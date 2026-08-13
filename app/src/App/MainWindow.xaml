@@ -729,13 +729,17 @@
                             <Grid>
                                 <TextBlock x:Name="PaneATitle"
                                            Style="{StaticResource UrPaneTitleStyle}" />
-                                <TextBlock x:Name="PaneAMeta" HorizontalAlignment="Right"
-                                           Style="{StaticResource UrPaneMetaStyle}" />
+                                <!-- PaneAMeta deleted (Phase B): no writer anywhere on
+                                     this pane, unlike its Network/Account/Wallet
+                                     namesakes, which do have one. -->
                             </Grid>
                         </Border>
                         <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled"
                                       VerticalScrollBarVisibility="Auto">
-                            <StackPanel>
+                            <!-- x:Name so Simple mode can cap+centre this column at
+                                 480dip (MainWindow::ApplyBreakpoint); Advanced leaves
+                                 it stretched, exactly as before. -->
+                            <StackPanel x:Name="ConnectPaneAContent">
                                 <!-- STATUS LEADS. Protection state first, at the top of
                                      the pane, above the ornament. -->
                                 <Border Style="{StaticResource UrPaneRowStyle}"
@@ -757,6 +761,16 @@
                                                        FontFamily="{StaticResource UrBodyFontFamily}"
                                                        FontSize="20" LineHeight="24" FontWeight="SemiBold"
                                                        TextWrapping="Wrap" />
+                                            <!-- Simple mode's plain restatement of the headline
+                                                 (Phase B rule: a claim with no unit or id is
+                                                 restated in Simple, not hidden). Advanced omits
+                                                 it - the headline word already carries this for
+                                                 the reader who wanted more. One writer:
+                                                 ConnectPage::ApplyConnectStatus. -->
+                                            <TextBlock x:Name="ProtectionText"
+                                                       Style="{StaticResource UrSupportingTextStyle}"
+                                                       TextWrapping="Wrap" TextTrimming="None"
+                                                       Visibility="Collapsed" />
                                             <!-- #27 soft-kill-switch honesty: while the tunnel
                                                  is up with nothing proven (Evaluating /
                                                  Degraded), this says traffic is blocked rather
@@ -845,20 +859,9 @@
                                 <Button x:Name="ConnectButton"
                                         Style="{StaticResource UrPaneActionPrimaryStyle}"
                                         Click="OnConnectToggle" />
-                                <!-- network peers (apple ConnectActions parity) -->
-                                <Button x:Name="PeersLine" MinHeight="36"
-                                        Style="{StaticResource UrPaneRowButtonStyle}"
-                                        Click="OnPeersLineClick">
-                                    <StackPanel Orientation="Horizontal" Spacing="8"
-                                                VerticalAlignment="Center">
-                                        <Ellipse x:Name="PeerDot" Width="8" Height="8"
-                                                 VerticalAlignment="Center" />
-                                        <TextBlock x:Name="PeerCountText" FontSize="12"
-                                                   AutomationProperties.AccessibilityView="Raw"
-                                                   VerticalAlignment="Center"
-                                                   Foreground="{StaticResource UrTextMutedBrush}" />
-                                    </StackPanel>
-                                </Button>
+                                <!-- PeersLine moved below the three banners (Phase B):
+                                     it now sits with the peers list it summarizes,
+                                     inside MoreOptionsHost. See the disclosure below. -->
                                 <!-- out of balance: the action opens the upgrade flow -->
                                 <InfoBar x:Name="BalanceWarning" IsOpen="False" IsClosable="False"
                                          Margin="12,8" Severity="Warning" />
@@ -884,6 +887,26 @@
                                      state directly above finishes the job. -->
                                 <InfoBar x:Name="UpdateBar" IsOpen="False" IsClosable="False"
                                          Margin="12,8" Severity="Informational" />
+
+                                <!-- Simple mode's disclosure (Phase B). Provide, Connect
+                                     options and the peers list below keep their exact
+                                     markup positions inside this one contiguous host -
+                                     no reparenting, two Visibility writes. Advanced never
+                                     shows this row; MoreOptionsHost is unconditionally
+                                     visible there, exactly as it always was. One writer:
+                                     ConnectPage::ApplyMoreOptionsVisibility. -->
+                                <Button x:Name="MoreOptionsToggle" MinHeight="36"
+                                        Style="{StaticResource UrPaneRowButtonStyle}"
+                                        Click="OnMoreOptionsToggle">
+                                    <StackPanel Orientation="Horizontal" Spacing="8"
+                                                VerticalAlignment="Center">
+                                        <FontIcon x:Name="MoreOptionsChevron" FontSize="12"
+                                                  Style="{StaticResource UrRowIconStyle}" />
+                                        <TextBlock x:Name="MoreOptionsLabel" FontSize="12"
+                                                   Style="{StaticResource UrKeyTextStyle}" />
+                                    </StackPanel>
+                                </Button>
+                                <StackPanel x:Name="MoreOptionsHost">
 
                                 <!-- provide ....................................... -->
                                 <Border Style="{StaticResource UrGroupHeaderStyle}">
@@ -1021,6 +1044,22 @@
                                     </Grid>
                                 </Border>
 
+                                <!-- network peers (apple ConnectActions parity); relocated
+                                     here from beside ConnectButton (Phase B) so it sits
+                                     with the list it summarizes -->
+                                <Button x:Name="PeersLine" MinHeight="36"
+                                        Style="{StaticResource UrPaneRowButtonStyle}"
+                                        Click="OnPeersLineClick">
+                                    <StackPanel Orientation="Horizontal" Spacing="8"
+                                                VerticalAlignment="Center">
+                                        <Ellipse x:Name="PeerDot" Width="8" Height="8"
+                                                 VerticalAlignment="Center" />
+                                        <TextBlock x:Name="PeerCountText" FontSize="12"
+                                                   AutomationProperties.AccessibilityView="Raw"
+                                                   VerticalAlignment="Center"
+                                                   Foreground="{StaticResource UrTextMutedBrush}" />
+                                    </StackPanel>
+                                </Button>
                                 <!-- network peers ................................. -->
                                 <!-- The pane's LIST. Everything above it is a fixed
                                      block of controls, which is what left the connect
@@ -1037,6 +1076,8 @@
                                     </Grid>
                                 </Border>
                                 <StackPanel x:Name="PeersHost" />
+                                </StackPanel>
+                                <!-- /MoreOptionsHost -->
                             </StackPanel>
                         </ScrollViewer>
                     </Grid>
