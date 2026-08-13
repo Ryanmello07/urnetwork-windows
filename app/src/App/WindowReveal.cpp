@@ -80,7 +80,25 @@ void WindowReveal::Arm(bool enabled, std::optional<POINT> originScreen,
   // Activate() (E4), so on a brand-new window ActualWidth/Height can still be
   // 0 at this instant — a relative anchor scales correctly regardless of
   // whether XAML has measured yet.
-  rootVisual.AnchorPoint({0.5f, 0.5f});
+  // CenterPoint bound to Size, NOT AnchorPoint. AnchorPoint is the point ON
+  // the visual that gets placed at Offset, so setting it to (0.5, 0.5)
+  // DISPLACES the content by -0.5*Size -- half its own width and height, up
+  // and to the left -- and keeps it there. The spring below animates Scale
+  // and Offset back to their settled values and completes cleanly, so the
+  // reveal reports success while leaving every subsequent frame shifted off
+  // the left edge. That shipped in v2026.8.13-1018112070-beta and is exactly
+  // the failure CancelToFinal was written to prevent, one property over.
+  //
+  // CenterPoint moves only the origin that Scale and Rotation are applied
+  // about; it never repositions the visual. The reason AnchorPoint was
+  // reached for -- Arm() runs BEFORE Activate() (E4), so ActualWidth/Height
+  // can still be 0 here -- is solved properly by an ExpressionAnimation that
+  // tracks the visual's own Size: it re-evaluates as XAML measures, so the
+  // center is right by the time Start() runs, and stays right across resize.
+  rootVisual.AnchorPoint({0.0f, 0.0f});
+  auto centerBind = rootVisual.Compositor().CreateExpressionAnimation(
+      L"Vector3(this.Target.Size.X * 0.5f, this.Target.Size.Y * 0.5f, 0.0f)");
+  rootVisual.StartAnimation(L"CenterPoint", centerBind);
 
   // Origin-anchored (E2), direction only — see the file comment on kOffsetDip
   // for why this is not a full screen-space projection. Vertical: the tray
@@ -169,6 +187,10 @@ void WindowReveal::CancelToFinal() {
   rootVisual.StopAnimation(L"Scale");
   rootVisual.StopAnimation(L"Offset");
   plateVisual.StopAnimation(L"Opacity");
+  // AnchorPoint is restored too: a settled pose means geometry AND the
+  // origin it is measured from, otherwise "cancel to final" still leaves the
+  // content displaced by half its size.
+  rootVisual.AnchorPoint({0.0f, 0.0f});
   rootVisual.Scale({1.0f, 1.0f, 1.0f});
   rootVisual.Offset({0.0f, 0.0f, 0.0f});
   plateVisual.Opacity(1.0f);
