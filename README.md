@@ -133,8 +133,11 @@ Mode toggle, is where they are flipped.
 ## Docs
 
 - `PLAN.md` — architecture, decisions, milestones, risks.
-- `docs/superpowers/plans/` — the implementation plans, including the
-  smart-routing phase plans and their recorded outcomes.
+- `docs/superpowers/plans/2026-08-12-smart-routing-phase2-live-inputs.md` —
+  the phase 2 plan and its recorded outcome. The earlier plans and the p7
+  network-baseline captures were dropped from this branch by the
+  `urnetwork:main` merge (they never existed upstream, so the merge resolved
+  them as deletions); recover them from `324b5f0` if you need them.
 - `app/STORE.md`, `app/SIGNING.md` — Store submission and the two signing pipelines.
 - `app/driver/README.md`, `app/driver/PROVENANCE.md` — driver spec + clean-room record.
 
