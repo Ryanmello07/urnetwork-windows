@@ -96,6 +96,21 @@ which of these must be fixed before this branch merges.
    file's existing "raw counters always-on, gate at consumption" pattern, so not
    a deviation — but it is a small always-on cost that did not exist before.
 
+**From Task 5 fix (`dadf1c8`) re-review — fix ACCEPTED, these remain:**
+7. `routing_reward.go:44-46` — the `rewardAccumulatorMaxKeys = 256` cap
+   **silently rejects** new `(class, exitId)` keys once full. No counter, no log
+   line, and no test exercises the 257th key. It is scoped to the
+   `HeartbeatInterval=0` corner (never a shipped default), so it guards an
+   unreachable path — but it is a second instance of the "no silent caps"
+   pattern this project has already been bitten by. Wants a one-line counter or
+   log on drop, plus a test, before it is trusted. **Fold into Task 7's
+   dispatch** — it is observability work and Task 7 is already the
+   observability-proof task.
+8. The cap keys on `(class, exitId)` pairs, not `exitId` alone, so 256 is
+   really "256 / number-of-classes providers" in the worst case (all traffic in
+   one class). Not wrong, but the doc comment overstates the per-provider
+   headroom it buys.
+
 **From Task 4 (`53dec2d`) review:**
 4. **Demotion's promotion target ignores the load tie-break.** `plainBestIndex`
    picks a strict argmax raw score, while the ordinary loop uses
