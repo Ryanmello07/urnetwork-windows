@@ -16,6 +16,7 @@
 #include "Log.h"
 #include "Strings.h"
 #include "UrColors.h"
+#include "UrMotion.h"
 
 using namespace winrt;
 using namespace winrt::Microsoft::UI::Xaml;
@@ -289,6 +290,14 @@ void LoginCarousel::SetActive(bool active) {
 void LoginCarousel::Advance() {
   if (!active_) return;
   const size_t next = (index_ + 1) % kSlides.size();
+  // "Show animations in Windows" off: the carousel still advances (it is a
+  // slideshow, not decoration), but it must land on each slide rather than
+  // animate through it — the one reduce-motion gate this file never had. Same
+  // settle-not-animate shape SetActive(false) already uses below.
+  if (!urnw::motion::ShouldAnimate()) {
+    ShowSlide(next);
+    return;
+  }
   AnimateTextOut();
   CrossfadeTo(next);
 }
