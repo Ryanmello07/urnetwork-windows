@@ -75,6 +75,43 @@ Verified against the tree at connect `98b3215` / sdk `855b93d`:
 
 ---
 
+## Deferred minors — triage these at the final whole-branch review
+
+Recorded as they were found, not fixed in-task. The final review must decide
+which of these must be fixed before this branch merges.
+
+**From Task 3 (`c2b1cb6`) review:**
+1. `addSendRttSample` (~`ip_remote_multi_client.go:10797`) re-acquires `stateLock`
+   immediately after `addSendAck` (~`:12420`) has already taken and released it
+   inside the same `ackCallback` — two lock round-trips per acked packet where
+   one would do. Correct, but this is a genuinely hot path; worth folding into
+   one acquisition.
+2. The ack callback's double-fire behavior could not be fully traced (dispatch
+   lives in `transfer_contract_manager`/`transfer_control`, outside the diff). If
+   it can fire twice, the second fire folds a stale `time.Since(sendTime)` into
+   the RTT EWMA. This is inherited risk equal to what `addSendAck` already
+   carries on the same callback — not new, but now it feeds a scorer input.
+3. RTT collection runs unconditionally on every ack regardless of
+   `ScoredPlacement`, while the read side is fully gated. Consistent with this
+   file's existing "raw counters always-on, gate at consumption" pattern, so not
+   a deviation — but it is a small always-on cost that did not exist before.
+
+## Process rules learned during execution (do not repeat these mistakes)
+
+- **Exactly ONE writing agent in `connect-algo` at a time.** Task 2's fix rounds
+  were dispatched while Task 3 was mid-implementation in the same worktree. Both
+  agents detected it; no work was lost only because Task 2's used
+  `git apply --cached` to stage its own hunks without touching the working tree.
+  Do not rely on that happening again.
+- **Never reuse one detached worktree across reviews.** A reused review worktree
+  silently held the wrong commit and stray edits despite a checkout reporting
+  success. Create a fresh detached worktree per review, and tell every reviewer
+  to ASSERT `git rev-parse HEAD` matches the expected sha before reviewing —
+  and to fall back to `git archive` of the target commit into a scratch dir if
+  it does not.
+
+---
+
 ### Task 1: Light-tier flow classifier
 
 **Files:**
