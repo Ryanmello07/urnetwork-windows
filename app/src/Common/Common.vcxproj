@@ -41,6 +41,7 @@
   </ItemDefinitionGroup>
 
   <ItemGroup>
+    <ClInclude Include="AppPrefs.h" />
     <ClInclude Include="ConnectAction.h" />
     <ClInclude Include="ConnectionHealth.h" />
     <ClInclude Include="CrashDumps.h" />
@@ -60,6 +61,7 @@
     <ClInclude Include="VersionGrammar.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="AppPrefs.cpp" />
     <ClCompile Include="CrashDumps.cpp" />
     <ClCompile Include="Heartbeat.cpp" />
     <ClCompile Include="Log.cpp" />

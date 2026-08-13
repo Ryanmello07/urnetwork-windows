@@ -852,6 +852,14 @@
                                 <Button x:Name="ConnectButton"
                                         Style="{StaticResource UrPaneActionPrimaryStyle}"
                                         Click="OnConnectToggle" />
+                                <!-- Onboarding step 3 (Phase E5): targets and
+                                     content are set in code
+                                     (MainWindow::MaybeShowOnboardingTip) —
+                                     declared here only so it exists in the
+                                     tree ahead of being opened. A TeachingTip
+                                     renders as its own popup, so this costs
+                                     no layout space. -->
+                                <muxc:TeachingTip x:Name="OnboardingTip" />
                                 <!-- network peers (apple ConnectActions parity) -->
                                 <Button x:Name="PeersLine" MinHeight="36"
                                         Style="{StaticResource UrPaneRowButtonStyle}"

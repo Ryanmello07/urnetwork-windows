@@ -14,6 +14,7 @@
 #include "Localization.h"
 #include "Log.h"
 #include "MainWindow.xaml.h"
+#include "Onboarding.h"
 #include "PageContext.h"  // pages::AdvW — the tray tooltip's health words (#27)
 #include "Startup.h"
 #include "Strings.h"
@@ -149,6 +150,25 @@ void AppController::Start() {
         L"It will appear if Windows Explorer restarts. Until then you can end "
         L"URnetwork.exe from Task Manager.",
         L"See the log for the failing Shell_NotifyIcon call.");
+  } else {
+    // Onboarding (Phase E5), step 1: a tray balloon at icon creation —
+    // ShowBalloon is the only thing that can point AT the notification area,
+    // which is the one thing a new user must learn. Computed and persisted
+    // HERE, once: MarkShown() runs the moment this balloon actually shows,
+    // not when the whole three-step sequence completes, so an abandoned
+    // first run (closed before ever reaching Connect) does not replay on
+    // every later launch. Steps 2 (the ServiceSetup banner) and 3 (the
+    // Connect button TeachingTip) read this cached answer back from
+    // MainWindow — see MainWindow::PrimeOnboarding — rather than re-querying
+    // ShouldShow(), which is already flipped by the time they would ask.
+    onboardingActive_ = urnw::Onboarding::ShouldShow();
+    if (onboardingActive_) {
+      urnw::Onboarding::MarkShown();
+      tray_.ShowBalloon(
+          Localized("app_name"),
+          pages::AdvW("onb_tray_balloon", L"URnetwork lives here from now on — "
+                                          L"click this icon any time to open it."));
+    }
   }
 
   // SDK state -> tray + window (marshaled onto the UI thread).
@@ -570,6 +590,12 @@ void AppController::ShowWindowImpl(const POINT* anchor) {
     // window and no message would send the owner back to guessing.
     LogInfo("app: creating the main window");
     window_ = winrt::make<winrt::URnetwork::implementation::MainWindow>();
+    // Onboarding (Phase E5): this window did not exist at tray-icon creation,
+    // where Start() already decided (and, if true, persisted) whether this is
+    // a first run — hand that cached answer down now.
+    if (auto self = window_.try_as<winrt::URnetwork::implementation::MainWindow>()) {
+      self->PrimeOnboarding(onboardingActive_);
+    }
     // Closing the window hides to tray (the tunnel keeps running); the tray
     // "Quit" is the only real exit (macOS parity). Wired once, on creation.
     if (auto native = window_.try_as<::IWindowNative>()) {

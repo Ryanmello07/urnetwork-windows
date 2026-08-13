@@ -1395,6 +1395,36 @@ void MainWindow::OnUpdateBannerAction() {
   }
 }
 
+// ---- onboarding (Phase E5) --------------------------------------------------
+//
+// Step 3 of 3. Steps 1 (the tray balloon) and 2 (the ServiceSetup banner
+// above ConnectButton, made focal by simply not competing with this one) are
+// AppController's and this window's existing banner machinery respectively —
+// nothing new to build for either. This is the one new surface: a
+// muxc::TeachingTip pointed at the Connect button, shown once, the first time
+// a real sign-in reaches Home (called from ApplyAuthState).
+void MainWindow::MaybeShowOnboardingTip() {
+  if (!onboardingActive_ || onboardingTipShown_) return;
+  // Step 2 is already on screen, focal, whenever there is anything for it to
+  // say: ApplyServiceSetup shows ServiceSetupBar exactly when the service
+  // state is actionable (NotInstalled/Stopped/VersionMismatch) and closes it
+  // for Running/ConsoleMode/Unknown. Skip step 3 while that is true, so the
+  // banner and the tip never compete for the same first glance — most users'
+  // service is already Running, so they see the balloon and the tip: two
+  // steps, exactly as the plan calls for.
+  using State = urnw::ServiceSetup::State;
+  const auto state = serviceSetup_.observation.state;
+  const bool bannerActionable = state == State::NotInstalled || state == State::Stopped ||
+                               state == State::VersionMismatch;
+  if (bannerActionable) return;
+  onboardingTipShown_ = true;
+  OnboardingTip().Target(ConnectButton());
+  OnboardingTip().Title(Adv("onb_tip_title", L"You're ready"));
+  OnboardingTip().Subtitle(
+      Adv("onb_tip_subtitle", L"Press Connect to start protecting your traffic."));
+  OnboardingTip().IsOpen(true);
+}
+
 winrt::fire_and_forget MainWindow::BeginServiceUninstall() {
   using State = urnw::ServiceSetup::State;
   using Notice = urnw::ServiceSetup::Notice;
@@ -1553,6 +1583,7 @@ void MainWindow::ApplyAuthState(urnw::AuthState state, std::string const& error)
       homeRevealed_ = true;
       urnw::motion::CrossfadePageSwap(nullptr, ConnectView());
     }
+    MaybeShowOnboardingTip();
     // Whatever destination is still selected from the PREVIOUS session is now
     // showing that session's data against this one's token. Re-read it.
     LoadCurrentDestination();

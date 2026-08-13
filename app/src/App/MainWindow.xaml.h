@@ -53,6 +53,12 @@ struct MainWindow : MainWindowT<MainWindow> {
   void ArmReveal(bool enabled, std::optional<POINT> originScreen, RECT const& windowScreenRect);
   void StartReveal();
 
+  // ---- onboarding (Phase E5) ----
+  // Set once, when the window is first created (AppController::ShowWindowImpl)
+  // — the answer AppController::Start already cached at tray-icon creation,
+  // since this window does not exist yet at that point.
+  void PrimeOnboarding(bool active) { onboardingActive_ = active; }
+
   // ---- page units ----
   // Public because the pages' own UI-thread callbacks resolve the window's weak
   // reference and then reach back for their page.
@@ -372,6 +378,12 @@ struct MainWindow : MainWindowT<MainWindow> {
   void ApplyUpdateChecker();  // fan the snapshot out to the pages
   void OnUpdateBannerAction();  // Update / retry, or re-reveal the manual zip
 
+  // ---- onboarding (Phase E5) ----
+  // Step 3: a TeachingTip on the Connect button, once, skipped while step 2
+  // (the ServiceSetup banner) has something actionable to say — see the
+  // definition for why that is the whole rule.
+  void MaybeShowOnboardingTip();
+
   std::unique_ptr<urnw::LoginPage> login_;
   std::unique_ptr<urnw::ConnectPage> connect_;
   std::unique_ptr<urnw::NetworkPage> network_;
@@ -480,6 +492,10 @@ struct MainWindow : MainWindowT<MainWindow> {
 
   // ---- the window reveal (Phase E) ----
   urnw::WindowReveal reveal_;
+
+  // ---- onboarding (Phase E5) ----
+  bool onboardingActive_ = false;  // this run's ShouldShow() answer, cached
+  bool onboardingTipShown_ = false;  // step 3 is one-shot per window lifetime
 
   bool wideLayout_ = false;
   // Home's second breakpoint (kUltraWideDip): the third column. Tracked

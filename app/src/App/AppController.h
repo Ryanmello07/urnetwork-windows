@@ -143,6 +143,12 @@ class AppController {
   bool windowMinimized_ = false;  // IsIconic, synced by SyncWindowMinimized
   bool windowVisible_ = false;    // the reconciled result: the presentation is running
   std::optional<proto::TunnelStatus> lastTunnelStatus_;
+
+  // Onboarding (Phase E5): this run's Onboarding::ShouldShow() answer,
+  // decided and persisted once in Start() (tray-icon creation, step 1's
+  // balloon) and handed to MainWindow when it is first created — see
+  // MainWindow::PrimeOnboarding.
+  bool onboardingActive_ = false;
 };
 
 // The single app controller instance (created in App::OnLaunched).
