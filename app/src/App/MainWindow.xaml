@@ -14,7 +14,14 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:muxc="using:Microsoft.UI.Xaml.Controls">
 
-    <Grid Background="{StaticResource UrBackgroundBrush}">
+    <!-- Phase E (window reveal): WindowPlate is opaque and NEVER moves or
+         animates itself - it is what stays behind RevealRoot while the
+         latter springs into place, so there is never a gap to the desktop
+         behind it. RevealRoot carries everything that used to live directly
+         on the root Grid, unchanged - no child's Grid.Row moves, only the
+         two new wrapper names are added. See WindowReveal.cpp/.h. -->
+    <Grid x:Name="WindowPlate" Background="{StaticResource UrBackgroundBrush}">
+    <Grid x:Name="RevealRoot">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -2400,5 +2407,6 @@
             <StackPanel x:Name="StatusStripFields" Orientation="Horizontal"
                         Spacing="0" VerticalAlignment="Center" />
         </Border>
-    </Grid>
+    </Grid><!-- /RevealRoot -->
+    </Grid><!-- /WindowPlate -->
 </Window>

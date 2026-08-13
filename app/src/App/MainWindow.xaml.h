@@ -9,8 +9,11 @@
 #include "MainWindow.g.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
+
+#include <windows.h>
 
 #include "AccountPage.h"
 #include "BalanceSheets.h"
@@ -27,6 +30,7 @@
 #include "UrComponents.h"
 #include "UsageBar.h"
 #include "WalletPage.h"
+#include "WindowReveal.h"
 
 namespace winrt::URnetwork::implementation {
 
@@ -41,6 +45,13 @@ struct MainWindow : MainWindowT<MainWindow> {
   MainWindow();
   ~MainWindow();
   void SetPresentationActive(bool active);
+
+  // ---- the window reveal (Phase E) ----
+  // Called from AppController::ShowWindowImpl ONLY — see WindowReveal.h for
+  // the ordering contract (Arm before Activate, Start after) and why this
+  // must never fire from ReconcileWindowPresentation's replay path.
+  void ArmReveal(bool enabled, std::optional<POINT> originScreen, RECT const& windowScreenRect);
+  void StartReveal();
 
   // ---- page units ----
   // Public because the pages' own UI-thread callbacks resolve the window's weak
@@ -466,6 +477,9 @@ struct MainWindow : MainWindowT<MainWindow> {
   // the crossfade would otherwise never fire for a session that lands on
   // Connect by default rather than by a click.
   bool homeRevealed_ = false;
+
+  // ---- the window reveal (Phase E) ----
+  urnw::WindowReveal reveal_;
 
   bool wideLayout_ = false;
   // Home's second breakpoint (kUltraWideDip): the third column. Tracked

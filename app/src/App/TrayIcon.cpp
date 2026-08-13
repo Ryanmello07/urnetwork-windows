@@ -93,6 +93,23 @@ void TrayIcon::FillIdentity(NOTIFYICONDATAW& nid) const {
   }
 }
 
+bool TrayIcon::GetIconRect(RECT& out) const {
+  if (!hwnd_) return false;
+  NOTIFYICONIDENTIFIER nid{};
+  nid.cbSize = sizeof(nid);
+  nid.hWnd = hwnd_;
+  if (useGuid_) {
+    nid.guidItem = ids::kTrayIconGuid;
+  } else {
+    nid.uID = kTrayIconId;
+  }
+  const HRESULT hr = ::Shell_NotifyIconGetRect(&nid, &out);
+  // S_OK: the icon's own rect. S_FALSE: this icon is in the overflow flyout,
+  // so the shell has no rect FOR IT but still fills `out` with the overflow
+  // chevron's rect — a valid anchor, not a failure (design plan, Phase E2).
+  return hr == S_OK || hr == S_FALSE;
+}
+
 bool TrayIcon::AddIcon() {
   // Two attempts at most: the stable GUID first, then the classic hwnd+uID.
   for (;;) {

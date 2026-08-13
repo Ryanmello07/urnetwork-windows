@@ -78,6 +78,22 @@ MainWindow::MainWindow() {
   ExtendsContentIntoTitleBar(true);
   SetTitleBar(AppTitleBar());
 
+  // The window reveal (Phase E): bind now that the content tree exists. The
+  // ripple order follows E3 — hero + status first, then the primary action,
+  // then navigation chrome, then the rest of the strip — each group 40ms
+  // after the one before it.
+  reveal_.Bind(WindowPlate(), RevealRoot(),
+              {
+                  {ConnectCanvasHost(), 0},
+                  {StatusDot(), 0},
+                  {StatusText(), 0},
+                  {ConnectButton(), 40},
+                  {LocationRow(), 40},
+                  {HomeNav(), 80},
+                  {AppTitleBar(), 80},
+                  {StatusStrip(), 120},
+              });
+
   // Each destination owns its own translation unit; the window keeps navigation,
   // the auth + balance relays, and the shared sheet guard. Constructed before
   // ApplyStrings because every page paints its own labels from there.
@@ -296,7 +312,19 @@ void MainWindow::SetPresentationActive(bool active) {
   network_->SetPresentationActive(active);
   // the login carousel's timer: it runs only while the window is on screen
   login_->SetPresentationActive(active);
+  // The window reveal (E6): hiding mid-reveal must cancel-to-final rather
+  // than leave RevealRoot's Scale pinned wherever the spring last wrote it —
+  // the same pattern ConnectCanvas::SetPresentationActive already uses for
+  // its own animations.
+  if (!active) reveal_.CancelToFinal();
 }
+
+void MainWindow::ArmReveal(bool enabled, std::optional<POINT> originScreen,
+                          RECT const& windowScreenRect) {
+  reveal_.Arm(enabled, originScreen, windowScreenRect);
+}
+
+void MainWindow::StartReveal() { reveal_.Start(); }
 
 // ---- strings -------------------------------------------------------------
 // Every label in the window, from the shared localization store (Localization.h).

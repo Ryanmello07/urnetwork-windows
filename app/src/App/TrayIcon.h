@@ -72,6 +72,15 @@ class TrayIcon {
   void SetTooltip(const std::wstring& tip);
   void ShowBalloon(const std::wstring& title, const std::wstring& text);
 
+  // The icon's screen rect (Shell_NotifyIconGetRect), for the window reveal's
+  // origin anchor (Phase E2) — reveal scales out from wherever the icon
+  // actually is, GUID or hwnd+uID identity either way, via the same
+  // FillIdentity this class already centralizes. S_FALSE is a VALID answer
+  // (the icon is in the overflow chevron) and this still returns true for it,
+  // as the plan requires — "never fail to open" belongs to the CALLER, which
+  // treats a false return as one more reason to fall back to the click point.
+  bool GetIconRect(RECT& out) const;
+
   HWND MessageWindow() const { return hwnd_; }
 
  private:

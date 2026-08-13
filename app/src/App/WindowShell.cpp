@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <optional>
 
+#include <dwmapi.h>
+
 #include <winrt/Microsoft.UI.Interop.h>
 #include <winrt/Microsoft.UI.Windowing.h>
 #include <winrt/Microsoft.UI.Xaml.Media.h>
@@ -13,6 +15,8 @@
 #include "Log.h"
 #include "Strings.h"  // Narrow
 #include "UrColors.h"
+
+#pragma comment(lib, "dwmapi.lib")
 
 namespace winrtx = winrt::Microsoft::UI::Xaml;
 namespace windowing = winrt::Microsoft::UI::Windowing;
@@ -141,6 +145,29 @@ void ApplyCaptionButtonColors(windowing::AppWindow const& appWindow) {
   bar.ButtonPressedForegroundColor(urnw::colors::kText);
 }
 
+// Phase E2 ("depth and corners"): this app makes NO other DWMWA_* call
+// anywhere. Round corners match the rest of Windows 11's shell chrome — this
+// window has no Mica/acrylic to imply depth any other way, see the note
+// above — and FORCEDISABLED is the one that actually matters for the window
+// reveal (WindowReveal.cpp): without it, Windows' own centred window-open
+// transition fights the tray-anchored spring and the result reads as broken,
+// not fancy. Best-effort: an unsupported or failing DwmSetWindowAttribute
+// leaves the window exactly as it was, which is a fine degradation for chrome
+// this cosmetic. The two attribute IDs are spelled out as local constants
+// rather than the SDK macros — DWMWA_WINDOW_CORNER_PREFERENCE is a Windows 11
+// addition that an older SDK header may not define, and a numeric literal
+// with a name and a comment compiles everywhere a `#ifndef` guard would.
+void ApplyWindowMotionAttributes(HWND hwnd) {
+  constexpr DWORD kDwmwaWindowCornerPreference = 33;   // DWMWA_WINDOW_CORNER_PREFERENCE
+  constexpr DWORD kDwmwaTransitionsForceDisabled = 3;  // DWMWA_TRANSITIONS_FORCEDISABLED
+  constexpr DWORD kDwmwcpRound = 2;                    // DWMWCP_ROUND
+  DWORD corner = kDwmwcpRound;
+  ::DwmSetWindowAttribute(hwnd, kDwmwaWindowCornerPreference, &corner, sizeof(corner));
+  BOOL disableTransitions = TRUE;
+  ::DwmSetWindowAttribute(hwnd, kDwmwaTransitionsForceDisabled, &disableTransitions,
+                          sizeof(disableTransitions));
+}
+
 }  // namespace
 
 bool ApplyNativeShell(winrtx::Window const& window, HWND hwnd) {
@@ -186,6 +213,7 @@ bool ApplyNativeShell(winrtx::Window const& window, HWND hwnd) {
   }
 
   ApplyCaptionButtonColors(appWindow);
+  ApplyWindowMotionAttributes(hwnd);
 
   const double scale = ScaleFor(hwnd);
   const int defaultW = static_cast<int>(kDefaultWidthDips * scale);
