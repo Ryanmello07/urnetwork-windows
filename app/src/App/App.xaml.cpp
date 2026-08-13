@@ -43,11 +43,13 @@ App::App() {
   urnw::LogInfo("app: XAML Application constructed");
 }
 
-// A tray app: OnLaunched brings up the controller (tray + SDK) but does not open
-// a window — the user opens it from the tray. Every step is logged, and the two
-// that can fail before there is any UI end in a message box: from outside, "the
-// SDK threw" and "the app is fine, look in the notification area" are the same
-// picture.
+// OnLaunched brings up the controller (tray + SDK) and now opens the main
+// window automatically — a launch that produces nothing but an icon in the
+// notification area reads as "did this even start?" just as often as a
+// missing icon does. The tray stays exactly as it was: click to show/hide,
+// quit from there. Every step is logged, and the two that can fail before
+// there is any UI end in a message box: from outside, "the SDK threw" and
+// "the app is fine, look in the notification area" are the same picture.
 void App::OnLaunched(LaunchActivatedEventArgs const&) {
   // main.cpp already opened the log (its first instruction) — this is the entry
   // marker for the XAML side of the handoff, and the proof for wWinMain that
@@ -96,6 +98,27 @@ void App::OnLaunched(LaunchActivatedEventArgs const&) {
   // rendering as a key id for the rest of the process (see Startup.h).
   urnw::LogInfo("startup: {}", urnw::Narrow(urnw::ResourceProbe()));
 
+  // Open the main window now, on every normal launch — the owner's call: a
+  // tray-only start was too easy to miss. This is the SAME path a tray click
+  // takes (AppController::ShowWindow -> ShowWindowImpl), so window creation,
+  // saved-placement restore and the presentation gate (ReconcileWindowPresentation)
+  // all run exactly as they do from a click; nothing here is a parallel
+  // code path to keep in sync.
+  //
+  // This does NOT start the tunnel. ShowWindow only creates/raises UI —
+  // nothing on this path calls SdkHost::Connect. The tunnel still starts
+  // solely on an explicit Connect gesture in the window, unchanged.
+  //
+  // NOTE: this process has no way to tell "Windows started me at login" apart
+  // from "the user double-clicked the exe" — there is no registry Run key, no
+  // registered StartupTask, and no launch flag for it anywhere in this
+  // codebase today. So this is the simple always-open behaviour for every
+  // launch, login-triggered or not. If a quiet at-login start is wanted, that
+  // needs a real signal added first (e.g. a StartupTask + a launch-arg or
+  // activation-kind check here) — flagging that gap rather than papering over
+  // it with a guess.
+  urnw::App().ShowWindow(nullptr);
+
   // urnetwork:// protocol activation — the ur.io/wallet-connect bridge returning
   // through the browser (see main.cpp). A launch while the app is already running
   // is redirected to this instance by AppInstance and lands on Activated, which
@@ -130,7 +153,7 @@ void App::OnLaunched(LaunchActivatedEventArgs const&) {
     urnw::LogError("app: activation routing not wired: {}",
                    urnw::Narrow(std::wstring{e.message()}));
   }
-  urnw::LogInfo("app: launch complete (tray icon is the only UI until it is clicked)");
+  urnw::LogInfo("app: launch complete (main window opened automatically)");
 }
 
 }  // namespace winrt::URnetwork::implementation

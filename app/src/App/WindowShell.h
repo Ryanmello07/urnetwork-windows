@@ -38,7 +38,11 @@ inline constexpr int kMinHeightDips = 480;
 //   region itself is the window's own AppTitleBar element (MainWindow sets it).
 // - Placement: restores the last saved size and position, else the compact
 //   default centred on the current monitor; either way clamped onto a monitor
-//   that actually exists.
+//   that actually exists. A saved position that does not overlap ANY monitor
+//   Windows currently reports (most often: the monitor it was saved on has
+//   since been unplugged, so the rect just sits in space that used to be a
+//   screen) is discarded outright rather than clamped - the compact default,
+//   centred on the primary, is used instead.
 //
 // RETURNS true when a SAVED placement was restored, which the caller must
 // honour: the tray-anchor flyout move would otherwise overwrite the position
