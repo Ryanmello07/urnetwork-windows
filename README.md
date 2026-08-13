@@ -1,104 +1,148 @@
-# URnetwork for Windows
+# URnetwork for Windows — beta line
 
-Native Windows 10 21H2+ / Windows 11 (x64 + ARM64) client. A WinUI 3 tray app
-controls a privileged Windows service that owns the VPN tunnel, embedding the
-URnetwork SDK (the cgo C ABI + C++ wrapper from `../sdk/cgo`). See
-`PLAN.md` for the full architecture and decisions.
+Native Windows 10 21H2+ / Windows 11 client for x64 and ARM64. A WinUI 3 app
+drives a privileged Windows service that owns the VPN tunnel; both embed the
+URnetwork SDK (the cgo C ABI + C++ wrapper from `sdk/cgo`).
+
+**This is the beta fork.** It tracks `urnetwork/windows` and runs ahead of it.
+Work lands here, gets a beta build, gets tested on real machines, and is then
+PR'd upstream. If you want the stable client, use upstream.
+
+Two differences matter before you read further:
+
+- This branch builds against the **fork branches** of `connect` and `sdk`
+  (`beta/algorithm-dpi`), not upstream main. Building it against upstream
+  `connect`/`sdk` will fail to compile — the smart-routing and probe APIs it
+  calls only exist on those branches until each lands upstream.
+- Beta releases are published here, not upstream. Upstream carries the CI that
+  proves it builds; releases come from our own build pipeline.
+
+## What the beta has that upstream does not
+
+- **Opens on launch.** The window comes up on start rather than starting
+  minimized to the tray.
+- **Motion system** (`UrMotion`) — page crossfades, a reveal-spring on window
+  open, and a reduce-motion gate that honors the OS setting.
+- **Onboarding** (`Onboarding`) — first-run tray balloon, banner focus, and a
+  Connect tip.
+- **Simple mode as a real mode.** Simple is structurally separate from
+  Advanced rather than Advanced-with-things-hidden: it has its own front page,
+  and the Advanced surfaces are absent rather than merely collapsed.
+- **Smart routing** (`connect` `beta/algorithm-dpi`) — a light-tier flow
+  classifier, per-exit telemetry, a reward tap feeding persisted provider
+  priors, and scored placement. See below for what is and is not live.
 
 ## Architecture
 
 ```
 URnetwork.exe (tray, per-user)          urnetworkd.exe (service, LocalSystem)
-  WinUI 3 flyout + window                 DeviceLocal + wintun packet pump
+  WinUI 3 window + tray flyout            DeviceLocal + wintun packet pump
   SdkHost: DeviceRemote --------------->  DeviceLocal.SetRpcServer (mTLS ws)
   ServiceClient (named pipe) ----------->  ControlServer -> TunnelController
                                            NetworkConfig (routes/DNS/MTU)
-                                           EgressMonitor -> SDK egress bind (R1)
+                                           WfpPolicy (leak guards, kill switch)
+                                           EgressMonitor -> SDK egress bind
                                            SplitTunnelClient -> SplitTunnel.sys
 ```
 
-The app and service each embed the SDK. The app's `DeviceRemote` controls the
-service's `DeviceLocal` over the SDK's own mTLS WebSocket RPC on loopback; the
-named pipe only carries lifecycle/config (mirrors macOS app↔extension).
+The tunnel needs LocalSystem and the UI must not have it. The app's
+`DeviceRemote` controls the service's `DeviceLocal` over the SDK's own mTLS
+WebSocket RPC on loopback; the named pipe carries only lifecycle and config.
+
+Because every UI action crosses a process boundary, anything the UI needs to
+*report* — not merely trigger — has to return its value across the RPC. That is
+why `MigrateExit` and `ProbeAllExits` return counts rather than void.
 
 ## Layout
 
 | Path | What |
 |---|---|
 | `app/src/Common/` | protocol, named-pipe transport, paths, logging, SDK bootstrap (static lib) |
-| `app/src/Service/` | `urnetworkd` — SCM service, wintun, packet pump, network config, egress, control server |
-| `app/src/App/` | `URnetwork` — WinUI 3 tray app, SdkHost (DeviceRemote), service client, UI |
+| `app/src/Service/` | `urnetworkd` — SCM service, wintun, packet pump, network config, WFP policy, egress, control server |
+| `app/src/App/` | `URnetwork` — WinUI 3 app, SdkHost (DeviceRemote), service client, UI, `UrMotion`, `Onboarding` |
 | `app/driver/` | `SplitTunnel.sys` — clean-room WFP split-tunnel driver (MPL-2.0) + spec |
 | `app/installer/` | WiX v5 MSI |
-| `app/third_party/` | vendored SDK + wintun (fetched, not committed) |
 | `app/tools/fetch-deps.ps1` | fetches wintun (pinned) + the SDK zip, builds import libs |
-
-## Prerequisites (Windows build box)
-
-- Visual Studio 2022 (v143), "Desktop development with C++" + Windows 11 SDK
-  (10.0.22621) + the WDK (for the driver).
-- vcpkg (manifest mode; `app/vcpkg.json` pulls nlohmann-json + wil).
-- WiX Toolset v5 (`dotnet tool install --global wix`) for the installer.
-- The SDK Windows zip: built by `../build-sdk.ps1` (Go + llvm-mingw; provisioned
-  into the build VM by `all/windows/packer/scripts/provision.ps1`) →
-  `../sdk/cgo/build/URnetworkSdkWindows.zip`.
+| `app/tools/build-local.ps1` | one-command local build (~60s) |
+| `.github/workflows/beta-build.yml` | builds the SDK from the fork branches, then app + service + MSI + portable zips, and publishes the beta release |
 
 ## Build
 
 ```powershell
 cd app
+tools\build-local.ps1          # fetch deps + build the solution
+```
 
-# 1. fetch wintun + SDK, generate import libs (Developer PowerShell)
-tools\fetch-deps.ps1 -SdkZip ..\..\sdk\cgo\build\URnetworkSdkWindows.zip
+Or the long way:
 
-# 2. build the app + service (+ driver, with the WDK)
+```powershell
+tools\fetch-deps.ps1 -SdkZip <path>\URnetworkSdkWindows.zip
 msbuild URnetwork.sln /p:Configuration=Release /p:Platform=x64
-
-# 3. build the MSI (stage binaries into build\x64\Release first)
 dotnet build installer\Installer.wixproj -c Release -p:Platform=x64
 ```
 
-Add the app icons under `app/src/App/Assets/` first (see that folder's README).
+Prerequisites: Visual Studio 2022 (v143) with "Desktop development with C++"
+and the Windows 11 SDK (10.0.22621); vcpkg in manifest mode; WiX v5 for the
+installer; the WDK only if you are building the driver.
 
-## Component status
+The app log is at `%LOCALAPPDATA%\URnetwork\app\logs\urnetwork-app.log`.
 
-Built to spec against the real SDK API and verified where verifiable on the
-authoring host (macOS):
+### SDK bindings
 
-- **R1 socket self-exclusion** (`../connect/egress*.go`, `sdk.SetEgressInterfaceIndex`,
-  cgo `urnet_set_egress_interface_index`) — implemented and **compiled+tested**
-  for darwin and cross-built for windows/amd64. This is the load-bearing piece
-  that keeps the service's own traffic off the tunnel.
-- **Common, Service, App, driver, installer** — complete source, written against
-  the verified SDK wrapper signatures. These build on the Windows toolchain;
-  they are **not** compiled on the authoring host.
+`sdk/cgo`'s `exports_gen.go` and `include/urnetwork_sdk.hpp` are **committed
+artifacts**; `make build_windows` does not regenerate them. Regenerate only
+after changing an exported SDK signature:
 
-> This code was authored on macOS. The IDE/language-server errors you may see on
-> a non-Windows host (`windows.h not found`, `nlohmann/json.hpp not found`, WinRT
-> namespaces missing) are expected — there is no Windows SDK, WDK, or vcpkg there.
-> The code targets MSVC v143 / C++20 and the Windows App SDK.
+```sh
+go build -o gen_tool ./gen && GOOS=linux ./gen_tool
+```
 
-The **WinUI 3 App project** (`app/src/App/App.vcxproj`, XAML) is the most
-toolchain-dependent piece: verify the NuGet versions in `app/src/App/packages.config`
-against the installed Windows App SDK, and expect one iteration pass on a real
-Windows box (per plan R2). The tray, SdkHost, and ServiceClient are plain
-Win32/C++ and independent of the XAML toolchain.
+Two traps, both of which fail quietly rather than loudly:
+
+- **`GOOS=linux` is required.** On a Windows host the generator drops every
+  `!windows`-tagged declaration (`IoLoop` among them) and emits bindings that
+  are wrong with no warning.
+- `GOOS=linux go run ./gen` cross-*builds* and then cannot execute the result,
+  which is why the two-step form above exists.
+
+`make generate` itself is pure Go and runs on any host — only
+`make build_windows` is host-sensitive, because of the cross-toolchains.
+
+## Smart routing: what is actually live
+
+Worth being precise about, because the machinery is larger than its effect.
+
+Everything observes; most of it does not yet steer. The classifier, per-exit
+telemetry, reward tap, and provider priors all run and are visible in the
+session banner and `[rel]` log lines. But scored placement was wired to the
+**race**, which is the last of four placement steps in `sendUpdate` — reached
+only when a flow's affinity groups, its app pin, and the destination bridge
+have all declined to donate. Most flows never reach it, and the race binds on
+lowest measured RTT anyway, discarding the scorer's ordering.
+
+`ScoredAffinityDonor` is the knob that closes that loop: it ranks affinity
+donors by learned provider bias instead of pure recency, on the placement step
+that actually carries most flows. It is **zero-value-off**, like every other
+routing knob — turning it on is how you make the learner load-bearing.
+
+To see the state of every knob, read the session banner in the log
+(`scoredaffinitydonor=0` and friends); the settings-diff logger reports any
+runtime change. The developer/reliability screen, behind the app-wide Advanced
+Mode toggle, is where they are flipped.
 
 ## Docs
 
 - `PLAN.md` — architecture, decisions, milestones, risks.
-- `app/STORE.md` — Microsoft Store submission findings + certification-spike checklist.
-- `app/SIGNING.md` — the two signing pipelines (Authenticode installer + attestation driver).
-- `app/driver/README.md`, `app/driver/PROVENANCE.md` — split-tunnel driver spec + clean-room record.
+- `docs/superpowers/plans/` — the implementation plans, including the
+  smart-routing phase plans and their recorded outcomes.
+- `app/STORE.md`, `app/SIGNING.md` — Store submission and the two signing pipelines.
+- `app/driver/README.md`, `app/driver/PROVENANCE.md` — driver spec + clean-room record.
 
-## Milestones
+## Known gaps
 
-Tracks `PLAN.md`. Implemented here: M0 skeleton, M1 service tunnel core
-(wintun + DeviceLocal + R1 + control pipe), M2 tray + auth + connect UI, M3
-Account/Wallet/Leaderboard/Support/Settings UI wired to the Api + Stripe upgrade
-+ redeem-code + split-tunnel, M3.5 driver (process-based bind-redirect, real
-source rewrite), M4 MSI. Real brand icons are generated from the macOS art by
-`app/tools/make-icons.py`. Remaining before ship: Store submission itself (needs
-Partner Center), attestation signing (app/SIGNING.md), the service-assisted updater
-(the Store does not push EXE/MSI updates — see app/STORE.md), DNS/IPv6 leak guards
-(R6/R7), the driver loopback-fixup + Verifier hardening (R10), and localization.
+- The split-tunnel driver is the least-exercised component; the process-based
+  bind-redirect path has had far more real use than the rest of it.
+- Driver loopback fixup and Driver Verifier hardening.
+- Store submission (needs Partner Center) and driver attestation signing.
+- Localization.
+- Smart routing beyond `ScoredAffinityDonor` still only observes — see above.
