@@ -75,6 +75,48 @@ Verified against the tree at connect `98b3215` / sdk `855b93d`:
 
 ---
 
+## OUTCOME — read this before building on Phase 2
+
+**The scorer does not steer traffic in the shipped configuration.** Found by the
+final whole-branch review; verified independently.
+
+`MultiRaceClientCount: 0` (`ip_remote_multi_client.go:253`, deliberate and
+documented) means `raceOrderedClients = orderedClients` — the WHOLE candidate
+list is dialed in parallel, and `completeRace` binds whichever exit answers
+with the lowest MEASURED rtt. List order is ignored. Most flows never race at
+all: destination affinity short-circuits first. So `scoredPlacementReorder`
+promoting the scorer's pick to index 0 changes only goroutine launch order and
+the degenerate no-response lock-in.
+
+**`ProviderPriors.Bias()` has zero production callers.** Priors are write-only.
+reward → prior → score is an OPEN loop. It is only safe from runaway feedback
+because it is unfinished; whoever closes it must add damping.
+
+Every task verified `scoredPlacementReorder` in isolation. Nobody traced its
+OUTPUT to a binding decision, and the chain proof asserts a different ORDER,
+never a different EXIT — the coordinator specified "picks a different exit" and
+accepted an order assertion. That is the gap to avoid repeating.
+
+**What Phase 2 did deliver:** classification, real per-exit telemetry with a
+correct NaN-for-unmeasured contract, stable provider identity, durable decay,
+demotion state, the reward tap, and observability. All reviewed, all working.
+The safety invariant holds — placement adds, removes and unquarantines nothing.
+
+**The next step is NOT a knob flip.** Making the scorer load-bearing means
+raising `MultiRaceClientCount` above 0, and the wide race is currently ALSO the
+only thing preventing rich-get-richer starvation: a measured exit scores ~0.80
+against an unmeasured exit's 0.00, which defeats `lessLoadedTieBreak` even at
+100,000-flows-to-0, and `bad := plainBestScore > incumbentScore` then never
+fires so N-of-M demotion can never rescue the starved exit. One change would
+simultaneously make the scorer matter and remove its safety net. Design pass
+required.
+
+**Must-fix list from that review — ALL RESOLVED:**
+- I2 demotion-state leak for exits that never carried a flow — FIXED, with a
+  regression test that fails against the old code. Note the pre-existing
+  eviction test had *worked around* the early return rather than catching it.
+- C1/M3 overstated claims in code comments — CORRECTED in place.
+
 ## Deferred minors — triage these at the final whole-branch review
 
 Recorded as they were found, not fixed in-task. The final review must decide
