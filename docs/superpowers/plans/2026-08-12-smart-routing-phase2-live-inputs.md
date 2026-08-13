@@ -96,6 +96,24 @@ which of these must be fixed before this branch merges.
    file's existing "raw counters always-on, gate at consumption" pattern, so not
    a deviation — but it is a small always-on cost that did not exist before.
 
+**From Task 6 fix (`e96cd09`) re-review — fix ACCEPTED, this remains:**
+6a. **The durable decay introduces a third, hybrid regime when
+`QuarantineDampening` is toggled mid-session** (it became runtime-toggleable in
+`7d8e9bb`). The fold gates on the knob's state at the single write instant
+(`ip_remote_multi_client.go:10552`). With the knob OFF at the moment
+`clearQuarantineWithLock` runs, the else-branch does a raw `++` ignoring accrued
+quiet time (`:10555`) but STILL advances `quarantineLiftTime = now` (`:10557`) —
+stamping a fresh anchor under an undecayed value. Toggle back ON and the
+discarded decay is unrecoverable, because the count can only measure elapsed
+time from the new anchor. Reproduced: raw=3, ON, long quiet gap (reads 0) →
+toggle OFF → reconviction → raw=4 → toggle ON → next read is **4, not 1**. That
+is the pre-fix defect, occurring with dampening nominally on.
+Rated Important, not Critical: the trigger is the rare developer-menu toggle,
+it is not attacker-reachable, and it self-heals after one full quiet interval.
+Wants an interleaved off/on regression test. A candidate real fix is to stop
+advancing the anchor on the off-path, so no decay is silently discarded —
+but check that against the byte-for-byte off-path guarantee before adopting it.
+
 **From Task 5 fix (`dadf1c8`) re-review — fix ACCEPTED, these remain:**
 7. `routing_reward.go:44-46` — the `rewardAccumulatorMaxKeys = 256` cap
    **silently rejects** new `(class, exitId)` keys once full. No counter, no log
