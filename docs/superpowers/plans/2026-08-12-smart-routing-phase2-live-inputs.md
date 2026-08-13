@@ -96,6 +96,30 @@ which of these must be fixed before this branch merges.
    file's existing "raw counters always-on, gate at consumption" pattern, so not
    a deviation — but it is a small always-on cost that did not exist before.
 
+**From Task 4 (`53dec2d`) review:**
+4. **Demotion's promotion target ignores the load tie-break.** `plainBestIndex`
+   picks a strict argmax raw score, while the ordinary loop uses
+   `lessLoadedTieBreak`. So a demotion can concentrate flows onto a marginally
+   higher-scored exit that the load-aware path would have spread away from.
+   This one is more than cosmetic: anti-herding was an explicit design goal
+   (the measured 37-flows-on-one-exit case), and this is a path that bypasses
+   it. Strong candidate to actually fix, not just note.
+5. `scoredPlacementReorder` takes `stateLock` for `flowCounts` and
+   `demotionObserve` takes it again — two acquisitions on a new-flow-frequency
+   path. Same class as deferred minor #1; fix them together.
+6. The Task 4 report claims the `[rel] event=demote` line fires only on the
+   round demotion changes `bestIndex`. It actually fires every round the bad
+   streak persists (the in-source comment on `demotionLogThrottle` is correct;
+   the report is not). No behavioral impact — the 5s throttle does the real
+   work — but do not trust the report's wording here.
+
+**Not a Phase 2 defect, but found by Phase 2 —** `multiClientWindow.Close()`
+(`ip_remote_multi_client.go:~9394`) closes every remaining client directly while
+`self.removeClients(removedClients)` sits commented out, so
+`clientRemoveCallback` never runs for them. Tracked as issue #51. Task 4 is
+unaffected (its map dies with the object it hangs off), but any future
+per-channel state expected to be evicted via `removeClient` inherits this hole.
+
 ## Process rules learned during execution (do not repeat these mistakes)
 
 - **Exactly ONE writing agent in `connect-algo` at a time.** Task 2's fix rounds
