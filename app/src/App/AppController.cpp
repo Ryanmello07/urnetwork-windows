@@ -14,6 +14,7 @@
 #include "Localization.h"
 #include "Log.h"
 #include "MainWindow.xaml.h"
+#include "Onboarding.h"
 #include "PageContext.h"  // pages::AdvW — the tray tooltip's health words (#27)
 #include "Startup.h"
 #include "Strings.h"
@@ -149,6 +150,25 @@ void AppController::Start() {
         L"It will appear if Windows Explorer restarts. Until then you can end "
         L"URnetwork.exe from Task Manager.",
         L"See the log for the failing Shell_NotifyIcon call.");
+  } else {
+    // Onboarding (Phase E5), step 1: a tray balloon at icon creation —
+    // ShowBalloon is the only thing that can point AT the notification area,
+    // which is the one thing a new user must learn. Computed and persisted
+    // HERE, once: MarkShown() runs the moment this balloon actually shows,
+    // not when the whole three-step sequence completes, so an abandoned
+    // first run (closed before ever reaching Connect) does not replay on
+    // every later launch. Steps 2 (the ServiceSetup banner) and 3 (the
+    // Connect button TeachingTip) read this cached answer back from
+    // MainWindow — see MainWindow::PrimeOnboarding — rather than re-querying
+    // ShouldShow(), which is already flipped by the time they would ask.
+    onboardingActive_ = urnw::Onboarding::ShouldShow();
+    if (onboardingActive_) {
+      urnw::Onboarding::MarkShown();
+      tray_.ShowBalloon(
+          Localized("app_name"),
+          pages::AdvW("onb_tray_balloon", L"URnetwork lives here from now on — "
+                                          L"click this icon any time to open it."));
+    }
   }
 
   // SDK state -> tray + window (marshaled onto the UI thread).
@@ -570,6 +590,12 @@ void AppController::ShowWindowImpl(const POINT* anchor) {
     // window and no message would send the owner back to guessing.
     LogInfo("app: creating the main window");
     window_ = winrt::make<winrt::URnetwork::implementation::MainWindow>();
+    // Onboarding (Phase E5): this window did not exist at tray-icon creation,
+    // where Start() already decided (and, if true, persisted) whether this is
+    // a first run — hand that cached answer down now.
+    if (auto self = window_.try_as<winrt::URnetwork::implementation::MainWindow>()) {
+      self->PrimeOnboarding(onboardingActive_);
+    }
     // Closing the window hides to tray (the tunnel keeps running); the tray
     // "Quit" is the only real exit (macOS parity). Wired once, on creation.
     if (auto native = window_.try_as<::IWindowNative>()) {
@@ -692,7 +718,14 @@ void AppController::ShowWindowImpl(const POINT* anchor) {
   // on visibility the click would otherwise read as dead — shown, still iconic,
   // presentation off. Before the rect log below, so that line reports the real
   // placement instead of the iconic placeholder rect (-32000,-32000).
-  if (windowHwnd_ && ::IsIconic(windowHwnd_)) ::ShowWindow(windowHwnd_, SW_RESTORE);
+  //
+  // Latched BEFORE the restore, for the window reveal (Phase E3): an
+  // un-minimize gets NO reveal of its own — the OS's own restore animation
+  // already owns that moment, and racing a second animation against it reads
+  // as broken rather than fancy. IsIconic() read AFTER ShowWindow(SW_RESTORE)
+  // would always answer false, which is exactly the state this must not trust.
+  const bool wasIconic = windowHwnd_ && ::IsIconic(windowHwnd_);
+  if (wasIconic) ::ShowWindow(windowHwnd_, SW_RESTORE);
   // What the window actually did, as opposed to what any one step intended.
   // The shell's "restored placement" line was true when it was written and
   // false a moment later, which is the failure mode this project keeps paying
@@ -708,7 +741,39 @@ void AppController::ShowWindowImpl(const POINT* anchor) {
   }
   windowShown_ = true;
   SyncWindowMinimized();
+
+  // The window reveal (Phase E4): Arm() writes the start pose BEFORE
+  // Activate(), so the first composed frame is already correct and the
+  // reveal adds ZERO latency; Start() runs after. Never on an un-minimize
+  // (wasIconic above — the OS's own restore animation owns that moment) and
+  // never from anywhere but here: ReconcileWindowPresentation's four replay
+  // handlers (auth/tunnel/stats/balance, re-applied after a hidden interval)
+  // must not re-trigger this, or every tray restore would replay it exactly
+  // like the old focus-loss graph-reset bug this app already paid for once.
+  if (auto self = window_.try_as<winrt::URnetwork::implementation::MainWindow>()) {
+    std::optional<POINT> origin;
+    RECT iconRect{};
+    if (tray_.GetIconRect(iconRect)) {
+      // E2 fallback 1: the tray icon's own rect (works for a context-menu
+      // "Open" as well as a left click, and for the overflow chevron).
+      origin = POINT{(iconRect.left + iconRect.right) / 2, (iconRect.top + iconRect.bottom) / 2};
+    } else if (anchor) {
+      // E2 fallback 2: the click point already used to place the window.
+      origin = *anchor;
+    }
+    // E2 fallback 3 (origin == nullopt): a plain centred scale — Arm() reads
+    // that as "no direction" rather than failing to reveal at all.
+    RECT windowRect{};
+    if (windowHwnd_) ::GetWindowRect(windowHwnd_, &windowRect);
+    self->ArmReveal(!wasIconic, origin, windowRect);
+  }
+
   window_.Activate();
+
+  if (auto self = window_.try_as<winrt::URnetwork::implementation::MainWindow>()) {
+    self->StartReveal();
+  }
+
   ReconcileWindowPresentation();
 }
 

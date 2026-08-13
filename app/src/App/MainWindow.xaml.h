@@ -9,8 +9,11 @@
 #include "MainWindow.g.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
+
+#include <windows.h>
 
 #include "AccountPage.h"
 #include "BalanceSheets.h"
@@ -27,6 +30,7 @@
 #include "UrComponents.h"
 #include "UsageBar.h"
 #include "WalletPage.h"
+#include "WindowReveal.h"
 
 namespace winrt::URnetwork::implementation {
 
@@ -41,6 +45,19 @@ struct MainWindow : MainWindowT<MainWindow> {
   MainWindow();
   ~MainWindow();
   void SetPresentationActive(bool active);
+
+  // ---- the window reveal (Phase E) ----
+  // Called from AppController::ShowWindowImpl ONLY — see WindowReveal.h for
+  // the ordering contract (Arm before Activate, Start after) and why this
+  // must never fire from ReconcileWindowPresentation's replay path.
+  void ArmReveal(bool enabled, std::optional<POINT> originScreen, RECT const& windowScreenRect);
+  void StartReveal();
+
+  // ---- onboarding (Phase E5) ----
+  // Set once, when the window is first created (AppController::ShowWindowImpl)
+  // — the answer AppController::Start already cached at tray-icon creation,
+  // since this window does not exist yet at that point.
+  void PrimeOnboarding(bool active) { onboardingActive_ = active; }
 
   // ---- page units ----
   // Public because the pages' own UI-thread callbacks resolve the window's weak
@@ -370,6 +387,12 @@ struct MainWindow : MainWindowT<MainWindow> {
   void ApplyUpdateChecker();  // fan the snapshot out to the pages
   void OnUpdateBannerAction();  // Update / retry, or re-reveal the manual zip
 
+  // ---- onboarding (Phase E5) ----
+  // Step 3: a TeachingTip on the Connect button, once, skipped while step 2
+  // (the ServiceSetup banner) has something actionable to say — see the
+  // definition for why that is the whole rule.
+  void MaybeShowOnboardingTip();
+
   std::unique_ptr<urnw::LoginPage> login_;
   std::unique_ptr<urnw::ConnectPage> connect_;
   std::unique_ptr<urnw::NetworkPage> network_;
@@ -466,6 +489,22 @@ struct MainWindow : MainWindowT<MainWindow> {
   // Seeded from SdkHost::CurrentAdvancedMode() in the ctor and written only by
   // ApplyAdvancedMode. See the accessor above.
   bool advancedMode_ = false;
+
+  // ---- motion (Phase C) ----
+  // The Home shell's one-shot entrance (formerly ConnectPage::AnimateDrawerIn,
+  // now folded into the general page-crossfade — see OnNavSelectionChanged).
+  // Still needed as an explicit flag at the two call sites where selecting an
+  // ALREADY-selected NavigationViewItem does not raise SelectionChanged, so
+  // the crossfade would otherwise never fire for a session that lands on
+  // Connect by default rather than by a click.
+  bool homeRevealed_ = false;
+
+  // ---- the window reveal (Phase E) ----
+  urnw::WindowReveal reveal_;
+
+  // ---- onboarding (Phase E5) ----
+  bool onboardingActive_ = false;  // this run's ShouldShow() answer, cached
+  bool onboardingTipShown_ = false;  // step 3 is one-shot per window lifetime
 
   bool wideLayout_ = false;
   // Home's second breakpoint (kUltraWideDip): the third column. Tracked

@@ -340,7 +340,18 @@
                                                   VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
                                                   AutomationProperties.AccessibilityView="Raw" />
                                 <VisualStateManager.VisualStateGroups>
+                                    <!-- Motion P0 (the cheapest win: see UrMotion.h kFastMs):
+                                         this group redefines CommonStates wholesale, which
+                                         means it also discards whatever transition duration
+                                         the platform's own Button template carried - every
+                                         hover/press in the app snapped instantly. One
+                                         GeneratedDuration here gives all three button styles
+                                         (this is the base every UrPaneAction*/UrCardButton
+                                         style is BasedOn) the same soft fade, for zero C++. -->
                                     <VisualStateGroup x:Name="CommonStates">
+                                        <VisualStateGroup.Transitions>
+                                            <VisualTransition GeneratedDuration="0:0:0.15" />
+                                        </VisualStateGroup.Transitions>
                                         <VisualState x:Name="Normal" />
                                         <VisualState x:Name="PointerOver">
                                             <VisualState.Setters>
@@ -654,7 +665,11 @@
                                                   HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
                                                   VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
                                 <VisualStateManager.VisualStateGroups>
+                                    <!-- Motion P0: see the matching note on UrButtonBaseStyle. -->
                                     <VisualStateGroup x:Name="CommonStates">
+                                        <VisualStateGroup.Transitions>
+                                            <VisualTransition GeneratedDuration="0:0:0.15" />
+                                        </VisualStateGroup.Transitions>
                                         <VisualState x:Name="Normal" />
                                         <VisualState x:Name="PointerOver">
                                             <VisualState.Setters>
@@ -899,7 +914,11 @@
                                                   HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
                                                   VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
                                 <VisualStateManager.VisualStateGroups>
+                                    <!-- Motion P0: see the matching note on UrButtonBaseStyle. -->
                                     <VisualStateGroup x:Name="CommonStates">
+                                        <VisualStateGroup.Transitions>
+                                            <VisualTransition GeneratedDuration="0:0:0.15" />
+                                        </VisualStateGroup.Transitions>
                                         <VisualState x:Name="Normal" />
                                         <VisualState x:Name="PointerOver">
                                             <VisualState.Setters>

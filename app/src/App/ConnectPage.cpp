@@ -2225,34 +2225,6 @@ void ConnectPage::OnChartTick() {
   // the sheet just reports scroll and renders the ordered rows (no local tick)
 }
 
-// The entrance.
-//
-// R1 staggered a fade + slide-up across the six cards. R3 has no cards: the
-// panes ARE the window, and sliding a full-height column up 16px on every visit
-// to Home reads as the layout settling after a failure rather than as polish. So
-// the whole shell fades in once, quickly, and nothing moves.
-void ConnectPage::AnimateDrawerIn() {
-  if (drawerAnimated_) return;
-  drawerAnimated_ = true;
-  namespace anim = winrt::Microsoft::UI::Xaml::Media::Animation;
-  auto view = w_.ConnectView();
-  view.Opacity(0);
-  anim::CubicEase ease;
-  ease.EasingMode(anim::EasingMode::EaseOut);
-  anim::Storyboard storyboard;
-  anim::DoubleAnimation fade;
-  fade.From(0.0);
-  fade.To(1.0);
-  fade.Duration(Duration{std::chrono::duration_cast<winrt::Windows::Foundation::TimeSpan>(
-                             std::chrono::milliseconds(180)),
-                         DurationType::TimeSpan});
-  fade.EasingFunction(ease);
-  anim::Storyboard::SetTarget(fade, view);
-  anim::Storyboard::SetTargetProperty(fade, L"Opacity");
-  storyboard.Children().Append(fade);
-  storyboard.Begin();
-}
-
 // --preview-ui + URNETWORK_PREVIEW_SAMPLE. Two gates, both required: the preview
 // flag says there is no session, and the env var says the operator explicitly
 // asked for synthetic content. Same contract as PreviewHeroActive.
