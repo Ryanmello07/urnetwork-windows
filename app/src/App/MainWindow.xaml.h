@@ -284,6 +284,9 @@ struct MainWindow : MainWindowT<MainWindow> {
                         winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnPeersLineClick(winrt::Windows::Foundation::IInspectable const&,
                          winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
+  // Simple mode's "More options" disclosure (Phase B); forwarded to ConnectPage.
+  void OnMoreOptionsToggle(winrt::Windows::Foundation::IInspectable const&,
+                           winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
 
   // Called by AppController (already marshaled onto the UI thread).
   void OnAuthStateChanged(urnw::AuthState state, std::string const& error);
@@ -307,7 +310,13 @@ struct MainWindow : MainWindowT<MainWindow> {
   // at window level rather than seven per-page handlers. AdaptiveTrigger would
   // have been the native mechanism and does not work here - see
   // kit::kWideBreakpointDip for what was measured.
-  void ApplyBreakpoint();
+  //
+  // Also the one place Home's pane COUNT is decided (Phase B): Advanced keeps
+  // its width-only rule, Simple never earns panes B/C. advancedMode_ does not
+  // change wide/ultra's raw width buckets used elsewhere in this function, so a
+  // mode flip alone would pass the "nothing crossed a bucket" early return -
+  // `force` is how MainWindow::ApplyAdvancedMode asks for a recompute anyway.
+  void ApplyBreakpoint(bool force = false);
 
   // ---- the persistent status strip ----
   // Built once, from kit::MakeStatusField, so the fields Advanced Mode adds

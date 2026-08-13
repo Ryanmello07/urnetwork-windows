@@ -209,6 +209,19 @@ void ConnectPage::ApplyStrings() {
   // The plan + usage card that used to sit in this rail is gone from Home
   // (spec §5); its strings now belong only to Account, which paints them from
   // MainWindow::ApplyBalance.
+
+  // Phase B: the disclosure row's label is static (unlike PeersLine's, which
+  // changes with the count), so it is set once here rather than from
+  // ApplyMoreOptionsVisibility. A Button whose content is a Panel gets no
+  // automatic name (the same gotcha PeersLine has, above) - name it explicitly.
+  w_.MoreOptionsLabel().Text(Adv("conn_more_options", L"More options"));
+  automation::AutomationProperties::SetName(w_.MoreOptionsToggle(),
+                                            Adv("conn_more_options", L"More options"));
+  // Seed the toggle/host/chevron for whatever advancedMode_ already is -
+  // ApplyAdvancedMode's own call only fires on a CHANGE, so a window that
+  // opens Simple (the common case) needs this or MoreOptionsHost is never
+  // told to collapse.
+  ApplyMoreOptionsVisibility();
 }
 
 // ---- connect -------------------------------------------------------------
@@ -568,6 +581,11 @@ void ConnectPage::ApplyConnectStatus() {
   // field away. The rule this adds is one line: no surface may print the word
   // for Disconnected while this machine's routes are still installed.
   const bool captured = w_.statusRoutesInstalled();
+  // Phase B: Simple's plain restatement of the bare-disconnected headline. Set
+  // true only by that one branch below - the captured/kill-switch readings
+  // already say more precise things ("still going through the tunnel" /
+  // "kill switch on") and must not be papered over with a generic line.
+  bool showNotProtected = false;
 
   hstring text;
   winrt::Windows::UI::Color dot = urnw::colors::kStatusIdle;
@@ -664,9 +682,20 @@ void ConnectPage::ApplyConnectStatus() {
       text = Loc("disconnected");
       dot = urnw::colors::kStatusIdle;
       heroConnection = urnw::ConnectCanvas::State::Disconnected;
+      showNotProtected = true;
       break;
   }
   w_.StatusText().Text(text);
+  // Phase B: the plain line the design doc asks for, restating the headline
+  // without inventing a new claim - Simple only, and only for the reading it
+  // was written for. Advanced omits it: the headline word already carries
+  // this for the reader who wanted more, and a second line here would be the
+  // "answers a fourth question" test failing in reverse.
+  urnw::kit::SetTextOrCollapse(
+      w_.ProtectionText(), (!advancedMode_ && showNotProtected)
+                                ? Adv("conn_not_protected",
+                                      L"Your internet traffic is not protected.")
+                                : hstring{});
 
   // ---- soft-kill-switch honesty (#27; RECOVERY.md's "says Connected but
   // nothing works" gap) ------------------------------------------------------
@@ -1934,10 +1963,39 @@ void ConnectPage::ApplyAdvancedMode(bool on) {
   ApplySessionRows();
   ApplyContractsList();
   ApplyInspector();
+  // Phase B: MoreOptionsHost's ONE predicate. Also re-renders the status
+  // block's plain protection line, which the same design rule (restate
+  // without the unit/id rather than hide) puts on the Simple reading only.
+  ApplyMoreOptionsVisibility();
+  ApplyConnectStatus();
   // Seed the routing tables the moment the mode comes on, rather than waiting
   // for the first slow tick: the user who just enabled Advanced Mode is looking
   // at the pane now.
   if (on) RefreshExitRouting();
+}
+
+// Phase B: THE decision for whether Provide, Connect options and the peers
+// list are on screen. Advanced never shows the toggle row and always shows
+// the content - unconditionally, lossless, exactly what shipped before this
+// disclosure existed. Simple shows the toggle and gates the content behind
+// moreOptionsExpanded_, collapsed by default. Called from ApplyAdvancedMode
+// (mode changed) and OnMoreOptionsToggle (user pressed the row) - the only two
+// things that can change the answer - so nothing else needs its own copy of
+// this check.
+void ConnectPage::ApplyMoreOptionsVisibility() {
+  w_.MoreOptionsToggle().Visibility(advancedMode_ ? Visibility::Collapsed
+                                                  : Visibility::Visible);
+  const bool expanded = advancedMode_ || moreOptionsExpanded_;
+  w_.MoreOptionsHost().Visibility(expanded ? Visibility::Visible
+                                           : Visibility::Collapsed);
+  // The chevron says what pressing the row does next, not the current state:
+  // down means "more below", up means "collapse it back up".
+  w_.MoreOptionsChevron().Glyph(expanded ? L"" : L"");
+}
+
+void ConnectPage::OnMoreOptionsToggle(IInspectable const&, RoutedEventArgs const&) {
+  moreOptionsExpanded_ = !moreOptionsExpanded_;
+  ApplyMoreOptionsVisibility();
 }
 
 // One row per contract peer: which peer, and how much has moved each way.

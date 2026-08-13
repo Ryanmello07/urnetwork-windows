@@ -129,6 +129,11 @@ class ConnectPage {
   // the inspector's "clear the selection" action (Advanced Mode)
   void OnInspectorClear(winrt::Windows::Foundation::IInspectable const&,
                         winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
+  // Simple mode's "More options" disclosure (Phase B). Advanced never shows
+  // this row - MoreOptionsHost is unconditionally visible there - so a press
+  // can only happen in Simple; see ApplyMoreOptionsVisibility.
+  void OnMoreOptionsToggle(winrt::Windows::Foundation::IInspectable const&,
+                           winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
 
  private:
   // The SDK's own connection status (ConnectViewController.getConnectionStatus,
@@ -192,6 +197,13 @@ class ConnectPage {
   // centred line INSIDE the full-height pane, not a card, so this only swaps
   // which of the two is drawn in that same area.
   void ApplySessionCardsVisibility(bool connected);
+  // Phase B: THE predicate for MoreOptionsHost (Provide, Connect options and
+  // the peers list). Advanced: always visible, unconditionally - lossless,
+  // exactly what shipped before this row existed. Simple: visible only while
+  // moreOptionsExpanded_, collapsed by default. One writer, called from
+  // ApplyAdvancedMode and from OnMoreOptionsToggle - the two things that can
+  // change the answer - so no other surface needs its own copy of this check.
+  void ApplyMoreOptionsVisibility();
 
   // ---- R3: the pane lists ---------------------------------------------------
   // The three dense, uniform-row lists the pane shell put where the cards were.
@@ -345,6 +357,11 @@ class ConnectPage {
   // SdkHost's standing value — this page never reads the preference itself, so
   // there is one authority and one apply path.
   bool advancedMode_ = false;
+  // Phase B: Simple mode's "More options" disclosure state (Provide, Connect
+  // options, peers line + list). Collapsed by default on every fresh Simple
+  // reading; Advanced ignores this entirely and always shows the content -
+  // see ApplyMoreOptionsVisibility.
+  bool moreOptionsExpanded_ = false;
   // The selected connection, by BlockActionItem::id. Empty means "nothing
   // selected", which in Advanced Mode is a real state with its own inspector
   // reading, not an error.

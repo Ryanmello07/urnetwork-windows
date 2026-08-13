@@ -6,6 +6,8 @@
 #include "MainWindow.g.cpp"
 #endif
 
+#include <limits>
+
 #include <winrt/Microsoft.UI.Xaml.Automation.h>
 #include <winrt/Windows.Foundation.h>
 
@@ -356,7 +358,7 @@ void MainWindow::ApplyStrings() {
 // One function rather than seven page-level SizeChanged handlers is the point:
 // there is exactly one place where the app decides what "wide" means.
 
-void MainWindow::ApplyBreakpoint() {
+void MainWindow::ApplyBreakpoint(bool force) {
   auto root = Content().try_as<FrameworkElement>();
   if (!root) return;
   // ActualWidth is in DIPs, which is what the breakpoint is stated in: on this
@@ -367,7 +369,7 @@ void MainWindow::ApplyBreakpoint() {
   if (width <= 0) return;
   const bool wide = urnw::kit::kWideBreakpointDip <= width;
   const bool ultra = urnw::kit::kUltraWideDip <= width;
-  if (breakpointApplied_ && wide == wideLayout_ && ultra == ultraLayout_) return;
+  if (!force && breakpointApplied_ && wide == wideLayout_ && ultra == ultraLayout_) return;
   breakpointApplied_ = true;
   wideLayout_ = wide;
   ultraLayout_ = ultra;
@@ -377,26 +379,36 @@ void MainWindow::ApplyBreakpoint() {
   // R3 deleted Home's card layout outright, and with it everything this branch
   // used to do. There is no centring column, no MaxWidth cap, and no Reparent:
   // the three panes are declared where they live and they always fill the
-  // window. All that is left to decide is how many of them there is room FOR,
-  // which is a width question and nothing else.
+  // window. All that is left to decide is how many of them there is room FOR -
+  // which used to be a width question and nothing else.
   //
-  //   >= 1000dip   three panes   connect(330) | activity(*) | statistics(380)
-  //   <  1000dip   two panes     connect(330) | activity(*)
+  // Phase B: it is now a MODE question first. The three-column shell is the
+  // Advanced reading (spec: "the status strip is already tiered correctly; the
+  // gap is that the shell survives into Simple, where it should not exist").
+  // advancedMode_ gates homeWide/homeTwoPanes below BEFORE width does, so a
+  // maximized Simple window still gets exactly one pane - not three panes
+  // squeezed, not a wide empty rail.
   //
-  // The statistics pane is the one that folds because it is the inspector: its
-  // charts, session figures, contracts, split rules and DNS are all reachable
-  // from the sheets its group headers open, so nothing becomes unreachable at
-  // flyout width - it just stops being on screen at the same time.
+  //   Advanced, >= 1000dip   three panes   connect(330) | activity(*) | statistics(380)
+  //   Advanced, <  1000dip   two panes     connect(330) | activity(*)
+  //   Simple, any width      one pane      connect only, capped+centred below
   //
-  // Below ~640dip the connect pane would leave the activity pane too narrow to
-  // be a table, so it takes the whole window and activity folds too.
-  const bool twoPanes = 640.0 <= width;
-  SetWidth(ConnectPaneCColumn(), wide ? 380 : 0);
-  ConnectPaneCRule().Visibility(wide ? Visibility::Visible : Visibility::Collapsed);
-  ConnectPaneC().Visibility(wide ? Visibility::Visible : Visibility::Collapsed);
+  // The statistics pane is the one that folds first in Advanced because it is
+  // the inspector: its charts, session figures, contracts, split rules and DNS
+  // are all reachable from the sheets its group headers open, so nothing
+  // becomes unreachable at flyout width - it just stops being on screen at the
+  // same time. Simple folds both B and C for the same reason Phase B gives:
+  // nothing in them answers "am I protected / through where / what do I
+  // press", so nothing reachable there is lost - see ConnectPage's Advanced
+  // reading of the same content, which Simple never disables, only hides.
+  const bool homeWide = advancedMode_ && wide;
+  const bool homeTwoPanes = advancedMode_ && 640.0 <= width;
+  SetWidth(ConnectPaneCColumn(), homeWide ? 380 : 0);
+  ConnectPaneCRule().Visibility(homeWide ? Visibility::Visible : Visibility::Collapsed);
+  ConnectPaneC().Visibility(homeWide ? Visibility::Visible : Visibility::Collapsed);
   // the connect pane is a fixed rail beside a table, EXCEPT when it is the only
   // pane left, where it takes the star and the activity pane closes
-  if (twoPanes) {
+  if (homeTwoPanes) {
     SetWidth(ConnectPaneAColumn(), 330);
     SetStar(ConnectPaneBColumn(), 1);
     ConnectPaneB().Visibility(Visibility::Visible);
@@ -406,6 +418,28 @@ void MainWindow::ApplyBreakpoint() {
     SetWidth(ConnectPaneBColumn(), 0);
     ConnectPaneB().Visibility(Visibility::Collapsed);
     ConnectPaneBRule().Visibility(Visibility::Collapsed);
+  }
+  // Simple: cap and centre the one remaining pane at 480dip - "one pane,
+  // 480dip cap, centred", so a maximized window does not stretch six rows
+  // edge to edge. Advanced's narrow (<640dip) one-pane reading is UNCHANGED:
+  // it earns the full width because there is nowhere else to put the content,
+  // and that reading predates this work - lossless.
+  if (auto content = ConnectPaneAContent()) {
+    if (advancedMode_) {
+      content.MaxWidth(std::numeric_limits<double>::infinity());
+      content.HorizontalAlignment(HorizontalAlignment::Stretch);
+    } else {
+      content.MaxWidth(480.0);
+      content.HorizontalAlignment(HorizontalAlignment::Center);
+    }
+  }
+  // The hero grows with it: ConnectCanvas clamps its own side to [168,288]dip
+  // off this host's WIDTH (ConnectCanvas.cpp kMinSide/kMaxSide), so raising the
+  // cap past 296 (288 + 2*kSidePad) is the whole change - the canvas's own
+  // SizeChanged handler does the rest. 190 is what shipped; unchanged for
+  // Advanced's narrower rail.
+  if (auto canvasHost = ConnectCanvasHost()) {
+    canvasHost.MaxWidth(advancedMode_ ? 190.0 : 320.0);
   }
 
   // ---- Network: the list, and what one row IS ------------------------------
@@ -599,13 +633,19 @@ void MainWindow::BuildStatusStrip() {
     statusSessionParts_.push_back(rule);
     statusSessionParts_.push_back(field.root);
   };
-  section(statusNetwork_, "network");
   section(statusProvider_, "selected_provider");
   section(statusTraffic_, "data");
 
   // ---- ADVANCED DENSITY (D5) ----------------------------------------------
   // The promise this strip was built to keep: four more facts cost four more
   // calls to MakeStatusField and no layout change. They do.
+  //
+  // Phase B moved Network here from between the pill and Provider: "pill +
+  // Provider + traffic-in-words" is Simple's whole strip (the design doc's
+  // words), and Network answers none of the three questions Simple asks on
+  // its own - it is context FOR the other two, which is an Advanced job. It
+  // reuses advSection rather than a new branch so this stays the one place
+  // that decides "core three vs advanced five", not a second one.
   //
   // These four are what an operator asks when the three above look fine and the
   // client still is not carrying traffic, and NOT ONE of them is inferable from
@@ -636,11 +676,13 @@ void MainWindow::BuildStatusStrip() {
       statusAdvancedParts_.push_back(rule);
       statusAdvancedParts_.push_back(field.root);
     };
+    advSection(statusNetwork_, Loc("network"));
     advSection(statusMode_, Adv("adv_session_mode", L"Session"));
     advSection(statusRoutes_, Adv("adv_routes", L"Routes"));
     advSection(statusRpcPort_, Adv("adv_rpc", L"RPC"));
     advSection(statusRaw_, Adv("adv_raw_status", L"Raw"));
   } else {
+    statusNetwork_ = {};
     statusMode_ = {};
     statusRoutes_ = {};
     statusRpcPort_ = {};
@@ -683,7 +725,11 @@ void MainWindow::ApplyStatusStripConnection(hstring const& text,
 }
 
 void MainWindow::ApplyStatusStrip() {
-  if (!statusNetwork_.value) return;  // not built yet
+  // statusProvider_, not statusNetwork_: Phase B made Network Advanced-only
+  // (see BuildStatusStrip), so it is null through most of a Simple session and
+  // is no longer a valid "has BuildStatusStrip run yet" probe. Provider is
+  // built in both readings.
+  if (!statusProvider_.value) return;  // not built yet
 
   // The strip belongs to the signed-in shell. On the sign-in flow it would be a
   // status line about a session that does not exist, under a screen whose whole
@@ -722,11 +768,20 @@ void MainWindow::ApplyStatusStrip() {
   // session reports the first and none of the second, and LiveStats has already
   // clamped its counters to zero for exactly that reason - so this reads the
   // clamped values and says what they mean rather than printing two zeroes.
+  //
+  // Phase B: a bps figure carries a unit, which the design rule makes Advanced
+  // by default - restated WITHOUT the token for Simple rather than dropped,
+  // because it is the sole evidence for "am I protected" this field carries.
+  // The disconnected reading is the same string either way; only the connected
+  // one forks.
   urnw::kit::SetStatusFieldValue(
       statusTraffic_,
-      statusConnected_ ? H("↓ " + urnw::FormatBitRate(statusDownBps_) + "   ↑ " +
-                           urnw::FormatBitRate(statusUpBps_))
-                       : Loc("site_app_no_traffic"));
+      !statusConnected_
+          ? Loc("site_app_no_traffic")
+          : (advancedMode_
+                 ? H("↓ " + urnw::FormatBitRate(statusDownBps_) + "   ↑ " +
+                     urnw::FormatBitRate(statusUpBps_))
+                 : Adv("conn_carrying_traffic", L"Carrying traffic")));
 
   // ---- the advanced four (D5) ---------------------------------------------
   // Only built when the mode is on, so a null field is "Normal", not an error.
@@ -839,6 +894,14 @@ void MainWindow::ApplyAdvancedMode(bool on) {
   // the separators belong to the fields and hiding a field without its rule
   // leaves a hairline against nothing.
   BuildStatusStrip();
+
+  // Home's pane count is gated on advancedMode_ (Phase B) but SizeChanged is
+  // the only other caller, so a runtime toggle at an unchanged window size
+  // would otherwise never re-run it. force=true bypasses the "width bucket
+  // unchanged" early return; harmless during construction, where this is a
+  // no-op because ActualWidth is still 0 and the first real layout pass
+  // (SizeChanged) applies the already-correct mode a moment later.
+  ApplyBreakpoint(/*force=*/true);
 
   // The pages. Each re-reads its own surfaces; none of them polls this.
   connect_->ApplyAdvancedMode(on);
@@ -1704,6 +1767,9 @@ void MainWindow::OnInspectorClear(IInspectable const& s, RoutedEventArgs const& 
 void MainWindow::OnPeersLineClick(IInspectable const& s,
                                    RoutedEventArgs const& e) {
   connect_->OnPeersLineClick(s, e);
+}
+void MainWindow::OnMoreOptionsToggle(IInspectable const& s, RoutedEventArgs const& e) {
+  connect_->OnMoreOptionsToggle(s, e);
 }
 
 void MainWindow::OnEditNetworkName(IInspectable const& s, RoutedEventArgs const& e) {
