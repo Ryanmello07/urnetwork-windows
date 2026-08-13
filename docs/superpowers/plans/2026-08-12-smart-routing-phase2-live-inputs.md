@@ -96,6 +96,25 @@ which of these must be fixed before this branch merges.
    file's existing "raw counters always-on, gate at consumption" pattern, so not
    a deviation — but it is a small always-on cost that did not exist before.
 
+**From Task 7 (`ecbb913`/`7bb6007`/`0a4e117`) review — both verdicts PASS. QUEUED FOR A FIX
+ROUND once Task 8 releases the worktree (one writer at a time):**
+9. **Important — the cap-drop counter counts attempts, not distinct keys.**
+   `routing_reward.go:53-60` increments `dropped` on every rejected `add` call.
+   The reviewer proved it with a scratch test: adding the same never-admitted
+   key 10 times reports `dropped=10`, not `1`. Both the commit subject ("keys
+   dropped") and the doc comment ("counts (class, exitId) keys rejected") claim
+   per-key semantics, so `event=reward_dropped dropped=N` overstates distinct
+   provider/class loss under sustained load. Severity is limited only because
+   the cap path needs `HeartbeatInterval==0`, unreachable under any shipped
+   default. Fix the code to match the stated semantics, or restate the
+   semantics — but the log line and the comment must agree with reality.
+10. **Minor — a prefix-match fragility in the chain test.**
+   `routing_e2e_test.go:122` filters `linesWith("event=reward")`, which also
+   matches `event=reward_dropped`. The sibling commit's own tests already guard
+   this with a trailing space (`"event=reward "`). Not currently exploitable —
+   the chain test makes exactly one `recordFlowReward` call — but it is a known
+   trap the neighbouring commit avoided and this one did not.
+
 **From Task 6 fix (`e96cd09`) re-review — fix ACCEPTED, this remains:**
 6a. **The durable decay introduces a third, hybrid regime when
 `QuarantineDampening` is toggled mid-session** (it became runtime-toggleable in
