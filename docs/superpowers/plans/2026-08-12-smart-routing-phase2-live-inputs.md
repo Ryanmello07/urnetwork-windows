@@ -113,6 +113,38 @@ which of these must be fixed before this branch merges.
    the report is not). No behavioral impact — the 5s throttle does the real
    work — but do not trust the report's wording here.
 
+## BLOCKERS on Task 8 (default-on) — must be fixed first
+
+**B1. Task 5 (`634f768`): provider priors are keyed on the wrong identity.**
+`recordFlowReward` keys on `client.ClientId()`, which is our own ephemeral
+per-window-slot id, minted fresh by `POST /network/auth-client` on nearly every
+channel reconnect (`ip_remote_multi_client_identity.go:8-15` states this
+outright). The stable provider identity is `client.Destination().Tail()`, already
+used in this file as `egressClientId`. Consequence: priors fail across an
+ordinary in-session reconnect to the SAME provider, not merely across restarts —
+the learning feature is inert from the first session while appearing complete.
+Fix dispatched.
+
+**B2. Task 6 (`2ce2655`): reconviction decay is not durable.**
+Decay is a read-time lens over a raw counter that is never decremented. Raw 3
+decays to a read of 0 over quiet time; a 4th conviction stamps
+`quarantineLiftTime = now`, so the next read computes elapsed≈0 and returns
+**4, not 1**. Forgiveness looks durable during quiet monitoring and then
+evaporates entirely on the next single event. `m.StallEvents =
+quarantineReconvictionCount()` (`:3179`) feeds this into `exitScore`'s
+continuous, uncapped-until-30 stall term — the reviewer measured stallPenalty
+jumping 0.1→0.4, ~10% of the ~3.0 positive score range, enough to flip a close
+placement. `benchDuration` hides it only because its ≥2 cap makes it insensitive
+to 1 vs 4; that is the bug being invisible to one consumer, not the design being
+safe.
+FIX: decay-then-increment in `clearQuarantineWithLock` — read the OLD
+`quarantineLiftTime` before overwriting it, store
+`quarantineReconvictions = decay(raw, now - oldLift) + 1`, then advance the
+anchor. No new state, same anchor field, keeps reads idempotent and the
+off-path short-circuit intact. (The Task 6 report's claim that a real leaky
+bucket needs a second anchor is wrong — it needs only to read the existing
+anchor once before overwriting.)
+
 **Not a Phase 2 defect, but found by Phase 2 —** `multiClientWindow.Close()`
 (`ip_remote_multi_client.go:~9394`) closes every remaining client directly while
 `self.removeClients(removedClients)` sits commented out, so
