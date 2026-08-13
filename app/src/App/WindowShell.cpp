@@ -94,10 +94,52 @@ double ScaleFor(HWND hwnd) {
   return (dpi == 0 ? 96u : dpi) / 96.0;
 }
 
+// True when at least part of rect actually overlaps a monitor Windows
+// reports RIGHT NOW. This is a stronger guarantee than ClampToWorkArea below:
+// MonitorFromPoint(..., MONITOR_DEFAULTTONEAREST) never fails while at least
+// one display exists, so ClampToWorkArea always finds *some* monitor and
+// forces the rect inside its work area - but "nearest by distance" is a
+// heuristic over a single point, not a visibility test. A placement saved on
+// a monitor that has since been unplugged can still read as belonging to
+// whatever monitor is now nearest, and the resulting clamp can leave it
+// planted in space that used to be a screen and is not one any more.
+// Observed live, verbatim from this build's own log: a window saved on a
+// since-removed monitor came back as "restored placement 1244x788 at
+// (-1361,585)" - a rect that overlaps no monitor this box currently has.
+// EnumDisplayMonitors + an actual rect intersection is the only way to ask
+// "is this really on a screen" instead of "which screen is closest".
+bool IsVisibleOnAnyMonitor(const RECT& rect) {
+  struct Ctx {
+    RECT rect;
+    bool visible = false;
+  } ctx{rect};
+  ::EnumDisplayMonitors(
+      nullptr, nullptr,
+      [](HMONITOR mon, HDC, LPRECT, LPARAM lparam) -> BOOL {
+        auto& ctx = *reinterpret_cast<Ctx*>(lparam);
+        MONITORINFO mi{};
+        mi.cbSize = sizeof(mi);
+        if (!::GetMonitorInfoW(mon, &mi)) return TRUE;  // keep looking
+        RECT intersection{};
+        if (::IntersectRect(&intersection, &ctx.rect, &mi.rcMonitor)) {
+          ctx.visible = true;
+          return FALSE;  // found real overlap - stop enumerating
+        }
+        return TRUE;
+      },
+      reinterpret_cast<LPARAM>(&ctx));
+  return ctx.visible;
+}
+
 // Keep the rect on a monitor that exists, and no larger than that monitor's
 // work area. Same failure this codebase already paid for once with the tray
 // anchor: an unclamped position put the window at (-1136,-875), off every
 // screen, with the tray still saying the app was open.
+//
+// This alone is not the full guarantee (see IsVisibleOnAnyMonitor above) -
+// it always lands on the NEAREST monitor's work area even when the saved
+// rect did not overlap any real monitor at all. Callers that care about that
+// distinction check IsVisibleOnAnyMonitor first.
 Placement ClampToWorkArea(Placement p) {
   POINT centre{p.x + p.width / 2, p.y + p.height / 2};
   HMONITOR mon = ::MonitorFromPoint(centre, MONITOR_DEFAULTTONEAREST);
@@ -199,7 +241,23 @@ bool ApplyNativeShell(winrtx::Window const& window, HWND hwnd) {
 
   Placement p;
   bool restored = false;
-  if (auto saved = LoadPlacement()) {
+  auto saved = LoadPlacement();
+  if (saved) {
+    // Checked BEFORE the window is moved anywhere near it: a rect that
+    // overlaps no current monitor at all is not "the wrong monitor", it is
+    // stale data (most often a monitor that has since been unplugged), and
+    // ClampToWorkArea's nearest-monitor heuristic is not a substitute for
+    // actually asking whether it is visible. Discard it here and fall
+    // through to the same centred-default placement a first-ever run gets.
+    const RECT savedRect{saved->x, saved->y, saved->x + saved->width, saved->y + saved->height};
+    if (!IsVisibleOnAnyMonitor(savedRect)) {
+      LogInfo("shell: saved placement {}x{} at ({},{}) is not visible on any "
+              "current monitor - discarding it for the centred default",
+              saved->width, saved->height, saved->x, saved->y);
+      saved.reset();
+    }
+  }
+  if (saved) {
     p = *saved;
     // Move to the saved POSITION first, then read the DPI. GetDpiForWindow
     // answers for the monitor the window is currently on, which at this point
