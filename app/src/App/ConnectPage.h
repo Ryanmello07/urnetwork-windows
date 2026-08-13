@@ -69,7 +69,10 @@ class ConnectPage {
   // copy; re-renders the status line
   void SetNetworkIdentity(std::string const& networkName, bool guestMode);
   void ResyncDrawer();     // seed the caches/panes from SdkHost snapshots
-  void AnimateDrawerIn();  // the entrance; see the definition
+  // The entrance used to live here as a one-shot AnimateDrawerIn(); it is now
+  // urnw::motion::CrossfadePageSwap, called from MainWindow — the drawer's
+  // first appearance is a page transition with no outgoing page, not a
+  // separate mechanism (Phase C of the design-update plan).
   // --preview-ui + URNETWORK_PREVIEW_SAMPLE only: synthetic rows for the panes,
   // so a review build shows the layout FULL rather than four empty states. Two
   // gates, like PreviewHeroActive, and it writes only this page's own caches —
@@ -362,7 +365,6 @@ class ConnectPage {
   uint32_t exitRefreshTick_ = 0;
 
   bool updatingControls_ = false;  // guards programmatic toggle/segment updates
-  bool drawerAnimated_ = false;    // entrance plays once per window
   std::shared_ptr<urnw::ClientContractsSheet> contractsSheet_;
   std::shared_ptr<urnw::SplitRulesSheet> splitRulesSheet_;
   std::shared_ptr<urnw::DnsEditorSheet> dnsSheet_;

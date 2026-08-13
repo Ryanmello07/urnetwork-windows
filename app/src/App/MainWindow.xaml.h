@@ -458,6 +458,15 @@ struct MainWindow : MainWindowT<MainWindow> {
   // ApplyAdvancedMode. See the accessor above.
   bool advancedMode_ = false;
 
+  // ---- motion (Phase C) ----
+  // The Home shell's one-shot entrance (formerly ConnectPage::AnimateDrawerIn,
+  // now folded into the general page-crossfade — see OnNavSelectionChanged).
+  // Still needed as an explicit flag at the two call sites where selecting an
+  // ALREADY-selected NavigationViewItem does not raise SelectionChanged, so
+  // the crossfade would otherwise never fire for a session that lands on
+  // Connect by default rather than by a click.
+  bool homeRevealed_ = false;
+
   bool wideLayout_ = false;
   // Home's second breakpoint (kUltraWideDip): the third column. Tracked
   // separately so a drag across 1800 re-runs the layout even though `wide` did
