@@ -153,8 +153,8 @@ ContentDialog MakeDialog(XamlRoot const& root, hstring const& title) {
   dialog.XamlRoot(root);
   if (!title.empty()) dialog.Title(winrt::box_value(title));
   dialog.CloseButtonText(Loc("close"));
-  // brand sheet surface (macOS sheet background)
-  dialog.Background(colors::BackgroundBrush());
+  // brand sheet surface (android SheetBlack: a sheet sits ABOVE the page)
+  dialog.Background(colors::SheetBrush());
   return dialog;
 }
 
@@ -258,6 +258,30 @@ void SetTermsMarkerText(TextBlock const& text, std::wstring const& value,
   }
 }
 
+void PairTermsLabel(CheckBox const& box, TextBlock const& label) {
+  namespace automation = winrt::Microsoft::UI::Xaml::Automation;
+  using automation::Peers::AccessibilityView;
+  if (!box || !label) return;
+  // The checkbox takes its name from the sentence — it has no content of its
+  // own, so without this it is a nameless CheckBox in the UIA tree...
+  automation::AutomationProperties::SetLabeledBy(box, label);
+  // ...and the sentence itself then has to LEAVE the control view, or it is
+  // announced once as the checkbox's name and immediately again as the text
+  // sitting beside it. Verified in the tree before this existed:
+  //   CheckBox 'I agree to URnetwork's Terms ... Privacy Policy'
+  //   Text     'I agree to URnetwork's Terms ... Privacy Policy'
+  automation::AutomationProperties::SetAccessibilityView(label, AccessibilityView::Raw);
+  // PER-ELEMENT, not a subtree hide. The two Hyperlinks inside that sentence
+  // are the only way to reach the terms and the privacy policy without a
+  // mouse, and they are children of the element just hidden — so each is put
+  // back into the content view explicitly.
+  for (auto const& run : label.Inlines()) {
+    if (auto link = run.try_as<Hyperlink>()) {
+      automation::AutomationProperties::SetAccessibilityView(link, AccessibilityView::Content);
+    }
+  }
+}
+
 // ---- RedeemCodeSheet --------------------------------------------------------
 
 std::shared_ptr<RedeemCodeSheet> RedeemCodeSheet::Create(XamlRoot const& root,
@@ -336,7 +360,8 @@ void RedeemCodeSheet::Build(XamlRoot const& root) {
 
 void RedeemCodeSheet::Submit() {
   const std::string secret = TrimWhitespace(urnw::Narrow(codeBox_.Text().c_str()));
-  if (redeeming_ || secret.size() != kBalanceCodeLength || !sdk_.apiReady()) return;
+  // IsLoggedIn(), not apiReady() - see WalletPage::ValidateWalletAddress.
+  if (redeeming_ || secret.size() != kBalanceCodeLength || !sdk_.IsLoggedIn()) return;
   redeeming_ = true;
   dialog_.IsPrimaryButtonEnabled(false);
   codeBox_.IsEnabled(false);
@@ -349,17 +374,19 @@ void RedeemCodeSheet::Submit() {
       args, [queue, weak](std::optional<urnet::RedeemBalanceCodeResult> result,
                           std::optional<std::string> err) {
         const bool ok = result && result->transfer_balance.has_value();
-        const bool rejected = !ok && result && result->error;  // the server refused the code
-        const std::string error =
-            ok || rejected ? std::string() : (err ? *err : std::string());
+        // rejected = the server was reached, decided, and refused the code.
+        // Anything else (err set / null result) is a TRANSPORT failure: the
+        // redeem may have committed server-side with only the response lost.
+        const bool rejected = !ok && result && result->error;
+        const std::string serverMessage = rejected ? result->error->message : std::string();
         const int64_t bytes = ok ? result->transfer_balance->balance_byte_count : 0;
-        queue.TryEnqueue([weak, ok, rejected, error, bytes] {
-          if (auto self = weak.lock()) self->ApplyResult(ok, rejected, error, bytes);
+        queue.TryEnqueue([weak, ok, rejected, serverMessage, bytes] {
+          if (auto self = weak.lock()) self->ApplyResult(ok, rejected, serverMessage, bytes);
         });
       });
 }
 
-void RedeemCodeSheet::ApplyResult(bool ok, bool rejected, std::string const& serverError,
+void RedeemCodeSheet::ApplyResult(bool ok, bool rejected, std::string const& serverMessage,
                                   int64_t balanceByteCount) {
   redeeming_ = false;
   if (ok) {
@@ -372,10 +399,14 @@ void RedeemCodeSheet::ApplyResult(bool ok, bool rejected, std::string const& ser
   }
   codeBox_.IsEnabled(true);
   dialog_.IsPrimaryButtonEnabled(true);
-  // a server error is not localizable; show it when there is one
-  errorText_.Text(rejected            ? Loc("invalid_balance_code")
-                  : serverError.empty() ? Loc("something_went_wrong")
-                                        : H(serverError));
+  // A rejection is authoritative — surface the server's own reason when it
+  // sent one (not localizable), else the generic invalid-code line. A
+  // transport failure is NOT "invalid": the code may already be applied, so
+  // the copy says to check the balance before trying again — never telling a
+  // user whose code just credited that it was invalid.
+  errorText_.Text(rejected ? (serverMessage.empty() ? Loc("invalid_balance_code")
+                                                    : H(serverMessage))
+                           : Loc("balance_code_transport_error"));
   errorText_.Visibility(Visibility::Visible);
 }
 
@@ -500,6 +531,9 @@ void UpgradeSheet::Build(XamlRoot const& root) {
       MakeText(Loc("pricing_shown_at_checkout"), 12, colors::FaintBrush(), true));
 
   checkoutErrorText_ = MakeText(hstring{L""}, 12, colors::DangerBrush(), true);
+  // selectable: a failed browser launch appends the checkout url for the user
+  // to copy out by hand (LaunchHosted)
+  checkoutErrorText_.IsTextSelectionEnabled(true);
   checkoutErrorText_.Visibility(Visibility::Collapsed);
   productsPanel_.Children().Append(checkoutErrorText_);
 
@@ -675,7 +709,7 @@ void UpgradeSheet::ShowCheckoutError(hstring const& message) {
 }
 
 void UpgradeSheet::BeginCheckout() {
-  if (checkingOut_ || !sdk_.apiReady()) return;
+  if (checkingOut_ || !sdk_.IsLoggedIn()) return;
   checkingOut_ = true;
   hostedFallbackTried_ = false;
   subscribeButton_.IsEnabled(false);
@@ -690,7 +724,7 @@ void UpgradeSheet::BeginCheckout() {
 }
 
 void UpgradeSheet::RequestSession(bool embedded) {
-  if (!sdk_.apiReady()) {
+  if (!sdk_.IsLoggedIn()) {
     ShowCheckoutError(Loc("something_went_wrong"));
     return;
   }
@@ -738,21 +772,40 @@ void UpgradeSheet::RequestSession(bool embedded) {
                                                            : H(transportError));
             return;
           }
-          try {
-            winrt::Windows::System::Launcher::LaunchUriAsync(Uri(H(url)));
-          } catch (...) {
-            self->ShowCheckoutError(Loc("something_went_wrong"));
-            return;
-          }
-          self->checkingOut_ = false;
-          self->subscribeRing_.IsActive(false);
-          self->subscribeButton_.IsEnabled(true);
-          // bridge the webhook gap: poll until the server confirms Pro
-          self->waitingBodyText_.Text(Loc("checkout_opened_in_browser"));
-          self->balance_.StartConfirmationPolling();
-          self->ShowPage(Page::Waiting);
+          // hand the session to the browser; Waiting only shows once the
+          // launch is OBSERVED to succeed (the ring keeps spinning meanwhile)
+          self->LaunchHosted(url);
         });
       });
+}
+
+winrt::fire_and_forget UpgradeSheet::LaunchHosted(std::string url) {
+  auto weak = weak_from_this();
+  // Await the launcher's verdict instead of fire-and-forget: advancing to the
+  // waiting page with no browser open would leave the user staring at a
+  // spinner for a payment page that never existed.
+  bool launched = false;
+  try {
+    launched = co_await winrt::Windows::System::Launcher::LaunchUriAsync(Uri(H(url)));
+  } catch (...) {
+    launched = false;
+  }
+  auto self = weak.lock();
+  if (!self || self->closed_) co_return;
+  if (!launched) {
+    // actionable failure: the checkout url itself, selectable so the user can
+    // copy it into any browser by hand (the error text allows selection)
+    self->ShowCheckoutError(
+        hstring{Localized("checkout_browser_launch_failed") + L"\n" + Widen(url)});
+    co_return;
+  }
+  self->checkingOut_ = false;
+  self->subscribeRing_.IsActive(false);
+  self->subscribeButton_.IsEnabled(true);
+  // bridge the webhook gap: poll until the server confirms Pro
+  self->waitingBodyText_.Text(Loc("checkout_opened_in_browser"));
+  self->balance_.StartConfirmationPolling();
+  self->ShowPage(Page::Waiting);
 }
 
 winrt::fire_and_forget UpgradeSheet::OpenEmbedded(std::string clientSecret) {
@@ -806,10 +859,23 @@ winrt::fire_and_forget UpgradeSheet::OpenEmbedded(std::string clientSecret) {
       auto self = weak.lock();
       if (!self || generation != self->webviewGeneration_) return;
       if (self->page_ != Page::Checkout) return;
-      // a dead browser process cannot take a payment: back to the products
-      // with an inline error instead of a blank box
-      self->ShowPage(Page::Products);
-      self->ShowCheckoutError(Loc("something_went_wrong"));
+      if (self->checkoutPageLoaded_) {
+        // The browser process died AFTER the checkout form rendered: the card
+        // may already have been charged, with only the redirect lost. Never
+        // show a bare "went wrong, retry" here — that invites a second
+        // purchase for a payment that likely landed. Treat it like a
+        // completed-checkout handoff: poll the server for the webhook, with
+        // copy saying the plan updates automatically if the payment went
+        // through. (ShowPage(Waiting) also tears the dead webview down.)
+        self->waitingBodyText_.Text(Loc("checkout_interrupted_confirming"));
+        self->balance_.StartConfirmationPolling();
+        self->ShowPage(Page::Waiting);
+        return;
+      }
+      // died before the page ever rendered: nothing was shown, so nothing was
+      // paid — the hosted flow can still save the purchase (the same rescue
+      // NavigationCompleted-failure takes)
+      self->FallBackToHosted();
     });
   });
 
@@ -917,12 +983,17 @@ void UpgradeSheet::TeardownWebView() {
 }
 
 void UpgradeSheet::OnBalance(BalanceSnapshot const& snapshot, BalancePollState const& poll) {
-  if (page_ != Page::Waiting) return;
+  if (page_ != Page::Waiting && page_ != Page::TimedOut) return;
   if (snapshot.isPro) {
+    // A Pro-confirming snapshot wins from EITHER page: the timeout screen is
+    // "we haven't heard yet", not a terminal state, and the background poll /
+    // an activation refresh can still deliver the confirmation after the
+    // 2-minute budget gave up. Leaving TimedOut up would tell a user who just
+    // paid that the purchase is in doubt.
     ShowPage(Page::Success);
-  } else if (poll.timedOut) {
-    ShowPage(Page::TimedOut);
+    return;
   }
+  if (page_ == Page::Waiting && poll.timedOut) ShowPage(Page::TimedOut);
 }
 
 }  // namespace urnw
