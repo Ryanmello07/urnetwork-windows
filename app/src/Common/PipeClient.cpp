@@ -34,7 +34,25 @@ bool PipeClient::Connect() {
 
   // The pipe is a message-mode byte stream we frame by newline. Retry briefly
   // if the single instance is momentarily busy between clients.
-  for (int attempt = 0; attempt < 20; ++attempt) {
+  //
+  // "Briefly" is load-bearing and used not to be. This loop ran 20 attempts
+  // with a 500ms WaitNamedPipeW between them, so a pipe that EXISTS but never
+  // frees an instance cost the caller a full 10 SECONDS -- measured at 10.19s
+  // on a machine where urnetworkd was running and the control pipe was already
+  // held by another client. That is not hypothetical: SdkHost::Initialize calls
+  // Connect() synchronously during startup, BEFORE the main window is created,
+  // so the whole app sat invisible for ten seconds and then appeared -- which
+  // also swallowed the window reveal, because the animation played at the
+  // instant the window finally showed and read as "it finally opened".
+  //
+  // A server that closes one client and accepts the next does it in single-
+  // digit milliseconds, so the budget only ever needed to cover that handoff.
+  // Failing fast is what the caller already expects: SdkHost documents this
+  // call as ok if the service is not up yet, and retries it on demand.
+  constexpr int kConnectAttempts = 5;
+  constexpr DWORD kBusyWaitMs = 100;  // total budget ~500ms, was ~10s
+  const auto connectStart = std::chrono::steady_clock::now();
+  for (int attempt = 0; attempt < kConnectAttempts; ++attempt) {
     HANDLE h = ::CreateFileW(ids::kControlPipeName, GENERIC_READ | GENERIC_WRITE,
                              0, nullptr, OPEN_EXISTING, FILE_FLAG_OVERLAPPED,
                              nullptr);
@@ -48,8 +66,17 @@ bool PipeClient::Connect() {
     if (::GetLastError() != ERROR_PIPE_BUSY) {
       return false;  // service not running
     }
-    ::WaitNamedPipeW(ids::kControlPipeName, 500);
+    ::WaitNamedPipeW(ids::kControlPipeName, kBusyWaitMs);
   }
+  // Say it, rather than returning a bare false. A pipe that is present but
+  // never free is a different fault from a service that is not running, and
+  // the old code made the two indistinguishable at the call site.
+  const auto waitedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                            std::chrono::steady_clock::now() - connectStart)
+                            .count();
+  LogWarn("pipe: control pipe present but no instance came free after {} attempts ({}ms) -- "
+          "continuing without the service; the connection is retried on demand",
+          kConnectAttempts, waitedMs);
   return false;
 }
 
