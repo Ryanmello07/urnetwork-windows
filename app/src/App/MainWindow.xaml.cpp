@@ -383,12 +383,6 @@ void MainWindow::SetPresentationActive(bool active) {
 
 void MainWindow::ArmReveal(bool enabled) { reveal_.Arm(enabled); }
 
-// TRANSITIONAL (deleted in Task 4 with its caller, AppController::ShowWindowImpl):
-// the origin/rect are dead — no direction decision remains — so this just forwards.
-void MainWindow::ArmReveal(bool enabled, std::optional<POINT>, RECT const&) {
-  ArmReveal(enabled);
-}
-
 void MainWindow::StartReveal() { reveal_.Start(); }
 
 // ---- strings -------------------------------------------------------------

@@ -10,10 +10,7 @@
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
 
-#include <optional>
 #include <vector>
-
-#include <windows.h>
 
 #include <winrt/Microsoft.UI.Xaml.h>
 #include <winrt/Microsoft.UI.Xaml.Media.Animation.h>
@@ -68,9 +65,6 @@ class WindowReveal {
   // SW_RESTORE). ShouldAnimate() is checked here: unarmed = zero property
   // writes = instant, fully-correct UI.
   void Arm(bool enabled);
-  // TRANSITIONAL (deleted in Task 4 with its caller): forwards to Arm(bool);
-  // the origin/rect are dead — no direction decision remains.
-  void Arm(bool enabled, std::optional<POINT>, RECT const&) { Arm(enabled); }
 
   // Start the spring + opacity ripple. Call AFTER Activate() returns. A no-op
   // unless the matching Arm() armed a reveal. If the OS animation toggle
