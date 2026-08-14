@@ -254,11 +254,13 @@ same spring, same tokens, one union CancelToFinal.
 The signed-out screen currently has NO wide layout: LoginRoot's inner Grid has
 no columns, LoginPanel is a MaxWidth=512 centred column at every width, and
 `ApplyBreakpoint`'s seven responsive groups all omit the login tree. At the
-1230dip wide breakpoint that leaves the 512+32dip form column with ~359dip of
-empty plate on EACH side — ~58% of the window — and the "hero" is a globe art
-card capped at 220dip (`kGlobeMaxSide`, LoginCarousel.cpp) floating in
-blackness. Blooming that as-is would be a small card blooming in an ocean of
-empty plate. So Wave 1 also gives the login screen its desktop reading (plan
+app-wide `kWideBreakpointDip` (UrComponents.h, 1000dip) that leaves the
+512+32dip form column with ~359dip of empty plate on EACH side — ~58% of the
+window, measured on a 1230dip-wide window when the bug was logged — and the
+"hero" is a globe art card capped at 220dip (`kGlobeMaxSide`,
+LoginCarousel.cpp) floating in blackness. Blooming that as-is would be a
+small card blooming in an ocean of empty plate. So Wave 1 also gives the
+login screen its desktop reading (plan
 Task 2a): LoginRoot's Grid gets two named columns — art (`*`) | form
 (512+32) — `ApplyBreakpoint` reparents `LoginCarouselHost` into the left art
 pane at the app-wide `kWideBreakpointDip` (UrComponents.h, 1000dip) and
