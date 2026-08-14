@@ -74,14 +74,27 @@ void SetStar(Controls::ColumnDefinition const& column, double weight) {
 // between the form column's flow (narrow: first child of LoginPanel) and the
 // wide art pane. Index is clamped, so "first" is stable even if the panel's
 // child list changes around it.
+// Detach `child` from whichever of `candidates` holds it, then insert into
+// `parent`. The candidates are searched DIRECTLY, never via Parent():
+// FrameworkElement.Parent() is null for an element whose subtree has not done
+// a layout pass, and the first revision of this helper trusted it — on a
+// signed-in launch ApplyAuthState collapses LoginRoot before the login tree
+// ever lays out, Parent() answered null, the removal was skipped, and
+// InsertAt threw "Element is already the child of another element" as an
+// unhandled exception: an instant crash on EVERY signed-in launch, while
+// every signed-out launch (and therefore every credential-less capture run)
+// worked. Searching the real Children vectors is layout-independent.
 void ReparentTo(winrt::Microsoft::UI::Xaml::UIElement const& child,
-                Controls::Panel const& parent, uint32_t index) {
+                Controls::Panel const& parent, uint32_t index,
+                std::initializer_list<Controls::Panel> candidates) {
   if (!child || !parent) return;
-  auto current = child.try_as<FrameworkElement>().Parent().try_as<Controls::Panel>();
-  if (current == parent) return;
-  if (current) {
-    uint32_t at = 0;
-    if (current.Children().IndexOf(child, at)) current.Children().RemoveAt(at);
+  uint32_t at = 0;
+  if (parent.Children().IndexOf(child, at)) return;  // already where it belongs
+  for (auto const& c : candidates) {
+    if (c && c != parent && c.Children().IndexOf(child, at)) {
+      c.Children().RemoveAt(at);
+      break;
+    }
   }
   parent.Children().InsertAt((std::min)(index, parent.Children().Size()), child);
 }
@@ -667,11 +680,13 @@ void MainWindow::ApplyBreakpoint(bool force) {
   if (wide) {
     SetStar(LoginArtColumn(), 1);
     SetWidth(LoginFormColumn(), 544);
-    ReparentTo(LoginCarouselHost(), LoginArtPane(), 0);
+    ReparentTo(LoginCarouselHost(), LoginArtPane(), 0,
+               {LoginPanel(), LoginArtPane()});
     LoginArtPane().Visibility(Visibility::Visible);
   } else {
     LoginArtPane().Visibility(Visibility::Collapsed);
-    ReparentTo(LoginCarouselHost(), LoginPanel(), 0);
+    ReparentTo(LoginCarouselHost(), LoginPanel(), 0,
+               {LoginPanel(), LoginArtPane()});
     SetWidth(LoginArtColumn(), 0);
     SetStar(LoginFormColumn(), 1);
   }
