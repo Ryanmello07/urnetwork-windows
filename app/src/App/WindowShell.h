@@ -18,8 +18,16 @@ namespace urnw::shell {
 
 // The compact default, in DIPs; scaled by the window's own DPI before use.
 // A tray flyout, not a workspace.
-inline constexpr int kDefaultWidthDips = 480;
-inline constexpr int kDefaultHeightDips = 760;
+// The first-run default is a DESKTOP reading, not the phone-shaped 480x760
+// compact this shipped with from the tray-flyout era. 480dip is far below
+// kWideBreakpointDip, so a first launch rendered the narrow login with the
+// brand art collapsed — the beta report was "opens on top left of screen,
+// sized weirdly so our branding doesn't show". 1120dip keeps the client
+// comfortably past the wide breakpoint at any scale; the default branch in
+// ApplyNativeShell clamps to the work area, so small screens shrink
+// gracefully (and a shrunk-below-breakpoint window correctly reads narrow).
+inline constexpr int kDefaultWidthDips = 1120;
+inline constexpr int kDefaultHeightDips = 820;
 // Below this the drawer's card column has nothing left to give.
 inline constexpr int kMinWidthDips = 400;
 inline constexpr int kMinHeightDips = 480;

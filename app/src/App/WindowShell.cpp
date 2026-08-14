@@ -315,17 +315,32 @@ bool ApplyNativeShell(winrtx::Window const& window, HWND hwnd) {
     // claim centred while the code took that verbatim.
     p.width = defaultW;
     p.height = defaultH;
+    // The work area both clamps the default size (a laptop must not get a
+    // window bigger than its screen) and centres it. The fallback work area
+    // is SPI_GETWORKAREA (the primary monitor), so even when the monitor
+    // query fails the window is still centred somewhere real — the failure
+    // path used to leave p.x/p.y at zero, which is the top-left corner the
+    // beta report described.
+    RECT work{};
+    bool haveWork = false;
     const auto origin = appWindow.Position();
     POINT here{origin.X, origin.Y};
     if (HMONITOR mon = ::MonitorFromPoint(here, MONITOR_DEFAULTTOPRIMARY)) {
       MONITORINFO mi{};
       mi.cbSize = sizeof(mi);
       if (::GetMonitorInfoW(mon, &mi)) {
-        p.x = static_cast<int32_t>(mi.rcWork.left) +
-              (static_cast<int32_t>(mi.rcWork.right - mi.rcWork.left) - p.width) / 2;
-        p.y = static_cast<int32_t>(mi.rcWork.top) +
-              (static_cast<int32_t>(mi.rcWork.bottom - mi.rcWork.top) - p.height) / 2;
+        work = mi.rcWork;
+        haveWork = true;
       }
+    }
+    if (!haveWork) haveWork = ::SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0) != FALSE;
+    if (haveWork) {
+      const int32_t workW = static_cast<int32_t>(work.right - work.left);
+      const int32_t workH = static_cast<int32_t>(work.bottom - work.top);
+      p.width = (std::min)(p.width, workW * 9 / 10);
+      p.height = (std::min)(p.height, workH * 9 / 10);
+      p.x = static_cast<int32_t>(work.left) + (workW - p.width) / 2;
+      p.y = static_cast<int32_t>(work.top) + (workH - p.height) / 2;
     }
     p = ClampToWorkArea(p);
     LogInfo("shell: no saved placement - compact default {}x{} centred at ({},{}) "
