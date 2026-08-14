@@ -506,14 +506,16 @@ void WindowReveal::Bind(winrt::Microsoft::UI::Xaml::FrameworkElement const& plat
 The signed-out screen has NO wide layout today: `LoginRoot`'s inner Grid
 (MainWindow.xaml:99–103) has no ColumnDefinitions, `LoginPanel` is a
 MaxWidth=512 centred column at every width, and `ApplyBreakpoint`
-(MainWindow.xaml.cpp:393) never touches the login tree. At the 1230dip wide
-breakpoint that is ~359dip of empty plate per side (~58% of the window), with
-the art capped at 220dip (`kGlobeMaxSide`, LoginCarousel.cpp:61). The Hero
-Bloom signed-out would bloom a small card in an ocean of empty plate — so
-this lands in Wave 1, before the choreography is judged. The Hero Bloom
-timeline itself is UNCHANGED: same `LoginCarouselHost` handle, same beats —
-the bloom simply happens in the wide-pane position when wide. Below 1230dip
-the layout must remain EXACTLY today's.
+(MainWindow.xaml.cpp:393) never touches the login tree. At the app-wide
+`kWideBreakpointDip` (UrComponents.h, 1000dip) that is ~359dip of empty
+plate per side (~58% of the window, measured on a 1230dip-wide window when
+the bug was logged), with the art capped at 220dip (`kGlobeMaxSide`,
+LoginCarousel.cpp:61). The Hero Bloom signed-out would bloom a small card
+in an ocean of empty plate — so this lands in Wave 1, before the
+choreography is judged. The Hero Bloom timeline itself is UNCHANGED: same
+`LoginCarouselHost` handle, same beats — the bloom simply happens in the
+wide-pane position when wide. Below `kWideBreakpointDip` the layout must
+remain EXACTLY today's.
 
 **Files:**
 - `app/src/App/MainWindow.xaml` (login Grid columns + art pane)
@@ -539,14 +541,17 @@ the layout must remain EXACTLY today's.
                     <!-- wide login (motion overhaul Task 2a): art | form.
                          Narrow keeps the art column at 0 and the form on the
                          star, which renders EXACTLY the old single-column
-                         layout; ApplyBreakpoint owns the flip at 1230dip. -->
+                         layout; ApplyBreakpoint owns the flip at the app-wide
+                         kWideBreakpointDip (UrComponents.h, 1000dip) — the
+                         same gate every other pane group in ApplyBreakpoint
+                         keys off. -->
                     <ColumnDefinition x:Name="LoginArtColumn" Width="0" />
                     <ColumnDefinition x:Name="LoginFormColumn" Width="*" />
                 </Grid.ColumnDefinitions>
                 <!-- the wide art pane: empty until ApplyBreakpoint reparents
-                     LoginCarouselHost here at >=1230dip. Padding keeps the
-                     globe off the window edge and the pane rule of thumb
-                     (content never touches chrome). -->
+                     LoginCarouselHost here at >=kWideBreakpointDip (1000dip).
+                     Padding keeps the globe off the window edge and the pane
+                     rule of thumb (content never touches chrome). -->
                 <Grid x:Name="LoginArtPane" Grid.Column="0" Padding="24"
                       Visibility="Collapsed" />
 ```
@@ -587,14 +592,23 @@ void ReparentTo(winrt::Microsoft::UI::Xaml::UIElement const& child,
 
 ```cpp
   // ---- Login: the art beside the form at desktop widths --------------------
-  // The seven groups above all skip the login tree, so signed out at 1230dip
-  // ~58% of the window was empty plate and the carousel read as a small card
-  // floating in blackness (512+32dip column, ~359dip of empty background per
-  // side). Wide: art pane takes the star, the form column takes its content
-  // width (LoginPanel MaxWidth 512 + 16+16 margin). Narrow: EXACTLY today's
-  // — art column 0, form on the star, the host back at the top of
-  // LoginPanel's flow. LoginPage::ApplyLoginLayout knows which parent the
-  // host has and only runs its elastic-height arithmetic in the narrow one.
+  // The seven groups above all skip the login tree, so signed out past the
+  // app-wide kWideBreakpointDip (UrComponents.h, 1000dip) ~58% of the window
+  // was empty plate and the carousel read as a small card floating in
+  // blackness (512+32dip column, ~359dip of empty background per side,
+  // measured on a 1230dip-wide window at the time). Wide: art pane takes the
+  // star, the form column takes its content width (LoginPanel MaxWidth 512 +
+  // 16+16 margin). Narrow: EXACTLY today's — art column 0, form on the star,
+  // the host back at the top of LoginPanel's flow. LoginPage::ApplyLoginLayout
+  // knows which parent the host has and only runs its elastic-height
+  // arithmetic in the narrow one.
+  //
+  // An earlier draft of this comment (and the plan doc it came from) called
+  // 1230dip "the wide breakpoint" — it never was one. 1230 is only the width
+  // the window happened to be in the log line that reported this bug
+  // ("layout: wide at 1230dip"); the actual gate has always been
+  // kWideBreakpointDip, same as Support and Developer above. Reference the
+  // constant, not the number, so this can't drift from the code again.
   if (wide) {
     SetStar(LoginArtColumn(), 1);
     SetWidth(LoginFormColumn(), 544);
@@ -657,9 +671,9 @@ constexpr double kGlobeMaxSide = 400;
 
 - [ ] Build: `powershell -File app\tools\build-local.ps1` — expect 0 errors.
 - [ ] CONTROLLER GATE: frame-burst capture + visual inspection — BOTH sides
-  of 1230dip, plus a resize across the breakpoint mid-carousel, plus the
-  narrow layout pixel-compared against a pre-change capture (it must be
-  identical). (Implementer does NOT check this box.)
+  of `kWideBreakpointDip` (1000dip), plus a resize across the breakpoint
+  mid-carousel, plus the narrow layout pixel-compared against a pre-change
+  capture (it must be identical). (Implementer does NOT check this box.)
 
 ## Task 3: WindowReveal rewrite — the Hero Bloom machine
 

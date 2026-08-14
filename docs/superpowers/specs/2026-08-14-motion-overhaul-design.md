@@ -261,10 +261,11 @@ blackness. Blooming that as-is would be a small card blooming in an ocean of
 empty plate. So Wave 1 also gives the login screen its desktop reading (plan
 Task 2a): LoginRoot's Grid gets two named columns — art (`*`) | form
 (512+32) — `ApplyBreakpoint` reparents `LoginCarouselHost` into the left art
-pane at ≥1230dip and collapses that column below it (the same
-`Place()`/`SetWidth` responsive pattern Support and Developer already use),
-and the art cap rises to 400dip so the card scales with its pane. Below
-1230dip the layout stays EXACTLY today's. The Hero Bloom signed-out timeline
+pane at the app-wide `kWideBreakpointDip` (UrComponents.h, 1000dip) and
+collapses that column below it (the same `Place()`/`SetWidth` responsive
+pattern Support and Developer already use), and the art cap rises to
+400dip so the card scales with its pane. Below `kWideBreakpointDip` the
+layout stays EXACTLY today's. The Hero Bloom signed-out timeline
 is unchanged either way: same `LoginCarouselHost` handle, same spring, same
 beats — the bloom simply happens in the wide-pane position when wide and the
 220dip centred slot when narrow.

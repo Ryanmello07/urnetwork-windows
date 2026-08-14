@@ -650,14 +650,23 @@ void MainWindow::ApplyBreakpoint(bool force) {
                                    : PanePlacement{3, 0, 1, Thickness{0, 16, 0, 24}});
 
   // ---- Login: the art beside the form at desktop widths --------------------
-  // The seven groups above all skip the login tree, so signed out at 1230dip
-  // ~58% of the window was empty plate and the carousel read as a small card
-  // floating in blackness (512+32dip column, ~359dip of empty background per
-  // side). Wide: art pane takes the star, the form column takes its content
-  // width (LoginPanel MaxWidth 512 + 16+16 margin). Narrow: EXACTLY today's
-  // — art column 0, form on the star, the host back at the top of
-  // LoginPanel's flow. LoginPage::ApplyLoginLayout knows which parent the
-  // host has and only runs its elastic-height arithmetic in the narrow one.
+  // The seven groups above all skip the login tree, so signed out past the
+  // app-wide kWideBreakpointDip (UrComponents.h, 1000dip) ~58% of the window
+  // was empty plate and the carousel read as a small card floating in
+  // blackness (512+32dip column, ~359dip of empty background per side,
+  // measured on a 1230dip-wide window at the time). Wide: art pane takes the
+  // star, the form column takes its content width (LoginPanel MaxWidth 512 +
+  // 16+16 margin). Narrow: EXACTLY today's — art column 0, form on the star,
+  // the host back at the top of LoginPanel's flow. LoginPage::ApplyLoginLayout
+  // knows which parent the host has and only runs its elastic-height
+  // arithmetic in the narrow one.
+  //
+  // An earlier draft of this comment (and the plan doc it came from) called
+  // 1230dip "the wide breakpoint" — it never was one. 1230 is only the width
+  // the window happened to be in the log line that reported this bug
+  // ("layout: wide at 1230dip"); the actual gate has always been
+  // kWideBreakpointDip, same as Support and Developer above. Reference the
+  // constant, not the number, so this can't drift from the code again.
   if (wide) {
     SetStar(LoginArtColumn(), 1);
     SetWidth(LoginFormColumn(), 544);

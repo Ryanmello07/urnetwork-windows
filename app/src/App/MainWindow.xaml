@@ -105,14 +105,17 @@
                     <!-- wide login (motion overhaul Task 2a): art | form.
                          Narrow keeps the art column at 0 and the form on the
                          star, which renders EXACTLY the old single-column
-                         layout; ApplyBreakpoint owns the flip at 1230dip. -->
+                         layout; ApplyBreakpoint owns the flip at the app-wide
+                         kWideBreakpointDip (UrComponents.h, 1000dip) — the
+                         same gate every other pane group in ApplyBreakpoint
+                         keys off. -->
                     <ColumnDefinition x:Name="LoginArtColumn" Width="0" />
                     <ColumnDefinition x:Name="LoginFormColumn" Width="*" />
                 </Grid.ColumnDefinitions>
                 <!-- the wide art pane: empty until ApplyBreakpoint reparents
-                     LoginCarouselHost here at >=1230dip. Padding keeps the
-                     globe off the window edge and the pane rule of thumb
-                     (content never touches chrome). -->
+                     LoginCarouselHost here at >=kWideBreakpointDip (1000dip).
+                     Padding keeps the globe off the window edge and the pane
+                     rule of thumb (content never touches chrome). -->
                 <Grid x:Name="LoginArtPane" Grid.Column="0" Padding="24"
                       Visibility="Collapsed" />
 
