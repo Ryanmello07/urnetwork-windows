@@ -80,21 +80,63 @@ MainWindow::MainWindow() {
   ExtendsContentIntoTitleBar(true);
   SetTitleBar(AppTitleBar());
 
-  // The window reveal (Phase E): bind now that the content tree exists. The
-  // ripple order follows E3 — hero + status first, then the primary action,
-  // then navigation chrome, then the rest of the strip — each group 40ms
-  // after the one before it.
-  reveal_.Bind(WindowPlate(), RevealRoot(),
-              {
-                  {ConnectCanvasHost(), 0},
-                  {StatusDot(), 0},
-                  {StatusText(), 0},
-                  {ConnectButton(), 40},
-                  {LocationRow(), 40},
-                  {HomeNav(), 80},
-                  {AppTitleBar(), 80},
-                  {StatusStrip(), 120},
-              });
+  // The window reveal (motion overhaul, Surface 1 "Hero Bloom"): two
+  // per-state tables, one machine — Arm() picks the table from the tree's
+  // own HomeNav/LoginRoot visibility. Ring = {element, riseDip (+ starts
+  // below final and settles UP, − above and settles DOWN, 0 opacity-only),
+  // delayMs, fadeMs, riseMs}. Delays sit on the stagger grid:
+  // kBrandBeatMs=120, kHeroHoldMs=240, then +kStaggerMs steps to 360.
+  //
+  // HomeNav is the STAGE, not a mover: it is the signed-in hero's alpha
+  // ancestor, so its XAML opacity CAPS every descendant (products compound).
+  // Opacity-only, delay 0, kFastMs — and LoginRoot/LoginPanel (signed-out
+  // hero ancestors) are never listed at all. Bind() asserts both.
+  {
+    namespace mo = urnw::motion;
+    urnw::RevealState signedIn{
+        ConnectCanvasHost(),
+        {
+            {HomeNav(), 0.0f, 0, mo::kFastMs, 0},
+            {AppTitleBar(), +8.0f, mo::kBrandBeatMs, mo::kBaseMs, mo::kSlowMs},
+            {AccountMenuButton(), +8.0f, mo::kBrandBeatMs, mo::kBaseMs, mo::kSlowMs},
+            {StatusDot(), +8.0f, mo::kHeroHoldMs, mo::kBaseMs, mo::kSlowMs},
+            {StatusText(), +8.0f, mo::kHeroHoldMs, mo::kBaseMs, mo::kSlowMs},
+            {ProtectionText(), +8.0f, mo::kHeroHoldMs, mo::kBaseMs, mo::kSlowMs},
+            {TrafficHeldText(), +8.0f, mo::kHeroHoldMs, mo::kBaseMs, mo::kSlowMs},
+            {StatusReasonText(), +8.0f, mo::kHeroHoldMs, mo::kBaseMs, mo::kSlowMs},
+            {LocationRow(), -8.0f, mo::kHeroHoldMs, mo::kBaseMs, mo::kSlowMs},
+            {ConnectButton(), -8.0f, mo::kHeroHoldMs + mo::kStaggerMs, mo::kBaseMs, mo::kSlowMs},
+            {StatusStrip(), -12.0f, mo::kHeroHoldMs + 3 * mo::kStaggerMs, mo::kBaseMs,
+             mo::kSlowMs},
+            // data panes: opacity-only (large surfaces never slide), the
+            // closing beat; the 1px rules stay unringed as skeleton
+            {ConnectPaneB(), 0.0f, mo::kHeroHoldMs + 3 * mo::kStaggerMs, mo::kSlowMs, 0},
+            {ConnectPaneC(), 0.0f, mo::kHeroHoldMs + 3 * mo::kStaggerMs, mo::kSlowMs, 0},
+        }};
+    urnw::RevealState signedOut{
+        LoginCarouselHost(),
+        {
+            {AppTitleBar(), +8.0f, mo::kBrandBeatMs, mo::kBaseMs, mo::kSlowMs},
+            {EmailGroup(), -8.0f, mo::kHeroHoldMs, mo::kBaseMs, mo::kSlowMs},
+            {GetStartedButton(), -8.0f, mo::kHeroHoldMs + mo::kStaggerMs, mo::kBaseMs,
+             mo::kSlowMs},
+            {OrDivider(), -8.0f, mo::kHeroHoldMs + mo::kStaggerMs, mo::kBaseMs, mo::kSlowMs},
+            {GoogleSignInButton(), -12.0f, mo::kHeroHoldMs + 2 * mo::kStaggerMs, mo::kBaseMs,
+             mo::kSlowMs},
+            {BittensorSignInButton(), -12.0f, mo::kHeroHoldMs + 2 * mo::kStaggerMs,
+             mo::kBaseMs, mo::kSlowMs},
+            {SolanaSignInButton(), -12.0f, mo::kHeroHoldMs + 2 * mo::kStaggerMs, mo::kBaseMs,
+             mo::kSlowMs},
+            {AuthCodeButton(), -12.0f, mo::kHeroHoldMs + 2 * mo::kStaggerMs, mo::kBaseMs,
+             mo::kSlowMs},
+            {SecondaryAuthRow(), -12.0f, mo::kHeroHoldMs + 3 * mo::kStaggerMs, mo::kBaseMs,
+             mo::kSlowMs},
+            {NetworkServerLink(), -12.0f, mo::kHeroHoldMs + 3 * mo::kStaggerMs, mo::kBaseMs,
+             mo::kSlowMs},
+        }};
+    reveal_.Bind(WindowPlate(), RevealRoot(), HomeNav(), LoginRoot(),
+                 std::move(signedIn), std::move(signedOut));
+  }
 
   // Each destination owns its own translation unit; the window keeps navigation,
   // the auth + balance relays, and the shared sheet guard. Constructed before

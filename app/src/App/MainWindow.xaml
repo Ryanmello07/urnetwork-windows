@@ -144,7 +144,7 @@
                     <!-- URTextInput: label, then the underlined field. Spacing is 0
                          here because the label style carries android's 8dp gap and
                          the field owns the padding above its underline. -->
-                    <StackPanel Spacing="0">
+                    <StackPanel x:Name="EmailGroup" Spacing="0">
                         <TextBlock x:Name="EmailLabel" Style="{StaticResource UrTextInputLabelStyle}" />
                         <TextBox x:Name="EmailBox" Style="{StaticResource UrTextInputStyle}"
                                  TextChanged="OnUserAuthChanged" />
@@ -265,7 +265,7 @@
                          Create Instant Account mints a seedphrase-only network
                          and Sign in with Seedphrase is the only way back into
                          one. Neither carries an icon, matching iOS. -->
-                    <StackPanel Spacing="8" Margin="0,16,0,0">
+                    <StackPanel x:Name="SecondaryAuthRow" Spacing="8" Margin="0,16,0,0">
                         <Button x:Name="SeedphraseSignInButton"
                                 Style="{StaticResource UrSecondaryButtonStyle}"
                                 Click="OnSignInWithSeedphrase" />

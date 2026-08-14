@@ -7,6 +7,8 @@
 #include <winrt/Microsoft.UI.Xaml.Hosting.h>
 #include <winrt/Microsoft.UI.Xaml.Media.Animation.h>
 
+#include <cassert>
+
 #include "Log.h"
 #include "UrMotion.h"
 
@@ -57,12 +59,47 @@ constexpr float kOffsetDip = 20.0f;
 
 void WindowReveal::Bind(winrt::Microsoft::UI::Xaml::FrameworkElement const& plate,
                         winrt::Microsoft::UI::Xaml::FrameworkElement const& revealRoot,
-                        std::vector<RevealRing> rings) {
+                        winrt::Microsoft::UI::Xaml::FrameworkElement const& homeNav,
+                        winrt::Microsoft::UI::Xaml::FrameworkElement const& loginRoot,
+                        RevealState signedIn, RevealState signedOut) {
   plate_ = plate;
   revealRoot_ = revealRoot;
-  rings_ = std::move(rings);
+  homeNav_ = homeNav;
+  loginRoot_ = loginRoot;
+  signedIn_ = std::move(signedIn);
+  signedOut_ = std::move(signedOut);
+  // SetIsTranslationEnabled ONCE per translated element, here — forgetting it
+  // makes every Translation write a silent no-op that reads as "the stagger
+  // feels flat", never as an error (spec §3.7 risk 3).
+  for (auto const* state : {&signedIn_, &signedOut_}) {
+    for (auto const& ring : state->rings) {
+      if (ring.element && ring.riseDip != 0.0f) urnw::motion::EnableTranslation(ring.element);
+    }
+  }
+#ifdef _DEBUG
+  // The ancestor-alpha rule, enforced where the tables land (spec §3.7 risk
+  // 1): HomeNav is the signed-in hero's alpha ancestor — stage beat only,
+  // opacity-only, never delayed, never translated. LoginRoot (the signed-out
+  // hero's ancestor) is never listed at all.
+  for (auto const& ring : signedIn_.rings) {
+    if (ring.element == homeNav_) {
+      assert(ring.riseDip == 0.0f && ring.delayMs == 0 &&
+             "HomeNav is the STAGE: opacity-only, delay 0");
+    }
+  }
+  for (auto const* state : {&signedIn_, &signedOut_}) {
+    for (auto const& ring : state->rings) {
+      assert(ring.element != loginRoot_ && "LoginRoot must never be animated");
+    }
+  }
+#endif
 }
 
+// TRANSITIONAL (Task 2): today's root-spring/opacity-fade behavior, now
+// reading the ACTIVE per-state table instead of the old flat `rings_`. The
+// full Hero Bloom choreography (per-ring rise + hero bloom spring) lands in
+// Task 3 — this keeps the build green and the tables Bind-level-asserted
+// while that rewrite is staged.
 void WindowReveal::Arm(bool enabled, std::optional<POINT> originScreen,
                        RECT const& windowScreenRect) {
   if (!plate_ || !revealRoot_) return;
@@ -120,8 +157,14 @@ void WindowReveal::Arm(bool enabled, std::optional<POINT> originScreen,
   // Geometry and opacity are kept strictly separate (E3): the rings start
   // invisible on the XAML Opacity DP, independent of the plate/root's
   // Composition-layer animation above, so nested alpha never compounds.
-  for (auto const& ring : rings_) {
-    if (ring.element) ring.element.Opacity(0.0);
+  // ACTIVE table, latched from the tree — Task 3 does the full per-ring
+  // rise/bloom; this transitional body only needs which rings exist.
+  signedInArmed_ = homeNav_ && homeNav_.Visibility() == Visibility::Visible;
+  auto const& active = signedInArmed_ ? signedIn_ : signedOut_;
+  for (auto const& ring : active.rings) {
+    if (!ring.element) continue;
+    if (ring.element.Visibility() == Visibility::Collapsed) continue;  // spec §3.7 risk 4
+    ring.element.Opacity(0.0);
   }
 }
 
@@ -160,17 +203,22 @@ void WindowReveal::Start() {
   // The opacity ripple (E3), staggered after the geometry starts. Ordinary
   // Storyboard fades on the XAML DP — the same family every other hand-built
   // animation in this app uses — not Composition, keeping geometry and
-  // opacity on two independent systems as the plan specifies.
-  for (auto const& ring : rings_) {
+  // opacity on two independent systems as the plan specifies. ACTIVE table,
+  // per-ring fadeMs, ring.delayMs as BeginTime — never force-Visible (the
+  // ring's owner controls Visibility); every board retained so
+  // CancelToFinal can stop it before the union restore writes.
+  auto const& active = signedInArmed_ ? signedIn_ : signedOut_;
+  for (auto const& ring : active.rings) {
     if (!ring.element) continue;
-    ring.element.Visibility(Visibility::Visible);
+    if (ring.element.Visibility() == Visibility::Collapsed) continue;
     anim::Storyboard sb;
-    auto fade = urnw::motion::MakeSplineDouble(0.0, 1.0, urnw::motion::kBaseMs, ring.delayMs,
+    auto fade = urnw::motion::MakeSplineDouble(0.0, 1.0, ring.fadeMs, ring.delayMs,
                                                urnw::motion::kStandardP1, urnw::motion::kStandardP2);
     anim::Storyboard::SetTarget(fade, ring.element);
     anim::Storyboard::SetTargetProperty(fade, L"Opacity");
     sb.Children().Append(fade);
     sb.Begin();
+    boards_.push_back(sb);
   }
   armed_ = false;  // one-shot: a second Start() without an intervening Arm() does nothing
 }
@@ -194,9 +242,21 @@ void WindowReveal::CancelToFinal() {
   rootVisual.Scale({1.0f, 1.0f, 1.0f});
   rootVisual.Offset({0.0f, 0.0f, 0.0f});
   plateVisual.Opacity(1.0f);
-  for (auto const& ring : rings_) {
+  // Boards first: a running Storyboard HOLDS its DP; stop releases it so the
+  // Opacity writes below actually land.
+  for (auto const& board : boards_) board.Stop();
+  boards_.clear();
+  // The UNION of both tables regardless of which armed, plus both heroes:
+  // Opacity 1.0 on a Collapsed element is inert, and Visibility is NEVER
+  // touched here — step panels and home views own their own.
+  for (auto const& ring : signedIn_.rings) {
     if (ring.element) ring.element.Opacity(1.0);
   }
+  for (auto const& ring : signedOut_.rings) {
+    if (ring.element) ring.element.Opacity(1.0);
+  }
+  if (signedIn_.hero) signedIn_.hero.Opacity(1.0);
+  if (signedOut_.hero) signedOut_.hero.Opacity(1.0);
   armed_ = false;
 }
 

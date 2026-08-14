@@ -16,15 +16,28 @@
 #include <windows.h>
 
 #include <winrt/Microsoft.UI.Xaml.h>
+#include <winrt/Microsoft.UI.Xaml.Media.Animation.h>
+
+#include "UrMotion.h"
 
 namespace urnw {
 
-// One ripple-ring element and the delay (ms) its opacity fade starts at,
-// relative to Start(). See MainWindow's constructor for how the rings are
-// built from the window's own named elements.
+// One ripple-ring element: signed rise start in dip (+ = starts below its
+// final slot and settles UP; − = starts above and settles DOWN; 0 =
+// opacity-only), the delay BOTH of its clocks start at, and its two
+// durations. See MainWindow's constructor for the two per-state tables.
 struct RevealRing {
-  winrt::Microsoft::UI::Xaml::UIElement element{nullptr};
+  winrt::Microsoft::UI::Xaml::FrameworkElement element{nullptr};
+  float riseDip = 0.0f;
   int64_t delayMs = 0;
+  int64_t fadeMs = urnw::motion::kBaseMs;
+  int64_t riseMs = urnw::motion::kSlowMs;
+};
+
+// One first frame: the hero that blooms and the rings that unfold around it.
+struct RevealState {
+  winrt::Microsoft::UI::Xaml::FrameworkElement hero{nullptr};
+  std::vector<RevealRing> rings;
 };
 
 // E1: the HWND never animates; content springs inside it. `plate` is the
@@ -33,11 +46,16 @@ struct RevealRing {
 // WindowReveal.cpp's file comment for why the HWND itself is off limits.
 class WindowReveal {
  public:
-  // Bind once, right after the window's content exists (MainWindow's
-  // constructor). `rings` is the E3 opacity ripple, in playback order.
+  // Bind once, right after the window's content exists. Two tables, one
+  // machine: Arm() picks signedIn/signedOut from the tree's own
+  // HomeNav/LoginRoot visibility. `revealRoot` remains bound ONLY for the
+  // legacy defensive restore in CancelToFinal -- the root itself no longer
+  // animates after Task 3.
   void Bind(winrt::Microsoft::UI::Xaml::FrameworkElement const& plate,
             winrt::Microsoft::UI::Xaml::FrameworkElement const& revealRoot,
-            std::vector<RevealRing> rings);
+            winrt::Microsoft::UI::Xaml::FrameworkElement const& homeNav,
+            winrt::Microsoft::UI::Xaml::FrameworkElement const& loginRoot,
+            RevealState signedIn, RevealState signedOut);
 
   // Write the START pose synchronously, BEFORE Window.Activate() (E4) - the
   // reveal must add zero latency, so the first composed frame has to already
@@ -70,8 +88,15 @@ class WindowReveal {
  private:
   winrt::Microsoft::UI::Xaml::FrameworkElement plate_{nullptr};
   winrt::Microsoft::UI::Xaml::FrameworkElement revealRoot_{nullptr};
-  std::vector<RevealRing> rings_;
+  winrt::Microsoft::UI::Xaml::FrameworkElement homeNav_{nullptr};
+  winrt::Microsoft::UI::Xaml::FrameworkElement loginRoot_{nullptr};
+  RevealState signedIn_;
+  RevealState signedOut_;
+  bool signedInArmed_ = false;  // which table Arm() latched
   bool armed_ = false;
+  // Retained so CancelToFinal can STOP them: a running Storyboard holds its
+  // DP, and the union restore must release it before writing.
+  std::vector<winrt::Microsoft::UI::Xaml::Media::Animation::Storyboard> boards_;
 };
 
 }  // namespace urnw
