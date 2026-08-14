@@ -26,9 +26,10 @@
 //      rect to the registry.
 //
 // So MainWindow.xaml wraps its root Grid in an opaque WindowPlate that never
-// moves, containing a RevealRoot that springs (Scale + Offset) while the
-// plate's own opacity ramps in underneath it. Nothing here ever touches the
-// HWND, AppWindow, or window placement.
+// moves, containing a RevealRoot (kept only for the legacy defensive restore
+// below) and the two hero elements — ConnectCanvasHost, LoginCarouselHost —
+// that actually spring, under Hero Bloom (motion-overhaul spec §2.1). Nothing
+// here ever touches the HWND, AppWindow, or window placement.
 //
 // THE PLATE FADE IS A COMPOSITION VISUAL OPACITY ANIMATION, not a Win32
 // SetLayeredWindowAttributes/WS_EX_LAYERED fade of the whole window surface.
@@ -38,9 +39,20 @@
 // window, the same verification gap that let the Mica regression ship
 // (WindowShell.cpp) — with an explicit sanctioned fallback of "no plate
 // fade". This file starts ON that fallback rather than the unverified path,
-// since nobody has produced that proof yet; the effect it still delivers
-// (RevealRoot's spring + the opacity ripple, both ordinary, safe Composition
-// APIs) is most of what reads as "fancy" in the choreography anyway.
+// since nobody has produced that proof yet.
+//
+// HERO BLOOM, NOT ORIGIN-ANCHORED SCALE: the reveal used to spring RevealRoot
+// from a tray-icon-derived origin with a guessed left/right direction
+// (kOffsetDip, dirX — E2). That whole mechanism is gone, along with the bug a
+// stray (0.5,0.5) AnchorPoint shipped once: AnchorPoint is the point ON the
+// visual placed at Offset, not the point Scale pivots around (that is
+// CenterPoint), so (0.5,0.5) DISPLACES the content by half its own size
+// rather than centering it. The ban this file now runs under: AnchorPoint is
+// never set here except to restore it to {0,0} in CancelToFinal, and the
+// scale origin is always a CenterPoint ExpressionAnimation bound to the
+// visual's own Size, left running. Both the ban and the mechanism now live in
+// one place, UrMotion::ArmHeroBloom/StartHeroBloom — this file only calls
+// them.
 namespace urnw {
 namespace {
 using winrt::Microsoft::UI::Xaml::Hosting::ElementCompositionPreview;
@@ -48,12 +60,33 @@ using winrt::Microsoft::UI::Xaml::UIElement;
 using winrt::Microsoft::UI::Xaml::Visibility;
 namespace anim = winrt::Microsoft::UI::Xaml::Media::Animation;
 
-// A ~20dip cosmetic nudge, not a placement — deliberately NOT DPI-corrected.
-// The window's own physical/DIP split lives one layer down, in WindowShell;
-// a Composition Visual hosted by XAML already operates in the same effective
-// (DIP) coordinate space as its XAML content, so this is consistent with
-// every other distance in UrMotion.h.
-constexpr float kOffsetDip = 20.0f;
+// The one settled pose a ring ever has: Opacity 1, Translation 0 (both inert
+// on a Collapsed element — Visibility is never touched here, its owner
+// controls that). Shared by CancelToFinal's union restore AND by Start()'s
+// per-ring Collapsed skip-guard below, so the settled values have exactly one
+// implementation and the two paths cannot drift apart.
+//
+// THIS is where deferred finding #2 (Task 1/2 ledger) is closed. Arm() can
+// write a ring's start pose (Opacity 0, maybe a Translation.Y offset) while
+// it is Visible; between Arm() (pre-Activate) and Start() (post-Activate —
+// Window.Activate() pumps messages, and a message can land a SizeChanged
+// that flips ApplyBreakpoint's pane bucket) its owner can Collapse it before
+// Start ever gets to animate it back. A bare `continue` in that skip-guard
+// used to leave that Opacity(0) orphaned: not the reveal's problem (one-shot,
+// already skipping it) and not its owner's (a Collapsed element has no
+// reason to touch Opacity). Routing the skip-guard through SettleRing means
+// every pose Arm ever writes is EITHER animated back to settled by the
+// running code below OR restored to that same settled value right here —
+// never left stranded in between.
+void SettleRing(RevealRing const& ring) {
+  if (!ring.element) return;
+  if (ring.riseDip != 0.0f) {
+    auto visual = ElementCompositionPreview::GetElementVisual(ring.element);
+    visual.StopAnimation(L"Translation.Y");
+    ring.element.Translation(winrt::Windows::Foundation::Numerics::float3{0.0f, 0.0f, 0.0f});
+  }
+  ring.element.Opacity(1.0);
+}
 
 }  // namespace
 
@@ -95,168 +128,146 @@ void WindowReveal::Bind(winrt::Microsoft::UI::Xaml::FrameworkElement const& plat
 #endif
 }
 
-// TRANSITIONAL (Task 2): today's root-spring/opacity-fade behavior, now
-// reading the ACTIVE per-state table instead of the old flat `rings_`. The
-// full Hero Bloom choreography (per-ring rise + hero bloom spring) lands in
-// Task 3 — this keeps the build green and the tables Bind-level-asserted
-// while that rewrite is staged.
-void WindowReveal::Arm(bool enabled, std::optional<POINT> originScreen,
-                       RECT const& windowScreenRect) {
-  if (!plate_ || !revealRoot_) return;
-  // A reveal still running from a PREVIOUS show (hide-to-tray mid-animation,
-  // then clicked again quickly) settles before this one writes its own start
-  // pose — two overlapping springs on the same visual is how E6's "nastiest
-  // failure mode" starts.
+void WindowReveal::Arm(bool enabled) {
+  if (!plate_ || !homeNav_ || !loginRoot_) return;
+  // A reveal still running from a PREVIOUS show settles before this one
+  // writes its own start pose — two overlapping springs on the same visual is
+  // how E6's "nastiest failure mode" starts.
   CancelToFinal();
   armed_ = enabled && urnw::motion::ShouldAnimate();
   if (!armed_) return;
 
-  auto plateVisual = ElementCompositionPreview::GetElementVisual(plate_);
-  auto rootVisual = ElementCompositionPreview::GetElementVisual(revealRoot_);
-  // Relative (0..1) anchor, not an absolute CenterPoint: Arm() runs BEFORE
-  // Activate() (E4), so on a brand-new window ActualWidth/Height can still be
-  // 0 at this instant — a relative anchor scales correctly regardless of
-  // whether XAML has measured yet.
-  // CenterPoint bound to Size, NOT AnchorPoint. AnchorPoint is the point ON
-  // the visual that gets placed at Offset, so setting it to (0.5, 0.5)
-  // DISPLACES the content by -0.5*Size -- half its own width and height, up
-  // and to the left -- and keeps it there. The spring below animates Scale
-  // and Offset back to their settled values and completes cleanly, so the
-  // reveal reports success while leaving every subsequent frame shifted off
-  // the left edge. That shipped in v2026.8.13-1018112070-beta and is exactly
-  // the failure CancelToFinal was written to prevent, one property over.
-  //
-  // CenterPoint moves only the origin that Scale and Rotation are applied
-  // about; it never repositions the visual. The reason AnchorPoint was
-  // reached for -- Arm() runs BEFORE Activate() (E4), so ActualWidth/Height
-  // can still be 0 here -- is solved properly by an ExpressionAnimation that
-  // tracks the visual's own Size: it re-evaluates as XAML measures, so the
-  // center is right by the time Start() runs, and stays right across resize.
-  rootVisual.AnchorPoint({0.0f, 0.0f});
-  auto centerBind = rootVisual.Compositor().CreateExpressionAnimation(
-      L"Vector3(this.Target.Size.X * 0.5f, this.Target.Size.Y * 0.5f, 0.0f)");
-  rootVisual.StartAnimation(L"CenterPoint", centerBind);
+  // Which first frame is this? Read the tree, don't be told.
+  signedInArmed_ = homeNav_.Visibility() == Visibility::Visible;
+  auto const& state = signedInArmed_ ? signedIn_ : signedOut_;
 
-  // Origin-anchored (E2), direction only — see the file comment on kOffsetDip
-  // for why this is not a full screen-space projection. Vertical: the tray
-  // sits at the screen edge nearest the icon, which for the overwhelming
-  // majority of Windows desktops is the bottom, so content settles UP into
-  // place. Horizontal: which side of the window the anchor falls on, when one
-  // was found at all.
-  float dirX = 0.0f;
-  if (originScreen) {
-    const float windowCenterX =
-        static_cast<float>(windowScreenRect.left + windowScreenRect.right) / 2.0f;
-    dirX = static_cast<float>(originScreen->x) < windowCenterX ? -1.0f : 1.0f;
-  }
-  constexpr float kDirY = 1.0f;  // settle upward, toward the taskbar edge
-
-  rootVisual.Scale({0.94f, 0.94f, 1.0f});
-  rootVisual.Offset({dirX * kOffsetDip, kDirY * kOffsetDip, 0.0f});
-  plateVisual.Opacity(0.0f);
-  // Geometry and opacity are kept strictly separate (E3): the rings start
-  // invisible on the XAML Opacity DP, independent of the plate/root's
-  // Composition-layer animation above, so nested alpha never compounds.
-  // ACTIVE table, latched from the tree — Task 3 does the full per-ring
-  // rise/bloom; this transitional body only needs which rings exist.
-  signedInArmed_ = homeNav_ && homeNav_.Visibility() == Visibility::Visible;
-  auto const& active = signedInArmed_ ? signedIn_ : signedOut_;
-  for (auto const& ring : active.rings) {
+  ElementCompositionPreview::GetElementVisual(plate_).Opacity(0.0f);
+  // Hero pose: Scale kHeroScaleFrom, XAML opacity 0, AnchorPoint {0,0}
+  // ALWAYS, CenterPoint expression bound to Size (left running).
+  urnw::motion::ArmHeroBloom(state.hero);
+  for (auto const& ring : state.rings) {
     if (!ring.element) continue;
-    if (ring.element.Visibility() == Visibility::Collapsed) continue;  // spec §3.7 risk 4
+    if (ring.element.Visibility() == Visibility::Collapsed) continue;
     ring.element.Opacity(0.0);
+    if (ring.riseDip != 0.0f) {
+      ring.element.Translation({0.0f, ring.riseDip, 0.0f});
+    }
   }
 }
 
 void WindowReveal::Start() {
-  if (!armed_ || !plate_ || !revealRoot_) return;
+  if (!armed_ || !plate_) return;
+  // DEFERRED FINDING #1 (Task 1/2 ledger): the OS "show animations" toggle is
+  // consulted twice on a reveal — once by Arm() (pre-Activate), and again,
+  // transitively, by ArmHeroBloom/StartHeroBloom's own ShouldAnimate() gate —
+  // and nothing stops it flipping true->false in between: Window.Activate()
+  // pumps messages, and a settings change can land on this thread while it
+  // does. If it flips, armed_ is still true (Arm() latched it before the
+  // flip), but StartHeroBloom would silently no-op and leave the hero exactly
+  // where Arm() posed it — Scale kHeroScaleFrom, Opacity 0 — forever, with no
+  // animation ever coming to release it. A bare `return` here would be that
+  // bug outright, so this early-out (the only one in this function that runs
+  // after Arm has written poses) settles instead of abandoning them.
+  if (!urnw::motion::ShouldAnimate()) {
+    CancelToFinal();
+    return;
+  }
+  auto const& state = signedInArmed_ ? signedIn_ : signedOut_;
   auto plateVisual = ElementCompositionPreview::GetElementVisual(plate_);
-  auto rootVisual = ElementCompositionPreview::GetElementVisual(revealRoot_);
-  auto compositor = rootVisual.Compositor();
+  auto compositor = plateVisual.Compositor();
+  auto standard = urnw::motion::MakeCompositionEasing(compositor, urnw::motion::kStandardP1,
+                                                      urnw::motion::kStandardP2);
 
-  // Plate alpha 0->1 over Fast150, Standard ease (E3).
+  // The stage's floor: plate alpha 0->1 over kFastMs, kStandard — unchanged
+  // from the shipped reveal.
   auto plateFade = compositor.CreateScalarKeyFrameAnimation();
-  plateFade.InsertKeyFrame(
-      1.0f, 1.0f, urnw::motion::MakeCompositionEasing(compositor, urnw::motion::kStandardP1,
-                                                       urnw::motion::kStandardP2));
+  plateFade.InsertKeyFrame(1.0f, 1.0f, standard);
   plateFade.Duration(urnw::motion::Ms(urnw::motion::kFastMs));
   plateVisual.StartAnimation(L"Opacity", plateFade);
 
-  // RevealRoot Scale 0.94->1 and Offset -> 0, both on the reveal spring
-  // (damping 0.86, period 60ms — E2's "spring, not easing"; the existing
-  // 0.75/40ms spring reserved for the Connect button visibly wobbles a
-  // surface this size). Composition is the only tool in this app that can do
-  // this at all: Storyboard has no spring easing.
-  using winrt::Windows::Foundation::Numerics::float3;
-  auto scaleSpring = compositor.CreateSpringVector3Animation();
-  scaleSpring.DampingRatio(urnw::motion::kRevealSpringDamping);
-  scaleSpring.Period(urnw::motion::Ms(urnw::motion::kRevealSpringPeriodMs));
-  scaleSpring.FinalValue(float3{1.0f, 1.0f, 1.0f});
-  rootVisual.StartAnimation(L"Scale", scaleSpring);
+  // The hero: 0.86/60 spring on Scale under a kHeroMs fade. The returned
+  // board is retained so CancelToFinal can release the hero's Opacity DP.
+  if (auto heroBoard = urnw::motion::StartHeroBloom(state.hero)) boards_.push_back(heroBoard);
 
-  auto offsetSpring = compositor.CreateSpringVector3Animation();
-  offsetSpring.DampingRatio(urnw::motion::kRevealSpringDamping);
-  offsetSpring.Period(urnw::motion::Ms(urnw::motion::kRevealSpringPeriodMs));
-  offsetSpring.FinalValue(float3{0.0f, 0.0f, 0.0f});
-  rootVisual.StartAnimation(L"Offset", offsetSpring);
-
-  // The opacity ripple (E3), staggered after the geometry starts. Ordinary
-  // Storyboard fades on the XAML DP — the same family every other hand-built
-  // animation in this app uses — not Composition, keeping geometry and
-  // opacity on two independent systems as the plan specifies. ACTIVE table,
-  // per-ring fadeMs, ring.delayMs as BeginTime — never force-Visible (the
-  // ring's owner controls Visibility); every board retained so
-  // CancelToFinal can stop it before the union restore writes.
-  auto const& active = signedInArmed_ ? signedIn_ : signedOut_;
-  for (auto const& ring : active.rings) {
+  // The rings: two clocks per entry, BOTH started inside this one UI-thread
+  // call — rises on Composition DelayTime, fades on Storyboard BeginTime.
+  // Sub-frame drift between the clocks is fine; spreading starts across
+  // ticks is not (spec §3.7 risk 6).
+  for (auto const& ring : state.rings) {
     if (!ring.element) continue;
-    if (ring.element.Visibility() == Visibility::Collapsed) continue;
+    // Same guard as Arm — and NEVER a Visibility write: a Collapsed ring
+    // element belongs to its owner (spec §3.7 risk 4). Settle rather than
+    // bare-skip: deferred finding #2, see SettleRing's comment above.
+    if (ring.element.Visibility() == Visibility::Collapsed) {
+      SettleRing(ring);
+      continue;
+    }
+    if (ring.riseDip != 0.0f) {
+      auto visual = ElementCompositionPreview::GetElementVisual(ring.element);
+      auto rise = compositor.CreateScalarKeyFrameAnimation();
+      rise.InsertKeyFrame(1.0f, 0.0f, standard);
+      rise.Duration(urnw::motion::Ms(ring.riseMs));
+      if (0 < ring.delayMs) rise.DelayTime(urnw::motion::Ms(ring.delayMs));
+      visual.StartAnimation(L"Translation.Y", rise);
+    }
     anim::Storyboard sb;
     auto fade = urnw::motion::MakeSplineDouble(0.0, 1.0, ring.fadeMs, ring.delayMs,
-                                               urnw::motion::kStandardP1, urnw::motion::kStandardP2);
+                                               urnw::motion::kStandardP1,
+                                               urnw::motion::kStandardP2);
     anim::Storyboard::SetTarget(fade, ring.element);
     anim::Storyboard::SetTargetProperty(fade, L"Opacity");
     sb.Children().Append(fade);
     sb.Begin();
     boards_.push_back(sb);
   }
-  armed_ = false;  // one-shot: a second Start() without an intervening Arm() does nothing
+  armed_ = false;  // one-shot: a second Start() without an Arm() does nothing
 }
 
 void WindowReveal::CancelToFinal() {
-  if (!plate_ || !revealRoot_) return;
-  auto plateVisual = ElementCompositionPreview::GetElementVisual(plate_);
-  auto rootVisual = ElementCompositionPreview::GetElementVisual(revealRoot_);
-  // StopAnimation leaves the property wherever the animation last wrote it —
-  // explicitly setting the settled pose after stopping is the fix for E6's
-  // "nastiest failure mode": hiding mid-reveal must not leave Scale pinned at
-  // ~0.96 forever, rendering every subsequent open a fraction small with no
-  // error anywhere.
-  rootVisual.StopAnimation(L"Scale");
-  rootVisual.StopAnimation(L"Offset");
-  plateVisual.StopAnimation(L"Opacity");
-  // AnchorPoint is restored too: a settled pose means geometry AND the
-  // origin it is measured from, otherwise "cancel to final" still leaves the
-  // content displaced by half its size.
-  rootVisual.AnchorPoint({0.0f, 0.0f});
-  rootVisual.Scale({1.0f, 1.0f, 1.0f});
-  rootVisual.Offset({0.0f, 0.0f, 0.0f});
-  plateVisual.Opacity(1.0f);
+  if (!plate_) return;
   // Boards first: a running Storyboard HOLDS its DP; stop releases it so the
-  // Opacity writes below actually land.
+  // XAML writes below actually land.
   for (auto const& board : boards_) board.Stop();
   boards_.clear();
-  // The UNION of both tables regardless of which armed, plus both heroes:
-  // Opacity 1.0 on a Collapsed element is inert, and Visibility is NEVER
-  // touched here — step panels and home views own their own.
-  for (auto const& ring : signedIn_.rings) {
-    if (ring.element) ring.element.Opacity(1.0);
+
+  // BOTH heroes, unconditionally — the restore is auth-state-independent, so
+  // it survives an auth flip between Arm and Cancel. CenterPoint expressions
+  // are deliberately left running: they evaluate to the settled center.
+  auto settleHero = [](winrt::Microsoft::UI::Xaml::FrameworkElement const& hero) {
+    if (!hero) return;
+    auto visual = ElementCompositionPreview::GetElementVisual(hero);
+    visual.StopAnimation(L"Scale");
+    visual.AnchorPoint({0.0f, 0.0f});
+    visual.Scale({1.0f, 1.0f, 1.0f});
+    hero.Opacity(1.0);
+  };
+  settleHero(signedIn_.hero);
+  settleHero(signedOut_.hero);
+
+  // Legacy defensive: the root no longer animates, but a prior build's
+  // spring may have left Scale/Offset behind, and "cancel to final" includes
+  // the origin geometry is measured from.
+  if (revealRoot_) {
+    auto rootVisual = ElementCompositionPreview::GetElementVisual(revealRoot_);
+    rootVisual.StopAnimation(L"Scale");
+    rootVisual.StopAnimation(L"Offset");
+    rootVisual.AnchorPoint({0.0f, 0.0f});
+    rootVisual.Scale({1.0f, 1.0f, 1.0f});
+    rootVisual.Offset({0.0f, 0.0f, 0.0f});
   }
-  for (auto const& ring : signedOut_.rings) {
-    if (ring.element) ring.element.Opacity(1.0);
-  }
-  if (signedIn_.hero) signedIn_.hero.Opacity(1.0);
-  if (signedOut_.hero) signedOut_.hero.Opacity(1.0);
+
+  auto plateVisual = ElementCompositionPreview::GetElementVisual(plate_);
+  plateVisual.StopAnimation(L"Opacity");
+  plateVisual.Opacity(1.0f);
+
+  // The UNION of both tables regardless of which armed: opacity 1.0 /
+  // Translation 0 on Collapsed elements is inert, and Visibility is NEVER
+  // touched — step panels and home views own their own. SettleRing is the
+  // SAME function Start()'s per-ring Collapsed skip-guard calls (deferred
+  // finding #2 above) — one settled value, one implementation.
+  for (auto const& ring : signedIn_.rings) SettleRing(ring);
+  for (auto const& ring : signedOut_.rings) SettleRing(ring);
+
   armed_ = false;
 }
 

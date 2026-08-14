@@ -57,32 +57,43 @@ class WindowReveal {
             winrt::Microsoft::UI::Xaml::FrameworkElement const& loginRoot,
             RevealState signedIn, RevealState signedOut);
 
-  // Write the START pose synchronously, BEFORE Window.Activate() (E4) - the
-  // reveal must add zero latency, so the first composed frame has to already
-  // be correct rather than cloaked-then-corrected.
-  //
-  // `enabled` folds together every reason this show should not reveal:
-  // reduce-motion and the presentation gate are checked here; "this is an
-  // un-minimize, which the OS's own restore animation already owns" is the
-  // CALLER's decision (AppController::ShowWindowImpl latches IsIconic before
-  // it calls SW_RESTORE, because IsIconic after that call always answers
-  // false). `originScreen` is the best available anchor in screen
-  // coordinates - the tray icon's rect, falling back to the click point, or
-  // nullopt for a plain centred scale (E2's three fallbacks; never fail to
-  // open). `windowScreenRect` is the window's own screen rect, used only to
-  // turn that anchor into a left/right direction.
-  void Arm(bool enabled, std::optional<POINT> originScreen, RECT const& windowScreenRect);
+  // Write the START pose synchronously, BEFORE Window.Activate() — the reveal
+  // must add zero latency, so the first composed frame is already correct.
+  // Arm derives SignedIn/SignedOut ITSELF from the current HomeNav/LoginRoot
+  // visibility: it runs synchronously pre-Activate, after every root-
+  // visibility write, so the tree already reflects auth state and there is no
+  // state parameter to race. `enabled` folds together every caller-side
+  // reason not to reveal; "this is an un-minimize, which the OS's own restore
+  // animation owns" stays the CALLER's decision (wasIconic latched before
+  // SW_RESTORE). ShouldAnimate() is checked here: unarmed = zero property
+  // writes = instant, fully-correct UI.
+  void Arm(bool enabled);
+  // TRANSITIONAL (deleted in Task 4 with its caller): forwards to Arm(bool);
+  // the origin/rect are dead — no direction decision remains.
+  void Arm(bool enabled, std::optional<POINT>, RECT const&) { Arm(enabled); }
 
   // Start the spring + opacity ripple. Call AFTER Activate() returns. A no-op
-  // unless the matching Arm() armed a reveal.
+  // unless the matching Arm() armed a reveal. If the OS animation toggle
+  // flips true->false in the window between Arm() and this call, Start()
+  // settles rather than leaving Arm's start pose stranded on screen — see
+  // the definition; this is deferred finding #1 from the Task 1/2 reviews.
   void Start();
 
-  // Cancel whatever is in flight and snap straight to the settled pose (Scale
-  // 1, Offset 0, full opacity everywhere). Two callers: Arm() itself, which
-  // settles any reveal still running from a previous show before writing the
-  // next start pose, and MainWindow::SetPresentationActive(false) - hiding
-  // mid-reveal must not leave RevealRoot pinned at ~0.96 scale forever, which
-  // is E6's "nastiest failure mode, found not hypothetical".
+  // Cancel whatever is in flight and snap straight to the settled pose (both
+  // heroes at Scale 1/Opacity 1, every ring in BOTH tables at Opacity
+  // 1/Translation 0 — the union, regardless of which table armed, since a
+  // reveal in flight and the swap that cancels it can disagree about which
+  // table is active). Several callers: Arm() itself, settling any reveal
+  // still running from a previous show before writing the next start pose;
+  // MainWindow::SetPresentationActive(false) - hiding mid-reveal must not
+  // leave a hero pinned at ~0.92 scale forever, which is E6's "nastiest
+  // failure mode, found not hypothetical"; and the login<->home root swap
+  // (ApplyAuthState/ShowLoginRoot/ShowHomeRoot), which settles a reveal
+  // before a page swap can inherit half-animated rings. This restores to the
+  // exact same settled values Start()'s own per-ring Collapsed skip-guard
+  // uses (WindowReveal.cpp's SettleRing) — see that function for where the
+  // "no pose Arm writes is ever left orphaned" invariant (deferred finding
+  // #2) actually lives.
   void CancelToFinal();
 
  private:

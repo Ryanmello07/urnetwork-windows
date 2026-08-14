@@ -381,9 +381,12 @@ void MainWindow::SetPresentationActive(bool active) {
   if (!active) reveal_.CancelToFinal();
 }
 
-void MainWindow::ArmReveal(bool enabled, std::optional<POINT> originScreen,
-                          RECT const& windowScreenRect) {
-  reveal_.Arm(enabled, originScreen, windowScreenRect);
+void MainWindow::ArmReveal(bool enabled) { reveal_.Arm(enabled); }
+
+// TRANSITIONAL (deleted in Task 4 with its caller, AppController::ShowWindowImpl):
+// the origin/rect are dead — no direction decision remains — so this just forwards.
+void MainWindow::ArmReveal(bool enabled, std::optional<POINT>, RECT const&) {
+  ArmReveal(enabled);
 }
 
 void MainWindow::StartReveal() { reveal_.Start(); }
@@ -1093,12 +1096,14 @@ void MainWindow::PreviewSampleStatusStrip() {
 // ---- login / home roots ----------------------------------------------------
 
 void MainWindow::ShowLoginRoot() {
+  if (LoginRoot().Visibility() != Visibility::Visible) reveal_.CancelToFinal();
   HomeNav().Visibility(Visibility::Collapsed);
   LoginRoot().Visibility(Visibility::Visible);
   ApplyStatusStrip();
 }
 
 void MainWindow::ShowHomeRoot() {
+  if (HomeNav().Visibility() != Visibility::Visible) reveal_.CancelToFinal();
   LoginRoot().Visibility(Visibility::Collapsed);
   HomeNav().Visibility(Visibility::Visible);
   ApplyStatusStrip();
@@ -1683,6 +1688,10 @@ void MainWindow::ApplyAuthState(urnw::AuthState state, std::string const& error)
   // --preview-ui pins the home view; every other branch below still keys off
   // the real auth state, because preview never logs in.
   const bool showHome = loggedIn || previewUi_;
+  // A login<->home swap mid-reveal settles the reveal first: no element may
+  // be left translated/transparent under the page entrance that follows.
+  // Only ShowWindowImpl ever STARTS a reveal; this only ends one early.
+  if (showHome != wasVisible) reveal_.CancelToFinal();
   LoginRoot().Visibility(showHome ? Visibility::Collapsed : Visibility::Visible);
   HomeNav().Visibility(showHome ? Visibility::Visible : Visibility::Collapsed);
   if (!error.empty()) {

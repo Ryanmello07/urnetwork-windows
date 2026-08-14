@@ -50,6 +50,9 @@ struct MainWindow : MainWindowT<MainWindow> {
   // Called from AppController::ShowWindowImpl ONLY — see WindowReveal.h for
   // the ordering contract (Arm before Activate, Start after) and why this
   // must never fire from ReconcileWindowPresentation's replay path.
+  void ArmReveal(bool enabled);
+  // TRANSITIONAL (deleted in Task 4 with its caller): forwards to
+  // ArmReveal(bool) — the origin/rect are dead, see WindowReveal.h.
   void ArmReveal(bool enabled, std::optional<POINT> originScreen, RECT const& windowScreenRect);
   void StartReveal();
 
