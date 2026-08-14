@@ -301,6 +301,9 @@ struct MainWindow : MainWindowT<MainWindow> {
                         winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnPeersLineClick(winrt::Windows::Foundation::IInspectable const&,
                          winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
+  // "Connected to N providers" -> the globe sheet.
+  void OnProviderCountClick(winrt::Windows::Foundation::IInspectable const&,
+                             winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   // Simple mode's "More options" disclosure (Phase B); forwarded to ConnectPage.
   void OnMoreOptionsToggle(winrt::Windows::Foundation::IInspectable const&,
                            winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);

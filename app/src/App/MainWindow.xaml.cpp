@@ -1981,6 +1981,10 @@ void MainWindow::OnPeersLineClick(IInspectable const& s,
                                    RoutedEventArgs const& e) {
   connect_->OnPeersLineClick(s, e);
 }
+void MainWindow::OnProviderCountClick(IInspectable const& s,
+                                       RoutedEventArgs const& e) {
+  connect_->OnProviderCountClick(s, e);
+}
 void MainWindow::OnMoreOptionsToggle(IInspectable const& s, RoutedEventArgs const& e) {
   connect_->OnMoreOptionsToggle(s, e);
 }
