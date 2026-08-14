@@ -8,7 +8,13 @@
 namespace urnw {
 namespace {
 constexpr char kPrefKey[] = "onboarding_version_seen";
-constexpr int kOnboardingVersion = 1;
+// v2: v1 was consumed invisibly. Its tray balloon fired at icon creation and
+// was immediately covered by the auto-opened window, and the banner/tip ran
+// behind the AnchorPoint layout bug (content displaced off-screen), so every
+// v1 user "saw" onboarding without seeing anything. The version int exists
+// for exactly this: bump it and the sequence replays once.
+constexpr int kOnboardingVersion = 2;
+constexpr char kBalloonPrefKey[] = "onb_tray_balloon_seen";
 }  // namespace
 
 bool Onboarding::ShouldShow() {
@@ -16,5 +22,11 @@ bool Onboarding::ShouldShow() {
 }
 
 void Onboarding::MarkShown() { SaveAppPref(kPrefKey, kOnboardingVersion); }
+
+bool Onboarding::ShouldShowTrayBalloon() {
+  return !LoadAppPrefs().value(kBalloonPrefKey, false);
+}
+
+void Onboarding::MarkTrayBalloonShown() { SaveAppPref(kBalloonPrefKey, true); }
 
 }  // namespace urnw

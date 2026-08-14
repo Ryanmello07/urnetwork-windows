@@ -30,6 +30,18 @@ class Onboarding {
   // 1, or signed out before reaching Connect) must not replay every launch
   // after that.
   static void MarkShown();
+
+  // The tray balloon is tracked SEPARATELY from the version above, because
+  // its moment moved. It used to fire at tray-icon creation, which made
+  // sense when the app started hidden in the tray; with open-on-launch the
+  // window opens ON TOP of it, so it taught its lesson to nobody -- the
+  // beta-1 user reported never seeing any onboarding at all. Its lesson
+  // ("closing did not quit the app; it lives in the tray") belongs at the
+  // first hide-to-tray, which can happen in any session, long after the
+  // version latch above has flipped. One balloon, ever, at the moment the
+  // user has just done the thing the balloon explains.
+  static bool ShouldShowTrayBalloon();
+  static void MarkTrayBalloonShown();
 };
 
 }  // namespace urnw

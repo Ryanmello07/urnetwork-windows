@@ -164,10 +164,12 @@ void AppController::Start() {
     onboardingActive_ = urnw::Onboarding::ShouldShow();
     if (onboardingActive_) {
       urnw::Onboarding::MarkShown();
-      tray_.ShowBalloon(
-          Localized("app_name"),
-          pages::AdvW("onb_tray_balloon", L"URnetwork lives here from now on — "
-                                          L"click this icon any time to open it."));
+      // No balloon here any more. It used to point at the notification area
+      // the moment the icon appeared — correct when the app STARTED in the
+      // tray, and useless now that the window opens on launch and covers it
+      // (the beta-1 report: "I dont see an onboarding"). The balloon moved to
+      // HideWindow, the first time the window actually goes to the tray,
+      // where its lesson answers the question the user just asked.
     }
   }
 
@@ -823,6 +825,20 @@ void AppController::HideWindow() {
   windowShown_ = false;
   ReconcileWindowPresentation();
   if (window_) window_.try_as<Window>().AppWindow().Hide();
+  // The onboarding tray balloon, at the one moment its lesson is the exact
+  // question in the user's head: the window they just closed did not quit.
+  // Once ever (its own persisted pref, independent of the onboarding version
+  // latch — see Onboarding.h for why), and never during a real quit, whose
+  // Closing handler returns before reaching here but is not the only caller.
+  if (!quitting_.load(std::memory_order_acquire) &&
+      urnw::Onboarding::ShouldShowTrayBalloon()) {
+    urnw::Onboarding::MarkTrayBalloonShown();
+    tray_.ShowBalloon(
+        Localized("app_name"),
+        pages::AdvW("onb_tray_balloon_hide",
+                    L"Still running — URnetwork closed to the tray. "
+                    L"Click this icon to open it again."));
+  }
 }
 
 // The minimize half of the gate. IsIconic is read fresh rather than carried
