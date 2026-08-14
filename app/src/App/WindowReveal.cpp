@@ -135,10 +135,18 @@ void WindowReveal::Arm(bool enabled) {
   // how E6's "nastiest failure mode" starts.
   CancelToFinal();
   armed_ = enabled && urnw::motion::ShouldAnimate();
-  if (!armed_) return;
+  // [rel]-style breadcrumbs: the reveal fails SILENTLY by design (a wrong
+  // choreography is still a working window), so the log is the only witness.
+  // The beta-2 report "no animations" was undiagnosable without these lines.
+  if (!armed_) {
+    LogInfo("reveal: not armed ({})", !enabled ? "un-minimize or caller declined"
+                                               : "animations off in Windows");
+    return;
+  }
 
   // Which first frame is this? Read the tree, don't be told.
   signedInArmed_ = homeNav_.Visibility() == Visibility::Visible;
+  LogInfo("reveal: armed ({} table)", signedInArmed_ ? "signed-in" : "signed-out");
   auto const& state = signedInArmed_ ? signedIn_ : signedOut_;
 
   ElementCompositionPreview::GetElementVisual(plate_).Opacity(0.0f);
@@ -169,6 +177,7 @@ void WindowReveal::Start() {
   // bug outright, so this early-out (the only one in this function that runs
   // after Arm has written poses) settles instead of abandoning them.
   if (!urnw::motion::ShouldAnimate()) {
+    LogInfo("reveal: start fell back to settled pose (animations toggled off between arm and start)");
     CancelToFinal();
     return;
   }
@@ -220,10 +229,12 @@ void WindowReveal::Start() {
     sb.Begin();
     boards_.push_back(sb);
   }
+  LogInfo("reveal: started");
   armed_ = false;  // one-shot: a second Start() without an Arm() does nothing
 }
 
 void WindowReveal::CancelToFinal() {
+  if (armed_) LogInfo("reveal: cancel-to-final while armed (hidden or superseded mid-bloom)");
   if (!plate_) return;
   // Boards first: a running Storyboard HOLDS its DP; stop releases it so the
   // XAML writes below actually land.
