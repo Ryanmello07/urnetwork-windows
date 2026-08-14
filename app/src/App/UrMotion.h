@@ -18,6 +18,7 @@
 #pragma once
 
 #include <cstdint>
+#include <vector>
 
 #include <winrt/Microsoft.UI.Composition.h>
 #include <winrt/Microsoft.UI.Xaml.h>
@@ -76,6 +77,21 @@ inline constexpr double kDist24 = 24.0;
 inline constexpr double kHoverScale = 1.03;
 inline constexpr double kPressScale = 0.97;
 
+// ---- Hero Bloom (motion-overhaul spec §2.1) ---------------------------------
+// The held brand beat: the hero owns the frame for ~two visual fixations
+// before the unfold. =6*kStaggerMs so it sits on the existing stagger grid;
+// shorter reads as no beat, longer reads as a stall.
+inline constexpr int64_t kHeroHoldMs = 240;
+// =kHeroHoldMs/2 =3*kStaggerMs: the wordmark (and avatar) join mid-hero-settle
+// so logo+hero read as one brand moment.
+inline constexpr int64_t kBrandBeatMs = 120;
+// ~15dip visible travel on the <=190dip globe, ~40dip on the ~512dip art
+// card; deep enough to register as the composition's origin, and the 0.86/60
+// spring damps both sizes without visible overshoot.
+inline constexpr float kHeroScaleFrom = 0.92f;
+static_assert(kBrandBeatMs * 2 == kHeroHoldMs, "the brand beat is half the hold");
+static_assert(kHeroHoldMs == 6 * kStaggerMs, "the hold sits on the stagger grid");
+
 // ---- the one reduce-motion choke point --------------------------------------
 // Consult this before starting ANY animation that is not a stock XAML
 // VisualState transition (those are the platform's own business). Before this
@@ -119,5 +135,61 @@ winrt::Microsoft::UI::Composition::CompositionEasingFunction MakeCompositionEasi
 // with outgoing == incoming (no-ops other than ensuring it is visible).
 void CrossfadePageSwap(winrt::Microsoft::UI::Xaml::FrameworkElement const& outgoing,
                        winrt::Microsoft::UI::Xaml::FrameworkElement const& incoming);
+
+// ---- the four motion primitives (motion-overhaul spec §2.2) -----------------
+// All gated on ShouldAnimate(); all keep the house split — geometry on
+// Composition visuals, opacity on XAML Storyboard DPs, never compounded
+// alpha. UI THREAD ONLY, like everything else in this file.
+
+// Which way a RiseIn element travels as it settles INTO place. Up starts
+// distDip BELOW its final slot (Translation.Y = +dist) and settles up; Down
+// starts above (-dist) and settles down. The window open uses both: the
+// outward bloom.
+enum class Rise { Up, Down };
+
+// Hero Bloom, split at the Arm/Start seam the window reveal needs (pose
+// written synchronously pre-Activate, animation post-Activate). ArmHeroBloom
+// writes the start pose: visual Scale = kHeroScaleFrom, XAML Opacity = 0,
+// AnchorPoint {0,0} — ALWAYS {0,0}; (0.5,0.5) displaces content by half its
+// size and shipped as v2026.8.13's off-screen bug — and a CenterPoint
+// ExpressionAnimation bound to this.Target.Size*0.5, left running (it
+// re-evaluates as XAML measures, so the center is right before layout and
+// stays right across resize). StartHeroBloom plays the 0.86/60 reveal spring
+// on Scale to (1,1,1) under a kHeroMs kStandard opacity fade, and RETURNS the
+// fade's Storyboard so the caller can retain and stop it (CancelToFinal must
+// release the DP). dampingRatio exists for the one sanctioned override: 0.90
+// for the signed-out art card if it visibly wobbles (spec §3.7 risk 7).
+void ArmHeroBloom(winrt::Microsoft::UI::Xaml::FrameworkElement const& hero);
+winrt::Microsoft::UI::Xaml::Media::Animation::Storyboard StartHeroBloom(
+    winrt::Microsoft::UI::Xaml::FrameworkElement const& hero,
+    float dampingRatio = kRevealSpringDamping);
+
+// SetIsTranslationEnabled(true), once, idempotent. Forgetting it before the
+// first Translation write is a SILENT no-op that reads as "the stagger feels
+// flat", never as an error.
+void EnableTranslation(winrt::Microsoft::UI::Xaml::UIElement const& element);
+
+// RiseIn: XAML opacity 0->1 over fadeMs riding a Composition Translation.Y
+// ±distDip->0 over riseMs — motion outlives alpha (riseMs > fadeMs), so the
+// element is readable while it settles the last dip into place. Immediate
+// mode: writes its own start pose, enables translation itself, then plays.
+// Skip-if-Collapsed lives HERE, at the choke point. distDip 0 degrades to a
+// pure fade (how opacity-only riders share the primitive).
+void RiseIn(winrt::Microsoft::UI::Xaml::FrameworkElement const& element,
+            Rise direction, double distDip, int64_t delayMs,
+            int64_t fadeMs = kBaseMs, int64_t riseMs = kSlowMs);
+
+// RippleGroup: staggered RiseIns. Entry i plays at baseDelayMs + i*staggerMs
+// by LISTING position — a Collapsed entry is skipped but holds its slot, so
+// delays never shift with auth-conditional visibility. staggerMs 0 moves a
+// group as one row (the status-row rule: riders move WITH the row or it
+// shears).
+struct RippleEntry {
+  winrt::Microsoft::UI::Xaml::FrameworkElement element{nullptr};
+  Rise direction = Rise::Up;
+  double distDip = kDist8;
+};
+void RippleGroup(std::vector<RippleEntry> const& elements, int64_t baseDelayMs,
+                 int64_t staggerMs = kStaggerMs);
 
 }  // namespace urnw::motion

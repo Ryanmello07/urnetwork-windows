@@ -138,4 +138,92 @@ void CrossfadePageSwap(winrt::Microsoft::UI::Xaml::FrameworkElement const& outgo
   RunCrossfade(outgoing, incoming);
 }
 
+void EnableTranslation(winrt::Microsoft::UI::Xaml::UIElement const& element) {
+  if (!element) return;
+  winrt::Microsoft::UI::Xaml::Hosting::ElementCompositionPreview::SetIsTranslationEnabled(
+      element, true);
+}
+
+void ArmHeroBloom(winrt::Microsoft::UI::Xaml::FrameworkElement const& hero) {
+  if (!hero || !ShouldAnimate()) return;
+  auto visual =
+      winrt::Microsoft::UI::Xaml::Hosting::ElementCompositionPreview::GetElementVisual(hero);
+  // AnchorPoint {0,0} ALWAYS; the scale origin is CenterPoint, bound to the
+  // visual's own Size (see the header comment for the shipped bug this rule
+  // exists to prevent).
+  visual.AnchorPoint({0.0f, 0.0f});
+  auto centerBind = visual.Compositor().CreateExpressionAnimation(
+      L"Vector3(this.Target.Size.X * 0.5f, this.Target.Size.Y * 0.5f, 0.0f)");
+  visual.StartAnimation(L"CenterPoint", centerBind);
+  visual.Scale({kHeroScaleFrom, kHeroScaleFrom, 1.0f});
+  hero.Opacity(0.0);
+}
+
+winrt::Microsoft::UI::Xaml::Media::Animation::Storyboard StartHeroBloom(
+    winrt::Microsoft::UI::Xaml::FrameworkElement const& hero, float dampingRatio) {
+  if (!hero || !ShouldAnimate()) return nullptr;
+  auto visual =
+      winrt::Microsoft::UI::Xaml::Hosting::ElementCompositionPreview::GetElementVisual(hero);
+  auto compositor = visual.Compositor();
+  using winrt::Windows::Foundation::Numerics::float3;
+  auto spring = compositor.CreateSpringVector3Animation();
+  spring.DampingRatio(dampingRatio);
+  spring.Period(Ms(kRevealSpringPeriodMs));
+  spring.FinalValue(float3{1.0f, 1.0f, 1.0f});
+  visual.StartAnimation(L"Scale", spring);
+
+  anim::Storyboard sb;
+  auto fade = MakeSplineDouble(0.0, 1.0, kHeroMs, 0, kStandardP1, kStandardP2);
+  anim::Storyboard::SetTarget(fade, hero);
+  anim::Storyboard::SetTargetProperty(fade, L"Opacity");
+  sb.Children().Append(fade);
+  sb.Begin();
+  return sb;
+}
+
+void RiseIn(winrt::Microsoft::UI::Xaml::FrameworkElement const& element, Rise direction,
+            double distDip, int64_t delayMs, int64_t fadeMs, int64_t riseMs) {
+  namespace xaml = winrt::Microsoft::UI::Xaml;
+  if (!element) return;
+  // Skip-if-Collapsed, at the choke point: never force-Visible, never pose a
+  // hidden element — its owner controls its Visibility.
+  if (element.Visibility() == xaml::Visibility::Collapsed) return;
+  if (!ShouldAnimate()) return;  // current pose IS the settled pose
+
+  if (distDip != 0.0) {
+    using winrt::Windows::Foundation::Numerics::float3;
+    EnableTranslation(element);  // idempotent; a silent no-op otherwise
+    const float fromY = static_cast<float>(direction == Rise::Up ? distDip : -distDip);
+    auto visual = xaml::Hosting::ElementCompositionPreview::GetElementVisual(element);
+    element.Translation(float3{0.0f, fromY, 0.0f});  // pre-delay frames correct
+    auto rise = visual.Compositor().CreateScalarKeyFrameAnimation();
+    rise.InsertKeyFrame(1.0f, 0.0f,
+                        MakeCompositionEasing(visual.Compositor(), kStandardP1, kStandardP2));
+    rise.Duration(Ms(riseMs));
+    if (0 < delayMs) rise.DelayTime(Ms(delayMs));
+    visual.StartAnimation(L"Translation.Y", rise);
+  }
+
+  // Alpha on the XAML clock (BeginTime = the same delay). Both clocks start
+  // in this one call — sub-frame drift is fine, spread starts are not.
+  element.Opacity(0.0);
+  anim::Storyboard sb;
+  auto fade = MakeSplineDouble(0.0, 1.0, fadeMs, delayMs, kStandardP1, kStandardP2);
+  anim::Storyboard::SetTarget(fade, element);
+  anim::Storyboard::SetTargetProperty(fade, L"Opacity");
+  sb.Children().Append(fade);
+  sb.Begin();
+}
+
+void RippleGroup(std::vector<RippleEntry> const& elements, int64_t baseDelayMs,
+                 int64_t staggerMs) {
+  int64_t slot = 0;
+  for (auto const& entry : elements) {
+    // slot advances for EVERY listed entry, present or not: delays are a
+    // property of the composition, not of what happens to be visible.
+    RiseIn(entry.element, entry.direction, entry.distDip, baseDelayMs + slot * staggerMs);
+    ++slot;
+  }
+}
+
 }  // namespace urnw::motion
