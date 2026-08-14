@@ -166,6 +166,17 @@ void LoginCarousel::Build() {
   // fixed 190px globe under a fixed 26px headline clamped at MaxWidth(300) put
   // the words well outside the mask they are supposed to sit inside.
   host_.SizeChanged([this](auto const&, auto const&) { ApplyMetrics(); });
+  // ATTACH, not size. The slot's size is only half of what a reparent changes:
+  // the other half is that the host is detached and re-attached, which drops
+  // the surfaces the globes' ImageBrushes were painting from (HostReparented).
+  // Loaded is the one signal raised by that mechanism itself, so it covers the
+  // launch attach, every breakpoint crossing, and any future move that does
+  // not go through ApplyBreakpoint — the mover's explicit call stays the
+  // deterministic one, this is the belt that cannot be mistimed. Both run the
+  // same idempotent resync (same slide, same pose), so whichever lands second
+  // is invisible. Raw `this` for the same reason the line above may use it:
+  // the host and the carousel are torn down together with the window.
+  host_.Loaded([this](auto const&, auto const&) { HostReparented(); });
 
   // The headline sits OVER the globe, as on iOS. Pure white and the display
   // face: these are the only headlines on the signed-out screen.
@@ -266,6 +277,38 @@ void LoginCarousel::ShowSlide(size_t index) {
   bottomShift_.Y(0);
   headline_.Opacity(1);
   bottomLine_.Opacity(1);
+}
+
+// The host has just moved between LoginPanel and LoginArtPane. What that costs
+// is NOT the layout — it is the two ImageBrushes.
+//
+// Measured on the round-3 build, wide -> narrow -> wide (frame capture): the
+// window came back in the correct wide shape, and the headline came back at
+// exactly the size, wrap and position it has on a healthy launch — its glyph
+// bounding box was identical to the pixel. The headline's size and MaxWidth are
+// derived from `side` in ApplyMetrics, so that is proof the slot WAS measured in
+// its new parent and the globes WERE sized from it. The only thing missing was
+// the picture inside them: a detached element loses the realized surface behind
+// its ImageBrush, and re-attaching does not rebuild one for a brush that was
+// assigned before the move. The brush object survives, still holding a decoded
+// bitmap, and paints nothing at all — which is why the globe read as pure
+// background while the words over it rendered normally, and why no later frame
+// ever healed it.
+//
+// So the fills are re-assigned, from scratch, by the class that owns them, once
+// the host is under its new parent. ShowSlide is exactly that (a fresh
+// ImageBrush over a fresh BitmapImage for the current slide) and it lands a
+// clean pose while it is there.
+void LoginCarousel::HostReparented() {
+  // Boards first, for the same reason SetActive(false) stops them before its
+  // own ShowSlide: a running animation HOLDS the Opacity the new frame writes.
+  StopAnimations();
+  ShowSlide(index_);
+  // The new parent may not have measured the slot yet — the mover calls this
+  // synchronously, before the layout pass its own reparent provokes. Correct
+  // either way: ApplyMetrics no-ops on an unmeasured slot (`slot <= 0`) and the
+  // host's SizeChanged runs it again the moment there is a real size.
+  ApplyMetrics();
 }
 
 void LoginCarousel::SetActive(bool active) {

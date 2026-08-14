@@ -46,6 +46,17 @@ class LoginCarousel {
   // flow has moved past the initial step.
   void SetActive(bool active);
 
+  // The host Grid has been moved to another parent — MainWindow::
+  // ApplyBreakpoint carries it between LoginPanel (narrow) and LoginArtPane
+  // (wide) across the breakpoint. Re-establish what the move invalidates.
+  //
+  // A reparent is a DETACH, and a detach takes the realized surfaces the two
+  // globe Paths' ImageBrushes paint from with it; re-attaching does not bring
+  // them back, and no layout pass can, because nothing about the layout is
+  // wrong. The brushes are this class's property, so this class re-assigns
+  // them — the mover calls this right after it moves the host.
+  void HostReparented();
+
  private:
   void Build();
   // fit the globe to whatever height the slot ended up with, and the headline

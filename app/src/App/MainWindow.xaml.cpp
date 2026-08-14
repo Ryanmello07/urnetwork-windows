@@ -687,6 +687,27 @@ void MainWindow::ApplyBreakpoint(bool force) {
   // Height; this just makes sure it runs once more, right here, after every
   // reparent, in both directions, instead of hoping a SizeChanged lands.
   login_->ApplyLoginLayout();
+  // ...and the carousel's own resync, from the same deterministic place, for
+  // the half of the move ApplyLoginLayout cannot see.
+  //
+  // Round 3 (the call above) fixed the LAYOUT: the frame captured immediately
+  // after a crossing now shows the new column shape instead of the old one. It
+  // did not fix the ART, because the art was never a layout problem. Measured
+  // on that build, wide -> narrow -> wide: the headline came back at exactly
+  // the size, wrap and position it has on a healthy launch — glyph bounding box
+  // identical to the pixel — and both of those are derived from the slot by
+  // LoginCarousel::ApplyMetrics, so the slot WAS measured in its new parent and
+  // the globes WERE sized from it. What was missing was the picture inside
+  // them: reparenting DETACHES the host, a detach drops the realized surface
+  // behind each globe's ImageBrush, and re-attaching does not rebuild one for a
+  // brush assigned before the move. Nothing later heals it, at any width, for
+  // as long as the window lives.
+  //
+  // Those brushes belong to LoginCarousel, so LoginCarousel re-assigns them —
+  // this window only says when. After ApplyLoginLayout, never before: the fills
+  // are re-established once the host's Visibility for its new parent has been
+  // settled by the owner of that property.
+  login_->OnCarouselHostReparented();
 
   // ---- the status strip ----------------------------------------------------
   // Captions off below the breakpoint. The app's minimum window is 400dip

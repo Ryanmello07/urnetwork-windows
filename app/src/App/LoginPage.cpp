@@ -204,6 +204,13 @@ void LoginPage::ApplyLoginLayout() {
   UpdateCarouselRunning();
 }
 
+// The page owns the carousel object; the window owns the parenting. This is the
+// one line that joins them, so the mover can tell the hero its host has moved
+// without reaching through the page for a member it does not own.
+void LoginPage::OnCarouselHostReparented() {
+  if (carousel_) carousel_->HostReparented();
+}
+
 void LoginPage::SetPresentationActive(bool active) {
   presentationActive_ = active;
   UpdateCarouselRunning();

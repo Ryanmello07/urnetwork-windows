@@ -63,6 +63,16 @@ class LoginPage {
   // guaranteed to fire again afterward, so the mover calls the resync itself
   // rather than hoping one arrives.
   void ApplyLoginLayout();
+  // The carousel's host has just been reparented (MainWindow::ApplyBreakpoint,
+  // wide <-> narrow). ApplyLoginLayout above resyncs what the PAGE owns for the
+  // new parent — the host's Visibility and Height. This resyncs what the
+  // CAROUSEL owns — the globe fills and metrics — which the detach invalidates
+  // and which no layout pass restores, because nothing about the layout is
+  // wrong (round 4; the reasoning and the measurement are on
+  // LoginCarousel::HostReparented). Two owners, two calls, in that order: the
+  // fills are re-assigned only after the call above has settled the host's
+  // visibility for its new parent.
+  void OnCarouselHostReparented();
   // --preview-ui=seedphrase (Startup.h). Raise the seedphrase display sheet on
   // the BIP-39 test vector so its word grid, its refusal to be dismissed and
   // its copy button can be looked at without creating a real account — the
