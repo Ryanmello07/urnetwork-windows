@@ -675,6 +675,18 @@ void MainWindow::ApplyBreakpoint(bool force) {
     SetWidth(LoginArtColumn(), 0);
     SetStar(LoginFormColumn(), 1);
   }
+  // Explicit resync, not an incidental one (frame-capture regression: a wide
+  // window moved narrow left the art card gone permanently, not for one
+  // frame). The reparent above leaves LoginCarouselHost's Visibility/Height
+  // exactly as ApplyLoginLayout last wrote them for its OLD parent, and nothing
+  // guarantees LoginPanel's/LoginRoot's own SizeChanged fires again afterward
+  // for THIS resize to notice the new parent and recompute — on the repro it
+  // didn't, so the host stayed stuck under its new parent with the wrong
+  // slot's numbers and nothing left changing size to give it a second look.
+  // ApplyLoginLayout is still the single writer of the host's Visibility/
+  // Height; this just makes sure it runs once more, right here, after every
+  // reparent, in both directions, instead of hoping a SizeChanged lands.
+  login_->ApplyLoginLayout();
 
   // ---- the status strip ----------------------------------------------------
   // Captions off below the breakpoint. The app's minimum window is 400dip

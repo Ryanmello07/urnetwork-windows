@@ -51,6 +51,18 @@ class LoginPage {
   // nobody can see is pure wakeups (iOS gates the same timer on
   // presentationActive).
   void SetPresentationActive(bool active);
+  // Give the sign-in affordances their height FIRST and the hero carousel
+  // whatever is left, so Sign in with Seedphrase / Create Instant Account /
+  // Change Network API are never pushed below the fold. Re-run on every size
+  // change of the scroll viewport or the column, AND public because
+  // MainWindow::ApplyBreakpoint calls it explicitly right after it reparents
+  // LoginCarouselHost between LoginPanel and LoginArtPane (Task 2a): the
+  // host's Visibility/Height are stale in its OLD parent's terms the instant
+  // it moves, and waiting for LoginPanel's/LoginRoot's own SizeChanged to
+  // notice was the bug -- on a wide<->narrow crossing that event is not
+  // guaranteed to fire again afterward, so the mover calls the resync itself
+  // rather than hoping one arrives.
+  void ApplyLoginLayout();
   // --preview-ui=seedphrase (Startup.h). Raise the seedphrase display sheet on
   // the BIP-39 test vector so its word grid, its refusal to be dismissed and
   // its copy button can be looked at without creating a real account — the
@@ -175,11 +187,6 @@ class LoginPage {
   // process for as long as it holds anything, so nothing may leave a phrase
   // sitting in it.
   void ClearSeedphraseField();
-  // Give the sign-in affordances their height FIRST and the hero carousel
-  // whatever is left, so Sign in with Seedphrase / Create Instant Account /
-  // Change Network API are never pushed below the fold. Re-run on every size
-  // change of the scroll viewport or the column.
-  void ApplyLoginLayout();
   // run the carousel only when it is on the initial step, on screen, and its
   // slot has not been collapsed by the layout above
   void UpdateCarouselRunning();
