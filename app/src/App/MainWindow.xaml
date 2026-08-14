@@ -101,6 +101,20 @@
                       HorizontalScrollBarVisibility="Disabled"
                       VerticalScrollBarVisibility="Auto">
             <Grid>
+                <Grid.ColumnDefinitions>
+                    <!-- wide login (motion overhaul Task 2a): art | form.
+                         Narrow keeps the art column at 0 and the form on the
+                         star, which renders EXACTLY the old single-column
+                         layout; ApplyBreakpoint owns the flip at 1230dip. -->
+                    <ColumnDefinition x:Name="LoginArtColumn" Width="0" />
+                    <ColumnDefinition x:Name="LoginFormColumn" Width="*" />
+                </Grid.ColumnDefinitions>
+                <!-- the wide art pane: empty until ApplyBreakpoint reparents
+                     LoginCarouselHost here at >=1230dip. Padding keeps the
+                     globe off the window edge and the pane rule of thumb
+                     (content never touches chrome). -->
+                <Grid x:Name="LoginArtPane" Grid.Column="0" Padding="24"
+                      Visibility="Collapsed" />
 
                 <!-- Initial: account discovery (email/phone), wallets, auth code.
                      Structure is android ungoogle/LoginInitial.kt LoginInitialActions,
@@ -117,7 +131,7 @@
                      child, so MaxWidth never binds and the column came out about
                      230px wide instead of android's 512. Stretch takes the whole
                      slot, MaxWidth clamps it, and the layout centres the rest. -->
-                <StackPanel x:Name="LoginPanel" Margin="16" Spacing="12"
+                <StackPanel x:Name="LoginPanel" Grid.Column="1" Margin="16" Spacing="12"
                             MaxWidth="512" HorizontalAlignment="Stretch"
                             VerticalAlignment="Center">
 
@@ -303,7 +317,7 @@
                 </StackPanel>
 
                 <!-- Password: an existing account signs in -->
-                <StackPanel x:Name="PasswordPanel" Margin="24" Spacing="12"
+                <StackPanel x:Name="PasswordPanel" Grid.Column="1" Margin="24" Spacing="12"
                             MaxWidth="420" VerticalAlignment="Center"
                             Visibility="Collapsed">
                     <Button x:Name="PasswordBackButton" Tag="initial" Click="OnLoginBack" />
@@ -338,7 +352,7 @@
                      isn't linked to a network yet (name + terms only), or the
                      guest network's upgrade to a full account (editable email;
                      MainWindow::EnterCreateStep drives the per-mode visibility) -->
-                <StackPanel x:Name="CreatePanel" Margin="24" Spacing="12"
+                <StackPanel x:Name="CreatePanel" Grid.Column="1" Margin="24" Spacing="12"
                             MaxWidth="420" VerticalAlignment="Center"
                             Visibility="Collapsed">
                     <Button x:Name="CreateBackButton" Tag="initial" Click="OnLoginBack" />
@@ -397,7 +411,7 @@
                 </StackPanel>
 
                 <!-- Verify: the emailed / texted one-time code -->
-                <StackPanel x:Name="VerifyPanel" Margin="24" Spacing="12"
+                <StackPanel x:Name="VerifyPanel" Grid.Column="1" Margin="24" Spacing="12"
                             MaxWidth="420" VerticalAlignment="Center"
                             Visibility="Collapsed">
                     <Button x:Name="VerifyBackButton" Tag="initial" Click="OnLoginBack" />
@@ -437,7 +451,7 @@
                      purpose: autocorrect on a BIP-39 word list silently
                      rewrites the credential, and a prediction service would be
                      handed a live seedphrase. -->
-                <StackPanel x:Name="SeedphrasePanel" Margin="24" Spacing="12"
+                <StackPanel x:Name="SeedphrasePanel" Grid.Column="1" Margin="24" Spacing="12"
                             MaxWidth="440" VerticalAlignment="Center"
                             Visibility="Collapsed">
                     <Button x:Name="SeedphraseBackButton" Tag="initial" Click="OnLoginBack" />
@@ -471,7 +485,7 @@
                      CreateNetworkInstantView). The seedphrase the server
                      returns is shown in a sheet before the device is
                      registered - see SeedphraseDisplaySheet. -->
-                <StackPanel x:Name="InstantPanel" Margin="24" Spacing="12"
+                <StackPanel x:Name="InstantPanel" Grid.Column="1" Margin="24" Spacing="12"
                             MaxWidth="440" VerticalAlignment="Center"
                             Visibility="Collapsed">
                     <Button x:Name="InstantBackButton" Tag="initial" Click="OnLoginBack" />
@@ -521,7 +535,7 @@
                 </StackPanel>
 
                 <!-- Password reset: send the reset link -->
-                <StackPanel x:Name="ResetPanel" Margin="24" Spacing="12"
+                <StackPanel x:Name="ResetPanel" Grid.Column="1" Margin="24" Spacing="12"
                             MaxWidth="420" VerticalAlignment="Center"
                             Visibility="Collapsed">
                     <Button x:Name="ResetBackButton" Tag="password" Click="OnLoginBack" />

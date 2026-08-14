@@ -11,6 +11,7 @@
 #include <winrt/Microsoft.UI.Xaml.Automation.h>
 #include <winrt/Windows.Foundation.h>
 
+#include <algorithm>
 #include <array>
 #include <utility>
 
@@ -67,6 +68,23 @@ void SetStar(Controls::ColumnDefinition const& column, double weight) {
 // shell has no such move: the three panes are declared where they live and the
 // breakpoint only decides how many are visible. Deleted with the layout that
 // needed them.)
+
+// Move `child` under `parent`, if it is not already there. The ONE reparent
+// left in this window (R3 deleted the general dance): the login art moves
+// between the form column's flow (narrow: first child of LoginPanel) and the
+// wide art pane. Index is clamped, so "first" is stable even if the panel's
+// child list changes around it.
+void ReparentTo(winrt::Microsoft::UI::Xaml::UIElement const& child,
+                Controls::Panel const& parent, uint32_t index) {
+  if (!child || !parent) return;
+  auto current = child.try_as<FrameworkElement>().Parent().try_as<Controls::Panel>();
+  if (current == parent) return;
+  if (current) {
+    uint32_t at = 0;
+    if (current.Children().IndexOf(child, at)) current.Children().RemoveAt(at);
+  }
+  parent.Children().InsertAt((std::min)(index, parent.Children().Size()), child);
+}
 
 }  // namespace
 
@@ -630,6 +648,27 @@ void MainWindow::ApplyBreakpoint(bool force) {
   }
   Place(DeveloperSideStack(), wide ? PanePlacement{2, 1, 1, Thickness{20, 16, 0, 24}}
                                    : PanePlacement{3, 0, 1, Thickness{0, 16, 0, 24}});
+
+  // ---- Login: the art beside the form at desktop widths --------------------
+  // The seven groups above all skip the login tree, so signed out at 1230dip
+  // ~58% of the window was empty plate and the carousel read as a small card
+  // floating in blackness (512+32dip column, ~359dip of empty background per
+  // side). Wide: art pane takes the star, the form column takes its content
+  // width (LoginPanel MaxWidth 512 + 16+16 margin). Narrow: EXACTLY today's
+  // — art column 0, form on the star, the host back at the top of
+  // LoginPanel's flow. LoginPage::ApplyLoginLayout knows which parent the
+  // host has and only runs its elastic-height arithmetic in the narrow one.
+  if (wide) {
+    SetStar(LoginArtColumn(), 1);
+    SetWidth(LoginFormColumn(), 544);
+    ReparentTo(LoginCarouselHost(), LoginArtPane(), 0);
+    LoginArtPane().Visibility(Visibility::Visible);
+  } else {
+    LoginArtPane().Visibility(Visibility::Collapsed);
+    ReparentTo(LoginCarouselHost(), LoginPanel(), 0);
+    SetWidth(LoginArtColumn(), 0);
+    SetStar(LoginFormColumn(), 1);
+  }
 
   // ---- the status strip ----------------------------------------------------
   // Captions off below the breakpoint. The app's minimum window is 400dip

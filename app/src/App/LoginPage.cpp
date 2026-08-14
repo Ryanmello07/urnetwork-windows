@@ -136,9 +136,22 @@ void LoginPage::ApplyLoginLayout() {
   auto panel = w_.LoginPanel();
   auto host = w_.LoginCarouselHost();
   if (!root || !panel || !host) return;
+  if (inLayoutPass_) return;  // re-entrancy: setting a height raises SizeChanged
+  // Wide login (Task 2a): the host lives in LoginArtPane and the PANE sizes
+  // it — the elastic-slot arithmetic below is the narrow column's, and its
+  // 200dip cap must not squash the art pane. The host mirrors LoginPanel's
+  // visibility (the art belongs to the initial step, exactly as it did when
+  // it lived inside the panel), and the carousel gate keys off it as before.
+  if (host.Parent().try_as<StackPanel>() != panel) {
+    inLayoutPass_ = true;
+    host.ClearValue(FrameworkElement::HeightProperty());
+    host.Visibility(panel.Visibility());
+    inLayoutPass_ = false;
+    UpdateCarouselRunning();
+    return;
+  }
   // Only the initial step owns this panel; the later steps collapse it.
   if (panel.Visibility() != Visibility::Visible) return;
-  if (inLayoutPass_) return;  // re-entrancy: setting a height raises SizeChanged
 
   const double viewport =
       root.ViewportHeight() > 0 ? root.ViewportHeight() : root.ActualHeight();
@@ -401,7 +414,7 @@ void LoginPage::ShowLoginStep(LoginStep step) {
   w_.InstantPanel().Visibility(step == LoginStep::Instant ? Visibility::Visible
                                                           : Visibility::Collapsed);
   UpdateCarouselRunning();
-  if (step == LoginStep::Initial) ApplyLoginLayout();
+  ApplyLoginLayout();  // wide: mirrors the art pane on every step; narrow: early-outs as before
 }
 
 // The initial step shows android's URInlineErrorText - a line of Red400 body

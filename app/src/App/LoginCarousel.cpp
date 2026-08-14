@@ -56,9 +56,10 @@ constexpr std::array<Slide, 3> kSlides{{
 
 // The globe never grows past this, and the type is derived from whatever the
 // globe actually ends up at (ApplyMetrics), so the headline stays INSIDE the
-// mask at every slot size. It used to be a 190px globe with a 26px headline
-// clamped to MaxWidth(300) — 110px wider than the thing it was meant to sit in.
-constexpr double kGlobeMaxSide = 220;
+// mask at every slot size. 400, not 220, since the wide login pane (Task 2a):
+// the narrow slot (<=200dip tall) still governs itself, and past 400 the
+// JPEG art goes soft before the pane runs out of room.
+constexpr double kGlobeMaxSide = 400;
 // headline width as a fraction of the globe, and the type scale that follows
 constexpr double kHeadlineWidthRatio = 0.86;
 constexpr double kHeadlineSizeDivisor = 9.0;
