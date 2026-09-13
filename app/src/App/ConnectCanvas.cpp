@@ -512,11 +512,13 @@ void ConnectCanvas::RebuildRings(GridDot& p) {
   p.rings.clear();
   if (p.marks.empty()) return;
 
-  // cell_ may be 0 before the first layout; the geometry only decides how MANY
-  // rings there are here, and a zero cell would answer "none" for a point that
-  // has extenders. Ask with a nominal cell and let LayoutPoints do the sizing.
+  // cell_ may be 0 before the first layout, and a zero cell answers "no rings"
+  // for a point that has extenders. Only the ring COUNT, the dash and the
+  // colours are read here and none of the three depends on the cell, so a
+  // nominal positive one stands in; LayoutPoints does every measurement.
+  constexpr double kNominalCell = 64.0;
   const ExtenderRingLayout layout =
-      ExtenderRingsFor(0 < cell_ ? cell_ : kIpFamilyDefaultCanvasSide, p.marks);
+      ExtenderRingsFor(0 < cell_ ? cell_ : kNominalCell, p.marks);
   for (const ExtenderRing& spec : layout.rings) {
     DotRing ring;
     ring.shape = shapes::Ellipse();

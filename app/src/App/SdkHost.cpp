@@ -2995,10 +2995,12 @@ void SdkHost::SubscribeDrawer() {
         PublishExtenderStatus(std::move(status));
       }));
   // The view controller behind the account section (K6, K7). Opened with the
-  // rest of the drawer so its lifetime is the session's, and started, since
-  // its own status stream is what an open share sheet re-reads from.
+  // rest of the drawer so its lifetime is the session's, and deliberately NOT
+  // started: start() only subscribes it to the device's extender status -- a
+  // second rpc listener for a stream this app already takes directly above --
+  // and the settings, share, decode and import calls it is opened for need no
+  // subscription at all.
   extenderVc_ = device_->openExtenderViewController();
-  extenderVc_->start();
 
   // initial snapshots
   PublishThroughput();
@@ -5358,11 +5360,8 @@ void SdkHost::ClosePresentationLocked() {
     if (connectVc_) device_->closeConnectViewController(*connectVc_);
     // The extender controller closes ITSELF (the SDK gives it no
     // Device::closeExtenderViewController), but it is the same rpc courtesy as
-    // the rest, so it lives inside the same guard.
-    if (extenderVc_) {
-      extenderVc_->stop();
-      extenderVc_->close();
-    }
+    // the rest, so it lives inside the same guard. close() stops it too.
+    if (extenderVc_) extenderVc_->close();
   }
   // ...but the handles drop UNCONDITIONALLY, whether or not the courtesy was
   // paid. That asymmetry is the D4 contract, and the provider controller joins
