@@ -174,6 +174,14 @@ void AccountPage::ResetForSignOut() {
   SetAuthText({});
   ApplyAccountState(FieldState::NoSession);
   RenderBalanceCodes({}, FieldState::NoSession);
+  // The extender pane is per network space, so a signed-out window must not
+  // keep the previous space's dns name, hosts or private secret on screen.
+  if (extenderBuilt_) {
+    advancedOpen_ = false;
+    advancedPanel_.Visibility(Visibility::Collapsed);
+    kit::SetTextOrCollapse(w_.AccountPaneDMeta(), {});
+    ApplyExtenderForm(FieldState::NoSession, {}, {}, {}, /*hasController=*/false);
+  }
 }
 
 void AccountPage::ApplyAccountState(rows::FieldState state) {
@@ -197,10 +205,12 @@ void AccountPage::ApplyStrings() {
   w_.AccountPaneATitle().Text(Loc("plan"));
   w_.AccountPaneBTitle().Text(Loc("account"));
   w_.AccountPaneCTitle().Text(Loc("balance_codes_title"));
+  w_.AccountPaneDTitle().Text(Loc("extenders"));
   // Landmark names, so a screen reader can tell three regions apart.
   Automation::AutomationProperties::SetName(w_.AccountPaneA(), Loc("plan"));
   Automation::AutomationProperties::SetName(w_.AccountPaneB(), Loc("account"));
   Automation::AutomationProperties::SetName(w_.AccountPaneC(), Loc("balance_codes_title"));
+  Automation::AutomationProperties::SetName(w_.AccountPaneD(), Loc("extenders"));
 
   // pane A: plan + usage
   w_.AccountPlanValueText().Text(Loc("free"));
@@ -239,6 +249,7 @@ void AccountPage::LoadAccount() {
     ApplyAccountState(FieldState::NoSession);
     LoadReferralInfo();
     LoadBalanceCodes();
+    LoadExtenderSettings();
     return;
   }
   ApplyAccountState(FieldState::Loading);
@@ -277,6 +288,9 @@ void AccountPage::LoadAccount() {
   });
   LoadReferralInfo();
   LoadBalanceCodes();
+  // pane D (K6): a local read of the space through the view controller, not an
+  // api call, so it runs on the same navigation as everything else here
+  LoadExtenderSettings();
 }
 
 void AccountPage::LoadReferralInfo() {
@@ -494,5 +508,353 @@ void AccountPage::SendPasswordReset() {
         });
       });
 }
+
+// ---- pane D: extenders (connect/EXTENDER.md K6, K7) ------------------------
+//
+// Three edited values through the SDK's ExtenderViewController -- the extender
+// dns name, the gossip url and the manual host list -- with the derived default
+// as each empty field's placeholder, because an empty field MEANS the default
+// and a box pre-filled with it would turn every save into an explicit override.
+// Then the legacy private extender behind an Advanced row, and the two buttons
+// that open the share and import sheets.
+//
+// Everything the form DECIDES is ExtenderPresentation.h, which is pure and
+// tested off-Windows (tools/extender-tests.cpp); what is here is the building
+// and the two SDK calls.
+
+namespace {
+
+// A labelled field row on the pane's rhythm: the 12px inset and the bottom
+// hairline every other row in this pane carries, with the control under its
+// label rather than beside it -- a url does not fit in a trailing slot.
+TextBox AddFieldRow(Panel const& host, hstring const& label, bool multiline) {
+  Border box;
+  box.Padding(ThicknessHelper::FromLengths(12, 10, 12, 10));
+  box.BorderBrush(urnw::colors::BorderBrush());
+  box.BorderThickness(ThicknessHelper::FromLengths(0, 0, 0, 1));
+  StackPanel column;
+  column.Spacing(6);
+  TextBlock caption;
+  caption.Text(label);
+  caption.FontSize(12);
+  caption.Foreground(urnw::colors::MutedBrush());
+  column.Children().Append(caption);
+  TextBox field;
+  field.Style(rows::Lookup(L"UrTextInputStyle"));
+  if (multiline) {
+    field.AcceptsReturn(true);
+    field.TextWrapping(TextWrapping::Wrap);
+    field.Height(84);
+  }
+  Automation::AutomationProperties::SetName(field, label);
+  column.Children().Append(field);
+  box.Child(column);
+  host.Children().Append(box);
+  return field;
+}
+
+// A full-width command on the pane's own bar style, the shape the plan pane's
+// Upgrade button already uses.
+Button AddActionRow(Panel const& host, hstring const& label, bool primary) {
+  Button button;
+  button.Content(winrt::box_value(label));
+  button.Style(
+      rows::Lookup(primary ? L"UrPaneActionPrimaryStyle" : L"UrPaneActionSecondaryStyle"));
+  Automation::AutomationProperties::SetName(button, label);
+  host.Children().Append(button);
+  return button;
+}
+
+}  // namespace
+
+void AccountPage::BuildExtenderPane() {
+  if (extenderBuilt_) return;
+  extenderBuilt_ = true;
+  auto host = w_.AccountExtenderHost();
+
+  host.Children().Append(kit::MakePaneGroupHeader(Loc("extender_settings")).root);
+  extenderDnsBox_ = AddFieldRow(host, Loc("extender_dns_name"), /*multiline=*/false);
+  extenderGossipBox_ = AddFieldRow(host, Loc("gossip_url"), /*multiline=*/false);
+  extenderHostsBox_ = AddFieldRow(host, Loc("extender_hosts"), /*multiline=*/true);
+  {
+    // the hint belongs to the host list, so it sits under it rather than at the
+    // bottom of the group where it would read as a note about all three fields
+    Border box;
+    box.Padding(ThicknessHelper::FromLengths(12, 8, 12, 8));
+    box.BorderBrush(urnw::colors::BorderBrush());
+    box.BorderThickness(ThicknessHelper::FromLengths(0, 0, 0, 1));
+    TextBlock hint;
+    hint.Text(Loc("extender_hosts_hint"));
+    hint.FontSize(12);
+    hint.TextWrapping(TextWrapping::Wrap);
+    hint.Foreground(urnw::colors::MutedBrush());
+    box.Child(hint);
+    host.Children().Append(box);
+  }
+
+  extenderSaveButton_ = AddActionRow(host, Loc("save"), /*primary=*/true);
+  extenderSaveButton_.Click([this](auto const&, auto const&) { SaveExtenderSettings(); });
+
+  // One line carrying the load state and the save verdict. Without it a failed
+  // save is invisible: the boxes keep what was typed and nothing else happens.
+  extenderStatus_ = TextBlock();
+  extenderStatus_.FontSize(12);
+  extenderStatus_.TextWrapping(TextWrapping::Wrap);
+  {
+    Border box;
+    box.Padding(ThicknessHelper::FromLengths(12, 8, 12, 8));
+    box.BorderBrush(urnw::colors::BorderBrush());
+    box.BorderThickness(ThicknessHelper::FromLengths(0, 0, 0, 1));
+    box.Child(extenderStatus_);
+    host.Children().Append(box);
+  }
+
+  // ---- advanced: the legacy private extender -------------------------------
+  // A disclosure row rather than a WinUI Expander: the pane's vocabulary is
+  // rows with a fixed height and a hairline, and an Expander would be the only
+  // control on this destination wearing a different one.
+  auto advanced = kit::MakePaneTwoLineRowButton(Loc("advanced"), Loc("private_extender"));
+  advancedButton_ = advanced.root;
+  Automation::AutomationProperties::SetName(advancedButton_, Loc("advanced"));
+  advancedButton_.Click([this](auto const&, auto const&) {
+    advancedOpen_ = !advancedOpen_;
+    advancedPanel_.Visibility(advancedOpen_ ? Visibility::Visible : Visibility::Collapsed);
+  });
+  host.Children().Append(advancedButton_);
+
+  advancedPanel_ = StackPanel();
+  advancedPanel_.Visibility(Visibility::Collapsed);
+  {
+    Border box;
+    box.Padding(ThicknessHelper::FromLengths(12, 8, 12, 8));
+    box.BorderBrush(urnw::colors::BorderBrush());
+    box.BorderThickness(ThicknessHelper::FromLengths(0, 0, 0, 1));
+    TextBlock hint;
+    hint.Text(Loc("private_extender_hint"));
+    hint.FontSize(12);
+    hint.TextWrapping(TextWrapping::Wrap);
+    hint.Foreground(urnw::colors::MutedBrush());
+    box.Child(hint);
+    advancedPanel_.Children().Append(box);
+  }
+  privateIpBox_ = AddFieldRow(advancedPanel_, Loc("private_extender_ip"), /*multiline=*/false);
+  privateSecretBox_ =
+      AddFieldRow(advancedPanel_, Loc("private_extender_secret"), /*multiline=*/false);
+  privateSaveButton_ = AddActionRow(advancedPanel_, Loc("save"), /*primary=*/false);
+  privateSaveButton_.Click([this](auto const&, auto const&) { SavePrivateExtender(); });
+  host.Children().Append(advancedPanel_);
+
+  // ---- share and import (K7) -----------------------------------------------
+  host.Children().Append(kit::MakePaneGroupHeader(Loc("share_extenders")).root);
+  shareExtendersButton_ = AddActionRow(host, Loc("share_extenders"), /*primary=*/false);
+  shareExtendersButton_.Click([this](auto const&, auto const&) { ShowExtenderShareSheet(); });
+  importExtendersButton_ = AddActionRow(host, Loc("import_extenders"), /*primary=*/false);
+  importExtendersButton_.Click([this](auto const&, auto const&) { ShowExtenderImportSheet(); });
+}
+
+void AccountPage::LoadExtenderSettings() {
+  BuildExtenderPane();
+  auto& sdk = Sdk();
+  const bool hasController = sdk.ExtenderController() != nullptr;
+  if (!hasController) {
+    // The view controller is opened from the DeviceRemote, so the form needs a
+    // live service session. Saying which of the two is missing is the whole
+    // point of FieldState: "please log in" to a signed-in user is a lie.
+    ApplyExtenderForm(sdk.IsLoggedIn() ? FieldState::NoDevice : FieldState::NoSession, {},
+                      {}, {}, /*hasController=*/false);
+    return;
+  }
+
+  ExtenderSettingsForm form;
+  FieldState state = FieldState::Loaded;
+  try {
+    ExtenderSettingsView view;
+    if (const auto settings = sdk.ExtenderController()->getSettings()) {
+      view.dnsName = settings->DnsName;
+      view.dnsNameDefault = settings->DnsNameDefault;
+      view.gossipUrl = settings->GossipUrl;
+      view.gossipUrlDefault = settings->GossipUrlDefault;
+      view.networkHost = settings->NetworkHost;
+      if (settings->Hosts) view.hosts = *settings->Hosts;
+      if (settings->RootPublicKeys) view.rootPublicKeys = *settings->RootPublicKeys;
+      view.rootPublicKeysDefault = settings->RootPublicKeysDefault;
+    }
+    form = ExtenderSettingsFormFor(view);
+    kit::SetTextOrCollapse(w_.AccountPaneDMeta(), H(view.networkHost));
+  } catch (const std::exception& e) {
+    LogWarn("account: extender settings read failed: {}", e.what());
+    state = FieldState::Failed;
+  } catch (...) {
+    LogWarn("account: extender settings read failed");
+    state = FieldState::Failed;
+  }
+
+  std::string privateIp;
+  std::string privateSecret;
+  if (const auto privateExtender = sdk.CurrentNetExtender()) {
+    privateIp = privateExtender->ip;
+    privateSecret = privateExtender->secret;
+  }
+  ApplyExtenderForm(state, form, privateIp, privateSecret, /*hasController=*/true);
+}
+
+void AccountPage::ApplyExtenderForm(FieldState state, ExtenderSettingsForm const& form,
+                                    std::string const& privateIp,
+                                    std::string const& privateSecret, bool hasController) {
+  if (!extenderBuilt_) return;
+  const bool live = hasController && state != FieldState::Failed;
+  for (auto const& box : {extenderDnsBox_, extenderGossipBox_, extenderHostsBox_,
+                          privateIpBox_, privateSecretBox_}) {
+    box.IsEnabled(live);
+  }
+  extenderSaveButton_.IsEnabled(live && !savingExtender_);
+  privateSaveButton_.IsEnabled(live && !savingExtender_);
+  shareExtendersButton_.IsEnabled(hasController);
+  importExtendersButton_.IsEnabled(hasController);
+
+  if (!live) {
+    kit::ApplySupportingText(extenderStatus_, {}, kit::ValidationState::NotChecked);
+    rows::ApplyFieldState(extenderStatus_, state);
+    return;
+  }
+
+  extenderDnsBox_.Text(H(form.dnsNameText));
+  extenderDnsBox_.PlaceholderText(
+      form.dnsNameDefaultValue.empty()
+          ? hstring{}
+          : hstring{urnw::Format("extender_default_value",
+                                 urnw::Widen(form.dnsNameDefaultValue))});
+  extenderGossipBox_.Text(H(form.gossipUrlText));
+  extenderGossipBox_.PlaceholderText(
+      form.gossipUrlDefaultValue.empty()
+          ? hstring{}
+          : hstring{urnw::Format("extender_default_value",
+                                 urnw::Widen(form.gossipUrlDefaultValue))});
+  extenderHostsBox_.Text(H(form.hostsText));
+  privateIpBox_.Text(H(privateIp));
+  privateSecretBox_.Text(H(privateSecret));
+  kit::ApplySupportingText(extenderStatus_, {}, kit::ValidationState::NotChecked);
+}
+
+winrt::fire_and_forget AccountPage::SaveExtenderSettings() {
+  if (savingExtender_ || !Sdk().ExtenderController()) co_return;
+
+  auto self = w_.get_strong();
+  auto weak = w_.get_weak();
+  auto queue = w_.DispatcherQueue();
+  const std::string dnsName = winrt::to_string(extenderDnsBox_.Text());
+  const std::string gossipUrl = winrt::to_string(extenderGossipBox_.Text());
+  const std::vector<std::string> hosts =
+      ParseExtenderHostLines(winrt::to_string(extenderHostsBox_.Text()));
+  // The host never dies under the app, so the background half holds a POINTER
+  // to it rather than reading a member through `this` after the suspension.
+  urnw::SdkHost* const sdk = &Sdk();
+
+  savingExtender_ = true;
+  extenderSaveButton_.IsEnabled(false);
+  kit::ApplySupportingText(extenderStatus_, Loc("loading"), kit::ValidationState::Validating);
+
+  bool ok = false;
+  co_await winrt::resume_background();
+  try {
+    if (auto* vc = sdk->ExtenderController()) {
+      // Empty means the derived default; the SDK trims and restarts the space's
+      // network client and node in place (K6).
+      vc->setSettings(dnsName, gossipUrl,
+                      hosts.empty() ? std::optional<urnet::StringList>{}
+                                    : std::optional<urnet::StringList>{hosts});
+      ok = true;
+    }
+  } catch (const std::exception& e) {
+    LogWarn("account: extender settings save failed: {}", e.what());
+  } catch (...) {
+    LogWarn("account: extender settings save failed");
+  }
+
+  queue.TryEnqueue([weak, ok] {
+    auto window = weak.get();
+    if (!window) return;
+    auto& page = window->account();
+    page.savingExtender_ = false;
+    page.extenderSaveButton_.IsEnabled(true);
+    page.privateSaveButton_.IsEnabled(true);
+    if (!ok) {
+      kit::ApplySupportingText(page.extenderStatus_, Loc("something_went_wrong"),
+                               kit::ValidationState::Invalid);
+      return;
+    }
+    kit::ApplySupportingText(page.extenderStatus_, Loc("extender_settings_saved"),
+                             kit::ValidationState::Valid);
+    // Re-read: the SDK normalises what it stored, and a cleared box comes back
+    // as a default whose value the placeholder has to name.
+    page.LoadExtenderSettings();
+  });
+}
+
+void AccountPage::SavePrivateExtender() {
+  if (savingExtender_) return;
+  const std::string ip = TrimWhitespace(winrt::to_string(privateIpBox_.Text()));
+  const std::string secret = TrimWhitespace(winrt::to_string(privateSecretBox_.Text()));
+
+  std::optional<urnet::NetExtender> value;
+  if (!ip.empty()) {
+    urnet::NetExtender netExtender;
+    netExtender.ip = ip;
+    netExtender.secret = secret;
+    value = netExtender;
+  }
+  // No rpc and no round trip: this is a local write to the space manager, which
+  // applies an extender-values-only change in place.
+  if (!Sdk().SetNetExtender(value)) {
+    kit::ApplySupportingText(extenderStatus_, Loc("something_went_wrong"),
+                             kit::ValidationState::Invalid);
+    return;
+  }
+  kit::ApplySupportingText(extenderStatus_, Loc("extender_settings_saved"),
+                           kit::ValidationState::Valid);
+  // The tunnel lives in the service process, which took this space's values at
+  // its last start; it picks the new ones up at its next one, and saying so is
+  // the difference between a setting that looks broken and one that is pending.
+  if (Sdk().hasDevice()) {
+    kit::ApplySupportingText(extenderStatus_, Loc("extender_settings_next_connect"),
+                             kit::ValidationState::Valid);
+  }
+}
+
+winrt::fire_and_forget AccountPage::ShowExtenderShareSheet() {
+  if (w_.sheetOpen()) co_return;
+  auto self = w_.get_strong();
+  w_.SetSheetOpen(true);
+  try {
+    extenderShareSheet_ = urnw::ExtenderShareSheet::Create(self->Content().XamlRoot(), Sdk());
+    co_await extenderShareSheet_->Dialog().ShowAsync();
+  } catch (...) {
+  }
+  extenderShareSheet_.reset();
+  w_.SetSheetOpen(false);
+}
+
+winrt::fire_and_forget AccountPage::ShowExtenderImportSheet() {
+  if (w_.sheetOpen()) co_return;
+  auto self = w_.get_strong();
+  w_.SetSheetOpen(true);
+  try {
+    // The picker needs this window's HWND or it throws E_ACCESSDENIED instead
+    // of opening (SettingsPage::SaveLogsToFile).
+    HWND hwnd{};
+    if (auto native = self.try_as<::IWindowNative>()) native->get_WindowHandle(&hwnd);
+    auto weak = w_.get_weak();
+    extenderImportSheet_ = urnw::ExtenderImportSheet::Create(
+        self->Content().XamlRoot(), hwnd, Sdk(), [weak] {
+          // an import may have replaced the dns name, gossip url and root keys
+          if (auto window = weak.get()) window->account().LoadExtenderSettings();
+        });
+    co_await extenderImportSheet_->Dialog().ShowAsync();
+  } catch (...) {
+  }
+  extenderImportSheet_.reset();
+  w_.SetSheetOpen(false);
+}
+
 
 }  // namespace urnw

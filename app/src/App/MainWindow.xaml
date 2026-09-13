@@ -1591,6 +1591,13 @@
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition x:Name="AccountPaneBColumn" Width="*" />
                         <ColumnDefinition Width="Auto" />
+                        <!-- Extenders (connect/EXTENDER.md K6) sits between the
+                             identity column and the codes table: it is a pane of
+                             CONTROLS, and the codes table next to it is a record
+                             with nothing actionable in it, which is why the codes
+                             fold before it does (MainWindow::ApplyBreakpoint). -->
+                        <ColumnDefinition x:Name="AccountPaneDColumn" Width="380" />
+                        <ColumnDefinition Width="Auto" />
                         <ColumnDefinition x:Name="AccountPaneCColumn" Width="380" />
                     </Grid.ColumnDefinitions>
 
@@ -1788,11 +1795,41 @@
                         </ScrollViewer>
                     </Grid>
 
-                    <Border x:Name="AccountPaneCRule" Grid.Column="3"
+                    <Border x:Name="AccountPaneDRule" Grid.Column="3"
+                            Style="{StaticResource UrPaneVRuleStyle}" />
+
+                    <!-- ============ PANE D: EXTENDERS (K6) ============
+                         The whole section is built in code (AccountPage::
+                         BuildExtenderPane) for the reason SettingsSheets.h gives
+                         about the settings sections: MainWindow.xaml is the file
+                         every parallel phase touches, and a uniform stack of
+                         label/field rows expresses itself more compactly as a
+                         builder than as markup. The markup carries the pane, its
+                         header and one host. -->
+                    <Grid Grid.Column="4" x:Name="AccountPaneD">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <Border Style="{StaticResource UrPaneHeaderStyle}">
+                            <Grid>
+                                <TextBlock x:Name="AccountPaneDTitle"
+                                           Style="{StaticResource UrPaneTitleStyle}" />
+                                <TextBlock x:Name="AccountPaneDMeta" HorizontalAlignment="Right"
+                                           Style="{StaticResource UrPaneMetaStyle}" />
+                            </Grid>
+                        </Border>
+                        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled"
+                                      VerticalScrollBarVisibility="Auto">
+                            <StackPanel x:Name="AccountExtenderHost" />
+                        </ScrollViewer>
+                    </Grid>
+
+                    <Border x:Name="AccountPaneCRule" Grid.Column="5"
                             Style="{StaticResource UrPaneVRuleStyle}" />
 
                     <!-- ============ PANE C: BALANCE CODES ============ -->
-                    <Grid Grid.Column="4" x:Name="AccountPaneC">
+                    <Grid Grid.Column="6" x:Name="AccountPaneC">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />

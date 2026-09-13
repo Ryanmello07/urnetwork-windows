@@ -156,6 +156,32 @@ ExtenderQrLayout ExtenderQrLayoutFor(int moduleCount, double pixelSide) {
   return layout;
 }
 
+std::vector<ExtenderQrRun> ExtenderQrRunsFor(int moduleCount, const std::vector<bool>& dark,
+                                             int clearFrom, int clearTo) {
+  std::vector<ExtenderQrRun> runs;
+  if (moduleCount <= 0) return runs;
+  const std::size_t need = static_cast<std::size_t>(moduleCount) *
+                           static_cast<std::size_t>(moduleCount);
+  if (dark.size() < need) return runs;
+  for (int y = 0; y < moduleCount; ++y) {
+    const bool clearedRow = clearFrom <= y && y < clearTo;
+    int start = -1;
+    for (int x = 0; x <= moduleCount; ++x) {
+      const bool cleared = clearedRow && clearFrom <= x && x < clearTo;
+      const bool on = x < moduleCount && !cleared &&
+                      dark[static_cast<std::size_t>(y) * static_cast<std::size_t>(moduleCount) +
+                           static_cast<std::size_t>(x)];
+      if (on && start < 0) {
+        start = x;
+      } else if (!on && 0 <= start) {
+        runs.push_back(ExtenderQrRun{start, y, x - start});
+        start = -1;
+      }
+    }
+  }
+  return runs;
+}
+
 // ---- import -----------------------------------------------------------------
 
 ExtenderImportDecision DecideExtenderImport(const ExtenderShareDecodeView& decoded,

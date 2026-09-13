@@ -16,6 +16,7 @@
 #include <winrt/Microsoft.UI.Xaml.h>
 #include <winrt/Microsoft.UI.Xaml.Controls.h>
 
+#include "ExtenderSheets.h"   // the share + import sheets (EXTENDER.md K7)
 #include "SettingsSheets.h"  // rows::FieldState + the row kit
 #include "UrComponents.h"
 
@@ -34,6 +35,10 @@ class AccountPage {
   void LoadAccount();
   void LoadReferralInfo();   // referral code + totals (pane A's usage-bar rows)
   void LoadBalanceCodes();   // redeemed-codes list (account panel)
+  // Pane D (EXTENDER.md K6). Reads the effective settings through the SDK's
+  // ExtenderViewController and the legacy private extender off the network
+  // space. Safe to call with no session: it renders the NoDevice state.
+  void LoadExtenderSettings();
 
   // read by MainWindow::ApplyBalance for the "Total Referrals" / bonus rows on
   // both plan cards
@@ -67,6 +72,27 @@ class AccountPage {
   void BuildProfileExtra();
   // The Referrals row (pane B) that opens the Refer and earn page.
   void BuildReferralsNav();
+  // ---- pane D: extenders (EXTENDER.md K6, K7) ------------------------------
+  // The whole section is built here rather than in markup, for the reason
+  // SettingsSheets.h gives about the settings sections: MainWindow.xaml is the
+  // file every parallel phase touches and a uniform stack of label/field rows
+  // is more compact as a builder than as markup.
+  void BuildExtenderPane();
+  void ApplyExtenderForm(rows::FieldState state, ExtenderSettingsForm const& form,
+                         std::string const& privateIp, std::string const& privateSecret,
+                         bool hasController);
+  // The three edited values, through the view controller: an empty box means
+  // the derived default, and the SDK restarts the space's network client and
+  // node in place.
+  winrt::fire_and_forget SaveExtenderSettings();
+  // The legacy single private extender, which is a network-space VALUE rather
+  // than a view-controller setting. A change confined to the extender values
+  // is applied in place by the space manager, so this does not disturb the
+  // live session; the service reads it at its next start, which is what the
+  // note under the fields says.
+  void SavePrivateExtender();
+  winrt::fire_and_forget ShowExtenderShareSheet();
+  winrt::fire_and_forget ShowExtenderImportSheet();
   void SendPasswordReset();
   // Every async field on this surface reaches one of these, for the same reason
   // the settings page does: before it, a 401 and an empty account looked
@@ -108,6 +134,26 @@ class AccountPage {
   // Cancel restores
   std::string networkName_;
   bool sendingReset_ = false;
+
+  // ---- pane D: extenders ---------------------------------------------------
+  bool extenderBuilt_ = false;
+  bool savingExtender_ = false;
+  bool advancedOpen_ = false;
+  winrt::Microsoft::UI::Xaml::Controls::TextBox extenderDnsBox_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::TextBox extenderGossipBox_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::TextBox extenderHostsBox_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::TextBox privateIpBox_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::TextBox privateSecretBox_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::Button extenderSaveButton_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::Button privateSaveButton_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::Button shareExtendersButton_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::Button importExtendersButton_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::Button advancedButton_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::StackPanel advancedPanel_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::TextBlock extenderStatus_{nullptr};
+  // held for as long as its dialog is showing, like every other sheet here
+  std::shared_ptr<urnw::ExtenderShareSheet> extenderShareSheet_;
+  std::shared_ptr<urnw::ExtenderImportSheet> extenderImportSheet_;
 };
 
 }  // namespace urnw

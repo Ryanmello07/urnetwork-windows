@@ -1004,6 +1004,17 @@ class SdkHost {
   // controller is opened from the device, and the account section shows the
   // NoDevice state rather than an editable form backed by nothing.
   urnet::ExtenderViewController* ExtenderController();
+  // The LEGACY single private extender (K6: "stays as an advanced field with
+  // its exclusive override"). It is a network-space VALUE, not one of the three
+  // the view controller edits, so it is read and written here.
+  //
+  // The write is safe against a live session: the space manager applies a
+  // change confined to the EXTENDER values -- and NetExtender is one of them --
+  // in place, restarting the space's network client and node rather than
+  // rebuilding the space, so the DeviceRemote bound to it and everything
+  // derived from it stay valid. An empty ip clears the override.
+  std::optional<urnet::NetExtender> CurrentNetExtender();
+  bool SetNetExtender(const std::optional<urnet::NetExtender>& value);
   // The client / provider transport policy: the device's when there is a
   // session (offline the DeviceRemote answers with the pending or last known
   // policy), else the app LocalState mirror (see ApplyTransportSettings), else

@@ -3513,6 +3513,49 @@ urnet::ExtenderViewController* SdkHost::ExtenderController() {
   return extenderVc_ ? &*extenderVc_ : nullptr;
 }
 
+std::optional<urnet::NetExtender> SdkHost::CurrentNetExtender() {
+  std::scoped_lock lock(mutex_);
+  if (!networkSpace_) return std::nullopt;
+  try {
+    return networkSpace_->getNetExtender();
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: get net extender failed: {}", e.what());
+    return std::nullopt;
+  }
+}
+
+bool SdkHost::SetNetExtender(const std::optional<urnet::NetExtender>& value) {
+  std::scoped_lock lock(mutex_);
+  if (!spaceManager_ || !networkSpace_) return false;
+  try {
+    // The values have to go back WHOLE (updateNetworkSpaceValues replaces
+    // them), and the space's own json is the only reading of them the C ABI
+    // offers -- the getters return EFFECTIVE values, and writing those back
+    // would pin every derived default as an explicit override.
+    const nlohmann::json document = nlohmann::json::parse(networkSpace_->toJson());
+    urnet::NetworkSpaceKey key{};
+    if (auto it = document.find("key"); it != document.end() && !it->is_null()) {
+      it->get_to(key);
+    }
+    urnet::NetworkSpaceValues values{};
+    if (auto it = document.find("values"); it != document.end() && !it->is_null()) {
+      it->get_to(values);
+    }
+    values.net_extender = value;
+    // Only the extender values changed, so the manager applies this in place
+    // (sdk network_space.go onlyExtenderValuesChanged) and hands back a handle
+    // to the SAME space; nothing derived from it is invalidated.
+    networkSpace_ = spaceManager_->updateNetworkSpaceValues(key, values);
+    return true;
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: set net extender failed: {}", e.what());
+    return false;
+  } catch (...) {
+    LogWarn("sdkhost: set net extender failed");
+    return false;
+  }
+}
+
 std::optional<urnet::TransportSettings> SdkHost::CurrentTransportSettings(
     TransportSettingsKind kind) {
   try {

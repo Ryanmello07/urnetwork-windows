@@ -139,7 +139,10 @@
            including file's own dir (=$(IntDir)) then /I, so without the project dir on /I
            XamlTypeInfo.g.cpp fails C1083 'App.xaml.h'. Our hand-authored .cpp don't hit
            this only because they physically sit next to those headers. -->
-      <AdditionalIncludeDirectories>$(MSBuildProjectDirectory);$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <!-- third_party\qrcodegen: the vendored QR encoder the extender share code
+           renders with. third_party\zxing-cpp\include: the QR decoder the import
+           sheet reads an image file with (fetched + built by fetch-deps.ps1). -->
+      <AdditionalIncludeDirectories>$(MSBuildProjectDirectory);$(IntDir);$(UrnRepoRoot)third_party\qrcodegen;$(UrnRepoRoot)third_party\zxing-cpp\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <!-- DISABLE_XAML_GENERATED_MAIN: the WinUI markup compiler emits an app bootstrap
            (wWinMain + its winrt module glue, guarded by #ifndef DISABLE_XAML_GENERATED_MAIN)
            into the generated XamlTypeInfo.g.cpp unit. We ship our OWN entry point in
@@ -165,13 +168,14 @@
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
-      <AdditionalLibraryDirectories>$(UrnSdkDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(UrnSdkDir);$(UrnRepoRoot)third_party\zxing-cpp\lib\$(Platform);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <!-- crypt32.lib: WalletConnect.cpp uses CryptBinaryToStringA (Base64) -> __imp_CryptBinaryToStringA,
            SdkHost.cpp CryptStringToBinaryA (the sso identity token's nonce claim).
            winhttp.lib + bcrypt.lib: UpdateChecker.cpp (WinHttp* / BCrypt*).
            version.lib: ServiceSetup.cpp reads ProductVersion resources
            (GetFileVersionInfoW / VerQueryValueW) for the mismatch banner. -->
-      <AdditionalDependencies>URnetworkSdk.lib;shell32.lib;advapi32.lib;ws2_32.lib;iphlpapi.lib;crypt32.lib;winhttp.lib;bcrypt.lib;version.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <!-- ZXing.lib: the QR decoder behind the extender import sheet (K8). -->
+      <AdditionalDependencies>ZXing.lib;URnetworkSdk.lib;shell32.lib;advapi32.lib;ws2_32.lib;iphlpapi.lib;crypt32.lib;winhttp.lib;bcrypt.lib;version.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <Manifest>
       <AdditionalManifestFiles>app.manifest</AdditionalManifestFiles>
@@ -301,6 +305,14 @@
          runs them on any host; the panel and sheets that draw them use the pch. -->
     <ClCompile Include="ExtenderPresentation.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
     <ClCompile Include="ExtenderPanel.cpp" />
+    <ClCompile Include="ExtenderSheets.cpp" />
+    <!-- The vendored QR ENCODER (third_party/qrcodegen, MIT). Two dependency-free
+         files compiled straight into the app: no pch (it is plain C++17 with no
+         WinRT), and it is also compiled by tools/extender-tests.cpp, which is
+         what proves on a non-Windows host that the vendored copy still builds.
+         The DECODER is zxing-cpp, a static lib fetched and built by
+         tools/fetch-deps.ps1 and linked below. -->
+    <ClCompile Include="..\..\third_party\qrcodegen\qrcodegen.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
     <ClCompile Include="UsageBar.cpp" />
     <ClCompile Include="WalletConnect.cpp" />
     <ClCompile Include="ServiceClient.cpp" />
@@ -362,6 +374,8 @@
     <ClInclude Include="ExtenderRingGeometry.h" />
     <ClInclude Include="ExtenderPresentation.h" />
     <ClInclude Include="ExtenderPanel.h" />
+    <ClInclude Include="ExtenderSheets.h" />
+    <ClInclude Include="ConnectorGlyph.h" />
     <ClInclude Include="TransportStatusPresentation.h" />
     <ClInclude Include="UsageBar.h" />
     <ClInclude Include="UrColors.h" />

@@ -194,6 +194,29 @@ inline constexpr double kExtenderQrOutline = 4.0;
 // code) or a non-positive side yields a zeroed layout, which draws nothing.
 ExtenderQrLayout ExtenderQrLayoutFor(int moduleCount, double pixelSide);
 
+// One horizontal run of dark modules, in module coordinates. The code is drawn
+// as rectangles, and a 37-module code is ~680 dark modules: merging each row's
+// runs turns that into ~200 shapes, which is the difference between a dialog
+// that opens and one that hitches while it does.
+struct ExtenderQrRun {
+  int x = 0;
+  int y = 0;
+  int length = 0;
+
+  bool operator==(const ExtenderQrRun& o) const {
+    return x == o.x && y == o.y && length == o.length;
+  }
+};
+
+// The dark runs of a code, with the modules under the glyph and its outline
+// BLANKED (K7). `dark` is row-major, moduleCount * moduleCount; the clear range
+// is [clearFrom, clearTo) on both axes, as ExtenderQrLayoutFor reports it.
+// Blanking here rather than at draw time is what keeps the glyph's white box
+// from being drawn over live modules, where the 4 px outline would not read as
+// an outline at all.
+std::vector<ExtenderQrRun> ExtenderQrRunsFor(int moduleCount, const std::vector<bool>& dark,
+                                             int clearFrom, int clearTo);
+
 // ---- import (K7, K8) ---------------------------------------------------------
 
 // The SDK's ExtenderShareDecodeResult. `error` is a KEY ID

@@ -456,9 +456,10 @@ void MainWindow::ApplyBreakpoint() {
   // Home's shape, applied to an account: a fixed rail of figures, a wide middle
   // that is the one list worth widening, and a fixed table on the right.
   //
-  //   >= 1000dip   three panes   plan(360) | account(*) | codes(380)
-  //   <  1000dip   two panes     plan(360) | account(*)
-  //   <   640dip   one pane      account(*)
+  //   >= 1900dip   four panes    plan(360) | account(*) | extenders(380) | codes(380)
+  //   >= 1500dip   three panes   plan(360) | account(*) | extenders(380)
+  //   >=  900dip   two panes     plan(360) | account(*)
+  //   <   900dip   one pane      account(*)
   //
   // The codes table folds first because it is a record, not a control: nothing
   // in it is actionable and Redeem lives in the plan pane. Below 640 the PLAN
@@ -470,11 +471,23 @@ void MainWindow::ApplyBreakpoint() {
   // 380, which left the account list 278dip - and a row that is a label, a value
   // and a Copy button in 278dip renders as "..." beside "Please login to
   // URnetwork". A pane that cannot show its labels is not a pane.
+  //
+  // EXTENDERS (connect/EXTENDER.md K6) is the fourth pane, and it takes the
+  // THIRD slot in the fold order rather than the fourth. The rule this
+  // generalises is the one already written above: the codes table folds first
+  // because it is a RECORD, nothing in it is actionable, and the same sentence
+  // decides between it and a pane that is entirely controls - the extender dns
+  // name, the gossip url, the manual host list, share and import. So codes need
+  // a fourth column's worth of room; extenders keep the third.
+  const bool accountFour = 1900.0 <= width;
   const bool accountThree = 1500.0 <= width;
   const bool accountTwo = 900.0 <= width;
-  SetWidth(AccountPaneCColumn(), accountThree ? 380 : 0);
-  AccountPaneCRule().Visibility(accountThree ? Visibility::Visible : Visibility::Collapsed);
-  AccountPaneC().Visibility(accountThree ? Visibility::Visible : Visibility::Collapsed);
+  SetWidth(AccountPaneCColumn(), accountFour ? 380 : 0);
+  AccountPaneCRule().Visibility(accountFour ? Visibility::Visible : Visibility::Collapsed);
+  AccountPaneC().Visibility(accountFour ? Visibility::Visible : Visibility::Collapsed);
+  SetWidth(AccountPaneDColumn(), accountThree ? 380 : 0);
+  AccountPaneDRule().Visibility(accountThree ? Visibility::Visible : Visibility::Collapsed);
+  AccountPaneD().Visibility(accountThree ? Visibility::Visible : Visibility::Collapsed);
   SetWidth(AccountPaneAColumn(), accountTwo ? 360 : 0);
   AccountPaneBRule().Visibility(accountTwo ? Visibility::Visible : Visibility::Collapsed);
   AccountPaneA().Visibility(accountTwo ? Visibility::Visible : Visibility::Collapsed);

@@ -527,6 +527,48 @@ void QrLayoutTests() {
   }
 }
 
+void QrRunTests() {
+  {
+    TEST_CASE("runsMergeAcrossARow");
+    //  . # # .
+    //  # . . #
+    //  . . . .
+    //  # # # #
+    const int n = 4;
+    const std::vector<bool> dark = {false, true,  true,  false, true,  false, false, true,
+                                    false, false, false, false, true,  true,  true,  true};
+    const auto runs = ExtenderQrRunsFor(n, dark, 0, 0);
+    CheckEq(4, static_cast<long long>(runs.size()), "four runs, not eight modules");
+    Check(runs[0] == ExtenderQrRun{1, 0, 2}, "row 0 merges into one run of 2");
+    Check(runs[1] == ExtenderQrRun{0, 1, 1}, "row 1 first run");
+    Check(runs[2] == ExtenderQrRun{3, 1, 1}, "row 1 second run, past the gap");
+    Check(runs[3] == ExtenderQrRun{0, 3, 4}, "a full row is one run");
+  }
+  {
+    TEST_CASE("theGlyphPatchIsBlankedNotOverdrawn");
+    const int n = 5;
+    const std::vector<bool> dark(static_cast<std::size_t>(n * n), true);
+    const auto runs = ExtenderQrRunsFor(n, dark, 2, 3);  // the centre module
+    // rows 0, 1, 3, 4 are one full run each; row 2 is split either side
+    CheckEq(6, static_cast<long long>(runs.size()), "six runs");
+    long long modules = 0;
+    for (const auto& run : runs) modules += run.length;
+    CheckEq(n * n - 1, modules, "exactly the cleared module is missing");
+    for (const auto& run : runs) {
+      Check(!(run.y == 2 && run.x <= 2 && 2 < run.x + run.length),
+            "nothing is drawn across the cleared column on the cleared row");
+    }
+  }
+  {
+    TEST_CASE("aDegenerateInputDrawsNothing");
+    Check(ExtenderQrRunsFor(0, {}, 0, 0).empty(), "no modules");
+    Check(ExtenderQrRunsFor(4, {true, true}, 0, 0).empty(),
+          "a matrix shorter than the code draws nothing rather than reading past it");
+    Check(ExtenderQrRunsFor(3, std::vector<bool>(9, false), 0, 0).empty(),
+          "an all-light code has no runs");
+  }
+}
+
 // The vendored encoder itself: this is the only place on a non-Windows host
 // where third_party/qrcodegen is compiled and run, so it is what catches a
 // re-vendor that does not build or an API that moved under us.
@@ -553,6 +595,32 @@ void QrEncoderTests() {
     const auto layout = ExtenderQrLayoutFor(code.getSize(), 296);
     CheckEq(code.getSize(), layout.moduleCount, "the layout follows the encoder");
     Check(0 < layout.moduleSize, "with a drawable module size");
+
+    // and the runs the sheet actually draws come out of that same pairing
+    std::vector<bool> dark(static_cast<std::size_t>(code.getSize() * code.getSize()), false);
+    for (int y = 0; y < code.getSize(); ++y) {
+      for (int x = 0; x < code.getSize(); ++x) {
+        dark[static_cast<std::size_t>(y * code.getSize() + x)] = code.getModule(x, y);
+      }
+    }
+    const auto runs =
+        ExtenderQrRunsFor(code.getSize(), dark, layout.clearFrom, layout.clearTo);
+    Check(!runs.empty(), "the code has dark runs to draw");
+    long long drawn = 0;
+    for (const auto& run : runs) {
+      drawn += run.length;
+      Check(run.x + run.length <= code.getSize(), "no run runs off the right edge");
+      const bool inClearedRows = layout.clearFrom <= run.y && run.y < layout.clearTo;
+      if (inClearedRows) {
+        Check(run.x + run.length <= layout.clearFrom || layout.clearTo <= run.x,
+              "no run crosses the glyph patch");
+      }
+    }
+    long long total = 0;
+    for (bool on : dark) total += on ? 1 : 0;
+    Check(drawn < total, "the glyph patch really did remove modules");
+    Check(static_cast<long long>(runs.size()) < total,
+          "and merging really did cut the shape count");
   }
 }
 
@@ -685,6 +753,8 @@ int main() {
   ShareTests();
   std::cout << "share QR layout\n";
   QrLayoutTests();
+  std::cout << "share QR runs\n";
+  QrRunTests();
   std::cout << "vendored qrcodegen\n";
   QrEncoderTests();
   std::cout << "import decisions\n";
