@@ -2739,6 +2739,10 @@ right way</value>
     <value>{0} of {1}</value>
     <comment>The extender panel count: extenders carrying a live connection now, of every usable extender the app knows.</comment>
   </data>
+  <data name="extenders_no_session" xml:space="preserve">
+    <value>Sign in and connect to manage extenders.</value>
+    <comment>Shown in the account Extenders section when there is no signed-in device to manage extenders with.</comment>
+  </data>
   <data name="failed_to_connect" xml:space="preserve">
     <value>Failed to connect</value>
     <comment>Used in Shared/Intents/ConnectIntent.swift.</comment>
@@ -4913,6 +4917,10 @@ world's content</value>
   <data name="share_extenders_hint" xml:space="preserve">
     <value>Scan this code with another URnetwork app to share these extenders.</value>
     <comment>Help text on the share screen under the QR code.</comment>
+  </data>
+  <data name="share_extenders_too_large" xml:space="preserve">
+    <value>The share code is too large for a QR code. Copy the share text instead.</value>
+    <comment>Shown on the share screen when the share payload exceeds what a QR code can hold; the text form is still offered.</comment>
   </data>
   <data name="share_logs" xml:space="preserve">
     <value>Share logs</value>
