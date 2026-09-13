@@ -2985,6 +2985,28 @@ void SdkHost::SubscribeDrawer() {
   presentationSubs_.push_back(device_->addProviderIdentityChangeListener(
       [this] { PublishProviderIdentities(); }));
 
+  // The extender network (EXTENDER.md K4, K5). The status listener is on the
+  // DEVICE, not the space: DeviceRemote answers it over the rpc with the last
+  // value cached, exactly as the transport settings do, so this app sees the
+  // service's truth rather than its own process's empty directory. The SDK
+  // already coalesces to one callback per second, so there is no throttle here.
+  presentationSubs_.push_back(device_->addExtenderStatusChangeListener(
+      [this](std::optional<urnet::ExtenderStatus> status) {
+        PublishExtenderStatus(std::move(status));
+      }));
+  // The view controller behind the account section (K6, K7). Opened with the
+  // rest of the drawer so its lifetime is the session's, and deliberately NOT
+  // started: start() only subscribes it to the device's extender status -- a
+  // second rpc listener for a stream this app already takes directly above --
+  // and the settings, share, decode and import calls it is opened for need no
+  // subscription at all.
+  {
+    auto controller = std::make_shared<urnet::ExtenderViewController>(
+        device_->openExtenderViewController());
+    std::scoped_lock lock(drawerMutex_);
+    extenderVc_ = std::move(controller);
+  }
+
   // initial snapshots
   PublishThroughput();
   PublishContractRows();
@@ -2998,6 +3020,11 @@ void SdkHost::SubscribeDrawer() {
     onTransportSettings_(TransportSettingsKind::Client, device_->getTransportSettings());
     onTransportSettings_(TransportSettingsKind::Provider,
                          device_->getProviderTransportSettings());
+  }
+  {
+    static std::atomic<bool> loggedExtenderStatus{false};
+    PublishExtenderStatus(ReadSdkList(loggedExtenderStatus, "getExtenderStatus",
+                                      [&] { return device_->getExtenderStatus(); }));
   }
 }
 
@@ -3356,9 +3383,13 @@ void SdkHost::ClearDrawer() {
     lastSplitRules_.clear();
     lastProviderLocations_.clear();
     lastTransportDistribution_ = {};
+    lastExtenderStatus_ = {};
   }
   if (onThroughput_) onThroughput_({}, 60);
   if (onTransportDistribution_) onTransportDistribution_({});
+  // an empty status, not a stale one: with no session the panel says 0 of 0
+  // with a red dot, which is the truth
+  if (onExtenderStatus_) onExtenderStatus_({});
   if (onTransportSettings_) {
     onTransportSettings_(TransportSettingsKind::Client, std::nullopt);
     onTransportSettings_(TransportSettingsKind::Provider, std::nullopt);
@@ -3442,6 +3473,101 @@ bool SdkHost::CurrentBlockerEnabled() {
 TransportDistributionSnapshot SdkHost::CurrentTransportDistribution() {
   std::scoped_lock lock(drawerMutex_);
   return lastTransportDistribution_;
+}
+
+namespace {
+// The SDK's ExtenderStatus onto the plain view the panel draws (K4, K5).
+// Mirrored rather than passed through so the UI layer never sees an SDK type
+// and the mapping is exercised by tools/extender-tests.cpp.
+ExtenderStatusView MapExtenderStatus(std::optional<urnet::ExtenderStatus> const& status) {
+  ExtenderStatusView view;
+  if (!status) return view;
+  view.gossipState = status->GossipState;
+  view.activeCount = status->ActiveCount;
+  view.reserveCount = status->ReserveCount;
+  view.eventCountLastMinute = status->EventCountLastMinute;
+  if (status->Extenders) {
+    view.extenders.reserve(status->Extenders->size());
+    for (urnet::ExtenderInfo const& extenderInfo : *status->Extenders) {
+      view.extenders.push_back(
+          ExtenderInfoView{extenderInfo.Ip, extenderInfo.ColorHex, extenderInfo.InUse});
+    }
+  }
+  return view;
+}
+}  // namespace
+
+void SdkHost::PublishExtenderStatus(std::optional<urnet::ExtenderStatus> status) {
+  ExtenderStatusView view = MapExtenderStatus(status);
+  {
+    std::scoped_lock lock(drawerMutex_);
+    // The SDK fires once a second whether or not anything moved (it coalesces a
+    // change stream, it does not suppress a repeat), and the panel's rebuild
+    // tears down and rebuilds a row of shapes. Comparing here is what keeps an
+    // idle extender network off the UI thread entirely.
+    if (view == lastExtenderStatus_) return;
+    lastExtenderStatus_ = view;
+  }
+  if (onExtenderStatus_) onExtenderStatus_(std::move(view));
+}
+
+ExtenderStatusView SdkHost::CurrentExtenderStatus() {
+  std::scoped_lock lock(drawerMutex_);
+  return lastExtenderStatus_;
+}
+
+std::shared_ptr<urnet::ExtenderViewController> SdkHost::ExtenderController() {
+  std::scoped_lock lock(drawerMutex_);
+  return extenderVc_;
+}
+
+std::optional<urnet::NetExtender> SdkHost::CurrentNetExtender() {
+  std::scoped_lock lock(mutex_);
+  if (!networkSpace_) return std::nullopt;
+  try {
+    return networkSpace_->getNetExtender();
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: get net extender failed: {}", e.what());
+    return std::nullopt;
+  }
+}
+
+bool SdkHost::SetNetExtender(const std::optional<urnet::NetExtender>& value) {
+  std::scoped_lock lock(mutex_);
+  if (!spaceManager_ || !networkSpace_) return false;
+  try {
+    // The values have to go back WHOLE (updateNetworkSpaceValues replaces
+    // them), and the space's own json is the only reading of them the C ABI
+    // offers -- the getters return EFFECTIVE values, and writing those back
+    // would pin every derived default as an explicit override.
+    const nlohmann::json document = nlohmann::json::parse(networkSpace_->toJson());
+    urnet::NetworkSpaceKey key{};
+    if (auto it = document.find("key"); it != document.end() && !it->is_null()) {
+      it->get_to(key);
+    }
+    if (!key.host_name || key.host_name->empty()) {
+      // A default-constructed key names a DIFFERENT space, so an unreadable
+      // one must refuse rather than write the private extender somewhere else.
+      LogWarn("sdkhost: set net extender refused: the space json carries no key");
+      return false;
+    }
+    urnet::NetworkSpaceValues values{};
+    if (auto it = document.find("values"); it != document.end() && !it->is_null()) {
+      it->get_to(values);
+    }
+    values.net_extender = value;
+    // Only the extender values changed, so the manager applies this in place
+    // (sdk network_space.go onlyExtenderValuesChanged) and hands back a handle
+    // to the SAME space; nothing derived from it is invalidated.
+    networkSpace_ = spaceManager_->updateNetworkSpaceValues(key, values);
+    return true;
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: set net extender failed: {}", e.what());
+    return false;
+  } catch (...) {
+    LogWarn("sdkhost: set net extender failed");
+    return false;
+  }
 }
 
 std::optional<urnet::TransportSettings> SdkHost::CurrentTransportSettings(
@@ -5214,6 +5340,10 @@ void SdkHost::ClosePresentationLocked() {
     locationsVc_.reset();
     peerVc_.reset();
     providerLocationsVc_.reset();
+    {
+      std::scoped_lock drawerLock(drawerMutex_);
+      extenderVc_.reset();
+    }
     return;
   }
   // D4: the close calls below are courtesies to the SERVICE — they detach
@@ -5243,6 +5373,13 @@ void SdkHost::ClosePresentationLocked() {
     if (blockVc_) device_->closeBlockActionViewController(*blockVc_);
     if (contractVc_) device_->closeContractViewController(*contractVc_);
     if (connectVc_) device_->closeConnectViewController(*connectVc_);
+    // The extender controller closes ITSELF (the SDK gives it no
+    // Device::closeExtenderViewController), but it is the same rpc courtesy as
+    // the rest, so it lives inside the same guard. close() stops it too, and it
+    // is what makes dropping the reference below safe while a background call
+    // still holds one: the Go side is cancelled, the C handle survives until
+    // that last reference goes.
+    if (auto controller = ExtenderController()) controller->close();
   }
   // ...but the handles drop UNCONDITIONALLY, whether or not the courtesy was
   // paid. That asymmetry is the D4 contract, and the provider controller joins
@@ -5254,6 +5391,10 @@ void SdkHost::ClosePresentationLocked() {
   blockVc_.reset();
   contractVc_.reset();
   connectVc_.reset();
+  {
+    std::scoped_lock drawerLock(drawerMutex_);
+    extenderVc_.reset();
+  }
   ClearDrawer();
 }
 

@@ -72,6 +72,7 @@
 #include <winrt/Microsoft.UI.Xaml.Media.Animation.h>
 #include <winrt/Microsoft.UI.Xaml.Shapes.h>
 
+#include "ExtenderRingGeometry.h"  // the K2 ring numbers, shared with the drawer
 #include "Sdk.h"
 
 namespace urnw {
@@ -127,6 +128,23 @@ class ConnectCanvas {
   // than vanishing between frames.
   enum class PointState { InEvaluation, EvaluationFailed, NotAdded, Added, Removed };
 
+  // One extender ring on a dot (EXTENDER.md K2). A SIBLING of the dot on the
+  // same Canvas rather than a child of it: the rings sit entirely OUTSIDE the
+  // filled dot (that is what "the filled dot shrinks inward by 4px per ring"
+  // means), so they never overlap it and need no z-order, and keeping them as
+  // plain Canvas children avoids putting a layout panel per point into a
+  // surface whose whole budget argument is that it does no per-frame layout.
+  // Each carries its own ScaleTransform, driven to the same eased value as the
+  // dot's, so a ringed provider grows in and fades out as one object.
+  struct DotRing {
+    winrt::Microsoft::UI::Xaml::Shapes::Ellipse shape{nullptr};
+    winrt::Microsoft::UI::Xaml::Media::SolidColorBrush brush{nullptr};
+    winrt::Microsoft::UI::Xaml::Media::ScaleTransform scale{nullptr};
+    // the settled colour; the live brush carries the dot's alpha on top of it
+    // so a Removed point's rings fade with it
+    winrt::Windows::UI::Color color{};
+  };
+
   // named GridDot, not Point: `Point` is winrt::Windows::Foundation::Point
   // inside every member function of this class.
   struct GridDot {
@@ -142,6 +160,11 @@ class ConnectCanvas {
     double colorProgress = 1;  // 0..1, 1 = settled
     double sizeProgress = 1;
     bool seen = false;  // marked during a SetGrid diff
+    // The extenders carrying this client's live transports to this exit (K1),
+    // in the SDK's order, each with the colour the SDK paired with it (K3).
+    // Empty for a direct or P2P route, which is the common case.
+    std::vector<ExtenderMark> marks;
+    std::vector<DotRing> rings;
     bool Animating() const { return colorProgress < 1 || sizeProgress < 1; }
   };
 
@@ -168,6 +191,11 @@ class ConnectCanvas {
   void Layout();       // recompute all geometry for the current host size
   void LayoutPoints(); // place and size the live dots
   void ApplyPoint(GridDot& p);  // push colour + scale for the point's progress
+  // (Re)build a point's ring shapes when its extender set changes, and drop
+  // them from the canvas when it empties. Layout sizes them; this only owns
+  // how many there are and what colour each is.
+  void RebuildRings(GridDot& p);
+  void RemoveDot(GridDot& p);  // take the dot AND its rings off the canvas
   void ApplyStateVisuals();
   void ClearPoints();
   void Fade(winrt::Microsoft::UI::Xaml::UIElement const& element, double to, int64_t ms);

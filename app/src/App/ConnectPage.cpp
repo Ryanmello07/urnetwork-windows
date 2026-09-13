@@ -222,6 +222,9 @@ void ConnectPage::ApplyStrings() {
   w_.FallbackState().Text(Loc("off"));
   w_.DnsUnavailableText().Text(Loc("dns_settings_unavailable"));
   w_.BlockerLabel().Text(Loc("block_ads_and_trackers"));
+  // The extender panel's own fixed labels (title, the two automation names);
+  // guarded because ApplyStrings also runs before BuildCharts has made it.
+  if (extenderPanel_) extenderPanel_->ApplyStrings();
   // The plan + usage card that used to sit in this rail is gone from Home
   // (spec §5); its strings now belong only to Account, which paints them from
   // MainWindow::ApplyBalance.
@@ -1127,12 +1130,48 @@ void ConnectPage::PreviewHeroTick() {
         default: p.IpFamily = "dualstack"; break;
       }
       p.Active = true;
+      // A few of the preview's providers are reached through an extender, so
+      // the rings of EXTENDER.md K2 are visible in --preview-ui at one, two and
+      // four addresses (four is the collapsed dashed third ring). The colours
+      // are the SDK's own pinned values for these addresses.
+      switch ((h >> 18) % 16) {
+        case 0:
+          p.ExtenderIps = "192.0.2.1";
+          p.ExtenderColorHexes = "3cdd67";
+          break;
+        case 1:
+          p.ExtenderIps = "192.0.2.1,2001:db8::1";
+          p.ExtenderColorHexes = "3cdd67,dd4f3c";
+          break;
+        case 2:
+          p.ExtenderIps = "192.0.2.1,2001:db8::1,198.51.100.7,203.0.113.42";
+          p.ExtenderColorHexes = "3cdd67,dd4f3c,8fd0e8,e8c23c";
+          break;
+        default: break;  // most providers are reached directly
+      }
       points.push_back(p);
     }
   }
   canvas_->SetGrid(points, kCols, kCols);
   if (ipFamilyHistogram_) {
     ipFamilyHistogram_->SetGrid(points, canvas_->PointDiameterFor(kCols, kCols));
+  }
+  if (extenderPanel_) {
+    // the panel has no feed in preview (there is no device), so give it a
+    // plausible one rather than leaving the row saying 0 of 0 forever
+    urnw::ExtenderStatusView preview;
+    preview.gossipState = (seed % 12) < 8   ? urnw::kGossipStateConnected
+                          : (seed % 12) < 10 ? urnw::kGossipStateConnecting
+                                             : urnw::kGossipStateDisconnected;
+    preview.activeCount = 2;
+    preview.reserveCount = 7;
+    preview.eventCountLastMinute = static_cast<int64_t>(seed % 5);
+    preview.extenders = {
+        urnw::ExtenderInfoView{"192.0.2.1", "3cdd67", 1},
+        urnw::ExtenderInfoView{"2001:db8::1", "dd4f3c", 1},
+        urnw::ExtenderInfoView{"198.51.100.7", "8fd0e8", 0},
+    };
+    extenderPanel_->SetStatus(preview);
   }
 }
 
@@ -1193,6 +1232,12 @@ void ConnectPage::BuildCharts() {
   // its own host row: the Added providers as dots under Both / v4 / v6. Fed by
   // ApplyStats from the same grid push the hero reads, at the hero's dot size.
   ipFamilyHistogram_ = std::make_unique<urnw::IpFamilyHistogram>(w_.IpFamilyHistogramHost());
+  // The extender panel (EXTENDER.md K4), its own host row directly under the
+  // histogram: the extenders carrying live connections, the usable count, and
+  // the gossip network's state. Fed by the SDK's once-a-second extender status
+  // listener rather than by the stats tick -- it is a property of the network,
+  // not of this window's traffic.
+  extenderPanel_ = std::make_unique<urnw::ExtenderPanel>(w_.ExtenderPanelHost());
 }
 
 void ConnectPage::WireDrawerFeeds() {
@@ -1286,6 +1331,17 @@ void ConnectPage::WireDrawerFeeds() {
       if (auto self = weak.get()) {
         auto& page = self->connect();
         if (page.transportBar_) page.transportBar_->SetDistribution(d);
+      }
+    });
+  });
+  // the extender network (K4, K5): SdkHost maps the SDK status to the plain
+  // view the panel draws and pushes only when it changed, so this can apply
+  // every push
+  sdk.SetExtenderStatusHandler([queue, weak](urnw::ExtenderStatusView status) {
+    queue.TryEnqueue([weak, status = std::move(status)] {
+      if (auto self = weak.get()) {
+        auto& page = self->connect();
+        if (page.extenderPanel_) page.extenderPanel_->SetStatus(status);
       }
     });
   });
@@ -1405,6 +1461,7 @@ void ConnectPage::ResyncDrawer() {
   splitRules_ = sdk.CurrentSplitRules();
   dnsSettings_ = sdk.CurrentDnsSettings();
   if (transportBar_) transportBar_->SetDistribution(sdk.CurrentTransportDistribution());
+  if (extenderPanel_) extenderPanel_->SetStatus(sdk.CurrentExtenderStatus());
   clientTransportSettings_ = sdk.CurrentTransportSettings(urnw::TransportSettingsKind::Client);
   providerTransportSettings_ =
       sdk.CurrentTransportSettings(urnw::TransportSettingsKind::Provider);

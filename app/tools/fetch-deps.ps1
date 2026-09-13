@@ -1,6 +1,10 @@
 # Fetches vendored dependencies for the URnetwork Windows solution:
 #   - Wintun (pinned, upstream-signed) from wintun.net
 #   - the URnetwork SDK Windows zip built by sdk/cgo, and generates import libs
+#   - zxing-cpp (pinned source release), built headless as a static lib: the QR
+#     DECODER the extender import sheet reads a chosen image with. The ENCODER
+#     is not here - third_party/qrcodegen is two committed files (EXTENDER.md
+#     K7, K8)
 #
 # Run from a Developer PowerShell (needs lib.exe on PATH for the import libs).
 #
@@ -10,7 +14,11 @@ param(
   # path to sdk/cgo/build/URnetworkSdkWindows.zip (built on the macOS build server)
   [string]$SdkZip = "$PSScriptRoot\..\..\..\sdk\cgo\build\URnetworkSdkWindows.zip",
   [string]$WintunVersion = "0.14.1",
-  [ValidateSet("x64", "ARM64")][string[]]$Platforms = @("x64", "ARM64")
+  [string]$ZXingVersion = "2.2.1",
+  [ValidateSet("x64", "ARM64")][string[]]$Platforms = @("x64", "ARM64"),
+  # zxing-cpp is a cmake build of a few hundred files; skipping it is for an
+  # inner loop that is not touching the extender import sheet
+  [switch]$SkipZXing
 )
 
 $ErrorActionPreference = "Stop"
@@ -104,6 +112,76 @@ if ($wintunLicense) {
   Invoke-WebRequest -Uri "https://raw.githubusercontent.com/WireGuard/wintun/$WintunVersion/prebuilt-binaries-license.txt" -OutFile "$wintunDir\wintun-license.txt"
 }
 Write-Host "Wintun OK (signer + hash verified)."
+
+# --- zxing-cpp (QR decode for the extender import sheet) -----------------------
+# Source release, pinned by sha256 and built HERE rather than pulled as a
+# binary: upstream publishes no windows binaries, and vcpkg's MSBuild
+# integration collides with the Windows App SDK (see the nlohmann note below).
+# BUILD_WRITERS is OFF - the app never encodes with this; encoding is
+# third_party/qrcodegen, two committed files (EXTENDER.md K7, K8). Examples are
+# off too, which is what keeps the FetchContent of stb out of this build, so the
+# configure step needs no network beyond the zip above.
+#
+# The pin is the sha256 of github's tag archive. If a future re-roll of that
+# archive changes the bytes, update the pin in a reviewed change - never relax
+# the check.
+$ZXingSha256 = "71D9288F0637D321EE6823D8C27E684E9A00D4FFB92F18AFF95FB5342CB6521D"
+$zxingDir = Join-Path $thirdParty "zxing-cpp"
+$zxingBuilt = (Test-Path (Join-Path $zxingDir "include\ZXing\ReadBarcode.h")) -and
+  -not ($Platforms | Where-Object { -not (Test-Path (Join-Path $zxingDir "lib\$_\ZXing.lib")) })
+if ($SkipZXing) {
+  Write-Host "zxing-cpp skipped (-SkipZXing)."
+} elseif ($zxingBuilt) {
+  Write-Host "zxing-cpp $ZXingVersion already built."
+} else {
+  if (-not (Get-Command cmake -ErrorAction SilentlyContinue)) {
+    throw "cmake not found on PATH; zxing-cpp needs it (or re-run with -SkipZXing)"
+  }
+  $zxingZip = Join-Path $wintunCache "zxing-cpp-$ZXingVersion.zip"
+  if (-not (Test-Path $zxingZip)) {
+    Write-Host "Downloading zxing-cpp $ZXingVersion ..."
+    Invoke-WebRequest -Uri "https://github.com/zxing-cpp/zxing-cpp/archive/refs/tags/v$ZXingVersion.zip" -OutFile $zxingZip
+  }
+  $zxingActual = (Get-FileHash -Algorithm SHA256 $zxingZip).Hash
+  if ($zxingActual -ne $ZXingSha256) {
+    Remove-Item -Force $zxingZip -ErrorAction SilentlyContinue
+    throw "zxing-cpp SHA256 mismatch: expected $ZXingSha256, got $zxingActual"
+  }
+  $zxingExtract = Join-Path $env:TEMP "zxing-cpp-extract"
+  Remove-Item -Recurse -Force $zxingExtract -ErrorAction SilentlyContinue
+  Expand-Archive -Path $zxingZip -DestinationPath $zxingExtract
+  $zxingSrc = Join-Path $zxingExtract "zxing-cpp-$ZXingVersion"
+
+  New-Item -ItemType Directory -Force -Path (Join-Path $zxingDir "include") | Out-Null
+  foreach ($platform in $Platforms) {
+    $buildDir = Join-Path $env:TEMP "zxing-build-$platform"
+    $installDir = Join-Path $buildDir "install"
+    Remove-Item -Recurse -Force $buildDir -ErrorAction SilentlyContinue
+    & cmake -S $zxingSrc -B $buildDir -A $platform `
+      -DBUILD_SHARED_LIBS=OFF `
+      -DBUILD_WRITERS=OFF `
+      -DBUILD_READERS=ON `
+      -DBUILD_EXAMPLES=OFF `
+      -DBUILD_BLACKBOX_TESTS=OFF `
+      -DBUILD_UNIT_TESTS=OFF `
+      -DBUILD_PYTHON_MODULE=OFF `
+      -DCMAKE_INSTALL_PREFIX="$installDir" | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "zxing-cpp cmake configure failed for $platform" }
+    & cmake --build $buildDir --config Release --target install | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "zxing-cpp build failed for $platform" }
+
+    $libDst = Join-Path $zxingDir "lib\$platform"
+    New-Item -ItemType Directory -Force -Path $libDst | Out-Null
+    $lib = Get-ChildItem "$installDir\lib" -Filter "ZXing*.lib" | Select-Object -First 1
+    if (-not $lib) { throw "zxing-cpp produced no import/static lib for $platform" }
+    Copy-Item $lib.FullName (Join-Path $libDst "ZXing.lib") -Force
+    # The headers are arch independent, so one copy serves both; copying on
+    # every pass is what keeps a partial earlier run from leaving a stale tree.
+    Copy-Item "$installDir\include\*" (Join-Path $zxingDir "include") -Recurse -Force
+  }
+  Copy-Item (Join-Path $zxingSrc "LICENSE") (Join-Path $zxingDir "zxing-cpp-license.txt") -Force
+  Write-Host "zxing-cpp $ZXingVersion OK."
+}
 
 # --- URnetwork SDK: unzip per-arch and build import libs ------------------------
 if (-not (Test-Path $SdkZip)) {

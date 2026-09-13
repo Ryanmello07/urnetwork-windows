@@ -1097,6 +1097,7 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
                         <Border Style="{StaticResource UrPaneHeaderStyle}">
@@ -1133,7 +1134,16 @@
                              ConnectPage::BuildCharts (urnw::IpFamilyHistogram); its
                              bottom rule is the group header's, so no rule here. -->
                         <Grid Grid.Row="3" x:Name="IpFamilyHistogramHost" />
-                        <Border Grid.Row="4" Style="{StaticResource UrGroupHeaderStyle}">
+                        <!-- The extender panel (connect/EXTENDER.md K4): the
+                             extenders carrying live connections as rings, the
+                             "N of M" count, and the gossip network's status dot.
+                             Built into this host by ConnectPage::BuildCharts
+                             (urnw::ExtenderPanel). It is NOT tappable - K4 says
+                             there is no details panel - so it is a plain row, not
+                             a pane-row Button like the transport bar above. Its
+                             bottom rule is the group header's, so no rule here. -->
+                        <Grid Grid.Row="4" x:Name="ExtenderPanelHost" />
+                        <Border Grid.Row="5" Style="{StaticResource UrGroupHeaderStyle}">
                             <Grid>
                                 <TextBlock x:Name="ConnectionsLabel"
                                            Style="{StaticResource UrGroupHeaderTextStyle}" />
@@ -1144,7 +1154,7 @@
                         <!-- The list FILLS the rest of the pane. Its empty state is a
                              centred line in that same full-height area, never a short
                              card floating in space. -->
-                        <Grid Grid.Row="5">
+                        <Grid Grid.Row="6">
                             <ScrollViewer x:Name="ConnectionsScroll"
                                           HorizontalScrollBarVisibility="Disabled"
                                           VerticalScrollBarVisibility="Auto">
@@ -1581,6 +1591,13 @@
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition x:Name="AccountPaneBColumn" Width="*" />
                         <ColumnDefinition Width="Auto" />
+                        <!-- Extenders (connect/EXTENDER.md K6) sits between the
+                             identity column and the codes table: it is a pane of
+                             CONTROLS, and the codes table next to it is a record
+                             with nothing actionable in it, which is why the codes
+                             fold before it does (MainWindow::ApplyBreakpoint). -->
+                        <ColumnDefinition x:Name="AccountPaneDColumn" Width="380" />
+                        <ColumnDefinition Width="Auto" />
                         <ColumnDefinition x:Name="AccountPaneCColumn" Width="380" />
                     </Grid.ColumnDefinitions>
 
@@ -1778,11 +1795,41 @@
                         </ScrollViewer>
                     </Grid>
 
-                    <Border x:Name="AccountPaneCRule" Grid.Column="3"
+                    <Border x:Name="AccountPaneDRule" Grid.Column="3"
+                            Style="{StaticResource UrPaneVRuleStyle}" />
+
+                    <!-- ============ PANE D: EXTENDERS (K6) ============
+                         The whole section is built in code (AccountPage::
+                         BuildExtenderPane) for the reason SettingsSheets.h gives
+                         about the settings sections: MainWindow.xaml is the file
+                         every parallel phase touches, and a uniform stack of
+                         label/field rows expresses itself more compactly as a
+                         builder than as markup. The markup carries the pane, its
+                         header and one host. -->
+                    <Grid Grid.Column="4" x:Name="AccountPaneD">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <Border Style="{StaticResource UrPaneHeaderStyle}">
+                            <Grid>
+                                <TextBlock x:Name="AccountPaneDTitle"
+                                           Style="{StaticResource UrPaneTitleStyle}" />
+                                <TextBlock x:Name="AccountPaneDMeta" HorizontalAlignment="Right"
+                                           Style="{StaticResource UrPaneMetaStyle}" />
+                            </Grid>
+                        </Border>
+                        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled"
+                                      VerticalScrollBarVisibility="Auto">
+                            <StackPanel x:Name="AccountExtenderHost" />
+                        </ScrollViewer>
+                    </Grid>
+
+                    <Border x:Name="AccountPaneCRule" Grid.Column="5"
                             Style="{StaticResource UrPaneVRuleStyle}" />
 
                     <!-- ============ PANE C: BALANCE CODES ============ -->
-                    <Grid Grid.Column="4" x:Name="AccountPaneC">
+                    <Grid Grid.Column="6" x:Name="AccountPaneC">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />

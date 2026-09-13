@@ -24,6 +24,7 @@
 #include <winrt/Microsoft.UI.Xaml.Input.h>
 
 #include "ConnectCanvas.h"
+#include "ExtenderPanel.h"
 #include "IpFamilyHistogram.h"
 #include "LocationSheets.h"
 #include "ProviderLocationsSheet.h"
@@ -353,6 +354,10 @@ class ConnectPage {
   // Added providers as dots under Both / v4 / v6, fed from the same grid push
   // as the hero
   std::unique_ptr<urnw::IpFamilyHistogram> ipFamilyHistogram_;
+  // The extender panel (EXTENDER.md K4), the row under the histogram. Fed from
+  // SdkHost's extender status feed through the same dispatcher hop as the other
+  // drawer feeds; no click, no sheet.
+  std::unique_ptr<urnw::ExtenderPanel> extenderPanel_;
   // the client / provider transport policies in force, from SdkHost's change
   // listeners (nullopt = unknown -> the editor opens on the SDK default). Cached
   // here so the sheet opens on the last push, like dnsSettings_.

@@ -80,6 +80,10 @@
     <value>This account needs verification. Check your email.</value>
     <comment>Sign-in error shown when the account exists but has not been verified yet.</comment>
   </data>
+  <data name="active_extenders" xml:space="preserve">
+    <value>Active extenders</value>
+    <comment>Accessibility label of the row of rings, one per extender carrying a live connection.</comment>
+  </data>
   <data name="activity" xml:space="preserve">
     <value>Activity</value>
     <comment>A heading for the list of current block actions.</comment>
@@ -755,6 +759,10 @@ right way</value>
     <value>Bypass VPN</value>
     <comment>App split rules: rule choice sending the app around the VPN (local route).</comment>
   </data>
+  <data name="camera_permission_needed" xml:space="preserve">
+    <value>Camera access is needed to scan a code.</value>
+    <comment>Shown when the camera permission was denied on the scan screen.</comment>
+  </data>
   <data name="cancel" xml:space="preserve">
     <value>Cancel</value>
     <comment>Call to action</comment>
@@ -818,6 +826,18 @@ right way</value>
   <data name="checkout_opened_in_browser" xml:space="preserve">
     <value>Complete your purchase in the browser. Your plan updates here automatically once payment is confirmed.</value>
     <comment>Shown after the app hands the user to the Stripe hosted checkout in the system browser. The app polls the server and flips the plan automatically when the payment webhook lands.</comment>
+  </data>
+  <data name="choose_file" xml:space="preserve">
+    <value>Choose file</value>
+    <comment>Button on desktop: pick a file that contains a QR code image.</comment>
+  </data>
+  <data name="choose_image_file" xml:space="preserve">
+    <value>Choose image file</value>
+    <comment>Button on desktop: pick an image file that contains a QR code.</comment>
+  </data>
+  <data name="choose_photo" xml:space="preserve">
+    <value>Choose photo</value>
+    <comment>Button: pick a photo that contains a QR code.</comment>
   </data>
   <data name="cities" xml:space="preserve">
     <value>Cities</value>
@@ -1118,6 +1138,10 @@ right way</value>
   <data name="copy_client_id" xml:space="preserve">
     <value>Copy client ID</value>
     <comment>A label for a context menu item that copies a client ID to the clipboard.</comment>
+  </data>
+  <data name="copy_share_text" xml:space="preserve">
+    <value>Copy share text</value>
+    <comment>Button on the share screen: copy the text form of the code.</comment>
   </data>
   <data name="copy_to_clipboard" xml:space="preserve">
     <value>Copy to Clipboard</value>
@@ -2679,6 +2703,46 @@ right way</value>
     <value>Export Logs</value>
     <comment>Used in Shared/Views/ExportLogsButton/ExportLogsButton.swift.</comment>
   </data>
+  <data name="extender_default_value" xml:space="preserve">
+    <value>Default: {}</value>
+    <comment>Placeholder shown in an empty extender settings field, naming the default value that applies.</comment>
+  </data>
+  <data name="extender_dns_name" xml:space="preserve">
+    <value>Extender DNS name</value>
+    <comment>Label of the extender DNS name field. Empty means the network space default.</comment>
+  </data>
+  <data name="extender_hosts" xml:space="preserve">
+    <value>Extender hosts</value>
+    <comment>Label of the manual extender list field: hostnames or IP addresses, one per line.</comment>
+  </data>
+  <data name="extender_hosts_hint" xml:space="preserve">
+    <value>One hostname or IP address per line. These are added to the discovered extenders.</value>
+    <comment>Help text under the manual extender list field.</comment>
+  </data>
+  <data name="extender_settings" xml:space="preserve">
+    <value>Extender settings</value>
+    <comment>Title of the extender settings form under account &gt; Extenders.</comment>
+  </data>
+  <data name="extender_settings_next_connect" xml:space="preserve">
+    <value>The tunnel uses new extender settings the next time it connects.</value>
+    <comment>Note on iOS after saving extender settings: the packet tunnel extension reads them at its next start.</comment>
+  </data>
+  <data name="extender_settings_saved" xml:space="preserve">
+    <value>Extender settings saved</value>
+    <comment>Confirmation after the extender settings are saved.</comment>
+  </data>
+  <data name="extenders" xml:space="preserve">
+    <value>Extenders</value>
+    <comment>Title of the extenders panel in the connect drawer and of the Extenders section under account.</comment>
+  </data>
+  <data name="extenders_active_of_reserve" xml:space="preserve">
+    <value>{0} of {1}</value>
+    <comment>The extender panel count: extenders carrying a live connection now, of every usable extender the app knows.</comment>
+  </data>
+  <data name="extenders_no_session" xml:space="preserve">
+    <value>Sign in and connect to manage extenders.</value>
+    <comment>Shown in the account Extenders section when there is no signed-in device to manage extenders with.</comment>
+  </data>
   <data name="failed_to_connect" xml:space="preserve">
     <value>Failed to connect</value>
     <comment>Used in Shared/Intents/ConnectIntent.swift.</comment>
@@ -2784,6 +2848,42 @@ right way</value>
     <value>Google sign-in method added</value>
     <comment>Snackbar message displayed when a Google sign-in method is successfully added.</comment>
   </data>
+  <data name="gossip_connecting" xml:space="preserve">
+    <value>Connecting</value>
+    <comment>Gossip network status: a dial or reconnect is in progress (yellow).</comment>
+  </data>
+  <data name="gossip_events_per_minute.zero" xml:space="preserve">
+    <value>{} events/min</value>
+    <comment>The count of extender records and revocations applied from the gossip network or the feed in the last minute.</comment>
+  </data>
+  <data name="gossip_events_per_minute.one" xml:space="preserve">
+    <value>{} event/min</value>
+    <comment>The count of extender records and revocations applied from the gossip network or the feed in the last minute.</comment>
+  </data>
+  <data name="gossip_events_per_minute.two" xml:space="preserve">
+    <value>{} events/min</value>
+    <comment>The count of extender records and revocations applied from the gossip network or the feed in the last minute.</comment>
+  </data>
+  <data name="gossip_events_per_minute.few" xml:space="preserve">
+    <value>{} events/min</value>
+    <comment>The count of extender records and revocations applied from the gossip network or the feed in the last minute.</comment>
+  </data>
+  <data name="gossip_events_per_minute.many" xml:space="preserve">
+    <value>{} events/min</value>
+    <comment>The count of extender records and revocations applied from the gossip network or the feed in the last minute.</comment>
+  </data>
+  <data name="gossip_events_per_minute.other" xml:space="preserve">
+    <value>{} events/min</value>
+    <comment>The count of extender records and revocations applied from the gossip network or the feed in the last minute.</comment>
+  </data>
+  <data name="gossip_network" xml:space="preserve">
+    <value>Gossip network</value>
+    <comment>Label of the gossip network status dot in the extender panel.</comment>
+  </data>
+  <data name="gossip_url" xml:space="preserve">
+    <value>Gossip URL</value>
+    <comment>Label of the gossip URL field. Empty means the network space default.</comment>
+  </data>
   <data name="got_it" xml:space="preserve">
     <value>Got it</value>
     <comment>Used in Shared/Views/UpgradeSubscriptionSheet.swift.</comment>
@@ -2862,6 +2962,46 @@ right way</value>
     <value>Ignore battery optimizations</value>
     <comment>Call to action</comment>
   </data>
+  <data name="import_extenders" xml:space="preserve">
+    <value>Import extenders</value>
+    <comment>Button and screen title: import extenders from a QR code, a photo, or pasted text.</comment>
+  </data>
+  <data name="import_extenders_confirm_settings" xml:space="preserve">
+    <value>Use the extender settings from this code? Extender lookups will use {}.</value>
+    <comment>Confirmation before applying the extender settings from a share code. The argument is the operator host the settings point at.</comment>
+  </data>
+  <data name="import_extenders_foreign_host" xml:space="preserve">
+    <value>This code is for {}, not this network. Use extender settings to switch networks.</value>
+    <comment>Error when a share code belongs to another network. The argument is that network's host.</comment>
+  </data>
+  <data name="import_extenders_imported.zero" xml:space="preserve">
+    <value>Imported {} extenders</value>
+    <comment>Confirmation after an import, with the number of extenders added.</comment>
+  </data>
+  <data name="import_extenders_imported.one" xml:space="preserve">
+    <value>Imported {} extender</value>
+    <comment>Confirmation after an import, with the number of extenders added.</comment>
+  </data>
+  <data name="import_extenders_imported.two" xml:space="preserve">
+    <value>Imported {} extenders</value>
+    <comment>Confirmation after an import, with the number of extenders added.</comment>
+  </data>
+  <data name="import_extenders_imported.few" xml:space="preserve">
+    <value>Imported {} extenders</value>
+    <comment>Confirmation after an import, with the number of extenders added.</comment>
+  </data>
+  <data name="import_extenders_imported.many" xml:space="preserve">
+    <value>Imported {} extenders</value>
+    <comment>Confirmation after an import, with the number of extenders added.</comment>
+  </data>
+  <data name="import_extenders_imported.other" xml:space="preserve">
+    <value>Imported {} extenders</value>
+    <comment>Confirmation after an import, with the number of extenders added.</comment>
+  </data>
+  <data name="import_extenders_invalid" xml:space="preserve">
+    <value>This code is not an extender share.</value>
+    <comment>Error when the scanned or pasted text is not an extender share code.</comment>
+  </data>
   <data name="in_guest_mode" xml:space="preserve">
     <value>You're in guest mode</value>
     <comment>Guest mode overlay</comment>
@@ -2873,6 +3013,10 @@ right way</value>
   <data name="include_app_description" xml:space="preserve">
     <value>Only included apps use the tunnel.</value>
     <comment>transfer stats and split rules</comment>
+  </data>
+  <data name="include_extender_settings" xml:space="preserve">
+    <value>Include extender settings</value>
+    <comment>Toggle on the share screen: also include the extender DNS name, gossip URL and root keys in the code.</comment>
   </data>
   <data name="include_in_vpn" xml:space="preserve">
     <value>Include in VPN</value>
@@ -3006,9 +3150,29 @@ right way</value>
     <value>{} IPs</value>
     <comment>A label showing the number of IP addresses in a block action cluster, rendered as a single pill. The argument is the number of IPs.</comment>
   </data>
+  <data name="ip_families" xml:space="preserve">
+    <value>IP versions</value>
+    <comment>Title of the IP version histogram under the transport bar in the connect drawer: the connected providers grouped by whether they carry both IP versions, only IPv4, or only IPv6.</comment>
+  </data>
+  <data name="ip_family_both" xml:space="preserve">
+    <value>Both</value>
+    <comment>Row label of the IP version histogram, and the provider row tag, for a provider that carries both IPv4 and IPv6.</comment>
+  </data>
+  <data name="ip_family_v4" xml:space="preserve">
+    <value>v4</value>
+    <comment>Row label of the IP version histogram, and the provider row tag, for a provider that carries only IPv4.</comment>
+  </data>
+  <data name="ip_family_v6" xml:space="preserve">
+    <value>v6</value>
+    <comment>Row label of the IP version histogram, and the provider row tag, for a provider that carries only IPv6.</comment>
+  </data>
   <data name="ipv4" xml:space="preserve">
     <value>IPv4</value>
     <comment>Label for a list of IPv4 addresses.</comment>
+  </data>
+  <data name="ipv4_and_ipv6" xml:space="preserve">
+    <value>IPv4 and IPv6</value>
+    <comment>Accessibility label for a provider that carries both IPv4 and IPv6 traffic.</comment>
   </data>
   <data name="ipv6" xml:space="preserve">
     <value>IPv6</value>
@@ -3769,6 +3933,10 @@ and most decentralized ingress and egress protocol.</value>
     <value>Password must be at least 12 characters</value>
     <comment>Hint for password input length requirements.</comment>
   </data>
+  <data name="paste_share_text" xml:space="preserve">
+    <value>Paste share text</value>
+    <comment>Button and field label: paste the text form of a share code.</comment>
+  </data>
   <data name="paste_your_24_word_seedphrase_here" xml:space="preserve">
     <value>Paste your 24-word seedphrase here</value>
     <comment>A placeholder text for the seedphrase field.</comment>
@@ -3976,6 +4144,22 @@ and most decentralized ingress and egress protocol.</value>
     <value>Your provider identity key is stored locally on this device. If any peer's key appears different than their locally stored key, it means the network operator cannot be trusted.</value>
     <comment>Account tab: explanation under the post quantum identity panel — what the identity key is and how verifying provider keys detects interception.</comment>
   </data>
+  <data name="private_extender" xml:space="preserve">
+    <value>Private extender</value>
+    <comment>Title of the advanced private extender fields: one extender with a secret that replaces discovery.</comment>
+  </data>
+  <data name="private_extender_hint" xml:space="preserve">
+    <value>A private extender replaces every discovered extender. Leave it empty to use discovery.</value>
+    <comment>Help text under the private extender fields.</comment>
+  </data>
+  <data name="private_extender_ip" xml:space="preserve">
+    <value>IP address</value>
+    <comment>Label of the private extender IP address field.</comment>
+  </data>
+  <data name="private_extender_secret" xml:space="preserve">
+    <value>Secret</value>
+    <comment>Label of the private extender secret field.</comment>
+  </data>
   <data name="private_network" xml:space="preserve">
     <value>Private Network</value>
     <comment>Network name when privacy is enabled</comment>
@@ -4154,6 +4338,10 @@ and most decentralized ingress and egress protocol.</value>
   <data name="purchase_found_confirming_your_plan" xml:space="preserve">
     <value>Purchase found. Confirming your plan — it will update automatically.</value>
     <comment>Restore-purchases outcome: an entitlement for the current network was found; the confirmation poll now bridges the gap until the server credits it (Shared/ViewModels/AppStoreSubscriptionManager.swift).</comment>
+  </data>
+  <data name="qr_code_not_found" xml:space="preserve">
+    <value>No QR code was found in the image.</value>
+    <comment>Error when a chosen photo or image file holds no QR code.</comment>
   </data>
   <data name="quit" xml:space="preserve">
     <value>Quit</value>
@@ -4541,6 +4729,10 @@ and most decentralized ingress and egress protocol.</value>
     <value>Save Logs</value>
     <comment>Used in Shared/Views/ExportLogsButton/ExportLogsButton.swift.</comment>
   </data>
+  <data name="scan_qr_code" xml:space="preserve">
+    <value>Scan QR code</value>
+    <comment>Button: open the camera to scan a QR code.</comment>
+  </data>
   <data name="search_placeholder" xml:space="preserve">
     <value>Search for all locations</value>
     <comment>Locations List</comment>
@@ -4694,6 +4886,42 @@ world's content</value>
     <value>Share</value>
     <comment>Call to action</comment>
   </data>
+  <data name="share_extenders" xml:space="preserve">
+    <value>Share extenders</value>
+    <comment>Button and screen title: share the known extenders as a QR code.</comment>
+  </data>
+  <data name="share_extenders_count.zero" xml:space="preserve">
+    <value>{} extenders</value>
+    <comment>How many extenders the share code carries.</comment>
+  </data>
+  <data name="share_extenders_count.one" xml:space="preserve">
+    <value>{} extender</value>
+    <comment>How many extenders the share code carries.</comment>
+  </data>
+  <data name="share_extenders_count.two" xml:space="preserve">
+    <value>{} extenders</value>
+    <comment>How many extenders the share code carries.</comment>
+  </data>
+  <data name="share_extenders_count.few" xml:space="preserve">
+    <value>{} extenders</value>
+    <comment>How many extenders the share code carries.</comment>
+  </data>
+  <data name="share_extenders_count.many" xml:space="preserve">
+    <value>{} extenders</value>
+    <comment>How many extenders the share code carries.</comment>
+  </data>
+  <data name="share_extenders_count.other" xml:space="preserve">
+    <value>{} extenders</value>
+    <comment>How many extenders the share code carries.</comment>
+  </data>
+  <data name="share_extenders_hint" xml:space="preserve">
+    <value>Scan this code with another URnetwork app to share these extenders.</value>
+    <comment>Help text on the share screen under the QR code.</comment>
+  </data>
+  <data name="share_extenders_too_large" xml:space="preserve">
+    <value>The share code is too large for a QR code. Copy the share text instead.</value>
+    <comment>Shown on the share screen when the share payload exceeds what a QR code can hold; the text form is still offered.</comment>
+  </data>
   <data name="share_logs" xml:space="preserve">
     <value>Share logs</value>
     <comment>Call to action</comment>
@@ -4701,6 +4929,10 @@ world's content</value>
   <data name="share_logs_2" xml:space="preserve">
     <value>Share Logs</value>
     <comment>Used in Shared/Views/ExportLogsButton/ExportLogsButton.swift.</comment>
+  </data>
+  <data name="share_text_copied" xml:space="preserve">
+    <value>Share text copied</value>
+    <comment>Confirmation after the share text of an extender code was copied to the clipboard.</comment>
   </data>
   <data name="share_urnetwork" xml:space="preserve">
     <value>Share URnetwork</value>
@@ -6554,6 +6786,10 @@ as it should be.</value>
   <data name="urnetwork_vpn_started" xml:space="preserve">
     <value>URnetwork VPN started</value>
     <comment>Used in Shared/Intents/ConnectIntent.swift.</comment>
+  </data>
+  <data name="use_extender_settings" xml:space="preserve">
+    <value>Use extender settings</value>
+    <comment>Toggle on the import screen: also apply the extender settings carried by the code.</comment>
   </data>
   <data name="use_most_stable_provider" xml:space="preserve">
     <value>Use most stable provider</value>

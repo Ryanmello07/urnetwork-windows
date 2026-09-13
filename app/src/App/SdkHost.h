@@ -11,6 +11,7 @@
 #include <condition_variable>
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -21,6 +22,7 @@
 #include "ClientEvents.h"
 #include "ConnectAction.h"
 #include "ConnectionHealth.h"
+#include "ExtenderPresentation.h"
 #include "PostQuantumIdentity.h"
 #include "ProviderLocations.h"
 #include "Sdk.h"
@@ -450,6 +452,12 @@ class SdkHost {
   // The transport bar's feed: the client (remote) distribution, published from
   // the SAME throughput tick as the points and only when it changed.
   using TransportDistributionHandler = std::function<void(TransportDistributionSnapshot)>;
+  // The extender panel's feed (EXTENDER.md K4, K5). The SDK coalesces its own
+  // change stream to one callback per second; this publishes only when the
+  // mapped view actually changed, so an idle network costs the UI thread
+  // nothing. A default-constructed view means "no session / nothing known",
+  // which the panel draws as a red dot and 0 of 0.
+  using ExtenderStatusHandler = std::function<void(ExtenderStatusView)>;
   // The client / provider transport policy in force (device change listeners +
   // the initial read); nullopt = no device / no policy known.
   using TransportSettingsHandler =
@@ -900,6 +908,9 @@ class SdkHost {
   void SetSplitRulesHandler(SplitRulesHandler h) { onSplitRules_ = std::move(h); }
   void SetDnsSettingsHandler(DnsSettingsHandler h) { onDnsSettings_ = std::move(h); }
   void SetBlockerEnabledHandler(BlockerEnabledHandler h) { onBlockerEnabled_ = std::move(h); }
+  void SetExtenderStatusHandler(ExtenderStatusHandler h) {
+    onExtenderStatus_ = std::move(h);
+  }
   void SetTransportDistributionHandler(TransportDistributionHandler h) {
     onTransportDistribution_ = std::move(h);
   }
@@ -984,6 +995,41 @@ class SdkHost {
   // like CurrentSplitRules, no rpc: the value is refreshed by PublishThroughput
   // on every throughput tick.
   TransportDistributionSnapshot CurrentTransportDistribution();
+  // The last published extender status (K4). A cache read like the
+  // distribution above: the value is refreshed by the SDK's once-a-second
+  // change listener, never by polling.
+  ExtenderStatusView CurrentExtenderStatus();
+  // The SDK's ExtenderViewController for this session (K6, K7): the settings
+  // form, the share payload and the import all go through it, so every app
+  // applies one implementation of those rules. Null with no session -- the
+  // controller is opened from the device, and the account section shows the
+  // NoDevice state rather than an editable form backed by nothing.
+  // A SHARED reference, not a raw pointer into the host's own storage.
+  //
+  // This is the one view controller a caller uses from a BACKGROUND thread: the
+  // account section's settings read and save, and the share/import sheets, all
+  // hop off the UI thread for what are DeviceRemote rpcs. Handing out a raw
+  // pointer meant the teardown could run `urnet_release` on the handle between
+  // the caller's null check and its call. Holding the shared_ptr for the
+  // duration of the call keeps the C handle registered; ClosePresentationLocked
+  // still close()s the controller, which is what stops the Go side, and the
+  // last reference releases the handle when the call in flight returns.
+  //
+  // Null with no session -- the controller is opened from the device, and the
+  // account section shows the NoDevice state rather than an editable form
+  // backed by nothing.
+  std::shared_ptr<urnet::ExtenderViewController> ExtenderController();
+  // The LEGACY single private extender (K6: "stays as an advanced field with
+  // its exclusive override"). It is a network-space VALUE, not one of the three
+  // the view controller edits, so it is read and written here.
+  //
+  // The write is safe against a live session: the space manager applies a
+  // change confined to the EXTENDER values -- and NetExtender is one of them --
+  // in place, restarting the space's network client and node rather than
+  // rebuilding the space, so the DeviceRemote bound to it and everything
+  // derived from it stay valid. An empty ip clears the override.
+  std::optional<urnet::NetExtender> CurrentNetExtender();
+  bool SetNetExtender(const std::optional<urnet::NetExtender>& value);
   // The client / provider transport policy: the device's when there is a
   // session (offline the DeviceRemote answers with the pending or last known
   // policy), else the app LocalState mirror (see ApplyTransportSettings), else
@@ -1581,6 +1627,9 @@ class SdkHost {
   void PublishSplitRules();
   void PublishProviderLocations();
   void PublishProviderIdentities();
+  // The extender status listener's payload, mapped and pushed when it changed
+  // (K4, K5). Called on an SDK callback thread.
+  void PublishExtenderStatus(std::optional<urnet::ExtenderStatus> status);
   // Read getLocalOverrideAppIds(), compute {paths, allowlist} (Android inversion:
   // any include-in-tunnel app => allowlist with the tunnel set, else denylist with
   // the bypass set), and push to the service -> driver. Called from the override
@@ -1615,6 +1664,12 @@ class SdkHost {
   std::atomic<bool> provideHasNetworkKey_{false};
   std::optional<urnet::ConnectViewController> connectVc_;
   std::optional<urnet::ContractViewController> contractVc_;  // live throughput feed
+  // K6/K7's one implementation of the settings, share and import rules.
+  // shared_ptr and guarded by drawerMutex_ rather than mutex_: see
+  // ExtenderController(). drawerMutex_ is the light lock the UI thread already
+  // takes for cache reads, and the ordering mutex_ -> drawerMutex_ is the one
+  // every Publish* already uses, so this adds no new lock order.
+  std::shared_ptr<urnet::ExtenderViewController> extenderVc_;
   // per-peer contract rows: this single-feed VC (the client feed) owns the
   // egress+ingress coalescing, renewal atomicity, per-peer aggregation, the
   // closing/eject lifecycle, the at-top activity sort, the scrolled-away freeze,
@@ -1679,6 +1734,7 @@ class SdkHost {
   std::vector<SplitRule> lastSplitRules_;
   // the dedup baseline for the transport bar feed (PublishThroughput)
   TransportDistributionSnapshot lastTransportDistribution_;
+  ExtenderStatusView lastExtenderStatus_;
   // The value-compare baselines for the two signal-only provider feeds; see
   // CurrentProviderLocations() for why an identity compare is not enough.
   std::vector<ProviderLocationRow> lastProviderLocations_;
@@ -1946,6 +2002,7 @@ class SdkHost {
   DnsSettingsHandler onDnsSettings_;
   BlockerEnabledHandler onBlockerEnabled_;
   TransportDistributionHandler onTransportDistribution_;
+  ExtenderStatusHandler onExtenderStatus_;
   TransportSettingsHandler onTransportSettings_;
   LocationsHandler onLocations_;
   PeersHandler onPeers_;
