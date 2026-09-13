@@ -237,7 +237,7 @@ void ExtenderShareSheet::Build(XamlRoot const& root) {
     auto self = weak.lock();
     if (!self || self->text_.empty()) return;
     CopyToClipboard(self->text_);
-    self->statusText_.Text(Loc("site_app_copied"));
+    self->statusText_.Text(Loc("share_text_copied"));
     self->statusText_.Foreground(colors::MutedBrush());
     self->statusText_.Visibility(Visibility::Visible);
   });

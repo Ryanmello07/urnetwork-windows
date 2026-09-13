@@ -827,6 +827,10 @@ right way</value>
     <value>Complete your purchase in the browser. Your plan updates here automatically once payment is confirmed.</value>
     <comment>Shown after the app hands the user to the Stripe hosted checkout in the system browser. The app polls the server and flips the plan automatically when the payment webhook lands.</comment>
   </data>
+  <data name="choose_file" xml:space="preserve">
+    <value>Choose file</value>
+    <comment>Button on desktop: pick a file that contains a QR code image.</comment>
+  </data>
   <data name="choose_image_file" xml:space="preserve">
     <value>Choose image file</value>
     <comment>Button on desktop: pick an image file that contains a QR code.</comment>
@@ -4917,6 +4921,10 @@ world's content</value>
   <data name="share_logs_2" xml:space="preserve">
     <value>Share Logs</value>
     <comment>Used in Shared/Views/ExportLogsButton/ExportLogsButton.swift.</comment>
+  </data>
+  <data name="share_text_copied" xml:space="preserve">
+    <value>Share text copied</value>
+    <comment>Confirmation after the share text of an extender code was copied to the clipboard.</comment>
   </data>
   <data name="share_urnetwork" xml:space="preserve">
     <value>Share URnetwork</value>
