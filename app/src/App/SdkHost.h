@@ -11,6 +11,7 @@
 #include <condition_variable>
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -1003,7 +1004,21 @@ class SdkHost {
   // applies one implementation of those rules. Null with no session -- the
   // controller is opened from the device, and the account section shows the
   // NoDevice state rather than an editable form backed by nothing.
-  urnet::ExtenderViewController* ExtenderController();
+  // A SHARED reference, not a raw pointer into the host's own storage.
+  //
+  // This is the one view controller a caller uses from a BACKGROUND thread: the
+  // account section's settings read and save, and the share/import sheets, all
+  // hop off the UI thread for what are DeviceRemote rpcs. Handing out a raw
+  // pointer meant the teardown could run `urnet_release` on the handle between
+  // the caller's null check and its call. Holding the shared_ptr for the
+  // duration of the call keeps the C handle registered; ClosePresentationLocked
+  // still close()s the controller, which is what stops the Go side, and the
+  // last reference releases the handle when the call in flight returns.
+  //
+  // Null with no session -- the controller is opened from the device, and the
+  // account section shows the NoDevice state rather than an editable form
+  // backed by nothing.
+  std::shared_ptr<urnet::ExtenderViewController> ExtenderController();
   // The LEGACY single private extender (K6: "stays as an advanced field with
   // its exclusive override"). It is a network-space VALUE, not one of the three
   // the view controller edits, so it is read and written here.
@@ -1649,8 +1664,12 @@ class SdkHost {
   std::atomic<bool> provideHasNetworkKey_{false};
   std::optional<urnet::ConnectViewController> connectVc_;
   std::optional<urnet::ContractViewController> contractVc_;  // live throughput feed
-  // K6/K7's one implementation of the settings, share and import rules
-  std::optional<urnet::ExtenderViewController> extenderVc_;
+  // K6/K7's one implementation of the settings, share and import rules.
+  // shared_ptr and guarded by drawerMutex_ rather than mutex_: see
+  // ExtenderController(). drawerMutex_ is the light lock the UI thread already
+  // takes for cache reads, and the ordering mutex_ -> drawerMutex_ is the one
+  // every Publish* already uses, so this adds no new lock order.
+  std::shared_ptr<urnet::ExtenderViewController> extenderVc_;
   // per-peer contract rows: this single-feed VC (the client feed) owns the
   // egress+ingress coalescing, renewal atomicity, per-peer aggregation, the
   // closing/eject lifecycle, the at-top activity sort, the scrolled-away freeze,

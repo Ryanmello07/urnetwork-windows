@@ -3000,7 +3000,12 @@ void SdkHost::SubscribeDrawer() {
   // second rpc listener for a stream this app already takes directly above --
   // and the settings, share, decode and import calls it is opened for need no
   // subscription at all.
-  extenderVc_ = device_->openExtenderViewController();
+  {
+    auto controller = std::make_shared<urnet::ExtenderViewController>(
+        device_->openExtenderViewController());
+    std::scoped_lock lock(drawerMutex_);
+    extenderVc_ = std::move(controller);
+  }
 
   // initial snapshots
   PublishThroughput();
@@ -3511,8 +3516,9 @@ ExtenderStatusView SdkHost::CurrentExtenderStatus() {
   return lastExtenderStatus_;
 }
 
-urnet::ExtenderViewController* SdkHost::ExtenderController() {
-  return extenderVc_ ? &*extenderVc_ : nullptr;
+std::shared_ptr<urnet::ExtenderViewController> SdkHost::ExtenderController() {
+  std::scoped_lock lock(drawerMutex_);
+  return extenderVc_;
 }
 
 std::optional<urnet::NetExtender> SdkHost::CurrentNetExtender() {
@@ -5334,7 +5340,10 @@ void SdkHost::ClosePresentationLocked() {
     locationsVc_.reset();
     peerVc_.reset();
     providerLocationsVc_.reset();
-    extenderVc_.reset();
+    {
+      std::scoped_lock drawerLock(drawerMutex_);
+      extenderVc_.reset();
+    }
     return;
   }
   // D4: the close calls below are courtesies to the SERVICE — they detach
@@ -5366,8 +5375,11 @@ void SdkHost::ClosePresentationLocked() {
     if (connectVc_) device_->closeConnectViewController(*connectVc_);
     // The extender controller closes ITSELF (the SDK gives it no
     // Device::closeExtenderViewController), but it is the same rpc courtesy as
-    // the rest, so it lives inside the same guard. close() stops it too.
-    if (extenderVc_) extenderVc_->close();
+    // the rest, so it lives inside the same guard. close() stops it too, and it
+    // is what makes dropping the reference below safe while a background call
+    // still holds one: the Go side is cancelled, the C handle survives until
+    // that last reference goes.
+    if (auto controller = ExtenderController()) controller->close();
   }
   // ...but the handles drop UNCONDITIONALLY, whether or not the courtesy was
   // paid. That asymmetry is the D4 contract, and the provider controller joins
@@ -5379,7 +5391,10 @@ void SdkHost::ClosePresentationLocked() {
   blockVc_.reset();
   contractVc_.reset();
   connectVc_.reset();
-  extenderVc_.reset();
+  {
+    std::scoped_lock drawerLock(drawerMutex_);
+    extenderVc_.reset();
+  }
   ClearDrawer();
 }
 

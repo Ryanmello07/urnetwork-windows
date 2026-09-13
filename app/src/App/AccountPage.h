@@ -11,6 +11,7 @@
 
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <winrt/Microsoft.UI.Xaml.h>
@@ -37,8 +38,10 @@ class AccountPage {
   void LoadBalanceCodes();   // redeemed-codes list (account panel)
   // Pane D (EXTENDER.md K6). Reads the effective settings through the SDK's
   // ExtenderViewController and the legacy private extender off the network
-  // space. Safe to call with no session: it renders the NoDevice state.
-  void LoadExtenderSettings();
+  // space -- BOTH off the UI thread, because the controller lives on the
+  // DeviceRemote and its read is an rpc to the service. Safe to call with no
+  // session: it renders the NoDevice state.
+  winrt::fire_and_forget LoadExtenderSettings();
 
   // read by MainWindow::ApplyBalance for the "Total Referrals" / bonus rows on
   // both plan cards
@@ -90,7 +93,11 @@ class AccountPage {
   // is applied in place by the space manager, so this does not disturb the
   // live session; the service reads it at its next start, which is what the
   // note under the fields says.
-  void SavePrivateExtender();
+  winrt::fire_and_forget SavePrivateExtender();
+  // Re-text pane D's built labels and buttons after a language change.
+  // BuildExtenderPane is one-shot, so unlike the other two builders on this
+  // page it cannot simply be re-run.
+  void ApplyExtenderStrings();
   winrt::fire_and_forget ShowExtenderShareSheet();
   winrt::fire_and_forget ShowExtenderImportSheet();
   void SendPasswordReset();
@@ -156,6 +163,12 @@ class AccountPage {
   // start and reads the new ones at its next one.
   winrt::Microsoft::UI::Xaml::Controls::TextBlock extenderNote_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::Border extenderNoteRow_{nullptr};
+  // Every built label and button in pane D with the store id it came from, so
+  // ApplyExtenderStrings can re-text them without rebuilding the pane.
+  std::vector<std::pair<winrt::Microsoft::UI::Xaml::Controls::TextBlock, std::string>>
+      extenderLabels_;
+  std::vector<std::pair<winrt::Microsoft::UI::Xaml::Controls::Button, std::string>>
+      extenderButtons_;
   // held for as long as its dialog is showing, like every other sheet here
   std::shared_ptr<urnw::ExtenderShareSheet> extenderShareSheet_;
   std::shared_ptr<urnw::ExtenderImportSheet> extenderImportSheet_;

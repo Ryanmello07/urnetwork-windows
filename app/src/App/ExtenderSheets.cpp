@@ -259,16 +259,17 @@ winrt::fire_and_forget ExtenderShareSheet::Rebuild() {
   auto weak = weak_from_this();
   auto queue = dialog_.DispatcherQueue();
   const bool includeSettings = includeSettings_;
-  // The host outlives every sheet (it is the process-wide SdkHost through
-  // AppController), so a POINTER taken here is what the background half uses --
-  // `sdk_` is a member, and reading a member after a suspension point means
-  // reading `this`, which the dialog may have dropped by then.
-  SdkHost* const sdk = &sdk_;
+  // A SHARED reference, taken before the suspension and held for the whole
+  // call: `sdk_` is a member, so reading it after a suspension point means
+  // reading `this`, which the dialog may have dropped by then -- and a raw
+  // controller pointer could be released by the session teardown between the
+  // check and the call.
+  const auto controller = sdk_.ExtenderController();
 
-  if (!sdk->ExtenderController()) {
+  if (!controller) {
     // No session, so there is nothing to share and nothing to be coy about.
     ApplyFieldState(statusText_,
-                    sdk->IsLoggedIn() ? FieldState::NoDevice : FieldState::NoSession);
+                    sdk_.IsLoggedIn() ? FieldState::NoDevice : FieldState::NoSession);
     statusText_.Visibility(Visibility::Visible);
     ApplyShare({}, 0, /*failed=*/false);
     co_return;
@@ -281,17 +282,13 @@ winrt::fire_and_forget ExtenderShareSheet::Rebuild() {
   co_await winrt::resume_background();
   try {
     // The controller is on the DeviceRemote, so this is an rpc.
-    if (auto* vc = sdk->ExtenderController()) {
-      if (const auto result = vc->buildShare(includeSettings)) {
-        text = result->Text;
-        count = result->Count;
-      } else {
-        // A call that returned nothing is a failure, not an empty share: a
-        // blank frame with no line under it is indistinguishable from a space
-        // that genuinely knows no extenders yet, and those are different.
-        failed = true;
-      }
+    if (const auto result = controller->buildShare(includeSettings)) {
+      text = result->Text;
+      count = result->Count;
     } else {
+      // A call that returned nothing is a failure, not an empty share: a blank
+      // frame with no line under it is indistinguishable from a space that
+      // genuinely knows no extenders yet, and those are different.
       failed = true;
     }
   } catch (const std::exception& e) {
@@ -587,7 +584,7 @@ void ExtenderImportSheet::Decode(std::string const& text) {
     statusText_.Visibility(Visibility::Collapsed);
     return;
   }
-  auto* controller = sdk_.ExtenderController();
+  const auto controller = sdk_.ExtenderController();
   if (!controller) {
     ApplyDecision();
     return;
@@ -682,7 +679,8 @@ winrt::fire_and_forget ExtenderImportSheet::Import() {
   const std::string text = text_;
   const bool useSettings = useSettings_ && decoded_.hasSettings;
 
-  SdkHost* const sdk = &sdk_;  // see ExtenderShareSheet::Rebuild
+  const auto controller = sdk_.ExtenderController();  // see ExtenderShareSheet::Rebuild
+  if (!controller) co_return;
   busy_ = true;
   importButton_.IsEnabled(false);
   ring_.IsActive(true);
@@ -693,13 +691,11 @@ winrt::fire_and_forget ExtenderImportSheet::Import() {
 
   co_await winrt::resume_background();
   try {
-    if (auto* vc = sdk->ExtenderController()) {
-      if (const auto imported = vc->importShare(text, useSettings)) {
-        result.ok = imported->Ok;
-        result.error = imported->Error;
-        result.importedCount = imported->ImportedCount;
-        callFailed = false;
-      }
+    if (const auto imported = controller->importShare(text, useSettings)) {
+      result.ok = imported->Ok;
+      result.error = imported->Error;
+      result.importedCount = imported->ImportedCount;
+      callFailed = false;
     }
   } catch (const std::exception& e) {
     LogWarn("extender: import share failed: {}", e.what());
