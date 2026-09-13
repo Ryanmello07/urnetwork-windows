@@ -1097,6 +1097,7 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
                         <Border Style="{StaticResource UrPaneHeaderStyle}">
@@ -1133,7 +1134,16 @@
                              ConnectPage::BuildCharts (urnw::IpFamilyHistogram); its
                              bottom rule is the group header's, so no rule here. -->
                         <Grid Grid.Row="3" x:Name="IpFamilyHistogramHost" />
-                        <Border Grid.Row="4" Style="{StaticResource UrGroupHeaderStyle}">
+                        <!-- The extender panel (connect/EXTENDER.md K4): the
+                             extenders carrying live connections as rings, the
+                             "N of M" count, and the gossip network's status dot.
+                             Built into this host by ConnectPage::BuildCharts
+                             (urnw::ExtenderPanel). It is NOT tappable - K4 says
+                             there is no details panel - so it is a plain row, not
+                             a pane-row Button like the transport bar above. Its
+                             bottom rule is the group header's, so no rule here. -->
+                        <Grid Grid.Row="4" x:Name="ExtenderPanelHost" />
+                        <Border Grid.Row="5" Style="{StaticResource UrGroupHeaderStyle}">
                             <Grid>
                                 <TextBlock x:Name="ConnectionsLabel"
                                            Style="{StaticResource UrGroupHeaderTextStyle}" />
@@ -1144,7 +1154,7 @@
                         <!-- The list FILLS the rest of the pane. Its empty state is a
                              centred line in that same full-height area, never a short
                              card floating in space. -->
-                        <Grid Grid.Row="5">
+                        <Grid Grid.Row="6">
                             <ScrollViewer x:Name="ConnectionsScroll"
                                           HorizontalScrollBarVisibility="Disabled"
                                           VerticalScrollBarVisibility="Auto">

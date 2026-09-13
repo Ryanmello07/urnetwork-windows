@@ -56,6 +56,11 @@ struct ExtenderInfoView {
   std::string colorHex;
   // addresses carrying at least one live connection right now
   std::int64_t inUse = 0;
+
+  bool operator==(const ExtenderInfoView& o) const {
+    return ip == o.ip && colorHex == o.colorHex && inUse == o.inUse;
+  }
+  bool operator!=(const ExtenderInfoView& o) const { return !(*this == o); }
 };
 
 // As much of the SDK's ExtenderStatus as the panel reads.
@@ -67,6 +72,15 @@ struct ExtenderStatusView {
   std::int64_t reserveCount = 0;
   std::int64_t eventCountLastMinute = 0;
   std::vector<ExtenderInfoView> extenders;
+
+  // The SDK fires once a second whether or not anything moved, so the feed
+  // dedups on this before it reaches the UI thread.
+  bool operator==(const ExtenderStatusView& o) const {
+    return gossipState == o.gossipState && activeCount == o.activeCount &&
+           reserveCount == o.reserveCount &&
+           eventCountLastMinute == o.eventCountLastMinute && extenders == o.extenders;
+  }
+  bool operator!=(const ExtenderStatusView& o) const { return !(*this == o); }
 };
 
 // What the panel draws, with nothing left to decide.

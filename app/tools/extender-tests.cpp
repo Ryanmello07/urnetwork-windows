@@ -369,6 +369,19 @@ void PanelModelTests() {
           "there is nothing to identify, so there is nothing to draw");
   }
   {
+    TEST_CASE("theStatusViewComparesByValueSoTheFeedCanDedup");
+    // the SDK fires once a second whether or not anything moved, and SdkHost
+    // drops the repeat on exactly this comparison
+    ExtenderStatusView same = status;
+    Check(same == status, "an identical push is not a change");
+    same.eventCountLastMinute = 4;
+    Check(same != status, "a new event rate is");
+    ExtenderStatusView other = status;
+    other.extenders.pop_back();
+    Check(other != status, "so is an extender leaving the directory");
+    Check(ExtenderStatusView{} == ExtenderStatusView{}, "two empty statuses agree");
+  }
+  {
     TEST_CASE("theModelComparesByValueSoAnUnchangedPushCostsNothing");
     const auto a = ExtenderPanelModelFor(status);
     const auto b = ExtenderPanelModelFor(status);

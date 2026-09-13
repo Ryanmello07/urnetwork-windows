@@ -300,6 +300,7 @@
          form, share/import) are WinRT-free (no pch) so tools/extender-tests.cpp
          runs them on any host; the panel and sheets that draw them use the pch. -->
     <ClCompile Include="ExtenderPresentation.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <ClCompile Include="ExtenderPanel.cpp" />
     <ClCompile Include="UsageBar.cpp" />
     <ClCompile Include="WalletConnect.cpp" />
     <ClCompile Include="ServiceClient.cpp" />
@@ -360,6 +361,7 @@
     <ClInclude Include="IpFamilyHistogram.h" />
     <ClInclude Include="ExtenderRingGeometry.h" />
     <ClInclude Include="ExtenderPresentation.h" />
+    <ClInclude Include="ExtenderPanel.h" />
     <ClInclude Include="TransportStatusPresentation.h" />
     <ClInclude Include="UsageBar.h" />
     <ClInclude Include="UrColors.h" />

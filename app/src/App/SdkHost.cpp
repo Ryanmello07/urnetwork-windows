@@ -2985,6 +2985,21 @@ void SdkHost::SubscribeDrawer() {
   presentationSubs_.push_back(device_->addProviderIdentityChangeListener(
       [this] { PublishProviderIdentities(); }));
 
+  // The extender network (EXTENDER.md K4, K5). The status listener is on the
+  // DEVICE, not the space: DeviceRemote answers it over the rpc with the last
+  // value cached, exactly as the transport settings do, so this app sees the
+  // service's truth rather than its own process's empty directory. The SDK
+  // already coalesces to one callback per second, so there is no throttle here.
+  presentationSubs_.push_back(device_->addExtenderStatusChangeListener(
+      [this](std::optional<urnet::ExtenderStatus> status) {
+        PublishExtenderStatus(std::move(status));
+      }));
+  // The view controller behind the account section (K6, K7). Opened with the
+  // rest of the drawer so its lifetime is the session's, and started, since
+  // its own status stream is what an open share sheet re-reads from.
+  extenderVc_ = device_->openExtenderViewController();
+  extenderVc_->start();
+
   // initial snapshots
   PublishThroughput();
   PublishContractRows();
@@ -2998,6 +3013,11 @@ void SdkHost::SubscribeDrawer() {
     onTransportSettings_(TransportSettingsKind::Client, device_->getTransportSettings());
     onTransportSettings_(TransportSettingsKind::Provider,
                          device_->getProviderTransportSettings());
+  }
+  {
+    static std::atomic<bool> loggedExtenderStatus{false};
+    PublishExtenderStatus(ReadSdkList(loggedExtenderStatus, "getExtenderStatus",
+                                      [&] { return device_->getExtenderStatus(); }));
   }
 }
 
@@ -3356,9 +3376,13 @@ void SdkHost::ClearDrawer() {
     lastSplitRules_.clear();
     lastProviderLocations_.clear();
     lastTransportDistribution_ = {};
+    lastExtenderStatus_ = {};
   }
   if (onThroughput_) onThroughput_({}, 60);
   if (onTransportDistribution_) onTransportDistribution_({});
+  // an empty status, not a stale one: with no session the panel says 0 of 0
+  // with a red dot, which is the truth
+  if (onExtenderStatus_) onExtenderStatus_({});
   if (onTransportSettings_) {
     onTransportSettings_(TransportSettingsKind::Client, std::nullopt);
     onTransportSettings_(TransportSettingsKind::Provider, std::nullopt);
@@ -3442,6 +3466,51 @@ bool SdkHost::CurrentBlockerEnabled() {
 TransportDistributionSnapshot SdkHost::CurrentTransportDistribution() {
   std::scoped_lock lock(drawerMutex_);
   return lastTransportDistribution_;
+}
+
+namespace {
+// The SDK's ExtenderStatus onto the plain view the panel draws (K4, K5).
+// Mirrored rather than passed through so the UI layer never sees an SDK type
+// and the mapping is exercised by tools/extender-tests.cpp.
+ExtenderStatusView MapExtenderStatus(std::optional<urnet::ExtenderStatus> const& status) {
+  ExtenderStatusView view;
+  if (!status) return view;
+  view.gossipState = status->GossipState;
+  view.activeCount = status->ActiveCount;
+  view.reserveCount = status->ReserveCount;
+  view.eventCountLastMinute = status->EventCountLastMinute;
+  if (status->Extenders) {
+    view.extenders.reserve(status->Extenders->size());
+    for (urnet::ExtenderInfo const& extenderInfo : *status->Extenders) {
+      view.extenders.push_back(
+          ExtenderInfoView{extenderInfo.Ip, extenderInfo.ColorHex, extenderInfo.InUse});
+    }
+  }
+  return view;
+}
+}  // namespace
+
+void SdkHost::PublishExtenderStatus(std::optional<urnet::ExtenderStatus> status) {
+  ExtenderStatusView view = MapExtenderStatus(status);
+  {
+    std::scoped_lock lock(drawerMutex_);
+    // The SDK fires once a second whether or not anything moved (it coalesces a
+    // change stream, it does not suppress a repeat), and the panel's rebuild
+    // tears down and rebuilds a row of shapes. Comparing here is what keeps an
+    // idle extender network off the UI thread entirely.
+    if (view == lastExtenderStatus_) return;
+    lastExtenderStatus_ = view;
+  }
+  if (onExtenderStatus_) onExtenderStatus_(std::move(view));
+}
+
+ExtenderStatusView SdkHost::CurrentExtenderStatus() {
+  std::scoped_lock lock(drawerMutex_);
+  return lastExtenderStatus_;
+}
+
+urnet::ExtenderViewController* SdkHost::ExtenderController() {
+  return extenderVc_ ? &*extenderVc_ : nullptr;
 }
 
 std::optional<urnet::TransportSettings> SdkHost::CurrentTransportSettings(
@@ -5214,6 +5283,7 @@ void SdkHost::ClosePresentationLocked() {
     locationsVc_.reset();
     peerVc_.reset();
     providerLocationsVc_.reset();
+    extenderVc_.reset();
     return;
   }
   // D4: the close calls below are courtesies to the SERVICE — they detach
@@ -5243,6 +5313,13 @@ void SdkHost::ClosePresentationLocked() {
     if (blockVc_) device_->closeBlockActionViewController(*blockVc_);
     if (contractVc_) device_->closeContractViewController(*contractVc_);
     if (connectVc_) device_->closeConnectViewController(*connectVc_);
+    // The extender controller closes ITSELF (the SDK gives it no
+    // Device::closeExtenderViewController), but it is the same rpc courtesy as
+    // the rest, so it lives inside the same guard.
+    if (extenderVc_) {
+      extenderVc_->stop();
+      extenderVc_->close();
+    }
   }
   // ...but the handles drop UNCONDITIONALLY, whether or not the courtesy was
   // paid. That asymmetry is the D4 contract, and the provider controller joins
@@ -5254,6 +5331,7 @@ void SdkHost::ClosePresentationLocked() {
   blockVc_.reset();
   contractVc_.reset();
   connectVc_.reset();
+  extenderVc_.reset();
   ClearDrawer();
 }
 
