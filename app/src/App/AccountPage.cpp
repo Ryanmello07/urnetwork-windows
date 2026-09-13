@@ -786,8 +786,19 @@ void AccountPage::ApplyExtenderForm(FieldState state, ExtenderSettingsForm const
   extenderNoteRow_.Visibility(hasController ? Visibility::Visible : Visibility::Collapsed);
 
   if (!live) {
-    kit::ApplySupportingText(extenderStatus_, {}, kit::ValidationState::NotChecked);
-    rows::ApplyFieldState(extenderStatus_, state);
+    if (hasController) {
+      // the read itself failed; that is not the same as having nothing to read
+      kit::ApplySupportingText(extenderStatus_, {}, kit::ValidationState::NotChecked);
+      rows::ApplyFieldState(extenderStatus_, state);
+      return;
+    }
+    // The store has a line written for exactly this surface, and it covers BOTH
+    // halves of the FieldState distinction in one sentence ("Sign in AND
+    // connect"): with no session there is nothing to sign in as, and with no
+    // service there is nothing to manage extenders through. Splitting it into
+    // the two generic lines would invent a distinction the copy does not make.
+    kit::ApplySupportingText(extenderStatus_, Loc("extenders_no_session"),
+                             kit::ValidationState::NotChecked);
     return;
   }
 

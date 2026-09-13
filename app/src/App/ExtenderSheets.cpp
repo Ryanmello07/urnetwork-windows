@@ -311,18 +311,27 @@ void ExtenderShareSheet::ApplyShare(std::string const& text, int64_t count, bool
   payloadText_.Text(H(text));
   copyButton_.IsEnabled(!text.empty());
   countText_.Text(hstring{urnw::Plural("share_extenders_count", count)});
-  RenderCode(text);
+  const bool drew = RenderCode(text);
+  // the frame is a white box with nothing in it when the code did not render,
+  // so collapse it rather than present an empty one as if it were the code
+  codeFrame_.Visibility(drew && !text.empty() ? Visibility::Visible
+                                              : Visibility::Collapsed);
   if (failed) {
     ApplyFieldState(statusText_, FieldState::Failed);
+    statusText_.Visibility(Visibility::Visible);
+  } else if (!drew) {
+    // the payload exists and is copyable; only the picture of it does not
+    statusText_.Text(Loc("share_extenders_too_large"));
+    statusText_.Foreground(colors::MutedBrush());
     statusText_.Visibility(Visibility::Visible);
   } else if (!text.empty()) {
     statusText_.Visibility(Visibility::Collapsed);
   }
 }
 
-void ExtenderShareSheet::RenderCode(std::string const& text) {
+bool ExtenderShareSheet::RenderCode(std::string const& text) {
   canvas_.Children().Clear();
-  if (text.empty()) return;
+  if (text.empty()) return true;
 
   int moduleCount = 0;
   std::vector<bool> dark;
@@ -339,17 +348,20 @@ void ExtenderShareSheet::RenderCode(std::string const& text) {
       }
     }
   } catch (const std::exception& e) {
-    // data_too_long is the one real failure here, and it is a bug upstream
-    // (the payload is capped at 48 addresses), not something a user can fix.
+    // qrcodegen::data_too_long is the real case: a share bigger than even a
+    // version-40 level-H symbol. The payload is capped at 48 addresses so it
+    // should not happen, but a blank frame with no explanation is the worst
+    // possible way to find out that it did -- and the copyable text below is
+    // still a complete answer, which is what the store's line says.
     LogWarn("extender: qr encode failed: {}", e.what());
-    return;
+    return false;
   } catch (...) {
     LogWarn("extender: qr encode failed");
-    return;
+    return false;
   }
 
   const ExtenderQrLayout layout = ExtenderQrLayoutFor(moduleCount, kCodeSide);
-  if (layout.moduleCount <= 0) return;
+  if (layout.moduleCount <= 0) return false;
   canvas_.Width(layout.side);
   canvas_.Height(layout.side);
 
@@ -399,6 +411,7 @@ void ExtenderShareSheet::RenderCode(std::string const& text) {
   canvas_.Children().Append(mark);
 
   automation::AutomationProperties::SetName(codeFrame_, Loc("share_extenders"));
+  return true;
 }
 
 // ---- ExtenderImportSheet ----------------------------------------------------

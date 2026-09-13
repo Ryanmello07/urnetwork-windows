@@ -57,8 +57,10 @@ class ExtenderShareSheet : public std::enable_shared_from_this<ExtenderShareShee
   winrt::fire_and_forget Rebuild();
   void ApplyShare(std::string const& text, std::int64_t count, bool failed);
   // Draw `text` as a level-H code inside the fixed canvas, glyph and outline
-  // included. An empty text clears the canvas.
-  void RenderCode(std::string const& text);
+  // included. An empty text clears the canvas. Returns false when the payload
+  // could not be encoded at all -- the one real case is a share bigger than a
+  // QR code can hold, which the copyable text below still serves.
+  bool RenderCode(std::string const& text);
 
   SdkHost& sdk_;
   std::string text_;
