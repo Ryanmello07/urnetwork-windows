@@ -802,11 +802,13 @@ winrt::fire_and_forget AccountPage::SaveExtenderSettings() {
                                kit::ValidationState::Invalid);
       return;
     }
+    // Re-read FIRST: the SDK normalises what it stored, a cleared box comes
+    // back as a default whose value the placeholder has to name -- and the
+    // re-read owns this status line, so writing the verdict before it would be
+    // writing to a line about to be cleared.
+    page.LoadExtenderSettings();
     kit::ApplySupportingText(page.extenderStatus_, Loc("extender_settings_saved"),
                              kit::ValidationState::Valid);
-    // Re-read: the SDK normalises what it stored, and a cleared box comes back
-    // as a default whose value the placeholder has to name.
-    page.LoadExtenderSettings();
   });
 }
 
