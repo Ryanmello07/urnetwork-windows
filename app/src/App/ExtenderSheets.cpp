@@ -682,6 +682,7 @@ winrt::fire_and_forget ExtenderImportSheet::Import() {
   ring_.Visibility(Visibility::Visible);
 
   ExtenderImportResultView result;
+  bool callFailed = true;
 
   co_await winrt::resume_background();
   try {
@@ -690,6 +691,7 @@ winrt::fire_and_forget ExtenderImportSheet::Import() {
         result.ok = imported->Ok;
         result.error = imported->Error;
         result.importedCount = imported->ImportedCount;
+        callFailed = false;
       }
     }
   } catch (const std::exception& e) {
@@ -698,15 +700,25 @@ winrt::fire_and_forget ExtenderImportSheet::Import() {
     LogWarn("extender: import share failed");
   }
 
-  queue.TryEnqueue([weak, result] {
-    if (auto self = weak.lock()) self->ApplyImportResult(result);
+  queue.TryEnqueue([weak, result, callFailed] {
+    if (auto self = weak.lock()) self->ApplyImportResult(result, callFailed);
   });
 }
 
-void ExtenderImportSheet::ApplyImportResult(ExtenderImportResultView const& result) {
+void ExtenderImportSheet::ApplyImportResult(ExtenderImportResultView const& result,
+                                            bool callFailed) {
   busy_ = false;
   ring_.IsActive(false);
   ring_.Visibility(Visibility::Collapsed);
+
+  if (callFailed) {
+    // The call never reached a verdict, so the payload is not what is wrong
+    // with this: saying "this code is not an extender share" here would blame
+    // a code the SDK never looked at.
+    ApplyDecision();
+    ShowMessage(Loc("something_went_wrong"), /*danger=*/true);
+    return;
+  }
 
   const ExtenderImportOutcome outcome = ExtenderImportOutcomeFor(result);
   if (outcome.ok) {

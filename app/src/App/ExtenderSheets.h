@@ -105,7 +105,10 @@ class ExtenderImportSheet : public std::enable_shared_from_this<ExtenderImportSh
   void Decode(std::string const& text);
   void ApplyDecision();
   winrt::fire_and_forget Import();
-  void ApplyImportResult(ExtenderImportResultView const& result);
+  // `callFailed` is the difference between "the SDK judged this payload and
+  // refused it" and "the call never got an answer". Both leave result.ok
+  // false, and only one of them is a statement about the code.
+  void ApplyImportResult(ExtenderImportResultView const& result, bool callFailed);
   void ShowMessage(winrt::hstring const& message, bool danger);
 
   HWND owner_{};
