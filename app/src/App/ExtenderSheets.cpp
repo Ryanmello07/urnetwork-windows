@@ -23,10 +23,8 @@
 #include <qrcodegen.hpp>
 
 #include "ConnectorGlyph.h"
-#include "ExtenderRingGeometry.h"
 #include "Localization.h"
 #include "Log.h"
-#include "PageContext.h"
 #include "SettingsSheets.h"  // the row kit: MakeSheet / Supporting / Lookup / clipboard
 #include "Strings.h"
 #include "UrColors.h"
