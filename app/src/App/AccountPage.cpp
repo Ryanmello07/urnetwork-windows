@@ -595,6 +595,24 @@ void AccountPage::BuildExtenderPane() {
   extenderSaveButton_ = AddActionRow(host, Loc("save"), /*primary=*/true);
   extenderSaveButton_.Click([this](auto const&, auto const&) { SaveExtenderSettings(); });
 
+  // K6 on iOS: "the tunnel extension picks the values up at its next start and
+  // the app says so". Windows is in exactly that position -- the tunnel runs in
+  // the service process, which imported this space's values when the session
+  // started -- so the same sentence belongs here, standing rather than fired
+  // once after a save, and only while there IS a session to be behind.
+  extenderNote_ = TextBlock();
+  extenderNote_.Text(Loc("extender_settings_next_connect"));
+  extenderNote_.FontSize(12);
+  extenderNote_.TextWrapping(TextWrapping::Wrap);
+  extenderNote_.Foreground(urnw::colors::MutedBrush());
+  extenderNoteRow_ = Border();
+  extenderNoteRow_.Padding(ThicknessHelper::FromLengths(12, 8, 12, 8));
+  extenderNoteRow_.BorderBrush(urnw::colors::BorderBrush());
+  extenderNoteRow_.BorderThickness(ThicknessHelper::FromLengths(0, 0, 0, 1));
+  extenderNoteRow_.Visibility(Visibility::Collapsed);
+  extenderNoteRow_.Child(extenderNote_);
+  host.Children().Append(extenderNoteRow_);
+
   // One line carrying the load state and the save verdict. Without it a failed
   // save is invisible: the boxes keep what was typed and nothing else happens.
   extenderStatus_ = TextBlock();
@@ -711,6 +729,7 @@ void AccountPage::ApplyExtenderForm(FieldState state, ExtenderSettingsForm const
   privateSaveButton_.IsEnabled(live && !savingExtender_);
   shareExtendersButton_.IsEnabled(hasController);
   importExtendersButton_.IsEnabled(hasController);
+  extenderNoteRow_.Visibility(hasController ? Visibility::Visible : Visibility::Collapsed);
 
   if (!live) {
     kit::ApplySupportingText(extenderStatus_, {}, kit::ValidationState::NotChecked);
@@ -810,15 +829,10 @@ void AccountPage::SavePrivateExtender() {
                              kit::ValidationState::Invalid);
     return;
   }
+  // The standing note under the Save button already says when the tunnel picks
+  // this up; this line is only the verdict on the write.
   kit::ApplySupportingText(extenderStatus_, Loc("extender_settings_saved"),
                            kit::ValidationState::Valid);
-  // The tunnel lives in the service process, which took this space's values at
-  // its last start; it picks the new ones up at its next one, and saying so is
-  // the difference between a setting that looks broken and one that is pending.
-  if (Sdk().hasDevice()) {
-    kit::ApplySupportingText(extenderStatus_, Loc("extender_settings_next_connect"),
-                             kit::ValidationState::Valid);
-  }
 }
 
 winrt::fire_and_forget AccountPage::ShowExtenderShareSheet() {

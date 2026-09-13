@@ -151,6 +151,11 @@ class AccountPage {
   winrt::Microsoft::UI::Xaml::Controls::Button advancedButton_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::StackPanel advancedPanel_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::TextBlock extenderStatus_{nullptr};
+  // The standing fact about this platform, not a per-save message: the tunnel
+  // runs in the service process, which took this space's values at its last
+  // start and reads the new ones at its next one.
+  winrt::Microsoft::UI::Xaml::Controls::TextBlock extenderNote_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::Border extenderNoteRow_{nullptr};
   // held for as long as its dialog is showing, like every other sheet here
   std::shared_ptr<urnw::ExtenderShareSheet> extenderShareSheet_;
   std::shared_ptr<urnw::ExtenderImportSheet> extenderImportSheet_;
