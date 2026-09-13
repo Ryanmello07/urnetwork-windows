@@ -18,6 +18,7 @@
 
 #include <cstdint>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include <winrt/Windows.Foundation.h>
@@ -25,6 +26,7 @@
 #include <winrt/Microsoft.UI.Xaml.Controls.h>
 #include <winrt/Microsoft.UI.Xaml.Media.h>
 
+#include "ExtenderRingGeometry.h"
 #include "IpFamilyGroups.h"
 #include "Sdk.h"
 
@@ -42,8 +44,9 @@ class IpFamilyHistogram {
 
   // Replace the grid (from LiveStats::gridPoints, every stats push) and the
   // dot diameter to draw at (ConnectCanvas::PointDiameterFor, so the dots are
-  // the hero's live size). Rebuilds only when the Added providers per row or
-  // the diameter actually changed.
+  // the hero's live size). Rebuilds only when the Added providers per row, the
+  // extenders any of them is reached through, or the diameter actually
+  // changed.
   void SetGrid(std::vector<urnet::ProviderGridPoint> const& points, double dotDiameter);
 
   // The current rows, for the page's own bookkeeping and the preview build.
@@ -59,8 +62,17 @@ class IpFamilyHistogram {
   void BuildVisuals(winrt::Microsoft::UI::Xaml::Controls::Grid const& host);
   void Rebuild();
   void RebuildRow(Row& row);
+  // One provider's dot: the filled dot alone when it is reached directly, or
+  // the dot inside its extender rings (EXTENDER.md K2) when it is not. The
+  // returned element is always `dotDiameter_` square, so a ringed provider
+  // takes exactly as much room in the row as a bare one.
+  winrt::Microsoft::UI::Xaml::FrameworkElement MakeDot(
+      std::vector<ExtenderMark> const& marks) const;
 
   IpFamilyGroups groups_;
+  // clientId -> the extenders carrying this client's transports to that exit
+  // (K1). Only providers reached through one appear here.
+  std::unordered_map<std::string, std::vector<ExtenderMark>> marks_;
   double dotDiameter_ = 0;
   bool built_ = false;
 

@@ -482,11 +482,89 @@ void ConnectCanvas::LayoutPoints() {
     // dots touch. Nothing is culled at the rim — the mask does that now.
     const double cx = p.x * cell_ + cell_ / 2;
     const double cy = p.y * cell_ + cell_ / 2;
-    SizeSquare(p.dot, cell_);
-    Canvas::SetLeft(p.dot, cx - cell_ / 2);
-    Canvas::SetTop(p.dot, cy - cell_ / 2);
+    // EXTENDER.md K2: with extenders the filled dot shrinks inward so the
+    // OUTERMOST ring's outer edge lands on the cell edge, which is why a
+    // ringed provider has exactly the same footprint as a bare one and never
+    // grows into its neighbour. With no extenders this is cell_ and the dot is
+    // drawn exactly as it always was.
+    const ExtenderRingLayout ringLayout = ExtenderRingsFor(cell_, p.marks);
+    const double dotDiameter = p.marks.empty() ? cell_ : ringLayout.dotDiameter;
+    SizeSquare(p.dot, dotDiameter);
+    Canvas::SetLeft(p.dot, cx - dotDiameter / 2);
+    Canvas::SetTop(p.dot, cy - dotDiameter / 2);
+    for (size_t i = 0; i < p.rings.size() && i < ringLayout.rings.size(); ++i) {
+      const ExtenderRing& spec = ringLayout.rings[i];
+      DotRing& ring = p.rings[i];
+      SizeSquare(ring.shape, spec.diameter);
+      ring.shape.StrokeThickness(spec.stroke);
+      Canvas::SetLeft(ring.shape, cx - spec.diameter / 2);
+      Canvas::SetTop(ring.shape, cy - spec.diameter / 2);
+    }
     ApplyPoint(p);
   }
+}
+
+// The rings a point wears, rebuilt only when its extender set actually
+// changed. Sizing is Layout's job (the cell is not known here); this owns how
+// many shapes exist and what colour each carries.
+void ConnectCanvas::RebuildRings(GridDot& p) {
+  for (DotRing& ring : p.rings) {
+    uint32_t index = 0;
+    if (pointCanvas_.Children().IndexOf(ring.shape, index)) {
+      pointCanvas_.Children().RemoveAt(index);
+    }
+  }
+  p.rings.clear();
+  if (p.marks.empty()) return;
+
+  // cell_ may be 0 before the first layout; the geometry only decides how MANY
+  // rings there are here, and a zero cell would answer "none" for a point that
+  // has extenders. Ask with a nominal cell and let LayoutPoints do the sizing.
+  const ExtenderRingLayout layout =
+      ExtenderRingsFor(0 < cell_ ? cell_ : kIpFamilyDefaultCanvasSide, p.marks);
+  for (const ExtenderRing& spec : layout.rings) {
+    DotRing ring;
+    ring.shape = shapes::Ellipse();
+    ring.shape.IsHitTestVisible(false);
+    ring.shape.Fill(Brush{nullptr});  // hollow: the dot inside it is the fill
+    // K3: the SDK computed the colour; every app draws the value as given. An
+    // address the SDK sent no colour for is drawn muted rather than in a hue
+    // this app invented, which would be a different extender's colour to a
+    // user comparing two machines.
+    ring.color = spec.hasColor ? winrt::Windows::UI::Color{255, spec.color.r, spec.color.g,
+                                                           spec.color.b}
+                               : colors::kTextMuted;
+    ring.brush = SolidColorBrush(ring.color);
+    ring.shape.Stroke(ring.brush);
+    ring.shape.StrokeThickness(spec.stroke);
+    if (spec.dashed) {
+      DoubleCollection dashes;
+      dashes.Append(kExtenderRingDashOn);
+      dashes.Append(kExtenderRingDashOff);
+      ring.shape.StrokeDashArray(dashes);
+      ring.shape.StrokeDashCap(PenLineCap::Round);
+    }
+    ring.scale = ScaleTransform();
+    ring.scale.ScaleX(0);
+    ring.scale.ScaleY(0);
+    ring.shape.RenderTransformOrigin(Point{0.5f, 0.5f});
+    ring.shape.RenderTransform(ring.scale);
+    pointCanvas_.Children().Append(ring.shape);
+    p.rings.push_back(std::move(ring));
+  }
+}
+
+void ConnectCanvas::RemoveDot(GridDot& p) {
+  uint32_t index = 0;
+  if (p.dot && pointCanvas_.Children().IndexOf(p.dot, index)) {
+    pointCanvas_.Children().RemoveAt(index);
+  }
+  for (DotRing& ring : p.rings) {
+    if (pointCanvas_.Children().IndexOf(ring.shape, index)) {
+      pointCanvas_.Children().RemoveAt(index);
+    }
+  }
+  p.rings.clear();
 }
 
 // ---- grid feed ------------------------------------------------------------
@@ -549,6 +627,11 @@ void ConnectCanvas::SetGrid(std::vector<urnet::ProviderGridPoint> const& incomin
                                 ? *point.ClientId
                                 : std::to_string(point.X) + "," + std::to_string(point.Y);
     const PointState state = ParsePointState(point.State);
+    // K1: the extenders carrying THIS CLIENT's live transports to that exit,
+    // never extenders the provider itself may use. Usually none; one or two
+    // when the route goes through one, briefly more during a migration.
+    std::vector<ExtenderMark> marks =
+        PairExtenderMarks(point.ExtenderIps, point.ExtenderColorHexes);
     auto it = points_.find(key);
     if (it == points_.end()) {
       if (kMaxPoints <= points_.size()) continue;
@@ -569,8 +652,10 @@ void ConnectCanvas::SetGrid(std::vector<urnet::ProviderGridPoint> const& incomin
       p.colorProgress = 1;
       p.sizeProgress = 0;  // grow in
       p.seen = true;
+      p.marks = std::move(marks);
       pointCanvas_.Children().Append(p.dot);
-      points_.emplace(key, p);
+      auto inserted = points_.emplace(key, std::move(p));
+      RebuildRings(inserted.first->second);
     } else {
       GridDot& p = it->second;
       p.seen = true;
@@ -580,6 +665,13 @@ void ConnectCanvas::SetGrid(std::vector<urnet::ProviderGridPoint> const& incomin
         p.previous = p.state;
         p.state = state;
         p.colorProgress = 0;
+      }
+      // A migration swaps one extender for another without the provider ever
+      // leaving the grid, so the ring set has to follow the push rather than
+      // only the first sighting.
+      if (p.marks != marks) {
+        p.marks = std::move(marks);
+        RebuildRings(p);
       }
     }
   }
@@ -607,14 +699,27 @@ void ConnectCanvas::SetGrid(std::vector<urnet::ProviderGridPoint> const& incomin
 void ConnectCanvas::ApplyPoint(GridDot& p) {
   if (!p.brush || !p.scale) return;
   const auto target = ColorForPointState(p.state);
-  p.brush.Color(p.colorProgress < 1
-                    ? Blend(ColorForPointState(p.previous), target, p.colorProgress)
-                    : target);
+  const auto current = p.colorProgress < 1
+                           ? Blend(ColorForPointState(p.previous), target, p.colorProgress)
+                           : target;
+  p.brush.Color(current);
   // the view model's own easeInOut, applied to the grow-in
   const double t = p.sizeProgress;
   const double eased = t < 0.5 ? 4 * t * t * t : 1 - std::pow(-2 * t + 2, 3) / 2;
   p.scale.ScaleX(eased);
   p.scale.ScaleY(eased);
+  // The rings animate WITH the dot (K2), so they take the same eased scale and
+  // the dot's alpha. The alpha is what makes a Removed provider's rings leave
+  // with it: ColorForPointState(Removed) is the ground colour at alpha 0, and
+  // a ring that kept its own opaque brush would hang in the air after the dot
+  // it belonged to had gone.
+  for (DotRing& ring : p.rings) {
+    if (!ring.scale || !ring.brush) continue;
+    ring.scale.ScaleX(eased);
+    ring.scale.ScaleY(eased);
+    ring.brush.Color(winrt::Windows::UI::Color{current.A, ring.color.R, ring.color.G,
+                                               ring.color.B});
+  }
 }
 
 void ConnectCanvas::Tick() {
@@ -638,10 +743,7 @@ void ConnectCanvas::Tick() {
   for (auto const& id : settled) {
     auto it = points_.find(id);
     if (it == points_.end()) continue;
-    uint32_t index = 0;
-    if (pointCanvas_.Children().IndexOf(it->second.dot, index)) {
-      pointCanvas_.Children().RemoveAt(index);
-    }
+    RemoveDot(it->second);
     points_.erase(it);
   }
   animating_ = stillAnimating;
