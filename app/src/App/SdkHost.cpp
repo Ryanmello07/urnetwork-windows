@@ -3539,6 +3539,12 @@ bool SdkHost::SetNetExtender(const std::optional<urnet::NetExtender>& value) {
     if (auto it = document.find("key"); it != document.end() && !it->is_null()) {
       it->get_to(key);
     }
+    if (!key.host_name || key.host_name->empty()) {
+      // A default-constructed key names a DIFFERENT space, so an unreadable
+      // one must refuse rather than write the private extender somewhere else.
+      LogWarn("sdkhost: set net extender refused: the space json carries no key");
+      return false;
+    }
     urnet::NetworkSpaceValues values{};
     if (auto it = document.find("values"); it != document.end() && !it->is_null()) {
       it->get_to(values);
