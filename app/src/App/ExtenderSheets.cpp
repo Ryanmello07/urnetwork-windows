@@ -629,10 +629,14 @@ void ExtenderImportSheet::ApplyDecision() {
   }
 
   // A payload that did not parse says so; a foreign one says so in the line
-  // above, which is its own message and not an error about the text.
-  if (haveText && !decoded_.ok && !decision.showForeignHost) {
+  // above, which is its own message and not an error about the text. Anything
+  // else CLEARS the line: without the else the verdict on a rejected paste
+  // stayed on screen under the next, valid one.
+  if (!haveText) {
+    statusText_.Visibility(Visibility::Collapsed);
+  } else if (!decoded_.ok && !decision.showForeignHost) {
     ShowMessage(Loc(decision.messageKey), /*danger=*/true);
-  } else if (!haveText) {
+  } else if (!(confirmArmed_ && decision.needsConfirm)) {
     statusText_.Visibility(Visibility::Collapsed);
   }
 
@@ -713,6 +717,10 @@ void ExtenderImportSheet::ApplyImportResult(ExtenderImportResultView const& resu
     importButton_.IsEnabled(false);
     return;
   }
+  // ApplyDecision FIRST, then the verdict: it re-enables the button and owns
+  // the status line, so showing the failure before it would be showing it to a
+  // line that is about to be cleared.
+  ApplyDecision();
   if (outcome.messageKey == "import_extenders_foreign_host") {
     ShowMessage(hstring{urnw::Format("import_extenders_foreign_host",
                                      urnw::Widen(decoded_.networkHost))},
@@ -720,7 +728,6 @@ void ExtenderImportSheet::ApplyImportResult(ExtenderImportResultView const& resu
   } else {
     ShowMessage(Loc(outcome.messageKey), /*danger=*/true);
   }
-  ApplyDecision();
 }
 
 void ExtenderImportSheet::ShowMessage(hstring const& message, bool danger) {
