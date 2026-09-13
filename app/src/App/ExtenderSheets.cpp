@@ -285,7 +285,14 @@ winrt::fire_and_forget ExtenderShareSheet::Rebuild() {
       if (const auto result = vc->buildShare(includeSettings)) {
         text = result->Text;
         count = result->Count;
+      } else {
+        // A call that returned nothing is a failure, not an empty share: a
+        // blank frame with no line under it is indistinguishable from a space
+        // that genuinely knows no extenders yet, and those are different.
+        failed = true;
       }
+    } else {
+      failed = true;
     }
   } catch (const std::exception& e) {
     LogWarn("extender: build share failed: {}", e.what());
