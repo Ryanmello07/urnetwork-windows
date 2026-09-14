@@ -429,6 +429,7 @@ WalletPage::~WalletPage() {
   if (rankingFlow_.timer) rankingFlow_.timer.Stop();
   if (pointsPublicFlow_.timer) pointsPublicFlow_.timer.Stop();
   if (legacyFlow_.timer) legacyFlow_.timer.Stop();
+  if (removeFlow_.timer) removeFlow_.timer.Stop();
   try {
     ClosePointsBoard(/*deviceAlive=*/true);
   } catch (...) {
@@ -1469,9 +1470,15 @@ void WalletPage::RebuildSolanaPanel() {
   w_.SolanaMoreButton().IsEnabled(!legacyBusy_);
 }
 
+// While a payout switch or a removal is out, every door to another Solana write
+// is shut: the card's overflow, and both Bittensor-row overflows that hold
+// "Connect Solana wallet". A link racing the removal of the same wallet could end
+// with no payout wallet after "Payout wallet updated".
 void WalletPage::SetLegacyBusy(bool busy) {
   legacyBusy_ = busy;
   w_.SolanaMoreButton().IsEnabled(!busy);
+  w_.WalletMoreButton().IsEnabled(!busy);
+  w_.WalletMoreConnectedButton().IsEnabled(!busy);
 }
 
 void WalletPage::OnWalletMore(IInspectable const& sender, RoutedEventArgs const&) {
@@ -1486,6 +1493,7 @@ void WalletPage::ShowWalletMenu(FrameworkElement const& anchor) {
   MenuFlyout flyout;
   MenuFlyoutItem connect;
   connect.Text(Loc("connect_solana_wallet"));
+  connect.IsEnabled(!legacyBusy_);  // no link while a switch or a removal is out
   connect.Click([weak = w_.get_weak()](IInspectable const&, RoutedEventArgs const&) {
     if (auto self = weak.get()) self->wallet().OpenConnectSolanaSheet();
   });
@@ -1495,6 +1503,8 @@ void WalletPage::ShowWalletMenu(FrameworkElement const& anchor) {
 
 winrt::fire_and_forget WalletPage::OpenConnectSolanaSheet() {
   if (w_.sheetOpen()) co_return;  // only one ContentDialog can show at a time
+  // not while a payout switch or a removal is out (SetLegacyBusy): a link would race it
+  if (legacyBusy_) co_return;
   // The sheet ends in a server write and opens a BROWSER on the way there, so
   // with no session it does not open - except under --preview-ui, where it opens
   // READABLE with its actions disabled, like the claim dialog.
@@ -1685,7 +1695,7 @@ void WalletPage::RemoveSolanaWallet(std::string const& walletId) {
   }
   SetLegacyBusy(true);
   const uint32_t generation =
-      BeginFlow(legacyFlow_, kApiTimeoutMs, [weak = w_.get_weak()] {
+      BeginFlow(removeFlow_, kApiTimeoutMs, [weak = w_.get_weak()] {
         if (auto self = weak.get()) {
           auto& page = self->wallet();
           page.SetLegacyBusy(false);
@@ -1713,7 +1723,7 @@ void WalletPage::RemoveSolanaWallet(std::string const& walletId) {
 }
 
 void WalletPage::ApplyRemoveResult(uint32_t generation, bool ok, std::string const& error) {
-  if (!SettleFlow(legacyFlow_, generation)) {
+  if (!SettleFlow(removeFlow_, generation)) {
     urnw::LogWarn("earnings: dropping a remove result for an abandoned request (ok={})", ok);
     return;
   }

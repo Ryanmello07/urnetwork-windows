@@ -360,8 +360,11 @@ class WalletPage {
   solana::LegacyCommitted legacy_;
   solana::LegacyLoad legacyLoad_;
   uint32_t legacyGeneration_ = 0;
-  bool legacyBusy_ = false;  // a payout switch or a removal is out
-  Flow legacyFlow_;
+  // a payout switch or a removal is out: every door to another Solana write is
+  // shut (SetLegacyBusy)
+  bool legacyBusy_ = false;
+  Flow legacyFlow_;  // the payout read and switch after a link
+  Flow removeFlow_;  // the removal, on its own flow: a link must never drop its answer
   std::shared_ptr<urnw::ConnectSolanaWalletSheet> solanaSheet_;
 
   struct PointsStatTile {
