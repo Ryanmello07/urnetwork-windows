@@ -31,10 +31,16 @@ enum class ThroughputRoute { Remote, Local, Block };
 
 class TransferChart {
  public:
+  // What the count rows count. Packets everywhere but the extender chart,
+  // whose series counts relay reads: a byte stream has no packet boundary in
+  // userspace, so its rows read reads/s (connect/EXTENDER.md O1, O8).
+  enum class CountUnit { Packets, Reads };
+
   TransferChart(winrt::Microsoft::UI::Xaml::Controls::Grid const& host,
                 std::wstring title, ThroughputRoute route,
                 winrt::Windows::UI::Color byteColor,
-                winrt::Windows::UI::Color packetColor);
+                winrt::Windows::UI::Color packetColor,
+                CountUnit countUnit = CountUnit::Packets);
 
   // Replace the point series (SDK point times are unix milliseconds).
   void SetPoints(const std::vector<urnet::ThroughputPoint>& points, int64_t windowSeconds);
@@ -88,6 +94,9 @@ class TransferChart {
   ThroughputRoute route_;
   winrt::Windows::UI::Color byteColor_;
   winrt::Windows::UI::Color packetColor_;
+  CountUnit countUnit_;
+  // the localized reads/s, read once like the title; empty for packets
+  std::string readUnit_;
 
   std::vector<Entry> entries_;   // ascending by time
   double window_ = 60;           // seconds

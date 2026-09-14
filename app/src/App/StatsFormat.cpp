@@ -92,6 +92,10 @@ std::string FormatPacketRate(int64_t packetsPerSecond) {
   return FormatCountCompact(packetsPerSecond) + " pkt/s";
 }
 
+std::string FormatCountRate(int64_t count, std::string const& unit) {
+  return FormatCountCompact(count) + " " + unit;
+}
+
 std::string FormatBitRate(int64_t bitsPerSecond) {
   const double v = static_cast<double>(bitsPerSecond);
   if (v < 1000) return std::to_string(bitsPerSecond) + " bps";
