@@ -796,6 +796,10 @@ maneira certa</value>
     <value>Parceiro</value>
     <comment>A label displayed next to a companion contract.</comment>
   </data>
+  <data name="confirm_seeker_token" xml:space="preserve">
+    <value>Confirmar Token Seeker</value>
+    <comment>Used in Main/Account/Settings/SettingsView.swift.</comment>
+  </data>
   <data name="conn_connect_on_launch" xml:space="preserve">
     <value>Ligar automaticamente ao iniciar a app</value>
     <comment>Settings: switch that connects automatically when the app starts.</comment>

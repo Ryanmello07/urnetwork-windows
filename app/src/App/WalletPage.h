@@ -88,9 +88,6 @@ class WalletPage {
   // The statistics charts' clock runs only while the window presents, as the
   // Connect page's does.
   void SetPresentationActive(bool active);
-  // Close the provider transport sheet if it is open: the window is hiding to
-  // the tray, and the sheet must not come back on a draft read before the hide.
-  void CloseProviderTransportSheet();
 
   // Every Earnings fetch: points, the Seeker flag, reliability, the epoch
   // history, the coldkey, the head-spot status - and, once the coldkey is

@@ -788,6 +788,10 @@
     <value>对端</value>
     <comment>A label displayed next to a companion contract.</comment>
   </data>
+  <data name="confirm_seeker_token" xml:space="preserve">
+    <value>确认 Seeker 令牌</value>
+    <comment>Used in Main/Account/Settings/SettingsView.swift.</comment>
+  </data>
   <data name="conn_connect_on_launch" xml:space="preserve">
     <value>应用启动时自动连接</value>
     <comment>Settings: switch that connects automatically when the app starts.</comment>

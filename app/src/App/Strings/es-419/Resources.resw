@@ -536,6 +536,10 @@ de la manera correcta</value>
     <value>Compañero</value>
     <comment>A label displayed next to a companion contract.</comment>
   </data>
+  <data name="confirm_seeker_token" xml:space="preserve">
+    <value>Confirmar Token de Seeker</value>
+    <comment>Used in Main/Account/Settings/SettingsView.swift.</comment>
+  </data>
   <data name="connect" xml:space="preserve">
     <value>Conectar</value>
     <comment>Button text to connect to URnetwork VPN</comment>
