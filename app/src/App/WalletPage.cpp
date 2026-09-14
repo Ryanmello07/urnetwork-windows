@@ -321,8 +321,8 @@ bool PreviewSample() {
 // URNETWORK_PREVIEW_SOLANA=1, with --preview-ui on: a synthetic Solana payout
 // wallet and 3.87 USDC waiting, committed through the same LegacyLoad the api
 // path uses, so the card, its overflow and the remove confirmation can be looked at.
-// Its own switch rather than part of the sample above, because with it OFF the
-// waiting line and the plain Bittensor block are what there is to look at.
+// Its own switch rather than part of the sample above, so the plain Bittensor
+// block can still be looked at; URNETWORK_PREVIEW_USDC_WAITING shows the line.
 constexpr const char* kSampleSolanaWalletId = "sample-solana-payout-wallet";
 constexpr const char* kSampleSolanaAddress = "7Xk9SAMPLEpayoutWALLETnotREAL1111113fQa";
 constexpr int64_t kSampleUsdcWaitingNanoCents = 3'870'000'000;
@@ -338,6 +338,28 @@ bool PreviewSolana() {
     if (enabled) {
       urnw::LogWarn(
           "preview-solana: rendering a SYNTHETIC Solana payout wallet and USDC total - "
+          "none of this came from the api");
+    }
+    return enabled;
+  }();
+  return on;
+}
+
+// URNETWORK_PREVIEW_USDC_WAITING=1, with --preview-ui on: the same 3.87 USDC
+// waiting with no Solana payout wallet - the emailed user's state, the line
+// above the Bittensor action. URNETWORK_PREVIEW_SOLANA wins when both are set.
+bool PreviewUsdcWaiting() {
+  static const bool on = [] {
+    size_t len = 0;
+    char value[16]{};
+    if (getenv_s(&len, value, sizeof(value), "URNETWORK_PREVIEW_USDC_WAITING") != 0 ||
+        len == 0) {
+      return false;
+    }
+    const bool enabled = std::string_view(value) == "1";
+    if (enabled) {
+      urnw::LogWarn(
+          "preview-usdc-waiting: rendering a SYNTHETIC USDC total with no payout wallet - "
           "none of this came from the api");
     }
     return enabled;
@@ -539,13 +561,15 @@ void WalletPage::ApplyStrings() {
                                             Loc("earnings_address_placeholder"));
   w_.ConnectAddressButton().Content(LocBox("connect"));
   // the Solana payout wallet, and the wallet overflows (icon-only: a glyph is
-  // not a name)
+  // not a name, so each gets the name, and the same words as its tooltip)
   w_.SolanaWalletNote().Text(Loc("usdc_payouts_until_migration"));
   w_.SolanaDefaultTagText().Text(Upper(Loc("default_wallet")));
   const hstring walletOptions = Loc("wallet_options");
-  automation::AutomationProperties::SetName(w_.WalletMoreButton(), walletOptions);
-  automation::AutomationProperties::SetName(w_.WalletMoreConnectedButton(), walletOptions);
-  automation::AutomationProperties::SetName(w_.SolanaMoreButton(), walletOptions);
+  for (Button const more :
+       {w_.WalletMoreButton(), w_.WalletMoreConnectedButton(), w_.SolanaMoreButton()}) {
+    automation::AutomationProperties::SetName(more, walletOptions);
+    ToolTipService::SetToolTip(more, winrt::box_value(walletOptions));
+  }
   w_.UnclaimedHeading().Text(Loc("unclaimed"));
   w_.ClaimButton().Content(LocBox("claim"));
   w_.Top200Heading().Text(Loc("top200"));
@@ -1541,6 +1565,8 @@ winrt::fire_and_forget WalletPage::OpenConnectSolanaSheet() {
 void WalletPage::OnSolanaConnected(std::string const& walletId) {
   if (!CanCallApi()) {
     RefuseNoSession();
+    // the wallet may be linked all the same: show what the reads say
+    LoadLegacyWallets(/*reset=*/true);
     return;
   }
   SetLegacyBusy(true);
@@ -2251,7 +2277,8 @@ void WalletPage::ShowPreviewSnackbar() {
 // like. Settle them all on their empty state instead.
 void WalletPage::ShowPreviewWalletState() {
   // The Solana payout wallet settles either way: on the synthetic card with
-  // URNETWORK_PREVIEW_SOLANA=1, on its collapsed empty state otherwise. The
+  // URNETWORK_PREVIEW_SOLANA=1, on the waiting line alone with
+  // URNETWORK_PREVIEW_USDC_WAITING=1, on its collapsed empty state otherwise. The
   // answers go through the same LegacyLoad the api path commits with.
   solana::BeginLegacyLoad(legacy_, std::string(), /*reset=*/true);
   legacyLoad_ = solana::LegacyLoad(++legacyGeneration_);
@@ -2267,6 +2294,10 @@ void WalletPage::ShowPreviewWalletState() {
     wallet.active = true;
     wallets.wallets.push_back(wallet);
     payout.payoutId = kSampleSolanaWalletId;
+    solana::HeldPayment held;
+    held.payoutNanoCents = kSampleUsdcWaitingNanoCents;
+    payments.payments.push_back(held);
+  } else if (PreviewUsdcWaiting()) {
     solana::HeldPayment held;
     held.payoutNanoCents = kSampleUsdcWaitingNanoCents;
     payments.payments.push_back(held);

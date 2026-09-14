@@ -85,12 +85,9 @@ struct HeldPayment {
 // of them.
 int64_t PendingUsdcNanoCents(const std::vector<HeldPayment>& payments);
 
-// USD from nano cents: 1 USD is 1e9 of them (sdk.go NanoCentsToUsd), the scale
-// urnet::nanoCentsToUsd uses, mirrored so this unit needs no SDK.
-double NanoCentsToUsd(int64_t nanoCents);
-
-// "3.87": two decimals, rounded half away from zero to the cent in integer
-// arithmetic, so a total never prints as 3.869999.
+// "3.87" from nano cents (1 USD is 1e9 of them, sdk.go NanoCentsToUsd): two
+// decimals, rounded half away from zero to the cent in integer arithmetic, so a
+// total never prints as 3.869999.
 std::string FormatUsd(int64_t nanoCents);
 
 // Whether a total is worth a line: it still reads above zero at two decimals.

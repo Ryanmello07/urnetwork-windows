@@ -1996,10 +1996,10 @@
                                                    Style="{StaticResource UrRowNoteStyle}"
                                                    TextTrimming="None" />
                                         <!-- change, and the wallet overflow beside it. The pane
-                                             action styles inset a button by 12 on every side;
-                                             the overflow drops its left inset so the pair reads
-                                             as one row -->
-                                        <Grid ColumnSpacing="8">
+                                             action styles inset a button by 12 on every side, so
+                                             with no column spacing and no left inset on the
+                                             overflow the two sit the pane's 12 apart -->
+                                        <Grid ColumnSpacing="0">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*" />
                                                 <ColumnDefinition Width="Auto" />
@@ -2011,7 +2011,6 @@
                                             <Button x:Name="WalletMoreConnectedButton" Grid.Column="1"
                                                     Style="{StaticResource UrPaneActionSecondaryStyle}"
                                                     MinWidth="44" Padding="0" Margin="0,12,12,12"
-                                                    VerticalAlignment="Stretch"
                                                     Click="OnWalletMore">
                                                 <FontIcon FontFamily="{StaticResource UrIconFontFamily}"
                                                           Glyph="&#xE712;" FontSize="16" />
@@ -2039,7 +2038,7 @@
                                                    TextWrapping="Wrap" TextTrimming="None"><Run x:Name="WalletNotRetroactiveRun" /><Run Text="&#xA0;" /><Hyperlink Foreground="{StaticResource UrPinkBrush}" UnderlineStyle="None" Click="OnWalletLearnMore"><Run x:Name="WalletLearnMoreRun" /><Run Text="&#xA0;" /><Run FontFamily="{StaticResource UrIconFontFamily}" Text="&#xE8A7;" /></Hyperlink></TextBlock>
                                         <!-- the bridge button, and the wallet overflow beside
                                              it (inset as in the connected panel) -->
-                                        <Grid ColumnSpacing="8">
+                                        <Grid ColumnSpacing="0">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*" />
                                                 <ColumnDefinition Width="Auto" />
@@ -2051,7 +2050,6 @@
                                             <Button x:Name="WalletMoreButton" Grid.Column="1"
                                                     Style="{StaticResource UrPaneActionSecondaryStyle}"
                                                     MinWidth="44" Padding="0" Margin="0,12,12,12"
-                                                    VerticalAlignment="Stretch"
                                                     Click="OnWalletMore">
                                                 <FontIcon FontFamily="{StaticResource UrIconFontFamily}"
                                                           Glyph="&#xE712;" FontSize="16" />
@@ -2109,19 +2107,21 @@
                                                            FontSize="16" FontWeight="Bold"
                                                            Foreground="{StaticResource UrTextMutedBrush}" />
                                             </Border>
+                                            <!-- the header command style is 28 x 24: 44 x 32
+                                                 is a steadier target beside the DEFAULT chip -->
                                             <Button x:Name="SolanaMoreButton" Grid.Column="2"
                                                     Style="{StaticResource UrPaneActionButtonStyle}"
-                                                    MinWidth="44"
+                                                    MinWidth="44" Height="32"
                                                     Click="OnSolanaWalletMore">
                                                 <FontIcon FontFamily="{StaticResource UrIconFontFamily}"
                                                           Glyph="&#xE712;" FontSize="16" />
                                             </Button>
                                         </Grid>
-                                        <!-- the short form; the tooltip and the accessible
+                                        <!-- the short form, not selectable: copying it would
+                                             not yield an address. The tooltip and the accessible
                                              name carry the full address -->
                                         <TextBlock x:Name="SolanaAddressText"
-                                                   Style="{StaticResource UrKeyTextStyle}"
-                                                   IsTextSelectionEnabled="True" />
+                                                   Style="{StaticResource UrKeyTextStyle}" />
                                         <TextBlock x:Name="SolanaWalletNote" TextWrapping="Wrap"
                                                    Style="{StaticResource UrRowNoteStyle}"
                                                    TextTrimming="None" />

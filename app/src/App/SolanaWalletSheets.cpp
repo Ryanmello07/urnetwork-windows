@@ -4,6 +4,7 @@
 #include "SolanaWalletSheets.h"
 
 #include <winrt/Microsoft.UI.Xaml.Automation.h>
+#include <winrt/Microsoft.UI.Xaml.Automation.Peers.h>
 #include <winrt/Microsoft.UI.Xaml.Media.h>
 
 #include <chrono>
@@ -26,6 +27,9 @@ using namespace urnw::pages;
 
 namespace urnw {
 namespace {
+
+namespace automation = winrt::Microsoft::UI::Xaml::Automation;
+namespace peers = winrt::Microsoft::UI::Xaml::Automation::Peers;
 
 // The wallet bridge opens a browser and the user may take a while in it; a
 // plain api call does not. (WalletPage's two values.)
@@ -70,6 +74,17 @@ ColumnDefinition StarColumn() {
 // the machine's store key as a line, "" for none
 hstring KeyText(const char* key) {
   return (key == nullptr || *key == '\0') ? hstring{} : Loc(key);
+}
+
+// The status and the failure lines are live regions, so a screen reader hears a
+// new text without moving to it. WinUI announces a live region only when its
+// peer raises LiveRegionChanged, and a peer exists only while assistive
+// technology is asking.
+void AnnounceIfChanged(TextBlock const& line, hstring const& before) {
+  if (line.Text().empty() || line.Text() == before) return;
+  if (auto peer = peers::FrameworkElementAutomationPeer::FromElement(line)) {
+    peer.RaiseAutomationEvent(peers::AutomationEvents::LiveRegionChanged);
+  }
 }
 
 }  // namespace
@@ -136,6 +151,8 @@ void ConnectSolanaWalletSheet::Build(XamlRoot const& root) {
   // the sheet is waiting for it to come back, or the account is being written.
   statusText_ = StyledText(hstring{}, L"UrRowNoteStyle", /*wrap=*/true);
   statusText_.Visibility(Visibility::Collapsed);
+  automation::AutomationProperties::SetLiveSetting(statusText_,
+                                                   peers::AutomationLiveSetting::Polite);
   content.Children().Append(statusText_);
 
   // a pasted address, folded under a link
@@ -155,8 +172,7 @@ void ConnectSolanaWalletSheet::Build(XamlRoot const& root) {
   addressBox_.Style(rows::Lookup(L"UrTextInputStyle"));
   addressBox_.PlaceholderText(Loc("enter_a_solana_usdc_wallet_address"));
   // a placeholder is not a name
-  winrt::Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(
-      addressBox_, Loc("usdc_wallet_address"));
+  automation::AutomationProperties::SetName(addressBox_, Loc("usdc_wallet_address"));
   addressBox_.TextChanged([weak = weak_from_this()](auto const&, auto const&) {
     if (auto self = weak.lock()) self->OnAddressChanged();
   });
@@ -178,6 +194,8 @@ void ConnectSolanaWalletSheet::Build(XamlRoot const& root) {
   errorText_ = StyledText(hstring{}, L"UrRowNoteStyle", /*wrap=*/true);
   errorText_.Foreground(colors::DangerBrush());
   errorText_.Visibility(Visibility::Collapsed);
+  automation::AutomationProperties::SetLiveSetting(errorText_,
+                                                   peers::AutomationLiveSetting::Assertive);
   content.Children().Append(errorText_);
 
   dialog_.Content(content);
@@ -406,16 +424,20 @@ void ConnectSolanaWalletSheet::Render() {
   addressBox_.IsEnabled(solana::EntryEnabled(machine_));
   connectButton_.IsEnabled(allowActions_ && solana::ConnectEnabled(machine_));
 
+  const hstring statusBefore = statusText_.Text();
   kit::SetTextOrCollapse(statusText_, KeyText(solana::StatusKey(machine_)));
+  AnnounceIfChanged(statusText_, statusBefore);
 
   // muted while checking, danger for a refusal
   kit::SetTextOrCollapse(verdictText_, KeyText(solana::CheckKey(machine_)));
   verdictText_.Foreground(solana::CheckIsError(machine_) ? colors::DangerBrush()
                                                          : colors::MutedBrush());
 
+  const hstring failureBefore = errorText_.Text();
   kit::SetTextOrCollapse(errorText_, machine_.state == solana::ConnectState::Failed
                                          ? SolanaFailureText(machine_.detail)
                                          : hstring{});
+  AnnounceIfChanged(errorText_, failureBefore);
 }
 
 }  // namespace urnw

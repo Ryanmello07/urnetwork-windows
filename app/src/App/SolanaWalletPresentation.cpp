@@ -119,10 +119,6 @@ int64_t PendingUsdcNanoCents(const std::vector<HeldPayment>& payments) {
   return total;
 }
 
-double NanoCentsToUsd(int64_t nanoCents) {
-  return static_cast<double>(nanoCents) / 1'000'000'000.0;
-}
-
 std::string FormatUsd(int64_t nanoCents) {
   const uint64_t cents = RoundedCents(nanoCents);
   char buffer[32];

@@ -17,11 +17,9 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-#include <cmath>
 #include <cstdint>
 #include <iostream>
 #include <optional>
-#include <sstream>
 #include <string>
 #include <vector>
 
@@ -43,14 +41,6 @@ void Fail(const std::string& message) {
 
 void Check(bool condition, const std::string& message) {
   if (!condition) Fail(message);
-}
-
-void CheckNear(double expected, double actual, double tolerance, const std::string& what) {
-  if (!(std::fabs(expected - actual) <= tolerance)) {
-    std::ostringstream out;
-    out << what << ": expected " << expected << " +/- " << tolerance << ", got " << actual;
-    Fail(out.str());
-  }
 }
 
 void CheckEq(const std::string& expected, const std::string& actual,
@@ -282,11 +272,6 @@ void PendingTests() {
     CheckEq("100.00", FormatUsd(100'000'000'000), "whole dollars keep two places");
     CheckEq("-3.87", FormatUsd(-3'870'000'000), "negative");
     CheckEq("0.00", FormatUsd(-4'999'999), "a negative that rounds to zero has no sign");
-  }
-  {
-    TEST_CASE("theScaleIsTheSdks");
-    CheckNear(3.87, NanoCentsToUsd(3'870'000'000), 1e-12, "3'870'000'000 nano cents");
-    CheckNear(1.0, NanoCentsToUsd(1'000'000'000), 1e-12, "1e9 nano cents is a dollar");
   }
   {
     TEST_CASE("subCentTotalsAreNotWaiting");
