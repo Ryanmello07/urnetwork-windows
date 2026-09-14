@@ -2994,6 +2994,16 @@ void SdkHost::SubscribeDrawer() {
       [this](std::optional<urnet::ExtenderStatus> status) {
         PublishExtenderStatus(std::move(status));
       }));
+  // The provider extender role on this device (EXTENDER.md N2, N7): its status
+  // and, read beside it, its setting. Relayed by the DeviceRemote through the
+  // rpc listener registry with the last value cached, like the extender status
+  // above; the device emits at most one status a second. A device process too
+  // old to have the listener keeps its session and reports the role
+  // unsupported, which hides the rows.
+  presentationSubs_.push_back(device_->addExtenderProvideStatusChangeListener(
+      [this](std::optional<urnet::ExtenderProvideStatus> status) {
+        PublishExtenderProvideStatus(std::move(status));
+      }));
   // The view controller behind the account section (K6, K7). Opened with the
   // rest of the drawer so its lifetime is the session's, and deliberately NOT
   // started: start() only subscribes it to the device's extender status -- a
@@ -3025,6 +3035,12 @@ void SdkHost::SubscribeDrawer() {
     static std::atomic<bool> loggedExtenderStatus{false};
     PublishExtenderStatus(ReadSdkList(loggedExtenderStatus, "getExtenderStatus",
                                       [&] { return device_->getExtenderStatus(); }));
+  }
+  {
+    static std::atomic<bool> loggedExtenderProvideStatus{false};
+    PublishExtenderProvideStatus(
+        ReadSdkList(loggedExtenderProvideStatus, "getExtenderProvideStatus",
+                    [&] { return device_->getExtenderProvideStatus(); }));
   }
 }
 
@@ -3078,6 +3094,32 @@ void SdkHost::PublishThroughput() {
   TransportDistributionSnapshot distribution = MapTransportDistribution(
       ReadSdkList(loggedDistribution, "getTransportDistribution",
                   [&] { return contractVc_->getTransportDistribution(); }));
+  // The Earnings page's statistics (EXTENDER.md O5, O8), from the same view
+  // controller on the same tick: the provider series, the extender series,
+  // whether provider packet stats exist and the provider distribution. All four
+  // are view-controller reads, answered from its own sampled state without an
+  // rpc. No extender stats are read here: whether the role runs is the pushed
+  // status's `enabled`, and the view controller samples the stats for its
+  // series itself.
+  ProviderThroughputSnapshot provider;
+  provider.windowSeconds = window;
+  static std::atomic<bool> loggedProviderPoints{false};
+  if (auto p = ReadSdkList(loggedProviderPoints, "getProviderThroughputPoints",
+                           [&] { return contractVc_->getProviderThroughputPoints(); }))
+    provider.providerPoints = std::move(*p);
+  static std::atomic<bool> loggedExtenderPoints{false};
+  if (auto p = ReadSdkList(loggedExtenderPoints, "getExtenderThroughputPoints",
+                           [&] { return contractVc_->getExtenderThroughputPoints(); }))
+    provider.extenderPoints = std::move(*p);
+  static std::atomic<bool> loggedProviderStats{false};
+  provider.hasProviderStats =
+      ReadSdkList(loggedProviderStats, "getProviderPacketStats",
+                  [&] { return contractVc_->getProviderPacketStats(); })
+          .has_value();
+  static std::atomic<bool> loggedProviderDistribution{false};
+  TransportDistributionSnapshot providerDistribution = MapTransportDistribution(
+      ReadSdkList(loggedProviderDistribution, "getProviderTransportDistribution",
+                  [&] { return contractVc_->getProviderTransportDistribution(); }));
   bool distributionChanged = false;
   {
     std::scoped_lock lock(drawerMutex_);
@@ -3087,11 +3129,20 @@ void SdkHost::PublishThroughput() {
       lastTransportDistribution_ = distribution;
       distributionChanged = true;
     }
+    lastProviderPoints_ = provider.providerPoints;
+    lastExtenderPoints_ = provider.extenderPoints;
+    lastHasProviderStats_ = provider.hasProviderStats;
+    // published only when it changed, as the client distribution is
+    if (providerDistribution != lastProviderDistribution_) {
+      lastProviderDistribution_ = providerDistribution;
+      provider.providerDistribution = std::move(providerDistribution);
+    }
   }
   if (onThroughput_) onThroughput_(std::move(points), window);
   if (distributionChanged && onTransportDistribution_) {
     onTransportDistribution_(std::move(distribution));
   }
+  if (onProviderThroughput_) onProviderThroughput_(std::move(provider));
 }
 
 void SdkHost::PublishContractRows() {
@@ -3384,12 +3435,26 @@ void SdkHost::ClearDrawer() {
     lastProviderLocations_.clear();
     lastTransportDistribution_ = {};
     lastExtenderStatus_ = {};
+    lastExtenderProvideStatus_ = {};
+    extenderProvideRepublish_ = false;
+    lastProviderPoints_.clear();
+    lastExtenderPoints_.clear();
+    lastHasProviderStats_ = false;
+    lastProviderDistribution_ = {};
   }
   if (onThroughput_) onThroughput_({}, 60);
   if (onTransportDistribution_) onTransportDistribution_({});
   // an empty status, not a stale one: with no session the panel says 0 of 0
   // with a red dot, which is the truth
   if (onExtenderStatus_) onExtenderStatus_({});
+  // with no session there is no role to report: both extender rows hide (N1)
+  if (onExtenderProvideStatus_) onExtenderProvideStatus_({});
+  // and the statistics go back to their gated state, the bar to an empty track
+  if (onProviderThroughput_) {
+    ProviderThroughputSnapshot empty;
+    empty.providerDistribution = TransportDistributionSnapshot{};
+    onProviderThroughput_(std::move(empty));
+  }
   if (onTransportSettings_) {
     onTransportSettings_(TransportSettingsKind::Client, std::nullopt);
     onTransportSettings_(TransportSettingsKind::Provider, std::nullopt);
@@ -3514,6 +3579,66 @@ void SdkHost::PublishExtenderStatus(std::optional<urnet::ExtenderStatus> status)
 ExtenderStatusView SdkHost::CurrentExtenderStatus() {
   std::scoped_lock lock(drawerMutex_);
   return lastExtenderStatus_;
+}
+
+namespace {
+// The SDK's ExtenderProvideStatus onto the plain view both extender rows draw
+// (N7): only the fields the apps read, since the SDK derived the state from the
+// rest once. The setting comes from the caller, read beside the status.
+ExtenderProvideStatusView MapExtenderProvideStatus(
+    std::optional<urnet::ExtenderProvideStatus> const& status, bool provideExtender) {
+  ExtenderProvideStatusView view;
+  view.provideExtender = provideExtender;
+  if (!status) return view;
+  view.supported = status->Supported;
+  view.state = status->State;
+  view.errorCase = status->ErrorCase;
+  view.reason = status->Reason;
+  view.activatedV4 = status->ActivatedV4;
+  view.activatedV6 = status->ActivatedV6;
+  view.refused = status->LastActivationRefused;
+  view.enabled = status->Enabled;
+  return view;
+}
+}  // namespace
+
+void SdkHost::PublishExtenderProvideStatus(std::optional<urnet::ExtenderProvideStatus> status) {
+  // The switch's position is the setting read beside every status (N7). The
+  // DeviceRemote answers it with the queued or last-known value while the device
+  // process is out of contact, so the switch holds through a daemon restart. The
+  // DeviceRemote hands a listener its status after releasing its own lock, so
+  // this read cannot deadlock it. It is made without mutex_, as every listener
+  // callback here reads the device: the subscription is dropped in
+  // ClosePresentationLocked before the device is, and mutex_ is held across a
+  // whole bootstrap.
+  const bool provideExtender = device_ ? device_->getProvideExtender() : false;
+  ExtenderProvideStatusView view = MapExtenderProvideStatus(status, provideExtender);
+  {
+    std::scoped_lock lock(drawerMutex_);
+    // The device emits a complete status at most once a second whether or not
+    // anything moved; an unchanged one stays off the UI thread, unless a write
+    // since the last publish left a guess on screen that only a push replaces.
+    if (view == lastExtenderProvideStatus_ && !extenderProvideRepublish_) return;
+    lastExtenderProvideStatus_ = view;
+    extenderProvideRepublish_ = false;
+  }
+  if (onExtenderProvideStatus_) onExtenderProvideStatus_(std::move(view));
+}
+
+ExtenderProvideStatusView SdkHost::CurrentExtenderProvideStatus() {
+  std::scoped_lock lock(drawerMutex_);
+  return lastExtenderProvideStatus_;
+}
+
+ProviderThroughputSnapshot SdkHost::CurrentProviderThroughput() {
+  std::scoped_lock lock(drawerMutex_);
+  ProviderThroughputSnapshot snapshot;
+  snapshot.providerPoints = lastProviderPoints_;
+  snapshot.extenderPoints = lastExtenderPoints_;
+  snapshot.windowSeconds = throughputWindowSeconds_;
+  snapshot.hasProviderStats = lastHasProviderStats_;
+  snapshot.providerDistribution = lastProviderDistribution_;
+  return snapshot;
 }
 
 std::shared_ptr<urnet::ExtenderViewController> SdkHost::ExtenderController() {
@@ -3744,6 +3869,21 @@ void SdkHost::SetProvideControlMode(const std::string& mode) {
   } catch (const std::exception& e) {
     LogWarn("sdkhost: set provide control mode failed: {}", e.what());
   }
+}
+
+void SdkHost::SetProvideExtender(bool on) {
+  std::scoped_lock lock(mutex_);
+  if (!device_) return;
+  // The device persists it in its space and applies it at once (N4); detached,
+  // the DeviceRemote queues it for the next sync, and a device process with no
+  // setter drops it rather than replaying it on every reconnect.
+  device_->setProvideExtender(on);
+  // The row paints its guess after this returns (N7). The device emits a status
+  // for the write within its one-second epoch, but two flips inside one epoch
+  // can land on the status already published, which the dedup would drop and so
+  // leave the guess standing.
+  std::scoped_lock drawerLock(drawerMutex_);
+  extenderProvideRepublish_ = true;
 }
 
 void SdkHost::ApplyDnsSettings(const urnet::DnsResolverSettings& settings) {
