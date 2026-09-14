@@ -50,10 +50,13 @@ class ConnectSolanaWalletSheet : public std::enable_shared_from_this<ConnectSola
   // the sheet still opens and still READS, but the providers and Connect are
   // disabled and a typed address is checked locally only. `onConnected` fires on
   // the UI thread with the new account wallet's id, just before the sheet
-  // closes itself.
+  // closes itself. `onAbandonedLink` fires when the sheet is dismissed while its
+  // create call is out: that answer will find no sheet, and the wallet may exist
+  // all the same, so the page reloads it.
   static std::shared_ptr<ConnectSolanaWalletSheet> Create(
       winrt::Microsoft::UI::Xaml::XamlRoot const& root, SdkHost& sdk, bool allowActions,
-      std::function<void(std::string walletId)> onConnected);
+      std::function<void(std::string walletId)> onConnected,
+      std::function<void()> onAbandonedLink);
 
   ~ConnectSolanaWalletSheet();
 
@@ -61,7 +64,8 @@ class ConnectSolanaWalletSheet : public std::enable_shared_from_this<ConnectSola
 
  private:
   ConnectSolanaWalletSheet(SdkHost& sdk, bool allowActions,
-                           std::function<void(std::string)> onConnected);
+                           std::function<void(std::string)> onConnected,
+                           std::function<void()> onAbandonedLink);
 
   void Build(winrt::Microsoft::UI::Xaml::XamlRoot const& root);
   void ToggleManual();
@@ -93,6 +97,7 @@ class ConnectSolanaWalletSheet : public std::enable_shared_from_this<ConnectSola
   SdkHost& sdk_;
   bool allowActions_ = false;
   std::function<void(std::string)> onConnected_;
+  std::function<void()> onAbandonedLink_;
   solana::ConnectMachine machine_;
   bool manualOpen_ = false;
   bool closed_ = false;

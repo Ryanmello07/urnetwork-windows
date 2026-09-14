@@ -96,16 +96,20 @@ hstring SolanaFailureText(std::string const& detail) {
 
 std::shared_ptr<ConnectSolanaWalletSheet> ConnectSolanaWalletSheet::Create(
     XamlRoot const& root, SdkHost& sdk, bool allowActions,
-    std::function<void(std::string)> onConnected) {
-  auto sheet = std::shared_ptr<ConnectSolanaWalletSheet>(
-      new ConnectSolanaWalletSheet(sdk, allowActions, std::move(onConnected)));
+    std::function<void(std::string)> onConnected, std::function<void()> onAbandonedLink) {
+  auto sheet = std::shared_ptr<ConnectSolanaWalletSheet>(new ConnectSolanaWalletSheet(
+      sdk, allowActions, std::move(onConnected), std::move(onAbandonedLink)));
   sheet->Build(root);
   return sheet;
 }
 
 ConnectSolanaWalletSheet::ConnectSolanaWalletSheet(SdkHost& sdk, bool allowActions,
-                                                   std::function<void(std::string)> onConnected)
-    : sdk_(sdk), allowActions_(allowActions), onConnected_(std::move(onConnected)) {}
+                                                   std::function<void(std::string)> onConnected,
+                                                   std::function<void()> onAbandonedLink)
+    : sdk_(sdk),
+      allowActions_(allowActions),
+      onConnected_(std::move(onConnected)),
+      onAbandonedLink_(std::move(onAbandonedLink)) {}
 
 ConnectSolanaWalletSheet::~ConnectSolanaWalletSheet() { StopTimers(); }
 
@@ -221,10 +225,13 @@ void ConnectSolanaWalletSheet::Build(XamlRoot const& root) {
   // Dismissed mid-flow (Cancel, Esc): whatever is out is stale from here on.
   dialog_.Closed([weak = weak_from_this()](auto const&, auto const&) {
     if (auto self = weak.lock()) {
+      // a create call still out may land all the same, and its answer finds no sheet
+      const bool linking = self->machine_.state == solana::ConnectState::Linking;
       self->closed_ = true;
       ++self->flowGeneration_;
       ++self->checkGeneration_;
       self->StopTimers();
+      if (linking && self->onAbandonedLink_) self->onAbandonedLink_();
     }
   });
 

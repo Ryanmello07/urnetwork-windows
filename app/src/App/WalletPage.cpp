@@ -1543,8 +1543,13 @@ winrt::fire_and_forget WalletPage::OpenConnectSolanaSheet() {
   self->SetSheetOpen(true);
   try {
     solanaSheet_ = urnw::ConnectSolanaWalletSheet::Create(
-        self->Content().XamlRoot(), Sdk(), allowActions, [weak](std::string walletId) {
+        self->Content().XamlRoot(), Sdk(), allowActions,
+        [weak](std::string walletId) {
           if (auto w = weak.get()) w->wallet().OnSolanaConnected(walletId);
+        },
+        [weak] {
+          // dismissed while its create call was out: the wallet may exist all the same
+          if (auto w = weak.get()) w->wallet().LoadLegacyWallets(/*reset=*/true);
         });
     co_await self->wallet().solanaSheet_->Dialog().ShowAsync();
   } catch (winrt::hresult_error const& e) {
@@ -1663,11 +1668,11 @@ void WalletPage::OnSolanaWalletMore(IInspectable const& sender, RoutedEventArgs 
   if (auto anchor = sender.try_as<FrameworkElement>()) ShowSolanaCardMenu(anchor);
 }
 
-// The card's overflow: Remove, behind a confirmation.
+// The card's overflow: Remove wallet, behind a confirmation whose button is Remove.
 void WalletPage::ShowSolanaCardMenu(FrameworkElement const& anchor) {
   MenuFlyout flyout;
   MenuFlyoutItem remove;
-  remove.Text(Loc("remove"));
+  remove.Text(Loc("remove_wallet"));
   remove.IsEnabled(!legacyBusy_);
   remove.Click([weak = w_.get_weak()](IInspectable const&, RoutedEventArgs const&) {
     if (auto self = weak.get()) self->wallet().ConfirmRemoveSolanaWallet();
