@@ -429,6 +429,36 @@ func TestTunnelWatchdogObservesDestinationGenerationAndReadiness(t *testing.T) {
 	}
 }
 
+// The service sizes its DeviceLocal at the 64 MiB desktop reference: connect
+// scales the H3 carrier windows off the whole device target, and the
+// constructors that take no target fall back to the SDK's 20 MiB default.
+func TestTunnelControllerConstructsEveryDeviceAtTheMemoryTarget(t *testing.T) {
+	source := readServiceSource(t, "TunnelController.cpp")
+	const constant = "constexpr int64_t kDeviceMemoryTargetByteCount = 64 * 1024 * 1024;"
+	if !strings.Contains(source, constant) {
+		t.Fatalf("TunnelController.cpp does not declare the 64 MiB device memory target %q", constant)
+	}
+	for _, forbidden := range []string{
+		"urnet::newDeviceLocalWithDefaults(",
+		"urnet::newDeviceLocalWithKeyMaterial(",
+	} {
+		if strings.Contains(source, forbidden) {
+			t.Errorf("TunnelController.cpp still constructs a device with %q", forbidden)
+		}
+	}
+	const call = "urnet::newDeviceLocalWithMemoryTarget("
+	calls := strings.Split(source, call)[1:]
+	if len(calls) != 2 {
+		t.Fatalf("TunnelController.cpp has %d newDeviceLocalWithMemoryTarget calls, want 2", len(calls))
+	}
+	for index, rest := range calls {
+		end := strings.Index(rest, ");")
+		if end < 0 || !strings.Contains(rest[:end], "kDeviceMemoryTargetByteCount") {
+			t.Errorf("newDeviceLocalWithMemoryTarget call %d does not pass kDeviceMemoryTargetByteCount", index+1)
+		}
+	}
+}
+
 func TestAcceptanceHarnessImmutabilityContract(t *testing.T) {
 	root := repositoryRoot(t)
 	filename := filepath.Join(root, "test-main.sh")
