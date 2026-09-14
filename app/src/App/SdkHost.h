@@ -363,7 +363,13 @@ struct ProviderThroughputSnapshot {
   std::vector<urnet::ThroughputPoint> providerPoints;
   std::vector<urnet::ThroughputPoint> extenderPoints;
   int64_t windowSeconds = 60;
-  bool hasProviderStats = false;
+  // Whether the device reports provider packet stats: the provider section's
+  // gate with the provide mode (O8). Engaged when this publish carries a
+  // reading: the controller's on a throughput tick, the device's own when a
+  // presentation opens (a new controller reports none until it samples), and
+  // false when the session ends. Nullopt when the window only hid, so the page
+  // keeps the reading it has.
+  std::optional<bool> hasProviderStats;
   // Engaged only when the distribution changed since the last publish, the
   // client bar's rule: an idle tick must not rebuild the legend.
   // CurrentProviderThroughput always engages it, for the seed.
@@ -1034,8 +1040,9 @@ class SdkHost {
   // The last published provider extender status (N7), the same kind of cache
   // read: refreshed by the device's change listener, never by polling.
   ExtenderProvideStatusView CurrentExtenderProvideStatus();
-  // The last published statistics feed (O8), with the distribution engaged:
-  // the seed when the Earnings page shows.
+  // The last published statistics feed (O8), with the distribution and the
+  // provider-stats reading engaged: the seed when the Earnings page is built and
+  // when it shows. A cache read under the drawer lock, no rpc.
   ProviderThroughputSnapshot CurrentProviderThroughput();
   // The SDK's ExtenderViewController for this session (K6, K7): the settings
   // form, the share payload and the import all go through it, so every app
@@ -1664,8 +1671,16 @@ class SdkHost {
   // the LOCATIONS_LOADING push has and is indistinguishable from "loaded, zero
   // providers" without the state string. Caller holds apiLocationsMutex_.
   std::optional<urnet::FilteredLocations> FilteredApiLocationsLocked();
-  void ClosePresentationLocked();
-  void PublishThroughput();
+  // `sessionEnding`: a teardown's close forgets the provider extender status and
+  // the provider-stats reading; a hide's close keeps both, so a re-shown window
+  // draws what it drew (EXTENDER.md O8).
+  void ClosePresentationLocked(bool sessionEnding);
+  // `deviceHasProviderStats`: the device's answer when the caller asked it
+  // (SubscribeDrawer); otherwise the controller's (a throughput tick).
+  void PublishThroughput(std::optional<bool> deviceHasProviderStats = std::nullopt);
+  // Whether the device reports provider packet stats, asked of the device: one
+  // rpc, caller holds mutex_ (EXTENDER.md O8).
+  bool DeviceHasProviderStatsLocked();
   void PublishContractRows();
   void PublishBlockActions();
   void PublishBlockStats();
@@ -1684,7 +1699,9 @@ class SdkHost {
   // the bypass set), and push to the service -> driver. Called from the override
   // change listener and the initial drawer snapshot.
   void PushLocalOverrideAppsToDriver();
-  void ClearDrawer();             // logout: reset caches and push empty snapshots
+  // logout or hide: reset caches and push empty snapshots. `sessionEnding` also
+  // forgets what a hide keeps (see ClosePresentationLocked).
+  void ClearDrawer(bool sessionEnding);
   static std::string RandomLoopbackHostPort();
   std::string DeviceSpec();
   std::string DeviceDescription();

@@ -2576,6 +2576,12 @@ bool SdkHost::BootstrapSession(const char* reason, bool attachOnly) {
       // last asked, and nothing re-asked afterwards - so the pane stayed empty
       // for the life of the window. Re-arm here, where the device first exists.
       EnsureLocationsLocked();
+    } else {
+      // nothing presents, so nothing subscribes: cache the device's answer for the
+      // seed a window reads when it is built or navigates to Earnings (O8)
+      const bool hasProviderStats = DeviceHasProviderStatsLocked();
+      std::scoped_lock drawerLock(drawerMutex_);
+      lastHasProviderStats_ = hasProviderStats;
     }
 
     if (onTunnel_) onTunnel_(SessionStatus(device_->getConnectLocation().has_value()));
@@ -3020,7 +3026,10 @@ void SdkHost::SubscribeDrawer() {
   }
 
   // initial snapshots
-  PublishThroughput();
+  // The throughput one carries the device's own answer for the provider
+  // section's gate: the controller SubscribeStats just opened reports no
+  // provider stats until it samples, and notifies only after its second sample.
+  PublishThroughput(DeviceHasProviderStatsLocked());
   PublishContractRows();
   PublishBlockActions();
   PublishBlockStats();
@@ -3078,7 +3087,20 @@ TransportDistributionSnapshot MapTransportDistribution(
 }
 }  // namespace
 
-void SdkHost::PublishThroughput() {
+// The provider section's gate asked of the device itself (EXTENDER.md O8). A
+// ContractViewController opened a moment ago reports no provider stats until
+// its first sample and notifies only after its second, so the moments that open
+// one (a bootstrap, a presentation) ask the device; the throughput tick reads
+// the controller, which has sampled by then.
+bool SdkHost::DeviceHasProviderStatsLocked() {
+  if (!device_) return false;
+  static std::atomic<bool> logged{false};
+  return ReadSdkList(logged, "getProviderPacketStats (device)",
+                     [&] { return device_->getProviderPacketStats(); })
+      .has_value();
+}
+
+void SdkHost::PublishThroughput(std::optional<bool> deviceHasProviderStats) {
   if (!contractVc_) return;
   std::vector<urnet::ThroughputPoint> points;
   static std::atomic<bool> logged{false};
@@ -3098,11 +3120,11 @@ void SdkHost::PublishThroughput() {
                   [&] { return contractVc_->getTransportDistribution(); }));
   // The Earnings page's statistics (EXTENDER.md O5, O8), from the same view
   // controller on the same tick: the provider series, the extender series,
-  // whether provider packet stats exist and the provider distribution. All four
-  // are view-controller reads, answered from its own sampled state without an
-  // rpc. No extender stats are read here: whether the role runs is the pushed
-  // status's `enabled`, and the view controller samples the stats for its
-  // series itself.
+  // whether provider packet stats exist and the provider distribution. They are
+  // view-controller reads, answered from its own sampled state without an rpc,
+  // except the stats gate when the caller brings the device's own answer. No
+  // extender stats are read here: whether the role runs is the pushed status's
+  // `enabled`, and the view controller samples the stats for its series itself.
   ProviderThroughputSnapshot provider;
   provider.windowSeconds = window;
   static std::atomic<bool> loggedProviderPoints{false};
@@ -3113,11 +3135,15 @@ void SdkHost::PublishThroughput() {
   if (auto p = ReadSdkList(loggedExtenderPoints, "getExtenderThroughputPoints",
                            [&] { return contractVc_->getExtenderThroughputPoints(); }))
     provider.extenderPoints = std::move(*p);
-  static std::atomic<bool> loggedProviderStats{false};
-  provider.hasProviderStats =
-      ReadSdkList(loggedProviderStats, "getProviderPacketStats",
-                  [&] { return contractVc_->getProviderPacketStats(); })
-          .has_value();
+  if (deviceHasProviderStats) {
+    provider.hasProviderStats = *deviceHasProviderStats;
+  } else {
+    static std::atomic<bool> loggedProviderStats{false};
+    provider.hasProviderStats =
+        ReadSdkList(loggedProviderStats, "getProviderPacketStats",
+                    [&] { return contractVc_->getProviderPacketStats(); })
+            .has_value();
+  }
   static std::atomic<bool> loggedProviderDistribution{false};
   TransportDistributionSnapshot providerDistribution = MapTransportDistribution(
       ReadSdkList(loggedProviderDistribution, "getProviderTransportDistribution",
@@ -3133,7 +3159,7 @@ void SdkHost::PublishThroughput() {
     }
     lastProviderPoints_ = provider.providerPoints;
     lastExtenderPoints_ = provider.extenderPoints;
-    lastHasProviderStats_ = provider.hasProviderStats;
+    lastHasProviderStats_ = *provider.hasProviderStats;
     // published only when it changed, as the client distribution is
     if (providerDistribution != lastProviderDistribution_) {
       lastProviderDistribution_ = providerDistribution;
@@ -3425,7 +3451,7 @@ void SdkHost::PushLocalOverrideAppsToDriver() {
   if (service_.IsConnected()) service_.SetSplitTunnel(paths, allowlist);
 }
 
-void SdkHost::ClearDrawer() {
+void SdkHost::ClearDrawer(bool sessionEnding) {
   {
     std::scoped_lock lock(drawerMutex_);
     lastThroughputPoints_.clear();
@@ -3437,24 +3463,31 @@ void SdkHost::ClearDrawer() {
     lastProviderLocations_.clear();
     lastTransportDistribution_ = {};
     lastExtenderStatus_ = {};
-    lastExtenderProvideStatus_ = {};
-    extenderProvideRepublish_ = false;
     lastProviderPoints_.clear();
     lastExtenderPoints_.clear();
-    lastHasProviderStats_ = false;
     lastProviderDistribution_ = {};
+    // a hide keeps these for the window that comes back (O8), and the next
+    // presentation's reads confirm them
+    if (sessionEnding) {
+      lastExtenderProvideStatus_ = {};
+      extenderProvideRepublish_ = false;
+      lastHasProviderStats_ = false;
+    }
   }
   if (onThroughput_) onThroughput_({}, 60);
   if (onTransportDistribution_) onTransportDistribution_({});
   // an empty status, not a stale one: with no session the panel says 0 of 0
   // with a red dot, which is the truth
   if (onExtenderStatus_) onExtenderStatus_({});
-  // with no session there is no role to report: both extender rows hide (N1)
-  if (onExtenderProvideStatus_) onExtenderProvideStatus_({});
-  // and the statistics go back to their gated state, the bar to an empty track
+  // With no session there is no role and no provider to report (N1, O8). A
+  // window that only hid keeps both: its rows and groups stay as they were, and
+  // the next presentation's reads confirm them. The charts and the bar empty
+  // either way, and refill from the next tick.
+  if (sessionEnding && onExtenderProvideStatus_) onExtenderProvideStatus_({});
   if (onProviderThroughput_) {
     ProviderThroughputSnapshot empty;
     empty.providerDistribution = TransportDistributionSnapshot{};
+    if (sessionEnding) empty.hasProviderStats = false;
     onProviderThroughput_(std::move(empty));
   }
   if (onTransportSettings_) {
@@ -5456,7 +5489,7 @@ proto::TunnelStatus SdkHost::StopServiceTunnel() {
   return st;
 }
 
-void SdkHost::ClosePresentationLocked() {
+void SdkHost::ClosePresentationLocked(bool sessionEnding) {
   presentationSubs_.clear();
   // Released here rather than beside each locationsVc_.reset() below, so the two
   // exit paths cannot disagree. Once it is clear the api path may write again.
@@ -5524,7 +5557,7 @@ void SdkHost::ClosePresentationLocked() {
     std::scoped_lock drawerLock(drawerMutex_);
     extenderVc_.reset();
   }
-  ClearDrawer();
+  ClearDrawer(sessionEnding);
 }
 
 // D4: RECORD AND RETURN — the caller is the XAML thread, and this used to be
@@ -5585,7 +5618,9 @@ void SdkHost::PresentationWorkerLoop() {
         // detaches the transport and the rest are local), and nobody on the
         // UI thread waits for any of it.
         try {
-          ClosePresentationLocked();
+          // a hide, not a teardown: the provider extender status and the
+          // provider-stats reading stay for the window that comes back (O8)
+          ClosePresentationLocked(/*sessionEnding=*/false);
         } catch (const std::exception& e) {
           LogWarn("sdkhost: presentation close failed: {}", e.what());
         }
@@ -5674,7 +5709,7 @@ void SdkHost::TeardownSessionLocked(bool stopTunnel) {
   // is about to remove.
   activeRpcPersistenceGeneration_.store(0, std::memory_order_release);
   confirmedRpcPersistenceGeneration_.store(0, std::memory_order_release);
-  ClosePresentationLocked();
+  ClosePresentationLocked(/*sessionEnding=*/true);
   subs_.clear();
   if (device_) { device_->close(); device_.reset(); }
   // A pending rpc-sync check must not act on the session that is ending — its

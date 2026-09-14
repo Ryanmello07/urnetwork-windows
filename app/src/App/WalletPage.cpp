@@ -476,6 +476,10 @@ void WalletPage::Initialize() {
   chartTimer_.Tick([weak](auto const&, auto const&) {
     if (auto self = weak.get()) self->wallet().OnChartTick();
   });
+  // Seed the read-only row, the running role and the provider gate from
+  // SdkHost's caches, so a window built long after the session bootstrapped
+  // paints what is known on its first frame. Cache reads only: no rpc, no mutex_.
+  ResyncProviderStats();
   ApplyStatsSections(/*force=*/true);
 }
 
@@ -3396,7 +3400,8 @@ void WalletPage::ApplyProviderThroughput(urnw::ProviderThroughputSnapshot const&
     providerTransportBar_->SetDistribution(*snapshot.providerDistribution);
     providerDistributionSeen_ = !snapshot.providerDistribution->shares.empty();
   }
-  hasProviderStats_ = snapshot.hasProviderStats;
+  // a hide's clear carries no reading, and the page keeps the one it has
+  if (snapshot.hasProviderStats) hasProviderStats_ = *snapshot.hasProviderStats;
   ApplyStatsSections(/*force=*/false);
 }
 

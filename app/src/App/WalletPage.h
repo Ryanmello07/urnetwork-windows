@@ -77,7 +77,8 @@ class WalletPage {
   // The provider statistics and the extender series (O5, O8), from SdkHost's
   // feed on every throughput tick.
   void ApplyProviderThroughput(urnw::ProviderThroughputSnapshot const& snapshot);
-  // Re-seed both from SdkHost's caches when the destination shows.
+  // Re-seed both from SdkHost's caches when the page is built and when the
+  // destination shows: cache reads, no rpc.
   void ResyncProviderStats();
   // The statistics charts' clock runs only while the window presents, as the
   // Connect page's does.
