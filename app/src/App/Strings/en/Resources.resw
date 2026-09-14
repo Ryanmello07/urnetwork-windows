@@ -2767,6 +2767,10 @@ right way</value>
     <value>Extender settings saved</value>
     <comment>Confirmation after the extender settings are saved.</comment>
   </data>
+  <data name="extender_statistics" xml:space="preserve">
+    <value>Extender statistics</value>
+    <comment>Title of the section that shows statistics about the extender, directly above the provider statistics section.</comment>
+  </data>
   <data name="extenders" xml:space="preserve">
     <value>Extenders</value>
     <comment>Title of the extenders panel in the connect drawer and of the Extenders section under account.</comment>
@@ -4390,6 +4394,10 @@ and most decentralized ingress and egress protocol.</value>
   <data name="ranked_networks_count" xml:space="preserve">
     <value>{} ranked networks</value>
     <comment>Points leaderboard: how many networks hold a rank. {count} is preformatted with separators.</comment>
+  </data>
+  <data name="reads_per_second" xml:space="preserve">
+    <value>reads/s</value>
+    <comment>Unit the extender chart labels its rates with, where the provider chart says pkt/s. The compact count is prepended by the app, as it is for pkt/s.</comment>
   </data>
   <data name="ready_to_connect" xml:space="preserve">
     <value>Ready to connect</value>
