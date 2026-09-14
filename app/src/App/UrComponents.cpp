@@ -38,6 +38,21 @@ void SetTextOrCollapse(TextBlock const& line, winrt::hstring const& text) {
   line.Visibility(text.empty() ? Visibility::Collapsed : Visibility::Visible);
 }
 
+void ClipToBounds(Grid const& host) {
+  if (!host) return;
+  auto apply = [](FrameworkElement const& element, winrt::Windows::Foundation::Size const& size) {
+    Media::RectangleGeometry clip;
+    clip.Rect({0, 0, static_cast<float>(size.Width), static_cast<float>(size.Height)});
+    element.Clip(clip);
+  };
+  host.SizeChanged([apply](winrt::Windows::Foundation::IInspectable const& sender,
+                           SizeChangedEventArgs const& args) {
+    if (auto element = sender.try_as<FrameworkElement>()) {
+      apply(element, args.NewSize());
+    }
+  });
+}
+
 Controls::Border MakeDivider() {
   Controls::Border rule;
   rule.Height(1);

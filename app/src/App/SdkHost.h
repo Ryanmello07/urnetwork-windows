@@ -351,6 +351,31 @@ inline bool operator!=(const TransportDistributionSnapshot& a,
   return !(a == b);
 }
 
+// The Earnings page's statistics feed (EXTENDER.md O5, O8), read on the SAME
+// throughput tick as the client points: the provider series (the Local and
+// Blocked charts), the extender series (the extender chart, its Remote route),
+// whether the device reports provider packet stats (the provider section's
+// gate, with the provide mode) and the provider transport distribution (its
+// bar). Whether the extender role runs is deliberately NOT here: it is the
+// pushed status's `enabled` (ExtenderProvideStatusView), which changes with the
+// role rather than on a tick the listener may never send.
+struct ProviderThroughputSnapshot {
+  std::vector<urnet::ThroughputPoint> providerPoints;
+  std::vector<urnet::ThroughputPoint> extenderPoints;
+  int64_t windowSeconds = 60;
+  // Whether the device reports provider packet stats: the provider section's
+  // gate with the provide mode (O8). Engaged when this publish carries a
+  // reading: the controller's on a throughput tick, the device's own when a
+  // presentation opens (a new controller reports none until it samples), and
+  // false when the session ends. Nullopt when the window only hid, so the page
+  // keeps the reading it has.
+  std::optional<bool> hasProviderStats;
+  // Engaged only when the distribution changed since the last publish, the
+  // client bar's rule: an idle tick must not rebuild the legend.
+  // CurrentProviderThroughput always engages it, for the seed.
+  std::optional<TransportDistributionSnapshot> providerDistribution;
+};
+
 // Which device transport policy a surface reads/edits: the CLIENT policy (the
 // carrier this device uses to reach providers) or the PROVIDER policy (the
 // carrier it uses when relaying for remote clients). Both are SDK
@@ -458,6 +483,13 @@ class SdkHost {
   // nothing. A default-constructed view means "no session / nothing known",
   // which the panel draws as a red dot and 0 of 0.
   using ExtenderStatusHandler = std::function<void(ExtenderStatusView)>;
+  // The provider extender rows' feed (EXTENDER.md N2, N7): the device's status
+  // mapped to the plain view both rows draw, with the setting read beside it,
+  // published only when the view changed. A default-constructed view is "no
+  // session / unsupported", which hides both rows.
+  using ExtenderProvideStatusHandler = std::function<void(ExtenderProvideStatusView)>;
+  // The Earnings page's statistics feed (O5, O8), every throughput tick.
+  using ProviderThroughputHandler = std::function<void(ProviderThroughputSnapshot)>;
   // The client / provider transport policy in force (device change listeners +
   // the initial read); nullopt = no device / no policy known.
   using TransportSettingsHandler =
@@ -911,6 +943,12 @@ class SdkHost {
   void SetExtenderStatusHandler(ExtenderStatusHandler h) {
     onExtenderStatus_ = std::move(h);
   }
+  void SetExtenderProvideStatusHandler(ExtenderProvideStatusHandler h) {
+    onExtenderProvideStatus_ = std::move(h);
+  }
+  void SetProviderThroughputHandler(ProviderThroughputHandler h) {
+    onProviderThroughput_ = std::move(h);
+  }
   void SetTransportDistributionHandler(TransportDistributionHandler h) {
     onTransportDistribution_ = std::move(h);
   }
@@ -999,6 +1037,13 @@ class SdkHost {
   // distribution above: the value is refreshed by the SDK's once-a-second
   // change listener, never by polling.
   ExtenderStatusView CurrentExtenderStatus();
+  // The last published provider extender status (N7), the same kind of cache
+  // read: refreshed by the device's change listener, never by polling.
+  ExtenderProvideStatusView CurrentExtenderProvideStatus();
+  // The last published statistics feed (O8), with the distribution and the
+  // provider-stats reading engaged: the seed when the Earnings page is built and
+  // when it shows. A cache read under the drawer lock, no rpc.
+  ProviderThroughputSnapshot CurrentProviderThroughput();
   // The SDK's ExtenderViewController for this session (K6, K7): the settings
   // form, the share payload and the import all go through it, so every app
   // applies one implementation of those rules. Null with no session -- the
@@ -1071,6 +1116,13 @@ class SdkHost {
   // macOS (DeviceLocal does not persist the control mode itself).
   std::string CurrentProvideControlMode();
   void SetProvideControlMode(const std::string& mode);
+  // The provider extender setting (EXTENDER.md N4): written through the device,
+  // which persists it in its own space and applies it at once; while the device
+  // process is out of contact the DeviceRemote queues it and replays it at the
+  // next sync. There is no app-side mirror to keep, unlike the provide mode: the
+  // row is hidden with no device, so nothing is written without one. Callers
+  // never write while the row is hidden (N1).
+  void SetProvideExtender(bool on);
   void ApplyDnsSettings(const urnet::DnsResolverSettings& settings);
   // Apply a transport policy (client or provider) to the device AND mirror it
   // into the app LocalState. The service's DeviceLocal persists the policy in
@@ -1619,8 +1671,16 @@ class SdkHost {
   // the LOCATIONS_LOADING push has and is indistinguishable from "loaded, zero
   // providers" without the state string. Caller holds apiLocationsMutex_.
   std::optional<urnet::FilteredLocations> FilteredApiLocationsLocked();
-  void ClosePresentationLocked();
-  void PublishThroughput();
+  // `sessionEnding`: a teardown's close forgets the provider extender status and
+  // the provider-stats reading; a hide's close keeps both, so a re-shown window
+  // draws what it drew (EXTENDER.md O8).
+  void ClosePresentationLocked(bool sessionEnding);
+  // `deviceHasProviderStats`: the device's answer when the caller asked it
+  // (SubscribeDrawer); otherwise the controller's (a throughput tick).
+  void PublishThroughput(std::optional<bool> deviceHasProviderStats = std::nullopt);
+  // Whether the device reports provider packet stats, asked of the device: one
+  // rpc, caller holds mutex_ (EXTENDER.md O8).
+  bool DeviceHasProviderStatsLocked();
   void PublishContractRows();
   void PublishBlockActions();
   void PublishBlockStats();
@@ -1630,12 +1690,18 @@ class SdkHost {
   // The extender status listener's payload, mapped and pushed when it changed
   // (K4, K5). Called on an SDK callback thread.
   void PublishExtenderStatus(std::optional<urnet::ExtenderStatus> status);
+  // The provider extender status listener's payload (N2, N7), with the setting
+  // read beside it, mapped and pushed when it changed. Called on an SDK callback
+  // thread.
+  void PublishExtenderProvideStatus(std::optional<urnet::ExtenderProvideStatus> status);
   // Read getLocalOverrideAppIds(), compute {paths, allowlist} (Android inversion:
   // any include-in-tunnel app => allowlist with the tunnel set, else denylist with
   // the bypass set), and push to the service -> driver. Called from the override
   // change listener and the initial drawer snapshot.
   void PushLocalOverrideAppsToDriver();
-  void ClearDrawer();             // logout: reset caches and push empty snapshots
+  // logout or hide: reset caches and push empty snapshots. `sessionEnding` also
+  // forgets what a hide keeps (see ClosePresentationLocked).
+  void ClearDrawer(bool sessionEnding);
   static std::string RandomLoopbackHostPort();
   std::string DeviceSpec();
   std::string DeviceDescription();
@@ -1735,6 +1801,16 @@ class SdkHost {
   // the dedup baseline for the transport bar feed (PublishThroughput)
   TransportDistributionSnapshot lastTransportDistribution_;
   ExtenderStatusView lastExtenderStatus_;
+  ExtenderProvideStatusView lastExtenderProvideStatus_;
+  // Set by SetProvideExtender: the next status publishes even when it equals the
+  // last one. The row painted a local guess after the write (N7), and only a
+  // pushed status replaces it.
+  bool extenderProvideRepublish_ = false;
+  // the statistics feed's caches (O8), refreshed by PublishThroughput
+  std::vector<urnet::ThroughputPoint> lastProviderPoints_;
+  std::vector<urnet::ThroughputPoint> lastExtenderPoints_;
+  bool lastHasProviderStats_ = false;
+  TransportDistributionSnapshot lastProviderDistribution_;
   // The value-compare baselines for the two signal-only provider feeds; see
   // CurrentProviderLocations() for why an identity compare is not enough.
   std::vector<ProviderLocationRow> lastProviderLocations_;
@@ -2003,6 +2079,8 @@ class SdkHost {
   BlockerEnabledHandler onBlockerEnabled_;
   TransportDistributionHandler onTransportDistribution_;
   ExtenderStatusHandler onExtenderStatus_;
+  ExtenderProvideStatusHandler onExtenderProvideStatus_;
+  ProviderThroughputHandler onProviderThroughput_;
   TransportSettingsHandler onTransportSettings_;
   LocationsHandler onLocations_;
   PeersHandler onPeers_;

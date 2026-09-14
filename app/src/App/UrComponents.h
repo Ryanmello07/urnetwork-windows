@@ -107,6 +107,17 @@ inline constexpr double kUltraWideDip = 1800.0;
 void SetTextOrCollapse(winrt::Microsoft::UI::Xaml::Controls::TextBlock const& line,
                        winrt::hstring const& text);
 
+// Keep a chart inside its pane.
+//
+// TransferChart draws into a Canvas, and a Canvas does not clip: its curves and
+// its edge labels run a few pixels past the host and, in a pane layout, straight
+// across the 1px rule into the NEXT pane. It did - the activity chart put a
+// green sliver and a stray peak marker inside the statistics pane, right at the
+// boundary. A Grid column does not clip its children either, so the clip has to
+// be stated, and re-stated on every resize because Clip is a fixed rectangle.
+// Every chart host calls it: the Connect page's three and the Earnings page's.
+void ClipToBounds(winrt::Microsoft::UI::Xaml::Controls::Grid const& host);
+
 // The Windows idiom for "there is nothing here yet": a large muted Segoe Fluent
 // glyph over one sentence, centred, rather than a bare "-" or an empty panel.
 // A dash cannot distinguish "nothing" from "not loaded" from "failed", and an

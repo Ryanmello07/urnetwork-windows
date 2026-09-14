@@ -7,7 +7,9 @@
 #include <chrono>
 #include <cmath>
 
+#include "Localization.h"
 #include "StatsFormat.h"
+#include "Strings.h"  // Narrow: the localized count unit into the utf-8 label
 #include "UrColors.h"
 
 using namespace winrt;
@@ -60,8 +62,10 @@ bool TransferChart::ValueTransition::InFlight(double now) const {
 
 TransferChart::TransferChart(Grid const& host, std::wstring title, ThroughputRoute route,
                              winrt::Windows::UI::Color byteColor,
-                             winrt::Windows::UI::Color packetColor)
-    : route_(route), byteColor_(byteColor), packetColor_(packetColor) {
+                             winrt::Windows::UI::Color packetColor, CountUnit countUnit)
+    : route_(route), byteColor_(byteColor), packetColor_(packetColor), countUnit_(countUnit) {
+  // before BuildVisuals, which draws the first labels
+  if (countUnit_ == CountUnit::Reads) readUnit_ = Narrow(Localized("reads_per_second"));
   BuildVisuals(host, std::move(title));
 }
 
@@ -430,7 +434,8 @@ void TransferChart::UpdateAverageLabels() {
                       TextBlock const& arrow, int64_t bytes, int64_t packets) {
     byteAvg.Text(H(FormatByteRate(bytes)));
     byteAvg.Opacity(0 < bytes ? 1.0 : 0.4);
-    packetAvg.Text(H(FormatPacketRate(packets)));
+    packetAvg.Text(H(countUnit_ == CountUnit::Reads ? FormatCountRate(packets, readUnit_)
+                                                    : FormatPacketRate(packets)));
     packetAvg.Opacity(0 < packets ? 1.0 : 0.4);
     // the arrow lights up like a link light when this direction is active
     arrow.Foreground(0 < bytes || 0 < packets ? textBrush_ : mutedBrush_);

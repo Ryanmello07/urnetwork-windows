@@ -1,8 +1,9 @@
 // Everything the extender surfaces decide BEFORE they touch a XAML object
-// (connect/EXTENDER.md K4, K6, K7): the gossip status dot's colour and word,
-// the panel's "N of M" and event rate, the settings form's text and
-// placeholders, the share screen's QR placement, and whether an import may
-// proceed.
+// (connect/EXTENDER.md K4, K6, K7, N7, O8): the gossip status dot's colour and
+// word, the panel's "N of M" and event rate, the settings form's text and
+// placeholders, the share screen's QR placement, whether an import may
+// proceed, the provider extender row's dot, text and switch, and which of the
+// Earnings page's provider and extender statistics sections show.
 //
 // It is all here, and it is all pure, for the reason IpFamilyGroups.h gives:
 // the windows solution has no test project and a WinUI 3 app cannot even be
@@ -17,6 +18,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -280,5 +282,207 @@ struct ExtenderImportOutcome {
 };
 
 ExtenderImportOutcome ExtenderImportOutcomeFor(const ExtenderImportResultView& result);
+
+// ---- the provider extender row (N7) -------------------------------------------
+
+// The SDK's ExtenderProvideState tokens and ExtenderProvideError cases. Mirrors
+// urnet::ExtenderProvideState* and urnet::ExtenderProvideError* so a build that
+// has not seen the SDK header still agrees with it, as the gossip tokens do.
+inline constexpr const char* kExtenderProvideStateOff = "off";
+inline constexpr const char* kExtenderProvideStateNotProviding = "not_providing";
+inline constexpr const char* kExtenderProvideStateSettingUp = "setting_up";
+inline constexpr const char* kExtenderProvideStateActive = "active";
+inline constexpr const char* kExtenderProvideStateError = "error";
+inline constexpr const char* kExtenderProvideErrorRevoked = "revoked";
+inline constexpr const char* kExtenderProvideErrorStart = "start";
+inline constexpr const char* kExtenderProvideErrorListen = "listen";
+inline constexpr const char* kExtenderProvideErrorActivationFailed = "activation_failed";
+inline constexpr const char* kExtenderProvideErrorActivationRefused = "activation_refused";
+
+// As much of the SDK's ExtenderProvideStatus as the apps read (N7), with the
+// setting read beside it. The SDK derived `state` and `errorCase` once from the
+// fields this leaves out (RevokedTime, Listening, ListenError, StartError,
+// LastActivationError), so nothing here re-derives that rule.
+//
+//   refused          LastActivationRefused: in the active state, whether
+//                    `reason` (the other family's text) is a refusal
+//   enabled          the role is running; the statistics sections read it
+//                    (O8), the row does not
+//   provideExtender  Device::getProvideExtender() read beside each status whose
+//                    row shows: the switch's position. The DeviceRemote answers
+//                    the queued or last-known value while the device process is
+//                    out of contact, so the switch holds through a daemon
+//                    restart.
+//
+// A default-constructed view is "no session": unsupported, so both rows hide.
+struct ExtenderProvideStatusView {
+  bool supported = false;
+  std::string state = kExtenderProvideStateOff;
+  std::string errorCase;
+  std::string reason;
+  bool activatedV4 = false;
+  bool activatedV6 = false;
+  bool refused = false;
+  bool enabled = false;
+  bool provideExtender = false;
+
+  // The device pushes a status after any change of the setting, the provide
+  // state or the role, coalesced to one status per epoch and never on
+  // registration. SdkHost keeps a push equal to the last one off the UI thread
+  // on this comparison, so it covers every field the row and the sections read.
+  bool operator==(const ExtenderProvideStatusView& o) const {
+    return supported == o.supported && state == o.state && errorCase == o.errorCase &&
+           reason == o.reason && activatedV4 == o.activatedV4 &&
+           activatedV6 == o.activatedV6 && refused == o.refused && enabled == o.enabled &&
+           provideExtender == o.provideExtender;
+  }
+  bool operator!=(const ExtenderProvideStatusView& o) const { return !(*this == o); }
+};
+
+// The view of the SDK's ExtenderProvideStatus (N7), read from the fields the
+// apps may read and nothing else, with the setting read beside it only when the
+// row will show: a device that reports the role unsupported is never asked for
+// a setting it may not have (N1). Generic over the status type so the host tests
+// hand it every field of urnet::ExtenderProvideStatus by the SDK's names.
+template <typename Status, typename ReadSetting>
+ExtenderProvideStatusView ExtenderProvideStatusViewOf(const std::optional<Status>& status,
+                                                      const ReadSetting& readSetting) {
+  ExtenderProvideStatusView view;
+  if (!status || !status->Supported) return view;
+  view.supported = true;
+  view.state = status->State;
+  view.errorCase = status->ErrorCase;
+  view.reason = status->Reason;
+  view.activatedV4 = status->ActivatedV4;
+  view.activatedV6 = status->ActivatedV6;
+  view.refused = status->LastActivationRefused;
+  view.enabled = status->Enabled;
+  view.provideExtender = readSetting();
+  return view;
+}
+
+// The dot, by state: grey off and not providing, yellow setting up, green
+// active, red error. The WinUI layer picks the colours (ProvideModeVisual.h).
+enum class ExtenderProvideTone { Grey, Green, Yellow, Red };
+
+// How the state key takes its "{}".
+enum class ExtenderProvideArgument {
+  None,  // the key is the whole text: off, not providing, setting up, revoked
+  Text,  // the argument is the SDK's raw Reason, filled in as it is
+  Key,   // the argument is a store key, localized first: the families of active
+};
+
+// What the extender row draws, with nothing left to decide (N7). Store keys,
+// never rendered words; ComposeExtenderProvideText makes them the one line.
+struct ExtenderProvideRowModel {
+  // The row, its description and its switch show at all: the view's
+  // `supported`. Hidden, never disabled (N1).
+  bool visible = false;
+  ExtenderProvideTone tone = ExtenderProvideTone::Grey;
+  // The state key. Empty when `argument` renders bare: an error case this
+  // build does not know (a newer device process), or a state it does not know.
+  std::string textKey = "off";
+  std::string argument;
+  ExtenderProvideArgument argumentKind = ExtenderProvideArgument::None;
+  // Active only: the other family's last attempt failed, so its text follows
+  // on the same line after " · ": this key, filled with `suffixArgument` (the
+  // Reason). Empty when there is nothing to add.
+  std::string suffixKey;
+  std::string suffixArgument;
+  // the switch's position
+  bool on = false;
+
+  bool operator==(const ExtenderProvideRowModel& o) const {
+    return visible == o.visible && tone == o.tone && textKey == o.textKey &&
+           argument == o.argument && argumentKind == o.argumentKind &&
+           suffixKey == o.suffixKey && suffixArgument == o.suffixArgument && on == o.on;
+  }
+  bool operator!=(const ExtenderProvideRowModel& o) const { return !(*this == o); }
+};
+
+// N7's reading, from `state` and, in the error state, from `errorCase` alone:
+//
+//   off            grey    off
+//   not_providing  grey    extender_not_providing
+//   setting_up     yellow  extender_setting_up
+//   active         green   extender_active with the families (ipv4_and_ipv6
+//                          when both hold, else ipv4 or ipv6); with a Reason,
+//                          " · " and extender_activation_refused (refused) or
+//                          extender_activation_failed, filled with the Reason
+//   error          red     revoked: extender_revoked; start, listen,
+//                          activation_refused, activation_failed: their key
+//                          filled with the Reason; any other case: the Reason
+//                          bare
+//
+// A state this build does not know is grey with the Reason bare: it names no
+// case the SDK did not pick, and claims no error the SDK did not report.
+ExtenderProvideRowModel ExtenderProvideRowModelFor(const ExtenderProvideStatusView& view);
+
+// The row the switch paints the moment it is flipped, before the listener
+// answers (N7): off is grey Off; on is yellow Setting up while the device is
+// providing and grey Not providing while it is not. The view comes back with
+// the state and the setting guessed and the rest of the SDK's reading cleared,
+// so it draws through ExtenderProvideRowModelFor like any status; the next
+// pushed status replaces it.
+ExtenderProvideStatusView ExtenderProvideGuessFor(const ExtenderProvideStatusView& current,
+                                                  bool on, bool providing);
+
+// The one line of state text a model reads as. `localized(key)` answers the
+// store's text for a key and `formatted(key, text)` the store's text with its
+// "{}" filled, both as `Text`; `fromUtf8` lifts the SDK's raw Reason into
+// `Text`; `separator` is the " · " between the active line and the other
+// family's failure. A template so the composition is checked off Windows with
+// plain strings; the app passes Localized and Format (ProvideModeVisual.h).
+template <typename Text, typename LocalizedFn, typename FormattedFn, typename FromUtf8Fn>
+Text ComposeExtenderProvideText(const ExtenderProvideRowModel& model, const Text& separator,
+                                LocalizedFn&& localized, FormattedFn&& formatted,
+                                FromUtf8Fn&& fromUtf8) {
+  Text text;
+  if (model.textKey.empty()) {
+    text = fromUtf8(model.argument);
+  } else {
+    switch (model.argumentKind) {
+      case ExtenderProvideArgument::None:
+        text = localized(model.textKey);
+        break;
+      case ExtenderProvideArgument::Text:
+        text = formatted(model.textKey, fromUtf8(model.argument));
+        break;
+      case ExtenderProvideArgument::Key:
+        text = formatted(model.textKey, localized(model.argument));
+        break;
+    }
+  }
+  if (!model.suffixKey.empty()) {
+    text += separator;
+    text += formatted(model.suffixKey, fromUtf8(model.suffixArgument));
+  }
+  return text;
+}
+
+// ---- the statistics sections (O8) ---------------------------------------------
+
+// Which parts of the Earnings page's two statistics groups show.
+struct ExtenderStatsSections {
+  // the provider group's chart rows: the provide mode is not never and the
+  // device reports provider packet stats
+  bool providerVisible = false;
+  // the whole extender group, its title and its chart: the provider rows show
+  // and the role is running (the pushed status's `enabled`, never the
+  // throughput tick or the point count)
+  bool extenderVisible = false;
+  // `providing_disabled` as the provider group header's meta label, exactly
+  // while the provider rows are hidden
+  bool disabledMeta = true;
+
+  bool operator==(const ExtenderStatsSections& o) const {
+    return providerVisible == o.providerVisible && extenderVisible == o.extenderVisible &&
+           disabledMeta == o.disabledMeta;
+  }
+  bool operator!=(const ExtenderStatsSections& o) const { return !(*this == o); }
+};
+
+ExtenderStatsSections ExtenderStatsSectionsFor(bool providingEnabled, bool hasProviderStats,
+                                               bool extenderRunning);
 
 }  // namespace urnw

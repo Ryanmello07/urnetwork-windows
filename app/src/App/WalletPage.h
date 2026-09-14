@@ -42,6 +42,8 @@ namespace urnw {
 struct LiveStats;
 }
 #include "SdkHost.h"
+#include "TransferChart.h"
+#include "TransportBar.h"
 #include "UrComponents.h"
 
 namespace winrt::URnetwork::implementation {
@@ -51,6 +53,7 @@ struct MainWindow;
 namespace urnw {
 
 class EmojiTagSheet;
+class TransportSettingsSheet;
 
 class WalletPage {
  public:
@@ -65,6 +68,24 @@ class WalletPage {
   // chart hides and the group says so, the same gate and message as the
   // stats widget. MainWindow relays each live-stats update here.
   void ApplyProvideState(urnw::LiveStats const& stats);
+
+  // The read-only extender row under the provide mode row (connect/EXTENDER.md
+  // N7), and the extender statistics section's other half, whether the role is
+  // running (O8). MainWindow hands every pushed status here and to the Connect
+  // page.
+  void ApplyExtenderProvideState(urnw::ExtenderProvideStatusView const& view);
+  // The provider statistics and the extender series (O5, O8), from SdkHost's
+  // feed on every throughput tick.
+  void ApplyProviderThroughput(urnw::ProviderThroughputSnapshot const& snapshot);
+  // Re-seed both from SdkHost's caches when the page is built and when the
+  // destination shows: cache reads, no rpc.
+  void ResyncProviderStats();
+  // The statistics charts' clock runs only while the window presents, as the
+  // Connect page's does.
+  void SetPresentationActive(bool active);
+  // Close the provider transport sheet if it is open: the window is hiding to
+  // the tray, and the sheet must not come back on a draft read before the hide.
+  void CloseProviderTransportSheet();
 
   // Every Earnings fetch: points, the Seeker flag, reliability, the epoch
   // history, the coldkey, the head-spot status - and, once the coldkey is
@@ -248,6 +269,16 @@ class WalletPage {
   // ---- reliability
   void ApplyReliability(std::optional<urnet::ReliabilityWindow> window, Fetch state);
 
+  // ---- the statistics groups (connect/EXTENDER.md O5, O8)
+  void BuildCharts();
+  void OnChartTick();
+  // the read-only extender row, from extenderProvideView_ (N7)
+  void ApplyExtenderProvideRow();
+  // Both groups' visibility and the provider header's meta label, from
+  // ExtenderStatsSectionsFor. Only a changed reading is painted unless `force`.
+  void ApplyStatsSections(bool force);
+  winrt::fire_and_forget ShowProviderTransportSettingsSheet();
+
   // ---- the Seeker multiplier (points only)
   void ApplySeekerState();
   void ApplySeekerResult(uint32_t generation, bool ok, std::string const& serverError);
@@ -282,6 +313,22 @@ class WalletPage {
   // ---- state
   std::string ownNetworkId_;
   bool providingEnabled_ = true;  // the reliability chart follows the provide mode
+  // ---- the statistics groups (O5, O8)
+  std::unique_ptr<urnw::TransferChart> extenderChart_;
+  std::unique_ptr<urnw::TransferChart> providerLocalChart_;
+  std::unique_ptr<urnw::TransportBar> providerTransportBar_;
+  std::unique_ptr<urnw::TransferChart> providerBlockedChart_;
+  winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer chartTimer_{nullptr};
+  std::shared_ptr<urnw::TransportSettingsSheet> providerTransportSheet_;
+  // the last pushed status: the read-only row draws it, and its `enabled` is
+  // the extender section's running role
+  urnw::ExtenderProvideStatusView extenderProvideView_;
+  bool extenderRunning_ = false;
+  bool hasProviderStats_ = false;
+  // the bar holds a distribution with shares, so it has nothing to wait for
+  bool providerDistributionSeen_ = false;
+  // the reading last painted; empty before the first
+  std::optional<urnw::ExtenderStatsSections> statsSections_;
   PointsBreakdown accountPoints_;
   bool seekerHolder_ = false;
   bool verifyingSeeker_ = false;

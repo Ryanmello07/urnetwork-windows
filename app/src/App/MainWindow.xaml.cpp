@@ -125,6 +125,19 @@ MainWindow::MainWindow() {
         if (auto self = weak.get()) self->network().OnPeers(peers);
       });
     });
+    // The provider extender status (EXTENDER.md N7): one feed for the rows that
+    // draw it, each taking every pushed view on the UI queue, the way
+    // OnStatsChanged hands the live stats to every page that reads them. The
+    // Earnings page also reads the role's `enabled` from it for its statistics
+    // groups (O8).
+    Sdk().SetExtenderProvideStatusHandler([queue, weak](urnw::ExtenderProvideStatusView view) {
+      queue.TryEnqueue([weak, view = std::move(view)] {
+        if (auto self = weak.get()) {
+          self->connect().ApplyExtenderProvideState(view);
+          self->wallet().ApplyExtenderProvideState(view);
+        }
+      });
+    });
   }
 
   ApplyStrings();
@@ -292,6 +305,8 @@ MainWindow::~MainWindow() {
 
 void MainWindow::SetPresentationActive(bool active) {
   connect_->SetPresentationActive(active);
+  // the Earnings statistics charts' clock (EXTENDER.md O8)
+  wallet_->SetPresentationActive(active);
   developer_->SetPresentationActive(active);
   // R4: Network holds two SDK feeds that SdkHost closes with the presentation.
   // Without this line the close had no matching open and the provider list was
@@ -1076,6 +1091,9 @@ void MainWindow::OnNavSelectionChanged(NavigationView const&,
   // re-renders from whatever snapshot exists now. Same shape as the developer
   // poll above - a destination that is not on screen does not hold a feed open.
   network_->SetSelected(tag == L"network");
+  // The Earnings statistics (EXTENDER.md O8) re-seed from SdkHost's caches as the
+  // destination shows. A cache read with no request, so it runs in preview too.
+  if (tag == L"wallet") wallet_->ResyncProviderStats();
 
   if (tag == L"connect" && !wasConnectVisible) connect_->AnimateDrawerIn();
 
@@ -1863,6 +1881,10 @@ void MainWindow::OnTunnelStateChanged(urnw::proto::TunnelStatus const& status) {
   if (advancedMode_) ApplyStatusStrip();
 }
 
+void MainWindow::CloseSheetsForHide() {
+  if (wallet_) wallet_->CloseProviderTransportSheet();
+}
+
 void MainWindow::OnStatsChanged(urnw::LiveStats const& stats) {
   connect_->ApplyStats(stats);
   if (wallet_) wallet_->ApplyProvideState(stats);  // the Earnings provide row + gate
@@ -1995,6 +2017,9 @@ void MainWindow::OnProvideModeChanged(SelectorBar const& s,
                                       SelectorBarSelectionChangedEventArgs const& e) {
   connect_->OnProvideModeChanged(s, e);
 }
+void MainWindow::OnExtenderToggled(IInspectable const& s, RoutedEventArgs const& e) {
+  connect_->OnExtenderToggled(s, e);
+}
 void MainWindow::OnFixedIpToggled(IInspectable const& s, RoutedEventArgs const& e) {
   connect_->OnFixedIpToggled(s, e);
 }
@@ -2078,6 +2103,11 @@ void MainWindow::OnWalletLearnMore(
 // The provide mode is changed on the Connect page (its provide group); the
 // Earnings row is a shortcut there.
 void MainWindow::OnWalletProvideMode(IInspectable const&, RoutedEventArgs const&) {
+  HomeNav().SelectedItem(ConnectNavItem());
+}
+// The extender switch lives in the same provide group; the Earnings extender row
+// is the same shortcut (EXTENDER.md N7).
+void MainWindow::OnWalletExtender(IInspectable const&, RoutedEventArgs const&) {
   HomeNav().SelectedItem(ConnectNavItem());
 }
 void MainWindow::OnVerifySeeker(IInspectable const& s, RoutedEventArgs const& e) {

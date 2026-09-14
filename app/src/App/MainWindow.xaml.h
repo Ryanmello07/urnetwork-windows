@@ -276,6 +276,10 @@ struct MainWindow : MainWindowT<MainWindow> {
                          winrt::Microsoft::UI::Xaml::Documents::HyperlinkClickEventArgs const&);
   void OnWalletProvideMode(winrt::Windows::Foundation::IInspectable const&,
                            winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
+  // Earnings: the read-only extender row (EXTENDER.md N7) opens the Connect page,
+  // where its switch lives, as the provide mode row does.
+  void OnWalletExtender(winrt::Windows::Foundation::IInspectable const&,
+                        winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   // wallet: Seeker-token multiplier verification. leaderboard: the
   // public/private switch.
   void OnVerifySeeker(winrt::Windows::Foundation::IInspectable const&,
@@ -294,6 +298,9 @@ struct MainWindow : MainWindowT<MainWindow> {
   void OnProvideModeChanged(
       winrt::Microsoft::UI::Xaml::Controls::SelectorBar const&,
       winrt::Microsoft::UI::Xaml::Controls::SelectorBarSelectionChangedEventArgs const&);
+  // the provider extender switch under the provide group (EXTENDER.md N7)
+  void OnExtenderToggled(winrt::Windows::Foundation::IInspectable const&,
+                         winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnFixedIpToggled(winrt::Windows::Foundation::IInspectable const&,
                         winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnStrongAnonToggled(winrt::Windows::Foundation::IInspectable const&,
@@ -323,6 +330,11 @@ struct MainWindow : MainWindowT<MainWindow> {
   void OnAuthStateChanged(urnw::AuthState state, std::string const& error);
   void OnTunnelStateChanged(urnw::proto::TunnelStatus const& status);
   void OnStatsChanged(urnw::LiveStats const& stats);
+  // The window is hiding to the tray (AppController::HideWindow): close the
+  // sheets that must not come back on a draft read before the hide, today the
+  // Earnings provider transport sheet (EXTENDER.md O8). A minimize does not
+  // call this.
+  void CloseSheetsForHide();
   void OnBalanceChanged(urnw::BalanceSnapshot const& snapshot,
                         urnw::BalancePollState const& poll);
   // A batch of newly observed referrals: the first ever shows the full-window
