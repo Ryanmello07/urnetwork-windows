@@ -21,6 +21,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cwchar>
+#include <cwctype>
 #include <iterator>
 #include <limits>
 #include <string_view>
@@ -32,6 +33,7 @@
 #include "MainWindow.xaml.h"
 #include "PageContext.h"
 #include "SettingsSheets.h"
+#include "SolanaWalletSheets.h"
 #include "StatsFormat.h"
 #include "Strings.h"
 #include "UrColors.h"
@@ -80,6 +82,14 @@ void SetStatValue(TextBlock const& value, hstring const& text, bool loaded) {
 using ShapeEllipse = winrt::Microsoft::UI::Xaml::Shapes::Ellipse;
 using ShapePolyline = winrt::Microsoft::UI::Xaml::Shapes::Polyline;
 
+// A store string in capitals, for a chip (the DEFAULT tag), the way the
+// referral card draws its kickers.
+hstring Upper(hstring const& text) {
+  std::wstring upper{text};
+  for (auto& ch : upper) ch = static_cast<wchar_t>(std::towupper(ch));
+  return hstring{upper};
+}
+
 // The SDK's stable error codes (SnErrorCode*), in the store's words. A code
 // the store has no sentence for shows the SDK's message as it came, so a new
 // server state is visible rather than blank.
@@ -115,6 +125,30 @@ urnet::SnError SetWalletError(urnet::SnSetWalletError const& source) {
   urnet::SnError error;
   error.message = source.message;
   return error;
+}
+
+// The Solana payout wallet reads the account's wallets, the payout wallet id
+// and the payments: three reads, committed once all of them have answered.
+constexpr int kLegacyReads = 3;
+
+// The SDK's AccountWallet and AccountPayment as the plain views the Solana
+// payout wallet's logic reads (SolanaWalletPresentation.h).
+solana::LegacyWallet ToLegacyWallet(urnet::AccountWallet const& wallet) {
+  solana::LegacyWallet out;
+  out.id = wallet.wallet_id.value_or(std::string());
+  out.blockchain = wallet.blockchain;
+  out.address = wallet.wallet_address;
+  out.circleWalletId = wallet.circle_wallet_id.value_or(std::string());
+  out.active = wallet.active;
+  return out;
+}
+
+solana::HeldPayment ToHeldPayment(urnet::AccountPayment const& payment) {
+  solana::HeldPayment out;
+  out.payoutNanoCents = payment.payout_nano_cents;
+  out.completed = payment.completed.value_or(false);
+  out.canceled = payment.canceled;
+  return out;
 }
 
 // The four account-point events the server emits (iOS AccountPointEvent).
@@ -287,6 +321,33 @@ bool PreviewSample() {
   return on;
 }
 
+// URNETWORK_PREVIEW_SOLANA=1, with --preview-ui on: a synthetic Solana payout
+// wallet and 3.87 USDC waiting, through the same ApplyLegacyWallets the api path
+// uses, so the card, its overflow and the remove confirmation can be looked at.
+// Its own switch rather than part of the sample above, because with it OFF the
+// waiting line and the plain Bittensor block are what there is to look at.
+constexpr const char* kSampleSolanaWalletId = "sample-solana-payout-wallet";
+constexpr const char* kSampleSolanaAddress = "7Xk9SAMPLEpayoutWALLETnotREAL1111113fQa";
+constexpr int64_t kSampleUsdcWaitingNanoCents = 3'870'000'000;
+
+bool PreviewSolana() {
+  static const bool on = [] {
+    size_t len = 0;
+    char value[16]{};
+    if (getenv_s(&len, value, sizeof(value), "URNETWORK_PREVIEW_SOLANA") != 0 || len == 0) {
+      return false;
+    }
+    const bool enabled = std::string_view(value) == "1";
+    if (enabled) {
+      urnw::LogWarn(
+          "preview-solana: rendering a SYNTHETIC Solana payout wallet and USDC total - "
+          "none of this came from the api");
+    }
+    return enabled;
+  }();
+  return on;
+}
+
 std::vector<urnet::AccountPoint> SamplePoints() {
   auto make = [](const char* event, int64_t nanoPoints) {
     urnet::AccountPoint p;
@@ -370,6 +431,7 @@ WalletPage::~WalletPage() {
   if (connectFlow_.timer) connectFlow_.timer.Stop();
   if (rankingFlow_.timer) rankingFlow_.timer.Stop();
   if (pointsPublicFlow_.timer) pointsPublicFlow_.timer.Stop();
+  if (legacyFlow_.timer) legacyFlow_.timer.Stop();
   try {
     ClosePointsBoard(/*deviceAlive=*/true);
   } catch (...) {
@@ -478,6 +540,15 @@ void WalletPage::ApplyStrings() {
   automation::AutomationProperties::SetName(w_.WalletAddressBox(),
                                             Loc("earnings_address_placeholder"));
   w_.ConnectAddressButton().Content(LocBox("connect"));
+  // the Solana payout wallet, and the wallet overflows (icon-only: a glyph is
+  // not a name)
+  w_.SolanaWalletHeading().Text(Loc("solana_wallet"));
+  w_.SolanaWalletNote().Text(Loc("usdc_payouts_until_migration"));
+  w_.SolanaDefaultTagText().Text(Upper(Loc("default_wallet")));
+  const hstring walletOptions = Loc("wallet_options");
+  automation::AutomationProperties::SetName(w_.WalletMoreButton(), walletOptions);
+  automation::AutomationProperties::SetName(w_.WalletMoreConnectedButton(), walletOptions);
+  automation::AutomationProperties::SetName(w_.SolanaMoreButton(), walletOptions);
   w_.UnclaimedHeading().Text(Loc("unclaimed"));
   w_.ClaimButton().Content(LocBox("claim"));
   w_.Top200Heading().Text(Loc("top200"));
@@ -516,6 +587,10 @@ void WalletPage::ApplyStrings() {
   SetStatValue(w_.LeaderboardNetProvidedValue(), dash, false);
   ApplySeekerState();
   ShowManualPanel(manualPanelOpen_);
+  // Not part of the Loading seeding above: the Solana card and the waiting line
+  // stay collapsed until their reads land. Their formatted text and names are
+  // in the language, though, so a strings change redraws them.
+  RebuildSolanaPanel();
 }
 
 // The ledger pane shows ONE table at a time; this is the switch in its header.
@@ -540,6 +615,7 @@ void WalletPage::LoadWallet() {
   LoadEpochs();
   LoadSnWallet();  // continues into LoadClaims/LoadGas once the coldkey is known
   LoadHead();
+  LoadLegacyWallets();
 }
 
 void WalletPage::RefreshAfterWalletChange() { LoadWallet(); }
@@ -1266,6 +1342,390 @@ void WalletPage::OnConnectWalletAddress(IInspectable const&, RoutedEventArgs con
   StartWalletConnect(manualAddress_);
 }
 
+// ---- the Solana payout wallet ------------------------------------------------
+//
+// USDC payouts continue until the migration to Bittensor completes, and a
+// network whose payouts are held for want of a wallet is emailed "Connect a
+// wallet - N USDC waiting". The card under the Bittensor block is the Solana
+// payout wallet: its address, DEFAULT, what it is for, the USDC waiting, and
+// Remove behind its overflow. With no Solana payout wallet, one "N USDC
+// waiting" line above the Bittensor action says what the email said. Connecting
+// is SolanaWalletSheets, behind "Connect Solana wallet" in the overflow beside
+// the Bittensor action. What to show is SolanaWalletPresentation's decision;
+// this section runs the reads and the writes.
+
+void WalletPage::LoadLegacyWallets(bool reset) {
+  if (!Sdk().IsLoggedIn()) return;  // the caller's guard is not the only one
+  std::string networkId;
+  if (auto jwt = Sdk().ParsedJwt(); jwt && jwt->NetworkId) networkId = *jwt->NetworkId;
+  if (networkId != legacyNetworkId_) {
+    // Another network's wallet must not stay on screen while this one's loads,
+    // and its payout wallet id must not outlive it through the empty-id rule.
+    legacyNetworkId_ = networkId;
+    legacyWallets_.clear();
+    payoutWalletId_.clear();
+    pendingNanoCents_ = 0;
+    reset = true;
+  }
+  legacyLoad_ = LegacyLoad{};
+  legacyLoad_.generation = ++legacyGeneration_;
+  const uint32_t generation = legacyLoad_.generation;
+  if (reset) {
+    legacyState_ = Fetch::Loading;
+    RebuildSolanaPanel();
+  }
+
+  auto queue = w_.DispatcherQueue();
+  auto weak = w_.get_weak();
+  Sdk().api().getAccountWallets(
+      [queue, weak, generation](std::optional<urnet::GetAccountWalletsResult> result,
+                                std::optional<std::string> err) {
+        const bool ok = result && !err;
+        // an account with no wallets answers with an empty list
+        std::vector<solana::LegacyWallet> wallets;
+        if (ok && result->wallets) {
+          for (auto const& wallet : *result->wallets) wallets.push_back(ToLegacyWallet(wallet));
+        }
+        if (!ok) {
+          urnw::LogError("earnings: getAccountWallets (payout wallet) failed{}",
+                         err ? (": " + *err) : std::string());
+        }
+        queue.TryEnqueue([weak, generation, ok, wallets] {
+          auto self = weak.get();
+          if (!self) return;
+          auto& page = self->wallet();
+          if (page.legacyLoad_.generation != generation) return;  // a newer load owns the view
+          page.legacyLoad_.wallets = wallets;
+          page.legacyLoad_.failed = page.legacyLoad_.failed || !ok;
+          ++page.legacyLoad_.answered;
+          page.ApplyLegacyWallets(generation);
+        });
+      });
+
+  Sdk().api().getPayoutWallet(
+      [queue, weak, generation](std::optional<urnet::GetPayoutWalletIdResult> result,
+                                std::optional<std::string> err) {
+        // A network with no payout wallet is not an error: it answers with no id.
+        const bool ok = result && !err;
+        std::string payoutId;
+        if (ok && result->wallet_id) payoutId = *result->wallet_id;
+        if (!ok) {
+          urnw::LogError("earnings: getPayoutWallet failed{}",
+                         err ? (": " + *err) : std::string());
+        }
+        queue.TryEnqueue([weak, generation, ok, payoutId] {
+          auto self = weak.get();
+          if (!self) return;
+          auto& page = self->wallet();
+          if (page.legacyLoad_.generation != generation) return;
+          page.legacyLoad_.payoutId = payoutId;
+          page.legacyLoad_.failed = page.legacyLoad_.failed || !ok;
+          ++page.legacyLoad_.answered;
+          page.ApplyLegacyWallets(generation);
+        });
+      });
+
+  Sdk().api().getAccountPayments(
+      [queue, weak, generation](std::optional<urnet::GetNetworkAccountPaymentsResult> result,
+                                std::optional<std::string> err) {
+        std::string error = err ? *err : std::string();
+        if (error.empty() && result && result->error) error = result->error->message;
+        const bool ok = result && error.empty();
+        // a network with no payments answers with no list at all
+        std::vector<solana::HeldPayment> payments;
+        if (ok && result->account_payments) {
+          for (auto const& payment : *result->account_payments) {
+            payments.push_back(ToHeldPayment(payment));
+          }
+        }
+        if (!ok) urnw::LogError("earnings: getAccountPayments failed: {}", error);
+        queue.TryEnqueue([weak, generation, ok, payments] {
+          auto self = weak.get();
+          if (!self) return;
+          auto& page = self->wallet();
+          if (page.legacyLoad_.generation != generation) return;
+          page.legacyLoad_.payments = payments;
+          page.legacyLoad_.failed = page.legacyLoad_.failed || !ok;
+          ++page.legacyLoad_.answered;
+          page.ApplyLegacyWallets(generation);
+        });
+      });
+}
+
+// Once all three reads of the current load are in: commit them, or fail the view.
+void WalletPage::ApplyLegacyWallets(uint32_t generation) {
+  if (legacyLoad_.generation != generation || legacyLoad_.answered < kLegacyReads) return;
+  if (legacyLoad_.failed) {
+    // Logged where it failed. This wallet is secondary to the Bittensor block,
+    // so a failed read hides the card and the line rather than raising a bar.
+    legacyState_ = Fetch::Failed;
+  } else {
+    legacyWallets_ = legacyLoad_.wallets;
+    // An answer with no id keeps the id already known (the old payout wallet
+    // rows' rule, iOS PayoutWalletViewModel): a transient nil must not make the
+    // payout wallet look unset. A removed wallet is inactive, so it still drops.
+    if (!legacyLoad_.payoutId.empty()) payoutWalletId_ = legacyLoad_.payoutId;
+    pendingNanoCents_ = solana::PendingUsdcNanoCents(legacyLoad_.payments);
+    legacyState_ = Fetch::Ready;
+  }
+  RebuildSolanaPanel();
+}
+
+void WalletPage::RebuildSolanaPanel() {
+  const solana::LegacyState state = legacyState_ == Fetch::Ready    ? solana::LegacyState::Ready
+                                    : legacyState_ == Fetch::Failed ? solana::LegacyState::Failed
+                                                                    : solana::LegacyState::Loading;
+  const auto view = solana::SolanaPanelFor(
+      state, solana::PayoutWalletFor(legacyWallets_, payoutWalletId_), pendingNanoCents_);
+  const hstring waiting =
+      (view.showCardPending || view.showWaitingLine)
+          ? hstring{urnw::Format("usdc_waiting", urnw::Widen(view.pendingUsd))}
+          : hstring{};
+
+  w_.SolanaWalletPanel().Visibility(view.showCard ? Visibility::Visible : Visibility::Collapsed);
+  if (view.showCard) {
+    namespace automation = winrt::Microsoft::UI::Xaml::Automation;
+    const std::string& address = view.wallet.address;
+    // The short form is visual only: the tooltip and the name carry the address.
+    w_.SolanaAddressText().Text(hstring{ShortAddress(address)});
+    ToolTipService::SetToolTip(w_.SolanaAddressText(), winrt::box_value(H(address)));
+    automation::AutomationProperties::SetName(
+        w_.SolanaAddressText(),
+        hstring{urnw::Localized("solana_wallet") + L", " + urnw::Widen(address)});
+  }
+  kit::SetTextOrCollapse(w_.SolanaPendingText(), view.showCardPending ? waiting : hstring{});
+  // one line, in whichever Bittensor state is showing
+  kit::SetTextOrCollapse(w_.UsdcWaitingText(), view.showWaitingLine ? waiting : hstring{});
+  kit::SetTextOrCollapse(w_.UsdcWaitingConnectedText(),
+                         view.showWaitingLine ? waiting : hstring{});
+  w_.SolanaMoreButton().IsEnabled(!legacyBusy_);
+}
+
+void WalletPage::SetLegacyBusy(bool busy) {
+  legacyBusy_ = busy;
+  w_.SolanaMoreButton().IsEnabled(!busy);
+}
+
+void WalletPage::OnWalletMore(IInspectable const& sender, RoutedEventArgs const&) {
+  if (auto anchor = sender.try_as<FrameworkElement>()) ShowWalletMenu(anchor);
+}
+
+// The overflow beside the Bittensor action, in both of its states. One item,
+// whether or not a Solana wallet is connected: connecting another address
+// replaces the payout wallet. The account menu's idiom (AuthSheets.cpp
+// ShowAccountMenu).
+void WalletPage::ShowWalletMenu(FrameworkElement const& anchor) {
+  MenuFlyout flyout;
+  MenuFlyoutItem connect;
+  connect.Text(Loc("connect_solana_wallet"));
+  connect.Click([weak = w_.get_weak()](IInspectable const&, RoutedEventArgs const&) {
+    if (auto self = weak.get()) self->wallet().OpenConnectSolanaSheet();
+  });
+  flyout.Items().Append(connect);
+  flyout.ShowAt(anchor);
+}
+
+winrt::fire_and_forget WalletPage::OpenConnectSolanaSheet() {
+  if (w_.sheetOpen()) co_return;  // only one ContentDialog can show at a time
+  // The sheet ends in a server write and opens a BROWSER on the way there, so
+  // with no session it does not open - except under --preview-ui, where it opens
+  // READABLE with its actions disabled, like the claim dialog.
+  if (!w_.previewUi() && !CanCallApi()) {
+    RefuseNoSession();
+    co_return;
+  }
+  const bool allowActions = CanCallApi();
+  auto self = w_.get_strong();
+  auto weak = w_.get_weak();
+  self->SetSheetOpen(true);
+  try {
+    solanaSheet_ = urnw::ConnectSolanaWalletSheet::Create(
+        self->Content().XamlRoot(), Sdk(), allowActions, [weak](std::string walletId) {
+          if (auto w = weak.get()) w->wallet().OnSolanaConnected(walletId);
+        });
+    co_await self->wallet().solanaSheet_->Dialog().ShowAsync();
+  } catch (winrt::hresult_error const& e) {
+    // Silence here is how a click that opens nothing stays a mystery.
+    urnw::LogError("earnings: the Solana wallet sheet failed to open: {}",
+                   urnw::Narrow(std::wstring{e.message()}));
+  } catch (...) {
+    urnw::LogError("earnings: the Solana wallet sheet failed to open");
+  }
+  self->wallet().solanaSheet_.reset();
+  self->SetSheetOpen(false);
+}
+
+// The sheet linked `walletId` and is closing. The server made the wallet the
+// payout wallet by itself if the network had none; one linked beside an
+// existing payout wallet has to be made so here.
+void WalletPage::OnSolanaConnected(std::string const& walletId) {
+  if (!solana::NeedsPayoutSwitch(walletId, payoutWalletId_)) {
+    Notify(Loc("payout_wallet_updated"), InfoBarSeverity::Success);
+    LoadLegacyWallets(/*reset=*/true);
+    return;
+  }
+  if (!CanCallApi()) {
+    RefuseNoSession();
+    return;
+  }
+  SetLegacyBusy(true);
+  // Api::setPayoutWallet drops a call it cannot use without ever answering (the
+  // old wallet sheet found that out), so the watchdog has the last word.
+  const uint32_t generation =
+      BeginFlow(legacyFlow_, kApiTimeoutMs, [weak = w_.get_weak()] {
+        if (auto self = weak.get()) {
+          auto& page = self->wallet();
+          page.SetLegacyBusy(false);
+          page.Notify(Loc("something_went_wrong"), InfoBarSeverity::Error);
+          page.LoadLegacyWallets(/*reset=*/true);  // the wallet is linked either way
+        }
+      });
+
+  urnet::SetPayoutWalletArgs args;
+  args.wallet_id = walletId;
+  auto queue = w_.DispatcherQueue();
+  auto weak = w_.get_weak();
+  Sdk().api().setPayoutWallet(
+      args, [queue, weak, generation](std::optional<urnet::SetPayoutWalletResult> result,
+                                      std::optional<std::string> err) {
+        const bool ok = result.has_value() && !err;
+        const std::string error = err ? *err : std::string();
+        if (!ok) urnw::LogError("earnings: setPayoutWallet failed: {}", error);
+        queue.TryEnqueue([weak, generation, ok, error] {
+          if (auto self = weak.get())
+            self->wallet().ApplyPayoutSwitchResult(generation, ok, error);
+        });
+      });
+}
+
+void WalletPage::ApplyPayoutSwitchResult(uint32_t generation, bool ok,
+                                         std::string const& error) {
+  if (!SettleFlow(legacyFlow_, generation)) {
+    urnw::LogWarn("earnings: dropping a payout wallet result for an abandoned request (ok={})",
+                  ok);
+    return;
+  }
+  SetLegacyBusy(false);
+  if (ok) {
+    Notify(Loc("payout_wallet_updated"), InfoBarSeverity::Success);
+  } else {
+    // the wallet is linked either way; it is the switch that failed
+    Notify(error.empty() ? Loc("something_went_wrong")
+                         : hstring{urnw::Format("error_setting_default_wallet_with_reason",
+                                                urnw::Widen(error))},
+           InfoBarSeverity::Error);
+  }
+  LoadLegacyWallets(/*reset=*/true);  // the reload shows the truth
+}
+
+void WalletPage::OnSolanaWalletMore(IInspectable const& sender, RoutedEventArgs const&) {
+  if (auto anchor = sender.try_as<FrameworkElement>()) ShowSolanaCardMenu(anchor);
+}
+
+// The card's overflow: Remove, behind a confirmation.
+void WalletPage::ShowSolanaCardMenu(FrameworkElement const& anchor) {
+  MenuFlyout flyout;
+  MenuFlyoutItem remove;
+  remove.Text(Loc("remove"));
+  remove.IsEnabled(!legacyBusy_);
+  remove.Click([weak = w_.get_weak()](IInspectable const&, RoutedEventArgs const&) {
+    if (auto self = weak.get()) self->wallet().ConfirmRemoveSolanaWallet();
+  });
+  flyout.Items().Append(remove);
+  flyout.ShowAt(anchor);
+}
+
+winrt::fire_and_forget WalletPage::ConfirmRemoveSolanaWallet() {
+  if (w_.sheetOpen() || legacyBusy_) co_return;
+  const auto wallet = solana::PayoutWalletFor(legacyWallets_, payoutWalletId_);
+  if (!wallet) co_return;
+  // Before the confirmation, not after: its answer is a server write. Under
+  // --preview-ui the confirmation still opens, its Remove disabled.
+  if (!w_.previewUi() && !CanCallApi()) {
+    RefuseNoSession();
+    co_return;
+  }
+  const bool allowActions = CanCallApi();
+  const std::string walletId = wallet->id;
+  auto self = w_.get_strong();
+
+  ContentDialog dialog;
+  dialog.XamlRoot(self->Content().XamlRoot());
+  dialog.Title(winrt::box_value(Loc("remove_wallet")));
+  dialog.Content(winrt::box_value(Loc("remove_wallet_holds_payouts")));
+  dialog.PrimaryButtonText(Loc("remove"));
+  dialog.IsPrimaryButtonEnabled(allowActions);
+  dialog.CloseButtonText(Loc("cancel"));
+  // no undo: the safe answer is the default one
+  dialog.DefaultButton(ContentDialogButton::Close);
+  dialog.Background(colors::SheetBrush());
+
+  self->SetSheetOpen(true);
+  ContentDialogResult result{ContentDialogResult::None};
+  try {
+    result = co_await dialog.ShowAsync();
+  } catch (...) {
+    urnw::LogError("earnings: the remove confirmation failed to open");
+  }
+  self->SetSheetOpen(false);
+  if (result != ContentDialogResult::Primary) co_return;
+  self->wallet().RemoveSolanaWallet(walletId);
+}
+
+void WalletPage::RemoveSolanaWallet(std::string const& walletId) {
+  if (legacyBusy_) return;
+  if (!CanCallApi()) {
+    RefuseNoSession();
+    return;
+  }
+  SetLegacyBusy(true);
+  const uint32_t generation =
+      BeginFlow(legacyFlow_, kApiTimeoutMs, [weak = w_.get_weak()] {
+        if (auto self = weak.get()) {
+          auto& page = self->wallet();
+          page.SetLegacyBusy(false);
+          page.Notify(Loc("something_went_wrong"), InfoBarSeverity::Error);
+          // the removal may have landed all the same: the reads say whether
+          page.LoadLegacyWallets();
+        }
+      });
+
+  urnet::RemoveWalletArgs args;
+  args.wallet_id = walletId;
+  auto queue = w_.DispatcherQueue();
+  auto weak = w_.get_weak();
+  Sdk().api().removeWallet(
+      args, [queue, weak, generation](std::optional<urnet::RemoveWalletResult> result,
+                                      std::optional<std::string> err) {
+        std::string error = err ? *err : std::string();
+        if (error.empty() && result && result->error) error = result->error->message;
+        const bool ok = result && result->success && error.empty();
+        if (!ok) urnw::LogError("earnings: removeWallet failed: {}", error);
+        queue.TryEnqueue([weak, generation, ok, error] {
+          if (auto self = weak.get()) self->wallet().ApplyRemoveResult(generation, ok, error);
+        });
+      });
+}
+
+void WalletPage::ApplyRemoveResult(uint32_t generation, bool ok, std::string const& error) {
+  if (!SettleFlow(legacyFlow_, generation)) {
+    urnw::LogWarn("earnings: dropping a remove result for an abandoned request (ok={})", ok);
+    return;
+  }
+  SetLegacyBusy(false);
+  if (!ok) {
+    // the server's message is not localizable; it is the reason when there is one
+    Notify(error.empty() ? Loc("something_went_wrong")
+                         : hstring{urnw::Format("error_connecting_wallet_with_reason",
+                                                urnw::Widen(error))},
+           InfoBarSeverity::Error);
+    return;
+  }
+  // No snackbar on success: the store has no "wallet removed" sentence, so the
+  // removal reports itself the way the old wallet sheet's did - the card goes.
+  LoadLegacyWallets(/*reset=*/true);
+}
+
 // ---- history ---------------------------------------------------------------
 
 void WalletPage::ApplyEpochs(std::vector<EpochRow> const& epochs, Fetch state) {
@@ -1767,6 +2227,24 @@ void WalletPage::ShowPreviewSnackbar() {
 // otherwise sit on "Loading..." forever - which is exactly what a hang looks
 // like. Settle them all on their empty state instead.
 void WalletPage::ShowPreviewWalletState() {
+  // The Solana payout wallet settles either way: on the synthetic card with
+  // URNETWORK_PREVIEW_SOLANA=1, on its collapsed empty state otherwise.
+  legacyLoad_ = LegacyLoad{};
+  legacyLoad_.generation = ++legacyGeneration_;
+  legacyLoad_.answered = kLegacyReads;
+  if (PreviewSolana()) {
+    solana::LegacyWallet wallet;
+    wallet.id = kSampleSolanaWalletId;
+    wallet.blockchain = solana::kBlockchainSolana;
+    wallet.address = kSampleSolanaAddress;
+    wallet.active = true;
+    legacyLoad_.wallets.push_back(wallet);
+    legacyLoad_.payoutId = kSampleSolanaWalletId;
+    solana::HeldPayment held;
+    held.payoutNanoCents = kSampleUsdcWaitingNanoCents;
+    legacyLoad_.payments.push_back(held);
+  }
+  ApplyLegacyWallets(legacyLoad_.generation);
   if (PreviewSample()) {
     seekerHolder_ = true;
     ApplyPoints(SamplePoints(), Fetch::Ready);
