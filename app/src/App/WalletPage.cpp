@@ -1523,32 +1523,55 @@ winrt::fire_and_forget WalletPage::OpenConnectSolanaSheet() {
   self->SetSheetOpen(false);
 }
 
-// The sheet linked `walletId` and is closing. The server made the wallet the
-// payout wallet by itself if the network had none; one linked beside an
-// existing payout wallet has to be made so here.
+// The sheet linked `walletId` and is closing. Whether it must be made the payout
+// wallet is decided on a fresh read, not on the card: the payout wallet can move
+// elsewhere (on the web, in another app), and the server adopts a new wallet by
+// itself only when the network has none.
 void WalletPage::OnSolanaConnected(std::string const& walletId) {
-  if (!solana::NeedsPayoutSwitch(walletId, legacy_.payoutWalletId)) {
-    Notify(Loc("payout_wallet_updated"), InfoBarSeverity::Success);
-    LoadLegacyWallets(/*reset=*/true);
-    return;
-  }
   if (!CanCallApi()) {
     RefuseNoSession();
     return;
   }
   SetLegacyBusy(true);
-  // Api::setPayoutWallet drops a call it cannot use without ever answering (the
-  // old wallet sheet found that out), so the watchdog has the last word.
-  const uint32_t generation =
-      BeginFlow(legacyFlow_, kApiTimeoutMs, [weak = w_.get_weak()] {
-        if (auto self = weak.get()) {
-          auto& page = self->wallet();
-          page.SetLegacyBusy(false);
-          page.Notify(SolanaFailureText({}), InfoBarSeverity::Error);
-          page.LoadLegacyWallets(/*reset=*/true);  // the wallet is linked either way
+  const uint32_t generation = BeginPayoutFlow();
+  auto queue = w_.DispatcherQueue();
+  auto weak = w_.get_weak();
+  Sdk().api().getPayoutWallet(
+      [queue, weak, generation, walletId](std::optional<urnet::GetPayoutWalletIdResult> result,
+                                          std::optional<std::string> err) {
+        const bool ok = result && !err;
+        const std::string readId =
+            (ok && result->wallet_id) ? *result->wallet_id : std::string();
+        if (!ok) {
+          urnw::LogWarn("earnings: getPayoutWallet before the payout switch failed{}",
+                        err ? (": " + *err) : std::string());
         }
+        queue.TryEnqueue([weak, generation, walletId, ok, readId] {
+          if (auto self = weak.get()) {
+            self->wallet().ApplyFreshPayoutWallet(generation, walletId,
+                                                  solana::PayoutIdForSwitch(ok, readId));
+          }
+        });
       });
+}
 
+void WalletPage::ApplyFreshPayoutWallet(uint32_t generation, std::string const& walletId,
+                                        std::string const& payoutWalletId) {
+  if (!SettleFlow(legacyFlow_, generation)) {
+    urnw::LogWarn("earnings: dropping a payout wallet read for an abandoned request");
+    return;
+  }
+  if (!solana::NeedsPayoutSwitch(walletId, payoutWalletId)) {
+    SetLegacyBusy(false);
+    Notify(Loc("payout_wallet_updated"), InfoBarSeverity::Success);
+    LoadLegacyWallets(/*reset=*/true);
+    return;
+  }
+  SwitchPayoutWallet(walletId);
+}
+
+void WalletPage::SwitchPayoutWallet(std::string const& walletId) {
+  const uint32_t generation = BeginPayoutFlow();
   urnet::SetPayoutWalletArgs args;
   args.wallet_id = walletId;
   auto queue = w_.DispatcherQueue();
@@ -1564,6 +1587,21 @@ void WalletPage::OnSolanaConnected(std::string const& walletId) {
             self->wallet().ApplyPayoutSwitchResult(generation, ok, error);
         });
       });
+}
+
+// Api::setPayoutWallet drops a call it cannot use without ever answering (the
+// old wallet sheet found that out), and a read can hang as well: the watchdog
+// has the last word, gives the overflows back and reloads, since the wallet is
+// linked either way.
+uint32_t WalletPage::BeginPayoutFlow() {
+  return BeginFlow(legacyFlow_, kApiTimeoutMs, [weak = w_.get_weak()] {
+    if (auto self = weak.get()) {
+      auto& page = self->wallet();
+      page.SetLegacyBusy(false);
+      page.Notify(SolanaFailureText({}), InfoBarSeverity::Error);
+      page.LoadLegacyWallets(/*reset=*/true);
+    }
+  });
 }
 
 void WalletPage::ApplyPayoutSwitchResult(uint32_t generation, bool ok,

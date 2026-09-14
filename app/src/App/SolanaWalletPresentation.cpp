@@ -213,6 +213,10 @@ bool NeedsPayoutSwitch(const std::string& newWalletId, const std::string& payout
   return !newWalletId.empty() && newWalletId != payoutWalletId;
 }
 
+std::string PayoutIdForSwitch(bool readOk, const std::string& readPayoutId) {
+  return readOk ? readPayoutId : std::string();
+}
+
 // ---- the connect sheet ------------------------------------------------------
 
 bool ChooseProvider(ConnectMachine& m) {

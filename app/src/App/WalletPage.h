@@ -249,8 +249,14 @@ class WalletPage {
   void RebuildSolanaPanel();
   void ShowWalletMenu(winrt::Microsoft::UI::Xaml::FrameworkElement const& anchor);
   winrt::fire_and_forget OpenConnectSolanaSheet();
-  // The sheet linked `walletId`: made the payout wallet here when it is not yet.
+  // The sheet linked `walletId`: made the payout wallet here when a fresh read of
+  // the payout wallet says it is not yet (ApplyFreshPayoutWallet).
   void OnSolanaConnected(std::string const& walletId);
+  void ApplyFreshPayoutWallet(uint32_t generation, std::string const& walletId,
+                              std::string const& payoutWalletId);
+  void SwitchPayoutWallet(std::string const& walletId);
+  // the payout read and the switch share one watchdog (legacyFlow_)
+  uint32_t BeginPayoutFlow();
   void ApplyPayoutSwitchResult(uint32_t generation, bool ok, std::string const& error);
   void ShowSolanaCardMenu(winrt::Microsoft::UI::Xaml::FrameworkElement const& anchor);
   winrt::fire_and_forget ConfirmRemoveSolanaWallet();

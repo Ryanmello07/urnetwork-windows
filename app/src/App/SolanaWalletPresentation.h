@@ -209,6 +209,13 @@ SolanaPanelView SolanaPanelFor(const LegacyCommitted& view);
 // payout wallet by itself only when the network has none.
 bool NeedsPayoutSwitch(const std::string& newWalletId, const std::string& payoutWalletId);
 
+// The payout wallet id that switch is decided on: a fresh GET
+// /account/payout-wallet, never the card's id, which may be stale (the payout
+// wallet can move on the web). A failed read counts as none, so the switch runs:
+// POST /account/payout-wallet is idempotent for this network's wallet, while a
+// skipped switch could leave USDC going to a wallet the user replaced.
+std::string PayoutIdForSwitch(bool readOk, const std::string& readPayoutId);
+
 // ---- the connect sheet ------------------------------------------------------
 //
 // Two ways in, one way out. A wallet app (Phantom or Solflare, through the

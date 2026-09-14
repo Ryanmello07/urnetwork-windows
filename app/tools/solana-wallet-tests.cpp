@@ -378,6 +378,18 @@ void PanelTests() {
     Check(NeedsPayoutSwitch("w2", "w1"), "a second wallet");
     Check(NeedsPayoutSwitch("w2", ""), "no payout wallet known");
   }
+  {
+    TEST_CASE("theSwitchIsDecidedOnAFreshRead");
+    // the card still shows w1, but the payout wallet moved to w2 on the web
+    Check(NeedsPayoutSwitch("w1", PayoutIdForSwitch(true, "w2")),
+          "linking w1 again switches back to it");
+    Check(!NeedsPayoutSwitch("w1", PayoutIdForSwitch(true, "w1")),
+          "no switch when the server already adopted it");
+    Check(NeedsPayoutSwitch("w1", PayoutIdForSwitch(true, "")), "no payout wallet: switch");
+    CheckEq("", PayoutIdForSwitch(false, "w1"), "a failed read counts as none");
+    Check(NeedsPayoutSwitch("w1", PayoutIdForSwitch(false, "w1")),
+          "so a failed read switches (idempotent)");
+  }
 }
 
 // ---- the three reads, committed (LegacyLoad) ------------------------------
