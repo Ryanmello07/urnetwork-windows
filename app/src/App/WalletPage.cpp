@@ -1583,7 +1583,7 @@ void WalletPage::OnSolanaConnected(std::string const& walletId) {
         if (auto self = weak.get()) {
           auto& page = self->wallet();
           page.SetLegacyBusy(false);
-          page.Notify(Loc("something_went_wrong"), InfoBarSeverity::Error);
+          page.Notify(SolanaFailureText({}), InfoBarSeverity::Error);
           page.LoadLegacyWallets(/*reset=*/true);  // the wallet is linked either way
         }
       });
@@ -1616,11 +1616,9 @@ void WalletPage::ApplyPayoutSwitchResult(uint32_t generation, bool ok,
   if (ok) {
     Notify(Loc("payout_wallet_updated"), InfoBarSeverity::Success);
   } else {
-    // the wallet is linked either way; it is the switch that failed
-    Notify(error.empty() ? Loc("something_went_wrong")
-                         : hstring{urnw::Format("error_setting_default_wallet_with_reason",
-                                                urnw::Widen(error))},
-           InfoBarSeverity::Error);
+    // The wallet is linked either way. The switch is the second half of linking,
+    // so its failure is a connect failure, like android's and apple's link().
+    Notify(SolanaFailureText(error), InfoBarSeverity::Error);
   }
   LoadLegacyWallets(/*reset=*/true);  // the reload shows the truth
 }
@@ -1691,7 +1689,7 @@ void WalletPage::RemoveSolanaWallet(std::string const& walletId) {
         if (auto self = weak.get()) {
           auto& page = self->wallet();
           page.SetLegacyBusy(false);
-          page.Notify(Loc("something_went_wrong"), InfoBarSeverity::Error);
+          page.Notify(SolanaFailureText({}), InfoBarSeverity::Error);
           // the removal may have landed all the same: the reads say whether
           page.LoadLegacyWallets();
         }
@@ -1722,10 +1720,7 @@ void WalletPage::ApplyRemoveResult(uint32_t generation, bool ok, std::string con
   SetLegacyBusy(false);
   if (!ok) {
     // the server's message is not localizable; it is the reason when there is one
-    Notify(error.empty() ? Loc("something_went_wrong")
-                         : hstring{urnw::Format("error_connecting_wallet_with_reason",
-                                                urnw::Widen(error))},
-           InfoBarSeverity::Error);
+    Notify(SolanaFailureText(error), InfoBarSeverity::Error);
     return;
   }
   // No snackbar on success: the store has no "wallet removed" sentence, so the

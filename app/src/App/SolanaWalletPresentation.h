@@ -134,13 +134,13 @@ bool NeedsPayoutSwitch(const std::string& newWalletId, const std::string& payout
 //                                                         a plausible address -> Checking
 //   OpeningBrowser  opening_wallet_in_browser;            the public key -> Linking;
 //                   providers and Connect disabled        a bridge error -> Failed(detail);
-//                                                         180 s -> Failed(timeout)
+//                                                         180 s -> Failed (no detail)
 //   Checking        checking_wallet_address               valid -> Ready; invalid or
 //                                                         unanswered -> Idle, with its line
 //   Ready           Connect enabled                       Connect -> Linking
 //   Linking         connecting_to_wallet; providers,      a wallet id -> Linked;
 //                   Connect and the entry disabled        an error -> Failed(detail);
-//                                                         20 s -> Failed(timeout)
+//                                                         20 s -> Failed (no detail)
 //   Failed          the failure line; controls enabled    any new attempt clears it
 //   Linked          everything disabled                   (the sheet closes)
 //
@@ -159,7 +159,6 @@ enum class ServerVerdict { Valid, Invalid, Unavailable };
 struct ConnectMachine {
   ConnectState state = ConnectState::Idle;
   std::string detail;     // Failed: the bridge's or the server's message, "" when none
-  bool timedOut = false;  // Failed: a watchdog gave up on the request
   AddressCheck check = AddressCheck::None;
   std::string address;    // the trimmed manual address `check` is about
 };
@@ -200,9 +199,9 @@ const char* StatusKey(const ConnectMachine& m);
 const char* CheckKey(const ConnectMachine& m);
 // the supporting line is a refusal (danger) rather than progress (muted)
 bool CheckIsError(const ConnectMachine& m);
-// The failure line's store key: wallet_connect_failed for a timeout,
-// error_connecting_wallet_with_reason (formatted with the detail) when there is
-// a detail, something_went_wrong otherwise.
-const char* FailureKey(const std::string& detail, bool timedOut = false);
+// The store key of a connect, link or remove failure, the rule every app shares:
+// error_connecting_wallet_with_reason (formatted with the detail) when there is a
+// detail, something_went_wrong when there is none - as after a watchdog gave up.
+const char* FailureKey(const std::string& detail);
 
 }  // namespace urnw::solana

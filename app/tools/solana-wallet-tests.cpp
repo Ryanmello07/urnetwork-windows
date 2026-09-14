@@ -376,7 +376,7 @@ void BridgeTests() {
     Check(BridgeError(m, "User rejected the request."), "accepted");
     CheckState(ConnectState::Failed, m, "failed");
     CheckEq("User rejected the request.", m.detail, "the bridge's words");
-    CheckEq("error_connecting_wallet_with_reason", FailureKey(m.detail, m.timedOut),
+    CheckEq("error_connecting_wallet_with_reason", FailureKey(m.detail),
             "rendered with its reason");
     Check(ProvidersEnabled(m) && EntryEnabled(m), "controls re-enabled");
     CheckEq("", StatusKey(m), "no status line");
@@ -387,8 +387,9 @@ void BridgeTests() {
     ChooseProvider(m);
     Check(Timeout(m), "accepted");
     CheckState(ConnectState::Failed, m, "failed");
-    Check(m.timedOut, "as a timeout");
-    CheckEq("wallet_connect_failed", FailureKey(m.detail, m.timedOut), "the timeout's key");
+    CheckEq("", m.detail, "a watchdog has no detail to give");
+    CheckEq("something_went_wrong", FailureKey(m.detail), "the rule's text without a detail");
+    Check(!PublicKey(m), "a key arriving after the give-up is refused");
   }
   {
     TEST_CASE("lateAnswersInIdleAreIgnored");
@@ -404,10 +405,10 @@ void BridgeTests() {
     TEST_CASE("anyNewAttemptClearsAFailure");
     ConnectMachine m;
     ChooseProvider(m);
-    Timeout(m);
+    BridgeError(m, "User rejected the request.");
     Check(ChooseProvider(m), "a provider again");
     CheckState(ConnectState::OpeningBrowser, m, "opening again");
-    Check(!m.timedOut && m.detail.empty(), "the failure is gone");
+    CheckEq("", m.detail, "the failure is gone");
   }
 }
 
@@ -467,6 +468,7 @@ void ManualTests() {
     Check(Typed(m), "accepted");
     CheckState(ConnectState::Idle, m, "back to idle");
     CheckEq("", CheckKey(m), "no verdict");
+    CheckEq("", m.address, "and no address it was about");
     Check(!ConnectEnabled(m), "Connect disabled until the new text is checked");
     ConnectMachine checking;
     Debounced(checking, kUsdcMint, true);
@@ -525,10 +527,10 @@ void ManualTests() {
     TEST_CASE("aNewAddressClearsAFailure");
     ConnectMachine m;
     ChooseProvider(m);
-    Timeout(m);
+    BridgeError(m, "closed");
     Check(Debounced(m, kTokenProgram, true), "checked");
     CheckState(ConnectState::Checking, m, "checking");
-    Check(!m.timedOut && m.detail.empty(), "the failure is gone");
+    CheckEq("", m.detail, "the failure is gone");
     ConnectMachine local;
     ChooseProvider(local);
     BridgeError(local, "closed");
@@ -554,7 +556,7 @@ void LinkTests() {
     Submit(m);
     Check(CreateResult(m, true, "", ""), "accepted");
     CheckState(ConnectState::Failed, m, "failed");
-    CheckEq("something_went_wrong", FailureKey(m.detail, m.timedOut), "a detail-less failure");
+    CheckEq("something_went_wrong", FailureKey(m.detail), "a detail-less failure");
   }
   {
     TEST_CASE("aCreateErrorFailsWithTheServerDetail");
@@ -564,7 +566,7 @@ void LinkTests() {
     Check(CreateResult(m, false, "", "invalid wallet address"), "accepted");
     CheckState(ConnectState::Failed, m, "failed");
     CheckEq("invalid wallet address", m.detail, "the server's words");
-    CheckEq("error_connecting_wallet_with_reason", FailureKey(m.detail, m.timedOut),
+    CheckEq("error_connecting_wallet_with_reason", FailureKey(m.detail),
             "rendered with its reason");
     Check(ProvidersEnabled(m) && EntryEnabled(m), "controls re-enabled");
   }
@@ -573,17 +575,18 @@ void LinkTests() {
     ConnectMachine m = ReadyMachine();
     Submit(m);
     Check(Timeout(m), "accepted");
-    CheckEq("wallet_connect_failed", FailureKey(m.detail, m.timedOut), "the timeout's key");
+    CheckEq("something_went_wrong", FailureKey(m.detail), "the rule's text without a detail");
     Check(!CreateResult(m, true, "w1", ""), "the answer after giving up is dropped");
     CheckState(ConnectState::Failed, m, "still failed");
     Check(ConnectEnabled(m), "the checked address can be tried again");
   }
   {
-    TEST_CASE("theFailureKeys");
-    CheckEq("wallet_connect_failed", FailureKey("", true), "a timeout");
-    CheckEq("wallet_connect_failed", FailureKey("anything", true), "a timeout wins");
+    TEST_CASE("aFailureWithoutADetailSaysSomethingWentWrong");
+    CheckEq("something_went_wrong", FailureKey(""), "no detail, as after a watchdog");
+  }
+  {
+    TEST_CASE("aFailureWithADetailCarriesIt");
     CheckEq("error_connecting_wallet_with_reason", FailureKey("reason"), "with a detail");
-    CheckEq("something_went_wrong", FailureKey(""), "with nothing to say");
   }
 }
 

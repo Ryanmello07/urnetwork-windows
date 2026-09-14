@@ -41,15 +41,11 @@ bool InFlight(ConnectState state) {
          state == ConnectState::Linked;
 }
 
-void ClearFailure(ConnectMachine& m) {
-  m.detail.clear();
-  m.timedOut = false;
-}
+void ClearFailure(ConnectMachine& m) { m.detail.clear(); }
 
-void Fail(ConnectMachine& m, const std::string& detail, bool timedOut) {
+void Fail(ConnectMachine& m, const std::string& detail) {
   m.state = ConnectState::Failed;
   m.detail = detail;
-  m.timedOut = timedOut;
 }
 
 // Checking and Ready are the manual field's own states: once its verdict is
@@ -168,13 +164,13 @@ bool PublicKey(ConnectMachine& m) {
 
 bool BridgeError(ConnectMachine& m, const std::string& detail) {
   if (m.state != ConnectState::OpeningBrowser) return false;
-  Fail(m, detail, /*timedOut=*/false);
+  Fail(m, detail);
   return true;
 }
 
 bool Timeout(ConnectMachine& m) {
   if (m.state != ConnectState::OpeningBrowser && m.state != ConnectState::Linking) return false;
-  Fail(m, std::string(), /*timedOut=*/true);
+  Fail(m, std::string());
   return true;
 }
 
@@ -246,7 +242,7 @@ bool CreateResult(ConnectMachine& m, bool ok, const std::string& walletId,
     ClearFailure(m);
     return true;
   }
-  Fail(m, detail, /*timedOut=*/false);
+  Fail(m, detail);
   return true;
 }
 
@@ -281,10 +277,8 @@ bool CheckIsError(const ConnectMachine& m) {
   return m.check == AddressCheck::Invalid || m.check == AddressCheck::Unavailable;
 }
 
-const char* FailureKey(const std::string& detail, bool timedOut) {
-  if (timedOut) return "wallet_connect_failed";
-  if (!detail.empty()) return "error_connecting_wallet_with_reason";
-  return "something_went_wrong";
+const char* FailureKey(const std::string& detail) {
+  return detail.empty() ? "something_went_wrong" : "error_connecting_wallet_with_reason";
 }
 
 }  // namespace urnw::solana

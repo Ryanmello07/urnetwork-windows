@@ -38,6 +38,12 @@
 
 namespace urnw {
 
+// One wording for every Solana connect, link and remove failure, on this sheet
+// and on the Earnings page - the rule every app shares (solana::FailureKey):
+// error_connecting_wallet_with_reason with the detail, something_went_wrong
+// when there is none, as after a watchdog gave up.
+winrt::hstring SolanaFailureText(std::string const& detail);
+
 class ConnectSolanaWalletSheet : public std::enable_shared_from_this<ConnectSolanaWalletSheet> {
  public:
   // `allowActions` is WalletPage::CanCallApi(): false under --preview-ui, where

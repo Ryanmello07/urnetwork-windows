@@ -74,6 +74,11 @@ hstring KeyText(const char* key) {
 
 }  // namespace
 
+hstring SolanaFailureText(std::string const& detail) {
+  const char* key = solana::FailureKey(detail);
+  return detail.empty() ? Loc(key) : hstring{urnw::Format(key, urnw::Widen(detail))};
+}
+
 std::shared_ptr<ConnectSolanaWalletSheet> ConnectSolanaWalletSheet::Create(
     XamlRoot const& root, SdkHost& sdk, bool allowActions,
     std::function<void(std::string)> onConnected) {
@@ -408,14 +413,9 @@ void ConnectSolanaWalletSheet::Render() {
   verdictText_.Foreground(solana::CheckIsError(machine_) ? colors::DangerBrush()
                                                          : colors::MutedBrush());
 
-  hstring failure;
-  if (machine_.state == solana::ConnectState::Failed) {
-    const std::string key = solana::FailureKey(machine_.detail, machine_.timedOut);
-    failure = key == "error_connecting_wallet_with_reason"
-                  ? hstring{urnw::Format(key, urnw::Widen(machine_.detail))}
-                  : Loc(key);
-  }
-  kit::SetTextOrCollapse(errorText_, failure);
+  kit::SetTextOrCollapse(errorText_, machine_.state == solana::ConnectState::Failed
+                                         ? SolanaFailureText(machine_.detail)
+                                         : hstring{});
 }
 
 }  // namespace urnw
