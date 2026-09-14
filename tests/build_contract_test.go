@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 	"strings"
@@ -834,5 +835,265 @@ func TestWalletSignInClearsAnAbandonedSsoAttempt(t *testing.T) {
 		if cancelAt < 0 || waitingAt < 0 || cancelAt > waitingAt {
 			t.Fatalf("%s must clear the pending flows, the sso attempt among them, before it waits for its sign-in", signature)
 		}
+	}
+}
+
+// stripLineComments blanks every // comment so a contract reads the code and
+// not the prose around it. Lines are kept, so an offset still names its line; a
+// // inside a string literal ("https://") is not a comment, and a quote inside a
+// character literal ('"') does not open a string.
+func stripLineComments(source string) string {
+	lines := strings.Split(source, "\n")
+	for index, line := range lines {
+		inString := false
+	scan:
+		for at := 0; at < len(line); at++ {
+			switch character := line[at]; {
+			case inString && character == '\\':
+				at++
+			case character == '"':
+				inString = !inString
+			case !inString && character == '\'' && (at == 0 || !isIdentifierByte(line[at-1])):
+				// a character literal; a quote after a digit is a digit separator
+				for at++; at < len(line) && line[at] != '\''; at++ {
+					if line[at] == '\\' {
+						at++
+					}
+				}
+			case !inString && character == '/' && at+1 < len(line) && line[at+1] == '/':
+				lines[index] = line[:at]
+				break scan
+			}
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+func isIdentifierByte(character byte) bool {
+	return character == '_' ||
+		'0' <= character && character <= '9' ||
+		'a' <= character && character <= 'z' ||
+		'A' <= character && character <= 'Z'
+}
+
+// definitionBody is the source of the top-level definition that starts at
+// signature, through the closing brace in its first column.
+func definitionBody(t *testing.T, name, source, signature string) string {
+	t.Helper()
+	start := strings.Index(source, signature)
+	if start < 0 {
+		t.Fatalf("%s no longer defines %s; update this contract", name, signature)
+	}
+	end := strings.Index(source[start:], "\n}\n")
+	if end < 0 {
+		t.Fatalf("cannot find the end of %s in %s", signature, name)
+	}
+	return source[start : start+end+2]
+}
+
+// handlerSource is the source of the handler registered at opener, through the
+// "});" that closes its registration.
+func handlerSource(t *testing.T, name, source, opener string) string {
+	t.Helper()
+	start := strings.Index(source, opener)
+	if start < 0 {
+		t.Fatalf("%s no longer registers %s; update this contract", name, opener)
+	}
+	end := strings.Index(source[start:], "});")
+	if end < 0 {
+		t.Fatalf("cannot find the end of the %s registration in %s", opener, name)
+	}
+	return source[start : start+end+len("});")]
+}
+
+// appSourceFiles is every app/src/App file with one of the extensions, keyed by
+// its slash-separated path under that directory. Build output is not source.
+func appSourceFiles(t *testing.T, extensions ...string) map[string]string {
+	t.Helper()
+	root := filepath.Join(repositoryRoot(t), "app", "src", "App")
+	skipped := map[string]bool{"Generated Files": true, "x64": true, "ARM64": true, "bin": true, "obj": true}
+	files := map[string]string{}
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() {
+			if path != root && skipped[entry.Name()] {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		for _, extension := range extensions {
+			if !strings.EqualFold(filepath.Ext(path), extension) {
+				continue
+			}
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			relative, err := filepath.Rel(root, path)
+			if err != nil {
+				return err
+			}
+			files[filepath.ToSlash(relative)] = string(data)
+			break
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return files
+}
+
+func sortedNames(files map[string]string) []string {
+	names := make([]string, 0, len(files))
+	for name := range files {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+// A hide to the tray closes whatever sheet is open, through one sweep of the
+// open dialogs that a sheet added later cannot slip past; a minimize keeps its
+// sheet, as it keeps the window.
+func TestHideToTrayClosesEveryOpenSheet(t *testing.T) {
+	controller := stripLineComments(readAppSource(t, "AppController.cpp"))
+	hide := definitionBody(t, "AppController.cpp", controller, "void AppController::HideWindow() {")
+	sweep := strings.Index(hide, "->CloseSheetsForHide();")
+	windowHide := strings.Index(hide, ".AppWindow().Hide();")
+	if sweep < 0 || windowHide < 0 || sweep > windowHide {
+		t.Fatal("AppController::HideWindow must close the open sheets through MainWindow::CloseSheetsForHide before the window hides to the tray")
+	}
+	if count := strings.Count(controller, "CloseSheetsForHide("); count != 1 {
+		t.Fatalf("AppController.cpp closes the sheets from %d places; only HideWindow may", count)
+	}
+
+	// The minimize box never reaches HideWindow. It raises Window.VisibilityChanged,
+	// whose handler re-reads IsIconic and reconciles the presentation, and nothing
+	// on that path closes a sheet.
+	for _, minimize := range []string{
+		handlerSource(t, "AppController.cpp", controller, "window_.VisibilityChanged("),
+		definitionBody(t, "AppController.cpp", controller, "void AppController::SyncWindowMinimized() {"),
+		definitionBody(t, "AppController.cpp", controller, "void AppController::ReconcileWindowPresentation() {"),
+	} {
+		if strings.Contains(minimize, "CloseSheetsForHide") || strings.Contains(minimize, "HideWindow") {
+			t.Fatalf("a minimize would close the open sheet:\n%s", minimize)
+		}
+	}
+	// HideWindow's one caller is the window's Closing handler (the caption X,
+	// Alt+F4), which hides to the tray instead of closing.
+	callers := 0
+	for _, source := range appSourceFiles(t, ".cpp") {
+		callers += strings.Count(stripLineComments(source), "HideWindow();")
+	}
+	closing := handlerSource(t, "AppController.cpp", controller, "appWindow.Closing(")
+	if callers != 1 || !strings.Contains(closing, "HideWindow();") {
+		t.Fatalf("HideWindow is called from %d places; the window's Closing handler must be the only one", callers)
+	}
+
+	// The sweep: every open ContentDialog on the window's XamlRoot, dismissed with
+	// Hide(), which runs the dialog's own Closing and Closed and returns its
+	// ShowAsync as any dismissal does.
+	window := stripLineComments(readAppSource(t, "MainWindow.xaml.cpp"))
+	sweeper := definitionBody(t, "MainWindow.xaml.cpp", window, "void MainWindow::CloseSheetsForHide() {")
+	for _, required := range []string{
+		".XamlRoot()",
+		"VisualTreeHelper::GetOpenPopupsForXamlRoot(",
+		".Child().try_as<ContentDialog>()",
+		".Hide();",
+	} {
+		if !strings.Contains(sweeper, required) {
+			t.Errorf("MainWindow::CloseSheetsForHide is missing the open-dialog sweep step %q", required)
+		}
+	}
+	if strings.Contains(sweeper, "IsOpen(") {
+		t.Error("MainWindow::CloseSheetsForHide closes a popup directly; a dialog closed that way never returns from ShowAsync, so the sheet gate stays set, and its Closing guard is skipped")
+	}
+	if count := strings.Count(window, "CloseSheetsForHide("); count != 1 {
+		t.Errorf("MainWindow.xaml.cpp names CloseSheetsForHide %d times; only its definition may, since the window's presentation path also runs on a minimize", count)
+	}
+
+	// One mechanism: outside a sheet, nothing hides a sheet but the sweep (a sheet
+	// still closes itself with dialog_.Hide() when its own work is done). The sweep
+	// finds a dialog as its popup's child, which is how a dialog built in code is
+	// hosted; one declared in markup is hosted otherwise and would be missed.
+	files := appSourceFiles(t, ".cpp", ".h", ".xaml")
+	markupDialog := regexp.MustCompile(`<(?:[A-Za-z_][\w.]*:)?ContentDialog[\s/>]`)
+	for _, name := range sortedNames(files) {
+		if strings.HasSuffix(name, ".xaml") {
+			if markupDialog.MatchString(files[name]) {
+				t.Errorf("%s declares a ContentDialog in markup; the hide's sweep finds dialogs built in code, so this one would stay open across a hide", name)
+			}
+			continue
+		}
+		code := stripLineComments(files[name])
+		if strings.Contains(code, "Dialog().Hide()") {
+			t.Errorf("%s hides a sheet it holds; a hide to the tray closes every sheet through MainWindow::CloseSheetsForHide", name)
+		}
+		if strings.Contains(code, "CloseButtonClick(") {
+			t.Errorf("%s acts on a sheet's CloseButtonClick; Hide() and Esc never raise it, so a hide to the tray would skip that work (use Closing or Closed)", name)
+		}
+	}
+
+	// The Solana connect sheet keeps its designed dismissal: closed mid-link, its
+	// create call may still land, so the page reloads the payout wallet. Closed is
+	// raised by a programmatic Hide() as by Cancel.
+	solana := stripLineComments(readAppSource(t, "SolanaWalletSheets.cpp"))
+	if !strings.Contains(handlerSource(t, "SolanaWalletSheets.cpp", solana, "dialog_.Closed("), "onAbandonedLink_()") {
+		t.Error("the Solana connect sheet no longer reports an abandoned link from its Closed handler, so a hide mid-link would not reload the payout wallet")
+	}
+	wallet := stripLineComments(readAppSource(t, "WalletPage.cpp"))
+	if !strings.Contains(definitionBody(t, "WalletPage.cpp", wallet, "winrt::fire_and_forget WalletPage::OpenConnectSolanaSheet() {"), "LoadLegacyWallets(/*reset=*/true)") {
+		t.Error("the Earnings page no longer reloads the payout wallet when the Solana connect sheet is dismissed mid-link")
+	}
+
+	// The one sheet a hide leaves open: the seedphrase sheet refuses every close
+	// but its confirm, the sweep's included, because it shows the only copy of the
+	// credential of a network the server has already created.
+	auth := stripLineComments(readAppSource(t, "AuthSheets.cpp"))
+	guard := handlerSource(t, "AuthSheets.cpp", auth, "dialog_.Closing(")
+	if !strings.Contains(guard, "args.Result() == ContentDialogResult::None && !self->confirmed_") ||
+		!strings.Contains(guard, "args.Cancel(true);") {
+		t.Error("the seedphrase sheet no longer refuses a close without its confirm; a hide to the tray would discard a network whose only credential is on screen")
+	}
+}
+
+// Every sheet's ShowAsync sits inside the single-sheet gate: checked before the
+// sheet opens, set while it shows, and cleared once ShowAsync returns, which it
+// does for a programmatic Hide() as for any dismissal. A sheet that skipped the
+// clear would lock every other sheet out after a hide to the tray.
+func TestEverySheetClearsTheSheetGateWhenItCloses(t *testing.T) {
+	files := appSourceFiles(t, ".cpp")
+	shows := 0
+	for _, name := range sortedNames(files) {
+		source := stripLineComments(files[name])
+		for offset := 0; ; {
+			found := strings.Index(source[offset:], ".ShowAsync(")
+			if found < 0 {
+				break
+			}
+			at := offset + found
+			offset = at + len(".ShowAsync(")
+			shows++
+			line := strings.Count(source[:at], "\n") + 1
+			start := strings.LastIndex(source[:at], "\n}\n") + 1
+			end := strings.Index(source[at:], "\n}\n")
+			if end < 0 {
+				t.Errorf("%s:%d: cannot find the end of the function that shows this sheet", name, line)
+				continue
+			}
+			before, after := source[start:at], source[at:at+end]
+			checked := strings.Contains(before, "sheetOpen()") || strings.Contains(before, "if (sheetOpen_)")
+			set := strings.Contains(before, "SetSheetOpen(true)") || strings.Contains(before, "sheetOpen_ = true")
+			cleared := strings.Contains(after, "SetSheetOpen(false)") || strings.Contains(after, "sheetOpen_ = false")
+			if !checked || !set || !cleared {
+				t.Errorf("%s:%d shows a sheet outside the single-sheet gate (checked %t, set %t, cleared after ShowAsync %t)", name, line, checked, set, cleared)
+			}
+		}
+	}
+	if shows == 0 {
+		t.Fatal("no sheet calls ShowAsync any more; update this contract")
 	}
 }
