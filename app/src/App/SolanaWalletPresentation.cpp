@@ -147,6 +147,7 @@ SolanaPanelView SolanaPanelFor(LegacyState state, const LegacyReads& reads,
   if (payoutWallet) {
     view.showCard = true;
     view.wallet = *payoutWallet;
+    view.solana = payoutWallet->blockchain != kBlockchainPolygon;
     view.shortAddress = ShortAddress(payoutWallet->address);
     view.showCardPending = waiting;
     return view;

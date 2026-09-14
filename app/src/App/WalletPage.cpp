@@ -540,7 +540,6 @@ void WalletPage::ApplyStrings() {
   w_.ConnectAddressButton().Content(LocBox("connect"));
   // the Solana payout wallet, and the wallet overflows (icon-only: a glyph is
   // not a name)
-  w_.SolanaWalletHeading().Text(Loc("solana_wallet"));
   w_.SolanaWalletNote().Text(Loc("usdc_payouts_until_migration"));
   w_.SolanaDefaultTagText().Text(Upper(Loc("default_wallet")));
   const hstring walletOptions = Loc("wallet_options");
@@ -1455,12 +1454,14 @@ void WalletPage::RebuildSolanaPanel() {
   if (view.showCard) {
     namespace automation = winrt::Microsoft::UI::Xaml::Automation;
     const std::string& address = view.wallet.address;
+    // a legacy Polygon payout wallet is not called a Solana one
+    const hstring title = view.solana ? Loc("solana_wallet") : Loc("wallet");
+    w_.SolanaWalletHeading().Text(title);
     // The short form is visual only: the tooltip and the name carry the address.
     w_.SolanaAddressText().Text(hstring{urnw::Widen(view.shortAddress)});
     ToolTipService::SetToolTip(w_.SolanaAddressText(), winrt::box_value(H(address)));
     automation::AutomationProperties::SetName(
-        w_.SolanaAddressText(),
-        hstring{urnw::Localized("solana_wallet") + L", " + urnw::Widen(address)});
+        w_.SolanaAddressText(), hstring{std::wstring{title} + L", " + urnw::Widen(address)});
   }
   kit::SetTextOrCollapse(w_.SolanaPendingText(), view.showCardPending ? waiting : hstring{});
   // one line, in whichever Bittensor state is showing

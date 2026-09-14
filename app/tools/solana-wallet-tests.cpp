@@ -327,6 +327,16 @@ void PanelTests() {
     CheckEq("", none.shortAddress, "no card, no address");
   }
   {
+    TEST_CASE("aPolygonPayoutWalletIsNotCalledASolanaOne");
+    const auto polygon = SolanaPanelFor(
+        LegacyState::Ready, all, Wallet("matic", "MATIC", "0x71C7656EC7ab88b098defB751B7401B5f6d8976F"),
+        3'870'000'000);
+    Check(polygon.showCard, "its card still shows: hiding it would invite replacing a working wallet");
+    Check(!polygon.solana, "titled Wallet, not Solana wallet");
+    Check(SolanaPanelFor(LegacyState::Ready, all, wallet, 0).solana,
+          "a Solana payout wallet is titled Solana wallet");
+  }
+  {
     TEST_CASE("theCardHidesItsLineAtZero");
     const auto view = SolanaPanelFor(LegacyState::Ready, all, wallet, 0);
     Check(view.showCard, "the card");

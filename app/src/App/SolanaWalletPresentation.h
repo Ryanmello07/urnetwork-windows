@@ -49,6 +49,7 @@ std::string ShortAddress(const std::string& address);
 // ---- the payout wallet ------------------------------------------------------
 
 inline constexpr const char* kBlockchainSolana = "SOL";
+inline constexpr const char* kBlockchainPolygon = "MATIC";
 inline constexpr const char* kBlockchainBittensor = "TAO";
 
 // As much of the SDK's AccountWallet as the payout wallet needs.
@@ -66,7 +67,9 @@ struct LegacyWallet {
 // wallet whose id is the network's (non-empty) payout wallet id. TAO account
 // wallets - the old address-only Bittensor connect - are left out, since the
 // Bittensor block shows the coldkey. A MATIC payout wallet is kept: a legacy
-// Polygon user's USDC goes there, and it renders under the same heading.
+// Polygon user's USDC goes there, and hiding it would put the waiting line up,
+// inviting them to replace a working payout wallet. Its card is titled
+// "Wallet", not "Solana wallet" (SolanaPanelView::solana).
 std::optional<LegacyWallet> PayoutWalletFor(const std::vector<LegacyWallet>& wallets,
                                             const std::string& payoutId);
 
@@ -133,6 +136,9 @@ enum class LegacyState { Loading, Ready };
 struct SolanaPanelView {
   bool showCard = false;
   LegacyWallet wallet;           // the card's wallet, when showCard
+  // the card's title and its address's accessible prefix: "Solana wallet", or
+  // "Wallet" for a legacy Polygon payout wallet, whose address is 0x hex
+  bool solana = true;
   std::string shortAddress;      // what the card draws: ShortAddress(wallet.address)
   bool showCardPending = false;  // the card's "N USDC waiting"
   bool showWaitingLine = false;  // the line above the Bittensor action
