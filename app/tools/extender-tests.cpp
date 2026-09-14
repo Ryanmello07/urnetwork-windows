@@ -20,8 +20,11 @@
 // SPDX-License-Identifier: MPL-2.0
 
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
+#include <functional>
 #include <iostream>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -982,24 +985,140 @@ void ProvideRowTests() {
       Check(!ExtenderProvideRowModelFor(view).on, std::string("off in ") + state);
     }
   }
+}
+
+// ---- ExtenderPresentation.h: the SDK status onto the view (N7) ---------------
+
+// Every field of urnet::ExtenderProvideStatus (urnetwork_sdk.hpp), by the SDK's
+// names and types. ExtenderProvideStatusViewOf reads the same names in SdkHost,
+// so a rename breaks the app build there; here the struct pins which of the
+// eighteen the view reads, and that the ten it leaves to the SDK's state rule
+// change nothing.
+struct FullStatus {
+  bool Supported{};
+  std::string State{};
+  std::string ErrorCase{};
+  std::string Reason{};
+  bool Enabled{};
+  std::string StartError{};
+  bool Listening{};
+  std::string ListenError{};
+  bool ActivatedV4{};
+  bool ActivatedV6{};
+  std::string Ipv4{};
+  std::string Ipv6{};
+  int64_t LastActivationTime{};
+  std::string LastActivationError{};
+  bool LastActivationRefused{};
+  int64_t RevokedTime{};
+  std::string DnsPorts{};
+  int64_t ConnectionCount{};
+};
+
+FullStatus BaseStatus() {
+  FullStatus status;
+  status.Supported = true;
+  status.State = kExtenderProvideStateActive;
+  status.ActivatedV4 = true;
+  status.Enabled = true;
+  status.Reason = "dial tcp6 [2001:db8::1]:443: i/o timeout";
+  return status;
+}
+
+ExtenderProvideStatusView ViewOf(const FullStatus& status, bool setting = true) {
+  return ExtenderProvideStatusViewOf(std::optional<FullStatus>(status),
+                                     [setting] { return setting; });
+}
+
+void ProvideStatusViewTests() {
+  const ExtenderProvideStatusView base = ViewOf(BaseStatus());
   {
-    TEST_CASE("theStatusViewComparesByValueSoTheFeedCanDedup");
-    ExtenderProvideStatusView a = ProvideStatus(kExtenderProvideStateActive, "", "timeout");
-    a.activatedV4 = true;
-    ExtenderProvideStatusView b = a;
-    Check(a == b, "an identical push is not a change");
-    b.provideExtender = false;
-    Check(a != b, "the setting alone is a change");
-    b = a;
-    b.enabled = !a.enabled;
-    Check(a != b, "the role starting or stopping is a change");
-    b = a;
-    b.refused = true;
-    Check(a != b, "a refusal in place of a failure is a change");
-    b = a;
-    b.reason = "another reason";
-    Check(a != b, "so is a new reason");
-    Check(ExtenderProvideStatusView{} == ExtenderProvideStatusView{}, "two empty views agree");
+    TEST_CASE("readsOnlyTheContractFields");
+    FullStatus noisy = BaseStatus();
+    noisy.StartError = "no extender directory";
+    noisy.Listening = true;
+    noisy.ListenError = "udp 4053: bind: address already in use";
+    noisy.Ipv4 = "192.0.2.10";
+    noisy.Ipv6 = "2001:db8::10";
+    noisy.LastActivationTime = 1757800000000;
+    noisy.LastActivationError = "context deadline exceeded";
+    noisy.RevokedTime = 1757800000001;
+    noisy.DnsPorts = "53,4053";
+    noisy.ConnectionCount = 12;
+    Check(ViewOf(noisy) == base,
+          "the ten fields the SDK's state rule already read change nothing");
+  }
+  {
+    TEST_CASE("eachReadFieldMovesTheView");
+    struct Flip {
+      const char* field;
+      void (*apply)(FullStatus&);
+    };
+    const Flip flips[] = {
+        {"Supported", [](FullStatus& s) { s.Supported = false; }},
+        {"State", [](FullStatus& s) { s.State = kExtenderProvideStateSettingUp; }},
+        {"ErrorCase", [](FullStatus& s) { s.ErrorCase = kExtenderProvideErrorListen; }},
+        {"Reason", [](FullStatus& s) { s.Reason = "tcp 443: bind: permission denied"; }},
+        {"ActivatedV4", [](FullStatus& s) { s.ActivatedV4 = false; }},
+        {"ActivatedV6", [](FullStatus& s) { s.ActivatedV6 = true; }},
+        {"LastActivationRefused", [](FullStatus& s) { s.LastActivationRefused = true; }},
+        {"Enabled", [](FullStatus& s) { s.Enabled = false; }},
+    };
+    for (const Flip& flip : flips) {
+      FullStatus status = BaseStatus();
+      flip.apply(status);
+      Check(ViewOf(status) != base,
+            std::string(flip.field) + " alone is a change the feed publishes");
+    }
+    Check(ViewOf(BaseStatus(), false) != base, "the setting alone is a change");
+    // Supported alone: a device that starts reporting the role with its setting
+    // off differs from the unsupported view in nothing else, and the feed must
+    // still publish it, or the row would stay hidden
+    FullStatus offStatus;
+    offStatus.Supported = true;
+    offStatus.State = kExtenderProvideStateOff;
+    Check(ViewOf(offStatus, false) !=
+              ExtenderProvideStatusViewOf(std::optional<FullStatus>(), [] { return false; }),
+          "Supported alone is a change the feed publishes");
+
+    // and each lands where the row reads it
+    FullStatus v6 = BaseStatus();
+    v6.ActivatedV4 = false;
+    v6.ActivatedV6 = true;
+    CheckEq("ipv6", ExtenderProvideRowModelFor(ViewOf(v6)).argument, "IPv6 alone reads ipv6");
+    FullStatus refused = BaseStatus();
+    refused.LastActivationRefused = true;
+    CheckEq("extender_activation_refused",
+            ExtenderProvideRowModelFor(ViewOf(refused)).suffixKey,
+            "a refusal beside the active line is labeled a refusal");
+    FullStatus stopped = BaseStatus();
+    stopped.Enabled = false;
+    Check(base.enabled && !ViewOf(stopped).enabled, "enabled follows Enabled");
+  }
+  {
+    TEST_CASE("aHiddenRowReadsNoSetting");
+    int reads = 0;
+    const auto counting = [&reads] {
+      ++reads;
+      return true;
+    };
+    const ExtenderProvideStatusView none =
+        ExtenderProvideStatusViewOf(std::optional<FullStatus>(), counting);
+    Check(!ExtenderProvideRowModelFor(none).visible, "no status is hidden");
+    FullStatus unsupported = BaseStatus();
+    unsupported.Supported = false;
+    const ExtenderProvideStatusView hidden =
+        ExtenderProvideStatusViewOf(std::optional<FullStatus>(unsupported), counting);
+    Check(!ExtenderProvideRowModelFor(hidden).visible, "an unsupported status is hidden");
+    CheckEq(0, reads, "and neither asks the device for its setting");
+    int supportedReads = 0;
+    const ExtenderProvideStatusView shown = ExtenderProvideStatusViewOf(
+        std::optional<FullStatus>(BaseStatus()), [&supportedReads] {
+          ++supportedReads;
+          return false;
+        });
+    CheckEq(1, supportedReads, "a row that shows reads the setting once");
+    Check(!shown.provideExtender, "and its switch is that setting");
   }
 }
 
@@ -1104,6 +1223,8 @@ int main() {
   ImportTests();
   std::cout << "provider extender row\n";
   ProvideRowTests();
+  std::cout << "provider extender status view\n";
+  ProvideStatusViewTests();
   std::cout << "provider extender switch guess\n";
   ProvideGuessTests();
   std::cout << "statistics sections\n";

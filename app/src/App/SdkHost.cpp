@@ -2995,10 +2995,12 @@ void SdkHost::SubscribeDrawer() {
         PublishExtenderStatus(std::move(status));
       }));
   // The provider extender role on this device (EXTENDER.md N2, N7): its status
-  // and, read beside it, its setting. Relayed by the DeviceRemote through the
-  // rpc listener registry with the last value cached, like the extender status
-  // above; the device emits at most one status a second. A device process too
-  // old to have the listener keeps its session and reports the role
+  // and, for a status whose row shows, its setting. Relayed by the DeviceRemote
+  // through the rpc listener registry with the last value cached, like the
+  // extender status above. The device pushes after any change of the setting,
+  // the provide state or the role, coalesced to one status per epoch, and never
+  // on registration, so the seed below is the first reading. A device process
+  // too old to have the listener keeps its session and reports the role
   // unsupported, which hides the rows.
   presentationSubs_.push_back(device_->addExtenderProvideStatusChangeListener(
       [this](std::optional<urnet::ExtenderProvideStatus> status) {
@@ -3581,43 +3583,30 @@ ExtenderStatusView SdkHost::CurrentExtenderStatus() {
   return lastExtenderStatus_;
 }
 
-namespace {
-// The SDK's ExtenderProvideStatus onto the plain view both extender rows draw
-// (N7): only the fields the apps read, since the SDK derived the state from the
-// rest once. The setting comes from the caller, read beside the status.
-ExtenderProvideStatusView MapExtenderProvideStatus(
-    std::optional<urnet::ExtenderProvideStatus> const& status, bool provideExtender) {
-  ExtenderProvideStatusView view;
-  view.provideExtender = provideExtender;
-  if (!status) return view;
-  view.supported = status->Supported;
-  view.state = status->State;
-  view.errorCase = status->ErrorCase;
-  view.reason = status->Reason;
-  view.activatedV4 = status->ActivatedV4;
-  view.activatedV6 = status->ActivatedV6;
-  view.refused = status->LastActivationRefused;
-  view.enabled = status->Enabled;
-  return view;
-}
-}  // namespace
-
 void SdkHost::PublishExtenderProvideStatus(std::optional<urnet::ExtenderProvideStatus> status) {
-  // The switch's position is the setting read beside every status (N7). The
-  // DeviceRemote answers it with the queued or last-known value while the device
-  // process is out of contact, so the switch holds through a daemon restart. The
-  // DeviceRemote hands a listener its status after releasing its own lock, so
-  // this read cannot deadlock it. It is made without mutex_, as every listener
-  // callback here reads the device: the subscription is dropped in
-  // ClosePresentationLocked before the device is, and mutex_ is held across a
-  // whole bootstrap.
-  const bool provideExtender = device_ ? device_->getProvideExtender() : false;
-  ExtenderProvideStatusView view = MapExtenderProvideStatus(status, provideExtender);
+  // The view reads only the fields the apps may read (N7), and the setting only
+  // for a status whose row shows (N1). The setting is the switch's position: the
+  // DeviceRemote answers the queued or last-known value while the device process
+  // is out of contact, so the switch holds through a daemon restart. It hands a
+  // listener its status after releasing its own lock, so the read cannot
+  // deadlock it, and the read is made without mutex_, as every listener callback
+  // here reads the device: the subscription is dropped in ClosePresentationLocked
+  // before the device is, and mutex_ is held across a whole bootstrap.
+  ExtenderProvideStatusView view = ExtenderProvideStatusViewOf(status, [this] {
+    // D4: with the control pipe down the getter is an rpc into a dying service
+    // that waits out the transport timeout on the callback goroutine, holding the
+    // DeviceRemote lock every UI-thread setter needs. The setting last published
+    // stands in.
+    if (device_ && service_.IsConnected()) return device_->getProvideExtender();
+    std::scoped_lock lock(drawerMutex_);
+    return lastExtenderProvideStatus_.provideExtender;
+  });
   {
     std::scoped_lock lock(drawerMutex_);
-    // The device emits a complete status at most once a second whether or not
-    // anything moved; an unchanged one stays off the UI thread, unless a write
-    // since the last publish left a guess on screen that only a push replaces.
+    // The device pushes after any change of the setting, the provide state or
+    // the role, coalesced to one status per epoch and never on registration. A
+    // push equal to the last one stays off the UI thread, unless a write since
+    // the last publish left a guess on screen that only a push replaces.
     if (view == lastExtenderProvideStatus_ && !extenderProvideRepublish_) return;
     lastExtenderProvideStatus_ = view;
     extenderProvideRepublish_ = false;

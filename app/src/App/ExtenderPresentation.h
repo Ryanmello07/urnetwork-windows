@@ -18,6 +18,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -307,10 +308,11 @@ inline constexpr const char* kExtenderProvideErrorActivationRefused = "activatio
 //                    `reason` (the other family's text) is a refusal
 //   enabled          the role is running; the statistics sections read it
 //                    (O8), the row does not
-//   provideExtender  Device::getProvideExtender() read beside each status: the
-//                    switch's position. The DeviceRemote answers the queued or
-//                    last-known value while the device process is out of
-//                    contact, so the switch holds through a daemon restart.
+//   provideExtender  Device::getProvideExtender() read beside each status whose
+//                    row shows: the switch's position. The DeviceRemote answers
+//                    the queued or last-known value while the device process is
+//                    out of contact, so the switch holds through a daemon
+//                    restart.
 //
 // A default-constructed view is "no session": unsupported, so both rows hide.
 struct ExtenderProvideStatusView {
@@ -324,8 +326,10 @@ struct ExtenderProvideStatusView {
   bool enabled = false;
   bool provideExtender = false;
 
-  // The device emits a complete status at most once a second whether or not it
-  // changed, and SdkHost drops a push that changes nothing on this comparison.
+  // The device pushes a status after any change of the setting, the provide
+  // state or the role, coalesced to one status per epoch and never on
+  // registration. SdkHost keeps a push equal to the last one off the UI thread
+  // on this comparison, so it covers every field the row and the sections read.
   bool operator==(const ExtenderProvideStatusView& o) const {
     return supported == o.supported && state == o.state && errorCase == o.errorCase &&
            reason == o.reason && activatedV4 == o.activatedV4 &&
@@ -334,6 +338,28 @@ struct ExtenderProvideStatusView {
   }
   bool operator!=(const ExtenderProvideStatusView& o) const { return !(*this == o); }
 };
+
+// The view of the SDK's ExtenderProvideStatus (N7), read from the fields the
+// apps may read and nothing else, with the setting read beside it only when the
+// row will show: a device that reports the role unsupported is never asked for
+// a setting it may not have (N1). Generic over the status type so the host tests
+// hand it every field of urnet::ExtenderProvideStatus by the SDK's names.
+template <typename Status, typename ReadSetting>
+ExtenderProvideStatusView ExtenderProvideStatusViewOf(const std::optional<Status>& status,
+                                                      const ReadSetting& readSetting) {
+  ExtenderProvideStatusView view;
+  if (!status || !status->Supported) return view;
+  view.supported = true;
+  view.state = status->State;
+  view.errorCase = status->ErrorCase;
+  view.reason = status->Reason;
+  view.activatedV4 = status->ActivatedV4;
+  view.activatedV6 = status->ActivatedV6;
+  view.refused = status->LastActivationRefused;
+  view.enabled = status->Enabled;
+  view.provideExtender = readSetting();
+  return view;
+}
 
 // The dot, by state: grey off and not providing, yellow setting up, green
 // active, red error. The WinUI layer picks the colours (ProvideModeVisual.h).
