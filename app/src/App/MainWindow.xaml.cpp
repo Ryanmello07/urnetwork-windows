@@ -125,6 +125,14 @@ MainWindow::MainWindow() {
         if (auto self = weak.get()) self->network().OnPeers(peers);
       });
     });
+    // The provider extender status (EXTENDER.md N7): one feed for the rows that
+    // draw it, each taking every pushed view on the UI queue, the way
+    // OnStatsChanged hands the live stats to every page that reads them.
+    Sdk().SetExtenderProvideStatusHandler([queue, weak](urnw::ExtenderProvideStatusView view) {
+      queue.TryEnqueue([weak, view = std::move(view)] {
+        if (auto self = weak.get()) self->connect().ApplyExtenderProvideState(view);
+      });
+    });
   }
 
   ApplyStrings();
@@ -1994,6 +2002,9 @@ void MainWindow::OnConnectionModeChanged(SelectorBar const& s,
 void MainWindow::OnProvideModeChanged(SelectorBar const& s,
                                       SelectorBarSelectionChangedEventArgs const& e) {
   connect_->OnProvideModeChanged(s, e);
+}
+void MainWindow::OnExtenderToggled(IInspectable const& s, RoutedEventArgs const& e) {
+  connect_->OnExtenderToggled(s, e);
 }
 void MainWindow::OnFixedIpToggled(IInspectable const& s, RoutedEventArgs const& e) {
   connect_->OnFixedIpToggled(s, e);

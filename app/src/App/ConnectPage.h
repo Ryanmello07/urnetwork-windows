@@ -69,6 +69,10 @@ class ConnectPage {
 
   // ---- window-level relays ----
   void ApplyStats(urnw::LiveStats const& stats);
+  // The provider extender row under the provide group (connect/EXTENDER.md N7).
+  // MainWindow hands every pushed status here and to the Earnings page, as it
+  // hands the live stats to both.
+  void ApplyExtenderProvideState(urnw::ExtenderProvideStatusView const& view);
   void SetConnectedUi(bool connected);
   // network name off the stored jwt, for the idle "{name} is ready to connect"
   // copy; re-renders the status line
@@ -113,6 +117,10 @@ class ConnectPage {
   void OnProvideModeChanged(
       winrt::Microsoft::UI::Xaml::Controls::SelectorBar const&,
       winrt::Microsoft::UI::Xaml::Controls::SelectorBarSelectionChangedEventArgs const&);
+  // the extender switch: writes the setting through the device and paints the
+  // row's guess until the next pushed status (N7)
+  void OnExtenderToggled(winrt::Windows::Foundation::IInspectable const&,
+                         winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnFixedIpToggled(winrt::Windows::Foundation::IInspectable const&,
                         winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnStrongAnonToggled(winrt::Windows::Foundation::IInspectable const&,
@@ -196,6 +204,9 @@ class ConnectPage {
   void ApplyLocationRowName();
   void ApplySplitRuleCount();
   void ApplyBlockerUi(bool on);
+  // The extender row, its description and its switch, from extenderProvideView_:
+  // the one writer of all three (N7).
+  void ApplyExtenderProvideRow();
   // R3: the activity pane's list vs its empty state. The empty state is a
   // centred line INSIDE the full-height pane, not a card, so this only swaps
   // which of the two is drawn in that same area.
@@ -411,6 +422,12 @@ class ConnectPage {
   uint32_t exitRefreshTick_ = 0;
 
   bool updatingControls_ = false;  // guards programmatic toggle/segment updates
+  // ---- the provider extender row (N7) ----
+  // The last pushed status, or the switch's guess painted over it until the
+  // next push. The default is "no session": hidden, and never written.
+  urnw::ExtenderProvideStatusView extenderProvideView_;
+  // whether the device is providing (LiveStats), which the switch's guess reads
+  bool provideEnabled_ = false;
   bool drawerAnimated_ = false;    // entrance plays once per window
   std::shared_ptr<urnw::ClientContractsSheet> contractsSheet_;
   std::shared_ptr<urnw::SplitRulesSheet> splitRulesSheet_;

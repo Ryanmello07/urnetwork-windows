@@ -173,6 +173,13 @@ void ConnectPage::ApplyStrings() {
   w_.ProvideAlwaysItem().Text(Loc("always"));
   w_.ProvideNetworkItem().Text(Loc("network"));
   w_.ProvideNeverItem().Text(Loc("never"));
+  // the provider extender row (N7): its title, the switch's name, the
+  // description under it, and the state line again in the new language
+  w_.ExtenderLabel().Text(Loc("extender"));
+  winrt::Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(w_.ExtenderToggle(),
+                                                                       Loc("extender"));
+  w_.ExtenderDescription().Text(Loc("extender_setting_description"));
+  ApplyExtenderProvideRow();
   w_.FixedIpLabel().Text(Loc("fixed_ip"));
   w_.StrongAnonLabel().Text(Loc("strong_anonymization"));
   w_.PostQuantumLabel().Text(Loc("post_quantum_encryption"));
@@ -1007,6 +1014,9 @@ void ConnectPage::ApplyStats(urnw::LiveStats const& stats) {
   w_.ProvideStatsText().Text(provide);
   w_.ProvideStatsRow().Visibility(provide.empty() ? Visibility::Collapsed
                                                   : Visibility::Visible);
+  // the extender switch's guess needs whether the device is providing, the
+  // same fact the SDK's not_providing state reports (N3)
+  provideEnabled_ = stats.provideEnabled;
 
   // provide indicator (apple parity). The effective provide mode is a bit set
   // (0 none, 1 network, 2 friends-and-family, 3 public) — per-case only.
@@ -1462,6 +1472,7 @@ void ConnectPage::ResyncDrawer() {
   dnsSettings_ = sdk.CurrentDnsSettings();
   if (transportBar_) transportBar_->SetDistribution(sdk.CurrentTransportDistribution());
   if (extenderPanel_) extenderPanel_->SetStatus(sdk.CurrentExtenderStatus());
+  ApplyExtenderProvideState(sdk.CurrentExtenderProvideStatus());
   clientTransportSettings_ = sdk.CurrentTransportSettings(urnw::TransportSettingsKind::Client);
   providerTransportSettings_ =
       sdk.CurrentTransportSettings(urnw::TransportSettingsKind::Provider);
@@ -1592,6 +1603,58 @@ void ConnectPage::OnProvideModeChanged(SelectorBar const&,
                                        SelectorBarSelectionChangedEventArgs const&) {
   if (updatingControls_) return;
   Sdk().SetProvideControlMode(SelectedProvideMode());
+}
+
+// ---- the provider extender row (connect/EXTENDER.md N7) -----------------------
+
+void ConnectPage::ApplyExtenderProvideState(urnw::ExtenderProvideStatusView const& view) {
+  // a pushed status always replaces the switch's guess
+  extenderProvideView_ = view;
+  ApplyExtenderProvideRow();
+}
+
+void ConnectPage::OnExtenderToggled(IInspectable const&, RoutedEventArgs const&) {
+  if (updatingControls_) return;
+  // Never written while the row is hidden (N1): a device that reports the role
+  // unsupported may be a daemon that cannot take the setting at all.
+  if (!extenderProvideView_.supported) return;
+  const bool on = w_.ExtenderToggle().IsOn();
+  Sdk().SetProvideExtender(on);
+  // Repaint now rather than a device epoch later: grey Off, yellow Setting up
+  // while providing, grey Not providing while not. The next pushed status
+  // replaces the guess.
+  extenderProvideView_ = urnw::ExtenderProvideGuessFor(extenderProvideView_, on, provideEnabled_);
+  ApplyExtenderProvideRow();
+}
+
+void ConnectPage::ApplyExtenderProvideRow() {
+  const urnw::ExtenderProvideRowModel model =
+      urnw::ExtenderProvideRowModelFor(extenderProvideView_);
+  // Hidden, never disabled (N1): a device without the role shows the provide
+  // group exactly as before, and the description goes with the row.
+  const Visibility shown = model.visible ? Visibility::Visible : Visibility::Collapsed;
+  w_.ExtenderRow().Visibility(shown);
+  w_.ExtenderDescriptionRow().Visibility(shown);
+  const hstring text{urnw::ExtenderProvideText(model)};
+  // the provide dot's drawing; a new state repaints it at once, with no motion
+  w_.ExtenderDot().Fill(urnw::colors::MakeBrush(urnw::ExtenderProvideToneColor(model.tone)));
+  w_.ExtenderNote().Text(text);
+  w_.ExtenderNote().Foreground(urnw::ExtenderProvideNoteBrush(model.tone));
+  // the note style cuts the line at the row's width, so the whole line rides
+  // the tooltip: a listen failure names every carrier
+  ToolTipService::SetToolTip(w_.ExtenderNote(),
+                             text.empty() ? IInspectable{nullptr} : winrt::box_value(text));
+  // the switch is named "Extender" (ApplyStrings) and carries the state as its
+  // help text; the dot is decorative (markup)
+  winrt::Microsoft::UI::Xaml::Automation::AutomationProperties::SetHelpText(
+      w_.ExtenderToggle(), text);
+  // the switch is the setting, read beside the status; the echo guard keeps
+  // the repaint from writing it back
+  if (w_.ExtenderToggle().IsOn() != model.on) {
+    updatingControls_ = true;
+    w_.ExtenderToggle().IsOn(model.on);
+    updatingControls_ = false;
+  }
 }
 
 void ConnectPage::OnFixedIpToggled(IInspectable const&, RoutedEventArgs const&) {

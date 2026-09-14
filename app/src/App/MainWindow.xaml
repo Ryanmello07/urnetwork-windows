@@ -979,6 +979,46 @@
                                                Style="{StaticResource UrKeyTextStyle}"
                                                FontSize="12" />
                                 </Border>
+                                <!-- The provider extender (connect/EXTENDER.md N7): the switch
+                                     for the per-space setting, a status dot in the provide
+                                     dot's drawing without its public ring, and the state on
+                                     one line under the title (the whole line is its
+                                     tooltip). Both rows are hidden, never disabled, while
+                                     the device reports the role unsupported;
+                                     ConnectPage::ApplyExtenderProvideRow is their one
+                                     writer. -->
+                                <Border x:Name="ExtenderRow" Visibility="Collapsed"
+                                        Style="{StaticResource UrPaneRowStyle}" MinHeight="44">
+                                    <Grid ColumnSpacing="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid Width="12" Height="12" VerticalAlignment="Center">
+                                            <Ellipse x:Name="ExtenderDot" Width="7" Height="7"
+                                                     IsHitTestVisible="False"
+                                                     AutomationProperties.AccessibilityView="Raw" />
+                                        </Grid>
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center"
+                                                    Spacing="1">
+                                            <TextBlock x:Name="ExtenderLabel"
+                                                       Style="{StaticResource UrRowTitleStyle}" />
+                                            <TextBlock x:Name="ExtenderNote"
+                                                       Style="{StaticResource UrRowNoteStyle}" />
+                                        </StackPanel>
+                                        <ToggleSwitch x:Name="ExtenderToggle" Grid.Column="2" Width="44"
+                                                      Style="{StaticResource UrSwitchToggleStyle}"
+                                                      Toggled="OnExtenderToggled" />
+                                    </Grid>
+                                </Border>
+                                <Border x:Name="ExtenderDescriptionRow" Visibility="Collapsed"
+                                        Style="{StaticResource UrPaneRowStyle}"
+                                        MinHeight="0" Padding="12,8">
+                                    <TextBlock x:Name="ExtenderDescription" TextWrapping="Wrap"
+                                               Style="{StaticResource UrRowNoteStyle}"
+                                               TextTrimming="None" />
+                                </Border>
 
                                 <!-- connect options ................................ -->
                                 <Border Style="{StaticResource UrGroupHeaderStyle}">
