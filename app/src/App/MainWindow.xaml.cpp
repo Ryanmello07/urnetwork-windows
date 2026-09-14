@@ -2085,6 +2085,12 @@ void MainWindow::OnEnterAddressManually(IInspectable const& s, RoutedEventArgs c
 void MainWindow::OnConnectWalletAddress(IInspectable const& s, RoutedEventArgs const& e) {
   wallet_->OnConnectWalletAddress(s, e);
 }
+void MainWindow::OnWalletMore(IInspectable const& s, RoutedEventArgs const& e) {
+  wallet_->OnWalletMore(s, e);
+}
+void MainWindow::OnSolanaWalletMore(IInspectable const& s, RoutedEventArgs const& e) {
+  wallet_->OnSolanaWalletMore(s, e);
+}
 void MainWindow::OnChangeWallet(IInspectable const& s, RoutedEventArgs const& e) {
   wallet_->OnChangeWallet(s, e);
 }

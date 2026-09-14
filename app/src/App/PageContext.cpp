@@ -41,4 +41,19 @@ bool LooksLikeUserAuth(std::string const& value) {
   return digits >= 7;
 }
 
+winrt::hstring Upper(winrt::hstring const& text) {
+  if (text.empty()) return text;
+  const DWORD flags = LCMAP_UPPERCASE | LCMAP_LINGUISTIC_CASING;
+  const int length = static_cast<int>(text.size());
+  const int size = ::LCMapStringEx(LOCALE_NAME_USER_DEFAULT, flags, text.c_str(), length,
+                                   nullptr, 0, nullptr, nullptr, 0);
+  if (size <= 0) return text;
+  std::wstring upper(static_cast<size_t>(size), L'\0');
+  if (::LCMapStringEx(LOCALE_NAME_USER_DEFAULT, flags, text.c_str(), length, upper.data(), size,
+                      nullptr, nullptr, 0) <= 0) {
+    return text;
+  }
+  return winrt::hstring{upper};
+}
+
 }  // namespace urnw::pages

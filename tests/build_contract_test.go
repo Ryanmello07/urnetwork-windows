@@ -753,3 +753,86 @@ func TestNeutralPluralResources(t *testing.T) {
 		t.Fatalf("neutral Resources.resw omits plural resource names: %v", missing)
 	}
 }
+
+func TestWalletBridgeReturnsAreRouted(t *testing.T) {
+	host := readAppSource(t, "SdkHost.cpp")
+	for _, required := range []string{
+		"bridge::RoutePublicKey(",
+		"bridge::RouteSignature(",
+	} {
+		if !strings.Contains(host, required) {
+			t.Fatalf("SdkHost.cpp does not route wallet-bridge returns through %s; a return no flow is waiting for would fall through to a wallet sign-in", required)
+		}
+	}
+
+	const cancel = `CancelPendingWalletFlows("`
+	reasons := 0
+	for rest := host; ; {
+		index := strings.Index(rest, cancel)
+		if index < 0 {
+			break
+		}
+		rest = rest[index+len(cancel):]
+		reasons++
+		if !strings.HasPrefix(rest, "superseded by ") {
+			end := strings.IndexByte(rest, '"')
+			if end < 0 {
+				end = len(rest)
+			}
+			t.Errorf("CancelPendingWalletFlows reason %q does not start with %q, the prefix a page settles a superseded flow by", rest[:end], "superseded by ")
+		}
+	}
+	if reasons == 0 {
+		t.Fatal("SdkHost.cpp no longer answers a superseded wallet flow with a literal reason")
+	}
+
+	page := readAppSource(t, "WalletPage.cpp")
+	if !strings.Contains(page, "bridge::IsSuperseded(") {
+		t.Fatal("WalletPage.cpp shows a superseded wallet flow as an error; it must settle one quietly through bridge::IsSuperseded")
+	}
+}
+
+func TestWalletChallengesCheckTheirFlow(t *testing.T) {
+	host := readAppSource(t, "SdkHost.cpp")
+	if !strings.Contains(host, "walletFlows_.Start()") {
+		t.Fatal("CancelPendingWalletFlows no longer starts a new wallet flow number")
+	}
+	// every call site, less the definition
+	challenges := strings.Count(host, "RequestWalletChallenge(") - 1
+	checks := strings.Count(host, "walletFlows_.IsCurrent(")
+	if challenges < 1 {
+		t.Fatal("SdkHost.cpp no longer fetches a wallet challenge; update this contract")
+	}
+	if checks < challenges {
+		t.Fatalf("SdkHost.cpp fetches %d wallet challenges but checks the flow serial %d times; a flow superseded while its challenge was on its way would open the bridge over the current flow", challenges, checks)
+	}
+}
+
+func TestWalletSignInClearsAnAbandonedSsoAttempt(t *testing.T) {
+	host := readAppSource(t, "SdkHost.cpp")
+	body := func(signature string) string {
+		start := strings.Index(host, signature)
+		if start < 0 {
+			t.Fatalf("SdkHost.cpp no longer defines %s", signature)
+		}
+		end := strings.Index(host[start:], "\n}\n")
+		if end < 0 {
+			t.Fatalf("cannot find the end of %s", signature)
+		}
+		return host[start : start+end]
+	}
+	// A wallet sign-in is waiting when walletAuthDone_ is set and no sso attempt
+	// owns it. An abandoned Google or Apple attempt left in place would drop the
+	// wallet's return, and the login screen would wait for it forever.
+	if !strings.Contains(body("SdkHost::CancelPendingWalletFlows("), "ssoAttempt_.reset();") {
+		t.Fatal("CancelPendingWalletFlows no longer clears the sso attempt, so a wallet sign-in started after an abandoned Google or Apple tab would never see its return")
+	}
+	for _, signature := range []string{"SdkHost::SignInWithSolana(", "SdkHost::SignInWithBittensor("} {
+		definition := body(signature)
+		cancelAt := strings.Index(definition, "CancelPendingWalletFlows(")
+		waitingAt := strings.Index(definition, "walletAuthDone_ = ")
+		if cancelAt < 0 || waitingAt < 0 || cancelAt > waitingAt {
+			t.Fatalf("%s must clear the pending flows, the sso attempt among them, before it waits for its sign-in", signature)
+		}
+	}
+}

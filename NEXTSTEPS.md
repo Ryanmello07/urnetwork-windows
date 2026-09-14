@@ -274,6 +274,14 @@ DeviceRemote → service):
   `AppController::HandleDeepLink` → `SdkHost::HandleDeepLink`. Remaining: set
   `UrnWalletConnectProjectId` (see `src/App/Config.h`), deploy ur.io/wallet-connect,
   and do a real-wallet test.
+  > **The Solana payout wallet is back on Earnings (not yet compiled).** The
+  > by-address connect went with the Subtensor rework (`e14049c`); "Connect Solana
+  > wallet" in the overflow beside "Connect Bittensor wallet" restores it for the
+  > legacy USDC payouts: `SolanaWalletSheets` (Phantom/Solflare through the
+  > connect-only `SdkHost::ConnectSolanaWallet`, or an address checked for `SOL`) →
+  > `createAccountWallet` → `setPayoutWallet`, plus the payout wallet card with
+  > Remove; `tools/solana-wallet-tests.cpp` runs its logic on any host.
+  >
   > **No create-network-with-wallet path.** A wallet with no network still only gets
   > an error ("this wallet isn't linked to a network yet") because the app has no
   > sign-up UI at all. Both wallets are equally affected; fix it with the sign up

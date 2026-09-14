@@ -840,6 +840,10 @@ de la manera correcta</value>
     <value>Conectar la VPN de URnetwork</value>
     <comment>Used in Shared/Intents/ConnectIntent.swift.</comment>
   </data>
+  <data name="connect_wallet" xml:space="preserve">
+    <value>Conectar cartera</value>
+    <comment>Used in Main/Account/Wallets/ConnectWalletSheet/EnterWalletAddress/EnterWalletAddressView.swift.</comment>
+  </data>
   <data name="connected" xml:space="preserve">
     <value>Conectado</value>
     <comment>Used in Main/Connect/ConnectButton/StatusIndicator/ConnectStatusIndicator.swift.</comment>
@@ -1075,6 +1079,10 @@ de la manera correcta</value>
   <data name="default_option" xml:space="preserve">
     <value>Predeterminado</value>
     <comment>Generic default choice label, e.g. the app split rule combo state meaning no rule.</comment>
+  </data>
+  <data name="default_wallet" xml:space="preserve">
+    <value>Predeterminado</value>
+    <comment>Call to action</comment>
   </data>
   <data name="delete" xml:space="preserve">
     <value>Eliminar</value>
@@ -1336,6 +1344,9 @@ de la manera correcta</value>
     <value>Ingresa una contraseña</value>
     <comment>Placeholder text for the password field in the add auth sheet.</comment>
   </data>
+  <data name="enter_a_solana_usdc_wallet_address" xml:space="preserve">
+    <value>Ingresa una dirección de cartera USDC en Solana</value>
+  </data>
   <data name="enter_balance_code" xml:space="preserve">
     <value>Ingresa el código de saldo</value>
     <comment>Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.</comment>
@@ -1368,6 +1379,10 @@ de la manera correcta</value>
     <value>Se produjo un error al conectar tu cartera.</value>
     <comment>Snackbar shown when connecting a wallet fails. Used in Main/Account/Wallets/WalletsView.swift.</comment>
   </data>
+  <data name="error_connecting_wallet_with_reason" xml:space="preserve">
+    <value>Se produjo un error al conectar tu cartera: {}</value>
+    <comment>Snackbar shown when connecting a wallet fails, with the underlying error message. Used in Main/Account/Wallets/WalletsView.swift.</comment>
+  </data>
   <data name="error_creating_network" xml:space="preserve">
     <value>Se produjo un error al crear tu red. Inténtalo de nuevo más tarde.</value>
     <comment>Snackbar shown when creating the user's network fails. Used in ContentView.swift, Main/Account/AccountRootView.swift and Main/Connect/ConnectView-iOS.swift.</comment>
@@ -1395,6 +1410,10 @@ de la manera correcta</value>
   <data name="error_sending_verification_code" xml:space="preserve">
     <value>Ocurrió un error al enviar el código de verificación.</value>
     <comment>Inline error on the verify page when resending the verification code fails. Matches the apple CreateNetworkVerifyView literal.</comment>
+  </data>
+  <data name="error_setting_default_wallet_with_reason" xml:space="preserve">
+    <value>Error al establecer la cartera predeterminada: {}</value>
+    <comment>Snackbar shown when setting the default payout wallet fails, with the underlying error message. Used in Main/Account/Wallet/WalletView.swift.</comment>
   </data>
   <data name="error_updating_device_name" xml:space="preserve">
     <value>Se produjo un error al actualizar el nombre del dispositivo.</value>
@@ -1849,6 +1868,10 @@ enviamos para verificar tu identidad.</value>
   <data name="low_user_ip_ratio" xml:space="preserve">
     <value>La menor proporción de usuarios por IP para acceder a contenido</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="make_default" xml:space="preserve">
+    <value>Establecer como predeterminada</value>
+    <comment>Wallet Screen</comment>
   </data>
   <data name="manage_apps" xml:space="preserve">
     <value>Administrar apps</value>
@@ -2363,6 +2386,10 @@ más grande, seguro y descentralizado del mundo.</value>
     <value>Problema con el pago</value>
     <comment>Billing errors. Every one is shown to the user WITH a remedy: a payment error they cannot see is a payment error they will hit again.</comment>
   </data>
+  <data name="payout_wallet_updated" xml:space="preserve">
+    <value>Cartera de pago actualizada</value>
+    <comment>Snackbar shown after the payout wallet is changed. Used in Main/Account/Wallet/WalletView.swift.</comment>
+  </data>
   <data name="peer_count_one" xml:space="preserve">
     <value>1 par</value>
     <comment>Post quantum identity panel: peer identity count indicator, singular.</comment>
@@ -2839,6 +2866,10 @@ más grande, seguro y descentralizado del mundo.</value>
   </data>
   <data name="remove_this_sign_in_method" xml:space="preserve">
     <value>¿Eliminar este método de inicio de sesión?</value>
+  </data>
+  <data name="remove_wallet" xml:space="preserve">
+    <value>Eliminar cartera</value>
+    <comment>Used in Main/Account/AccountNavStackView.swift.</comment>
   </data>
   <data name="resend_reset_link" xml:space="preserve">
     <value>Reenviar enlace</value>
@@ -3762,6 +3793,9 @@ como debería ser.</value>
   <data name="urnetwork_vpn_started" xml:space="preserve">
     <value>URnetwork VPN iniciada</value>
     <comment>Used in Shared/Intents/ConnectIntent.swift.</comment>
+  </data>
+  <data name="usdc_wallet_address" xml:space="preserve">
+    <value>Dirección de la cartera USDC</value>
   </data>
   <data name="use_most_stable_provider" xml:space="preserve">
     <value>Usa el proveedor más estable</value>

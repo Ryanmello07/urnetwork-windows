@@ -832,6 +832,10 @@
     <value>URnetwork VPN 연결</value>
     <comment>Used in Shared/Intents/ConnectIntent.swift.</comment>
   </data>
+  <data name="connect_wallet" xml:space="preserve">
+    <value>지갑 연결</value>
+    <comment>Used in Main/Account/Wallets/ConnectWalletSheet/EnterWalletAddress/EnterWalletAddressView.swift.</comment>
+  </data>
   <data name="connected" xml:space="preserve">
     <value>연결됨</value>
     <comment>Used in Main/Connect/ConnectButton/StatusIndicator/ConnectStatusIndicator.swift.</comment>
@@ -1059,6 +1063,10 @@
   <data name="default_option" xml:space="preserve">
     <value>기본값</value>
     <comment>Generic default choice label, e.g. the app split rule combo state meaning no rule.</comment>
+  </data>
+  <data name="default_wallet" xml:space="preserve">
+    <value>기본값</value>
+    <comment>Call to action</comment>
   </data>
   <data name="delete" xml:space="preserve">
     <value>삭제</value>
@@ -1320,6 +1328,9 @@
     <value>비밀번호를 입력하세요</value>
     <comment>Placeholder text for the password field in the add auth sheet.</comment>
   </data>
+  <data name="enter_a_solana_usdc_wallet_address" xml:space="preserve">
+    <value>Solana USDC 지갑 주소를 입력하세요</value>
+  </data>
   <data name="enter_balance_code" xml:space="preserve">
     <value>잔액 코드를 입력하세요</value>
     <comment>Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.</comment>
@@ -1352,6 +1363,10 @@
     <value>지갑을 연결하는 중 오류가 발생했습니다.</value>
     <comment>Snackbar shown when connecting a wallet fails. Used in Main/Account/Wallets/WalletsView.swift.</comment>
   </data>
+  <data name="error_connecting_wallet_with_reason" xml:space="preserve">
+    <value>지갑을 연결하는 중 오류가 발생했습니다: {}</value>
+    <comment>Snackbar shown when connecting a wallet fails, with the underlying error message. Used in Main/Account/Wallets/WalletsView.swift.</comment>
+  </data>
   <data name="error_creating_network" xml:space="preserve">
     <value>네트워크를 만드는 중 오류가 발생했습니다. 나중에 다시 시도해 주세요.</value>
     <comment>Snackbar shown when creating the user's network fails. Used in ContentView.swift, Main/Account/AccountRootView.swift and Main/Connect/ConnectView-iOS.swift.</comment>
@@ -1379,6 +1394,10 @@
   <data name="error_sending_verification_code" xml:space="preserve">
     <value>인증 코드를 보내는 중 오류가 발생했습니다.</value>
     <comment>Inline error on the verify page when resending the verification code fails. Matches the apple CreateNetworkVerifyView literal.</comment>
+  </data>
+  <data name="error_setting_default_wallet_with_reason" xml:space="preserve">
+    <value>기본 지갑을 설정하는 중 오류가 발생했습니다: {}</value>
+    <comment>Snackbar shown when setting the default payout wallet fails, with the underlying error message. Used in Main/Account/Wallet/WalletView.swift.</comment>
   </data>
   <data name="error_updating_device_name" xml:space="preserve">
     <value>기기 이름을 업데이트하는 중 오류가 발생했습니다.</value>
@@ -1825,6 +1844,10 @@
   <data name="low_user_ip_ratio" xml:space="preserve">
     <value>콘텐츠 접근 시 최저 사용자/IP 비율</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="make_default" xml:space="preserve">
+    <value>기본값으로 설정</value>
+    <comment>Wallet Screen</comment>
   </data>
   <data name="manage_apps" xml:space="preserve">
     <value>앱 관리</value>
@@ -2331,6 +2354,10 @@
     <value>결제 문제</value>
     <comment>Billing errors. Every one is shown to the user WITH a remedy: a payment error they cannot see is a payment error they will hit again.</comment>
   </data>
+  <data name="payout_wallet_updated" xml:space="preserve">
+    <value>지급 지갑이 업데이트되었습니다</value>
+    <comment>Snackbar shown after the payout wallet is changed. Used in Main/Account/Wallet/WalletView.swift.</comment>
+  </data>
   <data name="peer_count_one" xml:space="preserve">
     <value>피어 1개</value>
     <comment>Post quantum identity panel: peer identity count indicator, singular.</comment>
@@ -2783,6 +2810,10 @@
   </data>
   <data name="remove_this_sign_in_method" xml:space="preserve">
     <value>이 로그인 방법을 제거할까요?</value>
+  </data>
+  <data name="remove_wallet" xml:space="preserve">
+    <value>지갑 제거</value>
+    <comment>Used in Main/Account/AccountNavStackView.swift.</comment>
   </data>
   <data name="resend_reset_link" xml:space="preserve">
     <value>링크 재전송</value>
@@ -3697,6 +3728,9 @@
   <data name="urnetwork_vpn_started" xml:space="preserve">
     <value>URnetwork VPN 시작됨</value>
     <comment>Used in Shared/Intents/ConnectIntent.swift.</comment>
+  </data>
+  <data name="usdc_wallet_address" xml:space="preserve">
+    <value>USDC 월렛 주소</value>
   </data>
   <data name="use_most_stable_provider" xml:space="preserve">
     <value>가장 안정적인 제공업체를 사용합니다</value>

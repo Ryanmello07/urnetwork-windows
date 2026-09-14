@@ -5,7 +5,6 @@
 
 #include <algorithm>
 #include <chrono>
-#include <cwctype>
 #include <random>
 
 #include <winrt/Microsoft.UI.Xaml.Automation.Peers.h>
@@ -43,6 +42,7 @@ using urnw::pages::Balance;
 using urnw::pages::H;
 using urnw::pages::Loc;
 using urnw::pages::Sdk;
+using urnw::pages::Upper;
 
 namespace urnw {
 namespace {
@@ -152,12 +152,6 @@ Button MakeSecondaryButton(hstring const& text) {
   button.HorizontalAlignment(HorizontalAlignment::Stretch);
   if (auto style = rows::Lookup(L"UrSecondaryButtonStyle")) button.Style(style);
   return button;
-}
-
-hstring Upper(hstring const& text) {
-  std::wstring upper{text};
-  for (auto& ch : upper) ch = static_cast<wchar_t>(std::towupper(ch));
-  return hstring{upper};
 }
 
 // The whole gibibytes for prose ("30 GiB"); anything else in the compact form.

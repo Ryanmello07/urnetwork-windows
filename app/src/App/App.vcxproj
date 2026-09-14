@@ -268,6 +268,12 @@
     <ClCompile Include="SettingsSheets.cpp" />
     <ClCompile Include="WalletPage.cpp" />
     <ClCompile Include="EarningsSheets.cpp" />
+    <!-- The Solana payout wallet's decisions (address check, payout wallet,
+         USDC waiting, the connect sheet's state machine) are WinRT-free (no
+         pch) so tools/solana-wallet-tests.cpp runs them on any host; the page
+         and the sheet that draw them use the pch. -->
+    <ClCompile Include="SolanaWalletPresentation.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <ClCompile Include="SolanaWalletSheets.cpp" />
     <ClCompile Include="AppController.cpp" />
     <ClCompile Include="AuthSheets.cpp" />
     <ClCompile Include="LoginCarousel.cpp" />
@@ -343,6 +349,8 @@
     <ClInclude Include="LeaderboardIndicator.h" />
     <ClInclude Include="WalletPage.h" />
     <ClInclude Include="EarningsSheets.h" />
+    <ClInclude Include="SolanaWalletPresentation.h" />
+    <ClInclude Include="SolanaWalletSheets.h" />
     <ClInclude Include="AppController.h" />
     <ClInclude Include="AuthSheets.h" />
     <ClInclude Include="BalanceSheets.h" />
@@ -382,6 +390,8 @@
     <ClInclude Include="ProvideModeVisual.h" />
     <ClInclude Include="UrComponents.h" />
     <ClInclude Include="WalletConnect.h" />
+    <!-- header-only and WinRT-free: tools/solana-wallet-tests.cpp runs it -->
+    <ClInclude Include="WalletBridgeRoute.h" />
     <ClInclude Include="WindowShell.h" />
     <ClInclude Include="ServiceClient.h" />
     <ClInclude Include="ServiceSetup.h" />

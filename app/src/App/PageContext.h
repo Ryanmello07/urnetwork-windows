@@ -96,5 +96,11 @@ std::string TrimWhitespace(std::string const& value);
 // the real validator — macOS ValidationUtils parity in spirit)
 bool LooksLikeUserAuth(std::string const& value);
 
+// `text` in capitals for a chip or a kicker, cased for the user's language
+// (LCMapStringEx with linguistic casing). std::towupper maps ASCII only in the C
+// runtime's default "C" locale, which left the Russian, Ukrainian and Greek
+// chips in lower case.
+winrt::hstring Upper(winrt::hstring const& text);
+
 }  // namespace pages
 }  // namespace urnw
