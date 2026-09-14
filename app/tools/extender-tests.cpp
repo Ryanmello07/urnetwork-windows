@@ -22,8 +22,11 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
+#include <fstream>
 #include <functional>
 #include <iostream>
+#include <map>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -745,29 +748,67 @@ void ImportTests() {
 // family's failure, spelled as its UTF-8 bytes.
 constexpr const char* kMiddleDot = "\xC2\xB7";
 
-// The en store text (Strings/en/Resources.resw) of every key the row can name,
-// with the placeholder lowered to "{}" as the resw carries it. A key missing
-// here answers itself, which is what Localized() does in the app, so a key the
-// model invented would show up in a failure as its own id.
-std::string EnglishFor(const std::string& key) {
-  static const std::vector<std::pair<std::string, std::string>> kEnglish = {
-      {"off", "Off"},
-      {"extender_not_providing", "Not providing"},
-      {"extender_setting_up", "Setting up"},
-      {"extender_active", std::string("Active ") + kMiddleDot + " {}"},
-      {"ipv4", "IPv4"},
-      {"ipv6", "IPv6"},
-      {"ipv4_and_ipv6", "IPv4 and IPv6"},
-      {"extender_revoked", "Revoked by the operator"},
-      {"extender_start_failed", "Could not start: {}"},
-      {"extender_listen_failed", "Could not listen: {}"},
-      {"extender_activation_refused", "Activation refused: {}"},
-      {"extender_activation_failed", "Activation failed: {}"},
-  };
-  for (const auto& entry : kEnglish) {
-    if (entry.first == key) return entry.second;
+// The en store the app ships (Strings/en/Resources.resw), read from the tree
+// this file is built in: the header's command runs from app/tools. The row's
+// English is composed from it rather than from a copy, so a store change the
+// row cannot take (a dropped "{}", a renamed key) fails here.
+constexpr const char* kEnglishStorePath = "../src/App/Strings/en/Resources.resw";
+
+std::string XmlUnescape(std::string text) {
+  // &amp; last, so an escaped entity comes out as the entity rather than its
+  // character
+  static const std::pair<const char*, const char*> kEntities[] = {
+      {"&lt;", "<"}, {"&gt;", ">"}, {"&quot;", "\""}, {"&apos;", "'"}, {"&amp;", "&"}};
+  for (const auto& entity : kEntities) {
+    std::size_t at = 0;
+    while ((at = text.find(entity.first, at)) != std::string::npos) {
+      text.replace(at, std::strlen(entity.first), entity.second);
+      at += std::strlen(entity.second);
+    }
   }
-  return key;
+  return text;
+}
+
+// Every <data name="..."><value>...</value></data> entry of the store, parsed
+// once; empty when the file cannot be opened.
+const std::map<std::string, std::string>& EnglishStore() {
+  static const std::map<std::string, std::string> store = [] {
+    std::map<std::string, std::string> entries;
+    std::ifstream file(kEnglishStorePath, std::ios::binary);
+    if (!file) return entries;
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+    const std::string text = buffer.str();
+    static const std::string kDataOpen = "<data name=\"";
+    static const std::string kValueOpen = "<value>";
+    std::size_t at = 0;
+    while ((at = text.find(kDataOpen, at)) != std::string::npos) {
+      const std::size_t nameStart = at + kDataOpen.size();
+      const std::size_t nameEnd = text.find('"', nameStart);
+      const std::size_t dataEnd = text.find("</data>", nameStart);
+      if (nameEnd == std::string::npos || dataEnd == std::string::npos) break;
+      const std::size_t valueOpen = text.find(kValueOpen, nameEnd);
+      const std::size_t valueEnd =
+          valueOpen == std::string::npos ? std::string::npos : text.find("</value>", valueOpen);
+      if (valueEnd != std::string::npos && valueEnd < dataEnd) {
+        const std::size_t valueStart = valueOpen + kValueOpen.size();
+        entries[text.substr(nameStart, nameEnd - nameStart)] =
+            XmlUnescape(text.substr(valueStart, valueEnd - valueStart));
+      }
+      at = dataEnd;
+    }
+    return entries;
+  }();
+  return store;
+}
+
+// The store's text for a key. A key missing from it answers itself, which is
+// what Localized() does in the app, so a key the model invented shows up in a
+// failure as its own id.
+std::string EnglishFor(const std::string& key) {
+  const auto& store = EnglishStore();
+  const auto found = store.find(key);
+  return found == store.end() ? key : found->second;
 }
 
 // Format() with one argument: the store's text with its "{}" filled.
@@ -820,6 +861,31 @@ void CheckTone(ExtenderProvideTone expected, ExtenderProvideTone actual,
 }
 
 void ProvideRowTests() {
+  {
+    TEST_CASE("theStoreHasEveryKeyTheRowNames");
+    Check(!EnglishStore().empty(),
+          std::string("the en store opens and parses from app/tools: ") + kEnglishStorePath);
+    const char* const kTakesArgument[] = {"extender_active", "extender_start_failed",
+                                          "extender_listen_failed", "extender_activation_refused",
+                                          "extender_activation_failed"};
+    const char* const kWholeText[] = {"off", "extender_not_providing", "extender_setting_up",
+                                      "ipv4", "ipv6", "ipv4_and_ipv6", "extender_revoked"};
+    for (const char* key : kTakesArgument) {
+      const auto found = EnglishStore().find(key);
+      Check(found != EnglishStore().end(), std::string("the store carries ") + key);
+      if (found == EnglishStore().end()) continue;
+      const std::size_t first = found->second.find("{}");
+      Check(first != std::string::npos && found->second.find("{}", first + 2) == std::string::npos,
+            std::string(key) + " holds exactly one {}");
+    }
+    for (const char* key : kWholeText) {
+      const auto found = EnglishStore().find(key);
+      Check(found != EnglishStore().end(), std::string("the store carries ") + key);
+      if (found == EnglishStore().end()) continue;
+      Check(found->second.find('{') == std::string::npos,
+            std::string(key) + " is whole text, with no placeholder");
+    }
+  }
   {
     TEST_CASE("unsupportedIsHiddenInEveryState");
     Check(!ExtenderProvideRowModelFor(ExtenderProvideStatusView{}).visible,
@@ -1169,21 +1235,30 @@ void ProvideGuessTests() {
 void StatsSectionsTests() {
   {
     TEST_CASE("everyCombination");
-    for (int bits = 0; bits < 8; ++bits) {
-      const bool providing = (bits & 1) != 0;
-      const bool hasStats = (bits & 2) != 0;
-      const bool running = (bits & 4) != 0;
-      const auto sections = ExtenderStatsSectionsFor(providing, hasStats, running);
-      const std::string at = " (providing=" + std::to_string(providing) +
-                             " stats=" + std::to_string(hasStats) +
-                             " running=" + std::to_string(running) + ")";
-      const bool provider = providing && hasStats;
-      Check(sections.providerVisible == provider,
-            "the provider rows show exactly while providing is not never and stats exist" + at);
-      Check(sections.extenderVisible == (provider && running),
-            "the extender section shows only with the provider rows and a running role" + at);
-      Check(sections.disabledMeta == !provider,
-            "the disabled line shows exactly while the provider rows are hidden" + at);
+    // O8 as a table, not as the three expressions it is implemented with
+    struct Row {
+      int providing, stats, running;  // the inputs
+      int provider, extender, meta;   // the provider rows, the extender group, the disabled meta
+    };
+    const Row table[] = {
+        {0, 0, 0, 0, 0, 1},
+        {0, 0, 1, 0, 0, 1},
+        {0, 1, 0, 0, 0, 1},
+        {0, 1, 1, 0, 0, 1},
+        {1, 0, 0, 0, 0, 1},
+        {1, 0, 1, 0, 0, 1},
+        {1, 1, 0, 1, 0, 0},
+        {1, 1, 1, 1, 1, 0},
+    };
+    for (const Row& row : table) {
+      const auto sections = ExtenderStatsSectionsFor(row.providing != 0, row.stats != 0,
+                                                     row.running != 0);
+      const std::string at = " (providing=" + std::to_string(row.providing) +
+                             " stats=" + std::to_string(row.stats) +
+                             " running=" + std::to_string(row.running) + ")";
+      Check(sections.providerVisible == (row.provider != 0), "the provider rows" + at);
+      Check(sections.extenderVisible == (row.extender != 0), "the extender group" + at);
+      Check(sections.disabledMeta == (row.meta != 0), "the disabled meta label" + at);
     }
   }
   {
