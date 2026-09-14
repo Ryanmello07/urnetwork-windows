@@ -785,4 +785,9 @@ func TestWalletBridgeReturnsAreRouted(t *testing.T) {
 	if reasons == 0 {
 		t.Fatal("SdkHost.cpp no longer answers a superseded wallet flow with a literal reason")
 	}
+
+	page := readAppSource(t, "WalletPage.cpp")
+	if !strings.Contains(page, "bridge::IsSuperseded(") {
+		t.Fatal("WalletPage.cpp shows a superseded wallet flow as an error; it must settle one quietly through bridge::IsSuperseded")
+	}
 }

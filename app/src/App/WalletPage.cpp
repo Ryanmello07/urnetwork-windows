@@ -38,6 +38,7 @@
 #include "Strings.h"
 #include "UrColors.h"
 #include "UrComponents.h"
+#include "WalletBridgeRoute.h"
 
 using namespace winrt;
 using namespace winrt::Microsoft::UI::Xaml;
@@ -1087,6 +1088,12 @@ void WalletPage::ApplyWalletSigned(uint32_t generation, bool ok, std::string con
   if (!ok) {
     SettleFlow(connectFlow_, generation);
     SetConnectingWallet(false);
+    if (bridge::IsSuperseded(error)) {
+      // the user started another wallet flow (the Solana sheet, Seeker): this
+      // attempt ended by their choice, and the block is simply ready again
+      urnw::LogInfo("earnings: the Bittensor wallet connect was superseded ({})", error);
+      return;
+    }
     urnw::LogError("earnings: wallet signature failed: {}", error);
     Notify(error.empty() ? Loc("wallet_connect_failed") : H(error), InfoBarSeverity::Error);
     return;
@@ -2171,7 +2178,10 @@ winrt::fire_and_forget WalletPage::OnVerifySeeker(IInspectable const&, RoutedEve
       [queue, weak, message, generation](bool ok, std::string address, std::string signature,
                                          std::string error) {
         if (!ok) {
-          urnw::LogError("seeker: wallet signature failed: {}", error);
+          // a superseded request is not a failure (ApplySeekerResult says so quietly)
+          if (!bridge::IsSuperseded(error)) {
+            urnw::LogError("seeker: wallet signature failed: {}", error);
+          }
           queue.TryEnqueue([weak, error, generation] {
             if (auto w = weak.get()) w->wallet().ApplySeekerResult(generation, false, error);
           });
@@ -2206,6 +2216,13 @@ void WalletPage::ApplySeekerResult(uint32_t generation, bool ok,
     return;
   }
   verifyingSeeker_ = false;
+  if (!ok && bridge::IsSuperseded(serverError)) {
+    // the user started another wallet flow (the Solana sheet): this attempt
+    // ended by their choice, and the button is simply ready again
+    urnw::LogInfo("seeker: the wallet signature was superseded ({})", serverError);
+    ApplySeekerState();
+    return;
+  }
   Notify(ok ? Loc("successfully_claimed_multiplier")
             : (serverError.empty()
                    ? Loc("error_claiming_multiplier")
