@@ -21,7 +21,6 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cwchar>
-#include <cwctype>
 #include <iterator>
 #include <limits>
 #include <string_view>
@@ -82,14 +81,6 @@ void SetStatValue(TextBlock const& value, hstring const& text, bool loaded) {
 
 using ShapeEllipse = winrt::Microsoft::UI::Xaml::Shapes::Ellipse;
 using ShapePolyline = winrt::Microsoft::UI::Xaml::Shapes::Polyline;
-
-// A store string in capitals, for a chip (the DEFAULT tag), the way the
-// referral card draws its kickers.
-hstring Upper(hstring const& text) {
-  std::wstring upper{text};
-  for (auto& ch : upper) ch = static_cast<wchar_t>(std::towupper(ch));
-  return hstring{upper};
-}
 
 // The SDK's stable error codes (SnErrorCode*), in the store's words. A code
 // the store has no sentence for shows the SDK's message as it came, so a new

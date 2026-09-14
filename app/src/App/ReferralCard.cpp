@@ -3,7 +3,6 @@
 #include "ReferralCard.h"
 
 #include <algorithm>
-#include <cwctype>
 
 #include <winrt/Microsoft.UI.Xaml.Media.Imaging.h>
 
@@ -27,6 +26,7 @@ using ShapeRectangle = winrt::Microsoft::UI::Xaml::Shapes::Rectangle;
 using urnw::pages::Balance;
 using urnw::pages::H;
 using urnw::pages::Loc;
+using urnw::pages::Upper;
 
 namespace urnw {
 namespace {
@@ -68,12 +68,6 @@ TextBlock MakeLead(hstring const& text, double size = 22) {
   lead.FontFamily(FontResource(L"UrWordmarkFontFamily"));
   lead.FontWeight(winrt::Windows::UI::Text::FontWeights::Bold());
   return lead;
-}
-
-hstring Upper(hstring const& text) {
-  std::wstring upper{text};
-  for (auto& ch : upper) ch = static_cast<wchar_t>(std::towupper(ch));
-  return hstring{upper};
 }
 
 // Pro gold, top to bottom light -> gold (the Best value pill, the copy button).
