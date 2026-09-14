@@ -766,8 +766,9 @@ void AppController::HideWindow() {
   if (shell::SaveWindowPlacement(windowHwnd_)) ownPlacement_ = true;
   windowShown_ = false;
   // A sheet may not outlive the surface that feeds it: the window only hides, and
-  // a dialog left open would come back on a draft read before the hide. A
-  // minimize keeps it, as it keeps the window.
+  // a dialog left open would come back on a draft read before the hide, so every
+  // open sheet closes here. A minimize reaches only VisibilityChanged, never this,
+  // and keeps its sheet, as it keeps the window.
   if (window_) {
     if (auto self = window_.try_as<winrt::URnetwork::implementation::MainWindow>()) {
       self->CloseSheetsForHide();

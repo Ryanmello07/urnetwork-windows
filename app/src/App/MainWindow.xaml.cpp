@@ -1881,8 +1881,29 @@ void MainWindow::OnTunnelStateChanged(urnw::proto::TunnelStatus const& status) {
   if (advancedMode_) ApplyStatusStrip();
 }
 
+// Every sheet in this app is a ContentDialog built in code, and a dialog built
+// in code shows as the child of an open popup on its XamlRoot. One sweep of the
+// window's open popups therefore finds whichever sheet is up, wherever it was
+// opened from - a page, this window, or a sheet added later - with no list of
+// sheets to keep in step.
+//
+// Hide() is the dismissal Esc is: the dialog raises Closing and Closed, its
+// ShowAsync returns None, and the coroutine awaiting it drops the sheet and
+// clears the sheetOpen gate without acting. A sheet that refuses a close without
+// its own button refuses this one too and comes back with the window: the
+// seedphrase sheet, which holds the only copy of a new network's credential.
 void MainWindow::CloseSheetsForHide() {
-  if (wallet_) wallet_->CloseProviderTransportSheet();
+  const auto content = Content();
+  if (!content) return;
+  const auto root = content.XamlRoot();
+  if (!root) return;
+  // collected first, then hidden, so no close runs inside the enumeration
+  std::vector<ContentDialog> openDialogs;
+  for (auto const& popup :
+       Microsoft::UI::Xaml::Media::VisualTreeHelper::GetOpenPopupsForXamlRoot(root)) {
+    if (auto dialog = popup.Child().try_as<ContentDialog>()) openDialogs.push_back(dialog);
+  }
+  for (auto const& dialog : openDialogs) dialog.Hide();
 }
 
 void MainWindow::OnStatsChanged(urnw::LiveStats const& stats) {

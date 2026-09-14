@@ -3977,10 +3977,4 @@ winrt::fire_and_forget WalletPage::ShowProviderTransportSettingsSheet() {
   w_.SetSheetOpen(false);
 }
 
-void WalletPage::CloseProviderTransportSheet() {
-  // ShowProviderTransportSettingsSheet's co_await returns, and it resets the
-  // sheet and clears the window's sheet gate as on any dismissal
-  if (providerTransportSheet_) providerTransportSheet_->Dialog().Hide();
-}
-
 }  // namespace urnw
