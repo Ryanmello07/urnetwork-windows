@@ -2767,6 +2767,10 @@ right way</value>
     <value>Extender settings saved</value>
     <comment>Confirmation after the extender settings are saved.</comment>
   </data>
+  <data name="extender_start_failed" xml:space="preserve">
+    <value>Could not start: {}</value>
+    <comment>Extender status when the setting is on and the device is providing, but the role could not start in this network space: no extender directory or no identity. The argument is the reason.</comment>
+  </data>
   <data name="extender_statistics" xml:space="preserve">
     <value>Extender statistics</value>
     <comment>Title of the section that shows statistics about the extender, directly above the provider statistics section.</comment>
