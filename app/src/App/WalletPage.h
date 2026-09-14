@@ -239,12 +239,13 @@ class WalletPage {
 
   // ---- the Solana payout wallet (legacy USDC payouts until the migration)
   // The account's wallets, the payout wallet id and the payments: three
-  // independent reads, committed together (ApplyLegacyWallets) so the card and
-  // the waiting line never render from part of them. `reset` hides both until
-  // the new answers land (after a change, or on another network); a plain
-  // reload keeps what is on screen meanwhile.
+  // independent reads, committed together by solana::LegacyLoad so the card and
+  // the waiting line never render from part of them. `reset` (after a write)
+  // hides both until the new answers commit; a plain reload keeps what is on
+  // screen meanwhile; another network is cleared at once.
   void LoadLegacyWallets(bool reset = false);
-  void ApplyLegacyWallets(uint32_t generation);
+  void ApplyLegacyAnswer(uint32_t generation, solana::LegacyRead which, bool ok,
+                         solana::LegacyAnswer answer);
   void RebuildSolanaPanel();
   void ShowWalletMenu(winrt::Microsoft::UI::Xaml::FrameworkElement const& anchor);
   winrt::fire_and_forget OpenConnectSolanaSheet();
@@ -348,22 +349,10 @@ class WalletPage {
 
   std::shared_ptr<urnw::ClaimAlphaSheet> claimSheet_;
 
-  // the Solana payout wallet, as last committed from the three reads
-  std::vector<solana::LegacyWallet> legacyWallets_;
-  std::string payoutWalletId_;
-  int64_t pendingNanoCents_ = 0;
-  Fetch legacyState_ = Fetch::Loading;
-  std::string legacyNetworkId_;  // the network that view belongs to
-  // the current load's answers, until all three are in
-  struct LegacyLoad {
-    uint32_t generation = 0;
-    int answered = 0;
-    bool failed = false;
-    std::vector<solana::LegacyWallet> wallets;
-    std::string payoutId;
-    std::vector<solana::HeldPayment> payments;
-  };
-  LegacyLoad legacyLoad_;
+  // the Solana payout wallet: the view last committed from the three reads, and
+  // the load whose answers are still coming in
+  solana::LegacyCommitted legacy_;
+  solana::LegacyLoad legacyLoad_;
   uint32_t legacyGeneration_ = 0;
   bool legacyBusy_ = false;  // a payout switch or a removal is out
   Flow legacyFlow_;

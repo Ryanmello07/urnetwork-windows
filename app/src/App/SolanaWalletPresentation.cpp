@@ -6,6 +6,7 @@
 
 #include <cstdio>
 #include <string_view>
+#include <utility>
 
 namespace urnw::solana {
 namespace {
@@ -46,6 +47,16 @@ void ClearFailure(ConnectMachine& m) { m.detail.clear(); }
 void Fail(ConnectMachine& m, const std::string& detail) {
   m.state = ConnectState::Failed;
   m.detail = detail;
+}
+
+// another network's view, or the first: nothing of what was committed applies
+void ClearView(LegacyCommitted& view, const std::string& networkId) {
+  view.networkId = networkId;
+  view.ready = false;
+  view.reads = LegacyReads{};
+  view.wallets.clear();
+  view.payoutWalletId.clear();
+  view.pendingNanoCents = 0;
 }
 
 // Checking and Ready are the manual field's own states: once its verdict is
@@ -126,21 +137,76 @@ bool HasPendingUsd(int64_t nanoCents) {
   return nanoCents > 0 && RoundedCents(nanoCents) > 0;
 }
 
-SolanaPanelView SolanaPanelFor(LegacyState state,
+SolanaPanelView SolanaPanelFor(LegacyState state, const LegacyReads& reads,
                                const std::optional<LegacyWallet>& payoutWallet,
                                int64_t pendingNanoCents) {
   SolanaPanelView view;
-  if (state != LegacyState::Ready) return view;
-  const bool waiting = HasPendingUsd(pendingNanoCents);
+  if (state != LegacyState::Ready || !reads.wallets) return view;
+  const bool waiting = reads.payments && HasPendingUsd(pendingNanoCents);
   view.pendingUsd = FormatUsd(pendingNanoCents);
   if (payoutWallet) {
     view.showCard = true;
     view.wallet = *payoutWallet;
+    view.shortAddress = ShortAddress(payoutWallet->address);
     view.showCardPending = waiting;
-  } else {
-    view.showWaitingLine = waiting;
+    return view;
   }
+  view.showWaitingLine = reads.payout && waiting;
   return view;
+}
+
+void BeginLegacyLoad(LegacyCommitted& view, const std::string& networkId, bool reset) {
+  if (view.networkId != networkId) {
+    ClearView(view, networkId);
+    return;
+  }
+  if (reset) view.ready = false;
+}
+
+bool LegacyLoad::Answer(uint32_t generation, LegacyRead which, bool ok, LegacyAnswer answer) {
+  if (generation != generation_) return false;
+  switch (which) {
+    case LegacyRead::Wallets:
+      if (answered_.wallets) return false;
+      answered_.wallets = true;
+      ok_.wallets = ok;
+      if (ok) answer_.wallets = std::move(answer.wallets);
+      return true;
+    case LegacyRead::Payout:
+      if (answered_.payout) return false;
+      answered_.payout = true;
+      ok_.payout = ok;
+      if (ok) answer_.payoutId = std::move(answer.payoutId);
+      return true;
+    case LegacyRead::Payments:
+      if (answered_.payments) return false;
+      answered_.payments = true;
+      ok_.payments = ok;
+      if (ok) answer_.payments = std::move(answer.payments);
+      return true;
+  }
+  return false;
+}
+
+bool LegacyLoad::Complete() const {
+  return answered_.wallets && answered_.payout && answered_.payments;
+}
+
+bool LegacyLoad::Commit(LegacyCommitted& view, const std::string& networkId) const {
+  if (!Complete()) return false;
+  if (view.networkId != networkId) ClearView(view, networkId);
+  if (ok_.wallets) view.wallets = answer_.wallets;
+  if (ok_.payout && !answer_.payoutId.empty()) view.payoutWalletId = answer_.payoutId;
+  if (ok_.payments) view.pendingNanoCents = PendingUsdcNanoCents(answer_.payments);
+  view.reads = ok_;
+  view.ready = true;
+  return true;
+}
+
+SolanaPanelView SolanaPanelFor(const LegacyCommitted& view) {
+  return SolanaPanelFor(view.ready ? LegacyState::Ready : LegacyState::Loading, view.reads,
+                        PayoutWalletFor(view.wallets, view.payoutWalletId),
+                        view.pendingNanoCents);
 }
 
 bool NeedsPayoutSwitch(const std::string& newWalletId, const std::string& payoutWalletId) {

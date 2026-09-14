@@ -128,10 +128,6 @@ urnet::SnError SetWalletError(urnet::SnSetWalletError const& source) {
   return error;
 }
 
-// The Solana payout wallet reads the account's wallets, the payout wallet id
-// and the payments: three reads, committed once all of them have answered.
-constexpr int kLegacyReads = 3;
-
 // The SDK's AccountWallet and AccountPayment as the plain views the Solana
 // payout wallet's logic reads (SolanaWalletPresentation.h).
 solana::LegacyWallet ToLegacyWallet(urnet::AccountWallet const& wallet) {
@@ -323,8 +319,8 @@ bool PreviewSample() {
 }
 
 // URNETWORK_PREVIEW_SOLANA=1, with --preview-ui on: a synthetic Solana payout
-// wallet and 3.87 USDC waiting, through the same ApplyLegacyWallets the api path
-// uses, so the card, its overflow and the remove confirmation can be looked at.
+// wallet and 3.87 USDC waiting, committed through the same LegacyLoad the api
+// path uses, so the card, its overflow and the remove confirmation can be looked at.
 // Its own switch rather than part of the sample above, because with it OFF the
 // waiting line and the plain Bittensor block are what there is to look at.
 constexpr const char* kSampleSolanaWalletId = "sample-solana-payout-wallet";
@@ -1365,22 +1361,12 @@ void WalletPage::LoadLegacyWallets(bool reset) {
   if (!Sdk().IsLoggedIn()) return;  // the caller's guard is not the only one
   std::string networkId;
   if (auto jwt = Sdk().ParsedJwt(); jwt && jwt->NetworkId) networkId = *jwt->NetworkId;
-  if (networkId != legacyNetworkId_) {
-    // Another network's wallet must not stay on screen while this one's loads,
-    // and its payout wallet id must not outlive it through the empty-id rule.
-    legacyNetworkId_ = networkId;
-    legacyWallets_.clear();
-    payoutWalletId_.clear();
-    pendingNanoCents_ = 0;
-    reset = true;
-  }
-  legacyLoad_ = LegacyLoad{};
-  legacyLoad_.generation = ++legacyGeneration_;
-  const uint32_t generation = legacyLoad_.generation;
-  if (reset) {
-    legacyState_ = Fetch::Loading;
-    RebuildSolanaPanel();
-  }
+  // Another network's wallet is cleared and hidden at once; a write hides the
+  // view until this load commits; a plain reload leaves it on screen meanwhile.
+  solana::BeginLegacyLoad(legacy_, networkId, reset);
+  legacyLoad_ = solana::LegacyLoad(++legacyGeneration_);
+  const uint32_t generation = legacyLoad_.generation();
+  RebuildSolanaPanel();
 
   auto queue = w_.DispatcherQueue();
   auto weak = w_.get_weak();
@@ -1389,23 +1375,20 @@ void WalletPage::LoadLegacyWallets(bool reset) {
                                 std::optional<std::string> err) {
         const bool ok = result && !err;
         // an account with no wallets answers with an empty list
-        std::vector<solana::LegacyWallet> wallets;
+        solana::LegacyAnswer answer;
         if (ok && result->wallets) {
-          for (auto const& wallet : *result->wallets) wallets.push_back(ToLegacyWallet(wallet));
+          for (auto const& wallet : *result->wallets) {
+            answer.wallets.push_back(ToLegacyWallet(wallet));
+          }
         }
         if (!ok) {
           urnw::LogError("earnings: getAccountWallets (payout wallet) failed{}",
                          err ? (": " + *err) : std::string());
         }
-        queue.TryEnqueue([weak, generation, ok, wallets] {
-          auto self = weak.get();
-          if (!self) return;
-          auto& page = self->wallet();
-          if (page.legacyLoad_.generation != generation) return;  // a newer load owns the view
-          page.legacyLoad_.wallets = wallets;
-          page.legacyLoad_.failed = page.legacyLoad_.failed || !ok;
-          ++page.legacyLoad_.answered;
-          page.ApplyLegacyWallets(generation);
+        queue.TryEnqueue([weak, generation, ok, answer] {
+          if (auto self = weak.get()) {
+            self->wallet().ApplyLegacyAnswer(generation, solana::LegacyRead::Wallets, ok, answer);
+          }
         });
       });
 
@@ -1414,21 +1397,16 @@ void WalletPage::LoadLegacyWallets(bool reset) {
                                 std::optional<std::string> err) {
         // A network with no payout wallet is not an error: it answers with no id.
         const bool ok = result && !err;
-        std::string payoutId;
-        if (ok && result->wallet_id) payoutId = *result->wallet_id;
+        solana::LegacyAnswer answer;
+        if (ok && result->wallet_id) answer.payoutId = *result->wallet_id;
         if (!ok) {
           urnw::LogError("earnings: getPayoutWallet failed{}",
                          err ? (": " + *err) : std::string());
         }
-        queue.TryEnqueue([weak, generation, ok, payoutId] {
-          auto self = weak.get();
-          if (!self) return;
-          auto& page = self->wallet();
-          if (page.legacyLoad_.generation != generation) return;
-          page.legacyLoad_.payoutId = payoutId;
-          page.legacyLoad_.failed = page.legacyLoad_.failed || !ok;
-          ++page.legacyLoad_.answered;
-          page.ApplyLegacyWallets(generation);
+        queue.TryEnqueue([weak, generation, ok, answer] {
+          if (auto self = weak.get()) {
+            self->wallet().ApplyLegacyAnswer(generation, solana::LegacyRead::Payout, ok, answer);
+          }
         });
       });
 
@@ -1439,51 +1417,34 @@ void WalletPage::LoadLegacyWallets(bool reset) {
         if (error.empty() && result && result->error) error = result->error->message;
         const bool ok = result && error.empty();
         // a network with no payments answers with no list at all
-        std::vector<solana::HeldPayment> payments;
+        solana::LegacyAnswer answer;
         if (ok && result->account_payments) {
           for (auto const& payment : *result->account_payments) {
-            payments.push_back(ToHeldPayment(payment));
+            answer.payments.push_back(ToHeldPayment(payment));
           }
         }
         if (!ok) urnw::LogError("earnings: getAccountPayments failed: {}", error);
-        queue.TryEnqueue([weak, generation, ok, payments] {
-          auto self = weak.get();
-          if (!self) return;
-          auto& page = self->wallet();
-          if (page.legacyLoad_.generation != generation) return;
-          page.legacyLoad_.payments = payments;
-          page.legacyLoad_.failed = page.legacyLoad_.failed || !ok;
-          ++page.legacyLoad_.answered;
-          page.ApplyLegacyWallets(generation);
+        queue.TryEnqueue([weak, generation, ok, answer] {
+          if (auto self = weak.get()) {
+            self->wallet().ApplyLegacyAnswer(generation, solana::LegacyRead::Payments, ok,
+                                             answer);
+          }
         });
       });
 }
 
-// Once all three reads of the current load are in: commit them, or fail the view.
-void WalletPage::ApplyLegacyWallets(uint32_t generation) {
-  if (legacyLoad_.generation != generation || legacyLoad_.answered < kLegacyReads) return;
-  if (legacyLoad_.failed) {
-    // Logged where it failed. This wallet is secondary to the Bittensor block,
-    // so a failed read hides the card and the line rather than raising a bar.
-    legacyState_ = Fetch::Failed;
-  } else {
-    legacyWallets_ = legacyLoad_.wallets;
-    // An answer with no id keeps the id already known (the old payout wallet
-    // rows' rule, iOS PayoutWalletViewModel): a transient nil must not make the
-    // payout wallet look unset. A removed wallet is inactive, so it still drops.
-    if (!legacyLoad_.payoutId.empty()) payoutWalletId_ = legacyLoad_.payoutId;
-    pendingNanoCents_ = solana::PendingUsdcNanoCents(legacyLoad_.payments);
-    legacyState_ = Fetch::Ready;
-  }
-  RebuildSolanaPanel();
+// One of the three reads answered. The rules for a failed read (logged where it
+// failed) and for committing are solana::LegacyLoad's.
+void WalletPage::ApplyLegacyAnswer(uint32_t generation, solana::LegacyRead which, bool ok,
+                                   solana::LegacyAnswer answer) {
+  // another load's answer, or a read that already answered
+  if (!legacyLoad_.Answer(generation, which, ok, std::move(answer))) return;
+  // legacy_.networkId is the network the current load was begun for
+  if (legacyLoad_.Commit(legacy_, legacy_.networkId)) RebuildSolanaPanel();
 }
 
 void WalletPage::RebuildSolanaPanel() {
-  const solana::LegacyState state = legacyState_ == Fetch::Ready    ? solana::LegacyState::Ready
-                                    : legacyState_ == Fetch::Failed ? solana::LegacyState::Failed
-                                                                    : solana::LegacyState::Loading;
-  const auto view = solana::SolanaPanelFor(
-      state, solana::PayoutWalletFor(legacyWallets_, payoutWalletId_), pendingNanoCents_);
+  const auto view = solana::SolanaPanelFor(legacy_);
   const hstring waiting =
       (view.showCardPending || view.showWaitingLine)
           ? hstring{urnw::Format("usdc_waiting", urnw::Widen(view.pendingUsd))}
@@ -1494,7 +1455,7 @@ void WalletPage::RebuildSolanaPanel() {
     namespace automation = winrt::Microsoft::UI::Xaml::Automation;
     const std::string& address = view.wallet.address;
     // The short form is visual only: the tooltip and the name carry the address.
-    w_.SolanaAddressText().Text(hstring{ShortAddress(address)});
+    w_.SolanaAddressText().Text(hstring{urnw::Widen(view.shortAddress)});
     ToolTipService::SetToolTip(w_.SolanaAddressText(), winrt::box_value(H(address)));
     automation::AutomationProperties::SetName(
         w_.SolanaAddressText(),
@@ -1566,7 +1527,7 @@ winrt::fire_and_forget WalletPage::OpenConnectSolanaSheet() {
 // payout wallet by itself if the network had none; one linked beside an
 // existing payout wallet has to be made so here.
 void WalletPage::OnSolanaConnected(std::string const& walletId) {
-  if (!solana::NeedsPayoutSwitch(walletId, payoutWalletId_)) {
+  if (!solana::NeedsPayoutSwitch(walletId, legacy_.payoutWalletId)) {
     Notify(Loc("payout_wallet_updated"), InfoBarSeverity::Success);
     LoadLegacyWallets(/*reset=*/true);
     return;
@@ -1642,8 +1603,9 @@ void WalletPage::ShowSolanaCardMenu(FrameworkElement const& anchor) {
 
 winrt::fire_and_forget WalletPage::ConfirmRemoveSolanaWallet() {
   if (w_.sheetOpen() || legacyBusy_) co_return;
-  const auto wallet = solana::PayoutWalletFor(legacyWallets_, payoutWalletId_);
-  if (!wallet) co_return;
+  // the wallet the card shows: the only one its overflow can remove
+  const auto card = solana::SolanaPanelFor(legacy_);
+  if (!card.showCard) co_return;
   // Before the confirmation, not after: its answer is a server write. Under
   // --preview-ui the confirmation still opens, its Remove disabled.
   if (!w_.previewUi() && !CanCallApi()) {
@@ -1651,7 +1613,7 @@ winrt::fire_and_forget WalletPage::ConfirmRemoveSolanaWallet() {
     co_return;
   }
   const bool allowActions = CanCallApi();
-  const std::string walletId = wallet->id;
+  const std::string walletId = card.wallet.id;
   auto self = w_.get_strong();
 
   ContentDialog dialog;
@@ -2240,23 +2202,29 @@ void WalletPage::ShowPreviewSnackbar() {
 // like. Settle them all on their empty state instead.
 void WalletPage::ShowPreviewWalletState() {
   // The Solana payout wallet settles either way: on the synthetic card with
-  // URNETWORK_PREVIEW_SOLANA=1, on its collapsed empty state otherwise.
-  legacyLoad_ = LegacyLoad{};
-  legacyLoad_.generation = ++legacyGeneration_;
-  legacyLoad_.answered = kLegacyReads;
+  // URNETWORK_PREVIEW_SOLANA=1, on its collapsed empty state otherwise. The
+  // answers go through the same LegacyLoad the api path commits with.
+  solana::BeginLegacyLoad(legacy_, std::string(), /*reset=*/true);
+  legacyLoad_ = solana::LegacyLoad(++legacyGeneration_);
+  const uint32_t legacyGeneration = legacyLoad_.generation();
+  solana::LegacyAnswer wallets;
+  solana::LegacyAnswer payout;
+  solana::LegacyAnswer payments;
   if (PreviewSolana()) {
     solana::LegacyWallet wallet;
     wallet.id = kSampleSolanaWalletId;
     wallet.blockchain = solana::kBlockchainSolana;
     wallet.address = kSampleSolanaAddress;
     wallet.active = true;
-    legacyLoad_.wallets.push_back(wallet);
-    legacyLoad_.payoutId = kSampleSolanaWalletId;
+    wallets.wallets.push_back(wallet);
+    payout.payoutId = kSampleSolanaWalletId;
     solana::HeldPayment held;
     held.payoutNanoCents = kSampleUsdcWaitingNanoCents;
-    legacyLoad_.payments.push_back(held);
+    payments.payments.push_back(held);
   }
-  ApplyLegacyWallets(legacyLoad_.generation);
+  ApplyLegacyAnswer(legacyGeneration, solana::LegacyRead::Wallets, true, wallets);
+  ApplyLegacyAnswer(legacyGeneration, solana::LegacyRead::Payout, true, payout);
+  ApplyLegacyAnswer(legacyGeneration, solana::LegacyRead::Payments, true, payments);
   if (PreviewSample()) {
     seekerHolder_ = true;
     ApplyPoints(SamplePoints(), Fetch::Ready);

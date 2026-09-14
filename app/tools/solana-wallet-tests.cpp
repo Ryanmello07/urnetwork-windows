@@ -187,9 +187,13 @@ void AddressTests() {
 }
 
 void ShortAddressTests() {
+  // What the card draws: SolanaPanelView::shortAddress is this function (see
+  // theCardDrawsItsShortForm), the SDK's ShortSs58 shape.
   {
-    TEST_CASE("theSdkShortForm");
+    TEST_CASE("theCardsShortForm");
     CheckEq(std::string("EPjF") + kEllipsis + "Dt1v", ShortAddress(kUsdcMint), "the USDC mint");
+    CheckEq(std::string("7Xk9") + kEllipsis + "3fQa",
+            ShortAddress("7Xk9SAMPLEpayoutWALLETnotREAL1111113fQa"), "the preview card's sample");
     CheckEq(std::string("1111") + kEllipsis + "1111", ShortAddress(kSystemProgram),
             "the system program");
   }
@@ -295,17 +299,16 @@ void PendingTests() {
 
 void PanelTests() {
   const LegacyWallet wallet = Wallet("w1", "SOL", kUsdcMint);
+  const LegacyReads all{true, true, true};
   {
-    TEST_CASE("loadingAndFailedShowNothing");
-    for (LegacyState state : {LegacyState::Loading, LegacyState::Failed}) {
-      const auto view = SolanaPanelFor(state, wallet, 3'870'000'000);
-      Check(!view.showCard && !view.showCardPending && !view.showWaitingLine,
-            "no card and no line until all three reads are in");
-    }
+    TEST_CASE("loadingShowsNothing");
+    const auto view = SolanaPanelFor(LegacyState::Loading, all, wallet, 3'870'000'000);
+    Check(!view.showCard && !view.showCardPending && !view.showWaitingLine,
+          "no card and no line until all three reads are in");
   }
   {
     TEST_CASE("aPayoutWalletShowsTheCard");
-    const auto view = SolanaPanelFor(LegacyState::Ready, wallet, 3'870'000'000);
+    const auto view = SolanaPanelFor(LegacyState::Ready, all, wallet, 3'870'000'000);
     Check(view.showCard, "the card");
     Check(view.wallet == wallet, "for the payout wallet");
     Check(view.showCardPending, "with its waiting line");
@@ -313,25 +316,60 @@ void PanelTests() {
     CheckEq("3.87", view.pendingUsd, "the figure");
   }
   {
+    TEST_CASE("theCardDrawsItsShortForm");
+    const auto view = SolanaPanelFor(LegacyState::Ready, all, wallet, 0);
+    CheckEq(std::string("EPjF") + kEllipsis + "Dt1v", view.shortAddress, "the card's address line");
+    const auto sample = SolanaPanelFor(
+        LegacyState::Ready, all, Wallet("s", "SOL", "7Xk9SAMPLEpayoutWALLETnotREAL1111113fQa"), 0);
+    CheckEq(std::string("7Xk9") + kEllipsis + "3fQa", sample.shortAddress, "the preview card's");
+    const auto none = SolanaPanelFor(LegacyState::Ready, all, std::nullopt, 0);
+    CheckEq("", none.shortAddress, "no card, no address");
+  }
+  {
     TEST_CASE("theCardHidesItsLineAtZero");
-    const auto view = SolanaPanelFor(LegacyState::Ready, wallet, 0);
+    const auto view = SolanaPanelFor(LegacyState::Ready, all, wallet, 0);
     Check(view.showCard, "the card");
     Check(!view.showCardPending, "no 0.00 USDC waiting");
     Check(!view.showWaitingLine, "and no line elsewhere");
   }
   {
     TEST_CASE("noPayoutWalletShowsTheWaitingLine");
-    const auto view = SolanaPanelFor(LegacyState::Ready, std::nullopt, 3'870'000'000);
+    const auto view = SolanaPanelFor(LegacyState::Ready, all, std::nullopt, 3'870'000'000);
     Check(!view.showCard, "no card");
     Check(view.showWaitingLine, "the emailed user's line");
     CheckEq("3.87", view.pendingUsd, "the figure");
   }
   {
     TEST_CASE("noPayoutWalletAndNothingWaitingShowsNothing");
-    const auto none = SolanaPanelFor(LegacyState::Ready, std::nullopt, 0);
+    const auto none = SolanaPanelFor(LegacyState::Ready, all, std::nullopt, 0);
     Check(!none.showCard && !none.showWaitingLine, "zero");
-    const auto dust = SolanaPanelFor(LegacyState::Ready, std::nullopt, 1);
+    const auto dust = SolanaPanelFor(LegacyState::Ready, all, std::nullopt, 1);
     Check(!dust.showWaitingLine, "a sub-cent remainder");
+  }
+  {
+    TEST_CASE("aFailedPaymentsReadKeepsTheCardWithoutItsFigure");
+    const auto view = SolanaPanelFor(LegacyState::Ready, {true, true, false}, wallet, 3'870'000'000);
+    Check(view.showCard, "the card");
+    Check(!view.showCardPending, "without its figure");
+    Check(!view.showWaitingLine, "and no line");
+  }
+  {
+    TEST_CASE("aFailedPayoutReadKeepsTheKnownWallet");
+    const auto view = SolanaPanelFor(LegacyState::Ready, {true, false, true}, wallet, 3'870'000'000);
+    Check(view.showCard, "the card for the last known payout wallet");
+    Check(view.showCardPending, "with its figure");
+  }
+  {
+    TEST_CASE("aFailedPayoutReadWithNoKnownWalletClaimsNothing");
+    const auto view =
+        SolanaPanelFor(LegacyState::Ready, {true, false, true}, std::nullopt, 3'870'000'000);
+    Check(!view.showCard, "no card");
+    Check(!view.showWaitingLine, "and no line saying there is no payout wallet");
+  }
+  {
+    TEST_CASE("aFailedWalletsReadShowsNothing");
+    const auto view = SolanaPanelFor(LegacyState::Ready, {false, true, true}, wallet, 3'870'000'000);
+    Check(!view.showCard && !view.showCardPending && !view.showWaitingLine, "nothing");
   }
   {
     TEST_CASE("aSwitchIsNeededUnlessItIsAlreadyThePayoutWallet");
@@ -339,6 +377,139 @@ void PanelTests() {
     Check(!NeedsPayoutSwitch("w1", "w1"), "already the payout wallet");
     Check(NeedsPayoutSwitch("w2", "w1"), "a second wallet");
     Check(NeedsPayoutSwitch("w2", ""), "no payout wallet known");
+  }
+}
+
+// ---- the three reads, committed (LegacyLoad) ------------------------------
+
+LegacyAnswer WalletsAnswer(std::vector<LegacyWallet> wallets) {
+  LegacyAnswer answer;
+  answer.wallets = std::move(wallets);
+  return answer;
+}
+
+LegacyAnswer PayoutAnswer(const std::string& payoutId) {
+  LegacyAnswer answer;
+  answer.payoutId = payoutId;
+  return answer;
+}
+
+LegacyAnswer PaymentsAnswer(std::vector<HeldPayment> payments) {
+  LegacyAnswer answer;
+  answer.payments = std::move(payments);
+  return answer;
+}
+
+// A view of `networkId` committed from one load of three ok reads.
+LegacyCommitted CommittedView(const std::string& networkId, const LegacyWallet& wallet,
+                              int64_t pendingNanoCents) {
+  LegacyCommitted view;
+  BeginLegacyLoad(view, networkId, /*reset=*/false);
+  LegacyLoad load(1);
+  load.Answer(1, LegacyRead::Wallets, true, WalletsAnswer({wallet}));
+  load.Answer(1, LegacyRead::Payout, true, PayoutAnswer(wallet.id));
+  load.Answer(1, LegacyRead::Payments, true,
+              PaymentsAnswer({Payment(pendingNanoCents, false, false)}));
+  load.Commit(view, networkId);
+  return view;
+}
+
+void LegacyLoadTests() {
+  const LegacyWallet w1 = Wallet("w1", "SOL", kUsdcMint);
+  const LegacyWallet w2 = Wallet("w2", "SOL", kTokenProgram);
+  {
+    TEST_CASE("nothingCommitsBeforeThreeAnswers");
+    LegacyCommitted view;
+    LegacyLoad load(1);
+    Check(load.Answer(1, LegacyRead::Wallets, true, WalletsAnswer({w1})), "the wallets");
+    Check(load.Answer(1, LegacyRead::Payout, true, PayoutAnswer("w1")), "the payout wallet id");
+    Check(!load.Complete(), "two of three");
+    Check(!load.Commit(view, "net-a"), "no commit");
+    Check(!view.ready && view.wallets.empty() && view.payoutWalletId.empty(), "the view untouched");
+    Check(load.Answer(1, LegacyRead::Payments, true,
+                      PaymentsAnswer({Payment(3'870'000'000, false, false)})),
+          "the payments");
+    Check(load.Complete(), "all three");
+    Check(load.Commit(view, "net-a"), "commits");
+    Check(view.ready, "ready");
+    CheckEq("w1", view.payoutWalletId, "the payout wallet id");
+    CheckEq(3'870'000'000LL, view.pendingNanoCents, "the total");
+    const auto panel = SolanaPanelFor(view);
+    Check(panel.showCard && panel.showCardPending, "the card with its figure");
+  }
+  {
+    TEST_CASE("anAnswerForAnOldLoadIsDropped");
+    LegacyLoad load(2);
+    Check(!load.Answer(1, LegacyRead::Wallets, true, WalletsAnswer({w1})), "the older load's answer");
+    Check(load.Answer(2, LegacyRead::Wallets, true, WalletsAnswer({w2})), "this load's");
+    Check(!load.Answer(2, LegacyRead::Wallets, true, WalletsAnswer({w1})), "a read answers once");
+    load.Answer(2, LegacyRead::Payout, true, PayoutAnswer("w2"));
+    load.Answer(2, LegacyRead::Payments, true);
+    LegacyCommitted view;
+    Check(load.Commit(view, "net-a"), "commits");
+    CheckEq(1, static_cast<long long>(view.wallets.size()), "one wallet");
+    if (!view.wallets.empty()) CheckEq("w2", view.wallets[0].id, "this load's, not the older one's");
+  }
+  {
+    TEST_CASE("anEmptyPayoutIdKeepsTheKnownOne");
+    LegacyCommitted view = CommittedView("net-a", w1, 0);
+    LegacyLoad load(2);
+    load.Answer(2, LegacyRead::Wallets, true, WalletsAnswer({w1}));
+    load.Answer(2, LegacyRead::Payout, true, PayoutAnswer(""));
+    load.Answer(2, LegacyRead::Payments, true);
+    load.Commit(view, "net-a");
+    CheckEq("w1", view.payoutWalletId, "a transient nil keeps the payout wallet");
+    Check(SolanaPanelFor(view).showCard, "and its card");
+  }
+  {
+    TEST_CASE("aFailedReadCommitsNothingOfItsOwn");
+    LegacyCommitted view = CommittedView("net-a", w1, 3'870'000'000);
+    LegacyLoad load(2);
+    load.Answer(2, LegacyRead::Wallets, true, WalletsAnswer({w1}));
+    load.Answer(2, LegacyRead::Payout, false, PayoutAnswer("w9"));
+    load.Answer(2, LegacyRead::Payments, false,
+                PaymentsAnswer({Payment(9'000'000'000, false, false)}));
+    load.Commit(view, "net-a");
+    CheckEq("w1", view.payoutWalletId, "the last known id stands");
+    CheckEq(3'870'000'000LL, view.pendingNanoCents, "a failed read's payload is ignored");
+    Check(view.reads.wallets && !view.reads.payout && !view.reads.payments, "which reads failed");
+    const auto panel = SolanaPanelFor(view);
+    Check(panel.showCard, "the card for the known wallet");
+    Check(!panel.showCardPending, "without its figure");
+  }
+  {
+    TEST_CASE("anotherNetworkClearsTheView");
+    LegacyCommitted view = CommittedView("net-a", w1, 3'870'000'000);
+    BeginLegacyLoad(view, "net-b", /*reset=*/false);
+    Check(!view.ready, "hidden at once, even on a plain reload");
+    Check(view.wallets.empty() && view.payoutWalletId.empty() && view.pendingNanoCents == 0,
+          "net-a's wallets, id and total are gone");
+    CheckEq("net-b", view.networkId, "the view is net-b's");
+    LegacyLoad load(2);
+    load.Answer(2, LegacyRead::Wallets, true, WalletsAnswer({w1}));
+    load.Answer(2, LegacyRead::Payout, true, PayoutAnswer(""));
+    load.Answer(2, LegacyRead::Payments, true);
+    load.Commit(view, "net-b");
+    CheckEq("", view.payoutWalletId, "net-a's id does not survive through the empty-id rule");
+    Check(!SolanaPanelFor(view).showCard, "no card");
+
+    LegacyCommitted late = CommittedView("net-a", w1, 0);
+    LegacyLoad other(3);
+    other.Answer(3, LegacyRead::Wallets, true, WalletsAnswer({w1}));
+    other.Answer(3, LegacyRead::Payout, true, PayoutAnswer(""));
+    other.Answer(3, LegacyRead::Payments, true);
+    other.Commit(late, "net-b");
+    CheckEq("", late.payoutWalletId, "a commit for another network clears the view first");
+    CheckEq("net-b", late.networkId, "and takes it over");
+  }
+  {
+    TEST_CASE("aPlainReloadKeepsTheViewAndAWriteHidesIt");
+    LegacyCommitted view = CommittedView("net-a", w1, 0);
+    BeginLegacyLoad(view, "net-a", /*reset=*/false);
+    Check(view.ready && SolanaPanelFor(view).showCard, "a plain reload keeps the card on screen");
+    BeginLegacyLoad(view, "net-a", /*reset=*/true);
+    Check(!view.ready && !SolanaPanelFor(view).showCard, "a write hides it until the reads commit");
+    CheckEq("w1", view.payoutWalletId, "without forgetting the known id");
   }
 }
 
@@ -692,6 +863,8 @@ int main() {
   PendingTests();
   std::cout << "the pane\n";
   PanelTests();
+  std::cout << "the three reads\n";
+  LegacyLoadTests();
   std::cout << "connect: wallet app\n";
   BridgeTests();
   std::cout << "connect: manual address\n";
