@@ -788,6 +788,10 @@
     <value>상대방</value>
     <comment>A label displayed next to a companion contract.</comment>
   </data>
+  <data name="confirm_seeker_token" xml:space="preserve">
+    <value>Seeker 토큰 확인</value>
+    <comment>Used in Main/Account/Settings/SettingsView.swift.</comment>
+  </data>
   <data name="conn_connect_on_launch" xml:space="preserve">
     <value>앱 시작 시 자동으로 연결</value>
     <comment>Settings: switch that connects automatically when the app starts.</comment>
