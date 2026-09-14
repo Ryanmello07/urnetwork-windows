@@ -273,6 +273,7 @@
          pch) so tools/solana-wallet-tests.cpp runs them on any host; the page
          and the sheet that draw them use the pch. -->
     <ClCompile Include="SolanaWalletPresentation.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <ClCompile Include="SolanaWalletSheets.cpp" />
     <ClCompile Include="AppController.cpp" />
     <ClCompile Include="AuthSheets.cpp" />
     <ClCompile Include="LoginCarousel.cpp" />
@@ -349,6 +350,7 @@
     <ClInclude Include="WalletPage.h" />
     <ClInclude Include="EarningsSheets.h" />
     <ClInclude Include="SolanaWalletPresentation.h" />
+    <ClInclude Include="SolanaWalletSheets.h" />
     <ClInclude Include="AppController.h" />
     <ClInclude Include="AuthSheets.h" />
     <ClInclude Include="BalanceSheets.h" />
