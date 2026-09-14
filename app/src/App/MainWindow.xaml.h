@@ -330,6 +330,11 @@ struct MainWindow : MainWindowT<MainWindow> {
   void OnAuthStateChanged(urnw::AuthState state, std::string const& error);
   void OnTunnelStateChanged(urnw::proto::TunnelStatus const& status);
   void OnStatsChanged(urnw::LiveStats const& stats);
+  // The window is hiding to the tray (AppController::HideWindow): close the
+  // sheets that must not come back on a draft read before the hide, today the
+  // Earnings provider transport sheet (EXTENDER.md O8). A minimize does not
+  // call this.
+  void CloseSheetsForHide();
   void OnBalanceChanged(urnw::BalanceSnapshot const& snapshot,
                         urnw::BalancePollState const& poll);
   // A batch of newly observed referrals: the first ever shows the full-window

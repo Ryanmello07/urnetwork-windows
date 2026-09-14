@@ -765,6 +765,14 @@ void AppController::HideWindow() {
   // next tray click - within this session as well as across restarts.
   if (shell::SaveWindowPlacement(windowHwnd_)) ownPlacement_ = true;
   windowShown_ = false;
+  // A sheet may not outlive the surface that feeds it: the window only hides, and
+  // a dialog left open would come back on a draft read before the hide. A
+  // minimize keeps it, as it keeps the window.
+  if (window_) {
+    if (auto self = window_.try_as<winrt::URnetwork::implementation::MainWindow>()) {
+      self->CloseSheetsForHide();
+    }
+  }
   ReconcileWindowPresentation();
   if (window_) window_.try_as<Window>().AppWindow().Hide();
 }

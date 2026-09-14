@@ -1881,6 +1881,10 @@ void MainWindow::OnTunnelStateChanged(urnw::proto::TunnelStatus const& status) {
   if (advancedMode_) ApplyStatusStrip();
 }
 
+void MainWindow::CloseSheetsForHide() {
+  if (wallet_) wallet_->CloseProviderTransportSheet();
+}
+
 void MainWindow::OnStatsChanged(urnw::LiveStats const& stats) {
   connect_->ApplyStats(stats);
   if (wallet_) wallet_->ApplyProvideState(stats);  // the Earnings provide row + gate
