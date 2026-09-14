@@ -28,6 +28,7 @@
 #include "Sdk.h"
 #include "ServiceClient.h"
 #include "ServiceRecoveryPolicy.h"
+#include "WalletBridgeRoute.h"
 #include "WalletConnect.h"
 
 namespace urnw {
@@ -1937,8 +1938,10 @@ class SdkHost {
   // Answer and clear whichever wallet-bridge flow is outstanding. Called when a
   // new one starts: the bridge has a single pair of callbacks, so the new flow
   // takes them over and the old one has to be TOLD rather than abandoned - an
-  // abandoned callback is a busy flag nothing will ever clear.
-  void CancelPendingWalletFlows(const char* reason);
+  // abandoned callback is a busy flag nothing will ever clear. Returns the new
+  // flow's number (walletFlows_), which a challenge continuation checks before
+  // it opens the bridge.
+  uint64_t CancelPendingWalletFlows(const char* reason);
 
   WalletConnect wallet_;
   std::function<void(AuthResult)> walletAuthDone_;
@@ -1952,6 +1955,11 @@ class SdkHost {
   // walletSignDone_ and walletAuthDone_, CancelPendingWalletFlows answers and
   // clears it whenever another flow starts.
   std::function<void(bool, std::string, std::string)> walletConnectDone_;
+  // The number of the wallet-bridge flow that started last. A flow superseded
+  // while its challenge was being fetched must not open the bridge afterwards:
+  // on Windows that would open a stray tab, overwrite walletSignMessage_ and
+  // reset the session the current flow depends on.
+  bridge::FlowSerial walletFlows_;
   // Exact single-use server challenge being signed by an authentication flow.
   // Kept separate from walletSignMessage_, which also serves signed-in utility
   // signature requests.

@@ -788,11 +788,22 @@ void SdkHost::CreateNetwork(const CreateNetworkParams& params,
     const std::string blockchain = identity->blockchain.value_or(std::string());
     const std::string expectedAddress =
         identity->wallet_address.value_or(std::string());
+    // The creation is a wallet flow from here: it supersedes any other at once, and
+    // its challenge opens the bridge only while it is still the current flow.
+    const uint64_t flow = CancelPendingWalletFlows("superseded by wallet network creation");
     RequestWalletChallenge(
         blockchain, expectedAddress,
-        [this, params, identity = *identity, expectedAddress, blockchain,
+        [this, params, identity = *identity, expectedAddress, blockchain, flow,
          done = std::move(done)](std::optional<std::string> message,
                                  std::string error) mutable {
+      if (!walletFlows_.IsCurrent(flow)) {
+        // Another wallet flow took the bridge meanwhile. Nothing waits in a slot
+        // for this creation, so it answers its own caller; the auth state is the
+        // newer flow's to move.
+        LogWarn("sdkhost: a superseded network creation's wallet challenge arrived, dropping it");
+        if (done) done({false, false, "superseded by another wallet request"});
+        return;
+      }
       if (!message) {
         AuthResult r{false, false,
                      error.empty() ? "could not fetch wallet challenge" : error};
@@ -801,7 +812,6 @@ void SdkHost::CreateNetwork(const CreateNetworkParams& params,
         return;
       }
 
-      CancelPendingWalletFlows("superseded by wallet network creation");
       walletSignMessage_ = *message;
       walletSignDone_ =
           [this, params, identity, expectedAddress, message = *message,
@@ -1424,8 +1434,14 @@ void SdkHost::SetupWalletCallbacks() {
         break;
     }
 
+    // the sign-in's challenge opens the bridge only while that sign-in still owns it
+    const uint64_t flow = walletFlows_.Current();
     RequestWalletChallenge(urnet::SOL, publicKey,
-                           [this](std::optional<std::string> message, std::string error) {
+                           [this, flow](std::optional<std::string> message, std::string error) {
+      if (!walletFlows_.IsCurrent(flow)) {
+        LogWarn("sdkhost: a superseded wallet sign-in's challenge arrived, dropping it");
+        return;
+      }
       if (!message) {
         if (wallet_.on_error)
           wallet_.on_error(error.empty() ? "could not fetch wallet challenge" : error);
@@ -1519,7 +1535,9 @@ void SdkHost::SetupWalletCallbacks() {
 // left whatever was waiting on it - a busy flag, a greyed-out button - waiting
 // for a reply that could no longer come. Neither caller can see that from
 // where it stands.
-void SdkHost::CancelPendingWalletFlows(const char* reason) {
+uint64_t SdkHost::CancelPendingWalletFlows(const char* reason) {
+  // First: from here on every earlier flow's challenge continuation is stale.
+  const uint64_t flow = walletFlows_.Start();
   // an sso attempt answers through walletAuthDone_ below; its state/nonce die
   // with it so the bridge's late answer is ignored rather than acted on
   ssoAttempt_.reset();
@@ -1535,6 +1553,7 @@ void SdkHost::CancelPendingWalletFlows(const char* reason) {
     LogWarn("sdkhost: a wallet sign-in was superseded ({})", reason);
     authDone({false, false, reason});
   }
+  return flow;
 }
 
 void SdkHost::SignInWithSolana(WalletConnect::Provider provider,
@@ -1556,10 +1575,16 @@ void SdkHost::SignInWithBittensor(std::function<void(AuthResult)> done) {
     std::scoped_lock lock(mutex_);
     pendingWalletAuth_.reset();  // a fresh sign-in supersedes any retained auth
   }
-  CancelPendingWalletFlows("superseded by a wallet sign-in");
+  const uint64_t flow = CancelPendingWalletFlows("superseded by a wallet sign-in");
   walletAuthDone_ = std::move(done);
   RequestWalletChallenge(urnet::TAO, std::string(),
-                         [this](std::optional<std::string> message, std::string error) {
+                         [this, flow](std::optional<std::string> message, std::string error) {
+    // A newer flow took the bridge while the challenge was on its way: it has
+    // answered this sign-in already, and no tab may open for it now.
+    if (!walletFlows_.IsCurrent(flow)) {
+      LogWarn("sdkhost: a superseded wallet sign-in's challenge arrived, dropping it");
+      return;
+    }
     if (!message) {
       if (wallet_.on_error)
         wallet_.on_error(error.empty() ? "could not fetch wallet challenge" : error);
@@ -1624,7 +1649,7 @@ void SdkHost::SignWithBittensorWallet(
     const std::string& walletAddress, const std::string& purpose,
     std::function<void(bool, std::string, std::string, std::string, std::string)> done) {
   // Not a sign-in: the auth state does not move (see on_error above).
-  CancelPendingWalletFlows("superseded by a wallet signature request");
+  const uint64_t flow = CancelPendingWalletFlows("superseded by a wallet signature request");
   // The bridge answers with the address and the signature; the message it
   // signed is the one this flow handed it, kept in walletSignMessage_ until
   // the answer (or a superseding flow) arrives.
@@ -1634,7 +1659,15 @@ void SdkHost::SignWithBittensorWallet(
   };
   RequestWalletChallenge(
       urnet::TAO, walletAddress,
-      [this, purpose](std::optional<std::string> message, std::string error) {
+      [this, purpose, flow](std::optional<std::string> message, std::string error) {
+        // A newer flow took the bridge while the challenge was on its way (the
+        // Solana sheet's connect, a Seeker request) and has answered this request.
+        // The late challenge must not open a Bittensor tab over that flow,
+        // overwrite the message it signs, reset its session or fail its request.
+        if (!walletFlows_.IsCurrent(flow)) {
+          LogWarn("sdkhost: a superseded wallet signature request's challenge arrived, dropping it");
+          return;
+        }
         if (!message) {
           if (auto signDone = std::exchange(walletSignDone_, nullptr)) {
             signDone(false, std::string(), std::string(),

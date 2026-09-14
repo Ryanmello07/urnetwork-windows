@@ -791,3 +791,19 @@ func TestWalletBridgeReturnsAreRouted(t *testing.T) {
 		t.Fatal("WalletPage.cpp shows a superseded wallet flow as an error; it must settle one quietly through bridge::IsSuperseded")
 	}
 }
+
+func TestWalletChallengesCheckTheirFlow(t *testing.T) {
+	host := readAppSource(t, "SdkHost.cpp")
+	if !strings.Contains(host, "walletFlows_.Start()") {
+		t.Fatal("CancelPendingWalletFlows no longer starts a new wallet flow number")
+	}
+	// every call site, less the definition
+	challenges := strings.Count(host, "RequestWalletChallenge(") - 1
+	checks := strings.Count(host, "walletFlows_.IsCurrent(")
+	if challenges < 1 {
+		t.Fatal("SdkHost.cpp no longer fetches a wallet challenge; update this contract")
+	}
+	if checks < challenges {
+		t.Fatalf("SdkHost.cpp fetches %d wallet challenges but checks the flow serial %d times; a flow superseded while its challenge was on its way would open the bridge over the current flow", challenges, checks)
+	}
+}

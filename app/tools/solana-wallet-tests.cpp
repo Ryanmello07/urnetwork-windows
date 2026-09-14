@@ -3,7 +3,8 @@
 // passes before it is sent to the server, the short form, which account wallet
 // is the Solana payout wallet, the USDC still waiting, what the pane shows from
 // those, and the connect sheet's state machine (App/SolanaWalletPresentation.h),
-// plus where the wallet bridge's returns go (App/WalletBridgeRoute.h) - run
+// plus where the wallet bridge's returns go and when a late challenge may still
+// open the bridge (App/WalletBridgeRoute.h) - run
 // against the SAME sources the app compiles, on any host with a C++20 compiler.
 //
 // The WinUI halves (WalletPage's card and overflows, SolanaWalletSheets' dialog)
@@ -859,6 +860,42 @@ void BridgeRouteTests() {
       Check(IsSuperseded(reason), std::string("\"") + reason + "\"");
     }
     Check(!IsSuperseded("Superseded by a sign-in"), "the prefix is exact");
+  }
+  {
+    TEST_CASE("aSupersededFlowsChallengeNeverOpensTheBridge");
+    urnw::bridge::FlowSerial flows;
+    // the page's Bittensor connect starts and fetches its challenge
+    const uint64_t bittensor = flows.Start();
+    Check(flows.IsCurrent(bittensor), "its challenge may open the bridge while nothing else started");
+    // meanwhile the Solana sheet's Phantom connect takes the bridge
+    const uint64_t solana = flows.Start();
+    Check(!flows.IsCurrent(bittensor),
+          "the late Bittensor challenge is stale: no tab, no message, no session reset");
+    Check(flows.IsCurrent(solana), "the Solana connect still owns the bridge");
+    CheckEq(static_cast<long long>(solana), static_cast<long long>(flows.Current()),
+            "Current is the flow that started last");
+  }
+  {
+    TEST_CASE("aSignInsChallengeBelongsToTheFlowItWasRoutedUnder");
+    urnw::bridge::FlowSerial flows;
+    flows.Start();  // SignInWithSolana starts and opens Phantom
+    const uint64_t routed = flows.Current();  // on_public_key routes to SignIn, fetches the challenge
+    Check(flows.IsCurrent(routed), "the challenge may ask for a signature while the sign-in owns the bridge");
+    flows.Start();  // a Google sign-in starts meanwhile
+    Check(!flows.IsCurrent(routed), "the late Solana challenge must not open a signing tab");
+  }
+  {
+    TEST_CASE("flowNumbersNeverRepeat");
+    urnw::bridge::FlowSerial flows;
+    uint64_t last = flows.Current();
+    bool increasing = true;
+    for (int i = 0; i < 1000; ++i) {
+      const uint64_t next = flows.Start();
+      if (next <= last) increasing = false;
+      last = next;
+    }
+    Check(increasing, "every start takes a new, larger number");
+    Check(flows.IsCurrent(last) && !flows.IsCurrent(last - 1), "only the last one is current");
   }
 }
 
