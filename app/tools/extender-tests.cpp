@@ -1,14 +1,16 @@
 // Executable spec for the extender UI's pure logic (connect/EXTENDER.md K2,
-// K3, K4, K6, K7): the ring geometry a provider dot is drawn with
+// K3, K4, K6, K7, N7, O8): the ring geometry a provider dot is drawn with
 // (App/ExtenderRingGeometry.h), the status mapping, settings form, QR
-// placement and import decision the panel and the sheets act on
-// (App/ExtenderPresentation.h), and a build+encode of the vendored Nayuki
-// encoder the share screen renders with — run against the SAME sources the app
-// compiles, on any host with a C++20 compiler.
+// placement and import decision the panel and the sheets act on, the provider
+// extender row's reading and its switch guess, and which statistics sections
+// the Earnings page shows (App/ExtenderPresentation.h), and a build+encode of
+// the vendored Nayuki encoder the share screen renders with — run against the
+// SAME sources the app compiles, on any host with a C++20 compiler.
 //
 // The WinUI halves (ExtenderPanel, ExtenderSheets, the ConnectCanvas and
-// IpFamilyHistogram drawing) cannot be built off Windows at all; what is
-// verified here is every decision they make before they touch a XAML object.
+// IpFamilyHistogram drawing, the two extender rows and the statistics groups)
+// cannot be built off Windows at all; what is verified here is every decision
+// they make before they touch a XAML object.
 //
 //   c++ -std=c++20 -I ../src/App -I ../third_party/qrcodegen \
 //       extender-tests.cpp ../src/App/ExtenderPresentation.cpp \
@@ -734,6 +736,347 @@ void ImportTests() {
   }
 }
 
+// ---- ExtenderPresentation.h: the provider extender row (N7) -----------------
+
+// U+00B7, the separator N7 draws between the active line and the other
+// family's failure, spelled as its UTF-8 bytes.
+constexpr const char* kMiddleDot = "\xC2\xB7";
+
+// The en store text (Strings/en/Resources.resw) of every key the row can name,
+// with the placeholder lowered to "{}" as the resw carries it. A key missing
+// here answers itself, which is what Localized() does in the app, so a key the
+// model invented would show up in a failure as its own id.
+std::string EnglishFor(const std::string& key) {
+  static const std::vector<std::pair<std::string, std::string>> kEnglish = {
+      {"off", "Off"},
+      {"extender_not_providing", "Not providing"},
+      {"extender_setting_up", "Setting up"},
+      {"extender_active", std::string("Active ") + kMiddleDot + " {}"},
+      {"ipv4", "IPv4"},
+      {"ipv6", "IPv6"},
+      {"ipv4_and_ipv6", "IPv4 and IPv6"},
+      {"extender_revoked", "Revoked by the operator"},
+      {"extender_start_failed", "Could not start: {}"},
+      {"extender_listen_failed", "Could not listen: {}"},
+      {"extender_activation_refused", "Activation refused: {}"},
+      {"extender_activation_failed", "Activation failed: {}"},
+  };
+  for (const auto& entry : kEnglish) {
+    if (entry.first == key) return entry.second;
+  }
+  return key;
+}
+
+// Format() with one argument: the store's text with its "{}" filled.
+std::string FilledFor(const std::string& key, const std::string& argument) {
+  std::string text = EnglishFor(key);
+  const std::size_t at = text.find("{}");
+  if (at != std::string::npos) text.replace(at, 2, argument);
+  return text;
+}
+
+// The row's line as the app composes it, in English.
+std::string RowText(const ExtenderProvideRowModel& model) {
+  return ComposeExtenderProvideText<std::string>(
+      model, std::string(" ") + kMiddleDot + " ",
+      [](const std::string& key) { return EnglishFor(key); },
+      [](const std::string& key, const std::string& argument) {
+        return FilledFor(key, argument);
+      },
+      [](const std::string& utf8) { return utf8; });
+}
+
+std::string Dotted(const std::string& a, const std::string& b) {
+  return a + " " + kMiddleDot + " " + b;
+}
+
+ExtenderProvideStatusView ProvideStatus(const char* state, const char* errorCase = "",
+                                        const char* reason = "") {
+  ExtenderProvideStatusView view;
+  view.supported = true;
+  view.state = state;
+  view.errorCase = errorCase;
+  view.reason = reason;
+  view.provideExtender = true;
+  return view;
+}
+
+const char* ToneName(ExtenderProvideTone tone) {
+  switch (tone) {
+    case ExtenderProvideTone::Grey: return "grey";
+    case ExtenderProvideTone::Green: return "green";
+    case ExtenderProvideTone::Yellow: return "yellow";
+    case ExtenderProvideTone::Red: return "red";
+  }
+  return "unknown";
+}
+
+void CheckTone(ExtenderProvideTone expected, ExtenderProvideTone actual,
+               const std::string& what) {
+  CheckEq(ToneName(expected), ToneName(actual), what);
+}
+
+void ProvideRowTests() {
+  {
+    TEST_CASE("unsupportedIsHiddenInEveryState");
+    Check(!ExtenderProvideRowModelFor(ExtenderProvideStatusView{}).visible,
+          "no session is hidden");
+    for (const char* state :
+         {kExtenderProvideStateOff, kExtenderProvideStateNotProviding,
+          kExtenderProvideStateSettingUp, kExtenderProvideStateActive,
+          kExtenderProvideStateError}) {
+      ExtenderProvideStatusView view = ProvideStatus(state);
+      view.supported = false;
+      Check(!ExtenderProvideRowModelFor(view).visible,
+            std::string("unsupported ") + state + " is hidden, never drawn disabled");
+      view.supported = true;
+      Check(ExtenderProvideRowModelFor(view).visible,
+            std::string("supported ") + state + " is shown");
+    }
+  }
+  {
+    TEST_CASE("offAndNotProvidingAreGrey");
+    const auto off = ExtenderProvideRowModelFor(ProvideStatus(kExtenderProvideStateOff));
+    CheckTone(ExtenderProvideTone::Grey, off.tone, "off");
+    CheckEq("off", off.textKey, "off reuses the shared off key");
+    CheckEq("Off", RowText(off), "off text");
+    const auto notProviding =
+        ExtenderProvideRowModelFor(ProvideStatus(kExtenderProvideStateNotProviding));
+    CheckTone(ExtenderProvideTone::Grey, notProviding.tone, "not providing");
+    CheckEq("extender_not_providing", notProviding.textKey, "not providing key");
+    CheckEq("Not providing", RowText(notProviding), "not providing text");
+  }
+  {
+    TEST_CASE("settingUpIsYellow");
+    const auto model = ExtenderProvideRowModelFor(ProvideStatus(kExtenderProvideStateSettingUp));
+    CheckTone(ExtenderProvideTone::Yellow, model.tone, "setting up");
+    CheckEq("extender_setting_up", model.textKey, "setting up key");
+    CheckEq("Setting up", RowText(model), "setting up text");
+  }
+  {
+    TEST_CASE("activeIsGreenWithItsFamilies");
+    ExtenderProvideStatusView both = ProvideStatus(kExtenderProvideStateActive);
+    both.activatedV4 = true;
+    both.activatedV6 = true;
+    const auto model = ExtenderProvideRowModelFor(both);
+    CheckTone(ExtenderProvideTone::Green, model.tone, "active");
+    CheckEq("extender_active", model.textKey, "active key");
+    CheckEq("ipv4_and_ipv6", model.argument, "both families");
+    Check(model.argumentKind == ExtenderProvideArgument::Key,
+          "the families are a store key, localized before they are filled in");
+    Check(model.suffixKey.empty(), "nothing follows when neither family failed");
+    CheckEq(Dotted("Active", "IPv4 and IPv6"), RowText(model), "both families text");
+
+    ExtenderProvideStatusView v4 = ProvideStatus(kExtenderProvideStateActive);
+    v4.activatedV4 = true;
+    CheckEq("ipv4", ExtenderProvideRowModelFor(v4).argument, "IPv4 alone");
+    CheckEq(Dotted("Active", "IPv4"), RowText(ExtenderProvideRowModelFor(v4)), "IPv4 text");
+
+    ExtenderProvideStatusView v6 = ProvideStatus(kExtenderProvideStateActive);
+    v6.activatedV6 = true;
+    CheckEq("ipv6", ExtenderProvideRowModelFor(v6).argument, "IPv6 alone");
+    CheckEq(Dotted("Active", "IPv6"), RowText(ExtenderProvideRowModelFor(v6)), "IPv6 text");
+  }
+  {
+    TEST_CASE("activeCarriesTheOtherFamilysRefusalOrFailure");
+    ExtenderProvideStatusView refused =
+        ProvideStatus(kExtenderProvideStateActive, "", "the operator refused the activation");
+    refused.activatedV4 = true;
+    refused.refused = true;
+    const auto refusedModel = ExtenderProvideRowModelFor(refused);
+    CheckTone(ExtenderProvideTone::Green, refusedModel.tone, "still green: a family is active");
+    CheckEq("extender_activation_refused", refusedModel.suffixKey, "a refusal");
+    CheckEq(Dotted(Dotted("Active", "IPv4"),
+                   "Activation refused: the operator refused the activation"),
+            RowText(refusedModel), "the refusal follows on the same line");
+
+    ExtenderProvideStatusView failed = ProvideStatus(
+        kExtenderProvideStateActive, "", "dial tcp4 192.0.2.1:443: connect: network is unreachable");
+    failed.activatedV6 = true;
+    const auto failedModel = ExtenderProvideRowModelFor(failed);
+    CheckEq("extender_activation_failed", failedModel.suffixKey, "a failure");
+    CheckEq(Dotted(Dotted("Active", "IPv6"),
+                   "Activation failed: dial tcp4 192.0.2.1:443: connect: network is unreachable"),
+            RowText(failedModel), "the failure follows on the same line");
+  }
+  {
+    TEST_CASE("eachErrorCaseTakesItsLabelFromErrorCase");
+    struct ErrorRow {
+      const char* errorCase;
+      const char* reason;
+      const char* key;
+      const char* text;
+    };
+    const ErrorRow rows[] = {
+        {kExtenderProvideErrorStart, "no extender directory", "extender_start_failed",
+         "Could not start: no extender directory"},
+        {kExtenderProvideErrorListen,
+         "tcp 443: bind: permission denied; udp 443: bind: permission denied",
+         "extender_listen_failed",
+         "Could not listen: tcp 443: bind: permission denied; udp 443: bind: permission denied"},
+        {kExtenderProvideErrorActivationRefused, "the operator refused the activation",
+         "extender_activation_refused",
+         "Activation refused: the operator refused the activation"},
+        {kExtenderProvideErrorActivationFailed, "context deadline exceeded",
+         "extender_activation_failed", "Activation failed: context deadline exceeded"},
+    };
+    for (const ErrorRow& row : rows) {
+      const auto model = ExtenderProvideRowModelFor(
+          ProvideStatus(kExtenderProvideStateError, row.errorCase, row.reason));
+      const std::string at = std::string(" (") + row.errorCase + ")";
+      CheckTone(ExtenderProvideTone::Red, model.tone, "red" + at);
+      CheckEq(row.key, model.textKey, "key" + at);
+      Check(model.argumentKind == ExtenderProvideArgument::Text, "the reason is raw text" + at);
+      Check(model.suffixKey.empty(), "no second half in the error state" + at);
+      CheckEq(row.text, RowText(model), "text" + at);
+    }
+    // ErrorCase decides the label; LastActivationRefused never relabels an error
+    ExtenderProvideStatusView failedFlaggedRefused = ProvideStatus(
+        kExtenderProvideStateError, kExtenderProvideErrorActivationFailed, "timeout");
+    failedFlaggedRefused.refused = true;
+    CheckEq("extender_activation_failed", ExtenderProvideRowModelFor(failedFlaggedRefused).textKey,
+            "a failed case stays failed");
+    ExtenderProvideStatusView refusedFlaggedFailed = ProvideStatus(
+        kExtenderProvideStateError, kExtenderProvideErrorActivationRefused, "no capacity");
+    refusedFlaggedFailed.refused = false;
+    CheckEq("extender_activation_refused", ExtenderProvideRowModelFor(refusedFlaggedFailed).textKey,
+            "a refused case stays refused");
+  }
+  {
+    TEST_CASE("revokedIsTheWholeMessage");
+    const auto model = ExtenderProvideRowModelFor(
+        ProvideStatus(kExtenderProvideStateError, kExtenderProvideErrorRevoked));
+    CheckTone(ExtenderProvideTone::Red, model.tone, "revoked is red");
+    CheckEq("extender_revoked", model.textKey, "revoked key");
+    Check(model.argumentKind == ExtenderProvideArgument::None, "no argument");
+    CheckEq("Revoked by the operator", RowText(model), "revoked text");
+    const auto stray = ExtenderProvideRowModelFor(
+        ProvideStatus(kExtenderProvideStateError, kExtenderProvideErrorRevoked, "stray"));
+    CheckEq("Revoked by the operator", RowText(stray), "a stray reason is not appended");
+  }
+  {
+    TEST_CASE("anUnknownErrorCaseRendersTheReasonBareInRed");
+    const auto model = ExtenderProvideRowModelFor(ProvideStatus(
+        kExtenderProvideStateError, "quota", "the operator's quota is exhausted"));
+    CheckTone(ExtenderProvideTone::Red, model.tone, "still the error colour");
+    CheckEq("", model.textKey, "no label this build would have to invent");
+    CheckEq("the operator's quota is exhausted", RowText(model), "the reason, bare");
+  }
+  {
+    TEST_CASE("anUnknownStateNamesNoCase");
+    const auto model =
+        ExtenderProvideRowModelFor(ProvideStatus("draining", "", "held for maintenance"));
+    Check(model.visible, "a supported device still shows its row");
+    CheckTone(ExtenderProvideTone::Grey, model.tone, "grey: no error was reported");
+    CheckEq("held for maintenance", RowText(model), "the reason, bare");
+  }
+  {
+    TEST_CASE("theSwitchIsTheSetting");
+    for (const char* state : {kExtenderProvideStateOff, kExtenderProvideStateNotProviding,
+                              kExtenderProvideStateSettingUp, kExtenderProvideStateActive,
+                              kExtenderProvideStateError}) {
+      ExtenderProvideStatusView view = ProvideStatus(state);
+      view.provideExtender = true;
+      Check(ExtenderProvideRowModelFor(view).on, std::string("on in ") + state);
+      view.provideExtender = false;
+      Check(!ExtenderProvideRowModelFor(view).on, std::string("off in ") + state);
+    }
+  }
+  {
+    TEST_CASE("theStatusViewComparesByValueSoTheFeedCanDedup");
+    ExtenderProvideStatusView a = ProvideStatus(kExtenderProvideStateActive, "", "timeout");
+    a.activatedV4 = true;
+    ExtenderProvideStatusView b = a;
+    Check(a == b, "an identical push is not a change");
+    b.provideExtender = false;
+    Check(a != b, "the setting alone is a change");
+    b = a;
+    b.enabled = !a.enabled;
+    Check(a != b, "the role starting or stopping is a change");
+    b = a;
+    b.refused = true;
+    Check(a != b, "a refusal in place of a failure is a change");
+    b = a;
+    b.reason = "another reason";
+    Check(a != b, "so is a new reason");
+    Check(ExtenderProvideStatusView{} == ExtenderProvideStatusView{}, "two empty views agree");
+  }
+}
+
+void ProvideGuessTests() {
+  ExtenderProvideStatusView listening = ProvideStatus(
+      kExtenderProvideStateError, kExtenderProvideErrorListen, "tcp 443: bind: address in use");
+  listening.activatedV4 = true;
+  listening.refused = true;
+  listening.enabled = true;
+  {
+    TEST_CASE("offIsGreyOff");
+    const auto model = ExtenderProvideRowModelFor(ExtenderProvideGuessFor(listening, false, true));
+    Check(model.visible, "the row stays shown");
+    CheckTone(ExtenderProvideTone::Grey, model.tone, "grey");
+    CheckEq("Off", RowText(model), "Off");
+    Check(!model.on, "the switch reads off");
+  }
+  {
+    TEST_CASE("onWhileProvidingIsYellowSettingUp");
+    const auto guess = ExtenderProvideGuessFor(listening, true, true);
+    const auto model = ExtenderProvideRowModelFor(guess);
+    CheckTone(ExtenderProvideTone::Yellow, model.tone, "yellow");
+    CheckEq("Setting up", RowText(model), "Setting up");
+    Check(model.on, "the switch reads on");
+    Check(guess.enabled, "the guessed role runs");
+  }
+  {
+    TEST_CASE("onWhileNotProvidingIsGreyNotProviding");
+    const auto guess = ExtenderProvideGuessFor(listening, true, false);
+    const auto model = ExtenderProvideRowModelFor(guess);
+    CheckTone(ExtenderProvideTone::Grey, model.tone, "grey");
+    CheckEq("Not providing", RowText(model), "Not providing");
+    Check(model.on, "the switch reads on");
+    Check(!guess.enabled, "no role runs while not providing");
+  }
+  {
+    TEST_CASE("theGuessDropsTheOldReading");
+    const auto guess = ExtenderProvideGuessFor(listening, true, true);
+    CheckEq("", guess.errorCase, "no error case");
+    CheckEq("", guess.reason, "no reason");
+    Check(!guess.activatedV4 && !guess.activatedV6 && !guess.refused, "no families, no refusal");
+    Check(guess.supported, "and the device is still the one that supports the role");
+  }
+}
+
+// ---- ExtenderPresentation.h: the statistics sections (O8) --------------------
+
+void StatsSectionsTests() {
+  {
+    TEST_CASE("everyCombination");
+    for (int bits = 0; bits < 8; ++bits) {
+      const bool providing = (bits & 1) != 0;
+      const bool hasStats = (bits & 2) != 0;
+      const bool running = (bits & 4) != 0;
+      const auto sections = ExtenderStatsSectionsFor(providing, hasStats, running);
+      const std::string at = " (providing=" + std::to_string(providing) +
+                             " stats=" + std::to_string(hasStats) +
+                             " running=" + std::to_string(running) + ")";
+      const bool provider = providing && hasStats;
+      Check(sections.providerVisible == provider,
+            "the provider rows show exactly while providing is not never and stats exist" + at);
+      Check(sections.extenderVisible == (provider && running),
+            "the extender section shows only with the provider rows and a running role" + at);
+      Check(sections.disabledMeta == !provider,
+            "the disabled line shows exactly while the provider rows are hidden" + at);
+    }
+  }
+  {
+    TEST_CASE("aRunningRoleNeverShowsTheSectionAlone");
+    Check(!ExtenderStatsSectionsFor(false, true, true).extenderVisible, "provide mode never");
+    Check(!ExtenderStatsSectionsFor(true, false, true).extenderVisible,
+          "no provider stats reported yet");
+    Check(!ExtenderStatsSectionsFor(true, true, false).extenderVisible, "the role is not running");
+    Check(ExtenderStatsSectionsFor(true, true, true).extenderVisible, "all three hold");
+  }
+}
+
 }  // namespace
 
 int main() {
@@ -759,6 +1102,12 @@ int main() {
   QrEncoderTests();
   std::cout << "import decisions\n";
   ImportTests();
+  std::cout << "provider extender row\n";
+  ProvideRowTests();
+  std::cout << "provider extender switch guess\n";
+  ProvideGuessTests();
+  std::cout << "statistics sections\n";
+  StatsSectionsTests();
 
   std::cout << "\n" << gCases << " cases, " << gFailures << " failures\n";
   return gFailures == 0 ? 0 : 1;

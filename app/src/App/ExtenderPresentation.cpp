@@ -234,4 +234,97 @@ ExtenderImportOutcome ExtenderImportOutcomeFor(const ExtenderImportResultView& r
   return outcome;
 }
 
+// ---- the provider extender row ------------------------------------------------
+
+namespace {
+
+// The families of an active row: both, else the one that holds. The SDK
+// reports active only with a family activated; a device that ever said active
+// with neither would read as IPv4, the first of the two.
+const char* ExtenderProvideFamiliesKey(bool activatedV4, bool activatedV6) {
+  if (activatedV4 && activatedV6) return "ipv4_and_ipv6";
+  if (activatedV6) return "ipv6";
+  return "ipv4";
+}
+
+// The label of an error case that carries a Reason; null for a case this build
+// does not know.
+const char* ExtenderProvideErrorKey(std::string_view errorCase) {
+  if (errorCase == kExtenderProvideErrorStart) return "extender_start_failed";
+  if (errorCase == kExtenderProvideErrorListen) return "extender_listen_failed";
+  if (errorCase == kExtenderProvideErrorActivationRefused) return "extender_activation_refused";
+  if (errorCase == kExtenderProvideErrorActivationFailed) return "extender_activation_failed";
+  return nullptr;
+}
+
+}  // namespace
+
+ExtenderProvideRowModel ExtenderProvideRowModelFor(const ExtenderProvideStatusView& view) {
+  ExtenderProvideRowModel model;
+  model.visible = view.supported;
+  model.on = view.provideExtender;
+  const std::string_view state = view.state;
+  if (state == kExtenderProvideStateOff) {
+    model.textKey = "off";
+  } else if (state == kExtenderProvideStateNotProviding) {
+    model.textKey = "extender_not_providing";
+  } else if (state == kExtenderProvideStateSettingUp) {
+    model.tone = ExtenderProvideTone::Yellow;
+    model.textKey = "extender_setting_up";
+  } else if (state == kExtenderProvideStateActive) {
+    model.tone = ExtenderProvideTone::Green;
+    model.textKey = "extender_active";
+    model.argument = ExtenderProvideFamiliesKey(view.activatedV4, view.activatedV6);
+    model.argumentKind = ExtenderProvideArgument::Key;
+    // ErrorCase is empty in this state: the Reason alone is the other family's
+    // text, and LastActivationRefused says which of the two labels it takes
+    if (!view.reason.empty()) {
+      model.suffixKey =
+          view.refused ? "extender_activation_refused" : "extender_activation_failed";
+      model.suffixArgument = view.reason;
+    }
+  } else if (state == kExtenderProvideStateError) {
+    model.tone = ExtenderProvideTone::Red;
+    if (view.errorCase == kExtenderProvideErrorRevoked) {
+      // the case is the whole message; the SDK sends no reason with it
+      model.textKey = "extender_revoked";
+    } else {
+      const char* key = ExtenderProvideErrorKey(view.errorCase);
+      // a case this build does not know renders the Reason bare, still red
+      model.textKey = key ? key : "";
+      model.argument = view.reason;
+      model.argumentKind = ExtenderProvideArgument::Text;
+    }
+  } else {
+    model.textKey.clear();
+    model.argument = view.reason;
+    model.argumentKind = ExtenderProvideArgument::Text;
+  }
+  return model;
+}
+
+ExtenderProvideStatusView ExtenderProvideGuessFor(const ExtenderProvideStatusView& current,
+                                                  bool on, bool providing) {
+  ExtenderProvideStatusView guess;
+  guess.supported = current.supported;
+  guess.state = !on        ? kExtenderProvideStateOff
+                : providing ? kExtenderProvideStateSettingUp
+                            : kExtenderProvideStateNotProviding;
+  // the role runs exactly when the guess says setting up
+  guess.enabled = on && providing;
+  guess.provideExtender = on;
+  return guess;
+}
+
+// ---- the statistics sections ----------------------------------------------------
+
+ExtenderStatsSections ExtenderStatsSectionsFor(bool providingEnabled, bool hasProviderStats,
+                                               bool extenderRunning) {
+  ExtenderStatsSections sections;
+  sections.providerVisible = providingEnabled && hasProviderStats;
+  sections.extenderVisible = sections.providerVisible && extenderRunning;
+  sections.disabledMeta = !sections.providerVisible;
+  return sections;
+}
+
 }  // namespace urnw
