@@ -807,3 +807,32 @@ func TestWalletChallengesCheckTheirFlow(t *testing.T) {
 		t.Fatalf("SdkHost.cpp fetches %d wallet challenges but checks the flow serial %d times; a flow superseded while its challenge was on its way would open the bridge over the current flow", challenges, checks)
 	}
 }
+
+func TestWalletSignInClearsAnAbandonedSsoAttempt(t *testing.T) {
+	host := readAppSource(t, "SdkHost.cpp")
+	body := func(signature string) string {
+		start := strings.Index(host, signature)
+		if start < 0 {
+			t.Fatalf("SdkHost.cpp no longer defines %s", signature)
+		}
+		end := strings.Index(host[start:], "\n}\n")
+		if end < 0 {
+			t.Fatalf("cannot find the end of %s", signature)
+		}
+		return host[start : start+end]
+	}
+	// A wallet sign-in is waiting when walletAuthDone_ is set and no sso attempt
+	// owns it. An abandoned Google or Apple attempt left in place would drop the
+	// wallet's return, and the login screen would wait for it forever.
+	if !strings.Contains(body("SdkHost::CancelPendingWalletFlows("), "ssoAttempt_.reset();") {
+		t.Fatal("CancelPendingWalletFlows no longer clears the sso attempt, so a wallet sign-in started after an abandoned Google or Apple tab would never see its return")
+	}
+	for _, signature := range []string{"SdkHost::SignInWithSolana(", "SdkHost::SignInWithBittensor("} {
+		definition := body(signature)
+		cancelAt := strings.Index(definition, "CancelPendingWalletFlows(")
+		waitingAt := strings.Index(definition, "walletAuthDone_ = ")
+		if cancelAt < 0 || waitingAt < 0 || cancelAt > waitingAt {
+			t.Fatalf("%s must clear the pending flows, the sso attempt among them, before it waits for its sign-in", signature)
+		}
+	}
+}
