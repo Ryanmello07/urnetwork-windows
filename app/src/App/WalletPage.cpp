@@ -69,23 +69,6 @@ constexpr const char* kTop200Path = "/app/account/top200";
 // A head score this close to the eviction floor is worth a warning.
 constexpr double kDemotionWarningRatio = 1.15;
 
-// The chart hosts' clip, as ConnectPage::BuildCharts states it for its own: a
-// TransferChart draws into a Canvas and neither a Canvas nor a Grid clips, so a
-// curve or an edge label overdraws the rule into the pane next door unless the
-// clip is stated, and re-stated on every resize because Clip is a fixed
-// rectangle.
-void ClipToBounds(Grid const& host) {
-  if (!host) return;
-  host.SizeChanged([](IInspectable const& sender, SizeChangedEventArgs const& args) {
-    if (auto element = sender.try_as<FrameworkElement>()) {
-      RectangleGeometry clip;
-      clip.Rect({0, 0, static_cast<float>(args.NewSize().Width),
-                 static_cast<float>(args.NewSize().Height)});
-      element.Clip(clip);
-    }
-  });
-}
-
 // A stat tile's value, in the colour its state deserves. The dash is a
 // PLACEHOLDER, not a number: faint for the placeholder, text colour for a real
 // figure.
@@ -3339,9 +3322,9 @@ void WalletPage::BuildCharts() {
   providerBlockedChart_ = std::make_unique<urnw::TransferChart>(
       w_.WalletProviderBlockedChartHost(), urnw::Localized("blocked"),
       urnw::ThroughputRoute::Block, urnw::colors::kUrCoral, urnw::colors::kUrMutedCoral);
-  ClipToBounds(w_.WalletExtenderChartHost());
-  ClipToBounds(w_.WalletProviderLocalChartHost());
-  ClipToBounds(w_.WalletProviderBlockedChartHost());
+  urnw::kit::ClipToBounds(w_.WalletExtenderChartHost());
+  urnw::kit::ClipToBounds(w_.WalletProviderLocalChartHost());
+  urnw::kit::ClipToBounds(w_.WalletProviderBlockedChartHost());
 }
 
 void WalletPage::OnChartTick() {
@@ -3446,11 +3429,13 @@ winrt::fire_and_forget WalletPage::ShowProviderTransportSettingsSheet() {
   auto self = w_.get_strong();
   w_.SetSheetOpen(true);
   try {
-    // ConnectPage::ShowTransportSettingsSheet for the provider policy: the
-    // draft opens on the policy in force and applies together on Update
+    // ConnectPage::ShowTransportSettingsSheet for the provider policy: the draft
+    // opens on the policy the settings listener last pushed, which the Connect
+    // page keeps, so opening reads nothing from the device on the UI thread, and
+    // applies together on Update
     providerTransportSheet_ = urnw::TransportSettingsSheet::Create(
         self->Content().XamlRoot(), Sdk(), urnw::TransportSettingsKind::Provider,
-        Sdk().CurrentTransportSettings(urnw::TransportSettingsKind::Provider));
+        self->connect().ProviderTransportSettings());
     co_await providerTransportSheet_->Dialog().ShowAsync();
   } catch (...) {
   }

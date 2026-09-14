@@ -1185,32 +1185,6 @@ void ConnectPage::PreviewHeroTick() {
   }
 }
 
-namespace {
-// Keep a chart inside its pane.
-//
-// TransferChart draws into a Canvas, and a Canvas does not clip: its curves and
-// its edge labels run a few pixels past the host and, in a pane layout, straight
-// across the 1px rule into the NEXT pane. It did - the activity chart put a
-// green sliver and a stray peak marker inside the statistics pane, right at the
-// boundary. A Grid column does not clip its children either, so the clip has to
-// be stated, and re-stated on every resize because Clip is a fixed rectangle.
-void ClipToBounds(winrt::Microsoft::UI::Xaml::Controls::Grid const& host) {
-  if (!host) return;
-  auto apply = [](winrt::Microsoft::UI::Xaml::FrameworkElement const& element,
-                  winrt::Windows::Foundation::Size const& size) {
-    winrt::Microsoft::UI::Xaml::Media::RectangleGeometry clip;
-    clip.Rect({0, 0, static_cast<float>(size.Width), static_cast<float>(size.Height)});
-    element.Clip(clip);
-  };
-  host.SizeChanged([apply](winrt::Windows::Foundation::IInspectable const& sender,
-                           SizeChangedEventArgs const& args) {
-    if (auto element = sender.try_as<winrt::Microsoft::UI::Xaml::FrameworkElement>()) {
-      apply(element, args.NewSize());
-    }
-  });
-}
-}  // namespace
-
 void ConnectPage::BuildCharts() {
   remoteChart_ = std::make_unique<urnw::TransferChart>(
       w_.RemoteChartHost(), urnw::Localized("remote"), urnw::ThroughputRoute::Remote,
@@ -1223,9 +1197,9 @@ void ConnectPage::BuildCharts() {
       urnw::colors::kUrGreen, urnw::colors::kUrPink);
   // R3: a chart is now full-bleed to its pane's edge, so anything it overdraws
   // lands in the pane next door.
-  ClipToBounds(w_.RemoteChartHost());
-  ClipToBounds(w_.BlockedChartHost());
-  ClipToBounds(w_.LocalChartHost());
+  urnw::kit::ClipToBounds(w_.RemoteChartHost());
+  urnw::kit::ClipToBounds(w_.BlockedChartHost());
+  urnw::kit::ClipToBounds(w_.LocalChartHost());
   // The transport distribution bar (TRANSPORTSTATS): the window's remote traffic
   // by transport, full width directly under the Remote plot in the activity
   // pane. Its click opens the client transport settings editor; the bar is its

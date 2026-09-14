@@ -73,6 +73,13 @@ class ConnectPage {
   // MainWindow hands every pushed status here and to the Earnings page, as it
   // hands the live stats to both.
   void ApplyExtenderProvideState(urnw::ExtenderProvideStatusView const& view);
+  // The provider transport policy in force, as the settings listener last pushed
+  // it (nullopt: unknown, and the editor opens on the SDK default). The Earnings
+  // provider transport sheet opens on it rather than reading the device on the
+  // UI thread.
+  std::optional<urnet::TransportSettings> const& ProviderTransportSettings() const {
+    return providerTransportSettings_;
+  }
   void SetConnectedUi(bool connected);
   // network name off the stored jwt, for the idle "{name} is ready to connect"
   // copy; re-renders the status line
