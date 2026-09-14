@@ -753,3 +753,36 @@ func TestNeutralPluralResources(t *testing.T) {
 		t.Fatalf("neutral Resources.resw omits plural resource names: %v", missing)
 	}
 }
+
+func TestWalletBridgeReturnsAreRouted(t *testing.T) {
+	host := readAppSource(t, "SdkHost.cpp")
+	for _, required := range []string{
+		"bridge::RoutePublicKey(",
+		"bridge::RouteSignature(",
+	} {
+		if !strings.Contains(host, required) {
+			t.Fatalf("SdkHost.cpp does not route wallet-bridge returns through %s; a return no flow is waiting for would fall through to a wallet sign-in", required)
+		}
+	}
+
+	const cancel = `CancelPendingWalletFlows("`
+	reasons := 0
+	for rest := host; ; {
+		index := strings.Index(rest, cancel)
+		if index < 0 {
+			break
+		}
+		rest = rest[index+len(cancel):]
+		reasons++
+		if !strings.HasPrefix(rest, "superseded by ") {
+			end := strings.IndexByte(rest, '"')
+			if end < 0 {
+				end = len(rest)
+			}
+			t.Errorf("CancelPendingWalletFlows reason %q does not start with %q, the prefix a page settles a superseded flow by", rest[:end], "superseded by ")
+		}
+	}
+	if reasons == 0 {
+		t.Fatal("SdkHost.cpp no longer answers a superseded wallet flow with a literal reason")
+	}
+}

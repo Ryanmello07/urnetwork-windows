@@ -390,6 +390,8 @@
     <ClInclude Include="ProvideModeVisual.h" />
     <ClInclude Include="UrComponents.h" />
     <ClInclude Include="WalletConnect.h" />
+    <!-- header-only and WinRT-free: tools/solana-wallet-tests.cpp runs it -->
+    <ClInclude Include="WalletBridgeRoute.h" />
     <ClInclude Include="WindowShell.h" />
     <ClInclude Include="ServiceClient.h" />
     <ClInclude Include="ServiceSetup.h" />

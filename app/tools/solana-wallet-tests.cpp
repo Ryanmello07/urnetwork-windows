@@ -2,9 +2,9 @@
 // Solana connect option on Earnings): the address check a pasted address
 // passes before it is sent to the server, the short form, which account wallet
 // is the Solana payout wallet, the USDC still waiting, what the pane shows from
-// those, and the connect sheet's state machine (App/SolanaWalletPresentation.h)
-// - run against the SAME source the app compiles, on any host with a C++20
-// compiler.
+// those, and the connect sheet's state machine (App/SolanaWalletPresentation.h),
+// plus where the wallet bridge's returns go (App/WalletBridgeRoute.h) - run
+// against the SAME sources the app compiles, on any host with a C++20 compiler.
 //
 // The WinUI halves (WalletPage's card and overflows, SolanaWalletSheets' dialog)
 // cannot be built off Windows at all; what is verified here is every decision
@@ -25,6 +25,7 @@
 #include <vector>
 
 #include "SolanaWalletPresentation.h"
+#include "WalletBridgeRoute.h"
 
 using namespace urnw::solana;
 
@@ -586,6 +587,95 @@ void LinkTests() {
   }
 }
 
+// ---- where a wallet-bridge return goes (WalletBridgeRoute.h) -----------------
+
+std::string RouteName(urnw::bridge::PublicKeyRoute route) {
+  switch (route) {
+    case urnw::bridge::PublicKeyRoute::Drop: return "Drop";
+    case urnw::bridge::PublicKeyRoute::AnswerConnect: return "AnswerConnect";
+    case urnw::bridge::PublicKeyRoute::SignForRequest: return "SignForRequest";
+    case urnw::bridge::PublicKeyRoute::SignIn: return "SignIn";
+  }
+  return "?";
+}
+
+std::string RouteName(urnw::bridge::SignatureRoute route) {
+  switch (route) {
+    case urnw::bridge::SignatureRoute::Drop: return "Drop";
+    case urnw::bridge::SignatureRoute::AnswerRequest: return "AnswerRequest";
+    case urnw::bridge::SignatureRoute::SignIn: return "SignIn";
+  }
+  return "?";
+}
+
+void BridgeRouteTests() {
+  using urnw::bridge::IsSuperseded;
+  using urnw::bridge::RoutePublicKey;
+  using urnw::bridge::RouteSignature;
+  {
+    TEST_CASE("aConnectReturnNobodyWaitsForIsDropped");
+    // the bridge page's "Return to URnetwork" after the sheet already linked
+    CheckEq("Drop", RouteName(RoutePublicKey(false, false, false, false)), "no flow in flight");
+  }
+  {
+    TEST_CASE("theBareConnectIsAnsweredFirst");
+    CheckEq("AnswerConnect", RouteName(RoutePublicKey(false, true, true, true)),
+            "a waiting connect takes the key before anything else");
+  }
+  {
+    TEST_CASE("aSignatureRequestSignsBeforeASignIn");
+    CheckEq("SignForRequest", RouteName(RoutePublicKey(false, false, true, true)),
+            "the Seeker request's own message is signed");
+  }
+  {
+    TEST_CASE("aWalletSignInStillSignsIn");
+    CheckEq("SignIn", RouteName(RoutePublicKey(false, false, false, true)),
+            "the login page's Solana sign-in fetches its challenge");
+  }
+  {
+    TEST_CASE("aBittensorConnectReturnChainsNothing");
+    CheckEq("Drop", RouteName(RoutePublicKey(true, true, true, true)),
+            "Bittensor has no connect hop, whatever is waiting");
+  }
+  {
+    TEST_CASE("aSignatureNobodyWaitsForNeverSignsIn");
+    CheckEq("Drop", RouteName(RouteSignature(false, false)),
+            "a superseded tab's signature is dropped");
+    CheckEq("AnswerRequest", RouteName(RouteSignature(true, true)),
+            "a waiting request is answered before a sign-in");
+    CheckEq("SignIn", RouteName(RouteSignature(false, true)), "a wallet sign-in logs in");
+  }
+  {
+    TEST_CASE("everyPublicKeyCombinationRoutesByPriority");
+    for (int bits = 0; bits < 16; ++bits) {
+      const bool bittensor = (bits & 1) != 0;
+      const bool connect = (bits & 2) != 0;
+      const bool sign = (bits & 4) != 0;
+      const bool signIn = (bits & 8) != 0;
+      const std::string expected = bittensor ? "Drop"
+                                   : connect ? "AnswerConnect"
+                                   : sign    ? "SignForRequest"
+                                   : signIn  ? "SignIn"
+                                             : "Drop";
+      CheckEq(expected, RouteName(RoutePublicKey(bittensor, connect, sign, signIn)),
+              "combination " + std::to_string(bits));
+    }
+  }
+  {
+    TEST_CASE("supersededIsTheHostsOwnWord");
+    Check(IsSuperseded("superseded by a wallet connect request"), "the connect request's reason");
+    Check(!IsSuperseded("User rejected the request."), "the bridge's own error is not");
+    Check(!IsSuperseded(""), "an empty error is not");
+    // every reason SdkHost::CancelPendingWalletFlows passes today
+    for (const char* reason :
+         {"superseded by a wallet sign-in", "superseded by a wallet signature request",
+          "superseded by wallet network creation", "superseded by a sign-in"}) {
+      Check(IsSuperseded(reason), std::string("\"") + reason + "\"");
+    }
+    Check(!IsSuperseded("Superseded by a sign-in"), "the prefix is exact");
+  }
+}
+
 }  // namespace
 
 int main() {
@@ -605,6 +695,8 @@ int main() {
   ManualTests();
   std::cout << "connect: linking\n";
   LinkTests();
+  std::cout << "wallet bridge routing\n";
+  BridgeRouteTests();
 
   std::cout << "\n" << gCases << " cases, " << gFailures << " failures\n";
   return gFailures == 0 ? 0 : 1;
