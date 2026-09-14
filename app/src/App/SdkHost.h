@@ -674,6 +674,17 @@ class SdkHost {
                             std::function<void(bool ok, std::string address,
                                                std::string signature, std::string error)> done);
 
+  // Connect a Solana wallet through the same browser bridge and hand back its
+  // public key WITHOUT signing anything and WITHOUT authenticating. The address
+  // becomes an account wallet (createAccountWallet: the Earnings Solana payout
+  // wallet), which takes no signature - android (MWA connect) and apple
+  // (connectPhantomWallet) connected the same way. Same single-flow rule and
+  // threading caveat as above: it supersedes any wallet flow in flight and is
+  // superseded by the next one, and `done` runs on whichever thread delivered
+  // the deep link.
+  void ConnectSolanaWallet(WalletConnect::Provider provider,
+                           std::function<void(bool ok, std::string address, std::string error)> done);
+
   // Sign a server-issued TAO challenge with a Bittensor wallet through the
   // bridge WITHOUT authenticating: the signed triple attaches the coldkey to
   // the provider (Api.snSetWallet / Device.connectSnWallet, Earnings). The
@@ -1936,6 +1947,11 @@ class SdkHost {
   // both are cleared whenever the other starts.
   std::function<void(bool, std::string, std::string, std::string)> walletSignDone_;
   std::string walletSignMessage_;
+  // A bare connect request (ConnectSolanaWallet): answered from on_public_key
+  // with the wallet's address, before any challenge or signature. Like
+  // walletSignDone_ and walletAuthDone_, CancelPendingWalletFlows answers and
+  // clears it whenever another flow starts.
+  std::function<void(bool, std::string, std::string)> walletConnectDone_;
   // Exact single-use server challenge being signed by an authentication flow.
   // Kept separate from walletSignMessage_, which also serves signed-in utility
   // signature requests.
