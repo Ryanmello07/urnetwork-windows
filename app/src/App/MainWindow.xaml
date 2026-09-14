@@ -2361,6 +2361,58 @@
                                     </StackPanel>
                                 </Border>
 
+                                <!-- network reliability ........................ -->
+                                <Border Style="{StaticResource UrGroupHeaderStyle}">
+                                    <Grid>
+                                        <TextBlock x:Name="NetworkReliabilityHeading"
+                                                   Style="{StaticResource UrGroupHeaderTextStyle}" />
+                                        <TextBlock x:Name="ReliabilityStatusText"
+                                                   HorizontalAlignment="Right"
+                                                   Style="{StaticResource UrPaneMetaStyle}" />
+                                    </Grid>
+                                </Border>
+                                <Border x:Name="ReliabilityCard" Visibility="Collapsed"
+                                        BorderBrush="{StaticResource UrBorderBrush}"
+                                        BorderThickness="0,0,0,1" Padding="12,10">
+                                    <StackPanel x:Name="ReliabilityPanel" Spacing="8" />
+                                </Border>
+
+                                <!-- extender statistics ........................ -->
+                                <!-- The relayed traffic of this device's extender role
+                                     (connect/EXTENDER.md O8): shown only while the provider
+                                     statistics below are and the role is running (the pushed
+                                     status's `enabled`), and hidden with no placeholder
+                                     otherwise, since the extender row in the provider group
+                                     already says why. WalletPage::ApplyStatsSections writes
+                                     the visibility of both groups. -->
+                                <Border x:Name="WalletExtenderStatsHeader" Visibility="Collapsed"
+                                        Style="{StaticResource UrGroupHeaderStyle}">
+                                    <TextBlock x:Name="WalletExtenderStatsHeading"
+                                               Style="{StaticResource UrGroupHeaderTextStyle}" />
+                                </Border>
+                                <Border x:Name="WalletExtenderChartRow" Visibility="Collapsed"
+                                        Style="{StaticResource UrPaneRowStyle}"
+                                        MinHeight="0" Padding="12,0">
+                                    <Grid x:Name="WalletExtenderChartHost" Height="132" />
+                                </Border>
+
+                                <!-- provider statistics ........................ -->
+                                <!-- (O5, O8) The header is static: there is no provider
+                                     contracts feed for it to open yet. While the provider
+                                     statistics are not visible its meta label says providing
+                                     is disabled and the chart rows collapse, the reliability
+                                     group's mechanism; the title, the provide mode row and the
+                                     extender row stay. -->
+                                <Border x:Name="WalletProviderStatsHeader"
+                                        Style="{StaticResource UrGroupHeaderStyle}">
+                                    <Grid>
+                                        <TextBlock x:Name="WalletProviderStatsHeading"
+                                                   Style="{StaticResource UrGroupHeaderTextStyle}" />
+                                        <TextBlock x:Name="WalletProviderStatsStatus"
+                                                   HorizontalAlignment="Right"
+                                                   Style="{StaticResource UrPaneMetaStyle}" />
+                                    </Grid>
+                                </Border>
                                 <!-- provide mode: the Connect page's indicator + label with
                                      the current mode; the whole row opens the Connect page
                                      where it is changed -->
@@ -2394,21 +2446,63 @@
                                         </Grid>
                                     </Button>
                                 </Border>
-
-                                <!-- network reliability ........................ -->
-                                <Border Style="{StaticResource UrGroupHeaderStyle}">
-                                    <Grid>
-                                        <TextBlock x:Name="NetworkReliabilityHeading"
-                                                   Style="{StaticResource UrGroupHeaderTextStyle}" />
-                                        <TextBlock x:Name="ReliabilityStatusText"
-                                                   HorizontalAlignment="Right"
-                                                   Style="{StaticResource UrPaneMetaStyle}" />
-                                    </Grid>
+                                <!-- the read-only extender row (N7): the Connect page's
+                                     extender row with a chevron in place of the switch,
+                                     opening the Connect page where the switch lives, as the
+                                     provide mode row above does. One element named
+                                     "Extender: <state>" (WalletPage), so the texts inside it
+                                     are raw. -->
+                                <Border x:Name="WalletExtenderRow" Visibility="Collapsed"
+                                        Style="{StaticResource UrPaneRowStyle}" MinHeight="44">
+                                    <Button x:Name="WalletExtenderButton"
+                                            Background="Transparent" BorderThickness="0"
+                                            Padding="0" Margin="0"
+                                            HorizontalAlignment="Stretch"
+                                            HorizontalContentAlignment="Stretch"
+                                            Click="OnWalletExtender">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <Grid Width="12" Height="12" VerticalAlignment="Center"
+                                                  Margin="0,0,8,0">
+                                                <Ellipse x:Name="WalletExtenderDot" Width="7" Height="7"
+                                                         IsHitTestVisible="False"
+                                                         AutomationProperties.AccessibilityView="Raw" />
+                                            </Grid>
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center"
+                                                        Spacing="1">
+                                                <TextBlock x:Name="WalletExtenderLabel"
+                                                           Style="{StaticResource UrKeyTextStyle}"
+                                                           AutomationProperties.AccessibilityView="Raw" />
+                                                <TextBlock x:Name="WalletExtenderNote"
+                                                           Style="{StaticResource UrRowNoteStyle}"
+                                                           AutomationProperties.AccessibilityView="Raw" />
+                                            </StackPanel>
+                                            <FontIcon Grid.Column="2" Glyph="&#xE76C;" FontSize="12"
+                                                      Style="{StaticResource UrRowIconStyle}" />
+                                        </Grid>
+                                    </Button>
                                 </Border>
-                                <Border x:Name="ReliabilityCard" Visibility="Collapsed"
-                                        BorderBrush="{StaticResource UrBorderBrush}"
-                                        BorderThickness="0,0,0,1" Padding="12,10">
-                                    <StackPanel x:Name="ReliabilityPanel" Spacing="8" />
+                                <!-- The provider series: Local, its transport distribution (a
+                                     pane-row button of its own that opens the provider
+                                     transport settings, so its host adds no rule and no
+                                     inset), and Blocked at half height. The chart hosts are
+                                     clipped by WalletPage::BuildCharts. -->
+                                <Border x:Name="WalletProviderLocalChartRow" Visibility="Collapsed"
+                                        Style="{StaticResource UrPaneRowStyle}"
+                                        MinHeight="0" Padding="12,0">
+                                    <Grid x:Name="WalletProviderLocalChartHost" Height="132" />
+                                </Border>
+                                <Border x:Name="WalletProviderTransportBarRow" Visibility="Collapsed">
+                                    <Grid x:Name="WalletProviderTransportBarHost" />
+                                </Border>
+                                <Border x:Name="WalletProviderBlockedChartRow" Visibility="Collapsed"
+                                        Style="{StaticResource UrPaneRowStyle}"
+                                        MinHeight="0" Padding="12,0">
+                                    <Grid x:Name="WalletProviderBlockedChartHost" Height="66" />
                                 </Border>
                             </StackPanel>
                         </ScrollViewer>

@@ -276,6 +276,10 @@ struct MainWindow : MainWindowT<MainWindow> {
                          winrt::Microsoft::UI::Xaml::Documents::HyperlinkClickEventArgs const&);
   void OnWalletProvideMode(winrt::Windows::Foundation::IInspectable const&,
                            winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
+  // Earnings: the read-only extender row (EXTENDER.md N7) opens the Connect page,
+  // where its switch lives, as the provide mode row does.
+  void OnWalletExtender(winrt::Windows::Foundation::IInspectable const&,
+                        winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   // wallet: Seeker-token multiplier verification. leaderboard: the
   // public/private switch.
   void OnVerifySeeker(winrt::Windows::Foundation::IInspectable const&,

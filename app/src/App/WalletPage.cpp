@@ -32,6 +32,7 @@
 #include "MainWindow.xaml.h"
 #include "PageContext.h"
 #include "SettingsSheets.h"
+#include "StatsSheets.h"  // TransportSettingsSheet, for the provider transport bar
 #include "StatsFormat.h"
 #include "Strings.h"
 #include "UrColors.h"
@@ -67,6 +68,23 @@ constexpr const char* kTop200Path = "/app/account/top200";
 
 // A head score this close to the eviction floor is worth a warning.
 constexpr double kDemotionWarningRatio = 1.15;
+
+// The chart hosts' clip, as ConnectPage::BuildCharts states it for its own: a
+// TransferChart draws into a Canvas and neither a Canvas nor a Grid clips, so a
+// curve or an edge label overdraws the rule into the pane next door unless the
+// clip is stated, and re-stated on every resize because Clip is a fixed
+// rectangle.
+void ClipToBounds(Grid const& host) {
+  if (!host) return;
+  host.SizeChanged([](IInspectable const& sender, SizeChangedEventArgs const& args) {
+    if (auto element = sender.try_as<FrameworkElement>()) {
+      RectangleGeometry clip;
+      clip.Rect({0, 0, static_cast<float>(args.NewSize().Width),
+                 static_cast<float>(args.NewSize().Height)});
+      element.Clip(clip);
+    }
+  });
+}
 
 // A stat tile's value, in the colour its state deserves. The dash is a
 // PLACEHOLDER, not a number: faint for the placeholder, text colour for a real
@@ -366,6 +384,7 @@ WalletPage::WalletPage(winrt::URnetwork::implementation::MainWindow& window)
 WalletPage::~WalletPage() {
   *alive_ = false;  // the controller's listener and the sheet's completions stop here
   if (walletValidateTimer_) walletValidateTimer_.Stop();
+  if (chartTimer_) chartTimer_.Stop();
   if (seekerFlow_.timer) seekerFlow_.timer.Stop();
   if (connectFlow_.timer) connectFlow_.timer.Stop();
   if (rankingFlow_.timer) rankingFlow_.timer.Stop();
@@ -438,6 +457,35 @@ void WalletPage::Initialize() {
     if (auto self = weak.get()) self->wallet().ValidateWalletAddress();
   });
   InitializePointsBoard();
+
+  // The statistics groups (connect/EXTENDER.md O5, O8): the charts and the bar,
+  // their feed, and the clock that redraws them. The feed hops through the
+  // dispatcher like every SdkHost push, and resolves the window only there.
+  BuildCharts();
+  auto queue = w_.DispatcherQueue();
+  auto weak = w_.get_weak();
+  Sdk().SetProviderThroughputHandler([queue, weak](urnw::ProviderThroughputSnapshot snapshot) {
+    queue.TryEnqueue([weak, snapshot = std::move(snapshot)] {
+      if (auto self = weak.get()) self->wallet().ApplyProviderThroughput(snapshot);
+    });
+  });
+  // ConnectPage's ~10 fps chart clock, started and stopped with the window's
+  // presentation (SetPresentationActive)
+  chartTimer_ = w_.DispatcherQueue().CreateTimer();
+  chartTimer_.Interval(std::chrono::milliseconds(100));
+  chartTimer_.Tick([weak](auto const&, auto const&) {
+    if (auto self = weak.get()) self->wallet().OnChartTick();
+  });
+  ApplyStatsSections(/*force=*/true);
+}
+
+void WalletPage::SetPresentationActive(bool active) {
+  if (!chartTimer_) return;
+  if (active) {
+    if (!chartTimer_.IsRunning()) chartTimer_.Start();
+  } else {
+    chartTimer_.Stop();
+  }
 }
 
 void WalletPage::OpenUrl(std::string const& url) {
@@ -492,6 +540,13 @@ void WalletPage::ApplyStrings() {
   w_.NetworkReliabilityHeading().Text(Loc("site_app_network_reliability"));
   w_.WalletProvideModeLabel().Text(Loc("provide_mode"));
   w_.WalletProvideModeValue().Text(Loc(Sdk().CurrentProvideControlMode().c_str()));
+  // the two statistics groups (connect/EXTENDER.md O8) and the read-only
+  // extender row (N7), whose state line follows the language too
+  w_.WalletExtenderStatsHeading().Text(Loc("extender_statistics"));
+  w_.WalletProviderStatsHeading().Text(Loc("provider_statistics"));
+  w_.WalletExtenderLabel().Text(Loc("extender"));
+  ApplyExtenderProvideRow();
+  ApplyStatsSections(/*force=*/true);
   w_.LeaderboardRankLabel().Text(Loc("current_ranking"));
   w_.LeaderboardNetProvidedLabel().Text(Loc("net_provided"));
   w_.LeaderboardPublicLabel().Text(Loc("display_network_on_leaderboard"));
@@ -3248,11 +3303,154 @@ void WalletPage::ApplyProvideState(urnw::LiveStats const& stats) {
   const bool enabled = Sdk().CurrentProvideControlMode() != "never";
   if (enabled == providingEnabled_) return;
   providingEnabled_ = enabled;
+  // the provider statistics share this gate (O8)
+  ApplyStatsSections(/*force=*/false);
   if (enabled) {
     LoadReliability();  // repaint the chart the gate was hiding
   } else {
     ApplyReliability(std::nullopt, Fetch::Ready);  // the gate paints the message
   }
+}
+
+// ---- the statistics groups (connect/EXTENDER.md O5, O8) ------------------------
+
+void WalletPage::BuildCharts() {
+  // The extender statistics: the extender series in its Remote route, egress
+  // toward the clients above and ingress toward the operator below, bytes in the
+  // pale H1 blue and reads in the count series' pink, counted in reads per second
+  // since a relay read is not a packet.
+  extenderChart_ = std::make_unique<urnw::TransferChart>(
+      w_.WalletExtenderChartHost(), urnw::Localized("extender"), urnw::ThroughputRoute::Remote,
+      urnw::colors::kUrLightBlue, urnw::colors::kUrPink, urnw::TransferChart::CountUnit::Reads);
+  // The provider statistics: the provider series' Local chart, its transport
+  // distribution (whose click opens the provider transport settings) and its
+  // Blocked chart at half height, the Connect page's colours.
+  providerLocalChart_ = std::make_unique<urnw::TransferChart>(
+      w_.WalletProviderLocalChartHost(), urnw::Localized("local"), urnw::ThroughputRoute::Local,
+      urnw::colors::kUrGreen, urnw::colors::kUrPink);
+  providerTransportBar_ = std::make_unique<urnw::TransportBar>(
+      w_.WalletProviderTransportBarHost(), [weak = w_.get_weak()] {
+        if (auto self = weak.get()) self->wallet().ShowProviderTransportSettingsSheet();
+      });
+  providerBlockedChart_ = std::make_unique<urnw::TransferChart>(
+      w_.WalletProviderBlockedChartHost(), urnw::Localized("blocked"),
+      urnw::ThroughputRoute::Block, urnw::colors::kUrCoral, urnw::colors::kUrMutedCoral);
+  ClipToBounds(w_.WalletExtenderChartHost());
+  ClipToBounds(w_.WalletProviderLocalChartHost());
+  ClipToBounds(w_.WalletProviderBlockedChartHost());
+}
+
+void WalletPage::OnChartTick() {
+  // the Connect page's gate on its own view: nothing redraws while the window is
+  // hidden or another destination shows
+  if (!w_.Visible()) return;
+  if (w_.WalletView().Visibility() != Visibility::Visible) return;
+  if (extenderChart_) extenderChart_->Tick();
+  if (providerLocalChart_) providerLocalChart_->Tick();
+  // the bar's boundary tween and empty fade; returns at once unless one runs
+  if (providerTransportBar_) providerTransportBar_->Tick();
+  if (providerBlockedChart_) providerBlockedChart_->Tick();
+}
+
+void WalletPage::ApplyExtenderProvideState(urnw::ExtenderProvideStatusView const& view) {
+  extenderProvideView_ = view;
+  ApplyExtenderProvideRow();
+  // The extender section follows the pushed status, never the throughput tick
+  // or the point count: the throughput listener is silent when the role stops
+  // inside an idle window (O4).
+  if (view.enabled != extenderRunning_) {
+    extenderRunning_ = view.enabled;
+    ApplyStatsSections(/*force=*/false);
+  }
+}
+
+void WalletPage::ApplyExtenderProvideRow() {
+  const urnw::ExtenderProvideRowModel model =
+      urnw::ExtenderProvideRowModelFor(extenderProvideView_);
+  // hidden, never disabled, like the settings row it repeats (N1)
+  w_.WalletExtenderRow().Visibility(model.visible ? Visibility::Visible
+                                                  : Visibility::Collapsed);
+  const hstring text{urnw::ExtenderProvideText(model)};
+  w_.WalletExtenderDot().Fill(
+      urnw::colors::MakeBrush(urnw::ExtenderProvideToneColor(model.tone)));
+  w_.WalletExtenderNote().Text(text);
+  w_.WalletExtenderNote().Foreground(urnw::ExtenderProvideNoteBrush(model.tone));
+  ToolTipService::SetToolTip(w_.WalletExtenderNote(),
+                             text.empty() ? IInspectable{nullptr} : winrt::box_value(text));
+  // one element named "Extender: <state text>" with the button's trait; the
+  // texts inside it are raw in the markup, so the name is not read twice
+  winrt::Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(
+      w_.WalletExtenderButton(), Loc("extender") + L": " + text);
+}
+
+void WalletPage::ApplyProviderThroughput(urnw::ProviderThroughputSnapshot const& snapshot) {
+  if (!extenderChart_) return;  // Initialize has not built the charts yet
+  // The points are set whether or not their rows show, so a group that appears
+  // draws the window it would have shown rather than starting empty.
+  extenderChart_->SetPoints(snapshot.extenderPoints, snapshot.windowSeconds);
+  providerLocalChart_->SetPoints(snapshot.providerPoints, snapshot.windowSeconds);
+  providerBlockedChart_->SetPoints(snapshot.providerPoints, snapshot.windowSeconds);
+  // engaged only when the distribution changed, so an idle tick does not
+  // rebuild the bar's legend
+  if (snapshot.providerDistribution) {
+    providerTransportBar_->SetDistribution(*snapshot.providerDistribution);
+    providerDistributionSeen_ = !snapshot.providerDistribution->shares.empty();
+  }
+  hasProviderStats_ = snapshot.hasProviderStats;
+  ApplyStatsSections(/*force=*/false);
+}
+
+void WalletPage::ResyncProviderStats() {
+  ApplyExtenderProvideState(Sdk().CurrentExtenderProvideStatus());
+  ApplyProviderThroughput(Sdk().CurrentProviderThroughput());
+}
+
+void WalletPage::ApplyStatsSections(bool force) {
+  const urnw::ExtenderStatsSections sections =
+      urnw::ExtenderStatsSectionsFor(providingEnabled_, hasProviderStats_, extenderRunning_);
+  if (!force && statsSections_ && *statsSections_ == sections) return;
+  const bool providerWasVisible = statsSections_ && statsSections_->providerVisible;
+  statsSections_ = sections;
+  const auto shown = [](bool visible) {
+    return visible ? Visibility::Visible : Visibility::Collapsed;
+  };
+  // the extender group, its title and chart together, with no placeholder when
+  // hidden: the extender row in the provider group already says why (O4)
+  w_.WalletExtenderStatsHeader().Visibility(shown(sections.extenderVisible));
+  w_.WalletExtenderChartRow().Visibility(shown(sections.extenderVisible));
+  // The provider group keeps its title, the provide mode row and the extender
+  // row in every state. Its chart rows collapse and its header says why, the
+  // reliability group's mechanism.
+  urnw::kit::SetTextOrCollapse(w_.WalletProviderStatsStatus(),
+                               sections.disabledMeta ? Loc("providing_disabled") : hstring{});
+  w_.WalletProviderLocalChartRow().Visibility(shown(sections.providerVisible));
+  w_.WalletProviderTransportBarRow().Visibility(shown(sections.providerVisible));
+  w_.WalletProviderBlockedChartRow().Visibility(shown(sections.providerVisible));
+  if (!providerTransportBar_) return;
+  if (!sections.providerVisible) {
+    providerTransportBar_->SettleEmpty();
+  } else if (!providerWasVisible && !providerDistributionSeen_) {
+    // DESIGNSTYLE "Placeholders, not pop-in": the legend holds a skeleton until
+    // the first distribution lands, which settles it
+    providerTransportBar_->BeginLoading();
+  }
+}
+
+winrt::fire_and_forget WalletPage::ShowProviderTransportSettingsSheet() {
+  if (w_.sheetOpen()) co_return;  // only one ContentDialog can show at a time
+  auto self = w_.get_strong();
+  w_.SetSheetOpen(true);
+  try {
+    // ConnectPage::ShowTransportSettingsSheet for the provider policy: the
+    // draft opens on the policy in force and applies together on Update
+    providerTransportSheet_ = urnw::TransportSettingsSheet::Create(
+        self->Content().XamlRoot(), Sdk(), urnw::TransportSettingsKind::Provider,
+        Sdk().CurrentTransportSettings(urnw::TransportSettingsKind::Provider));
+    co_await providerTransportSheet_->Dialog().ShowAsync();
+  } catch (...) {
+  }
+  providerTransportSheet_.reset();
+  w_.SetSheetOpen(false);
 }
 
 }  // namespace urnw
