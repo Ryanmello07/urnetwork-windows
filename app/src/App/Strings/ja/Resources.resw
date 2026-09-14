@@ -832,6 +832,10 @@
     <value>URnetwork VPNに接続</value>
     <comment>Used in Shared/Intents/ConnectIntent.swift.</comment>
   </data>
+  <data name="connect_wallet" xml:space="preserve">
+    <value>ウォレットを接続</value>
+    <comment>Used in Main/Account/Wallets/ConnectWalletSheet/EnterWalletAddress/EnterWalletAddressView.swift.</comment>
+  </data>
   <data name="connected" xml:space="preserve">
     <value>接続済み</value>
     <comment>Used in Main/Connect/ConnectButton/StatusIndicator/ConnectStatusIndicator.swift.</comment>
@@ -1059,6 +1063,10 @@
   <data name="default_option" xml:space="preserve">
     <value>デフォルト</value>
     <comment>Generic default choice label, e.g. the app split rule combo state meaning no rule.</comment>
+  </data>
+  <data name="default_wallet" xml:space="preserve">
+    <value>デフォルト</value>
+    <comment>Call to action</comment>
   </data>
   <data name="delete" xml:space="preserve">
     <value>削除</value>
@@ -1320,6 +1328,9 @@
     <value>パスワードを入力</value>
     <comment>Placeholder text for the password field in the add auth sheet.</comment>
   </data>
+  <data name="enter_a_solana_usdc_wallet_address" xml:space="preserve">
+    <value>Solana USDCウォレットアドレスを入力してください</value>
+  </data>
   <data name="enter_balance_code" xml:space="preserve">
     <value>残高コードを入力</value>
     <comment>Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.</comment>
@@ -1352,6 +1363,10 @@
     <value>ウォレットの接続中にエラーが発生しました。</value>
     <comment>Snackbar shown when connecting a wallet fails. Used in Main/Account/Wallets/WalletsView.swift.</comment>
   </data>
+  <data name="error_connecting_wallet_with_reason" xml:space="preserve">
+    <value>ウォレットの接続中にエラーが発生しました：{}</value>
+    <comment>Snackbar shown when connecting a wallet fails, with the underlying error message. Used in Main/Account/Wallets/WalletsView.swift.</comment>
+  </data>
   <data name="error_creating_network" xml:space="preserve">
     <value>ネットワークの作成中にエラーが発生しました。後でもう一度お試しください。</value>
     <comment>Snackbar shown when creating the user's network fails. Used in ContentView.swift, Main/Account/AccountRootView.swift and Main/Connect/ConnectView-iOS.swift.</comment>
@@ -1379,6 +1394,10 @@
   <data name="error_sending_verification_code" xml:space="preserve">
     <value>確認コードの送信中にエラーが発生しました。</value>
     <comment>Inline error on the verify page when resending the verification code fails. Matches the apple CreateNetworkVerifyView literal.</comment>
+  </data>
+  <data name="error_setting_default_wallet_with_reason" xml:space="preserve">
+    <value>デフォルトウォレットの設定中にエラーが発生しました：{}</value>
+    <comment>Snackbar shown when setting the default payout wallet fails, with the underlying error message. Used in Main/Account/Wallet/WalletView.swift.</comment>
   </data>
   <data name="error_updating_device_name" xml:space="preserve">
     <value>デバイス名の更新中にエラーが発生しました。</value>
@@ -1823,6 +1842,10 @@
   <data name="low_user_ip_ratio" xml:space="preserve">
     <value>コンテンツにアクセスするための最も低いユーザー/IP比率</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="make_default" xml:space="preserve">
+    <value>デフォルトに設定</value>
+    <comment>Wallet Screen</comment>
   </data>
   <data name="manage_apps" xml:space="preserve">
     <value>アプリを管理</value>
@@ -2329,6 +2352,10 @@
     <value>支払いの問題</value>
     <comment>Billing errors. Every one is shown to the user WITH a remedy: a payment error they cannot see is a payment error they will hit again.</comment>
   </data>
+  <data name="payout_wallet_updated" xml:space="preserve">
+    <value>支払いウォレットを更新しました</value>
+    <comment>Snackbar shown after the payout wallet is changed. Used in Main/Account/Wallet/WalletView.swift.</comment>
+  </data>
   <data name="peer_count_one" xml:space="preserve">
     <value>1 ピア</value>
     <comment>Post quantum identity panel: peer identity count indicator, singular.</comment>
@@ -2781,6 +2808,10 @@
   </data>
   <data name="remove_this_sign_in_method" xml:space="preserve">
     <value>このサインイン方法を削除しますか？</value>
+  </data>
+  <data name="remove_wallet" xml:space="preserve">
+    <value>ウォレットを削除</value>
+    <comment>Used in Main/Account/AccountNavStackView.swift.</comment>
   </data>
   <data name="resend_reset_link" xml:space="preserve">
     <value>リンクを再送信</value>
@@ -3695,6 +3726,9 @@
   <data name="urnetwork_vpn_started" xml:space="preserve">
     <value>URnetwork VPN が起動しました</value>
     <comment>Used in Shared/Intents/ConnectIntent.swift.</comment>
+  </data>
+  <data name="usdc_wallet_address" xml:space="preserve">
+    <value>USDCウォレットアドレス</value>
   </data>
   <data name="use_most_stable_provider" xml:space="preserve">
     <value>最も安定したプロバイダーを使用します</value>

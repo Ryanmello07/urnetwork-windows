@@ -872,6 +872,10 @@
     <value>الاتصال بـ URnetwork VPN</value>
     <comment>Used in Shared/Intents/ConnectIntent.swift.</comment>
   </data>
+  <data name="connect_wallet" xml:space="preserve">
+    <value>ربط المحفظة</value>
+    <comment>Used in Main/Account/Wallets/ConnectWalletSheet/EnterWalletAddress/EnterWalletAddressView.swift.</comment>
+  </data>
   <data name="connected" xml:space="preserve">
     <value>متصل</value>
     <comment>Used in Main/Connect/ConnectButton/StatusIndicator/ConnectStatusIndicator.swift.</comment>
@@ -1140,6 +1144,10 @@
     <value>افتراضي</value>
     <comment>Generic default choice label, e.g. the app split rule combo state meaning no rule.</comment>
   </data>
+  <data name="default_wallet" xml:space="preserve">
+    <value>الافتراضي</value>
+    <comment>Call to action</comment>
+  </data>
   <data name="delete" xml:space="preserve">
     <value>حذف</value>
     <comment>Delete button label. Apple: Main/Account/BlockedLocations/BlockedLocationsView.swift. Android: the swipe-to-reveal delete button label (SwipeToRevealRow).</comment>
@@ -1400,6 +1408,9 @@
     <value>أدخل كلمة مرور</value>
     <comment>Placeholder text for the password field in the add auth sheet.</comment>
   </data>
+  <data name="enter_a_solana_usdc_wallet_address" xml:space="preserve">
+    <value>أدخل عنوان محفظة USDC على Solana</value>
+  </data>
   <data name="enter_balance_code" xml:space="preserve">
     <value>أدخل رمز الرصيد</value>
     <comment>Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.</comment>
@@ -1432,6 +1443,10 @@
     <value>حدث خطأ أثناء ربط محفظتك.</value>
     <comment>Snackbar shown when connecting a wallet fails. Used in Main/Account/Wallets/WalletsView.swift.</comment>
   </data>
+  <data name="error_connecting_wallet_with_reason" xml:space="preserve">
+    <value>حدث خطأ أثناء ربط محفظتك: {}</value>
+    <comment>Snackbar shown when connecting a wallet fails, with the underlying error message. Used in Main/Account/Wallets/WalletsView.swift.</comment>
+  </data>
   <data name="error_creating_network" xml:space="preserve">
     <value>حدث خطأ أثناء إنشاء شبكتك. يرجى المحاولة مرة أخرى لاحقًا.</value>
     <comment>Snackbar shown when creating the user's network fails. Used in ContentView.swift, Main/Account/AccountRootView.swift and Main/Connect/ConnectView-iOS.swift.</comment>
@@ -1459,6 +1474,10 @@
   <data name="error_sending_verification_code" xml:space="preserve">
     <value>حدث خطأ أثناء إرسال رمز التحقق.</value>
     <comment>Inline error on the verify page when resending the verification code fails. Matches the apple CreateNetworkVerifyView literal.</comment>
+  </data>
+  <data name="error_setting_default_wallet_with_reason" xml:space="preserve">
+    <value>خطأ في تعيين المحفظة الافتراضية: {}</value>
+    <comment>Snackbar shown when setting the default payout wallet fails, with the underlying error message. Used in Main/Account/Wallet/WalletView.swift.</comment>
   </data>
   <data name="error_updating_device_name" xml:space="preserve">
     <value>حدث خطأ أثناء تحديث اسم الجهاز.</value>
@@ -1944,6 +1963,10 @@
   <data name="low_user_ip_ratio" xml:space="preserve">
     <value>أقل نسبة مستخدم/عنوان IP للوصول إلى المحتوى</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="make_default" xml:space="preserve">
+    <value>جعل الافتراضي</value>
+    <comment>Wallet Screen</comment>
   </data>
   <data name="manage_apps" xml:space="preserve">
     <value>إدارة التطبيقات</value>
@@ -2489,6 +2512,10 @@
   <data name="payment_problem" xml:space="preserve">
     <value>مشكلة في الدفع</value>
     <comment>Billing errors. Every one is shown to the user WITH a remedy: a payment error they cannot see is a payment error they will hit again.</comment>
+  </data>
+  <data name="payout_wallet_updated" xml:space="preserve">
+    <value>تم تحديث محفظة الدفع</value>
+    <comment>Snackbar shown after the payout wallet is changed. Used in Main/Account/Wallet/WalletView.swift.</comment>
   </data>
   <data name="peer_count_one" xml:space="preserve">
     <value>قرين واحد</value>
@@ -3074,6 +3101,10 @@
   </data>
   <data name="remove_this_sign_in_method" xml:space="preserve">
     <value>إزالة طريقة تسجيل الدخول هذه؟</value>
+  </data>
+  <data name="remove_wallet" xml:space="preserve">
+    <value>إزالة المحفظة</value>
+    <comment>Used in Main/Account/AccountNavStackView.swift.</comment>
   </data>
   <data name="resend_reset_link" xml:space="preserve">
     <value>إعادة إرسال الرابط</value>
@@ -4753,6 +4784,9 @@
   <data name="urnetwork_vpn_started" xml:space="preserve">
     <value>تم تشغيل URnetwork VPN</value>
     <comment>Used in Shared/Intents/ConnectIntent.swift.</comment>
+  </data>
+  <data name="usdc_wallet_address" xml:space="preserve">
+    <value>عنوان محفظة USDC</value>
   </data>
   <data name="use_most_stable_provider" xml:space="preserve">
     <value>استخدام مزود الخدمة الأكثر استقرارًا</value>

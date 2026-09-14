@@ -1007,6 +1007,14 @@ right way</value>
     <value>Connect a wallet with the Saga Genesis or Seeker Pre-Order Token</value>
     <comment>Call to action</comment>
   </data>
+  <data name="connect_solana_wallet" xml:space="preserve">
+    <value>Connect Solana wallet</value>
+    <comment>Overflow menu item next to “Connect Bittensor wallet” on the Earnings screen, and the title of the Solana connect sheet/card: connect a Solana USDC payout wallet (wallet app, or manual address entry). USDC payouts continue until the migration to Bittensor completes.</comment>
+  </data>
+  <data name="connect_solana_wallet_note" xml:space="preserve">
+    <value>Connect a Solana wallet app, or enter a Solana USDC address manually.</value>
+    <comment>Note at the top of the Solana connect sheet/card, above the wallet-app button and the manual-entry link.</comment>
+  </data>
   <data name="connect_to_location" xml:space="preserve">
     <value>Connect to {}</value>
     <comment>Call to action</comment>
@@ -1014,6 +1022,10 @@ right way</value>
   <data name="connect_urnetwork_vpn" xml:space="preserve">
     <value>Connect URnetwork VPN</value>
     <comment>Used in Shared/Intents/ConnectIntent.swift.</comment>
+  </data>
+  <data name="connect_wallet" xml:space="preserve">
+    <value>Connect Wallet</value>
+    <comment>Used in Main/Account/Wallets/ConnectWalletSheet/EnterWalletAddress/EnterWalletAddressView.swift.</comment>
   </data>
   <data name="connect_wallet_first" xml:space="preserve">
     <value>Connect a Bittensor wallet first.</value>
@@ -1302,6 +1314,10 @@ right way</value>
   <data name="default_option" xml:space="preserve">
     <value>Default</value>
     <comment>Generic default choice label, e.g. the app split rule combo state meaning no rule.</comment>
+  </data>
+  <data name="default_wallet" xml:space="preserve">
+    <value>Default</value>
+    <comment>Call to action</comment>
   </data>
   <data name="delete" xml:space="preserve">
     <value>Delete</value>
@@ -2583,6 +2599,9 @@ right way</value>
     <value>Enter a password</value>
     <comment>Placeholder text for the password field in the add auth sheet.</comment>
   </data>
+  <data name="enter_a_solana_usdc_wallet_address" xml:space="preserve">
+    <value>Enter a Solana USDC wallet address</value>
+  </data>
   <data name="enter_address_manually" xml:space="preserve">
     <value>Enter address manually</value>
     <comment>Fallback link to paste an ss58 address.</comment>
@@ -2647,6 +2666,10 @@ right way</value>
     <value>There was an error connecting your wallet.</value>
     <comment>Snackbar shown when connecting a wallet fails. Used in Main/Account/Wallets/WalletsView.swift.</comment>
   </data>
+  <data name="error_connecting_wallet_with_reason" xml:space="preserve">
+    <value>There was an error connecting your wallet: {}</value>
+    <comment>Snackbar shown when connecting a wallet fails, with the underlying error message. Used in Main/Account/Wallets/WalletsView.swift.</comment>
+  </data>
   <data name="error_creating_network" xml:space="preserve">
     <value>There was an error creating your network. Please try again later.</value>
     <comment>Snackbar shown when creating the user's network fails. Used in ContentView.swift, Main/Account/AccountRootView.swift and Main/Connect/ConnectView-iOS.swift.</comment>
@@ -2674,6 +2697,10 @@ right way</value>
   <data name="error_sending_verification_code" xml:space="preserve">
     <value>There was an error sending the verification code.</value>
     <comment>Inline error on the verify page when resending the verification code fails. Matches the apple CreateNetworkVerifyView literal.</comment>
+  </data>
+  <data name="error_setting_default_wallet_with_reason" xml:space="preserve">
+    <value>Error setting default wallet: {}</value>
+    <comment>Snackbar shown when setting the default payout wallet fails, with the underlying error message. Used in Main/Account/Wallet/WalletView.swift.</comment>
   </data>
   <data name="error_updating_device_name" xml:space="preserve">
     <value>There was an error updating the device name.</value>
@@ -3118,6 +3145,10 @@ right way</value>
     <value>Invalid referral code. Please try again.</value>
     <comment>Used in Main/Account/Settings/UpdateReferralNetworkSheet/UpdateReferralNetworkSheetViewModel.swift.</comment>
   </data>
+  <data name="invalid_solana_address" xml:space="preserve">
+    <value>That is not a valid Solana address.</value>
+    <comment>Validation error under the manual address field when the address is not a valid Solana address (parallel to invalid_ss58_address).</comment>
+  </data>
   <data name="invalid_ss58_address" xml:space="preserve">
     <value>That is not a valid Bittensor address.</value>
     <comment>Validation error for a coldkey address.</comment>
@@ -3378,6 +3409,10 @@ sent you to verify your identity.</value>
   <data name="low_user_ip_ratio" xml:space="preserve">
     <value>Lowest user/IP ratio to access content</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="make_default" xml:space="preserve">
+    <value>Make default</value>
+    <comment>Wallet Screen</comment>
   </data>
   <data name="manage_apps" xml:space="preserve">
     <value>Manage apps</value>
@@ -3972,6 +4007,10 @@ and most decentralized ingress and egress protocol.</value>
   <data name="payment_received_title" xml:space="preserve">
     <value>Payment received</value>
     <comment>Title for the post-purchase overlay and the confirmation-timeout dialog. Deliberately claims only what is known -- the payment was received -- not that the plan is active yet.</comment>
+  </data>
+  <data name="payout_wallet_updated" xml:space="preserve">
+    <value>Payout wallet updated</value>
+    <comment>Snackbar shown after the payout wallet is changed. Used in Main/Account/Wallet/WalletView.swift.</comment>
   </data>
   <data name="peer_count_one" xml:space="preserve">
     <value>1 peer</value>
@@ -4644,6 +4683,14 @@ and most decentralized ingress and egress protocol.</value>
   </data>
   <data name="remove_this_sign_in_method" xml:space="preserve">
     <value>Remove this sign-in method?</value>
+  </data>
+  <data name="remove_wallet" xml:space="preserve">
+    <value>Remove wallet</value>
+    <comment>Used in Main/Account/AccountNavStackView.swift.</comment>
+  </data>
+  <data name="remove_wallet_holds_payouts" xml:space="preserve">
+    <value>USDC payouts are held until another wallet is connected.</value>
+    <comment>Body of the remove confirmation for the Solana payout wallet (the title is remove_wallet).</comment>
   </data>
   <data name="resend_reset_link" xml:space="preserve">
     <value>Resend link</value>
@@ -6236,6 +6283,10 @@ world's content</value>
     <value>Sign in with Solana</value>
     <comment>Call to action</comment>
   </data>
+  <data name="solana_wallet" xml:space="preserve">
+    <value>Solana wallet</value>
+    <comment>Label of the connected Solana wallet block on the Earnings screen (parallel to bittensor_wallet).</comment>
+  </data>
   <data name="solflare" xml:space="preserve">
     <value>Solflare</value>
     <comment>Used in Main/Account/Wallets/ConnectWalletSheet/ConnectWalletSheetView.swift.</comment>
@@ -6787,6 +6838,17 @@ as it should be.</value>
     <value>URnetwork VPN started</value>
     <comment>Used in Shared/Intents/ConnectIntent.swift.</comment>
   </data>
+  <data name="usdc_payouts_until_migration" xml:space="preserve">
+    <value>USDC payouts continue to this wallet until the migration to Bittensor is complete.</value>
+    <comment>Second paragraph of the Solana connect sheet/card, and the body line under a connected Solana wallet.</comment>
+  </data>
+  <data name="usdc_waiting" xml:space="preserve">
+    <value>{} USDC waiting</value>
+    <comment>The pending USDC payout total waiting to be sent to the Solana payout wallet; shown on the Solana wallet block and, while no Solana wallet is connected, next to the wallet actions. Mirrors the email headline.</comment>
+  </data>
+  <data name="usdc_wallet_address" xml:space="preserve">
+    <value>USDC wallet address</value>
+  </data>
   <data name="use_extender_settings" xml:space="preserve">
     <value>Use extender settings</value>
     <comment>Toggle on the import screen: also apply the extender settings carried by the code.</comment>
@@ -6938,6 +7000,10 @@ as it should be.</value>
   <data name="wallet_not_retroactive" xml:space="preserve">
     <value>Connect a wallet to earn SN25α from the next epoch. Earlier epochs are not settled retroactively.</value>
     <comment>Line on the wallet block before a wallet is connected.</comment>
+  </data>
+  <data name="wallet_options" xml:space="preserve">
+    <value>Wallet options</value>
+    <comment>Accessibility label of the three-dot overflow button next to “Connect Bittensor wallet” and on the connected Bittensor wallet block.</comment>
   </data>
   <data name="wallet_sign_in_failed" xml:space="preserve">
     <value>Wallet sign-in failed</value>
