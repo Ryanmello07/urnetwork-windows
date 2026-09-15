@@ -218,7 +218,7 @@ msi_sha256="$(shasum -a 256 "$msi" | awk '{print toupper($1)}')"
 
 echo "[windows acceptance] building the local SDK control agent"
 (cd "$root/build/all/acceptance" && CGO_ENABLED=0 GOOS=windows GOARCH=arm64 \
-  timeout 600 go build -trimpath -o "$run_dir/agent.exe" .)
+  timeout 600 go build -mod=readonly -trimpath -o "$run_dir/agent.exe" .)
 
 echo "[windows acceptance] booting the isolated Windows ARM64 VM"
 win_boot_vm
