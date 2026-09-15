@@ -34,7 +34,7 @@ inline constexpr int64_t kProcessMemoryBudgetByteCount = 384ll * 1024 * 1024;
 inline constexpr int64_t kDeviceMemoryTargetByteCount = 128ll * 1024 * 1024;
 inline constexpr int64_t kLargeHostProcessMemoryBudgetByteCount = 768ll * 1024 * 1024;
 inline constexpr int64_t kLargeHostDeviceMemoryTargetByteCount = 256ll * 1024 * 1024;
-// THE BAR: a host with MORE than 8 GiB of memory takes the large tier. The same
+// THE BAR: every machine sold as 8 GiB or more takes the large tier. The same
 // bar on macOS, Windows and the Linux daemon.
 //
 // This is a product decision rather than a memory one: the throughput the
@@ -55,12 +55,28 @@ inline constexpr int64_t kLargeHostDeviceMemoryTargetByteCount = 256ll * 1024 * 
 // promotion on measured throughput, rather than any RAM threshold; either is a
 // different change from this one.
 //
-// The comparison is STRICT: measured memory must exceed the bar. Measured
-// memory is below nominal anyway -- firmware, the kernel and an integrated
-// GPU's carve-out come off before GlobalMemoryStatusEx reports anything -- so a
-// nominal 8 GiB machine measures under 8 GiB and takes the base tier, and
-// 12 GiB and up take the large one.
-inline constexpr int64_t kLargeHostMemoryByteCount = 8ll * 1024 * 1024 * 1024;
+// WHY THE NUMBER BELOW IS 7 AND NOT 8 -- do not round it up. A probe reports
+// usable memory, and usable memory is below the size a machine is sold as:
+// firmware, the kernel and an integrated GPU's carve-out come off before
+// GlobalMemoryStatusEx reports ullTotalPhys, so a machine sold as 8 GiB reads
+// roughly 7.6-7.8 GiB. A bar set at the nominal 8 GiB would exclude exactly the
+// machines it exists to include, and would silently send every base-model 8 GiB
+// machine back to the small tier. The threshold sits a whole GiB below nominal
+// so that cannot happen, while anything genuinely smaller -- a 6 GiB machine
+// reads about 5.7 -- stays base.
+//
+// The comparison is strict -- measured memory must EXCEED 7 GiB -- which sits
+// naturally with a threshold chosen below the nominal size. Rounding this up is
+// not left to review: the static_asserts below require an exact 8 GiB reading
+// and a realistic 7.68 GiB one to take the large tier, so the build fails.
+inline constexpr int64_t kLargeHostMemoryByteCount = 7ll * 1024 * 1024 * 1024;
+
+// What machines sold as 8 GiB actually report, for those assertions: installed
+// memory exactly (as macOS's hw.memsize reports it), and a realistic usable
+// reading after firmware, kernel and integrated-graphics reservations (a Linux
+// MemTotal of 8048972 kB, about 7.68 GiB).
+inline constexpr int64_t kNominal8GiBHostMemoryByteCount = 8ll * 1024 * 1024 * 1024;
+inline constexpr int64_t kUsable8GiBHostMemoryByteCount = 8048972ll * 1024;
 
 // The parts the two constraints are written in, so a pair cannot drift apart
 // silently.
@@ -131,5 +147,17 @@ static_assert(MemoryTierForHost(kLargeHostMemoryByteCount).device_target_byte_co
 static_assert(MemoryTierForHost(kLargeHostMemoryByteCount + 1).device_target_byte_count ==
                   kLargeHostDeviceMemoryTargetByteCount,
               "a host one byte over the bar must take the large memory tier");
+// The machines the decision is about. These are what fail if the bar is ever
+// rounded up to the nominal 8 GiB.
+static_assert(MemoryTierForHost(kNominal8GiBHostMemoryByteCount).device_target_byte_count ==
+                      kLargeHostDeviceMemoryTargetByteCount &&
+                  MemoryTierForHost(kNominal8GiBHostMemoryByteCount).process_budget_byte_count ==
+                      kLargeHostProcessMemoryBudgetByteCount,
+              "a machine reporting exactly 8 GiB must take the large memory tier");
+static_assert(MemoryTierForHost(kUsable8GiBHostMemoryByteCount).device_target_byte_count ==
+                      kLargeHostDeviceMemoryTargetByteCount &&
+                  MemoryTierForHost(kUsable8GiBHostMemoryByteCount).process_budget_byte_count ==
+                      kLargeHostProcessMemoryBudgetByteCount,
+              "a machine sold as 8 GiB, reporting its usable 7.68 GiB, must take the large tier");
 
 }  // namespace urnw

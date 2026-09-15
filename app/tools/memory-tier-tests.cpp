@@ -54,12 +54,13 @@ int main() {
           kLargeHostDeviceMemoryTargetByteCount);
   CheckEq("the large budget is 768 MiB", 768ll * 1024 * 1024,
           kLargeHostProcessMemoryBudgetByteCount);
-  CheckEq("the large-host bar is 8 GiB", 8ll * kGiB, kLargeHostMemoryByteCount);
+  CheckEq("the large-host bar is 7 GiB", 7ll * kGiB, kLargeHostMemoryByteCount);
 
   // The gate over the measurement, including the failure case. With the bar
   // this low nearly every real machine is on one side of it, so an off-by-one
   // in the comparison would be invisible in practice: the three rows around
-  // 8 GiB are the only thing that would catch it.
+  // 7 GiB are the only thing that would catch it. The two rows after them are
+  // the machines the decision is about, and fail if the bar is rounded up to 8.
   struct Row {
     const char* what;
     int64_t host;
@@ -69,9 +70,13 @@ int main() {
       {"an unmeasurable host takes the base tier", 0, kDeviceMemoryTargetByteCount},
       {"a failed measurement takes the base tier", -1, kDeviceMemoryTargetByteCount},
       {"a 4 GiB host takes the base tier", 4 * kGiB, kDeviceMemoryTargetByteCount},
-      {"one byte under 8 GiB takes the base tier", 8 * kGiB - 1, kDeviceMemoryTargetByteCount},
-      {"exactly 8 GiB takes the base tier (strict)", 8 * kGiB, kDeviceMemoryTargetByteCount},
-      {"one byte over 8 GiB takes the large tier", 8 * kGiB + 1,
+      {"one byte under 7 GiB takes the base tier", 7 * kGiB - 1, kDeviceMemoryTargetByteCount},
+      {"exactly 7 GiB takes the base tier (strict)", 7 * kGiB, kDeviceMemoryTargetByteCount},
+      {"one byte over 7 GiB takes the large tier", 7 * kGiB + 1,
+       kLargeHostDeviceMemoryTargetByteCount},
+      {"an exact 8 GiB reading takes the large tier", kNominal8GiBHostMemoryByteCount,
+       kLargeHostDeviceMemoryTargetByteCount},
+      {"an 8 GiB machine's usable 7.68 GiB takes the large tier", kUsable8GiBHostMemoryByteCount,
        kLargeHostDeviceMemoryTargetByteCount},
       {"a 12 GiB laptop takes the large tier", 12 * kGiB, kLargeHostDeviceMemoryTargetByteCount},
       {"a 64 GiB workstation takes the large tier", 64 * kGiB,
@@ -86,14 +91,17 @@ int main() {
   CheckEq("an unknown host gets the base budget", kProcessMemoryBudgetByteCount,
           MemoryTierForHost(0).process_budget_byte_count);
   CheckEq("the base target is backed by the base budget", kProcessMemoryBudgetByteCount,
-          MemoryTierForHost(8 * kGiB).process_budget_byte_count);
+          MemoryTierForHost(7 * kGiB).process_budget_byte_count);
   CheckEq("the large target is backed by the large budget", kLargeHostProcessMemoryBudgetByteCount,
-          MemoryTierForHost(8 * kGiB + 1).process_budget_byte_count);
+          MemoryTierForHost(7 * kGiB + 1).process_budget_byte_count);
+  CheckEq("an 8 GiB machine gets the large budget too", kLargeHostProcessMemoryBudgetByteCount,
+          MemoryTierForHost(kUsable8GiBHostMemoryByteCount).process_budget_byte_count);
 
   // Both constraints on both tiers and at the bar itself. MemoryTiers.h
   // static_asserts these too, so a regression fails the build; this says so out
   // loud where a reader looks.
-  for (const int64_t host : {int64_t{0}, 8 * kGiB - 1, 8 * kGiB, 8 * kGiB + 1, 128 * kGiB}) {
+  for (const int64_t host :
+       {int64_t{0}, 7 * kGiB - 1, 7 * kGiB, 7 * kGiB + 1, 8 * kGiB, 128 * kGiB}) {
     const MemoryTier tier = MemoryTierForHost(host);
     Check("every tier's target is backed by its budget (20/34)", MemoryTierIsBacked(tier));
     Check("every tier's budget is three times its target", MemoryTierIsCollectorSafe(tier));
