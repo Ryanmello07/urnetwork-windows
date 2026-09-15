@@ -48,9 +48,13 @@ namespace {
 
 // The service's process budget: the message pools and the go soft limit, and
 // nothing else. The per-device memory target TunnelController creates its
-// DeviceLocal with is a separate surface; both live in Sdk.h, which carries the
-// backing and collector constraints binding them and asserts them.
-constexpr int64_t kServiceMemoryLimit = urnw::kProcessMemoryBudgetByteCount;
+// DeviceLocal with is a separate surface, chosen from the SAME cached host
+// measurement so the two are always one tier -- see Common/MemoryTiers.h for
+// the tier table and the constraints binding a target to its budget.
+//
+// A function rather than a constant because the tier depends on measured host
+// memory; urnw::HostMemoryByteCount caches it, so both SdkInit call sites below
+// and TunnelController's device see one decision.
 
 SERVICE_STATUS_HANDLE g_statusHandle = nullptr;
 SERVICE_STATUS g_status{};
@@ -719,7 +723,7 @@ void Run() {
   // machine pointed at a tun that is gone, giving the routes back is more
   // urgent than getting the sdk up.
   ReportAndClearPriorState(/*observeOnly=*/false);
-  SdkInit(/*isService=*/true, kServiceMemoryLimit);
+  SdkInit(/*isService=*/true, ProcessMemoryBudgetByteCount());
   // Immediately after the SDK is up, for the reason spelled out on the function:
   // this is the anchor that survives the SDK becoming delay-loaded.
   UnblindErrorMode("after SdkInit (service)");
@@ -1347,7 +1351,7 @@ int RunConsole(bool rpcOnly, int stopAfterStep = 0) {
           "automatically ({}).",
           (LogDir(/*isService=*/true) / L"go-crash.log").string());
 
-  SdkInit(/*isService=*/true, kServiceMemoryLimit);
+  SdkInit(/*isService=*/true, ProcessMemoryBudgetByteCount());
   UnblindErrorMode("after SdkInit (console)");
   StartHeartbeat(LogDir(/*isService=*/true) / L"heartbeat.txt",
                  &FlushSdkLogsTick);

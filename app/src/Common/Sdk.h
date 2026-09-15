@@ -16,6 +16,7 @@
 #include <string>
 
 #include "Log.h"
+#include "MemoryTiers.h"
 
 namespace urnw {
 
@@ -31,41 +32,31 @@ namespace urnw {
 // service did until it moved to the target-taking constructor.
 void SdkInit(bool isService, int64_t memoryLimitBytes);
 
-// The service's process budget and the per-device memory target it backs, as
-// one decision. connect draws the H3 carrier windows from the device target
-// (the stream window is three quarters of the carrier's eighth, so
-// 3 * target / 32), and two constraints bind the target to the budget:
+// ---- memory: what this process may use, and what its device may use --------
 //
-//   backing    the device targets plus the message pools must fit the budget,
-//              and the pools take 14 of 34 parts, so a target may be at most
-//              20/34 of the budget. 128 MiB <= 20/34 * 384 MiB = 225.9.
-//   collector  the budget is also the go soft limit, and live heap amplifies
-//              about threefold at the runtime; a target too close to its soft
-//              limit reproduces the measured mobile collection storm (23.6
-//              collections per second). So the budget is at least three times
-//              the target: 384 MiB = 3 * 128 MiB. This is the binding one.
+// The tier table -- a device target and the process budget that backs it, at
+// two sizes -- and the two constraints binding them live in MemoryTiers.h,
+// which is pure and host-testable (tools/memory-tier-tests.cpp). These three
+// are the Windows half: the measurement, and the two numbers the service
+// actually passes.
 //
 // The service runs in no job object and has no working-set limit, so nothing
-// below these values caps it. A host-memory gate raising the target to 256 MiB
-// on machines with 16 GiB or more is a follow-up; the service measures no host
-// memory today. The app process keeps its own, smaller budget: it owns a
-// DeviceRemote and no data plane.
-inline constexpr int64_t kProcessMemoryBudgetByteCount = 384ll * 1024 * 1024;
-inline constexpr int64_t kDeviceMemoryTargetByteCount = 128ll * 1024 * 1024;
+// below these values caps it. The app process keeps its own, smaller budget: it
+// owns a DeviceRemote and no data plane.
 
-// The parts the two constraints are written in, so the pair cannot drift apart
-// silently.
-inline constexpr int64_t kMemoryPoolRatioParts = 14;
-inline constexpr int64_t kMemoryBudgetRatioParts = 34;
-inline constexpr int64_t kCollectorBudgetMultiple = 3;
+// Usable physical memory in bytes (GlobalMemoryStatusEx ullTotalPhys), or 0
+// when it cannot be determined. Measured on the first call and cached after,
+// which is the point rather than an optimisation: the process budget is set at
+// startup and the device target when a tunnel is created, and those two must
+// come from the SAME tier. A second measurement could pair a large target with
+// a small budget, which is the one arrangement the constraints exist to forbid.
+int64_t HostMemoryByteCount();
 
-static_assert(kDeviceMemoryTargetByteCount * kMemoryBudgetRatioParts <=
-                  kProcessMemoryBudgetByteCount *
-                      (kMemoryBudgetRatioParts - kMemoryPoolRatioParts),
-              "the device memory target is not backed by the process budget");
-static_assert(kCollectorBudgetMultiple * kDeviceMemoryTargetByteCount <=
-                  kProcessMemoryBudgetByteCount,
-              "the process budget is too close to the device memory target for the collector");
+// The two numbers, from that one measurement. Pass ProcessMemoryBudgetByteCount
+// to SdkInit and DeviceMemoryTargetByteCount to newDeviceLocalWithMemoryTarget;
+// never mix a target from one tier with a budget from another.
+int64_t ProcessMemoryBudgetByteCount();
+int64_t DeviceMemoryTargetByteCount();
 
 // ---- Go runtime crash capture ----------------------------------------------
 //

@@ -443,36 +443,76 @@ func readCommonSource(t *testing.T, name string) string {
 // surfaces, not one number: SdkInit sizes the pools and the go soft limit,
 // while the device target is passed at device creation. The constructors that
 // take no target fall back to the process budget, which is what the service
-// used to do.
+// used to do. Both come from one measured host tier.
+//
+// The tier logic itself is executed, not read, by tools/memory-tier-tests.cpp,
+// which builds on any host; this pins the wiring and the numbers.
 func TestServiceMemoryBudgetAndDeviceTargetPair(t *testing.T) {
-	header := readCommonSource(t, "Sdk.h")
+	tiers := readCommonSource(t, "MemoryTiers.h")
 	for _, required := range []string{
 		"inline constexpr int64_t kProcessMemoryBudgetByteCount = 384ll * 1024 * 1024;",
 		"inline constexpr int64_t kDeviceMemoryTargetByteCount = 128ll * 1024 * 1024;",
+		"inline constexpr int64_t kLargeHostProcessMemoryBudgetByteCount = 768ll * 1024 * 1024;",
+		"inline constexpr int64_t kLargeHostDeviceMemoryTargetByteCount = 256ll * 1024 * 1024;",
+		"inline constexpr int64_t kLargeHostMemoryByteCount = 16ll * 1024 * 1024 * 1024;",
 	} {
-		if !strings.Contains(header, required) {
-			t.Fatalf("Common/Sdk.h does not declare %q", required)
+		if !strings.Contains(tiers, required) {
+			t.Fatalf("Common/MemoryTiers.h does not declare %q", required)
 		}
 	}
-	// Both constraints, computed here rather than restated: the pools take 14
-	// of 34 parts so the target is at most 20/34 of the budget, and the go
-	// collector wants the budget at three times the target.
-	const budget = 384 * 1024 * 1024
-	const target = 128 * 1024 * 1024
-	if target*34 > budget*(34-14) {
-		t.Errorf("the device target %d is not backed by the process budget %d", target, budget)
+	// Both constraints on both tiers, computed here rather than restated: the
+	// pools take 14 of 34 parts so a target is at most 20/34 of its budget, and
+	// the go collector wants a budget at three times its target.
+	for _, tier := range []struct {
+		name   string
+		target int64
+		budget int64
+	}{
+		{"base", 128 * 1024 * 1024, 384 * 1024 * 1024},
+		{"large-host", 256 * 1024 * 1024, 768 * 1024 * 1024},
+	} {
+		if tier.target*34 > tier.budget*(34-14) {
+			t.Errorf("the %s device target %d is not backed by its process budget %d",
+				tier.name, tier.target, tier.budget)
+		}
+		if 3*tier.target > tier.budget {
+			t.Errorf("the %s process budget %d is too close to its device target %d",
+				tier.name, tier.budget, tier.target)
+		}
 	}
-	if 3*target > budget {
-		t.Errorf("the process budget %d is too close to the device target %d", budget, target)
+	for _, assertion := range []string{
+		"the base device memory target is not backed by its process budget",
+		"the base process budget is too close to its device memory target",
+		"the large-host device memory target is not backed by its process budget",
+		"the large-host process budget is too close to its device memory target",
+		"an unknown host must take the base memory tier",
+	} {
+		if !strings.Contains(tiers, assertion) {
+			t.Errorf("Common/MemoryTiers.h no longer static_asserts %q", assertion)
+		}
 	}
-	if !strings.Contains(header, "the device memory target is not backed by the process budget") ||
-		!strings.Contains(header, "the process budget is too close to the device memory target for the collector") {
-		t.Error("Common/Sdk.h no longer static_asserts the backing and collector constraints")
+
+	// The tier is chosen from a MEASURED host, once, and both numbers come from
+	// that one measurement.
+	sdk := readCommonSource(t, "Sdk.cpp")
+	if !strings.Contains(sdk, "::GlobalMemoryStatusEx(&status)") {
+		t.Error("Common/Sdk.cpp no longer measures host memory with GlobalMemoryStatusEx")
+	}
+	if !strings.Contains(sdk, "static const int64_t byteCount = MeasureHostMemoryByteCount();") {
+		t.Error("Common/Sdk.cpp no longer caches the host memory measurement")
+	}
+	for _, required := range []string{
+		"return MemoryTierForHost(HostMemoryByteCount()).process_budget_byte_count;",
+		"return MemoryTierForHost(HostMemoryByteCount()).device_target_byte_count;",
+	} {
+		if !strings.Contains(sdk, required) {
+			t.Errorf("Common/Sdk.cpp does not derive both numbers from the tier: %q", required)
+		}
 	}
 
 	main := readServiceSource(t, "main.cpp")
-	if !strings.Contains(main, "kServiceMemoryLimit = urnw::kProcessMemoryBudgetByteCount") {
-		t.Error("Service/main.cpp does not take its memory limit from kProcessMemoryBudgetByteCount")
+	if strings.Count(main, "SdkInit(/*isService=*/true, ProcessMemoryBudgetByteCount());") != 2 {
+		t.Error("Service/main.cpp does not initialize the SDK with the tier's process budget")
 	}
 }
 
@@ -493,9 +533,14 @@ func TestTunnelControllerConstructsEveryDeviceAtTheMemoryTarget(t *testing.T) {
 	}
 	for index, rest := range calls {
 		end := strings.Index(rest, ");")
-		if end < 0 || !strings.Contains(rest[:end], "urnw::kDeviceMemoryTargetByteCount") {
-			t.Errorf("newDeviceLocalWithMemoryTarget call %d does not pass urnw::kDeviceMemoryTargetByteCount", index+1)
+		if end < 0 || !strings.Contains(rest[:end], "memoryTargetByteCount") {
+			t.Errorf("newDeviceLocalWithMemoryTarget call %d does not pass the tier's device target", index+1)
 		}
+	}
+	// ...and that target comes from the same cached measurement the process
+	// budget used, so a large target can never be paired with a small budget.
+	if !strings.Contains(source, "const int64_t memoryTargetByteCount = DeviceMemoryTargetByteCount();") {
+		t.Error("TunnelController.cpp does not take its device target from the measured memory tier")
 	}
 }
 

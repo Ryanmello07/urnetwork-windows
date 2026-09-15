@@ -24,7 +24,6 @@ namespace {
 
 constexpr DWORD kRingCapacity = 0x400000;  // 4 MiB (power of two, within wintun bounds)
 
-
 std::filesystem::path ExeDir() {
   wchar_t buf[MAX_PATH];
   DWORD n = ::GetModuleFileNameW(nullptr, buf, MAX_PATH);
@@ -759,20 +758,24 @@ proto::TunnelStatus TunnelController::StartLocked(const proto::StartTunnel& conf
     // --- 4/8 DeviceLocal (stable provider identity via persisted key material) ---
     step = "4/8 device";
     auto km = LoadKeyMaterial();
-    LogInfo("tunnel: [4/8] constructing DeviceLocal ({} identity)",
-            km ? "persisted" : "new");
+    // The device target comes from the measured host's memory tier, and the
+    // SAME cached measurement chose the process budget at startup, so the
+    // target and the budget backing it are always one tier.
+    const int64_t memoryTargetByteCount = DeviceMemoryTargetByteCount();
+    LogInfo("tunnel: [4/8] constructing DeviceLocal ({} identity, {} MiB memory target)",
+            km ? "persisted" : "new", memoryTargetByteCount / (1024 * 1024));
     if (km) {
       device_ = urnet::newDeviceLocalWithMemoryTarget(
           *networkSpace_, config.by_jwt, config.device_description,
           config.device_spec, config.app_version, config.instance_id,
-          /*enable_rpc=*/false, *km, urnw::kDeviceMemoryTargetByteCount);
+          /*enable_rpc=*/false, *km, memoryTargetByteCount);
     } else {
       // An empty key material (handle 0) is nil in the SDK: new identity.
       device_ = urnet::newDeviceLocalWithMemoryTarget(
           *networkSpace_, config.by_jwt, config.device_description,
           config.device_spec, config.app_version, config.instance_id,
           /*enable_rpc=*/false, urnet::DeviceLocalKeyMaterial{},
-          urnw::kDeviceMemoryTargetByteCount);
+          memoryTargetByteCount);
       PersistKeyMaterial(device_->getKeyMaterial());
     }
     LogInfo("tunnel: [4/8] device client_id={}", device_->getClientId());

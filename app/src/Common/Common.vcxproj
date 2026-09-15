@@ -47,6 +47,7 @@
     <ClInclude Include="Heartbeat.h" />
     <ClInclude Include="Ids.h" />
     <ClInclude Include="Log.h" />
+    <ClInclude Include="MemoryTiers.h" />
     <ClInclude Include="Paths.h" />
     <ClInclude Include="PipeClient.h" />
     <ClInclude Include="PipeServer.h" />
