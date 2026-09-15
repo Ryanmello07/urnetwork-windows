@@ -454,7 +454,7 @@ func TestServiceMemoryBudgetAndDeviceTargetPair(t *testing.T) {
 		"inline constexpr int64_t kDeviceMemoryTargetByteCount = 128ll * 1024 * 1024;",
 		"inline constexpr int64_t kLargeHostProcessMemoryBudgetByteCount = 768ll * 1024 * 1024;",
 		"inline constexpr int64_t kLargeHostDeviceMemoryTargetByteCount = 256ll * 1024 * 1024;",
-		"inline constexpr int64_t kLargeHostMemoryByteCount = 32ll * 1024 * 1024 * 1024;",
+		"inline constexpr int64_t kLargeHostMemoryByteCount = 8ll * 1024 * 1024 * 1024;",
 	} {
 		if !strings.Contains(tiers, required) {
 			t.Fatalf("Common/MemoryTiers.h does not declare %q", required)
@@ -485,7 +485,11 @@ func TestServiceMemoryBudgetAndDeviceTargetPair(t *testing.T) {
 		"the base process budget is too close to its device memory target",
 		"the large-host device memory target is not backed by its process budget",
 		"the large-host process budget is too close to its device memory target",
-		"an unknown host must take the base memory tier",
+		"an unknown host must take the base device memory target",
+		"an unknown host must take the base process budget",
+		"a host one byte under the bar must take the base memory tier",
+		"a host exactly at the bar must take the base memory tier",
+		"a host one byte over the bar must take the large memory tier",
 	} {
 		if !strings.Contains(tiers, assertion) {
 			t.Errorf("Common/MemoryTiers.h no longer static_asserts %q", assertion)

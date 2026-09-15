@@ -34,38 +34,33 @@ inline constexpr int64_t kProcessMemoryBudgetByteCount = 384ll * 1024 * 1024;
 inline constexpr int64_t kDeviceMemoryTargetByteCount = 128ll * 1024 * 1024;
 inline constexpr int64_t kLargeHostProcessMemoryBudgetByteCount = 768ll * 1024 * 1024;
 inline constexpr int64_t kLargeHostDeviceMemoryTargetByteCount = 256ll * 1024 * 1024;
-// THE BAR IS 32 GiB, AND IT IS NOT ARBITRARY. Read this before lowering it.
+// THE BAR: a host with MORE than 8 GiB of memory takes the large tier. The same
+// bar on macOS, Windows and the Linux daemon.
 //
-// What justifies a 256 MiB device target is sustained multi-hundred-megabit
-// throughput, which is the only thing a 24 MiB stream window buys. Host memory
-// is a weak proxy for that, and it is weakest exactly at 16 GiB, where the
-// population is laptops on wireless whose window is not the binding constraint:
-// they would pay the memory and get nothing back.
+// This is a product decision rather than a memory one: the throughput the
+// larger window buys is the product, and it is wanted on ordinary machines
+// rather than on workstations alone. It is a deliberate trade, and worth
+// stating as one. The 256 MiB target permits a 768 MiB process budget, and that
+// budget is the go soft limit -- not a ceiling the process avoids, but the
+// level the collector lets live heap climb toward before it works hard. On a
+// machine just over this bar, a steady-state service approaching that figure is
+// a real share of the machine. The program spends that memory because the
+// throughput is what it is buying.
 //
-// They would pay it continuously, too. The process budget is the go soft limit,
-// and a soft limit is not a ceiling the process avoids -- it is the level the
-// collector lets live heap climb to before it works hard. A steady-state
-// service sitting near 768 MiB resident is behaving as designed, and on a
-// 16 GiB machine that is nearly five percent of the machine for something the
-// user experiences as an on-off switch. The failure mode is not a crash we
-// would see; it is this service being blamed for a slow machine, which never
-// reaches our telemetry.
+// Two things a later reader will need if the bar is ever revisited. Host memory
+// is a weak proxy for a link fast enough to make the receive window bind, so
+// some hosts over the bar -- laptops on wireless, mostly -- pay the memory and
+// never reach the throughput it buys. And the instrument that would size this
+// on the thing that actually predicts the need is an explicit opt-in, or
+// promotion on measured throughput, rather than any RAM threshold; either is a
+// different change from this one.
 //
-// The costs are asymmetric in the same direction: one tier too low costs
-// throughput only on a link fast enough for the window to bind, while one tier
-// too high costs memory on every qualifying host, including idle ones.
-//
-// So the way to reach a 16 GiB machine on a fast link is NOT a lower bar --
-// that changes nothing about what is being measured. It is an explicit opt-in,
-// or promotion on measured throughput. Both are deliberately a different change
-// from this one.
-//
-// The Linux daemon deliberately uses a lower bar (16 GiB, linux TunnelPolicy.hpp):
-// it is the build that runs on servers and in containers, where 16 GiB is a
-// machine doing one job rather than a laptop running a browser, an IDE and a
-// container runtime. This service ships on desktops and laptops, so it takes
-// the desktop bar.
-inline constexpr int64_t kLargeHostMemoryByteCount = 32ll * 1024 * 1024 * 1024;
+// The comparison is STRICT: measured memory must exceed the bar. Measured
+// memory is below nominal anyway -- firmware, the kernel and an integrated
+// GPU's carve-out come off before GlobalMemoryStatusEx reports anything -- so a
+// nominal 8 GiB machine measures under 8 GiB and takes the base tier, and
+// 12 GiB and up take the large one.
+inline constexpr int64_t kLargeHostMemoryByteCount = 8ll * 1024 * 1024 * 1024;
 
 // The parts the two constraints are written in, so a pair cannot drift apart
 // silently.
@@ -79,9 +74,11 @@ struct MemoryTier {
 };
 
 // The tier for a host with `hostMemoryByteCount` usable bytes. A nonpositive
-// (unknown) measurement takes the base tier.
+// (unknown) measurement takes the base tier, which is now the RARE path --
+// genuinely small hosts, and hosts whose probe failed -- and so the one to keep
+// pinned by assertions rather than by practice.
 constexpr MemoryTier MemoryTierForHost(int64_t hostMemoryByteCount) {
-  if (kLargeHostMemoryByteCount <= hostMemoryByteCount) {
+  if (kLargeHostMemoryByteCount < hostMemoryByteCount) {
     return MemoryTier{kLargeHostDeviceMemoryTargetByteCount,
                       kLargeHostProcessMemoryBudgetByteCount};
   }
@@ -104,18 +101,35 @@ static_assert(MemoryTierIsBacked(MemoryTierForHost(0)),
               "the base device memory target is not backed by its process budget");
 static_assert(MemoryTierIsCollectorSafe(MemoryTierForHost(0)),
               "the base process budget is too close to its device memory target");
+// Both constraints on the tiers either side of the bar itself, not merely on
+// some small and some large host.
 static_assert(MemoryTierIsBacked(MemoryTierForHost(kLargeHostMemoryByteCount)),
-              "the large-host device memory target is not backed by its process budget");
+              "the tier at the bar is not backed by its process budget");
 static_assert(MemoryTierIsCollectorSafe(MemoryTierForHost(kLargeHostMemoryByteCount)),
+              "the tier at the bar has a process budget too close to its target");
+static_assert(MemoryTierIsBacked(MemoryTierForHost(kLargeHostMemoryByteCount + 1)),
+              "the large-host device memory target is not backed by its process budget");
+static_assert(MemoryTierIsCollectorSafe(MemoryTierForHost(kLargeHostMemoryByteCount + 1)),
               "the large-host process budget is too close to its device memory target");
-// An unknown host takes the base tier, and the gate is a floor rather than a
-// window: everything at or above the threshold is large.
+// The base tier is the rare path now, so its WHOLE pair is asserted rather than
+// left to practice: an unknown host gets the base target and the base budget.
 static_assert(MemoryTierForHost(0).device_target_byte_count == kDeviceMemoryTargetByteCount,
-              "an unknown host must take the base memory tier");
-static_assert(MemoryTierForHost(-1).device_target_byte_count == kDeviceMemoryTargetByteCount,
+              "an unknown host must take the base device memory target");
+static_assert(MemoryTierForHost(0).process_budget_byte_count == kProcessMemoryBudgetByteCount,
+              "an unknown host must take the base process budget");
+static_assert(MemoryTierForHost(-1).device_target_byte_count == kDeviceMemoryTargetByteCount &&
+                  MemoryTierForHost(-1).process_budget_byte_count == kProcessMemoryBudgetByteCount,
               "an unmeasurable host must take the base memory tier");
+// The comparison is strict, and the three rows around the bar pin it: one byte
+// under and exactly at the bar are base, one byte over is large.
 static_assert(MemoryTierForHost(kLargeHostMemoryByteCount - 1).device_target_byte_count ==
                   kDeviceMemoryTargetByteCount,
-              "a host just under the threshold must take the base memory tier");
+              "a host one byte under the bar must take the base memory tier");
+static_assert(MemoryTierForHost(kLargeHostMemoryByteCount).device_target_byte_count ==
+                  kDeviceMemoryTargetByteCount,
+              "a host exactly at the bar must take the base memory tier");
+static_assert(MemoryTierForHost(kLargeHostMemoryByteCount + 1).device_target_byte_count ==
+                  kLargeHostDeviceMemoryTargetByteCount,
+              "a host one byte over the bar must take the large memory tier");
 
 }  // namespace urnw
