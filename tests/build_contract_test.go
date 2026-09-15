@@ -454,7 +454,7 @@ func TestServiceMemoryBudgetAndDeviceTargetPair(t *testing.T) {
 		"inline constexpr int64_t kDeviceMemoryTargetByteCount = 128ll * 1024 * 1024;",
 		"inline constexpr int64_t kLargeHostProcessMemoryBudgetByteCount = 768ll * 1024 * 1024;",
 		"inline constexpr int64_t kLargeHostDeviceMemoryTargetByteCount = 256ll * 1024 * 1024;",
-		"inline constexpr int64_t kLargeHostMemoryByteCount = 16ll * 1024 * 1024 * 1024;",
+		"inline constexpr int64_t kLargeHostMemoryByteCount = 32ll * 1024 * 1024 * 1024;",
 	} {
 		if !strings.Contains(tiers, required) {
 			t.Fatalf("Common/MemoryTiers.h does not declare %q", required)

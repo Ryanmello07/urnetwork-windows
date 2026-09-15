@@ -54,7 +54,7 @@ int main() {
           kLargeHostDeviceMemoryTargetByteCount);
   CheckEq("the large budget is 768 MiB", 768ll * 1024 * 1024,
           kLargeHostProcessMemoryBudgetByteCount);
-  CheckEq("the large-host bar is 16 GiB", 16ll * kGiB, kLargeHostMemoryByteCount);
+  CheckEq("the large-host bar is 32 GiB", 32ll * kGiB, kLargeHostMemoryByteCount);
 
   // The gate over the measurement, including the failure case.
   struct Row {
@@ -67,8 +67,9 @@ int main() {
       {"a failed measurement takes the base tier", -1, kDeviceMemoryTargetByteCount},
       {"a 4 GiB host takes the base tier", 4 * kGiB, kDeviceMemoryTargetByteCount},
       {"an 8 GiB laptop takes the base tier", 8 * kGiB, kDeviceMemoryTargetByteCount},
-      {"one byte under the bar takes the base tier", 16 * kGiB - 1, kDeviceMemoryTargetByteCount},
-      {"exactly 16 GiB takes the large tier", 16 * kGiB, kLargeHostDeviceMemoryTargetByteCount},
+      {"a 16 GiB laptop takes the base tier", 16 * kGiB, kDeviceMemoryTargetByteCount},
+      {"one byte under the bar takes the base tier", 32 * kGiB - 1, kDeviceMemoryTargetByteCount},
+      {"exactly 32 GiB takes the large tier", 32 * kGiB, kLargeHostDeviceMemoryTargetByteCount},
       {"a 64 GiB workstation takes the large tier", 64 * kGiB,
        kLargeHostDeviceMemoryTargetByteCount},
   };
@@ -80,11 +81,11 @@ int main() {
   CheckEq("the base target is backed by the base budget", kProcessMemoryBudgetByteCount,
           MemoryTierForHost(8 * kGiB).process_budget_byte_count);
   CheckEq("the large target is backed by the large budget", kLargeHostProcessMemoryBudgetByteCount,
-          MemoryTierForHost(32 * kGiB).process_budget_byte_count);
+          MemoryTierForHost(64 * kGiB).process_budget_byte_count);
 
   // Both constraints on both tiers. MemoryTiers.h static_asserts these too, so
   // a regression fails the build; this says so out loud where a reader looks.
-  for (const int64_t host : {int64_t{0}, 8 * kGiB, 16 * kGiB, 128 * kGiB}) {
+  for (const int64_t host : {int64_t{0}, 8 * kGiB, 32 * kGiB, 128 * kGiB}) {
     const MemoryTier tier = MemoryTierForHost(host);
     Check("every tier's target is backed by its budget (20/34)", MemoryTierIsBacked(tier));
     Check("every tier's budget is three times its target", MemoryTierIsCollectorSafe(tier));

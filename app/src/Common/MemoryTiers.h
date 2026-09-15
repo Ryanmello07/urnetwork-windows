@@ -34,7 +34,38 @@ inline constexpr int64_t kProcessMemoryBudgetByteCount = 384ll * 1024 * 1024;
 inline constexpr int64_t kDeviceMemoryTargetByteCount = 128ll * 1024 * 1024;
 inline constexpr int64_t kLargeHostProcessMemoryBudgetByteCount = 768ll * 1024 * 1024;
 inline constexpr int64_t kLargeHostDeviceMemoryTargetByteCount = 256ll * 1024 * 1024;
-inline constexpr int64_t kLargeHostMemoryByteCount = 16ll * 1024 * 1024 * 1024;
+// THE BAR IS 32 GiB, AND IT IS NOT ARBITRARY. Read this before lowering it.
+//
+// What justifies a 256 MiB device target is sustained multi-hundred-megabit
+// throughput, which is the only thing a 24 MiB stream window buys. Host memory
+// is a weak proxy for that, and it is weakest exactly at 16 GiB, where the
+// population is laptops on wireless whose window is not the binding constraint:
+// they would pay the memory and get nothing back.
+//
+// They would pay it continuously, too. The process budget is the go soft limit,
+// and a soft limit is not a ceiling the process avoids -- it is the level the
+// collector lets live heap climb to before it works hard. A steady-state
+// service sitting near 768 MiB resident is behaving as designed, and on a
+// 16 GiB machine that is nearly five percent of the machine for something the
+// user experiences as an on-off switch. The failure mode is not a crash we
+// would see; it is this service being blamed for a slow machine, which never
+// reaches our telemetry.
+//
+// The costs are asymmetric in the same direction: one tier too low costs
+// throughput only on a link fast enough for the window to bind, while one tier
+// too high costs memory on every qualifying host, including idle ones.
+//
+// So the way to reach a 16 GiB machine on a fast link is NOT a lower bar --
+// that changes nothing about what is being measured. It is an explicit opt-in,
+// or promotion on measured throughput. Both are deliberately a different change
+// from this one.
+//
+// The Linux daemon deliberately uses a lower bar (16 GiB, linux TunnelPolicy.hpp):
+// it is the build that runs on servers and in containers, where 16 GiB is a
+// machine doing one job rather than a laptop running a browser, an IDE and a
+// container runtime. This service ships on desktops and laptops, so it takes
+// the desktop bar.
+inline constexpr int64_t kLargeHostMemoryByteCount = 32ll * 1024 * 1024 * 1024;
 
 // The parts the two constraints are written in, so a pair cannot drift apart
 // silently.
