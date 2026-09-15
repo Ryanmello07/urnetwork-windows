@@ -21,9 +21,51 @@ namespace urnw {
 
 // Initialize the SDK for this process: point glog at the per-process log dir and
 // set the process memory budget. Call once at startup, before constructing any
-// NetworkSpace/Device. memoryLimitBytes matches the macOS caps (app ~64MB,
-// service 48-64MB); the service is intentionally memory-bounded.
+// NetworkSpace/Device.
+//
+// memoryLimitBytes is the PROCESS budget only: the message pools and the go
+// soft limit. It is NOT the per-device memory target, which is a separate
+// argument passed at device creation (newDeviceLocalWithMemoryTarget). The two
+// look like one number on a host that passes no target, because the H3
+// constructors then fall back to the process budget -- which is what this
+// service did until it moved to the target-taking constructor.
 void SdkInit(bool isService, int64_t memoryLimitBytes);
+
+// The service's process budget and the per-device memory target it backs, as
+// one decision. connect draws the H3 carrier windows from the device target
+// (the stream window is three quarters of the carrier's eighth, so
+// 3 * target / 32), and two constraints bind the target to the budget:
+//
+//   backing    the device targets plus the message pools must fit the budget,
+//              and the pools take 14 of 34 parts, so a target may be at most
+//              20/34 of the budget. 128 MiB <= 20/34 * 384 MiB = 225.9.
+//   collector  the budget is also the go soft limit, and live heap amplifies
+//              about threefold at the runtime; a target too close to its soft
+//              limit reproduces the measured mobile collection storm (23.6
+//              collections per second). So the budget is at least three times
+//              the target: 384 MiB = 3 * 128 MiB. This is the binding one.
+//
+// The service runs in no job object and has no working-set limit, so nothing
+// below these values caps it. A host-memory gate raising the target to 256 MiB
+// on machines with 16 GiB or more is a follow-up; the service measures no host
+// memory today. The app process keeps its own, smaller budget: it owns a
+// DeviceRemote and no data plane.
+inline constexpr int64_t kProcessMemoryBudgetByteCount = 384ll * 1024 * 1024;
+inline constexpr int64_t kDeviceMemoryTargetByteCount = 128ll * 1024 * 1024;
+
+// The parts the two constraints are written in, so the pair cannot drift apart
+// silently.
+inline constexpr int64_t kMemoryPoolRatioParts = 14;
+inline constexpr int64_t kMemoryBudgetRatioParts = 34;
+inline constexpr int64_t kCollectorBudgetMultiple = 3;
+
+static_assert(kDeviceMemoryTargetByteCount * kMemoryBudgetRatioParts <=
+                  kProcessMemoryBudgetByteCount *
+                      (kMemoryBudgetRatioParts - kMemoryPoolRatioParts),
+              "the device memory target is not backed by the process budget");
+static_assert(kCollectorBudgetMultiple * kDeviceMemoryTargetByteCount <=
+                  kProcessMemoryBudgetByteCount,
+              "the process budget is too close to the device memory target for the collector");
 
 // ---- Go runtime crash capture ----------------------------------------------
 //

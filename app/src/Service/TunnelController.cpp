@@ -24,14 +24,7 @@ namespace {
 
 constexpr DWORD kRingCapacity = 0x400000;  // 4 MiB (power of two, within wintun bounds)
 
-// The per-device memory target passed to newDeviceLocalWithMemoryTarget.
-// connect sizes the H3 carrier windows from the whole device target (stream
-// window max(384 KiB, target / 64 MiB * 3 MiB), scale capped at the 64 MiB
-// reference), so the SDK's 20 MiB default held the stream window at 960 KiB.
-// At 64 MiB it is the full 3 MiB. The service runs in no job object and has no
-// working-set limit, and its process budget (SdkSetMemoryLimit, main.cpp) is
-// already 64 MiB.
-constexpr int64_t kDeviceMemoryTargetByteCount = 64 * 1024 * 1024;
+
 std::filesystem::path ExeDir() {
   wchar_t buf[MAX_PATH];
   DWORD n = ::GetModuleFileNameW(nullptr, buf, MAX_PATH);
@@ -772,14 +765,14 @@ proto::TunnelStatus TunnelController::StartLocked(const proto::StartTunnel& conf
       device_ = urnet::newDeviceLocalWithMemoryTarget(
           *networkSpace_, config.by_jwt, config.device_description,
           config.device_spec, config.app_version, config.instance_id,
-          /*enable_rpc=*/false, *km, kDeviceMemoryTargetByteCount);
+          /*enable_rpc=*/false, *km, urnw::kDeviceMemoryTargetByteCount);
     } else {
       // An empty key material (handle 0) is nil in the SDK: new identity.
       device_ = urnet::newDeviceLocalWithMemoryTarget(
           *networkSpace_, config.by_jwt, config.device_description,
           config.device_spec, config.app_version, config.instance_id,
           /*enable_rpc=*/false, urnet::DeviceLocalKeyMaterial{},
-          kDeviceMemoryTargetByteCount);
+          urnw::kDeviceMemoryTargetByteCount);
       PersistKeyMaterial(device_->getKeyMaterial());
     }
     LogInfo("tunnel: [4/8] device client_id={}", device_->getClientId());

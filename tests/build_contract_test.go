@@ -429,15 +429,55 @@ func TestTunnelWatchdogObservesDestinationGenerationAndReadiness(t *testing.T) {
 	}
 }
 
-// The service sizes its DeviceLocal at the 64 MiB desktop reference: connect
-// scales the H3 carrier windows off the whole device target, and the
-// constructors that take no target fall back to the SDK's 20 MiB default.
+func readCommonSource(t *testing.T, name string) string {
+	t.Helper()
+	filename := filepath.Join(repositoryRoot(t), "app", "src", "Common", name)
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		t.Fatalf("read %s: %v", filename, err)
+	}
+	return string(data)
+}
+
+// The service's process budget and its per-device memory target are two
+// surfaces, not one number: SdkInit sizes the pools and the go soft limit,
+// while the device target is passed at device creation. The constructors that
+// take no target fall back to the process budget, which is what the service
+// used to do.
+func TestServiceMemoryBudgetAndDeviceTargetPair(t *testing.T) {
+	header := readCommonSource(t, "Sdk.h")
+	for _, required := range []string{
+		"inline constexpr int64_t kProcessMemoryBudgetByteCount = 384ll * 1024 * 1024;",
+		"inline constexpr int64_t kDeviceMemoryTargetByteCount = 128ll * 1024 * 1024;",
+	} {
+		if !strings.Contains(header, required) {
+			t.Fatalf("Common/Sdk.h does not declare %q", required)
+		}
+	}
+	// Both constraints, computed here rather than restated: the pools take 14
+	// of 34 parts so the target is at most 20/34 of the budget, and the go
+	// collector wants the budget at three times the target.
+	const budget = 384 * 1024 * 1024
+	const target = 128 * 1024 * 1024
+	if target*34 > budget*(34-14) {
+		t.Errorf("the device target %d is not backed by the process budget %d", target, budget)
+	}
+	if 3*target > budget {
+		t.Errorf("the process budget %d is too close to the device target %d", budget, target)
+	}
+	if !strings.Contains(header, "the device memory target is not backed by the process budget") ||
+		!strings.Contains(header, "the process budget is too close to the device memory target for the collector") {
+		t.Error("Common/Sdk.h no longer static_asserts the backing and collector constraints")
+	}
+
+	main := readServiceSource(t, "main.cpp")
+	if !strings.Contains(main, "kServiceMemoryLimit = urnw::kProcessMemoryBudgetByteCount") {
+		t.Error("Service/main.cpp does not take its memory limit from kProcessMemoryBudgetByteCount")
+	}
+}
+
 func TestTunnelControllerConstructsEveryDeviceAtTheMemoryTarget(t *testing.T) {
 	source := readServiceSource(t, "TunnelController.cpp")
-	const constant = "constexpr int64_t kDeviceMemoryTargetByteCount = 64 * 1024 * 1024;"
-	if !strings.Contains(source, constant) {
-		t.Fatalf("TunnelController.cpp does not declare the 64 MiB device memory target %q", constant)
-	}
 	for _, forbidden := range []string{
 		"urnet::newDeviceLocalWithDefaults(",
 		"urnet::newDeviceLocalWithKeyMaterial(",
@@ -453,8 +493,8 @@ func TestTunnelControllerConstructsEveryDeviceAtTheMemoryTarget(t *testing.T) {
 	}
 	for index, rest := range calls {
 		end := strings.Index(rest, ");")
-		if end < 0 || !strings.Contains(rest[:end], "kDeviceMemoryTargetByteCount") {
-			t.Errorf("newDeviceLocalWithMemoryTarget call %d does not pass kDeviceMemoryTargetByteCount", index+1)
+		if end < 0 || !strings.Contains(rest[:end], "urnw::kDeviceMemoryTargetByteCount") {
+			t.Errorf("newDeviceLocalWithMemoryTarget call %d does not pass urnw::kDeviceMemoryTargetByteCount", index+1)
 		}
 	}
 }

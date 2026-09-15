@@ -46,7 +46,11 @@ using namespace urnw;
 
 namespace {
 
-constexpr int64_t kServiceMemoryLimit = 64ll * 1024 * 1024;
+// The service's process budget: the message pools and the go soft limit, and
+// nothing else. The per-device memory target TunnelController creates its
+// DeviceLocal with is a separate surface; both live in Sdk.h, which carries the
+// backing and collector constraints binding them and asserts them.
+constexpr int64_t kServiceMemoryLimit = urnw::kProcessMemoryBudgetByteCount;
 
 SERVICE_STATUS_HANDLE g_statusHandle = nullptr;
 SERVICE_STATUS g_status{};
