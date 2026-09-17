@@ -3400,7 +3400,7 @@
     <comment>Subscription: undo a pending cancellation while the paid period is still running.</comment>
   </data>
   <data name="site_sub_solana_no_renew" xml:space="preserve">
-    <value>Δεν ανανεώνεται. Πληρώστε ξανά με USDC όταν λήξει.</value>
+    <value>Δεν ανανεώνεται. Πληρώστε ξανά με USDC στο Solana όταν λήξει.</value>
     <comment>Subscription: note under a USDC-paid year — it is a one-time payment with nothing to cancel.</comment>
   </data>
   <data name="site_sub_stripe_body" xml:space="preserve">
@@ -3797,6 +3797,10 @@
   <data name="urnetwork_vpn_started" xml:space="preserve">
     <value>Το URnetwork VPN ξεκίνησε</value>
     <comment>Used in Shared/Intents/ConnectIntent.swift.</comment>
+  </data>
+  <data name="usdc_solana_network_only" xml:space="preserve">
+    <value>Στείλτε USDC μόνο στο δίκτυο Solana. Τα USDC που στέλνονται σε άλλο δίκτυο δεν θα φτάσουν.</value>
+    <comment>Payment: the chain to send on. Shown wherever a USDC payment is requested, because USDC exists on many chains and a transfer sent on the wrong one is lost.</comment>
   </data>
   <data name="usdc_wallet_address" xml:space="preserve">
     <value>Διεύθυνση πορτοφολιού USDC</value>

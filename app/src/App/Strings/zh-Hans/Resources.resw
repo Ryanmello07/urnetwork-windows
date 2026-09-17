@@ -4072,7 +4072,7 @@
     <comment>Subscription: undo a pending cancellation while the paid period is still running.</comment>
   </data>
   <data name="site_sub_solana_no_renew" xml:space="preserve">
-    <value>不会自动续订。到期后请再次使用 USDC 支付。</value>
+    <value>不会自动续订。到期后请再次使用 Solana 上的 USDC 支付。</value>
     <comment>Subscription: note under a USDC-paid year — it is a one-time payment with nothing to cancel.</comment>
   </data>
   <data name="site_sub_stripe_body" xml:space="preserve">
@@ -4469,6 +4469,10 @@
   <data name="urnetwork_vpn_started" xml:space="preserve">
     <value>URnetwork VPN 已启动</value>
     <comment>Used in Shared/Intents/ConnectIntent.swift.</comment>
+  </data>
+  <data name="usdc_solana_network_only" xml:space="preserve">
+    <value>请仅在 Solana 网络上发送 USDC。通过其他网络发送的 USDC 将无法到账。</value>
+    <comment>Payment: the chain to send on. Shown wherever a USDC payment is requested, because USDC exists on many chains and a transfer sent on the wrong one is lost.</comment>
   </data>
   <data name="usdc_wallet_address" xml:space="preserve">
     <value>USDC 钱包地址</value>

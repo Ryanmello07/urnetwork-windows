@@ -2972,7 +2972,7 @@ del mundo</value>
     <comment>Subscription: undo a pending cancellation while the paid period is still running.</comment>
   </data>
   <data name="site_sub_solana_no_renew" xml:space="preserve">
-    <value>No se renueva. Vuelve a pagar con USDC cuando termine.</value>
+    <value>No se renueva. Vuelve a pagar con USDC en Solana cuando termine.</value>
     <comment>Subscription: note under a USDC-paid year — it is a one-time payment with nothing to cancel.</comment>
   </data>
   <data name="site_sub_stripe_body" xml:space="preserve">
@@ -3337,6 +3337,10 @@ como debería ser.</value>
   <data name="urnetwork_vpn_started" xml:space="preserve">
     <value>URnetwork VPN iniciada</value>
     <comment>Used in Shared/Intents/ConnectIntent.swift.</comment>
+  </data>
+  <data name="usdc_solana_network_only" xml:space="preserve">
+    <value>Envía USDC solo por la red Solana. Los USDC enviados por cualquier otra red no llegarán.</value>
+    <comment>Payment: the chain to send on. Shown wherever a USDC payment is requested, because USDC exists on many chains and a transfer sent on the wrong one is lost.</comment>
   </data>
   <data name="usdc_wallet_address" xml:space="preserve">
     <value>Dirección de la billetera USDC</value>

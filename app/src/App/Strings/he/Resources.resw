@@ -3512,7 +3512,7 @@
     <comment>Subscription: undo a pending cancellation while the paid period is still running.</comment>
   </data>
   <data name="site_sub_solana_no_renew" xml:space="preserve">
-    <value>לא מתחדש. שלמו שוב ב-USDC כשהוא מסתיים.</value>
+    <value>לא מתחדש. שלמו שוב ב-USDC ברשת Solana כשהוא מסתיים.</value>
     <comment>Subscription: note under a USDC-paid year — it is a one-time payment with nothing to cancel.</comment>
   </data>
   <data name="site_sub_stripe_body" xml:space="preserve">
@@ -3925,6 +3925,10 @@
   <data name="urnetwork_vpn_started" xml:space="preserve">
     <value>URnetwork VPN הופעל</value>
     <comment>Used in Shared/Intents/ConnectIntent.swift.</comment>
+  </data>
+  <data name="usdc_solana_network_only" xml:space="preserve">
+    <value>שלחו USDC ברשת Solana בלבד. USDC שיישלחו ברשת אחרת לא יגיעו.</value>
+    <comment>Payment: the chain to send on. Shown wherever a USDC payment is requested, because USDC exists on many chains and a transfer sent on the wrong one is lost.</comment>
   </data>
   <data name="usdc_wallet_address" xml:space="preserve">
     <value>כתובת ארנק USDC</value>

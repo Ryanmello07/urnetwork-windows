@@ -6288,7 +6288,7 @@ world's content</value>
     <comment>Subscription: undo a pending cancellation while the paid period is still running.</comment>
   </data>
   <data name="site_sub_solana_no_renew" xml:space="preserve">
-    <value>Does not renew. Pay again with USDC when it ends.</value>
+    <value>Does not renew. Pay again with USDC on Solana when it ends.</value>
     <comment>Subscription: note under a USDC-paid year — it is a one-time payment with nothing to cancel.</comment>
   </data>
   <data name="site_sub_stripe_body" xml:space="preserve">
@@ -6328,7 +6328,7 @@ world's content</value>
     <comment>Blockchain name. A product name: never translated.</comment>
   </data>
   <data name="solana_one_time_payment" xml:space="preserve">
-    <value>Paying with Solana is a one-time yearly payment, with no free trial.</value>
+    <value>Paying with USDC on Solana is a one-time yearly payment, with no free trial.</value>
     <comment>Note under the Solana payment button on the plan picker: Solana is a one-time yearly payment, the free trial is Stripe only.</comment>
   </data>
   <data name="solana_sign_in" xml:space="preserve">
@@ -6893,6 +6893,10 @@ as it should be.</value>
   <data name="usdc_payouts_until_migration" xml:space="preserve">
     <value>USDC payouts continue to this wallet until the migration to Bittensor is complete.</value>
     <comment>Second paragraph of the Solana connect sheet/card, and the body line under a connected Solana wallet.</comment>
+  </data>
+  <data name="usdc_solana_network_only" xml:space="preserve">
+    <value>Send USDC on the Solana network only. USDC sent on any other network will not arrive.</value>
+    <comment>Payment: the chain to send on. Shown wherever a USDC payment is requested, because USDC exists on many chains and a transfer sent on the wrong one is lost.</comment>
   </data>
   <data name="usdc_waiting" xml:space="preserve">
     <value>{} USDC waiting</value>
