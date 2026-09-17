@@ -639,6 +639,7 @@ struct WatchdogChannel {
 
   // the network-change coalescer, guarded by `mutex`
   NotifyCoalescer coalescer;
+  NotifyCoalescer qualityCoalescer;
 
   // WHAT THE FAILSAFE DOES, AND IT LIVES HERE RATHER THAN ON THE WATCHDOG.
   // Guarded by `mutex`; cleared by Stop() and Cancel().
@@ -695,6 +696,10 @@ class TunnelWatchdog {
   // IS NEVER CALLED FROM HERE — EgressMonitor::Stop() waits for in-flight
   // callbacks, so a blocking one would wedge the teardown.
   void NoteNetworkEvent();
+
+  // A radio-quality update keeps transports alive and only remeasures pacing.
+  // Like NoteNetworkEvent, this records work for the SDK sampler thread.
+  void NoteNetworkQualityEvent();
 
   // "A countdown is running right now", for TunnelStatus::failsafe_armed. Read
   // from the RPC thread while a connect may be wedged holding the session lock,

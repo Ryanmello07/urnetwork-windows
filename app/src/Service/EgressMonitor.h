@@ -18,6 +18,7 @@
 #include <ws2tcpip.h>
 #include <iphlpapi.h>
 #include <netioapi.h>    // NET_LUID, MIB_IPINTERFACE_ROW, MIB_NOTIFICATION_TYPE, NotifyIpInterfaceChange
+#include <wlanapi.h>
 
 #include <functional>
 #include <mutex>
@@ -25,6 +26,33 @@
 #include "NetworkConfig.h"
 
 namespace urnw {
+
+// Windows reports Wi-Fi signal quality as 0..100. Five stable buckets match
+// the user-visible bars and keep one-point RSSI jitter out of the SDK.
+inline constexpr int WifiSignalLevel(uint32_t quality) {
+  return static_cast<int>(((quality > 100 ? 100 : quality) * 5) / 101);
+}
+
+// The first OS value establishes the current radio state. Later notifications
+// only matter when they cross a user-visible bar boundary.
+class WifiSignalLevelTracker {
+ public:
+  bool Observe(uint32_t quality) {
+    const int next = WifiSignalLevel(quality);
+    if (level_ < 0) {
+      level_ = next;
+      return false;
+    }
+    if (level_ == next) return false;
+    level_ = next;
+    return true;
+  }
+
+  void Reset() { level_ = -1; }
+
+ private:
+  int level_ = -1;
+};
 
 class EgressMonitor {
  public:
@@ -83,6 +111,11 @@ class EgressMonitor {
   using NetworkEventHandler = std::function<void()>;
   void SetOnNetworkEvent(NetworkEventHandler handler);
 
+  // Wi-Fi signal-bar changes do not invalidate working sockets. They request
+  // transfer estimator remeasurement without entering the reconnect path.
+  using NetworkQualityEventHandler = std::function<void()>;
+  void SetOnNetworkQualityEvent(NetworkQualityEventHandler handler);
+
   // Compute the current egress interfaces, push them to the SDK, and register
   // for change notifications to keep them current. Returns false if the
   // notification could not be registered; the initial binding is still applied,
@@ -116,10 +149,12 @@ class EgressMonitor {
   // through.
   static void __stdcall OnRouteChange(void* context, MIB_IPFORWARD_ROW2* row,
                                       MIB_NOTIFICATION_TYPE type);
+  static void WINAPI OnWlanChange(PWLAN_NOTIFICATION_DATA data, void* context);
 
   NET_LUID tunLuid_;
   HANDLE notifyHandle_ = nullptr;
   HANDLE routeNotifyHandle_ = nullptr;
+  HANDLE wlanHandle_ = nullptr;
 
   // Serializes Refresh: NotifyIpInterfaceChange callbacks arrive on system
   // worker threads and can overlap each other and Start().
@@ -127,6 +162,8 @@ class EgressMonitor {
   EgressInterfaces current_;
   ChangeHandler onChange_;
   NetworkEventHandler onNetworkEvent_;
+  NetworkQualityEventHandler onNetworkQualityEvent_;
+  WifiSignalLevelTracker wlanSignalLevelTracker_;
 };
 
 }  // namespace urnw

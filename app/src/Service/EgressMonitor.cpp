@@ -4,6 +4,9 @@
 #include <winsock2.h>
 #include <iphlpapi.h>
 #include <netioapi.h>
+#include <wlanapi.h>
+
+#include <algorithm>
 
 #include "Log.h"
 #include "NetworkConfig.h"
@@ -12,6 +15,7 @@
 #include "ThreadGuard.h"
 
 #pragma comment(lib, "iphlpapi.lib")
+#pragma comment(lib, "wlanapi.lib")
 
 namespace urnw {
 namespace {
@@ -68,6 +72,21 @@ bool EgressMonitor::Start() {
              err);
     ok = false;
   }
+  DWORD negotiatedVersion = 0;
+  err = ::WlanOpenHandle(2, nullptr, &negotiatedVersion, &wlanHandle_);
+  if (err == ERROR_SUCCESS) {
+    err = ::WlanRegisterNotification(
+        wlanHandle_, WLAN_NOTIFICATION_SOURCE_MSM, FALSE,
+        &EgressMonitor::OnWlanChange, this, nullptr, nullptr);
+  }
+  if (err != ERROR_SUCCESS) {
+    LogWarn("egress: Wi-Fi quality notifications unavailable ({}); adaptive "
+            "pacing will continue from transport feedback", err);
+    if (wlanHandle_) {
+      ::WlanCloseHandle(wlanHandle_, nullptr);
+      wlanHandle_ = nullptr;
+    }
+  }
   return ok;
 }
 
@@ -82,6 +101,16 @@ void EgressMonitor::Stop() {
     ::CancelMibChangeNotify2(routeNotifyHandle_);
     routeNotifyHandle_ = nullptr;
   }
+  if (wlanHandle_) {
+    ::WlanRegisterNotification(wlanHandle_, WLAN_NOTIFICATION_SOURCE_NONE,
+                               FALSE, nullptr, nullptr, nullptr, nullptr);
+    ::WlanCloseHandle(wlanHandle_, nullptr);
+    wlanHandle_ = nullptr;
+  }
+  {
+    std::scoped_lock lock(mutex_);
+    wlanSignalLevelTracker_.Reset();
+  }
 }
 
 void EgressMonitor::SetOnChange(ChangeHandler handler) {
@@ -92,6 +121,11 @@ void EgressMonitor::SetOnChange(ChangeHandler handler) {
 void EgressMonitor::SetOnNetworkEvent(NetworkEventHandler handler) {
   std::scoped_lock lock(mutex_);
   onNetworkEvent_ = std::move(handler);
+}
+
+void EgressMonitor::SetOnNetworkQualityEvent(NetworkQualityEventHandler handler) {
+  std::scoped_lock lock(mutex_);
+  onNetworkQualityEvent_ = std::move(handler);
 }
 
 void EgressMonitor::Refresh() {
@@ -227,6 +261,26 @@ void __stdcall EgressMonitor::OnRouteChange(void* context,
       row->InterfaceLuid.Value == self->tunLuid_.Value)
     return;
   RunGuarded("egress-route-change", [&] { self->Refresh(); });
+}
+
+void WINAPI EgressMonitor::OnWlanChange(PWLAN_NOTIFICATION_DATA data,
+                                        void* context) {
+  auto* self = static_cast<EgressMonitor*>(context);
+  if (!self) return;
+  RunGuarded("egress-wlan-quality", [&] {
+    if (!data || data->NotificationSource != WLAN_NOTIFICATION_SOURCE_MSM ||
+        data->NotificationCode != wlan_notification_msm_signal_quality_change ||
+        data->dwDataSize < sizeof(ULONG) || data->pData == nullptr)
+      return;
+    const ULONG quality = *static_cast<const ULONG*>(data->pData);
+    NetworkQualityEventHandler handler;
+    {
+      std::scoped_lock lock(self->mutex_);
+      if (!self->wlanSignalLevelTracker_.Observe(quality)) return;
+      handler = self->onNetworkQualityEvent_;
+    }
+    if (handler) handler();
+  });
 }
 
 }  // namespace urnw

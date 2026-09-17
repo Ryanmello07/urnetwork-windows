@@ -39,7 +39,7 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <AdditionalLibraryDirectories>$(UrnSdkDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>URnetworkSdk.lib;iphlpapi.lib;ws2_32.lib;advapi32.lib;shell32.lib;ntdll.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>URnetworkSdk.lib;iphlpapi.lib;wlanapi.lib;ws2_32.lib;advapi32.lib;shell32.lib;ntdll.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <!-- copy the SDK dll (and wintun) next to the service exe for local runs -->
     <PostBuildEvent>

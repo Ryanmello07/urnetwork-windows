@@ -282,6 +282,20 @@ void TunnelWatchdog::NoteNetworkEvent() {
   channel->wake.notify_all();
 }
 
+void TunnelWatchdog::NoteNetworkQualityEvent() {
+  std::shared_ptr<WatchdogChannel> channel;
+  {
+    std::scoped_lock lock(stateMutex_);
+    channel = channel_;
+  }
+  if (!channel || channel->cancelled.load()) return;
+  {
+    std::scoped_lock lock(channel->mutex);
+    channel->qualityCoalescer.Observe(NowMillis());
+  }
+  channel->wake.notify_all();
+}
+
 void TunnelWatchdog::Fire(const std::shared_ptr<WatchdogChannel>& channel,
                           DeadTunnelReason reason) {
   DeadHandler handler;
@@ -328,6 +342,7 @@ void TunnelWatchdog::RunSampler(std::shared_ptr<WatchdogChannel> channel) {
   int64_t nextSampleMillis = NowMillis();
   for (;;) {
     bool notifyDue = false;
+    bool qualityNotifyDue = false;
     int64_t burst = 0;
     {
       std::unique_lock lock(channel->mutex);
@@ -337,12 +352,18 @@ void TunnelWatchdog::RunSampler(std::shared_ptr<WatchdogChannel> channel) {
         const int64_t untilNotify = channel->coalescer.deadlineMillis() - now;
         if (untilNotify < waitMillis) waitMillis = untilNotify;
       }
+      if (channel->qualityCoalescer.pending()) {
+        const int64_t untilNotify =
+            channel->qualityCoalescer.deadlineMillis() - now;
+        if (untilNotify < waitMillis) waitMillis = untilNotify;
+      }
       if (waitMillis > 0) {
         channel->wake.wait_for(lock, std::chrono::milliseconds(waitMillis),
                                [&] { return channel->cancelled.load(); });
       }
       if (channel->cancelled.load()) return;
       notifyDue = channel->coalescer.TakeDue(NowMillis());
+      qualityNotifyDue = channel->qualityCoalescer.TakeDue(NowMillis());
       burst = channel->coalescer.lastBurstSize();
     }
 
@@ -363,6 +384,19 @@ void TunnelWatchdog::RunSampler(std::shared_ptr<WatchdogChannel> channel) {
                 e.what());
       }
       // The device may have been torn down while we were inside those calls.
+      if (channel->cancelled.load()) return;
+      device = channel->device.load();
+      if (device == nullptr) return;
+    }
+    if (qualityNotifyDue && !notifyDue) {
+      LogInfo("watchdog: Wi-Fi signal quality changed — asking transfer pacing "
+              "to remeasure without reconnecting transports");
+      try {
+        device->networkQualityChanged();
+      } catch (const std::exception& e) {
+        LogWarn("watchdog: the sdk network-quality notification failed: {}",
+                e.what());
+      }
       if (channel->cancelled.load()) return;
       device = channel->device.load();
       if (device == nullptr) return;

@@ -21,6 +21,7 @@
 #include "ConnectionHealth.h"
 #include "ConsoleArgs.h"
 #include "CrashDumps.h"
+#include "EgressMonitor.h"
 #include "FlowOwner.h"
 #include "Heartbeat.h"
 #include "InstallVerb.h"
@@ -4355,6 +4356,20 @@ void TestFailsafeDisarmChoice() {
 // counters and the verdict's edge timestamps.
 void TestEgressCoalescer() {
   Section("TunnelWatchdog — network-change coalescing and the packet tracker");
+
+  Check(WifiSignalLevel(0) == 0 && WifiSignalLevel(19) == 0 &&
+            WifiSignalLevel(20) == 0 && WifiSignalLevel(21) == 1 &&
+            WifiSignalLevel(80) == 3 && WifiSignalLevel(81) == 4 &&
+            WifiSignalLevel(100) == 4 && WifiSignalLevel(1000) == 4,
+        "Wi-Fi signal quality is clamped into stable five-bar buckets");
+  WifiSignalLevelTracker wifiSignal;
+  Check(!wifiSignal.Observe(55) && !wifiSignal.Observe(59) &&
+            wifiSignal.Observe(60) && !wifiSignal.Observe(80) &&
+            wifiSignal.Observe(81),
+        "the first Wi-Fi sample is a baseline and only bar crossings notify");
+  wifiSignal.Reset();
+  Check(!wifiSignal.Observe(81),
+        "a restarted Wi-Fi listener establishes a fresh baseline");
 
   // ---- a roam is one notification, not thirty -----------------------------
   {

@@ -719,6 +719,8 @@ proto::TunnelStatus TunnelController::StartLocked(const proto::StartTunnel& conf
     // EgressMonitor::Stop() waits for, so it records the event and returns. The
     // SDK calls happen on the watchdog's own thread, coalesced.
     egress_->SetOnNetworkEvent([this] { deadTunnelWatchdog_.NoteNetworkEvent(); });
+    egress_->SetOnNetworkQualityEvent(
+        [this] { deadTunnelWatchdog_.NoteNetworkQualityEvent(); });
     egress_->Start();  // logs the chosen interface; keeps it current on change
     if (egress_->Current().index4 == 0) {
       // Not fatal — there may genuinely be no network yet, and the monitor will
@@ -1559,6 +1561,7 @@ bool TunnelController::TearDownSessionLocked() {
   if (egress_) {
     egress_->SetOnChange(nullptr);
     egress_->SetOnNetworkEvent(nullptr);
+    egress_->SetOnNetworkQualityEvent(nullptr);
   }
 
   // Take splitMutex_ only to MOVE the client out, never across the close. The
