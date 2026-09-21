@@ -550,6 +550,104 @@ func TestTunnelControllerConstructsEveryDeviceAtTheMemoryTarget(t *testing.T) {
 	}
 }
 
+func TestTunnelCleanupDiagnosticsDoNotCertifyKernelState(t *testing.T) {
+	source := readServiceSource(t, "TunnelController.cpp")
+	// Check the actual log call, joining adjacent C++ string literals. These
+	// diagnostics describe controller ownership, not an independent OS readback.
+	joinLiterals := regexp.MustCompile(`"\s*"`)
+	for _, c := range []struct {
+		prefix   string
+		required []string
+	}{
+		{
+			prefix: `LogInfo("tunnel: stage=capture outcome=rolled-back`,
+			required: []string{
+				"cleanup=attempted", "routes=false dns=false", "facts=ownership",
+				"os_state=unverified", "firewall={}",
+			},
+		},
+		{
+			prefix: `LogInfo("tunnel: stage=capture outcome=superseded`,
+			required: []string{
+				"routes=false dns=false", "facts=ownership", "os_state=unverified",
+			},
+		},
+		{
+			prefix: `LogInfo("tunnel: stopped,`,
+			required: []string{
+				"route_dns_cleanup={}", `hadRoutes ? "attempted" : "not-owned"`,
+				"routes=false dns=false", "facts=ownership", "os_state=unverified",
+				"SDK TEARDOWN ABANDONED",
+			},
+		},
+		{
+			prefix: `LogInfo("tunnel: machine cleanup requested`,
+			required: []string{
+				"routes=false dns=false", "facts=ownership", "os_state=unverified",
+				"resolver_cache_flush=attempted", "firewall={}",
+			},
+		},
+		{
+			prefix: `LogWarn("tunnel: the failsafe teardown`,
+			required: []string{
+				"cleanup=attempted", "facts=ownership", "os_state=unverified",
+				"Armed was requested", "firewall removal was requested",
+			},
+		},
+		{
+			prefix: `LogWarn("tunnel: ======== STOPPED AFTER STEP`,
+			required: []string{
+				"CONTROLLER OWNERS EMPTY", "facts=ownership", "os_state=unverified",
+				"Route/DNS cleanup was attempted", "No route/DNS configuration owner",
+			},
+		},
+		{
+			prefix: `LogError("tunnel: ======== STOPPED AFTER STEP`,
+			required: []string{
+				"CONTROLLER CLEANUP IS INCOMPLETE", "facts=ownership", "os_state=unverified",
+			},
+		},
+		{
+			prefix: `LogError("tunnel: REFUSING to start`,
+			required: []string{
+				"cleanup=attempted", "os_state=unverified",
+			},
+		},
+		{
+			prefix: `LogWarn("tunnel: [{}] dropping the leak-prevention firewall`,
+			required: []string{
+				"route_cleanup=requested", "os_state=unverified",
+			},
+		},
+	} {
+		start := strings.Index(source, c.prefix)
+		if start < 0 {
+			t.Errorf("missing cleanup diagnostic %q", c.prefix)
+			continue
+		}
+		rest := source[start:]
+		end := strings.Index(rest, ");")
+		if end < 0 {
+			t.Fatalf("unterminated cleanup diagnostic %q", c.prefix)
+		}
+		call := joinLiterals.ReplaceAllString(rest[:end], "")
+		for _, required := range c.required {
+			if !strings.Contains(call, required) {
+				t.Errorf("cleanup diagnostic %q is missing %q", c.prefix, required)
+			}
+		}
+		for _, forbidden := range []string{
+			"network restored", "network is BACK", "routes reverted",
+			"dns cleared", "nothing was applied", "network is already back",
+			"internet is back", "NOTHING IS LEFT APPLIED", "routes/dns reverted",
+		} {
+			if strings.Contains(call, forbidden) {
+				t.Errorf("cleanup diagnostic %q certifies unread OS state with %q", c.prefix, forbidden)
+			}
+		}
+	}
+}
+
 func TestAcceptanceHarnessImmutabilityContract(t *testing.T) {
 	root := repositoryRoot(t)
 	filename := filepath.Join(root, "test-main.sh")

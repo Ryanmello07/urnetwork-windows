@@ -238,8 +238,8 @@ std::vector<WfpFilterSpec> BuildFilterSet(WfpState state, const WfpConfig& cfg) 
   //    Deliberately NOT the app (URnetwork.exe). The app does its own platform
   //    HTTP for account/auth screens, so while ARMED those calls fail — which
   //    is what a kill switch means, and permitting the app would put real user
-  //    traffic on the physical NIC in the clear. Connecting is unaffected: the
-  //    tunnel is built by THIS service, and the app reaches it over loopback.
+  //    traffic on the physical NIC in the clear. Connecting adds the exact UI
+  //    bootstrap image below so discovery can complete before capture.
   if (!cfg.service_image_path.empty()) {
     for (WfpLayer l : {WfpLayer::ConnectV4, WfpLayer::RecvAcceptV4}) {
       f.push_back(Spec("urnetwork-permit-service-v4", l, WfpSublayer::Baseline,
@@ -251,28 +251,10 @@ std::vector<WfpFilterSpec> BuildFilterSet(WfpState state, const WfpConfig& cfg) 
     }
   }
 
-  // 1b. THE UI PROCESS — CONNECTED ONLY.
-  //
-  //     The same R1 self-exclusion filter 1 gives the service, for the OTHER
-  //     process that runs an SDK instance. Read the long comment on
-  //     WfpConfig::app_image_path before changing anything here; the short
-  //     version is:
-  //
-  //       * it pairs with the app binding its own SDK egress to the physical
-  //         NIC (TunnelStatus::egress_index4). The bind is what moves the app's
-  //         sockets out of the tun; this is what stops the baseline floor
-  //         blocking them once they are out. Neither half works alone.
-  //       * `connected` is the WHOLE gate, and it is written against the state
-  //         and not against the config so that populating app_image_path can
-  //         never widen Armed or Connecting by accident. Filter 1's comment
-  //         says "deliberately NOT the app" — that ruling is about ARMED, and it
-  //         is still in force: the state whose promise is "nothing leaves"
-  //         permits urnetworkd and nothing else.
-  //       * Connecting is excluded for a second, independent reason: the
-  //         selftest pins filter 9b as the SINGLE difference between Armed and
-  //         Connecting, and a second name there would break the
-  //         one-directional-widening property that split rests on.
-  if (connected && !cfg.app_image_path.empty()) {
+  // The UI owns discovery/auth calls during bootstrap and has its own SDK.
+  // Permit only the installed image during Connecting/Connected; Armed still
+  // excludes it. This pairs with the app's physical-interface socket binding.
+  if (AttemptsConnection(state) && !cfg.app_image_path.empty()) {
     for (WfpLayer l : {WfpLayer::ConnectV4, WfpLayer::RecvAcceptV4}) {
       f.push_back(Spec("urnetwork-permit-app-v4", l, WfpSublayer::Baseline,
                        false, kWeightMax, {CondAppId(cfg.app_image_path)}));
@@ -516,13 +498,9 @@ std::vector<WfpFilterSpec> BuildFilterSet(WfpState state, const WfpConfig& cfg) 
                      WfpSublayer::Dns, false, kWeightMax, std::move(c)));
   }
 
-  // 9a. THE UI PROCESS, CONNECTED ONLY. SdkHost gives its separate SDK the
-  //     service-reported egress interface, which activates the same in-process
-  //     resolver. Repeat the exact-image exemption in this higher-priority
-  //     sublayer or a cold lookup/reconnect is blocked even though ordinary UI
-  //     control sockets pass the baseline app permit. Armed and Connecting are
-  //     deliberately unchanged.
-  if (connected && !cfg.app_image_path.empty()) {
+  // The same exact UI identity must pass the higher-priority DNS sublayer
+  // during bootstrap and while connected. The Armed policy retains its block.
+  if (AttemptsConnection(state) && !cfg.app_image_path.empty()) {
     std::vector<WfpCondition> c;
     PushUdpTcp(c);
     c.push_back(CondRemotePort(kPortDns));

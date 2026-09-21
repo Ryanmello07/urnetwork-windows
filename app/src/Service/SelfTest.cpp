@@ -359,6 +359,36 @@ void TestTunnelNetworkSettingsPolicy() {
         "a malformed v6 address is rejected");
 }
 
+void TestTunnelDnsClearSettings() {
+  Section("NetworkConfig — DNS clear payload (no adapter or resolver touched)");
+  for (const bool ipv6 : {false, true}) {
+    wchar_t stale[] = L"synthetic.example";
+    wchar_t emptyValue[1]{L'x'};
+    DNS_INTERFACE_SETTINGS settings{};
+    settings.Version = 99;
+    settings.Flags = ~0ull;
+    settings.Domain = stale;
+    settings.NameServer = stale;
+    settings.SearchList = stale;
+    settings.ProfileNameServer = stale;
+    settings.RegistrationEnabled = 1;
+    settings.RegisterAdapterName = 1;
+    settings.EnableLLMNR = 1;
+    settings.QueryAdapterName = 1;
+    NetworkConfig::PrepareTunnelDnsClearSettings(settings, ipv6, emptyValue);
+    Check(settings.Version == DNS_INTERFACE_SETTINGS_VERSION1 &&
+              settings.Flags == (DNS_SETTING_NAMESERVER | DNS_SETTING_SEARCHLIST | (ipv6 ? DNS_SETTING_IPV6 : 0)),
+          ipv6 ? "IPv6 clear selects exactly the nameserver/search-list and IPv6 flags" :
+                 "IPv4 clear selects exactly the nameserver/search-list flags");
+    Check(settings.NameServer == emptyValue && settings.SearchList == emptyValue && emptyValue[0] == L'\0',
+          ipv6 ? "IPv6 clear supplies non-null terminated empty values, not the rejected null payload" :
+                 "IPv4 clear supplies non-null terminated empty values, not the rejected null payload");
+    Check(!settings.Domain && !settings.ProfileNameServer && !settings.RegistrationEnabled &&
+              !settings.RegisterAdapterName && !settings.EnableLLMNR && !settings.QueryAdapterName,
+          "DNS clear leaves every unrelated setting unselected and zero");
+  }
+}
+
 // --- part 2: the filter set -------------------------------------------------
 
 using Specs = std::vector<WfpFilterSpec>;
@@ -379,7 +409,7 @@ WfpConfig SampleConfig(uint64_t luid) {
   cfg.host_resolvers_v4 = {"192.168.1.1"};
   cfg.service_image_path = L"C:\\Program Files\\URnetwork\\urnetworkd.exe";
   // SET IN EVERY SAMPLE, INCLUDING THE NO-TUNNEL ONE. The whole assertion about
-  // this field is that populating it widens exactly one state, so a fixture that
+  // this field is that populating it never widens Armed, so a fixture that
   // left it empty for Armed and Connecting would make that test vacuous — it
   // would be checking that an absent path produces no filter, which is the
   // uninteresting half.
@@ -608,7 +638,7 @@ void TestFilterSet() {
         "Connected permits the v6 bypass ranges the v6 routes leave to the "
         "physical NIC");
 
-  // --- THE UI PROCESS: CONNECTED ONLY --------------------------------------
+  // --- THE UI PROCESS: BOOTSTRAP AND CONNECTED ------------------------------
   //
   // The app runs its own SDK instance, so once the tunnel is up its platform
   // traffic follows the route table into the tun and the UI cannot reach the
@@ -633,13 +663,12 @@ void TestFilterSet() {
         "ARMED DOES NOT PERMIT THE APP, even with app_image_path set. The armed "
         "state permits urnetworkd and nothing else, so a kill switch cannot put "
         "user traffic on the physical NIC in the clear");
-  Check(!HasName(connecting, "urnetwork-permit-app-v4") &&
-            !HasName(connecting, "urnetwork-permit-app-v6") &&
-            !HasName(connecting, "urnetwork-permit-app-dns-v4") &&
-            !HasName(connecting, "urnetwork-permit-app-dns-v6"),
-        "Connecting does not permit the app either — it is Armed plus filter 9b "
-        "and nothing else, which is what keeps the Armed -> Connecting "
-        "transition one-directional");
+  Check(CountName(connecting, "urnetwork-permit-app-v4") == 2 &&
+            CountName(connecting, "urnetwork-permit-app-v6") == 2 &&
+            CountName(connecting, "urnetwork-permit-app-dns-v4") == 1 &&
+            CountName(connecting, "urnetwork-permit-app-dns-v6") == 1,
+        "Connecting permits the exact UI image so provider discovery and its "
+        "egress-bound resolver can finish while the kill switch protects other apps");
   {
     // Structural, like the Armed-independent-of-resolvers check below: with no
     // app path there must be NO app filter in any state, so a machine where
@@ -695,14 +724,8 @@ void TestFilterSet() {
           "lookup cannot be defeated by the DNS block");
   }
 
-  // --- CONNECTING IS EXACTLY ARMED PLUS ONE FILTER -------------------------
-  //
-  // This is the assertion the whole Armed/Connecting split rests on. The two
-  // states were merged precisely so that the transition between them could not
-  // be a window where the policy is briefly weaker; splitting them keeps that
-  // property only if the difference is ONE-DIRECTIONAL. Asserted as a multiset
-  // difference in both directions, with the one permitted name spelled out, so
-  // a second name silently joining it fails here rather than in the field.
+  // Connecting preserves all Armed blocks and adds only bootstrap exceptions.
+  // Pin the complete multiset so a general application permit cannot creep in.
   {
     const std::multiset<std::string> a = Names(armed);
     const std::multiset<std::string> c = Names(connecting);
@@ -716,12 +739,13 @@ void TestFilterSet() {
           "transition only ever widens, so nothing permitted while armed is "
           "interrupted by a connection attempt starting",
           onlyInArmed.empty() ? "" : *onlyInArmed.begin());
-    Check(onlyInConnecting.size() == 1 &&
-              *onlyInConnecting.begin() == kHostResolverPermit,
-          std::format("the ONLY difference between Armed and Connecting is {} — "
-                      "the machine-wide plaintext-DNS permit, which is the "
-                      "entire cost of opening the window",
-                      kHostResolverPermit),
+    const std::multiset<std::string> bootstrapPermits{
+        kHostResolverPermit, "urnetwork-permit-app-v4", "urnetwork-permit-app-v4",
+        "urnetwork-permit-app-v6", "urnetwork-permit-app-v6",
+        "urnetwork-permit-app-dns-v4", "urnetwork-permit-app-dns-v6"};
+    Check(onlyInConnecting == bootstrapPermits,
+          "Connecting adds only host DNS and the exact UI bootstrap image; "
+          "all Armed blocks remain present",
           std::format("{} extra filter(s): {}", onlyInConnecting.size(),
                       onlyInConnecting.empty() ? std::string("none")
                                                : *onlyInConnecting.begin()));
@@ -4359,17 +4383,29 @@ void TestEgressCoalescer() {
 
   Check(WifiSignalLevel(0) == 0 && WifiSignalLevel(19) == 0 &&
             WifiSignalLevel(20) == 0 && WifiSignalLevel(21) == 1 &&
+            WifiSignalLevel(40) == 1 && WifiSignalLevel(41) == 2 &&
+            WifiSignalLevel(60) == 2 && WifiSignalLevel(61) == 3 &&
             WifiSignalLevel(80) == 3 && WifiSignalLevel(81) == 4 &&
             WifiSignalLevel(100) == 4 && WifiSignalLevel(1000) == 4,
         "Wi-Fi signal quality is clamped into stable five-bar buckets");
   WifiSignalLevelTracker wifiSignal;
-  Check(!wifiSignal.Observe(55) && !wifiSignal.Observe(59) &&
-            wifiSignal.Observe(60) && !wifiSignal.Observe(80) &&
-            wifiSignal.Observe(81),
-        "the first Wi-Fi sample is a baseline and only bar crossings notify");
+  // 60 is still bucket 2; 61 crosses into bucket 3. Evaluate every sample,
+  // even if an earlier expectation fails, so a short circuit cannot hide edges.
+  struct WifiSample { uint32_t quality; bool notify; };
+  constexpr WifiSample samples[] = {
+      {55, false}, {59, false}, {60, false}, {61, true}, {80, false},
+      {81, true}, {100, false}, {1000, false}, {80, true}, {61, false},
+      {60, true}, {41, false}, {40, true}, {21, false}, {20, true}, {0, false}};
+  for (const auto& sample : samples) {
+    Check(wifiSignal.Observe(sample.quality) == sample.notify,
+          std::format("Wi-Fi quality {} {} a bar-change notification",
+                      sample.quality, sample.notify ? "emits" : "does not emit"));
+  }
   wifiSignal.Reset();
   Check(!wifiSignal.Observe(81),
         "a restarted Wi-Fi listener establishes a fresh baseline");
+  Check(!wifiSignal.Observe(100) && wifiSignal.Observe(80),
+        "after reset, same-bar jitter stays quiet and a downward crossing notifies");
 
   // ---- a roam is one notification, not thirty -----------------------------
   {
@@ -4876,6 +4912,37 @@ void TestServiceRecoveryPolicy() {
         "the shipped app/service protocol includes exact RPC identities");
 }
 
+// Preparing is an adoptable RPC session but never a claim that traffic is
+// captured. A second gesture must use or stop that session, not restart it.
+void TestPreparingSession() {
+  Section("Deferred capture — RPC preparation precedes provider selection");
+  proto::TunnelStatus status;
+  status.state = proto::TunnelState::Preparing;
+  const auto back = nlohmann::json(status).get<proto::TunnelStatus>();
+  Check(back.state == proto::TunnelState::Preparing &&
+            proto::IsSessionLive(back.state) && !proto::IsTunnelUp(back.state) &&
+            !back.routes_installed && !back.dns_applied,
+        "preparing round-trips as RPC live without claiming routes or DNS");
+  Check(proto::kProtocolVersion >= proto::kFirstDeferredCaptureVersion,
+        "the wire contract advertises deferred capture");
+  gesture::ServiceFacts service;
+  service.known = service.pipeUp = true;
+  service.state = proto::TunnelState::Preparing;
+  gesture::AppFacts app;
+  app.haveDevice = true;
+  app.wantsTunnel = true;
+  for (auto intent : {gesture::Gesture::Connect, gesture::Gesture::ConnectRow,
+                      gesture::Gesture::EnsureSession}) {
+    const auto plan = gesture::Decide(intent, service, app);
+    Check(!plan.startTunnel && !plan.stopTunnel && !plan.tearDownDevice,
+          "a prepared session is reused while the selected provider forms");
+  }
+  const auto stop = gesture::Decide(gesture::Gesture::Disconnect, service, app);
+  Check(stop.stopTunnel &&
+            gesture::ActionIsDisconnect(service, health::State::Disconnected),
+        "disconnect cancels preparation even before routes or SDK activity exist");
+}
+
 int RunSelfTest() {
   g_pass = 0;
   g_fail = 0;
@@ -4899,6 +4966,7 @@ int RunSelfTest() {
   TestNetPolicyTable();
   TestNetPolicyTableV6();
   TestTunnelNetworkSettingsPolicy();
+  TestTunnelDnsClearSettings();
   TestFilterSet();
   TestServiceDnsPath();
   TestDnsDisclosureShape();
@@ -4913,6 +4981,7 @@ int RunSelfTest() {
   TestUpdateFormats();
   TestInstallVerb();
   TestServiceRecoveryPolicy();
+  TestPreparingSession();
   TestConnectionHealth();
   TestFlowOwner();
   TestConnectGesture();

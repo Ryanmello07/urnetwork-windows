@@ -298,6 +298,16 @@ void NetworkConfig::PrepareTunnelIpv6InterfaceRow(MIB_IPINTERFACE_ROW& row,
   row.DisableDefaultRoutes = carriesIpv6 ? FALSE : TRUE;
 }
 
+void NetworkConfig::PrepareTunnelDnsClearSettings(DNS_INTERFACE_SETTINGS& settings, bool ipv6,
+                                                 wchar_t (&emptyValue)[1]) {
+  emptyValue[0] = L'\0';
+  settings = {};
+  settings.Version = DNS_INTERFACE_SETTINGS_VERSION1;
+  settings.Flags = DNS_SETTING_NAMESERVER | DNS_SETTING_SEARCHLIST | (ipv6 ? DNS_SETTING_IPV6 : 0);
+  settings.NameServer = emptyValue;
+  settings.SearchList = emptyValue;
+}
+
 bool NetworkConfig::ResolverCacheFlushAvailable() {
   return ResolveDnsFlush() != nullptr;
 }
@@ -580,7 +590,7 @@ void NetworkConfig::Revert() {
   applied_ipv6_ = false;
   dns_applied_ = false;
   DisarmCrashRevert();
-  LogInfo("netcfg: reverted ({} of {} routes removed, dns cleared)", removed,
+  LogInfo("netcfg: reverted ({} of {} routes removed, dns clear attempted)", removed,
           std::size(kIncludedV4Routes) + (hadIpv6 ? std::size(kIncludedV6Routes) : 0));
 }
 
@@ -604,16 +614,16 @@ void NetworkConfig::ClearTunnelDns(NET_LUID tunLuid) {
   if (::ConvertInterfaceLuidToGuid(&tunLuid, &guid) != NO_ERROR) return;
   // One call per family: the settings struct addresses v4 unless
   // DNS_SETTING_IPV6 is set, and a dual-stack session set both.
-  for (const ULONG family : {0ul, static_cast<ULONG>(DNS_SETTING_IPV6)}) {
+  for (const bool ipv6 : {false, true}) {
+    wchar_t emptyValue[1]{};
     DNS_INTERFACE_SETTINGS settings{};
-    settings.Version = DNS_INTERFACE_SETTINGS_VERSION1;
-    // Clear BOTH of the things Apply can set. Apply adds DNS_SETTING_SEARCHLIST
-    // whenever a search domain is supplied, so clearing only NAMESERVER left the
-    // search list in force on the interface.
-    settings.Flags = DNS_SETTING_NAMESERVER | DNS_SETTING_SEARCHLIST | family;
-    settings.NameServer = nullptr;
-    settings.SearchList = nullptr;
-    ::SetInterfaceDnsSettings(guid, &settings);
+    // Null pointers with these flags return ERROR_INVALID_PARAMETER and leave
+    // the resolver in force. Non-null empty strings clear both optional fields.
+    PrepareTunnelDnsClearSettings(settings, ipv6, emptyValue);
+    const DWORD error = ::SetInterfaceDnsSettings(guid, &settings);
+    if (error != NO_ERROR)
+      LogWarn("dns: clear tunnel settings failed (family={} error={}); adapter teardown still required",
+              ipv6 ? "ipv6" : "ipv4", error);
   }
 }
 
@@ -788,8 +798,7 @@ int NetworkConfig::SweepOrphanedTunnel(const GUID& tunGuid,
     ClearTunnelDns(luid);
     LogWarn(
         "netcfg: ORPHANED tun interface \"{}\" (luid {:#x}) present at startup — "
-        "a previous run did not revert; removed {} stale routes and cleared its "
-        "DNS",
+        "a previous run did not revert; removed {} stale routes; DNS clear requested",
         alias, luid.Value, removed);
   }
   // CONFIRMED orphans, not candidates. This return value is what

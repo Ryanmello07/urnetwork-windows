@@ -60,6 +60,7 @@
 #include <thread>
 
 #include "PacketPump.h"  // PacketCounters
+#include "CaptureReadiness.h"
 #include "Sdk.h"
 
 namespace urnw {
@@ -601,6 +602,11 @@ class NotifyCoalescer {
 // thread that publishes into its owner's members is a use-after-free waiting
 // for a bad day. It owns a share of this instead.
 struct WatchdogChannel {
+  // Retained in both Preparing and Up so late callbacks cannot queue work for
+  // a replacement session. captureReadiness is set only while capture is pending.
+  std::shared_ptr<CaptureReadiness> sessionReadiness;
+  std::shared_ptr<CaptureReadiness> captureReadiness;
+  std::function<void(CaptureTicket)> onReady;
   std::mutex mutex;
   std::condition_variable wake;
   // Set by Stop(). Checked by the sampler immediately before and immediately
@@ -665,7 +671,7 @@ class TunnelWatchdog {
   TunnelWatchdog(const TunnelWatchdog&) = delete;
   TunnelWatchdog& operator=(const TunnelWatchdog&) = delete;
 
-  // Begin watching `device` for the session that has just reached Up.
+  // Watch this session while preparing (onReady supplied) or after capture.
   //
   // The session's start instant is stamped HERE, from this class's own steady
   // clock, rather than taken as an argument: TunnelController's upSinceMillis_
@@ -678,7 +684,9 @@ class TunnelWatchdog {
   // WindowTrace requires — with the difference that this Stop() is BOUNDED and
   // will abandon a wedged sampler rather than hold the teardown hostage.
   void Start(urnet::DeviceLocal* device,
-             std::shared_ptr<PacketCounters> counters, DeadHandler onDead);
+             std::shared_ptr<PacketCounters> counters, DeadHandler onDead,
+             std::shared_ptr<CaptureReadiness> sessionReadiness,
+             std::function<void(CaptureTicket)> onReady = {});
 
   // Stop watching. Idempotent, safe when nothing was started, and SAFE TO CALL
   // FROM INSIDE the DeadHandler — which is not a nicety: the handler tears the
@@ -695,7 +703,8 @@ class TunnelWatchdog {
   // system worker thread: it records a timestamp and wakes the sampler. THE SDK
   // IS NEVER CALLED FROM HERE — EgressMonitor::Stop() waits for in-flight
   // callbacks, so a blocking one would wedge the teardown.
-  void NoteNetworkEvent();
+  bool NoteNetworkEvent(const std::shared_ptr<CaptureReadiness>& session,
+                        int64_t eventMillis);
 
   // A radio-quality update keeps transports alive and only remeasures pacing.
   // Like NoteNetworkEvent, this records work for the SDK sampler thread.

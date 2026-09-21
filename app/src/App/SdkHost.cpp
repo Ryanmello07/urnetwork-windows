@@ -506,6 +506,15 @@ bool SdkHost::Initialize() {
       // defaults and render a healthy tunnel as degraded.
       AdoptServiceFacts(st);
       if (onTunnel_) onTunnel_(st);
+      // Terminal activation failure may close the SDK feed before another
+      // stats event arrives. Publish the service truth without an SDK getter
+      // on the control-pipe reader, where a blocking getter could deadlock RPC.
+      if (st.state != proto::TunnelState::Up && onStats_) {
+        LiveStats stats;
+        stats.rpcOnly = st.mode == proto::StartMode::RpcOnly;
+        ClampCaptureStats(stats);
+        onStats_(stats);
+      }
     });
     service_.SetDisconnectHandler([this] { OnServiceDisconnected(); });
     service_.Connect();  // ok if the service isn't up yet; retried on demand
@@ -2054,22 +2063,20 @@ void SdkHost::PublishSessionFailure(const std::string& why) {
 }
 
 void SdkHost::AdoptServiceFacts(const proto::TunnelStatus& st) {
+  lastServiceState_.store(st.state);
   lastServiceDnsApplied_.store(st.dns_applied);
   // The third service-owned fact, adopted here for the same reason as the other
   // two: this process cannot observe it, and inferring it from a mode flag is
   // what let the app report a captured machine as disconnected.
   lastServiceRoutesInstalled_.store(st.routes_installed);
-  // R1 for this process. Keyed on routes_installed and NOT on state: that field
-  // is the one Protocol.h nominates as the answer to "is my traffic going
-  // through the tunnel", it is read off the object that owns the routes, and it
-  // is true for the window between the routes going in and the session being
-  // reported Up — which is exactly the window in which an unbound app socket
-  // would pick the tun and keep it. A status with routes down unbinds, so a
-  // stop, a failure, or an rpc-only session all put this back.
-  ApplySdkEgressBind(st.routes_installed ? st.egress_index4 : 0,
-                     st.routes_installed ? st.egress_index6 : 0,
-                     st.routes_installed ? "the service reports routes installed"
-                                         : "the service reports no routes");
+  // Bind this process's SDK during bootstrap, before the service installs
+  // routes. The connected route flag keeps that binding through activation.
+  const bool bindEgress = st.routes_installed ||
+                         st.state == proto::TunnelState::Preparing;
+  ApplySdkEgressBind(bindEgress ? st.egress_index4 : 0,
+                     bindEgress ? st.egress_index6 : 0,
+                     bindEgress ? "the service is preparing or carrying traffic"
+                                : "the service reports no tunnel session");
   std::scoped_lock lock(wfpStateMutex_);
   lastServiceWfpState_ = st.wfp_state;
 }
@@ -2122,6 +2129,7 @@ void SdkHost::OnServiceDisconnected() {
   // window is open, because no further push is coming from anywhere.
   lastServiceDnsApplied_.store(false);
   lastServiceRoutesInstalled_.store(false);
+  lastServiceState_.store(proto::TunnelState::Stopped);
   // ...and the tun went with it, so nothing must stay pinned to the interface
   // that existed to avoid it. A binding retained across the service's death
   // would outlive the reason for it and pin this process to one NIC for the rest
@@ -2186,11 +2194,14 @@ proto::TunnelStatus SdkHost::SessionStatus(bool haveLocation) const {
     // facts" lock. It is never held together with mutex_ in the other order.
     st.rpc_listen_hostport = sessionRpcHostPort_;
   }
-  if (!haveLocation) {
+  if (mode == proto::StartMode::Tunnel &&
+      lastServiceState_.load() == proto::TunnelState::Preparing) {
+    st.state = proto::TunnelState::Preparing;
+  } else if (!haveLocation) {
     st.state = proto::TunnelState::Stopped;
   } else {
     st.state = mode == proto::StartMode::RpcOnly ? proto::TunnelState::RpcOnly
-                                                 : proto::TunnelState::Up;
+                                                : lastServiceState_.load();
   }
   return st;
 }
@@ -2243,6 +2254,16 @@ bool SdkHost::BootstrapSession(const char* reason, bool attachOnly) {
     // may be perfectly healthy, until some unrelated start/stop happened to
     // correct it.
     AdoptServiceFacts(hello);
+
+    if (requestedMode_ == proto::StartMode::Tunnel &&
+        hello.protocol_version < proto::kFirstDeferredCaptureVersion) {
+      bootstrapServiceRetryable_ = true;
+      bootstrapError_ = "the running service must be updated before connecting "
+                        "(provider readiness requires control protocol v4)";
+      LogError("sdkhost: stage=bootstrap protocol={} deferred_capture=unsupported",
+               hello.protocol_version);
+      return false;
+    }
 
     // Version 3 is the first protocol in which a live status proves which
     // DeviceLocal and which mTLS generation own the listener. Refuse before a
@@ -2950,7 +2971,33 @@ LiveStats SdkHost::ReadStats() {
     s.provenProviderCount = proven;
     s.healthReevalAtMillis = healthTracker_.ReevalAtMillis();
   }
+  ClampCaptureStats(s);
   return s;
+}
+
+void SdkHost::ClampCaptureStats(LiveStats& stats) const {
+  const auto state = lastServiceState_.load();
+  const health::CaptureSignals capture{
+      .serviceConnected = service_.IsConnected(),
+      .preparing = !stats.rpcOnly && (state == proto::TunnelState::Preparing ||
+                                     state == proto::TunnelState::Starting),
+      .active = !stats.rpcOnly && state == proto::TunnelState::Up &&
+                lastServiceRoutesInstalled_.load() && lastServiceDnsApplied_.load(),
+      .failed = state == proto::TunnelState::Error};
+  stats.health = health::WithCapture(stats.health, capture);
+  if (!capture.active) {
+    if (stats.rawConnectionStatus.empty()) {
+      stats.rawConnectionStatus = stats.connectionStatus;
+      stats.rawConnected = stats.connected;
+    }
+    stats.connected = false;
+    stats.downBitsPerSecond = stats.upBitsPerSecond = 0;
+    stats.healthReevalAtMillis = 0;
+    stats.connectionStatus = !capture.serviceConnected ? "SERVICE_DOWN"
+        : stats.rpcOnly ? "RPC_ONLY"
+        : stats.health == health::State::Failed ? "CONNECT_FAILED"
+        : capture.preparing ? "CONNECTING" : "DISCONNECTED";
+  }
 }
 
 void SdkHost::PublishStats() {

@@ -79,6 +79,12 @@ class NetworkConfig {
   // the interface's own v6 at all.
   static void PrepareTunnelIpv6InterfaceRow(MIB_IPINTERFACE_ROW& row, bool carriesIpv6);
 
+  // Pure payload preparation. Flagged DNS fields require non-null empty strings
+  // to clear; settings borrows the caller's one-character buffer through the
+  // synchronous SetInterfaceDnsSettings call. No OS state is read or changed.
+  static void PrepareTunnelDnsClearSettings(DNS_INTERFACE_SETTINGS& settings, bool ipv6,
+                                            wchar_t (&emptyValue)[1]);
+
   // Remove the routes/addresses/DNS added by Apply(), restoring prior state.
   void Revert();
 

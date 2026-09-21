@@ -68,6 +68,7 @@
     <ClInclude Include="InstallVerb.h" />
     <ClInclude Include="TunnelController.h" />
     <ClInclude Include="TunnelWatchdog.h" />
+    <ClInclude Include="CaptureReadiness.h" />
     <ClInclude Include="Wintun.h" />
     <ClInclude Include="PacketPump.h" />
     <ClInclude Include="NetworkConfig.h" />

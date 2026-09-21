@@ -3,6 +3,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <future>
 #include <span>
 #include <vector>
 
@@ -88,7 +89,13 @@ bool PacketPump::Start() {
         });
       });
 
-  outbound_ = StartGuardedThread("pump-outbound", [this] { OutboundLoop(); });
+  auto started = std::make_shared<std::promise<void>>();
+  auto ready = started->get_future();
+  outbound_ = StartGuardedThread("pump-outbound", [this, started] {
+    started->set_value();
+    OutboundLoop();
+  });
+  ready.get();  // the consumer is running before capture can target the ring
   LogInfo("pump: started");
   return true;
 }

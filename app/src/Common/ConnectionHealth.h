@@ -78,6 +78,25 @@ inline constexpr const char* ToString(State s) {
   return "unknown";
 }
 
+// Service-owned capture facts constrain SDK evidence. A stale provider grid
+// cannot advertise a tunnel after activation failed while the control pipe lives.
+struct CaptureSignals {
+  bool serviceConnected = false;
+  bool preparing = false;
+  bool active = false;
+  bool failed = false;
+};
+
+inline constexpr State WithCapture(State provider, CaptureSignals capture) {
+  if (!capture.serviceConnected) return State::NoService;
+  if (capture.failed) return State::Failed;
+  if (capture.preparing) {
+    if (provider == State::Failed || provider == State::Evaluating) return provider;
+    return State::Connecting;
+  }
+  return capture.active ? provider : State::Disconnected;
+}
+
 // What the SDK's connection status contributes: is anything being attempted at
 // all. The four live values plus this app's two clamp sentinels (RPC_ONLY,
 // SERVICE_DOWN — see SdkHost::ReadStats) fold into three answers; anything

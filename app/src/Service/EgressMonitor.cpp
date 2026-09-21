@@ -227,7 +227,7 @@ EgressInterfaces EgressMonitor::Current() const {
   return current_;
 }
 
-void __stdcall EgressMonitor::OnChange(void* context, MIB_IPINTERFACE_ROW*,
+void __stdcall EgressMonitor::OnChange(void* context, MIB_IPINTERFACE_ROW* row,
                                        MIB_NOTIFICATION_TYPE) {
   // Called on a system worker thread. Recompute the egress binding; the SDK
   // setter is atomic and cheap, so we can react to every change.
@@ -240,6 +240,10 @@ void __stdcall EgressMonitor::OnChange(void* context, MIB_IPINTERFACE_ROW*,
   // direction only: our handler adds a log line and a route revert to a process
   // that was already dying, and never keeps one alive.
   auto* self = static_cast<EgressMonitor*>(context);
+  // Configuring our prepared adapter is not an uplink change. Feeding it back
+  // into readiness would invalidate every capture transaction's own proof.
+  if (self && row && self->tunLuid_.Value != 0 &&
+      row->InterfaceLuid.Value == self->tunLuid_.Value) return;
   RunGuarded("egress-change", [&] {
     if (self) self->Refresh();
   });

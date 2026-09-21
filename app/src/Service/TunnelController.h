@@ -39,7 +39,8 @@ class TunnelController {
   // Returns a status; on failure state == Error with error set.
   //
   // config.mode selects what "up" means:
-  //   StartMode::Tunnel  — all eight steps; rewrites routes and DNS.
+  //   StartMode::Tunnel  — RPC-ready Preparing; capture activates asynchronously
+  //                        after current-destination provider proof.
   //   StartMode::RpcOnly — steps 2-5 only (no wintun adapter, so no elevation
   //                        needed), ending at the RPC listener. It returns
   //                        BEFORE step 6/8, the first call that touches the
@@ -119,11 +120,8 @@ class TunnelController {
   void FailsafeStop(DeadTunnelReason reason);
 
   // Called, OUTSIDE mutex_, whenever this controller changes state on its own
-  // initiative rather than in reply to a request. Exists for exactly one case
-  // and it is the failsafe: every other transition is the direct result of an
-  // RPC, so ControlServer pushes the new status when it answers. A teardown
-  // nobody asked for has no reply to ride on, and an app that only learns about
-  // it at its next poll is an app showing a tunnel that is already gone.
+  // initiative rather than in reply to a request: deferred activation and the
+  // dead-tunnel failsafe. These transitions have no control reply to ride on.
   void SetOnStateChanged(std::function<void()> handler);
 
   // Update the split-tunnel app set + mode (driver, if present). allowlist=false:
@@ -225,31 +223,28 @@ class TunnelController {
   // SetStateLocked and ApplyWfpLocked are the two funnels that cover most of
   // it; the rest are named at their call sites. Caller holds mutex_.
   void PublishStatusLocked();
-  // The same publish for the three paths that change this machine's state
+  // The same publish for the three paths that request machine-state changes
   // WITHOUT mutex_ — the connecting watchdog narrowing the DNS window, and
   // Stop()/FailsafeStop() escaping a wedged lock through CrashRevert. They
   // cannot compose a status (that reads session state), so they patch the two
-  // facts they actually changed. Without this the app would keep being told
-  // "routes installed, policy connecting" about a machine those very paths just
-  // handed back — and its disconnect decision now rides on both fields.
+  // ownership/application flags, not independently observed kernel state. The
+  // app's disconnect decision reads these flags even during a wedged teardown.
   //
-  // `routesReverted` is for the CrashRevert paths; the watchdog passes false
-  // because it only ever moves the firewall.
+  // `routesReverted` means CrashRevert was requested, not verified. The watchdog
+  // passes false because it only ever moves the firewall.
   void RepublishMachineFactsLockFree(bool routesReverted);
   proto::TunnelStatus StartLocked(const proto::StartTunnel& config);
-  // Steps 6-8: network settings, split tunnel, packet pump. Split out of
-  // StartLocked so the destructive half of the sequence is a named unit with
-  // its OWN precondition, checked against the stored mode rather than against
-  // the caller's argument. StartLocked already returns before reaching it in
-  // rpc-only mode; this is the second, independent gate, and the one a future
-  // caller cannot get wrong. Caller holds mutex_; `step` is the diagnostic
-  // cursor StartLocked reports on failure.
-  //
-  // Returns true when all three steps ran. False means --stop-after halted the
-  // sequence at one of them AND THE TEARDOWN HAS ALREADY RUN — the caller must
-  // not go on to report the session up. Reported as a return value rather than a
-  // flag on the object so the caller cannot forget to look at it.
-  bool BringUpTunnelLocked(const proto::StartTunnel& config, const char*& step);
+  // Provider-proof-gated machine transaction: pump/split routing, firewall,
+  // routes/DNS, then connected policy. Caller holds mutex_. Waiting means proof
+  // changed and any applied stages received rollback; Halted means a debug stop ran.
+  CaptureResult BringUpTunnelLocked(CaptureReadiness& readiness,
+                                    CaptureTicket ticket, const char*& step);
+  // Terminal callback from the preparing watchdog. The ticket belongs only to
+  // this session; cancellation is published before Stop waits for mutex_.
+  void ActivateCapture(std::shared_ptr<CaptureReadiness> readiness,
+                       CaptureTicket ticket);
+  void WatchForCaptureLocked();
+  void CancelCapture();
   // The staged bring-up stop point. Returns false — instantly, before reading
   // anything — unless --stop-after was passed and this sequence has reached it.
   // When it has: log what step `step` left behind, run the ORDINARY teardown,
@@ -270,12 +265,9 @@ class TunnelController {
   // the public Stop() (user disconnect, service shutdown) passes true and lifts
   // it. Caller holds mutex_.
   void StopLocked(bool finalDisarm);
-  // Phase 1 of StopLocked: give this MACHINE back — routes, DNS, the resolver
-  // cache, the active marker and the firewall policy. Split out so the ordering
-  // is a fact about the code rather than a comment: everything here is local,
-  // cheap and measured in single-digit milliseconds, and NONE of it can block on
-  // a network that has already failed. It therefore runs FIRST, before any part
-  // of the teardown that talks to the SDK. Caller holds mutex_.
+  // Phase 1 of StopLocked: request route, DNS, resolver-cache, marker and policy
+  // cleanup before SDK teardown. Releases configuration ownership but does not
+  // independently verify OS removal. Caller holds mutex_.
   //
   // Deliberately NOT wrapped in a budget. It is the thing whose completion the
   // budgets exist to guarantee; abandoning it would abandon the revert, which is
@@ -322,7 +314,7 @@ class TunnelController {
   // Full path of THIS executable, for the ALE_APP_ID self-exemption. Resolved
   // once: without it the machine can be armed, blocked and unable to reconnect.
   static std::wstring ServiceImagePath();
-  // Full path of the UI process, for the Connected-only app permit (WfpConfig::
+  // Full path of the UI process, for the bootstrap/connected app permit (WfpConfig::
   // app_image_path). Empty when it cannot be found, which is a supported answer
   // — the permit is then simply not emitted.
   //
@@ -418,6 +410,10 @@ class TunnelController {
   std::unique_ptr<NetworkConfig> netConfig_;
   std::unique_ptr<EgressMonitor> egress_;
   std::unique_ptr<PacketPump> pump_;
+  // Accessed with atomic_load/store so Stop can cancel a pending transaction
+  // without first taking the potentially blocked session mutex.
+  std::shared_ptr<CaptureReadiness> captureReadiness_;
+  std::atomic<uint64_t> stopGeneration_{0};
   SplitTunnelClient splitTunnel_;
   std::vector<std::string> excludedPaths_;
   bool allowlist_ = false;

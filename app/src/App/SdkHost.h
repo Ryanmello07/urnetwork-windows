@@ -1658,6 +1658,7 @@ class SdkHost {
   void SubscribeStats();          // caller holds mutex_; opens presentation controllers
   LiveStats ReadStats();          // read the current snapshot from the SDK getters
   void PublishStats();            // ReadStats() -> onStats_
+  void ClampCaptureStats(LiveStats& stats) const;
   // Drawer feeds: subscribe listeners (in BootstrapSession) and publish
   // snapshots, only on change (block actions storm per routing decision).
   void SubscribeDrawer();
@@ -1936,6 +1937,7 @@ class SdkHost {
   // tunnel" — with no idea whether they were. Carried from the service like its
   // two neighbours instead; the service is the process that owns the routes.
   std::atomic<bool> lastServiceRoutesInstalled_{false};
+  std::atomic<proto::TunnelState> lastServiceState_{proto::TunnelState::Stopped};
   // "THE LAST THING THE USER ASKED FOR WAS OFF." Written by the session worker
   // from the gesture it just dequeued, read by gesture::Decide for EnsureSession
   // alone (see AppFacts::userDisconnected).

@@ -8,8 +8,8 @@
 //
 // This mirrors the macOS app<->extension boundary: `start_tunnel` carries the
 // same fields the macOS app puts in NETunnelProviderProtocol.providerConfiguration,
-// and the device RPC (mTLS WebSocket on loopback) is established separately by
-// the SDK once the tunnel is up — this channel only carries lifecycle + config.
+// and device RPC (mTLS WebSocket on loopback) is established once the service
+// is prepared. Provider selection/proof precedes capture and the later Up state.
 //
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
@@ -50,12 +50,15 @@ namespace urnw::proto {
 //    RPC session generation. These fields are required for safe adoption; a
 //    port match alone cannot prove that saved mTLS material belongs to the
 //    listener currently bound there.
-inline constexpr int kProtocolVersion = 3;
+// 4: start_tunnel returns Preparing once RPC is usable. Capture is deferred
+//    until the selected destination has a usable proven provider.
+inline constexpr int kProtocolVersion = 4;
 
 // The first version that understands StartTunnel::mode. Below this, an absent
 // `mode` on the wire means "ignored", not "defaulted".
 inline constexpr int kFirstStartModeVersion = 2;
 inline constexpr int kFirstRpcSessionIdentityVersion = 3;
+inline constexpr int kFirstDeferredCaptureVersion = 4;
 
 // ---- message type tags ----------------------------------------------------
 
@@ -116,6 +119,7 @@ enum class TunnelState {
   // An older peer that does not know this string parses it as `Stopped`, which
   // is the safe direction to be wrong in.
   RpcOnly,
+  Preparing,  // RPC live; capture not committed; routes/DNS fields report transition facts
 };
 
 inline const char* ToString(TunnelState s) {
@@ -126,6 +130,7 @@ inline const char* ToString(TunnelState s) {
     case TunnelState::Stopping: return "stopping";
     case TunnelState::Error: return "error";
     case TunnelState::RpcOnly: return "rpc_only";
+    case TunnelState::Preparing: return "preparing";
   }
   return "unknown";
 }
@@ -133,6 +138,7 @@ inline const char* ToString(TunnelState s) {
 inline TunnelState TunnelStateFromString(const std::string& s) {
   if (s == "starting") return TunnelState::Starting;
   if (s == "up") return TunnelState::Up;
+  if (s == "preparing") return TunnelState::Preparing;
   if (s == "stopping") return TunnelState::Stopping;
   if (s == "error") return TunnelState::Error;
   if (s == "rpc_only") return TunnelState::RpcOnly;
@@ -147,7 +153,8 @@ inline TunnelState TunnelStateFromString(const std::string& s) {
 // with the SAME predicate the rest of the product uses rather than a second
 // copy of it.
 inline constexpr bool IsSessionLive(TunnelState s) {
-  return s == TunnelState::Up || s == TunnelState::RpcOnly;
+  return s == TunnelState::Up || s == TunnelState::RpcOnly ||
+         s == TunnelState::Preparing;
 }
 
 // "Traffic is actually being carried." Use this, never IsSessionLive, for
@@ -230,21 +237,14 @@ struct TunnelStatus {
   // reading its silence as "Tunnel" is honest. What is NOT safe is asking such
   // a peer for RpcOnly — see kFirstStartModeVersion.
   StartMode mode = StartMode::Tunnel;
-  // True only when routes and DNS are actually installed right now. This is the
-  // field to trust for "is my traffic going through the tunnel"; it is false for
-  // the whole life of an rpc-only session.
+  // Controller-reported route-configuration ownership; false for rpc-only.
+  // May be true during partial Apply. Not a fresh route-table query: false after
+  // cleanup requests does not certify kernel removal.
   bool routes_installed = false;
-  // True only when the tunnel's resolvers were actually accepted by the stack.
-  //
-  // routes_installed and dns_applied are separate facts and used to be
-  // conflated. Applying the network settings deliberately SUCCEEDS when the DNS
-  // half fails — tearing a working tunnel down over its resolvers trades a DNS
-  // problem for a connectivity one — so before this field a DNS failure left
-  // state=up, routes_installed=true and one warning in the service log, while
-  // every surface said Connected and every query went out in the clear.
-  //
-  // Defaults FALSE, including for a peer too old to send it. That is the safe
-  // direction: an unknown DNS state renders as degraded, not as clean.
+  // Current owner's IPv4 DNS-apply result, cleared after cleanup requests.
+  // IPv6 failures are logged separately. Capture commits only after this flag
+  // is true; false on teardown does not independently verify resolver removal.
+  // Defaults false for a peer too old to send it.
   bool dns_applied = false;
   // The firewall policy in force: "off" | "armed" | "connecting" | "connected".
   // Reported so the app can say whether leak prevention is actually running — on
