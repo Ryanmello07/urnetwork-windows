@@ -302,10 +302,11 @@
     <ClCompile Include="OfferCard.cpp" />
     <ClCompile Include="TransferChart.cpp" />
     <ClCompile Include="TransportBar.cpp" />
-    <!-- The IP-family grouping is WinRT-free (no pch) so tools/ip-family-tests.cpp
-         runs it on any host; the histogram that draws it uses the pch. -->
-    <ClCompile Include="IpFamilyGroups.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
-    <ClCompile Include="IpFamilyHistogram.cpp" />
+    <!-- The IP-family counting and ranking is WinRT-free (no pch) so
+         tools/ip-family-tests.cpp runs it on any host; the status row that draws
+         it uses the pch. -->
+    <ClCompile Include="IpFamilyStatus.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <ClCompile Include="IpFamilyStatusRow.cpp" />
     <!-- The extender UI's decisions (ring geometry, status mapping, settings
          form, share/import) are WinRT-free (no pch) so tools/extender-tests.cpp
          runs them on any host; the panel and sheets that draw them use the pch. -->
@@ -377,8 +378,9 @@
     <ClInclude Include="PricePresentation.h" />
     <ClInclude Include="TransferChart.h" />
     <ClInclude Include="TransportBar.h" />
-    <ClInclude Include="IpFamilyGroups.h" />
-    <ClInclude Include="IpFamilyHistogram.h" />
+    <ClInclude Include="IpFamilyStatus.h" />
+    <ClInclude Include="IpFamilyStatusRow.h" />
+    <ClInclude Include="ProviderDotDiameter.h" />
     <ClInclude Include="ExtenderRingGeometry.h" />
     <ClInclude Include="ExtenderPresentation.h" />
     <ClInclude Include="ExtenderPanel.h" />

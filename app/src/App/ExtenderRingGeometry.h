@@ -30,7 +30,7 @@
 //
 // Pure standard C++: no WinRT, no XAML, no SDK header, so tools/extender-
 // tests.cpp runs it on any host and both drawing surfaces (ConnectCanvas and
-// IpFamilyHistogram) share one source of truth for the numbers.
+// ExtenderPanel) share one source of truth for the numbers.
 //
 // SPDX-License-Identifier: MPL-2.0
 #pragma once

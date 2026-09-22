@@ -1,13 +1,15 @@
 // Executable spec for the dual-stack pure logic (connect/IPV6.md): the
-// IP-family histogram grouping and dot-size rule (App/IpFamilyGroups.h), the
-// provider row's family fields (App/ProviderLocations.h), and the IPv6 half of
-// the tunnel's route/firewall table (Service/NetPolicy.h) — run against the
+// IP-family status row's counting, ranking and line selection
+// (App/IpFamilyStatus.h), the hero's dot-size rule (App/ProviderDotDiameter.h),
+// the provider row's family fields (App/ProviderLocations.h), and the IPv6 half
+// of the tunnel's route/firewall table (Service/NetPolicy.h) — run against the
 // SAME sources the app and the service compile, on any host with a C++20
-// compiler. The Windows-only halves (NetworkConfig's settings validation and
-// the WFP filter set) are covered by urnetworkd's own selftest.
+// compiler. The Windows-only halves (the IpFamilyStatusRow drawing,
+// NetworkConfig's settings validation and the WFP filter set) are covered by
+// the app build and urnetworkd's own selftest.
 //
 //   c++ -std=c++20 -I ../src/App -I ../src/Service ip-family-tests.cpp \
-//       ../src/App/IpFamilyGroups.cpp ../src/App/ProviderLocations.cpp \
+//       ../src/App/IpFamilyStatus.cpp ../src/App/ProviderLocations.cpp \
 //       -o /tmp/ip-family-tests && /tmp/ip-family-tests
 //
 // SPDX-License-Identifier: MPL-2.0
@@ -19,8 +21,9 @@
 #include <string>
 #include <vector>
 
-#include "IpFamilyGroups.h"
+#include "IpFamilyStatus.h"
 #include "NetPolicy.h"
+#include "ProviderDotDiameter.h"
 #include "ProviderLocations.h"
 
 using namespace urnw;
@@ -56,8 +59,20 @@ struct Case {
 };
 #define TEST_CASE(name) Case case_##__LINE__(name)
 
-IpFamilyDot Dot(const char* id, const char* state, const char* family) {
-  return IpFamilyDot{id, state, family};
+IpFamilyPoint Point(const char* family, const char* state = "Added", const char* id = "p") {
+  return IpFamilyPoint{id, state, family};
+}
+
+IpFamilyColumnStatus Status(IpFamilyColumn column, int64_t connected = 0, int64_t connecting = 0) {
+  IpFamilyColumnStatus status;
+  status.column = column;
+  status.connectedCount = connected;
+  status.connectingCount = connecting;
+  return status;
+}
+
+IpFamilyStatusLine Line(IpFamilyLineKind kind, int64_t count = 0) {
+  return IpFamilyStatusLine{kind, count};
 }
 
 std::string Text6(const net::V6Prefix& p) {
@@ -68,90 +83,197 @@ std::string Text6(const net::V6Prefix& p) {
   return buf;
 }
 
-// ---- IpFamilyGroups.h ------------------------------------------------------
+// ---- IpFamilyStatus.h: counting -------------------------------------------
+//
+// The same fourteen cases apple's IpFamilyStatusRowTests pin, so the platforms
+// agree on every column, tier and line.
 
-void GroupingTests() {
+void CountingTests() {
   {
-    TEST_CASE("categoryMapsToRow");
-    Check(IpFamilyGroupFor("dualstack") == IpFamilyGroup::Both, "dualstack -> Both");
-    Check(IpFamilyGroupFor("v4-only") == IpFamilyGroup::V4, "v4-only -> V4");
-    Check(IpFamilyGroupFor("v6-only") == IpFamilyGroup::V6, "v6-only -> V6");
-    Check(IpFamilyGroupFor("") == IpFamilyGroup::V4, "legacy (empty) -> V4");
-    Check(IpFamilyGroupFor("v7-only") == IpFamilyGroup::V4,
-          "an unknown category is v4-only, never a v6 claim");
+    TEST_CASE("columnsAreAlwaysPresentInDisplayOrder");
+    const auto statuses = IpFamilyColumnStatuses({});
+    Check(statuses.size() == 3, "three columns");
+    Check(statuses[0].column == IpFamilyColumn::Dualstack &&
+              statuses[1].column == IpFamilyColumn::V4 && statuses[2].column == IpFamilyColumn::V6,
+          "Dualstack, IPv4, IPv6 in that order");
+    for (const auto& status : statuses) Check(status.Unavailable(), "nothing counted");
+  }
+  {
+    // The columns are categories, not capabilities: a dualstack provider
+    // counts once, under Dualstack, never under IPv4 or IPv6 as well.
+    TEST_CASE("countsConnectedAndConnectingByCategory");
+    const auto statuses = IpFamilyColumnStatuses({
+        Point("dualstack", "Added", "a"),
+        Point("dualstack", "Added", "b"),
+        Point("dualstack", "InEvaluation", "c"),
+        Point("v4-only", "Added", "d"),
+        Point("v6-only", "InEvaluation", "e"),
+        Point("v6-only", "InEvaluation", "f"),
+    });
+    Check(statuses[0] == Status(IpFamilyColumn::Dualstack, 2, 1), "dualstack 2 connected, 1 connecting");
+    Check(statuses[1] == Status(IpFamilyColumn::V4, 1, 0), "v4 1 connected");
+    Check(statuses[2] == Status(IpFamilyColumn::V6, 0, 2), "v6 2 connecting");
+  }
+  {
+    // A provider that failed evaluation, was not added, or is on its way out
+    // (it lingers on the grid for the removal tween) counts as nothing.
+    TEST_CASE("ignoresProvidersThatAreNotLive");
+    const auto statuses = IpFamilyColumnStatuses({
+        Point("dualstack", "EvaluationFailed", "a"),
+        Point("v4-only", "NotAdded", "b"),
+        Point("v6-only", "Removed", "c"),
+        Point("v6-only", "something-newer", "d"),
+    });
+    for (const auto& status : statuses) Check(status.Unavailable(), "nothing counted");
+  }
+  {
+    // A legacy or unknown category carries v4, so it is an IPv4 provider
+    // rather than one that vanishes from the row.
+    TEST_CASE("legacyAndUnknownCategoriesReadAsV4");
+    const auto statuses = IpFamilyColumnStatuses({
+        Point("", "Added", "a"),
+        Point("something-newer", "InEvaluation", "b"),
+    });
+    Check(statuses[1] == Status(IpFamilyColumn::V4, 1, 1), "both under v4");
+    Check(statuses[0].Unavailable() && statuses[2].Unavailable(), "nothing elsewhere");
+    Check(IpFamilyColumnFor("dualstack") == IpFamilyColumn::Dualstack, "dualstack -> Dualstack");
+    Check(IpFamilyColumnFor("v4-only") == IpFamilyColumn::V4, "v4-only -> V4");
+    Check(IpFamilyColumnFor("v6-only") == IpFamilyColumn::V6, "v6-only -> V6");
+  }
+  {
+    // The SDK's grid list carries one entry per provider, keyed by client id;
+    // IpFamilyStatusRow::SetGrid hands the id, state and family through, and
+    // a cell without an id is a position, not a provider (apple's
+    // "statusesFromSdkGridPoints" pins the same conversion there).
+    TEST_CASE("statusesFromGridPoints");
+    const auto statuses = IpFamilyColumnStatuses({
+        Point("v6-only", "Added", "added"),
+        Point("dualstack", "InEvaluation", "evaluating"),
+        Point("dualstack", "Added", ""),
+    });
+    Check(statuses[0] == Status(IpFamilyColumn::Dualstack, 0, 1), "dualstack 1 connecting");
+    Check(statuses[2] == Status(IpFamilyColumn::V6, 1, 0), "v6 1 connected");
+    Check(statuses[0].connectedCount == 0, "the bare cell is not a provider");
   }
   {
     TEST_CASE("tokensRoundTrip");
-    for (IpFamilyGroup g : {IpFamilyGroup::Both, IpFamilyGroup::V4, IpFamilyGroup::V6}) {
-      Check(IpFamilyGroupForToken(IpFamilyGroupToken(g)) == g, "token round trip");
+    for (IpFamilyColumn column : kIpFamilyColumns) {
+      Check(IpFamilyColumnForToken(IpFamilyColumnToken(column)) == column, "token round trip");
     }
-    Check(std::string(IpFamilyGroupToken(IpFamilyGroup::Both)) == "both", "both token");
-    Check(std::string(IpFamilyGroupToken(IpFamilyGroup::V4)) == "v4", "v4 token");
-    Check(std::string(IpFamilyGroupToken(IpFamilyGroup::V6)) == "v6", "v6 token");
-    Check(IpFamilyGroupForToken("") == IpFamilyGroup::V4, "empty token -> V4");
-    Check(IpFamilyGroupForToken("dualstack") == IpFamilyGroup::V4,
+    Check(std::string(IpFamilyColumnToken(IpFamilyColumn::Dualstack)) == "both", "both token");
+    Check(std::string(IpFamilyColumnToken(IpFamilyColumn::V4)) == "v4", "v4 token");
+    Check(std::string(IpFamilyColumnToken(IpFamilyColumn::V6)) == "v6", "v6 token");
+    Check(IpFamilyColumnForToken("") == IpFamilyColumn::V4, "empty token -> V4");
+    Check(IpFamilyColumnForToken("dualstack") == IpFamilyColumn::V4,
           "a category is not a token; unknown tokens read as v4");
   }
+}
+
+// ---- IpFamilyStatus.h: ranking --------------------------------------------
+
+void RankingTests() {
   {
-    TEST_CASE("onlyAddedProvidersCount");
-    const IpFamilyGroups g = GroupAddedProvidersByIpFamily({
-        Dot("a", "Added", "dualstack"),
-        Dot("b", "InEvaluation", "dualstack"),
-        Dot("c", "EvaluationFailed", "v4-only"),
-        Dot("d", "NotAdded", "v6-only"),
-        Dot("e", "Removed", "dualstack"),
-        Dot("f", "Added", "v6-only"),
-        Dot("g", "Added", "v4-only"),
-        Dot("h", "SomethingNew", "dualstack"),
+    TEST_CASE("dualstackConnectedIsBestAndTheOthersAreDimmed");
+    const auto tiers = IpFamilyColumnTiers({
+        Status(IpFamilyColumn::Dualstack, 1),
+        Status(IpFamilyColumn::V4, 3),
+        Status(IpFamilyColumn::V6, 0, 1),
     });
-    Check(g.both == std::vector<std::string>{"a"}, "both = a");
-    Check(g.v4 == std::vector<std::string>{"g"}, "v4 = g");
-    Check(g.v6 == std::vector<std::string>{"f"}, "v6 = f");
-    Check(g.Total() == 3, "three added providers");
+    Check(tiers == std::vector<IpFamilyTier>{IpFamilyTier::Best, IpFamilyTier::Active,
+                                             IpFamilyTier::Active},
+          "dualstack best, v4 and v6 active");
   }
   {
-    TEST_CASE("legacyAndUnknownFamiliesLandUnderV4");
-    const IpFamilyGroups g = GroupAddedProvidersByIpFamily({
-        Dot("legacy", "Added", ""),
-        Dot("future", "Added", "v4-v6-v7"),
-        Dot("plain", "Added", "v4-only"),
+    // IPv4 and IPv6 tie, so with nothing dualstack connected they share the top.
+    TEST_CASE("v4AndV6ShareBestWhenNothingDualstackIsConnected");
+    const auto tiers = IpFamilyColumnTiers({
+        Status(IpFamilyColumn::Dualstack),
+        Status(IpFamilyColumn::V4, 2),
+        Status(IpFamilyColumn::V6, 1),
     });
-    Check(g.v4 == std::vector<std::string>{"legacy", "future", "plain"},
-          "all three under v4, in input order");
-    Check(g.both.empty() && g.v6.empty(), "nothing elsewhere");
+    Check(tiers == std::vector<IpFamilyTier>{IpFamilyTier::Unavailable, IpFamilyTier::Best,
+                                             IpFamilyTier::Best},
+          "dualstack unavailable, v4 and v6 both best");
   }
   {
-    TEST_CASE("bareCellsAreNotProviders");
-    const IpFamilyGroups g = GroupAddedProvidersByIpFamily({
-        Dot("", "Added", "dualstack"),
-        Dot("x", "Added", "dualstack"),
+    TEST_CASE("aLoneConnectedColumnIsBest");
+    const auto tiers = IpFamilyColumnTiers({
+        Status(IpFamilyColumn::Dualstack),
+        Status(IpFamilyColumn::V4),
+        Status(IpFamilyColumn::V6, 1),
     });
-    Check(g.both == std::vector<std::string>{"x"}, "the empty-id cell is skipped");
+    Check(tiers == std::vector<IpFamilyTier>{IpFamilyTier::Unavailable, IpFamilyTier::Unavailable,
+                                             IpFamilyTier::Best},
+          "only v6 best");
   }
   {
-    TEST_CASE("inputOrderIsPreservedPerRow");
-    const IpFamilyGroups g = GroupAddedProvidersByIpFamily({
-        Dot("3", "Added", "dualstack"),
-        Dot("1", "Added", "dualstack"),
-        Dot("2", "Added", "dualstack"),
+    // A column that is only connecting carries no traffic yet: it is active,
+    // never best, even when it outranks the connected column.
+    TEST_CASE("aConnectingOnlyColumnIsActiveNotBest");
+    const auto tiers = IpFamilyColumnTiers({
+        Status(IpFamilyColumn::Dualstack, 0, 2),
+        Status(IpFamilyColumn::V4, 1),
+        Status(IpFamilyColumn::V6),
     });
-    Check(g.both == std::vector<std::string>{"3", "1", "2"}, "not sorted, not deduped by value");
-    Check(&g.For(IpFamilyGroup::Both) == &g.both && &g.For(IpFamilyGroup::V4) == &g.v4 &&
-              &g.For(IpFamilyGroup::V6) == &g.v6,
-          "For() addresses the matching row");
+    Check(tiers == std::vector<IpFamilyTier>{IpFamilyTier::Active, IpFamilyTier::Best,
+                                             IpFamilyTier::Unavailable},
+          "dualstack active, v4 best, v6 unavailable");
   }
   {
-    TEST_CASE("groupsCompareByValue");
-    const IpFamilyGroups a = GroupAddedProvidersByIpFamily({Dot("a", "Added", "dualstack")});
-    const IpFamilyGroups b = GroupAddedProvidersByIpFamily({Dot("a", "Added", "dualstack")});
-    const IpFamilyGroups c = GroupAddedProvidersByIpFamily({Dot("a", "Added", "v6-only")});
-    Check(a == b, "same input, equal groups");
-    Check(a != c, "a provider moving rows is a change");
+    TEST_CASE("onlyConnectingColumnsMakeNothingBest");
+    const auto tiers = IpFamilyColumnTiers({
+        Status(IpFamilyColumn::Dualstack, 0, 1),
+        Status(IpFamilyColumn::V4, 0, 1),
+        Status(IpFamilyColumn::V6),
+    });
+    Check(tiers == std::vector<IpFamilyTier>{IpFamilyTier::Active, IpFamilyTier::Active,
+                                             IpFamilyTier::Unavailable},
+          "nothing best while nothing is connected");
   }
   {
-    TEST_CASE("emptyGridIsThreeEmptyRows");
-    const IpFamilyGroups g = GroupAddedProvidersByIpFamily({});
-    Check(g.Total() == 0 && g.both.empty() && g.v4.empty() && g.v6.empty(), "all empty");
+    TEST_CASE("nothingLiveMakesEveryColumnUnavailable");
+    const auto tiers = IpFamilyColumnTiers(IpFamilyColumnStatuses({}));
+    Check(tiers.size() == 3, "three tiers");
+    for (IpFamilyTier tier : tiers) Check(tier == IpFamilyTier::Unavailable, "unavailable");
+    Check(IpFamilyColumnRank(IpFamilyColumn::Dualstack) < IpFamilyColumnRank(IpFamilyColumn::V4) &&
+              IpFamilyColumnRank(IpFamilyColumn::V4) == IpFamilyColumnRank(IpFamilyColumn::V6),
+          "dualstack outranks the tied v4 and v6");
+  }
+}
+
+// ---- IpFamilyStatus.h: lines ----------------------------------------------
+
+void LineTests() {
+  {
+    TEST_CASE("linesShowTheNonZeroCountsConnectedFirst");
+    Check(IpFamilyStatusLines(Status(IpFamilyColumn::V4, 3, 1)) ==
+              std::vector<IpFamilyStatusLine>{Line(IpFamilyLineKind::Connected, 3),
+                                              Line(IpFamilyLineKind::Connecting, 1)},
+          "connected then connecting");
+    Check(IpFamilyStatusLines(Status(IpFamilyColumn::V4, 3)) ==
+              std::vector<IpFamilyStatusLine>{Line(IpFamilyLineKind::Connected, 3)},
+          "connected alone");
+    Check(IpFamilyStatusLines(Status(IpFamilyColumn::V4, 0, 1)) ==
+              std::vector<IpFamilyStatusLine>{Line(IpFamilyLineKind::Connecting, 1)},
+          "connecting alone");
+  }
+  {
+    TEST_CASE("aColumnWithNothingReadsDisconnected");
+    Check(IpFamilyStatusLines(Status(IpFamilyColumn::V6)) ==
+              std::vector<IpFamilyStatusLine>{Line(IpFamilyLineKind::Disconnected)},
+          "disconnected alone");
+  }
+  {
+    // The line's identity is its kind: a count change is the same line with a
+    // new number (the slot updates in place), a kind change is a line coming
+    // or going (the slot appears or collapses).
+    TEST_CASE("lineIdentityIsTheKind");
+    Check(Line(IpFamilyLineKind::Connected, 1).kind == Line(IpFamilyLineKind::Connected, 2).kind,
+          "same kind across counts");
+    Check(Line(IpFamilyLineKind::Connected, 1).kind != Line(IpFamilyLineKind::Connecting, 1).kind,
+          "different kinds");
+    Check(Line(IpFamilyLineKind::Connected, 1) != Line(IpFamilyLineKind::Connected, 2),
+          "a count change is a value change");
   }
 }
 
@@ -160,28 +282,28 @@ void GroupingTests() {
 void DotDiameterTests() {
   {
     TEST_CASE("diameterIsSideOverColumns");
-    CheckNear(256.0 / 14, IpFamilyDotDiameter(256, 14, 14), 1e-9, "square 14 grid on 256");
-    CheckNear(288.0 / 16, IpFamilyDotDiameter(288, 16, 16), 1e-9, "square 16 grid on 288");
-    CheckNear(168.0 / 10, IpFamilyDotDiameter(168, 10, 10), 1e-9, "square 10 grid on 168");
+    CheckNear(256.0 / 14, ProviderDotDiameter(256, 14, 14), 1e-9, "square 14 grid on 256");
+    CheckNear(288.0 / 16, ProviderDotDiameter(288, 16, 16), 1e-9, "square 16 grid on 288");
+    CheckNear(168.0 / 10, ProviderDotDiameter(168, 10, 10), 1e-9, "square 10 grid on 168");
   }
   {
     TEST_CASE("nonSquareGridUsesTheLargerDimension");
-    CheckNear(256.0 / 20, IpFamilyDotDiameter(256, 12, 20), 1e-9, "taller than wide");
-    CheckNear(256.0 / 20, IpFamilyDotDiameter(256, 20, 12), 1e-9, "wider than tall");
-    CheckNear(256.0 / 12, IpFamilyDotDiameter(256, 12, 0), 1e-9, "no height reported");
+    CheckNear(256.0 / 20, ProviderDotDiameter(256, 12, 20), 1e-9, "taller than wide");
+    CheckNear(256.0 / 20, ProviderDotDiameter(256, 20, 12), 1e-9, "wider than tall");
+    CheckNear(256.0 / 12, ProviderDotDiameter(256, 12, 0), 1e-9, "no height reported");
   }
   {
     TEST_CASE("unmeasuredCanvasUsesTheIosCanvas");
-    CheckNear(256.0 / 14, IpFamilyDotDiameter(0, 14, 14), 1e-9, "side 0 -> 256");
-    CheckNear(256.0 / 14, IpFamilyDotDiameter(-5, 14, 14), 1e-9, "negative side -> 256");
+    CheckNear(256.0 / 14, ProviderDotDiameter(0, 14, 14), 1e-9, "side 0 -> 256");
+    CheckNear(256.0 / 14, ProviderDotDiameter(-5, 14, 14), 1e-9, "negative side -> 256");
   }
   {
     TEST_CASE("shapelessGridUsesTheDefaultColumns");
-    CheckNear(256.0 / kIpFamilyDefaultGridWidth, IpFamilyDotDiameter(0, 0, 0), 1e-9,
+    CheckNear(256.0 / kProviderDotDefaultGridWidth, ProviderDotDiameter(0, 0, 0), 1e-9,
               "nothing known");
-    CheckNear(288.0 / kIpFamilyDefaultGridWidth, IpFamilyDotDiameter(288, 0, 0), 1e-9,
+    CheckNear(288.0 / kProviderDotDefaultGridWidth, ProviderDotDiameter(288, 0, 0), 1e-9,
               "side known, grid not");
-    Check(0 < IpFamilyDotDiameter(0, 0, 0), "never zero");
+    Check(0 < ProviderDotDiameter(0, 0, 0), "never zero");
   }
 }
 
@@ -310,9 +432,13 @@ void NetPolicyV6Tests() {
 }  // namespace
 
 int main() {
-  std::cout << "IpFamilyGroups\n";
-  GroupingTests();
-  std::cout << "IpFamilyDotDiameter\n";
+  std::cout << "IpFamilyStatus counting\n";
+  CountingTests();
+  std::cout << "IpFamilyStatus ranking\n";
+  RankingTests();
+  std::cout << "IpFamilyStatus lines\n";
+  LineTests();
+  std::cout << "ProviderDotDiameter\n";
   DotDiameterTests();
   std::cout << "ProviderLocationRow\n";
   ProviderRowTests();

@@ -4,7 +4,7 @@
 #include "ConnectCanvas.h"
 
 #include "ConnectorGlyph.h"  // the ur connector outline, shared with the share code
-#include "IpFamilyGroups.h"  // IpFamilyDotDiameter: the one dot-size rule
+#include "ProviderDotDiameter.h"  // the one dot-size rule
 
 #include <winrt/Microsoft.UI.Xaml.Markup.h>
 #include <winrt/Windows.UI.ViewManagement.h>
@@ -465,7 +465,7 @@ void ConnectCanvas::Layout() {
 double ConnectCanvas::PointDiameterFor(int64_t gridWidth, int64_t gridHeight) const {
   // the pure form of the cols_/cell_ computation in Layout(), with the iOS
   // canvas standing in for a side that has not been measured yet
-  return IpFamilyDotDiameter(side_, gridWidth, gridHeight);
+  return ProviderDotDiameter(side_, gridWidth, gridHeight);
 }
 
 void ConnectCanvas::LayoutPoints() {

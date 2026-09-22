@@ -116,10 +116,10 @@ class ConnectCanvas {
   void Tick();
 
   // The live dot diameter for a grid of the given shape, by the SAME rule
-  // Layout() uses (the globe's side over the larger grid dimension), so a
-  // sibling surface — the drawer's IP-family histogram — draws a provider dot
-  // at exactly the hero's size. Before the first layout iOS's 256pt canvas
-  // stands in; never zero (see IpFamilyDotDiameter).
+  // Layout() uses (the globe's side over the larger grid dimension), for any
+  // sibling surface that wants a provider dot at exactly the hero's size.
+  // Before the first layout iOS's 256pt canvas stands in; never zero (see
+  // ProviderDotDiameter).
   double PointDiameterFor(int64_t gridWidth, int64_t gridHeight) const;
 
  private:

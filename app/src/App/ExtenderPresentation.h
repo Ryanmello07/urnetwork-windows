@@ -5,7 +5,7 @@
 // proceed, the provider extender row's dot, text and switch, and which of the
 // Earnings page's provider and extender statistics sections show.
 //
-// It is all here, and it is all pure, for the reason IpFamilyGroups.h gives:
+// It is all here, and it is all pure, for the reason IpFamilyStatus.h gives:
 // the windows solution has no test project and a WinUI 3 app cannot even be
 // built on the machine this was written on, so anything expressed as a
 // function of plain values is verified by tools/extender-tests.cpp on any

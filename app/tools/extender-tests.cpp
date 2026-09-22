@@ -7,8 +7,8 @@
 // the vendored Nayuki encoder the share screen renders with — run against the
 // SAME sources the app compiles, on any host with a C++20 compiler.
 //
-// The WinUI halves (ExtenderPanel, ExtenderSheets, the ConnectCanvas and
-// IpFamilyHistogram drawing, the two extender rows and the statistics groups)
+// The WinUI halves (ExtenderPanel, ExtenderSheets, the ConnectCanvas drawing,
+// the IpFamilyStatusRow, the two extender rows and the statistics groups)
 // cannot be built off Windows at all; what is verified here is every decision
 // they make before they touch a XAML object.
 //

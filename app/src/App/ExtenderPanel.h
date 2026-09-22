@@ -1,5 +1,5 @@
 // The extender panel (connect/EXTENDER.md K4): in the connect drawer, directly
-// under the IP-family histogram. One hollow ring per extender carrying a live
+// under the IP-family status row. One hollow ring per extender carrying a live
 // connection right now, in that extender's colour; the count as "N of M" where
 // M is every usable directory entry; and the gossip network's status dot --
 // green connected, yellow connecting, red disconnected -- with its state word
@@ -7,14 +7,14 @@
 //
 // Tapping does nothing. K4 says so explicitly ("there is no details panel"), so
 // this is a plain pane row rather than a Button, exactly like the IP-family
-// histogram beside it and unlike the transport bar above it, which does open
+// status row beside it and unlike the transport bar above it, which does open
 // something.
 //
 // Every decision is ExtenderPresentation.h (pure, tested off-Windows) and every
 // number in the rings is ExtenderRingGeometry.h (the same file the hero's dots
 // use); this class converts, keeps the last model so an unchanged push costs
 // nothing, and draws. Built into a host Grid like TransportBar and
-// IpFamilyHistogram. UI thread only.
+// IpFamilyStatusRow. UI thread only.
 //
 // SPDX-License-Identifier: MPL-2.0
 #pragma once

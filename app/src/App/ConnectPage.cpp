@@ -229,8 +229,10 @@ void ConnectPage::ApplyStrings() {
   w_.FallbackState().Text(Loc("off"));
   w_.DnsUnavailableText().Text(Loc("dns_settings_unavailable"));
   w_.BlockerLabel().Text(Loc("block_ads_and_trackers"));
-  // The extender panel's own fixed labels (title, the two automation names);
-  // guarded because ApplyStrings also runs before BuildCharts has made it.
+  // The status row's labels and lines, and the extender panel's own fixed
+  // labels (title, the two automation names); guarded because ApplyStrings
+  // also runs before BuildCharts has made them.
+  if (ipFamilyStatusRow_) ipFamilyStatusRow_->ApplyStrings();
   if (extenderPanel_) extenderPanel_->ApplyStrings();
   // The plan + usage card that used to sit in this rail is gone from Home
   // (spec §5); its strings now belong only to Account, which paints them from
@@ -931,15 +933,11 @@ void ConnectPage::ApplyStats(urnw::LiveStats const& stats) {
   if (canvas_ && !PreviewHeroActive()) {
     canvas_->SetGrid(stats.gridPoints, stats.gridWidth, stats.gridHeight);
   }
-  // The same grid, bucketed by proven address family for the drawer. Unlike
+  // The same grid, counted by proven address family for the drawer. Unlike
   // the hero this never freezes on connect: which exits can carry v6 is live
-  // information for as long as the window is. The dot size is the hero's own
-  // rule for this grid shape, so the two surfaces show one set of providers.
-  if (ipFamilyHistogram_ && !PreviewHeroActive()) {
-    const double diameter =
-        canvas_ ? canvas_->PointDiameterFor(stats.gridWidth, stats.gridHeight)
-                : urnw::IpFamilyDotDiameter(0, stats.gridWidth, stats.gridHeight);
-    ipFamilyHistogram_->SetGrid(stats.gridPoints, diameter);
+  // information for as long as the window is.
+  if (ipFamilyStatusRow_ && !PreviewHeroActive()) {
+    ipFamilyStatusRow_->SetGrid(stats.gridPoints);
   }
   ApplyConnectStatus();
   ApplyPeerCount(peers);  // the peers status line below the connect button (req1)
@@ -1132,8 +1130,8 @@ void ConnectPage::PreviewHeroTick() {
         case 2: p.State = "NotAdded"; break;
         default: p.State = "Added"; break;
       }
-      // a synthetic family too, so the drawer's histogram fills in the preview
-      // in the design's expected proportions (mostly dualstack)
+      // a synthetic family too, so the drawer's status row fills in the
+      // preview in the design's expected proportions (mostly dualstack)
       switch ((h >> 12) % 6) {
         case 0: p.IpFamily = "v4-only"; break;
         case 1: p.IpFamily = "v6-only"; break;
@@ -1163,9 +1161,7 @@ void ConnectPage::PreviewHeroTick() {
     }
   }
   canvas_->SetGrid(points, kCols, kCols);
-  if (ipFamilyHistogram_) {
-    ipFamilyHistogram_->SetGrid(points, canvas_->PointDiameterFor(kCols, kCols));
-  }
+  if (ipFamilyStatusRow_) ipFamilyStatusRow_->SetGrid(points);
   if (extenderPanel_) {
     // the panel has no feed in preview (there is no device), so give it a
     // plausible one rather than leaving the row saying 0 of 0 forever
@@ -1212,12 +1208,13 @@ void ConnectPage::BuildCharts() {
           self->connect().ShowTransportSettingsSheet(urnw::TransportSettingsKind::Client);
         }
       });
-  // The IP-family histogram (IPV6.md D2), directly under the transport bar in
-  // its own host row: the Added providers as dots under Both / v4 / v6. Fed by
-  // ApplyStats from the same grid push the hero reads, at the hero's dot size.
-  ipFamilyHistogram_ = std::make_unique<urnw::IpFamilyHistogram>(w_.IpFamilyHistogramHost());
+  // The IP-family status row (IPV6.md D2), directly under the transport bar in
+  // its own host row: the Dualstack / IPv4 / IPv6 columns with their connected
+  // and connecting counts. Fed by ApplyStats from the same grid push the hero
+  // reads.
+  ipFamilyStatusRow_ = std::make_unique<urnw::IpFamilyStatusRow>(w_.IpFamilyStatusRowHost());
   // The extender panel (EXTENDER.md K4), its own host row directly under the
-  // histogram: the extenders carrying live connections, the usable count, and
+  // status row: the extenders carrying live connections, the usable count, and
   // the gossip network's state. Fed by the SDK's once-a-second extender status
   // listener rather than by the stats tick -- it is a property of the network,
   // not of this window's traffic.

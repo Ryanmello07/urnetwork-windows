@@ -10,7 +10,7 @@
 #include <algorithm>
 #include <chrono>
 
-#include "IpFamilyHistogram.h"  // IpFamilyLabelText: the shared row label
+#include "IpFamilyStatusRow.h"  // IpFamilyLabelText: the shared row label
 #include "Localization.h"
 #include "PageContext.h"  // pages::Adv
 #include "Sdk.h"

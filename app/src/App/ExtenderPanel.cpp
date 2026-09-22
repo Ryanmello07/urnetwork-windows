@@ -20,7 +20,7 @@ namespace urnw {
 namespace {
 
 // wingdi.h declares ::Ellipse; alias the XAML shape so unqualified lookup under
-// the using-directives stays unambiguous (IpFamilyHistogram.cpp does the same)
+// the using-directives stays unambiguous (ConnectCanvas.cpp does the same)
 using ShapeEllipse = winrt::Microsoft::UI::Xaml::Shapes::Ellipse;
 namespace automation = winrt::Microsoft::UI::Xaml::Automation;
 

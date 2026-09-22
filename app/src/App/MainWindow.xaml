@@ -1168,12 +1168,13 @@
                              footer) whose click opens the transport settings editor. Its
                              own hairline is the row's, so no rule here. -->
                         <Grid Grid.Row="2" x:Name="TransportBarHost" />
-                        <!-- The IP-family histogram (connect/IPV6.md D2): the Added
-                             providers as dots under Both / v4 / v6, directly under the
-                             transport bar with the same inset. Built into this host by
-                             ConnectPage::BuildCharts (urnw::IpFamilyHistogram); its
+                        <!-- The IP-family status row (connect/IPV6.md D2): the
+                             Dualstack / IPv4 / IPv6 columns with their connected and
+                             connecting counts, directly under the transport bar with
+                             the same inset. Built into this host by
+                             ConnectPage::BuildCharts (urnw::IpFamilyStatusRow); its
                              bottom rule is the group header's, so no rule here. -->
-                        <Grid Grid.Row="3" x:Name="IpFamilyHistogramHost" />
+                        <Grid Grid.Row="3" x:Name="IpFamilyStatusRowHost" />
                         <!-- The extender panel (connect/EXTENDER.md K4): the
                              extenders carrying live connections as rings, the
                              "N of M" count, and the gossip network's status dot.

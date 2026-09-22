@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 //
 // No pch.h on purpose -- see ExtenderPresentation.h. App.vcxproj compiles this
-// with PrecompiledHeader=NotUsing, like IpFamilyGroups.cpp.
+// with PrecompiledHeader=NotUsing, like IpFamilyStatus.cpp.
 #include "ExtenderPresentation.h"
 
 #include <cmath>

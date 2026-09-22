@@ -25,7 +25,7 @@
 
 #include "ConnectCanvas.h"
 #include "ExtenderPanel.h"
-#include "IpFamilyHistogram.h"
+#include "IpFamilyStatusRow.h"
 #include "LocationSheets.h"
 #include "ProviderLocationsSheet.h"
 #include "SdkHost.h"
@@ -368,11 +368,11 @@ class ConnectPage {
   std::unique_ptr<urnw::TransferChart> localChart_;
   // the transport distribution bar directly under the Remote chart (TRANSPORTSTATS)
   std::unique_ptr<urnw::TransportBar> transportBar_;
-  // the IP-family histogram directly under the transport bar (IPV6.md D2): the
-  // Added providers as dots under Both / v4 / v6, fed from the same grid push
-  // as the hero
-  std::unique_ptr<urnw::IpFamilyHistogram> ipFamilyHistogram_;
-  // The extender panel (EXTENDER.md K4), the row under the histogram. Fed from
+  // the IP-family status row directly under the transport bar (IPV6.md D2):
+  // the Dualstack / IPv4 / IPv6 columns with their connected and connecting
+  // counts, fed from the same grid push as the hero
+  std::unique_ptr<urnw::IpFamilyStatusRow> ipFamilyStatusRow_;
+  // The extender panel (EXTENDER.md K4), the row under the status row. Fed from
   // SdkHost's extender status feed through the same dispatcher hop as the other
   // drawer feeds; no click, no sheet.
   std::unique_ptr<urnw::ExtenderPanel> extenderPanel_;
