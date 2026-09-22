@@ -3201,6 +3201,7 @@ TransportDistributionSnapshot MapTransportDistribution(
     for (const auto& share : *distribution->Shares) {
       TransportShareRow row;
       row.transportType = share.TransportType;
+      row.h1PlusActive = share.TransportType == urnet::TransportTypeH1 && share.H1PlusConnectionCount > 0;
       row.egressByteCount = share.EgressByteCount;
       row.ingressByteCount = share.IngressByteCount;
       row.share = share.Share;

@@ -46,7 +46,7 @@ namespace urnw {
 // product names -- "whodis" / "whodis pump" -- which are not localized; the
 // queued bucket ("unknown": admitted for sending, not yet written to a physical
 // carrier) is a plain word and is.
-winrt::hstring TransportName(std::string const& transportType);
+winrt::hstring TransportName(std::string const& transportType, bool h1PlusActive = false);
 // one line for the settings editor rows; empty for p2p / unknown
 winrt::hstring TransportDetail(std::string const& transportType);
 // the brand color of the carrier (bar segment, legend dot, editor dot)

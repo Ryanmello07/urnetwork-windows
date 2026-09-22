@@ -314,6 +314,7 @@ inline bool operator!=(const AppRule& a, const AppRule& b) { return !(a == b); }
 // only maps names/colors and draws.
 struct TransportShareRow {
   std::string transportType;  // sdk id: h3 | h1 | dns | dnspump | p2p | unknown
+  bool h1PlusActive = false;  // live negotiated carrier; H1 retains its sdk id
   int64_t egressByteCount = 0;
   int64_t ingressByteCount = 0;
   double share = 0;     // fraction of the window's remote bytes, 0..1
@@ -327,7 +328,7 @@ inline bool operator==(const TransportShareRow& a, const TransportShareRow& b) {
   return a.transportType == b.transportType && a.egressByteCount == b.egressByteCount &&
          a.ingressByteCount == b.ingressByteCount && a.share == b.share &&
          a.boundary == b.boundary && a.percent == b.percent && a.used == b.used &&
-         a.enabled == b.enabled;
+         a.enabled == b.enabled && a.h1PlusActive == b.h1PlusActive;
 }
 inline bool operator!=(const TransportShareRow& a, const TransportShareRow& b) {
   return !(a == b);

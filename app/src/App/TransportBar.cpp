@@ -198,7 +198,8 @@ PathGeometry SegmentGeometry(double x0, double x1, double height, double leftRad
 
 // ---- the transport vocabulary -----------------------------------------------
 
-hstring TransportName(std::string const& transportType) {
+hstring TransportName(std::string const& transportType, bool h1PlusActive) {
+  if (transportType == urnet::TransportTypeH1 && h1PlusActive) return L"H1+";
   if (transportType == urnet::TransportTypeH3) return TransportText("transport_h3", L"H3");
   if (transportType == urnet::TransportTypeH1) return TransportText("transport_h1", L"H1");
   if (transportType == urnet::TransportTypeDns) {
@@ -571,7 +572,7 @@ void TransportBar::RebuildLegend() {
   std::vector<const TransportShareRow*> used;
   for (const auto& share : distribution_.shares) {
     if (!share.used) continue;
-    key.push_back(share.transportType);
+    key.push_back(share.transportType + (share.h1PlusActive ? "+" : ""));
     used.push_back(&share);
   }
   if (used.empty()) {
@@ -596,7 +597,7 @@ void TransportBar::RebuildLegend() {
     item.Orientation(Orientation::Horizontal);
     item.Spacing(5);
     item.Children().Append(MakeDot(TransportColor(share->transportType)));
-    TextBlock name = MakeLabel(TransportName(share->transportType), 11, textBrush_);
+    TextBlock name = MakeLabel(TransportName(share->transportType, share->h1PlusActive), 11, textBrush_);
     // bottom-align the labels within the chip: the Consolas percent face has
     // different metrics from the name face, so centering would skew their
     // baselines against each other
@@ -614,8 +615,12 @@ void TransportBar::RebuildLegend() {
 
 void TransportBar::RebuildUnused() {
   std::vector<std::string> key;
+  std::vector<const TransportShareRow*> unused;
   for (const auto& share : distribution_.shares) {
-    if (share.enabled && !share.used) key.push_back(share.transportType);
+    if (share.enabled && !share.used) {
+      key.push_back(share.transportType + (share.h1PlusActive ? "+" : ""));
+      unused.push_back(&share);
+    }
   }
   if (key.empty()) {
     unused_.Visibility(Visibility::Collapsed);
@@ -629,12 +634,12 @@ void TransportBar::RebuildUnused() {
   if (key == unusedKey_) return;
   ClearFlow(unused_);
   AppendInline(unused_, MakeLabel(TransportText("transport_unused", L"unused"), 11, faintBrush_));
-  for (const std::string& type : key) {
+  for (const TransportShareRow* share : unused) {
     StackPanel item;
     item.Orientation(Orientation::Horizontal);
     item.Spacing(5);
-    item.Children().Append(MakeHollowDot(TransportColor(type)));
-    TextBlock name = MakeLabel(TransportName(type), 11, faintBrush_);
+    item.Children().Append(MakeHollowDot(TransportColor(share->transportType)));
+    TextBlock name = MakeLabel(TransportName(share->transportType, share->h1PlusActive), 11, faintBrush_);
     name.VerticalAlignment(VerticalAlignment::Bottom);
     item.Children().Append(name);
     AppendInline(unused_, item);
