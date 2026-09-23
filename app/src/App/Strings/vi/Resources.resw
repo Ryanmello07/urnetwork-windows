@@ -84,6 +84,10 @@
     <value>Thêm</value>
     <comment>dns settings</comment>
   </data>
+  <data name="add_a_rule" xml:space="preserve">
+    <value>Thêm quy tắc</value>
+    <comment>Split rules: the button (and its icon's accessibility label) that adds the typed host to the rule.</comment>
+  </data>
   <data name="add_a_sign_in_method" xml:space="preserve">
     <value>Thêm phương thức đăng nhập</value>
     <comment>A title for the screen that lets the user add a new sign-in method.</comment>
@@ -1083,6 +1087,10 @@ cách đúng đắn</value>
   <data name="delete_account_2" xml:space="preserve">
     <value>Xóa tài khoản</value>
     <comment>Used in Main/Account/Settings/SettingsForm-iOS.swift.</comment>
+  </data>
+  <data name="delete_account_type_network_name" xml:space="preserve">
+    <value>Nhập {} để xác nhận.</value>
+    <comment>Delete account dialog: asks the user to type the network name back before the delete button enables. {network} is the account's network name.</comment>
   </data>
   <data name="device" xml:space="preserve">
     <value>Thiết bị</value>
@@ -2162,6 +2170,10 @@ Nhận thưởng bằng cách tạo mạng!</value>
     <value>Không</value>
     <comment>Call to action</comment>
   </data>
+  <data name="no_apps_found" xml:space="preserve">
+    <value>Không tìm thấy ứng dụng</value>
+    <comment>App split rules: empty state when the search matches no installed app.</comment>
+  </data>
   <data name="no_balance_codes_found" xml:space="preserve">
     <value>Không tìm thấy mã số dư nào</value>
     <comment>Used in Main/Account/TransferBalanceCodes/TransferBalanceCodesView.swift.</comment>
@@ -2884,6 +2896,14 @@ an toàn nhất và phi tập trung nhất thế giới.</value>
     <value>Lưu nhật ký</value>
     <comment>Used in Shared/Views/ExportLogsButton/ExportLogsButton.swift.</comment>
   </data>
+  <data name="saved_as" xml:space="preserve">
+    <value>Đã lưu thành {}</value>
+    <comment>Split rules: note under the host input when the entry will be stored in a normalised form. {value} is that form, for example 10.0.0.0/8 for a typed 10.0.0.5/8.</comment>
+  </data>
+  <data name="search_apps_placeholder" xml:space="preserve">
+    <value>Tìm ứng dụng</value>
+    <comment>App split rules: placeholder in the search field that filters the installed apps by name or package id.</comment>
+  </data>
   <data name="search_placeholder" xml:space="preserve">
     <value>Tìm kiếm tất cả vị trí</value>
     <comment>Locations List</comment>
@@ -3379,6 +3399,30 @@ nội dung thế giới</value>
     <value>Các host đã chọn được định tuyến cục bộ và không qua đường hầm.</value>
     <comment>A description of the functionality of the split rule editor.</comment>
   </data>
+  <data name="split_rule_error_bad_name" xml:space="preserve">
+    <value>Nhập tên máy chủ như example.com.</value>
+    <comment>Split rules: validation error for a host entry that is not a valid host name.</comment>
+  </data>
+  <data name="split_rule_error_bad_range" xml:space="preserve">
+    <value>Nhập dải IP như 10.0.0.0/8.</value>
+    <comment>Split rules: validation error for an entry that looks like an IP range but is not a valid CIDR.</comment>
+  </data>
+  <data name="split_rule_error_bad_wildcard" xml:space="preserve">
+    <value>Ký tự đại diện cần có tên phía sau, như *.example.com.</value>
+    <comment>Split rules: validation error for a wildcard entry with nothing after the asterisk.</comment>
+  </data>
+  <data name="split_rule_error_covered" xml:space="preserve">
+    <value>Đã được {} bao gồm trong quy tắc này.</value>
+    <comment>Split rules: validation error when a broader entry already in the rule covers the typed one. {rule} is that broader entry, for example *.example.com or 10.0.0.0/8.</comment>
+  </data>
+  <data name="split_rule_error_duplicate" xml:space="preserve">
+    <value>Đã có trong quy tắc này.</value>
+    <comment>Split rules: validation error when the typed entry is already in the rule.</comment>
+  </data>
+  <data name="split_rule_error_not_ascii" xml:space="preserve">
+    <value>Hãy dùng dạng ASCII của tên.</value>
+    <comment>Split rules: validation error for a host name with non-ASCII characters; the rule wants the punycode form.</comment>
+  </data>
   <data name="split_rules" xml:space="preserve">
     <value>Quy tắc tách luồng</value>
     <comment>transfer stats and split rules</comment>
@@ -3390,6 +3434,10 @@ nội dung thế giới</value>
   <data name="split_rules_hint" xml:space="preserve">
     <value>Chạm vào lưu lượng bên dưới để định tuyến cục bộ, không qua đường hầm.</value>
     <comment>A description of how to route traffic locally.</comment>
+  </data>
+  <data name="split_rules_host_hint" xml:space="preserve">
+    <value>Thêm máy chủ ở trên, hoặc chạm vào lưu lượng bên dưới để định tuyến cục bộ, không qua đường hầm.</value>
+    <comment>Split rules on android, which has a host input above the traffic list: how to add to the rule. The apple/linux screens without the input keep split_rules_hint.</comment>
   </data>
   <data name="split_rules_info_note" xml:space="preserve">
     <value>Loại trừ áp dụng cho toàn bộ cụm mạng liên quan, nên lưu lượng liên quan được gộp chung.</value>

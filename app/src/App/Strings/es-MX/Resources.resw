@@ -84,6 +84,10 @@
     <value>Agregar</value>
     <comment>dns settings</comment>
   </data>
+  <data name="add_a_rule" xml:space="preserve">
+    <value>Agregar una regla</value>
+    <comment>Split rules: the button (and its icon's accessibility label) that adds the typed host to the rule.</comment>
+  </data>
   <data name="add_a_sign_in_method" xml:space="preserve">
     <value>Agregar un método de inicio de sesión</value>
     <comment>A title for the screen that lets the user add a new sign-in method.</comment>
@@ -1099,6 +1103,10 @@ de la manera correcta</value>
   <data name="delete_account_2" xml:space="preserve">
     <value>Eliminar cuenta</value>
     <comment>Used in Main/Account/Settings/SettingsForm-iOS.swift.</comment>
+  </data>
+  <data name="delete_account_type_network_name" xml:space="preserve">
+    <value>Escribe {} para confirmar.</value>
+    <comment>Delete account dialog: asks the user to type the network name back before the delete button enables. {network} is the account's network name.</comment>
   </data>
   <data name="device" xml:space="preserve">
     <value>Dispositivo</value>
@@ -2193,6 +2201,10 @@ enviamos para verificar tu identidad.</value>
     <value>No</value>
     <comment>Call to action</comment>
   </data>
+  <data name="no_apps_found" xml:space="preserve">
+    <value>No se encontraron aplicaciones</value>
+    <comment>App split rules: empty state when the search matches no installed app.</comment>
+  </data>
   <data name="no_balance_codes_found" xml:space="preserve">
     <value>No se encontraron códigos de saldo</value>
     <comment>Used in Main/Account/TransferBalanceCodes/TransferBalanceCodesView.swift.</comment>
@@ -2939,6 +2951,14 @@ más grande, seguro y descentralizado del mundo.</value>
     <value>Guardar registros</value>
     <comment>Used in Shared/Views/ExportLogsButton/ExportLogsButton.swift.</comment>
   </data>
+  <data name="saved_as" xml:space="preserve">
+    <value>Se guarda como {}</value>
+    <comment>Split rules: note under the host input when the entry will be stored in a normalised form. {value} is that form, for example 10.0.0.0/8 for a typed 10.0.0.5/8.</comment>
+  </data>
+  <data name="search_apps_placeholder" xml:space="preserve">
+    <value>Buscar aplicaciones</value>
+    <comment>App split rules: placeholder in the search field that filters the installed apps by name or package id.</comment>
+  </data>
   <data name="search_placeholder" xml:space="preserve">
     <value>Buscar en todas las ubicaciones</value>
     <comment>Locations List</comment>
@@ -3439,6 +3459,30 @@ del mundo</value>
     <value>Los hosts seleccionados se enrutan localmente y evitan el túnel.</value>
     <comment>A description of the functionality of the split rule editor.</comment>
   </data>
+  <data name="split_rule_error_bad_name" xml:space="preserve">
+    <value>Ingresa un nombre de host como example.com.</value>
+    <comment>Split rules: validation error for a host entry that is not a valid host name.</comment>
+  </data>
+  <data name="split_rule_error_bad_range" xml:space="preserve">
+    <value>Ingresa un rango de IP como 10.0.0.0/8.</value>
+    <comment>Split rules: validation error for an entry that looks like an IP range but is not a valid CIDR.</comment>
+  </data>
+  <data name="split_rule_error_bad_wildcard" xml:space="preserve">
+    <value>Un comodín necesita un nombre después, como *.example.com.</value>
+    <comment>Split rules: validation error for a wildcard entry with nothing after the asterisk.</comment>
+  </data>
+  <data name="split_rule_error_covered" xml:space="preserve">
+    <value>Ya está cubierto por {} en esta regla.</value>
+    <comment>Split rules: validation error when a broader entry already in the rule covers the typed one. {rule} is that broader entry, for example *.example.com or 10.0.0.0/8.</comment>
+  </data>
+  <data name="split_rule_error_duplicate" xml:space="preserve">
+    <value>Ya está en esta regla.</value>
+    <comment>Split rules: validation error when the typed entry is already in the rule.</comment>
+  </data>
+  <data name="split_rule_error_not_ascii" xml:space="preserve">
+    <value>Usa la forma ASCII del nombre.</value>
+    <comment>Split rules: validation error for a host name with non-ASCII characters; the rule wants the punycode form.</comment>
+  </data>
   <data name="split_rules" xml:space="preserve">
     <value>Reglas de división</value>
     <comment>transfer stats and split rules</comment>
@@ -3450,6 +3494,10 @@ del mundo</value>
   <data name="split_rules_hint" xml:space="preserve">
     <value>Toca el tráfico de abajo para enrutarlo localmente, evitando el túnel.</value>
     <comment>A description of how to route traffic locally.</comment>
+  </data>
+  <data name="split_rules_host_hint" xml:space="preserve">
+    <value>Agrega un host arriba o toca el tráfico de abajo para enrutarlo localmente, evitando el túnel.</value>
+    <comment>Split rules on android, which has a host input above the traffic list: how to add to the rule. The apple/linux screens without the input keep split_rules_hint.</comment>
   </data>
   <data name="split_rules_info_note" xml:space="preserve">
     <value>Las exclusiones se aplican a todo el clúster de red asociado, así que el tráfico relacionado queda cubierto en conjunto.</value>
