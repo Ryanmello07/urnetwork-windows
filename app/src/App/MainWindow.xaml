@@ -2731,15 +2731,20 @@
                      Windows guidance wants settings as a single constrained
                      column of rows, and the pane model wants full bleed with no
                      max-width cap. Those are reconciled by making each pane a
-                     constrained column: THREE equal star columns, so at the
-                     2062dip window this app is judged in each one is ~660dip -
-                     which is the settings measure the guidance is asking for -
-                     and together they cover the window edge to edge with no
-                     centring grid and no gutter.
+                     constrained column: TWO equal star columns, so at the
+                     2062dip window this app is judged in each one is ~1000dip -
+                     wider than the guidance's measure, accepted because the
+                     rows inside are the kit's constrained vocabulary.
 
                        col 0  GENERAL   preferences, then VPN and privacy
-                       col 2  DEVICE    this machine, then Advanced
-                       col 4  ABOUT     version, community, the protocol
+                       col 2  DEVICE    this machine, then Advanced, then what
+                                       the app is (version, community links)
+
+                     There WAS a third pane (About), and it is gone: it folded
+                     away below 1400dip, which left the app version unreachable
+                     in every folded layout, and the fold rule bars a foldable
+                     pane from owning content with no second door. Its two
+                     sections end pane B now.
 
                      A list-pane-plus-detail reading was the other legitimate
                      option. It was rejected because there are ~14 preference
@@ -2747,7 +2752,7 @@
                      sections of three rows spends a third of the window on a
                      table of contents for a page that fits on one screen.
 
-                     Every row here is built by SettingsPage into the three
+                     Every row here is built by SettingsPage into the two
                      hosts below, through the row kit in pane mode. -->
                 <Grid x:Name="SettingsView" Visibility="Collapsed"
                       Style="{StaticResource UrPaneStyle}">
@@ -2755,8 +2760,6 @@
                         <ColumnDefinition x:Name="SettingsPaneAColumn" Width="*" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition x:Name="SettingsPaneBColumn" Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition x:Name="SettingsPaneCColumn" Width="*" />
                     </Grid.ColumnDefinitions>
 
                     <!-- ============ PANE A: GENERAL / VPN AND PRIVACY ======= -->
@@ -2796,27 +2799,6 @@
                         <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled"
                                       VerticalScrollBarVisibility="Auto">
                             <StackPanel x:Name="SettingsSectionsRight" />
-                        </ScrollViewer>
-                    </Grid>
-
-                    <Border x:Name="SettingsPaneCRule" Grid.Column="3"
-                            Style="{StaticResource UrPaneVRuleStyle}" />
-
-                    <!-- ============ PANE C: ABOUT =========================== -->
-                    <Grid Grid.Column="4" x:Name="SettingsPaneC">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
-                        </Grid.RowDefinitions>
-                        <Border Style="{StaticResource UrPaneHeaderStyle}">
-                            <Grid>
-                                <TextBlock x:Name="SettingsPaneCTitle"
-                                           Style="{StaticResource UrPaneTitleStyle}" />
-                            </Grid>
-                        </Border>
-                        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled"
-                                      VerticalScrollBarVisibility="Auto">
-                            <StackPanel x:Name="SettingsAboutHost" />
                         </ScrollViewer>
                     </Grid>
                 </Grid>

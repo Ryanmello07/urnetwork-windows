@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: MPL-2.0
 #include "pch.h"
 
 #include "SettingsPage.h"
@@ -143,14 +143,14 @@ void SettingsPage::ApplyStrings() {
   Automation::AutomationProperties::SetName(w_.SupportPaneA(), Loc("feedback"));
   Automation::AutomationProperties::SetName(w_.SupportPaneB(), Loc("support"));
 
-  // settings: three pane headers, and a landmark name each so a screen reader
-  // can tell the three regions apart
+  // settings: two pane headers, and a landmark name each so a screen reader
+  // can tell the two regions apart. The About pane is gone (fold rule: a pane
+  // that folds away below 1400dip may not own content with no second door, and
+  // the app version had none) - its sections live at the end of pane B now.
   w_.SettingsPaneATitle().Text(Loc("general"));
   w_.SettingsPaneBTitle().Text(Loc("device"));
-  w_.SettingsPaneCTitle().Text(Missing("about", L"About"));
   Automation::AutomationProperties::SetName(w_.SettingsPaneA(), Loc("general"));
   Automation::AutomationProperties::SetName(w_.SettingsPaneB(), Loc("device"));
-  Automation::AutomationProperties::SetName(w_.SettingsPaneC(), Missing("about", L"About"));
 
   // The heading over the destructive end. It sits on ACCOUNT now (the rows under
   // it are Sign out and Delete account), which is why it is painted from here
@@ -191,22 +191,24 @@ void SettingsPage::BuildSections() {
   BuildDangerSection();
   rows::SetPaneMode(false);
 
-  // ---- what stays on Settings: preferences, in three panes ----------------
-  // col 0 what the app DOES, col 1 what this machine IS, col 2 what the app is.
-  // Each pane is one constrained column of rows, which is how the Windows
-  // single-column settings guidance and the full-bleed pane model reconcile:
-  // three columns of ~660dip in the 2062dip window this app is judged in.
+  // ---- what stays on Settings: preferences, in two panes ------------------
+  // col 0 what the app DOES, col 1 everything else: what this machine IS, then
+  // what the app is (About's version and community links moved here when the
+  // third pane was deleted - it folded away below 1400dip, which made the app
+  // version unreachable in every folded layout; pane-model fold rule: a pane
+  // that can fold may not own content with no second door). Each pane is one
+  // constrained column of rows, which is how the Windows single-column
+  // settings guidance and the full-bleed pane model reconcile.
   rows::SetPaneMode(true);
   auto general = w_.SettingsSections();
   auto device = w_.SettingsSectionsRight();
-  auto about = w_.SettingsAboutHost();
   BuildGeneralSection(general);
   BuildConnectionsSection(general);
   BuildDeviceSection(device);
   BuildIdentitySection(device);
   BuildAdvancedSection(device);
-  BuildVersionSection(about);
-  BuildStayInTouchSection(about);
+  BuildVersionSection(device);
+  BuildStayInTouchSection(device);
   rows::SetPaneMode(false);
 
   // ---- Support: the way to reach a human, in BOTH its homes ----------------

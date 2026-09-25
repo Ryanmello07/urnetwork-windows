@@ -510,23 +510,17 @@ void MainWindow::ApplyBreakpoint() {
   // (Leaderboard's branch is gone with its destination: it is a tab inside
   // Earnings' ledger pane now, and shares that pane's widths.)
 
-  // ---- Settings: three constrained columns ---------------------------------
+  // ---- Settings: two constrained columns -----------------------------------
   // Windows guidance says settings is a single column of rows at a constrained
-  // width; the pane model says full bleed with no cap. Three equal star columns
-  // satisfy both: at the 2062dip window this app is judged in each pane is
-  // ~660dip, which IS the constrained settings measure, and the three together
-  // reach both edges with no centring grid.
+  // width; the pane model says full bleed with no cap. Two equal star columns
+  // split the difference. The third pane (About) was deleted because it folded
+  // away below 1400dip, which left the app version unreachable in every folded
+  // layout - the fold rule bars a foldable pane from owning content with no
+  // second door, and the version had none. Its sections end pane B now.
   //
-  //   >= 1400dip   three panes   general | device | about
-  //   >=  900dip   two panes     general | device      (About folds; version and
-  //                                                     the community links are
-  //                                                     the least operational)
-  //   <   900dip   one pane      general
-  const bool settingsThree = 1400.0 <= width;
+  //   >=  900dip   two panes   general | device (+ version, community)
+  //   <   900dip   one pane    general
   const bool settingsTwo = 900.0 <= width;
-  SetStar(SettingsPaneCColumn(), settingsThree ? 1 : 0);
-  SettingsPaneCRule().Visibility(settingsThree ? Visibility::Visible : Visibility::Collapsed);
-  SettingsPaneC().Visibility(settingsThree ? Visibility::Visible : Visibility::Collapsed);
   SetStar(SettingsPaneBColumn(), settingsTwo ? 1 : 0);
   SettingsPaneBRule().Visibility(settingsTwo ? Visibility::Visible : Visibility::Collapsed);
   SettingsPaneB().Visibility(settingsTwo ? Visibility::Visible : Visibility::Collapsed);
