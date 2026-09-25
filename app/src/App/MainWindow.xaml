@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <!-- URnetwork main window. Sign-in flow (initial → password / create / verify /
      reset — macOS Authenticate/** parity), then a NavigationView home with the
      macOS sections: Connect, Account, Wallet, Leaderboard, Support, Settings.
@@ -1685,7 +1685,7 @@
                                 </Border>
                                 <!-- the pane's primary command: a full-bleed bar -->
                                 <Button x:Name="AccountUpgradeButton"
-                                        Style="{StaticResource UrPaneActionPrimaryStyle}"
+                                        Style="{StaticResource UrPaneActionEarningsStyle}"
                                         Click="OnOpenUpgrade" />
 
                                 <Border Style="{StaticResource UrGroupHeaderStyle}">
@@ -2193,7 +2193,7 @@
                                                        Style="{StaticResource UrRowNoteStyle}"
                                                        TextTrimming="None" />
                                             <Button x:Name="ClaimButton"
-                                                    Style="{StaticResource UrPaneActionPrimaryStyle}"
+                                                    Style="{StaticResource UrPaneActionEarningsStyle}"
                                                     HorizontalAlignment="Stretch"
                                                     IsEnabled="False"
                                                     Click="OnClaimAlpha" />
@@ -2234,7 +2234,7 @@
                                      free account can upgrade from here; the
                                      window owns its visibility -->
                                 <Button x:Name="UpgradeButton"
-                                        Style="{StaticResource UrPaneActionPrimaryStyle}"
+                                        Style="{StaticResource UrPaneActionEarningsStyle}"
                                         Click="OnOpenUpgrade" />
                                 <muxc:InfoBar x:Name="WalletInfo"
                                               Style="{StaticResource UrSnackbarStyle}"

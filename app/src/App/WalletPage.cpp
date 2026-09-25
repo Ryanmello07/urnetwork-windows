@@ -1000,6 +1000,10 @@ void WalletPage::ApplyPoints(std::vector<urnet::AccountPoint> const& points, Fet
   }
   w_.AccountPointsStatusText().Visibility(Visibility::Collapsed);
   SetStatValue(w_.PointsHeadlineValue(), hstring{FormatPointsValue(accountPoints_.net)}, true);
+  // Lime is the earnings accent, and this is the page's headline figure. It
+  // must be set here, not in markup: SetStatValue rewrites Foreground on every
+  // call, and the leaderboard tiles share that helper and stay off-white.
+  w_.PointsHeadlineValue().Foreground(colors::AccentBrush());
   RebuildPointsRows();
 }
 
@@ -1872,7 +1876,7 @@ void WalletPage::RebuildHistory() {
         row.cells[5].Text(ClaimStatusText(claim->status));
         // Lime is the earnings accent: alpha that can be claimed now, or was.
         if (claim->status == "claimable" || claim->status == "claimed") {
-          row.cells[4].Foreground(colors::MakeBrush(colors::kUrGreen));
+          row.cells[4].Foreground(colors::AccentBrush());
         }
         if (claim->status == "expired") row.cells[5].Foreground(colors::DangerBrush());
       } else {
@@ -1924,7 +1928,9 @@ void WalletPage::ApplyClaims(std::vector<EpochClaim> const& claims, int64_t tota
   }
   w_.ClaimsStatusText().Visibility(Visibility::Collapsed);
   SetStatValue(w_.UnclaimedValue(), hstring{FormatAlphaRao(totalClaimableRao_)}, true);
-  if (totalClaimableRao_ > 0) w_.UnclaimedValue().Foreground(colors::MakeBrush(colors::kUrGreen));
+  // Lime is the earnings accent: the claimable figure is this page's reason
+  // to exist. Behaviour identical (coloured only when claimable > 0).
+  if (totalClaimableRao_ > 0) w_.UnclaimedValue().Foreground(colors::AccentBrush());
   w_.UnclaimedNote().Text(
       claimable > 0
           ? hstring{urnw::Format("claim_across_epochs", static_cast<int64_t>(claimable))}
