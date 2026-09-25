@@ -437,8 +437,22 @@ void ConnectPage::ApplyServiceSetup(urnw::ServiceSetup::Snapshot const& snap) {
       // appending them to the store line is composition, not a hidden literal.
       if (!snap.observation.installedVersion.empty() &&
           !snap.observation.siblingVersion.empty()) {
-        message += L" (" + snap.observation.installedVersion + L" → " +
-                   snap.observation.siblingVersion + L")";
+        // LAYOUT, not content: XAML line-breaking treats an ASCII hyphen as a
+        // break opportunity, and the banner's message column is narrow, so
+        // "(0.0.0-dev → …)" used to wrap MID-token and orphan "dev)" onto its
+        // own line. Non-breaking hyphens (U+2011) inside each version keep a
+        // version on one line; the spaces around them stay REGULAR so the
+        // parenthetical still wraps BETWEEN tokens. (Making the spaces
+        // non-breaking too fused "app. (…)" into one 48-char word, and the
+        // InfoBar message's WrapWholeWords CLIPS an overlong word at the
+        // column edge instead of wrapping it - the tail vanished.) The
+        // snapshot strings themselves are untouched.
+        const auto nonBreaking = [](std::wstring version) {
+          std::replace(version.begin(), version.end(), L'-', L'\u2011');
+          return version;
+        };
+        message += L" (" + nonBreaking(snap.observation.installedVersion) +
+                   L" → " + nonBreaking(snap.observation.siblingVersion) + L")";
       }
       break;
   }

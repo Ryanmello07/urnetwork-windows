@@ -150,10 +150,42 @@ MainWindow::MainWindow() {
   accountUsageBar_ = std::make_unique<urnw::UsageBar>(AccountUsageBarHost(),
                                                       AccountUsageLegend());
 
+  // Banner action buttons (balance warning, service setup, app update): the
+  // stock ButtonBackground* theme brushes are translucent greys
+  // (ControlFillColor*), which over a severity fill read as washed-out
+  // grey-on-amber mud. Give them a solid reading instead - the page-
+  // background fill with off-white text and the pane hairline, per state -
+  // through each button's OWN theme resources. The default Button template
+  // resolves ButtonBackground* against the element's Resources first, which
+  // is the same mechanism ConnectHero uses in MainWindow.xaml; the shared
+  // primary/secondary styles are untouched.
+  const auto solidBannerAction = [](Button const& b) {
+    namespace media = winrt::Microsoft::UI::Xaml::Media;
+    auto res = b.Resources();
+    const auto put = [&res](winrt::hstring const& key,
+                            winrt::Windows::UI::Color const& color) {
+      res.Insert(winrt::box_value(key), media::SolidColorBrush(color));
+    };
+    using namespace urnw::colors;
+    put(L"ButtonBackground", kBackground);
+    put(L"ButtonBackgroundPointerOver", kCardHover);
+    put(L"ButtonBackgroundPressed", kBackground);
+    put(L"ButtonBackgroundDisabled", WithAlpha(kBackground, 0x66));
+    put(L"ButtonForeground", kText);
+    put(L"ButtonForegroundPointerOver", kText);
+    put(L"ButtonForegroundPressed", kText);
+    put(L"ButtonForegroundDisabled", WithAlpha(kText, 0x66));
+    put(L"ButtonBorderBrush", kBorder);
+    put(L"ButtonBorderBrushPointerOver", kBorder);
+    put(L"ButtonBorderBrushPressed", kBorder);
+    put(L"ButtonBorderBrushDisabled", kBorder);
+  };
+
   // the insufficient-balance warning's action opens the upgrade flow (a guest
   // first creates a full account, like the plan card's affordance)
   {
     Button getPro;
+    solidBannerAction(getPro);
     getPro.Content(LocBox("get_pro"));  // the same label as every other app
     getPro.Click([weak = get_weak()](auto const&, auto const&) {
       auto self = weak.get();
@@ -174,6 +206,7 @@ MainWindow::MainWindow() {
   // ConnectPage::ApplyServiceSetup, the same way the balance bar's title is.
   {
     Button setup;
+    solidBannerAction(setup);
     setup.Click([weak = get_weak()](auto const&, auto const&) {
       if (auto self = weak.get()) self->BeginServiceSetupAction();
     });
@@ -187,6 +220,7 @@ MainWindow::MainWindow() {
   // now with no replay would leave the banner blank until the 6-hour tick.
   {
     Button update;
+    solidBannerAction(update);
     update.Click([weak = get_weak()](auto const&, auto const&) {
       if (auto self = weak.get()) self->OnUpdateBannerAction();
     });
