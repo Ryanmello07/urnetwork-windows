@@ -241,6 +241,14 @@ struct MainWindow : MainWindowT<MainWindow> {
   // AnimateDrawerIn uses for the drawer, applied to the incoming destination's
   // view. No-op when AnimationsEnabled() is false.
   void FadeDestinationIn(winrt::Microsoft::UI::Xaml::FrameworkElement const& view);
+  // The exit half of the swap: the outgoing view fades 1 -> 0 over 120ms
+  // (exit faster than entrance) and is collapsed only in the storyboard's
+  // Completed handler - it stays Visible until then so the swap reads as a
+  // crossfade instead of a blink to the background. viewTag is the view's nav
+  // tag, so Completed can refuse to collapse a view the user navigated BACK
+  // to before the exit finished. No-op when AnimationsEnabled() is false.
+  void FadeDestinationOut(winrt::Microsoft::UI::Xaml::FrameworkElement const& view,
+                          winrt::hstring const& viewTag);
   void OnManageAppSplitTunnel(winrt::Windows::Foundation::IInspectable const&,
                               winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnSignOut(winrt::Windows::Foundation::IInspectable const&,

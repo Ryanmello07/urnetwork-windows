@@ -1067,6 +1067,62 @@ void MainWindow::FadeDestinationIn(winrt::Microsoft::UI::Xaml::FrameworkElement 
   storyboard.Begin();
 }
 
+void MainWindow::FadeDestinationOut(winrt::Microsoft::UI::Xaml::FrameworkElement const& view,
+                                    winrt::hstring const& viewTag) {
+  if (!view) return;
+  if (!winrt::Windows::UI::ViewManagement::UISettings().AnimationsEnabled()) return;
+  // The exit half of the destination crossfade: 120ms opacity 1 -> 0, faster
+  // than the 180ms entrance (FadeDestinationIn) so the swap reads as one
+  // motion. The view stays Visible until the board's Completed handler
+  // collapses it - collapsing it at the moment of the swap was the
+  // blink-to-black this replaces. Opacity is independently animatable, so
+  // this costs the compositor, not the UI thread (the standing rule,
+  // ConnectCanvas.h). Same lifetime discipline as AnimateDrawerIn and
+  // FadeDestinationIn: a local board begun synchronously - a started board is
+  // held by the framework until it completes, so Completed still runs. The
+  // handler captures only weak refs (and must NOT capture the board itself:
+  // board -> handler -> board would keep both alive forever).
+  namespace anim = winrt::Microsoft::UI::Xaml::Media::Animation;
+  anim::CubicEase ease;
+  ease.EasingMode(anim::EasingMode::EaseOut);
+  anim::Storyboard storyboard;
+  anim::DoubleAnimation fade;
+  fade.From(1.0);
+  fade.To(0.0);
+  fade.Duration(Duration{std::chrono::duration_cast<winrt::Windows::Foundation::TimeSpan>(
+                             std::chrono::milliseconds(120)),
+                         DurationType::TimeSpan});
+  fade.EasingFunction(ease);
+  anim::Storyboard::SetTarget(fade, view);
+  anim::Storyboard::SetTargetProperty(fade, L"Opacity");
+  storyboard.Children().Append(fade);
+  // A leaving view must not take input while it is still on screen.
+  view.IsHitTestVisible(false);
+  const auto weakView = winrt::make_weak(view);
+  const auto weakSelf = get_weak();
+  storyboard.Completed([weakView, weakSelf, viewTag](
+                           winrt::Windows::Foundation::IInspectable const&,
+                           winrt::Windows::Foundation::IInspectable const&) {
+    const auto v = weakView.get();
+    if (!v) return;
+    v.IsHitTestVisible(true);
+    // The user navigated BACK to this view inside the 120ms exit window: it
+    // is the current destination again, so it stays shown (its entrance is
+    // either AnimateDrawerIn, FadeDestinationIn, or no board at all - the
+    // Opacity(1) below covers the no-board case; a running entrance board
+    // wins over the local value either way).
+    if (const auto self = weakSelf.get(); self && self->currentTag_ == viewTag) {
+      v.Opacity(1.0);
+      return;
+    }
+    v.Visibility(Visibility::Collapsed);
+    // Clean slate for the next time this view shows: a HoldEnd fill would
+    // otherwise leave the last animated value (0) as its presented opacity.
+    v.Opacity(1.0);
+  });
+  storyboard.Begin();
+}
+
 void MainWindow::OnNavSelectionChanged(NavigationView const&,
                                        NavigationViewSelectionChangedEventArgs const& args) {
   auto item = args.SelectedItem().try_as<NavigationViewItem>();
@@ -1105,6 +1161,24 @@ void MainWindow::OnNavSelectionChanged(NavigationView const&,
   // Refer and earn page that may have been open in Account's place
   referralsOpen_ = false;
   ReferralsView().Visibility(Visibility::Collapsed);
+  // The outgoing view, for the crossfade: it must stay Visible (overlapping
+  // the incoming view inside HomeContentRoot) until its 120ms exit board's
+  // Completed handler collapses it. Without that deferral the swap reads as a
+  // blink to the background - the outgoing vanishes on this frame while the
+  // incoming is still at opacity 0. AnimationsEnabled() off keeps the old
+  // instant swap (FadeDestinationOut is itself a no-op then, but skipping the
+  // deferral is what keeps the swap instant rather than 120ms late).
+  FrameworkElement outgoing{nullptr};
+  if (previousTag == L"connect") outgoing = ConnectView();
+  else if (previousTag == L"network") outgoing = NetworkView();
+  else if (previousTag == L"account") outgoing = AccountView();
+  else if (previousTag == L"wallet") outgoing = WalletView();
+  else if (previousTag == L"support") outgoing = SupportView();
+  else if (previousTag == L"settings") outgoing = SettingsView();
+  else if (previousTag == L"developer") outgoing = DeveloperView();
+  const bool crossfade =
+      outgoing && previousTag != tag && outgoing.Visibility() == Visibility::Visible &&
+      winrt::Windows::UI::ViewManagement::UISettings().AnimationsEnabled();
   ConnectView().Visibility(tag == L"connect" ? Visibility::Visible : Visibility::Collapsed);
   NetworkView().Visibility(tag == L"network" ? Visibility::Visible : Visibility::Collapsed);
   AccountView().Visibility(tag == L"account" ? Visibility::Visible : Visibility::Collapsed);
@@ -1113,6 +1187,10 @@ void MainWindow::OnNavSelectionChanged(NavigationView const&,
   SettingsView().Visibility(tag == L"settings" ? Visibility::Visible : Visibility::Collapsed);
   DeveloperView().Visibility(tag == L"developer" ? Visibility::Visible
                                                  : Visibility::Collapsed);
+  if (crossfade) {
+    outgoing.Visibility(Visibility::Visible);
+    FadeDestinationOut(outgoing, previousTag);
+  }
   // The developer screen's 5s poll is four synchronous rpcs into the service:
   // it runs only while this destination is selected AND the window is
   // presenting (SetPresentationActive supplies the other half).
