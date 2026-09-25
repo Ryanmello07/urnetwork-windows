@@ -2283,9 +2283,13 @@
                                             BorderBrush="{StaticResource UrReferralGoldBrush}"
                                             BorderThickness="0,0,0,1" Padding="12,10">
                                         <StackPanel Spacing="6">
+                                            <!-- "You qualify" is an earnings WIN,
+                                                 so it spends the earnings lime;
+                                                 the eviction-floor warning below
+                                                 keeps the amber-family reading. -->
                                             <TextBlock x:Name="Top200Status"
                                                        Style="{StaticResource UrKeyTextStyle}"
-                                                       Foreground="{StaticResource UrReferralGoldLightBrush}"
+                                                       Foreground="{StaticResource UrAccentBrush}"
                                                        TextWrapping="Wrap" TextTrimming="None" />
                                             <TextBlock x:Name="Top200Detail" TextWrapping="Wrap"
                                                        Style="{StaticResource UrRowNoteStyle}"
@@ -2304,9 +2308,15 @@
 
                                 <!-- the checkout stays where it was: a signed-in
                                      free account can upgrade from here; the
-                                     window owns its visibility -->
+                                     window owns its visibility. Demoted to the
+                                     outlined secondary: TWO stacked lime slabs
+                                     (Claim above, this below) overspend the
+                                     earnings accent - the lime fill on this page
+                                     belongs to Claim alone. (Account's upgrade
+                                     button keeps its lime: it is alone in its
+                                     pane there.) -->
                                 <Button x:Name="UpgradeButton"
-                                        Style="{StaticResource UrPaneActionEarningsStyle}"
+                                        Style="{StaticResource UrPaneActionSecondaryStyle}"
                                         Click="OnOpenUpgrade" />
                                 <muxc:InfoBar x:Name="WalletInfo"
                                               Style="{StaticResource UrSnackbarStyle}"
@@ -2459,11 +2469,21 @@
                                 <!-- own ranking: the one thing you came to the
                                      leaderboard for, beside the table rather
                                      than above it. The data board's block; hidden
-                                     while the Points board shows. -->
+                                     while the Points board shows. The rank itself
+                                     rides in the group header as the right-aligned
+                                     META ("CURRENT RANKING … #42") so the Net
+                                     Provided row below stays a clean label/value
+                                     pair instead of two figures merging on one
+                                     baseline. -->
                                 <StackPanel x:Name="DataRankingHost">
                                 <Border Style="{StaticResource UrGroupHeaderStyle}">
-                                    <TextBlock x:Name="LeaderboardRankLabel"
-                                               Style="{StaticResource UrGroupHeaderTextStyle}" />
+                                    <Grid>
+                                        <TextBlock x:Name="LeaderboardRankLabel"
+                                                   Style="{StaticResource UrGroupHeaderTextStyle}" />
+                                        <TextBlock x:Name="LeaderboardRankValue"
+                                                   Style="{StaticResource UrPaneMetaStyle}"
+                                                   HorizontalAlignment="Right" />
+                                    </Grid>
                                 </Border>
                                 <Border Style="{StaticResource UrPaneRowStyle}"
                                         MinHeight="0" Padding="12,12">
@@ -2474,16 +2494,12 @@
                                         </Grid.ColumnDefinitions>
                                         <TextBlock x:Name="LeaderboardNetProvidedLabel"
                                                    Style="{StaticResource UrKeyTextStyle}"
-                                                   VerticalAlignment="Bottom" />
-                                        <StackPanel Grid.Column="1" Orientation="Horizontal"
-                                                    Spacing="12" VerticalAlignment="Center">
-                                            <TextBlock x:Name="LeaderboardNetProvidedValue"
-                                                       FontFamily="{StaticResource UrBodyFontFamily}"
-                                                       FontSize="18" FontWeight="SemiBold" />
-                                            <TextBlock x:Name="LeaderboardRankValue"
-                                                       FontFamily="{StaticResource UrBodyFontFamily}"
-                                                       FontSize="22" FontWeight="SemiBold" />
-                                        </StackPanel>
+                                                   VerticalAlignment="Center" />
+                                        <TextBlock x:Name="LeaderboardNetProvidedValue"
+                                                   Grid.Column="1"
+                                                   FontFamily="{StaticResource UrBodyFontFamily}"
+                                                   FontSize="18" FontWeight="SemiBold"
+                                                   VerticalAlignment="Center" />
                                     </Grid>
                                 </Border>
                                 <Border Style="{StaticResource UrPaneRowStyle}" MinHeight="44">

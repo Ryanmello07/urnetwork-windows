@@ -1878,6 +1878,10 @@ void WalletPage::RebuildHistory() {
         if (claim->status == "claimable" || claim->status == "claimed") {
           row.cells[4].Foreground(colors::AccentBrush());
         }
+        // ...and the STATUS word for the one actionable state joins it:
+        // "claimable" is the cell that asks for the click. Claimed, expired
+        // and the muted states keep their readings.
+        if (claim->status == "claimable") row.cells[5].Foreground(colors::AccentBrush());
         if (claim->status == "expired") row.cells[5].Foreground(colors::DangerBrush());
       } else {
         // before the wallet, or not finalized: points only
