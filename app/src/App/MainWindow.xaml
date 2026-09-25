@@ -2731,17 +2731,55 @@
                                                Style="{StaticResource UrSupportingTextStyle}" />
                                 </Border>
                                 <Border Style="{StaticResource UrPaneRowStyle}">
+                                    <!-- left-aligned to the row's 12px inset like
+                                         every other control in the form: the stock
+                                         RatingControl centers itself in a stretched
+                                         row, which broke the form's left edge -->
                                     <muxc:RatingControl x:Name="FeedbackRating"
+                                                        HorizontalAlignment="Left"
                                                         VerticalAlignment="Center" />
                                 </Border>
                                 <!-- the one free-text control on the page: the row
                                      frame (it owns the hairline) but at the box's
-                                     own height, not the 36px row height -->
+                                     own height, not the 36px row height. At the
+                                     1400px+ widths the field's bare underline read
+                                     as an ornament, so the field gets a CONTROL
+                                     BOUNDARY - 1px UrBorderBrush, 4px radius, no
+                                     fill, not a card - and the Send bar below
+                                     stays the pane's full-bleed primary action.
+                                     The TextBox's own underline is zeroed through
+                                     its local theme resources: the stock template's
+                                     Focused state re-asserts
+                                     TextControlBorderThemeThicknessFocused, which
+                                     resolves against the element's own Resources
+                                     first. The measure is the form-control
+                                     exception (~640, pane stays full-bleed): a
+                                     single star column capped at 640 gives
+                                     min(row, 640) at the LEFT edge - a stretched
+                                     element with MaxWidth centers itself, and a
+                                     left-aligned one sizes to content. -->
                                 <Border Style="{StaticResource UrPaneRowStyle}"
                                         MinHeight="0" Padding="12,8">
-                                    <TextBox x:Name="FeedbackText" AcceptsReturn="True" TextWrapping="Wrap"
-                                             Style="{StaticResource UrTextInputStyle}"
-                                             MinHeight="96" />
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <!-- 616 + this row's 12px padding each
+                                                 side = the Send bar's 640 envelope
+                                                 (its style margin eats 24 of the
+                                                 640), so the three form controls
+                                                 share one right edge. -->
+                                            <ColumnDefinition Width="*" MaxWidth="616" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border BorderBrush="{StaticResource UrBorderBrush}"
+                                                BorderThickness="1" CornerRadius="4" Padding="8">
+                                            <TextBox x:Name="FeedbackText" AcceptsReturn="True" TextWrapping="Wrap"
+                                                     Style="{StaticResource UrTextInputStyle}"
+                                                     BorderThickness="0" MinHeight="96">
+                                                <TextBox.Resources>
+                                                    <Thickness x:Key="TextControlBorderThemeThicknessFocused">0</Thickness>
+                                                </TextBox.Resources>
+                                            </TextBox>
+                                        </Border>
+                                    </Grid>
                                 </Border>
                                 <!-- apple FeedbackView: logs go to the server ONLY
                                      from here, only when this is ticked, and only
@@ -2749,23 +2787,41 @@
                                      (SettingsPage). -->
                                 <Border Style="{StaticResource UrPaneRowStyle}">
                                     <CheckBox x:Name="FeedbackIncludeLogs"
+                                              MaxWidth="640" HorizontalAlignment="Left"
                                               VerticalAlignment="Center" />
                                 </Border>
                                 <!-- bare like the Connect pane's primary action:
                                      UrPaneActionPrimaryStyle already carries the
-                                     12px inset. Content is set in code
+                                     12px inset. The measure is the field's form-
+                                     control exception: a star column capped at
+                                     640 keeps it a BAR of min(pane, 640) at the
+                                     left edge (MaxWidth on a stretched button
+                                     would center it; Left would size it to its
+                                     label). Content
+                                     is set in code
                                      (Loc("send")); a plain-string Content gets
                                      its automation name for free, but the
                                      explicit SetName stays. -->
-                                <Button x:Name="SendFeedbackButton"
-                                        Style="{StaticResource UrPaneActionPrimaryStyle}"
-                                        Click="OnSendFeedback" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" MaxWidth="640" />
+                                    </Grid.ColumnDefinitions>
+                                    <Button x:Name="SendFeedbackButton"
+                                            Style="{StaticResource UrPaneActionPrimaryStyle}"
+                                            Click="OnSendFeedback" />
+                                </Grid>
                                 <!-- KEEP this x:Name: SettingsPage's ctor builds
                                      its Snackbar on it ("thanks for the
-                                     feedback" and the send-failure errors). -->
-                                <muxc:InfoBar x:Name="SupportInfo"
-                                              Style="{StaticResource UrSnackbarStyle}"
-                                              Margin="12,8" IsOpen="False" />
+                                     feedback" and the send-failure errors). The
+                                     same capped-column measure as the Send bar. -->
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" MaxWidth="640" />
+                                    </Grid.ColumnDefinitions>
+                                    <muxc:InfoBar x:Name="SupportInfo"
+                                                  Style="{StaticResource UrSnackbarStyle}"
+                                                  Margin="12,8" IsOpen="False" />
+                                </Grid>
                                 <!-- the narrow-width contact host: pane B's whole
                                      contents, built here by
                                      SettingsPage::BuildSupportContactSection

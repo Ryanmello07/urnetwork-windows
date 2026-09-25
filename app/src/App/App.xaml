@@ -153,6 +153,30 @@
                             <SolidColorBrush x:Key="NavigationViewItemForegroundPressed" Color="#F8F8F8" />
                             <SolidColorBrush x:Key="NavigationViewItemForegroundSelectedPointerOver" Color="#F8F8F8" />
                             <SolidColorBrush x:Key="NavigationViewItemForegroundSelectedPressed" Color="#F8F8F8" />
+
+                            <!-- InfoBar severities (kit::Snackbar: the support
+                                 acknowledgement and the wallet errors). WinUI's
+                                 stock severity backgrounds are the SystemFillColor
+                                 *BackgroundBrush family, which renders on this
+                                 dark palette as muddy olive (success), brown
+                                 (warning) and maroon (error) washes that read as
+                                 dirt, not status. Neutralise the bar to the card
+                                 fill (#1C1C1C) and let the ICON carry the
+                                 severity in the app's own tokens: success urGreen
+                                 (its protected reading), error urCoral (danger
+                                 family), warning kUrAmber. SeverityIconBackground
+                                 is the coloured circle glyph; the severity glyph
+                                 over it keeps the stock TextFillColorInverse
+                                 foreground, which is dark and reads on all three.
+                                 Key names verified against the WinUI 2.2
+                                 generic.xaml InfoBar template (the
+                                 Microsoft.WindowsAppSDK.WinUI package). -->
+                            <SolidColorBrush x:Key="InfoBarSuccessSeverityBackgroundBrush" Color="#1C1C1C" />
+                            <SolidColorBrush x:Key="InfoBarSuccessSeverityIconBackground" Color="#87FB67" />
+                            <SolidColorBrush x:Key="InfoBarErrorSeverityBackgroundBrush" Color="#1C1C1C" />
+                            <SolidColorBrush x:Key="InfoBarErrorSeverityIconBackground" Color="#FF6C58" />
+                            <SolidColorBrush x:Key="InfoBarWarningSeverityBackgroundBrush" Color="#1C1C1C" />
+                            <SolidColorBrush x:Key="InfoBarWarningSeverityIconBackground" Color="#F5C242" />
                         </ResourceDictionary>
                     </ResourceDictionary.ThemeDictionaries>
                 </ResourceDictionary>
