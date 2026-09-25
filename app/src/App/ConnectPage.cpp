@@ -2706,6 +2706,14 @@ void ConnectPage::ApplyPreviewSample() {
   w_.ProvideModeRing().Visibility(Visibility::Visible);
   w_.ProvideStatsText().Text(hstring{urnw::Plural("providing_client_count", 3)});
   w_.ProvideStatsRow().Visibility(Visibility::Visible);
+  // The mode bar itself is seeded from the SDK's stored mode (SeedConnectControls,
+  // run by ResyncDrawer just before this), and with no session that lands on
+  // Never - "Never" beside discoverable + 3 clients is a contradiction. The
+  // sample PROVIDES, so pin Auto with it, behind the guard so the selection
+  // change does not push a setting into the session-less SDK.
+  updatingControls_ = true;
+  w_.ProvideModeBar().SelectedItem(w_.ProvideAutoItem());
+  updatingControls_ = false;
   // the DNS rows, from the SDK's own defaults. A pure local lookup - it reads a
   // table compiled into the SDK and makes no request.
   if (auto defaults = urnet::getDefaultDnsResolverSettings()) {
