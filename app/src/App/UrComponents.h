@@ -1,4 +1,4 @@
-﻿// The parts of the component kit a XAML style cannot express.
+// The parts of the component kit a XAML style cannot express.
 //
 // Most of the kit IS markup — UrButton, UrCard, UrLabel, UrTextField, the
 // switch and the snackbar surface are styles in App.xaml, over native WinUI
@@ -293,7 +293,8 @@ winrt::Microsoft::UI::Xaml::Controls::Border MakeStatusSeparator();
 winrt::Microsoft::UI::Xaml::Controls::Border MakePaneRow(double height);
 
 // key on the left, value hard right, one line each, both trimmed. The session
-// figures and any inspector grid are this.
+// figures and any inspector grid are this. Height defaults to 36 - the pane
+// row-height rule (36/40/44) has no 34.
 struct PaneKeyValueRow {
   winrt::Microsoft::UI::Xaml::Controls::Border root{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::TextBlock key{nullptr};
@@ -301,7 +302,7 @@ struct PaneKeyValueRow {
 };
 PaneKeyValueRow MakePaneKeyValueRow(winrt::hstring const& key,
                                     winrt::hstring const& value = {},
-                                    double height = 34);
+                                    double height = 36);
 
 // A list row: a leading state dot, a title that trims, and a right-aligned
 // figure. The connections table, the contracts list and the split rules are all

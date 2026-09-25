@@ -77,6 +77,18 @@ TextBlock SectionHeader(hstring const& text) {
   return tb;
 }
 
+// Prose on the pane's rhythm: the row inset and hairline, wrapping allowed
+// (the same construction as AccountPage's AddNoteRow, for the detail pane's
+// standing notes).
+void AddDetailNote(Panel const& host, hstring const& text) {
+  Border box;
+  box.Padding(ThicknessHelper::FromLengths(12, 8, 12, 8));
+  box.BorderBrush(colors::BorderBrush());
+  box.BorderThickness(ThicknessHelper::FromLengths(0, 0, 0, 1));
+  box.Child(MakeText(text, 12, MutedBrush(), /*wrap=*/true));
+  host.Children().Append(box);
+}
+
 // "AABBCC" / "#AABBCC" / "AARRGGBB" -> Color (fallback muted gray)
 winrt::Windows::UI::Color ColorFromHex(std::string hex) {
   if (!hex.empty() && hex[0] == '#') hex = hex.substr(1);
@@ -828,6 +840,46 @@ void NetworkPage::RenderDetail() {
     host.Children().Append(
         kit::MakePaneKeyValueRow(Loc("name_label"), Loc("best_available_provider")).root);
     w_.NetworkPaneBMeta().Text(Loc("best_available_provider"));
+
+    // What best-available MEANS, and how to override it. The two ids are
+    // genuinely missing from the store - Adv() fallback, reported for
+    // urnetwork/localizations. Deliberately NO "currently connected: X" line:
+    // the SDK does not expose the resolved location under best-available, so
+    // printing one would be fabrication.
+    AddDetailNote(host, pages::Adv("adv_best_available_note",
+                            L"URnetwork picks the fastest healthy providers for you, with no "
+                            L"location constraint, and re-picks as the network changes."));
+    AddDetailNote(host, pages::Adv("adv_pick_location_note",
+                            L"Pick a country, region, city or device in the list to connect "
+                            L"there instead."));
+
+    // Quick-pick: the top countries as the SAME rows the list uses - one
+    // builder (MakeRow), the LocationColor dot, the provider_count plural meta,
+    // and the coalesced connect on click - so picking here behaves
+    // byte-identically to clicking the row in the list (AppendLocationSection).
+    if (locations_ && NonEmpty(locations_->Countries)) {
+      const int64_t total = static_cast<int64_t>(locations_->Countries->size());
+      const int64_t shown = total < 5 ? total : 5;
+      host.Children().Append(
+          kit::MakePaneGroupHeader(Loc("countries"), hstring{std::to_wstring(shown)}).root);
+      for (int64_t i = 0; i < shown; ++i) {
+        auto const& location = (*locations_->Countries)[static_cast<size_t>(i)];
+        const int providers = location.provider_count.value_or(0);
+        auto row = MakeRow(H(location.name.value_or(std::string())),
+                           0 < providers
+                               ? hstring{Plural("provider_count",
+                                                static_cast<int64_t>(providers))}
+                               : hstring{},
+                           LocationColor(location), /*selected=*/false, !location.stable,
+                           location.strong_privacy, /*providing=*/false);
+        const urnet::ConnectLocation copy = location;
+        row.Click([this, copy](IInspectable const&, auto const&) {
+          Sdk().ConnectFromRow(copy);
+          Render();
+        });
+        host.Children().Append(row);
+      }
+    }
   } else {
     const auto& location = *selected;
     const hstring name = H(location.name.value_or(std::string()));
@@ -858,7 +910,9 @@ void NetworkPage::RenderDetail() {
     if (!location.stable) {
       // Amber, and a sentence, rather than a "Stable: No" row: the store has no
       // "Stable" label and this is the shipped string for the condition.
-      auto warning = kit::MakePaneRow(34);
+      // 36 like the key-value rows around it - the pane row-height rule
+      // (36/40/44) has no 34.
+      auto warning = kit::MakePaneRow(36);
       auto text = MakeText(Loc("unstable_providers_warning"), 12,
                            SolidColorBrush(kUnstable));
       text.VerticalAlignment(VerticalAlignment::Center);
