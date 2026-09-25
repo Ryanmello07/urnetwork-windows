@@ -1960,10 +1960,11 @@
                                 <StackPanel x:Name="BalanceCodesPanel" />
                             </ScrollViewer>
                             <!-- one centred line in a FULL-HEIGHT pane, never a
-                                 short card at the top of one -->
+                                 short card at the top of one. 320, the kit empty
+                                 line's measure (kit::MakePaneEmptyLine). -->
                             <TextBlock x:Name="BalanceCodesEmptyText"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"
-                                       TextAlignment="Center" TextWrapping="Wrap" MaxWidth="300"
+                                       TextAlignment="Center" TextWrapping="Wrap" MaxWidth="320"
                                        Margin="16" IsHitTestVisible="False"
                                        Style="{StaticResource UrSupportingTextStyle}" />
                         </Grid>
@@ -2356,6 +2357,7 @@
                                            HorizontalAlignment="Center" VerticalAlignment="Center"
                                            TextAlignment="Center" TextWrapping="Wrap"
                                            MaxWidth="320" Margin="16" IsHitTestVisible="False"
+                                           Foreground="{StaticResource UrTextFaintBrush}"
                                            Style="{StaticResource UrSupportingTextStyle}" />
                             </Grid>
                             <!-- LEADERBOARD. The same pane, the same floor. Two boards
@@ -2381,6 +2383,7 @@
                                                HorizontalAlignment="Center" VerticalAlignment="Center"
                                                TextAlignment="Center" TextWrapping="Wrap"
                                                MaxWidth="320" Margin="16" IsHitTestVisible="False"
+                                               Foreground="{StaticResource UrTextFaintBrush}"
                                                Style="{StaticResource UrSupportingTextStyle}" />
                                 </Grid>
                                 <!-- the points board: sort chips, the ranked rows (paged
@@ -2422,6 +2425,7 @@
                                                HorizontalAlignment="Center" VerticalAlignment="Center"
                                                TextAlignment="Center" TextWrapping="Wrap"
                                                MaxWidth="320" Margin="16" IsHitTestVisible="False"
+                                               Foreground="{StaticResource UrTextFaintBrush}"
                                                Style="{StaticResource UrSupportingTextStyle}" />
                                 </Grid>
                             </Grid>
