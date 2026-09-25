@@ -237,6 +237,10 @@ struct MainWindow : MainWindowT<MainWindow> {
   void OnNavSelectionChanged(
       winrt::Microsoft::UI::Xaml::Controls::NavigationView const&,
       winrt::Microsoft::UI::Xaml::Controls::NavigationViewSelectionChangedEventArgs const&);
+  // The destination-swap entrance: the same 180ms opacity fade ConnectPage's
+  // AnimateDrawerIn uses for the drawer, applied to the incoming destination's
+  // view. No-op when AnimationsEnabled() is false.
+  void FadeDestinationIn(winrt::Microsoft::UI::Xaml::FrameworkElement const& view);
   void OnManageAppSplitTunnel(winrt::Windows::Foundation::IInspectable const&,
                               winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnSignOut(winrt::Windows::Foundation::IInspectable const&,
@@ -448,6 +452,9 @@ struct MainWindow : MainWindowT<MainWindow> {
   std::unique_ptr<urnw::ReferralsPage> referrals_;
   bool referralsOpen_ = false;  // the Refer and earn page is up in Account's place
   std::unique_ptr<urnw::DeveloperPage> developer_;
+  // The last nav tag OnNavSelectionChanged applied; the destination-swap fade
+  // plays only when this actually changes (a SameItem re-selection plays none).
+  winrt::hstring currentTag_{L""};
 
   // balance / plan state (UI thread only; pushed by the store via AppController)
   urnw::BalanceSnapshot balance_;

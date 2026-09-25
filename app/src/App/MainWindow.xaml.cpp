@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: MPL-2.0
 #include "pch.h"
 
 #include "MainWindow.xaml.h"
@@ -1040,6 +1040,32 @@ void MainWindow::EnterPreviewUi(std::string const& destination) {
 
 // ---- navigation ----------------------------------------------------------
 
+void MainWindow::FadeDestinationIn(winrt::Microsoft::UI::Xaml::FrameworkElement const& view) {
+  if (!view) return;
+  if (!winrt::Windows::UI::ViewManagement::UISettings().AnimationsEnabled()) return;
+  // The exact AnimateDrawerIn shape (ConnectPage.cpp): 180ms opacity 0 -> 1
+  // behind a CubicEase EaseOut, begun synchronously so the first presented
+  // frame shows the from-pose. Opacity is independently animatable, so this
+  // costs the compositor, not the UI thread - the standing rule for every
+  // repeating or high-frequency animation in this app (ConnectCanvas.h).
+  namespace anim = winrt::Microsoft::UI::Xaml::Media::Animation;
+  view.Opacity(0);
+  anim::CubicEase ease;
+  ease.EasingMode(anim::EasingMode::EaseOut);
+  anim::Storyboard storyboard;
+  anim::DoubleAnimation fade;
+  fade.From(0.0);
+  fade.To(1.0);
+  fade.Duration(Duration{std::chrono::duration_cast<winrt::Windows::Foundation::TimeSpan>(
+                             std::chrono::milliseconds(180)),
+                         DurationType::TimeSpan});
+  fade.EasingFunction(ease);
+  anim::Storyboard::SetTarget(fade, view);
+  anim::Storyboard::SetTargetProperty(fade, L"Opacity");
+  storyboard.Children().Append(fade);
+  storyboard.Begin();
+}
+
 void MainWindow::OnNavSelectionChanged(NavigationView const&,
                                        NavigationViewSelectionChangedEventArgs const& args) {
   auto item = args.SelectedItem().try_as<NavigationViewItem>();
@@ -1071,6 +1097,8 @@ void MainWindow::OnNavSelectionChanged(NavigationView const&,
   HomeNav().Header(paneShell ? IInspectable{nullptr} : item.Content());
 
   const bool wasConnectVisible = ConnectView().Visibility() == Visibility::Visible;
+  const hstring previousTag = currentTag_;
+  currentTag_ = tag;
   // a rail navigation always lands on the destination itself, never on the
   // Refer and earn page that may have been open in Account's place
   referralsOpen_ = false;
@@ -1095,7 +1123,24 @@ void MainWindow::OnNavSelectionChanged(NavigationView const&,
   // destination shows. A cache read with no request, so it runs in preview too.
   if (tag == L"wallet") wallet_->ResyncProviderStats();
 
-  if (tag == L"connect" && !wasConnectVisible) connect_->AnimateDrawerIn();
+  if (tag == L"connect" && !wasConnectVisible) {
+    connect_->AnimateDrawerIn();
+  } else if (previousTag != tag) {
+    // The destination swap entrance: every non-Connect destination gets the
+    // same 180ms opacity fade the Connect drawer's AnimateDrawerIn uses
+    // (Connect itself gets its when it first shows, above - two boards on one
+    // property would collide, so this is the else-branch). A destination that
+    // re-selects itself (SameItem) plays nothing.
+    FrameworkElement incoming{nullptr};
+    if (tag == L"connect") incoming = ConnectView();
+    else if (tag == L"network") incoming = NetworkView();
+    else if (tag == L"account") incoming = AccountView();
+    else if (tag == L"wallet") incoming = WalletView();
+    else if (tag == L"support") incoming = SupportView();
+    else if (tag == L"settings") incoming = SettingsView();
+    else if (tag == L"developer") incoming = DeveloperView();
+    FadeDestinationIn(incoming);
+  }
 
   // --preview-ui has no session. apiReady() is NOT the guard for that: it is
   // api_.has_value(), set at SDK INIT, not at login — so without this the
