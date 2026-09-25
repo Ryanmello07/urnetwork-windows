@@ -532,18 +532,25 @@ void MainWindow::ApplyBreakpoint() {
   SettingsPaneB().Visibility(settingsTwo ? Visibility::Visible : Visibility::Collapsed);
 
   // ---- Support: the form, and the way to reach a human beside it -----------
-  // 1080 and an even split. This destination has one form and no data, so the
-  // cap is the narrowest of the wide readings: a feedback box 540dip across is
-  // already generous, and stretching it further would be the "one column in a
-  // 2000px window" complaint in a different shape.
-  SupportCapColumn().MaxWidth(wide ? 1080 : 560);
-  if (wide) {
-    SetStar(SupportSideColumn(), 1);
-  } else {
-    SetWidth(SupportSideColumn(), 0);
-  }
-  Place(SupportSideStack(), wide ? PanePlacement{0, 1, 1, Thickness{20, 0, 0, 24}}
-                                 : PanePlacement{1, 0, 1, Thickness{0, 16, 0, 24}});
+  //
+  //   >= 1000dip   two panes   feedback(*) | support(360)
+  //   <  1000dip   one pane    feedback(*)
+  //
+  // Pane B is the fixed column for the same reason Network's detail pane is:
+  // it is a sentence and a link row, and prose gains nothing past a few
+  // hundred dips, while the form it sits beside is the thing that should take
+  // whatever width the window has.
+  //
+  // The fold is NOT reachability-losing: pane B's contents are built twice
+  // (SettingsPage::BuildSupportContactSection), once into the pane and once
+  // into SupportContactInline under the Send button, and below the breakpoint
+  // the inline copy shows instead. On a destination named Support the mailto
+  // is the one link with no second door anywhere else in the app, so it is
+  // the one pane whose content may not fold away.
+  SetWidth(SupportPaneBColumn(), wide ? 360 : 0);
+  SupportPaneBRule().Visibility(wide ? Visibility::Visible : Visibility::Collapsed);
+  SupportPaneB().Visibility(wide ? Visibility::Visible : Visibility::Collapsed);
+  SupportContactInline().Visibility(wide ? Visibility::Collapsed : Visibility::Visible);
 
   // ---- Developer: the tables full width, the rest in two columns -----------
   // Portmaster's reading. Exits carries seven columns and Destinations three,
@@ -1089,11 +1096,12 @@ void MainWindow::OnNavSelectionChanged(NavigationView const&,
   // A 60px display-face title above a pane layout is the one thing that stops
   // the panes reaching the ceiling, and it looked exactly as wrong on Network
   // as it had on Home - measured side by side against the approved Connect
-  // capture. Support and Developer keep their header because they are still
-  // card-model pages with a page margin, and a card page with no title reads as
-  // content that started halfway down.
+  // capture. Only Developer keeps its header now: it is the last card-model
+  // page with a page margin, and a card page with no title reads as content
+  // that started halfway down.
   const bool paneShell = tag == L"connect" || tag == L"network" || tag == L"wallet" ||
-                         tag == L"leaderboard" || tag == L"account" || tag == L"settings";
+                         tag == L"leaderboard" || tag == L"account" || tag == L"settings" ||
+                         tag == L"support";
   HomeNav().Header(paneShell ? IInspectable{nullptr} : item.Content());
 
   const bool wasConnectVisible = ConnectView().Visibility() == Visibility::Visible;

@@ -114,6 +114,11 @@ class SettingsPage {
   void BuildConnectionsSection(winrt::Microsoft::UI::Xaml::Controls::Panel const& host);
   void BuildIdentitySection(winrt::Microsoft::UI::Xaml::Controls::Panel const& host);
   void BuildStayInTouchSection(winrt::Microsoft::UI::Xaml::Controls::Panel const& host);
+  // Support's pane B: the mailto sentence and the protocol row. Built twice -
+  // into the pane and into the narrow-width inline host, which is the one the
+  // group header is for (the pane has its own 40px header strip).
+  void BuildSupportContactSection(winrt::Microsoft::UI::Xaml::Controls::Panel const& host,
+                                  bool withGroupHeader);
   void BuildSubscriptionSection(winrt::Microsoft::UI::Xaml::Controls::Panel const& host);
   void BuildVersionSection(winrt::Microsoft::UI::Xaml::Controls::Panel const& host);
   void BuildDangerSection();

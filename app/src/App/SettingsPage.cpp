@@ -121,32 +121,27 @@ SettingsPage::SettingsPage(winrt::URnetwork::implementation::MainWindow& window)
 void SettingsPage::ApplyStrings() {
   BuildSections();  // idempotent
 
-  // support
-  w_.FeedbackHeading().Text(Loc("feedback"));
-  // Why the screen exists. Already in the store, used nowhere until now: the
-  // panel opened on five bare controls and no sentence.
+  // support: two pane headers, and a landmark name each so a screen reader
+  // can tell the form from the way to reach a human
+  w_.SupportPaneATitle().Text(Loc("feedback"));
+  w_.SupportPaneBTitle().Text(Loc("support"));
+  // Why the screen exists, in one sentence. Already in the store, used nowhere
+  // until this destination: the panel opened on five bare controls and no
+  // sentence.
   w_.SupportIntroText().Text(Loc("site_app_support_intro"));
   w_.FeedbackRating().Caption(Loc("how_are_we_doing"));
   w_.FeedbackText().Header(LocBox("anything_else"));
   // The box shipped with no content whatsoever - an unlabelled tick offering to
   // upload the user's logs. The string existed the whole time.
   w_.FeedbackIncludeLogs().Content(LocBox("feedback_include_logs"));
-  // Send is now glyph + label, and a Button whose Content is a Panel gets NO
-  // automatic automation name, so it needs an explicit one or the only way to
-  // submit this form is nameless to a screen reader.
-  w_.SendFeedbackText().Text(Loc("send"));
-  // The contact card beside the form (D4). The feedback form is one-way; this
-  // is the other way, and both strings already shipped with no call site.
-  // SetMarkdownLinkText keeps the whole sentence and turns support@ur.io and
-  // the Discord invite into real Hyperlinks, which is what puts them in the
-  // tab order.
-  w_.SupportContactHeading().Text(Loc("support"));
-  urnw::SetMarkdownLinkText(
-      w_.SupportContactText(),
-      Localized("if_the_problem_persists_contact_us_at_support_ur"), 14);
-  w_.SupportProtocolLink().Content(LocBox("learn_more_protocol_page"));
+  // The primary action's label. A plain-string Content would name the button
+  // for free; the explicit SetName stays so the one way to submit this form is
+  // never nameless to a screen reader.
+  w_.SendFeedbackButton().Content(LocBox("send"));
   winrt::Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(
       w_.SendFeedbackButton(), Loc("send"));
+  Automation::AutomationProperties::SetName(w_.SupportPaneA(), Loc("feedback"));
+  Automation::AutomationProperties::SetName(w_.SupportPaneB(), Loc("support"));
 
   // settings: three pane headers, and a landmark name each so a screen reader
   // can tell the three regions apart
@@ -212,6 +207,17 @@ void SettingsPage::BuildSections() {
   BuildAdvancedSection(device);
   BuildVersionSection(about);
   BuildStayInTouchSection(about);
+  rows::SetPaneMode(false);
+
+  // ---- Support: the way to reach a human, in BOTH its homes ----------------
+  // The same section is built twice: into pane B for the two-pane widths, and
+  // into SupportContactInline (under the Send button) for the folded one. The
+  // breakpoint shows exactly one of the hosts, so only one copy is ever on
+  // screen; the inline copy carries the group header because there is no pane
+  // header strip naming it there.
+  rows::SetPaneMode(true);
+  BuildSupportContactSection(w_.SupportContactHost(), false);
+  BuildSupportContactSection(w_.SupportContactInline(), true);
   rows::SetPaneMode(false);
 
   // Everything that can be read without a round trip, so the page is not blank
@@ -563,6 +569,43 @@ void SettingsPage::BuildStayInTouchSection(Panel const& host) {
   auto protocolRow = kit::MakePaneRow(40);
   protocolRow.Child(protocol);
   card.Children().Append(protocolRow);
+}
+
+// REACHING A HUMAN. The feedback form is one-way; this is the other way, and
+// support@ur.io and the Discord invite were already in the store
+// (if_the_problem_persists_contact_us_at_support_ur) with no call site
+// anywhere in the client. Built TWICE (BuildSections): into Support's pane B
+// without a group header - the 40px pane header strip above already carries
+// the word, and repeating it read as a stutter on Settings' device pane - and
+// into the inline narrow-width host WITH one, because there is no pane header
+// naming the section there.
+void SettingsPage::BuildSupportContactSection(Panel const& host, bool withGroupHeader) {
+  if (withGroupHeader) {
+    host.Children().Append(kit::MakePaneGroupHeader(Loc("support")).root);
+  }
+
+  // The contact prose, exactly as BuildStayInTouchSection's linkRow: the
+  // store's own markdown string rendered with the links inline
+  // (SetMarkdownLinkText), so the whole shipped sentence survives and both
+  // links are real Hyperlinks in the tab order, in a hairline-bottom row at
+  // the pane's 12px inset.
+  TextBlock text;
+  SetMarkdownLinkText(text, Localized("if_the_problem_persists_contact_us_at_support_ur"), 13);
+  text.TextWrapping(TextWrapping::Wrap);
+  Border box;
+  box.Padding(ThicknessHelper::FromLengths(12, 10, 12, 10));
+  box.BorderBrush(colors::BorderBrush());
+  box.BorderThickness(ThicknessHelper::FromLengths(0, 0, 0, 1));
+  box.Child(text);
+  host.Children().Append(box);
+
+  // The protocol link as a whole-row chevron button: in pane mode NavRow
+  // emits the 44px chevron row, which is what a tappable row is everywhere
+  // else in the shell. The URL is the one the card model's HyperlinkButton
+  // already navigated to.
+  TextBlock unused{nullptr};
+  auto row = rows::NavRow(host, Loc("learn_more_protocol_page"), unused);
+  row.Click([](auto const&, auto const&) { OpenUrl(L"https://ur.xyz"); });
 }
 
 void SettingsPage::BuildSubscriptionSection(Panel const& host) {

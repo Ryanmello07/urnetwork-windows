@@ -2606,130 +2606,121 @@
                     </Grid>
                 </Grid>
 
-                <!-- Support. Measured before this change: 0% card surface and
-                     83% blank rows - the stars, the box and Send floated
-                     directly on the page background with nothing holding them
-                     together, which is the owner's "just buttons on a black
-                     screen" in its purest form. It is now one card with a
-                     glyphed header, an intro line and rules between the three
-                     steps (rate, write, send), which is the shape Settings
-                     already uses and the shape that reads best in the app. -->
-                <ScrollViewer Margin="24" x:Name="SupportView" Visibility="Collapsed">
-                  <!-- Three columns, weighted 1 : 1000 : 1, with the cap on the
-                       middle one. The middle star is greedy enough to always
-                       reach its MaxWidth when the window has the room, and the
-                       two hairline stars split whatever is left - so the column
-                       is CENTRED at wide widths and simply fills the viewport
-                       at narrow ones, with no breakpoint and no branch.
+                <!-- ==== SUPPORT: THE PANE SHELL =============================
+                     The last card-model form page. Measured before this
+                     change: 0% card surface and 83% blank rows - the stars,
+                     the box and Send floated directly on the page background
+                     with nothing holding them together, the owner's "just
+                     buttons on a black screen" in its purest form. It now
+                     reads the way every other destination reads:
 
-                       Why not MaxWidth on the panel: that is the arrange-split
-                       bug (the offset comes out of the child's DESIRED width
-                       while it is laid out at the cap). Why not the single
-                       capped column P4 used: it pins the content to x=0, which
-                       is right at 1100 and lopsided when maximized - measured
-                       2578px wide with 600px of content and ~1900px of void on
-                       one side. -->
-                  <!-- The same shape ConnectView carries. Support has ONE
-                       form and no data, so at desktop widths the right half was
-                       simply black - measured at 8% non-background pixels
-                       maximized, the emptiest surface in the app. It now
-                       carries the OTHER half of what this destination is for:
-                       the form sends feedback to us, and the card beside it is
-                       how you reach a human. Both strings already ship and were
-                       used nowhere. -->
-                  <Grid x:Name="SupportLayout">
+                       pane A  FEEDBACK   the form: intro, rate, write, logs,
+                                          send, its acknowledgement
+                       pane B  SUPPORT    the way to reach a human (the mailto
+                                          sentence and the protocol link)
+
+                     The form sends feedback TO us; pane B is the other
+                     direction, and on a destination named Support the mailto
+                     is the one link with no second door - which is why it
+                     folds INLINE (SupportContactInline, below Send) rather
+                     than out of reach. -->
+                <Grid x:Name="SupportView" Visibility="Collapsed"
+                      Style="{StaticResource UrPaneStyle}">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition x:Name="SupportCapColumn"
-                                          Width="1000*" MaxWidth="560" />
-                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition x:Name="SupportPaneAColumn" Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition x:Name="SupportPaneBColumn" Width="360" />
                     </Grid.ColumnDefinitions>
-                    <Grid Grid.Column="1">
-                      <Grid.ColumnDefinitions>
-                          <ColumnDefinition Width="*" />
-                          <ColumnDefinition x:Name="SupportSideColumn" Width="0" />
-                      </Grid.ColumnDefinitions>
-                      <Grid.RowDefinitions>
-                          <RowDefinition Height="Auto" />
-                          <RowDefinition Height="Auto" />
-                      </Grid.RowDefinitions>
 
-                    <StackPanel Grid.Row="0" Grid.Column="0"
-                                x:Name="SupportMainStack" Spacing="12"
-                                VerticalAlignment="Top">
-                        <!-- section header: glyph + name, the pattern every
-                             destination now uses above its first card -->
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <FontIcon Glyph="&#xE9CE;" Style="{StaticResource UrRowIconStyle}" />
-                            <TextBlock x:Name="FeedbackHeading" Style="{StaticResource UrPanelHeadingStyle}" />
-                        </StackPanel>
-                        <Border Style="{StaticResource UrCardStyle}">
-                            <StackPanel Spacing="12">
+                    <!-- ============ PANE A: FEEDBACK ======================= -->
+                    <Grid Grid.Column="0" x:Name="SupportPaneA"
+                          AutomationProperties.LandmarkType="Main">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <Border Style="{StaticResource UrPaneHeaderStyle}">
+                            <Grid>
+                                <TextBlock x:Name="SupportPaneATitle"
+                                           Style="{StaticResource UrPaneTitleStyle}" />
+                            </Grid>
+                        </Border>
+                        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled"
+                                      VerticalScrollBarVisibility="Auto">
+                            <StackPanel>
                                 <!-- why this screen exists, in one sentence.
-                                     site_app_support_intro already ships and was
-                                     used nowhere. -->
-                                <TextBlock x:Name="SupportIntroText"
-                                           Style="{StaticResource UrSupportingTextStyle}" />
-                                <Border Style="{StaticResource UrDividerStyle}" />
-                                <muxc:RatingControl x:Name="FeedbackRating" />
-                                <Border Style="{StaticResource UrDividerStyle}" />
-                                <TextBox x:Name="FeedbackText" AcceptsReturn="True" TextWrapping="Wrap"
-                                         Style="{StaticResource UrTextInputStyle}"
-                                         MinHeight="96" />
-                                <!-- apple FeedbackView: logs go to the server ONLY from
-                                     here, only when this is ticked, and only with the
-                                     server-issued feedback id (SettingsPage).
-                                     This box shipped with NO CONTENT AT ALL - an
-                                     unlabelled checkbox offering to upload the
-                                     user's logs, announced by a screen reader as
-                                     "checkbox" and nothing else. The string
-                                     (feedback_include_logs) was already in the
-                                     store. -->
-                                <CheckBox x:Name="FeedbackIncludeLogs" />
-                                <Border Style="{StaticResource UrDividerStyle}" />
-                                <Button x:Name="SendFeedbackButton" Click="OnSendFeedback"
-                                        HorizontalAlignment="Right">
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <FontIcon Glyph="&#xE724;" Style="{StaticResource UrRowIconStyle}"
-                                                  FontSize="14" />
-                                        <TextBlock x:Name="SendFeedbackText" VerticalAlignment="Center" />
-                                    </StackPanel>
-                                </Button>
+                                     site_app_support_intro already ships. -->
+                                <Border BorderBrush="{StaticResource UrBorderBrush}"
+                                        BorderThickness="0,0,0,1" Padding="12,10">
+                                    <TextBlock x:Name="SupportIntroText"
+                                               Style="{StaticResource UrSupportingTextStyle}" />
+                                </Border>
+                                <Border Style="{StaticResource UrPaneRowStyle}">
+                                    <muxc:RatingControl x:Name="FeedbackRating"
+                                                        VerticalAlignment="Center" />
+                                </Border>
+                                <!-- the one free-text control on the page: the row
+                                     frame (it owns the hairline) but at the box's
+                                     own height, not the 36px row height -->
+                                <Border Style="{StaticResource UrPaneRowStyle}"
+                                        MinHeight="0" Padding="12,8">
+                                    <TextBox x:Name="FeedbackText" AcceptsReturn="True" TextWrapping="Wrap"
+                                             Style="{StaticResource UrTextInputStyle}"
+                                             MinHeight="96" />
+                                </Border>
+                                <!-- apple FeedbackView: logs go to the server ONLY
+                                     from here, only when this is ticked, and only
+                                     with the server-issued feedback id
+                                     (SettingsPage). -->
+                                <Border Style="{StaticResource UrPaneRowStyle}">
+                                    <CheckBox x:Name="FeedbackIncludeLogs"
+                                              VerticalAlignment="Center" />
+                                </Border>
+                                <!-- bare like the Connect pane's primary action:
+                                     UrPaneActionPrimaryStyle already carries the
+                                     12px inset. Content is set in code
+                                     (Loc("send")); a plain-string Content gets
+                                     its automation name for free, but the
+                                     explicit SetName stays. -->
+                                <Button x:Name="SendFeedbackButton"
+                                        Style="{StaticResource UrPaneActionPrimaryStyle}"
+                                        Click="OnSendFeedback" />
+                                <!-- KEEP this x:Name: SettingsPage's ctor builds
+                                     its Snackbar on it ("thanks for the
+                                     feedback" and the send-failure errors). -->
+                                <muxc:InfoBar x:Name="SupportInfo"
+                                              Style="{StaticResource UrSnackbarStyle}"
+                                              Margin="12,8" IsOpen="False" />
+                                <!-- the narrow-width contact host: pane B's whole
+                                     contents, built here by
+                                     SettingsPage::BuildSupportContactSection
+                                     when the window is too narrow for the pane -->
+                                <StackPanel x:Name="SupportContactInline" Visibility="Collapsed" />
                             </StackPanel>
-                        </Border>
-                        <muxc:InfoBar x:Name="SupportInfo" Style="{StaticResource UrSnackbarStyle}" IsOpen="False" />
-                    </StackPanel>
-
-                    <!-- REACHING A HUMAN. The feedback form is one-way; this is
-                         the other way, and support@ur.io and the Discord invite
-                         were already in the store
-                         (if_the_problem_persists_contact_us_at_support_ur) with
-                         no call site anywhere in the client. Rendered with its
-                         links inline by urnw::SetMarkdownLinkText, so the whole
-                         shipped sentence survives and both links are real
-                         Hyperlinks in the tab order. -->
-                    <StackPanel Grid.Row="1" Grid.Column="0"
-                                x:Name="SupportSideStack" Spacing="12"
-                                VerticalAlignment="Top" Margin="0,16,0,0">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <FontIcon Glyph="&#xE939;" Style="{StaticResource UrRowIconStyle}" />
-                            <TextBlock x:Name="SupportContactHeading"
-                                       Style="{StaticResource UrPanelHeadingStyle}" />
-                        </StackPanel>
-                        <Border Style="{StaticResource UrCardStyle}">
-                            <StackPanel Spacing="12">
-                                <TextBlock x:Name="SupportContactText" TextWrapping="Wrap" />
-                                <Border Style="{StaticResource UrDividerStyle}" />
-                                <HyperlinkButton x:Name="SupportProtocolLink"
-                                                 NavigateUri="https://ur.xyz"
-                                                 FontSize="12" Padding="0"
-                                                 HorizontalAlignment="Left" />
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
+                        </ScrollViewer>
                     </Grid>
-                  </Grid>
-                </ScrollViewer>
+
+                    <Border x:Name="SupportPaneBRule" Grid.Column="1"
+                            Style="{StaticResource UrPaneVRuleStyle}" />
+
+                    <!-- ============ PANE B: REACH A HUMAN =================== -->
+                    <Grid Grid.Column="2" x:Name="SupportPaneB">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <Border Style="{StaticResource UrPaneHeaderStyle}">
+                            <Grid>
+                                <TextBlock x:Name="SupportPaneBTitle"
+                                           Style="{StaticResource UrPaneTitleStyle}" />
+                            </Grid>
+                        </Border>
+                        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled"
+                                      VerticalScrollBarVisibility="Auto">
+                            <StackPanel x:Name="SupportContactHost" />
+                        </ScrollViewer>
+                    </Grid>
+                </Grid>
 
                 <!-- ==== SETTINGS: THE PANE SHELL (R4) ======================
                      Slimmed to PREFERENCES. Account, subscription, login
