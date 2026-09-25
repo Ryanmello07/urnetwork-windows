@@ -1704,6 +1704,48 @@
                                                    Style="{StaticResource UrValueTextStyle}" />
                                     </Grid>
                                 </Border>
+                                <!-- the usage bar's three figures, as rows: the bar
+                                     shows the SHAPE, these carry the numbers the
+                                     legend dots only colour. Neutral text on
+                                     purpose - palette spend stays with the legend
+                                     dots, which own the colour meaning. Labels are
+                                     the same shipped keys the legend uses. -->
+                                <Border Style="{StaticResource UrPaneRowStyle}" MinHeight="34">
+                                    <Grid ColumnSpacing="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock x:Name="AccountUsedLabel"
+                                                   Style="{StaticResource UrKeyTextStyle}" />
+                                        <TextBlock x:Name="AccountUsedValue" Grid.Column="1"
+                                                   Style="{StaticResource UrValueTextStyle}" />
+                                    </Grid>
+                                </Border>
+                                <Border Style="{StaticResource UrPaneRowStyle}" MinHeight="34">
+                                    <Grid ColumnSpacing="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock x:Name="AccountPendingLabel"
+                                                   Style="{StaticResource UrKeyTextStyle}" />
+                                        <TextBlock x:Name="AccountPendingValue" Grid.Column="1"
+                                                   Style="{StaticResource UrValueTextStyle}" />
+                                    </Grid>
+                                </Border>
+                                <Border Style="{StaticResource UrPaneRowStyle}" MinHeight="34">
+                                    <Grid ColumnSpacing="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock x:Name="AccountAvailableLabel"
+                                                   Style="{StaticResource UrKeyTextStyle}" />
+                                        <TextBlock x:Name="AccountAvailableValue" Grid.Column="1"
+                                                   Style="{StaticResource UrValueTextStyle}" />
+                                    </Grid>
+                                </Border>
                                 <Border Style="{StaticResource UrPaneRowStyle}" MinHeight="34">
                                     <Grid ColumnSpacing="8">
                                         <Grid.ColumnDefinitions>
@@ -1713,6 +1755,35 @@
                                         <TextBlock x:Name="AccountReferralTotals"
                                                    Style="{StaticResource UrKeyTextStyle}" />
                                         <TextBlock x:Name="AccountReferralBonus" Grid.Column="1"
+                                                   Style="{StaticResource UrValueTextStyle}" />
+                                    </Grid>
+                                </Border>
+                                <!-- what the referral bonus MEANS, in the program's
+                                     own terms (the shipped formatted key the
+                                     referral card already uses; the count row above
+                                     carries the numbers, this carries the rule). -->
+                                <Border Style="{StaticResource UrPaneRowStyle}"
+                                        MinHeight="0" Padding="12,10">
+                                    <TextBlock x:Name="AccountReferralDetail"
+                                               Style="{StaticResource UrSupportingTextStyle}" />
+                                </Border>
+                                <!-- the redeemed-code COUNT, one glance at pane C's
+                                     contents from pane A. Informational only: the
+                                     Redeem row below stays the action. The whole
+                                     row collapses (AccountPage::RenderBalanceCodes)
+                                     when there is no count to report - NoSession,
+                                     Loading and Failed draw no empty row. -->
+                                <Border x:Name="AccountBalanceCodesRow"
+                                        Style="{StaticResource UrPaneRowStyle}" MinHeight="34"
+                                        Visibility="Collapsed">
+                                    <Grid ColumnSpacing="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock x:Name="AccountBalanceCodesLabel"
+                                                   Style="{StaticResource UrKeyTextStyle}" />
+                                        <TextBlock x:Name="AccountBalanceCodesValue" Grid.Column="1"
                                                    Style="{StaticResource UrValueTextStyle}" />
                                     </Grid>
                                 </Border>

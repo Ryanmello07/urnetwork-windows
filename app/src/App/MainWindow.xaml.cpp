@@ -1554,6 +1554,11 @@ void MainWindow::ApplyBalance() {
   }
   const hstring daily = H(urnw::FormatByteCountCompact(balance_.startBalanceByteCount));
   AccountDailyValue().Text(daily);
+  // The bar shows the shape of the balance; these rows carry the three figures
+  // the legend dots only colour. Same snapshot fields, same compact format.
+  AccountUsedValue().Text(H(urnw::FormatByteCountCompact(balance_.usedByteCount)));
+  AccountPendingValue().Text(H(urnw::FormatByteCountCompact(balance_.pendingByteCount)));
+  AccountAvailableValue().Text(H(urnw::FormatByteCountCompact(balance_.availableByteCount)));
 
   // referral rows: "Total Referrals: N" and "+N*3 GiB/Day" (the server grants
   // 3 GiB per referral per 24h -- pro.yml referral; this row said GiB/Month)
@@ -1563,6 +1568,10 @@ void MainWindow::ApplyBalance() {
       "referral_bonus", Balance().ReferralTerms().EarnedGibPerDay(totalReferrals))};
   AccountReferralTotals().Text(totals);
   AccountReferralBonus().Text(bonus);
+  // the program's rule under its numbers, from the same terms the bonus figure
+  // above is computed with (pro.yml via ReferralTerms, not a hardcoded 3)
+  AccountReferralDetail().Text(hstring{urnw::Format(
+      "referral_panel_detail", Balance().ReferralTerms().bonusGibPerDay)});
 
   UpdateBalanceWarning();
   // the open upgrade sheet watches for the plan flip / poll timeout
