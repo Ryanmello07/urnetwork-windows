@@ -3107,51 +3107,85 @@
                      seven destinations and it belongs where the other six are.
                      The page appends its cards into the four named hosts.
 
-                     Portmaster's reading: the wide tables at the top, then
-                     key-value material in columns under them. Exits has seven
-                     columns and Destinations three; both take the full width of
-                     the composition at every size, and both will grow id / raw
-                     columns under Advanced Mode. -->
-                <ScrollViewer Margin="24" x:Name="DeveloperView" Visibility="Collapsed"
-                              HorizontalScrollBarVisibility="Disabled"
-                              VerticalScrollBarVisibility="Auto">
-                  <Grid x:Name="DeveloperLayout">
+                       col 0  SESSION     the intro and its actions, what the
+                                         session has measured, then the wide
+                                         tables (Exits has seven columns,
+                                         Destinations three, the probe suite
+                                         seven)
+                       col 2  OVERRIDES   the five reliability override
+                                         sections - what the session has been
+                                         TOLD TO DO
+
+                     The pairing is the reading direction: change a threshold
+                     on the right, watch a count move on the left. The tables
+                     keep the pane's full width at every size; below the fold
+                     what overflows clips silently, the same answer every pane
+                     gives.
+
+                     The cards INSIDE the panes are the page's unchanged
+                     section builders - this port moves the shell, not the
+                     sections - so each scroller keeps the 16px gap a
+                     UrCardStyle needs to read as a card rather than fusing
+                     edge to edge. -->
+                <Grid x:Name="DeveloperView" Visibility="Collapsed"
+                      Style="{StaticResource UrPaneStyle}">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition x:Name="DeveloperCapColumn"
-                                          Width="1000*" MaxWidth="1000" />
-                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition x:Name="DeveloperPaneAColumn" Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition x:Name="DeveloperPaneBColumn" Width="400" />
                     </Grid.ColumnDefinitions>
-                    <Grid Grid.Column="1">
-                      <Grid.ColumnDefinitions>
-                          <ColumnDefinition Width="*" />
-                          <ColumnDefinition x:Name="DeveloperSideColumn" Width="0" />
-                      </Grid.ColumnDefinitions>
-                      <Grid.RowDefinitions>
-                          <RowDefinition Height="Auto" />
-                          <RowDefinition Height="Auto" />
-                          <RowDefinition Height="Auto" />
-                          <RowDefinition Height="Auto" />
-                      </Grid.RowDefinitions>
-                      <!-- what these tools are, and the two actions that need
-                           no session -->
-                      <StackPanel Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2"
-                                  x:Name="DeveloperTopStack" Spacing="16" />
-                      <!-- the two tables, full width -->
-                      <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
-                                  x:Name="DeveloperTablesStack" Spacing="16"
-                                  Margin="0,16,0,0" />
-                      <!-- what the session has measured -->
-                      <StackPanel Grid.Row="2" Grid.Column="0"
-                                  x:Name="DeveloperMainStack" Spacing="16"
-                                  VerticalAlignment="Top" Margin="0,16,0,24" />
-                      <!-- the five override sections -->
-                      <StackPanel Grid.Row="3" Grid.Column="0"
-                                  x:Name="DeveloperSideStack" Spacing="16"
-                                  VerticalAlignment="Top" Margin="0,16,0,24" />
+
+                    <!-- ============ PANE A: THE SESSION ===================== -->
+                    <Grid Grid.Column="0" x:Name="DeveloperPaneA"
+                          AutomationProperties.LandmarkType="Main">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <Border Style="{StaticResource UrPaneHeaderStyle}">
+                            <Grid>
+                                <TextBlock x:Name="DeveloperPaneATitle"
+                                           Style="{StaticResource UrPaneTitleStyle}" />
+                            </Grid>
+                        </Border>
+                        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled"
+                                      VerticalScrollBarVisibility="Auto">
+                            <StackPanel Margin="16" Spacing="16">
+                                <!-- what these tools are, and the two actions
+                                     that need no session -->
+                                <StackPanel x:Name="DeveloperTopStack" Spacing="16" />
+                                <!-- what the session has measured -->
+                                <StackPanel x:Name="DeveloperMainStack" Spacing="16" />
+                                <!-- the tables and the probe suite, the pane's
+                                     full width -->
+                                <StackPanel x:Name="DeveloperTablesStack" Spacing="16" />
+                            </StackPanel>
+                        </ScrollViewer>
                     </Grid>
-                  </Grid>
-                </ScrollViewer>
+
+                    <Border x:Name="DeveloperPaneBRule" Grid.Column="1"
+                            Style="{StaticResource UrPaneVRuleStyle}" />
+
+                    <!-- ============ PANE B: THE OVERRIDES =================== -->
+                    <Grid Grid.Column="2" x:Name="DeveloperPaneB">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <Border Style="{StaticResource UrPaneHeaderStyle}">
+                            <Grid>
+                                <TextBlock x:Name="DeveloperPaneBTitle"
+                                           Style="{StaticResource UrPaneTitleStyle}" />
+                            </Grid>
+                        </Border>
+                        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled"
+                                      VerticalScrollBarVisibility="Auto">
+                            <!-- the five override sections -->
+                            <StackPanel x:Name="DeveloperSideStack" Spacing="16"
+                                        Margin="16" />
+                        </ScrollViewer>
+                    </Grid>
+                </Grid>
             </Grid>
         </muxc:NavigationView>
 

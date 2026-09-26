@@ -328,6 +328,17 @@ void DeveloperPage::BridgeLoop() {
 
 void DeveloperPage::ApplyStrings() {
   w_.DeveloperNavItem().Content(winrt::box_value(Dev("dev_developer", L"Developer")));
+  // The two pane headers, and a landmark name each so a screen reader can tell
+  // the session half from what it has been told to do - the idiom SettingsPage
+  // paints its pane titles with. dev_developer already names this destination,
+  // so pane A reuses it; pane B gets a dev_ id like the rest of this surface
+  // (the strings note above is why no store key covers either).
+  w_.DeveloperPaneATitle().Text(Dev("dev_developer", L"Developer"));
+  w_.DeveloperPaneBTitle().Text(Dev("dev_reliability_overrides", L"Reliability overrides"));
+  Automation::AutomationProperties::SetName(w_.DeveloperPaneA(),
+                                            Dev("dev_developer", L"Developer"));
+  Automation::AutomationProperties::SetName(
+      w_.DeveloperPaneB(), Dev("dev_reliability_overrides", L"Reliability overrides"));
   // The rest of the surface is code-built and carries its own strings; it is
   // built lazily on first selection so a user who never opens this destination
   // pays nothing for its ~40 controls.
@@ -778,13 +789,14 @@ void DeveloperPage::EnsureBuilt() {
 }
 
 void DeveloperPage::Build() {
-  // The four hosts D4 put in the markup. This page used to build its own
-  // 1000-wide left-aligned column and hand it to DeveloperView as Content; the
-  // width and the placement now come from the same shape the other six
-  // destinations use, so this unit only decides WHICH host each card belongs
-  // to. That decision is Portmaster's: the tables at the top, full width; what
-  // the session has measured and what it has been told to do in two columns
-  // under them.
+  // The four hosts in the markup's pane shell: pane A takes the intro, the
+  // measurements and the three wide tables, pane B the five override sections.
+  // This page used to build its own 1000-wide left-aligned column and hand it
+  // to DeveloperView as Content; the width and the placement now come from the
+  // same pane shape the other six destinations use, so this unit only decides
+  // WHICH host each card belongs to. That decision is still Portmaster's: what
+  // the session has measured on the left, what it has been told to do on the
+  // right - change a threshold on the right, watch a count move on the left.
   auto top = w_.DeveloperTopStack();
   auto tables = w_.DeveloperTablesStack();
   auto measured = w_.DeveloperMainStack();

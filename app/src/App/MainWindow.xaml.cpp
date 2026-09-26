@@ -30,23 +30,13 @@ using namespace urnw::pages;
 namespace winrt::URnetwork::implementation {
 namespace {
 
-// Where one pane sits: which cell of its page's pane grid, how many rows it may
-// span, and what gap it keeps. Every destination's wide reading is two of these
-// - one for the flyout, one for the desktop - and nothing else.
-struct PanePlacement {
-  int row = 0;
-  int column = 0;
-  int rowSpan = 1;
-  Thickness margin{};
-};
-
-void Place(FrameworkElement const& pane, PanePlacement const& at) {
-  if (!pane) return;
-  Grid::SetRow(pane, at.row);
-  Grid::SetColumn(pane, at.column);
-  Grid::SetRowSpan(pane, at.rowSpan);
-  pane.Margin(at.margin);
-}
+// (PanePlacement / Place lived here. They re-gridded Developer's side stack at
+// each breakpoint - beside the main column when wide, under it when narrow -
+// because the card layout needed a module in two different cells at two widths.
+// The pane shell has no such move: pane B is declared where it lives and the
+// breakpoint only decides how many panes are visible, which is SetWidth +
+// Visibility like every other destination. Deleted with the layout that
+// needed them.)
 
 // A column's width, as a fixed number of DIPs. Zero collapses it, which is how
 // a side column stops existing at flyout widths.
@@ -646,20 +636,30 @@ void MainWindow::ApplyBreakpoint() {
   SupportPaneB().Visibility(wide ? Visibility::Visible : Visibility::Collapsed);
   SupportContactInline().Visibility(wide ? Visibility::Collapsed : Visibility::Visible);
 
-  // ---- Developer: the tables full width, the rest in two columns -----------
-  // Portmaster's reading. Exits carries seven columns and Destinations three,
-  // and both were living inside a 1000dip left-aligned column; they now take
-  // the whole composition. What the session HAS MEASURED and what it has been
-  // TOLD TO DO go side by side under them, which is the pairing you actually
-  // read them in - change a threshold on the right, watch a count on the left.
-  DeveloperCapColumn().MaxWidth(wide ? 1800 : 1000);
-  if (wide) {
-    SetStar(DeveloperSideColumn(), 1);
-  } else {
-    SetWidth(DeveloperSideColumn(), 0);
-  }
-  Place(DeveloperSideStack(), wide ? PanePlacement{2, 1, 1, Thickness{20, 16, 0, 24}}
-                                   : PanePlacement{3, 0, 1, Thickness{0, 16, 0, 24}});
+  // ---- Developer: the session beside what it has been told to do ------------
+  //
+  //   >= 1000dip   two panes   session(*) | overrides(400)
+  //   <  1000dip   one pane    session(*)
+  //
+  // (1000dip OF NAV CONTENT, like Network and Support above - a fold read on
+  // the window has the same 1008 inversion, and at the gate pane A keeps
+  // 1000 - 400 - 1 = 599dip.)
+  //
+  // Pane B is the fixed column because its override rows carry the widest
+  // trailing in the app - a 72px effective readout beside a 120px NumberBox -
+  // so it takes Network's 400 rather than Support's 360, and the session half
+  // (the tables) is the thing that should take whatever width is left.
+  //
+  // The fold closes the overrides with no second door. The fold rule's usual
+  // answer (Support's inline copy) would build the 34-row settings surface
+  // twice, and its rows' indexed toggle/number wiring (DeveloperPage's
+  // boolRows_/numRows_) is single-instance. Settings' pane B already folds the
+  // same way with the version and the community links in it: below the gate
+  // the destination narrows to what the session shows, which is the half a
+  // freeze diagnosis is actually run from.
+  SetWidth(DeveloperPaneBColumn(), wide ? 400 : 0);
+  DeveloperPaneBRule().Visibility(wide ? Visibility::Visible : Visibility::Collapsed);
+  DeveloperPaneB().Visibility(wide ? Visibility::Visible : Visibility::Collapsed);
 
   // ---- the status strip ----------------------------------------------------
   // Captions off below the breakpoint. The app's minimum window is 400dip
@@ -1401,16 +1401,15 @@ void MainWindow::OnNavSelectionChanged(NavigationView const&,
   // area. (AlwaysShowHeader is not the lever: it hides the header only in the
   // minimal pane mode. A null Header collapses the presenter at every width.)
   //
-  // R4 extends that from Home to every destination REBUILT in the pane shell.
-  // A 60px display-face title above a pane layout is the one thing that stops
-  // the panes reaching the ceiling, and it looked exactly as wrong on Network
-  // as it had on Home - measured side by side against the approved Connect
-  // capture. Only Developer keeps its header now: it is the last card-model
-  // page with a page margin, and a card page with no title reads as content
-  // that started halfway down.
+  // R4 extends that from Home to every destination REBUILT in the pane shell,
+  // which is now all of them (Developer was the last card-model page). A 60px
+  // display-face title above a pane layout is the one thing that stops the
+  // panes reaching the ceiling, and it looked exactly as wrong on Network as
+  // it had on Home - measured side by side against the approved Connect
+  // capture.
   const bool paneShell = tag == L"connect" || tag == L"network" || tag == L"wallet" ||
                          tag == L"leaderboard" || tag == L"account" || tag == L"settings" ||
-                         tag == L"support";
+                         tag == L"support" || tag == L"developer";
   HomeNav().Header(paneShell ? IInspectable{nullptr} : item.Content());
 
   const bool wasConnectVisible = ConnectView().Visibility() == Visibility::Visible;
