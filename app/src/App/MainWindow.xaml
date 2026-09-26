@@ -778,9 +778,14 @@
                                            Style="{StaticResource UrPaneMetaStyle}" />
                             </Grid>
                         </Border>
-                        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled"
+                        <ScrollViewer Grid.Row="1" x:Name="PaneAScroll"
+                                      HorizontalScrollBarVisibility="Disabled"
                                       VerticalScrollBarVisibility="Auto">
-                            <StackPanel>
+                            <!-- the 28px bottom pad is PaneAScrollFade's height (see
+                                 the fade below): at the bottom edge the fade zone
+                                 holds only this pad, so the last peer row always sits
+                                 ABOVE the fade. The two numbers must match. -->
+                            <StackPanel Padding="0,0,0,28">
                                 <!-- STATUS LEADS. Protection state first, at the top of
                                      the pane, above the ornament. -->
                                 <Border Style="{StaticResource UrPaneRowStyle}"
@@ -1124,6 +1129,38 @@
                                 <StackPanel x:Name="PeersHost" />
                             </StackPanel>
                         </ScrollViewer>
+                        <!-- Bottom edge fade for the pane's list (the peers feed is
+                             what this scroller ends in): it says "there is more
+                             below", which a plain StackPanel in a ScrollViewer
+                             cannot. Pure geometry, no code: docked to the pane
+                             bottom in the scroller's OWN grid cell, it fades to the
+                             pane surface #101010 (UrPaneStyle / UrBackgroundBrush;
+                             literal stops, the same idiom as the referral card's
+                             gold fade), and the content's 28px bottom pad means the
+                             fade zone holds only padding once the last row arrives -
+                             so the fade dissolves exactly as the list runs out,
+                             without observing VerticalOffset (a scroll handler would
+                             have to live on MainWindow or ConnectPage, which this
+                             chrome does not own). The binding hides it outright when
+                             everything fits: with an Auto vertical scrollbar,
+                             ComputedVerticalScrollBarVisibility is Visible exactly
+                             while the content overflows. It tracks that scrollbar
+                             setting - if it ever stops being Auto, re-derive the
+                             gate. PEERS ONLY, deliberately: the Activity connections
+                             list rebuilds its rows live and row churn sliding under
+                             a fade reads as flicker, while the peers feed is one
+                             slow push. Pointer-transparent and animation-free: a
+                             static gradient strip, nothing per frame. -->
+                        <Border x:Name="PaneAScrollFade" Grid.Row="1" Height="28"
+                                VerticalAlignment="Bottom" IsHitTestVisible="False"
+                                Visibility="{Binding ElementName=PaneAScroll, Path=ComputedVerticalScrollBarVisibility}">
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                    <GradientStop Offset="0" Color="#00101010" />
+                                    <GradientStop Offset="1" Color="#101010" />
+                                </LinearGradientBrush>
+                            </Border.Background>
+                        </Border>
                     </Grid>
 
                     <Border x:Name="ConnectPaneBRule" Grid.Column="1"
