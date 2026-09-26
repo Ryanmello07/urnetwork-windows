@@ -1193,9 +1193,13 @@
                              segmented idiom (same control, same row metrics as the
                              ConnectionModeBar row in pane A), because the list is one
                              feed read four ways - All / Blocked / Tunnelled / Bypassed,
-                             the same three-way verdict the rows themselves print. No
-                             markup handler: XAML event handlers live on MainWindow,
-                             which this page does not own, so the bar is wired from
+                             the same three-way verdict the rows themselves print. The
+                             bar gets the row to itself: at the three-pane gate the
+                             activity pane is 368dip and the four items already read
+                             ~290, so sharing the row with the group-by switch clipped
+                             the last item (measured at 1625px). No markup handlers:
+                             XAML event handlers live on MainWindow, which this page
+                             does not own, so the bar is wired from
                              ConnectPage::Initialize like the status-dot taps. -->
                         <Border Grid.Row="1" Style="{StaticResource UrPaneRowStyle}"
                                 MinHeight="44" Padding="8,4">
@@ -1209,8 +1213,28 @@
                         </Border>
                         <!-- the connections search row, built by ConnectPage
                              (kit::MakePaneSearchRow, the NetworkSearchHost idiom) so the
-                             field and its host/IP substring filter live in one place -->
-                        <Grid Grid.Row="2" x:Name="ConnectionsSearchHost" />
+                             field and its host/IP substring filter live in one place.
+                             The group-by-host switch rides at the row's right, the
+                             app's one on/off idiom with an 11px caption: it folds the
+                             same filtered feed into one row per display host. The row
+                             shares because the search field is the one control here
+                             that shrinks gracefully - the star column takes the
+                             squeeze, the switch keeps its shape. -->
+                        <Grid Grid.Row="2" ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Grid x:Name="ConnectionsSearchHost" />
+                            <StackPanel Grid.Column="1" Orientation="Horizontal"
+                                        Spacing="8" VerticalAlignment="Center">
+                                <TextBlock x:Name="ConnectionsGroupLabel"
+                                           Style="{StaticResource UrPaneMetaStyle}" />
+                                <ToggleSwitch x:Name="ConnectionsGroupToggle" Width="44"
+                                              Style="{StaticResource UrSwitchToggleStyle}"
+                                              AutomationProperties.LabeledBy="{Binding ElementName=ConnectionsGroupLabel}" />
+                            </StackPanel>
+                        </Grid>
                         <!-- Everything under the filters is ONE body whose height
                              ConnectPage::ApplyActivityBodyHeight pins at the viewport,
                              floored at kActivityBodyMinHeight: while the window is

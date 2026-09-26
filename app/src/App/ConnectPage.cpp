@@ -111,6 +111,12 @@ void ConnectPage::Initialize() {
   w_.ConnectionsVerdictBar().SelectionChanged([weak = w_.get_weak()](auto const&, auto const&) {
     if (auto self = weak.get()) self->connect().OnConnectionsVerdictChanged();
   });
+  // The group-by-host toggle rides the same filter row and is wired here for
+  // the same reason: XAML event handlers live on MainWindow, which this page
+  // does not own.
+  w_.ConnectionsGroupToggle().Toggled([weak = w_.get_weak()](auto const&, auto const&) {
+    if (auto self = weak.get()) self->connect().OnConnectionsGroupToggled();
+  });
   // the small-height scroll escape for pane B: keep the body under the filter
   // rows viewport-sized, with the floor that engages the outer scroller only
   // when height is scarce (ApplyActivityBodyHeight has the rule)
@@ -222,6 +228,10 @@ void ConnectPage::ApplyStrings() {
   w_.VerdictBlockedItem().Text(Loc("blocked"));
   w_.VerdictTunnelledItem().Text(Adv("adv_filter_tunnelled", L"Tunnelled"));
   w_.VerdictBypassedItem().Text(Adv("adv_filter_bypassed", L"Bypassed"));
+  // The group-by-host switch's caption. The switch itself is labelled BY this
+  // TextBlock (markup's AutomationProperties.LabeledBy), so there is no second
+  // name to string.
+  w_.ConnectionsGroupLabel().Text(Adv("adv_group_by_host", L"Group by host"));
   if (connectionsSearch_) {
     connectionsSearch_.PlaceholderText(Adv("adv_search_connections", L"Search hosts or IPs"));
     // a TextBox's placeholder is NOT its accessible name (MakePaneSearchRow
@@ -1791,6 +1801,34 @@ std::string BlockActionMeta(int64_t timeMillis, int64_t byteCount, int64_t packe
           urnw::FormatCountCompact(packetCount) + " pkt";
   return meta;
 }
+
+// The fold count as words, for a group row's meta and its accessible name.
+// "1 connection" / "N connections": no store key plurals "connection" today
+// (host_count is the nearest and names the wrong thing), so the Adv pair is
+// reported with the rest of this surface.
+std::string GroupConnectionsWord(int64_t connections) {
+  return std::to_string(connections) + " " +
+         (connections == 1 ? Narrow(Adv("adv_connection_count_one", L"connection"))
+                           : Narrow(Adv("adv_connection_count", L"connections")));
+}
+
+// A GROUP row's meta line: the fold count first - it is what makes the row a
+// group - then the same age / bytes / packets figures every connection row
+// prints, summed over the group with the LATEST decision's age. The age
+// re-renders on the 1s clock like any other row's.
+std::string GroupConnectionsMeta(int64_t connections, int64_t timeMillis,
+                                 int64_t byteCount, int64_t packetCount,
+                                 int64_t nowMillis) {
+  std::string meta = GroupConnectionsWord(connections);
+  meta += "   ";
+  if (0 < timeMillis) {
+    meta += urnw::RelativeTime(timeMillis, nowMillis);
+    meta += "   ";
+  }
+  meta += urnw::FormatByteCountCompact(byteCount) + "   " +
+          urnw::FormatCountCompact(packetCount) + " pkt";
+  return meta;
+}
 }  // namespace
 
 // The verdict filter's membership test. "Tunnelled" and "Bypassed" split the
@@ -1826,16 +1864,18 @@ bool ConnectPage::ConnectionQueryPasses(std::string const& query,
          anyMatch(action.matchedHosts) || anyMatch(action.matchedIps);
 }
 
-// The activity row, built ONCE per block-action id. NORMAL: a static row, not
+// The activity row, built ONCE per reconcile key. NORMAL: a static row, not
 // focusable, not selectable - a Normal user is being told what their VPN is
 // doing, not handed 200 tab stops on the way to the Connect button. ADVANCED:
 // the same row, selectable - clickable, in the tab order, and invokable with
 // Enter or Space because it is a real Button rather than a Border with a
-// pointer handler bolted on.
+// pointer handler bolted on. A GROUP row (group-by-host) is the same row over
+// a host's aggregate; its click is the drill-in, not a selection.
 ConnectPage::ConnectionRowEntry ConnectPage::BuildConnectionRow(
-    urnw::BlockActionItem const& action) {
+    ConnectionViewItem const& item) {
   ConnectionRowEntry entry;
-  entry.id = action.id;
+  entry.group = item.group != nullptr;
+  entry.id = entry.group ? item.group->host : item.action->id;
   entry.selectable = advancedMode_;
   if (!advancedMode_) {
     auto row = urnw::kit::MakePaneListRow(36);
@@ -1850,49 +1890,86 @@ ConnectPage::ConnectionRowEntry ConnectPage::BuildConnectionRow(
     entry.dot = row.dot;
     entry.title = row.title;
     entry.meta = row.meta;
-    // By ID, never by index - see SelectConnection. The id is captured by
+    // By KEY, never by index - see SelectConnection. The key is captured by
     // value so the handler does not reach back into a vector that has been
-    // rebuilt.
-    const std::string id = action.id;
-    row.root.Click([weak = w_.get_weak(), id](auto const&, auto const&) {
-      if (auto self = weak.get()) self->connect().SelectConnection(id);
-    });
+    // rebuilt. A group row's click drills into the host; a decision row's
+    // click selects the connection for the inspector.
+    const std::string key = entry.id;
+    const bool group = entry.group;
+    if (group) {
+      row.root.Click([weak = w_.get_weak(), key](auto const&, auto const&) {
+        if (auto self = weak.get()) self->connect().DrillIntoConnectionGroup(key);
+      });
+    } else {
+      row.root.Click([weak = w_.get_weak(), key](auto const&, auto const&) {
+        if (auto self = weak.get()) self->connect().SelectConnection(key);
+      });
+    }
+    // Right-tap (or the keyboard's menu key): the row's rule toggles and
+    // copy-details. Advanced Mode only - Normal's static rows get no menu, the
+    // same division the click has.
+    const Controls::Button anchor = row.root;
+    row.root.ContextRequested(
+        [weak = w_.get_weak(), key, group, anchor](
+            auto const&,
+            winrt::Microsoft::UI::Xaml::Input::ContextRequestedEventArgs const& args) {
+          args.Handled(true);
+          if (auto self = weak.get()) {
+            self->connect().ShowConnectionRowMenu(anchor, key, group);
+          }
+        });
   }
-  UpdateConnectionRow(entry, action);
+  UpdateConnectionRow(entry, item);
   return entry;
 }
 
 // The in-place rewrite: everything a push can change about a row that is
 // already on screen - the counters (and with them the meta line), the title,
 // the verdict's colour and word - without touching the row's identity, focus
-// or the scroller's offset.
+// or the scroller's offset. A group row rewrites from the aggregate: the
+// verdict by precedence (blocked if any blocked, else bypassed if any local,
+// else tunnelled), the counters summed, the age from the latest decision.
 void ConnectPage::UpdateConnectionRow(ConnectionRowEntry& entry,
-                                      urnw::BlockActionItem const& action) {
-  entry.timeMillis = action.timeMillis;
-  entry.byteCount = action.byteCount;
-  entry.packetCount = action.packetCount;
-  const std::string title = BlockActionTitle(action);
+                                      ConnectionViewItem const& item) {
+  const bool group = item.group != nullptr;
+  entry.timeMillis = group ? item.group->latestMillis : item.action->timeMillis;
+  entry.byteCount = group ? item.group->byteCount : item.action->byteCount;
+  entry.packetCount = group ? item.group->packetCount : item.action->packetCount;
+  entry.groupConnections = group ? item.group->connections : 0;
+  const std::string title = group ? item.group->host : BlockActionTitle(*item.action);
+  const bool blocked = group ? item.group->anyBlocked : item.action->block;
+  const bool local = group ? !item.group->anyBlocked && item.group->anyLocal
+                           : item.action->local;
   const hstring titleText = title.empty() ? Loc("unknown") : H(title);
-  const auto verdictColor = action.block   ? urnw::colors::kUrCoral
-                            : action.local ? urnw::colors::kUrAmber
-                                           : urnw::colors::kUrGreen;
+  const auto verdictColor = blocked   ? urnw::colors::kUrCoral
+                            : local   ? urnw::colors::kUrAmber
+                                      : urnw::colors::kUrGreen;
   // The verdict in WORDS, for the row's accessible name. The dot is Raw, so
   // the name is the only place the colour's meaning exists for a screen
   // reader - and `local` is a THIRD verdict the old two-way name folded into
   // "allowed": traffic sent around the tunnel is allowed and unprotected, and
   // those are not the same thing to anyone reading this list.
-  const hstring verdict = action.block  ? Loc("blocked")
-                          : action.local ? Loc("local")
-                                         : Loc("allowed");
+  const hstring verdict = blocked ? Loc("blocked")
+                          : local ? Loc("local")
+                                  : Loc("allowed");
   const int64_t nowMillis = std::chrono::duration_cast<std::chrono::milliseconds>(
                                 std::chrono::system_clock::now().time_since_epoch())
                                 .count();
   entry.dot.Fill(urnw::colors::MakeBrush(verdictColor));
   entry.title.Text(titleText);
   entry.meta.Text(
-      H(BlockActionMeta(action.timeMillis, action.byteCount, action.packetCount, nowMillis)));
+      H(group ? GroupConnectionsMeta(entry.groupConnections, entry.timeMillis,
+                                     entry.byteCount, entry.packetCount, nowMillis)
+              : BlockActionMeta(entry.timeMillis, entry.byteCount,
+                                entry.packetCount, nowMillis)));
+  // A group row's name carries the fold count too: "host, N connections,
+  // verdict" - the aggregate fact the sighted row shows and the bare title
+  // would not say.
+  std::wstring name{titleText};
+  if (group) name += L", " + urnw::Widen(GroupConnectionsWord(entry.groupConnections));
+  name += L", " + std::wstring{verdict};
   winrt::Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(
-      entry.root, hstring{std::wstring{titleText} + L", " + std::wstring{verdict}});
+      entry.root, hstring{name});
 }
 
 // The activity pane's table: every routing decision the device has made, newest
@@ -1902,18 +1979,21 @@ void ConnectPage::UpdateConnectionRow(ConnectionRowEntry& entry,
 //
 // INCREMENTAL, because the feed pushes several times a second and a
 // Clear()+rebuild on every push reset the scroller to the top, which made the
-// list unreadable while it moved: rows are keyed by BlockActionItem::id, new
+// list unreadable while it moved: rows are keyed by BlockActionItem::id (or, in
+// group-by-host mode, by display host - see ConnectionRowEntry's kind), new
 // decisions insert at the top, living rows are rewritten in place, rows past
 // the cap or filtered out are removed, and the offset is restored afterwards.
-// The verdict filter and the host/IP search re-evaluate membership through
-// this same pass, so a filter change is a diff, not a rebuild.
+// The verdict filter, the host/IP search and the group fold re-evaluate
+// membership through this same pass, so a filter change is a diff, not a
+// rebuild.
 void ConnectPage::ApplyConnectionsList(bool resetScroll) {
   auto host = w_.ConnectionsHost();
   auto scroll = w_.ConnectionsScroll();
 
   // The Advanced-Mode flip changes the row TYPE (static Border <-> selectable
   // Button), which an incremental pass cannot morph: it is the ONE path that
-  // still clears, and it is a user gesture, never a push.
+  // still clears, and it is a user gesture, never a push. (The group flip only
+  // changes the row's KEY - the reconcile replaces the rows below.)
   if (connectionRowsSelectable_ != advancedMode_ && !connectionRowEntries_.empty()) {
     host.Children().Clear();
     connectionRowEntries_.clear();
@@ -1924,31 +2004,56 @@ void ConnectPage::ApplyConnectionsList(bool resetScroll) {
   // feed (no Sdk() read, so the filter and the push path cannot disagree),
   // under the cap the full rebuild had. A cap, not a scroll budget: the SDK's
   // action feed is unbounded and every row is a live XAML subtree - 200 rows
-  // is ~7000px of pane, well past any window.
+  // is ~7000px of pane, well past any window. Group mode folds the SAME
+  // filtered feed first and the cap counts groups.
   constexpr size_t kMaxRows = 200;
-  std::vector<urnw::BlockActionItem const*> visible;
-  visible.reserve(std::min(blockActions_.size(), kMaxRows));
   int64_t filteredCount = 0;
-  for (auto const& action : blockActions_) {
-    if (!VerdictPassesFilter(verdictFilter_, action) ||
-        !ConnectionQueryPasses(connectionsQuery_, action)) {
-      continue;
+  std::vector<ConnectionGroup> groups;
+  std::vector<ConnectionViewItem> visible;
+  if (connectionsGrouped_) {
+    groups = FoldConnectionGroups();
+    for (auto const& group : groups) filteredCount += group.connections;
+    visible.reserve(std::min(groups.size(), kMaxRows));
+    for (auto const& group : groups) {
+      if (visible.size() >= kMaxRows) break;
+      visible.push_back(ConnectionViewItem{nullptr, &group});
     }
-    ++filteredCount;
-    if (visible.size() < kMaxRows) visible.push_back(&action);
+  } else {
+    visible.reserve(std::min(blockActions_.size(), kMaxRows));
+    for (auto const& action : blockActions_) {
+      if (!VerdictPassesFilter(verdictFilter_, action) ||
+          !ConnectionQueryPasses(connectionsQuery_, action)) {
+        continue;
+      }
+      ++filteredCount;
+      if (visible.size() < kMaxRows) {
+        visible.push_back(ConnectionViewItem{&action, nullptr});
+      }
+    }
   }
 
   // Read the offset BEFORE the mutations; it is restored after them. A filter
   // change is a new result set and reads from the top instead.
   const double offset = resetScroll ? 0.0 : scroll.VerticalOffset();
 
+  // The reconcile key + kind check: the decision id for a flat row, the host
+  // for a group row. The kind has to match too - the id namespace and the
+  // hostname namespace share the entry's one string, so a group flip must
+  // REPLACE a row, never rewrite a decision row into a group that happens to
+  // spell the same.
+  auto matches = [](ConnectionViewItem const& item, ConnectionRowEntry const& entry) {
+    const bool group = item.group != nullptr;
+    if (group != entry.group) return false;
+    return (group ? item.group->host : item.action->id) == entry.id;
+  };
+
   // Rows that left the visible set - aged out of the feed, trimmed past the
   // cap, or filtered out - walk back to front so the Children() indices stay
   // valid as they come out.
   for (size_t i = connectionRowEntries_.size(); 0 < i--;) {
     bool stays = false;
-    for (auto const* action : visible) {
-      if (action->id == connectionRowEntries_[i].id) {
+    for (auto const& item : visible) {
+      if (matches(item, connectionRowEntries_[i])) {
         stays = true;
         break;
       }
@@ -1962,16 +2067,16 @@ void ConnectPage::ApplyConnectionsList(bool resetScroll) {
   // The visible order, top = newest: update in place where the row already
   // stands, reseat it if the feed moved it, insert it if it is new.
   for (size_t i = 0; i < visible.size(); ++i) {
-    auto const& action = *visible[i];
+    auto const& item = visible[i];
     size_t at = connectionRowEntries_.size();
     for (size_t k = i; k < connectionRowEntries_.size(); ++k) {
-      if (connectionRowEntries_[k].id == action.id) {
+      if (matches(item, connectionRowEntries_[k])) {
         at = k;
         break;
       }
     }
     if (at < connectionRowEntries_.size()) {
-      UpdateConnectionRow(connectionRowEntries_[at], action);
+      UpdateConnectionRow(connectionRowEntries_[at], item);
       if (at != i) {
         ConnectionRowEntry entry = std::move(connectionRowEntries_[at]);
         connectionRowEntries_.erase(connectionRowEntries_.begin() +
@@ -1983,7 +2088,7 @@ void ConnectPage::ApplyConnectionsList(bool resetScroll) {
                                      std::move(entry));
       }
     } else {
-      ConnectionRowEntry entry = BuildConnectionRow(action);
+      ConnectionRowEntry entry = BuildConnectionRow(item);
       host.Children().InsertAt(static_cast<uint32_t>(i), entry.root);
       connectionRowEntries_.insert(connectionRowEntries_.begin() +
                                        static_cast<ptrdiff_t>(i),
@@ -2014,16 +2119,21 @@ void ConnectPage::ApplyConnectionsList(bool resetScroll) {
 
   // The group-header count: "N hosts" with no filter, "N hosts of M" while a
   // filter is holding rows back - of_total is the shipped "of {}" key, so the
-  // pair stays plural-correct in every language the store covers.
+  // pair stays plural-correct in every language the store covers. Group mode
+  // always reads "N hosts of M": the fold over the filtered feed it folded -
+  // "8 hosts of 30".
   const bool filterActive =
       verdictFilter_ != ConnectionVerdictFilter::All || !connectionsQuery_.empty();
   std::wstring count =
       urnw::Plural("host_count",
-                   filterActive ? filteredCount
-                                : static_cast<int64_t>(blockActions_.size()));
-  if (filterActive) {
+                   connectionsGrouped_ ? static_cast<int64_t>(groups.size())
+                   : filterActive      ? filteredCount
+                                       : static_cast<int64_t>(blockActions_.size()));
+  if (connectionsGrouped_ || filterActive) {
     count += L" ";
-    count += urnw::Format("of_total", static_cast<int64_t>(blockActions_.size()));
+    count += urnw::Format("of_total", connectionsGrouped_
+                                          ? filteredCount
+                                          : static_cast<int64_t>(blockActions_.size()));
   }
   w_.ConnectionsCount().Text(hstring{count});
 
@@ -2040,6 +2150,47 @@ void ConnectPage::ApplyConnectionsList(bool resetScroll) {
   // connection that has aged out.
   ApplyConnectionSelectionVisuals();
   ApplyInspector();
+}
+
+// Group-by-host's fold: the FILTERED feed (the same verdict + query membership
+// the flat list renders) collapsed by display host - BlockActionTitle's rule,
+// so a group is named exactly the way its members' rows would be. The feed is
+// newest-first, so the first sight of a host is its latest decision; the
+// explicit sort afterwards states the row order (latest first) rather than
+// trusting that property through ties and zeroed times.
+std::vector<ConnectPage::ConnectionGroup> ConnectPage::FoldConnectionGroups() const {
+  std::vector<ConnectionGroup> groups;
+  for (auto const& action : blockActions_) {
+    if (!VerdictPassesFilter(verdictFilter_, action) ||
+        !ConnectionQueryPasses(connectionsQuery_, action)) {
+      continue;
+    }
+    const std::string host = BlockActionTitle(action);
+    ConnectionGroup* group = nullptr;
+    for (auto& candidate : groups) {
+      if (candidate.host == host) {
+        group = &candidate;
+        break;
+      }
+    }
+    if (!group) {
+      groups.push_back(ConnectionGroup{});
+      group = &groups.back();
+      group->host = host;
+      group->latest = &action;  // newest-first feed: first seen is the latest
+    }
+    ++group->connections;
+    group->byteCount += action.byteCount;
+    group->packetCount += action.packetCount;
+    group->latestMillis = std::max(group->latestMillis, action.timeMillis);
+    group->anyBlocked = group->anyBlocked || action.block;
+    group->anyLocal = group->anyLocal || action.local;
+  }
+  std::stable_sort(groups.begin(), groups.end(),
+                   [](ConnectionGroup const& a, ConnectionGroup const& b) {
+                     return a.latestMillis > b.latestMillis;
+                   });
+  return groups;
 }
 
 // NetworkPage::Build parity: the search field and its filter live in one
@@ -2083,6 +2234,43 @@ void ConnectPage::OnConnectionsVerdictChanged() {
   ApplyConnectionsList(true);
 }
 
+// The group-by-host switch, read off the control the way the verdict bar is. A
+// changed fold is a new result set, like a changed verdict: re-evaluate
+// through the ordinary incremental pass and read it from the top.
+void ConnectPage::OnConnectionsGroupToggled() {
+  if (updatingControls_) return;
+  const bool grouped = w_.ConnectionsGroupToggle().IsOn();
+  if (grouped == connectionsGrouped_) return;
+  connectionsGrouped_ = grouped;
+  ApplyConnectionsList(true);
+}
+
+// The drill-in. The search box takes the host (its TextChanged folds the text
+// into connectionsQuery_ and re-runs the pass - the same path the user's own
+// typing takes), and the switch goes off behind updatingControls_ so the
+// programmatic flip does not echo back through its handler. When the box
+// already held exactly this host no TextChanged is coming, so the pass runs
+// here instead: the fold flip alone still re-renders.
+void ConnectPage::DrillIntoConnectionGroup(std::string const& host) {
+  if (host.empty()) return;  // an unnamed group has nothing to search for
+  if (connectionsGrouped_) {
+    connectionsGrouped_ = false;
+    updatingControls_ = true;
+    w_.ConnectionsGroupToggle().IsOn(false);
+    updatingControls_ = false;
+  }
+  if (connectionsSearch_) {
+    if (Narrow(connectionsSearch_.Text()) == host) {
+      ApplyConnectionsList(true);
+    } else {
+      connectionsSearch_.Text(H(host));
+    }
+  } else {
+    connectionsQuery_ = ToLower(TrimWhitespace(host));
+    ApplyConnectionsList(true);
+  }
+}
+
 // The 1s reading of the meta line's age prefix. Every row keeps the counters
 // its meta was built from, so this is one string re-render per row with no
 // feed read and no rebuild - and a row whose age text has not changed is not
@@ -2094,8 +2282,12 @@ void ConnectPage::RefreshConnectionRowTimes() {
                                 .count();
   for (auto& entry : connectionRowEntries_) {
     if (entry.timeMillis <= 0) continue;
+    // a group row re-renders its own meta shape (fold count + the trio)
     const hstring meta =
-        H(BlockActionMeta(entry.timeMillis, entry.byteCount, entry.packetCount, nowMillis));
+        H(entry.group ? GroupConnectionsMeta(entry.groupConnections, entry.timeMillis,
+                                             entry.byteCount, entry.packetCount, nowMillis)
+                      : BlockActionMeta(entry.timeMillis, entry.byteCount,
+                                        entry.packetCount, nowMillis));
     if (entry.meta.Text() != meta) entry.meta.Text(meta);
   }
 }
@@ -2618,14 +2810,17 @@ void ConnectPage::ApplyQuickActionButton(Button const& button,
 }
 
 void ConnectPage::OnInspectorBlockToggle() {
-  const InspectorQuickAction state = blockQuickAction_;
+  RunBlockQuickAction(blockQuickAction_, SelectedConnectionAction());
+}
+
+void ConnectPage::RunBlockQuickAction(InspectorQuickAction const& state,
+                                      urnw::BlockActionItem const* action) {
   if (!state.enabled) return;
   if (state.active) {
     // the toggle's off half: remove the rule in force, by id
     Sdk().RemoveBlockRule(state.overrideId);
     ShowInspectorRuleSnackbar(Adv("adv_rule_removed", L"Rule removed"), {});
   } else {
-    const urnw::BlockActionItem* action = SelectedConnectionAction();
     if (!action) return;
     // the inverse of the verdict: a tunnelled host gets a blocking rule; a
     // host the default policy blocked gets an allowing one (the countermand)
@@ -2644,13 +2839,16 @@ void ConnectPage::OnInspectorBlockToggle() {
 }
 
 void ConnectPage::OnInspectorRouteToggle() {
-  const InspectorQuickAction state = routeQuickAction_;
+  RunRouteQuickAction(routeQuickAction_, SelectedConnectionAction());
+}
+
+void ConnectPage::RunRouteQuickAction(InspectorQuickAction const& state,
+                                      urnw::BlockActionItem const* action) {
   if (!state.enabled) return;
   if (state.active) {
     Sdk().RemoveSplitRule(state.overrideId);
     ShowInspectorRuleSnackbar(Adv("adv_rule_removed", L"Rule removed"), {});
   } else {
-    const urnw::BlockActionItem* action = SelectedConnectionAction();
     if (!action) return;
     // the inverse of the verdict, as with the block pair: bypassed gets a
     // tunnel rule (Local=false), tunnelled gets a bypass rule (Local=true)
@@ -2669,6 +2867,10 @@ void ConnectPage::OnInspectorRouteToggle() {
 void ConnectPage::OnInspectorCopyDetails() {
   const urnw::BlockActionItem* action = SelectedConnectionAction();
   if (!action) return;
+  CopyConnectionDetails(*action);
+}
+
+void ConnectPage::CopyConnectionDetails(urnw::BlockActionItem const& action) {
   auto join = [](std::vector<std::string> const& parts) {
     std::string out;
     for (auto const& part : parts) {
@@ -2685,41 +2887,128 @@ void ConnectPage::OnInspectorCopyDetails() {
     if (!text.empty()) text += L"\r\n";
     text += std::wstring{key} + L": " + std::wstring{value};
   };
-  const std::string hostsJoined = join(action->hosts);
-  const std::string ipsJoined = join(action->ips);
+  const std::string hostsJoined = join(action.hosts);
+  const std::string ipsJoined = join(action.ips);
   line(Adv("adv_host", L"Host"),
        hostsJoined.empty() ? Adv("adv_none", L"none") : H(hostsJoined));
   line(Adv("adv_addresses", L"Addresses"),
        ipsJoined.empty() ? Adv("adv_none", L"none") : H(ipsJoined));
   line(Adv("adv_verdict", L"Verdict"),
-       action->block ? Adv("adv_verdict_blocked", L"Blocked — no packets sent")
-       : action->local
+       action.block ? Adv("adv_verdict_blocked", L"Blocked — no packets sent")
+       : action.local
            ? Adv("adv_verdict_local", L"Bypassed the tunnel — not protected")
            : Adv("adv_verdict_tunnelled", L"Tunnelled through URnetwork"));
-  if (action->overrideId.empty()) {
+  if (action.overrideId.empty()) {
     line(Adv("adv_reason", L"Reason"), Adv("adv_reason_default", L"Default policy"));
   } else {
     line(Adv("adv_reason", L"Reason"),
-         action->hasBlockOverride  ? Adv("adv_reason_block", L"Block override")
-         : action->hasRouteOverride ? Adv("adv_reason_route", L"Route override")
+         action.hasBlockOverride  ? Adv("adv_reason_block", L"Block override")
+         : action.hasRouteOverride ? Adv("adv_reason_route", L"Route override")
                                     : Adv("adv_reason_override", L"Override"));
-    line(Adv("adv_override_id", L"Override"), H(action->overrideId));
+    line(Adv("adv_override_id", L"Override"), H(action.overrideId));
   }
   line(Adv("adv_packets_total", L"Packets (total)"),
-       H(urnw::FormatCountCompact(action->packetCount)));
+       H(urnw::FormatCountCompact(action.packetCount)));
   line(Adv("adv_bytes_total", L"Bytes (total)"),
-       H(urnw::FormatByteCountCompact(action->byteCount)));
-  if (0 < action->timeMillis) {
+       H(urnw::FormatByteCountCompact(action.byteCount)));
+  if (0 < action.timeMillis) {
     const int64_t nowMillis = std::chrono::duration_cast<std::chrono::milliseconds>(
                                   std::chrono::system_clock::now().time_since_epoch())
                                   .count();
     line(Adv("adv_last_decision", L"Last decision"),
-         H(urnw::RelativeTime(action->timeMillis, nowMillis)));
+         H(urnw::RelativeTime(action.timeMillis, nowMillis)));
   }
   winrt::Windows::ApplicationModel::DataTransfer::DataPackage package;
   package.SetText(winrt::hstring{text});
   winrt::Windows::ApplicationModel::DataTransfer::Clipboard::SetContent(package);
   ShowInspectorRuleSnackbar(Adv("adv_details_copied", L"Connection details copied"), {});
+}
+
+// The row menu is built at OPEN, never cached: the quick-action state reads
+// the live overrides list, and a menu that remembered a rule state from when
+// its row was built would offer to remove rules that no longer exist. The
+// state and the target are then captured INTO the items, so a click does
+// exactly what the open menu showed - the same stored-state rule the
+// inspector's buttons follow.
+void ConnectPage::ShowConnectionRowMenu(
+    winrt::Microsoft::UI::Xaml::FrameworkElement const& anchor,
+    std::string const& key, bool group) {
+  // Resolve the target NOW, and own it: the feed is live, and neither the menu
+  // nor its clicks may point into vectors the next push replaces. A group
+  // row's target is a synthesized action over the group's HOST (the menu rules
+  // on the host, the way the row aggregates it), folded back out of the same
+  // filtered feed the list rendered so menu and row cannot disagree.
+  urnw::BlockActionItem target;
+  if (!group) {
+    const urnw::BlockActionItem* action = nullptr;
+    for (auto const& candidate : blockActions_) {
+      if (candidate.id == key) {
+        action = &candidate;
+        break;
+      }
+    }
+    if (!action) return;  // aged out of the feed: nothing honest to offer
+    target = *action;
+  } else {
+    bool found = false;
+    for (auto const& fold : FoldConnectionGroups()) {
+      if (fold.host != key) continue;
+      found = true;
+      target.id = fold.host;
+      target.hosts = {fold.host};
+      target.block = fold.anyBlocked;
+      target.local = !fold.anyBlocked && fold.anyLocal;
+      target.timeMillis = fold.latestMillis;
+      target.byteCount = fold.byteCount;
+      target.packetCount = fold.packetCount;
+      if (fold.latest) {
+        target.overrideId = fold.latest->overrideId;
+        target.hasBlockOverride = fold.latest->hasBlockOverride;
+        target.hasRouteOverride = fold.latest->hasRouteOverride;
+      }
+      break;
+    }
+    if (!found) return;
+  }
+
+  const InspectorQuickAction blockState = QuickActionFor(target, true);
+  const InspectorQuickAction routeState = QuickActionFor(target, false);
+
+  MenuFlyout flyout;
+  MenuFlyoutItem blockItem;
+  // The label names what the click leaves behind - the active rule's polarity,
+  // else the verdict - the exact reading the inspector's buttons print
+  // (ApplyInspector), so the menu and the buttons never name the same click
+  // two ways.
+  blockItem.Text((blockState.active ? blockState.polarity : target.block)
+                     ? Adv("adv_allow_host", L"Allow this host")
+                     : Adv("adv_block_host", L"Block this host"));
+  blockItem.IsEnabled(blockState.enabled);
+  blockItem.Click([weak = w_.get_weak(), blockState, target](auto const&, auto const&) {
+    if (auto self = weak.get()) {
+      self->connect().RunBlockQuickAction(blockState, &target);
+    }
+  });
+  flyout.Items().Append(blockItem);
+  MenuFlyoutItem routeItem;
+  routeItem.Text((routeState.active ? routeState.polarity : target.local)
+                     ? Adv("adv_always_tunnel", L"Always tunnel")
+                     : Adv("adv_bypass_tunnel", L"Bypass the tunnel"));
+  routeItem.IsEnabled(routeState.enabled);
+  routeItem.Click([weak = w_.get_weak(), routeState, target](auto const&, auto const&) {
+    if (auto self = weak.get()) {
+      self->connect().RunRouteQuickAction(routeState, &target);
+    }
+  });
+  flyout.Items().Append(routeItem);
+  flyout.Items().Append(MenuFlyoutSeparator());
+  MenuFlyoutItem copyItem;
+  copyItem.Text(Adv("adv_copy_details", L"Copy details"));
+  copyItem.Click([weak = w_.get_weak(), target](auto const&, auto const&) {
+    if (auto self = weak.get()) self->connect().CopyConnectionDetails(target);
+  });
+  flyout.Items().Append(copyItem);
+  flyout.ShowAt(anchor);
 }
 
 void ConnectPage::OnInspectorUndo() {
@@ -3201,7 +3490,11 @@ void ConnectPage::ApplyPreviewSample() {
     const uint32_t h = hash(i + 7);
     urnw::BlockActionItem action;
     action.id = "preview-" + std::to_string(i);
-    action.hosts = {kHosts[i]};
+    // Every fourth row repeats an earlier host: group-by-host needs repeated
+    // hosts in the sample, or the preview demonstrates 30 one-member groups,
+    // which is the mode showing nothing. Deterministic, like everything here.
+    const char* host = (i % 4 == 3) ? kHosts[(i / 4) % 8] : kHosts[i];
+    action.hosts = {host};
     action.block = (h >> 5) % 5 == 0;
     action.local = !action.block && (h >> 9) % 7 == 0;
     action.byteCount = static_cast<int64_t>((h >> 11) % 900000) + 512;
@@ -3219,7 +3512,7 @@ void ConnectPage::ApplyPreviewSample() {
       action.overrideId = "preview-override-" + std::to_string(i);
       action.hasBlockOverride = action.block;
       action.hasRouteOverride = action.local;
-      action.matchedHosts = {kHosts[i]};
+      action.matchedHosts = {host};
     }
     blockActions_.push_back(action);
   }

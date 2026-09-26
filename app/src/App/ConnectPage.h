@@ -237,7 +237,11 @@ class ConnectPage {
   //                                           push. resetScroll is for the
   //                                           filter controls: a changed filter
   //                                           is a new result set and reads
-  //                                           from the top.
+  //                                           from the top. Group-by-host folds
+  //                                           the same filtered feed into one
+  //                                           row per display host, keyed by
+  //                                           the host - a second payload over
+  //                                           the SAME pass, not a second list.
   //   statistics pane   ApplySessionRows      the session figures, key/value
   //                     ApplyContractsList    one row per contract peer
   //                     ApplySplitRulesList   one row per split rule
@@ -257,12 +261,44 @@ class ConnectPage {
   // or the inspector can print (hosts, ips, and the override-matched variants).
   static bool ConnectionQueryPasses(std::string const& query,
                                     urnw::BlockActionItem const& action);
+  // One host's aggregate of the FILTERED feed (group-by-host). The fold key is
+  // the display host (BlockActionTitle's precedence: first matched host, else
+  // host, else ip), the verdict is the precedence the row dots already print -
+  // blocked if ANY decision in the group blocked, else bypassed if any went
+  // around the tunnel, else tunnelled - the counters are the sums, and the time
+  // is the LATEST decision's, which is also the group's sort order.
+  struct ConnectionGroup {
+    std::string host;
+    int64_t connections = 0;
+    int64_t byteCount = 0;
+    int64_t packetCount = 0;
+    int64_t latestMillis = 0;
+    bool anyBlocked = false;
+    bool anyLocal = false;
+    // the newest decision in the group: the row menu's quick actions read its
+    // override id for QuickActionFor's `decided` fallback, the way a flat row
+    // reads its own action.
+    urnw::BlockActionItem const* latest = nullptr;
+  };
+  // The filtered feed folded by host. The ONE fold: ApplyConnectionsList
+  // renders it and a group row's menu re-reads it, so the two can never
+  // disagree about what a group holds.
+  std::vector<ConnectionGroup> FoldConnectionGroups() const;
+  // The reconcile's unit: ONE routing decision, or one host group. Exactly one
+  // of the two pointers is set, and that pointer IS the row's kind.
+  struct ConnectionViewItem {
+    urnw::BlockActionItem const* action = nullptr;
+    ConnectionGroup const* group = nullptr;
+  };
   // One row of the activity list as it stands on screen: the elements both
   // modes share (root, dot, title, meta) plus, in Advanced Mode, the selectable
   // row kept whole for SetPaneListRowSelected. The cached counters let the 1s
-  // clock re-render the relative-time prefix without a feed push.
+  // clock re-render the relative-time prefix without a feed push. `group`
+  // marks the entry model's second kind: a host aggregate (id = the host)
+  // rather than one routing decision (id = BlockActionItem::id).
   struct ConnectionRowEntry {
     std::string id;
+    bool group = false;       // a host aggregate row, keyed by host
     bool selectable = false;  // root is a Button (Advanced Mode), else a Border
     winrt::Microsoft::UI::Xaml::UIElement root{nullptr};
     winrt::Microsoft::UI::Xaml::Shapes::Ellipse dot{nullptr};
@@ -272,13 +308,21 @@ class ConnectPage {
     int64_t timeMillis = 0;
     int64_t byteCount = 0;
     int64_t packetCount = 0;
+    int64_t groupConnections = 0;  // the fold count; group rows only
   };
-  ConnectionRowEntry BuildConnectionRow(urnw::BlockActionItem const& action);
-  void UpdateConnectionRow(ConnectionRowEntry& entry, urnw::BlockActionItem const& action);
+  ConnectionRowEntry BuildConnectionRow(ConnectionViewItem const& item);
+  void UpdateConnectionRow(ConnectionRowEntry& entry, ConnectionViewItem const& item);
   // the search row (kit::MakePaneSearchRow, NetworkPage::Build parity), once
   void BuildConnectionsFilter();
   // verdict bar change -> verdictFilter_ -> incremental re-evaluation
   void OnConnectionsVerdictChanged();
+  // group-by-host switch change -> connectionsGrouped_ -> the same pass
+  void OnConnectionsGroupToggled();
+  // A group row's click, and the whole of its interaction: fill the search box
+  // with the group's host and leave group mode, so the group expands IN PLACE
+  // through the filter that already exists. Not a selection (a group has no
+  // one connection to inspect) and not a nested list.
+  void DrillIntoConnectionGroup(std::string const& host);
   // Re-render every row's relative-time prefix on the 1s divider: a repaint of
   // one TextBlock per row, never a rebuild.
   void RefreshConnectionRowTimes();
@@ -341,6 +385,26 @@ class ConnectPage {
   void OnInspectorBlockToggle();
   void OnInspectorRouteToggle();
   void OnInspectorCopyDetails();
+  // Execute a quick action's click against the LIVE rule state: the toggle's
+  // off half removes the rule in force by id, the on half creates the rule
+  // whose polarity is the inverse of the verdict, and both confirm through the
+  // snackbar (Undo armed on a creation). Factored out of the inspector's
+  // button handlers so the row context menu runs the SAME logic - the two
+  // surfaces can never disagree about what a click does. `action` supplies the
+  // verdict the create-half inverts (null tolerated; the create half no-ops).
+  void RunBlockQuickAction(InspectorQuickAction const& state,
+                           urnw::BlockActionItem const* action);
+  void RunRouteQuickAction(InspectorQuickAction const& state,
+                           urnw::BlockActionItem const* action);
+  // The copy-details third of the same trio: the inspector's fields, in the
+  // inspector's words, onto the clipboard.
+  void CopyConnectionDetails(urnw::BlockActionItem const& action);
+  // The row's right-tap menu (Advanced Mode, where rows are Buttons): the two
+  // rule toggles and copy-details above, on the row under the pointer instead
+  // of the selection. `key` is the row's reconcile key - the decision id, or
+  // the host when `group` is set, in which case the menu rules on that host.
+  void ShowConnectionRowMenu(winrt::Microsoft::UI::Xaml::FrameworkElement const& anchor,
+                             std::string const& key, bool group);
   // the snackbar's Undo: deletes the just-created override by id
   void OnInspectorUndo();
   // Confirmation after a rule write. undoOverrideId non-empty arms the Undo
@@ -538,6 +602,10 @@ class ConnectPage {
   // (ApplyAdvancedMode, a user gesture and never a push).
   bool connectionRowsSelectable_ = false;
   ConnectionVerdictFilter verdictFilter_ = ConnectionVerdictFilter::All;
+  // group-by-host (the filter strip's second control): the filtered feed folds
+  // into one row per display host. Reconciled through the SAME incremental
+  // pass - the entry carries a kind, there is no second list.
+  bool connectionsGrouped_ = false;
   // the host/IP substring, lowercased and trimmed; empty = no text filter
   std::string connectionsQuery_;
   winrt::Microsoft::UI::Xaml::Controls::TextBox connectionsSearch_{nullptr};
