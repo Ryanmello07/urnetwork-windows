@@ -1203,13 +1203,34 @@
                              ConnectPage::Initialize like the status-dot taps. -->
                         <Border Grid.Row="1" Style="{StaticResource UrPaneRowStyle}"
                                 MinHeight="44" Padding="8,4">
-                            <muxc:SelectorBar x:Name="ConnectionsVerdictBar"
-                                              VerticalAlignment="Center">
-                                <muxc:SelectorBarItem x:Name="VerdictAllItem" />
-                                <muxc:SelectorBarItem x:Name="VerdictBlockedItem" />
-                                <muxc:SelectorBarItem x:Name="VerdictTunnelledItem" />
-                                <muxc:SelectorBarItem x:Name="VerdictBypassedItem" />
-                            </muxc:SelectorBar>
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <muxc:SelectorBar x:Name="ConnectionsVerdictBar"
+                                                  VerticalAlignment="Center">
+                                    <muxc:SelectorBarItem x:Name="VerdictAllItem" />
+                                    <muxc:SelectorBarItem x:Name="VerdictBlockedItem" />
+                                    <muxc:SelectorBarItem x:Name="VerdictTunnelledItem" />
+                                    <muxc:SelectorBarItem x:Name="VerdictBypassedItem" />
+                                </muxc:SelectorBar>
+                                <!-- One-click reset for the whole filter strip (verdict,
+                                     search text and the group fold), shown only while any
+                                     of the three is off its default. A text button, not an
+                                     icon: "Clear" is a word the store already ships, and an
+                                     unlabelled glyph would need an automation name to say
+                                     the same thing. The row has the room - the group-by
+                                     switch moved to the search row below. Wired from
+                                     ConnectPage::Initialize like the bar itself; collapsed
+                                     here costs no width, so the bar's rest layout is
+                                     exactly what it was. -->
+                                <Button x:Name="ConnectionsClearFilters" Grid.Column="1"
+                                        Visibility="Collapsed"
+                                        Style="{StaticResource UrPaneActionSecondaryStyle}"
+                                        Height="26" MinHeight="0" Margin="0"
+                                        Padding="10,0" FontSize="12" />
+                            </Grid>
                         </Border>
                         <!-- the connections search row, built by ConnectPage
                              (kit::MakePaneSearchRow, the NetworkSearchHost idiom) so the
@@ -1241,8 +1262,10 @@
                              tall enough the body IS the viewport and the layout is
                              pixel-identical to the fixed rows it replaces, and below
                              the floor this scroller engages instead of the fixed
-                             blocks above (40px header + 150px chart + transport bar +
-                             ip-family row + extender panel + 28px group header)
+                             blocks above (40px pane header + the chart, which flexes
+                             120..240 with the same viewport + transport bar +
+                             ip-family row + extender panel + 28px group header +
+                             3px ratio bar)
                              compressing the star-sized connections list to zero with
                              no way to reach it - which is exactly what the 400x480dip
                              minimum window did. The rule: fixed chrome never starves
@@ -1257,9 +1280,20 @@
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
                                     <RowDefinition Height="*" />
                                 </Grid.RowDefinitions>
-                                <!-- the chart runs the FULL WIDTH of the pane, edge to edge -->
+                                <!-- the chart runs the FULL WIDTH of the pane, edge to edge.
+                                     The 150 is the pre-layout seed (today's fixed height);
+                                     ConnectPage::ApplyActivityBodyHeight re-derives the
+                                     host's height from the scroller's viewport on every
+                                     resize - the chart flexes between 120 (height scarce:
+                                     what it yields keeps the list's rows readable at the
+                                     520 floor) and 240 (a tall window uses it), so the
+                                     default layout keeps the 150 it had. The chart
+                                     re-renders and re-stamps its clip per SizeChanged
+                                     (kit::ClipToBounds), the same path a window resize
+                                     already took. -->
                                 <Border BorderBrush="{StaticResource UrBorderBrush}"
                                         BorderThickness="0,0,0,1" Padding="12,0">
                                     <Grid x:Name="RemoteChartHost" Height="150" />
@@ -1296,10 +1330,32 @@
                                                    Style="{StaticResource UrPaneMetaStyle}" />
                                     </Grid>
                                 </Border>
+                                <!-- The verdict ratio bar: a 3px full-bleed strip directly
+                                     under the group header, one segment per verdict the
+                                     rows print - green tunnelled, coral blocked, amber
+                                     bypassed (the row dots' reading). Segment fills are
+                                     set ONCE from code (colors:: is the one palette
+                                     source; markup ships no UrAmberBrush) and the star
+                                     weights move only on feed pushes
+                                     (ConnectPage::ApplyVerdictRatioBar), so the strip
+                                     costs nothing per frame. Collapsed while there is
+                                     nothing to proportion - an empty track would read as
+                                     chrome, not data. -->
+                                <Grid Grid.Row="5" x:Name="ConnectionsVerdictRatio"
+                                      Height="3" Visibility="Collapsed">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border />
+                                    <Border Grid.Column="1" />
+                                    <Border Grid.Column="2" />
+                                </Grid>
                                 <!-- The list FILLS the rest of the pane. Its empty state is a
                                      centred line in that same full-height area, never a short
                                      card floating in space. -->
-                                <Grid Grid.Row="5">
+                                <Grid Grid.Row="6">
                                     <ScrollViewer x:Name="ConnectionsScroll"
                                                   HorizontalScrollBarVisibility="Disabled"
                                                   VerticalScrollBarVisibility="Auto">
@@ -1334,7 +1390,35 @@
                         </Border>
                         <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled"
                                       VerticalScrollBarVisibility="Auto">
-                            <StackPanel>
+                            <!-- A Grid, not a StackPanel, for exactly one reason: the two
+                                 chart rows are STAR rows (MinHeight 132 = today's fixed
+                                 height, MaxHeight 220), so a window taller than the
+                                 content shares the leftover between the charts instead of
+                                 leaving it blank. Star rows need a bounded height to
+                                 share, which a scroller never offers on its own, so
+                                 ConnectPage::ApplyPaneCBodyHeight pins this grid's
+                                 MinHeight to the viewport - content shorter than the pane
+                                 gets the flex, content taller overrides the pin and
+                                 scrolls, which is what the StackPanel did at every height.
+                                 Everything else stays an Auto row, so the short-window
+                                 layout is pixel-identical to the StackPanel's. -->
+                            <Grid x:Name="PaneCBody">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" MinHeight="132" MaxHeight="220" />
+                                    <RowDefinition Height="*" MinHeight="132" MaxHeight="220" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
                                 <!-- ==== THE CONNECTION INSPECTOR (D5) ==================
                                      The Portmaster ask, and the reason the spec called
                                      this column "detail/inspector for the selection"
@@ -1355,7 +1439,7 @@
                                      screen reader than no landmark at all). Every row
                                      inside is built by ConnectPage::ApplyInspector on
                                      the same key/value rhythm as the session figures. -->
-                                <StackPanel x:Name="InspectorGroup" Visibility="Collapsed"
+                                <StackPanel x:Name="InspectorGroup" Grid.Row="0" Visibility="Collapsed"
                                             AutomationProperties.LandmarkType="Custom">
                                     <Border Style="{StaticResource UrGroupHeaderStyle}">
                                         <Grid ColumnSpacing="8">
@@ -1444,22 +1528,29 @@
                                                   IsOpen="False" Margin="12,6,12,12" />
                                 </StackPanel>
 
-                                <!-- two charts, the SAME height, full width of the pane -->
-                                <Border BorderBrush="{StaticResource UrBorderBrush}"
+                                <!-- two charts, the SAME height, full width of the pane.
+                                     Their rows carry the flex (star, 132..220 - the grid
+                                     comment above has the rule); the hosts keep only the
+                                     132 MinHeight so the scroller's unbounded measure
+                                     still desires today's fixed height and the scrolling
+                                     layout is pixel-identical to what it was. -->
+                                <Border Grid.Row="1"
+                                        BorderBrush="{StaticResource UrBorderBrush}"
                                         BorderThickness="0,0,0,1" Padding="12,0">
-                                    <Grid x:Name="BlockedChartHost" Height="132" />
+                                    <Grid x:Name="BlockedChartHost" MinHeight="132" />
                                 </Border>
-                                <Border BorderBrush="{StaticResource UrBorderBrush}"
+                                <Border Grid.Row="2"
+                                        BorderBrush="{StaticResource UrBorderBrush}"
                                         BorderThickness="0,0,0,1" Padding="12,0">
-                                    <Grid x:Name="LocalChartHost" Height="132" />
+                                    <Grid x:Name="LocalChartHost" MinHeight="132" />
                                 </Border>
 
                                 <!-- session figures ............................... -->
-                                <Border Style="{StaticResource UrGroupHeaderStyle}">
+                                <Border Grid.Row="3" Style="{StaticResource UrGroupHeaderStyle}">
                                     <TextBlock x:Name="DataUsageLabel"
                                                Style="{StaticResource UrGroupHeaderTextStyle}" />
                                 </Border>
-                                <StackPanel x:Name="LiveStatsGroup" Visibility="Collapsed">
+                                <StackPanel x:Name="LiveStatsGroup" Grid.Row="4" Visibility="Collapsed">
                                     <!-- the connected providers and where they are: this row
                                          opens the globe sheet (android ProviderLocationsScreen
                                          parity). A Button on the pane-row style rather than a
@@ -1484,10 +1575,10 @@
                                 </StackPanel>
                                 <!-- the key/value rows are built into this host by
                                      ConnectPage::ApplySessionRows, on one grid rhythm -->
-                                <StackPanel x:Name="SessionRowsHost" />
+                                <StackPanel x:Name="SessionRowsHost" Grid.Row="5" />
 
                                 <!-- contracts ..................................... -->
-                                <Border Style="{StaticResource UrGroupHeaderStyle}">
+                                <Border Grid.Row="6" Style="{StaticResource UrGroupHeaderStyle}">
                                     <Grid ColumnSpacing="8">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*" />
@@ -1505,10 +1596,10 @@
                                         </Button>
                                     </Grid>
                                 </Border>
-                                <StackPanel x:Name="ContractsHost" />
+                                <StackPanel x:Name="ContractsHost" Grid.Row="7" />
 
                                 <!-- split rules ................................... -->
-                                <Border Style="{StaticResource UrGroupHeaderStyle}">
+                                <Border Grid.Row="8" Style="{StaticResource UrGroupHeaderStyle}">
                                     <Grid ColumnSpacing="8">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*" />
@@ -1527,10 +1618,10 @@
                                         </Button>
                                     </Grid>
                                 </Border>
-                                <StackPanel x:Name="SplitRulesHost" />
+                                <StackPanel x:Name="SplitRulesHost" Grid.Row="9" />
 
                                 <!-- custom dns .................................... -->
-                                <Border Style="{StaticResource UrGroupHeaderStyle}">
+                                <Border Grid.Row="10" Style="{StaticResource UrGroupHeaderStyle}">
                                     <Grid ColumnSpacing="8">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*" />
@@ -1548,7 +1639,7 @@
                                 </Border>
                                 <!-- unapplied-recommendation pill (iOS DnsRecommendationPill
                                      parity), as a row rather than a floating chip -->
-                                <Border x:Name="DnsRecPill" Visibility="Collapsed"
+                                <Border x:Name="DnsRecPill" Grid.Row="11" Visibility="Collapsed"
                                         Style="{StaticResource UrPaneRowStyle}" MinHeight="34"
                                         Background="{StaticResource UrCoralSubtleBrush}">
                                     <StackPanel Orientation="Horizontal" Spacing="6"
@@ -1562,7 +1653,7 @@
                                                    Foreground="{StaticResource UrTextBrush}" />
                                     </StackPanel>
                                 </Border>
-                                <StackPanel x:Name="DnsRowsPanel">
+                                <StackPanel x:Name="DnsRowsPanel" Grid.Row="12">
                                     <Border Style="{StaticResource UrPaneRowStyle}" MinHeight="34">
                                         <Grid ColumnSpacing="8">
                                             <Grid.ColumnDefinitions>
@@ -1648,13 +1739,13 @@
                                         </Grid>
                                     </Border>
                                 </StackPanel>
-                                <Border x:Name="DnsUnavailableRow" Visibility="Collapsed"
+                                <Border x:Name="DnsUnavailableRow" Grid.Row="13" Visibility="Collapsed"
                                         Style="{StaticResource UrPaneRowStyle}" MinHeight="34">
                                     <TextBlock x:Name="DnsUnavailableText"
                                                Style="{StaticResource UrKeyTextStyle}"
                                                Foreground="{StaticResource UrTextFaintBrush}" />
                                 </Border>
-                            </StackPanel>
+                            </Grid>
                         </ScrollViewer>
                     </Grid>
                 </Grid>

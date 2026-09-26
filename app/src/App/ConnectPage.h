@@ -318,6 +318,18 @@ class ConnectPage {
   void OnConnectionsVerdictChanged();
   // group-by-host switch change -> connectionsGrouped_ -> the same pass
   void OnConnectionsGroupToggled();
+  // The clear-filters button (visible only while any of the three controls is
+  // off its default): one click puts the verdict bar, the search text and the
+  // group fold back to their defaults and re-runs the ONE incremental pass -
+  // a filter change is a new result set, and three at once are no different.
+  void OnConnectionsClearFilters();
+  // The verdict ratio bar under the connections group header (markup's
+  // ConnectionsVerdictRatio): the session's allowed / blocked proportions from
+  // BlockStats plus the bypassed-local third counted over the cached
+  // blockActions_ window. Recomputed only on the feed pushes that already
+  // rebuild the header count - three star-weight writes, never a rebuild, so
+  // the strip costs nothing per frame.
+  void ApplyVerdictRatioBar();
   // A group row's click, and the whole of its interaction: fill the search box
   // with the group's host and leave group mode, so the group expands IN PLACE
   // through the filter that already exists. Not a selection (a group has no
@@ -330,8 +342,14 @@ class ConnectPage {
   // ActivityBodyScroll has the rule): pin the body under the filter rows at
   // its scroller's viewport height, floored at kActivityBodyMinHeight, so the
   // outer scroller engages only when the window is too short for the fixed
-  // blocks AND the list together.
+  // blocks AND the list together. The same viewport drives the Remote chart's
+  // flex (kRemoteChartMinHeight..kRemoteChartMaxHeight).
   void ApplyActivityBodyHeight();
+  // pane C's chart flex (the markup comment on PaneCBody has the rule): pin
+  // the body grid's MinHeight to its scroller's viewport, so the two star
+  // chart rows have leftover to share exactly while the content is shorter
+  // than the pane.
+  void ApplyPaneCBodyHeight();
 
   // ---- D5: the connection inspector -----------------------------------------
   //

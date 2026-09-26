@@ -117,11 +117,36 @@ void ConnectPage::Initialize() {
   w_.ConnectionsGroupToggle().Toggled([weak = w_.get_weak()](auto const&, auto const&) {
     if (auto self = weak.get()) self->connect().OnConnectionsGroupToggled();
   });
+  // The clear-filters button at the verdict row's right end - same wiring
+  // reason as the bar and the toggle above.
+  w_.ConnectionsClearFilters().Click([weak = w_.get_weak()](auto const&, auto const&) {
+    if (auto self = weak.get()) self->connect().OnConnectionsClearFilters();
+  });
+  // The verdict ratio bar's segments wear the SAME three verdict colours the
+  // row dots print (UpdateConnectionRow), painted once here: green tunnelled,
+  // coral blocked, amber bypassed. colors:: is the source for all three -
+  // markup ships UrGreenBrush/UrCoralBrush but no UrAmberBrush, and three code
+  // fills keep the bar and the dots on one palette statement. After this the
+  // bar's only per-push work is ApplyVerdictRatioBar's star weights.
+  auto ratioSegment = [this](uint32_t i) {
+    return w_.ConnectionsVerdictRatio().Children().GetAt(i).as<Controls::Border>();
+  };
+  ratioSegment(0).Background(urnw::colors::MakeBrush(urnw::colors::kUrGreen));
+  ratioSegment(1).Background(urnw::colors::MakeBrush(urnw::colors::kUrCoral));
+  ratioSegment(2).Background(urnw::colors::MakeBrush(urnw::colors::kUrAmber));
   // the small-height scroll escape for pane B: keep the body under the filter
   // rows viewport-sized, with the floor that engages the outer scroller only
   // when height is scarce (ApplyActivityBodyHeight has the rule)
   w_.ActivityBodyScroll().SizeChanged([weak = w_.get_weak()](auto const&, auto const&) {
     if (auto self = weak.get()) self->connect().ApplyActivityBodyHeight();
+  });
+  // pane C's chart flex: the body grid's star rows can only share LEFTOVER
+  // height, which a scroller never offers (it measures content unbounded), so
+  // the body is pinned to the viewport on every pane resize - content shorter
+  // than the pane gets the flex, content taller overrides the pin and scrolls
+  // (ApplyPaneCBodyHeight has the rule)
+  w_.ConnectPaneC().SizeChanged([weak = w_.get_weak()](auto const&, auto const&) {
+    if (auto self = weak.get()) self->connect().ApplyPaneCBodyHeight();
   });
 
   // The inspector's quick actions (D5). Wired here rather than in markup for
@@ -228,6 +253,11 @@ void ConnectPage::ApplyStrings() {
   w_.VerdictBlockedItem().Text(Loc("blocked"));
   w_.VerdictTunnelledItem().Text(Adv("adv_filter_tunnelled", L"Tunnelled"));
   w_.VerdictBypassedItem().Text(Adv("adv_filter_bypassed", L"Bypassed"));
+  // The clear-filters reset. "clear" is the shipped key (the store's own
+  // comment: "a button that clears a field or setting"), so no Adv id - the
+  // one-string-fits rule is exactly what the key exists for. Text content
+  // gives the button its automation name for free.
+  w_.ConnectionsClearFilters().Content(LocBox("clear"));
   // The group-by-host switch's caption. The switch itself is labelled BY this
   // TextBlock (markup's AutomationProperties.LabeledBy), so there is no second
   // name to string.
@@ -1359,6 +1389,10 @@ void ConnectPage::WireDrawerFeeds() {
         page.allowedCount_ = allowed;
         page.blockedCount_ = blocked;
         page.ApplySessionRows();
+        // The stats pair is two of the ratio bar's three inputs (the local
+        // third rides the block-actions push into ApplyConnectionsList), so
+        // this handler rebuilds the bar the way it rebuilds the header count.
+        page.ApplyVerdictRatioBar();
         if (page.splitRulesSheet_) {
           page.splitRulesSheet_->Update(page.splitRules_, page.blockActions_, allowed,
                                         blocked);
@@ -2136,6 +2170,19 @@ void ConnectPage::ApplyConnectionsList(bool resetScroll) {
                                           : static_cast<int64_t>(blockActions_.size()));
   }
   w_.ConnectionsCount().Text(hstring{count});
+  // The clear-filters affordance rides on ANY of the three controls being off
+  // its default. The group fold counts here though the header count above
+  // deliberately does not treat it as a filter: it changes what the list
+  // shows, which is exactly what the one-click reset is for. Every path that
+  // can change any of the three lands in this pass, so this is the one place
+  // the button's visibility is written.
+  w_.ConnectionsClearFilters().Visibility(
+      filterActive || connectionsGrouped_ ? Visibility::Visible
+                                          : Visibility::Collapsed);
+  // The verdict ratio bar under the header, rebuilt on the same pass that
+  // rebuilds the count (and from the block-stats handler for its session
+  // inputs): three star weights, never a rebuild.
+  ApplyVerdictRatioBar();
 
   ApplySessionCardsVisibility(statsConnected_);
   // A filter that matches nothing in a session that HAS rows must not read as
@@ -2245,6 +2292,61 @@ void ConnectPage::OnConnectionsGroupToggled() {
   ApplyConnectionsList(true);
 }
 
+// The one-click reset. The state fields move first, the controls follow behind
+// updatingControls_ so the programmatic writes cannot echo back through their
+// own handlers, and the pass runs ONCE at the end: clearing the search text
+// fires its TextChanged (the same path the user's own typing takes), and when
+// the box was already empty no TextChanged is coming, so the pass runs here
+// instead - the DrillIntoConnectionGroup pattern.
+void ConnectPage::OnConnectionsClearFilters() {
+  verdictFilter_ = ConnectionVerdictFilter::All;
+  connectionsGrouped_ = false;
+  updatingControls_ = true;
+  w_.ConnectionsVerdictBar().SelectedItem(w_.VerdictAllItem());
+  w_.ConnectionsGroupToggle().IsOn(false);
+  updatingControls_ = false;
+  if (connectionsSearch_ && !connectionsSearch_.Text().empty()) {
+    connectionsSearch_.Text(L"");
+  } else {
+    connectionsQuery_.clear();
+    ApplyConnectionsList(true);
+  }
+}
+
+// The verdict ratio bar under the connections group header: the session's
+// allowed (green) / blocked (coral) split, plus the bypassed-local third
+// (amber). The BlockStats pair is SESSION-scoped; the local count is read off
+// the cached blockActions_ window, so the amber share is WINDOW-scoped (the
+// SDK has no session-scoped bypass counter) - the two scopes sit on one bar
+// because the window is the only place a bypass reading exists at all.
+//
+// The work per call is deliberately trivial: one pass over the cached window
+// for the local count, then three star-weight writes on the columns that
+// already exist. No element is built here - the strip updates only on feed
+// pushes (the block-actions pass and the block-stats handler), so a live
+// session pays nothing per frame.
+void ConnectPage::ApplyVerdictRatioBar() {
+  auto bar = w_.ConnectionsVerdictRatio();
+  int64_t localCount = 0;
+  for (auto const& action : blockActions_) {
+    if (!action.block && action.local) ++localCount;
+  }
+  const int64_t total = allowedCount_ + blockedCount_ + localCount;
+  if (total <= 0) {
+    // Nothing to proportion: the strip collapses rather than drawing an
+    // empty track, which would read as chrome instead of data.
+    bar.Visibility(Visibility::Collapsed);
+    return;
+  }
+  bar.Visibility(Visibility::Visible);
+  const double weights[3] = {static_cast<double>(allowedCount_),
+                             static_cast<double>(blockedCount_),
+                             static_cast<double>(localCount)};
+  for (uint32_t i = 0; i < 3; ++i) {
+    bar.ColumnDefinitions().GetAt(i).Width(GridLength{weights[i], GridUnitType::Star});
+  }
+}
+
 // The drill-in. The search box takes the host (its TextChanged folds the text
 // into connectionsQuery_ and re-runs the pass - the same path the user's own
 // typing takes), and the switch goes off behind updatingControls_ so the
@@ -2292,12 +2394,22 @@ void ConnectPage::RefreshConnectionRowTimes() {
   }
 }
 
-// The pane-B body floor: the 150px chart + the transport bar + the ip-family
-// row + the extender panel + the 28px group header + a usable sliver of the
-// list. Below it the fixed blocks would leave the star-sized list under ~3
-// rows, so the body stops shrinking and the pane's own scroller takes over
-// (the markup comment on ActivityBodyScroll states the rule).
+// The pane-B body floor: the Remote chart at its 120 floor + the transport bar
+// + the ip-family row + the extender panel + the 28px group header + the 3px
+// ratio bar + a usable sliver of the list. Below it the fixed blocks would
+// leave the star-sized list under ~3 rows, so the body stops shrinking and the
+// pane's own scroller takes over (the markup comment on ActivityBodyScroll
+// states the rule). The floor's list guarantee survived the chart flex because
+// the chart yields its flex FIRST: at the floor the chart sits at 120, not its
+// old fixed 150, so the list's sliver here is 27px LARGER than the fixed-150
+// layout's was (the chart's 30 less the ratio bar's 3).
 constexpr double kActivityBodyMinHeight = 520;
+// The Remote chart's flex bounds. The floor is what the chart may shrink to
+// when height is scarce (pane-model rule: fixed chrome never starves the
+// pane's list - the chart is the one fixed block here that can give); the cap
+// keeps a tall window's chart a chart rather than a second list.
+constexpr double kRemoteChartMinHeight = 120;
+constexpr double kRemoteChartMaxHeight = 240;
 
 void ConnectPage::ApplyActivityBodyHeight() {
   // Pin the body at the viewport while the window is tall enough - the body IS
@@ -2306,6 +2418,33 @@ void ConnectPage::ApplyActivityBodyHeight() {
   // cannot express: "shrink with the pane, but no further than this".
   const double viewport = w_.ActivityBodyScroll().ViewportHeight();
   w_.ActivityBody().Height(std::max(viewport, kActivityBodyMinHeight));
+  // The Remote chart's share of that math, derived from the SAME viewport so
+  // the chart and the body can never disagree: today's 150 at the floor (the
+  // default layout is unchanged), a THIRD of each viewport pixel past it - the
+  // list keeps the other two thirds, because the list is the pane's reason to
+  // exist - floored at 120 when height is scarce and capped at 240. The chart
+  // re-renders and re-stamps its clip on the SizeChanged this causes, the same
+  // path any resize already took.
+  const double chartFlex = 150.0 + (viewport - kActivityBodyMinHeight) / 3.0;
+  w_.RemoteChartHost().Height(
+      std::clamp(chartFlex, kRemoteChartMinHeight, kRemoteChartMaxHeight));
+}
+
+// The pane header's fixed height (UrPaneHeaderHeight in App.xaml; keep in
+// step). The pane's rows are Auto-header + star-scroller, so the scroller's
+// viewport is exactly the pane's height minus this.
+constexpr double kPaneHeaderHeight = 40;
+
+void ConnectPage::ApplyPaneCBodyHeight() {
+  // Pin the body grid's MinHeight to the viewport. MINHeight, not Height:
+  // content taller than the pane overrides the pin and scrolls exactly as the
+  // StackPanel did, while content shorter than the pane gets a bounded grid
+  // whose star chart rows can share the leftover (132 floor, 220 cap - the
+  // markup comment on PaneCBody has the rule). Without the pin the scroller's
+  // unbounded measure would leave the star rows at their floor forever.
+  const double viewport = w_.ConnectPaneC().ActualHeight() - kPaneHeaderHeight;
+  if (viewport <= 0) return;  // not laid out yet; the first SizeChanged re-runs
+  w_.PaneCBody().MinHeight(viewport);
 }
 
 // The session, as key/value rows on the statistics pane's grid. These were four
