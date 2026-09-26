@@ -397,6 +397,18 @@ struct MainWindow : MainWindowT<MainWindow> {
   // later (egress interface, rpc port, session mode, the raw pre-clamp
   // connection status) cost one more call each and no layout change.
   void BuildStatusStrip();
+  // The Advanced-Mode flip's entrance and exit, pointed at a GROUP of surfaces
+  // (the inspector group + the strip's advanced fields): the destination
+  // crossfade's two halves (FadeDestinationIn / FadeDestinationOut) applied to
+  // everything the flip reveals or hides at once, on ONE storyboard so the
+  // group settles on the same frame. No-op when AnimationsEnabled() is false.
+  void FadeAdvancedSurfaces(
+      std::vector<winrt::Microsoft::UI::Xaml::UIElement> const& surfaces, bool fadeIn);
+  // The fade-out's deferred half of a mode-OFF flip: the strip rebuild and the
+  // connect page's Normal re-read run only once the exit completes (a surface
+  // already removed cannot fade). Guarded on the mode STILL being off - a flip
+  // back on inside the 120ms already rebuilt both.
+  void CompleteAdvancedModeOff();
   // Writes the state field unconditionally. The three callers each decide
   // whether they are ALLOWED to write it (ApplyStatusStripConnection refuses a
   // signed-out push; the preview sample refuses nothing); this just renders.
@@ -504,6 +516,11 @@ struct MainWindow : MainWindowT<MainWindow> {
   urnw::kit::StatusField statusRoutes_;    // are routes+DNS actually installed
   urnw::kit::StatusField statusRpcPort_;   // the service rpc endpoint
   urnw::kit::StatusField statusRaw_;       // the PRE-CLAMP connection status
+  // The standing "Advanced" tag at the end of the strip while the mode is on,
+  // in the action blue (kToggleAccent #638BFC) - NOT the lime kAccent, which is
+  // the earnings/premium colour. In statusAdvancedParts_, so the breakpoint
+  // drops it with the four above before the strip can overflow.
+  urnw::kit::StatusField statusAdvancedPill_;
   // The last TunnelStatus, for the three advanced fields that read it. Cached
   // because the strip is rebuilt on a mode change, which is not a tunnel event:
   // without this a rebuild would show three blanks until the service next
@@ -560,10 +577,14 @@ struct MainWindow : MainWindowT<MainWindow> {
   bool advancedMode_ = false;
 
   bool wideLayout_ = false;
-  // Home's second breakpoint (kUltraWideDip): the third column. Tracked
-  // separately so a drag across 1800 re-runs the layout even though `wide` did
-  // not change - the early-out has to test every state it applies, not one.
+  // The second breakpoint (kUltraWideDip). It gates nothing of its own - the
+  // log line names it - but it is an APPLIED state, so the early-out still has
+  // to test it or a drag across 1800 would leave the log one state stale.
   bool ultraLayout_ = false;
+  // Home's third-pane gate (kConnectThreePaneContentDip), which is NOT `wide`
+  // any more: it is wider, so a drag across it with `wide` and `ultra` both
+  // unchanged must still re-run the layout. Same early-out rule as ultraLayout_.
+  bool connectThreeLayout_ = false;
   bool breakpointApplied_ = false;
 };
 

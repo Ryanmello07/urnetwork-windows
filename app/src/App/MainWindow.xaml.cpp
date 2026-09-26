@@ -62,6 +62,15 @@ void SetStar(Controls::ColumnDefinition const& column, double weight) {
   if (column) column.Width(GridLengthHelper::FromValueAndType(weight, GridUnitType::Star));
 }
 
+// Home's third-pane gate, in NAV CONTENT dips: pane A (330, ConnectPaneAColumn
+// in markup) + the 1px UrPaneVRuleStyle + the activity star pane's floor (330 -
+// a rail's width of its own; below it the connections "table" is the 76dip
+// column the 1008dip inversion produced) + the 1px rule + pane C (380,
+// ConnectPaneCColumn). Pane C opens only when all five fit at once. Read on
+// the nav content width, never the window width - the head of ApplyBreakpoint
+// carries why the window width cannot be trusted across the nav's 1008epx dock.
+constexpr double kConnectThreePaneContentDip = 330 + 1 + 330 + 1 + 380;
+
 // (Reparent / SameElement lived here. They moved Home's panes between three
 // StackPanel hosts at each breakpoint, because the card layout needed a module
 // to stack under the hero at one width and sit beside it at another. R3's pane
@@ -95,14 +104,25 @@ MainWindow::MainWindow() {
   // so everything it may paint over must already exist.
   developer_ = std::make_unique<urnw::DeveloperPage>(*this);
 
-  // The responsive switch. SizeChanged on the window's own content root fires
-  // on the first layout pass, so this also seeds the initial state; the handler
-  // is cheap on the resizes that do not cross the breakpoint.
+  // The responsive switch. TWO SizeChanged hooks, one handler, because
+  // ApplyBreakpoint measures the nav CONTENT width (see its head):
+  //   * the window's own content root fires on every window resize - and on
+  //     the first layout pass, which is what seeds the initial state;
+  //   * HomeContentRoot, the element actually measured, fires when the nav
+  //     re-docks WITHOUT the window changing (PaneDisplayMode=Auto swaps its
+  //     docked pane between the 48 compact rail and the 220 expanded pane
+  //     across its own thresholds) and when the login/home root swap takes
+  //     the content host between collapsed and full width. A window hook
+  //     alone would leave the layout one state stale across both.
+  // The handler is cheap on the events that do not cross a gate.
   if (auto root = Content().try_as<FrameworkElement>()) {
     root.SizeChanged([weak = get_weak()](auto const&, auto const&) {
       if (auto self = weak.get()) self->ApplyBreakpoint();
     });
   }
+  HomeContentRoot().SizeChanged([weak = get_weak()](auto const&, auto const&) {
+    if (auto self = weak.get()) self->ApplyBreakpoint();
+  });
 
   // R4: the Network destination's copy of the locations/peers feeds. A SECOND
   // subscriber, not a replacement - ConnectPage still owns the handlers that
@@ -422,13 +442,37 @@ void MainWindow::ApplyBreakpoint() {
   // compared against physical pixels would fire in the wrong place on every
   // machine with a different scale.
   const double width = root.ActualWidth();
-  if (width <= 0) return;
-  const bool wide = urnw::kit::kWideBreakpointDip <= width;
-  const bool ultra = urnw::kit::kUltraWideDip <= width;
-  if (breakpointApplied_ && wide == wideLayout_ && ultra == ultraLayout_) return;
+  // ...and the width that decides how many PANES fit is the nav CONTENT's, not
+  // the window's. HomeNav is PaneDisplayMode=Auto (MainWindow.xaml): it docks
+  // its OpenPaneLength (220) at the 1008epx expanded threshold and the 48
+  // compact rail at 641, so a window GROWING across 1008 shrinks its content
+  // by 172dip. A pane gate read on the window opened pane C with the same
+  // pixel the nav took - at 1008 the activity star pane dropped from ~245dip
+  // to ~76dip precisely as the window grew (the documented inversion).
+  // HomeContentRoot is the nav's content host, so its width is the window
+  // minus whatever the nav currently docks, in every nav mode, and a gate
+  // read on it can never open a pane with the nav's pixel.
+  const double content = HomeContentRoot().ActualWidth();
+  // Zero is the login root (HomeNav collapsed): there is no pane layout to
+  // decide. Home's first show re-fires through HomeContentRoot's own
+  // SizeChanged hook (see the ctor).
+  if (content <= 0) return;
+  // Three destinations keep reading the WINDOW below (Earnings, Account,
+  // Settings): their gates sit far past the 1008 dock (900/1500/1900), so the
+  // nav's re-dock only narrows their panes and never folds one - no inversion
+  // to fix, and their fold behavior stays byte-identical to what it was.
+  const bool wide = urnw::kit::kWideBreakpointDip <= content;
+  const bool ultra = urnw::kit::kUltraWideDip <= content;
+  // Home's third pane has its own gate (kConnectThreePaneContentDip), wider
+  // than `wide`, so the early-out has to test it as a third applied state:
+  // a drag across it with `wide` and `ultra` both unchanged must still re-run.
+  const bool connectThree = kConnectThreePaneContentDip <= content;
+  if (breakpointApplied_ && wide == wideLayout_ && ultra == ultraLayout_ &&
+      connectThree == connectThreeLayout_) return;
   breakpointApplied_ = true;
   wideLayout_ = wide;
   ultraLayout_ = ultra;
+  connectThreeLayout_ = connectThree;
 
   // ---- Home: HOW MANY PANES FIT ---------------------------------------------
   //
@@ -438,20 +482,32 @@ void MainWindow::ApplyBreakpoint() {
   // window. All that is left to decide is how many of them there is room FOR,
   // which is a width question and nothing else.
   //
-  //   >= 1000dip   three panes   connect(330) | activity(*) | statistics(380)
-  //   <  1000dip   two panes     connect(330) | activity(*)
+  //   >= 1042dip   three panes   connect(330) | activity(*) | statistics(380)
+  //   <  1042dip   two panes     connect(330) | activity(*)
+  //
+  // 1042 ON THE CONTENT, and wider than the app-wide 1000: pane C opens only
+  // when the activity star pane keeps a rail's width of its own - 330 (A) + 1
+  // + 330 (activity's floor) + 1 + 380 (C), the arithmetic
+  // kConnectThreePaneContentDip carries. The old gate was the app-wide
+  // breakpoint read on the WINDOW: with the expanded nav docked that is a
+  // 780dip content, pane C opened into it, and the activity "table" read
+  // ~76dip - opened by the same pixel that grew the window.
   //
   // The statistics pane is the one that folds because it is the inspector: its
   // charts, session figures, contracts, split rules and DNS are all reachable
   // from the sheets its group headers open, so nothing becomes unreachable at
   // flyout width - it just stops being on screen at the same time.
   //
-  // Below ~640dip the connect pane would leave the activity pane too narrow to
-  // be a table, so it takes the whole window and activity folds too.
+  // Below ~640dip OF WINDOW the connect pane would leave the activity pane too
+  // narrow to be a table, so it takes the whole window and activity folds too.
+  // This gate stays on the window on purpose: it is the flyout question, and
+  // it cannot invert - the compact rail docking at 641 narrows the activity
+  // pane by 48 but never folds it, and the expanded dock at 1008 happens
+  // 368dip past the gate.
   const bool twoPanes = 640.0 <= width;
-  SetWidth(ConnectPaneCColumn(), wide ? 380 : 0);
-  ConnectPaneCRule().Visibility(wide ? Visibility::Visible : Visibility::Collapsed);
-  ConnectPaneC().Visibility(wide ? Visibility::Visible : Visibility::Collapsed);
+  SetWidth(ConnectPaneCColumn(), connectThree ? 380 : 0);
+  ConnectPaneCRule().Visibility(connectThree ? Visibility::Visible : Visibility::Collapsed);
+  ConnectPaneC().Visibility(connectThree ? Visibility::Visible : Visibility::Collapsed);
   // the connect pane is a fixed rail beside a table, EXCEPT when it is the only
   // pane left, where it takes the star and the activity pane closes
   if (twoPanes) {
@@ -476,6 +532,12 @@ void MainWindow::ApplyBreakpoint() {
   // Below the breakpoint the detail folds and the list takes the window. Nothing
   // becomes unreachable: selecting a row still connects, which is the only thing
   // the detail pane's content is about.
+  //
+  // This gate had Home's 1008 inversion in the same shape: read on the window,
+  // the nav's expanded dock and the detail pane's opening landed on the same
+  // pixel, and the list dropped 959 -> 387dip as the window GREW. Read on the
+  // content the two can no longer coincide, and at the gate the list keeps
+  // 1000 - 400 - 1 = 599dip.
   SetWidth(NetworkPaneBColumn(), wide ? 400 : 0);
   NetworkPaneBRule().Visibility(wide ? Visibility::Visible : Visibility::Collapsed);
   NetworkPaneB().Visibility(wide ? Visibility::Visible : Visibility::Collapsed);
@@ -564,6 +626,10 @@ void MainWindow::ApplyBreakpoint() {
   //   >= 1000dip   two panes   feedback(*) | support(360)
   //   <  1000dip   one pane    feedback(*)
   //
+  // (1000dip OF NAV CONTENT, like Network above - the fold read on the window
+  // had the same 1008 inversion, and at the gate the form keeps 1000 - 360 - 1
+  // = 639dip.)
+  //
   // Pane B is the fixed column for the same reason Network's detail pane is:
   // it is a sentence and a link row, and prose gains nothing past a few
   // hundred dips, while the form it sits beside is the thing that should take
@@ -620,9 +686,11 @@ void MainWindow::ApplyBreakpoint() {
   }
   ApplyStatusStrip();
 
-  urnw::LogInfo("layout: {} at {:.0f}dip",
-                ultra ? "ultra (Home in three columns)" : wide ? "wide" : "narrow",
-                width);
+  // Both widths go in the log: the gates read the content, and the next
+  // inversion-shaped bug will need the window beside it to see the nav's dock.
+  urnw::LogInfo("layout: {} at {:.0f}dip of nav content (window {:.0f}dip){}",
+                ultra ? "ultra" : wide ? "wide" : "narrow", content, width,
+                connectThree ? ", Home in three panes" : "");
 }
 
 // ---- the persistent status strip (D4) --------------------------------------
@@ -712,11 +780,43 @@ void MainWindow::BuildStatusStrip() {
     advSection(statusRoutes_, Adv("adv_routes", L"Routes"));
     advSection(statusRpcPort_, Adv("adv_rpc", L"RPC"));
     advSection(statusRaw_, Adv("adv_raw_status", L"Raw"));
+
+    // ---- the mode tag ------------------------------------------------------
+    // A standing "Advanced" tag closing the strip while the mode is on: the
+    // mode changes what half the surfaces in the app mean, so the chrome
+    // should say which reading it is in. Caption-less, like the state field -
+    // the word IS the fact - and in the action blue (kToggleAccent #638BFC),
+    // NOT the lime kAccent: lime is the earnings/premium colour and a mode
+    // tag is chrome, and blue is what chrome actions already wear here (the
+    // primary button, the toggle on-state, the focused field).
+    //
+    // In BOTH part lists, for the same two reasons as the four above:
+    // statusSessionParts_ so a sign-out hides it (a session-less strip
+    // describes no session and no mode), statusAdvancedParts_ so the
+    // breakpoint drops it with the four below the wide gate - the marker
+    // goes before the strip overflows, and the mode is still named on the
+    // Settings toggle that owns it. "advanced" is a shipped store key, so
+    // the word itself comes through Loc rather than an Adv() fallback.
+    {
+      auto rule = urnw::kit::MakeStatusSeparator();
+      fields.Children().Append(rule);
+      statusAdvancedPill_ = urnw::kit::MakeStatusField(
+          hstring{}, /*withDot=*/false, Adv("adv_advanced_mode", L"Advanced mode"));
+      urnw::kit::SetStatusFieldValue(statusAdvancedPill_, Loc("advanced"));
+      statusAdvancedPill_.value.Foreground(
+          urnw::colors::MakeBrush(urnw::colors::kToggleAccent));
+      fields.Children().Append(statusAdvancedPill_.root);
+      statusSessionParts_.push_back(rule);
+      statusSessionParts_.push_back(statusAdvancedPill_.root);
+      statusAdvancedParts_.push_back(rule);
+      statusAdvancedParts_.push_back(statusAdvancedPill_.root);
+    }
   } else {
     statusMode_ = {};
     statusRoutes_ = {};
     statusRpcPort_ = {};
     statusRaw_ = {};
+    statusAdvancedPill_ = {};
   }
 
   ApplyStatusStrip();
@@ -872,6 +972,11 @@ void MainWindow::ApplyStatusStrip() {
 // ApplyAdvancedMode() the way it already has an ApplyStrings().
 
 void MainWindow::ApplyAdvancedMode(bool on) {
+  // Remembered for the fade below: the fade plays only on an actual FLIP. A
+  // replay of the standing value (the ctor's bind-then-replay) re-reads every
+  // surface exactly as a flip does, but fading surfaces that were never shown
+  // in the other mode would be motion for its own sake.
+  const bool wasAdvanced = advancedMode_;
   advancedMode_ = on;
 
   // THE DEVELOPER DESTINATION FOLDS. A Normal user whose VPN "just works" has no
@@ -910,14 +1015,59 @@ void MainWindow::ApplyAdvancedMode(bool on) {
   // The strip gains or loses four fields. Rebuilt rather than toggled, because
   // the separators belong to the fields and hiding a field without its rule
   // leaves a hairline against nothing.
-  BuildStatusStrip();
+  //
+  // On the way OFF, what is on screen fades out FIRST and the rebuild + the
+  // connect page's re-read are deferred to the fade's Completed: a surface
+  // already removed cannot fade (the FadeDestinationOut lesson, one function
+  // down). CompleteAdvancedModeOff runs the deferred half and guards the flip
+  // back ON inside the 120ms. With animations off - or nothing actually on
+  // screen to fade (a narrow window drops the strip's advanced fields, and a
+  // hidden Connect destination hides the inspector) - the swap stays instant,
+  // the same rule the destination crossfade keeps.
+  std::vector<UIElement> leaving;
+  if (!on && wasAdvanced &&
+      winrt::Windows::UI::ViewManagement::UISettings().AnimationsEnabled()) {
+    if (ConnectView().Visibility() == Visibility::Visible &&
+        ConnectPaneC().Visibility() == Visibility::Visible &&
+        InspectorGroup().Visibility() == Visibility::Visible) {
+      leaving.push_back(InspectorGroup());
+    }
+    for (auto const& part : statusAdvancedParts_) {
+      if (part.Visibility() == Visibility::Visible) leaving.push_back(part);
+    }
+  }
+  if (!leaving.empty()) {
+    FadeAdvancedSurfaces(leaving, false);
+  } else {
+    BuildStatusStrip();
+    connect_->ApplyAdvancedMode(on);
+  }
 
   // The pages. Each re-reads its own surfaces; none of them polls this.
-  connect_->ApplyAdvancedMode(on);
+  // (connect_ ran just above: it owns the inspector, whose collapse is what
+  // the fade-out defers.)
   developer_->ApplyAdvancedMode(on);
   // Settings owns the toggle, so it has to be told as well — otherwise a mode
   // restored from disk leaves the very control that sets it reading Off.
   settings_->ApplyAdvancedMode(on);
+
+  // ...and on the way ON the surfaces the applies just revealed fade IN, one
+  // board over the group. Collected AFTER the applies, because what appeared
+  // is the applies' output (the strip's advanced fields stay collapsed below
+  // the wide gate; the inspector follows pane C and the Connect destination).
+  if (on && !wasAdvanced) {
+    std::vector<UIElement> appearing;
+    if (ConnectView().Visibility() == Visibility::Visible &&
+        ConnectPaneC().Visibility() == Visibility::Visible &&
+        InspectorGroup().Visibility() == Visibility::Visible) {
+      appearing.push_back(InspectorGroup());
+    }
+    for (auto const& part : statusAdvancedParts_) {
+      if (part.Visibility() == Visibility::Visible) appearing.push_back(part);
+    }
+    FadeAdvancedSurfaces(appearing, true);
+  }
+
   // R4 HOOK — Account / Wallet.
   // Those two pages are owned by the concurrent R4 branch, so their
   // ApplyAdvancedMode() is theirs to add and this is where the calls go:
@@ -929,6 +1079,81 @@ void MainWindow::ApplyAdvancedMode(bool on) {
   // carries "Advanced Mode will add id / raw columns here" on the payouts table
   // and the leaderboard rank card, and on the transfer table's id columns.
   // Adding the two calls is the whole integration; nothing else here changes.
+}
+
+// The Advanced-Mode flip's entrance and exit, pointed at a GROUP of surfaces.
+// The inspector group and the strip's advanced fields appear and disappear
+// together when the mode flips, and a hard cut on a toggle the user just
+// flipped read as a glitch next to the destination crossfade. The shape is the
+// crossfade's (FadeDestinationIn / FadeDestinationOut, above): opacity only,
+// which is independently animatable and so costs the compositor rather than
+// the UI thread (the standing rule, ConnectCanvas.h); 180ms 0 -> 1 in, 120ms
+// 1 -> 0 out, both behind a CubicEase EaseOut; gated on
+// UISettings::AnimationsEnabled(); ONE bounded pass - nothing repeats, nothing
+// idles. ONE storyboard for the whole group rather than one per surface, so
+// every surface starts and settles on the same frame.
+//
+// A fade-out's surfaces are still parented and visible when this runs - that
+// is the whole reason ApplyAdvancedMode defers its strip rebuild and the
+// connect page's re-read to the board's Completed (CompleteAdvancedModeOff);
+// removing them at the moment of the flip was the blink-to-black
+// FadeDestinationOut documents.
+void MainWindow::FadeAdvancedSurfaces(
+    std::vector<winrt::Microsoft::UI::Xaml::UIElement> const& surfaces, bool fadeIn) {
+  if (surfaces.empty()) return;
+  if (!winrt::Windows::UI::ViewManagement::UISettings().AnimationsEnabled()) return;
+  namespace anim = winrt::Microsoft::UI::Xaml::Media::Animation;
+  anim::CubicEase ease;
+  ease.EasingMode(anim::EasingMode::EaseOut);
+  anim::Storyboard board;
+  for (auto const& surface : surfaces) {
+    // begun synchronously below, so the first presented frame shows the
+    // from-pose (the AnimateDrawerIn shape)
+    if (fadeIn) surface.Opacity(0);
+    anim::DoubleAnimation fade;
+    fade.From(fadeIn ? 0.0 : 1.0);
+    fade.To(fadeIn ? 1.0 : 0.0);
+    fade.Duration(Duration{std::chrono::duration_cast<winrt::Windows::Foundation::TimeSpan>(
+                               std::chrono::milliseconds(fadeIn ? 180 : 120)),
+                           DurationType::TimeSpan});
+    fade.EasingFunction(ease);
+    anim::Storyboard::SetTarget(fade, surface);
+    anim::Storyboard::SetTargetProperty(fade, L"Opacity");
+    board.Children().Append(fade);
+  }
+  if (!fadeIn) {
+    // Weak refs only, the FadeDestinationOut lifetime rule: a started board is
+    // held by the framework until it completes, so Completed still runs - and
+    // the handler must NOT capture the board itself (board -> handler -> board
+    // would keep both alive forever).
+    std::vector<winrt::weak_ref<winrt::Microsoft::UI::Xaml::UIElement>> weakSurfaces;
+    weakSurfaces.reserve(surfaces.size());
+    for (auto const& surface : surfaces) weakSurfaces.push_back(winrt::make_weak(surface));
+    board.Completed([weakSelf = get_weak(), weakSurfaces = std::move(weakSurfaces)](
+                        winrt::Windows::Foundation::IInspectable const&,
+                        winrt::Windows::Foundation::IInspectable const&) {
+      if (auto const self = weakSelf.get()) self->CompleteAdvancedModeOff();
+      // Clean slate, the FadeDestinationOut rule: a HoldEnd fill would
+      // otherwise leave the exit's 0 as the presented opacity of a surface
+      // that shows again - the inspector is the SAME element the next time
+      // the mode comes on.
+      for (auto const& weak : weakSurfaces) {
+        if (auto const surface = weak.get()) surface.Opacity(1.0);
+      }
+    });
+  }
+  board.Begin();
+}
+
+void MainWindow::CompleteAdvancedModeOff() {
+  // The mode flipped back ON inside the 120ms exit: that flip already rebuilt
+  // the strip and re-read the connect page, so writing the OFF reading over it
+  // now would be the stale write this guard exists for. (ConnectPage's own
+  // ApplyAdvancedMode early-outs on an unchanged mode, so in that case the
+  // page never rendered Normal at all.)
+  if (advancedMode_) return;
+  BuildStatusStrip();
+  connect_->ApplyAdvancedMode(false);
 }
 
 void MainWindow::SetAdvancedMode(bool on) {
