@@ -1135,9 +1135,6 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
                         <Border Style="{StaticResource UrPaneHeaderStyle}">
@@ -1155,60 +1152,108 @@
                                            Style="{StaticResource UrPaneMetaStyle}" />
                             </Grid>
                         </Border>
-                        <!-- the chart runs the FULL WIDTH of the pane, edge to edge -->
-                        <Border Grid.Row="1" BorderBrush="{StaticResource UrBorderBrush}"
-                                BorderThickness="0,0,0,1" Padding="12,0">
-                            <Grid x:Name="RemoteChartHost" Height="150" />
+                        <!-- The connections verdict filter: a SelectorBar, the app's
+                             segmented idiom (same control, same row metrics as the
+                             ConnectionModeBar row in pane A), because the list is one
+                             feed read four ways - All / Blocked / Tunnelled / Bypassed,
+                             the same three-way verdict the rows themselves print. No
+                             markup handler: XAML event handlers live on MainWindow,
+                             which this page does not own, so the bar is wired from
+                             ConnectPage::Initialize like the status-dot taps. -->
+                        <Border Grid.Row="1" Style="{StaticResource UrPaneRowStyle}"
+                                MinHeight="44" Padding="8,4">
+                            <muxc:SelectorBar x:Name="ConnectionsVerdictBar"
+                                              VerticalAlignment="Center">
+                                <muxc:SelectorBarItem x:Name="VerdictAllItem" />
+                                <muxc:SelectorBarItem x:Name="VerdictBlockedItem" />
+                                <muxc:SelectorBarItem x:Name="VerdictTunnelledItem" />
+                                <muxc:SelectorBarItem x:Name="VerdictBypassedItem" />
+                            </muxc:SelectorBar>
                         </Border>
-                        <!-- The transport distribution bar (TRANSPORTSTATS): the window's
-                             remote traffic by transport, directly under the Remote plot and
-                             the same 12px inset, so it lines up with it. Built into this host
-                             by ConnectPage::BuildCharts (urnw::TransportBar) as ONE pane-row
-                             Button (title "Transports", the bar, the legend, the unused
-                             footer) whose click opens the transport settings editor. Its
-                             own hairline is the row's, so no rule here. -->
-                        <Grid Grid.Row="2" x:Name="TransportBarHost" />
-                        <!-- The IP-family status row (connect/IPV6.md D2): the
-                             Dualstack / IPv4 / IPv6 columns with their connected and
-                             connecting counts, directly under the transport bar with
-                             the same inset. Built into this host by
-                             ConnectPage::BuildCharts (urnw::IpFamilyStatusRow); its
-                             bottom rule is the group header's, so no rule here. -->
-                        <Grid Grid.Row="3" x:Name="IpFamilyStatusRowHost" />
-                        <!-- The extender panel (connect/EXTENDER.md K4): the
-                             extenders carrying live connections as rings, the
-                             "N of M" count, and the gossip network's status dot.
-                             Built into this host by ConnectPage::BuildCharts
-                             (urnw::ExtenderPanel). It is NOT tappable - K4 says
-                             there is no details panel - so it is a plain row, not
-                             a pane-row Button like the transport bar above. Its
-                             bottom rule is the group header's, so no rule here. -->
-                        <Grid Grid.Row="4" x:Name="ExtenderPanelHost" />
-                        <Border Grid.Row="5" Style="{StaticResource UrGroupHeaderStyle}">
-                            <Grid>
-                                <TextBlock x:Name="ConnectionsLabel"
-                                           Style="{StaticResource UrGroupHeaderTextStyle}" />
-                                <TextBlock x:Name="ConnectionsCount" HorizontalAlignment="Right"
-                                           Style="{StaticResource UrPaneMetaStyle}" />
+                        <!-- the connections search row, built by ConnectPage
+                             (kit::MakePaneSearchRow, the NetworkSearchHost idiom) so the
+                             field and its host/IP substring filter live in one place -->
+                        <Grid Grid.Row="2" x:Name="ConnectionsSearchHost" />
+                        <!-- Everything under the filters is ONE body whose height
+                             ConnectPage::ApplyActivityBodyHeight pins at the viewport,
+                             floored at kActivityBodyMinHeight: while the window is
+                             tall enough the body IS the viewport and the layout is
+                             pixel-identical to the fixed rows it replaces, and below
+                             the floor this scroller engages instead of the fixed
+                             blocks above (40px header + 150px chart + transport bar +
+                             ip-family row + extender panel + 28px group header)
+                             compressing the star-sized connections list to zero with
+                             no way to reach it - which is exactly what the 400x480dip
+                             minimum window did. The rule: fixed chrome never starves
+                             the pane's list; the pane scrolls as a unit first. -->
+                        <ScrollViewer Grid.Row="3" x:Name="ActivityBodyScroll"
+                                      HorizontalScrollBarVisibility="Disabled"
+                                      VerticalScrollBarVisibility="Auto">
+                            <Grid x:Name="ActivityBody">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+                                <!-- the chart runs the FULL WIDTH of the pane, edge to edge -->
+                                <Border BorderBrush="{StaticResource UrBorderBrush}"
+                                        BorderThickness="0,0,0,1" Padding="12,0">
+                                    <Grid x:Name="RemoteChartHost" Height="150" />
+                                </Border>
+                                <!-- The transport distribution bar (TRANSPORTSTATS): the window's
+                                     remote traffic by transport, directly under the Remote plot and
+                                     the same 12px inset, so it lines up with it. Built into this host
+                                     by ConnectPage::BuildCharts (urnw::TransportBar) as ONE pane-row
+                                     Button (title "Transports", the bar, the legend, the unused
+                                     footer) whose click opens the transport settings editor. Its
+                                     own hairline is the row's, so no rule here. -->
+                                <Grid Grid.Row="1" x:Name="TransportBarHost" />
+                                <!-- The IP-family status row (connect/IPV6.md D2): the
+                                     Dualstack / IPv4 / IPv6 columns with their connected and
+                                     connecting counts, directly under the transport bar with
+                                     the same inset. Built into this host by
+                                     ConnectPage::BuildCharts (urnw::IpFamilyStatusRow); its
+                                     bottom rule is the group header's, so no rule here. -->
+                                <Grid Grid.Row="2" x:Name="IpFamilyStatusRowHost" />
+                                <!-- The extender panel (connect/EXTENDER.md K4): the
+                                     extenders carrying live connections as rings, the
+                                     "N of M" count, and the gossip network's status dot.
+                                     Built into this host by ConnectPage::BuildCharts
+                                     (urnw::ExtenderPanel). It is NOT tappable - K4 says
+                                     there is no details panel - so it is a plain row, not
+                                     a pane-row Button like the transport bar above. Its
+                                     bottom rule is the group header's, so no rule here. -->
+                                <Grid Grid.Row="3" x:Name="ExtenderPanelHost" />
+                                <Border Grid.Row="4" Style="{StaticResource UrGroupHeaderStyle}">
+                                    <Grid>
+                                        <TextBlock x:Name="ConnectionsLabel"
+                                                   Style="{StaticResource UrGroupHeaderTextStyle}" />
+                                        <TextBlock x:Name="ConnectionsCount" HorizontalAlignment="Right"
+                                                   Style="{StaticResource UrPaneMetaStyle}" />
+                                    </Grid>
+                                </Border>
+                                <!-- The list FILLS the rest of the pane. Its empty state is a
+                                     centred line in that same full-height area, never a short
+                                     card floating in space. -->
+                                <Grid Grid.Row="5">
+                                    <ScrollViewer x:Name="ConnectionsScroll"
+                                                  HorizontalScrollBarVisibility="Disabled"
+                                                  VerticalScrollBarVisibility="Auto">
+                                        <StackPanel x:Name="ConnectionsHost" />
+                                    </ScrollViewer>
+                                    <StackPanel x:Name="SessionEmptyCard" Spacing="8"
+                                                HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                IsHitTestVisible="False">
+                                        <FontIcon Glyph="&#xE9D2;" Style="{StaticResource UrEmptyGlyphStyle}" />
+                                        <TextBlock x:Name="SessionEmptyText" TextAlignment="Center"
+                                                   Style="{StaticResource UrSupportingTextStyle}" />
+                                    </StackPanel>
+                                </Grid>
                             </Grid>
-                        </Border>
-                        <!-- The list FILLS the rest of the pane. Its empty state is a
-                             centred line in that same full-height area, never a short
-                             card floating in space. -->
-                        <Grid Grid.Row="6">
-                            <ScrollViewer x:Name="ConnectionsScroll"
-                                          HorizontalScrollBarVisibility="Disabled"
-                                          VerticalScrollBarVisibility="Auto">
-                                <StackPanel x:Name="ConnectionsHost" />
-                            </ScrollViewer>
-                            <StackPanel x:Name="SessionEmptyCard" Spacing="8"
-                                        HorizontalAlignment="Center" VerticalAlignment="Center"
-                                        IsHitTestVisible="False">
-                                <FontIcon Glyph="&#xE9D2;" Style="{StaticResource UrEmptyGlyphStyle}" />
-                                <TextBlock x:Name="SessionEmptyText" TextAlignment="Center"
-                                           Style="{StaticResource UrSupportingTextStyle}" />
-                            </StackPanel>
-                        </Grid>
+                        </ScrollViewer>
                     </Grid>
 
                     <Border x:Name="ConnectPaneCRule" Grid.Column="3"

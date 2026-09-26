@@ -102,6 +102,21 @@ void ConnectPage::Initialize() {
   BuildHero();
   WireDrawerFeeds();
 
+  // The connections verdict filter. Wired here rather than in markup for the
+  // same reason the status-dot taps are: XAML event handlers live on
+  // MainWindow, which this page does not own. The selection is seeded BEFORE
+  // the handler attaches so the seed itself cannot echo into the handler.
+  w_.ConnectionsVerdictBar().SelectedItem(w_.VerdictAllItem());
+  w_.ConnectionsVerdictBar().SelectionChanged([weak = w_.get_weak()](auto const&, auto const&) {
+    if (auto self = weak.get()) self->connect().OnConnectionsVerdictChanged();
+  });
+  // the small-height scroll escape for pane B: keep the body under the filter
+  // rows viewport-sized, with the floor that engages the outer scroller only
+  // when height is scarce (ApplyActivityBodyHeight has the rule)
+  w_.ActivityBodyScroll().SizeChanged([weak = w_.get_weak()](auto const&, auto const&) {
+    if (auto self = weak.get()) self->connect().ApplyActivityBodyHeight();
+  });
+
   // the easter egg: five taps on the status dot while connected, each within
   // two seconds of the previous, play the Pro celebration; silent otherwise
   w_.StatusDot().Tapped([weak = w_.get_weak()](auto const&, auto const&) {
@@ -173,6 +188,23 @@ void ConnectPage::ApplyStrings() {
   w_.ProvideAlwaysItem().Text(Loc("always"));
   w_.ProvideNetworkItem().Text(Loc("network"));
   w_.ProvideNeverItem().Text(Loc("never"));
+  // The connections filter row. The verdict choices reuse the store's own
+  // verdict words where they exist ("blocked" ships; the store has no short
+  // "All"/"Tunnelled"/"Bypassed" - those are Adv ids, reported like every
+  // other). The search field is built once and re-strung on every pass, the
+  // NetworkPage::ApplyStrings pattern.
+  BuildConnectionsFilter();
+  w_.VerdictAllItem().Text(Adv("adv_filter_all", L"All"));
+  w_.VerdictBlockedItem().Text(Loc("blocked"));
+  w_.VerdictTunnelledItem().Text(Adv("adv_filter_tunnelled", L"Tunnelled"));
+  w_.VerdictBypassedItem().Text(Adv("adv_filter_bypassed", L"Bypassed"));
+  if (connectionsSearch_) {
+    connectionsSearch_.PlaceholderText(Adv("adv_search_connections", L"Search hosts or IPs"));
+    // a TextBox's placeholder is NOT its accessible name (MakePaneSearchRow
+    // sets both, so a re-string sets both)
+    pane_automation::AutomationProperties::SetName(
+        connectionsSearch_, Adv("adv_search_connections", L"Search hosts or IPs"));
+  }
   // the provider extender row (N7): its title, the switch's name, the
   // description under it, and the state line again in the new language
   w_.ExtenderLabel().Text(Loc("extender"));
@@ -1710,80 +1742,346 @@ std::string BlockActionTitle(urnw::BlockActionItem const& action) {
 std::string ShortId(std::string const& id) {
   return id.size() <= 12 ? id : id.substr(0, 12) + "…";
 }
+
+// A connection row's meta line: when the routing decision was made, then the
+// volume totals the line has always carried. The age re-renders on the 1s
+// clock (RefreshConnectionRowTimes) from the row's cached fields, so it stays
+// honest without a feed push. timeMillis is unix-ms; 0 means the feed predates
+// the field, and the prefix is simply absent rather than a 56-year age.
+std::string BlockActionMeta(int64_t timeMillis, int64_t byteCount, int64_t packetCount,
+                            int64_t nowMillis) {
+  std::string meta;
+  if (0 < timeMillis) {
+    meta = urnw::RelativeTime(timeMillis, nowMillis);
+    meta += "   ";
+  }
+  meta += urnw::FormatByteCountCompact(byteCount) + "   " +
+          urnw::FormatCountCompact(packetCount) + " pkt";
+  return meta;
+}
 }  // namespace
+
+// The verdict filter's membership test. "Tunnelled" and "Bypassed" split the
+// old two-way "allowed": both pass traffic, but only one of them protects it -
+// the same three-way reading the row dots and the inspector already print.
+bool ConnectPage::VerdictPassesFilter(ConnectionVerdictFilter filter,
+                                      urnw::BlockActionItem const& action) {
+  switch (filter) {
+    case ConnectionVerdictFilter::Blocked:
+      return action.block;
+    case ConnectionVerdictFilter::Tunnelled:
+      return !action.block && !action.local;
+    case ConnectionVerdictFilter::Bypassed:
+      return !action.block && action.local;
+    default:
+      return true;
+  }
+}
+
+// Case-insensitive substring over every identity field the row or the
+// inspector can print. The query arrives lowercased and trimmed; the search
+// field's TextChanged is its only writer.
+bool ConnectPage::ConnectionQueryPasses(std::string const& query,
+                                        urnw::BlockActionItem const& action) {
+  if (query.empty()) return true;
+  auto anyMatch = [&query](std::vector<std::string> const& values) {
+    for (auto const& value : values) {
+      if (ToLower(value).find(query) != std::string::npos) return true;
+    }
+    return false;
+  };
+  return anyMatch(action.hosts) || anyMatch(action.ips) ||
+         anyMatch(action.matchedHosts) || anyMatch(action.matchedIps);
+}
+
+// The activity row, built ONCE per block-action id. NORMAL: a static row, not
+// focusable, not selectable - a Normal user is being told what their VPN is
+// doing, not handed 200 tab stops on the way to the Connect button. ADVANCED:
+// the same row, selectable - clickable, in the tab order, and invokable with
+// Enter or Space because it is a real Button rather than a Border with a
+// pointer handler bolted on.
+ConnectPage::ConnectionRowEntry ConnectPage::BuildConnectionRow(
+    urnw::BlockActionItem const& action) {
+  ConnectionRowEntry entry;
+  entry.id = action.id;
+  entry.selectable = advancedMode_;
+  if (!advancedMode_) {
+    auto row = urnw::kit::MakePaneListRow(36);
+    entry.root = row.root;
+    entry.dot = row.dot;
+    entry.title = row.title;
+    entry.meta = row.meta;
+  } else {
+    auto row = urnw::kit::MakePaneListRowButton(36);
+    entry.button = row;
+    entry.root = row.root;
+    entry.dot = row.dot;
+    entry.title = row.title;
+    entry.meta = row.meta;
+    // By ID, never by index - see SelectConnection. The id is captured by
+    // value so the handler does not reach back into a vector that has been
+    // rebuilt.
+    const std::string id = action.id;
+    row.root.Click([weak = w_.get_weak(), id](auto const&, auto const&) {
+      if (auto self = weak.get()) self->connect().SelectConnection(id);
+    });
+  }
+  UpdateConnectionRow(entry, action);
+  return entry;
+}
+
+// The in-place rewrite: everything a push can change about a row that is
+// already on screen - the counters (and with them the meta line), the title,
+// the verdict's colour and word - without touching the row's identity, focus
+// or the scroller's offset.
+void ConnectPage::UpdateConnectionRow(ConnectionRowEntry& entry,
+                                      urnw::BlockActionItem const& action) {
+  entry.timeMillis = action.timeMillis;
+  entry.byteCount = action.byteCount;
+  entry.packetCount = action.packetCount;
+  const std::string title = BlockActionTitle(action);
+  const hstring titleText = title.empty() ? Loc("unknown") : H(title);
+  const auto verdictColor = action.block   ? urnw::colors::kUrCoral
+                            : action.local ? urnw::colors::kUrAmber
+                                           : urnw::colors::kUrGreen;
+  // The verdict in WORDS, for the row's accessible name. The dot is Raw, so
+  // the name is the only place the colour's meaning exists for a screen
+  // reader - and `local` is a THIRD verdict the old two-way name folded into
+  // "allowed": traffic sent around the tunnel is allowed and unprotected, and
+  // those are not the same thing to anyone reading this list.
+  const hstring verdict = action.block  ? Loc("blocked")
+                          : action.local ? Loc("local")
+                                         : Loc("allowed");
+  const int64_t nowMillis = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                std::chrono::system_clock::now().time_since_epoch())
+                                .count();
+  entry.dot.Fill(urnw::colors::MakeBrush(verdictColor));
+  entry.title.Text(titleText);
+  entry.meta.Text(
+      H(BlockActionMeta(action.timeMillis, action.byteCount, action.packetCount, nowMillis)));
+  winrt::Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(
+      entry.root, hstring{std::wstring{titleText} + L", " + std::wstring{verdict}});
+}
 
 // The activity pane's table: every routing decision the device has made, newest
 // first. Coral = blocked, green = allowed through the tunnel, amber = sent
 // around it (a split rule matched). This is the pane's reason to exist and the
 // list that has to FILL it.
-void ConnectPage::ApplyConnectionsList() {
+//
+// INCREMENTAL, because the feed pushes several times a second and a
+// Clear()+rebuild on every push reset the scroller to the top, which made the
+// list unreadable while it moved: rows are keyed by BlockActionItem::id, new
+// decisions insert at the top, living rows are rewritten in place, rows past
+// the cap or filtered out are removed, and the offset is restored afterwards.
+// The verdict filter and the host/IP search re-evaluate membership through
+// this same pass, so a filter change is a diff, not a rebuild.
+void ConnectPage::ApplyConnectionsList(bool resetScroll) {
   auto host = w_.ConnectionsHost();
-  host.Children().Clear();
-  connectionRows_.clear();
-  connectionRowIds_.clear();
-  // A cap, not a scroll budget: the SDK's action feed is unbounded and every row
-  // is a live XAML subtree. 200 rows is ~7000px of pane, well past any window.
-  constexpr size_t kMaxRows = 200;
-  const size_t count = std::min(blockActions_.size(), kMaxRows);
-  for (size_t i = 0; i < count; ++i) {
-    auto const& action = blockActions_[i];
-    const std::string title = BlockActionTitle(action);
-    const hstring titleText = title.empty() ? Loc("unknown") : H(title);
-    const auto verdictColor = action.block   ? urnw::colors::kUrCoral
-                              : action.local ? urnw::colors::kUrAmber
-                                             : urnw::colors::kUrGreen;
-    // The verdict in WORDS, for the row's accessible name. The dot is Raw, so
-    // the name is the only place the colour's meaning exists for a screen
-    // reader — and `local` is a THIRD verdict the old two-way name folded into
-    // "allowed": traffic sent around the tunnel is allowed and unprotected, and
-    // those are not the same thing to anyone reading this list.
-    const hstring verdict = action.block  ? Loc("blocked")
-                            : action.local ? Loc("local")
-                                           : Loc("allowed");
-    const hstring meta = H(urnw::FormatByteCountCompact(action.byteCount) + "   " +
-                           urnw::FormatCountCompact(action.packetCount) + " pkt");
+  auto scroll = w_.ConnectionsScroll();
 
-    if (!advancedMode_) {
-      // NORMAL. Exactly what shipped: a static row, not focusable, not
-      // selectable. A Normal user is being told what their VPN is doing, not
-      // handed 200 tab stops on the way to the Connect button.
-      auto row = urnw::kit::MakePaneListRow(36);
-      row.dot.Fill(urnw::colors::MakeBrush(verdictColor));
-      row.title.Text(titleText);
-      row.meta.Text(meta);
-      winrt::Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(
-          row.root, hstring{std::wstring{titleText} + L", " + std::wstring{verdict}});
-      host.Children().Append(row.root);
+  // The Advanced-Mode flip changes the row TYPE (static Border <-> selectable
+  // Button), which an incremental pass cannot morph: it is the ONE path that
+  // still clears, and it is a user gesture, never a push.
+  if (connectionRowsSelectable_ != advancedMode_ && !connectionRowEntries_.empty()) {
+    host.Children().Clear();
+    connectionRowEntries_.clear();
+  }
+  connectionRowsSelectable_ = advancedMode_;
+
+  // The visible slice: verdict filter and host/IP substring over the CACHED
+  // feed (no Sdk() read, so the filter and the push path cannot disagree),
+  // under the cap the full rebuild had. A cap, not a scroll budget: the SDK's
+  // action feed is unbounded and every row is a live XAML subtree - 200 rows
+  // is ~7000px of pane, well past any window.
+  constexpr size_t kMaxRows = 200;
+  std::vector<urnw::BlockActionItem const*> visible;
+  visible.reserve(std::min(blockActions_.size(), kMaxRows));
+  int64_t filteredCount = 0;
+  for (auto const& action : blockActions_) {
+    if (!VerdictPassesFilter(verdictFilter_, action) ||
+        !ConnectionQueryPasses(connectionsQuery_, action)) {
       continue;
     }
-
-    // ADVANCED. The same row, selectable: clickable, in the tab order, and
-    // invokable with Enter or Space because it is a real Button rather than a
-    // Border with a pointer handler bolted on.
-    auto row = urnw::kit::MakePaneListRowButton(36);
-    row.dot.Fill(urnw::colors::MakeBrush(verdictColor));
-    row.title.Text(titleText);
-    row.meta.Text(meta);
-    winrt::Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(
-        row.root, hstring{std::wstring{titleText} + L", " + std::wstring{verdict}});
-    // By ID, never by index — see SelectConnection. The id is captured by value
-    // so the handler does not reach back into a vector that has been rebuilt.
-    const std::string id = action.id;
-    row.root.Click([weak = w_.get_weak(), id](auto const&, auto const&) {
-      if (auto self = weak.get()) self->connect().SelectConnection(id);
-    });
-    host.Children().Append(row.root);
-    connectionRows_.push_back(row);
-    connectionRowIds_.push_back(id);
+    ++filteredCount;
+    if (visible.size() < kMaxRows) visible.push_back(&action);
   }
-  w_.ConnectionsCount().Text(
-      hstring{urnw::Plural("host_count", static_cast<int64_t>(blockActions_.size()))});
+
+  // Read the offset BEFORE the mutations; it is restored after them. A filter
+  // change is a new result set and reads from the top instead.
+  const double offset = resetScroll ? 0.0 : scroll.VerticalOffset();
+
+  // Rows that left the visible set - aged out of the feed, trimmed past the
+  // cap, or filtered out - walk back to front so the Children() indices stay
+  // valid as they come out.
+  for (size_t i = connectionRowEntries_.size(); 0 < i--;) {
+    bool stays = false;
+    for (auto const* action : visible) {
+      if (action->id == connectionRowEntries_[i].id) {
+        stays = true;
+        break;
+      }
+    }
+    if (stays) continue;
+    host.Children().RemoveAt(static_cast<uint32_t>(i));
+    connectionRowEntries_.erase(connectionRowEntries_.begin() +
+                                static_cast<ptrdiff_t>(i));
+  }
+
+  // The visible order, top = newest: update in place where the row already
+  // stands, reseat it if the feed moved it, insert it if it is new.
+  for (size_t i = 0; i < visible.size(); ++i) {
+    auto const& action = *visible[i];
+    size_t at = connectionRowEntries_.size();
+    for (size_t k = i; k < connectionRowEntries_.size(); ++k) {
+      if (connectionRowEntries_[k].id == action.id) {
+        at = k;
+        break;
+      }
+    }
+    if (at < connectionRowEntries_.size()) {
+      UpdateConnectionRow(connectionRowEntries_[at], action);
+      if (at != i) {
+        ConnectionRowEntry entry = std::move(connectionRowEntries_[at]);
+        connectionRowEntries_.erase(connectionRowEntries_.begin() +
+                                    static_cast<ptrdiff_t>(at));
+        host.Children().RemoveAt(static_cast<uint32_t>(at));
+        host.Children().InsertAt(static_cast<uint32_t>(i), entry.root);
+        connectionRowEntries_.insert(connectionRowEntries_.begin() +
+                                         static_cast<ptrdiff_t>(i),
+                                     std::move(entry));
+      }
+    } else {
+      ConnectionRowEntry entry = BuildConnectionRow(action);
+      host.Children().InsertAt(static_cast<uint32_t>(i), entry.root);
+      connectionRowEntries_.insert(connectionRowEntries_.begin() +
+                                       static_cast<ptrdiff_t>(i),
+                                   std::move(entry));
+    }
+  }
+
+  // The selectable rows, re-collected so the selection path keeps repainting
+  // instead of rebuilding (see ApplyConnectionSelectionVisuals).
+  connectionRows_.clear();
+  connectionRowIds_.clear();
+  for (auto const& entry : connectionRowEntries_) {
+    if (!entry.selectable) continue;
+    connectionRows_.push_back(entry.button);
+    connectionRowIds_.push_back(entry.id);
+  }
+
+  // Restore what a rebuild would have lost. ChangeView applies against the new
+  // extent once layout settles; the animation is disabled because this is a
+  // correction, not a transition.
+  if (resetScroll) {
+    scroll.ChangeView(nullptr, winrt::Windows::Foundation::IReference<double>{0.0}, nullptr,
+                      true);
+  } else if (0 < offset) {
+    scroll.ChangeView(nullptr, winrt::Windows::Foundation::IReference<double>{offset},
+                      nullptr, true);
+  }
+
+  // The group-header count: "N hosts" with no filter, "N hosts of M" while a
+  // filter is holding rows back - of_total is the shipped "of {}" key, so the
+  // pair stays plural-correct in every language the store covers.
+  const bool filterActive =
+      verdictFilter_ != ConnectionVerdictFilter::All || !connectionsQuery_.empty();
+  std::wstring count =
+      urnw::Plural("host_count",
+                   filterActive ? filteredCount
+                                : static_cast<int64_t>(blockActions_.size()));
+  if (filterActive) {
+    count += L" ";
+    count += urnw::Format("of_total", static_cast<int64_t>(blockActions_.size()));
+  }
+  w_.ConnectionsCount().Text(hstring{count});
+
   ApplySessionCardsVisibility(statsConnected_);
-  // The list was just rebuilt underneath the selection. If what was selected is
-  // no longer in the feed, the inspector must say so rather than keep printing a
+  // A filter that matches nothing in a session that HAS rows must not read as
+  // an empty session: the blank list under the active filter controls says
+  // exactly what happened, which the session-empty line would contradict.
+  if (filterActive && filteredCount == 0 && !blockActions_.empty() && statsConnected_) {
+    w_.ConnectionsScroll().Visibility(Visibility::Visible);
+    w_.SessionEmptyCard().Visibility(Visibility::Collapsed);
+  }
+  // The selection survived the reconcile by id. If what was selected is no
+  // longer in the feed, the inspector must say so rather than keep printing a
   // connection that has aged out.
   ApplyConnectionSelectionVisuals();
   ApplyInspector();
+}
+
+// NetworkPage::Build parity: the search field and its filter live in one
+// place, built once into the markup's host. The locations search is owned by
+// the SDK; the connections feed's reading is NOT - this filter is view-side
+// over the cached feed, so TextChanged just re-runs the incremental pass.
+void ConnectPage::BuildConnectionsFilter() {
+  if (connectionsFilterBuilt_) return;
+  connectionsFilterBuilt_ = true;
+  auto row =
+      urnw::kit::MakePaneSearchRow(Adv("adv_search_connections", L"Search hosts or IPs"));
+  connectionsSearch_ = row.box;
+  connectionsSearch_.TextChanged([weak = w_.get_weak()](IInspectable const&, auto const&) {
+    if (auto self = weak.get()) {
+      auto& page = self->connect();
+      page.connectionsQuery_ =
+          ToLower(TrimWhitespace(Narrow(page.connectionsSearch_.Text())));
+      page.ApplyConnectionsList(true);
+    }
+  });
+  w_.ConnectionsSearchHost().Children().Append(row.root);
+}
+
+// The verdict filter, read off the bar the way SelectedMode reads the
+// connection mode (same non-const accessor note). A changed filter is a new
+// result set: re-evaluate membership through the ordinary incremental pass
+// and read it from the top.
+void ConnectPage::OnConnectionsVerdictChanged() {
+  if (updatingControls_) return;
+  auto selected = w_.ConnectionsVerdictBar().SelectedItem();
+  ConnectionVerdictFilter filter = ConnectionVerdictFilter::All;
+  if (selected == w_.VerdictBlockedItem()) {
+    filter = ConnectionVerdictFilter::Blocked;
+  } else if (selected == w_.VerdictTunnelledItem()) {
+    filter = ConnectionVerdictFilter::Tunnelled;
+  } else if (selected == w_.VerdictBypassedItem()) {
+    filter = ConnectionVerdictFilter::Bypassed;
+  }
+  if (filter == verdictFilter_) return;
+  verdictFilter_ = filter;
+  ApplyConnectionsList(true);
+}
+
+// The 1s reading of the meta line's age prefix. Every row keeps the counters
+// its meta was built from, so this is one string re-render per row with no
+// feed read and no rebuild - and a row whose age text has not changed is not
+// touched, so a quiet minute costs no layout.
+void ConnectPage::RefreshConnectionRowTimes() {
+  if (connectionRowEntries_.empty()) return;
+  const int64_t nowMillis = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                std::chrono::system_clock::now().time_since_epoch())
+                                .count();
+  for (auto& entry : connectionRowEntries_) {
+    if (entry.timeMillis <= 0) continue;
+    const hstring meta =
+        H(BlockActionMeta(entry.timeMillis, entry.byteCount, entry.packetCount, nowMillis));
+    if (entry.meta.Text() != meta) entry.meta.Text(meta);
+  }
+}
+
+// The pane-B body floor: the 150px chart + the transport bar + the ip-family
+// row + the extender panel + the 28px group header + a usable sliver of the
+// list. Below it the fixed blocks would leave the star-sized list under ~3
+// rows, so the body stops shrinking and the pane's own scroller takes over
+// (the markup comment on ActivityBodyScroll states the rule).
+constexpr double kActivityBodyMinHeight = 520;
+
+void ConnectPage::ApplyActivityBodyHeight() {
+  // Pin the body at the viewport while the window is tall enough - the body IS
+  // the viewport there, so the layout is pixel-identical to the fixed rows it
+  // replaced - and at the floor below it, which is the one thing a star row
+  // cannot express: "shrink with the pane, but no further than this".
+  const double viewport = w_.ActivityBodyScroll().ViewportHeight();
+  w_.ActivityBody().Height(std::max(viewport, kActivityBodyMinHeight));
 }
 
 // The session, as key/value rows on the statistics pane's grid. These were four
@@ -2465,6 +2763,9 @@ void ConnectPage::OnChartTick() {
   if (PreviewSampleActive() && chartTickCount_ % 20 == 0) PreviewSampleCharts();
   if (++chartTickCount_ % 10 == 0) {  // ~1s cadence
     if (splitRulesSheet_) splitRulesSheet_->RefreshTimes();  // "Ns ago" labels
+    // the activity rows' age prefix rides the same 1s cadence as the sheet's;
+    // gated on the pane being on screen, like every other repaint here
+    if (w_.ConnectView().Visibility() == Visibility::Visible) RefreshConnectionRowTimes();
     // D5: the inspector's exit-routing tables, every 5s. THREE gates, and all
     // three earn their place — the mode is on (nothing else reads these), the
     // window is presenting (this function already returned otherwise), and the

@@ -22,6 +22,7 @@
 #include <winrt/Microsoft.UI.Xaml.h>
 #include <winrt/Microsoft.UI.Xaml.Controls.h>
 #include <winrt/Microsoft.UI.Xaml.Input.h>
+#include <winrt/Microsoft.UI.Xaml.Shapes.h>  // ConnectionRowEntry's Ellipse
 
 #include "ConnectCanvas.h"
 #include "ExtenderPanel.h"
@@ -221,16 +222,72 @@ class ConnectPage {
 
   // ---- R3: the pane lists ---------------------------------------------------
   // The three dense, uniform-row lists the pane shell put where the cards were.
-  // Each rebuilds its host StackPanel from this page's cached feed, and every
+  // Each renders its host StackPanel from this page's cached feed, and every
   // row in a list is the same height as every other row in it.
   //
   //   activity pane     ApplyConnectionsList  the routing decisions (block
-  //                                           actions): verdict, host, bytes
+  //                                           actions): verdict, host, bytes.
+  //                                           INCREMENTAL: rows are keyed by
+  //                                           BlockActionItem::id and updated
+  //                                           in place - a feed push inserts
+  //                                           the new rows at the top, rewrites
+  //                                           the rest, trims past the 200-row
+  //                                           cap, and never Clear()s, so the
+  //                                           scroller's offset survives every
+  //                                           push. resetScroll is for the
+  //                                           filter controls: a changed filter
+  //                                           is a new result set and reads
+  //                                           from the top.
   //   statistics pane   ApplySessionRows      the session figures, key/value
   //                     ApplyContractsList    one row per contract peer
   //                     ApplySplitRulesList   one row per split rule
-  void ApplyConnectionsList();
+  void ApplyConnectionsList(bool resetScroll = false);
   void ApplySessionRows();
+
+  // ---- the connections filter row + relative time ---------------------------
+  // The verdict filter: the same three-way verdict the rows print (blocked /
+  // tunnelled / sent AROUND the tunnel) plus All. Applied view-side over the
+  // cached blockActions_ - no Sdk() read - so the filter and the push path can
+  // never disagree about the feed, and a filter change re-evaluates membership
+  // through the same incremental pass a push uses.
+  enum class ConnectionVerdictFilter { All, Blocked, Tunnelled, Bypassed };
+  static bool VerdictPassesFilter(ConnectionVerdictFilter filter,
+                                  urnw::BlockActionItem const& action);
+  // The host/IP substring: case-insensitive over every identity field the row
+  // or the inspector can print (hosts, ips, and the override-matched variants).
+  static bool ConnectionQueryPasses(std::string const& query,
+                                    urnw::BlockActionItem const& action);
+  // One row of the activity list as it stands on screen: the elements both
+  // modes share (root, dot, title, meta) plus, in Advanced Mode, the selectable
+  // row kept whole for SetPaneListRowSelected. The cached counters let the 1s
+  // clock re-render the relative-time prefix without a feed push.
+  struct ConnectionRowEntry {
+    std::string id;
+    bool selectable = false;  // root is a Button (Advanced Mode), else a Border
+    winrt::Microsoft::UI::Xaml::UIElement root{nullptr};
+    winrt::Microsoft::UI::Xaml::Shapes::Ellipse dot{nullptr};
+    winrt::Microsoft::UI::Xaml::Controls::TextBlock title{nullptr};
+    winrt::Microsoft::UI::Xaml::Controls::TextBlock meta{nullptr};
+    urnw::kit::PaneListRowButton button{};  // valid only when selectable
+    int64_t timeMillis = 0;
+    int64_t byteCount = 0;
+    int64_t packetCount = 0;
+  };
+  ConnectionRowEntry BuildConnectionRow(urnw::BlockActionItem const& action);
+  void UpdateConnectionRow(ConnectionRowEntry& entry, urnw::BlockActionItem const& action);
+  // the search row (kit::MakePaneSearchRow, NetworkPage::Build parity), once
+  void BuildConnectionsFilter();
+  // verdict bar change -> verdictFilter_ -> incremental re-evaluation
+  void OnConnectionsVerdictChanged();
+  // Re-render every row's relative-time prefix on the 1s divider: a repaint of
+  // one TextBlock per row, never a rebuild.
+  void RefreshConnectionRowTimes();
+  // The small-height scroll escape for pane B (the markup comment on
+  // ActivityBodyScroll has the rule): pin the body under the filter rows at
+  // its scroller's viewport height, floored at kActivityBodyMinHeight, so the
+  // outer scroller engages only when the window is too short for the fixed
+  // blocks AND the list together.
+  void ApplyActivityBodyHeight();
 
   // ---- D5: the connection inspector -----------------------------------------
   //
@@ -241,11 +298,11 @@ class ConnectPage {
   // per-direction counters, ASN, per-connection duration) are absent rather than
   // guessed. See the report; they need bridging or upstream SDK work.
   //
-  // Selection is held by the block action's ID, not by its index. The feed is a
-  // live rebuild on every push and rows move; an index selection follows the
-  // POSITION and quietly starts inspecting a different connection, which is the
-  // worst failure available to a tool whose whole job is to tell you what a
-  // given connection is doing.
+  // Selection is held by the block action's ID, not by its index. The feed is
+  // live and rows move on every push; an index selection follows the POSITION
+  // and quietly starts inspecting a different connection, which is the worst
+  // failure available to a tool whose whole job is to tell you what a given
+  // connection is doing.
   void SelectConnection(std::string const& id);
   void ApplyInspector();
   // Paint the selected/unselected state across the rows already on screen,
@@ -418,8 +475,23 @@ class ConnectPage {
   std::string selectedConnectionId_;
   // The rows currently on screen, parallel to the visible slice of
   // blockActions_, so a selection change repaints instead of rebuilding.
+  // Re-collected from connectionRowEntries_ after each incremental reconcile.
   std::vector<urnw::kit::PaneListRowButton> connectionRows_;
   std::vector<std::string> connectionRowIds_;
+  // The activity rows as they stand on screen, in display order and parallel
+  // to ConnectionsHost.Children() - the structure the incremental
+  // ApplyConnectionsList reconciles against the filtered feed.
+  std::vector<ConnectionRowEntry> connectionRowEntries_;
+  // The mode the on-screen rows were built for. A flip changes the row TYPE
+  // (static Border <-> selectable Button), which an incremental pass cannot
+  // morph - it is the one ApplyConnectionsList path that still clears
+  // (ApplyAdvancedMode, a user gesture and never a push).
+  bool connectionRowsSelectable_ = false;
+  ConnectionVerdictFilter verdictFilter_ = ConnectionVerdictFilter::All;
+  // the host/IP substring, lowercased and trimmed; empty = no text filter
+  std::string connectionsQuery_;
+  winrt::Microsoft::UI::Xaml::Controls::TextBox connectionsSearch_{nullptr};
+  bool connectionsFilterBuilt_ = false;
   // The reliability snapshot's routing tables, refreshed off-thread. Exits are
   // keyed by client id; destination exits map a destination ip to the exit
   // carrying its flows. This is the ONLY per-connection "which exit" the SDK has.
