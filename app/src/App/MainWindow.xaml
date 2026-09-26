@@ -1611,9 +1611,12 @@
                         <Grid Grid.Row="1" x:Name="NetworkSearchHost" />
                         <!-- The list FILLS the rest of the pane, and its empty
                              state is a centred line in that same full-height
-                             area - never a short card at the top of it. -->
+                             area - never a short card at the top of it. The
+                             scroller is named so NetworkPage's reconcile can
+                             hold its offset across an incremental update. -->
                         <Grid Grid.Row="2">
-                            <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                            <ScrollViewer x:Name="NetworkListScroll"
+                                          HorizontalScrollBarVisibility="Disabled"
                                           VerticalScrollBarVisibility="Auto">
                                 <StackPanel x:Name="NetworkListHost" />
                             </ScrollViewer>
