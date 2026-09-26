@@ -7,6 +7,7 @@
 #include <winrt/Microsoft.UI.Xaml.Automation.h>
 #include <winrt/Microsoft.UI.Xaml.Media.Animation.h>
 #include <winrt/Microsoft.UI.Xaml.Shapes.h>  // PeerDot Ellipse.Fill
+#include <winrt/Windows.ApplicationModel.DataTransfer.h>  // copy-details DataPackage
 
 #include <algorithm>
 #include <array>
@@ -115,6 +116,29 @@ void ConnectPage::Initialize() {
   // when height is scarce (ApplyActivityBodyHeight has the rule)
   w_.ActivityBodyScroll().SizeChanged([weak = w_.get_weak()](auto const&, auto const&) {
     if (auto self = weak.get()) self->connect().ApplyActivityBodyHeight();
+  });
+
+  // The inspector's quick actions (D5). Wired here rather than in markup for
+  // the same reason as the verdict bar above: XAML Click handlers live on
+  // MainWindow, which this page does not own.
+  w_.InspectorBlockButton().Click([weak = w_.get_weak()](auto const&, auto const&) {
+    if (auto self = weak.get()) self->connect().OnInspectorBlockToggle();
+  });
+  w_.InspectorRouteButton().Click([weak = w_.get_weak()](auto const&, auto const&) {
+    if (auto self = weak.get()) self->connect().OnInspectorRouteToggle();
+  });
+  w_.InspectorCopyButton().Click([weak = w_.get_weak()](auto const&, auto const&) {
+    if (auto self = weak.get()) self->connect().OnInspectorCopyDetails();
+  });
+  // the rule confirmation and its Undo action. The button is built once and
+  // swapped onto the InfoBar per Show - a creation arms it, a removal shows
+  // the bare acknowledgement.
+  inspectorSnackbar_ =
+      std::make_unique<urnw::kit::Snackbar>(w_.InspectorSnackbar(), w_.DispatcherQueue());
+  inspectorUndoButton_ = Controls::Button();
+  inspectorUndoButton_.Content(winrt::box_value(Adv("adv_undo", L"Undo")));
+  inspectorUndoButton_.Click([weak = w_.get_weak()](auto const&, auto const&) {
+    if (auto self = weak.get()) self->connect().OnInspectorUndo();
   });
 
   // the easter egg: five taps on the status dot while connected, each within
@@ -266,6 +290,10 @@ void ConnectPage::ApplyStrings() {
   // also runs before BuildCharts has made them.
   if (ipFamilyStatusRow_) ipFamilyStatusRow_->ApplyStrings();
   if (extenderPanel_) extenderPanel_->ApplyStrings();
+  // The snackbar's Undo is built once in Initialize, so its label is re-strung
+  // here like every other fixed label; the action-row buttons' labels
+  // re-render from ApplyInspector with the rest of the inspector.
+  if (inspectorUndoButton_) inspectorUndoButton_.Content(winrt::box_value(Adv("adv_undo", L"Undo")));
   // The plan + usage card that used to sit in this rail is gone from Home
   // (spec §5); its strings now belong only to Account, which paints them from
   // MainWindow::ApplyBalance.
@@ -1334,6 +1362,10 @@ void ConnectPage::WireDrawerFeeds() {
         auto& page = self->connect();
         page.splitRules_ = rules;
         page.ApplySplitRuleCount();
+        // The quick actions read the SAME publish (through CurrentHostRules),
+        // so a rule written from any surface - the sheet, not only the
+        // inspector's own buttons - re-renders the on/off state here.
+        page.ApplyInspector();
         if (page.splitRulesSheet_) {
           page.splitRulesSheet_->Update(page.splitRules_, page.blockActions_,
                                         page.allowedCount_, page.blockedCount_);
@@ -2244,6 +2276,18 @@ std::optional<ConnectPage::ExitRouting> ConnectPage::RoutingForAddresses(
   return std::nullopt;
 }
 
+// The selection in the CURRENT feed, or nullptr. The action may have aged out
+// of the SDK's window since it was picked, and if it has, saying so is the
+// honest reading - the alternative is a detail pane frozen on a connection
+// that no longer exists, which is indistinguishable from a hung inspector.
+const urnw::BlockActionItem* ConnectPage::SelectedConnectionAction() const {
+  if (selectedConnectionId_.empty()) return nullptr;
+  for (auto const& candidate : blockActions_) {
+    if (candidate.id == selectedConnectionId_) return &candidate;
+  }
+  return nullptr;
+}
+
 void ConnectPage::ApplyInspector() {
   // Normal mode: the group is not merely empty, it is gone. The third pane is
   // the statistics pane it has always been, with no vestigial header.
@@ -2262,19 +2306,7 @@ void ConnectPage::ApplyInspector() {
   auto host = w_.InspectorRowsHost();
   host.Children().Clear();
 
-  // Find the selection in the CURRENT feed. It may have aged out of the SDK's
-  // window since it was picked, and if it has, saying so is the honest reading —
-  // the alternative is a detail pane frozen on a connection that no longer
-  // exists, which is indistinguishable from a hung inspector.
-  const urnw::BlockActionItem* action = nullptr;
-  if (!selectedConnectionId_.empty()) {
-    for (auto const& candidate : blockActions_) {
-      if (candidate.id == selectedConnectionId_) {
-        action = &candidate;
-        break;
-      }
-    }
-  }
+  const urnw::BlockActionItem* action = SelectedConnectionAction();
 
   w_.InspectorClearButton().Visibility(action ? Visibility::Visible
                                               : Visibility::Collapsed);
@@ -2292,6 +2324,11 @@ void ConnectPage::ApplyInspector() {
     w_.InspectorDot().Fill(urnw::colors::MakeBrush(urnw::colors::kTextFaint));
     w_.InspectorVerdict().Text(
         Adv("adv_select_a_row", L"Select a row in Activity to inspect it"));
+    // No selection, no actions: the row goes WITH the empty reading, and a
+    // disabled row left behind would offer rules on a connection that is gone.
+    w_.InspectorActionsRow().Visibility(Visibility::Collapsed);
+    blockQuickAction_ = {};
+    routeQuickAction_ = {};
     return;
   }
 
@@ -2312,6 +2349,33 @@ void ConnectPage::ApplyInspector() {
       : action->local
           ? Adv("adv_verdict_local", L"Bypassed the tunnel — not protected")
           : Adv("adv_verdict_tunnelled", L"Tunnelled through URnetwork"));
+
+  // ---- the quick actions (observe -> decide -> rule) ----------------------
+  // Derived on EVERY render, from the live overrides list: the click handlers
+  // consume the stored state, so the state and the buttons can never disagree.
+  blockQuickAction_ = QuickActionFor(*action, true);
+  routeQuickAction_ = QuickActionFor(*action, false);
+  w_.InspectorActionsRow().Visibility(Visibility::Visible);
+  // The label names what the click leaves behind: "Allow this host" over a
+  // blocking rule (or a blocked verdict when no rule is in force), "Block
+  // this host" over an allowing one - and the bypass/tunnel pair the same
+  // way. The ACTIVE rule's polarity answers, never the action's verdict: the
+  // verdict is a stale snapshot once a rule has landed after the decision,
+  // and a label read from it would name the click backwards exactly while
+  // the undo snackbar is up. The fill says create vs remove
+  // (ApplyQuickActionButton).
+  ApplyQuickActionButton(
+      w_.InspectorBlockButton(), blockQuickAction_,
+      (blockQuickAction_.active ? blockQuickAction_.polarity : action->block)
+          ? Adv("adv_allow_host", L"Allow this host")
+          : Adv("adv_block_host", L"Block this host"));
+  ApplyQuickActionButton(
+      w_.InspectorRouteButton(), routeQuickAction_,
+      (routeQuickAction_.active ? routeQuickAction_.polarity : action->local)
+          ? Adv("adv_always_tunnel", L"Always tunnel")
+          : Adv("adv_bypass_tunnel", L"Bypass the tunnel"));
+  w_.InspectorCopyButton().Content(
+      winrt::box_value(Adv("adv_copy_details", L"Copy details")));
 
   auto add = [&host](winrt::hstring const& key, winrt::hstring const& value) {
     host.Children().Append(urnw::kit::MakePaneKeyValueRow(key, value).root);
@@ -2349,10 +2413,54 @@ void ConnectPage::ApplyInspector() {
   if (action->overrideId.empty()) {
     add(Adv("adv_reason", L"Reason"), Adv("adv_reason_default", L"Default policy"));
   } else {
-    add(Adv("adv_reason", L"Reason"),
+    const winrt::hstring reason =
         action->hasBlockOverride  ? Adv("adv_reason_block", L"Block override")
         : action->hasRouteOverride ? Adv("adv_reason_route", L"Route override")
-                                   : Adv("adv_reason_override", L"Override"));
+                                   : Adv("adv_reason_override", L"Override");
+    // The reason names a rule, and the rule lives on the split-rules surface -
+    // so "why did this happen" is one click away: the value is a button that
+    // opens that surface (the trailing caret says so, the way
+    // ProviderCountLine's does) rather than a fact the user hunts down.
+    auto reasonRow = urnw::kit::MakePaneKeyValueRow(Adv("adv_reason", L"Reason"), reason);
+    auto reasonGrid = reasonRow.root.Child().as<Controls::Grid>();
+    uint32_t reasonValueIndex = 0;
+    if (reasonGrid.Children().IndexOf(reasonRow.value, reasonValueIndex)) {
+      reasonGrid.Children().RemoveAt(reasonValueIndex);
+      Controls::Button link;
+      link.Padding(ThicknessHelper::FromLengths(0, 0, 0, 0));
+      link.Background(urnw::colors::MakeBrush(winrt::Windows::UI::Color{0, 0, 0, 0}));
+      link.BorderThickness(ThicknessHelper::FromLengths(0, 0, 0, 0));
+      link.HorizontalContentAlignment(HorizontalAlignment::Right);
+      Controls::StackPanel linkContent;
+      linkContent.Orientation(Controls::Orientation::Horizontal);
+      linkContent.Spacing(4);
+      Controls::TextBlock linkText;
+      linkText.Text(reason);
+      linkText.FontSize(13);
+      linkText.Foreground(urnw::colors::TextBrush());
+      linkText.VerticalAlignment(VerticalAlignment::Center);
+      linkContent.Children().Append(linkText);
+      Controls::FontIcon caret;
+      caret.Glyph(L"\uE76C");
+      caret.FontSize(12);
+      caret.Foreground(urnw::colors::FaintBrush());
+      caret.VerticalAlignment(VerticalAlignment::Center);
+      linkContent.Children().Append(caret);
+      link.Content(linkContent);
+      // A Button whose Content is a Panel gets NO automatic name (the kit's
+      // PaneListRowButton note): name it with the fact and where it goes, or
+      // a screen reader hears "button" and nothing else.
+      winrt::Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(
+          link, winrt::hstring{std::wstring{Adv("adv_reason", L"Reason")} + L", " +
+                               std::wstring{reason} + L", " +
+                               AdvW("adv_open_split_rules", L"open split rules")});
+      link.Click([weak = w_.get_weak()](auto const&, auto const&) {
+        if (auto self = weak.get()) self->connect().ShowSplitRulesSheet();
+      });
+      Controls::Grid::SetColumn(link, 1);
+      reasonGrid.Children().Append(link);
+    }
+    host.Children().Append(reasonRow.root);
     addText(Adv("adv_override_id", L"Override"), action->overrideId);
   }
 
@@ -2433,6 +2541,213 @@ void ConnectPage::ApplyInspector() {
     row.value.IsTextSelectionEnabled(true);
     host.Children().Append(row.root);
   }
+}
+
+// The quick action's whole state, derived from the LIVE overrides list. The
+// action itself cannot answer "is a rule in force NOW": it snapshots the
+// decision as made and does not change when a rule is added afterwards, which
+// is exactly when the user reaches for these buttons.
+ConnectPage::InspectorQuickAction ConnectPage::QuickActionFor(
+    urnw::BlockActionItem const& action, bool blockKind) const {
+  InspectorQuickAction out;
+  // The host values a click would rule on: the matched names first, then the
+  // bare hosts, then the addresses - the same values, in the same order, the
+  // split-rule editor offers for this same action (OpenEditorForAction).
+  out.hosts = action.matchedHosts;
+  out.hosts.insert(out.hosts.end(), action.hosts.begin(), action.hosts.end());
+  out.hosts.insert(out.hosts.end(), action.matchedIps.begin(), action.matchedIps.end());
+  out.hosts.insert(out.hosts.end(), action.ips.begin(), action.ips.end());
+  out.enabled = !out.hosts.empty();
+
+  for (auto const& rule : Sdk().CurrentHostRules()) {
+    if (blockKind ? !rule.hasBlockOverride : !rule.hasRouteOverride) continue;
+    const bool covers = std::any_of(rule.hosts.begin(), rule.hosts.end(),
+                                    [&out](std::string const& host) {
+                                      return std::find(out.hosts.begin(), out.hosts.end(),
+                                                       host) != out.hosts.end();
+                                    });
+    // The flattened action carries ONE override id and the block decision wins
+    // the slot, so the id is safe to remove for the route kind only when no
+    // block override shared the decision (device_local
+    // blockActionFromConnectWithLock). The id match also catches the SDK's
+    // suffix matching: an override for the parent names this connection
+    // without spelling any of its exact hosts.
+    const bool idNamesKind = blockKind ? action.hasBlockOverride
+                                       : (action.hasRouteOverride && !action.hasBlockOverride);
+    const bool decided = idNamesKind && rule.overrideId == action.overrideId;
+    if (!covers && !decided) continue;
+    out.active = true;
+    out.overrideId = rule.overrideId;
+    out.polarity = blockKind ? rule.block : rule.routeLocal;
+    out.enabled = true;
+    return out;
+  }
+  return out;
+}
+
+// Filled action-blue when a rule is in force (the click removes it), the
+// style's own outlined rest when the click creates one - the toggle on-state
+// the switches already paint, on the button whose label names the outcome.
+// The label changes word with the verdict, so the fill is a second channel,
+// never the only one.
+void ConnectPage::ApplyQuickActionButton(Button const& button,
+                                         InspectorQuickAction const& state,
+                                         winrt::hstring const& label) {
+  button.Content(winrt::box_value(label));
+  button.IsEnabled(state.enabled);
+  if (state.active) {
+    button.Background(urnw::colors::MakeBrush(urnw::colors::kToggleAccent));
+    button.Foreground(urnw::colors::MakeBrush(urnw::colors::kInverseText));
+    button.BorderBrush(urnw::colors::MakeBrush(urnw::colors::kToggleAccent));
+  } else {
+    // CLEAR the on-state's local values so the style's rest shows through -
+    // re-applying "transparent" by hand would be a second definition of the
+    // style's own colors.
+    button.ClearValue(Controls::Control::BackgroundProperty());
+    button.ClearValue(Controls::Control::ForegroundProperty());
+    button.ClearValue(Controls::Control::BorderBrushProperty());
+  }
+  // The on/off state is sighted-only otherwise; the name carries it, the same
+  // treatment ApplyConnectionSelectionVisuals gives the selected row.
+  winrt::Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(
+      button,
+      state.active
+          ? winrt::hstring{std::wstring{label} + L", " +
+                           AdvW("adv_rule_active", L"rule active, click to remove")}
+          : label);
+}
+
+void ConnectPage::OnInspectorBlockToggle() {
+  const InspectorQuickAction state = blockQuickAction_;
+  if (!state.enabled) return;
+  if (state.active) {
+    // the toggle's off half: remove the rule in force, by id
+    Sdk().RemoveBlockRule(state.overrideId);
+    ShowInspectorRuleSnackbar(Adv("adv_rule_removed", L"Rule removed"), {});
+  } else {
+    const urnw::BlockActionItem* action = SelectedConnectionAction();
+    if (!action) return;
+    // the inverse of the verdict: a tunnelled host gets a blocking rule; a
+    // host the default policy blocked gets an allowing one (the countermand)
+    const bool block = !action->block;
+    const std::string overrideId = Sdk().CreateBlockRule(state.hosts, block);
+    if (overrideId.empty()) return;
+    ShowInspectorRuleSnackbar(
+        block ? Adv("adv_host_blocked", L"This host will be blocked")
+              : Adv("adv_host_allowed", L"This host will be allowed"),
+        overrideId);
+  }
+  // Re-derive now: CreateBlockRule/RemoveBlockRule republish the overrides
+  // synchronously (the handler push lands after this click returns), so the
+  // buttons flip with the click rather than a beat later.
+  ApplyInspector();
+}
+
+void ConnectPage::OnInspectorRouteToggle() {
+  const InspectorQuickAction state = routeQuickAction_;
+  if (!state.enabled) return;
+  if (state.active) {
+    Sdk().RemoveSplitRule(state.overrideId);
+    ShowInspectorRuleSnackbar(Adv("adv_rule_removed", L"Rule removed"), {});
+  } else {
+    const urnw::BlockActionItem* action = SelectedConnectionAction();
+    if (!action) return;
+    // the inverse of the verdict, as with the block pair: bypassed gets a
+    // tunnel rule (Local=false), tunnelled gets a bypass rule (Local=true)
+    const std::string overrideId = action->local
+                                       ? Sdk().CreateTunnelRule(state.hosts)
+                                       : Sdk().CreateSplitRule(state.hosts);
+    if (overrideId.empty()) return;
+    ShowInspectorRuleSnackbar(
+        action->local ? Adv("adv_host_tunnelled", L"This host will use the tunnel")
+                      : Adv("adv_host_bypassed", L"This host will bypass the tunnel"),
+        overrideId);
+  }
+  ApplyInspector();
+}
+
+void ConnectPage::OnInspectorCopyDetails() {
+  const urnw::BlockActionItem* action = SelectedConnectionAction();
+  if (!action) return;
+  auto join = [](std::vector<std::string> const& parts) {
+    std::string out;
+    for (auto const& part : parts) {
+      if (!out.empty()) out += ", ";
+      out += part;
+    }
+    return out;
+  };
+  // The inspector's own fields, in the inspector's own words and order: host,
+  // addresses, verdict, reason, totals, last decision. A copy that invents a
+  // second phrasing of the same facts is a second place to be wrong.
+  std::wstring text;
+  auto line = [&text](winrt::hstring const& key, winrt::hstring const& value) {
+    if (!text.empty()) text += L"\r\n";
+    text += std::wstring{key} + L": " + std::wstring{value};
+  };
+  const std::string hostsJoined = join(action->hosts);
+  const std::string ipsJoined = join(action->ips);
+  line(Adv("adv_host", L"Host"),
+       hostsJoined.empty() ? Adv("adv_none", L"none") : H(hostsJoined));
+  line(Adv("adv_addresses", L"Addresses"),
+       ipsJoined.empty() ? Adv("adv_none", L"none") : H(ipsJoined));
+  line(Adv("adv_verdict", L"Verdict"),
+       action->block ? Adv("adv_verdict_blocked", L"Blocked — no packets sent")
+       : action->local
+           ? Adv("adv_verdict_local", L"Bypassed the tunnel — not protected")
+           : Adv("adv_verdict_tunnelled", L"Tunnelled through URnetwork"));
+  if (action->overrideId.empty()) {
+    line(Adv("adv_reason", L"Reason"), Adv("adv_reason_default", L"Default policy"));
+  } else {
+    line(Adv("adv_reason", L"Reason"),
+         action->hasBlockOverride  ? Adv("adv_reason_block", L"Block override")
+         : action->hasRouteOverride ? Adv("adv_reason_route", L"Route override")
+                                    : Adv("adv_reason_override", L"Override"));
+    line(Adv("adv_override_id", L"Override"), H(action->overrideId));
+  }
+  line(Adv("adv_packets_total", L"Packets (total)"),
+       H(urnw::FormatCountCompact(action->packetCount)));
+  line(Adv("adv_bytes_total", L"Bytes (total)"),
+       H(urnw::FormatByteCountCompact(action->byteCount)));
+  if (0 < action->timeMillis) {
+    const int64_t nowMillis = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                  std::chrono::system_clock::now().time_since_epoch())
+                                  .count();
+    line(Adv("adv_last_decision", L"Last decision"),
+         H(urnw::RelativeTime(action->timeMillis, nowMillis)));
+  }
+  winrt::Windows::ApplicationModel::DataTransfer::DataPackage package;
+  package.SetText(winrt::hstring{text});
+  winrt::Windows::ApplicationModel::DataTransfer::Clipboard::SetContent(package);
+  ShowInspectorRuleSnackbar(Adv("adv_details_copied", L"Connection details copied"), {});
+}
+
+void ConnectPage::OnInspectorUndo() {
+  if (inspectorUndoOverrideId_.empty()) return;
+  const std::string overrideId = inspectorUndoOverrideId_;
+  inspectorUndoOverrideId_.clear();
+  if (inspectorSnackbar_) inspectorSnackbar_->Hide();
+  // Kind-agnostic by construction: split, tunnel and block rules share the one
+  // overrides store, and removal from it is by id (SdkHost::RemoveBlockRule).
+  Sdk().RemoveBlockRule(overrideId);
+  ApplyInspector();
+}
+
+void ConnectPage::ShowInspectorRuleSnackbar(winrt::hstring const& message,
+                                            std::string undoOverrideId) {
+  inspectorUndoOverrideId_ = std::move(undoOverrideId);
+  if (!inspectorSnackbar_) return;
+  // The action slot exists only while there is something to undo: a creation
+  // arms Undo (which deletes the just-created override by id), a removal is
+  // the plain acknowledgement. One bar, so one message at a time - a second
+  // Show restarts the auto-dismiss window (kit::Snackbar), and Success is one
+  // of the severities that dismiss themselves.
+  if (inspectorUndoOverrideId_.empty()) {
+    w_.InspectorSnackbar().ActionButton(nullptr);
+  } else {
+    w_.InspectorSnackbar().ActionButton(inspectorUndoButton_);
+  }
+  inspectorSnackbar_->Show(message, InfoBarSeverity::Success);
 }
 
 // ReadReliability() is several SYNCHRONOUS rpcs into the service. It must never

@@ -1337,8 +1337,50 @@
                                             </StackPanel>
                                         </StackPanel>
                                     </Border>
+                                    <!-- the per-connection quick actions: Portmaster's
+                                         observe -> decide -> rule loop, inside the
+                                         advanced-gated inspector, so advanced-only by
+                                         construction. Labels and on/off state are
+                                         rendered by ApplyInspector from the LIVE
+                                         overrides list (a block action snapshots the
+                                         decision as made and never changes when a rule
+                                         lands afterwards); the row is collapsed while
+                                         there is no selection. Click handlers are wired
+                                         in ConnectPage::Initialize - XAML Click
+                                         handlers belong to MainWindow, which this page
+                                         does not own. The buttons are
+                                         UrPaneActionSecondaryStyle made compact; the
+                                         on-state is painted in code with the action
+                                         blue, the same fill the style's primary
+                                         sibling wears. -->
+                                    <Border x:Name="InspectorActionsRow" Visibility="Collapsed"
+                                            Style="{StaticResource UrPaneRowStyle}"
+                                            MinHeight="0" Padding="12,8">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <Button x:Name="InspectorBlockButton"
+                                                    Style="{StaticResource UrPaneActionSecondaryStyle}"
+                                                    Height="26" MinHeight="0" Margin="0"
+                                                    Padding="10,0" FontSize="12" />
+                                            <Button x:Name="InspectorRouteButton"
+                                                    Style="{StaticResource UrPaneActionSecondaryStyle}"
+                                                    Height="26" MinHeight="0" Margin="0"
+                                                    Padding="10,0" FontSize="12" />
+                                            <Button x:Name="InspectorCopyButton"
+                                                    Style="{StaticResource UrPaneActionSecondaryStyle}"
+                                                    Height="26" MinHeight="0" Margin="0"
+                                                    Padding="10,0" FontSize="12" />
+                                        </StackPanel>
+                                    </Border>
                                     <!-- and the fields, from ConnectPage::ApplyInspector -->
                                     <StackPanel x:Name="InspectorRowsHost" />
+                                    <!-- the quick actions' confirmation with Undo
+                                         (kit::Snackbar): bounded (auto-dismissing),
+                                         one at a time (the single bar). Inside the
+                                         group rather than window-level because it is
+                                         the inspector's own acknowledgement. -->
+                                    <muxc:InfoBar x:Name="InspectorSnackbar"
+                                                  Style="{StaticResource UrSnackbarStyle}"
+                                                  IsOpen="False" Margin="12,6,12,12" />
                                 </StackPanel>
 
                                 <!-- two charts, the SAME height, full width of the pane -->

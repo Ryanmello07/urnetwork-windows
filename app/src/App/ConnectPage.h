@@ -305,6 +305,56 @@ class ConnectPage {
   // connection is doing.
   void SelectConnection(std::string const& id);
   void ApplyInspector();
+  // The selection in the CURRENT feed, or nullptr (nothing selected, or the
+  // action aged out of the SDK's window). ApplyInspector and the three quick
+  // action handlers all need exactly this lookup.
+  const urnw::BlockActionItem* SelectedConnectionAction() const;
+  // ---- the per-connection quick actions (Portmaster's observe-decide-rule) ---
+  // One button pair (block/allow, bypass/tunnel) plus copy-details, rendered by
+  // ApplyInspector from the LIVE overrides list (SdkHost::CurrentHostRules) -
+  // the block action itself is a snapshot of the decision as made and does not
+  // change when a rule lands afterwards, so it cannot carry the on/off state.
+  //
+  // Toggle semantics, not duplicates: when a rule covers the connection the
+  // button is ON and the click removes that rule; otherwise the click creates
+  // the rule whose polarity is the inverse of the current verdict (a blocked
+  // connection gets an allow override, a tunnelled one a block override, and
+  // the same for bypass/tunnel).
+  struct InspectorQuickAction {
+    bool enabled = false;     // there is something to rule on (or a rule to remove)
+    bool active = false;      // on-state: a rule is in force; click removes overrideId
+    std::string overrideId;   // the rule the click removes (when active)
+    // the rule's value (block kind: true=blocking; route kind: true=bypass),
+    // which the label reads rather than the action's verdict - the verdict is
+    // a STALE snapshot here (the rule landed after the decision), and the
+    // label names what the click leaves behind.
+    bool polarity = false;
+    std::vector<std::string> hosts;  // the host values a click would rule on (when !active)
+  };
+  // kind: true walks block overrides, false route overrides. Host matching is
+  // exact string equality over every identity field the row prints, and falls
+  // back to the action's own deciding override id, which covers the SDK's
+  // suffix matching (an override for the parent named this connection without
+  // naming its exact host).
+  InspectorQuickAction QuickActionFor(urnw::BlockActionItem const& action,
+                                      bool blockKind) const;
+  void OnInspectorBlockToggle();
+  void OnInspectorRouteToggle();
+  void OnInspectorCopyDetails();
+  // the snackbar's Undo: deletes the just-created override by id
+  void OnInspectorUndo();
+  // Confirmation after a rule write. undoOverrideId non-empty arms the Undo
+  // action (a creation); empty shows the acknowledgement alone (a removal).
+  void ShowInspectorRuleSnackbar(winrt::hstring const& message,
+                                 std::string undoOverrideId);
+  // Paint a quick-action button for its state: outlined (the style's rest) when
+  // a click would CREATE a rule, action-blue fill when one is in force - the
+  // toggle on-state the switches already paint, on the button whose label
+  // names the other side (the label changes word; the fill is a second
+  // channel, never the only one).
+  void ApplyQuickActionButton(winrt::Microsoft::UI::Xaml::Controls::Button const& button,
+                              InspectorQuickAction const& state,
+                              winrt::hstring const& label);
   // Paint the selected/unselected state across the rows already on screen,
   // without rebuilding them: a rebuild on every click loses focus mid-keyboard-
   // navigation, which makes the list unusable from the keyboard.
@@ -499,6 +549,19 @@ class ConnectPage {
   std::vector<urnet::DestinationExit> destinationExits_;
   bool exitRefreshInFlight_ = false;
   uint32_t exitRefreshTick_ = 0;
+  // The quick actions' current state, derived on every ApplyInspector. The
+  // click handlers consume the stored state rather than re-deriving it, so
+  // the click acts on exactly the button the user saw rendered.
+  InspectorQuickAction blockQuickAction_, routeQuickAction_;
+  // The rule confirmation + its Undo (kit::Snackbar on InspectorSnackbar).
+  // inspectorUndoOverrideId_ is the just-created override the Undo action
+  // deletes; empty while the bar shows a plain acknowledgement. The undo
+  // button is built once and swapped onto the InfoBar's ActionButton per
+  // Show (null hides the action slot; a collapsed button would leave its
+  // padding behind).
+  std::unique_ptr<urnw::kit::Snackbar> inspectorSnackbar_;
+  winrt::Microsoft::UI::Xaml::Controls::Button inspectorUndoButton_{nullptr};
+  std::string inspectorUndoOverrideId_;
 
   bool updatingControls_ = false;  // guards programmatic toggle/segment updates
   // ---- the provider extender row (N7) ----
