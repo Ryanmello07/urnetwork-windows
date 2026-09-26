@@ -464,6 +464,15 @@ class WalletPage {
   std::optional<urnet::Sub> pointsSub_;
   uint64_t pointsVcDevice_ = 0;  // the device handle the controller was opened on
   bool pointsBoardShowing_ = false;
+  // The Leaderboard tab's first-show fetch guard: nothing else calls
+  // LoadLeaderboard on the wallet load path (MainWindow loads only LoadWallet),
+  // so without it the tab sits on "Loading..." until the ranking toggle is
+  // flipped. Tab flips must not re-fetch - the board is slower-moving than the
+  // ledger - so the load runs once and the ranking toggle's own re-read keeps
+  // its explicit call. Reset nowhere: the guard survives destination swaps,
+  // and a later sign-in is fine because it only ever sets when IsLoggedIn
+  // held at first show.
+  bool leaderboardLoaded_ = false;
   std::vector<PointsRow> pointsRows_;
   std::string pointsSort_ = urnet::PointsLeaderboardSortPoints;
   std::string pointsRenderedSort_;

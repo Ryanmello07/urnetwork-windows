@@ -655,6 +655,13 @@ void WalletPage::OnEarningsTableChanged(SelectorBar const& bar,
   w_.LeaderboardHost().Visibility(leaderboard ? Visibility::Visible : Visibility::Collapsed);
   ApplyLedgerMeta();
   if (leaderboard && pointsBoardShowing_) EnsurePointsBoard();
+  // First show fetches the board (see leaderboardLoaded_): nothing else loads
+  // it on this destination, and the fetch only runs when signed in - signed-out
+  // keeps the guard clear so the post-login show still loads.
+  if (leaderboard && !leaderboardLoaded_ && Sdk().IsLoggedIn()) {
+    leaderboardLoaded_ = true;
+    LoadLeaderboard();
+  }
   UpdatePointsIndicator();
 }
 
