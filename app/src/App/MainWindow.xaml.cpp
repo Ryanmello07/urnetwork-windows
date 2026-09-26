@@ -1407,8 +1407,12 @@ void MainWindow::OnNavSelectionChanged(NavigationView const&,
   // panes reaching the ceiling, and it looked exactly as wrong on Network as
   // it had on Home - measured side by side against the approved Connect
   // capture.
+  // (The leaderboard tag is gone with its destination: the leaderboard is a
+  // tab inside Earnings' ledger pane now, not its own nav item - MainWindow.xaml
+  // carries no NavigationViewItem with that tag, so the wallet arm below is the
+  // only earnings reading this list needs.)
   const bool paneShell = tag == L"connect" || tag == L"network" || tag == L"wallet" ||
-                         tag == L"leaderboard" || tag == L"account" || tag == L"settings" ||
+                         tag == L"account" || tag == L"settings" ||
                          tag == L"support" || tag == L"developer";
   HomeNav().Header(paneShell ? IInspectable{nullptr} : item.Content());
 
@@ -1544,8 +1548,12 @@ void MainWindow::LoadCurrentDestination() {
     if (referralsOpen_) referrals_->Load();  // the page is up in Account's place
   } else if (tag == L"wallet") {
     wallet_->LoadWallet();
-  } else if (tag == L"leaderboard") {
-    wallet_->LoadLeaderboard();
+    // (The leaderboard tag is gone with its destination, so this branch could
+    // never run: no NavigationViewItem carries it since Wallet + Leaderboard
+    // merged into Earnings, where the leaderboard is a tab on the ledger pane.
+    // WalletPage still owns LoadLeaderboard for its own callers - the tab's
+    // first show loads it, and the ranking toggle re-reads the board when our
+    // row masks or unmasks.)
   } else if (tag == L"settings") {
     settings_->LoadSettings();
   }
@@ -2046,6 +2054,7 @@ void MainWindow::ApplyUpdateChecker() {
   // principle before the pages exist.
   if (connect_) connect_->ApplyUpdateChecker(updateSnapshot_);
   if (developer_) developer_->ApplyUpdateCheck(updateSnapshot_);
+  if (settings_) settings_->ApplyUpdateCheck(updateSnapshot_);
 }
 
 void MainWindow::OnUpdateBannerAction() {

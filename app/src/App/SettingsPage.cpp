@@ -632,6 +632,69 @@ void SettingsPage::BuildVersionSection(Panel const& host) {
   // compile-time constant and needs no round trip.
   ApplyValue(ValueRow(card, Missing("app_version", L"App version")),
              urnw::version::kString);
+
+  // THE UPDATE STATE, next to the version it describes (beta spec §5). The
+  // auto-check toggle lives on the General pane; what this pane had no surface
+  // for is what that toggle produces — whether THIS build is current. Home's
+  // banner only appears when there is something to install, so "am I up to
+  // date?" had no answer anywhere in Settings. The value row always leads
+  // with the running build (version::kString, the same stamp the row above
+  // shows) and appends the last check's outcome; ApplyUpdateCheck is the one
+  // writer. The action row's click is the developer screen's own trigger —
+  // CheckNow coalesces with a queued or running check, so the button needs no
+  // gating. State words go through upd_ ids like the toggle's: the store
+  // carries none of the updater's wording (PageContext.h documents the
+  // prefix); "Update" and "Check for updates" ARE store keys and come through
+  // Loc.
+  updateStateValue_ = ValueRow(card, Loc("update"));
+  auto checkNow = ButtonRow(
+      card, Loc("dev_check_updates"),
+      Adv("upd_manual_note",
+          L"Runs the release check now; the outcome lands on the row above."),
+      Adv("upd_check_now", L"Check now"));
+  checkNow.Click([](auto const&, auto const&) { urnw::pages::Updates().CheckNow(); });
+  // Replay the standing state into the row just built: these sections build on
+  // the first ApplyStrings, and the outcome of the launch check (or a manual
+  // check fired before this destination was ever opened) must not be lost to
+  // having arrived early. Same bind-then-replay shape as the window's.
+  ApplyUpdateCheck(urnw::pages::Updates().Current());
+}
+
+// ---- the update checker (beta spec §5) --------------------------------------
+
+void SettingsPage::ApplyUpdateCheck(UpdateChecker::Snapshot const& snap) {
+  using Outcome = UpdateChecker::CheckOutcome;
+  if (!updateStateValue_) return;  // the section is not built yet
+  // The value ALWAYS leads with the running build — the row is where the build
+  // identifies itself — and appends the last check's outcome. Version strings
+  // are DATA (release grammar), so composing them around the Adv() state
+  // words hides no literal from the store. The state words stay short:
+  // ValueRow ellipsizes its value at 260px (SettingsSheets.cpp), and the
+  // developer screen's report line carries the long-form version of the same
+  // outcome, newest-release tag included.
+  std::wstring text = urnw::Widen(urnw::version::kString);
+  switch (snap.lastCheck) {
+    case Outcome::NeverRan:
+      text += L" — " + AdvW("upd_state_not_checked", L"not checked yet");
+      break;
+    case Outcome::InFlight:
+      text += L" — " + AdvW("upd_state_checking", L"checking…");
+      break;
+    case Outcome::NoUpdate:
+      text += L" — " + AdvW("upd_state_current", L"up to date");
+      break;
+    case Outcome::UpdateFound:
+      text += L" — " + AdvW("upd_state_available", L"update available:") + L" v" +
+              snap.newestVersion;
+      break;
+    case Outcome::DevBuild:
+      text += L" — " + AdvW("upd_state_dev_build", L"dev build, never self-updates");
+      break;
+    default:  // Failed
+      text += L" — " + AdvW("upd_state_failed", L"check failed");
+      break;
+  }
+  updateStateValue_.Text(hstring{text});
 }
 
 void SettingsPage::BuildDangerSection() {

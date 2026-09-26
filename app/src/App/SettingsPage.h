@@ -1,4 +1,4 @@
-﻿// The Settings destination and the Support destination (the feedback form),
+// The Settings destination and the Support destination (the feedback form),
 // which iOS carries inside the same settings surface.
 //
 // Settings is macOS SettingsForm parity: account (client id, referral code,
@@ -25,6 +25,7 @@
 #include "ServiceSetup.h"
 #include "SettingsSheets.h"
 #include "StatsSheets.h"
+#include "UpdateChecker.h"
 #include "UrComponents.h"
 
 namespace winrt::URnetwork::implementation {
@@ -50,6 +51,15 @@ class SettingsPage {
   // would only fight the developer's console run. Pushed by
   // MainWindow::ApplyServiceSetup, the one writer of that snapshot.
   void ApplyServiceSetup(urnw::ServiceSetup::Snapshot const& snap);
+
+  // The update checker's snapshot changed (beta spec §5): the "Update" value
+  // row in the Device pane's version section reads the running build plus the
+  // last check's outcome from it. Pushed by MainWindow's fan-out (already on
+  // the UI thread) whenever the checker publishes, and replayed at the end of
+  // BuildVersionSection — the bind-then-replay contract UpdateChecker.h spells
+  // out, because these sections build on the first ApplyStrings, which can be
+  // minutes after the launch check already ran.
+  void ApplyUpdateCheck(urnw::UpdateChecker::Snapshot const& snap);
 
   // The settings destination's API loads: network user (sign-in methods,
   // network name), device info, referral code + network, account preferences.
@@ -190,6 +200,10 @@ class SettingsPage {
   // its neighbours: nothing ever writes IsOn back — the pref has one writer
   // (this toggle) and one reader path (the checker), so there is no echo.
   winrt::Microsoft::UI::Xaml::Controls::ToggleSwitch autoUpdateCheck_{nullptr};
+  // The "Update" value row in the Device pane's version section (beta spec §5):
+  // the running build plus the last check's outcome. ApplyUpdateCheck is the
+  // one writer — the checker is the one source of that state.
+  winrt::Microsoft::UI::Xaml::Controls::TextBlock updateStateValue_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::Button manageSubscription_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::TextBlock versionValue_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::Button deleteAccountButton_{nullptr};
