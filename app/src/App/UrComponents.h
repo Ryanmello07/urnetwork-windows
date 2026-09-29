@@ -19,6 +19,8 @@
 
 #include <memory>
 #include <optional>
+#include <string>
+#include <string_view>
 #include <vector>
 
 #include <winrt/Microsoft.UI.Dispatching.h>
@@ -106,6 +108,17 @@ inline constexpr double kUltraWideDip = 1800.0;
 // right for a line whose content is conditional; this is the call that is.
 void SetTextOrCollapse(winrt::Microsoft::UI::Xaml::Controls::TextBlock const& line,
                        winrt::hstring const& text);
+
+// Filter an EXTERNAL display string (a network or location name read off the
+// wire) down to what the chrome's body font can shape. Rule: at most ONE
+// combining mark per base character, and no zero-width/format characters at
+// all. Reason, measured on a live jwt: a network name carried mark-stack
+// zalgo (every letter followed by U+0300-U+0365 runs), which the status strip
+// rendered as an overlapping glyph mess rather than as text. ASCII, composed
+// accented Latin, CJK and Cyrillic sit outside every filtered range and pass
+// through byte-identical. NOT for the user's own typed input or for wallet
+// addresses - those must keep exactly what was entered.
+std::string SanitizeExternalDisplayText(std::string_view text);
 
 // Keep a chart inside its pane.
 //

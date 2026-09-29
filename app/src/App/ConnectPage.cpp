@@ -1012,7 +1012,9 @@ void ConnectPage::ApplyStats(urnw::LiveStats const& stats) {
   // Selected provider row. When the selected location is a connected network
   // peer, show its device name instead of the raw client id (req4): resolve it
   // from the live peer list by client id, like the linux drawer does.
-  std::string locationName = stats.locationName;
+  // The provider name is an external string: filtered where it enters the
+  // page, so the row AND the automation name built from it stay shapeable.
+  std::string locationName = urnw::kit::SanitizeExternalDisplayText(stats.locationName);
   const auto peers = Sdk().ConnectedProvidePeers();
   if (auto selected = Sdk().SelectedLocation();
       peers && selected && selected->connect_location_id &&
@@ -1021,7 +1023,8 @@ void ConnectPage::ApplyStats(urnw::LiveStats const& stats) {
     const auto& clientId = *selected->connect_location_id->client_id;
     for (const auto& peer : *peers) {
       if (peer.ClientId && *peer.ClientId == clientId) {
-        locationName = urnw::PeerDisplayName(peer);
+        // a peer's device name is off the wire too: same filter, same reason
+        locationName = urnw::kit::SanitizeExternalDisplayText(urnw::PeerDisplayName(peer));
         break;
       }
     }

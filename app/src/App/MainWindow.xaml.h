@@ -585,6 +585,18 @@ struct MainWindow : MainWindowT<MainWindow> {
   // any more: it is wider, so a drag across it with `wide` and `ultra` both
   // unchanged must still re-run the layout. Same early-out rule as ultraLayout_.
   bool connectThreeLayout_ = false;
+  // The rest of ApplyBreakpoint's gates, one stored state each under the same
+  // early-out rule as ultraLayout_: Home's 640 fold and the window-read
+  // 900/1500/1900 gates of Earnings, Account and Settings. They went untracked
+  // and the gap was visible live: a drag that crossed only one of them left
+  // that destination's panes in whatever layout an older size had decided.
+  bool twoPanesLayout_ = false;
+  bool earningsThreeLayout_ = false;
+  bool earningsTwoLayout_ = false;
+  bool accountFourLayout_ = false;
+  bool accountThreeLayout_ = false;
+  bool accountTwoLayout_ = false;
+  bool settingsTwoLayout_ = false;
   bool breakpointApplied_ = false;
 };
 

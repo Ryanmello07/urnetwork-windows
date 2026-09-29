@@ -457,12 +457,38 @@ void MainWindow::ApplyBreakpoint() {
   // than `wide`, so the early-out has to test it as a third applied state:
   // a drag across it with `wide` and `ultra` both unchanged must still re-run.
   const bool connectThree = kConnectThreePaneContentDip <= content;
+  const bool twoPanes = 640.0 <= width;
+  const bool earningsThree = 1500.0 <= width;
+  const bool earningsTwo = 900.0 <= width;
+  const bool accountFour = 1900.0 <= width;
+  const bool accountThree = 1500.0 <= width;
+  const bool accountTwo = 900.0 <= width;
+  const bool settingsTwo = 900.0 <= width;
+  // EVERY gate is computed above the early-out and EVERY gate is one of the
+  // applied states it compares, because a gate the early-out does not compare
+  // is a gate a resize can cross without re-running the layout - the panes
+  // keep whatever an older size decided. That shipped: only the three content
+  // gates were tracked, so a drag that crossed only 640, 900, 1500 or 1900
+  // returned early - Earnings shrunk 1300 -> 640 with both panes crushed side
+  // by side, and Home kept two crushed panes at 512dip with its 640 fold never
+  // applied. Each gate is one cheap compare (SizeChanged fires on every pixel
+  // of a drag); the stale panes were the expensive part.
   if (breakpointApplied_ && wide == wideLayout_ && ultra == ultraLayout_ &&
-      connectThree == connectThreeLayout_) return;
+      connectThree == connectThreeLayout_ && twoPanes == twoPanesLayout_ &&
+      earningsThree == earningsThreeLayout_ && earningsTwo == earningsTwoLayout_ &&
+      accountFour == accountFourLayout_ && accountThree == accountThreeLayout_ &&
+      accountTwo == accountTwoLayout_ && settingsTwo == settingsTwoLayout_) return;
   breakpointApplied_ = true;
   wideLayout_ = wide;
   ultraLayout_ = ultra;
   connectThreeLayout_ = connectThree;
+  twoPanesLayout_ = twoPanes;
+  earningsThreeLayout_ = earningsThree;
+  earningsTwoLayout_ = earningsTwo;
+  accountFourLayout_ = accountFour;
+  accountThreeLayout_ = accountThree;
+  accountTwoLayout_ = accountTwo;
+  settingsTwoLayout_ = settingsTwo;
 
   // ---- Home: HOW MANY PANES FIT ---------------------------------------------
   //
@@ -493,8 +519,8 @@ void MainWindow::ApplyBreakpoint() {
   // This gate stays on the window on purpose: it is the flyout question, and
   // it cannot invert - the compact rail docking at 641 narrows the activity
   // pane by 48 but never folds it, and the expanded dock at 1008 happens
-  // 368dip past the gate.
-  const bool twoPanes = 640.0 <= width;
+  // 368dip past the gate. The gate itself is computed above the early-out,
+  // with the rest - see the comment there.
   SetWidth(ConnectPaneCColumn(), connectThree ? 380 : 0);
   ConnectPaneCRule().Visibility(connectThree ? Visibility::Visible : Visibility::Collapsed);
   ConnectPaneC().Visibility(connectThree ? Visibility::Visible : Visibility::Collapsed);
@@ -544,8 +570,7 @@ void MainWindow::ApplyBreakpoint() {
   // The points rail folds first and the LEDGER is what survives to the smallest
   // width, because a payouts table is the thing a user opens this destination
   // to read; points and reliability explain a number they can already see.
-  const bool earningsThree = 1500.0 <= width;
-  const bool earningsTwo = 900.0 <= width;
+  // The gates are computed above the early-out, with the rest.
   SetWidth(WalletPaneCColumn(), earningsThree ? 380 : 0);
   WalletPaneCRule().Visibility(earningsThree ? Visibility::Visible : Visibility::Collapsed);
   WalletPaneC().Visibility(earningsThree ? Visibility::Visible : Visibility::Collapsed);
@@ -580,9 +605,7 @@ void MainWindow::ApplyBreakpoint() {
   // decides between it and a pane that is entirely controls - the extender dns
   // name, the gossip url, the manual host list, share and import. So codes need
   // a fourth column's worth of room; extenders keep the third.
-  const bool accountFour = 1900.0 <= width;
-  const bool accountThree = 1500.0 <= width;
-  const bool accountTwo = 900.0 <= width;
+  // The gates are computed above the early-out, with the rest.
   SetWidth(AccountPaneCColumn(), accountFour ? 380 : 0);
   AccountPaneCRule().Visibility(accountFour ? Visibility::Visible : Visibility::Collapsed);
   AccountPaneC().Visibility(accountFour ? Visibility::Visible : Visibility::Collapsed);
@@ -606,7 +629,7 @@ void MainWindow::ApplyBreakpoint() {
   //
   //   >=  900dip   two panes   general | device (+ version, community)
   //   <   900dip   one pane    general
-  const bool settingsTwo = 900.0 <= width;
+  // The gate is computed above the early-out, with the rest.
   SetStar(SettingsPaneBColumn(), settingsTwo ? 1 : 0);
   SettingsPaneBRule().Visibility(settingsTwo ? Visibility::Visible : Visibility::Collapsed);
   SettingsPaneB().Visibility(settingsTwo ? Visibility::Visible : Visibility::Collapsed);
@@ -2197,7 +2220,11 @@ void MainWindow::ApplyAuthState(urnw::AuthState state, std::string const& error)
   bool pro = false;
   if (loggedIn) {
     if (auto jwt = Sdk().ParsedJwt()) {
-      networkName = jwt->NetworkName;
+      // The jwt's name is an external string (measured live: mark-stack zalgo
+      // the chrome font cannot shape), so it is filtered HERE, at the one
+      // read - SetNetworkIdentity, the status strip and the avatar menu below
+      // all share this local, and every surface gets the filtered text.
+      networkName = urnw::kit::SanitizeExternalDisplayText(jwt->NetworkName);
       guestMode = jwt->GuestMode;
       pro = jwt->Pro;
     }
@@ -2320,7 +2347,10 @@ void MainWindow::OnStatsChanged(urnw::LiveStats const& stats) {
   if (statusSamplePinned_) return;
   if (stats.connected) NoteConnected();
   statusConnected_ = stats.connected;
-  statusLocationName_ = stats.locationName;
+  // the provider name is an external string, like the jwt's network name
+  // above: filtered where it enters the strip (ConnectPage filters its own
+  // copy out of the same stats push)
+  statusLocationName_ = urnw::kit::SanitizeExternalDisplayText(stats.locationName);
   statusDownBps_ = stats.downBitsPerSecond;
   statusUpBps_ = stats.upBitsPerSecond;
   // D5: the pre-clamp reading, for the strip's advanced Raw field. rpcOnly is
