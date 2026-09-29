@@ -14,6 +14,7 @@
 #include "Log.h"
 #include "MainWindow.xaml.h"
 #include "PageContext.h"
+#include "SheetFit.h"  // sheetfit: sheets clamp to the window at open time
 #include "Strings.h"  // Narrow: the utf-16 search box into the sdk's utf-8 filter
 #include "UrColors.h"
 #include "UrComponents.h"
@@ -206,7 +207,7 @@ void LocationChooserSheet::Build(XamlRoot const& root) {
 
   StackPanel content;
   content.Spacing(12);
-  content.MinWidth(440);
+  content.MinWidth(sheetfit::Width(root, 440));
 
   // fixed search box above the scrolling sections (mobile parity). The SDK
   // debounces stale responses and re-emits FilteredLocations -> onLocations_ ->
@@ -226,7 +227,7 @@ void LocationChooserSheet::Build(XamlRoot const& root) {
   sections_.Spacing(12);
   ScrollViewer scroll;
   scroll.Content(sections_);
-  scroll.MaxHeight(460);
+  scroll.MaxHeight(sheetfit::Height(root, 460));
   content.Children().Append(scroll);
 
   dialog_.Content(content);

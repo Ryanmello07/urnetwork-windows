@@ -18,6 +18,7 @@
 #include "Localization.h"
 #include "PageContext.h"   // pages::Adv: the sheets' not-yet-in-store strings
 #include "Sdk.h"   // ReadSdkList: the list-getter null-unwrap guard
+#include "SheetFit.h"  // sheetfit: sheets clamp to the window at open time
 #include "StatsFormat.h"
 #include "Strings.h"  // Widen: the sdk's utf-8 data into the utf-16 ui
 #include "TransportBar.h"  // TransportName / TransportDetail / TransportColor
@@ -226,11 +227,14 @@ ContentDialog MakeDialog(XamlRoot const& root, hstring const& title) {
   return dialog;
 }
 
-ScrollViewer MakeSheetScroll(UIElement const& content) {
+// the one scrolling body every sheet here shares: clamped to the window at
+// open (sheetfit) because a ContentDialog clips overflow instead of scrolling
+// it -- a fixed 440x520 sails past the 400x480 window floor
+ScrollViewer MakeSheetScroll(XamlRoot const& root, UIElement const& content) {
   ScrollViewer scroll;
   scroll.Content(content);
-  scroll.MaxHeight(520);
-  scroll.MinWidth(440);
+  scroll.MaxHeight(sheetfit::Height(root, 520));
+  scroll.MinWidth(sheetfit::Width(root, 440));
   return scroll;
 }
 
@@ -283,7 +287,7 @@ void ClientContractsSheet::Build(XamlRoot const& root) {
 
   list_ = StackPanel();
   list_.ChildrenTransitions(RepositionTransitions());  // animate row resort / merge
-  scroll_ = MakeSheetScroll(list_);
+  scroll_ = MakeSheetScroll(root, list_);
   {
     std::weak_ptr<ClientContractsSheet> weak = weak_from_this();
     scroll_.ViewChanged([weak](IInspectable const&, auto const&) {
@@ -343,7 +347,7 @@ void ClientContractsSheet::Build(XamlRoot const& root) {
   }
 
   StackPanel body;
-  body.MinWidth(440);
+  body.MinWidth(sheetfit::Width(root, 440));
   body.Children().Append(scroll_);
   body.Children().Append(empty_);
   body.Children().Append(copiedNote_);
@@ -878,12 +882,12 @@ void SplitRulesSheet::Build(XamlRoot const& root) {
   activityList_.Spacing(4);
   listBody.Children().Append(activityList_);
 
-  listPage_ = MakeSheetScroll(listBody);
+  listPage_ = MakeSheetScroll(root, listBody);
 
   // ---- editor page ----
   editorPage_ = StackPanel();
   editorPage_.Spacing(12);
-  editorPage_.MinWidth(400);
+  editorPage_.MinWidth(sheetfit::Width(root, 400));
   editorPage_.Visibility(Visibility::Collapsed);
   editorPage_.Children().Append(MakeText(Loc("split_rule_description"), 12, MutedBrush(), true));
 
@@ -891,7 +895,7 @@ void SplitRulesSheet::Build(XamlRoot const& root) {
   checklist_.Spacing(2);
   ScrollViewer checklistScroll;
   checklistScroll.Content(checklist_);
-  checklistScroll.MaxHeight(320);
+  checklistScroll.MaxHeight(sheetfit::Height(root, 320));
   editorPage_.Children().Append(checklistScroll);
 
   applyButton_ = Button();
@@ -1356,7 +1360,7 @@ void DnsEditorSheet::Build(XamlRoot const& root) {
   BuildListSection(body, Loc("local_dns_servers"), ipAddress, false, &Draft::localDnsIpv4,
                    &Draft::localDnsIpv6);
 
-  dialog_.Content(MakeSheetScroll(body));
+  dialog_.Content(MakeSheetScroll(root, body));
   SyncFromDraft();
 }
 
@@ -1811,7 +1815,7 @@ void TransportSettingsSheet::Build(XamlRoot const& root) {
   }
   body.Children().Append(restoreSection_);
 
-  dialog_.Content(MakeSheetScroll(body));
+  dialog_.Content(MakeSheetScroll(root, body));
   SyncFromDraft();
 }
 
@@ -2101,7 +2105,7 @@ void AppRulesSheet::Build(XamlRoot const& root) {
   }
   body.Children().Append(appsList_);
 
-  dialog_.Content(MakeSheetScroll(body));
+  dialog_.Content(MakeSheetScroll(root, body));
   RenderList();
 }
 
