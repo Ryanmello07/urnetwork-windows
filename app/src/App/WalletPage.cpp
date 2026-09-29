@@ -681,6 +681,61 @@ void WalletPage::LoadWallet() {
 
 void WalletPage::RefreshAfterWalletChange() { LoadWallet(); }
 
+void WalletPage::ResetForSignOut() {
+  // Identity first: every one of these describes the account that just left.
+  // ownNetworkId_ is the dangerous one - it is what marks the own row on both
+  // boards, and the next LoadWallet re-derives it from the new jwt.
+  ownNetworkId_.clear();
+  // ...and leaderboardLoaded_ is why this method exists at all: nothing else
+  // loads the board on this destination, so a guard left set would keep the
+  // previous account's table and own rank on screen past the next sign-in.
+  leaderboardLoaded_ = false;
+
+  // The points board's own-account facts are read straight into the header
+  // (RenderPointsHeader), so they clear ahead of the board's own reset; the
+  // edit markers go with them or the old session's local edit would outrank
+  // the next account's first `me`.
+  pointsPublic_ = false;
+  emojiTag_.clear();
+  ownFlagsClock_ = 0;
+  ownFlagsEditedAt_ = 0;
+  ownFlagsAppliedAt_ = 0;
+  // The controller was opened on this session's device; ClosePointsBoard
+  // closes it there, drops every row, page and `me` it holds, and re-renders
+  // the board empty.
+  ClosePointsBoard(/*deviceAlive=*/true);
+
+  // Then the visible state, back to the seed ApplyStrings starts from
+  // ("Loading..." with a dash figure): the state the fetch has not left yet,
+  // which the next sign-in's loads replace panel by panel.
+  const hstring loading = Loc("loading");
+  const hstring dash{L"-"};
+
+  leaderboardRank_ = 0;
+  leaderboardCount_ = 0;
+  rankingPublic_ = false;
+  SetRankingToggle(false);  // the echo-guarded write, not the handler
+  w_.LeaderboardRows().Children().Clear();
+  w_.LeaderboardStatusText().Text(loading);
+  w_.LeaderboardStatusText().Visibility(Visibility::Visible);
+  SetStatValue(w_.LeaderboardRankValue(), dash, false);
+  SetStatValue(w_.LeaderboardNetProvidedValue(), dash, false);
+
+  accountPoints_ = {};
+  w_.AccountPointsPanel().Children().Clear();
+  w_.AccountPointsStatusText().Text(loading);
+  w_.AccountPointsStatusText().Visibility(Visibility::Visible);
+  SetStatValue(w_.PointsHeadlineValue(), dash, false);
+
+  epochs_.clear();
+  epochsState_ = Fetch::Loading;
+  w_.HistoryStatusText().Text(loading);
+  w_.HistoryStatusText().Visibility(Visibility::Visible);
+  RebuildHistory();  // clears the rows; Loading draws nothing over the status line
+  w_.PointsStatusText().Text(loading);
+  w_.PointsStatusText().Visibility(Visibility::Visible);
+}
+
 void WalletPage::LoadPoints() {
   auto queue = w_.DispatcherQueue();
   auto weak = w_.get_weak();

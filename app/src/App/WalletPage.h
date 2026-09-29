@@ -96,6 +96,13 @@ class WalletPage {
   void LoadWallet();
   void LoadLeaderboard();
 
+  // Drop everything the leaderboard, the points figure and the history were
+  // saying about the account that just signed out, and re-arm the board's
+  // first-show fetch. leaderboardLoaded_ is the dangerous one: it is the only
+  // load trigger the Leaderboard tab has on this destination, so a guard left
+  // set shows the next sign-in the PREVIOUS account's table and own rank.
+  void ResetForSignOut();
+
   // --preview-ui: settle every panel on its empty state (or, with
   // URNETWORK_PREVIEW_SAMPLE=1, on obviously synthetic rows) instead of
   // "Loading..." forever.
@@ -469,9 +476,9 @@ class WalletPage {
   // so without it the tab sits on "Loading..." until the ranking toggle is
   // flipped. Tab flips must not re-fetch - the board is slower-moving than the
   // ledger - so the load runs once and the ranking toggle's own re-read keeps
-  // its explicit call. Reset nowhere: the guard survives destination swaps,
-  // and a later sign-in is fine because it only ever sets when IsLoggedIn
-  // held at first show.
+  // its explicit call. ResetForSignOut re-arms it: the guard is per-ACCOUNT,
+  // not per-run - left set, the next sign-in on this app run would keep the
+  // previous account's table and own rank with no fetch ever replacing them.
   bool leaderboardLoaded_ = false;
   std::vector<PointsRow> pointsRows_;
   std::string pointsSort_ = urnet::PointsLeaderboardSortPoints;
