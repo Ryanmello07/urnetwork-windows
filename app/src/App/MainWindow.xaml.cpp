@@ -61,6 +61,24 @@ void SetStar(Controls::ColumnDefinition const& column, double weight) {
 // carries why the window width cannot be trusted across the nav's 1008epx dock.
 constexpr double kConnectThreePaneContentDip = 330 + 1 + 330 + 1 + 380;
 
+// The status strip's floor, in WINDOW dips (the strip is a root-grid row below
+// the nav, so its room is the window's, not the nav content's): below it the
+// traffic field and its separator hide. Measured, not picked. With captions
+// off (they drop at `wide`, far above any width this gate can bind at) the
+// four fields want ~520: state (8px dot + 6px gap + the state word, ~85),
+// network (~120 for a real network name), provider (~110), traffic
+// ("↓ 1.24 Mbps   ↑ 340.91 Kbps" at 12sp, ~155), three 29px separators (1px
+// rule in 14px side margins) and the strip's 16px side pads - D4's own "fit
+// from ~520dip" (the caption note in ApplyBreakpoint), confirmed from the
+// other end when the rightmost field was verified cut in half, live, at a
+// 400dip window. Dropping the traffic pair leaves ~395 for the three remaining
+// fields, which the 400dip minimum window (WindowShell kMinWidthDips) just
+// fits - and the reading keeps its page-side doors meanwhile: the activity
+// pane's header throughput figure (from the 640dip two-pane gate up) and the
+// statistics pane's Remote/Local session rows. The field returns the moment
+// the window gives all four room again.
+constexpr double kStatusStripTrafficFloorDip = 520;
+
 // (Reparent / SameElement lived here. They moved Home's panes between three
 // StackPanel hosts at each breakpoint, because the card layout needed a module
 // to stack under the hero at one width and sit beside it at another. R3's pane
@@ -458,6 +476,7 @@ void MainWindow::ApplyBreakpoint() {
   // a drag across it with `wide` and `ultra` both unchanged must still re-run.
   const bool connectThree = kConnectThreePaneContentDip <= content;
   const bool twoPanes = 640.0 <= width;
+  const bool stripTraffic = kStatusStripTrafficFloorDip <= width;
   const bool earningsThree = 1500.0 <= width;
   const bool earningsTwo = 900.0 <= width;
   const bool accountFour = 1900.0 <= width;
@@ -475,6 +494,7 @@ void MainWindow::ApplyBreakpoint() {
   // of a drag); the stale panes were the expensive part.
   if (breakpointApplied_ && wide == wideLayout_ && ultra == ultraLayout_ &&
       connectThree == connectThreeLayout_ && twoPanes == twoPanesLayout_ &&
+      stripTraffic == stripTrafficLayout_ &&
       earningsThree == earningsThreeLayout_ && earningsTwo == earningsTwoLayout_ &&
       accountFour == accountFourLayout_ && accountThree == accountThreeLayout_ &&
       accountTwo == accountTwoLayout_ && settingsTwo == settingsTwoLayout_) return;
@@ -483,6 +503,7 @@ void MainWindow::ApplyBreakpoint() {
   ultraLayout_ = ultra;
   connectThreeLayout_ = connectThree;
   twoPanesLayout_ = twoPanes;
+  stripTrafficLayout_ = stripTraffic;
   earningsThreeLayout_ = earningsThree;
   earningsTwoLayout_ = earningsTwo;
   accountFourLayout_ = accountFour;
@@ -511,8 +532,15 @@ void MainWindow::ApplyBreakpoint() {
   //
   // The statistics pane is the one that folds because it is the inspector: its
   // charts, session figures, contracts, split rules and DNS are all reachable
-  // from the sheets its group headers open, so nothing becomes unreachable at
-  // flyout width - it just stops being on screen at the same time.
+  // from the sheets its group headers open, so it just stops being on screen at
+  // the same time. But those group headers fold WITH the pane (and the Advanced
+  // inspector's Reason-row link, the transport bar and the provider-locations
+  // line fold with theirs), which is exactly the "content with no second door"
+  // the fold rule bars - so the sheets' doors are built twice, Support-contact
+  // style: once in pane C and once in ConnectPage's fold-gated section at the
+  // foot of pane A, shown exactly while pane C is folded (ApplyPaneCFolded,
+  // pushed just below). The transport settings door rides with them because it
+  // covers the 640dip fold too: the transport bar lives in pane B.
   //
   // Below ~640dip OF WINDOW the connect pane would leave the activity pane too
   // narrow to be a table, so it takes the whole window and activity folds too.
@@ -537,6 +565,11 @@ void MainWindow::ApplyBreakpoint() {
     ConnectPaneB().Visibility(Visibility::Collapsed);
     ConnectPaneBRule().Visibility(Visibility::Collapsed);
   }
+  // The fold rule's second doors: the page mirrors the gate this function just
+  // applied (the same push shape as ApplyAdvancedMode - the window computes the
+  // one gate, the page renders it) and shows pane A's fold-gated section exactly
+  // while pane C is folded. See the note above the gate arithmetic.
+  connect_->ApplyPaneCFolded(!connectThree);
 
   // ---- Network: the list, and what one row IS ------------------------------
   // The inverse of Home's rail: here the LIST takes the star and the detail is
@@ -629,10 +662,21 @@ void MainWindow::ApplyBreakpoint() {
   //
   //   >=  900dip   two panes   general | device (+ version, community)
   //   <   900dip   one pane    general
+  //
+  // Pane B's fold left two of its own rows with no second door, the same
+  // violation the About pane was deleted for: the Advanced-mode toggle (with
+  // Advanced OFF at a narrow window there was no way to turn it on) and the
+  // version/update rows. So those build twice too, the Support-contact pattern
+  // one block down: once into pane B and once into SettingsPage's fold-gated
+  // section at the end of pane A, and the gate shows exactly one copy.
   // The gate is computed above the early-out, with the rest.
   SetStar(SettingsPaneBColumn(), settingsTwo ? 1 : 0);
   SettingsPaneBRule().Visibility(settingsTwo ? Visibility::Visible : Visibility::Collapsed);
   SettingsPaneB().Visibility(settingsTwo ? Visibility::Visible : Visibility::Collapsed);
+  // The page mirrors the gate just applied (the same push shape as Home's
+  // ApplyPaneCFolded above): pane A's fold-gated copies show exactly while
+  // pane B is folded.
+  settings_->ApplyPaneBFolded(!settingsTwo);
 
   // ---- Support: the form, and the way to reach a human beside it -----------
   //
@@ -676,10 +720,11 @@ void MainWindow::ApplyBreakpoint() {
   // The fold closes the overrides with no second door. The fold rule's usual
   // answer (Support's inline copy) would build the 34-row settings surface
   // twice, and its rows' indexed toggle/number wiring (DeveloperPage's
-  // boolRows_/numRows_) is single-instance. Settings' pane B already folds the
-  // same way with the version and the community links in it: below the gate
-  // the destination narrows to what the session shows, which is the half a
-  // freeze diagnosis is actually run from.
+  // boolRows_/numRows_) is single-instance. Settings' pane B folds the same
+  // way with the community links in it (its version rows and the Advanced
+  // toggle kept second doors in pane A when the fold rule came for them):
+  // below the gate the destination narrows to what the session shows, which
+  // is the half a freeze diagnosis is actually run from.
   SetWidth(DeveloperPaneBColumn(), wide ? 400 : 0);
   DeveloperPaneBRule().Visibility(wide ? Visibility::Visible : Visibility::Collapsed);
   DeveloperPaneB().Visibility(wide ? Visibility::Visible : Visibility::Collapsed);
@@ -700,6 +745,14 @@ void MainWindow::ApplyBreakpoint() {
   // shortened; the same values are on the Developer destination, which is
   // revealed in this mode anyway. ApplyStatusStrip owns that (it is also the
   // signed-out gate) and is called from here so a resize applies it.
+  //
+  // The strip FLOOR is the same rule one field earlier: below
+  // kStatusStripTrafficFloorDip even the four caption-less fields no longer
+  // fit, and the traffic field was the one cut in half (verified live at a
+  // 400dip window). ApplyStatusStrip drops it and its separator there too,
+  // through statusTrafficParts_, the same handle-and-gate shape as the
+  // advanced four. The floor constant carries the measured arithmetic, and
+  // where the reading lives while it is off the strip.
   for (auto const* field : {&statusNetwork_, &statusProvider_, &statusTraffic_,
                             &statusMode_, &statusRoutes_, &statusRpcPort_,
                             &statusRaw_}) {
@@ -740,6 +793,7 @@ void MainWindow::BuildStatusStrip() {
   fields.Children().Clear();
   statusSessionParts_.clear();
   statusAdvancedParts_.clear();
+  statusTrafficParts_.clear();
 
   // The strip as a whole is a landmark: one accessible name over the row, so a
   // screen reader announces "URnetwork Status" and then the fields, instead of
@@ -765,6 +819,12 @@ void MainWindow::BuildStatusStrip() {
   section(statusNetwork_, "network");
   section(statusProvider_, "selected_provider");
   section(statusTraffic_, "data");
+  // ...and the traffic pair on its own list too, so the strip floor
+  // (kStatusStripTrafficFloorDip) can drop exactly those the way the breakpoint
+  // drops the advanced four. The last two parts the lambda appended are that
+  // pair; they stay in statusSessionParts_ as well (a sign-out hides them with
+  // the rest), this is the narrower handle for the width rule.
+  statusTrafficParts_.assign(statusSessionParts_.end() - 2, statusSessionParts_.end());
 
   // ---- ADVANCED DENSITY (D5) ----------------------------------------------
   // The promise this strip was built to keep: four more facts cost four more
@@ -903,6 +963,15 @@ void MainWindow::ApplyStatusStrip() {
   // worse than one that admits it has no room.
   for (auto const& part : statusAdvancedParts_) {
     part.Visibility(wideLayout_ ? Visibility::Visible : Visibility::Collapsed);
+  }
+  // ...and the traffic pair below the strip floor (kStatusStripTrafficFloorDip;
+  // the constant's comment carries the measured arithmetic). Three fields fit
+  // the 400dip minimum window where four were verified cut in half, and the
+  // reading keeps its page-side doors: the activity pane's header throughput
+  // figure (from the 640dip two-pane gate up) and the statistics pane's
+  // Remote/Local session rows.
+  for (auto const& part : statusTrafficParts_) {
+    part.Visibility(stripTrafficLayout_ ? Visibility::Visible : Visibility::Collapsed);
   }
 
   urnw::kit::SetStatusFieldValue(statusNetwork_,
@@ -2275,6 +2344,7 @@ void MainWindow::ApplyAuthState(urnw::AuthState state, std::string const& error)
     settings_->ResetForSignOut();
     account_->ResetForSignOut();
     referrals_->ResetForSignOut();
+    wallet_->ResetForSignOut();
     if (referralsOpen_) CloseReferrals();
   }
   if (!loggedIn && !wasVisible && login_->IsGuestUpgrade() && !Sdk().IsLoggedIn()) {

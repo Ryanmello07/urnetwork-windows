@@ -559,6 +559,12 @@ struct MainWindow : MainWindowT<MainWindow> {
   // (they are session facts, so signing out must hide them too); this is the
   // narrower handle for the width rule.
   std::vector<winrt::Microsoft::UI::Xaml::UIElement> statusAdvancedParts_;
+  // The strip floor's handle (kStatusStripTrafficFloorDip): the traffic field
+  // and its separator, tracked separately exactly like the advanced four above
+  // - and likewise ALSO in statusSessionParts_, so a sign-out still hides them.
+  // The field that silently clips at a narrow window is always the rightmost
+  // one, and a status line must never silently clip.
+  std::vector<winrt::Microsoft::UI::Xaml::UIElement> statusTrafficParts_;
   std::string statusNetworkName_;
   bool statusGuest_ = false;
   bool statusSignedIn_ = false;
@@ -597,6 +603,11 @@ struct MainWindow : MainWindowT<MainWindow> {
   bool accountThreeLayout_ = false;
   bool accountTwoLayout_ = false;
   bool settingsTwoLayout_ = false;
+  // The status strip's floor gate (kStatusStripTrafficFloorDip), one applied
+  // state under the same early-out rule as the rest: a drag that crosses only
+  // the floor must still re-run the layout, or the traffic field keeps
+  // whichever visibility an older size decided.
+  bool stripTrafficLayout_ = false;
   bool breakpointApplied_ = false;
 };
 

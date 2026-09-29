@@ -209,6 +209,7 @@ void ConnectPage::SetPresentationActive(bool active) {
 }
 
 void ConnectPage::ApplyStrings() {
+  BuildFoldDoors();  // idempotent: the fold rule's pane A sheet doors
   // status line, dot and button label all come from ApplyConnectStatus, which
   // is the single writer of the three (seeded here: idle, blue dot, "Connect")
   ApplyConnectStatus();
@@ -314,6 +315,15 @@ void ConnectPage::ApplyStrings() {
   automation::AutomationProperties::SetName(w_.ClientStatsCard(), Loc("client_contracts"));
   automation::AutomationProperties::SetName(w_.LocalStatsCard(), Loc("split_rules"));
   automation::AutomationProperties::SetName(w_.DnsCard(), Loc("custom_dns"));
+  // The fold-gated sheet doors (BuildFoldDoors built them on the first pass):
+  // re-strung here with every other label, and the automation name IS the
+  // row's title, so the two are written together.
+  for (auto const& d : foldDoors_) {
+    const hstring doorText = Loc(d.key);
+    d.title.Text(doorText);
+    automation::AutomationProperties::SetName(d.root, doorText);
+  }
+  if (foldDoorHeader_.title) foldDoorHeader_.title.Text(Loc("client_statistics"));
   ApplyLocationRowName();
   w_.DohLabel().Text(Loc("dns_over_https"));
   w_.UdnsLabel().Text(Loc("unencrypted_dns"));
@@ -1101,6 +1111,13 @@ void ConnectPage::ApplyStats(urnw::LiveStats const& stats) {
   w_.LiveStatsGroup().Visibility(stats.connected || providersConnecting
                                      ? Visibility::Visible
                                      : Visibility::Collapsed);
+  // The fold-gated globe door follows pane C's ProviderCountLine rule exactly
+  // (it sits inside LiveStatsGroup): hidden while there is no session to draw.
+  if (foldDoorGlobeRow_) {
+    foldDoorGlobeRow_.Visibility(stats.connected || providersConnecting
+                                     ? Visibility::Visible
+                                     : Visibility::Collapsed);
+  }
   // R3: the statistics pane draws the session as key/value rows, so it needs the
   // figures rather than only the prose lines above.
   downBitsPerSecond_ = stats.downBitsPerSecond;
@@ -1336,6 +1353,73 @@ void ConnectPage::BuildCharts() {
   // listener rather than by the stats tick -- it is a property of the network,
   // not of this window's traffic.
   extenderPanel_ = std::make_unique<urnw::ExtenderPanel>(w_.ExtenderPanelHost());
+}
+
+// ---- the fold-gated sheet doors (the fold rule) -----------------------------
+// Pane C folds below 1042dip of nav content (MainWindow::ApplyBreakpoint's
+// connectThree gate), and pane C owns the only doors to five sheets: split
+// rules (its group-header action AND the Advanced inspector's Reason-row link),
+// the DNS editor, client contracts, the provider-locations globe - and the
+// transport settings editor, whose bar rides pane B, gone below 640dip of
+// window. The fold rule bars a foldable pane from owning content with no
+// second door, so the doors are built TWICE, the Support-contact pattern:
+// once in pane C and once here, and ApplyPaneCFolded shows exactly one set.
+void ConnectPage::BuildFoldDoors() {
+  if (foldDoorsBuilt_) return;
+  foldDoorsBuilt_ = true;
+  // Pane A's scroller content has no x:Name (a new one is a stale-object
+  // startup crash without a full .obj wipe), so the host is reached, not named:
+  // markup's PaneAScroll ScrollViewer has exactly one child, the pane's
+  // StackPanel. The section inserts ahead of the peers GROUP HEADER - the child
+  // right before PeersHost - so it closes the pane's fixed controls rather than
+  // appending under the pane's one list; if that shape ever changes the
+  // fallback appends and the section lands at the foot, still correct.
+  auto panel = w_.PaneAScroll().Content().try_as<Controls::StackPanel>();
+  if (!panel) return;
+  foldDoorHost_ = Controls::StackPanel();
+  foldDoorHost_.Visibility(paneCFolded_ ? Visibility::Visible : Visibility::Collapsed);
+  uint32_t peersIndex = 0;
+  if (panel.Children().IndexOf(w_.PeersHost(), peersIndex) && 0 < peersIndex) {
+    panel.Children().InsertAt(peersIndex - 1, foldDoorHost_);
+  } else {
+    panel.Children().Append(foldDoorHost_);
+  }
+
+  // The section IS the folded statistics pane's doors, so it wears that pane's
+  // title. Every label below is a shipped store key - no Adv() fallbacks.
+  foldDoorHeader_ = urnw::kit::MakePaneGroupHeader(Loc("client_statistics"));
+  foldDoorHost_.Children().Append(foldDoorHeader_.root);
+  auto door = [this](std::string_view key, auto const& open) {
+    auto row = urnw::kit::MakePaneTwoLineRowButton(Loc(key));
+    row.root.Click([weak = w_.get_weak(), open](auto const&, auto const&) {
+      if (auto self = weak.get()) open(self->connect());
+    });
+    foldDoors_.push_back({key, row.root, row.title});
+    foldDoorHost_.Children().Append(row.root);
+    return row;
+  };
+  door("client_contracts", [](ConnectPage& page) { page.ShowClientContractsSheet(); });
+  door("split_rules", [](ConnectPage& page) { page.ShowSplitRulesSheet(); });
+  door("custom_dns", [](ConnectPage& page) { page.ShowDnsSheet(); });
+  door("transports", [](ConnectPage& page) {
+    page.ShowTransportSettingsSheet(urnw::TransportSettingsKind::Client);
+  });
+  // The globe door goes through OnProviderCountClick so the two rows can never
+  // disagree about when the sheet opens (the guard is the handler's; the args
+  // are unused). Its VISIBILITY follows the session like pane C's own row -
+  // ApplyStats writes it next to LiveStatsGroup, and it starts hidden the way
+  // LiveStatsGroup starts collapsed: before the first push there is no session
+  // to draw either.
+  foldDoorGlobeRow_ = door("provider_locations_title", [](ConnectPage& page) {
+                           page.OnProviderCountClick(nullptr, nullptr);
+                         }).root;
+  foldDoorGlobeRow_.Visibility(Visibility::Collapsed);
+}
+
+void ConnectPage::ApplyPaneCFolded(bool folded) {
+  paneCFolded_ = folded;
+  if (!foldDoorHost_) return;  // not built yet; BuildFoldDoors replays the state
+  foldDoorHost_.Visibility(folded ? Visibility::Visible : Visibility::Collapsed);
 }
 
 void ConnectPage::WireDrawerFeeds() {

@@ -209,6 +209,18 @@ void SettingsPage::BuildSections() {
   BuildAdvancedSection(device);
   BuildVersionSection(device);
   BuildStayInTouchSection(device);
+  // ---- the fold-gated second doors, at the END of pane A (the fold rule) ----
+  // Pane B folds below 900dip of window (MainWindow::ApplyBreakpoint's
+  // settingsTwo gate), and two of its rows have no other door: the
+  // Advanced-mode toggle (with Advanced OFF at a narrow window there was no
+  // way to turn it on) and the version/update rows. So they build twice, the
+  // BuildSupportContactSection pattern one destination over: once into pane B
+  // above, once into this host, and ApplyPaneBFolded shows exactly one copy.
+  paneBFoldHost_ = StackPanel();
+  paneBFoldHost_.Visibility(paneBFolded_ ? Visibility::Visible : Visibility::Collapsed);
+  general.Children().Append(paneBFoldHost_);
+  BuildAdvancedFoldSection(paneBFoldHost_);
+  BuildVersionFoldSection(paneBFoldHost_);
   rows::SetPaneMode(false);
 
   // ---- Support: the way to reach a human, in BOTH its homes ----------------
@@ -230,6 +242,8 @@ void SettingsPage::BuildSections() {
   // identifies the build here.
   const std::string sdkVersion = urnet::version();
   ApplyValue(versionValue_, sdkVersion.empty() ? Sdk().appVersion() : sdkVersion);
+  // ...and the fold-gated copy (BuildVersionFoldSection): one value, both rows.
+  ApplyValue(versionValueFold_, sdkVersion.empty() ? Sdk().appVersion() : sdkVersion);
 }
 
 // HOW THE ACCOUNT SIGNS IN. Built onto Account's pane B (spec override #2):
@@ -352,7 +366,64 @@ void SettingsPage::ApplyAdvancedMode(bool on) {
   if (advancedMode_.IsOn() == on) return;
   applyingAdvancedMode_ = true;
   advancedMode_.IsOn(on);
+  // ...and the fold-gated copy (BuildAdvancedFoldSection) under the SAME echo
+  // guard: the one apply path writes both instances, so the two toggles can
+  // never read differently.
+  if (advancedModeFold_) advancedModeFold_.IsOn(on);
   applyingAdvancedMode_ = false;
+}
+
+void SettingsPage::ApplyPaneBFolded(bool folded) {
+  paneBFolded_ = folded;
+  if (!paneBFoldHost_) return;  // not built yet; BuildSections replays the state
+  paneBFoldHost_.Visibility(folded ? Visibility::Visible : Visibility::Collapsed);
+}
+
+// The Advanced-mode toggle's SECOND door (BuildAdvancedSection is the primary;
+// its comment carries the one-apply-path rule, which this copy follows
+// verbatim: the toggle only writes through SdkHost, and MainWindow's apply
+// path writes BOTH toggles back under the one echo guard). Export logs stays
+// pane-B-only - a fold hides a convenience, not a capability, and the fold
+// rule's doors are for what has no other way in.
+void SettingsPage::BuildAdvancedFoldSection(Panel const& host) {
+  Heading(host, Missing("advanced", L"Advanced"), hstring{});
+  auto card = Card(host);
+  advancedModeFold_ = ToggleRow(
+      card, Adv("adv_advanced_mode", L"Advanced mode"),
+      Adv("adv_advanced_mode_note",
+          L"Show raw values, identifiers, the connection inspector and the "
+          L"reliability tuning surface across the app."));
+  advancedModeFold_.IsOn(Sdk().CurrentAdvancedMode());
+  advancedModeFold_.Toggled([this](auto const&, auto const&) {
+    if (applyingAdvancedMode_) return;  // the apply path wrote it; do not echo back
+    w_.SetAdvancedMode(advancedModeFold_.IsOn());
+  });
+}
+
+// The version/update rows' SECOND door (BuildVersionSection is the primary,
+// and its comment carries the why and the replay contract). The pane-B copy
+// needs no group header - its pane header strip names it - but pane A's strip
+// says "General", so this one carries one, and the word is the deleted About
+// pane's: that is where these rows lived.
+void SettingsPage::BuildVersionFoldSection(Panel const& host) {
+  Heading(host, Missing("about", L"About"), hstring{});
+  auto card = Card(host);
+  versionValueFold_ = ValueRow(card, Loc("version_info"));
+  // the build's own stamp (Common/Version.h), verbatim - see the primary
+  ApplyValue(ValueRow(card, Missing("app_version", L"App version")),
+             urnw::version::kString);
+  updateStateValueFold_ = ValueRow(card, Loc("update"));
+  auto checkNow = ButtonRow(
+      card, Loc("dev_check_updates"),
+      Adv("upd_manual_note",
+          L"Runs the release check now; the outcome lands on the row above."),
+      Adv("upd_check_now", L"Check now"));
+  checkNow.Click([](auto const&, auto const&) { urnw::pages::Updates().CheckNow(); });
+  // Replay the standing state into the row just built: the primary's copy of
+  // this call ran while this row did not exist (the fold section builds after
+  // pane B's), and ApplyUpdateCheck writes BOTH instances - so this is also
+  // what keeps the two rows on one outcome.
+  ApplyUpdateCheck(urnw::pages::Updates().Current());
 }
 
 void SettingsPage::BuildAdvancedSection(Panel const& host) {
@@ -695,6 +766,9 @@ void SettingsPage::ApplyUpdateCheck(UpdateChecker::Snapshot const& snap) {
       break;
   }
   updateStateValue_.Text(hstring{text});
+  // ...and the fold-gated copy (BuildVersionFoldSection): one snapshot, both
+  // rows, so the two can never disagree about the last check's outcome.
+  if (updateStateValueFold_) updateStateValueFold_.Text(hstring{text});
 }
 
 void SettingsPage::BuildDangerSection() {
