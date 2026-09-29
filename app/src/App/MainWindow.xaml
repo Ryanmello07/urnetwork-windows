@@ -614,12 +614,28 @@
              PaneDisplayMode="Auto" restores the native NavigationView adaptivity
              the old build deliberately pinned OFF (LeftCompact at every width):
                * >=1008 epx  expanded pane, icon + LABEL   (OpenPaneLength 220)
-               *  641-1007   compact icon rail
-               * <=640       overlay pane behind the toggle
-             The pinned thresholds and LeftCompact are gone: an icon-only rail in
+               * below that  compact icon rail, AT EVERY NARROWER WIDTH
+             The old always-on LeftCompact pin is gone: an icon-only rail in
              a 2000px window was the single biggest 'feels like mobile' signal,
              and the page-shift on expand the old note feared is exactly the
              adaptive behaviour the spec now wants.
+
+             CompactModeThresholdWidth="1" retires Auto's lower mode, LeftMinimal
+             (stock: <=640 hides the pane behind the toggle button alone). That
+             toggle is the shell's ONLY affordance in minimal mode, and in this
+             window it does not render: UIA sees it at the right rect with
+             IsOffscreen=false, but no pixels paint - so below 641epx (the
+             compact DEFAULT is 480, the floor 400) there was no way to switch
+             destination at all. The difference from compact/expanded, where the
+             same button renders and works, is the mode itself; the shell's own
+             48epx AppTitleBar row above the nav is the suspect WASDK 2.2 gives
+             no markup lever for, and Microsoft's guidance for LeftMinimal under
+             a custom title bar is to host a toggle there and drive IsPaneOpen
+             from code. The compact rail is what already renders and works at
+             641-1007, so the window keeps it down to its 400epx floor; the
+             rail's toggle still opens the labelled overlay, so no destination
+             is ever more than one click away, and >=641epx is byte-identical
+             to the stock thresholds.
 
              Five primary destinations, three footer. Wallet + Leaderboard merged
              into Earnings (leaderboard is a tab on that destination, not its own
@@ -640,6 +656,7 @@
                              AlwaysShowHeader="False"
                              FontFamily="{StaticResource UrBodyFontFamily}"
                              IsBackButtonVisible="Collapsed" PaneDisplayMode="Auto"
+                             CompactModeThresholdWidth="1"
                              OpenPaneLength="220" IsPaneToggleButtonVisible="True"
                              IsSettingsVisible="False"
                              SelectionChanged="OnNavSelectionChanged">
