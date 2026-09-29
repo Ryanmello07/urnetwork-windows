@@ -68,6 +68,14 @@ class ConnectPage {
   // and issues no RPC of its own.
   void ApplyAdvancedMode(bool on);
 
+  // The statistics pane's fold state, pushed by MainWindow::ApplyBreakpoint
+  // (its connectThree gate, inverted - the window computes the one gate, this
+  // page renders it, the same push shape as ApplyAdvancedMode above). While
+  // pane C is folded its sheet doors would fold with it, so the fold-gated
+  // section in pane A (BuildFoldDoors) shows instead: the fold rule bars a
+  // foldable pane from owning content with no second door.
+  void ApplyPaneCFolded(bool folded);
+
   // ---- window-level relays ----
   void ApplyStats(urnw::LiveStats const& stats);
   // The provider extender row under the provide group (connect/EXTENDER.md N7).
@@ -189,6 +197,10 @@ class ConnectPage {
 
   void BuildCharts();
   void BuildHero();        // the ConnectCanvas plus the hero's desktop affordances
+  // The fold-gated sheet doors at the foot of pane A (the fold rule; see
+  // ApplyPaneCFolded above). Idempotent - ApplyStrings calls it on every pass
+  // and then re-strings the rows like every other label.
+  void BuildFoldDoors();
   // --preview-ui + URNETWORK_PREVIEW_HERO only: a locally generated grid and a
   // state walk, so the hero's populated states can be looked at without a
   // session. Makes no network request of any kind — nothing here touches Sdk().
@@ -657,6 +669,27 @@ class ConnectPage {
   // whether the device is providing (LiveStats), which the switch's guess reads
   bool provideEnabled_ = false;
   bool drawerAnimated_ = false;    // entrance plays once per window
+  // ---- the fold-gated sheet doors (the fold rule; BuildFoldDoors) -----------
+  // One row of the pane A section, kept for re-stringing: the rows are built
+  // once, but ApplyStrings runs on every language change and the automation
+  // name IS the title, so both move together.
+  struct FoldDoor {
+    std::string_view key;
+    winrt::Microsoft::UI::Xaml::Controls::Button root{nullptr};
+    winrt::Microsoft::UI::Xaml::Controls::TextBlock title{nullptr};
+  };
+  bool foldDoorsBuilt_ = false;
+  // The last fold state ApplyPaneCFolded pushed, read at build time so a gate
+  // that landed before the section existed is replayed (bind-then-replay, the
+  // same shape as every other pushed value on this page).
+  bool paneCFolded_ = false;
+  winrt::Microsoft::UI::Xaml::Controls::StackPanel foldDoorHost_{nullptr};
+  urnw::kit::PaneGroupHeader foldDoorHeader_{};
+  std::vector<FoldDoor> foldDoors_;
+  // The provider-locations door, tracked separately because it follows pane
+  // C's ProviderCountLine rule: hidden while there is no session to draw
+  // (ApplyStats writes it next to LiveStatsGroup).
+  winrt::Microsoft::UI::Xaml::Controls::Button foldDoorGlobeRow_{nullptr};
   std::shared_ptr<urnw::ClientContractsSheet> contractsSheet_;
   std::shared_ptr<urnw::SplitRulesSheet> splitRulesSheet_;
   std::shared_ptr<urnw::DnsEditorSheet> dnsSheet_;

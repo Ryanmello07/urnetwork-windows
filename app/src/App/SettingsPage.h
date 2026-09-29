@@ -44,6 +44,15 @@ class SettingsPage {
   // MainWindow::ApplyAdvancedMode, which is the one apply path — the toggle
   // itself only writes, it never applies.
   void ApplyAdvancedMode(bool on);
+
+  // Pane B's fold state, pushed by MainWindow::ApplyBreakpoint (its
+  // settingsTwo gate, inverted - the window computes the one gate, this page
+  // renders it, the same push shape as ApplyAdvancedMode above). While pane B
+  // is folded its Advanced-mode toggle and version/update rows would fold with
+  // it, so their second copies at the end of pane A show instead
+  // (BuildAdvancedFoldSection / BuildVersionFoldSection): the fold rule bars a
+  // foldable pane from owning content with no second door.
+  void ApplyPaneBFolded(bool folded);
   // The service manager's snapshot changed (beta spec §3): show the uninstall
   // row only while a service is actually registered. Hidden — not disabled —
   // for NotInstalled / ConsoleMode / Unknown, because an affordance for
@@ -132,6 +141,12 @@ class SettingsPage {
   void BuildSubscriptionSection(winrt::Microsoft::UI::Xaml::Controls::Panel const& host);
   void BuildVersionSection(winrt::Microsoft::UI::Xaml::Controls::Panel const& host);
   void BuildDangerSection();
+  // The fold-gated SECOND copies (the fold rule; ApplyPaneBFolded above):
+  // pane B's Advanced-mode toggle and version/update rows, built again at the
+  // end of pane A and shown exactly while pane B is folded - the
+  // BuildSupportContactSection build-twice pattern, one page over.
+  void BuildAdvancedFoldSection(winrt::Microsoft::UI::Xaml::Controls::Panel const& host);
+  void BuildVersionFoldSection(winrt::Microsoft::UI::Xaml::Controls::Panel const& host);
 
   // ---- loads ----
   void LoadDeviceInfo();
@@ -210,6 +225,20 @@ class SettingsPage {
   // >>> ADVANCED MODE GOES HERE (D5). <<< The first host in Settings' Advanced
   // group; see BuildAdvancedSection for the row shape to append.
   winrt::Microsoft::UI::Xaml::Controls::StackPanel advancedModeHost_{nullptr};
+
+  // ---- the fold-gated second copies (BuildSections appends them to pane A) --
+  // Separate INSTANCES, not shared elements: a XAML element has one parent, so
+  // the build-twice pattern is two rows and every writer writes both (the
+  // toggle through ApplyAdvancedMode's one apply path, the version rows
+  // through BuildSections and ApplyUpdateCheck).
+  winrt::Microsoft::UI::Xaml::Controls::StackPanel paneBFoldHost_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::ToggleSwitch advancedModeFold_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::TextBlock versionValueFold_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::TextBlock updateStateValueFold_{nullptr};
+  // The last fold state ApplyPaneBFolded pushed, read at build time so a gate
+  // that landed before the sections existed is replayed (the bind-then-replay
+  // contract every other pushed value here follows).
+  bool paneBFolded_ = false;
 
   // ---- loaded state ----
   std::string clientId_;
