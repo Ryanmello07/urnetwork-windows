@@ -40,9 +40,8 @@ using namespace winrt::Microsoft::Windows::AppLifecycle;
 
 namespace {
 
-// Key for the single instance. Lives in Ids.h with the other app identities
-// because the update-relaunch failure path (AppController::RelaunchOnto) must
-// re-register the SAME key; a private copy here is how the two sites drift.
+// Key for the single instance. Lives in Ids.h with the other app identities,
+// where every site that registers it must read the SAME key.
 constexpr const wchar_t* kInstanceKey = urnw::ids::kSingleInstanceKey;
 
 // How long a second launch waits for the running instance to accept its
@@ -134,8 +133,9 @@ bool RedirectActivation(AppInstance const& primary, AppActivationArguments const
   return false;
 }
 
-// Was this process spawned by the update relaunch (AppController::RelaunchOnto,
-// beta spec §5)? Same argv scan as Startup.cpp's WantsDiagnose. The flag never
+// Was this process spawned by an update relaunch (the portable builds' former
+// rename-swap updater, beta spec §5)? Same argv scan as Startup.cpp's
+// WantsDiagnose. The flag never
 // GRANTS anything — it only buys the bounded key retry below, so a user typing
 // it by hand merely waits a few seconds longer before redirecting.
 bool IsRelaunchHandoff() {

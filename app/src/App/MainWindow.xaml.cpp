@@ -1689,15 +1689,15 @@ void MainWindow::OnUpdateBannerAction() {
   switch (updateSnapshot_.phase) {
     case Phase::Available:
     case Phase::Failed:
-      // Download / verify / extract / swap, or retry it from scratch — the
+      // Download / verify / install, or retry it from scratch — the
       // checker re-runs the whole pipeline rather than resuming a half state.
       urnw::pages::Updates().BeginApply();
       break;
-    case Phase::ManualUnzip:
-      // The zip is already downloaded and verified; the only help left to
+    case Phase::ManualInstall:
+      // The MSI is already downloaded and verified; the only help left to
       // offer is showing it again.
-      if (!updateSnapshot_.zipPath.empty())
-        urnw::UpdateChecker::RevealInExplorer(updateSnapshot_.zipPath);
+      if (!updateSnapshot_.installerPath.empty())
+        urnw::UpdateChecker::RevealInExplorer(updateSnapshot_.installerPath);
       break;
     default:
       break;  // Applying: the button is disabled; None: no banner to click

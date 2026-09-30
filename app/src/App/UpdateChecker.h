@@ -1,25 +1,22 @@
-// The in-app update checker (beta-distribution spec §5): finds newer GitHub
-// releases, and applies one with a verified download and a rename-swap.
+// The in-app update checker (beta-distribution spec §5): finds newer official
+// releases and installs one with a verified download.
 //
-// The portable zip has no installer, so this component IS the update story:
-// poll the release list (on launch after ~30s, then every 6 hours, and on the
-// two manual triggers), rank tags with Common/VersionGrammar.h, and when a
-// release outranks the build's own stamped code, offer ONE click that
+// The feed is the urnetwork/build GitHub releases (Config.h kUpdateRepo), where
+// the release pipeline attaches one MSI per architecture to every build. Poll
+// the release list (on launch after ~30s, then every 6 hours, and on the two
+// manual triggers), pick the release with Common/ReleaseSelection.h, and when
+// it outranks the build's own stamped code, offer ONE click that
 //
-//   downloads the own-arch zip to %LOCALAPPDATA%\URnetwork\updates\<tag>\,
+//   downloads the own-arch MSI to %LOCALAPPDATA%\URnetwork\updates\<tag>\,
 //   verifies it against the asset's own SHA-256 digest, stamped by GitHub in
 //     the same releases JSON the check parsed (CNG SHA-256 locally),
-//   extracts it with the OS tar.exe into a fresh staging dir,
-//   takes ONLY allowlisted top-level payload names out of staging
-//     (Common/UpdateFormats.h — archive paths are never trusted),
-//   rename-swaps them into the app's own directory (<name> -> <name>.old,
-//     staged -> <name>; NTFS renames running images fine, INCLUDING the
-//     running service exe), and relaunches the app.
+//   starts it with msiexec (elevated: the package is per-machine), and quits
+//     the app so none of its files are held open. The MSI's MajorUpgrade
+//     replaces the install and its ServiceControl stops and restarts the
+//     service, so there is no second click for the service.
 //
-// After the swap the SERVICE deliberately keeps running the renamed old exe:
-// restarting it needs elevation this process must never hold, so ServiceSetup's
-// VersionMismatch banner finishes the job with its own one click. Two clicks
-// per update, one elevation — that split is the spec's, not an accident.
+// If the installer cannot be started (the elevation prompt was declined, or
+// the launch failed), the verified MSI is shown in Explorer for the user to run.
 //
 // A dev build (urnw::version::kCode == 0) never self-updates: every release
 // would outrank it forever. The periodic checker is fully disabled there; the
@@ -53,22 +50,15 @@ class UpdateChecker {
   enum class Phase {
     None,         // nothing newer is known (or the checker is disabled)
     Available,    // a newer release exists; the one click is offered
-    Applying,     // the click fired; `stage` says how far it has got
-    ManualUnzip,  // downloaded + verified, but the app dir cannot be swapped
-                  // (not writable, or the renames were denied): the zip was
-                  // revealed in Explorer and the user finishes
-    Failed,       // the last apply attempt failed; `failure` says where.
-                  // Nothing was half-swapped (the rollback restored the old
-                  // files) — the click retries from scratch. The one exception
-                  // is SwapDirty, which says the rollback itself could not
-                  // finish; the banner wording owns that honesty.
+    Applying,       // the click fired; `stage` says how far it has got
+    ManualInstall,  // downloaded + verified, but the installer could not be
+                    // started (elevation declined, launch failed): the MSI
+                    // was revealed in Explorer and the user finishes
+    Failed,         // the last apply attempt failed; `failure` says where.
+                    // Nothing was installed — the click retries from scratch.
   };
-  enum class Stage { Idle, Downloading, Verifying, Extracting, Swapping };
-  // SwapDirty is Swap plus a rollback step that failed: the install dir may
-  // hold mixed-version files until a retry succeeds. It exists because the
-  // plain Swap banner says "the previous files were put back", and saying that
-  // over a directory where it is false teaches the user to distrust the banner.
-  enum class Failure { None, Download, Checksum, Extract, Swap, SwapDirty };
+  enum class Stage { Idle, Downloading, Verifying, Installing };
+  enum class Failure { None, Download, Checksum };
 
   // What the last CHECK concluded — the developer screen's line, separate from
   // the banner phase because "checked and found nothing" must be reportable
@@ -90,9 +80,9 @@ class UpdateChecker {
     // Empty when phase == None.
     std::wstring version;
     std::uint64_t code = 0;
-    // ManualUnzip: where the verified zip sits, for the banner's wording and
+    // ManualInstall: where the verified MSI sits, for the banner's wording and
     // its re-reveal action.
-    std::wstring zipPath;
+    std::wstring installerPath;
     CheckOutcome lastCheck = CheckOutcome::NeverRan;
     // The newest release tag the last completed check parsed, whether or not
     // it outranks this build — the developer line names it either way.
@@ -101,11 +91,10 @@ class UpdateChecker {
   };
 
   using Handler = std::function<void(Snapshot const&)>;
-  // Fired on the WORKER thread after a fully successful swap, with the path of
-  // the NEW exe now sitting at the app's own location. The receiver owns the
-  // actual handoff (unregister the single-instance key, spawn, exit) because
-  // only the app side knows how to tear itself down.
-  using RelaunchHandler = std::function<void(std::filesystem::path newExe)>;
+  // Fired on the WORKER thread once the installer is running. The receiver
+  // quits the app (the ordinary tray-quit teardown) so the MSI finds none of
+  // the app's files in use; only the app side knows how to tear itself down.
+  using InstallerStartedHandler = std::function<void()>;
 
   UpdateChecker() = default;
   ~UpdateChecker();
@@ -117,7 +106,7 @@ class UpdateChecker {
   void Start();
   // Signal and JOIN the worker. A download in flight notices within one read
   // (the fetch loop polls the stop flag), so this is bounded, not "until the
-  // 100 MB zip finishes".
+  // whole MSI finishes".
   void Stop();
 
   Snapshot Current();
@@ -125,12 +114,12 @@ class UpdateChecker {
   // window is built on the first tray click, which can be minutes after the
   // launch check already ran.
   void SetHandler(Handler h);
-  void SetRelaunchHandler(RelaunchHandler h);
+  void SetInstallerStartedHandler(InstallerStartedHandler h);
 
   // Queue a check now (the developer screen's trigger). Coalesces with a check
   // already queued; ignored only after Stop().
   void CheckNow();
-  // Queue the download/verify/extract/swap for the currently offered release.
+  // Queue the download/verify/install for the currently offered release.
   // Ignored when nothing is offered or an apply is already running.
   void BeginApply();
 
@@ -142,7 +131,7 @@ class UpdateChecker {
   // just asked for updates, so "in six hours" would be a strange answer.
   void SetAutoCheckEnabled(bool on);
 
-  // Open an Explorer window with `file` selected — the ManualUnzip banner's
+  // Open an Explorer window with `file` selected — the ManualInstall banner's
   // re-reveal action. Safe from the UI thread.
   static void RevealInExplorer(std::wstring const& file);
 
@@ -154,28 +143,27 @@ class UpdateChecker {
     std::wstring version;  // v-less
     std::uint64_t code = 0;
     std::wstring tag;      // as minted, with the v — names the download dir
-    std::wstring zipUrl;   // browser_download_url of the own-arch zip
-    // The zip asset's expected SHA-256 (lowercase hex), parsed out of the SAME
-    // asset object the zipUrl came from — never re-looked-up later, so a repo
+    std::wstring msiUrl;   // browser_download_url of the own-arch MSI
+    // The MSI asset's expected SHA-256 (lowercase hex), parsed out of the SAME
+    // asset object the msiUrl came from — never re-looked-up later, so a repo
     // that changes mid-flight cannot pair this hash with a different download.
     std::string digestHex;
-    std::string zipName;   // the exact asset filename, names the file on disk
+    std::string msiName;   // the exact asset filename, names the file on disk
   };
 
   void WorkerLoop();
   void RunCheck();
   void RunApply();
   // Best-effort startup hygiene: drop <name>.old / <name>.old-<code> leftovers
-  // next to the exe (the previous update's renamed images, deletable once
-  // nothing runs them any more) and download dirs whose tag no longer outranks
-  // this build.
+  // next to the exe (renamed images from the portable builds' old rename-swap
+  // updater) and download dirs whose tag no longer outranks this build.
   void CleanupStaleFiles();
 
   // Copy the snapshot under the lock, mutate, publish to the handler outside
   // it — the handler is never invoked with mutex_ held.
   void Mutate(std::function<void(Snapshot&)> const& fn);
   Handler HandlerCopy();
-  RelaunchHandler RelaunchCopy();
+  InstallerStartedHandler InstallerStartedCopy();
 
   std::mutex mutex_;
   std::condition_variable cv_;
@@ -192,7 +180,7 @@ class UpdateChecker {
   // across an invocation, never taken together with mutex_.
   std::mutex handlerMutex_;
   Handler handler_;
-  RelaunchHandler relaunch_;
+  InstallerStartedHandler installerStarted_;
 };
 
 }  // namespace urnw

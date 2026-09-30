@@ -8,6 +8,13 @@ Both architectures build in CI on every push and pull request — see
 `.github/workflows/build-and-test.yml`, which builds the SDK DLLs from
 `urnetwork/sdk` and then the app, the service, and the MSI.
 
+## Download
+
+Release MSIs (`URnetwork-<version>-x64.msi`, `URnetwork-<version>-arm64.msi`)
+are attached to the official releases at
+https://github.com/urnetwork/build/releases. The in-app updater polls the same
+releases (`app/src/App/Config.h`).
+
 ## Architecture
 
 ```
@@ -115,7 +122,8 @@ handle:
   tunnel, and a developer/reliability screen behind an app-wide Advanced Mode
   toggle.
 - **Updater** — `UpdateChecker`, because the Store does not push EXE/MSI
-  updates (see `app/STORE.md`).
+  updates (see `app/STORE.md`). It installs the verified official MSI from the
+  urnetwork/build releases.
 
 ## Docs
 
