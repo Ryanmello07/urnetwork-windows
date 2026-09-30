@@ -18,6 +18,7 @@
 #include "StopBudget.h"   // the shutdown budgets and the abandonable teardown
 #include "Strings.h"
 #include "ThreadGuard.h"
+#include "WintunError.h"
 
 namespace urnw {
 namespace {
@@ -642,16 +643,18 @@ proto::TunnelStatus TunnelController::StartLocked(const proto::StartTunnel& conf
     } else {
       const std::filesystem::path dll = ExeDir() / L"wintun.dll";
       LogInfo("tunnel: [1/8] loading wintun from {}", dll.string());
-      wintun_ = Wintun::Load(dll);
+      // The Windows error code goes into the message the user sees: it is
+      // what tells a missing DLL, a non-elevated process and a blocked driver
+      // apart (WintunError.h).
+      DWORD wintunError = 0;
+      wintun_ = Wintun::Load(dll, &wintunError);
       if (!wintun_)
-        throw std::runtime_error(
-            "failed to load wintun.dll (is it next to urnetworkd.exe?)");
+        throw std::runtime_error(wintun_error::LoadFailure(wintunError));
       adapter_ = WintunAdapter::Create(*wintun_, ids::kTunAdapterName,
-                                       ids::kTunAdapterGuid, kRingCapacity);
+                                       ids::kTunAdapterGuid, kRingCapacity,
+                                       &wintunError);
       if (!adapter_)
-        throw std::runtime_error(
-            "failed to create the wintun adapter (needs LocalSystem/admin and a "
-            "loadable wintun driver)");
+        throw std::runtime_error(wintun_error::AdapterFailure(wintunError));
       NET_IFINDEX tunIndex = 0;
       NET_LUID tunLuid = adapter_->Luid();
       ::ConvertInterfaceLuidToIndex(&tunLuid, &tunIndex);

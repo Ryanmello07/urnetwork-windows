@@ -2,19 +2,41 @@
 #include "Wintun.h"
 
 #include "Log.h"
+#include "Strings.h"
 
 namespace urnw {
 namespace {
 constexpr wchar_t kTunnelType[] = L"URnetwork";
+
+// wintun's own diagnostics — above all the driver install on first
+// CreateAdapter, whose failure otherwise surfaces as a bare error code. May be
+// called from wintun's threads concurrently; the Log* functions serialize.
+void CALLBACK WintunLog(WINTUN_LOGGER_LEVEL level, DWORD64 /*timestamp*/,
+                        LPCWSTR message) {
+  const std::string text = message ? Narrow(message) : std::string();
+  switch (level) {
+    case WINTUN_LOG_ERR:
+      LogError("wintun: {}", text);
+      break;
+    case WINTUN_LOG_WARN:
+      LogWarn("wintun: {}", text);
+      break;
+    default:
+      LogInfo("wintun: {}", text);
+      break;
+  }
+}
 }  // namespace
 
-std::unique_ptr<Wintun> Wintun::Load(const std::filesystem::path& dllPath) {
+std::unique_ptr<Wintun> Wintun::Load(const std::filesystem::path& dllPath,
+                                     DWORD* error) {
   HMODULE mod = ::LoadLibraryExW(dllPath.c_str(), nullptr,
                                  LOAD_LIBRARY_SEARCH_APPLICATION_DIR |
                                      LOAD_LIBRARY_SEARCH_SYSTEM32);
   if (!mod) {
-    LogError("wintun: LoadLibrary({}) failed: {}", dllPath.string(),
-             ::GetLastError());
+    const DWORD code = ::GetLastError();
+    if (error) *error = code;
+    LogError("wintun: LoadLibrary({}) failed: {}", dllPath.string(), code);
     return nullptr;
   }
   auto api = std::unique_ptr<Wintun>(new Wintun());
@@ -41,29 +63,39 @@ std::unique_ptr<Wintun> Wintun::Load(const std::filesystem::path& dllPath) {
   ok &= resolve(api->SendPacket, "WintunSendPacket");
   ok &= resolve(api->DeleteDriver, "WintunDeleteDriver");
   ok &= resolve(api->SetLogger, "WintunSetLogger");
-  if (!ok) return nullptr;
+  if (!ok) {
+    if (error) *error = ERROR_PROC_NOT_FOUND;
+    return nullptr;
+  }
+  api->SetLogger(WintunLog);
   return api;
 }
 
 Wintun::~Wintun() {
+  if (SetLogger) SetLogger(nullptr);
   if (module_) ::FreeLibrary(module_);
 }
 
 std::unique_ptr<WintunAdapter> WintunAdapter::Create(Wintun& api,
                                                      const wchar_t* name,
                                                      const GUID& requestedGuid,
-                                                     DWORD ringCapacity) {
+                                                     DWORD ringCapacity,
+                                                     DWORD* error) {
   auto self = std::unique_ptr<WintunAdapter>(new WintunAdapter(api));
   // installs the embedded driver on first use (requires SYSTEM/admin)
   self->adapter_ = api.CreateAdapter(name, kTunnelType, &requestedGuid);
   if (!self->adapter_) {
-    LogError("wintun: CreateAdapter failed: {}", ::GetLastError());
+    const DWORD code = ::GetLastError();
+    if (error) *error = code;
+    LogError("wintun: CreateAdapter failed: {}", code);
     return nullptr;
   }
   api.GetAdapterLuid(self->adapter_, &self->luid_);
   self->session_ = api.StartSession(self->adapter_, ringCapacity);
   if (!self->session_) {
-    LogError("wintun: StartSession failed: {}", ::GetLastError());
+    const DWORD code = ::GetLastError();
+    if (error) *error = code;
+    LogError("wintun: StartSession failed: {}", code);
     api.CloseAdapter(self->adapter_);
     self->adapter_ = nullptr;
     return nullptr;
