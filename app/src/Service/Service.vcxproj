@@ -93,4 +93,27 @@
   </ItemGroup>
 
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+
+  <!-- App-local VC++ runtime. urnetworkd and the app link the DLL CRT (/MD, see
+       above), and a self-contained unpackaged Windows App SDK app does not carry
+       the VC++ runtime: Microsoft requires the VC++ Redistributable on the target
+       machine. Neither the MSI nor the portable zip installed it, so on a machine
+       without it urnetworkd.exe cannot load and the MSI's ServiceControl start
+       fails the whole install ("Service 'URnetwork Service' (urnetworkd) failed
+       to start", error 1920). Copy the toolset's own redistributable CRT DLLs
+       into $(OutDir), the BinDir the MSI harvests and package-portable.ps1 zips;
+       the exe's directory is searched first, so the app and service load these.
+       Release only: the debug CRT is not redistributable. -->
+  <PropertyGroup>
+    <UrnVCRuntimeArch Condition="'$(Platform)'=='x64'">x64</UrnVCRuntimeArch>
+    <UrnVCRuntimeArch Condition="'$(Platform)'=='ARM64'">arm64</UrnVCRuntimeArch>
+  </PropertyGroup>
+  <Target Name="UrnStageVCRuntime" AfterTargets="Build" Condition="'$(Configuration)'=='Release'">
+    <ItemGroup>
+      <UrnVCRuntime Include="$(VCToolsRedistInstallDir)$(UrnVCRuntimeArch)\Microsoft.VC*.CRT\*.dll" />
+    </ItemGroup>
+    <Error Condition="'@(UrnVCRuntime)'==''"
+           Text="VC++ runtime DLLs not found under $(VCToolsRedistInstallDir)$(UrnVCRuntimeArch)\Microsoft.VC*.CRT (install the MSVC v143 toolset's redistributable); without them urnetworkd cannot start on a machine lacking the VC++ Redistributable" />
+    <Copy SourceFiles="@(UrnVCRuntime)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
 </Project>
