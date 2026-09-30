@@ -29,11 +29,9 @@ inline constexpr GUID kTrayIconGuid = {
 // and for correct taskbar/tray grouping.
 inline constexpr wchar_t kAppUserModelId[] = L"URnetwork.Desktop";
 
-// AppInstance single-instance key. Shared here because TWO sites must agree on
-// it: wWinMain registers it on launch, and the update relaunch re-acquires it
-// when its CreateProcess fails (AppController::RelaunchOnto) — a key that only
-// existed in main.cpp let that failure path leave the app alive but keyless,
-// so the next launch became a second full instance.
+// AppInstance single-instance key. Shared here so every site that registers it
+// agrees on it (wWinMain registers it on launch); a private copy is how two
+// sites drift into a keyless app and a second full instance.
 inline constexpr wchar_t kSingleInstanceKey[] = L"URnetwork.Desktop";
 
 // Deep-link / OAuth callback scheme (matches macOS `urnetwork://`).

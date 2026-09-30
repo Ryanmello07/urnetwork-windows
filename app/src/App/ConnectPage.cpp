@@ -494,10 +494,10 @@ void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) 
 
   switch (snap.phase) {
     case Phase::Available:
-      message = AdvW("upd_available_message",
-                     L"One click downloads the release, verifies it, applies "
-                     L"it here and restarts the app. Updating the VPN service "
-                     L"is a second click afterwards.");
+      message = AdvW("upd_available_msi_message",
+                     L"One click downloads the release, verifies it and runs "
+                     L"its installer, which updates the app and the VPN "
+                     L"service. The app closes while it installs.");
       break;
     case Phase::Applying:
       enabled = false;
@@ -508,23 +508,21 @@ void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) 
         case Stage::Verifying:
           message = AdvW("upd_stage_verifying", L"Verifying the download…");
           break;
-        case Stage::Extracting:
-          message = AdvW("upd_stage_extracting", L"Unpacking…");
-          break;
-        default:  // Swapping — Idle never renders under Applying
-          message = AdvW("upd_stage_swapping", L"Applying the new files…");
+        default:  // Installing — Idle never renders under Applying
+          message = AdvW("upd_stage_installing", L"Starting the installer…");
           break;
       }
       break;
-    case Phase::ManualUnzip:
-      // The one phase whose action is not the apply: the folder is not
-      // writable, the verified zip is downloaded, and the click re-reveals it.
+    case Phase::ManualInstall:
+      // The one phase whose action is not the apply: the installer could not
+      // be started, the verified MSI is downloaded, and the click re-reveals it.
       action = Adv("upd_show_file", L"Show file");
-      message = AdvW("upd_manual_message",
-                     L"This folder isn't writable, so the app can't swap its "
-                     L"own files. The verified download was shown in Explorer "
-                     L"— quit the app and extract it over this folder.");
-      if (!snap.zipPath.empty()) message += L" (" + snap.zipPath + L")";
+      message = AdvW("upd_manual_install_message",
+                     L"The installer didn't start (it needs administrator "
+                     L"approval). The verified download was shown in Explorer "
+                     L"— quit the app and run it.");
+      if (!snap.installerPath.empty())
+        message += L" (" + snap.installerPath + L")";
       break;
     default: {  // Failed — Phase::None returned above
       severity = winrt::Microsoft::UI::Xaml::Controls::InfoBarSeverity::Error;
@@ -534,30 +532,10 @@ void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) 
                          L"The download didn't finish. Check the connection "
                          L"and click to try again.");
           break;
-        case Failure::Checksum:
+        default:  // Checksum
           message = AdvW("upd_failed_checksum",
                          L"The download didn't match the release's checksums, "
                          L"so it was discarded. Click to try again.");
-          break;
-        case Failure::Extract:
-          message = AdvW("upd_failed_extract",
-                         L"The downloaded update couldn't be unpacked. "
-                         L"Details are in the app log.");
-          break;
-        case Failure::SwapDirty:
-          // The one failure whose banner must NOT claim a clean floor: the
-          // rollback itself lost a step, so "the previous files were put
-          // back" would be false over exactly the directory it describes.
-          message = AdvW("upd_failed_swap_dirty",
-                         L"The update couldn't be applied, and some previous "
-                         L"files could not be put back — this folder may mix "
-                         L"versions until a retry succeeds. Details are in "
-                         L"the app log.");
-          break;
-        default:  // Swap
-          message = AdvW("upd_failed_swap",
-                         L"The update couldn't be applied, and the previous "
-                         L"files were put back. Details are in the app log.");
           break;
       }
       break;

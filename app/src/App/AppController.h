@@ -54,10 +54,6 @@ class AppController {
 
  private:
   void ShowWindowImpl(const POINT* anchor);
-  // A fully swapped update wants this instance replaced: release the
-  // single-instance key, start the NEW exe (now sitting at our own path) with
-  // the handoff flag, and quit. UI thread only — it reuses the tray-quit path.
-  void RelaunchOnto(std::filesystem::path const& exe);
   // AppWindow.Changed relay: notices a move or resize the user made.
   void OnWindowPlacementChanged();
   // Record the rect we just applied ourselves, so the relay can ignore it.

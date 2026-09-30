@@ -202,12 +202,11 @@ void AppController::Start() {
   }
 
   // The update checker (beta spec §5): its worker owns the launch-delay check
-  // and the 6h cadence; a successful swap comes back through this handler.
-  // Marshalled onto the UI thread because the handoff reuses the tray-quit
-  // teardown, which is UI-thread machinery end to end.
-  updates_.SetRelaunchHandler([this](std::filesystem::path exe) {
-    OnUi([this, exe = std::move(exe)] { RelaunchOnto(exe); });
-  });
+  // and the 6h cadence; a started installer comes back through this handler,
+  // and the app quits so the MSI finds none of its files in use. Marshalled
+  // onto the UI thread because it is the tray-quit teardown, which is
+  // UI-thread machinery end to end.
+  updates_.SetInstallerStartedHandler([this] { OnUi([this] { Shutdown(); }); });
   updates_.Start();
 
   LogInfo("app: initializing the sdk host");
@@ -268,68 +267,6 @@ void AppController::Shutdown() {
   window_ = nullptr;
   windowHwnd_ = nullptr;
   if (auto app = Application::Current()) app.Exit();
-}
-
-// The relaunch half of a swapped update. Order is load-bearing:
-//
-//   1. UnregisterKey FIRST, so the key is free before the new process exists.
-//      Without this the new launch finds this (dying) instance holding the
-//      key and redirects its activation into a teardown.
-//   2. Spawn the new exe with --relaunched: its bounded key retry (main.cpp)
-//      covers the case where the unregister failed or this process is slow to
-//      die — tolerance, not the mechanism.
-//   3. Quit through the ordinary tray-quit path, so placement is saved and
-//      the SDK host tears down exactly as it does every day.
-//
-// A spawn failure does NOT quit — but it must UNDO step 1: the swap is already
-// complete on disk, so staying alive merely runs the old image until the user
-// restarts by hand. Staying alive WITHOUT the key is different: the next
-// shortcut launch (or a urnetwork:// wallet callback) would register ITSELF as
-// primary and run beside this instance — two tray icons, two SdkHosts on the
-// service pipe, and the wallet callback landing in the instance without the
-// session. So the failure branch re-acquires the key; if some other instance
-// took it in the gap, this one quits in its favour so exactly one remains.
-void AppController::RelaunchOnto(std::filesystem::path const& exe) {
-  namespace lifecycle = winrt::Microsoft::Windows::AppLifecycle;
-  LogInfo("update: relaunching onto {}", Narrow(exe.wstring()));
-  try {
-    lifecycle::AppInstance::GetCurrent().UnregisterKey();
-  } catch (winrt::hresult_error const& e) {
-    LogWarn("update: UnregisterKey failed ({}); the new instance will retry",
-            Narrow(std::wstring{e.message()}));
-  }
-  std::wstring cmd = L"\"" + exe.wstring() + L"\" --relaunched";
-  STARTUPINFOW si{};
-  si.cb = sizeof(si);
-  PROCESS_INFORMATION pi{};
-  if (::CreateProcessW(exe.c_str(), cmd.data(), nullptr, nullptr, FALSE, 0,
-                       nullptr, nullptr, &si, &pi)) {
-    ::CloseHandle(pi.hThread);
-    ::CloseHandle(pi.hProcess);
-    Shutdown();
-    return;
-  }
-  // The moment right after a swap is exactly when an AV scanner holds a fresh
-  // unsigned exe, so this branch is reachable in the field, not theoretical.
-  LogError("update: relaunch CreateProcess failed: {} — the update takes "
-           "effect on the next manual start",
-           ::GetLastError());
-  try {
-    const auto again =
-        lifecycle::AppInstance::FindOrRegisterForKey(ids::kSingleInstanceKey);
-    if (!again.IsCurrent()) {
-      // Someone else already owns the key (a launch raced the failed spawn).
-      // Two live instances is the one outcome worse than exiting; bow out
-      // through the ordinary quit path.
-      LogWarn("update: another instance took the single-instance key — "
-              "quitting in its favour");
-      Shutdown();
-    }
-  } catch (winrt::hresult_error const& e) {
-    LogError("update: could not re-register the single-instance key ({}) — "
-             "a second launch may start a second instance",
-             Narrow(std::wstring{e.message()}));
-  }
 }
 
 void AppController::OnAuthState(AuthState state, const std::string& error) {
