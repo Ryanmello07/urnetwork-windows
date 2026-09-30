@@ -28,7 +28,10 @@ namespace urnw {
 // Loads wintun.dll and resolves its exports. One per process.
 class Wintun {
  public:
-  static std::unique_ptr<Wintun> Load(const std::filesystem::path& dllPath);
+  // On failure, *error (when given) receives the Windows error code, captured
+  // before anything else can overwrite GetLastError.
+  static std::unique_ptr<Wintun> Load(const std::filesystem::path& dllPath,
+                                      DWORD* error = nullptr);
   ~Wintun();
 
   Wintun(const Wintun&) = delete;
@@ -58,10 +61,12 @@ class Wintun {
 class WintunAdapter {
  public:
   // ringCapacity must be a power of two between WINTUN_MIN_RING_CAPACITY and
-  // WINTUN_MAX_RING_CAPACITY.
+  // WINTUN_MAX_RING_CAPACITY. On failure, *error (when given) receives the
+  // Windows error code of the failing wintun call.
   static std::unique_ptr<WintunAdapter> Create(Wintun& api, const wchar_t* name,
                                                const GUID& requestedGuid,
-                                               DWORD ringCapacity);
+                                               DWORD ringCapacity,
+                                               DWORD* error = nullptr);
   ~WintunAdapter();
 
   WintunAdapter(const WintunAdapter&) = delete;
