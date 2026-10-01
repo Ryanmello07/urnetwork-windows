@@ -1,10 +1,11 @@
 // The in-app update checker (beta-distribution spec §5): finds newer official
 // releases and installs one with a verified download.
 //
-// The feed is the urnetwork/build GitHub releases (Config.h kUpdateRepo), where
-// the release pipeline attaches one MSI per architecture to every build. Poll
-// the release list (on launch after ~30s, then every 6 hours, and on the two
-// manual triggers), pick the release with Common/ReleaseSelection.h, and when
+// The feed is the urnetwork/windows GitHub releases (Config.h kUpdateRepo):
+// the stable releases published to the app's own repo, each carrying one MSI
+// per architecture (urnetwork/build holds the nightlies and is not polled).
+// Poll the release list (on launch after ~30s, then every 6 hours, and on the
+// two manual triggers), pick the release with Common/ReleaseSelection.h, and when
 // it outranks the build's own stamped code, offer ONE click that
 //
 //   downloads the own-arch MSI to %LOCALAPPDATA%\URnetwork\updates\<tag>\,

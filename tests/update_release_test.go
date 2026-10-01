@@ -12,8 +12,8 @@ import (
 
 // Compile and execute the update checker's pure release decision and feed
 // (Common/ReleaseSelection.h, App/Config.h) against the tag and MSI names the
-// urnetwork/build releases carry. mutateConfig, when set, rewrites Config.h in
-// an isolated include dir for a negative control.
+// stable urnetwork/windows releases carry. mutateConfig, when set, rewrites
+// Config.h in an isolated include dir for a negative control.
 func updateReleaseTestProgram(t *testing.T, mutateConfig func(string) string) string {
 	t.Helper()
 	compiler, err := exec.LookPath("c++")
@@ -57,14 +57,25 @@ func TestUpdateReleaseSelection(t *testing.T) {
 	}
 }
 
-// The update feed must be an official urnetwork repo: pointing it back at a
-// personal fork has to fail the suite, not just a review.
-func TestUpdateReleaseRejectsPersonalFork(t *testing.T) {
-	program := updateReleaseTestProgram(t, func(source string) string {
-		return strings.Replace(source, `L"urnetwork/build"`, `L"Ryanmello07/urnetwork-windows"`, 1)
-	})
-	output, err := exec.Command(program).CombinedOutput()
-	if err == nil || !strings.Contains(string(output), "official urnetwork/build") {
-		t.Fatalf("personal-fork negative control was not detected: %v\n%s", err, output)
+// The update feed must be the stable urnetwork/windows releases: pointing it
+// back at the nightly build repo or a personal fork has to fail the suite, not
+// just a review.
+func TestUpdateReleaseRejectsOtherFeeds(t *testing.T) {
+	for _, tc := range []struct {
+		name, repo, detected string
+	}{
+		{"nightly build repo", "urnetwork/build", "nightly builds, not the stable feed"},
+		{"personal fork", "Ryanmello07/urnetwork-windows", "official urnetwork repo"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			program := updateReleaseTestProgram(t, func(source string) string {
+				return strings.Replace(source, `L"urnetwork/windows"`, `L"`+tc.repo+`"`, 1)
+			})
+			output, err := exec.Command(program).CombinedOutput()
+			if err == nil || !strings.Contains(string(output), "stable urnetwork/windows") ||
+				!strings.Contains(string(output), tc.detected) {
+				t.Fatalf("%s negative control was not detected: %v\n%s", tc.name, err, output)
+			}
+		})
 	}
 }

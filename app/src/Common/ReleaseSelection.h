@@ -1,14 +1,15 @@
 // Which published release the update checker offers, decided pure.
 //
-// The official Windows releases are the urnetwork/build GitHub releases that
-// build/all/run.sh mints once per build: tag `v<YYYY.M.D>-<code>`, one MSI per
-// architecture attached as `URnetwork-<YYYY.M.D>-<code>-<x64|arm64>.msi`
-// (require_windows_artifacts + the github_release_upload loop). The same repo
-// also carries android-only PRE-releases at code+2 / code+3 (the F-Droid
-// reproducible-build variants), which outrank the real release by code and
-// carry no MSI — so prereleases are skipped outright rather than merely
-// failing the asset match, or the developer line would name an android build
-// as "the newest release".
+// The official Windows releases are the urnetwork/windows GitHub releases
+// (Config.h kUpdateRepo): the stable builds published by hand from the nightly
+// urnetwork/build output, keeping the names build/all/run.sh mints — tag
+// `v<YYYY.M.D>-<code>`, one MSI per architecture attached as
+// `URnetwork-<YYYY.M.D>-<code>-<x64|arm64>.msi` (require_windows_artifacts +
+// the github_release_upload loop). Drafts and prereleases are skipped outright
+// rather than merely failing the asset match: a prerelease that outranks the
+// stable release by code (the nightly repo's android-only F-Droid variants at
+// code+2 / code+3 are the model) must not make the developer line name it as
+// "the newest release".
 //
 // The checker turns the releases JSON into these plain structs and asks
 // SelectRelease; the decision itself (tag grammar, asset name, digest) touches
