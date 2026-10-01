@@ -27,6 +27,7 @@
 
 #include "Ids.h"
 #include "Log.h"
+#include "NetworkSpaceStartup.h"
 #include "Paths.h"
 #include "RpcSessionBlob.h"
 #include "Strings.h"
@@ -360,35 +361,37 @@ std::string SdkHost::DeviceSpec() {
 #endif
 }
 
+// The one-time re-keying of the official space from the key earlier builds
+// bundled it under (NetworkSpaceStartup.h). Best-effort: the SDK answers false
+// for "nothing to move" as well as for a destination it will not overwrite,
+// and either way the launch goes on against the space BuildNetworkSpace writes.
+static void MigrateLegacyNetworkSpace(const urnet::NetworkSpaceManager& manager,
+                                      const netspace::Key& from, const netspace::Key& to) {
+  urnet::NetworkSpaceKey fromKey;
+  fromKey.host_name = from.hostName;
+  fromKey.env_name = from.envName;
+  urnet::NetworkSpaceKey toKey;
+  toKey.host_name = to.hostName;
+  toKey.env_name = to.envName;
+  try {
+    if (manager.migrateNetworkSpace(fromKey, toKey)) {
+      LogInfo("sdkhost: re-keyed the network space '{}/{}' to the operator host "
+              "'{}/{}'; its stored credentials and preferences carry over",
+              from.hostName, from.envName, to.hostName, to.envName);
+    }
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: migrate network space '{}/{}' -> '{}/{}' failed: {}", from.hostName,
+            from.envName, to.hostName, to.envName, e.what());
+  }
+}
+
 urnet::NetworkSpace SdkHost::BuildNetworkSpace() {
   // Matches macOS DeviceManager.initializeNetworkSpace.
-  urnet::NetworkSpaceKey key;
-  key.host_name = std::string(ids::kNetworkSpaceHostName);
-  key.env_name = std::string(ids::kNetworkSpaceEnvName);
-
-  urnet::NetworkSpaceValues values;
-  values.bundled = true;
-  values.net_expose_server_ips = true;
-  values.net_expose_server_host_names = true;
-  values.link_host_name = "ur.io";
-  values.migration_host_name = "bringyour.com";
-  values.store = "";
-  values.wallet = "circle";
-  // Google (and Apple) sign-in run in the system browser against the provider,
-  // with the api's callback returning the token (SignInWithSso); nothing is
-  // compiled in, so the space always offers it.
-  values.sso_google = true;
-  values.env_secret = "";
-
+  //
   // URNETWORK_NETWORK_HOST points the client at a different backend, so that a
   // throwaway account on a test network can exercise the success paths. Until
   // this existed nothing in the client had ever seen a 200: every screen was
   // verified against layout, empty states and 401s only.
-  //
-  // MIGRATION_HOST_NAME MUST BE CLEARED WITH IT. sdk/network_space.go's
-  // ServiceUrl prefers MigrationHostName over the key's HostName, so setting
-  // the host alone changes nothing and the client keeps talking to
-  // bringyour.com - looking like the override silently failed.
   //
   // Env name follows the same rule the SDK uses: "main" (the default) gives
   // api.<host>, anything else gives <env>-api.<host>.
@@ -397,20 +400,35 @@ urnet::NetworkSpace SdkHost::BuildNetworkSpace() {
   // that lands, both should end up driving setActiveNetworkSpace rather than
   // each carrying their own idea of how a space is assembled.
   const std::string hostOverride = EnvVar(L"URNETWORK_NETWORK_HOST");
-  if (const auto host = hostOverride; !host.empty()) {
-    key.host_name = host;
-    // reset(), not "": these wrapper fields are std::optional<std::string> and
-    // the Go side omits an unset one, which is what ServiceUrl's `!= ""` test
-    // needs to fall through to the key's host name.
-    values.migration_host_name.reset();
-    std::string env(ids::kNetworkSpaceEnvName);
-    if (const auto envOverride = EnvVar(L"URNETWORK_NETWORK_ENV"); !envOverride.empty()) {
-      env = envOverride;
-    }
-    key.env_name = env;
-    LogWarn("sdkhost: NETWORK OVERRIDE - host={} env={} (migration host cleared). "
+  const netspace::BundledSpace bundled =
+      netspace::ResolveBundledSpace(hostOverride, EnvVar(L"URNETWORK_NETWORK_ENV"));
+  urnet::NetworkSpaceKey key;
+  key.host_name = bundled.key.hostName;
+  key.env_name = bundled.key.envName;
+
+  urnet::NetworkSpaceValues values;
+  values.bundled = true;
+  values.net_expose_server_ips = true;
+  values.net_expose_server_host_names = true;
+  values.link_host_name = "ur.io";
+  // NO migration host name, official or overridden. sdk/network_space.go's
+  // ServiceUrl prefers MigrationHostName over the key's HostName, so one here
+  // would silently redirect every api/connect url: the official key IS the
+  // operator host (ids::kNetworkSpaceHostName), and an override must talk to
+  // the host it names. Left unset rather than "": these wrapper fields are
+  // std::optional<std::string> and the Go side omits an unset one.
+  values.store = "";
+  values.wallet = "circle";
+  // Google (and Apple) sign-in run in the system browser against the provider,
+  // with the api's callback returning the token (SignInWithSso); nothing is
+  // compiled in, so the space always offers it.
+  values.sso_google = true;
+  values.env_secret = "";
+
+  if (!bundled.official) {
+    LogWarn("sdkhost: NETWORK OVERRIDE - host={} env={}. "
             "This client is NOT talking to production.",
-            host, env);
+            bundled.key.hostName, bundled.key.envName);
   }
 
   urnet::NetworkSpace space = spaceManager_->updateNetworkSpaceValues(key, values);
@@ -487,7 +505,15 @@ bool SdkHost::Initialize() {
   try {
     spaceManager_ =
         urnet::newNetworkSpaceManager(Narrow(SdkStorageDir(false).wstring()));
-    networkSpace_ = BuildNetworkSpace();
+    // The legacy official space is re-keyed BEFORE the bundled space is
+    // written, bound or read (NetworkSpaceStartup.h has the order and the SDK
+    // contract behind it); the DeviceRemote is built later, in the session
+    // bootstrap, from the space this returns.
+    networkSpace_ = netspace::StartBundledSpace(
+        [this](const netspace::Key& from, const netspace::Key& to) {
+          MigrateLegacyNetworkSpace(*spaceManager_, from, to);
+        },
+        [this] { return BuildNetworkSpace(); });
     api_ = networkSpace_->getApi();
     asyncLocalState_ = networkSpace_->getAsyncLocalState();
     localState_ = asyncLocalState_->getLocalState();
@@ -1222,7 +1248,7 @@ bool SdkHost::ApplyNetworkServer(const std::string& hostName, const std::string&
       values.net_expose_server_ips = true;
       values.net_expose_server_host_names = true;
       values.link_host_name = official ? std::string("ur.io") : hostName;
-      values.migration_host_name = official ? std::string("bringyour.com") : std::string();
+      // no migration host name for any space, see BuildNetworkSpace
       values.store = "";
       values.wallet = "circle";
       values.sso_google = true;  // Google's own web flow with the api's callback, see SignInWithSso

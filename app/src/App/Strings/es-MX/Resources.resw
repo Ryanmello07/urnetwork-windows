@@ -2102,7 +2102,7 @@ enviamos para verificar tu identidad.</value>
     <comment>Explains the network API selector.</comment>
   </data>
   <data name="network_api_domain_help" xml:space="preserve">
-    <value>Ejemplo: ur.network o tu dominio personalizado.</value>
+    <value>Ejemplo: bringyour.com o tu dominio personalizado.</value>
     <comment>Help text under the network domain field of the network API selector.</comment>
   </data>
   <data name="network_api_domain_label" xml:space="preserve">

@@ -3244,7 +3244,7 @@ gesendet haben, um deine Identität zu überprüfen.</value>
     <comment>Explains the network API selector.</comment>
   </data>
   <data name="network_api_domain_help" xml:space="preserve">
-    <value>Beispiel: ur.network oder deine eigene Domain.</value>
+    <value>Beispiel: bringyour.com oder deine eigene Domain.</value>
     <comment>Help text under the network domain field of the network API selector.</comment>
   </data>
   <data name="network_api_domain_label" xml:space="preserve">

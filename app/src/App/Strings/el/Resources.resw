@@ -2102,7 +2102,7 @@
     <comment>Explains the network API selector.</comment>
   </data>
   <data name="network_api_domain_help" xml:space="preserve">
-    <value>Παράδειγμα: ur.network ή ο δικός σας τομέας.</value>
+    <value>Παράδειγμα: bringyour.com ή ο δικός σας τομέας.</value>
     <comment>Help text under the network domain field of the network API selector.</comment>
   </data>
   <data name="network_api_domain_label" xml:space="preserve">

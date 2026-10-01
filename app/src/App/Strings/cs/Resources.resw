@@ -2148,7 +2148,7 @@ správným způsobem</value>
     <comment>Explains the network API selector.</comment>
   </data>
   <data name="network_api_domain_help" xml:space="preserve">
-    <value>Příklad: ur.network nebo vaše vlastní doména.</value>
+    <value>Příklad: bringyour.com nebo vaše vlastní doména.</value>
     <comment>Help text under the network domain field of the network API selector.</comment>
   </data>
   <data name="network_api_domain_label" xml:space="preserve">

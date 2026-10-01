@@ -2102,7 +2102,7 @@ kutumia ili kuthibitisha utambulisho wako.</value>
     <comment>Explains the network API selector.</comment>
   </data>
   <data name="network_api_domain_help" xml:space="preserve">
-    <value>Mfano: ur.network au kikoa chako maalum.</value>
+    <value>Mfano: bringyour.com au kikoa chako maalum.</value>
     <comment>Help text under the network domain field of the network API selector.</comment>
   </data>
   <data name="network_api_domain_label" xml:space="preserve">

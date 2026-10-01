@@ -139,7 +139,7 @@ carries lifecycle/config. Last-good rpc session persists like `RpcSessionStore` 
 |---|---|
 | `MenuBarExtra` + 4 state icons | Shell_NotifyIcon GUID icon + WinUI flyout; same 4 assets ×(light/dark) |
 | Main window `NavigationSplitView` (Connect/Account/Leaderboard/Support) | WinUI 3 `NavigationView`, same 4 sections |
-| `DeviceManager` (NetworkSpaceManager→NetworkSpace(`ur.network`/`main`)→Api/LocalState; DeviceRemote; ~10 persisted listeners) | `SdkHost` in src/App over `urnet::` classes, 1:1 |
+| `DeviceManager` (NetworkSpaceManager→NetworkSpace(`bringyour.com`/`main`)→Api/LocalState; DeviceRemote; ~10 persisted listeners) | `SdkHost` in src/App over `urnet::` classes, 1:1 |
 | `ConnectViewModel` over `SdkConnectViewController` (+Contract/BlockAction VCs) | same VCs via `urnet::DeviceRemote::openConnectViewController()` etc. |
 | `PacketTunnelProvider` (DeviceLocal, `readPackets`→`sendPacket` / `ReceivePacket`→`writePackets`, key material persist, logout msg) | service tunnel core: `WintunReceivePacket`→`urnet::DeviceLocal::sendPacket` / `addReceivePacket`→`WintunSendPacket`; key material via `getKeyMaterial()`/`newDeviceLocalWithKeyMaterial` |
 | `VPNManager` + `NETunnelProviderManager` + providerConfiguration | service control named pipe + SCM start/stop |

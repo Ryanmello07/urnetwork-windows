@@ -2078,7 +2078,7 @@
     <comment>Explains the network API selector.</comment>
   </data>
   <data name="network_api_domain_help" xml:space="preserve">
-    <value>ตัวอย่าง: ur.network หรือโดเมนที่คุณกำหนดเอง</value>
+    <value>ตัวอย่าง: bringyour.com หรือโดเมนที่คุณกำหนดเอง</value>
     <comment>Help text under the network domain field of the network API selector.</comment>
   </data>
   <data name="network_api_domain_label" xml:space="preserve">

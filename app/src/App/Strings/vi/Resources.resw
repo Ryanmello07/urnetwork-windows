@@ -2078,7 +2078,7 @@ gặp lại bạn</value>
     <comment>Explains the network API selector.</comment>
   </data>
   <data name="network_api_domain_help" xml:space="preserve">
-    <value>Ví dụ: ur.network hoặc tên miền tùy chỉnh của bạn.</value>
+    <value>Ví dụ: bringyour.com hoặc tên miền tùy chỉnh của bạn.</value>
     <comment>Help text under the network domain field of the network API selector.</comment>
   </data>
   <data name="network_api_domain_label" xml:space="preserve">
