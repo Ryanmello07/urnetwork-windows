@@ -3419,7 +3419,7 @@
     <comment>Explains the network API selector.</comment>
   </data>
   <data name="network_api_domain_help" xml:space="preserve">
-    <value>مثال: ur.network أو نطاقك المخصص.</value>
+    <value>مثال: bringyour.com أو نطاقك المخصص.</value>
     <comment>Help text under the network domain field of the network API selector.</comment>
   </data>
   <data name="network_api_domain_label" xml:space="preserve">

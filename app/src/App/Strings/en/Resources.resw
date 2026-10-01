@@ -3755,7 +3755,7 @@ sent you to verify your identity.</value>
     <comment>Explains the network API selector.</comment>
   </data>
   <data name="network_api_domain_help" xml:space="preserve">
-    <value>Example: ur.network or your custom domain.</value>
+    <value>Example: bringyour.com or your custom domain.</value>
     <comment>Help text under the network domain field of the network API selector.</comment>
   </data>
   <data name="network_api_domain_label" xml:space="preserve">

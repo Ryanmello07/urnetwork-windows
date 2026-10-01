@@ -2078,7 +2078,7 @@
     <comment>Explains the network API selector.</comment>
   </data>
   <data name="network_api_domain_help" xml:space="preserve">
-    <value>예: ur.network 또는 사용자 지정 도메인.</value>
+    <value>예: bringyour.com 또는 사용자 지정 도메인.</value>
     <comment>Help text under the network domain field of the network API selector.</comment>
   </data>
   <data name="network_api_domain_label" xml:space="preserve">

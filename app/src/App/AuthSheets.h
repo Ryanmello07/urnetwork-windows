@@ -136,7 +136,7 @@ class NetworkServerSheet : public std::enable_shared_from_this<NetworkServerShee
 // The url/host normalization the sheet applies before anything is sent to the
 // SDK. Free functions, ported one-for-one from iOS NetworkServerUtils.swift
 // (itself a port of android's NetworkServerSelector.kt), so the three clients
-// agree on what "ur.network", "https://api.example.com/" and "[2001:db8::1]:8080"
+// agree on what "bringyour.com", "https://api.example.com/" and "[2001:db8::1]:8080"
 // each mean. Declared here so they are testable and reviewable on their own.
 namespace netserver {
 std::string NormalizeHost(std::string const& raw);

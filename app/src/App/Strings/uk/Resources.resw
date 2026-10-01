@@ -2150,7 +2150,7 @@
     <comment>Explains the network API selector.</comment>
   </data>
   <data name="network_api_domain_help" xml:space="preserve">
-    <value>Приклад: ur.network або ваш власний домен.</value>
+    <value>Приклад: bringyour.com або ваш власний домен.</value>
     <comment>Help text under the network domain field of the network API selector.</comment>
   </data>
   <data name="network_api_domain_label" xml:space="preserve">

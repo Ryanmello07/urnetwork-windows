@@ -2078,7 +2078,7 @@
     <comment>Explains the network API selector.</comment>
   </data>
   <data name="network_api_domain_help" xml:space="preserve">
-    <value>例如：ur.network 或你的自訂網域。</value>
+    <value>例如：bringyour.com 或你的自訂網域。</value>
     <comment>Help text under the network domain field of the network API selector.</comment>
   </data>
   <data name="network_api_domain_label" xml:space="preserve">

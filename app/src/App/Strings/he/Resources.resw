@@ -2150,7 +2150,7 @@
     <comment>Explains the network API selector.</comment>
   </data>
   <data name="network_api_domain_help" xml:space="preserve">
-    <value>דוגמה: ur.network או הדומיין המותאם שלך.</value>
+    <value>דוגמה: bringyour.com או הדומיין המותאם שלך.</value>
     <comment>Help text under the network domain field of the network API selector.</comment>
   </data>
   <data name="network_api_domain_label" xml:space="preserve">

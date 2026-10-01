@@ -2078,7 +2078,7 @@ kami kirimkan untuk memverifikasi identitas Anda.</value>
     <comment>Explains the network API selector.</comment>
   </data>
   <data name="network_api_domain_help" xml:space="preserve">
-    <value>Contoh: ur.network atau domain kustom Anda.</value>
+    <value>Contoh: bringyour.com atau domain kustom Anda.</value>
     <comment>Help text under the network domain field of the network API selector.</comment>
   </data>
   <data name="network_api_domain_label" xml:space="preserve">

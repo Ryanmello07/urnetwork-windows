@@ -55,7 +55,16 @@ inline constexpr GUID kTunAdapterGuid = {
 inline constexpr wchar_t kTunAdapterName[] = L"URnetwork";
 
 // Network space identity (matches macOS DeviceManager.initializeNetworkSpace).
-inline constexpr char kNetworkSpaceHostName[] = "ur.network";
+// The operator is bringyour.com: the planned move of the operator to
+// *.ur.network was cancelled, so the official space is keyed by the host it
+// actually talks to and carries NO migration host name (the SDK's ServiceUrl
+// prefers a migration host over the key's host, so a stale one would silently
+// redirect every api/connect url). ur.io stays the link/site domain.
+inline constexpr char kNetworkSpaceHostName[] = "bringyour.com";
+// The key earlier builds bundled under. Each launch re-keys that space to
+// kNetworkSpaceHostName before anything binds to it (NetworkSpaceStartup.h),
+// so the stored credentials and preferences follow the operator host.
+inline constexpr char kLegacyNetworkSpaceHostName[] = "ur.network";
 inline constexpr char kNetworkSpaceEnvName[] = "main";
 
 }  // namespace urnw::ids

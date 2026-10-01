@@ -2102,7 +2102,7 @@ skickade till dig för att verifiera din identitet.</value>
     <comment>Explains the network API selector.</comment>
   </data>
   <data name="network_api_domain_help" xml:space="preserve">
-    <value>Exempel: ur.network eller din egen domän.</value>
+    <value>Exempel: bringyour.com eller din egen domän.</value>
     <comment>Help text under the network domain field of the network API selector.</comment>
   </data>
   <data name="network_api_domain_label" xml:space="preserve">
