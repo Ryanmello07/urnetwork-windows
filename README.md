@@ -11,9 +11,10 @@ Both architectures build in CI on every push and pull request — see
 ## Download
 
 Release MSIs (`URnetwork-<version>-x64.msi`, `URnetwork-<version>-arm64.msi`)
-are attached to the official releases at
-https://github.com/urnetwork/build/releases. The in-app updater polls the same
-releases (`app/src/App/Config.h`).
+are attached to the stable releases at
+https://github.com/urnetwork/windows/releases. The in-app updater polls the
+same releases (`app/src/App/Config.h`). Nightly builds live at
+https://github.com/urnetwork/build/releases and are not offered by the updater.
 
 ## Architecture
 
@@ -123,7 +124,7 @@ handle:
   toggle.
 - **Updater** — `UpdateChecker`, because the Store does not push EXE/MSI
   updates (see `app/STORE.md`). It installs the verified official MSI from the
-  urnetwork/build releases.
+  stable urnetwork/windows releases.
 
 ## Docs
 

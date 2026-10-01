@@ -3,7 +3,7 @@
 // repo is polled, which release is offered, and which asset is downloaded -
 // run against the SAME headers the app compiles, on any host with a C++20
 // compiler, with the tag and asset names build/all/run.sh actually publishes
-// on the urnetwork/build releases.
+// and the stable urnetwork/windows releases carry.
 //
 //   c++ -std=c++20 -I ../src/Common -I ../src/App update-release-tests.cpp \
 //       -o /tmp/update-release-tests && /tmp/update-release-tests
@@ -40,7 +40,7 @@ void CheckEq(const std::string& expected, const std::string& actual, const std::
 std::string Digest(char c) { return "sha256:" + std::string(64, c); }
 
 ReleaseAsset Asset(std::string name, char digest = 'a') {
-  return {name, "https://github.com/urnetwork/build/releases/download/x/" + name,
+  return {name, "https://github.com/urnetwork/windows/releases/download/x/" + name,
           Digest(digest)};
 }
 
@@ -68,9 +68,14 @@ Release AndroidPrerelease(const std::string& version) {
 }  // namespace
 
 int main() {
-  // ---- the feed: an official urnetwork repo, never a personal fork ----
-  Check(std::wstring_view(urnw::config::kUpdateRepo) == L"urnetwork/build",
-        "the update checker polls the official urnetwork/build releases");
+  // ---- the feed: the stable urnetwork/windows releases — not the nightly
+  // build repo, never a personal fork ----
+  const std::wstring_view repo(urnw::config::kUpdateRepo);
+  Check(repo == L"urnetwork/windows",
+        "the update checker polls the stable urnetwork/windows releases");
+  Check(repo != L"urnetwork/build",
+        "urnetwork/build holds nightly builds, not the stable feed");
+  Check(repo.starts_with(L"urnetwork/"), "the feed is an official urnetwork repo");
 
   // ---- asset names: run.sh require_windows_artifacts ----
   CheckEq("URnetwork-2026.8.28-1031763440-x64.msi",
@@ -92,7 +97,7 @@ int main() {
     CheckEq("2026.9.22-1053244730", s.version, "offered version is v-less");
     CheckEq("v2026.9.22-1053244730", s.tag, "offered tag keeps its v");
     CheckEq("URnetwork-2026.9.22-1053244730-x64.msi", s.assetName, "own-arch MSI");
-    CheckEq("https://github.com/urnetwork/build/releases/download/x/"
+    CheckEq("https://github.com/urnetwork/windows/releases/download/x/"
             "URnetwork-2026.9.22-1053244730-x64.msi",
             s.assetUrl, "download URL comes from the matched asset");
     CheckEq(std::string(64, 'b'), s.digestHex, "digest comes from the matched asset");
