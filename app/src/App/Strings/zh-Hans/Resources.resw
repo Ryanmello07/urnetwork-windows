@@ -4283,6 +4283,10 @@
     <value>Seeker 倍增器仅适用于积分。</value>
     <comment>Note on the Seeker verification action.</comment>
   </data>
+  <data name="seeker_token_not_found" xml:space="preserve">
+    <value>在钱包 …{} 中未找到 Seeker 或 Saga 代币</value>
+    <comment>Seeker token verification: the wallet holds no Seeker or Saga token. The argument is the end of the wallet address.</comment>
+  </data>
   <data name="seeker_token_verified" xml:space="preserve">
     <value>Seeker 令牌已验证</value>
     <comment>Call to action</comment>

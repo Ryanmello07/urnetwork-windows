@@ -2996,6 +2996,10 @@
     <value>{}개 단어입니다 — 시드 문구는 12개 또는 24개 단어입니다</value>
     <comment>Login: warning when the pasted seedphrase has {count} words instead of 12 or 24.</comment>
   </data>
+  <data name="seeker_token_not_found" xml:space="preserve">
+    <value>지갑 …{}에서 Seeker 또는 Saga 토큰을 찾을 수 없습니다</value>
+    <comment>Seeker token verification: the wallet holds no Seeker or Saga token. The argument is the end of the wallet address.</comment>
+  </data>
   <data name="seeker_token_verified" xml:space="preserve">
     <value>Seeker 토큰이 인증되었습니다!</value>
     <comment>Call to action</comment>

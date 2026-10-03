@@ -40,6 +40,7 @@
 #include <winrt/Microsoft.UI.Xaml.Shapes.h>
 
 #include "EarningsSheets.h"
+#include "SeekerVerifyNotice.h"
 #include "SolanaWalletPresentation.h"
 
 namespace urnw {
@@ -316,7 +317,10 @@ class WalletPage {
 
   // ---- the Seeker multiplier (points only)
   void ApplySeekerState();
-  void ApplySeekerResult(uint32_t generation, bool ok, std::string const& serverError);
+  // `failure` is the error or server message behind a Reason notice; the
+  // wallet suffix goes with NotHolder
+  void ApplySeekerResult(uint32_t generation, urnw::SeekerVerifyNoticeKind notice,
+                         std::string const& failure, std::string const& walletSuffix);
 
   // ---- leaderboard
   void ApplyLeaderboard(urnet::LeaderboardEarnersList const& earners, Fetch state);

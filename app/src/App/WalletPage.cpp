@@ -2253,7 +2253,10 @@ winrt::fire_and_forget WalletPage::OnVerifySeeker(IInspectable const&, RoutedEve
             urnw::LogError("seeker: wallet signature failed: {}", error);
           }
           queue.TryEnqueue([weak, error, generation] {
-            if (auto w = weak.get()) w->wallet().ApplySeekerResult(generation, false, error);
+            if (auto w = weak.get()) {
+              w->wallet().ApplySeekerResult(
+                  generation, urnw::SeekerVerifyNoticeFor(false, false, error), error, {});
+            }
           });
           return;
         }
@@ -2262,23 +2265,28 @@ winrt::fire_and_forget WalletPage::OnVerifySeeker(IInspectable const&, RoutedEve
         args.wallet_signature = signature;
         args.wallet_message = message;
         Sdk().api().verifySeekerHolder(
-            args, [queue, weak, generation](
+            args, [queue, weak, generation, walletSuffix = urnw::SeekerWalletSuffix(address)](
                       std::optional<urnet::VerifySeekerNftHolderResult> result,
                       std::optional<std::string> err) {
               std::string failure = err ? *err : std::string();
               if (failure.empty() && result && result->error) failure = result->error->message;
-              const bool verified = result && result->success && failure.empty();
-              if (!verified) urnw::LogError("seeker: verifySeekerHolder failed: {}", failure);
-              queue.TryEnqueue([weak, verified, failure, generation] {
+              const auto notice = urnw::SeekerVerifyNoticeFor(
+                  result.has_value(), result && result->success, failure);
+              if (notice != urnw::SeekerVerifyNoticeKind::Verified) {
+                urnw::LogError("seeker: verifySeekerHolder failed: {}", failure);
+              }
+              queue.TryEnqueue([weak, notice, failure, walletSuffix, generation] {
                 if (auto w = weak.get())
-                  w->wallet().ApplySeekerResult(generation, verified, failure);
+                  w->wallet().ApplySeekerResult(generation, notice, failure, walletSuffix);
               });
             });
       });
 }
 
-void WalletPage::ApplySeekerResult(uint32_t generation, bool ok,
-                                   std::string const& serverError) {
+void WalletPage::ApplySeekerResult(uint32_t generation, urnw::SeekerVerifyNoticeKind notice,
+                                   std::string const& failure,
+                                   std::string const& walletSuffix) {
+  const bool ok = notice == urnw::SeekerVerifyNoticeKind::Verified;
   // The watchdog already gave up on this one and said so: do not now contradict
   // it by reporting the outcome of a request the user was told had failed.
   if (!SettleFlow(seekerFlow_, generation)) {
@@ -2286,19 +2294,30 @@ void WalletPage::ApplySeekerResult(uint32_t generation, bool ok,
     return;
   }
   verifyingSeeker_ = false;
-  if (!ok && bridge::IsSuperseded(serverError)) {
+  if (!ok && bridge::IsSuperseded(failure)) {
     // the user started another wallet flow (the Solana sheet): this attempt
     // ended by their choice, and the button is simply ready again
-    urnw::LogInfo("seeker: the wallet signature was superseded ({})", serverError);
+    urnw::LogInfo("seeker: the wallet signature was superseded ({})", failure);
     ApplySeekerState();
     return;
   }
-  Notify(ok ? Loc("successfully_claimed_multiplier")
-            : (serverError.empty()
-                   ? Loc("error_claiming_multiplier")
-                   : hstring{urnw::Format("error_claiming_multiplier_with_reason",
-                                          urnw::Widen(serverError))}),
-         ok ? InfoBarSeverity::Success : InfoBarSeverity::Error);
+  hstring message;
+  switch (notice) {
+    case urnw::SeekerVerifyNoticeKind::Verified:
+      message = Loc("successfully_claimed_multiplier");
+      break;
+    case urnw::SeekerVerifyNoticeKind::NotHolder:
+      // the server checked the wallet: not a failed request
+      message = hstring{urnw::Format("seeker_token_not_found", urnw::Widen(walletSuffix))};
+      break;
+    case urnw::SeekerVerifyNoticeKind::Reason:
+      message = hstring{urnw::Format("error_claiming_multiplier_with_reason", urnw::Widen(failure))};
+      break;
+    case urnw::SeekerVerifyNoticeKind::Failed:
+      message = Loc("error_claiming_multiplier");
+      break;
+  }
+  Notify(message, ok ? InfoBarSeverity::Success : InfoBarSeverity::Error);
   if (ok) {
     LoadSeeker();  // has_seeker_token now reads true on the verified wallet
     return;

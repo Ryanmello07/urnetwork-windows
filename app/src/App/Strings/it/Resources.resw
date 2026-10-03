@@ -3053,6 +3053,10 @@ contenuti del mondo</value>
     <value>Sono {} parole — una frase seed è di 12 o 24 parole</value>
     <comment>Login: warning when the pasted seedphrase has {count} words instead of 12 or 24.</comment>
   </data>
+  <data name="seeker_token_not_found" xml:space="preserve">
+    <value>Nessun token Seeker o Saga trovato nel wallet …{}</value>
+    <comment>Seeker token verification: the wallet holds no Seeker or Saga token. The argument is the end of the wallet address.</comment>
+  </data>
   <data name="seeker_token_verified" xml:space="preserve">
     <value>Token Seeker verificato!</value>
     <comment>Call to action</comment>

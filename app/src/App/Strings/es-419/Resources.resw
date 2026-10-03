@@ -2629,6 +2629,10 @@ del mundo</value>
     <value>¿Seguro? Esta es la ÚNICA vez que verás tu frase semilla. Asegúrate de haberla guardado antes de volver.</value>
     <comment>Instant account creation: body of the confirmation shown when the user tries to leave the seedphrase screen without saving.</comment>
   </data>
+  <data name="seeker_token_not_found" xml:space="preserve">
+    <value>No se encontró ningún token Seeker o Saga en la billetera …{}</value>
+    <comment>Seeker token verification: the wallet holds no Seeker or Saga token. The argument is the end of the wallet address.</comment>
+  </data>
   <data name="seeker_token_verified" xml:space="preserve">
     <value>¡Token Seeker verificado!</value>
     <comment>Call to action</comment>
