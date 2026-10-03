@@ -650,6 +650,10 @@
     <value>Zablokowane lokalizacje</value>
     <comment>Used in Main/Account/Settings/SettingsForm-iOS.swift.</comment>
   </data>
+  <data name="blocked_locations_could_not_be_loaded" xml:space="preserve">
+    <value>Nie udało się wczytać zablokowanych lokalizacji.</value>
+    <comment>Shown on the Blocked locations screen when the list could not be fetched, above a Retry button.</comment>
+  </data>
   <data name="blocks" xml:space="preserve">
     <value>Bloki</value>
     <comment>Points leaderboard: stat tile label and sort chip. A block is one finalized payout epoch.</comment>
@@ -911,6 +915,10 @@ właściwy sposób</value>
   <data name="connectivity_label" xml:space="preserve">
     <value>Łączność</value>
     <comment>Settings</comment>
+  </data>
+  <data name="contact_support_at_support_ur_io" xml:space="preserve">
+    <value>Skontaktuj się z pomocą techniczną: [support@ur.io](mailto:support@ur.io)</value>
+    <comment>An email alternative to the Discord support link on the Feedback and Settings screens. The email address and link must stay unchanged.</comment>
   </data>
   <data name="continue_txt" xml:space="preserve">
     <value>Kontynuuj</value>
@@ -2885,6 +2893,10 @@ zdecentralizowanym na świecie protokole wejścia i wyjścia.</value>
     <value>Ten kod został już wykorzystany</value>
     <comment>Call to action</comment>
   </data>
+  <data name="referral_code_load_failed" xml:space="preserve">
+    <value>Nie udało się wczytać Twojego kodu polecającego.</value>
+    <comment>Shown in the referral panel in place of the code when fetching the referral code failed; a Retry button follows.</comment>
+  </data>
   <data name="referral_crowned_congrats.one" xml:space="preserve">
     <value>Dołączył znajomy — zarabiasz +{1} GiB/dzień, na całe życie.</value>
     <comment>Crowned status line on the gold refer overlay once the network has referrals. {count} is total referrals, {data} the total daily GiB the referrer earns (min(count, 20) × 3).</comment>
@@ -3191,6 +3203,14 @@ treść świata</value>
   <data name="seeker_token_verified" xml:space="preserve">
     <value>Token Seeker zweryfikowany!</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="seeker_verify_failed" xml:space="preserve">
+    <value>Nie udało się zweryfikować tokena Seeker. Spróbuj ponownie.</value>
+    <comment>Seeker token verification failed (wallet app error, the server could not be reached, the signature did not verify, or the token lookup failed).</comment>
+  </data>
+  <data name="seeker_verify_no_wallet_app" xml:space="preserve">
+    <value>Na tym urządzeniu nie znaleziono aplikacji portfela Solana.</value>
+    <comment>Seeker token verification: no Solana wallet app is installed to sign the verification message.</comment>
   </data>
   <data name="select_country_to_block" xml:space="preserve">
     <value>Wybierz kraj do zablokowania</value>
@@ -4065,7 +4085,7 @@ takiego, jakim powinien być.</value>
   </data>
   <data name="verification_code_sent_2" xml:space="preserve">
     <value>Kod weryfikacyjny został wysłany.</value>
-    <comment>Snackbar shown after the verification code is resent. Used in Authenticate/CreateNetworkVerify/CreateNetworkVerifyView.swift.</comment>
+    <comment>Snackbar (apple) / toast (android) shown after the verification code is resent. Used in Authenticate/CreateNetworkVerify/CreateNetworkVerifyView.swift and android LoginVerify.kt.</comment>
   </data>
   <data name="verified_project_on" xml:space="preserve">
     <value>Zweryfikowany projekt na {}</value>

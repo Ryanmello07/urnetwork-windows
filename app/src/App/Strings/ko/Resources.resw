@@ -626,6 +626,10 @@
     <value>차단된 위치</value>
     <comment>Used in Main/Account/Settings/SettingsForm-iOS.swift.</comment>
   </data>
+  <data name="blocked_locations_could_not_be_loaded" xml:space="preserve">
+    <value>차단된 위치를 불러올 수 없습니다.</value>
+    <comment>Shown on the Blocked locations screen when the list could not be fetched, above a Retry button.</comment>
+  </data>
   <data name="blocks" xml:space="preserve">
     <value>블록</value>
     <comment>Points leaderboard: stat tile label and sort chip. A block is one finalized payout epoch.</comment>
@@ -875,6 +879,10 @@
   <data name="connectivity_label" xml:space="preserve">
     <value>연결성</value>
     <comment>Settings</comment>
+  </data>
+  <data name="contact_support_at_support_ur_io" xml:space="preserve">
+    <value>고객 지원 문의: [support@ur.io](mailto:support@ur.io)</value>
+    <comment>An email alternative to the Discord support link on the Feedback and Settings screens. The email address and link must stay unchanged.</comment>
   </data>
   <data name="continue_txt" xml:space="preserve">
     <value>계속</value>
@@ -2741,6 +2749,10 @@
     <value>이 코드는 이미 모두 사용되었습니다</value>
     <comment>Call to action</comment>
   </data>
+  <data name="referral_code_load_failed" xml:space="preserve">
+    <value>추천 코드를 불러올 수 없습니다.</value>
+    <comment>Shown in the referral panel in place of the code when fetching the referral code failed; a Retry button follows.</comment>
+  </data>
   <data name="referral_crowned_congrats.other" xml:space="preserve">
     <value>친구 {0}명이 가입했습니다. 평생 +{1} GiB/일을 받는 중.</value>
     <comment>Crowned status line on the gold refer overlay once the network has referrals. {count} is total referrals, {data} the total daily GiB the referrer earns (min(count, 20) × 3).</comment>
@@ -3011,6 +3023,14 @@
   <data name="seeker_token_verified" xml:space="preserve">
     <value>Seeker 토큰이 인증되었습니다!</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="seeker_verify_failed" xml:space="preserve">
+    <value>Seeker 토큰을 확인할 수 없습니다. 다시 시도해 주세요.</value>
+    <comment>Seeker token verification failed (wallet app error, the server could not be reached, the signature did not verify, or the token lookup failed).</comment>
+  </data>
+  <data name="seeker_verify_no_wallet_app" xml:space="preserve">
+    <value>이 기기에서 Solana 지갑 앱을 찾을 수 없습니다.</value>
+    <comment>Seeker token verification: no Solana wallet app is installed to sign the verification message.</comment>
   </data>
   <data name="select_country_to_block" xml:space="preserve">
     <value>차단할 국가 선택</value>
@@ -3861,7 +3881,7 @@
   </data>
   <data name="verification_code_sent_2" xml:space="preserve">
     <value>인증 코드를 보냈습니다.</value>
-    <comment>Snackbar shown after the verification code is resent. Used in Authenticate/CreateNetworkVerify/CreateNetworkVerifyView.swift.</comment>
+    <comment>Snackbar (apple) / toast (android) shown after the verification code is resent. Used in Authenticate/CreateNetworkVerify/CreateNetworkVerifyView.swift and android LoginVerify.kt.</comment>
   </data>
   <data name="verified_project_on" xml:space="preserve">
     <value>{}에서 인증된 프로젝트</value>

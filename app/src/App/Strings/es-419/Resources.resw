@@ -382,6 +382,10 @@
     <value>Ubicaciones bloqueadas</value>
     <comment>Used in Main/Account/Settings/SettingsForm-iOS.swift.</comment>
   </data>
+  <data name="blocked_locations_could_not_be_loaded" xml:space="preserve">
+    <value>No se pudieron cargar las ubicaciones bloqueadas.</value>
+    <comment>Shown on the Blocked locations screen when the list could not be fetched, above a Retry button.</comment>
+  </data>
   <data name="bonus_referral_code_copied_to_clipboard" xml:space="preserve">
     <value>Código de referencia de bonificación copiado al portapapeles</value>
     <comment>Snackbar shown after copying the bonus referral code. Used in Shared/Views/Introduction/ParticipateReferView.swift, Main/Account/Settings/SettingsForm-iOS.swift and Main/Account/Settings/SettingsForm-macOS.swift.</comment>
@@ -615,6 +619,10 @@ de la manera correcta</value>
   <data name="connectivity_label" xml:space="preserve">
     <value>Conectividad</value>
     <comment>Settings</comment>
+  </data>
+  <data name="contact_support_at_support_ur_io" xml:space="preserve">
+    <value>Contacta a soporte en [support@ur.io](mailto:support@ur.io)</value>
+    <comment>An email alternative to the Discord support link on the Feedback and Settings screens. The email address and link must stay unchanged.</comment>
   </data>
   <data name="continue_txt" xml:space="preserve">
     <value>Continuar</value>
@@ -2393,6 +2401,10 @@ más grande, seguro y descentralizado del mundo.</value>
     <value>Este código ya ha sido utilizado</value>
     <comment>Call to action</comment>
   </data>
+  <data name="referral_code_load_failed" xml:space="preserve">
+    <value>No se pudo cargar tu código de referido.</value>
+    <comment>Shown in the referral panel in place of the code when fetching the referral code failed; a Retry button follows.</comment>
+  </data>
   <data name="referral_crowned_congrats.one" xml:space="preserve">
     <value>Un amigo se ha unido: ganas +{1} GiB/día, de por vida.</value>
     <comment>Crowned status line on the gold refer overlay once the network has referrals. {count} is total referrals, {data} the total daily GiB the referrer earns (min(count, 20) × 3).</comment>
@@ -2648,6 +2660,14 @@ del mundo</value>
   <data name="seeker_token_verified" xml:space="preserve">
     <value>¡Token Seeker verificado!</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="seeker_verify_failed" xml:space="preserve">
+    <value>No se pudo verificar el token Seeker. Inténtalo de nuevo.</value>
+    <comment>Seeker token verification failed (wallet app error, the server could not be reached, the signature did not verify, or the token lookup failed).</comment>
+  </data>
+  <data name="seeker_verify_no_wallet_app" xml:space="preserve">
+    <value>No se encontró ninguna app de billetera Solana en este dispositivo.</value>
+    <comment>Seeker token verification: no Solana wallet app is installed to sign the verification message.</comment>
   </data>
   <data name="select_country_to_block" xml:space="preserve">
     <value>Selecciona el país para bloquear</value>
@@ -3470,7 +3490,7 @@ como debería ser.</value>
   </data>
   <data name="verification_code_sent_2" xml:space="preserve">
     <value>Código de verificación enviado.</value>
-    <comment>Snackbar shown after the verification code is resent. Used in Authenticate/CreateNetworkVerify/CreateNetworkVerifyView.swift.</comment>
+    <comment>Snackbar (apple) / toast (android) shown after the verification code is resent. Used in Authenticate/CreateNetworkVerify/CreateNetworkVerifyView.swift and android LoginVerify.kt.</comment>
   </data>
   <data name="verified_project_on" xml:space="preserve">
     <value>Proyecto verificado en {}</value>

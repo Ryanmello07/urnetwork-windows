@@ -74,7 +74,7 @@
   </data>
   <data name="account_isn_t_ready_for_purchases" xml:space="preserve">
     <value>Ваш аккаунт пока не готов к покупкам. Перезапустите приложение и попробуйте снова.</value>
-    <comment>Shown when a purchase is refused before contacting the App Store because the networkId is missing or unparseable — the purchase could never be credited to anyone (Shared/ViewModels/AppStoreSubscriptionManager.swift). This used to be a silent no-op.</comment>
+    <comment>Shown when a purchase is refused before contacting the store because the account is not ready: on apple the networkId is missing or unparseable (Shared/ViewModels/AppStoreSubscriptionManager.swift), on android the active network space has no api yet (the Stripe sheet and pay page purchasers). The purchase could never be credited to anyone. This used to be a silent no-op.</comment>
   </data>
   <data name="account_needs_verification" xml:space="preserve">
     <value>Этот аккаунт требует подтверждения. Проверьте свою электронную почту.</value>
@@ -531,7 +531,7 @@
     <comment>A message that displays the first and last six characters of an auth code.</comment>
   </data>
   <data name="auth_code_create" xml:space="preserve">
-    <value>Создать код авторизации</value>
+    <value>Создать код аутентификации</value>
     <comment>Used in Main/Account/Settings/AuthCodeCreate/AuthCodeCreate.swift.</comment>
   </data>
   <data name="auth_code_created" xml:space="preserve">
@@ -555,7 +555,7 @@
     <comment>Auth code input label</comment>
   </data>
   <data name="auth_code_loading" xml:space="preserve">
-    <value>Загрузка кода авторизации</value>
+    <value>Загрузка кода аутентификации</value>
     <comment>Call to action</comment>
   </data>
   <data name="auth_code_login_button_text" xml:space="preserve">
@@ -698,6 +698,10 @@
     <value>Заблокированные локации</value>
     <comment>Used in Main/Account/Settings/SettingsForm-iOS.swift.</comment>
   </data>
+  <data name="blocked_locations_could_not_be_loaded" xml:space="preserve">
+    <value>Не удалось загрузить заблокированные местоположения.</value>
+    <comment>Shown on the Blocked locations screen when the list could not be fetched, above a Retry button.</comment>
+  </data>
   <data name="blocks" xml:space="preserve">
     <value>Блоки</value>
     <comment>Points leaderboard: stat tile label and sort chip. A block is one finalized payout epoch.</comment>
@@ -733,7 +737,7 @@
     <comment>Onboarding Carousel</comment>
   </data>
   <data name="by_default_you_get_10_gib_month_here_s_how_you" xml:space="preserve">
-    <value>По умолчанию вы получаете 10 ГиБ/месяц. Вот как можно заработать дополнительную пропускную способность:</value>
+    <value>По умолчанию вы получаете 10 GiB/месяц. Вот как можно заработать дополнительную пропускную способность:</value>
     <comment>Used in Shared/Views/Introduction/IntroductionUsageBar.swift.</comment>
   </data>
   <data name="by_subscribing_you_agree_to_urnetwork_s_terms" xml:space="preserve">
@@ -1064,6 +1068,10 @@
     <value>Подключение</value>
     <comment>Settings</comment>
   </data>
+  <data name="contact_support_at_support_ur_io" xml:space="preserve">
+    <value>Свяжитесь с поддержкой: [support@ur.io](mailto:support@ur.io)</value>
+    <comment>An email alternative to the Discord support link on the Feedback and Settings screens. The email address and link must stay unchanged.</comment>
+  </data>
   <data name="continue_txt" xml:space="preserve">
     <value>Продолжить</value>
     <comment>Continue button label.</comment>
@@ -1189,7 +1197,7 @@
     <comment>Call to action</comment>
   </data>
   <data name="created_auth_codes_expire_after_5_minutes" xml:space="preserve">
-    <value>Созданные коды авторизации истекают через 5 минут</value>
+    <value>Созданные коды аутентификации истекают через 5 минут</value>
     <comment>Used in Main/Account/Settings/SettingsForm-iOS.swift.</comment>
   </data>
   <data name="current_api_n" xml:space="preserve">
@@ -2931,7 +2939,7 @@
     <comment>Label for the IPv6 list of DNS servers.</comment>
   </data>
   <data name="its_nice_to_see_you_again" xml:space="preserve">
-    <value>Приятно снова тебя видеть</value>
+    <value>Приятно снова вас видеть</value>
     <comment>	Greeting text on Enter user auth password screen.</comment>
   </data>
   <data name="join_community_discord" xml:space="preserve">
@@ -3719,7 +3727,7 @@
   </data>
   <data name="payment_confirmation_delayed" xml:space="preserve">
     <value>Подтверждение занимает больше времени, чем ожидалось. Ваш тариф обновится автоматически, как только оплата будет подтверждена, — покупать повторно не нужно.</value>
-    <comment>Shown when the post-payment confirmation poll exhausts its budget (2 minutes) without the server confirming the subscription. The payment evidence is real (store or payment sheet reported success), so say that plainly, and head off a second purchase.</comment>
+    <comment>Shown when the post-payment confirmation poll exhausts its budget (2 minutes) without the server confirming the subscription. The payment evidence is real (store or payment sheet reported success), so say that plainly, and head off a second purchase. Android also shows it, without the "Payment received" title, when the 2-minute Solana Pay return-path check ends without the payment landing.</comment>
   </data>
   <data name="payment_confirmation_processing" xml:space="preserve">
     <value>Мы подтверждаем ваш платёж. Ваш тариф обновится автоматически — ничего делать не нужно.</value>
@@ -4137,7 +4145,7 @@
     <comment>Used in Shared/Views/Introduction/IntroductionUsageBar.swift.</comment>
   </data>
   <data name="refer_a_friend_30_gib_month" xml:space="preserve">
-    <value>Порекомендовать друга = +30 ГиБ/месяц</value>
+    <value>Порекомендовать друга = +30 GiB/месяц</value>
     <comment>Used in Shared/Views/Introduction/IntroductionUsageBar.swift.</comment>
   </data>
   <data name="refer_a_friend_3_gib_day" xml:space="preserve">
@@ -4212,6 +4220,10 @@
     <value>Этот код уже был использован</value>
     <comment>Call to action</comment>
   </data>
+  <data name="referral_code_load_failed" xml:space="preserve">
+    <value>Не удалось загрузить ваш реферальный код.</value>
+    <comment>Shown in the referral panel in place of the code when fetching the referral code failed; a Retry button follows.</comment>
+  </data>
   <data name="referral_crowned_congrats.one" xml:space="preserve">
     <value>Присоединился друг — вы получаете +{1} GiB в день, навсегда.</value>
     <comment>Crowned status line on the gold refer overlay once the network has referrals. {count} is total referrals, {data} the total daily GiB the referrer earns (min(count, 20) × 3).</comment>
@@ -4237,7 +4249,7 @@
     <comment>Snackbar on the Referrals screen after the referral network was changed.</comment>
   </data>
   <data name="referral_panel_detail" xml:space="preserve">
-    <value>Каждый подтверждённый реферал даёт каждому из вас по {} ГиБ в день бесплатно, навсегда.</value>
+    <value>Каждый подтверждённый реферал даёт каждому из вас по {} GiB в день бесплатно, навсегда.</value>
     <comment>Detail line of the gold referral panel. The amount is the daily GiB each side earns per verified referral (pro.yml referral).</comment>
   </data>
   <data name="referral_panel_heading" xml:space="preserve">
@@ -4249,7 +4261,7 @@
     <comment>Status line of the gold referral panel while the network has no referral yet.</comment>
   </data>
   <data name="referral_points" xml:space="preserve">
-    <value>Реферальные баллы</value>
+    <value>Реферальные очки</value>
     <comment>Referrals screen: label of the points a network earned from its referrals (the payout_linked_account points), shown next to the total referral count.</comment>
   </data>
   <data name="referral_progress_of_five" xml:space="preserve">
@@ -4324,7 +4336,7 @@
     <comment>A description of the benefits of providing.</comment>
   </data>
   <data name="reliability_weight" xml:space="preserve">
-    <value>надёжности</value>
+    <value>Вес надёжности</value>
     <comment>Call to action</comment>
   </data>
   <data name="reliability_with_value" xml:space="preserve">
@@ -4571,6 +4583,14 @@
     <value>Токен Seeker проверен!</value>
     <comment>Call to action</comment>
   </data>
+  <data name="seeker_verify_failed" xml:space="preserve">
+    <value>Не удалось проверить токен Seeker. Попробуйте ещё раз.</value>
+    <comment>Seeker token verification failed (wallet app error, the server could not be reached, the signature did not verify, or the token lookup failed).</comment>
+  </data>
+  <data name="seeker_verify_no_wallet_app" xml:space="preserve">
+    <value>На этом устройстве не найдено приложение кошелька Solana.</value>
+    <comment>Seeker token verification: no Solana wallet app is installed to sign the verification message.</comment>
+  </data>
   <data name="select_country_to_block" xml:space="preserve">
     <value>Выберите страну для блокировки</value>
     <comment>Used in Main/Account/BlockedLocations/BlockedLocationsView.swift.</comment>
@@ -4790,11 +4810,11 @@
     <comment>App connect: allowed count label</comment>
   </data>
   <data name="site_app_auth_code_limit" xml:space="preserve">
-    <value>Достигнут лимит кодов авторизации. Попробуйте позже.</value>
+    <value>Достигнут лимит кодов аутентификации. Попробуйте позже.</value>
     <comment>App settings: auth code limit error</comment>
   </data>
   <data name="site_app_auth_code_note" xml:space="preserve">
-    <value>Созданные коды авторизации истекают через 5 минут</value>
+    <value>Созданные коды аутентификации истекают через 5 минут</value>
     <comment>App settings: auth code expiry note</comment>
   </data>
   <data name="site_app_average_reliability" xml:space="preserve">
@@ -4926,7 +4946,7 @@
     <comment>Reliability: country multipliers heading</comment>
   </data>
   <data name="site_app_create_auth_code" xml:space="preserve">
-    <value>Создать код авторизации</value>
+    <value>Создать код аутентификации</value>
     <comment>App settings: create auth code button</comment>
   </data>
   <data name="site_app_created" xml:space="preserve">
@@ -5969,6 +5989,10 @@
     <value>Оплата в USDC в сети Solana — это разовый годовой платёж без бесплатного пробного периода.</value>
     <comment>Note under the Solana payment button on the plan picker: Solana is a one-time yearly payment, the free trial is Stripe only.</comment>
   </data>
+  <data name="solana_payment_still_checking" xml:space="preserve">
+    <value>Всё ещё проверяем ваш платёж в Solana. Подтверждение в сети может занять минуту-две.</value>
+    <comment>Shown once when the check for a Solana Pay payment (started when the app returns from the wallet) has run 20 seconds without the payment landing. The check keeps going for up to two minutes; the app cannot know whether the wallet actually sent anything, so do not say the payment was received.</comment>
+  </data>
   <data name="solana_sign_in" xml:space="preserve">
     <value>Войти через Solana</value>
     <comment>Call to action</comment>
@@ -6198,7 +6222,7 @@
     <comment>Locations List</comment>
   </data>
   <data name="terms_checkbox" xml:space="preserve">
-    <value>Я принимаю {terms_start}Условия и Услуги{terms_end} и {privacy_start}Политику конфиденциальности{privacy_end} URnetwork</value>
+    <value>Я принимаю {terms_start}Условия обслуживания{terms_end} и {privacy_start}Политику конфиденциальности{privacy_end} URnetwork</value>
     <comment>Label for the terms and conditions acceptance checkbox. It should read like "I agree to URnetwork's &lt;link&gt;Terms and Services&lt;/link&gt; and &lt;link&gt;Privacy Policy&lt;/link&gt;"  The {terms_start} and {terms_end} markers wrap the "Terms and Services" text. The {privacy_start} and {privacy_end} markers wrap the "Privacy Policy" text.  Platform-specific rendering: - Web: Replace {terms_start} with &lt;a href="/terms"&gt;, {terms_end} with &lt;/a&gt;, etc. - iOS: Use these markers to identify ranges for NSAttributedString link attributes - Android: Use these markers to identify ranges for ClickableSpan </comment>
   </data>
   <data name="test_animation" xml:space="preserve">
@@ -6226,7 +6250,7 @@
     <comment>Used in Authenticate/LoginInitial/LoginInitialView.swift.</comment>
   </data>
   <data name="there_was_an_error_validating_your_auth_code" xml:space="preserve">
-    <value>Ошибка при проверке вашего кода авторизации. Пожалуйста, попробуйте снова или сгенерируйте новый.</value>
+    <value>Ошибка при проверке вашего кода аутентификации. Пожалуйста, попробуйте снова или сгенерируйте новый.</value>
     <comment>Used in Authenticate/LoginInitial/AuthCodeLoginSheet.swift.</comment>
   </data>
   <data name="this_is_the_only_time_you_ll" xml:space="preserve">
@@ -6583,7 +6607,7 @@
   </data>
   <data name="verification_code_sent_2" xml:space="preserve">
     <value>Код подтверждения отправлен.</value>
-    <comment>Snackbar shown after the verification code is resent. Used in Authenticate/CreateNetworkVerify/CreateNetworkVerifyView.swift.</comment>
+    <comment>Snackbar (apple) / toast (android) shown after the verification code is resent. Used in Authenticate/CreateNetworkVerify/CreateNetworkVerifyView.swift and android LoginVerify.kt.</comment>
   </data>
   <data name="verified_project_on" xml:space="preserve">
     <value>Проверенный проект на {}</value>
@@ -6726,7 +6750,7 @@
     <comment>Call to action</comment>
   </data>
   <data name="when_unlinking_your_referral_network_you_will_no" xml:space="preserve">
-    <value>При отключении вашей реферальной сети вы больше не сможете получать баллы от {}.</value>
+    <value>При отключении вашей реферальной сети вы больше не сможете получать очки от {}.</value>
     <comment>Used in Main/Account/Settings/UpdateReferralNetworkSheet/UpdateReferralNetworkSheet.swift.</comment>
   </data>
   <data name="when_you_refer_a_friend" xml:space="preserve">
@@ -6918,7 +6942,7 @@
     <comment>Call to action</comment>
   </data>
   <data name="you_get_30_gib_month_for_life" xml:space="preserve">
-    <value>Вы получаете 30 ГиБ/месяц навсегда</value>
+    <value>Вы получаете 30 GiB/месяц навсегда</value>
     <comment>Used in Shared/Views/Introduction/ParticipateReferView.swift.</comment>
   </data>
   <data name="you_get_3_gib_day_for_life" xml:space="preserve">
@@ -6964,7 +6988,7 @@
     <comment>Placeholder text for the email field.</comment>
   </data>
   <data name="your_friend_gets_30_gib_month_for_life" xml:space="preserve">
-    <value>Ваш друг получает 30 ГиБ/месяц навсегда</value>
+    <value>Ваш друг получает 30 GiB/месяц навсегда</value>
     <comment>Used in Shared/Views/Introduction/ParticipateReferView.swift.</comment>
   </data>
   <data name="your_friend_gets_3_gib_day_for" xml:space="preserve">

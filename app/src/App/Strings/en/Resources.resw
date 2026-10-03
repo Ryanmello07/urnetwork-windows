@@ -74,7 +74,7 @@
   </data>
   <data name="account_isn_t_ready_for_purchases" xml:space="preserve">
     <value>Your account isn't ready for purchases. Please restart the app and try again.</value>
-    <comment>Shown when a purchase is refused before contacting the App Store because the networkId is missing or unparseable — the purchase could never be credited to anyone (Shared/ViewModels/AppStoreSubscriptionManager.swift). This used to be a silent no-op.</comment>
+    <comment>Shown when a purchase is refused before contacting the store because the account is not ready: on apple the networkId is missing or unparseable (Shared/ViewModels/AppStoreSubscriptionManager.swift), on android the active network space has no api yet (the Stripe sheet and pay page purchasers). The purchase could never be credited to anyone. This used to be a silent no-op.</comment>
   </data>
   <data name="account_needs_verification" xml:space="preserve">
     <value>This account needs verification. Check your email.</value>
@@ -709,6 +709,10 @@
     <value>Blocked</value>
     <comment>Label for the blocked traffic relayed for remote clients.</comment>
   </data>
+  <data name="blocked_location_block_failed" xml:space="preserve">
+    <value>Couldn't block {}. Please try again.</value>
+    <comment>Blocked locations: blocking a location failed. The argument is the location name.</comment>
+  </data>
   <data name="blocked_location_could_not_be_added_please_try" xml:space="preserve">
     <value>Blocked location could not be added. Please try again later.</value>
     <comment>Used in Main/Account/BlockedLocations/BlockedLocationsViewModel.swift.</comment>
@@ -717,6 +721,10 @@
     <value>Blocked location could not be removed. Please try again later.</value>
     <comment>Used in Main/Account/BlockedLocations/BlockedLocationsViewModel.swift.</comment>
   </data>
+  <data name="blocked_location_unblock_failed" xml:space="preserve">
+    <value>Couldn't unblock {}. Please try again.</value>
+    <comment>Blocked locations: unblocking a location failed, so it is back in the list. The argument is the location name.</comment>
+  </data>
   <data name="blocked_locations" xml:space="preserve">
     <value>Blocked Locations</value>
     <comment>Call to action</comment>
@@ -724,6 +732,14 @@
   <data name="blocked_locations_2" xml:space="preserve">
     <value>Blocked locations</value>
     <comment>Used in Main/Account/Settings/SettingsForm-iOS.swift.</comment>
+  </data>
+  <data name="blocked_locations_could_not_be_loaded" xml:space="preserve">
+    <value>Blocked locations could not be loaded.</value>
+    <comment>Shown on the Blocked locations screen when the list could not be fetched, above a Retry button.</comment>
+  </data>
+  <data name="blocked_locations_load_failed" xml:space="preserve">
+    <value>Couldn't load your blocked locations. Pull down to try again.</value>
+    <comment>Blocked locations: the list could not be loaded.</comment>
   </data>
   <data name="blocks" xml:space="preserve">
     <value>Blocks</value>
@@ -1098,6 +1114,10 @@ right way</value>
   <data name="connectivity_label" xml:space="preserve">
     <value>Connectivity</value>
     <comment>Settings</comment>
+  </data>
+  <data name="contact_support_at_support_ur_io" xml:space="preserve">
+    <value>Contact support at [support@ur.io](mailto:support@ur.io)</value>
+    <comment>An email alternative to the Discord support link on the Feedback and Settings screens. The email address and link must stay unchanged.</comment>
   </data>
   <data name="continue_txt" xml:space="preserve">
     <value>Continue</value>
@@ -4166,7 +4186,7 @@ and most decentralized ingress and egress protocol.</value>
   </data>
   <data name="payment_confirmation_delayed" xml:space="preserve">
     <value>Confirmation is taking longer than expected. Your plan will update automatically once it's confirmed — there's no need to buy again.</value>
-    <comment>Shown when the post-payment confirmation poll exhausts its budget (2 minutes) without the server confirming the subscription. The payment evidence is real (store or payment sheet reported success), so say that plainly, and head off a second purchase.</comment>
+    <comment>Shown when the post-payment confirmation poll exhausts its budget (2 minutes) without the server confirming the subscription. The payment evidence is real (store or payment sheet reported success), so say that plainly, and head off a second purchase. Android also shows it, without the "Payment received" title, when the 2-minute Solana Pay return-path check ends without the payment landing.</comment>
   </data>
   <data name="payment_confirmation_processing" xml:space="preserve">
     <value>We're confirming your payment now. Your plan will update automatically — you don't need to do anything.</value>
@@ -4706,6 +4726,10 @@ and most decentralized ingress and egress protocol.</value>
     <value>This code has been used up</value>
     <comment>Call to action</comment>
   </data>
+  <data name="referral_code_load_failed" xml:space="preserve">
+    <value>Your referral code could not be loaded.</value>
+    <comment>Shown in the referral panel in place of the code when fetching the referral code failed; a Retry button follows.</comment>
+  </data>
   <data name="referral_crowned_congrats.zero" xml:space="preserve">
     <value>{0} friends have joined — you're earning +{1} GiB/day, for life.</value>
     <comment>Crowned status line on the gold refer overlay once the network has referrals. {count} is total referrals, {data} the total daily GiB the referrer earns (min(count, 20) × 3).</comment>
@@ -5091,7 +5115,7 @@ world's content</value>
   </data>
   <data name="seeker_verify_failed" xml:space="preserve">
     <value>Couldn't verify the Seeker token. Please try again.</value>
-    <comment>Seeker token verification failed (wallet app error or the server could not be reached).</comment>
+    <comment>Seeker token verification failed (wallet app error, the server could not be reached, the signature did not verify, or the token lookup failed).</comment>
   </data>
   <data name="seeker_verify_no_wallet_app" xml:space="preserve">
     <value>No Solana wallet app was found on this device.</value>
@@ -6515,6 +6539,10 @@ world's content</value>
     <value>Paying with USDC on Solana is a one-time yearly payment, with no free trial.</value>
     <comment>Note under the Solana payment button on the plan picker: Solana is a one-time yearly payment, the free trial is Stripe only.</comment>
   </data>
+  <data name="solana_payment_still_checking" xml:space="preserve">
+    <value>Still checking for your Solana payment. Confirmation on the network can take a minute or two.</value>
+    <comment>Shown once when the check for a Solana Pay payment (started when the app returns from the wallet) has run 20 seconds without the payment landing. The check keeps going for up to two minutes; the app cannot know whether the wallet actually sent anything, so do not say the payment was received.</comment>
+  </data>
   <data name="solana_sign_in" xml:space="preserve">
     <value>Sign in with Solana</value>
     <comment>Call to action</comment>
@@ -7175,7 +7203,7 @@ as it should be.</value>
   </data>
   <data name="verification_code_sent_2" xml:space="preserve">
     <value>Verification code sent.</value>
-    <comment>Snackbar shown after the verification code is resent. Used in Authenticate/CreateNetworkVerify/CreateNetworkVerifyView.swift.</comment>
+    <comment>Snackbar (apple) / toast (android) shown after the verification code is resent. Used in Authenticate/CreateNetworkVerify/CreateNetworkVerifyView.swift and android LoginVerify.kt.</comment>
   </data>
   <data name="verified_project_on" xml:space="preserve">
     <value>Verified project on {}</value>
