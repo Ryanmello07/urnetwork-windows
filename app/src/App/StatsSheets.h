@@ -162,7 +162,9 @@ class SplitRulesSheet : public std::enable_shared_from_this<SplitRulesSheet> {
   void RenderRules();
   void RenderActivity();
   void OpenEditorForRule(const SplitRule& rule);
-  void OpenEditorForAction(const BlockActionItem& action);
+  // selectAll pre-checks every host value when creating a new rule (the
+  // "Route locally" offer); the row tap leaves them unchecked
+  void OpenEditorForAction(const BlockActionItem& action, bool selectAll = false);
   void OpenEditor(std::string ruleId, std::vector<std::string> candidates,
                   std::set<std::string> selected);
   void ShowList();

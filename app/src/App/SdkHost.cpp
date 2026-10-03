@@ -3400,6 +3400,7 @@ void SdkHost::PublishBlockActions() {
       if (it->OverrideId) item.overrideId = *it->OverrideId;
       item.hasBlockOverride = it->BlockOverride.has_value();
       item.hasRouteOverride = it->RouteOverride.has_value();
+      item.reason = it->Reason;
       item.packetCount = it->PacketCount;
       item.byteCount = it->ByteCount;
       items.push_back(std::move(item));

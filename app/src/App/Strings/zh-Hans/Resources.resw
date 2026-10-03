@@ -108,6 +108,10 @@
     <value>添加表情</value>
     <comment>Points leaderboard: button that opens the emoji tag editor when no tag is set yet.</comment>
   </data>
+  <data name="add_local_split_rule" xml:space="preserve">
+    <value>本地路由</value>
+    <comment>Call to action on a split-rule activity row blocked by URnetwork safety rules: create a local split rule for its hosts.</comment>
+  </data>
   <data name="add_referral_code" xml:space="preserve">
     <value>添加推荐码</value>
     <comment>Call to action</comment>
@@ -2818,6 +2822,10 @@
     <value>VPN 连接期间，即使开启了断网保护，IPv6 流量也不会经由 URnetwork 路由，可能会使用您的本地网络。通过 TCP 端口 25 的出站 SMTP 也会绕过 VPN。这些例外可能会向相应目标暴露您本地的公网 IP。端口 465 和 587 上的 SMTP 仍在 VPN 内，并且必须建立 TLS。</value>
     <comment>Explains the deliberate IPv6 and SMTP exceptions to the VPN kill switch and the encrypted SMTP behavior.</comment>
   </data>
+  <data name="kill_switch_exception_unrecognized_encrypted" xml:space="preserve">
+    <value>关闭断网保护时，被 URnetwork 安全规则挡在网络之外的流量（例如无法识别的加密协议）会绕过 VPN 并使用您本地的公网 IP。开启断网保护时，这些流量会被阻止。</value>
+    <comment>Explains that, with the kill switch off, traffic URnetwork safety rules keep off the network (such as unrecognized encrypted protocols) bypasses the VPN.</comment>
+  </data>
   <data name="launch" xml:space="preserve">
     <value>启动</value>
     <comment>Button text for entering the one-time authentication code and entering the app</comment>
@@ -4181,6 +4189,14 @@
   <data name="rules" xml:space="preserve">
     <value>规则</value>
     <comment>A heading for the pinned split rules.</comment>
+  </data>
+  <data name="safety_rule" xml:space="preserve">
+    <value>安全规则</value>
+    <comment>A short label on a blocked or locally routed split-rule activity row whose traffic URnetwork safety rules kept off the network.</comment>
+  </data>
+  <data name="safety_rule_detail" xml:space="preserve">
+    <value>URnetwork 安全规则会将此流量挡在网络之外，例如它无法识别的加密协议。本地分流规则会通过您自己的 IP 在 VPN 之外发送它。</value>
+    <comment>Explains a split-rule activity row that URnetwork safety rules kept off the network, and how a local split rule can use it outside the VPN.</comment>
   </data>
   <data name="save" xml:space="preserve">
     <value>保存</value>

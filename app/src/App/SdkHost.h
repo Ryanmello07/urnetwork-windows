@@ -264,6 +264,9 @@ struct BlockActionItem {
   bool hasRouteOverride = false;
   int64_t packetCount = 0;
   int64_t byteCount = 0;
+  // what decided the action (sdk BlockAction.Reason, a BlockActionReason value;
+  // "" for ordinary provider-routed traffic). See BlockActionReason.h.
+  std::string reason;
 };
 
 inline bool operator==(const BlockActionItem& a, const BlockActionItem& b) {
@@ -272,7 +275,7 @@ inline bool operator==(const BlockActionItem& a, const BlockActionItem& b) {
          a.matchedIps == b.matchedIps && a.block == b.block && a.local == b.local &&
          a.overrideId == b.overrideId && a.hasBlockOverride == b.hasBlockOverride &&
          a.hasRouteOverride == b.hasRouteOverride && a.packetCount == b.packetCount &&
-         a.byteCount == b.byteCount;
+         a.byteCount == b.byteCount && a.reason == b.reason;
 }
 inline bool operator!=(const BlockActionItem& a, const BlockActionItem& b) {
   return !(a == b);
