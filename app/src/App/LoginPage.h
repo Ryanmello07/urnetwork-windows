@@ -165,6 +165,13 @@ class LoginPage {
   // A code the server did not send, on the verify step; false when it was sent
   // (the caller says so, or not, as before).
   bool ShowVerifySendError(urnw::VerifySendNotice const& notice);
+  // A reset link the server did not send, on the reset step; false when it was
+  // sent.
+  bool ShowPasswordResetError(urnw::VerifySendNotice const& notice);
+  // Counts the rate-limit notices down and turns Resend / Send back on once
+  // the retry time has passed (rateLimitTimer_ tick).
+  void RefreshRateLimits();
+  void StartRateLimitTimer();
   // the initial step's URInlineErrorText; empty message hides it
   void SetInitialLoginError(winrt::hstring const& message);
   // Get started is enabled only for a non-empty field with no discovery in
@@ -228,6 +235,16 @@ class LoginPage {
   bool bonusCapped_ = false;
   // resend-code cooldown (15s, macOS parity)
   winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer resendCooldownTimer_{nullptr};
+  // after the server refused a code / reset link for too many attempts:
+  // Resend / Send stay off until the retry time, with a 1s tick counting the
+  // notice down
+  urnw::ResendCooldown verifyRateLimit_;
+  urnw::ResendCooldown resetRateLimit_;
+  std::string resetRateLimitUserAuth_;  // the account resetRateLimit_ is for
+  // the rate-limit line last shown, so the tick only rewrites its own notice
+  winrt::hstring verifyRateLimitText_;
+  winrt::hstring resetRateLimitText_;
+  winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer rateLimitTimer_{nullptr};
 
   // seedphrase / instant-account step state (UI thread only)
   bool seedphraseLoggingIn_ = false;

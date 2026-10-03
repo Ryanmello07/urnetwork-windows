@@ -2297,7 +2297,7 @@ richtig auf</value>
   </data>
   <data name="error_sending_password_reset_link" xml:space="preserve">
     <value>Fehler beim Senden des Links zum Zurücksetzen des Passworts</value>
-    <comment>Snackbar shown when sending the password reset link fails. Used in Main/Account/Profile/ProfileView.swift.</comment>
+    <comment>Shown when sending the password reset link fails (the request failed, or the server reports it could not send the link). Used on the password reset and account screens.</comment>
   </data>
   <data name="error_sending_verification_code" xml:space="preserve">
     <value>Beim Senden des Bestätigungscodes ist ein Fehler aufgetreten.</value>
@@ -4200,6 +4200,14 @@ und am stärksten dezentralisierten Ingress- und Egress-Protokoll.</value>
   <data name="reset_it" xml:space="preserve">
     <value>Zurücksetzen</value>
     <comment>Button text for resetting password</comment>
+  </data>
+  <data name="reset_link_rate_limited.one" xml:space="preserve">
+    <value>Zu viele Versuche. Du kannst in {} Minute einen neuen Link zum Zurücksetzen anfordern.</value>
+    <comment>Password reset: the server refused to send a new password reset link because of too many recent attempts. The argument is the number of minutes until a new link can be requested.</comment>
+  </data>
+  <data name="reset_link_rate_limited.other" xml:space="preserve">
+    <value>Zu viele Versuche. Du kannst in {} Minuten einen neuen Link zum Zurücksetzen anfordern.</value>
+    <comment>Password reset: the server refused to send a new password reset link because of too many recent attempts. The argument is the number of minutes until a new link can be requested.</comment>
   </data>
   <data name="reset_link_sent" xml:space="preserve">
     <value>Link zum Zurücksetzen gesendet</value>

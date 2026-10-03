@@ -191,7 +191,8 @@ void AccountPage::ApplyAccountState(rows::FieldState state) {
   w_.NetworkNameRow().IsEnabled(loaded);
   w_.NetworkNameBox().IsEnabled(loaded);
   w_.SaveNameButton().IsEnabled(loaded);
-  changePasswordButton_.IsEnabled(loaded && !userAuth_.empty());
+  changePasswordButton_.IsEnabled(loaded && !userAuth_.empty() &&
+                                  resetRateLimit_.CanSend(urnw::ResendCooldown::Clock::now()));
   // Leaving the editor open over a card that has just lost its account would
   // offer a Save that cannot run.
   if (!loaded && editingName_) SetEditingName(false);
@@ -481,35 +482,72 @@ void AccountPage::SendPasswordReset() {
   const std::string userAuth = userAuth_;
   auto queue = w_.DispatcherQueue();
   auto weak = w_.get_weak();
-  // AuthPasswordResetResult has no error field, so a result plus no transport
-  // error is the whole success test.
-  Sdk().api().authPasswordReset(
-      [&] {
-        urnet::AuthPasswordResetArgs args;
-        args.user_auth = userAuth;
-        return args;
-      }(),
-      [queue, weak, userAuth](std::optional<urnet::AuthPasswordResetResult> result,
-                              std::optional<std::string> err) {
-        const bool ok = !err && result.has_value();
-        if (!ok) LogWarn("account: authPasswordReset failed: {}", err ? *err : std::string());
-        queue.TryEnqueue([weak, ok, userAuth] {
-          auto self = weak.get();
-          if (!self) return;
-          auto& page = self->account();
-          page.sendingReset_ = false;
-          page.changePasswordButton_.IsEnabled(true);
-          if (ok) {
-            kit::ApplySupportingText(
-                page.nameStatus_,
-                hstring{urnw::Format("password_reset_link_sent_to", urnw::Widen(userAuth))},
-                kit::ValidationState::Valid);
-            return;
-          }
-          kit::ApplySupportingText(page.nameStatus_, Loc("error_sending_password_reset_link"),
-                                   kit::ValidationState::Invalid);
-        });
-      });
+  // A link the server did not send (send failed, rate limited) comes back as
+  // the notice, not as a result that reads sent.
+  Sdk().SendPasswordResetLink(userAuth, [queue, weak, userAuth](urnw::VerifySendNotice notice) {
+    queue.TryEnqueue([weak, notice, userAuth] {
+      auto self = weak.get();
+      if (!self) return;
+      auto& page = self->account();
+      page.sendingReset_ = false;
+      const auto now = urnw::ResendCooldown::Clock::now();
+      page.resetRateLimit_.Start(notice, now);
+      page.changePasswordButton_.IsEnabled(page.resetRateLimit_.CanSend(now));
+      hstring message;
+      switch (notice.kind) {
+        case urnw::VerifySendNoticeKind::Sent:
+          kit::ApplySupportingText(
+              page.nameStatus_,
+              hstring{urnw::Format("password_reset_link_sent_to", urnw::Widen(userAuth))},
+              kit::ValidationState::Valid);
+          return;
+        case urnw::VerifySendNoticeKind::RateLimited:
+          message = hstring{urnw::Plural(urnw::PasswordResetNoticeKey(notice), notice.minutes)};
+          break;
+        case urnw::VerifySendNoticeKind::SendFailed:
+          message = Loc(urnw::PasswordResetNoticeKey(notice));
+          break;
+        case urnw::VerifySendNoticeKind::ServerMessage:
+          message = H(notice.message);
+          break;
+      }
+      kit::ApplySupportingText(page.nameStatus_, message, kit::ValidationState::Invalid);
+      page.resetRateLimitText_ = message;
+      if (page.resetRateLimit_.Armed()) {
+        if (!page.resetRateLimitTimer_) {
+          page.resetRateLimitTimer_ = page.w_.DispatcherQueue().CreateTimer();
+          page.resetRateLimitTimer_.Interval(std::chrono::seconds(1));
+          page.resetRateLimitTimer_.IsRepeating(true);
+          page.resetRateLimitTimer_.Tick([weak](auto const&, auto const&) {
+            if (auto self = weak.get()) self->account().RefreshResetRateLimit();
+          });
+        }
+        page.resetRateLimitTimer_.Start();
+      }
+    });
+  });
+}
+
+void AccountPage::RefreshResetRateLimit() {
+  const auto now = urnw::ResendCooldown::Clock::now();
+  if (!resetRateLimit_.Armed()) {
+    if (resetRateLimitTimer_) resetRateLimitTimer_.Stop();
+    return;
+  }
+  // a later save verdict may have replaced the rate-limit line
+  const bool ownsStatus = nameStatus_.Text() == resetRateLimitText_;
+  if (resetRateLimit_.CanSend(now)) {
+    resetRateLimit_.Clear();
+    if (resetRateLimitTimer_) resetRateLimitTimer_.Stop();
+    if (ownsStatus) kit::ApplySupportingText(nameStatus_, hstring{}, kit::ValidationState::NotChecked);
+    changePasswordButton_.IsEnabled(!userAuth_.empty() && Sdk().IsLoggedIn());
+    return;
+  }
+  if (ownsStatus) {
+    resetRateLimitText_ =
+        hstring{urnw::Plural("reset_link_rate_limited", resetRateLimit_.Minutes(now))};
+    kit::ApplySupportingText(nameStatus_, resetRateLimitText_, kit::ValidationState::Invalid);
+  }
 }
 
 // ---- pane D: extenders (connect/EXTENDER.md K6, K7) ------------------------

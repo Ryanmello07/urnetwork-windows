@@ -1417,7 +1417,7 @@ kwa njia sahihi</value>
   </data>
   <data name="error_sending_password_reset_link" xml:space="preserve">
     <value>Hitilafu wakati wa kutuma kiungo cha kuweka upya nenosiri</value>
-    <comment>Snackbar shown when sending the password reset link fails. Used in Main/Account/Profile/ProfileView.swift.</comment>
+    <comment>Shown when sending the password reset link fails (the request failed, or the server reports it could not send the link). Used on the password reset and account screens.</comment>
   </data>
   <data name="error_sending_verification_code" xml:space="preserve">
     <value>Hitilafu imetokea wakati wa kutuma msimbo wa uthibitishaji.</value>
@@ -2922,6 +2922,14 @@ iliyo kubwa, salama na iliyogatuliwa zaidi duniani.</value>
   <data name="reset_it" xml:space="preserve">
     <value>Weka upya</value>
     <comment>Button text for resetting password</comment>
+  </data>
+  <data name="reset_link_rate_limited.one" xml:space="preserve">
+    <value>Majaribio mengi mno. Unaweza kuomba kiungo kipya cha kuweka upya baada ya dakika {}.</value>
+    <comment>Password reset: the server refused to send a new password reset link because of too many recent attempts. The argument is the number of minutes until a new link can be requested.</comment>
+  </data>
+  <data name="reset_link_rate_limited.other" xml:space="preserve">
+    <value>Majaribio mengi mno. Unaweza kuomba kiungo kipya cha kuweka upya baada ya dakika {}.</value>
+    <comment>Password reset: the server refused to send a new password reset link because of too many recent attempts. The argument is the number of minutes until a new link can be requested.</comment>
   </data>
   <data name="reset_link_sent" xml:space="preserve">
     <value>Kiungo cha kuweka upya kimetumwa</value>

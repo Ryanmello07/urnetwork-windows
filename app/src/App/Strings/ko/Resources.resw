@@ -1401,7 +1401,7 @@
   </data>
   <data name="error_sending_password_reset_link" xml:space="preserve">
     <value>비밀번호 재설정 링크를 보내는 중 오류가 발생했습니다</value>
-    <comment>Snackbar shown when sending the password reset link fails. Used in Main/Account/Profile/ProfileView.swift.</comment>
+    <comment>Shown when sending the password reset link fails (the request failed, or the server reports it could not send the link). Used on the password reset and account screens.</comment>
   </data>
   <data name="error_sending_verification_code" xml:space="preserve">
     <value>인증 코드를 보내는 중 오류가 발생했습니다.</value>
@@ -2866,6 +2866,10 @@
   <data name="reset_it" xml:space="preserve">
     <value>재설정</value>
     <comment>Button text for resetting password</comment>
+  </data>
+  <data name="reset_link_rate_limited.other" xml:space="preserve">
+    <value>시도 횟수가 너무 많습니다. {}분 후에 새 재설정 링크를 요청할 수 있습니다.</value>
+    <comment>Password reset: the server refused to send a new password reset link because of too many recent attempts. The argument is the number of minutes until a new link can be requested.</comment>
   </data>
   <data name="reset_link_sent" xml:space="preserve">
     <value>재설정 링크 전송됨</value>

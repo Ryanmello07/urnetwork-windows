@@ -2277,7 +2277,7 @@
   </data>
   <data name="error_sending_password_reset_link" xml:space="preserve">
     <value>发送密码重置链接时出错</value>
-    <comment>Snackbar shown when sending the password reset link fails. Used in Main/Account/Profile/ProfileView.swift.</comment>
+    <comment>Shown when sending the password reset link fails (the request failed, or the server reports it could not send the link). Used on the password reset and account screens.</comment>
   </data>
   <data name="error_sending_verification_code" xml:space="preserve">
     <value>发送验证码时出错。</value>
@@ -4125,6 +4125,10 @@
   <data name="reset_it" xml:space="preserve">
     <value>重置密码</value>
     <comment>Button text for resetting password</comment>
+  </data>
+  <data name="reset_link_rate_limited.other" xml:space="preserve">
+    <value>尝试次数过多。{} 分钟后可以重新获取重置链接。</value>
+    <comment>Password reset: the server refused to send a new password reset link because of too many recent attempts. The argument is the number of minutes until a new link can be requested.</comment>
   </data>
   <data name="reset_link_sent" xml:space="preserve">
     <value>重置链接已发送</value>
