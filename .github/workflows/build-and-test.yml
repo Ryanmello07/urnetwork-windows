@@ -91,6 +91,12 @@ jobs:
       - name: Check out connect dependency
         run: git clone --depth 1 --branch main https://github.com/urnetwork/connect.git connect
 
+      # connect@main also replaces gvisor.dev/gvisor with ../gvisor (its tun
+      # stack is the fork) - without the sibling the sdk build fails module
+      # resolution before a line compiles.
+      - name: Check out gvisor dependency
+        run: git clone --depth 1 https://github.com/urnetwork/gvisor.git gvisor
+
       - name: Check out glog dependency
         run: git clone --depth 1 https://github.com/urnetwork/glog.git glog
 
