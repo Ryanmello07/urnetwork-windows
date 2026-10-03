@@ -1476,8 +1476,8 @@ rätt sätt</value>
     <comment>DNS settings: label of the opt-in toggle (off by default) that answers DNS over the host's local network while the tunnel's DNS starts. Also the status row label in the connect drawer DNS summary.</comment>
   </data>
   <data name="fast_dns_on_connect_description" xml:space="preserve">
-    <value>Besvarar DNS via det lokala nätverket medan tunnelns DNS startar. Det kan avslöja dina uppslag för det lokala nätverket. När det är av sker DNS-uppslag endast genom tunneln.</value>
-    <comment>DNS settings: description under the Fast DNS on connect toggle. Explains that it answers DNS over the local network while the tunnel's DNS starts, which can reveal lookups to the local network.</comment>
+    <value>Besvarar DNS via det lokala nätverket medan tunnelns DNS startar. Det kan avslöja dina uppslag för det lokala nätverket och ge svar som inte stämmer med din utgångsplats. När det är av sker DNS-uppslag endast genom tunneln.</value>
+    <comment>DNS settings: description under the Fast DNS on connect toggle. Explains that it answers DNS over the local network while the tunnel's DNS starts, which can reveal lookups to the local network and can return answers that don't match the exit location (DNS answers depend on where the lookup comes from, so host-network answers can point to servers meant for the user's real location instead of the exit).</comment>
   </data>
   <data name="feedback" xml:space="preserve">
     <value>Feedback</value>

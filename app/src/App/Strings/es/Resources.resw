@@ -2440,8 +2440,8 @@ de la manera correcta</value>
     <comment>DNS settings: label of the opt-in toggle (off by default) that answers DNS over the host's local network while the tunnel's DNS starts. Also the status row label in the connect drawer DNS summary.</comment>
   </data>
   <data name="fast_dns_on_connect_description" xml:space="preserve">
-    <value>Responde al DNS a través de la red local mientras se inicia el DNS del túnel. Esto puede revelar tus búsquedas a la red local. Si está desactivado, el DNS solo se resuelve a través del túnel.</value>
-    <comment>DNS settings: description under the Fast DNS on connect toggle. Explains that it answers DNS over the local network while the tunnel's DNS starts, which can reveal lookups to the local network.</comment>
+    <value>Responde al DNS a través de la red local mientras se inicia el DNS del túnel. Esto puede revelar tus búsquedas a la red local y devolver respuestas que no coinciden con tu ubicación de salida. Si está desactivado, el DNS solo se resuelve a través del túnel.</value>
+    <comment>DNS settings: description under the Fast DNS on connect toggle. Explains that it answers DNS over the local network while the tunnel's DNS starts, which can reveal lookups to the local network and can return answers that don't match the exit location (DNS answers depend on where the lookup comes from, so host-network answers can point to servers meant for the user's real location instead of the exit).</comment>
   </data>
   <data name="feedback" xml:space="preserve">
     <value>Retroalimentación</value>

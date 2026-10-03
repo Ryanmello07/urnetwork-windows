@@ -1460,8 +1460,8 @@ cách đúng đắn</value>
     <comment>DNS settings: label of the opt-in toggle (off by default) that answers DNS over the host's local network while the tunnel's DNS starts. Also the status row label in the connect drawer DNS summary.</comment>
   </data>
   <data name="fast_dns_on_connect_description" xml:space="preserve">
-    <value>Trả lời DNS qua mạng cục bộ trong khi DNS của đường hầm khởi động. Điều này có thể để lộ các truy vấn của bạn cho mạng cục bộ. Khi tắt, DNS chỉ phân giải qua đường hầm.</value>
-    <comment>DNS settings: description under the Fast DNS on connect toggle. Explains that it answers DNS over the local network while the tunnel's DNS starts, which can reveal lookups to the local network.</comment>
+    <value>Trả lời DNS qua mạng cục bộ trong khi DNS của đường hầm khởi động. Điều này có thể để lộ các truy vấn của bạn cho mạng cục bộ và trả về kết quả không khớp với vị trí thoát của bạn. Khi tắt, DNS chỉ phân giải qua đường hầm.</value>
+    <comment>DNS settings: description under the Fast DNS on connect toggle. Explains that it answers DNS over the local network while the tunnel's DNS starts, which can reveal lookups to the local network and can return answers that don't match the exit location (DNS answers depend on where the lookup comes from, so host-network answers can point to servers meant for the user's real location instead of the exit).</comment>
   </data>
   <data name="feedback" xml:space="preserve">
     <value>Phản hồi</value>

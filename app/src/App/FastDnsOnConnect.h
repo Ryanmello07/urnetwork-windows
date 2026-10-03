@@ -2,7 +2,8 @@
 // DnsResolverSettings.EnableFallback, which races a handicapped DoH resolver
 // over the host's local network while the tunnel's DNS starts. It is an
 // opt-in, off by default: DNS resolves only through the tunnel unless the user
-// turns it on, because the fallback can reveal lookups to the local network.
+// turns it on, because the fallback can reveal lookups to the local network
+// and return answers that don't match the exit location.
 // The SDK owns the default (getDefaultDnsResolverSettings) and migrates older
 // saved settings to off; the app maps the flag through unchanged and never
 // turns it on by itself.

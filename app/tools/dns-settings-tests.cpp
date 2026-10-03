@@ -124,6 +124,9 @@ int main(int argc, char** argv) {
         !Contains(resw, "reveal your lookups to the local network")) {
       Fail("en Resources.resw has no Fast DNS on connect description");
     }
+    if (!Contains(resw, "return answers that don't match your exit location")) {
+      Fail("the Fast DNS on connect description does not warn that answers may not match the exit location");
+    }
     if (Contains(resw, "<data name=\"local_dns_fallback\"")) {
       Fail("en Resources.resw still carries the retired local_dns_fallback key");
     }

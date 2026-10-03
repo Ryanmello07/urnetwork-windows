@@ -1460,8 +1460,8 @@
     <comment>DNS settings: label of the opt-in toggle (off by default) that answers DNS over the host's local network while the tunnel's DNS starts. Also the status row label in the connect drawer DNS summary.</comment>
   </data>
   <data name="fast_dns_on_connect_description" xml:space="preserve">
-    <value>터널 DNS가 시작되는 동안 로컬 네트워크를 통해 DNS에 응답합니다. 이로 인해 조회 내용이 로컬 네트워크에 노출될 수 있습니다. 끄면 DNS는 터널을 통해서만 확인됩니다.</value>
-    <comment>DNS settings: description under the Fast DNS on connect toggle. Explains that it answers DNS over the local network while the tunnel's DNS starts, which can reveal lookups to the local network.</comment>
+    <value>터널 DNS가 시작되는 동안 로컬 네트워크를 통해 DNS에 응답합니다. 이로 인해 조회 내용이 로컬 네트워크에 노출되거나 출구 위치와 맞지 않는 응답이 반환될 수 있습니다. 끄면 DNS는 터널을 통해서만 확인됩니다.</value>
+    <comment>DNS settings: description under the Fast DNS on connect toggle. Explains that it answers DNS over the local network while the tunnel's DNS starts, which can reveal lookups to the local network and can return answers that don't match the exit location (DNS answers depend on where the lookup comes from, so host-network answers can point to servers meant for the user's real location instead of the exit).</comment>
   </data>
   <data name="feedback" xml:space="preserve">
     <value>피드백</value>

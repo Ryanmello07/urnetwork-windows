@@ -1507,8 +1507,8 @@ správným způsobem</value>
     <comment>DNS settings: label of the opt-in toggle (off by default) that answers DNS over the host's local network while the tunnel's DNS starts. Also the status row label in the connect drawer DNS summary.</comment>
   </data>
   <data name="fast_dns_on_connect_description" xml:space="preserve">
-    <value>Odpovídá na dotazy DNS přes místní síť, dokud se spouští DNS tunelu. Místní síť tak může vidět vaše dotazy. Když je vypnuto, DNS se překládá jen přes tunel.</value>
-    <comment>DNS settings: description under the Fast DNS on connect toggle. Explains that it answers DNS over the local network while the tunnel's DNS starts, which can reveal lookups to the local network.</comment>
+    <value>Odpovídá na dotazy DNS přes místní síť, dokud se spouští DNS tunelu. Místní síť tak může vidět vaše dotazy a odpovědi nemusí odpovídat vašemu výstupnímu umístění. Když je vypnuto, DNS se překládá jen přes tunel.</value>
+    <comment>DNS settings: description under the Fast DNS on connect toggle. Explains that it answers DNS over the local network while the tunnel's DNS starts, which can reveal lookups to the local network and can return answers that don't match the exit location (DNS answers depend on where the lookup comes from, so host-network answers can point to servers meant for the user's real location instead of the exit).</comment>
   </data>
   <data name="feedback" xml:space="preserve">
     <value>Odezva</value>
