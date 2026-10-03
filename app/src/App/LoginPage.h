@@ -68,16 +68,19 @@ class LoginPage {
                             bool signedIn);
   // surfaces an auth error on whichever step the user is looking at
   void ShowErrorOnCurrentStep(winrt::hstring const& message);
-  bool IsGuestUpgrade() const;
-  void ClearGuestUpgrade();
 
   // True once, right after this sign-in created a network (sign-up, its
   // verification step, or an instant account): the window shows the
   // onboarding flow for it. An existing account signing in never sets it.
   bool ConsumeNewNetwork();
-  // The plan card's create-account affordance for a guest: the create step in
-  // guest-upgrade mode, shown over the login flow while the session stays live.
-  void BeginGuestUpgrade();
+  // Every create-account and purchase affordance for a legacy guest network
+  // (the plan card, the account menu, Get Pro, the upgrade sheet). The server
+  // removed the guest upgrade, and a login method added to a guest network
+  // cannot be verified (the verify-code lookup reads network_user.user_auth,
+  // which AddAuth never sets), so the account is created after signing out:
+  // a confirmation warns that the guest balance stays on the guest network,
+  // which has no login to come back to, and Sign out lands on the sign-in flow.
+  winrt::fire_and_forget OfferGuestSignOut();
 
   // ---- XAML event handlers (forwarded from MainWindow) ----
   void OnGetStarted(winrt::Windows::Foundation::IInspectable const&,
@@ -94,8 +97,6 @@ class LoginPage {
                        winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnCreateNameChanged(winrt::Windows::Foundation::IInspectable const&,
                            winrt::Microsoft::UI::Xaml::Controls::TextChangedEventArgs const&);
-  void OnCreateEmailChanged(winrt::Windows::Foundation::IInspectable const&,
-                            winrt::Microsoft::UI::Xaml::Controls::TextChangedEventArgs const&);
   void OnCreatePasswordChanged(winrt::Windows::Foundation::IInspectable const&,
                                winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnTermsChanged(winrt::Windows::Foundation::IInspectable const&,
@@ -112,8 +113,6 @@ class LoginPage {
                     winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   winrt::fire_and_forget OnUseCode(winrt::Windows::Foundation::IInspectable const&,
                                    winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
-  void OnTryGuestMode(winrt::Windows::Foundation::IInspectable const&,
-                      winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnSignInWithBittensor(winrt::Windows::Foundation::IInspectable const&,
                              winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   winrt::fire_and_forget OnSignInWithSolana(
@@ -151,11 +150,9 @@ class LoginPage {
 
  private:
   enum class LoginStep { Initial, Password, Create, Verify, Reset, Seedphrase, Instant };
-  // What the create step submits: a fresh network with email + password, one
-  // with the retained wallet auth or SSO id token, or the guest network's
-  // upgrade to a full account (Api::upgradeGuest; linux CreateNetworkPage::Mode
-  // parity).
-  enum class CreateMode { Password, Wallet, AuthJwt, GuestUpgrade };
+  // What the create step submits: a fresh network with email + password, or one
+  // with the retained wallet auth or SSO id token.
+  enum class CreateMode { Password, Wallet, AuthJwt };
 
   void ShowLoginStep(LoginStep step);
   void ApplyLoginRouting(urnw::LoginRouting const& routing);
@@ -174,7 +171,6 @@ class LoginPage {
   void ApplyBonusValidation(uint32_t generation, bool ok, bool valid, bool capped);
   void ValidateCreateForm();   // gates the Continue button
   void SubmitVerifyCode();
-  winrt::fire_and_forget ShowGuestModeSheet();  // terms consent -> LoginAsGuest
   void SetWalletSignInEnabled(bool enabled);
   void ApplyWalletSignInResult(urnw::AuthResult const& result);
   // Google or Apple: open the provider's sign-in page and wait for the api's
@@ -234,7 +230,6 @@ class LoginPage {
   std::string accountNetworkName_;
   std::unique_ptr<urnw::LoginCarousel> carousel_;
   bool presentationActive_ = false;
-  std::shared_ptr<urnw::GuestModeSheet> guestSheet_;
   std::shared_ptr<urnw::SeedphraseDisplaySheet> seedphraseSheet_;
   std::shared_ptr<urnw::NetworkServerSheet> networkServerSheet_;
   // "Seedphrase copied" / "Referral link copied" acknowledgements

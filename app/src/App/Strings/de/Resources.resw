@@ -2552,13 +2552,13 @@ richtig auf</value>
     <value>Gast</value>
     <comment>Account Screen</comment>
   </data>
-  <data name="guest_mode_explainer" xml:space="preserve">
-    <value>Probiere URnetwork aus, ohne ein Konto zu erstellen. Du kannst jederzeit auf ein vollständiges Konto upgraden.</value>
-    <comment>Guest-mode sheet explainer: what guest mode is and that a full account can come later.</comment>
+  <data name="guest_sign_out_and_create_account" xml:space="preserve">
+    <value>Abmelden und ein Konto erstellen</value>
+    <comment>Guest sign-out confirmation (desktop): the button that signs out of a legacy guest network so the user can create an account. Guest networks can no longer be upgraded in place.</comment>
   </data>
-  <data name="guest_mode_failed" xml:space="preserve">
-    <value>Gastmodus fehlgeschlagen</value>
-    <comment>Error shown when starting a guest-mode network fails.</comment>
+  <data name="guest_sign_out_balance_warning" xml:space="preserve">
+    <value>Um ein Konto zu erstellen, melde dich zuerst von diesem Gastnetzwerk ab. Sein Guthaben bleibt im Gastnetzwerk und wird nicht auf dein neues Konto übertragen. Ein Gastnetzwerk hat keine Anmeldedaten, daher kannst du dich nach dem Abmelden nicht wieder dort anmelden.</value>
+    <comment>Guest sign-out confirmation (desktop), shown for every create-account and purchase action on a legacy guest network. Must say plainly that the guest balance is not carried over and that the guest network cannot be signed back into, since it has no login.</comment>
   </data>
   <data name="hash_count" xml:space="preserve">
     <value>#{}</value>

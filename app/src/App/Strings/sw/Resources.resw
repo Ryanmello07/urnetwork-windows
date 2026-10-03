@@ -1560,14 +1560,6 @@ kwa njia sahihi</value>
     <value>Mgeni</value>
     <comment>Account Screen</comment>
   </data>
-  <data name="guest_mode_explainer" xml:space="preserve">
-    <value>Jaribu URnetwork bila kufungua akaunti. Unaweza kupandisha hadhi hadi akaunti kamili wakati wowote.</value>
-    <comment>Guest-mode sheet explainer: what guest mode is and that a full account can come later.</comment>
-  </data>
-  <data name="guest_mode_failed" xml:space="preserve">
-    <value>Hali ya Mgeni imeshindwa</value>
-    <comment>Error shown when starting a guest-mode network fails.</comment>
-  </data>
   <data name="hide_provider_list" xml:space="preserve">
     <value>Ficha orodha ya watoa huduma</value>
     <comment>Used in Main/Connect/ConnectView-macOS.swift.</comment>

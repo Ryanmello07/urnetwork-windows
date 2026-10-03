@@ -177,10 +177,6 @@ struct MainWindow : MainWindowT<MainWindow> {
                        winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnCreateNameChanged(winrt::Windows::Foundation::IInspectable const&,
                            winrt::Microsoft::UI::Xaml::Controls::TextChangedEventArgs const&);
-  // the guest upgrade collects the email on the create step (the other modes
-  // carry it in from the initial step)
-  void OnCreateEmailChanged(winrt::Windows::Foundation::IInspectable const&,
-                            winrt::Microsoft::UI::Xaml::Controls::TextChangedEventArgs const&);
   void OnCreatePasswordChanged(winrt::Windows::Foundation::IInspectable const&,
                                winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnTermsChanged(winrt::Windows::Foundation::IInspectable const&,
@@ -198,12 +194,6 @@ struct MainWindow : MainWindowT<MainWindow> {
   // opens android's AuthCodeLoginSheet as a dialog
   void OnUseCode(winrt::Windows::Foundation::IInspectable const&,
                  winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
-  // guest mode: opens the terms-consent sheet (macOS GuestModeSheet parity).
-  // No longer reachable from the login screen - the android login has no guest
-  // affordance and guest mode is superseded by the seedphrase system - but the
-  // sheet and BeginGuestUpgrade stay for existing guest sessions.
-  void OnTryGuestMode(winrt::Windows::Foundation::IInspectable const&,
-                      winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnSignInWithBittensor(winrt::Windows::Foundation::IInspectable const&,
                              winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   // one Solana button, as android has; the wallet is chosen in a dialog because

@@ -160,7 +160,7 @@ MainWindow::MainWindow() {
       auto self = weak.get();
       if (!self) return;
       if (self->balance_.guest) {
-        self->login().BeginGuestUpgrade();
+        self->login().OfferGuestSignOut();
       } else {
         self->ShowUpgradeSheet();
       }
@@ -1465,6 +1465,10 @@ void MainWindow::NoteConnected() {
 // The upgrade sheet opened straight on the checkout for the plan the
 // onboarding page picked (its own products page would only ask again).
 winrt::fire_and_forget MainWindow::ShowUpgradeCheckout(bool yearly) {
+  if (balance_.guest) {  // no purchase for a guest network (ShowUpgradeSheet)
+    login_->OfferGuestSignOut();
+    co_return;
+  }
   if (sheetOpen_) co_return;
   auto self = get_strong();
   self->sheetOpen_ = true;
@@ -1513,7 +1517,8 @@ void MainWindow::ApplyBalance() {
 
   // the upgrade affordances show for a signed-in free account; a guest gets a
   // create-account affordance on the plan cards instead (macOS AccountRootView,
-  // linux ConnectDrawer), which routes into the guest-upgrade create step
+  // linux ConnectDrawer), which offers signing out to create an account
+  // (LoginPage::OfferGuestSignOut)
   const auto upgradeVisibility = (!balance_.isPro && !balance_.guest)
                                      ? Visibility::Visible
                                      : Visibility::Collapsed;
@@ -1754,7 +1759,7 @@ void MainWindow::OnOpenUpgrade(IInspectable const&, RoutedEventArgs const&) {
   // a guest first creates a full account (the plan card's affordance reads
   // "Create an account" for them); checkout is for signed-in free accounts
   if (balance_.guest) {
-    login_->BeginGuestUpgrade();
+    login_->OfferGuestSignOut();
     return;
   }
   ShowUpgradeSheet();
@@ -1765,6 +1770,12 @@ void MainWindow::OnOpenRedeem(IInspectable const&, RoutedEventArgs const&) {
 }
 
 winrt::fire_and_forget MainWindow::ShowUpgradeSheet() {
+  // No purchase for a legacy guest network: whatever was bought would stay
+  // on a network with no login (every entry point lands here or checks first)
+  if (balance_.guest) {
+    login_->OfferGuestSignOut();
+    co_return;
+  }
   if (sheetOpen_) co_return;  // only one ContentDialog can show at a time
   auto self = get_strong();
   self->sheetOpen_ = true;
@@ -1815,7 +1826,6 @@ void MainWindow::ApplyAuthState(urnw::AuthState state, std::string const& error)
     // surface the error on the sign-in step the user is looking at
     login_->ShowErrorOnCurrentStep(H(error));
   }
-  if (loggedIn) login_->ClearGuestUpgrade();  // any guest upgrade resolved
   // The network name behind the idle "{name} is ready to connect" copy. Read
   // from the stored jwt once per auth change (ParsedJwt re-parses on every
   // call, and the status line is rewritten on every stats push).
@@ -1876,12 +1886,6 @@ void MainWindow::ApplyAuthState(urnw::AuthState state, std::string const& error)
     account_->ResetForSignOut();
     referrals_->ResetForSignOut();
     if (referralsOpen_) CloseReferrals();
-  }
-  if (!loggedIn && !wasVisible && login_->IsGuestUpgrade() && !Sdk().IsLoggedIn()) {
-    // the guest session ended under the upgrade form (server-side
-    // invalidation): fall back to the start of the sign-in flow
-    login_->ClearGuestUpgrade();
-    login_->ResetToInitialStep();
   }
 }
 
@@ -1985,9 +1989,6 @@ void MainWindow::OnSendResetLink(IInspectable const& s, RoutedEventArgs const& e
 void MainWindow::OnCreateNameChanged(IInspectable const& s, TextChangedEventArgs const& e) {
   login_->OnCreateNameChanged(s, e);
 }
-void MainWindow::OnCreateEmailChanged(IInspectable const& s, TextChangedEventArgs const& e) {
-  login_->OnCreateEmailChanged(s, e);
-}
 void MainWindow::OnCreatePasswordChanged(IInspectable const& s, RoutedEventArgs const& e) {
   login_->OnCreatePasswordChanged(s, e);
 }
@@ -2011,9 +2012,6 @@ void MainWindow::OnResendCode(IInspectable const& s, RoutedEventArgs const& e) {
 }
 void MainWindow::OnUseCode(IInspectable const& s, RoutedEventArgs const& e) {
   login_->OnUseCode(s, e);
-}
-void MainWindow::OnTryGuestMode(IInspectable const& s, RoutedEventArgs const& e) {
-  login_->OnTryGuestMode(s, e);
 }
 void MainWindow::OnSignInWithBittensor(IInspectable const& s, RoutedEventArgs const& e) {
   login_->OnSignInWithBittensor(s, e);

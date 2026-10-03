@@ -16,38 +16,6 @@
 
 namespace urnw {
 
-// ---- Try guest mode -----------------------------------------------------------
-// macOS GuestModeSheet: a brief explainer, the terms consent (the same
-// terms/privacy links the create step uses), and one button that creates a
-// throwaway guest network (SdkHost::LoginAsGuest). On success the dialog hides
-// itself and the auth-state relay swaps the login panel for the home view;
-// errors show inline and leave the sheet open for a retry.
-class GuestModeSheet : public std::enable_shared_from_this<GuestModeSheet> {
- public:
-  static std::shared_ptr<GuestModeSheet> Create(
-      winrt::Microsoft::UI::Xaml::XamlRoot const& root, SdkHost& sdk);
-
-  winrt::Microsoft::UI::Xaml::Controls::ContentDialog Dialog() const { return dialog_; }
-
- private:
-  explicit GuestModeSheet(SdkHost& sdk) : sdk_(sdk) {}
-
-  void Build(winrt::Microsoft::UI::Xaml::XamlRoot const& root);
-  void Submit();
-  void ApplyResult(bool ok, std::string const& error);
-
-  SdkHost& sdk_;
-  winrt::Microsoft::UI::Xaml::Controls::ContentDialog dialog_{nullptr};
-  winrt::Microsoft::UI::Xaml::Controls::CheckBox termsCheck_{nullptr};
-  winrt::Microsoft::UI::Xaml::Controls::TextBlock errorText_{nullptr};
-  // optional referral code: guests can be referred too (android/apple instant
-  // account parity). Validated before the create; a bad code keeps the sheet
-  // open rather than silently dropping the bonus.
-  winrt::Microsoft::UI::Xaml::Controls::TextBox codeBox_{nullptr};
-  winrt::Microsoft::UI::Xaml::Controls::TextBlock codeStatus_{nullptr};
-  bool creating_ = false;
-};
-
 // ---- Seedphrase display -----------------------------------------------------
 // macOS SeedphraseDisplayView: the one and only showing of a newly minted
 // seedphrase — numbered word grid, a warning that this is the only time, copy

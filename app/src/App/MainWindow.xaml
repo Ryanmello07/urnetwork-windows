@@ -369,16 +369,8 @@
                         <TextBlock x:Name="WalletCreateNote" Style="{StaticResource UrSupportingTextStyle}"
                                    Visibility="Collapsed"
                                    />
-                        <!-- guest upgrade (the plan card's create-account affordance):
-                             status + call to action, and an editable email in place of
-                             the echoed one -->
-                        <TextBlock x:Name="GuestUpgradeNote" Style="{StaticResource UrSupportingTextStyle}"
-                                   Visibility="Collapsed"
-                                   />
                         <TextBlock x:Name="CreateEmailText"
                                    Foreground="{StaticResource UrTextMutedBrush}" />
-                        <TextBox x:Name="CreateEmailBox" Style="{StaticResource UrTextInputStyle}"
-                                 Visibility="Collapsed" TextChanged="OnCreateEmailChanged" />
                         <TextBox x:Name="CreateNameBox" Style="{StaticResource UrTextInputStyle}"
                                  TextChanged="OnCreateNameChanged" />
                         <TextBlock x:Name="CreateNameStatusText" Style="{StaticResource UrSupportingTextStyle}"

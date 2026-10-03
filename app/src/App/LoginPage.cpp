@@ -265,11 +265,6 @@ void LoginPage::ApplyStrings() {
   w_.CreateBackButton().Content(LocBox("back"));
   w_.CreateHeading().Text(Loc("join_urnetwork"));
   w_.WalletCreateNote().Text(Loc("wallet_needs_network"));
-  // guest upgrade: status + call to action, two store sentences on two lines
-  w_.GuestUpgradeNote().Text(hstring{urnw::Localized("in_guest_mode") + L"\n" +
-                                     urnw::Localized("start_earning_join")});
-  w_.CreateEmailBox().Header(LocBox("user_auth_label"));
-  w_.CreateEmailBox().PlaceholderText(Loc("user_auth_input_placeholder"));
   w_.CreateNameBox().Header(LocBox("network_name_label"));
   w_.CreateNameBox().PlaceholderText(Loc("enter_a_name_for_your_network"));
   w_.CreateNameStatusText().Text(Loc("network_name_length_error"));
@@ -350,10 +345,6 @@ void LoginPage::ShowErrorOnCurrentStep(hstring const& message) {
   ShowLoginErrorFor(loginStep_, message);
 }
 
-bool LoginPage::IsGuestUpgrade() const {
-  return createMode_ == CreateMode::GuestUpgrade;
-}
-
 bool LoginPage::ConsumeNewNetwork() {
   const bool pending = newNetworkPending_;
   newNetworkPending_ = false;
@@ -361,17 +352,39 @@ bool LoginPage::ConsumeNewNetwork() {
   return pending;
 }
 
-void LoginPage::ClearGuestUpgrade() { createMode_ = CreateMode::Password; }
+winrt::fire_and_forget LoginPage::OfferGuestSignOut() {
+  if (w_.sheetOpen()) co_return;  // only one ContentDialog can show at a time
+  auto self = w_.get_strong();
 
-void LoginPage::BeginGuestUpgrade() {
-  // The create step in guest-upgrade mode (email + name + password ->
-  // Api::upgradeGuest), shown over the login flow while the guest session
-  // stays live. macOS presents the same flow as a sheet over the account view;
-  // linux navigates its create page in UpgradeGuest mode. Back returns home
-  // (OnLoginBack); success re-registers the device and the LoggedIn push
-  // restores the home view.
-  w_.ShowLoginRoot();
-  EnterCreateStep(std::string(), CreateMode::GuestUpgrade);
+  TextBlock body;
+  body.Text(Loc("guest_sign_out_balance_warning"));
+  body.TextWrapping(TextWrapping::Wrap);
+  body.MaxWidth(420);
+
+  ContentDialog dialog;
+  dialog.XamlRoot(self->Content().XamlRoot());
+  dialog.Title(winrt::box_value(Loc("create_an_account")));
+  dialog.Content(body);
+  dialog.PrimaryButtonText(Loc("guest_sign_out_and_create_account"));
+  dialog.CloseButtonText(Loc("cancel"));
+  // signing out abandons the guest network: never the default
+  dialog.DefaultButton(ContentDialogButton::Close);
+
+  w_.SetSheetOpen(true);
+  ContentDialogResult result{ContentDialogResult::None};
+  try {
+    result = co_await dialog.ShowAsync();
+  } catch (winrt::hresult_error const& e) {
+    urnw::LogError("guest sign-out sheet: {} (0x{:08x})",
+                   urnw::Narrow(std::wstring{e.message()}),
+                   static_cast<uint32_t>(e.code()));
+  } catch (std::exception const& e) {
+    urnw::LogError("guest sign-out sheet: {}", e.what());
+  }
+  w_.SetSheetOpen(false);
+  if (result != ContentDialogResult::Primary) co_return;
+  // the auth relay swaps the home view for the sign-in flow
+  Sdk().Logout();
 }
 
 // ---- sign-in flow ----------------------------------------------------------
@@ -502,14 +515,6 @@ void LoginPage::ApplyLoginRouting(urnw::LoginRouting const& routing) {
 }
 
 void LoginPage::OnLoginBack(IInspectable const& sender, RoutedEventArgs const&) {
-  // backing out of the guest-upgrade create/verify step returns to the home
-  // view: the guest session never went away
-  if (createMode_ == CreateMode::GuestUpgrade && Sdk().IsLoggedIn()) {
-    createMode_ = CreateMode::Password;
-    ShowLoginStep(LoginStep::Initial);  // leave the flow ready for a real sign-out
-    w_.ShowHomeRoot();
-    return;
-  }
   IInspectable tagValue{nullptr};
   if (auto element = sender.try_as<FrameworkElement>()) tagValue = element.Tag();
   const auto tag = winrt::unbox_value_or<hstring>(tagValue, L"initial");
@@ -595,22 +600,13 @@ void LoginPage::EnterCreateStep(std::string const& userAuth, CreateMode mode) {
   // credential is already held by SdkHost, so all the form collects is a
   // network name and the terms consent.
   const bool walletMode = (mode == CreateMode::Wallet || mode == CreateMode::AuthJwt);
-  const bool guestUpgrade = (mode == CreateMode::GuestUpgrade);
   // wallet mode: the wallet signature is the credential — name + terms only.
-  // guest upgrade: the guest enters an email here (nothing was carried in).
   w_.WalletCreateNote().Visibility(walletMode ? Visibility::Visible : Visibility::Collapsed);
-  w_.GuestUpgradeNote().Visibility(guestUpgrade ? Visibility::Visible : Visibility::Collapsed);
   w_.CreateEmailText().Text(H(userAuth));
   w_.CreateEmailText().Visibility(mode == CreateMode::Password ? Visibility::Visible
                                                                : Visibility::Collapsed);
-  w_.CreateEmailBox().Text(L"");
-  w_.CreateEmailBox().Visibility(guestUpgrade ? Visibility::Visible : Visibility::Collapsed);
   w_.CreatePasswordBox().Visibility(walletMode ? Visibility::Collapsed : Visibility::Visible);
   w_.CreatePasswordHint().Visibility(walletMode ? Visibility::Collapsed : Visibility::Visible);
-  // UpgradeGuestArgs carries no referral code (the bonus only applies to a
-  // fresh create — the sdk/api shape, not a UI choice): hide the bonus row
-  w_.BonusCodeBox().Visibility(guestUpgrade ? Visibility::Collapsed : Visibility::Visible);
-  w_.BonusStatusText().Visibility(guestUpgrade ? Visibility::Collapsed : Visibility::Visible);
   w_.BonusAppliedChip().Visibility(Visibility::Collapsed);
 
   w_.CreateNameBox().Text(L"");
@@ -629,11 +625,7 @@ void LoginPage::EnterCreateStep(std::string const& userAuth, CreateMode mode) {
   w_.CreateError().IsOpen(false);
   ValidateCreateForm();
   ShowLoginStep(LoginStep::Create);
-  if (guestUpgrade) {
-    w_.CreateEmailBox().Focus(FocusState::Programmatic);  // the first empty field
-  } else {
-    w_.CreateNameBox().Focus(FocusState::Programmatic);
-  }
+  w_.CreateNameBox().Focus(FocusState::Programmatic);
 }
 
 void LoginPage::OnCreateNameChanged(IInspectable const&, TextChangedEventArgs const&) {
@@ -686,11 +678,6 @@ void LoginPage::ApplyNameCheck(uint32_t generation, bool ok, bool available) {
     nameAvailable_ = false;
     kit::ApplySupportingText(line, Loc("network_name_taken"), kit::ValidationState::Invalid);
   }
-  ValidateCreateForm();
-}
-
-void LoginPage::OnCreateEmailChanged(IInspectable const&, TextChangedEventArgs const&) {
-  w_.CreateError().IsOpen(false);
   ValidateCreateForm();
 }
 
@@ -773,14 +760,9 @@ void LoginPage::ValidateCreateForm() {
   const bool passwordOk = createMode_ == CreateMode::Wallet ||
                           createMode_ == CreateMode::AuthJwt ||
                           password.size() >= kMinPasswordLength;
-  // the guest upgrade collects the email on this step (the other modes carry a
-  // discovered / wallet credential in); the server is the real validator
-  const bool emailOk =
-      createMode_ != CreateMode::GuestUpgrade ||
-      LooksLikeUserAuth(TrimWhitespace(urnw::Narrow(w_.CreateEmailBox().Text().c_str())));
   const bool termsOk = w_.TermsCheck().IsChecked() && w_.TermsCheck().IsChecked().Value();
-  w_.CreateButton().IsEnabled(nameAvailable_ && !nameChecking_ && passwordOk && emailOk &&
-                              termsOk && !creatingNetwork_);
+  w_.CreateButton().IsEnabled(nameAvailable_ && !nameChecking_ && passwordOk && termsOk &&
+                              !creatingNetwork_);
 }
 
 void LoginPage::OnCreateNetwork(IInspectable const&, RoutedEventArgs const&) {
@@ -794,34 +776,25 @@ void LoginPage::OnCreateNetwork(IInspectable const&, RoutedEventArgs const&) {
 
   auto queue = w_.DispatcherQueue();
   auto weak = w_.get_weak();
-  // a guest upgrade keeps the network it already has; every other create is a
-  // new network, and a new network gets the onboarding flow
-  const bool newNetwork = createMode_ != CreateMode::GuestUpgrade;
-  auto done = [queue, weak, newNetwork](urnw::AuthResult r) {
-    queue.TryEnqueue([weak, r, newNetwork] {
+  // every create is a new network, and a new network gets the onboarding flow
+  auto done = [queue, weak](urnw::AuthResult r) {
+    queue.TryEnqueue([weak, r] {
       auto self = weak.get();
       if (!self) return;
       auto& page = self->login();
       page.creatingNetwork_ = false;
       page.ValidateCreateForm();
       if (r.verification_required) {
-        page.verifyIsNewNetwork_ = newNetwork;
+        page.verifyIsNewNetwork_ = true;
         page.EnterVerifyStep(page.loginUserAuth_);
       } else if (!r.ok && !r.error.empty()) {
         page.ShowLoginErrorFor(LoginStep::Create, H(r.error));
       } else if (r.ok) {
-        page.newNetworkPending_ = newNetwork;
+        page.newNetworkPending_ = true;
       }
       // success: the auth state relay swaps the panel for the home view
     });
   };
-
-  if (createMode_ == CreateMode::GuestUpgrade) {
-    // the email entered here also drives the verify step, should one be needed
-    loginUserAuth_ = TrimWhitespace(urnw::Narrow(w_.CreateEmailBox().Text().c_str()));
-    Sdk().UpgradeGuest(networkName, loginUserAuth_, password, done);
-    return;
-  }
 
   // the marketing opt-out rides on the create call (absent = opted in)
   const bool productUpdates = w_.ProductUpdatesCheck().IsChecked() &&
@@ -985,35 +958,6 @@ winrt::fire_and_forget LoginPage::OnUseCode(IInspectable const&, RoutedEventArgs
       }
     });
   });
-}
-
-// ---- guest mode (macOS GuestModeSheet parity) ------------------------------
-// One tap creates a throwaway network: the sheet collects the terms consent,
-// SdkHost::LoginAsGuest creates and registers it, and the auth-state relay
-// swaps the panel for the home view. The plan cards later offer the upgrade to
-// a full account (BeginGuestUpgrade).
-
-void LoginPage::OnTryGuestMode(IInspectable const&, RoutedEventArgs const&) {
-  SetInitialLoginError(hstring());
-  ShowGuestModeSheet();
-}
-
-winrt::fire_and_forget LoginPage::ShowGuestModeSheet() {
-  if (w_.sheetOpen()) co_return;  // only one ContentDialog can show at a time
-  auto self = w_.get_strong();
-  w_.SetSheetOpen(true);
-  try {
-    guestSheet_ = urnw::GuestModeSheet::Create(self->Content().XamlRoot(), Sdk());
-    co_await guestSheet_->Dialog().ShowAsync();
-  } catch (winrt::hresult_error const& e) {
-    urnw::LogError("guest mode sheet: {} (0x{:08x})",
-                   urnw::Narrow(std::wstring{e.message()}),
-                   static_cast<uint32_t>(e.code()));
-  } catch (std::exception const& e) {
-    urnw::LogError("guest mode sheet: {}", e.what());
-  }
-  guestSheet_.reset();
-  w_.SetSheetOpen(false);
 }
 
 // ---- wallet sign in ------------------------------------------------------
@@ -1427,7 +1371,7 @@ void LoginPage::OnAccountMenu(IInspectable const&, RoutedEventArgs const&) {
   urnw::AccountMenuActions actions;
   if (accountGuest_) {
     actions.onCreateAccount = [weak] {
-      if (auto self = weak.get()) self->login().BeginGuestUpgrade();
+      if (auto self = weak.get()) self->login().OfferGuestSignOut();
     };
   }
   actions.onSignOut = [] { Sdk().Logout(); };

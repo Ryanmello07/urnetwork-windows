@@ -1544,14 +1544,6 @@
     <value>訪客</value>
     <comment>Account Screen</comment>
   </data>
-  <data name="guest_mode_explainer" xml:space="preserve">
-    <value>無需建立帳戶即可試用 URnetwork。您可以隨時升級為完整帳戶。</value>
-    <comment>Guest-mode sheet explainer: what guest mode is and that a full account can come later.</comment>
-  </data>
-  <data name="guest_mode_failed" xml:space="preserve">
-    <value>訪客模式失敗</value>
-    <comment>Error shown when starting a guest-mode network fails.</comment>
-  </data>
   <data name="hide_provider_list" xml:space="preserve">
     <value>隱藏供應商列表</value>
     <comment>Used in Main/Connect/ConnectView-macOS.swift.</comment>

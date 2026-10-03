@@ -1559,14 +1559,6 @@
     <value>अतिथि</value>
     <comment>Account Screen</comment>
   </data>
-  <data name="guest_mode_explainer" xml:space="preserve">
-    <value>बिना खाता बनाए URnetwork आज़माएँ। आप किसी भी समय पूर्ण खाते में अपग्रेड कर सकते हैं।</value>
-    <comment>Guest-mode sheet explainer: what guest mode is and that a full account can come later.</comment>
-  </data>
-  <data name="guest_mode_failed" xml:space="preserve">
-    <value>गेस्ट मोड विफल</value>
-    <comment>Error shown when starting a guest-mode network fails.</comment>
-  </data>
   <data name="hide_provider_list" xml:space="preserve">
     <value>प्रदाता सूची छिपाएं</value>
     <comment>Used in Main/Connect/ConnectView-macOS.swift.</comment>
