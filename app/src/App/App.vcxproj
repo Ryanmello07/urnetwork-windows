@@ -375,6 +375,7 @@
     <ClInclude Include="StatsSheets.h" />
     <ClInclude Include="Startup.h" />
     <ClInclude Include="SubscriptionBalance.h" />
+    <ClInclude Include="ConfirmationPollGate.h" />
     <ClInclude Include="ClientEvents.h" />
     <ClInclude Include="OfferCard.h" />
     <ClInclude Include="OnboardingRouting.h" />

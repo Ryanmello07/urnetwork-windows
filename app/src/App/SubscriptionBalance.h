@@ -4,9 +4,10 @@
 // keeps it fresh with a 30-second background poll while the window is visible,
 // and offers a 5-second confirmation poll with a 2-minute active-polling
 // budget for after a checkout or a code redeem, so the plan flips as soon as
-// the server's payment webhook lands. The budget pauses whenever the window
-// loses focus (the poll stops with it), so the clock never runs while the
-// user is off paying in the browser.
+// the server's payment webhook lands. The confirmation poll and its budget run
+// only while the window is visible AND focused (ConfirmationPollGate): a hosted
+// checkout leaves the window visible behind the browser, so the clock must
+// also stop on focus loss while the user is off paying.
 //
 // Pro is readable OFFLINE from the stored jwt (LocalState::parseByJwt), which
 // seeds the snapshot at login; the server is the source of truth afterwards,
@@ -26,6 +27,7 @@
 
 #include <winrt/Microsoft.UI.Dispatching.h>
 
+#include "ConfirmationPollGate.h"
 #include "PricePresentation.h"
 #include "SdkHost.h"
 
@@ -103,14 +105,18 @@ class SubscriptionBalanceStore {
   void Initialize(winrt::Microsoft::UI::Dispatching::DispatcherQueue queue);
 
   void SetChangeHandler(ChangeHandler h) { onChange_ = std::move(h); }
-  // Stop/start every timer with window visibility. A confirmation pauses with
-  // the window: its give-up budget only burns while the poll actually runs, so
-  // time spent unfocused (typing card details in the browser) costs nothing,
-  // and showing the window again fires an immediate poll with the banked
-  // budget. Re-showing also always fetches once — even for a Pro network whose
-  // background poll is stopped — so a plan bought or lapsed on the web lands
-  // on the next focus.
+  // Stop/start every timer with window visibility (shown and not minimized).
+  // A confirmation pauses with the window, and showing it again fires an
+  // immediate poll with the banked budget. Re-showing also always fetches
+  // once — even for a Pro network whose background poll is stopped — so a
+  // plan bought or lapsed on the web lands on the next show.
   void SetVisible(bool visible);
+  // Window activation. Only the confirmation poll follows focus (the
+  // background poll and the presentation keep running while another app is
+  // in front): its give-up budget only burns while the poll actually runs, so
+  // time spent typing card details in the browser costs nothing, and
+  // refocusing the window fires an immediate poll with the banked budget.
+  void SetFocused(bool focused);
 
   // Login: seed Pro/guest offline from the stored jwt, fetch once, and begin
   // the 30s background poll. Once Pro with balance the periodic poll stops,
@@ -132,13 +138,14 @@ class SubscriptionBalanceStore {
 
   // After a checkout was handed to the browser (or a balance code redeemed):
   // poll every 5 seconds until the server confirms, giving up after 2 minutes
-  // of ACTIVE polling. The budget pauses with the poll (SetVisible), so a slow
-  // browser checkout can never burn it down to a false TimedOut.
+  // of ACTIVE polling. The budget pauses with the poll (SetVisible,
+  // SetFocused), so a slow browser checkout can never burn it down to a false
+  // TimedOut.
   void StartConfirmationPolling();
   void ClearTimeout();
 
   BalanceSnapshot Current() const { return snapshot_; }
-  BalancePollState CurrentPoll() const { return {confirming_, timedOut_}; }
+  BalancePollState CurrentPoll() const { return {gate_.Confirming(), timedOut_}; }
   // A freshly issued offer (POST /onboarding/offer/issue) lands here so every
   // plan surface prints it before the next poll. Publishes.
   void SetOffer(urnet::OnboardingOffer const& offer);
@@ -172,10 +179,9 @@ class SubscriptionBalanceStore {
     return snapshot_.isPro && snapshot_.availableByteCount > 0;
   }
   void EnsureBackgroundPolling();
+  // The gate opened (or a confirmation started): arm the timer and poll now,
+  // or give up when the banked budget is already spent.
   void ResumeConfirmationPolling();
-  // Focus loss: stop the confirmation timer and bank the unspent budget so
-  // ResumeConfirmationPolling can re-arm from where it left off.
-  void PauseConfirmationPolling();
   void StopBackground();
   void StopConfirmation(bool timedOut);
   void Publish();
@@ -196,13 +202,9 @@ class SubscriptionBalanceStore {
   bool visible_ = false;
   bool jwtPro_ = false;     // the jwt's Pro claim (stale across plan changes)
   bool loading_ = false;    // one fetch in flight at a time
-  bool confirming_ = false;
   bool timedOut_ = false;
-  // The confirmation give-up budget, counted in ACTIVE polling time only.
-  // deadlineMillis_ (monotonic) is armed while the confirm timer runs;
-  // pausing banks what is left back into confirmRemainingMillis_.
-  int64_t deadlineMillis_ = 0;
-  int64_t confirmRemainingMillis_ = 0;
+  // whether a confirmation runs, and its give-up budget in ACTIVE polling time
+  ConfirmationPollGate gate_{kConfirmationBudgetMillis};
   uint32_t generation_ = 0;      // drops fetch results from a superseded session
 };
 
