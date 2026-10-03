@@ -2882,6 +2882,10 @@
     <value>关联另一种登录帐户的方式。</value>
     <comment>A description of the add auth sheet.</comment>
   </data>
+  <data name="load_failed" xml:space="preserve">
+    <value>无法加载。请检查网络连接后重试。</value>
+    <comment>A section (points, wallet, referral code, epoch history, payout wallet) could not be loaded. Shown in place of the loading spinner or the section's data, next to a Try again (Retry on apple) button.</comment>
+  </data>
   <data name="loading" xml:space="preserve">
     <value>加载中...</value>
     <comment>Used in ContentView.swift.</comment>

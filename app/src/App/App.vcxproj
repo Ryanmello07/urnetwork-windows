@@ -336,6 +336,7 @@
     <ClInclude Include="MainWindow.xaml.h"><DependentUpon>MainWindow.xaml</DependentUpon></ClInclude>
     <ClInclude Include="AccountPage.h" />
     <ClInclude Include="ReferralCard.h" />
+    <ClInclude Include="ReferralCodeState.h" />
     <ClInclude Include="ReferralsPage.h" />
     <ClInclude Include="LicensesPage.h" />
     <ClInclude Include="LicensePresentation.h" />

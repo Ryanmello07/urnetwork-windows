@@ -145,14 +145,17 @@ void ReferralCard::Apply() {
   const int64_t total = Balance().TotalReferrals();
   const auto code = Balance().ReferralCode();
   const std::string codeText = code ? *code : std::string();
+  const ReferralCodeView view = Balance().ReferralView();
 
   // "n/max" — or, once the code's cap is reached, the sentence that says so
   const bool capped = 0 < terms.maxReferrals && terms.maxReferrals <= total;
 
   if (codeText == shownReferralCode_ && total == shownReferralTotal_ &&
-      terms.maxReferrals == shownReferralMax_ && referralPanelHost_.Children().Size() != 0) {
+      terms.maxReferrals == shownReferralMax_ && view == shownReferralView_ &&
+      referralPanelHost_.Children().Size() != 0) {
     return;
   }
+  shownReferralView_ = view;
   shownReferralCode_ = codeText;
   shownReferralTotal_ = total;
   shownReferralMax_ = terms.maxReferrals;
@@ -206,7 +209,7 @@ void ReferralCard::Apply() {
   detail.TextAlignment(TextAlignment::Center);
   content.Children().Append(detail);
 
-  if (!codeText.empty()) {
+  if (view == ReferralCodeView::Code) {
     auto label = MakeText(Upper(Loc("your_referral_code")), 11,
                           colors::MakeBrush(colors::WithAlpha(colors::kUrLightBlue, 0x99)));
     label.FontWeight(winrt::Windows::UI::Text::FontWeights::SemiBold());
@@ -272,6 +275,20 @@ void ReferralCard::Apply() {
       share.Content(winrt::box_value(Loc("copied")));
     });
     content.Children().Append(share);
+  } else if (view == ReferralCodeView::Unavailable) {
+    // the read failed with no code to show: say so, and offer the read again
+    // instead of a ring that only a later background poll could end
+    auto failed = MakeText(Loc("load_failed"), 14,
+                           colors::MakeBrush(colors::WithAlpha(colors::kUrLightBlue, 0xD9)), true);
+    failed.TextAlignment(TextAlignment::Center);
+    failed.HorizontalAlignment(HorizontalAlignment::Center);
+    failed.Margin(Thickness{0, 12, 0, 0});
+    content.Children().Append(failed);
+    Button retry;
+    retry.Content(winrt::box_value(Loc("try_again")));
+    retry.HorizontalAlignment(HorizontalAlignment::Center);
+    retry.Click([](auto const&, auto const&) { Balance().RetryReferral(); });
+    content.Children().Append(retry);
   } else {
     ProgressRing ring;
     ring.Width(24);

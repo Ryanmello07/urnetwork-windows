@@ -3102,6 +3102,10 @@
     <value>اربط طريقة أخرى لتسجيل الدخول إلى حسابك.</value>
     <comment>A description of the add auth sheet.</comment>
   </data>
+  <data name="load_failed" xml:space="preserve">
+    <value>تعذّر التحميل. تحقّق من اتصالك وحاول مرة أخرى.</value>
+    <comment>A section (points, wallet, referral code, epoch history, payout wallet) could not be loaded. Shown in place of the loading spinner or the section's data, next to a Try again (Retry on apple) button.</comment>
+  </data>
   <data name="loading" xml:space="preserve">
     <value>جارٍ التحميل...</value>
     <comment>Used in ContentView.swift.</comment>

@@ -2926,6 +2926,10 @@ richtig auf</value>
     <value>Verknüpfe eine weitere Möglichkeit, dich bei deinem Konto anzumelden.</value>
     <comment>A description of the add auth sheet.</comment>
   </data>
+  <data name="load_failed" xml:space="preserve">
+    <value>Laden fehlgeschlagen. Überprüfe deine Verbindung und versuche es erneut.</value>
+    <comment>A section (points, wallet, referral code, epoch history, payout wallet) could not be loaded. Shown in place of the loading spinner or the section's data, next to a Try again (Retry on apple) button.</comment>
+  </data>
   <data name="loading" xml:space="preserve">
     <value>Laden...</value>
     <comment>Used in ContentView.swift.</comment>
