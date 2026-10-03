@@ -105,7 +105,7 @@ void SubscriptionBalanceStore::Stop() {
   StopConfirmation(/*timedOut=*/false);
   StopBackground();
   StopReferralPolling();
-  referralCode_.reset();
+  referral_.Reset();
   totalReferrals_ = 0;
   referralLoading_ = false;
   timedOut_ = false;
@@ -352,14 +352,17 @@ void SubscriptionBalanceStore::FetchReferral() {
           referralLoading_ = false;
           if (err || !result || result->error) {
             if (err) LogWarn("referral: fetch failed: {}", *err);
-            return;  // keep the last reading; the poll retries
+            // keep the last reading; the poll retries
+            if (referral_.Fail()) Publish();
+            return;
           }
-          referralCode_ = result->referral_code;
+          const bool repaint = referral_.Succeed(result->referral_code);
           totalReferrals_ = result->total_referrals;
           terms_ = TermsFromResult(*result);
           if (result->referral_code) {
             MaybeCelebrateReferrals(*result->referral_code, result->total_referrals);
           }
+          if (repaint) Publish();
         });
       });
 }

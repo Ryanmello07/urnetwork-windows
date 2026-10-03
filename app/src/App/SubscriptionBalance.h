@@ -27,6 +27,7 @@
 #include <winrt/Microsoft.UI.Dispatching.h>
 
 #include "PricePresentation.h"
+#include "ReferralCodeState.h"
 #include "SdkHost.h"
 
 namespace urnw {
@@ -153,7 +154,9 @@ class SubscriptionBalanceStore {
   void SetReferralCelebrationHandler(ReferralCelebrationHandler h) {
     onReferralCelebration_ = std::move(h);
   }
-  std::optional<std::string> ReferralCode() const { return referralCode_; }
+  std::optional<std::string> ReferralCode() const { return referral_.Code(); }
+  // what the referral card shows where the code goes
+  ReferralCodeView ReferralView() const { return referral_.View(); }
   int64_t TotalReferrals() const { return totalReferrals_; }
   // the cap and bonus, from the server with the code (defaults until then)
   urnw::ReferralTerms ReferralTerms() const { return terms_; }
@@ -187,7 +190,7 @@ class SubscriptionBalanceStore {
   winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer referralTimer_{nullptr};
   ChangeHandler onChange_;
   ReferralCelebrationHandler onReferralCelebration_;
-  std::optional<std::string> referralCode_;
+  ReferralCodeFetch referral_;
   int64_t totalReferrals_ = 0;
   urnw::ReferralTerms terms_;
   bool referralLoading_ = false;
