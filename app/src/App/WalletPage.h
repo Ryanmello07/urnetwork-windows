@@ -11,7 +11,7 @@
 //           tile
 //   pane B  the per-epoch history (points; the alpha column only with a
 //           wallet) and the leaderboard, one at a time
-//   pane C  own ranking, the Seeker multiplier (points only), reliability
+//   pane C  own ranking, the Seeker multiplier, reliability
 //
 // Points are URnetwork's own system and always the headline. Alpha accrues
 // from the first epoch after the wallet was attached, never retroactively.
@@ -314,7 +314,7 @@ class WalletPage {
   void ApplyStatsSections(bool force);
   winrt::fire_and_forget ShowProviderTransportSettingsSheet();
 
-  // ---- the Seeker multiplier (points only)
+  // ---- the Seeker multiplier
   void ApplySeekerState();
   void ApplySeekerResult(uint32_t generation, bool ok, std::string const& serverError);
 

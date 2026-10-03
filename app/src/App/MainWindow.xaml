@@ -2441,8 +2441,8 @@
                                               Style="{StaticResource UrSnackbarStyle}"
                                               Margin="12,8" IsOpen="False" />
 
-                                <!-- earning multipliers: the Seeker token, points
-                                     only ........................................ -->
+                                <!-- earning multipliers: the Seeker token (2x points,
+                                     free daily data and referral data) ........... -->
                                 <Border Style="{StaticResource UrGroupHeaderStyle}">
                                     <TextBlock x:Name="EarningMultipliersHeading"
                                                Style="{StaticResource UrGroupHeaderTextStyle}" />
@@ -2453,7 +2453,7 @@
                                         <TextBlock x:Name="SeekerStatusText" TextWrapping="Wrap"
                                                    Style="{StaticResource UrKeyTextStyle}"
                                                    TextTrimming="None" />
-                                        <TextBlock x:Name="SeekerPointsOnlyText" TextWrapping="Wrap"
+                                        <TextBlock x:Name="SeekerBenefitText" TextWrapping="Wrap"
                                                    Style="{StaticResource UrRowNoteStyle}"
                                                    TextTrimming="None" />
                                         <Button x:Name="VerifySeekerButton"

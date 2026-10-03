@@ -5041,13 +5041,29 @@ world's content</value>
     <value>That's {} words — a seedphrase is 12 or 24 words</value>
     <comment>Login: warning when the pasted seedphrase has {count} words instead of 12 or 24.</comment>
   </data>
+  <data name="seeker_multiplier_benefit" xml:space="preserve">
+    <value>Doubles your points, free daily data and referral data.</value>
+    <comment>Seeker/Saga token multiplier: what a verified token gives. It doubles points and the free daily data and referral data grants; it does not grant Pro.</comment>
+  </data>
   <data name="seeker_points_only" xml:space="preserve">
     <value>The Seeker multiplier applies to points only.</value>
     <comment>Note on the Seeker verification action.</comment>
   </data>
+  <data name="seeker_token_not_found" xml:space="preserve">
+    <value>No Seeker or Saga token found in wallet …{}</value>
+    <comment>Seeker token verification: the wallet holds no Seeker or Saga token. The argument is the end of the wallet address.</comment>
+  </data>
   <data name="seeker_token_verified" xml:space="preserve">
     <value>Seeker Token Verified!</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="seeker_verify_failed" xml:space="preserve">
+    <value>Couldn't verify the Seeker token. Please try again.</value>
+    <comment>Seeker token verification failed (wallet app error or the server could not be reached).</comment>
+  </data>
+  <data name="seeker_verify_no_wallet_app" xml:space="preserve">
+    <value>No Solana wallet app was found on this device.</value>
+    <comment>Seeker token verification: no Solana wallet app is installed to sign the verification message.</comment>
   </data>
   <data name="select_country_to_block" xml:space="preserve">
     <value>Select country to block</value>
