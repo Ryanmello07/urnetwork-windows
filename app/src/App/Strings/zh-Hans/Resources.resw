@@ -2556,13 +2556,9 @@
     <value>访客</value>
     <comment>Account Screen</comment>
   </data>
-  <data name="guest_sign_out_and_create_account" xml:space="preserve">
-    <value>退出登录并创建账户</value>
-    <comment>Guest sign-out confirmation (desktop): the button that signs out of a legacy guest network so the user can create an account. Guest networks can no longer be upgraded in place.</comment>
-  </data>
-  <data name="guest_sign_out_balance_warning" xml:space="preserve">
-    <value>要创建账户，请先退出此访客网络。其余额会保留在访客网络中，不会转入您的新账户。访客网络没有登录方式，退出后您将无法再次登录该网络。</value>
-    <comment>Guest sign-out confirmation (desktop), shown for every create-account and purchase action on a legacy guest network. Must say plainly that the guest balance is not carried over and that the guest network cannot be signed back into, since it has no login.</comment>
+  <data name="guest_convert_explanation" xml:space="preserve">
+    <value>添加电子邮件和密码即可登录此网络。其套餐和余额都会保留。</value>
+    <comment>Desktop: the first step of "Create an account" on a legacy guest network. The user adds an email and a password to the network they are on now, so they can sign in to it again; its plan and balance stay with it (nothing moves to a new account).</comment>
   </data>
   <data name="hash_count" xml:space="preserve">
     <value>#{}</value>
@@ -3275,6 +3271,10 @@
   <data name="network_name_check_error" xml:space="preserve">
     <value>不可用。必须与现有网络至少有 3 个字符不同。使其独特或更长。</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="network_name_check_failed" xml:space="preserve">
+    <value>无法检查是否可用。你仍可以继续。</value>
+    <comment>Create Network Form: the network name availability check could not reach the server. Not a verdict on the name; the user may still create the network.</comment>
   </data>
   <data name="network_name_is_too_short_try_one_with_at_least" xml:space="preserve">
     <value>网络名称太短。请使用至少 6 个字符的名称</value>

@@ -163,7 +163,7 @@ MainWindow::MainWindow() {
       auto self = weak.get();
       if (!self) return;
       if (self->balance_.guest) {
-        self->login().OfferGuestSignOut();
+        self->login().OpenGuestConversion();
       } else {
         self->ShowUpgradeSheet();
       }
@@ -1471,7 +1471,7 @@ void MainWindow::NoteConnected() {
 // onboarding page picked (its own products page would only ask again).
 winrt::fire_and_forget MainWindow::ShowUpgradeCheckout(bool yearly) {
   if (balance_.guest) {  // no purchase for a guest network (ShowUpgradeSheet)
-    login_->OfferGuestSignOut();
+    login_->OpenGuestConversion();
     co_return;
   }
   if (sheetOpen_) co_return;
@@ -1523,7 +1523,7 @@ void MainWindow::ApplyBalance() {
   // the upgrade affordances show for a signed-in free account; a guest gets a
   // create-account affordance on the plan cards instead (macOS AccountRootView,
   // linux ConnectDrawer), which offers signing out to create an account
-  // (LoginPage::OfferGuestSignOut)
+  // (LoginPage::OpenGuestConversion)
   const auto upgradeVisibility = (!balance_.isPro && !balance_.guest)
                                      ? Visibility::Visible
                                      : Visibility::Collapsed;
@@ -1778,7 +1778,7 @@ void MainWindow::OnOpenUpgrade(IInspectable const&, RoutedEventArgs const&) {
   // a guest first creates a full account (the plan card's affordance reads
   // "Create an account" for them); checkout is for signed-in free accounts
   if (balance_.guest) {
-    login_->OfferGuestSignOut();
+    login_->OpenGuestConversion();
     return;
   }
   ShowUpgradeSheet();
@@ -1796,7 +1796,7 @@ winrt::fire_and_forget MainWindow::ShowUpgradeSheet() {
   // No purchase for a legacy guest network: whatever was bought would stay
   // on a network with no login (every entry point lands here or checks first)
   if (balance_.guest) {
-    login_->OfferGuestSignOut();
+    login_->OpenGuestConversion();
     co_return;
   }
   if (sheetOpen_) co_return;  // only one ContentDialog can show at a time

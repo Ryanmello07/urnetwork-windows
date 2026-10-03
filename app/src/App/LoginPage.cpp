@@ -12,6 +12,7 @@
 #include "Log.h"
 #include "MainWindow.xaml.h"
 #include "PageContext.h"
+#include "SubscriptionBalance.h"
 #include "Strings.h"
 #include "UrColors.h"
 #include "UrComponents.h"
@@ -374,39 +375,30 @@ bool LoginPage::ConsumeNewNetwork() {
   return pending;
 }
 
-winrt::fire_and_forget LoginPage::OfferGuestSignOut() {
+winrt::fire_and_forget LoginPage::OpenGuestConversion() {
   if (w_.sheetOpen()) co_return;  // only one ContentDialog can show at a time
   auto self = w_.get_strong();
 
-  TextBlock body;
-  body.Text(Loc("guest_sign_out_balance_warning"));
-  body.TextWrapping(TextWrapping::Wrap);
-  body.MaxWidth(420);
-
-  ContentDialog dialog;
-  dialog.XamlRoot(self->Content().XamlRoot());
-  dialog.Title(winrt::box_value(Loc("create_an_account")));
-  dialog.Content(body);
-  dialog.PrimaryButtonText(Loc("guest_sign_out_and_create_account"));
-  dialog.CloseButtonText(Loc("cancel"));
-  // signing out abandons the guest network: never the default
-  dialog.DefaultButton(ContentDialogButton::Close);
-
+  auto weak = w_.get_weak();
+  guestConversionSheet_ = urnw::GuestConversionSheet::Create(
+      self->Content().XamlRoot(), Sdk(), Balance(), [weak] {
+        if (auto self = weak.get()) {
+          self->login().snackbar_->Show(Loc("sign_in_method_added_successfully"),
+                                        InfoBarSeverity::Success);
+        }
+      });
   w_.SetSheetOpen(true);
-  ContentDialogResult result{ContentDialogResult::None};
   try {
-    result = co_await dialog.ShowAsync();
+    co_await guestConversionSheet_->Dialog().ShowAsync();
   } catch (winrt::hresult_error const& e) {
-    urnw::LogError("guest sign-out sheet: {} (0x{:08x})",
+    urnw::LogError("guest conversion sheet: {} (0x{:08x})",
                    urnw::Narrow(std::wstring{e.message()}),
                    static_cast<uint32_t>(e.code()));
   } catch (std::exception const& e) {
-    urnw::LogError("guest sign-out sheet: {}", e.what());
+    urnw::LogError("guest conversion sheet: {}", e.what());
   }
   w_.SetSheetOpen(false);
-  if (result != ContentDialogResult::Primary) co_return;
-  // the auth relay swaps the home view for the sign-in flow
-  Sdk().Logout();
+  self->login().guestConversionSheet_.reset();
 }
 
 // ---- sign-in flow ----------------------------------------------------------
@@ -1501,9 +1493,12 @@ void LoginPage::ApplyAccountIdentity(std::string const& networkName, bool guest,
 void LoginPage::OnAccountMenu(IInspectable const&, RoutedEventArgs const&) {
   auto weak = w_.get_weak();
   urnw::AccountMenuActions actions;
-  if (accountGuest_) {
+  // the jwt claim is gone after a refresh; the balance carries the server's
+  // guest (no login method)
+  const bool guest = accountGuest_ || Balance().Current().guest;
+  if (guest) {
     actions.onCreateAccount = [weak] {
-      if (auto self = weak.get()) self->login().OfferGuestSignOut();
+      if (auto self = weak.get()) self->login().OpenGuestConversion();
     };
   }
   actions.onSignOut = [] { Sdk().Logout(); };
@@ -1513,7 +1508,7 @@ void LoginPage::OnAccountMenu(IInspectable const&, RoutedEventArgs const&) {
                                     InfoBarSeverity::Success);
     }
   };
-  urnw::ShowAccountMenu(w_.AccountMenuButton(), Sdk(), accountNetworkName_, accountGuest_,
+  urnw::ShowAccountMenu(w_.AccountMenuButton(), Sdk(), accountNetworkName_, guest,
                         std::move(actions));
 }
 

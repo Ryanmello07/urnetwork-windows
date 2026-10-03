@@ -4,6 +4,7 @@ package tests
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -36,11 +37,37 @@ func functionBody(source string, signature string) string {
 	return ""
 }
 
-// A legacy guest network (UPGRADE.md D8, S6): the server removed the guest
+// Compile and execute the legacy guest conversion spec (App/GuestConversion.h,
+// UPGRADE.md A4/D8): a refreshed guest (jwt claim gone, server `guest` set) is
+// still a guest, and the conversion adds a sign-in to the guest's own network,
+// refreshes, sends and checks the code, and never signs out.
+func TestGuestConversion(t *testing.T) {
+	compiler, err := exec.LookPath("c++")
+	if err != nil {
+		t.Fatal("guest conversion tests require a C++20 compiler: ", err)
+	}
+	root := repositoryRoot(t)
+	program := filepath.Join(t.TempDir(), "guest-conversion-tests")
+	build := exec.Command(compiler, "-std=c++20", "-Wall", "-Wextra", "-Werror",
+		"-I"+filepath.Join(root, "app", "src", "App"),
+		filepath.Join(root, "app", "tools", "guest-conversion-tests.cpp"), "-o", program)
+	if output, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build guest conversion tests: %v\n%s", err, output)
+	}
+	if output, err := exec.Command(program).CombinedOutput(); err != nil {
+		t.Fatalf("guest conversion: %v\n%s", err, output)
+	} else {
+		t.Logf("%s", output)
+	}
+}
+
+// A legacy guest network (UPGRADE.md D8, A4, S6): the server removed the guest
 // upgrade routes and the SDK's UpgradeGuest now always fails, so nothing may
 // call it (or create guest networks). Every upgrade and create-account entry
-// for a guest offers to sign out instead, warning that the guest balance stays
-// on the guest network, and no checkout opens for a guest.
+// for a guest converts the network in place (GuestConversionSheet: add a
+// sign-in, verify it) and never signs out, and no checkout opens for a guest.
+// Who is a guest includes the server's `guest`, since a refreshed jwt has lost
+// its GuestMode claim.
 func TestLegacyGuestAccountFlow(t *testing.T) {
 	root := repositoryRoot(t)
 	appDir := filepath.Join(root, "app", "src", "App")
@@ -63,7 +90,7 @@ func TestLegacyGuestAccountFlow(t *testing.T) {
 			continue
 		}
 		source := read(name)
-		for _, dead := range []string{"upgradeGuest(", "UpgradeGuest(", "LoginAsGuest", "guest_mode = true", "GuestModeSheet"} {
+		for _, dead := range []string{"upgradeGuest(", "UpgradeGuest(", "LoginAsGuest", "guest_mode = true", "GuestModeSheet", "OfferGuestSignOut"} {
 			if strings.Contains(source, dead) {
 				t.Errorf("%s: still has %s", name, dead)
 			}
@@ -71,22 +98,36 @@ func TestLegacyGuestAccountFlow(t *testing.T) {
 	}
 
 	login := read("LoginPage.cpp")
-	offer := functionBody(login, "winrt::fire_and_forget LoginPage::OfferGuestSignOut()")
-	if offer == "" {
-		t.Fatal("LoginPage.cpp: no OfferGuestSignOut")
+	open := functionBody(login, "winrt::fire_and_forget LoginPage::OpenGuestConversion()")
+	if open == "" {
+		t.Fatal("LoginPage.cpp: no OpenGuestConversion")
 	}
-	for _, want := range []string{
-		`Loc("guest_sign_out_balance_warning")`,
-		`Loc("guest_sign_out_and_create_account")`,
-		"ContentDialogButton::Close",
-		"Sdk().Logout()",
-	} {
-		if !strings.Contains(offer, want) {
-			t.Errorf("OfferGuestSignOut: missing %s", want)
+	if !strings.Contains(open, "urnw::GuestConversionSheet::Create(") {
+		t.Error("OpenGuestConversion: does not open the conversion sheet")
+	}
+	if strings.Contains(open, "Logout") {
+		t.Error("OpenGuestConversion: signs out")
+	}
+	menu := functionBody(login, "void LoginPage::OnAccountMenu(")
+	if !strings.Contains(menu, "OpenGuestConversion()") {
+		t.Error("the account menu's Create account does not open the guest conversion")
+	}
+	if !strings.Contains(menu, "Balance().Current().guest") {
+		t.Error("the account menu reads only the jwt claim, which a refresh clears")
+	}
+
+	// the sheet adds and verifies on this network, and never signs in or out
+	sheets := read("SettingsSheets.cpp")
+	session := functionBody(sheets, "class SdkGuestConversionSession")
+	for _, want := range []string{"sdk_.api().addAuth(", "sdk_.api().authVerify(", "sdk_.RefreshJwt()", "balance_.Refresh()"} {
+		if !strings.Contains(session, want) {
+			t.Errorf("SdkGuestConversionSession: missing %s", want)
 		}
 	}
-	if !strings.Contains(functionBody(login, "void LoginPage::OnAccountMenu("), "OfferGuestSignOut()") {
-		t.Error("the account menu's Create account does not offer the guest sign-out")
+	for _, unwanted := range []string{"Logout", "sdk_.VerifyCode("} {
+		if strings.Contains(session, unwanted) {
+			t.Errorf("SdkGuestConversionSession: has %s", unwanted)
+		}
 	}
 
 	window := read("MainWindow.xaml.cpp")
@@ -96,15 +137,34 @@ func TestLegacyGuestAccountFlow(t *testing.T) {
 		"void MainWindow::OnOpenUpgrade(",
 	} {
 		body := functionBody(window, signature)
-		if !strings.Contains(body, "if (balance_.guest)") || !strings.Contains(body, "OfferGuestSignOut()") {
-			t.Errorf("%s: a guest is not diverted to the sign-out offer", signature)
+		if !strings.Contains(body, "if (balance_.guest)") || !strings.Contains(body, "OpenGuestConversion()") {
+			t.Errorf("%s: a guest is not diverted to the conversion", signature)
 		}
 	}
 
+	// the balance store reads the server's guest, not only the jwt claim
+	store := read("SubscriptionBalance.cpp")
+	for _, want := range []string{
+		"serverGuest_ = result.guest.value_or(false);",
+		"snapshot_.guest = IsGuestNetwork(jwtGuest_, serverGuest_);",
+	} {
+		if !strings.Contains(store, want) {
+			t.Errorf("SubscriptionBalance.cpp: missing %s", want)
+		}
+	}
+	if strings.Contains(store, "snapshot_.guest = jwt->GuestMode;") {
+		t.Error("SubscriptionBalance.cpp: guest is still the jwt claim alone")
+	}
+
 	resources := read(filepath.Join("Strings", "en", "Resources.resw"))
-	for _, key := range []string{"guest_sign_out_balance_warning", "guest_sign_out_and_create_account"} {
+	for _, key := range []string{"guest_convert_explanation", "sign_in_method_added_successfully"} {
 		if !strings.Contains(resources, `name="`+key+`"`) {
 			t.Errorf("en Resources.resw: missing %s", key)
+		}
+	}
+	for _, key := range []string{"guest_sign_out_balance_warning", "guest_sign_out_and_create_account"} {
+		if strings.Contains(resources, `name="`+key+`"`) {
+			t.Errorf("en Resources.resw: still has %s", key)
 		}
 	}
 }

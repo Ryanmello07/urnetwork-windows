@@ -31,9 +31,12 @@
 #include <winrt/Microsoft.UI.Xaml.Controls.h>
 #include <winrt/Microsoft.UI.Xaml.Media.h>
 
+#include "GuestConversion.h"
 #include "SdkHost.h"
 
 namespace urnw {
+
+class SubscriptionBalanceStore;
 
 // ---- the row kit ----------------------------------------------------------
 namespace rows {
@@ -249,6 +252,43 @@ class AddAuthSheet : public std::enable_shared_from_this<AddAuthSheet> {
   winrt::Microsoft::UI::Xaml::Controls::PasswordBox passwordBox_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::TextBlock errorText_{nullptr};
   bool submitting_ = false;
+};
+
+// ---- Create an account, for a legacy guest network ------------------------
+//
+// GuestConversion.h: adds an email/phone + password sign-in to the CURRENT
+// network and verifies it with the emailed code. The network, its plan and its
+// balance stay; nothing signs out (a guest network has no login to come back
+// to). Two pages in one dialog: the sign-in fields (Add), then the code
+// (Verify, Resend).
+class GuestConversionSheet : public std::enable_shared_from_this<GuestConversionSheet> {
+ public:
+  static std::shared_ptr<GuestConversionSheet> Create(
+      winrt::Microsoft::UI::Xaml::XamlRoot const& root, SdkHost& sdk,
+      SubscriptionBalanceStore& balance, std::function<void()> onDone);
+  ~GuestConversionSheet();
+
+  winrt::Microsoft::UI::Xaml::Controls::ContentDialog Dialog() const { return dialog_; }
+
+ private:
+  GuestConversionSheet(SdkHost& sdk, std::function<void()> onDone)
+      : sdk_(sdk), onDone_(std::move(onDone)) {}
+  void Build(winrt::Microsoft::UI::Xaml::XamlRoot const& root, SubscriptionBalanceStore& balance);
+  void Render();
+
+  SdkHost& sdk_;
+  std::function<void()> onDone_;
+  std::unique_ptr<GuestConversionSession> session_;
+  std::unique_ptr<GuestConversion> conversion_;
+  bool done_ = false;
+  winrt::Microsoft::UI::Xaml::Controls::ContentDialog dialog_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::StackPanel signInPanel_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::StackPanel codePanel_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::TextBox authBox_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::PasswordBox passwordBox_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::TextBox codeBox_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::TextBlock errorText_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::TextBlock noticeText_{nullptr};
 };
 
 // ---- Referral network (apple UpdateReferralNetworkSheet) -------------------

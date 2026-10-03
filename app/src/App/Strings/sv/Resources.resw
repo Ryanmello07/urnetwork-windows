@@ -2154,6 +2154,10 @@ Hämta din bonus genom att skapa ett nätverk!</value>
     <value>Inte tillgängligt. Måste skilja sig med minst 3 tecken från ett befintligt nätverk. Gör det unikt eller längre.</value>
     <comment>Call to action</comment>
   </data>
+  <data name="network_name_check_failed" xml:space="preserve">
+    <value>Det gick inte att kontrollera tillgängligheten. Du kan ändå fortsätta.</value>
+    <comment>Create Network Form: the network name availability check could not reach the server. Not a verdict on the name; the user may still create the network.</comment>
+  </data>
   <data name="network_name_is_too_short_try_one_with_at_least" xml:space="preserve">
     <value>Nätverksnamnet är för kort. Prova ett med minst 6 tecken</value>
     <comment>Supporting text for a text field that is invalid.</comment>

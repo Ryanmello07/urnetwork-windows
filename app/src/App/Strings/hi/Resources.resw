@@ -2151,6 +2151,10 @@
     <value>उपलब्ध नहीं है। किसी मौजूदा नेटवर्क से कम से कम 3 वर्ण अलग होने चाहिए। इसे अद्वितीय या लंबा बनाएं।</value>
     <comment>Call to action</comment>
   </data>
+  <data name="network_name_check_failed" xml:space="preserve">
+    <value>उपलब्धता की जांच नहीं हो सकी। आप फिर भी जारी रख सकते हैं।</value>
+    <comment>Create Network Form: the network name availability check could not reach the server. Not a verdict on the name; the user may still create the network.</comment>
+  </data>
   <data name="network_name_is_too_short_try_one_with_at_least" xml:space="preserve">
     <value>नेटवर्क का नाम बहुत छोटा है। कम से कम 6 अक्षरों वाला नाम आज़माएँ</value>
     <comment>Supporting text for a text field that is invalid.</comment>

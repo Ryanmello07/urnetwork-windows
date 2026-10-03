@@ -2202,6 +2202,10 @@
     <value>לא זמין. חייב להיות שונה בלפחות 3 תווים מרשת קיימת. הפוך אותו לייחודי או ארוך יותר.</value>
     <comment>Call to action</comment>
   </data>
+  <data name="network_name_check_failed" xml:space="preserve">
+    <value>לא ניתן היה לבדוק זמינות. עדיין אפשר להמשיך.</value>
+    <comment>Create Network Form: the network name availability check could not reach the server. Not a verdict on the name; the user may still create the network.</comment>
+  </data>
   <data name="network_name_is_too_short_try_one_with_at_least" xml:space="preserve">
     <value>שם הרשת קצר מדי. נסה שם באורך 6 תווים לפחות</value>
     <comment>Supporting text for a text field that is invalid.</comment>

@@ -378,6 +378,7 @@
     <ClInclude Include="ConnectCanvas.h" />
     <ClInclude Include="SdkHost.h" />
     <ClInclude Include="VerifySendNotice.h" />
+    <ClInclude Include="GuestConversion.h" />
     <ClInclude Include="StatsFormat.h" />
     <ClInclude Include="BlockActionReason.h" />
     <ClInclude Include="StatsSheets.h" />

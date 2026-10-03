@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <chrono>
 
+#include "GuestConversion.h"
 #include "Log.h"
 #include "Paths.h"
 
@@ -79,13 +80,16 @@ void SubscriptionBalanceStore::Start() {
 
   // Pro and guest are readable without any network call: they are claims baked
   // into the stored jwt.
+  serverGuest_ = false;
   if (auto jwt = sdk_.ParsedJwt()) {
     jwtPro_ = jwt->Pro;
+    jwtGuest_ = jwt->GuestMode;
     snapshot_.isPro = jwt->Pro;
-    snapshot_.guest = jwt->GuestMode;
   } else {
     jwtPro_ = false;
+    jwtGuest_ = false;
   }
+  snapshot_.guest = IsGuestNetwork(jwtGuest_, serverGuest_);
   Publish();
 
   if (visible_) {
@@ -109,6 +113,8 @@ void SubscriptionBalanceStore::Stop() {
   timedOut_ = false;
   snapshot_ = {};
   jwtPro_ = false;
+  jwtGuest_ = false;
+  serverGuest_ = false;
   Publish();
 }
 
@@ -183,7 +189,15 @@ void SubscriptionBalanceStore::OnJwtRefreshed() {
   auto byJwt = sdk_.ParsedJwt();
   if (!byJwt) return;
   jwtPro_ = byJwt->Pro;  // the claim actually landed; advance the tracking
-  if (snapshot_.isPro == jwtPro_) return;
+  // a refresh signs the jwt without GuestMode; the server's guest still holds
+  jwtGuest_ = byJwt->GuestMode;
+  const bool guest = IsGuestNetwork(jwtGuest_, serverGuest_);
+  const bool guestChanged = snapshot_.guest != guest;
+  snapshot_.guest = guest;
+  if (snapshot_.isPro == jwtPro_) {
+    if (guestChanged) Publish();
+    return;
+  }
   snapshot_.isPro = jwtPro_;
   // a lapse back to free resumes the background poll; Pro stops it (Apply parity)
   if (!jwtPro_) EnsureBackgroundPolling();
@@ -228,6 +242,10 @@ void SubscriptionBalanceStore::Apply(urnet::SubscriptionBalanceResult const& res
                             result.open_transfer_byte_count;
   snapshot_.startBalanceByteCount = result.start_balance_byte_count;
   snapshot_.loaded = true;
+  // no login method on the network (a legacy guest), read live by the server:
+  // right even after a refresh cleared the jwt claim
+  serverGuest_ = result.guest.value_or(false);
+  snapshot_.guest = IsGuestNetwork(jwtGuest_, serverGuest_);
   if (result.price_tier) {
     snapshot_.tier.name =
         result.price_tier->name.empty() ? kPriceTierStandard : result.price_tier->name;
