@@ -1603,14 +1603,6 @@ správným způsobem</value>
     <value>Host</value>
     <comment>Account Screen</comment>
   </data>
-  <data name="guest_mode_explainer" xml:space="preserve">
-    <value>Vyzkoušejte URnetwork bez vytváření účtu. Na plný účet můžete přejít kdykoli.</value>
-    <comment>Guest-mode sheet explainer: what guest mode is and that a full account can come later.</comment>
-  </data>
-  <data name="guest_mode_failed" xml:space="preserve">
-    <value>Režim hosta se nezdařil</value>
-    <comment>Error shown when starting a guest-mode network fails.</comment>
-  </data>
   <data name="hide_provider_list" xml:space="preserve">
     <value>Skrýt seznam poskytovatelů</value>
     <comment>Used in Main/Connect/ConnectView-macOS.swift.</comment>

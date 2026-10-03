@@ -2548,13 +2548,13 @@
     <value>访客</value>
     <comment>Account Screen</comment>
   </data>
-  <data name="guest_mode_explainer" xml:space="preserve">
-    <value>无需创建账户即可试用 URnetwork。您可以随时升级为完整账户。</value>
-    <comment>Guest-mode sheet explainer: what guest mode is and that a full account can come later.</comment>
+  <data name="guest_sign_out_and_create_account" xml:space="preserve">
+    <value>退出登录并创建账户</value>
+    <comment>Guest sign-out confirmation (desktop): the button that signs out of a legacy guest network so the user can create an account. Guest networks can no longer be upgraded in place.</comment>
   </data>
-  <data name="guest_mode_failed" xml:space="preserve">
-    <value>访客模式失败</value>
-    <comment>Error shown when starting a guest-mode network fails.</comment>
+  <data name="guest_sign_out_balance_warning" xml:space="preserve">
+    <value>要创建账户，请先退出此访客网络。其余额会保留在访客网络中，不会转入您的新账户。访客网络没有登录方式，退出后您将无法再次登录该网络。</value>
+    <comment>Guest sign-out confirmation (desktop), shown for every create-account and purchase action on a legacy guest network. Must say plainly that the guest balance is not carried over and that the guest network cannot be signed back into, since it has no login.</comment>
   </data>
   <data name="hash_count" xml:space="preserve">
     <value>#{}</value>

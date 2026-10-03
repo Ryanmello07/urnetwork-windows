@@ -1572,14 +1572,6 @@ bonne manière</value>
     <value>Invité</value>
     <comment>Account Screen</comment>
   </data>
-  <data name="guest_mode_explainer" xml:space="preserve">
-    <value>Essayez URnetwork sans créer de compte. Vous pouvez passer à un compte complet à tout moment.</value>
-    <comment>Guest-mode sheet explainer: what guest mode is and that a full account can come later.</comment>
-  </data>
-  <data name="guest_mode_failed" xml:space="preserve">
-    <value>Échec du mode invité</value>
-    <comment>Error shown when starting a guest-mode network fails.</comment>
-  </data>
   <data name="hide_provider_list" xml:space="preserve">
     <value>Masquer la liste des fournisseurs</value>
     <comment>Used in Main/Connect/ConnectView-macOS.swift.</comment>

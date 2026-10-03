@@ -721,39 +721,6 @@ void SdkHost::LoginWithCode(const std::string& authCode,
   });
 }
 
-void SdkHost::LoginAsGuest(std::function<void(AuthResult)> done,
-                           std::optional<std::string> referralCode) {
-  SetAuthState(AuthState::Authenticating);
-  urnet::NetworkCreateArgs args;
-  ApplySignupPreferences(args);
-  args.terms = true;  // the sheet's button is gated on the terms consent
-  args.guest_mode = true;
-  if (referralCode && !referralCode->empty()) args.referral_code = *referralCode;
-
-  api_->networkCreate(args, [this, done](std::optional<urnet::NetworkCreateResult> result,
-                                         std::optional<std::string> err) {
-    if (err || !result) {
-      AuthResult r{false, false, err ? *err : "no result"};
-      SetAuthState(AuthState::Error, r.error);
-      if (done) done(r);
-      return;
-    }
-    if (result->error && !result->error->message.empty()) {
-      AuthResult r{false, false, result->error->message};
-      SetAuthState(AuthState::LoggedOut);  // a request error, not a session error
-      if (done) done(r);
-      return;
-    }
-    if (result->network && result->network->by_jwt && !result->network->by_jwt->empty()) {
-      RegisterNetworkClient(*result->network->by_jwt, done);
-      return;
-    }
-    AuthResult r{false, false, "guest create returned no network"};
-    SetAuthState(AuthState::Error, r.error);
-    if (done) done(r);
-  });
-}
-
 // ---- account discovery / sign-up / verify / reset ---------------------------
 // macOS Authenticate/** parity. All results are delivered on SDK callback
 // threads; the UI marshals onto its thread.
@@ -964,40 +931,6 @@ void SdkHost::SubmitCreateNetwork(const CreateNetworkParams& params,
     AuthResult r{false, false, "create network returned no network"};
     SetAuthState(AuthState::Error, r.error);
     if (done) done(r);
-  });
-}
-
-void SdkHost::UpgradeGuest(const std::string& networkName, const std::string& userAuth,
-                           const std::string& password,
-                           std::function<void(AuthResult)> done) {
-  // No auth-state pushes on request errors: unlike the sign-in flows the caller
-  // is still signed in (as the guest), and the create step surfaces the error
-  // inline. Success lands in RegisterNetworkClient, which pushes LoggedIn once
-  // the device is re-registered under the upgraded network's jwt.
-  urnet::UpgradeGuestArgs args;
-  args.network_name = networkName;
-  args.user_auth = userAuth;
-  args.password = password;
-
-  api_->upgradeGuest(args, [this, done](std::optional<urnet::UpgradeGuestResult> result,
-                                        std::optional<std::string> err) {
-    if (err || !result) {
-      if (done) done({false, false, err ? *err : "no result"});
-      return;
-    }
-    if (result->error && !result->error->message.empty()) {
-      if (done) done({false, false, result->error->message});
-      return;
-    }
-    if (result->verification_required) {
-      if (done) done({false, true, ""});  // the UI routes to the verify step
-      return;
-    }
-    if (result->network && result->network->by_jwt && !result->network->by_jwt->empty()) {
-      RegisterNetworkClient(*result->network->by_jwt, done);
-      return;
-    }
-    if (done) done({false, false, "guest upgrade returned no network"});
   });
 }
 

@@ -533,15 +533,6 @@ class SdkHost {
                          std::function<void(AuthResult)> done);
   void LoginWithCode(const std::string& authCode, std::function<void(AuthResult)> done);
 
-  // Guest mode (macOS GuestModeSheet / linux LoginAsGuest parity): one tap
-  // creates a throwaway network — networkCreate{guest_mode, terms}, no user
-  // auth — then registers this device like any other sign-in. Upgradeable to a
-  // full account later (UpgradeGuest). Guests can be referred too: a validated
-  // referral code rides along on the create (the server links the referral on
-  // any create path).
-  void LoginAsGuest(std::function<void(AuthResult)> done,
-                    std::optional<std::string> referralCode = std::nullopt);
-
   // Account discovery: authLogin{user_auth} routes an email/phone to the
   // password, create or verify step (macOS LoginInitialViewModel parity).
   void StartLogin(const std::string& userAuth, std::function<void(LoginRouting)> done);
@@ -550,14 +541,6 @@ class SdkHost {
   // wallet auth (params.useWalletAuth). verification_required in the result
   // routes the UI to the verify step; a jwt registers this device.
   void CreateNetwork(const CreateNetworkParams& params, std::function<void(AuthResult)> done);
-
-  // Guest -> full account (Api::upgradeGuest; linux SdkHost parity). The
-  // upgraded network keeps its id but issues a new jwt, so on success
-  // RegisterNetworkClient tears the live guest session down and re-registers
-  // this device under the new auth. verification_required routes the UI to the
-  // verify step (authVerify then lands the new jwt the same way).
-  void UpgradeGuest(const std::string& networkName, const std::string& userAuth,
-                    const std::string& password, std::function<void(AuthResult)> done);
 
   // Verify-code entry + resend (authVerify / authVerifySend). A successful
   // verify yields the network jwt and registers this device.

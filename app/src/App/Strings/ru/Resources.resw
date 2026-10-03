@@ -2620,13 +2620,13 @@
     <value>Гость</value>
     <comment>Account Screen</comment>
   </data>
-  <data name="guest_mode_explainer" xml:space="preserve">
-    <value>Попробуйте URnetwork без создания аккаунта. Вы можете перейти на полный аккаунт в любое время.</value>
-    <comment>Guest-mode sheet explainer: what guest mode is and that a full account can come later.</comment>
+  <data name="guest_sign_out_and_create_account" xml:space="preserve">
+    <value>Выйти и создать аккаунт</value>
+    <comment>Guest sign-out confirmation (desktop): the button that signs out of a legacy guest network so the user can create an account. Guest networks can no longer be upgraded in place.</comment>
   </data>
-  <data name="guest_mode_failed" xml:space="preserve">
-    <value>Не удалось запустить гостевой режим</value>
-    <comment>Error shown when starting a guest-mode network fails.</comment>
+  <data name="guest_sign_out_balance_warning" xml:space="preserve">
+    <value>Чтобы создать аккаунт, сначала выйдите из этой гостевой сети. Её баланс останется в гостевой сети и не перейдёт в новый аккаунт. У гостевой сети нет данных для входа, поэтому после выхода вернуться в неё будет нельзя.</value>
+    <comment>Guest sign-out confirmation (desktop), shown for every create-account and purchase action on a legacy guest network. Must say plainly that the guest balance is not carried over and that the guest network cannot be signed back into, since it has no login.</comment>
   </data>
   <data name="hash_count" xml:space="preserve">
     <value>#{}</value>

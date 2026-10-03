@@ -1556,14 +1556,6 @@
     <value>ゲスト</value>
     <comment>Account Screen</comment>
   </data>
-  <data name="guest_mode_explainer" xml:space="preserve">
-    <value>アカウントを作成せずにURnetworkをお試しください。いつでもフルアカウントにアップグレードできます。</value>
-    <comment>Guest-mode sheet explainer: what guest mode is and that a full account can come later.</comment>
-  </data>
-  <data name="guest_mode_failed" xml:space="preserve">
-    <value>ゲストモードに失敗しました</value>
-    <comment>Error shown when starting a guest-mode network fails.</comment>
-  </data>
   <data name="hide_provider_list" xml:space="preserve">
     <value>プロバイダーリストを非表示</value>
     <comment>Used in Main/Connect/ConnectView-macOS.swift.</comment>

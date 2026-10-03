@@ -1572,14 +1572,6 @@ juiste manier</value>
     <value>Gast</value>
     <comment>Account Screen</comment>
   </data>
-  <data name="guest_mode_explainer" xml:space="preserve">
-    <value>Probeer URnetwork zonder een account aan te maken. Je kunt op elk moment upgraden naar een volledig account.</value>
-    <comment>Guest-mode sheet explainer: what guest mode is and that a full account can come later.</comment>
-  </data>
-  <data name="guest_mode_failed" xml:space="preserve">
-    <value>Gastmodus mislukt</value>
-    <comment>Error shown when starting a guest-mode network fails.</comment>
-  </data>
   <data name="hide_provider_list" xml:space="preserve">
     <value>Verberg Provider Lijst</value>
     <comment>Used in Main/Connect/ConnectView-macOS.swift.</comment>

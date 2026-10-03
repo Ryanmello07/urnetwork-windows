@@ -2668,13 +2668,13 @@
     <value>ضيف</value>
     <comment>Account Screen</comment>
   </data>
-  <data name="guest_mode_explainer" xml:space="preserve">
-    <value>جرب URnetwork دون إنشاء حساب. يمكنك الترقية إلى حساب كامل في أي وقت.</value>
-    <comment>Guest-mode sheet explainer: what guest mode is and that a full account can come later.</comment>
+  <data name="guest_sign_out_and_create_account" xml:space="preserve">
+    <value>تسجيل الخروج وإنشاء حساب</value>
+    <comment>Guest sign-out confirmation (desktop): the button that signs out of a legacy guest network so the user can create an account. Guest networks can no longer be upgraded in place.</comment>
   </data>
-  <data name="guest_mode_failed" xml:space="preserve">
-    <value>فشل وضع الضيف</value>
-    <comment>Error shown when starting a guest-mode network fails.</comment>
+  <data name="guest_sign_out_balance_warning" xml:space="preserve">
+    <value>لإنشاء حساب، سجّل الخروج من شبكة الضيف هذه أولًا. يبقى رصيدها في شبكة الضيف ولا يُنقل إلى حسابك الجديد. لا تملك شبكة الضيف وسيلة لتسجيل الدخول، لذا لن تتمكن من العودة إليها بعد تسجيل الخروج.</value>
+    <comment>Guest sign-out confirmation (desktop), shown for every create-account and purchase action on a legacy guest network. Must say plainly that the guest balance is not carried over and that the guest network cannot be signed back into, since it has no login.</comment>
   </data>
   <data name="hash_count" xml:space="preserve">
     <value>#{}</value>

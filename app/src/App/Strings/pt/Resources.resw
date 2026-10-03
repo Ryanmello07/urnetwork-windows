@@ -1572,14 +1572,6 @@ maneira certa</value>
     <value>Convidado</value>
     <comment>Account Screen</comment>
   </data>
-  <data name="guest_mode_explainer" xml:space="preserve">
-    <value>Experimente a URnetwork sem criar uma conta. Pode fazer o upgrade para uma conta completa a qualquer momento.</value>
-    <comment>Guest-mode sheet explainer: what guest mode is and that a full account can come later.</comment>
-  </data>
-  <data name="guest_mode_failed" xml:space="preserve">
-    <value>Falha no Modo Convidado</value>
-    <comment>Error shown when starting a guest-mode network fails.</comment>
-  </data>
   <data name="hide_provider_list" xml:space="preserve">
     <value>Ocultar lista de fornecedores</value>
     <comment>Used in Main/Connect/ConnectView-macOS.swift.</comment>
