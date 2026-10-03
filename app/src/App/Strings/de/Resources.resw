@@ -4431,10 +4431,6 @@ der Welt</value>
     <value>Sende</value>
     <comment>Call to action</comment>
   </data>
-  <data name="send_feedback" xml:space="preserve">
-    <value>Sende uns dein Feedback direkt oder tritt unserem {} bei, um direkten Support zu erhalten.</value>
-    <comment>Call to action</comment>
-  </data>
   <data name="send_product_updates" xml:space="preserve">
     <value>Sende mir Produkt-Updates</value>
     <comment>Settings</comment>

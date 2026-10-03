@@ -4591,10 +4591,6 @@
     <value>Отправить</value>
     <comment>Call to action</comment>
   </data>
-  <data name="send_feedback" xml:space="preserve">
-    <value>Отправьте нам свой отзыв напрямую или присоединяйтесь к нашему {} для прямой поддержки.</value>
-    <comment>Call to action</comment>
-  </data>
   <data name="send_product_updates" xml:space="preserve">
     <value>Присылайте мне обновления продукта</value>
     <comment>Settings</comment>

@@ -3041,10 +3041,6 @@
     <value>ส่ง</value>
     <comment>Call to action</comment>
   </data>
-  <data name="send_feedback" xml:space="preserve">
-    <value>ส่งความเห็นของคุณตรงๆมาหาเรา หรือเข้าร่วมกลุ่ม {} เพื่อรับการช่วยเหลือของเราโดยตรง</value>
-    <comment>Call to action</comment>
-  </data>
   <data name="send_product_updates" xml:space="preserve">
     <value>ส่งข้อมูลการอัพเดตผลิตภัณฑ์มาที่ฉัน</value>
     <comment>Settings</comment>

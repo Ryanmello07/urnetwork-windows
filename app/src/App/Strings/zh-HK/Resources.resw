@@ -3041,10 +3041,6 @@
     <value>發送</value>
     <comment>Call to action</comment>
   </data>
-  <data name="send_feedback" xml:space="preserve">
-    <value>直接向我們發送反饋，或加入我們的 {} 獲取直接支持。</value>
-    <comment>Call to action</comment>
-  </data>
   <data name="send_product_updates" xml:space="preserve">
     <value>向我發送產品更新</value>
     <comment>Settings</comment>

@@ -3220,10 +3220,6 @@ treść świata</value>
     <value>Wyślij</value>
     <comment>Call to action</comment>
   </data>
-  <data name="send_feedback" xml:space="preserve">
-    <value>Prześlij nam swoją opinię bezpośrednio lub dołącz do naszego {}, aby uzyskać bezpośrednie wsparcie.</value>
-    <comment>Call to action</comment>
-  </data>
   <data name="send_product_updates" xml:space="preserve">
     <value>Wysyłaj mi aktualizacje produktu</value>
     <comment>Settings</comment>

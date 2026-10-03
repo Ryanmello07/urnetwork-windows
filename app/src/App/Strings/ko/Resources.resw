@@ -3040,10 +3040,6 @@
     <value>보내기</value>
     <comment>Call to action</comment>
   </data>
-  <data name="send_feedback" xml:space="preserve">
-    <value>직접 피드백을 보내주시거나, 직접 지원을 위해 저희 {}에 참여하세요.</value>
-    <comment>Call to action</comment>
-  </data>
   <data name="send_product_updates" xml:space="preserve">
     <value>제품 업데이트 소식 받기</value>
     <comment>Settings</comment>

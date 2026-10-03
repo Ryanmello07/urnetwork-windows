@@ -4351,10 +4351,6 @@
     <value>发送</value>
     <comment>Call to action</comment>
   </data>
-  <data name="send_feedback" xml:space="preserve">
-    <value>直接向我们反馈，或加入我们的 {} 获取直接支持。</value>
-    <comment>Call to action</comment>
-  </data>
   <data name="send_product_updates" xml:space="preserve">
     <value>向我发送产品更新</value>
     <comment>Settings</comment>

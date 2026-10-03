@@ -3221,10 +3221,6 @@
     <value>Надіслати</value>
     <comment>Call to action</comment>
   </data>
-  <data name="send_feedback" xml:space="preserve">
-    <value>Надішліть нам свій відгук безпосередньо або приєднайтеся до нашого {} для прямої підтримки.</value>
-    <comment>Call to action</comment>
-  </data>
   <data name="send_product_updates" xml:space="preserve">
     <value>Надсилати оновлення продукту</value>
     <comment>Settings</comment>
