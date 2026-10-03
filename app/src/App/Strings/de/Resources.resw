@@ -4355,6 +4355,10 @@ der Welt</value>
     <value>Das sind {} Wörter — eine Seedphrase hat 12 oder 24 Wörter</value>
     <comment>Login: warning when the pasted seedphrase has {count} words instead of 12 or 24.</comment>
   </data>
+  <data name="seeker_multiplier_benefit" xml:space="preserve">
+    <value>Verdoppelt deine Punkte, dein kostenloses Tagesdatenvolumen und dein Empfehlungsdatenvolumen.</value>
+    <comment>Seeker/Saga token multiplier: what a verified token gives. It doubles points and the free daily data and referral data grants; it does not grant Pro.</comment>
+  </data>
   <data name="seeker_points_only" xml:space="preserve">
     <value>Der Seeker-Multiplikator gilt nur für Punkte.</value>
     <comment>Note on the Seeker verification action.</comment>

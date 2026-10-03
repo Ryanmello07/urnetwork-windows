@@ -3050,6 +3050,10 @@
     <value>ये {} शब्द हैं — सीड फ़्रेज़ में 12 या 24 शब्द होते हैं</value>
     <comment>Login: warning when the pasted seedphrase has {count} words instead of 12 or 24.</comment>
   </data>
+  <data name="seeker_multiplier_benefit" xml:space="preserve">
+    <value>आपके पॉइंट, मुफ़्त दैनिक डेटा और रेफ़रल डेटा को दोगुना करता है।</value>
+    <comment>Seeker/Saga token multiplier: what a verified token gives. It doubles points and the free daily data and referral data grants; it does not grant Pro.</comment>
+  </data>
   <data name="seeker_token_not_found" xml:space="preserve">
     <value>वॉलेट …{} में कोई Seeker या Saga टोकन नहीं मिला</value>
     <comment>Seeker token verification: the wallet holds no Seeker or Saga token. The argument is the end of the wallet address.</comment>
