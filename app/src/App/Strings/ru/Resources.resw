@@ -2970,9 +2970,9 @@
     <value>Исключение для Kill switch</value>
     <comment>Title for the disclosure explaining traffic that intentionally bypasses the VPN kill switch.</comment>
   </data>
-  <data name="kill_switch_exception_detail" xml:space="preserve">
-    <value>Пока VPN подключён, IPv6 не маршрутизируется через URnetwork и может использовать вашу локальную сеть, даже если Kill switch включён. Исходящий SMTP через TCP-порт 25 также идёт в обход VPN. Эти исключения могут раскрыть ваш локальный публичный IP этим адресатам. SMTP на портах 465 и 587 остаётся в VPN и обязан устанавливать TLS.</value>
-    <comment>Explains the deliberate IPv6 and SMTP exceptions to the VPN kill switch and the encrypted SMTP behavior.</comment>
+  <data name="kill_switch_exception_smtp_detail" xml:space="preserve">
+    <value>Пока VPN подключён, IPv6 маршрутизируется через URnetwork так же, как IPv4. Исходящий SMTP через TCP-порт 25 идёт в обход VPN, даже если Kill switch включён, и может раскрыть ваш локальный публичный IP этим почтовым серверам. SMTP на портах 465 и 587 остаётся в VPN и обязан устанавливать TLS.</value>
+    <comment>Explains the deliberate SMTP port 25 exception to the VPN kill switch, that IPv6 is routed through the tunnel, and the encrypted SMTP behavior.</comment>
   </data>
   <data name="kill_switch_exception_unrecognized_encrypted" xml:space="preserve">
     <value>Когда Kill switch выключен, трафик, который правила безопасности URnetwork не пропускают в сеть, например нераспознанные зашифрованные протоколы, идёт в обход VPN и использует ваш локальный публичный IP. Когда Kill switch включён, такой трафик блокируется.</value>
