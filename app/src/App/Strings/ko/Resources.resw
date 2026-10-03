@@ -836,6 +836,10 @@
     <value>Saga Genesis 또는 Seeker 선주문 토큰으로 지갑을 연결하세요</value>
     <comment>Call to action</comment>
   </data>
+  <data name="connect_solana_wallet_to_add_sign_in_method" xml:space="preserve">
+    <value>Solana 지갑을 연결하여 로그인 방법으로 추가하세요.</value>
+    <comment>Add sign-in method sheet (android): the wallet option's explanation.</comment>
+  </data>
   <data name="connect_to_location" xml:space="preserve">
     <value>{}에 연결</value>
     <comment>Call to action</comment>
@@ -935,6 +939,10 @@
   <data name="copy_to_clipboard" xml:space="preserve">
     <value>클립보드에 복사</value>
     <comment>Button text to copy the seedphrase to the clipboard.</comment>
+  </data>
+  <data name="could_not_get_google_id_token" xml:space="preserve">
+    <value>Google ID 토큰을 가져올 수 없습니다</value>
+    <comment>Add sign-in method sheet (android): Google sign-in returned no identity token.</comment>
   </data>
   <data name="couldnt_open_wallet" xml:space="preserve">
     <value>지갑을 열 수 없습니다. 설치 후 다시 시도해 주세요.</value>
@@ -1379,6 +1387,10 @@
     <value>죄송합니다. 배율을 받는 중 오류가 발생했습니다: {}</value>
     <comment>Snackbar shown when claiming the earnings multiplier fails, with the underlying error message. Used in Main/Account/Settings/SettingsView.swift.</comment>
   </data>
+  <data name="error_connecting_to_wallet" xml:space="preserve">
+    <value>지갑 연결 오류</value>
+    <comment>Add sign-in method sheet (android): the wallet app could not be reached or did not sign.</comment>
+  </data>
   <data name="error_connecting_wallet" xml:space="preserve">
     <value>지갑을 연결하는 중 오류가 발생했습니다.</value>
     <comment>Snackbar shown when connecting a wallet fails. Used in Main/Account/Wallets/WalletsView.swift.</comment>
@@ -1399,6 +1411,10 @@
     <value>계정 플랜을 불러오는 중 오류가 발생했습니다.</value>
     <comment>Call to action</comment>
   </data>
+  <data name="error_logging_in_please_try_again" xml:space="preserve">
+    <value>로그인 중 오류가 발생했습니다. 다시 시도하세요.</value>
+    <comment>Sign-in screen (android): a Google or wallet sign-in failed.</comment>
+  </data>
   <data name="error_redeeming_transfer_balance_code" xml:space="preserve">
     <value>이체 잔액 코드 사용 중 오류가 발생했습니다.</value>
     <comment>Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.</comment>
@@ -1418,6 +1434,10 @@
   <data name="error_setting_default_wallet_with_reason" xml:space="preserve">
     <value>기본 지갑을 설정하는 중 오류가 발생했습니다: {}</value>
     <comment>Snackbar shown when setting the default payout wallet fails, with the underlying error message. Used in Main/Account/Wallet/WalletView.swift.</comment>
+  </data>
+  <data name="error_signing_in_with_google" xml:space="preserve">
+    <value>Google로 로그인하는 중 오류가 발생했습니다</value>
+    <comment>Add sign-in method sheet (android): Google sign-in failed or was cancelled.</comment>
   </data>
   <data name="error_updating_device_name" xml:space="preserve">
     <value>기기 이름을 업데이트하는 중 오류가 발생했습니다.</value>
@@ -2213,9 +2233,17 @@
     <value>차단된 위치 없음</value>
     <comment>Call to action</comment>
   </data>
+  <data name="no_compatible_wallet_app_found" xml:space="preserve">
+    <value>이 기기에서 호환되는 지갑 앱을 찾을 수 없습니다.</value>
+    <comment>Add sign-in method sheet (android): no installed wallet app can sign the challenge.</comment>
+  </data>
   <data name="no_email_phone_or_password_needed_your" xml:space="preserve">
     <value>이메일, 전화번호, 비밀번호가 필요 없습니다. 계정은 시드 문구로 보호됩니다.</value>
     <comment>A description of the benefits of creating an Instant Account.</comment>
+  </data>
+  <data name="no_ethos_wallet_found" xml:space="preserve">
+    <value>EthOs 지갑을 찾을 수 없습니다</value>
+    <comment>Sign-in screen (android, ethOS build): no ethOS system wallet is available.</comment>
   </data>
   <data name="no_installed_apps_found" xml:space="preserve">
     <value>설치된 앱을 찾을 수 없습니다. (Store 앱은 표시되지 않습니다.)</value>
@@ -3198,6 +3226,10 @@
     <value>국가별 배수</value>
     <comment>Reliability: country multipliers heading</comment>
   </data>
+  <data name="site_app_email" xml:space="preserve">
+    <value>이메일</value>
+    <comment>App profile: email label</comment>
+  </data>
   <data name="site_app_fixed_ip" xml:space="preserve">
     <value>고정 IP</value>
     <comment>Connect drawer: fixed-IP toggle</comment>
@@ -4052,6 +4084,10 @@
   <data name="your_email" xml:space="preserve">
     <value>이메일</value>
     <comment>Label for the empty text field.</comment>
+  </data>
+  <data name="your_email_com" xml:space="preserve">
+    <value>name@email.com</value>
+    <comment>Placeholder text for the email field.</comment>
   </data>
   <data name="your_friend_gets_30_gib_month_for_life" xml:space="preserve">
     <value>친구도 평생 30 GiB/월을 받습니다</value>

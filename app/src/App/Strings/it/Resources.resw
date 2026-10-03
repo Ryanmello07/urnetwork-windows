@@ -844,6 +844,10 @@ modo giusto</value>
     <value>Connetti un portafoglio con il token Saga Genesis o il token di preordine Seeker</value>
     <comment>Call to action</comment>
   </data>
+  <data name="connect_solana_wallet_to_add_sign_in_method" xml:space="preserve">
+    <value>Collega un portafoglio Solana per aggiungerlo come metodo di accesso.</value>
+    <comment>Add sign-in method sheet (android): the wallet option's explanation.</comment>
+  </data>
   <data name="connect_to_location" xml:space="preserve">
     <value>Connettiti a {}</value>
     <comment>Call to action</comment>
@@ -951,6 +955,10 @@ modo giusto</value>
   <data name="copy_to_clipboard" xml:space="preserve">
     <value>Copia negli appunti</value>
     <comment>Button text to copy the seedphrase to the clipboard.</comment>
+  </data>
+  <data name="could_not_get_google_id_token" xml:space="preserve">
+    <value>Impossibile ottenere il token ID di Google</value>
+    <comment>Add sign-in method sheet (android): Google sign-in returned no identity token.</comment>
   </data>
   <data name="couldnt_open_wallet" xml:space="preserve">
     <value>Impossibile aprire il portafoglio. Installalo e riprova.</value>
@@ -1395,6 +1403,10 @@ modo giusto</value>
     <value>Spiacenti, si è verificato un errore durante la richiesta del moltiplicatore: {}</value>
     <comment>Snackbar shown when claiming the earnings multiplier fails, with the underlying error message. Used in Main/Account/Settings/SettingsView.swift.</comment>
   </data>
+  <data name="error_connecting_to_wallet" xml:space="preserve">
+    <value>Errore di connessione al portafoglio</value>
+    <comment>Add sign-in method sheet (android): the wallet app could not be reached or did not sign.</comment>
+  </data>
   <data name="error_connecting_wallet" xml:space="preserve">
     <value>Si è verificato un errore durante la connessione del tuo portafoglio.</value>
     <comment>Snackbar shown when connecting a wallet fails. Used in Main/Account/Wallets/WalletsView.swift.</comment>
@@ -1415,6 +1427,10 @@ modo giusto</value>
     <value>Errore nel caricamento del tuo piano account.</value>
     <comment>Call to action</comment>
   </data>
+  <data name="error_logging_in_please_try_again" xml:space="preserve">
+    <value>Errore di accesso, riprova.</value>
+    <comment>Sign-in screen (android): a Google or wallet sign-in failed.</comment>
+  </data>
   <data name="error_redeeming_transfer_balance_code" xml:space="preserve">
     <value>Errore durante il riscatto del codice saldo di trasferimento</value>
     <comment>Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.</comment>
@@ -1434,6 +1450,10 @@ modo giusto</value>
   <data name="error_setting_default_wallet_with_reason" xml:space="preserve">
     <value>Errore durante l'impostazione del portafoglio predefinito: {}</value>
     <comment>Snackbar shown when setting the default payout wallet fails, with the underlying error message. Used in Main/Account/Wallet/WalletView.swift.</comment>
+  </data>
+  <data name="error_signing_in_with_google" xml:space="preserve">
+    <value>Errore durante l'accesso con Google</value>
+    <comment>Add sign-in method sheet (android): Google sign-in failed or was cancelled.</comment>
   </data>
   <data name="error_updating_device_name" xml:space="preserve">
     <value>Si è verificato un errore durante l'aggiornamento del nome del dispositivo.</value>
@@ -2246,9 +2266,17 @@ Richiedi il tuo bonus creando una rete!</value>
     <value>Nessuna posizione bloccata</value>
     <comment>Call to action</comment>
   </data>
+  <data name="no_compatible_wallet_app_found" xml:space="preserve">
+    <value>Nessuna app di portafoglio compatibile trovata su questo dispositivo.</value>
+    <comment>Add sign-in method sheet (android): no installed wallet app can sign the challenge.</comment>
+  </data>
   <data name="no_email_phone_or_password_needed_your" xml:space="preserve">
     <value>Non servono email, telefono o password. Il tuo account è protetto da una frase seed.</value>
     <comment>A description of the benefits of creating an Instant Account.</comment>
+  </data>
+  <data name="no_ethos_wallet_found" xml:space="preserve">
+    <value>Nessun portafoglio EthOs trovato</value>
+    <comment>Sign-in screen (android, ethOS build): no ethOS system wallet is available.</comment>
   </data>
   <data name="no_installed_apps_found" xml:space="preserve">
     <value>Nessuna app installata trovata. (Le app dello Store non sono elencate.)</value>
@@ -3259,6 +3287,10 @@ contenuti del mondo</value>
     <value>Moltiplicatori per paese</value>
     <comment>Reliability: country multipliers heading</comment>
   </data>
+  <data name="site_app_email" xml:space="preserve">
+    <value>Email</value>
+    <comment>App profile: email label</comment>
+  </data>
   <data name="site_app_fixed_ip" xml:space="preserve">
     <value>IP fisso</value>
     <comment>Connect drawer: fixed-IP toggle</comment>
@@ -4125,6 +4157,10 @@ come dovrebbe essere.</value>
   <data name="your_email" xml:space="preserve">
     <value>La tua email</value>
     <comment>Label for the empty text field.</comment>
+  </data>
+  <data name="your_email_com" xml:space="preserve">
+    <value>tuo@email.com</value>
+    <comment>Placeholder text for the email field.</comment>
   </data>
   <data name="your_friend_gets_30_gib_month_for_life" xml:space="preserve">
     <value>Il tuo amico riceve 30 GiB/mese per sempre</value>

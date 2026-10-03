@@ -843,6 +843,10 @@
     <value>सागा जेनेसिस या सीकर प्री-ऑर्डर टोकन के साथ एक वॉलेट कनेक्ट करें</value>
     <comment>Call to action</comment>
   </data>
+  <data name="connect_solana_wallet_to_add_sign_in_method" xml:space="preserve">
+    <value>Solana वॉलेट को साइन-इन विधि के रूप में जोड़ने के लिए उसे कनेक्ट करें।</value>
+    <comment>Add sign-in method sheet (android): the wallet option's explanation.</comment>
+  </data>
   <data name="connect_to_location" xml:space="preserve">
     <value>{} से कनेक्ट करें</value>
     <comment>Call to action</comment>
@@ -950,6 +954,10 @@
   <data name="copy_to_clipboard" xml:space="preserve">
     <value>क्लिपबोर्ड पर कॉपी करें</value>
     <comment>Button text to copy the seedphrase to the clipboard.</comment>
+  </data>
+  <data name="could_not_get_google_id_token" xml:space="preserve">
+    <value>Google ID टोकन प्राप्त नहीं हो सका</value>
+    <comment>Add sign-in method sheet (android): Google sign-in returned no identity token.</comment>
   </data>
   <data name="couldnt_open_wallet" xml:space="preserve">
     <value>वॉलेट खोला नहीं जा सका। कृपया इसे इंस्टॉल करें और पुनः प्रयास करें।</value>
@@ -1394,6 +1402,10 @@
     <value>क्षमा करें, गुणक का दावा करते समय त्रुटि हुई: {}</value>
     <comment>Snackbar shown when claiming the earnings multiplier fails, with the underlying error message. Used in Main/Account/Settings/SettingsView.swift.</comment>
   </data>
+  <data name="error_connecting_to_wallet" xml:space="preserve">
+    <value>वॉलेट से कनेक्ट करने में त्रुटि</value>
+    <comment>Add sign-in method sheet (android): the wallet app could not be reached or did not sign.</comment>
+  </data>
   <data name="error_connecting_wallet" xml:space="preserve">
     <value>आपका वॉलेट कनेक्ट करते समय त्रुटि हुई।</value>
     <comment>Snackbar shown when connecting a wallet fails. Used in Main/Account/Wallets/WalletsView.swift.</comment>
@@ -1414,6 +1426,10 @@
     <value>आपके अकाउंट प्लान को लोड करने में त्रुटि हुई।</value>
     <comment>Call to action</comment>
   </data>
+  <data name="error_logging_in_please_try_again" xml:space="preserve">
+    <value>लॉग इन करने में त्रुटि, कृपया पुनः प्रयास करें।</value>
+    <comment>Sign-in screen (android): a Google or wallet sign-in failed.</comment>
+  </data>
   <data name="error_redeeming_transfer_balance_code" xml:space="preserve">
     <value>ट्रांसफर बैलेंस कोड रिडीम करने में त्रुटि।</value>
     <comment>Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.</comment>
@@ -1433,6 +1449,10 @@
   <data name="error_setting_default_wallet_with_reason" xml:space="preserve">
     <value>डिफ़ॉल्ट वॉलेट सेट करने में त्रुटि: {}</value>
     <comment>Snackbar shown when setting the default payout wallet fails, with the underlying error message. Used in Main/Account/Wallet/WalletView.swift.</comment>
+  </data>
+  <data name="error_signing_in_with_google" xml:space="preserve">
+    <value>Google से साइन इन करने में त्रुटि</value>
+    <comment>Add sign-in method sheet (android): Google sign-in failed or was cancelled.</comment>
   </data>
   <data name="error_updating_device_name" xml:space="preserve">
     <value>डिवाइस का नाम अपडेट करते समय त्रुटि हुई।</value>
@@ -2243,9 +2263,17 @@
     <value>कोई अवरुद्ध स्थान नहीं</value>
     <comment>Call to action</comment>
   </data>
+  <data name="no_compatible_wallet_app_found" xml:space="preserve">
+    <value>इस डिवाइस पर कोई संगत वॉलेट ऐप नहीं मिला।</value>
+    <comment>Add sign-in method sheet (android): no installed wallet app can sign the challenge.</comment>
+  </data>
   <data name="no_email_phone_or_password_needed_your" xml:space="preserve">
     <value>किसी ईमेल, फ़ोन या पासवर्ड की ज़रूरत नहीं। आपका खाता सीड फ़्रेज़ से सुरक्षित रहता है।</value>
     <comment>A description of the benefits of creating an Instant Account.</comment>
+  </data>
+  <data name="no_ethos_wallet_found" xml:space="preserve">
+    <value>कोई EthOs वॉलेट नहीं मिला</value>
+    <comment>Sign-in screen (android, ethOS build): no ethOS system wallet is available.</comment>
   </data>
   <data name="no_installed_apps_found" xml:space="preserve">
     <value>कोई इंस्टॉल किया गया ऐप्लिकेशन नहीं मिला। (Store के ऐप्लिकेशन सूची में नहीं आते।)</value>
@@ -3256,6 +3284,10 @@
     <value>देश गुणक</value>
     <comment>Reliability: country multipliers heading</comment>
   </data>
+  <data name="site_app_email" xml:space="preserve">
+    <value>ईमेल</value>
+    <comment>App profile: email label</comment>
+  </data>
   <data name="site_app_fixed_ip" xml:space="preserve">
     <value>स्थिर IP</value>
     <comment>Connect drawer: fixed-IP toggle</comment>
@@ -4121,6 +4153,10 @@
   <data name="your_email" xml:space="preserve">
     <value>आपका ईमेल</value>
     <comment>Label for the empty text field.</comment>
+  </data>
+  <data name="your_email_com" xml:space="preserve">
+    <value>name@email.com</value>
+    <comment>Placeholder text for the email field.</comment>
   </data>
   <data name="your_friend_gets_30_gib_month_for_life" xml:space="preserve">
     <value>आपके मित्र को जीवनभर के लिए 30 GiB/माह मिलता है</value>
