@@ -1453,7 +1453,7 @@ właściwy sposób</value>
   </data>
   <data name="error_sending_verification_code" xml:space="preserve">
     <value>Wystąpił błąd podczas wysyłania kodu weryfikacyjnego.</value>
-    <comment>Inline error on the verify page when resending the verification code fails. Matches the apple CreateNetworkVerifyView literal.</comment>
+    <comment>Inline error on the verify page when the verification code could not be sent (after sign-in, sign-up or resend). Matches the apple CreateNetworkVerifyView literal.</comment>
   </data>
   <data name="error_setting_default_wallet_with_reason" xml:space="preserve">
     <value>Błąd podczas ustawiania domyślnego portfela: {}</value>
@@ -4058,6 +4058,22 @@ takiego, jakim powinien być.</value>
   <data name="verify" xml:space="preserve">
     <value>Zweryfikuj</value>
     <comment>Used in Main/Account/Settings/SettingsForm-iOS.swift.</comment>
+  </data>
+  <data name="verify_code_rate_limited.one" xml:space="preserve">
+    <value>Zbyt wiele prób. Nowy kod możesz poprosić za {} minutę.</value>
+    <comment>Verify screen: the server refused to send a new verification code because of too many recent attempts. The argument is the number of minutes until a new code can be requested.</comment>
+  </data>
+  <data name="verify_code_rate_limited.few" xml:space="preserve">
+    <value>Zbyt wiele prób. Nowy kod możesz poprosić za {} minuty.</value>
+    <comment>Verify screen: the server refused to send a new verification code because of too many recent attempts. The argument is the number of minutes until a new code can be requested.</comment>
+  </data>
+  <data name="verify_code_rate_limited.many" xml:space="preserve">
+    <value>Zbyt wiele prób. Nowy kod możesz poprosić za {} minut.</value>
+    <comment>Verify screen: the server refused to send a new verification code because of too many recent attempts. The argument is the number of minutes until a new code can be requested.</comment>
+  </data>
+  <data name="verify_code_rate_limited.other" xml:space="preserve">
+    <value>Zbyt wiele prób. Nowy kod możesz poprosić za {} minuty.</value>
+    <comment>Verify screen: the server refused to send a new verification code because of too many recent attempts. The argument is the number of minutes until a new code can be requested.</comment>
   </data>
   <data name="verify_error" xml:space="preserve">
     <value>Coś poszło nie tak. Spróbuj ponownie.</value>

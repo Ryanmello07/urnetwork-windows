@@ -70,6 +70,14 @@ std::optional<std::string> JwtClaimString(const std::string& jwt, const char* cl
     return std::nullopt;
   }
 }
+
+// What the verify step says about a code the server was asked to send; no
+// error (an older server, or a sent code) reads sent.
+VerifySendNotice VerifySendNoticeOf(std::optional<urnet::AuthVerifySendError> const& error) {
+  if (!error) return VerifySendNoticeFor(false, std::string(), std::string(), 0);
+  return VerifySendNoticeFor(false, error->code, error->message,
+                             error->retry_after_seconds.value_or(0));
+}
 }  // namespace
 namespace {
 
@@ -669,6 +677,7 @@ void SdkHost::LoginWithPassword(const std::string& userAuth,
         }
         if (result->verification_required) {
           AuthResult r{false, true, ""};
+          r.verify_send = VerifySendNoticeOf(result->verification_required->send_error);
           SetAuthState(AuthState::LoggedOut);
           if (done) done(r);  // UI routes to the verify screen
           return;
@@ -936,6 +945,7 @@ void SdkHost::SubmitCreateNetwork(const CreateNetworkParams& params,
     }
     if (result->verification_required) {
       AuthResult r{false, true, ""};
+      r.verify_send = VerifySendNoticeOf(result->verification_required->send_error);
       SetAuthState(AuthState::LoggedOut);
       if (done) done(r);  // the UI routes to the verify step
       return;
@@ -1023,13 +1033,21 @@ void SdkHost::VerifyCode(const std::string& userAuth, const std::string& code,
 }
 
 void SdkHost::ResendVerifyCode(const std::string& userAuth,
-                               std::function<void(bool ok)> done) {
+                               std::function<void(VerifySendNotice)> done) {
   urnet::AuthVerifySendArgs args;
   args.user_auth = userAuth;
   args.use_numeric = true;
+  // a code the server did not send comes back as result.error; a server that
+  // predates the flag answers an error status instead
+  args.result_errors = true;
   api_->authVerifySend(args, [done](std::optional<urnet::AuthVerifySendResult> result,
                                     std::optional<std::string> err) {
-    if (done) done(!err && result.has_value());
+    if (!done) return;
+    if (err || !result) {
+      done(VerifySendNoticeFor(true, std::string(), std::string(), 0));
+      return;
+    }
+    done(VerifySendNoticeOf(result->error));
   });
 }
 

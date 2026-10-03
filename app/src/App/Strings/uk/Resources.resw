@@ -1453,7 +1453,7 @@
   </data>
   <data name="error_sending_verification_code" xml:space="preserve">
     <value>Сталася помилка під час надсилання коду підтвердження.</value>
-    <comment>Inline error on the verify page when resending the verification code fails. Matches the apple CreateNetworkVerifyView literal.</comment>
+    <comment>Inline error on the verify page when the verification code could not be sent (after sign-in, sign-up or resend). Matches the apple CreateNetworkVerifyView literal.</comment>
   </data>
   <data name="error_setting_default_wallet_with_reason" xml:space="preserve">
     <value>Помилка під час встановлення гаманця за замовчуванням: {}</value>
@@ -4059,6 +4059,22 @@
   <data name="verify" xml:space="preserve">
     <value>Підтвердити</value>
     <comment>Used in Main/Account/Settings/SettingsForm-iOS.swift.</comment>
+  </data>
+  <data name="verify_code_rate_limited.one" xml:space="preserve">
+    <value>Забагато спроб. Новий код можна запросити через {} хвилину.</value>
+    <comment>Verify screen: the server refused to send a new verification code because of too many recent attempts. The argument is the number of minutes until a new code can be requested.</comment>
+  </data>
+  <data name="verify_code_rate_limited.few" xml:space="preserve">
+    <value>Забагато спроб. Новий код можна запросити через {} хвилини.</value>
+    <comment>Verify screen: the server refused to send a new verification code because of too many recent attempts. The argument is the number of minutes until a new code can be requested.</comment>
+  </data>
+  <data name="verify_code_rate_limited.many" xml:space="preserve">
+    <value>Забагато спроб. Новий код можна запросити через {} хвилин.</value>
+    <comment>Verify screen: the server refused to send a new verification code because of too many recent attempts. The argument is the number of minutes until a new code can be requested.</comment>
+  </data>
+  <data name="verify_code_rate_limited.other" xml:space="preserve">
+    <value>Забагато спроб. Новий код можна запросити через {} хвилини.</value>
+    <comment>Verify screen: the server refused to send a new verification code because of too many recent attempts. The argument is the number of minutes until a new code can be requested.</comment>
   </data>
   <data name="verify_error" xml:space="preserve">
     <value>Щось пішло не так. Спробуйте ще раз.</value>
