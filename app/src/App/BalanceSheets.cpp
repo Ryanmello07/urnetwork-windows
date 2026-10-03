@@ -3,6 +3,8 @@
 
 #include "BalanceSheets.h"
 
+#include "BalanceCodeRedeem.h"
+
 #include <winrt/Microsoft.UI.Xaml.Automation.h>
 #include <winrt/Microsoft.UI.Xaml.Documents.h>
 #include <winrt/Microsoft.Web.WebView2.Core.h>
@@ -39,8 +41,6 @@ namespace {
 using ShapeEllipse = winrt::Microsoft::UI::Xaml::Shapes::Ellipse;
 
 constexpr winrt::Windows::UI::Color kTransparent{0, 0, 0, 0};
-// a redeemable balance code is exactly 26 characters (macOS RedeemBalanceCodeSheet)
-constexpr size_t kBalanceCodeLength = 26;
 
 // The ur.io bridge page (mmm/ur.io react EmbeddedCheckout.jsx): mounts Stripe's
 // Embedded Checkout for the session's client_secret — the card form stays in
@@ -307,7 +307,7 @@ void PairTermsLabel(CheckBox const& box, TextBlock const& label) {
 
 std::shared_ptr<RedeemCodeSheet> RedeemCodeSheet::Create(XamlRoot const& root,
                                                          SdkHost& sdk,
-                                                         std::function<void()> onRedeemed) {
+                                                         std::function<void(bool)> onRedeemed) {
   auto sheet = std::shared_ptr<RedeemCodeSheet>(
       new RedeemCodeSheet(sdk, std::move(onRedeemed)));
   sheet->Build(root);
@@ -330,12 +330,12 @@ void RedeemCodeSheet::Build(XamlRoot const& root) {
   codeBox_ = TextBox();
   codeBox_.Header(winrt::box_value(Loc("balance_code")));
   codeBox_.PlaceholderText(Loc("enter_balance_code"));
-  codeBox_.MaxLength(static_cast<int32_t>(kBalanceCodeLength));
+  codeBox_.MaxLength(static_cast<int32_t>(urnet::BalanceCodeLength));
   codeBox_.TextChanged([weak = weak_from_this()](auto const&, auto const&) {
     if (auto self = weak.lock()) {
-      const std::string code = TrimWhitespace(urnw::Narrow(self->codeBox_.Text().c_str()));
+      const std::string code = urnw::Narrow(self->codeBox_.Text().c_str());
       self->dialog_.IsPrimaryButtonEnabled(!self->redeeming_ &&
-                                           code.size() == kBalanceCodeLength);
+                                           urnet::isBalanceCodeFormatValid(code));
       self->errorText_.Visibility(Visibility::Collapsed);
     }
   });
@@ -382,7 +382,7 @@ void RedeemCodeSheet::Build(XamlRoot const& root) {
 void RedeemCodeSheet::Submit() {
   const std::string secret = TrimWhitespace(urnw::Narrow(codeBox_.Text().c_str()));
   // IsLoggedIn(), not apiReady() - see WalletPage::ValidateWalletAddress.
-  if (redeeming_ || secret.size() != kBalanceCodeLength || !sdk_.IsLoggedIn()) return;
+  if (redeeming_ || !urnet::isBalanceCodeFormatValid(secret) || !sdk_.IsLoggedIn()) return;
   redeeming_ = true;
   dialog_.IsPrimaryButtonEnabled(false);
   codeBox_.IsEnabled(false);
@@ -392,42 +392,83 @@ void RedeemCodeSheet::Submit() {
   auto queue = dialog_.DispatcherQueue();
   auto weak = weak_from_this();
   sdk_.api().redeemBalanceCode(
-      args, [queue, weak](std::optional<urnet::RedeemBalanceCodeResult> result,
-                          std::optional<std::string> err) {
-        const bool ok = result && result->transfer_balance.has_value();
-        // rejected = the server was reached, decided, and refused the code.
-        // Anything else (err set / null result) is a TRANSPORT failure: the
-        // redeem may have committed server-side with only the response lost.
-        const bool rejected = !ok && result && result->error;
-        const std::string serverMessage = rejected ? result->error->message : std::string();
-        const int64_t bytes = ok ? result->transfer_balance->balance_byte_count : 0;
-        queue.TryEnqueue([weak, ok, rejected, serverMessage, bytes] {
-          if (auto self = weak.lock()) self->ApplyResult(ok, rejected, serverMessage, bytes);
+      args, [queue, weak, secret](std::optional<urnet::RedeemBalanceCodeResult> result,
+                                  std::optional<std::string> err) {
+        // a transport failure has no result to classify: the outcome is unknown
+        if (err) result.reset();
+        queue.TryEnqueue([weak, secret, result = std::move(result)] {
+          if (auto self = weak.lock()) self->Classify(secret, result);
         });
       });
 }
 
-void RedeemCodeSheet::ApplyResult(bool ok, bool rejected, std::string const& serverMessage,
-                                  int64_t balanceByteCount) {
+void RedeemCodeSheet::Classify(std::string const& secret,
+                               std::optional<urnet::RedeemBalanceCodeResult> const& result) {
+  const std::string outcome = urnet::classifyBalanceCodeRedeem(result, std::nullopt, secret);
+  if (!BalanceCodeRedeemNeedsCodeList(outcome)) {
+    ApplyResult(outcome, result);
+    return;
+  }
+  // Not credited by this call. The server's refusal is the same for an
+  // unknown code and one this network already redeemed, and a lost response
+  // may have committed: ask the network's redeemed-code list before saying
+  // anything.
+  auto queue = dialog_.DispatcherQueue();
+  auto weak = weak_from_this();
+  sdk_.api().getNetworkRedeemedBalanceCodes(
+      [queue, weak, secret, result](std::optional<urnet::GetNetworkRedeemedBalanceCodesResult> list,
+                                    std::optional<std::string> listErr) {
+        std::optional<urnet::RedeemedBalanceCodeList> codes;
+        if (!listErr && list && !list->error) {
+          codes = list->balance_codes.value_or(urnet::RedeemedBalanceCodeList{});
+        }
+        queue.TryEnqueue([weak, secret, result, codes = std::move(codes)] {
+          if (auto self = weak.lock()) {
+            self->ApplyResult(urnet::classifyBalanceCodeRedeem(result, codes, secret), result);
+          }
+        });
+      });
+}
+
+void RedeemCodeSheet::ApplyResult(std::string const& outcome,
+                                  std::optional<urnet::RedeemBalanceCodeResult> const& result) {
   redeeming_ = false;
-  if (ok) {
+  const BalanceCodeRedeemNotice notice = BalanceCodeRedeemNoticeFor(outcome);
+  if (notice == BalanceCodeRedeemNotice::Redeemed) {
     formPanel_.Visibility(Visibility::Collapsed);
     successPanel_.Visibility(Visibility::Visible);
-    successAmountText_.Text(H("+" + FormatByteCountCompact(balanceByteCount)));
+    const int64_t bytes =
+        result && result->transfer_balance ? result->transfer_balance->balance_byte_count : 0;
+    successAmountText_.Text(H("+" + FormatByteCountCompact(bytes)));
     dialog_.PrimaryButtonText(hstring{L""});  // nothing left to submit
-    if (onRedeemed_) onRedeemed_();
+    if (onRedeemed_) onRedeemed_(/*credited=*/true);
     return;
   }
   codeBox_.IsEnabled(true);
   dialog_.IsPrimaryButtonEnabled(true);
-  // A rejection is authoritative — surface the server's own reason when it
-  // sent one (not localizable), else the generic invalid-code line. A
-  // transport failure is NOT "invalid": the code may already be applied, so
-  // the copy says to check the balance before trying again — never telling a
-  // user whose code just credited that it was invalid.
-  errorText_.Text(rejected ? (serverMessage.empty() ? Loc("invalid_balance_code")
-                                                    : H(serverMessage))
-                           : Loc("balance_code_transport_error"));
+  errorText_.Foreground(colors::DangerBrush());
+  switch (notice) {
+    case BalanceCodeRedeemNotice::AlreadyRedeemed:
+      // this network has the code: the data is on the balance (a retry after
+      // a lost-but-credited response lands here). Not an error.
+      errorText_.Text(Loc("balance_code_already_redeemed_message"));
+      errorText_.Foreground(colors::TextBrush());
+      if (onRedeemed_) onRedeemed_(/*credited=*/false);
+      break;
+    case BalanceCodeRedeemNotice::Invalid:
+      // A rejection of a code this network never redeemed — surface the
+      // server's own reason when it sent one (not localizable), else the
+      // generic invalid-code line.
+      errorText_.Text(result && result->error && !result->error->message.empty()
+                          ? H(result->error->message)
+                          : Loc("invalid_balance_code"));
+      break;
+    default:
+      // No answer (or an empty one) is NOT "invalid": the code may already be
+      // applied, so the copy says to check the balance before trying again.
+      errorText_.Text(Loc("balance_code_transport_error"));
+      break;
+  }
   errorText_.Visibility(Visibility::Visible);
 }
 

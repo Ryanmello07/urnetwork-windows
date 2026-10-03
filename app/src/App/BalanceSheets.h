@@ -49,31 +49,36 @@ void PairTermsLabel(winrt::Microsoft::UI::Xaml::Controls::CheckBox const& box,
                     winrt::Microsoft::UI::Xaml::Controls::TextBlock const& label);
 
 // ---- Redeem balance code ----------------------------------------------------
-// 26-character code entry with inline validation, a where-to-get-codes note,
-// and a success state. On success the owner re-polls the balance and refreshes
-// the redeemed-codes list.
+// 26-character code entry (urnet::isBalanceCodeFormatValid) with inline
+// validation, a where-to-get-codes note, and a success state. The answer comes
+// from the SDK's classification (BalanceCodeRedeem.h). onRedeemed(credited)
+// fires when this call credited the code (the owner starts the confirmation
+// poll) or when the network already had it (credited=false: the owner
+// refreshes the balance); either way it refreshes the redeemed-codes list.
 class RedeemCodeSheet : public std::enable_shared_from_this<RedeemCodeSheet> {
  public:
   static std::shared_ptr<RedeemCodeSheet> Create(
       winrt::Microsoft::UI::Xaml::XamlRoot const& root, SdkHost& sdk,
-      std::function<void()> onRedeemed);
+      std::function<void(bool credited)> onRedeemed);
 
   winrt::Microsoft::UI::Xaml::Controls::ContentDialog Dialog() const { return dialog_; }
 
  private:
-  explicit RedeemCodeSheet(SdkHost& sdk, std::function<void()> onRedeemed)
+  explicit RedeemCodeSheet(SdkHost& sdk, std::function<void(bool)> onRedeemed)
       : sdk_(sdk), onRedeemed_(std::move(onRedeemed)) {}
 
   void Build(winrt::Microsoft::UI::Xaml::XamlRoot const& root);
   void Submit();
-  // rejected: the server refused the code (serverMessage carries its reason,
-  // possibly empty). !ok && !rejected is a transport failure, which gets the
-  // check-your-balance copy — the redeem may have committed server-side.
-  void ApplyResult(bool ok, bool rejected, std::string const& serverMessage,
-                   int64_t balanceByteCount);
+  // urnet::classifyBalanceCodeRedeem on the redeem answer (nullopt for a
+  // transport failure); anything but "redeemed" is classified again with the
+  // network's redeemed-code list before ApplyResult shows it.
+  void Classify(std::string const& secret,
+                std::optional<urnet::RedeemBalanceCodeResult> const& result);
+  void ApplyResult(std::string const& outcome,
+                   std::optional<urnet::RedeemBalanceCodeResult> const& result);
 
   SdkHost& sdk_;
-  std::function<void()> onRedeemed_;
+  std::function<void(bool)> onRedeemed_;
   winrt::Microsoft::UI::Xaml::Controls::ContentDialog dialog_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::StackPanel formPanel_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::StackPanel successPanel_{nullptr};
