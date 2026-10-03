@@ -106,7 +106,7 @@ void SubscriptionBalanceStore::Stop() {
   StopBackground();
   StopReferralPolling();
   referral_.Reset();
-  totalReferrals_ = 0;
+  totals_.Reset();
   referralLoading_ = false;
   timedOut_ = false;
   snapshot_ = {};
@@ -357,11 +357,12 @@ void SubscriptionBalanceStore::FetchReferral() {
                                                    : std::string("no result")));
             // keep the last reading (the poll retries), but a card with no
             // code says so rather than spinning
+            totals_.Fail();
             if (referral_.Fail()) Publish();
             return;
           }
           const bool repaint = referral_.Succeed(result->referral_code);
-          totalReferrals_ = result->total_referrals;
+          totals_.Succeed(result->total_referrals);
           terms_ = TermsFromResult(*result);
           if (result->referral_code) {
             MaybeCelebrateReferrals(*result->referral_code, result->total_referrals);
@@ -403,6 +404,7 @@ void SubscriptionBalanceStore::MaybeCelebrateReferrals(std::string const& code,
 void SubscriptionBalanceStore::RetryReferral() {
   if (!started_) return;
   referral_.Retry();
+  totals_.Retry();
   Publish();
   FetchReferral();  // an in-flight read answers this retry instead
 }

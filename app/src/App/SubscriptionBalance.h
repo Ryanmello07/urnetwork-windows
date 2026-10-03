@@ -28,6 +28,7 @@
 
 #include "PricePresentation.h"
 #include "ReferralCodeState.h"
+#include "ReferralTotalsState.h"
 #include "SdkHost.h"
 
 namespace urnw {
@@ -159,7 +160,9 @@ class SubscriptionBalanceStore {
   ReferralCodeView ReferralView() const { return referral_.View(); }
   // Read the code again now (the card's Try again). Publishes.
   void RetryReferral();
-  int64_t TotalReferrals() const { return totalReferrals_; }
+  int64_t TotalReferrals() const { return totals_.Total(); }
+  // what a "Total referrals" figure shows: the count, or an error until a read lands
+  ReferralTotalsView TotalsView() const { return totals_.View(); }
   // the cap and bonus, from the server with the code (defaults until then)
   urnw::ReferralTerms ReferralTerms() const { return terms_; }
 
@@ -193,7 +196,7 @@ class SubscriptionBalanceStore {
   ChangeHandler onChange_;
   ReferralCelebrationHandler onReferralCelebration_;
   ReferralCodeFetch referral_;
-  int64_t totalReferrals_ = 0;
+  ReferralTotalsFetch totals_;
   urnw::ReferralTerms terms_;
   bool referralLoading_ = false;
   BalanceSnapshot snapshot_;

@@ -18,6 +18,7 @@
 #include <winrt/Microsoft.UI.Xaml.Controls.h>
 
 #include "ExtenderSheets.h"   // the share + import sheets (EXTENDER.md K7)
+#include "ReferralTotalsState.h"
 #include "SettingsSheets.h"  // rows::FieldState + the row kit
 #include "UrComponents.h"
 
@@ -35,6 +36,7 @@ class AccountPage {
 
   void LoadAccount();
   void LoadReferralInfo();   // referral code + totals (pane A's usage-bar rows)
+  void RetryReferralInfo();  // the referral rows' Try again: back to Loading, read again
   void LoadBalanceCodes();   // redeemed-codes list (account panel)
   // Pane D (EXTENDER.md K6). Reads the effective settings through the SDK's
   // ExtenderViewController and the legacy private extender off the network
@@ -44,8 +46,8 @@ class AccountPage {
   winrt::fire_and_forget LoadExtenderSettings();
 
   // read by MainWindow::ApplyBalance for the "Total Referrals" / bonus rows on
-  // both plan cards
-  int64_t totalReferrals() const { return totalReferrals_; }
+  // both plan cards: the count, or Loading / an error until a read lands
+  ReferralTotalsFetch const& referralTotals() const { return referralTotals_; }
 
   void OnSaveNetworkName(winrt::Windows::Foundation::IInspectable const&,
                          winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
@@ -109,7 +111,7 @@ class AccountPage {
 
   winrt::URnetwork::implementation::MainWindow& w_;
 
-  int64_t totalReferrals_ = 0;
+  ReferralTotalsFetch referralTotals_;
   std::string referralCode_;
   // the auth this account signs in with, needed by the password-reset call
   std::string userAuth_;

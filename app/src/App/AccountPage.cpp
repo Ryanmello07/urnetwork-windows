@@ -166,7 +166,7 @@ void AccountPage::ResetForSignOut() {
   // owner. needsNameClaim_ would likewise pick that account's save branch.
   userAuth_.clear();
   referralCode_.clear();
-  totalReferrals_ = 0;
+  referralTotals_.Reset();
   needsNameClaim_ = false;
   w_.NetworkNameBox().Text(L"");
   ApplyNetworkName({});
@@ -308,6 +308,14 @@ void AccountPage::LoadReferralInfo() {
         else if (err) error = *err;
         if (!error.empty() || !result) {
           LogWarn("account: getNetworkReferralCode failed: {}", error);
+          // the rows used to keep "Total referrals: 0" here; a count already
+          // shown stays, otherwise they say the read failed
+          queue.TryEnqueue([weak] {
+            auto self = weak.get();
+            if (!self) return;
+            self->account().referralTotals_.Fail();
+            self->ApplyBalance();
+          });
           return;
         }
         std::string code = result->referral_code ? *result->referral_code : std::string();
@@ -317,12 +325,19 @@ void AccountPage::LoadReferralInfo() {
           if (!self) return;
           auto& page = self->account();
           page.referralCode_ = code;
-          page.totalReferrals_ = total;
+          page.referralTotals_.Succeed(total);
           // the code, the count and the crowned state show on the Refer and
           // earn page (ReferralsPage); here they feed pane A's referral rows
           self->ApplyBalance();  // the usage-bar referral rows
         });
       });
+}
+
+void AccountPage::RetryReferralInfo() {
+  if (!Sdk().IsLoggedIn()) return;
+  referralTotals_.Retry();
+  w_.ApplyBalance();
+  LoadReferralInfo();
 }
 
 void AccountPage::LoadBalanceCodes() {
