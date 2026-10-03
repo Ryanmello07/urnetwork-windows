@@ -28,6 +28,7 @@
 #include "Sdk.h"
 #include "ServiceClient.h"
 #include "ServiceRecoveryPolicy.h"
+#include "VerifySendNotice.h"
 #include "WalletBridgeRoute.h"
 #include "WalletConnect.h"
 
@@ -49,6 +50,8 @@ struct AuthResult {
   // create step has to know which credential it is finishing — the two write
   // different fields of NetworkCreateArgs.
   bool auth_needs_network = false;
+  // With verification_required: whether the server sent the code (send_error).
+  VerifySendNotice verify_send;
 };
 
 // Outcome of the authLogin account discovery (macOS LoginInitialViewModel
@@ -557,7 +560,10 @@ class SdkHost {
   // verify yields the network jwt and registers this device.
   void VerifyCode(const std::string& userAuth, const std::string& code,
                   std::function<void(AuthResult)> done);
-  void ResendVerifyCode(const std::string& userAuth, std::function<void(bool ok)> done);
+  // The resend asks for result_errors, so a code the server did not send
+  // arrives as AuthVerifySendResult.error rather than as a 200 that reads sent.
+  void ResendVerifyCode(const std::string& userAuth,
+                        std::function<void(VerifySendNotice)> done);
 
   // Password reset: emails a reset link to the user auth.
   void SendPasswordResetLink(const std::string& userAuth, std::function<void(bool ok)> done);

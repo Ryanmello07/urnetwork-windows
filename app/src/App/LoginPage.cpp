@@ -542,9 +542,11 @@ void LoginPage::OnSignIn(IInspectable const&, RoutedEventArgs const&) {
         // the account still needs its code — route into the verify step
         // instead of dead-ending on an info bar
         page.EnterVerifyStep(page.loginUserAuth_);
-        self->VerifyInfo().Severity(InfoBarSeverity::Informational);
-        self->VerifyInfo().Message(Loc("verification_code_sent"));
-        self->VerifyInfo().IsOpen(true);
+        if (!page.ShowVerifySendError(r.verify_send)) {
+          self->VerifyInfo().Severity(InfoBarSeverity::Informational);
+          self->VerifyInfo().Message(Loc("verification_code_sent"));
+          self->VerifyInfo().IsOpen(true);
+        }
       } else if (!r.ok && !r.error.empty()) {
         page.ShowLoginErrorFor(LoginStep::Password, H(r.error));
       }
@@ -807,6 +809,7 @@ void LoginPage::OnCreateNetwork(IInspectable const&, RoutedEventArgs const&) {
       if (r.verification_required) {
         page.verifyIsNewNetwork_ = newNetwork;
         page.EnterVerifyStep(page.loginUserAuth_);
+        page.ShowVerifySendError(r.verify_send);
       } else if (!r.ok && !r.error.empty()) {
         page.ShowLoginErrorFor(LoginStep::Create, H(r.error));
       } else if (r.ok) {
@@ -909,23 +912,41 @@ void LoginPage::OnResendCode(IInspectable const&, RoutedEventArgs const&) {
 
   auto queue = w_.DispatcherQueue();
   auto weak = w_.get_weak();
-  Sdk().ResendVerifyCode(loginUserAuth_, [queue, weak](bool ok) {
-    queue.TryEnqueue([weak, ok] {
+  Sdk().ResendVerifyCode(loginUserAuth_, [queue, weak](urnw::VerifySendNotice notice) {
+    queue.TryEnqueue([weak, notice] {
       auto self = weak.get();
       if (!self) return;
       auto& page = self->login();
-      if (ok) {
-        self->VerifyInfo().Severity(InfoBarSeverity::Success);
-        self->VerifyInfo().Message(Loc("verification_code_sent"));
-        self->VerifyInfo().IsOpen(true);
-        // 15s cooldown before another resend (macOS parity)
-        if (page.resendCooldownTimer_) page.resendCooldownTimer_.Start();
-      } else {
+      if (page.ShowVerifySendError(notice)) {
         self->ResendCodeButton().IsEnabled(true);
-        page.ShowLoginErrorFor(LoginStep::Verify, Loc("something_went_wrong"));
+        return;
       }
+      self->VerifyInfo().Severity(InfoBarSeverity::Success);
+      self->VerifyInfo().Message(Loc("verification_code_sent"));
+      self->VerifyInfo().IsOpen(true);
+      // 15s cooldown before another resend (macOS parity)
+      if (page.resendCooldownTimer_) page.resendCooldownTimer_.Start();
     });
   });
+}
+
+bool LoginPage::ShowVerifySendError(urnw::VerifySendNotice const& notice) {
+  hstring message;
+  switch (notice.kind) {
+    case urnw::VerifySendNoticeKind::Sent:
+      return false;
+    case urnw::VerifySendNoticeKind::RateLimited:
+      message = hstring{urnw::Plural(urnw::VerifySendNoticeKey(notice), notice.minutes)};
+      break;
+    case urnw::VerifySendNoticeKind::SendFailed:
+      message = Loc(urnw::VerifySendNoticeKey(notice));
+      break;
+    case urnw::VerifySendNoticeKind::ServerMessage:
+      message = H(notice.message);
+      break;
+  }
+  ShowLoginErrorFor(LoginStep::Verify, message);
+  return true;
 }
 
 // ---- auth code login ----

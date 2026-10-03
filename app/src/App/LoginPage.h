@@ -162,6 +162,9 @@ class LoginPage {
   void EnterCreateStep(std::string const& userAuth, CreateMode mode);
   void EnterVerifyStep(std::string const& userAuth);
   void ShowLoginErrorFor(LoginStep step, winrt::hstring const& message);
+  // A code the server did not send, on the verify step; false when it was sent
+  // (the caller says so, or not, as before).
+  bool ShowVerifySendError(urnw::VerifySendNotice const& notice);
   // the initial step's URInlineErrorText; empty message hides it
   void SetInitialLoginError(winrt::hstring const& message);
   // Get started is enabled only for a non-empty field with no discovery in

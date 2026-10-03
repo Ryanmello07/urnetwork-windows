@@ -2281,7 +2281,7 @@
   </data>
   <data name="error_sending_verification_code" xml:space="preserve">
     <value>发送验证码时出错。</value>
-    <comment>Inline error on the verify page when resending the verification code fails. Matches the apple CreateNetworkVerifyView literal.</comment>
+    <comment>Inline error on the verify page when the verification code could not be sent (after sign-in, sign-up or resend). Matches the apple CreateNetworkVerifyView literal.</comment>
   </data>
   <data name="error_setting_default_wallet_with_reason" xml:space="preserve">
     <value>设置默认钱包时出错：{}</value>
@@ -6284,6 +6284,10 @@
   <data name="verify" xml:space="preserve">
     <value>验证</value>
     <comment>Used in Main/Account/Settings/SettingsForm-iOS.swift.</comment>
+  </data>
+  <data name="verify_code_rate_limited.other" xml:space="preserve">
+    <value>尝试次数过多。{} 分钟后可以重新获取验证码。</value>
+    <comment>Verify screen: the server refused to send a new verification code because of too many recent attempts. The argument is the number of minutes until a new code can be requested.</comment>
   </data>
   <data name="verify_error" xml:space="preserve">
     <value>出了些问题。再试一次。</value>

@@ -1452,7 +1452,7 @@ správným způsobem</value>
   </data>
   <data name="error_sending_verification_code" xml:space="preserve">
     <value>Při odesílání ověřovacího kódu došlo k chybě.</value>
-    <comment>Inline error on the verify page when resending the verification code fails. Matches the apple CreateNetworkVerifyView literal.</comment>
+    <comment>Inline error on the verify page when the verification code could not be sent (after sign-in, sign-up or resend). Matches the apple CreateNetworkVerifyView literal.</comment>
   </data>
   <data name="error_setting_default_wallet_with_reason" xml:space="preserve">
     <value>Chyba při nastavování výchozí peněženky: {}</value>
@@ -4057,6 +4057,22 @@ jaký by měl být.</value>
   <data name="verify" xml:space="preserve">
     <value>Ověřit</value>
     <comment>Used in Main/Account/Settings/SettingsForm-iOS.swift.</comment>
+  </data>
+  <data name="verify_code_rate_limited.one" xml:space="preserve">
+    <value>Příliš mnoho pokusů. Nový kód si můžete vyžádat za {} minutu.</value>
+    <comment>Verify screen: the server refused to send a new verification code because of too many recent attempts. The argument is the number of minutes until a new code can be requested.</comment>
+  </data>
+  <data name="verify_code_rate_limited.few" xml:space="preserve">
+    <value>Příliš mnoho pokusů. Nový kód si můžete vyžádat za {} minuty.</value>
+    <comment>Verify screen: the server refused to send a new verification code because of too many recent attempts. The argument is the number of minutes until a new code can be requested.</comment>
+  </data>
+  <data name="verify_code_rate_limited.many" xml:space="preserve">
+    <value>Příliš mnoho pokusů. Nový kód si můžete vyžádat za {} minuty.</value>
+    <comment>Verify screen: the server refused to send a new verification code because of too many recent attempts. The argument is the number of minutes until a new code can be requested.</comment>
+  </data>
+  <data name="verify_code_rate_limited.other" xml:space="preserve">
+    <value>Příliš mnoho pokusů. Nový kód si můžete vyžádat za {} minut.</value>
+    <comment>Verify screen: the server refused to send a new verification code because of too many recent attempts. The argument is the number of minutes until a new code can be requested.</comment>
   </data>
   <data name="verify_error" xml:space="preserve">
     <value>Něco se pokazilo. Zkuste to znovu.</value>

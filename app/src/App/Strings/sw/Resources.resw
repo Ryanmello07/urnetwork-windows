@@ -1421,7 +1421,7 @@ kwa njia sahihi</value>
   </data>
   <data name="error_sending_verification_code" xml:space="preserve">
     <value>Hitilafu imetokea wakati wa kutuma msimbo wa uthibitishaji.</value>
-    <comment>Inline error on the verify page when resending the verification code fails. Matches the apple CreateNetworkVerifyView literal.</comment>
+    <comment>Inline error on the verify page when the verification code could not be sent (after sign-in, sign-up or resend). Matches the apple CreateNetworkVerifyView literal.</comment>
   </data>
   <data name="error_setting_default_wallet_with_reason" xml:space="preserve">
     <value>Hitilafu wakati wa kuweka pochi chaguomsingi: {}</value>
@@ -3930,6 +3930,14 @@ kama inavyopaswa kuwa.</value>
   <data name="verify" xml:space="preserve">
     <value>Thibitisha</value>
     <comment>Used in Main/Account/Settings/SettingsForm-iOS.swift.</comment>
+  </data>
+  <data name="verify_code_rate_limited.one" xml:space="preserve">
+    <value>Majaribio mengi mno. Unaweza kuomba msimbo mpya baada ya dakika {}.</value>
+    <comment>Verify screen: the server refused to send a new verification code because of too many recent attempts. The argument is the number of minutes until a new code can be requested.</comment>
+  </data>
+  <data name="verify_code_rate_limited.other" xml:space="preserve">
+    <value>Majaribio mengi mno. Unaweza kuomba msimbo mpya baada ya dakika {}.</value>
+    <comment>Verify screen: the server refused to send a new verification code because of too many recent attempts. The argument is the number of minutes until a new code can be requested.</comment>
   </data>
   <data name="verify_error" xml:space="preserve">
     <value>Kuna kitu kilienda vibaya. Jaribu tena.</value>
