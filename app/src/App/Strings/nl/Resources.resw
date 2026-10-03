@@ -1491,6 +1491,10 @@ juiste manier</value>
     <value>Vertel ons eerlijk wat je ervan vindt</value>
     <comment>Feedback Screen</comment>
   </data>
+  <data name="feedback_sending" xml:space="preserve">
+    <value>Verzenden…</value>
+    <comment>Feedback screen: label of the Send button while the feedback is being sent.</comment>
+  </data>
   <data name="fixed_ip" xml:space="preserve">
     <value>Vast IP-adres</value>
     <comment>A toggle that allows users to enable or disable a fixed IP for their connection.</comment>

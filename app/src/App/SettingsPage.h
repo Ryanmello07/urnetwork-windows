@@ -150,6 +150,8 @@ class SettingsPage {
   // using the server's own feedback id. Only OnSendFeedback calls it, and only
   // when the user ticked the box.
   void UploadLogs(std::string const& feedbackId);
+  void SetFeedbackSending(bool sending);
+  void ApplyFeedbackSendButton();
 
   // ---- sheets (one at a time, through the window's sheetOpen_ guard) ----
   winrt::fire_and_forget ShowDeviceNameSheet();
@@ -165,6 +167,8 @@ class SettingsPage {
   std::shared_ptr<urnw::AppRulesSheet> appRulesSheet_;
 
   bool built_ = false;
+  // a feedback send is out (FeedbackSendState.h)
+  bool feedbackSending_ = false;
 
   // ---- the code-built controls the loads write into ----
   winrt::Microsoft::UI::Xaml::Controls::TextBlock clientIdValue_{nullptr};

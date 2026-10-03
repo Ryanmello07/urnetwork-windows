@@ -1475,6 +1475,10 @@
     <value>告訴我們您的真實感受</value>
     <comment>Feedback Screen</comment>
   </data>
+  <data name="feedback_sending" xml:space="preserve">
+    <value>正在發送…</value>
+    <comment>Feedback screen: label of the Send button while the feedback is being sent.</comment>
+  </data>
   <data name="fixed_ip" xml:space="preserve">
     <value>固定 IP</value>
     <comment>A toggle that allows users to enable or disable a fixed IP for their connection.</comment>

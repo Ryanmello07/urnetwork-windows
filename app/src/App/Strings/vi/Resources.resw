@@ -1475,6 +1475,10 @@ cách đúng đắn</value>
     <value>Hãy cho chúng tôi biết cảm nhận thật của bạn</value>
     <comment>Feedback Screen</comment>
   </data>
+  <data name="feedback_sending" xml:space="preserve">
+    <value>Đang gửi…</value>
+    <comment>Feedback screen: label of the Send button while the feedback is being sent.</comment>
+  </data>
   <data name="fixed_ip" xml:space="preserve">
     <value>IP cố định</value>
     <comment>A toggle that allows users to enable or disable a fixed IP for their connection.</comment>
