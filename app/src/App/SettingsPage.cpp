@@ -551,6 +551,8 @@ void SettingsPage::BuildStayInTouchSection(Panel const& host) {
     box.Child(text);
     card.Children().Append(box);
   };
+  // The Discord invite is unreachable in some regions, so the support address
+  // is offered beside it (support::kStayInTouchLinks).
   for (const auto link : support::kStayInTouchLinks) {
     switch (link) {
       case support::StayInTouchLink::Discord:

@@ -3076,10 +3076,6 @@ conteúdo do mundo</value>
     <value>Enviar</value>
     <comment>Call to action</comment>
   </data>
-  <data name="send_feedback" xml:space="preserve">
-    <value>Envie seu feedback diretamente ou entre no nosso {} para suporte direto.</value>
-    <comment>Call to action</comment>
-  </data>
   <data name="send_product_updates" xml:space="preserve">
     <value>Enviar atualizações de produtos</value>
     <comment>Settings</comment>

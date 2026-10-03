@@ -3077,10 +3077,6 @@ innehåll i världen</value>
     <value>Skicka</value>
     <comment>Call to action</comment>
   </data>
-  <data name="send_feedback" xml:space="preserve">
-    <value>Skicka din feedback direkt till oss eller gå med i vår {} för direkt support.</value>
-    <comment>Call to action</comment>
-  </data>
   <data name="send_product_updates" xml:space="preserve">
     <value>Skicka produktuppdateringar</value>
     <comment>Settings</comment>

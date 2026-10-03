@@ -3018,10 +3018,6 @@
     <value>送信</value>
     <comment>Call to action</comment>
   </data>
-  <data name="send_feedback" xml:space="preserve">
-    <value>ご意見を直接お送りいただくか、直接サポートのために私たちの{}にご参加ください。</value>
-    <comment>Call to action</comment>
-  </data>
   <data name="send_product_updates" xml:space="preserve">
     <value>製品のアップデートを送信する</value>
     <comment>Settings</comment>

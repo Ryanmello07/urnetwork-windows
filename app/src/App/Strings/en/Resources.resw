@@ -2531,6 +2531,10 @@ right way</value>
     <value>I'm not sure I trust a VPN</value>
     <comment>Onboarding feedback email, not-activated variant: one-tap reason 3.</comment>
   </data>
+  <data name="email_support_at" xml:space="preserve">
+    <value>Email support at</value>
+    <comment>Settings: label before the support email address link.</comment>
+  </data>
   <data name="emoji_group_activities" xml:space="preserve">
     <value>Activities</value>
     <comment>Emoji keyboard group: sports, games and activities.</comment>
@@ -5037,9 +5041,9 @@ world's content</value>
     <value>Send</value>
     <comment>Call to action</comment>
   </data>
-  <data name="send_feedback" xml:space="preserve">
-    <value>Send us your feedback directly or join our {} for direct support.</value>
-    <comment>Call to action</comment>
+  <data name="send_feedback_contact" xml:space="preserve">
+    <value>Send us your feedback directly, email us at {0}, or join our {1} for direct support.</value>
+    <comment>Feedback screen: support contacts. The first argument is the support email address, the second is the name of the community chat (Discord); both are links.</comment>
   </data>
   <data name="send_product_updates" xml:space="preserve">
     <value>Send me product updates</value>

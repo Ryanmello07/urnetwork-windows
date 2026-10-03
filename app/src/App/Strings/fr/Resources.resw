@@ -3077,10 +3077,6 @@ du monde</value>
     <value>Envoie</value>
     <comment>Call to action</comment>
   </data>
-  <data name="send_feedback" xml:space="preserve">
-    <value>Envoyez-nous directement vos retours ou rejoignez notre {} pour un support direct.</value>
-    <comment>Call to action</comment>
-  </data>
   <data name="send_product_updates" xml:space="preserve">
     <value>M'envoyer des mises à jour sur le produit</value>
     <comment>Settings</comment>
