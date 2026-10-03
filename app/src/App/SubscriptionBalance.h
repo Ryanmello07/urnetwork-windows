@@ -211,6 +211,11 @@ class SubscriptionBalanceStore {
   bool started_ = false;
   bool visible_ = false;
   bool jwtPro_ = false;     // the jwt's Pro claim (stale across plan changes)
+  // snapshot_.guest is IsGuestNetwork(jwtGuest_, serverGuest_): the jwt's
+  // GuestMode claim (a refresh clears it) or the server's `guest` (no login
+  // method, read live)
+  bool jwtGuest_ = false;
+  bool serverGuest_ = false;
   bool loading_ = false;    // one fetch in flight at a time
   bool timedOut_ = false;
   // whether a confirmation runs, and its give-up budget in ACTIVE polling time

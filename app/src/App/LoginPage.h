@@ -22,6 +22,7 @@
 #include "LoginCarousel.h"
 #include "NetworkNameCheck.h"
 #include "SdkHost.h"
+#include "SettingsSheets.h"
 #include "UrComponents.h"
 
 namespace winrt::URnetwork::implementation {
@@ -75,13 +76,11 @@ class LoginPage {
   // onboarding flow for it. An existing account signing in never sets it.
   bool ConsumeNewNetwork();
   // Every create-account and purchase affordance for a legacy guest network
-  // (the plan card, the account menu, Get Pro, the upgrade sheet). The server
-  // removed the guest upgrade, and a login method added to a guest network
-  // cannot be verified (the verify-code lookup reads network_user.user_auth,
-  // which AddAuth never sets), so the account is created after signing out:
-  // a confirmation warns that the guest balance stays on the guest network,
-  // which has no login to come back to, and Sign out lands on the sign-in flow.
-  winrt::fire_and_forget OfferGuestSignOut();
+  // (the plan card, the account menu, Get Pro, the upgrade sheet) opens the
+  // in-place conversion (GuestConversionSheet): a sign-in is added to THIS
+  // network and verified, so its plan and balance stay. Signing out would
+  // abandon the network for good (it has no login to come back to).
+  winrt::fire_and_forget OpenGuestConversion();
 
   // ---- XAML event handlers (forwarded from MainWindow) ----
   void OnGetStarted(winrt::Windows::Foundation::IInspectable const&,
@@ -255,6 +254,7 @@ class LoginPage {
   bool presentationActive_ = false;
   std::shared_ptr<urnw::SeedphraseDisplaySheet> seedphraseSheet_;
   std::shared_ptr<urnw::NetworkServerSheet> networkServerSheet_;
+  std::shared_ptr<urnw::GuestConversionSheet> guestConversionSheet_;
   // "Seedphrase copied" / "Referral link copied" acknowledgements
   std::unique_ptr<urnw::kit::Snackbar> snackbar_;
 };

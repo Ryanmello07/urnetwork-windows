@@ -822,6 +822,223 @@ void AddAuthSheet::ApplyResult(bool ok, std::string const& error) {
   errorText_.Visibility(Visibility::Visible);
 }
 
+// ---- GuestConversionSheet --------------------------------------------------
+
+namespace {
+
+// The SDK side of the conversion. Every answer is marshalled onto the dialog's
+// queue; one that arrives after the sheet is gone is dropped by `alive_`.
+class SdkGuestConversionSession : public GuestConversionSession {
+ public:
+  SdkGuestConversionSession(SdkHost& sdk, SubscriptionBalanceStore& balance,
+                            winrt::Microsoft::UI::Dispatching::DispatcherQueue queue)
+      : sdk_(sdk), balance_(balance), queue_(std::move(queue)) {}
+  ~SdkGuestConversionSession() override { *alive_ = false; }
+
+  void AddSignIn(std::string const& userAuth, std::string const& password,
+                 std::function<void(std::string error)> done) override {
+    urnet::AddAuthArgs args;
+    args.user_auth = userAuth;
+    args.password = password;
+    sdk_.api().addAuth(args, [queue = queue_, alive = alive_, done = std::move(done)](
+                                 std::optional<urnet::AddAuthResult> result,
+                                 std::optional<std::string> err) {
+      std::string error = ServerError(result, err);
+      queue.TryEnqueue([alive, done, error] {
+        if (*alive) done(error);
+      });
+    });
+  }
+
+  void RefreshJwt() override { sdk_.RefreshJwt(); }
+
+  void RefreshBalance() override { balance_.Refresh(); }
+
+  void SendCode(std::string const& userAuth,
+                std::function<void(VerifySendNotice notice)> done) override {
+    sdk_.ResendVerifyCode(userAuth, [queue = queue_, alive = alive_,
+                                     done = std::move(done)](VerifySendNotice notice) {
+      queue.TryEnqueue([alive, done, notice] {
+        if (*alive) done(notice);
+      });
+    });
+  }
+
+  // authVerify without SdkHost::VerifyCode's sign-in: the returned jwt is for
+  // this same network, and the session already holds one.
+  void VerifyCode(std::string const& userAuth, std::string const& code,
+                  std::function<void(std::string error)> done) override {
+    urnet::AuthVerifyArgs args;
+    args.user_auth = userAuth;
+    args.verify_code = code;
+    sdk_.api().authVerify(args, [queue = queue_, alive = alive_, done = std::move(done)](
+                                    std::optional<urnet::AuthVerifyResult> result,
+                                    std::optional<std::string> err) {
+      std::string error = ServerError(result, err);
+      queue.TryEnqueue([alive, done, error] {
+        if (*alive) done(error);
+      });
+    });
+  }
+
+ private:
+  SdkHost& sdk_;
+  SubscriptionBalanceStore& balance_;
+  winrt::Microsoft::UI::Dispatching::DispatcherQueue queue_;
+  std::shared_ptr<bool> alive_ = std::make_shared<bool>(true);
+};
+
+}  // namespace
+
+std::shared_ptr<GuestConversionSheet> GuestConversionSheet::Create(
+    XamlRoot const& root, SdkHost& sdk, SubscriptionBalanceStore& balance,
+    std::function<void()> onDone) {
+  auto sheet =
+      std::shared_ptr<GuestConversionSheet>(new GuestConversionSheet(sdk, std::move(onDone)));
+  sheet->Build(root, balance);
+  return sheet;
+}
+
+GuestConversionSheet::~GuestConversionSheet() {
+  // the conversion goes first: it drops its answers before the session goes
+  conversion_.reset();
+  session_.reset();
+}
+
+void GuestConversionSheet::Build(XamlRoot const& root, SubscriptionBalanceStore& balance) {
+  dialog_ = MakeSheet(root, Loc("create_an_account"));
+  dialog_.CloseButtonText(Loc("cancel"));
+  dialog_.DefaultButton(ContentDialogButton::Primary);
+  session_ = std::make_unique<SdkGuestConversionSession>(sdk_, balance, dialog_.DispatcherQueue());
+  conversion_ = std::make_unique<GuestConversion>(*session_);
+
+  StackPanel content;
+  content.MinWidth(380);
+  content.Spacing(12);
+
+  // ---- page 1: the sign-in to add ----
+  signInPanel_ = StackPanel();
+  signInPanel_.Spacing(12);
+  Supporting(signInPanel_, Loc("guest_convert_explanation"));
+  authBox_ = TextBox();
+  authBox_.Style(Lookup(L"UrTextInputStyle"));
+  authBox_.Header(winrt::box_value(Loc("your_email")));
+  authBox_.TextChanged([weak = weak_from_this()](auto const&, auto const&) {
+    if (auto self = weak.lock()) self->Render();
+  });
+  signInPanel_.Children().Append(authBox_);
+  passwordBox_ = PasswordBox();
+  passwordBox_.Style(Lookup(L"UrPasswordInputStyle"));
+  passwordBox_.Header(winrt::box_value(Loc("password_label")));
+  passwordBox_.PasswordChanged([weak = weak_from_this()](auto const&, auto const&) {
+    if (auto self = weak.lock()) self->Render();
+  });
+  signInPanel_.Children().Append(passwordBox_);
+  Supporting(signInPanel_, Loc("password_must_be_at_least_12_characters_long"));
+  content.Children().Append(signInPanel_);
+
+  // ---- page 2: verify the added sign-in ----
+  codePanel_ = StackPanel();
+  codePanel_.Spacing(12);
+  Supporting(codePanel_, Loc("verify_explanation"));
+  codeBox_ = TextBox();
+  codeBox_.Style(Lookup(L"UrTextInputStyle"));
+  codeBox_.Header(winrt::box_value(Loc("verify_input_label")));
+  codeBox_.TextChanged([weak = weak_from_this()](auto const&, auto const&) {
+    if (auto self = weak.lock()) self->Render();
+  });
+  codePanel_.Children().Append(codeBox_);
+  noticeText_ = TextBlock();
+  noticeText_.FontSize(12);
+  noticeText_.TextWrapping(TextWrapping::Wrap);
+  codePanel_.Children().Append(noticeText_);
+  content.Children().Append(codePanel_);
+
+  errorText_ = TextBlock();
+  errorText_.FontSize(12);
+  errorText_.TextWrapping(TextWrapping::Wrap);
+  errorText_.Foreground(colors::DangerBrush());
+  content.Children().Append(errorText_);
+
+  dialog_.Content(content);
+  dialog_.PrimaryButtonClick(
+      [weak = weak_from_this()](auto const&, ContentDialogButtonClickEventArgs const& args) {
+        args.Cancel(true);  // the conversion closes the dialog when it is done
+        auto self = weak.lock();
+        if (!self) return;
+        if (self->conversion_->Step() == GuestConversionStep::EnterSignIn) {
+          self->conversion_->SubmitSignIn(Narrow(self->authBox_.Text().c_str()),
+                                          Narrow(self->passwordBox_.Password().c_str()));
+        } else {
+          self->conversion_->SubmitCode(Narrow(self->codeBox_.Text().c_str()));
+        }
+      });
+  dialog_.SecondaryButtonClick(
+      [weak = weak_from_this()](auto const&, ContentDialogButtonClickEventArgs const& args) {
+        args.Cancel(true);
+        if (auto self = weak.lock()) self->conversion_->Resend();
+      });
+  conversion_->on_changed = [weak = weak_from_this()] {
+    if (auto self = weak.lock()) self->Render();
+  };
+  Render();
+}
+
+void GuestConversionSheet::Render() {
+  const GuestConversionStep step = conversion_->Step();
+  const bool busy = conversion_->Busy();
+  const bool signIn =
+      step == GuestConversionStep::EnterSignIn || step == GuestConversionStep::AddingSignIn;
+  signInPanel_.Visibility(signIn ? Visibility::Visible : Visibility::Collapsed);
+  codePanel_.Visibility(signIn ? Visibility::Collapsed : Visibility::Visible);
+  errorText_.Text(H(conversion_->Error()));
+  errorText_.Visibility(conversion_->Error().empty() ? Visibility::Collapsed
+                                                     : Visibility::Visible);
+  if (step == GuestConversionStep::Done) {
+    if (done_) return;
+    done_ = true;
+    if (onDone_) onDone_();
+    dialog_.Hide();
+    return;
+  }
+  if (signIn) {
+    dialog_.PrimaryButtonText(Loc("add"));
+    dialog_.SecondaryButtonText(hstring{});
+    authBox_.IsEnabled(!busy);
+    passwordBox_.IsEnabled(!busy);
+    dialog_.IsPrimaryButtonEnabled(
+        !busy && sdk_.IsLoggedIn() &&
+        GuestConversion::CanSubmitSignIn(Narrow(authBox_.Text().c_str()),
+                                         Narrow(passwordBox_.Password().c_str())));
+    return;
+  }
+  dialog_.PrimaryButtonText(Loc("verify"));
+  dialog_.SecondaryButtonText(Loc("resend_verify_code"));
+  dialog_.IsSecondaryButtonEnabled(!busy);
+  dialog_.IsPrimaryButtonEnabled(
+      !busy && !GuestConversion::Trim(Narrow(codeBox_.Text().c_str())).empty());
+  if (auto const& notice = conversion_->Notice()) {
+    hstring message;
+    switch (notice->kind) {
+      case VerifySendNoticeKind::Sent:
+      case VerifySendNoticeKind::SendFailed:
+        message = Loc(VerifySendNoticeKey(*notice));
+        break;
+      case VerifySendNoticeKind::RateLimited:
+        message = hstring{Plural(VerifySendNoticeKey(*notice), notice->minutes)};
+        break;
+      case VerifySendNoticeKind::ServerMessage:
+        message = H(notice->message);
+        break;
+    }
+    noticeText_.Text(message);
+    noticeText_.Foreground(notice->kind == VerifySendNoticeKind::Sent ? colors::MutedBrush()
+                                                                      : colors::DangerBrush());
+  } else {
+    noticeText_.Text(hstring{});
+  }
+}
+
 // ---- ReferralNetworkSheet --------------------------------------------------
 
 std::shared_ptr<ReferralNetworkSheet> ReferralNetworkSheet::Create(

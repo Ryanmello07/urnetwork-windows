@@ -2600,13 +2600,9 @@ richtig auf</value>
     <value>Gast</value>
     <comment>Account Screen</comment>
   </data>
-  <data name="guest_sign_out_and_create_account" xml:space="preserve">
-    <value>Abmelden und ein Konto erstellen</value>
-    <comment>Guest sign-out confirmation (desktop): the button that signs out of a legacy guest network so the user can create an account. Guest networks can no longer be upgraded in place.</comment>
-  </data>
-  <data name="guest_sign_out_balance_warning" xml:space="preserve">
-    <value>Um ein Konto zu erstellen, melde dich zuerst von diesem Gastnetzwerk ab. Sein Guthaben bleibt im Gastnetzwerk und wird nicht auf dein neues Konto übertragen. Ein Gastnetzwerk hat keine Anmeldedaten, daher kannst du dich nach dem Abmelden nicht wieder dort anmelden.</value>
-    <comment>Guest sign-out confirmation (desktop), shown for every create-account and purchase action on a legacy guest network. Must say plainly that the guest balance is not carried over and that the guest network cannot be signed back into, since it has no login.</comment>
+  <data name="guest_convert_explanation" xml:space="preserve">
+    <value>Füge eine E-Mail-Adresse und ein Passwort hinzu, um dich bei diesem Netzwerk anzumelden. Sein Tarif und sein Guthaben bleiben erhalten.</value>
+    <comment>Desktop: the first step of "Create an account" on a legacy guest network. The user adds an email and a password to the network they are on now, so they can sign in to it again; its plan and balance stay with it (nothing moves to a new account).</comment>
   </data>
   <data name="hash_count" xml:space="preserve">
     <value>#{}</value>
