@@ -589,6 +589,13 @@ void ConnectPage::ApplyConnectStatus() {
   // balance is mid-flight, and showing a warning for it would be wrong.
   const bool processing = w_.balanceConfirming();
   const bool outOfBalance = w_.outOfBalance();
+  // the banner says the traffic is held while a session is up, which is the
+  // state the tray notice announced; otherwise it asks for balance
+  if (outOfBalance) {
+    w_.BalanceWarning().Message(ConnectActionIsDisconnect()
+                                    ? Loc("insufficient_balance_held_notice")
+                                    : Loc("insufficient_balance_message"));
+  }
   switch (render) {
     case Health::Connected:
       // the provider count lives in its own line below (ProviderCountText),
@@ -856,14 +863,16 @@ void ConnectPage::ApplyConnectStatus() {
     connectWatchdogFired_ = true;
   }
   // out of balance / mid-poll: there is nothing a connect press can do, and iOS
-  // blocks the tap in exactly these two cases. A disconnect press is never
-  // blocked by balance (DecideConnectButton, with the watchdog state above).
-  const bool enabled = urnw::balance::DecideConnectButton(
-                           render == Health::Failed, ConnectActionIsDisconnect(),
-                           processing, outOfBalance, transitional,
-                           connectWatchdogFired_)
-                           .enabled;
-  w_.ConnectButton().IsEnabled(enabled);
+  // blocks the tap in exactly these two cases. The explicit button's
+  // Disconnect is never blocked by balance (DecideConnectButton, with the
+  // watchdog state above); the hero keeps the plain rule.
+  const bool blocked = processing || outOfBalance;
+  const bool enabled = !blocked && (!transitional || connectWatchdogFired_);
+  w_.ConnectButton().IsEnabled(urnw::balance::DecideConnectButton(
+                                   render == Health::Failed, ConnectActionIsDisconnect(),
+                                   processing, outOfBalance, transitional,
+                                   connectWatchdogFired_)
+                                   .enabled);
   w_.ConnectHero().IsEnabled(enabled);
 }
 
@@ -990,9 +999,9 @@ void ConnectPage::ApplyStats(urnw::LiveStats const& stats) {
 
   // Insufficient-balance warning. The action button opens the upgrade flow;
   // Pro / a running confirmation poll suppress it
-  // (MainWindow::UpdateBalanceWarning). The SDK does not disconnect on its
-  // own: AppController::UpdateBalanceAutoDisconnect clears the connect request
-  // after the grace (BalanceGate.h).
+  // (MainWindow::UpdateBalanceWarning). Nothing disconnects on its own: the
+  // tunnel holds traffic until the user upgrades or disconnects
+  // (BalanceGate.h), which the banner body says while a session is up.
   w_.SetInsufficientBalance(stats.insufficientBalance);
 
   // Provide stats.

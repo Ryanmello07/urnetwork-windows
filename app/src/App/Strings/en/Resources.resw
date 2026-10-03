@@ -3141,6 +3141,10 @@ right way</value>
     <value>Insufficient balance — add balance or a plan</value>
     <comment>Connection status shown when the network has no data balance left.</comment>
   </data>
+  <data name="insufficient_balance_held_notice" xml:space="preserve">
+    <value>Your traffic is held in the tunnel until you upgrade or disconnect.</value>
+    <comment>Alert body shown in the app and in a local notification when the account enters the insufficient balance state. Connect stays requested and the VPN keeps holding traffic (nothing leaves outside the tunnel); the user can upgrade or disconnect.</comment>
+  </data>
   <data name="insufficient_balance_message" xml:space="preserve">
     <value>Add balance or a plan to keep connecting.</value>
     <comment>Body of the warning shown when the balance runs out; the tunnel disconnects without more balance or a plan.</comment>

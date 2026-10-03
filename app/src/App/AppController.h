@@ -6,7 +6,6 @@
 #pragma once
 
 #include <atomic>
-#include <chrono>
 #include <memory>
 #include <optional>
 #include <string>
@@ -14,6 +13,7 @@
 #include <winrt/Microsoft.UI.Dispatching.h>
 #include <winrt/Microsoft.Windows.AppLifecycle.h>
 
+#include "BalanceGate.h"
 #include "SdkHost.h"
 #include "SubscriptionBalance.h"
 #include "TrayIcon.h"
@@ -65,11 +65,10 @@ class AppController {
   void OnAuthState(AuthState state, const std::string& error);
   void OnTunnelState(const proto::TunnelStatus& status);
   void OnStats(const LiveStats& stats);
-  // Clears the connect request once the insufficient-balance gate has held for
-  // the grace (BalanceGate.h), through the same path as a user Disconnect, and
-  // says why in a tray balloon. Re-evaluated on every stats and balance push
-  // and when the grace runs out; held off by the kill switch.
-  void UpdateBalanceAutoDisconnect();
+  // The reaction to a stats or balance push in the insufficient-balance gate
+  // (BalanceGate.h): a tray notice once per out-of-balance episode, and never
+  // a disconnect.
+  void ReactToBalance();
   void UpdateTray();
   // THE LAST STATUS THE SERVICE PUSHED, in the vocabulary of the shared
   // decision table (Common/ConnectAction.h). The tray reads this rather than
@@ -145,14 +144,10 @@ class AppController {
   bool windowMinimized_ = false;  // IsIconic, synced by SyncWindowMinimized
   bool windowVisible_ = false;    // the reconciled result: the presentation is running
   std::optional<proto::TunnelStatus> lastTunnelStatus_;
-  // the insufficient-balance auto-disconnect (UpdateBalanceAutoDisconnect):
-  // the last contract status a stats push carried, when the gate started
-  // holding (zero when it does not), and whether this hold has already been
-  // decided (disconnected, or kept for the kill switch)
+  // the last contract status a stats push carried, and the once-per-episode
+  // out-of-balance notice (ReactToBalance)
   bool insufficientBalance_ = false;
-  std::chrono::steady_clock::time_point outOfBalanceSince_{};
-  bool outOfBalanceDecided_ = false;
-  winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer balanceTimer_{nullptr};
+  urnw::balance::GateNoticeTracker balanceNotice_;
 };
 
 // The single app controller instance (created in App::OnLaunched).
