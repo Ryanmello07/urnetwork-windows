@@ -22,6 +22,7 @@
 #include "StatsFormat.h"
 #include "Strings.h"
 #include "UrColors.h"
+#include "UrlQuery.h"
 
 using namespace winrt;
 using namespace winrt::Windows::Foundation;
@@ -48,12 +49,12 @@ constexpr winrt::Windows::UI::Color kTransparent{0, 0, 0, 0};
 // by navigating to the redirect_link:
 //   done:  urnetwork://checkout?status=complete&session_id=cs_...
 //   error: urnetwork://checkout?errorCode=-1&errorMessage=...
-// There is no cancel url: Stripe's embedded flow never leaves the page, so the
-// checkout header's own close (X) is the only way out. (Linux UpgradeSheet
-// parity; the wallet-connect bridge uses the same envelope.)
-constexpr const char* kCheckoutPage = "https://ur.io/checkout";
-constexpr const char* kCheckoutRedirect = "urnetwork://checkout";
-constexpr const char* kCheckoutScheme = "urnetwork://";
+// The url and the hand-back are the SDK's envelope (urnet::buildCheckoutBridgeUrl,
+// urnet::parseCheckoutRedirect; linux UpgradeSheet parity). There is no cancel
+// url: Stripe's embedded flow never leaves the page, so the checkout header's
+// own close (X) is the only way out. Every urnetwork:// navigation in the
+// webview is a hand-back (the checkout bridge's or the pay page's).
+constexpr const char* kAppScheme = "urnetwork://";
 // The ur.io embedded pay page (mmm/ur.io /app/pay-sheet): mounts Stripe's
 // Payment Element for the payment sheet's client secret, confirms the intent,
 // and hands control back by navigating to the return url (success) or posting
@@ -86,66 +87,6 @@ bool WebView2RuntimeAvailable() {
   } catch (...) {
     return false;
   }
-}
-
-// Percent-encode everything except RFC 3986 unreserved characters
-// (WalletConnect.cpp builds its bridge urls the same way).
-std::string Esc(std::string const& s) {
-  static const char* hex = "0123456789ABCDEF";
-  std::string out;
-  out.reserve(s.size() * 3);
-  for (unsigned char c : s) {
-    if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ||
-        c == '-' || c == '_' || c == '.' || c == '~') {
-      out.push_back(static_cast<char>(c));
-    } else {
-      out.push_back('%');
-      out.push_back(hex[c >> 4]);
-      out.push_back(hex[c & 0xF]);
-    }
-  }
-  return out;
-}
-
-std::string Unesc(std::string const& s) {
-  auto hexv = [](char c) -> int {
-    if (c >= '0' && c <= '9') return c - '0';
-    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-    return -1;
-  };
-  std::string out;
-  out.reserve(s.size());
-  for (size_t i = 0; i < s.size(); ++i) {
-    if (s[i] == '%' && i + 2 < s.size()) {
-      const int hi = hexv(s[i + 1]), lo = hexv(s[i + 2]);
-      if (hi >= 0 && lo >= 0) {
-        out.push_back(static_cast<char>((hi << 4) | lo));
-        i += 2;
-        continue;
-      }
-    }
-    out.push_back(s[i] == '+' ? ' ' : s[i]);
-  }
-  return out;
-}
-
-// The query parameters of a urnetwork:// callback, percent-decoded.
-std::map<std::string, std::string> ParseQuery(std::string const& url) {
-  std::map<std::string, std::string> out;
-  const size_t q = url.find('?');
-  if (q == std::string::npos) return out;
-  size_t i = q + 1;
-  while (i < url.size()) {
-    const auto amp = url.find('&', i);
-    const std::string pair =
-        url.substr(i, amp == std::string::npos ? std::string::npos : amp - i);
-    const auto eq = pair.find('=');
-    if (eq != std::string::npos) out[pair.substr(0, eq)] = Unesc(pair.substr(eq + 1));
-    if (amp == std::string::npos) break;
-    i = amp + 1;
-  }
-  return out;
 }
 
 // A UI string from the shared localization store, by key id (Localization.h).
@@ -849,7 +790,7 @@ winrt::fire_and_forget UpgradeSheet::OpenPaySheet(std::string clientSecret,
 
   webview_.NavigationStarting([weak, queue](auto const&, auto const& args) {
     const std::string uri = urnw::Narrow(std::wstring_view{args.Uri()});
-    if (!uri.starts_with(kCheckoutScheme)) return;
+    if (!uri.starts_with(kAppScheme)) return;
     // the pay page handing control back (urnetwork://pay/done) — never a real navigation
     args.Cancel(true);
     queue.TryEnqueue([weak, uri] {
@@ -907,10 +848,10 @@ winrt::fire_and_forget UpgradeSheet::OpenPaySheet(std::string clientSecret,
   checkoutRing_.IsActive(true);
   ShowPage(Page::Checkout);
 
-  const std::string url = std::string(kPaySheetPage) + "?cs=" + Esc(clientSecret) +
-                          "&pk=" + Esc(publishableKey) +
-                          "&plan=" + Esc(PlanName(plans_.Yearly())) +
-                          "&return=" + Esc(kPayReturn);
+  const std::string url = std::string(kPaySheetPage) + "?cs=" + PercentEncode(clientSecret) +
+                          "&pk=" + PercentEncode(publishableKey) +
+                          "&plan=" + PercentEncode(PlanName(plans_.Yearly())) +
+                          "&return=" + PercentEncode(kPayReturn);
   try {
     const std::wstring dataDir = (StorageRoot(/*isService=*/false) / "webview2").wstring();
     auto environment = co_await wv2::CoreWebView2Environment::CreateWithOptionsAsync(
@@ -958,7 +899,7 @@ void UpgradeSheet::HandlePayMessage(std::string const& json) {
     return;
   }
   const std::string detail = message.value("message", std::string());
-  HandleCheckoutCallback("urnetwork://pay/error?errorMessage=" + Esc(detail));
+  HandleCheckoutCallback("urnetwork://pay/error?errorMessage=" + PercentEncode(detail));
 }
 
 void UpgradeSheet::RequestSession(bool embedded) {
@@ -969,6 +910,10 @@ void UpgradeSheet::RequestSession(bool embedded) {
   urnet::StripeCreateCheckoutSessionArgs args;
   args.item_id = plans_.Yearly() ? "pro_yearly" : "pro_monthly";
   args.ui_mode = embedded ? "embedded" : "hosted";
+  // redirect_on_completion stays unset: the bridge page hands control back
+  // only when Stripe returns the customer to the server's return_url.
+  // "never" would complete through Stripe's onComplete callback, which
+  // EmbeddedCheckout.jsx does not handle, so no hand-back would ever arrive.
 
   auto queue = dialog_.DispatcherQueue();
   auto weak = weak_from_this();
@@ -1071,7 +1016,7 @@ winrt::fire_and_forget UpgradeSheet::OpenEmbedded(std::string clientSecret) {
 
   webview_.NavigationStarting([weak, queue](auto const&, auto const& args) {
     const std::string uri = urnw::Narrow(std::wstring_view{args.Uri()});
-    if (!uri.starts_with(kCheckoutScheme)) return;
+    if (!uri.starts_with(kAppScheme)) return;
     // the checkout page handing control back — never a real navigation
     args.Cancel(true);
     // deferred: handling flips pages and tears this webview down, which must
@@ -1125,9 +1070,7 @@ winrt::fire_and_forget UpgradeSheet::OpenEmbedded(std::string clientSecret) {
   checkoutRing_.IsActive(true);
   ShowPage(Page::Checkout);
 
-  const std::string url = std::string(kCheckoutPage) +
-                          "?client_secret=" + Esc(clientSecret) +
-                          "&redirect_link=" + Esc(kCheckoutRedirect);
+  const std::string url = urnet::buildCheckoutBridgeUrl(clientSecret);
   try {
     // Explicit user data folder: WebView2's default is next to the exe, which
     // an install under Program Files cannot write. StorageRoot is the app's
@@ -1161,10 +1104,27 @@ winrt::fire_and_forget UpgradeSheet::OpenEmbedded(std::string clientSecret) {
 }
 
 void UpgradeSheet::HandleCheckoutCallback(std::string const& uri) {
-  const auto params = ParseQuery(uri);
-  const auto status = params.find("status");
-  const bool payDone = uri.rfind(kPayReturn, 0) == 0;
-  if (payDone || (status != params.end() && status->second == "complete")) {
+  // the checkout bridge's hand-back is the SDK's envelope; the pay page's
+  // (urnetwork://pay/done, urnetwork://pay/error?errorMessage=) is this sheet's
+  bool complete = false;
+  std::string errorMessage;
+  if (urnet::isCheckoutRedirect(uri)) {
+    try {
+      if (auto redirect = urnet::parseCheckoutRedirect(uri)) {
+        complete = redirect->Complete;
+        errorMessage = redirect->ErrorMessage;
+      }
+    } catch (...) {
+      // a malformed hand-back: an error with no message of its own
+    }
+  } else {
+    complete = uri.rfind(kPayReturn, 0) == 0;
+    const auto params = ParseUrlQuery(uri);
+    if (const auto message = params.find("errorMessage"); message != params.end()) {
+      errorMessage = message->second;
+    }
+  }
+  if (complete) {
     // Paid inside the webview. The server only believes the Stripe payment
     // webhook — a client saying "I paid" is not evidence — so bridge the gap
     // with the same confirmation poll as hosted checkout.
@@ -1174,7 +1134,6 @@ void UpgradeSheet::HandleCheckoutCallback(std::string const& uri) {
     return;
   }
   if (page_ != Page::Checkout) return;  // stale error after close
-  const auto message = params.find("errorMessage");
   if (!purchaseEmitted_) {
     // before the page flips: leaving Checkout tears the web view down and
     // forgets which page (pay sheet or checkout) failed
@@ -1182,9 +1141,7 @@ void UpgradeSheet::HandleCheckoutCallback(std::string const& uri) {
     purchaseEmitted_ = true;
   }
   ShowPage(Page::Products);
-  ShowCheckoutError(message != params.end() && !message->second.empty()
-                        ? H(message->second)
-                        : Loc("something_went_wrong"));
+  ShowCheckoutError(!errorMessage.empty() ? H(errorMessage) : Loc("something_went_wrong"));
 }
 
 void UpgradeSheet::FallBackToHosted() {
