@@ -266,6 +266,9 @@ void SubscriptionBalanceStore::Apply(urnet::SubscriptionBalanceResult const& res
     sdk_.RefreshJwt();
   }
   snapshot_.isPro = serverIsPro;
+  snapshot_.subscriptionStoreFamily =
+      result.current_subscription ? urnet::classifySubscriptionStore(result.current_subscription->store)
+                                  : std::string();
 
   if (IsSupporterWithBalance()) {
     // nothing left to poll for

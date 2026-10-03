@@ -18,6 +18,7 @@
 #include "Localization.h"
 #include "Log.h"
 #include "MainWindow.xaml.h"
+#include "ManageSubscription.h"
 #include "PageContext.h"
 #include "Strings.h"
 #include "SupportContact.h"
@@ -580,6 +581,14 @@ void SettingsPage::BuildSubscriptionSection(Panel const& host) {
   TextBlock unused{nullptr};
   manageSubscription_ = NavRow(card, Loc("site_app_manage_subscription"), unused);
   manageSubscription_.Click([this](auto const&, auto const&) { OpenCustomerPortal(); });
+  // hidden until the balance shows a Stripe subscription (ApplySubscriptionStore)
+  manageSubscription_.Visibility(Visibility::Collapsed);
+}
+
+void SettingsPage::ApplySubscriptionStore(std::string const& storeFamily) {
+  if (!manageSubscription_) return;
+  manageSubscription_.Visibility(urnw::ShowsManageSubscription(storeFamily) ? Visibility::Visible
+                                                                            : Visibility::Collapsed);
 }
 
 void SettingsPage::BuildVersionSection(Panel const& host) {

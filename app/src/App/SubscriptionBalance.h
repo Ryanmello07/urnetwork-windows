@@ -42,6 +42,9 @@ struct BalanceSnapshot {
   int64_t availableByteCount = 0;
   int64_t startBalanceByteCount = 0;  // the "daily data balance" row
   bool isPro = false;
+  // the current subscription's store family (urnet::classifySubscriptionStore:
+  // "stripe", "apple", "google", "other"), "" without a subscription
+  std::string subscriptionStoreFamily;
   bool guest = false;
   bool loaded = false;  // at least one successful fetch this session
   // The plan response's price tier (standard/regional, from the storefront

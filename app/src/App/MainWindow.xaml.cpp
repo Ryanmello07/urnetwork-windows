@@ -351,6 +351,8 @@ void MainWindow::ApplyStrings() {
   account_->ApplyStrings();
   wallet_->ApplyStrings();
   settings_->ApplyStrings();
+  // the rows ApplyStrings builds start hidden: re-apply the plan's store
+  settings_->ApplySubscriptionStore(balance_.subscriptionStoreFamily);
   referrals_->ApplyStrings();
   licenses_->ApplyStrings();
   developer_->ApplyStrings();
@@ -1526,6 +1528,9 @@ void MainWindow::ApplyBalance() {
                                                    : upgradeVisibility);
   // the wallet panel's checkout stays hidden for guests: an account comes first
   UpgradeButton().Visibility(upgradeVisibility);
+
+  // the Stripe customer portal only manages a Stripe subscription
+  if (settings_) settings_->ApplySubscriptionStore(balance_.subscriptionStoreFamily);
 
   // the small ring while the post-checkout confirmation poll runs
   AccountPlanRing().IsActive(balancePoll_.confirming);
