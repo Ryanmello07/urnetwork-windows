@@ -1455,6 +1455,14 @@
     <value>URnetwork VPNの起動に失敗しました</value>
     <comment>Used in Shared/Intents/ConnectIntent.swift.</comment>
   </data>
+  <data name="fast_dns_on_connect" xml:space="preserve">
+    <value>接続時の高速DNS</value>
+    <comment>DNS settings: label of the opt-in toggle (off by default) that answers DNS over the host's local network while the tunnel's DNS starts. Also the status row label in the connect drawer DNS summary.</comment>
+  </data>
+  <data name="fast_dns_on_connect_description" xml:space="preserve">
+    <value>トンネルのDNSが起動するまで、ローカルネットワーク経由でDNSに応答します。問い合わせ内容がローカルネットワークに知られたり、出口の場所に合わない応答が返されたりする可能性があります。オフの場合、DNSはトンネル経由でのみ解決されます。</value>
+    <comment>DNS settings: description under the Fast DNS on connect toggle. Explains that it answers DNS over the local network while the tunnel's DNS starts, which can reveal lookups to the local network and can return answers that don't match the exit location (DNS answers depend on where the lookup comes from, so host-network answers can point to servers meant for the user's real location instead of the exit).</comment>
+  </data>
   <data name="feedback" xml:space="preserve">
     <value>フィードバック</value>
     <comment>Used in Main/Feedback/FeedbackView.swift.</comment>
@@ -1786,14 +1794,6 @@
   <data name="local_dns" xml:space="preserve">
     <value>ローカルDNS</value>
     <comment>A label displayed in the custom dns settings section.</comment>
-  </data>
-  <data name="local_dns_fallback" xml:space="preserve">
-    <value>ローカルDNSフォールバック</value>
-    <comment>A label displayed in the custom dns settings section.</comment>
-  </data>
-  <data name="local_dns_fallback_description" xml:space="preserve">
-    <value>トンネルの起動中はローカルリゾルバーにも並行して問い合わせます。オフの場合、DNSはトンネル経由でのみ解決されます。</value>
-    <comment>A description of the local DNS fallback setting.</comment>
   </data>
   <data name="local_dns_servers" xml:space="preserve">
     <value>ローカルDNSサーバー</value>

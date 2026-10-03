@@ -1455,6 +1455,14 @@
     <value>เริ่ม URnetwork VPN ไม่สำเร็จ</value>
     <comment>Used in Shared/Intents/ConnectIntent.swift.</comment>
   </data>
+  <data name="fast_dns_on_connect" xml:space="preserve">
+    <value>DNS ที่รวดเร็วขณะเชื่อมต่อ</value>
+    <comment>DNS settings: label of the opt-in toggle (off by default) that answers DNS over the host's local network while the tunnel's DNS starts. Also the status row label in the connect drawer DNS summary.</comment>
+  </data>
+  <data name="fast_dns_on_connect_description" xml:space="preserve">
+    <value>ตอบ DNS ผ่านเครือข่ายภายในขณะที่ DNS ของอุโมงค์กำลังเริ่มทำงาน ซึ่งอาจเปิดเผยการค้นหาของคุณให้เครือข่ายภายในเห็น และอาจได้คำตอบที่ไม่ตรงกับตำแหน่งทางออกของคุณ เมื่อปิดอยู่ DNS จะทำงานผ่านอุโมงค์เท่านั้น</value>
+    <comment>DNS settings: description under the Fast DNS on connect toggle. Explains that it answers DNS over the local network while the tunnel's DNS starts, which can reveal lookups to the local network and can return answers that don't match the exit location (DNS answers depend on where the lookup comes from, so host-network answers can point to servers meant for the user's real location instead of the exit).</comment>
+  </data>
   <data name="feedback" xml:space="preserve">
     <value>ข้อเสนอแนะ</value>
     <comment>Used in Main/Feedback/FeedbackView.swift.</comment>
@@ -1786,14 +1794,6 @@
   <data name="local_dns" xml:space="preserve">
     <value>DNS ภายในเครื่อง</value>
     <comment>A label displayed in the custom dns settings section.</comment>
-  </data>
-  <data name="local_dns_fallback" xml:space="preserve">
-    <value>DNS สำรองภายในเครื่อง</value>
-    <comment>A label displayed in the custom dns settings section.</comment>
-  </data>
-  <data name="local_dns_fallback_description" xml:space="preserve">
-    <value>ใช้รีโซลเวอร์ภายในเครื่องแข่งกันไปด้วยขณะที่อุโมงค์กำลังเริ่มทำงาน เมื่อปิดอยู่ DNS จะทำงานผ่านอุโมงค์เท่านั้น</value>
-    <comment>A description of the local DNS fallback setting.</comment>
   </data>
   <data name="local_dns_servers" xml:space="preserve">
     <value>เซิร์ฟเวอร์ DNS ภายในเครื่อง</value>

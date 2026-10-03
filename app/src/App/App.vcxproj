@@ -386,6 +386,7 @@
     <ClInclude Include="PricePresentation.h" />
     <ClInclude Include="TransferChart.h" />
     <ClInclude Include="TransportBar.h" />
+    <ClInclude Include="FastDnsOnConnect.h" />
     <ClInclude Include="IpFamilyStatus.h" />
     <ClInclude Include="IpFamilyStatusRow.h" />
     <ClInclude Include="ProviderDotDiameter.h" />

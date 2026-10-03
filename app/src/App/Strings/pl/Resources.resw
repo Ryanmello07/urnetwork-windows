@@ -1503,6 +1503,14 @@ właściwy sposób</value>
     <value>Nie udało się uruchomić VPN URnetwork</value>
     <comment>Used in Shared/Intents/ConnectIntent.swift.</comment>
   </data>
+  <data name="fast_dns_on_connect" xml:space="preserve">
+    <value>Szybki DNS przy łączeniu</value>
+    <comment>DNS settings: label of the opt-in toggle (off by default) that answers DNS over the host's local network while the tunnel's DNS starts. Also the status row label in the connect drawer DNS summary.</comment>
+  </data>
+  <data name="fast_dns_on_connect_description" xml:space="preserve">
+    <value>Odpowiada na zapytania DNS przez sieć lokalną, dopóki uruchamia się DNS tunelu. Może to ujawnić Twoje zapytania sieci lokalnej i zwracać odpowiedzi niepasujące do Twojej lokalizacji wyjściowej. Po wyłączeniu DNS jest rozwiązywany tylko przez tunel.</value>
+    <comment>DNS settings: description under the Fast DNS on connect toggle. Explains that it answers DNS over the local network while the tunnel's DNS starts, which can reveal lookups to the local network and can return answers that don't match the exit location (DNS answers depend on where the lookup comes from, so host-network answers can point to servers meant for the user's real location instead of the exit).</comment>
+  </data>
   <data name="feedback" xml:space="preserve">
     <value>Informacja zwrotna</value>
     <comment>Used in Main/Feedback/FeedbackView.swift.</comment>
@@ -1858,14 +1866,6 @@ właściwy sposób</value>
   <data name="local_dns" xml:space="preserve">
     <value>Lokalny DNS</value>
     <comment>A label displayed in the custom dns settings section.</comment>
-  </data>
-  <data name="local_dns_fallback" xml:space="preserve">
-    <value>Awaryjny lokalny DNS</value>
-    <comment>A label displayed in the custom dns settings section.</comment>
-  </data>
-  <data name="local_dns_fallback_description" xml:space="preserve">
-    <value>Podczas uruchamiania tunelu równolegle odpytuje lokalny resolver. Po wyłączeniu DNS jest rozwiązywany tylko przez tunel.</value>
-    <comment>A description of the local DNS fallback setting.</comment>
   </data>
   <data name="local_dns_servers" xml:space="preserve">
     <value>Lokalne serwery DNS</value>
