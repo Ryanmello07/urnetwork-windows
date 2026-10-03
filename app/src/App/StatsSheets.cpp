@@ -14,6 +14,7 @@
 #include <cmath>
 #include <unordered_set>
 
+#include "BlockActionReason.h"  // safety-rule chip + "Route locally" offer
 #include "FastDnsOnConnect.h"
 #include "Localization.h"
 #include "PageContext.h"   // pages::Adv: the transport editor's not-yet-in-store strings
@@ -1043,6 +1044,14 @@ void SplitRulesSheet::RenderActivity() {
       bytesLabel.FontFamily(FontFamily(L"Consolas"));
       caption.Children().Append(bytesLabel);
     }
+    // the URnetwork safety rules decided this action: say so, with the why on
+    // hover and for Narrator (iOS/Android BlockActionRow "Safety rule")
+    if (block_action_reason::IsSecurity(action.reason)) {
+      auto safety = MakeChip(Loc("safety_rule"), colors::kUrAmber, false);
+      ToolTipService::SetToolTip(safety, winrt::box_value(Loc("safety_rule_detail")));
+      Automation::AutomationProperties::SetHelpText(safety, Loc("safety_rule_detail"));
+      caption.Children().Append(safety);
+    }
     text.Children().Append(caption);
     Grid::SetColumn(text, 0);
     row.Children().Append(text);
@@ -1057,6 +1066,23 @@ void SplitRulesSheet::RenderActivity() {
     chips.Children().Append(MakeChip(action.local ? Loc("local") : Loc("remote"),
                                      action.local ? colors::kUrGreen : colors::kTextMuted,
                                      action.hasRouteOverride));
+    // a safety-ruled action a route-local rule can fix, and no rule decided it
+    // yet: offer the rule outright. It is the same editor the row tap opens,
+    // with the action's hosts pre-selected so Create is one click away.
+    const bool hasOverride = !action.overrideId.empty() || action.hasBlockOverride ||
+                             action.hasRouteOverride;
+    if (block_action_reason::OffersRouteLocal(action.reason, hasOverride)) {
+      Button routeLocal = MakeSubtleButton(Loc("add_local_split_rule"));
+      routeLocal.FontSize(11);
+      routeLocal.Padding(Thickness{6, 2, 6, 2});
+      routeLocal.VerticalAlignment(VerticalAlignment::Center);
+      routeLocal.Foreground(SolidColorBrush(colors::kUrGreen));
+      BlockActionItem target = action;
+      routeLocal.Click([weak, target](IInspectable const&, RoutedEventArgs const&) {
+        if (auto self = weak.lock()) self->OpenEditorForAction(target, true);
+      });
+      chips.Children().Append(routeLocal);
+    }
     Grid::SetColumn(chips, 1);
     row.Children().Append(chips);
 
@@ -1082,7 +1108,7 @@ void SplitRulesSheet::OpenEditorForRule(const SplitRule& rule) {
              std::set<std::string>(rule.hosts.begin(), rule.hosts.end()));
 }
 
-void SplitRulesSheet::OpenEditorForAction(const BlockActionItem& action) {
+void SplitRulesSheet::OpenEditorForAction(const BlockActionItem& action, bool selectAll) {
   // an action decided by a still-existing rule edits that rule
   const SplitRule* rule = nullptr;
   if (!action.overrideId.empty()) {
@@ -1105,8 +1131,12 @@ void SplitRulesSheet::OpenEditorForAction(const BlockActionItem& action) {
   } else {
     // create a rule from the action's host values, all initially UNSELECTED: the
     // common case is picking one or a few server names, so pre-selecting
-    // everything just makes the user uncheck the rest (iOS/Android parity)
-    OpenEditor("", hostValues, std::set<std::string>{});
+    // everything just makes the user uncheck the rest (iOS/Android parity).
+    // "Route locally" on a safety-ruled row selects all: the user asked for
+    // exactly this traffic to go local.
+    std::set<std::string> selected;
+    if (selectAll) selected.insert(hostValues.begin(), hostValues.end());
+    OpenEditor("", hostValues, std::move(selected));
   }
 }
 

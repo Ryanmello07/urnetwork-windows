@@ -1010,7 +1010,23 @@ winrt::fire_and_forget SettingsPage::ShowKillSwitchException() {
     body.FontSize(14);
     body.TextWrapping(TextWrapping::Wrap);
     body.MinWidth(320);
-    dialog.Content(body);
+    // the safety-rule exception depends on the kill switch, unlike the two
+    // above: off, that traffic leaves from the local ip; on, it is dropped
+    TextBlock safetyRules;
+    safetyRules.Text(Adv(
+        "kill_switch_exception_unrecognized_encrypted",
+        L"When the kill switch is off, traffic that URnetwork safety rules keep "
+        L"off the network, such as unrecognized encrypted protocols, bypasses the "
+        L"VPN and uses your local public IP. With the kill switch on, that traffic "
+        L"is blocked."));
+    safetyRules.FontSize(14);
+    safetyRules.TextWrapping(TextWrapping::Wrap);
+    safetyRules.MinWidth(320);
+    StackPanel content;
+    content.Spacing(12);
+    content.Children().Append(body);
+    content.Children().Append(safetyRules);
+    dialog.Content(content);
     co_await dialog.ShowAsync();
   } catch (...) {
   }

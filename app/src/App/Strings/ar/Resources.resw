@@ -108,6 +108,10 @@
     <value>إضافة إيموجي</value>
     <comment>Points leaderboard: button that opens the emoji tag editor when no tag is set yet.</comment>
   </data>
+  <data name="add_local_split_rule" xml:space="preserve">
+    <value>توجيه محلي</value>
+    <comment>Call to action on a split-rule activity row blocked by URnetwork safety rules: create a local split rule for its hosts.</comment>
+  </data>
   <data name="add_referral_code" xml:space="preserve">
     <value>إضافة رمز الإحالة</value>
     <comment>Call to action</comment>
@@ -3058,6 +3062,10 @@
     <value>أثناء اتصال VPN، لا يُوجَّه IPv6 عبر URnetwork وقد يستخدم شبكتك المحلية، حتى عند تشغيل مفتاح القتل. كما يتجاوز SMTP الصادر عبر منفذ TCP رقم 25 شبكة VPN. قد تكشف هذه الاستثناءات عنوان IP العام المحلي لديك لتلك الوجهات. يبقى SMTP على المنفذين 465 و587 داخل VPN ويجب أن يُنشئ اتصال TLS.</value>
     <comment>Explains the deliberate IPv6 and SMTP exceptions to the VPN kill switch and the encrypted SMTP behavior.</comment>
   </data>
+  <data name="kill_switch_exception_unrecognized_encrypted" xml:space="preserve">
+    <value>عند إيقاف مفتاح القتل، تتجاوز حركة المرور التي تُبقيها قواعد أمان URnetwork خارج الشبكة، مثل البروتوكولات المشفرة غير المعروفة، شبكة VPN وتستخدم عنوان IP العام المحلي لديك. عند تشغيل مفتاح القتل، تُحظر حركة المرور هذه.</value>
+    <comment>Explains that, with the kill switch off, traffic URnetwork safety rules keep off the network (such as unrecognized encrypted protocols) bypasses the VPN.</comment>
+  </data>
   <data name="launch" xml:space="preserve">
     <value>تشغيل</value>
     <comment>Button text for entering the one-time authentication code and entering the app</comment>
@@ -4599,6 +4607,14 @@
   <data name="rules" xml:space="preserve">
     <value>القواعد</value>
     <comment>A heading for the pinned split rules.</comment>
+  </data>
+  <data name="safety_rule" xml:space="preserve">
+    <value>قاعدة أمان</value>
+    <comment>A short label on a blocked or locally routed split-rule activity row whose traffic URnetwork safety rules kept off the network.</comment>
+  </data>
+  <data name="safety_rule_detail" xml:space="preserve">
+    <value>تُبقي قواعد أمان URnetwork حركة المرور هذه خارج الشبكة، مثل بروتوكول مشفّر لا يمكنها التعرف عليه. تُرسلها قاعدة تقسيم محلية خارج VPN من عنوان IP الخاص بك.</value>
+    <comment>Explains a split-rule activity row that URnetwork safety rules kept off the network, and how a local split rule can use it outside the VPN.</comment>
   </data>
   <data name="save" xml:space="preserve">
     <value>حفظ</value>

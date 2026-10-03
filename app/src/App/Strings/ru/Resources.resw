@@ -108,6 +108,10 @@
     <value>Добавить эмодзи</value>
     <comment>Points leaderboard: button that opens the emoji tag editor when no tag is set yet.</comment>
   </data>
+  <data name="add_local_split_rule" xml:space="preserve">
+    <value>Направить локально</value>
+    <comment>Call to action on a split-rule activity row blocked by URnetwork safety rules: create a local split rule for its hosts.</comment>
+  </data>
   <data name="add_referral_code" xml:space="preserve">
     <value>Добавить реферальный код</value>
     <comment>Call to action</comment>
@@ -2970,6 +2974,10 @@
     <value>Пока VPN подключён, IPv6 не маршрутизируется через URnetwork и может использовать вашу локальную сеть, даже если Kill switch включён. Исходящий SMTP через TCP-порт 25 также идёт в обход VPN. Эти исключения могут раскрыть ваш локальный публичный IP этим адресатам. SMTP на портах 465 и 587 остаётся в VPN и обязан устанавливать TLS.</value>
     <comment>Explains the deliberate IPv6 and SMTP exceptions to the VPN kill switch and the encrypted SMTP behavior.</comment>
   </data>
+  <data name="kill_switch_exception_unrecognized_encrypted" xml:space="preserve">
+    <value>Когда Kill switch выключен, трафик, который правила безопасности URnetwork не пропускают в сеть, например нераспознанные зашифрованные протоколы, идёт в обход VPN и использует ваш локальный публичный IP. Когда Kill switch включён, такой трафик блокируется.</value>
+    <comment>Explains that, with the kill switch off, traffic URnetwork safety rules keep off the network (such as unrecognized encrypted protocols) bypasses the VPN.</comment>
+  </data>
   <data name="launch" xml:space="preserve">
     <value>Запустить</value>
     <comment>Button text for entering the one-time authentication code and entering the app</comment>
@@ -4441,6 +4449,14 @@
   <data name="rules" xml:space="preserve">
     <value>Правила</value>
     <comment>A heading for the pinned split rules.</comment>
+  </data>
+  <data name="safety_rule" xml:space="preserve">
+    <value>Правило безопасности</value>
+    <comment>A short label on a blocked or locally routed split-rule activity row whose traffic URnetwork safety rules kept off the network.</comment>
+  </data>
+  <data name="safety_rule_detail" xml:space="preserve">
+    <value>Правила безопасности URnetwork не пропускают этот трафик в сеть, например зашифрованный протокол, который они не могут распознать. Локальное правило разделения отправит его в обход VPN с вашего собственного IP.</value>
+    <comment>Explains a split-rule activity row that URnetwork safety rules kept off the network, and how a local split rule can use it outside the VPN.</comment>
   </data>
   <data name="save" xml:space="preserve">
     <value>Сохранить</value>

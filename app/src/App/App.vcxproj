@@ -377,6 +377,7 @@
     <ClInclude Include="SdkHost.h" />
     <ClInclude Include="VerifySendNotice.h" />
     <ClInclude Include="StatsFormat.h" />
+    <ClInclude Include="BlockActionReason.h" />
     <ClInclude Include="StatsSheets.h" />
     <ClInclude Include="Startup.h" />
     <ClInclude Include="SubscriptionBalance.h" />
