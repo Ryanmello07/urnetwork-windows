@@ -2130,6 +2130,10 @@ Nhận thưởng bằng cách tạo mạng!</value>
     <value>Không khả dụng. Phải khác ít nhất 3 ký tự so với mạng hiện có. Hãy đặt tên độc đáo hoặc dài hơn.</value>
     <comment>Call to action</comment>
   </data>
+  <data name="network_name_check_failed" xml:space="preserve">
+    <value>Không thể kiểm tra tính khả dụng. Bạn vẫn có thể tiếp tục.</value>
+    <comment>Create Network Form: the network name availability check could not reach the server. Not a verdict on the name; the user may still create the network.</comment>
+  </data>
   <data name="network_name_is_too_short_try_one_with_at_least" xml:space="preserve">
     <value>Tên mạng quá ngắn. Hãy thử tên có ít nhất 6 ký tự</value>
     <comment>Supporting text for a text field that is invalid.</comment>

@@ -2153,6 +2153,10 @@ vous avons envoyé pour vérifier votre identité.</value>
     <value>Non disponible. Doit comporter au moins 3 caractères différents d'un réseau existant. Rendez-le unique ou plus long.</value>
     <comment>Call to action</comment>
   </data>
+  <data name="network_name_check_failed" xml:space="preserve">
+    <value>Impossible de vérifier la disponibilité. Vous pouvez tout de même continuer.</value>
+    <comment>Create Network Form: the network name availability check could not reach the server. Not a verdict on the name; the user may still create the network.</comment>
+  </data>
   <data name="network_name_is_too_short_try_one_with_at_least" xml:space="preserve">
     <value>Le nom du réseau est trop court. Essayez-en un d'au moins 6 caractères</value>
     <comment>Supporting text for a text field that is invalid.</comment>

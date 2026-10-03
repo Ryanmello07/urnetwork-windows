@@ -2153,6 +2153,10 @@
     <value>Μη διαθέσιμο. Πρέπει να είναι τουλάχιστον 3 χαρακτήρες διαφορετικοί από ένα υπάρχον δίκτυο. Κάντε το μοναδικό ή μεγαλύτερο.</value>
     <comment>Call to action</comment>
   </data>
+  <data name="network_name_check_failed" xml:space="preserve">
+    <value>Δεν ήταν δυνατός ο έλεγχος διαθεσιμότητας. Μπορείτε να συνεχίσετε.</value>
+    <comment>Create Network Form: the network name availability check could not reach the server. Not a verdict on the name; the user may still create the network.</comment>
+  </data>
   <data name="network_name_is_too_short_try_one_with_at_least" xml:space="preserve">
     <value>Το όνομα δικτύου είναι πολύ σύντομο. Δοκιμάστε ένα με τουλάχιστον 6 χαρακτήρες</value>
     <comment>Supporting text for a text field that is invalid.</comment>

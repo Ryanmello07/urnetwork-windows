@@ -2200,6 +2200,10 @@ Získejte svůj bonus vytvořením sítě!</value>
     <value>Není k dispozici. Musí se lišit alespoň o 3 znaky od existující sítě. Vytvořte ji jedinečnou nebo delší.</value>
     <comment>Call to action</comment>
   </data>
+  <data name="network_name_check_failed" xml:space="preserve">
+    <value>Dostupnost se nepodařilo ověřit. Přesto můžete pokračovat.</value>
+    <comment>Create Network Form: the network name availability check could not reach the server. Not a verdict on the name; the user may still create the network.</comment>
+  </data>
   <data name="network_name_is_too_short_try_one_with_at_least" xml:space="preserve">
     <value>Název sítě je příliš krátký. Zkuste název s alespoň 6 znaky</value>
     <comment>Supporting text for a text field that is invalid.</comment>

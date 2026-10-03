@@ -3494,6 +3494,10 @@
     <value>غير متوفر. يجب أن يكون 3 أحرف على الأقل مختلفة عن شبكة موجودة. اجعلها فريدة أو أطول.</value>
     <comment>Call to action</comment>
   </data>
+  <data name="network_name_check_failed" xml:space="preserve">
+    <value>تعذّر التحقق من التوفر. لا يزال بإمكانك المتابعة.</value>
+    <comment>Create Network Form: the network name availability check could not reach the server. Not a verdict on the name; the user may still create the network.</comment>
+  </data>
   <data name="network_name_is_too_short_try_one_with_at_least" xml:space="preserve">
     <value>اسم الشبكة قصير جدًا. جرّب اسمًا من 6 أحرف على الأقل</value>
     <comment>Supporting text for a text field that is invalid.</comment>

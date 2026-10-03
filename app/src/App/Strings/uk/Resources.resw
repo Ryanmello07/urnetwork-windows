@@ -2202,6 +2202,10 @@
     <value>Недоступно. Має відрізнятися щонайменше на 3 символи від наявної мережі. Зробіть її унікальнішою або довшою.</value>
     <comment>Call to action</comment>
   </data>
+  <data name="network_name_check_failed" xml:space="preserve">
+    <value>Не вдалося перевірити доступність. Ви все одно можете продовжити.</value>
+    <comment>Create Network Form: the network name availability check could not reach the server. Not a verdict on the name; the user may still create the network.</comment>
+  </data>
   <data name="network_name_is_too_short_try_one_with_at_least" xml:space="preserve">
     <value>Назва мережі закоротка. Потрібно щонайменше 6 символів</value>
     <comment>Supporting text for a text field that is invalid.</comment>
