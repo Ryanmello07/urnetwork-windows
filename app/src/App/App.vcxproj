@@ -361,6 +361,7 @@
     <ClInclude Include="AuthSheets.h" />
     <ClInclude Include="BalanceSheets.h" />
     <ClInclude Include="Config.h" />
+    <ClInclude Include="BalanceCodeRedeem.h" />
     <ClInclude Include="LoginCarousel.h" />
     <ClInclude Include="Localization.h" />
     <ClInclude Include="LocationSheets.h" />
