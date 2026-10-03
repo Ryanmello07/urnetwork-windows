@@ -68,6 +68,7 @@ LoginPage::LoginPage(winrt::URnetwork::implementation::MainWindow& window)
 
 LoginPage::~LoginPage() {
   if (nameCheckTimer_) nameCheckTimer_.Stop();
+  if (nameRetryTimer_) nameRetryTimer_.Stop();
   if (bonusCheckTimer_) bonusCheckTimer_.Stop();
   if (resendCooldownTimer_) resendCooldownTimer_.Stop();
 }
@@ -81,6 +82,18 @@ void LoginPage::Initialize() {
   nameCheckTimer_.IsRepeating(false);
   nameCheckTimer_.Tick([weak = w_.get_weak()](auto const&, auto const&) {
     if (auto self = weak.get()) self->login().CheckCreateNameNow();
+  });
+  nameRetryTimer_ = queue.CreateTimer();
+  nameRetryTimer_.Interval(std::chrono::seconds(3));
+  nameRetryTimer_.IsRepeating(false);
+  nameRetryTimer_.Tick([weak = w_.get_weak()](auto const&, auto const&) {
+    if (auto self = weak.get()) self->login().CheckCreateNameNow();
+  });
+  nameCheck_ = std::make_unique<urnw::NetworkNameCheckFlow>(urnw::NetworkNameCheckTimers{
+      [timer = nameCheckTimer_] { timer.Start(); },
+      [timer = nameCheckTimer_] { timer.Stop(); },
+      [timer = nameRetryTimer_] { timer.Start(); },
+      [timer = nameRetryTimer_] { timer.Stop(); },
   });
 
   // debounce the bonus referral code validation
@@ -620,9 +633,7 @@ void LoginPage::EnterCreateStep(std::string const& userAuth, CreateMode mode) {
   w_.BonusStatusText().Text(L"");
   kit::ApplySupportingText(w_.CreateNameStatusText(), Loc("network_name_length_error"),
                            kit::ValidationState::NotChecked);
-  nameAvailable_ = false;
-  nameChecking_ = false;
-  ++nameCheckGeneration_;
+  if (nameCheck_) nameCheck_->Reset();
   bonusValid_ = false;
   bonusCapped_ = false;
   ++bonusCheckGeneration_;
@@ -637,33 +648,32 @@ void LoginPage::EnterCreateStep(std::string const& userAuth, CreateMode mode) {
 }
 
 void LoginPage::OnCreateNameChanged(IInspectable const&, TextChangedEventArgs const&) {
-  ++nameCheckGeneration_;  // drop any availability check still in flight
-  nameAvailable_ = false;
   w_.CreateError().IsOpen(false);
-  if (nameCheckTimer_) nameCheckTimer_.Stop();
-
+  if (!nameCheck_) return;
   const std::string name = TrimWhitespace(urnw::Narrow(w_.CreateNameBox().Text().c_str()));
-  if (name.size() < kMinNetworkNameLength) {
-    nameChecking_ = false;
-    kit::ApplySupportingText(w_.CreateNameStatusText(), Loc("network_name_length_error"),
-                             kit::ValidationState::NotChecked);
-  } else {
-    nameChecking_ = true;
-    kit::ApplySupportingText(w_.CreateNameStatusText(), hstring(),
-                             kit::ValidationState::Validating);
-    if (nameCheckTimer_) nameCheckTimer_.Start();  // debounce, then check
-  }
+  // drops any check still in flight, then debounces the next one
+  nameCheck_->Edited(kMinNetworkNameLength <= name.size());
+  ShowNameCheck();
   ValidateCreateForm();
 }
 
 void LoginPage::CheckCreateNameNow() {
+  if (!nameCheck_) return;
   const std::string name = TrimWhitespace(urnw::Narrow(w_.CreateNameBox().Text().c_str()));
-  if (name.size() < kMinNetworkNameLength || !Sdk().apiReady()) return;
-  const uint32_t generation = nameCheckGeneration_;
+  // an api that is not ready is applied as a failed check (retried), not
+  // skipped with the line left validating
+  const auto generation =
+      nameCheck_->Fire(kMinNetworkNameLength <= name.size(), Sdk().apiReady());
+  if (!generation) {
+    ShowNameCheck();
+    ValidateCreateForm();
+    return;
+  }
 
   auto queue = w_.DispatcherQueue();
   auto weak = w_.get_weak();
-  Sdk().CheckNetworkName(name, [queue, weak, generation](bool ok, bool available) {
+  Sdk().CheckNetworkName(name, [queue, weak, generation = *generation](bool ok,
+                                                                      bool available) {
     queue.TryEnqueue([weak, generation, ok, available] {
       if (auto self = weak.get()) self->login().ApplyNameCheck(generation, ok, available);
     });
@@ -671,22 +681,36 @@ void LoginPage::CheckCreateNameNow() {
 }
 
 void LoginPage::ApplyNameCheck(uint32_t generation, bool ok, bool available) {
-  if (generation != nameCheckGeneration_) return;  // a later edit superseded this
-  nameChecking_ = false;
-  auto const line = w_.CreateNameStatusText();
-  if (!ok) {
-    nameAvailable_ = false;
-    kit::ApplySupportingText(line, Loc("there_was_an_error_checking_the_network_name"),
-                             kit::ValidationState::Invalid);
-  } else if (available) {
-    nameAvailable_ = true;
-    kit::ApplySupportingText(line, Loc("nice_this_network_name_is_available"),
-                             kit::ValidationState::Valid);
-  } else {
-    nameAvailable_ = false;
-    kit::ApplySupportingText(line, Loc("network_name_taken"), kit::ValidationState::Invalid);
-  }
+  // false when a later edit superseded this answer
+  if (!nameCheck_ || !nameCheck_->Apply(generation, ok, available)) return;
+  ShowNameCheck();
   ValidateCreateForm();
+}
+
+void LoginPage::ShowNameCheck() {
+  auto const line = w_.CreateNameStatusText();
+  switch (nameCheck_ ? nameCheck_->state() : urnw::NetworkNameCheck::TooShort) {
+    case urnw::NetworkNameCheck::TooShort:
+      kit::ApplySupportingText(line, Loc("network_name_length_error"),
+                               kit::ValidationState::NotChecked);
+      break;
+    case urnw::NetworkNameCheck::Checking:
+      kit::ApplySupportingText(line, hstring(), kit::ValidationState::Validating);
+      break;
+    case urnw::NetworkNameCheck::Failed:
+      // not a verdict on the name: Create stays usable (the server validates
+      // the name at create) and the check is retried a few times
+      kit::ApplySupportingText(line, Loc("there_was_an_error_checking_the_network_name"),
+                               kit::ValidationState::NotChecked);
+      break;
+    case urnw::NetworkNameCheck::Available:
+      kit::ApplySupportingText(line, Loc("nice_this_network_name_is_available"),
+                               kit::ValidationState::Valid);
+      break;
+    case urnw::NetworkNameCheck::Taken:
+      kit::ApplySupportingText(line, Loc("network_name_taken"), kit::ValidationState::Invalid);
+      break;
+  }
 }
 
 void LoginPage::OnCreateEmailChanged(IInspectable const&, TextChangedEventArgs const&) {
@@ -779,8 +803,8 @@ void LoginPage::ValidateCreateForm() {
       createMode_ != CreateMode::GuestUpgrade ||
       LooksLikeUserAuth(TrimWhitespace(urnw::Narrow(w_.CreateEmailBox().Text().c_str())));
   const bool termsOk = w_.TermsCheck().IsChecked() && w_.TermsCheck().IsChecked().Value();
-  w_.CreateButton().IsEnabled(nameAvailable_ && !nameChecking_ && passwordOk && emailOk &&
-                              termsOk && !creatingNetwork_);
+  w_.CreateButton().IsEnabled(nameCheck_ && nameCheck_->AllowsCreate() && passwordOk &&
+                              emailOk && termsOk && !creatingNetwork_);
 }
 
 void LoginPage::OnCreateNetwork(IInspectable const&, RoutedEventArgs const&) {

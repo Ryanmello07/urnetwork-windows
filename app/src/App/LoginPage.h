@@ -20,6 +20,7 @@
 
 #include "AuthSheets.h"
 #include "LoginCarousel.h"
+#include "NetworkNameCheck.h"
 #include "SdkHost.h"
 #include "UrComponents.h"
 
@@ -170,6 +171,7 @@ class LoginPage {
   void UpdateGetStartedEnabled();
   void CheckCreateNameNow();   // debounce elapsed: run the availability check
   void ApplyNameCheck(uint32_t generation, bool ok, bool available);
+  void ShowNameCheck();        // the name's supporting line for the flow's state
   void ValidateBonusCodeNow();
   void ApplyBonusValidation(uint32_t generation, bool ok, bool valid, bool capped);
   void ValidateCreateForm();   // gates the Continue button
@@ -215,9 +217,10 @@ class LoginPage {
   bool sendingReset_ = false;
   // create-network name availability (debounced; the generation drops stale checks)
   winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer nameCheckTimer_{nullptr};
-  uint32_t nameCheckGeneration_ = 0;
-  bool nameChecking_ = false;
-  bool nameAvailable_ = false;
+  // re-runs a check that errored (see NetworkNameCheck.h)
+  winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer nameRetryTimer_{nullptr};
+  // the name state, debounce and retries; drives the two timers above
+  std::unique_ptr<urnw::NetworkNameCheckFlow> nameCheck_;
   // bonus referral code validation (debounced)
   winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer bonusCheckTimer_{nullptr};
   uint32_t bonusCheckGeneration_ = 0;
