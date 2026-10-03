@@ -998,13 +998,15 @@ winrt::fire_and_forget SettingsPage::ShowKillSwitchException() {
     dialog.CloseButtonText(Loc("got_it"));
     dialog.DefaultButton(ContentDialogButton::Close);
     TextBlock body;
+    // the tun captures ::/0 minus the local scopes (net::kTunCaptureV6), so
+    // the only public-route exception is SMTP on port 25
     body.Text(Adv(
-        "kill_switch_exception_detail",
-        L"While the VPN is connected, IPv6 is not routed through URnetwork and "
-        L"may use your local network, even when the kill switch is on. Outbound "
-        L"SMTP on TCP port 25 also bypasses the VPN. These exceptions may expose "
-        L"your local public IP to those destinations. SMTP on ports 465 and 587 "
-        L"stays in the VPN and must establish TLS."));
+        "kill_switch_exception_smtp_detail",
+        L"While the VPN is connected, IPv6 is routed through URnetwork like "
+        L"IPv4. Outbound SMTP on TCP port 25 bypasses the VPN, even when the "
+        L"kill switch is on, which may expose your local public IP to those "
+        L"mail servers. SMTP on ports 465 and 587 stays in the VPN and must "
+        L"establish TLS."));
     body.FontSize(14);
     body.TextWrapping(TextWrapping::Wrap);
     body.MinWidth(320);

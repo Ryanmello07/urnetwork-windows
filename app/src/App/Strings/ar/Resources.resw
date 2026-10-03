@@ -3034,9 +3034,9 @@
     <value>استثناء مفتاح القتل</value>
     <comment>Title for the disclosure explaining traffic that intentionally bypasses the VPN kill switch.</comment>
   </data>
-  <data name="kill_switch_exception_detail" xml:space="preserve">
-    <value>أثناء اتصال VPN، لا يُوجَّه IPv6 عبر URnetwork وقد يستخدم شبكتك المحلية، حتى عند تشغيل مفتاح القتل. كما يتجاوز SMTP الصادر عبر منفذ TCP رقم 25 شبكة VPN. قد تكشف هذه الاستثناءات عنوان IP العام المحلي لديك لتلك الوجهات. يبقى SMTP على المنفذين 465 و587 داخل VPN ويجب أن يُنشئ اتصال TLS.</value>
-    <comment>Explains the deliberate IPv6 and SMTP exceptions to the VPN kill switch and the encrypted SMTP behavior.</comment>
+  <data name="kill_switch_exception_smtp_detail" xml:space="preserve">
+    <value>أثناء اتصال VPN، يُوجَّه IPv6 عبر URnetwork مثل IPv4. يتجاوز SMTP الصادر عبر منفذ TCP رقم 25 شبكة VPN، حتى عند تشغيل مفتاح القتل، وقد يكشف ذلك عنوان IP العام المحلي لديك لخوادم البريد تلك. يبقى SMTP على المنفذين 465 و587 داخل VPN ويجب أن يُنشئ اتصال TLS.</value>
+    <comment>Explains the deliberate SMTP port 25 exception to the VPN kill switch, that IPv6 is routed through the tunnel, and the encrypted SMTP behavior.</comment>
   </data>
   <data name="launch" xml:space="preserve">
     <value>تشغيل</value>
