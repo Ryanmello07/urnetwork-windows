@@ -364,6 +364,7 @@
     <ClInclude Include="Config.h" />
     <ClInclude Include="BalanceCodeRedeem.h" />
     <ClInclude Include="LoginCarousel.h" />
+    <ClInclude Include="NetworkNameCheck.h" />
     <ClInclude Include="Localization.h" />
     <ClInclude Include="LocationSheets.h" />
     <ClInclude Include="GlobeGeometry.h" />
