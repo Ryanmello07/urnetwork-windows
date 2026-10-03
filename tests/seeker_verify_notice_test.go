@@ -12,7 +12,8 @@ import (
 
 // Compile and execute the Seeker verification notice spec
 // (App/SeekerVerifyNotice.h): a server answer that found no Seeker or Saga
-// token must say seeker_token_not_found, not the generic claim error.
+// token must say seeker_token_not_found, not the generic claim error, and the
+// server's error code picks the localized notice over its English message.
 func TestSeekerVerifyNotice(t *testing.T) {
 	compiler, err := exec.LookPath("c++")
 	if err != nil {
@@ -42,6 +43,16 @@ func TestSeekerVerifyNotice(t *testing.T) {
 		}
 		if !strings.Contains(string(source), want) {
 			t.Errorf("%s: missing %s", path, want)
+		}
+	}
+	// the verify answer's error code reaches the decision
+	walletPage, err := os.ReadFile(filepath.Join(root, "app", "src", "App", "WalletPage.cpp"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"result->error->code", "failure, errorCode)"} {
+		if !strings.Contains(string(walletPage), want) {
+			t.Errorf("WalletPage.cpp: the Seeker error code is not used (missing %s)", want)
 		}
 	}
 }

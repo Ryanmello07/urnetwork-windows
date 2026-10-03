@@ -3000,6 +3000,10 @@
     <value>{}개 단어입니다 — 시드 문구는 12개 또는 24개 단어입니다</value>
     <comment>Login: warning when the pasted seedphrase has {count} words instead of 12 or 24.</comment>
   </data>
+  <data name="seeker_multiplier_benefit" xml:space="preserve">
+    <value>포인트, 무료 일일 데이터, 추천 데이터가 두 배가 됩니다.</value>
+    <comment>Seeker/Saga token multiplier: what a verified token gives. It doubles points and the free daily data and referral data grants; it does not grant Pro.</comment>
+  </data>
   <data name="seeker_token_not_found" xml:space="preserve">
     <value>지갑 …{}에서 Seeker 또는 Saga 토큰을 찾을 수 없습니다</value>
     <comment>Seeker token verification: the wallet holds no Seeker or Saga token. The argument is the end of the wallet address.</comment>

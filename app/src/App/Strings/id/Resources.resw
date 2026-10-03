@@ -3001,6 +3001,10 @@ konten dunia</value>
     <value>Itu {} kata — frasa pemulihan terdiri dari 12 atau 24 kata</value>
     <comment>Login: warning when the pasted seedphrase has {count} words instead of 12 or 24.</comment>
   </data>
+  <data name="seeker_multiplier_benefit" xml:space="preserve">
+    <value>Menggandakan poin, data harian gratis, dan data referral Anda.</value>
+    <comment>Seeker/Saga token multiplier: what a verified token gives. It doubles points and the free daily data and referral data grants; it does not grant Pro.</comment>
+  </data>
   <data name="seeker_token_not_found" xml:space="preserve">
     <value>Tidak ada token Seeker atau Saga di dompet …{}</value>
     <comment>Seeker token verification: the wallet holds no Seeker or Saga token. The argument is the end of the wallet address.</comment>

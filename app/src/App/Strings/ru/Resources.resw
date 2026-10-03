@@ -4531,6 +4531,10 @@
     <value>Это {} слов — сид-фраза состоит из 12 или 24 слов</value>
     <comment>Login: warning when the pasted seedphrase has {count} words instead of 12 or 24.</comment>
   </data>
+  <data name="seeker_multiplier_benefit" xml:space="preserve">
+    <value>Удваивает ваши очки, бесплатные ежедневные данные и данные за рефералов.</value>
+    <comment>Seeker/Saga token multiplier: what a verified token gives. It doubles points and the free daily data and referral data grants; it does not grant Pro.</comment>
+  </data>
   <data name="seeker_points_only" xml:space="preserve">
     <value>Множитель Seeker применяется только к очкам.</value>
     <comment>Note on the Seeker verification action.</comment>

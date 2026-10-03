@@ -3181,6 +3181,10 @@
     <value>אלה {} מילים — ביטוי סיד הוא 12 או 24 מילים</value>
     <comment>Login: warning when the pasted seedphrase has {count} words instead of 12 or 24.</comment>
   </data>
+  <data name="seeker_multiplier_benefit" xml:space="preserve">
+    <value>מכפיל את הנקודות שלך, את הנתונים היומיים החינמיים ואת נתוני ההפניות.</value>
+    <comment>Seeker/Saga token multiplier: what a verified token gives. It doubles points and the free daily data and referral data grants; it does not grant Pro.</comment>
+  </data>
   <data name="seeker_token_not_found" xml:space="preserve">
     <value>לא נמצא אסימון Seeker או Saga בארנק …{}</value>
     <comment>Seeker token verification: the wallet holds no Seeker or Saga token. The argument is the end of the wallet address.</comment>

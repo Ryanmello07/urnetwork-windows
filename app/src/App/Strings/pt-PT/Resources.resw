@@ -3060,6 +3060,10 @@ conteúdo do mundo</value>
     <value>São {} palavras — uma frase-semente tem 12 ou 24 palavras</value>
     <comment>Login: warning when the pasted seedphrase has {count} words instead of 12 or 24.</comment>
   </data>
+  <data name="seeker_multiplier_benefit" xml:space="preserve">
+    <value>Duplica os seus pontos, os dados diários gratuitos e os dados de referência.</value>
+    <comment>Seeker/Saga token multiplier: what a verified token gives. It doubles points and the free daily data and referral data grants; it does not grant Pro.</comment>
+  </data>
   <data name="seeker_token_not_found" xml:space="preserve">
     <value>Nenhum token Seeker ou Saga encontrado na carteira …{}</value>
     <comment>Seeker token verification: the wallet holds no Seeker or Saga token. The argument is the end of the wallet address.</comment>

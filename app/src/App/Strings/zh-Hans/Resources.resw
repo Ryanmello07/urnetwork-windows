@@ -4291,6 +4291,10 @@
     <value>这是 {} 个词 — 助记词应为 12 或 24 个词</value>
     <comment>Login: warning when the pasted seedphrase has {count} words instead of 12 or 24.</comment>
   </data>
+  <data name="seeker_multiplier_benefit" xml:space="preserve">
+    <value>将你的积分、每日免费流量和推荐流量翻倍。</value>
+    <comment>Seeker/Saga token multiplier: what a verified token gives. It doubles points and the free daily data and referral data grants; it does not grant Pro.</comment>
+  </data>
   <data name="seeker_points_only" xml:space="preserve">
     <value>Seeker 倍增器仅适用于积分。</value>
     <comment>Note on the Seeker verification action.</comment>
