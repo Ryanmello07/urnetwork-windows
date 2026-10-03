@@ -42,10 +42,6 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <data name="a_new_seedphrase_will_be_generated_and" xml:space="preserve">
-    <value>系统将生成一个新的助记词并关联到你的帐户。</value>
-    <comment>A description of the seedphrase generation process.</comment>
-  </data>
   <data name="a_seedphrase_lets_you_recover_your_account" xml:space="preserve">
     <value>如果你无法访问帐户，助记词可以帮你恢复。</value>
   </data>

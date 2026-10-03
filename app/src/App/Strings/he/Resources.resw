@@ -42,10 +42,6 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <data name="a_new_seedphrase_will_be_generated_and" xml:space="preserve">
-    <value>ייווצר ביטוי סיד חדש ויקושר לחשבון שלך.</value>
-    <comment>A description of the seedphrase generation process.</comment>
-  </data>
   <data name="a_seedphrase_lets_you_recover_your_account" xml:space="preserve">
     <value>ביטוי סיד מאפשר לך לשחזר את החשבון שלך אם תאבד את הגישה אליו.</value>
   </data>

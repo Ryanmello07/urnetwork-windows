@@ -42,10 +42,6 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <data name="a_new_seedphrase_will_be_generated_and" xml:space="preserve">
-    <value>Zostanie wygenerowana nowa fraza seed i powiązana z Twoim kontem.</value>
-    <comment>A description of the seedphrase generation process.</comment>
-  </data>
   <data name="a_seedphrase_lets_you_recover_your_account" xml:space="preserve">
     <value>Fraza seed pozwala odzyskać konto, jeśli stracisz do niego dostęp.</value>
   </data>
