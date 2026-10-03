@@ -59,3 +59,32 @@ func TestBalanceCodeRedeem(t *testing.T) {
 		}
 	}
 }
+
+// A balance code is data only: the server grants its transfer balance with
+// pro = false and the redeem answer has no Pro field. The redeem owner must read
+// the balance once, never start the Pro confirmation poll, which waits for a
+// plan a code never grants (the plan ring spins and the insufficient-balance
+// notice is held back for 2 minutes, then the poll records a timed-out purchase).
+func TestBalanceCodeRedeemReadsTheBalanceOnce(t *testing.T) {
+	root := repositoryRoot(t)
+	source, err := os.ReadFile(filepath.Join(root, "app", "src", "App", "MainWindow.xaml.cpp"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	window := string(source)
+	start := strings.Index(window, "winrt::fire_and_forget MainWindow::ShowRedeemSheet()")
+	if start < 0 {
+		t.Fatal("MainWindow.xaml.cpp: no ShowRedeemSheet")
+	}
+	end := strings.Index(window[start:], "\n}\n")
+	if end < 0 {
+		t.Fatal("MainWindow.xaml.cpp: ShowRedeemSheet has no end")
+	}
+	showRedeemSheet := window[start : start+end]
+	if strings.Contains(showRedeemSheet, "StartConfirmationPolling(") {
+		t.Errorf("ShowRedeemSheet: a redeemed data code starts the Pro confirmation poll")
+	}
+	if !strings.Contains(showRedeemSheet, "balance().Refresh()") {
+		t.Errorf("ShowRedeemSheet: a redeemed code does not read the balance")
+	}
+}

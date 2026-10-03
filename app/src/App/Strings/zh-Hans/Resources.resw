@@ -590,6 +590,10 @@
     <value>此余额码已被兑换。如果您之前已兑换过，数据已计入您的余额。</value>
     <comment>Redeem balance code: the server answered that this code was already redeemed. Distinct from invalid -- the user may have redeemed it on an earlier attempt that looked like a failure.</comment>
   </data>
+  <data name="balance_code_data_added" xml:space="preserve">
+    <value>已向您的余额添加 {} 数据。</value>
+    <comment>Redeem balance code: confirmation of the data a redeemed code added to the network's balance (amount is a formatted byte count, e.g. "5.00 GiB"). A balance code is data only: never a plan or Pro upgrade.</comment>
+  </data>
   <data name="balance_code_invalid_message" xml:space="preserve">
     <value>该余额码无效。请检查后重试。</value>
     <comment>Redeem balance code: the server answered and rejected the code as unknown/invalid. Distinct from a transport failure, which must never be reported as a bad code.</comment>
