@@ -156,6 +156,9 @@ MainWindow::MainWindow() {
   {
     Button getPro;
     getPro.Content(LocBox("get_pro"));  // the same label as every other app
+    // found by the insufficient-balance acceptance driver beside the banner's id
+    Automation::AutomationProperties::SetAutomationId(getPro,
+                                                      L"acceptance.insufficient-balance.upgrade");
     getPro.Click([weak = get_weak()](auto const&, auto const&) {
       auto self = weak.get();
       if (!self) return;

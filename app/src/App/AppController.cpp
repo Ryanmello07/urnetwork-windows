@@ -379,6 +379,9 @@ void AppController::ReactToBalance() {
   struct Sinks {
     AppController& app;
     void Notice() {
+      // one line per posted notice: the acceptance driver counts these, since
+      // a balloon cannot be read back from the shell
+      LogInfo("app: insufficient balance notice posted");
       app.tray_.ShowBalloon(Localized("insufficient_balance"),
                             Localized("insufficient_balance_held_notice"));
     }

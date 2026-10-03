@@ -437,6 +437,9 @@ void SettingsPage::BuildConnectionsSection(Panel const& host) {
 
   killSwitch_ = ToggleSwitch();
   killSwitch_.Style(Lookup(L"UrSwitchToggleStyle"));
+  // the insufficient-balance acceptance driver's kill-switch case toggles this
+  winrt::Microsoft::UI::Xaml::Automation::AutomationProperties::SetAutomationId(
+      killSwitch_, L"acceptance.settings.kill-switch");
   killSwitchControls.Children().Append(killSwitch_);
   Row(card, Loc("kill_switch"),
       Adv("adv_kill_switch_note",
