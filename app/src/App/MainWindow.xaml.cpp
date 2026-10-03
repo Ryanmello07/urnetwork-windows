@@ -1558,8 +1558,7 @@ void MainWindow::SetInsufficientBalance(bool insufficient) {
 void MainWindow::UpdateBalanceWarning() {
   // macOS ConnectActions: the insufficient-balance CTA shows for a non-Pro
   // account when no confirmation poll is bridging a just-made purchase
-  BalanceWarning().IsOpen(insufficientBalance_ && !balance_.isPro &&
-                          !balancePoll_.confirming);
+  BalanceWarning().IsOpen(outOfBalance());
   // The hero canvas renders the same two account states (error / processing)
   // off the same fields, so it is re-rendered from the ONE place they change.
   // Guarded: the balance relay can land before the pages are constructed.

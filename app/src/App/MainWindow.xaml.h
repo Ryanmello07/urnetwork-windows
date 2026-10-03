@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "AccountPage.h"
+#include "BalanceGate.h"
 #include "BalanceSheets.h"
 #include "ConnectPage.h"
 #include "DeveloperPage.h"
@@ -115,7 +116,12 @@ struct MainWindow : MainWindowT<MainWindow> {
   // on, read from here rather than recomputed in ConnectPage, so the hero and
   // the InfoBar cannot end up disagreeing about the account's state.
   bool balanceConfirming() const { return balancePoll_.confirming; }
-  bool balanceBlocked() const { return insufficientBalance_ && !balance_.isPro; }
+  // The insufficient-balance gate (BalanceGate.h): out of balance, not Pro,
+  // and no confirmation poll running.
+  bool outOfBalance() const {
+    return urnw::balance::OutOfBalance(insufficientBalance_, balance_.isPro,
+                                       balancePoll_.confirming);
+  }
   // #27: the last firewall state the SERVICE reported ("off" | "armed" |
   // "connecting" | "connected"), for the connect page's blocked-traffic line.
   // Read from here rather than re-cached on the page for the balance reason

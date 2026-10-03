@@ -17,6 +17,7 @@
 #include <utility>
 #include <vector>
 
+#include "BalanceGate.h"
 #include "Log.h"
 #include "MainWindow.xaml.h"
 #include "PageContext.h"
@@ -247,7 +248,10 @@ void ConnectPage::OnConnectToggle(IInspectable const&, RoutedEventArgs const&) {
   // still holds a destination and the machine is still captured, so the
   // gesture predicate reads Disconnect, but the button SAYS Retry and a press
   // must do what the button says.
-  const bool retry = RenderHealth() == urnw::health::State::Failed;
+  //
+  // Out of balance the press is Disconnect instead (BalanceGate.h): a retry
+  // reconnects, which cannot succeed there.
+  const bool retry = RenderHealth() == urnw::health::State::Failed && !w_.outOfBalance();
   if (!retry && ConnectActionIsDisconnect()) {
     Sdk().Disconnect();
     return;
@@ -584,7 +588,7 @@ void ConnectPage::ApplyConnectStatus() {
   // post-checkout confirmation poll wins over an out-of-balance account: the
   // balance is mid-flight, and showing a warning for it would be wrong.
   const bool processing = w_.balanceConfirming();
-  const bool outOfBalance = !processing && w_.balanceBlocked();
+  const bool outOfBalance = w_.outOfBalance();
   switch (render) {
     case Health::Connected:
       // the provider count lives in its own line below (ProviderCountText),
@@ -779,8 +783,16 @@ void ConnectPage::ApplyConnectStatus() {
   // but a failure whose only offered control is "Disconnect" strands the user
   // one manual step from the retry that usually works. OnConnectToggle keeps
   // the two in agreement: a press in this state disconnects AND reconnects.
-  const bool failedAction = render == Health::Failed;
-  const bool disconnectAction = !failedAction && ConnectActionIsDisconnect();
+  //
+  // Out of balance the button keeps its Disconnect and that press stays
+  // enabled (BalanceGate.h): it used to be disabled with the connect, which
+  // left a machine captured with no exit and no way out but the tray.
+  const urnw::balance::ConnectButton button = urnw::balance::DecideConnectButton(
+      render == Health::Failed, ConnectActionIsDisconnect(), processing, outOfBalance,
+      connectStatus_ == ConnectStatus::Connecting, connectWatchdogFired_);
+  const bool failedAction = button.action == urnw::balance::ConnectButtonAction::Retry;
+  const bool disconnectAction =
+      button.action == urnw::balance::ConnectButtonAction::Disconnect;
   w_.ConnectButton().Content(failedAction
                                  ? LocBox("retry")
                                  : (disconnectAction ? LocBox("disconnect")
@@ -844,9 +856,13 @@ void ConnectPage::ApplyConnectStatus() {
     connectWatchdogFired_ = true;
   }
   // out of balance / mid-poll: there is nothing a connect press can do, and iOS
-  // blocks the tap in exactly these two cases
-  const bool blocked = processing || outOfBalance;
-  const bool enabled = !blocked && (!transitional || connectWatchdogFired_);
+  // blocks the tap in exactly these two cases. A disconnect press is never
+  // blocked by balance (DecideConnectButton, with the watchdog state above).
+  const bool enabled = urnw::balance::DecideConnectButton(
+                           render == Health::Failed, ConnectActionIsDisconnect(),
+                           processing, outOfBalance, transitional,
+                           connectWatchdogFired_)
+                           .enabled;
   w_.ConnectButton().IsEnabled(enabled);
   w_.ConnectHero().IsEnabled(enabled);
 }
@@ -972,9 +988,11 @@ void ConnectPage::ApplyStats(urnw::LiveStats const& stats) {
   // the activity list vs its centred empty line, on the same connected signal
   ApplySessionCardsVisibility(stats.connected);
 
-  // Insufficient-balance warning (auto-disconnect happens in the SDK). The
-  // action button opens the upgrade flow; Pro / a running confirmation poll
-  // suppress it (MainWindow::UpdateBalanceWarning).
+  // Insufficient-balance warning. The action button opens the upgrade flow;
+  // Pro / a running confirmation poll suppress it
+  // (MainWindow::UpdateBalanceWarning). The SDK does not disconnect on its
+  // own: AppController::UpdateBalanceAutoDisconnect clears the connect request
+  // after the grace (BalanceGate.h).
   w_.SetInsufficientBalance(stats.insufficientBalance);
 
   // Provide stats.

@@ -10,6 +10,7 @@
 #include <winrt/Microsoft.UI.Interop.h>
 #include <winrt/Windows.ApplicationModel.Activation.h>
 
+#include "BalanceGate.h"
 #include "Ids.h"
 #include "Localization.h"
 #include "Log.h"
@@ -175,6 +176,8 @@ void AppController::Start() {
   balance_.Initialize(uiThread_);
   balance_.SetChangeHandler([this](const BalanceSnapshot& snapshot,
                                    const BalancePollState& poll) {
+    // a plan flip or a confirmation poll changes the gate
+    UpdateBalanceAutoDisconnect();
     if (windowVisible_ && window_) {
       if (auto self = window_.try_as<winrt::URnetwork::implementation::MainWindow>())
         self->OnBalanceChanged(snapshot, poll);
@@ -199,6 +202,11 @@ void AppController::Start() {
     placementSaveTimer_.Tick([this](auto const&, auto const&) {
       if (shell::SaveWindowPlacement(windowHwnd_)) ownPlacement_ = true;
     });
+    // re-checks the insufficient-balance gate when its grace runs out, so the
+    // decision does not wait for a push that may never come
+    balanceTimer_ = uiThread_.CreateTimer();
+    balanceTimer_.IsRepeating(false);
+    balanceTimer_.Tick([this](auto const&, auto const&) { UpdateBalanceAutoDisconnect(); });
   }
 
   // The update checker (beta spec §5): its worker owns the launch-delay check
@@ -361,11 +369,54 @@ void AppController::OnStats(const LiveStats& stats) {
     trayHealth_ = stats.health;
     UpdateTray();
   }
+  insufficientBalance_ = stats.insufficientBalance;
+  UpdateBalanceAutoDisconnect();
   // Live stats otherwise only matter to the window; push only when visible.
   if (windowVisible_ && window_) {
     if (auto self = window_.try_as<winrt::URnetwork::implementation::MainWindow>())
       self->OnStatsChanged(stats);
   }
+}
+
+void AppController::UpdateBalanceAutoDisconnect() {
+  const bool outOfBalance =
+      urnw::balance::OutOfBalance(insufficientBalance_, balance_.Current().isPro,
+                            balance_.CurrentPoll().confirming);
+  const bool actionIsDisconnect =
+      gesture::ActionIsDisconnect(CurrentServiceFacts(), TrayHealth());
+  if (!outOfBalance || !actionIsDisconnect) {
+    // a new hold, after the gate clears or the session ends, starts over
+    outOfBalanceSince_ = {};
+    outOfBalanceDecided_ = false;
+    if (balanceTimer_) balanceTimer_.Stop();
+    return;
+  }
+  const auto now = std::chrono::steady_clock::now();
+  if (outOfBalanceSince_ == std::chrono::steady_clock::time_point{}) outOfBalanceSince_ = now;
+  if (outOfBalanceDecided_) return;
+  const auto heldFor = now - outOfBalanceSince_;
+  if (heldFor < urnw::balance::kAutoDisconnectGrace) {
+    if (balanceTimer_) {
+      balanceTimer_.Stop();
+      balanceTimer_.Interval(std::chrono::duration_cast<winrt::Windows::Foundation::TimeSpan>(
+          urnw::balance::kAutoDisconnectGrace - heldFor));
+      balanceTimer_.Start();
+    }
+    return;
+  }
+  // decided once per hold: the kill switch read crosses into the service, and
+  // a kill switch user stays blocked (fail closed) with Disconnect still offered
+  outOfBalanceDecided_ = true;
+  if (!urnw::balance::AutoDisconnectDue(outOfBalance, actionIsDisconnect,
+                                        sdk_.CurrentKillSwitch(), heldFor)) {
+    LogInfo("app: insufficient balance held past the grace with the kill switch on; "
+            "keeping the tunnel blocked");
+    return;
+  }
+  LogInfo("app: insufficient balance held past the grace; disconnecting");
+  sdk_.Disconnect();
+  tray_.ShowBalloon(Localized("insufficient_balance"),
+                    Localized("insufficient_balance_message"));
 }
 
 gesture::ServiceFacts AppController::CurrentServiceFacts() const {
