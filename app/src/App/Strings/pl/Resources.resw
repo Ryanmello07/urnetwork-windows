@@ -2201,6 +2201,10 @@ który wysłaliśmy, aby zweryfikować twoją tożsamość.</value>
     <value>Niedostępne. Musi różnić się od istniejącej sieci o co najmniej 3 znaki. Uczyń ją unikalną lub dłuższą.</value>
     <comment>Call to action</comment>
   </data>
+  <data name="network_name_check_failed" xml:space="preserve">
+    <value>Nie udało się sprawdzić dostępności. Nadal możesz kontynuować.</value>
+    <comment>Create Network Form: the network name availability check could not reach the server. Not a verdict on the name; the user may still create the network.</comment>
+  </data>
   <data name="network_name_is_too_short_try_one_with_at_least" xml:space="preserve">
     <value>Nazwa sieci jest za krótka. Musi mieć co najmniej 6 znaków</value>
     <comment>Supporting text for a text field that is invalid.</comment>

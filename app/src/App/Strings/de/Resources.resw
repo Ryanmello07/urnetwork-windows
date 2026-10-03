@@ -3319,6 +3319,10 @@ gesendet haben, um deine Identität zu überprüfen.</value>
     <value>Nicht verfügbar. Muss mindestens 3 Zeichen von einem bestehenden Netzwerk abweichen. Mach es einzigartig oder länger.</value>
     <comment>Call to action</comment>
   </data>
+  <data name="network_name_check_failed" xml:space="preserve">
+    <value>Verfügbarkeit konnte nicht geprüft werden. Du kannst trotzdem fortfahren.</value>
+    <comment>Create Network Form: the network name availability check could not reach the server. Not a verdict on the name; the user may still create the network.</comment>
+  </data>
   <data name="network_name_is_too_short_try_one_with_at_least" xml:space="preserve">
     <value>Netzwerkname ist zu kurz. Probiere einen mit mindestens 6 Zeichen</value>
     <comment>Supporting text for a text field that is invalid.</comment>

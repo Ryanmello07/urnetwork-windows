@@ -3851,6 +3851,10 @@ Claim your bonus by creating a network!</value>
     <value>Not available. Must be at least 3 characters different than an existing network. Make it unique or longer.</value>
     <comment>Call to action</comment>
   </data>
+  <data name="network_name_check_failed" xml:space="preserve">
+    <value>Couldn't check availability. You can still continue.</value>
+    <comment>Create Network Form: the network name availability check could not reach the server. Not a verdict on the name; the user may still create the network.</comment>
+  </data>
   <data name="network_name_is_too_short_try_one_with_at_least" xml:space="preserve">
     <value>Network name is too short. Try one with at least 6 characters</value>
     <comment>Supporting text for a text field that is invalid.</comment>

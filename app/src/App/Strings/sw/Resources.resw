@@ -2153,6 +2153,10 @@ kutumia ili kuthibitisha utambulisho wako.</value>
     <value>Haipatikani. Lazima iwe na angalau herufi 3 tofauti na mtandao uliopo. Ifanye iwe ya kipekee au ndefu zaidi.</value>
     <comment>Call to action</comment>
   </data>
+  <data name="network_name_check_failed" xml:space="preserve">
+    <value>Imeshindwa kukagua upatikanaji. Bado unaweza kuendelea.</value>
+    <comment>Create Network Form: the network name availability check could not reach the server. Not a verdict on the name; the user may still create the network.</comment>
+  </data>
   <data name="network_name_is_too_short_try_one_with_at_least" xml:space="preserve">
     <value>Jina la mtandao ni fupi mno. Jaribu lenye angalau herufi 6</value>
     <comment>Supporting text for a text field that is invalid.</comment>

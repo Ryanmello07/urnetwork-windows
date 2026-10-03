@@ -3276,6 +3276,10 @@
     <value>不可用。必须与现有网络至少有 3 个字符不同。使其独特或更长。</value>
     <comment>Call to action</comment>
   </data>
+  <data name="network_name_check_failed" xml:space="preserve">
+    <value>无法检查是否可用。你仍可以继续。</value>
+    <comment>Create Network Form: the network name availability check could not reach the server. Not a verdict on the name; the user may still create the network.</comment>
+  </data>
   <data name="network_name_is_too_short_try_one_with_at_least" xml:space="preserve">
     <value>网络名称太短。请使用至少 6 个字符的名称</value>
     <comment>Supporting text for a text field that is invalid.</comment>

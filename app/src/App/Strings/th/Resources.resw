@@ -2130,6 +2130,10 @@
     <value>ไม่สามารถใช้ได้ จะต้องมีตัวอักษรอย่างน้อย 3 ตัวที่แตกต่างจากชื่อเน็ตเวิร์กเดิม ลองตั้งใหม่ให้แตกต่างหรือยาวขึ้น</value>
     <comment>Call to action</comment>
   </data>
+  <data name="network_name_check_failed" xml:space="preserve">
+    <value>ไม่สามารถตรวจสอบความพร้อมใช้งานได้ คุณยังคงดำเนินการต่อได้</value>
+    <comment>Create Network Form: the network name availability check could not reach the server. Not a verdict on the name; the user may still create the network.</comment>
+  </data>
   <data name="network_name_is_too_short_try_one_with_at_least" xml:space="preserve">
     <value>ชื่อเครือข่ายสั้นเกินไป ลองใช้ชื่อที่มีอย่างน้อย 6 ตัวอักษร</value>
     <comment>Supporting text for a text field that is invalid.</comment>

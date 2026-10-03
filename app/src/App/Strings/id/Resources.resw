@@ -2130,6 +2130,10 @@ Klaim bonus Anda dengan membuat jaringan!</value>
     <value>Tidak tersedia. Harus berbeda setidaknya 3 karakter dari jaringan yang ada. Buat lebih unik atau lebih panjang.</value>
     <comment>Call to action</comment>
   </data>
+  <data name="network_name_check_failed" xml:space="preserve">
+    <value>Tidak dapat memeriksa ketersediaan. Anda tetap dapat melanjutkan.</value>
+    <comment>Create Network Form: the network name availability check could not reach the server. Not a verdict on the name; the user may still create the network.</comment>
+  </data>
   <data name="network_name_is_too_short_try_one_with_at_least" xml:space="preserve">
     <value>Nama jaringan terlalu pendek. Coba yang minimal 6 karakter</value>
     <comment>Supporting text for a text field that is invalid.</comment>

@@ -3408,6 +3408,10 @@
     <value>Недоступно. Имя должно отличаться от существующего как минимум на 3 символа. Сделайте его уникальнее или длиннее.</value>
     <comment>Call to action</comment>
   </data>
+  <data name="network_name_check_failed" xml:space="preserve">
+    <value>Не удалось проверить доступность. Вы всё равно можете продолжить.</value>
+    <comment>Create Network Form: the network name availability check could not reach the server. Not a verdict on the name; the user may still create the network.</comment>
+  </data>
   <data name="network_name_is_too_short_try_one_with_at_least" xml:space="preserve">
     <value>Имя сети слишком короткое. Нужно не менее 6 символов</value>
     <comment>Supporting text for a text field that is invalid.</comment>
