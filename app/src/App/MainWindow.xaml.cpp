@@ -1538,12 +1538,24 @@ void MainWindow::ApplyBalance() {
 
   // referral rows: "Total Referrals: N" and "+N*3 GiB/Day" (the server grants
   // 3 GiB per referral per 24h -- pro.yml referral; this row said GiB/Month)
-  const int64_t totalReferrals = account_ ? account_->totalReferrals() : 0;
-  const hstring totals = hstring{urnw::Format("total_referrals_lld", totalReferrals)};
-  const hstring bonus = hstring{urnw::Format(
-      "referral_bonus", Balance().ReferralTerms().EarnedGibPerDay(totalReferrals))};
-  AccountReferralTotals().Text(totals);
-  AccountReferralBonus().Text(bonus);
+  // once the read lands; a failed read is not "0" but the error and Try again
+  const urnw::ReferralTotalsView totalsView =
+      account_ ? account_->referralTotals().View() : urnw::ReferralTotalsView::Loading;
+  if (totalsView == urnw::ReferralTotalsView::Count) {
+    const int64_t totalReferrals = account_->referralTotals().Total();
+    AccountReferralTotals().Text(hstring{urnw::Format("total_referrals_lld", totalReferrals)});
+    AccountReferralBonus().Text(hstring{urnw::Format(
+        "referral_bonus", Balance().ReferralTerms().EarnedGibPerDay(totalReferrals))});
+  } else {
+    AccountReferralTotals().Text(Loc("total_referrals"));
+    AccountReferralBonus().Text(Loc(totalsView == urnw::ReferralTotalsView::Unavailable
+                                        ? "something_went_wrong"
+                                        : "loading"));
+  }
+  AccountReferralRetry().Content(LocBox("try_again"));
+  AccountReferralRetry().Visibility(totalsView == urnw::ReferralTotalsView::Unavailable
+                                        ? Visibility::Visible
+                                        : Visibility::Collapsed);
 
   UpdateBalanceWarning();
   // the open upgrade sheet watches for the plan flip / poll timeout
@@ -1762,6 +1774,10 @@ void MainWindow::OnOpenUpgrade(IInspectable const&, RoutedEventArgs const&) {
 
 void MainWindow::OnOpenRedeem(IInspectable const&, RoutedEventArgs const&) {
   ShowRedeemSheet();
+}
+
+void MainWindow::OnRetryReferralTotals(IInspectable const&, RoutedEventArgs const&) {
+  if (account_) account_->RetryReferralInfo();
 }
 
 winrt::fire_and_forget MainWindow::ShowUpgradeSheet() {

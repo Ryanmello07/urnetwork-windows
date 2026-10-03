@@ -1710,8 +1710,14 @@
                                         </Grid.ColumnDefinitions>
                                         <TextBlock x:Name="AccountReferralTotals"
                                                    Style="{StaticResource UrKeyTextStyle}" />
-                                        <TextBlock x:Name="AccountReferralBonus" Grid.Column="1"
-                                                   Style="{StaticResource UrValueTextStyle}" />
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                            <TextBlock x:Name="AccountReferralBonus"
+                                                       VerticalAlignment="Center"
+                                                       Style="{StaticResource UrValueTextStyle}" />
+                                            <Button x:Name="AccountReferralRetry"
+                                                    Visibility="Collapsed"
+                                                    Click="OnRetryReferralTotals" />
+                                        </StackPanel>
                                     </Grid>
                                 </Border>
                                 <Button x:Name="RedeemRowButton" MinHeight="40"
