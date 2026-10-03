@@ -9,7 +9,8 @@ import (
 )
 
 // Compile and execute the insufficient-balance gate (Common/BalanceGate.h): the
-// connect button keeps Disconnect out of balance, and auto-disconnect waits out the grace.
+// connect button keeps Disconnect out of balance, the balance reaction never
+// disconnects, and the notice is posted once per out-of-balance episode.
 func TestBalanceGate(t *testing.T) {
 	compiler, err := exec.LookPath("c++")
 	if err != nil {
