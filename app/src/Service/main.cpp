@@ -483,7 +483,10 @@ bool EnsureRestartOnFailure() {
              ::GetLastError());
     return false;
   }
-  SC_HANDLE svc = ::OpenServiceW(scm, ids::kServiceName, SERVICE_CHANGE_CONFIG);
+  // SERVICE_START too: the policy written below has SC_ACTION_RESTART entries,
+  // and without it ChangeServiceConfig2W refuses with ERROR_ACCESS_DENIED.
+  SC_HANDLE svc =
+      ::OpenServiceW(scm, ids::kServiceName, install::FailureActionsAccess());
   if (!svc) {
     LogError("service: cannot open our own service record to confirm the "
              "restart-on-failure policy ({})",
@@ -868,6 +871,8 @@ static_assert(install::kStateStopped == SERVICE_STOPPED);
 static_assert(install::kStateStartPending == SERVICE_START_PENDING);
 static_assert(install::kStateStopPending == SERVICE_STOP_PENDING);
 static_assert(install::kStateRunning == SERVICE_RUNNING);
+static_assert(install::kServiceChangeConfigAccess == SERVICE_CHANGE_CONFIG);
+static_assert(install::kServiceStartAccess == SERVICE_START);
 
 // This executable's own absolute path, unbounded. MAX_PATH is not a real
 // ceiling on this box — the portable zip can be unpacked anywhere, including
