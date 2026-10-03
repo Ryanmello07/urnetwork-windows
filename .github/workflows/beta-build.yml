@@ -68,19 +68,23 @@ jobs:
           echo "msi_version=${msi_version}" >> "$GITHUB_OUTPUT"
           echo "build date ${base} -> beta ${version} (${beta_code}), msi ${msi_version}"
 
-      - name: Check out forked SDK
+      - name: Check out the SDK
         uses: actions/checkout@v4
         with:
-          repository: Ryanmello07/urnetwork-sdk
-          # the fork SDK line THIS branch builds against — same branch name as
-          # the app branch; the custom-server work lives on both forks under it
-          ref: beta/custom-server
+          # upstream main, floating — the SAME SDK build-and-test.yml validates
+          # the app against. The fork's sdk line (beta/custom-server) carries
+          # the custom-server work for its other consumers, but the app does
+          # not call any fork-only SDK surface, and shipping the beta against
+          # the SDK the CI green-lit beats shipping one nobody built before.
+          repository: urnetwork/sdk
+          ref: main
           path: sdk
 
       # sdk/cgo/go.mod resolves these with `replace ... => ../../<name>`, so
-      # they have to sit as siblings of the sdk checkout
+      # they have to sit as siblings of the sdk checkout. Upstream mains again:
+      # sdk@main's replaces (connect/sctp among them) exist only there.
       - name: Check out connect dependency
-        run: git clone --depth 1 --branch beta/custom-server https://github.com/Ryanmello07/connect.git connect
+        run: git clone --depth 1 --branch main https://github.com/urnetwork/connect.git connect
 
       - name: Check out glog dependency
         run: git clone --depth 1 https://github.com/urnetwork/glog.git glog
