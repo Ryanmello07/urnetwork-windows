@@ -340,6 +340,7 @@
     <ClInclude Include="LicensesPage.h" />
     <ClInclude Include="LicensePresentation.h" />
     <ClInclude Include="ConnectPage.h" />
+    <ClInclude Include="ManageSubscription.h" />
     <ClInclude Include="DeveloperPage.h" />
     <ClInclude Include="LoginPage.h" />
     <ClInclude Include="PageContext.h" />

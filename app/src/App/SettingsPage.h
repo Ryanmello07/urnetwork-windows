@@ -55,6 +55,9 @@ class SettingsPage {
   // Licenses row lives there, and moves to the foot of General while About is
   // folded (see BuildLicensesRows).
   void ApplyAboutPaneVisible(bool visible);
+  // Manage Subscription shows only for a Stripe subscription
+  // (ShowsManageSubscription): the store family from the balance snapshot.
+  void ApplySubscriptionStore(std::string const& storeFamily);
 
   // The settings destination's API loads: network user (sign-in methods,
   // network name), device info, referral code + network, account preferences.
