@@ -140,6 +140,8 @@ class AppController {
   // app is foreground, and gating on activation reset all of it on every click
   // away. Only the states nobody can see tear it down — minimized, or hidden
   // to the tray — where the CPU save is real and the rebuild-on-return is fine.
+  // The one exception is the purchase-confirmation poll, which also pauses on
+  // focus loss (Window.Activated -> SubscriptionBalanceStore::SetFocused).
   bool windowShown_ = false;      // between ShowWindow and HideWindow (tray-level intent)
   bool windowMinimized_ = false;  // IsIconic, synced by SyncWindowMinimized
   bool windowVisible_ = false;    // the reconciled result: the presentation is running

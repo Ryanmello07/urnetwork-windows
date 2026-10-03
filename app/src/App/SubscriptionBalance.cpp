@@ -12,8 +12,9 @@
 namespace urnw {
 namespace {
 
-// Monotonic, not wall-clock: this feeds the confirmation budget, which must
-// never jump because the system clock was adjusted.
+// Monotonic, not wall-clock: this feeds the confirmation budget
+// (ConfirmationPollGate), which must never jump because the system clock was
+// adjusted.
 int64_t NowMillis() {
   return std::chrono::duration_cast<std::chrono::milliseconds>(
              std::chrono::steady_clock::now().time_since_epoch())
@@ -22,15 +23,12 @@ int64_t NowMillis() {
 
 // the usage-bar background refresh (macOS backgroundPollingInterval)
 constexpr auto kBackgroundInterval = std::chrono::seconds(30);
-// the post-checkout confirmation poll (macOS pollingInterval)
+// the post-checkout confirmation poll (macOS pollingInterval). Its give-up
+// budget (kConfirmationBudgetMillis) only burns while this poll actually runs:
+// hiding, minimizing or focusing another app pauses both, so however long the
+// user spends typing card details in the browser, they come back to a poll
+// that still has its remaining budget.
 constexpr auto kConfirmInterval = std::chrono::seconds(5);
-// give up confirming after this much ACTIVE polling time (macOS
-// maxPollingDuration). The budget only burns while the 5s poll is actually
-// running: focus loss pauses both, so however long the user spends typing card
-// details in the browser, they always come back to a poll that still has its
-// full remaining budget — never a TimedOut screen that ran out while nothing
-// was being fetched.
-constexpr int64_t kConfirmBudgetMillis = 120 * 1000;
 
 }  // namespace
 
@@ -61,7 +59,7 @@ void SubscriptionBalanceStore::Initialize(
   confirmTimer_.Tick([this](auto const&, auto const&) {
     // the server never confirmed within the window: stop hammering the api and
     // tell the user, rather than spinning for the rest of the session
-    if (confirming_ && NowMillis() >= deadlineMillis_) {
+    if (gate_.ExpiredAt(NowMillis())) {
       StopConfirmation(/*timedOut=*/true);
       EnsureBackgroundPolling();
       Publish();
@@ -76,7 +74,7 @@ void SubscriptionBalanceStore::Start() {
   ++generation_;
   loading_ = false;
   timedOut_ = false;
-  confirming_ = false;
+  StopConfirmation(/*timedOut=*/false);
   snapshot_ = {};
 
   // Pro and guest are readable without any network call: they are claims baked
@@ -119,58 +117,60 @@ void SubscriptionBalanceStore::Refresh() { Fetch(); }
 void SubscriptionBalanceStore::SetVisible(bool visible) {
   if (visible_ == visible) return;
   visible_ = visible;
+  // the gate banks the confirmation budget on hide and re-arms it on show
+  const bool resume = gate_.SetVisible(visible, NowMillis());
   if (!visible_) {
     StopBackground();
     StopReferralPolling();
-    PauseConfirmationPolling();
+    if (confirmTimer_) confirmTimer_.Stop();
     return;
   }
   if (!started_) return;
   FetchReferral();
   EnsureReferralPolling();
-  if (confirming_) {
-    ResumeConfirmationPolling();
+  if (gate_.Confirming()) {
+    if (resume) ResumeConfirmationPolling();
     return;
   }
   Fetch();
   EnsureBackgroundPolling();
 }
 
+void SubscriptionBalanceStore::SetFocused(bool focused) {
+  const bool resume = gate_.SetFocused(focused, NowMillis());
+  if (!gate_.Running()) {
+    // focus loss: the confirmation poll and its budget pause (the background
+    // poll is not confirming and keeps its visibility gate)
+    if (confirmTimer_) confirmTimer_.Stop();
+    return;
+  }
+  if (resume && started_) ResumeConfirmationPolling();
+}
+
 void SubscriptionBalanceStore::StartConfirmationPolling() {
-  if (confirming_) return;
+  if (gate_.Confirming()) return;
   StopBackground();
   // a fresh confirmation attempt: clear any previous give-up, arm a full budget
   timedOut_ = false;
-  confirming_ = true;
-  confirmRemainingMillis_ = kConfirmBudgetMillis;
+  gate_.Start(NowMillis());
   Publish();
   ResumeConfirmationPolling();
 }
 
 void SubscriptionBalanceStore::ResumeConfirmationPolling() {
-  if (!started_ || !visible_ || !confirming_) return;
-  if (confirmRemainingMillis_ <= 0) {
+  // hidden or unfocused: the gate holds the budget until it opens again
+  if (!started_ || !gate_.Running()) return;
+  if (gate_.ExpiredAt(NowMillis())) {
     StopConfirmation(/*timedOut=*/true);
     EnsureBackgroundPolling();
     Publish();
     return;
   }
-  // spend the remaining budget from now; PauseConfirmationPolling banks
-  // whatever is left when focus loss stops the timer
-  deadlineMillis_ = NowMillis() + confirmRemainingMillis_;
   if (confirmTimer_ && !confirmTimer_.IsRunning()) confirmTimer_.Start();
   // an immediate poll, so a payment that completed while the window was
   // unfocused (the whole point of a hosted checkout) confirms on the first
   // frame back rather than after one more interval
   Fetch();
-}
-
-void SubscriptionBalanceStore::PauseConfirmationPolling() {
-  // bank the unspent budget: the deadline only exists while the timer runs
-  if (confirming_ && confirmTimer_ && confirmTimer_.IsRunning()) {
-    confirmRemainingMillis_ = std::max<int64_t>(0, deadlineMillis_ - NowMillis());
-  }
-  if (confirmTimer_) confirmTimer_.Stop();
 }
 
 void SubscriptionBalanceStore::ClearTimeout() {
@@ -271,14 +271,14 @@ void SubscriptionBalanceStore::Apply(urnet::SubscriptionBalanceResult const& res
     // nothing left to poll for
     StopConfirmation(/*timedOut=*/false);
     StopBackground();
-  } else if (!confirming_) {
+  } else if (!gate_.Confirming()) {
     EnsureBackgroundPolling();
   }
   Publish();
 }
 
 void SubscriptionBalanceStore::EnsureBackgroundPolling() {
-  if (!backgroundTimer_ || !started_ || !visible_ || confirming_ ||
+  if (!backgroundTimer_ || !started_ || !visible_ || gate_.Confirming() ||
       IsSupporterWithBalance()) {
     return;
   }
@@ -291,7 +291,7 @@ void SubscriptionBalanceStore::StopBackground() {
 
 void SubscriptionBalanceStore::StopConfirmation(bool timedOut) {
   if (confirmTimer_) confirmTimer_.Stop();
-  confirming_ = false;
+  gate_.Stop();
   if (timedOut) timedOut_ = true;
 }
 
@@ -436,7 +436,7 @@ void SubscriptionBalanceStore::SetOffer(urnet::OnboardingOffer const& offer) {
 }
 
 void SubscriptionBalanceStore::Publish() {
-  if (onChange_) onChange_(snapshot_, {confirming_, timedOut_});
+  if (onChange_) onChange_(snapshot_, {gate_.Confirming(), timedOut_});
 }
 
 }  // namespace urnw

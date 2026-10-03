@@ -383,6 +383,7 @@
     <ClInclude Include="Startup.h" />
     <ClInclude Include="SubscriptionBalance.h" />
     <ClInclude Include="SupportContact.h" />
+    <ClInclude Include="ConfirmationPollGate.h" />
     <ClInclude Include="ClientEvents.h" />
     <ClInclude Include="OfferCard.h" />
     <ClInclude Include="OnboardingRouting.h" />

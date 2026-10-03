@@ -590,12 +590,19 @@ void AppController::ShowWindowImpl(const POINT* anchor) {
     // button. XAML's Window.VisibilityChanged reports Visible=false on
     // minimize as well as on AppWindow.Hide(), so it covers both teardown
     // states; the handler re-reads IsIconic instead of trusting args.Visible()
-    // (see SyncWindowMinimized for why). Window.Activated is deliberately not
-    // consumed here any more: focus loss used to stop the presentation, and
-    // the rebuild-on-refocus was the reset the owner reported.
+    // (see SyncWindowMinimized for why). Window.Activated does not feed the
+    // presentation gate: focus loss used to stop the presentation, and the
+    // rebuild-on-refocus was the reset the owner reported.
     window_.VisibilityChanged([this](auto const&, auto const&) {
       SyncWindowMinimized();
       ReconcileWindowPresentation();
+    });
+    // Activation feeds only the purchase-confirmation poll. A hosted checkout
+    // leaves this window visible behind the browser, so without focus the
+    // confirmation budget burned while the user paid and came back to a
+    // false "timed out" (UPGRADE.md D1).
+    window_.Activated([this](auto const&, WindowActivatedEventArgs const& args) {
+      balance_.SetFocused(args.WindowActivationState() != WindowActivationState::Deactivated);
     });
   }
 
