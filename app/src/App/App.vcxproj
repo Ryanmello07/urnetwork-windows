@@ -389,6 +389,7 @@
     <ClInclude Include="ExtenderPanel.h" />
     <ClInclude Include="ExtenderSheets.h" />
     <ClInclude Include="ConnectorGlyph.h" />
+    <ClInclude Include="UrlQuery.h" />
     <ClInclude Include="TransportStatusPresentation.h" />
     <ClInclude Include="UsageBar.h" />
     <ClInclude Include="UrColors.h" />
