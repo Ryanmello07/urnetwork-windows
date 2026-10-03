@@ -19,6 +19,7 @@
 #include "MainWindow.xaml.h"
 #include "PageContext.h"
 #include "Strings.h"
+#include "SupportContact.h"
 #include "UpdateChecker.h"
 #include "UrColors.h"
 #include "Version.h"
@@ -528,8 +529,8 @@ void SettingsPage::BuildIdentitySection(Panel const& host) {
 }
 
 // The community half of ABOUT. The product-updates preference that used to open
-// this card is a PREFERENCE and moved to General; what is left is the two ways
-// to reach the project and the protocol link, which is About material.
+// this card is a PREFERENCE and moved to General; what is left is the ways to
+// reach the project and the protocol link, which is About material.
 void SettingsPage::BuildStayInTouchSection(Panel const& host) {
   Heading(host, Loc("stay_in_touch"), hstring{});
   auto card = Card(host);
@@ -539,9 +540,9 @@ void SettingsPage::BuildStayInTouchSection(Panel const& host) {
   // is no plain-text variant of the DePIN Hub line - and needs no extra "Open"
   // word beside it. Each sits in a pane row so it shares the left edge and the
   // hairline grid with everything above it.
-  auto linkRow = [&card](std::string_view key) {
+  auto linkRow = [&card](std::wstring const& markdown) {
     TextBlock text;
-    SetMarkdownLinkText(text, Localized(key), 13);
+    SetMarkdownLinkText(text, markdown, 13);
     text.TextWrapping(TextWrapping::Wrap);
     Border box;
     box.Padding(ThicknessHelper::FromLengths(12, 10, 12, 10));
@@ -550,8 +551,19 @@ void SettingsPage::BuildStayInTouchSection(Panel const& host) {
     box.Child(text);
     card.Children().Append(box);
   };
-  linkRow("join_the_community_on_discord_https_discord_com");
-  linkRow("verified_project_on_depin_hub_https_depinhub_io");
+  for (const auto link : support::kStayInTouchLinks) {
+    switch (link) {
+      case support::StayInTouchLink::Discord:
+        linkRow(Localized("join_the_community_on_discord_https_discord_com"));
+        break;
+      case support::StayInTouchLink::SupportEmail:
+        linkRow(support::SupportEmailMarkdown(Localized("email_support_at")));
+        break;
+      case support::StayInTouchLink::DePinHub:
+        linkRow(Localized("verified_project_on_depin_hub_https_depinhub_io"));
+        break;
+    }
+  }
 
   // The protocol link, which used to hang off the very bottom of the page under
   // everything else with nothing holding it there.
