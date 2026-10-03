@@ -565,8 +565,11 @@ class SdkHost {
   void ResendVerifyCode(const std::string& userAuth,
                         std::function<void(VerifySendNotice)> done);
 
-  // Password reset: emails a reset link to the user auth.
-  void SendPasswordResetLink(const std::string& userAuth, std::function<void(bool ok)> done);
+  // Password reset: emails a reset link to the user auth. Asks for
+  // result_errors, so a link the server did not send arrives as
+  // AuthPasswordResetResult.error rather than as a 200 that reads sent.
+  void SendPasswordResetLink(const std::string& userAuth,
+                             std::function<void(VerifySendNotice)> done);
 
   // ---- seedphrase ----------------------------------------------------------
   // A seedphrase is a CREDENTIAL with no recovery path. What is true of it in

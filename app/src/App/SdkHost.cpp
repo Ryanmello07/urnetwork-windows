@@ -1052,12 +1052,20 @@ void SdkHost::ResendVerifyCode(const std::string& userAuth,
 }
 
 void SdkHost::SendPasswordResetLink(const std::string& userAuth,
-                                    std::function<void(bool ok)> done) {
+                                    std::function<void(VerifySendNotice)> done) {
   urnet::AuthPasswordResetArgs args;
   args.user_auth = userAuth;
+  // a link the server did not send comes back as result.error; a server that
+  // predates the flag answers an error status instead
+  args.result_errors = true;
   api_->authPasswordReset(args, [done](std::optional<urnet::AuthPasswordResetResult> result,
                                        std::optional<std::string> err) {
-    if (done) done(!err && result.has_value());
+    if (err || !result) {
+      LogWarn("sdkhost: authPasswordReset failed: {}", err ? *err : std::string());
+      if (done) done(VerifySendNoticeFor(true, std::string(), std::string(), 0));
+      return;
+    }
+    if (done) done(VerifySendNoticeOf(result->error));
   });
 }
 

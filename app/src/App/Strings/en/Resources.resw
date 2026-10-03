@@ -2712,7 +2712,7 @@ right way</value>
   </data>
   <data name="error_sending_password_reset_link" xml:space="preserve">
     <value>Error sending password reset link</value>
-    <comment>Snackbar shown when sending the password reset link fails. Used in Main/Account/Profile/ProfileView.swift.</comment>
+    <comment>Shown when sending the password reset link fails (the request failed, or the server reports it could not send the link). Used on the password reset and account screens.</comment>
   </data>
   <data name="error_sending_verification_code" xml:space="preserve">
     <value>There was an error sending the verification code.</value>
@@ -4859,6 +4859,30 @@ and most decentralized ingress and egress protocol.</value>
   <data name="reset_it" xml:space="preserve">
     <value>Reset it.</value>
     <comment>Button text for resetting password</comment>
+  </data>
+  <data name="reset_link_rate_limited.zero" xml:space="preserve">
+    <value>Too many attempts. You can request a new reset link in {} minutes.</value>
+    <comment>Password reset: the server refused to send a new password reset link because of too many recent attempts. The argument is the number of minutes until a new link can be requested.</comment>
+  </data>
+  <data name="reset_link_rate_limited.one" xml:space="preserve">
+    <value>Too many attempts. You can request a new reset link in {} minute.</value>
+    <comment>Password reset: the server refused to send a new password reset link because of too many recent attempts. The argument is the number of minutes until a new link can be requested.</comment>
+  </data>
+  <data name="reset_link_rate_limited.two" xml:space="preserve">
+    <value>Too many attempts. You can request a new reset link in {} minutes.</value>
+    <comment>Password reset: the server refused to send a new password reset link because of too many recent attempts. The argument is the number of minutes until a new link can be requested.</comment>
+  </data>
+  <data name="reset_link_rate_limited.few" xml:space="preserve">
+    <value>Too many attempts. You can request a new reset link in {} minutes.</value>
+    <comment>Password reset: the server refused to send a new password reset link because of too many recent attempts. The argument is the number of minutes until a new link can be requested.</comment>
+  </data>
+  <data name="reset_link_rate_limited.many" xml:space="preserve">
+    <value>Too many attempts. You can request a new reset link in {} minutes.</value>
+    <comment>Password reset: the server refused to send a new password reset link because of too many recent attempts. The argument is the number of minutes until a new link can be requested.</comment>
+  </data>
+  <data name="reset_link_rate_limited.other" xml:space="preserve">
+    <value>Too many attempts. You can request a new reset link in {} minutes.</value>
+    <comment>Password reset: the server refused to send a new password reset link because of too many recent attempts. The argument is the number of minutes until a new link can be requested.</comment>
   </data>
   <data name="reset_link_sent" xml:space="preserve">
     <value>Reset link sent</value>

@@ -70,6 +70,7 @@ LoginPage::~LoginPage() {
   if (nameCheckTimer_) nameCheckTimer_.Stop();
   if (bonusCheckTimer_) bonusCheckTimer_.Stop();
   if (resendCooldownTimer_) resendCooldownTimer_.Stop();
+  if (rateLimitTimer_) rateLimitTimer_.Stop();
 }
 
 void LoginPage::Initialize() {
@@ -97,6 +98,14 @@ void LoginPage::Initialize() {
   resendCooldownTimer_.IsRepeating(false);
   resendCooldownTimer_.Tick([weak = w_.get_weak()](auto const&, auto const&) {
     if (auto self = weak.get()) self->ResendCodeButton().IsEnabled(true);
+  });
+
+  // rate-limit countdown on the verify and reset steps
+  rateLimitTimer_ = queue.CreateTimer();
+  rateLimitTimer_.Interval(std::chrono::seconds(1));
+  rateLimitTimer_.IsRepeating(true);
+  rateLimitTimer_.Tick([weak = w_.get_weak()](auto const&, auto const&) {
+    if (auto self = weak.get()) self->login().RefreshRateLimits();
   });
 
   // window-level acknowledgements (the account menu's referral copy)
@@ -560,6 +569,16 @@ void LoginPage::OnForgotPassword(IInspectable const&, RoutedEventArgs const&) {
   w_.ResetInfo().IsOpen(false);
   w_.SendResetButton().IsEnabled(true);
   ShowLoginStep(LoginStep::Reset);
+  // a rate limit from an earlier send for this account still holds; it is
+  // shown again with the minutes left
+  if (resetRateLimitUserAuth_ != loginUserAuth_) resetRateLimit_.Clear();
+  const auto now = urnw::ResendCooldown::Clock::now();
+  if (resetRateLimit_.Armed() && !resetRateLimit_.CanSend(now)) {
+    resetRateLimitText_ =
+        hstring{urnw::Plural("reset_link_rate_limited", resetRateLimit_.Minutes(now))};
+    ShowLoginErrorFor(LoginStep::Reset, resetRateLimitText_);
+  }
+  RefreshRateLimits();
 }
 
 void LoginPage::OnSendResetLink(IInspectable const&, RoutedEventArgs const&) {
@@ -570,22 +589,48 @@ void LoginPage::OnSendResetLink(IInspectable const&, RoutedEventArgs const&) {
 
   auto queue = w_.DispatcherQueue();
   auto weak = w_.get_weak();
-  Sdk().SendPasswordResetLink(loginUserAuth_, [queue, weak](bool ok) {
-    queue.TryEnqueue([weak, ok] {
+  Sdk().SendPasswordResetLink(loginUserAuth_, [queue, weak](urnw::VerifySendNotice notice) {
+    queue.TryEnqueue([weak, notice] {
       auto self = weak.get();
       if (!self) return;
       auto& page = self->login();
       page.sendingReset_ = false;
       self->SendResetButton().IsEnabled(true);
-      self->ResetInfo().Severity(ok ? InfoBarSeverity::Success
-                                    : InfoBarSeverity::Error);
+      if (page.ShowPasswordResetError(notice)) return;
+      self->ResetInfo().Severity(InfoBarSeverity::Success);
       // "Reset link sent to" + the address it went to (the address is data)
-      self->ResetInfo().Message(ok ? hstring{urnw::Localized("reset_link_sent_to") +
-                                             L" " + urnw::Widen(page.loginUserAuth_)}
-                                   : Loc("something_went_wrong"));
+      self->ResetInfo().Message(hstring{urnw::Localized("reset_link_sent_to") + L" " +
+                                        urnw::Widen(page.loginUserAuth_)});
       self->ResetInfo().IsOpen(true);
     });
   });
+}
+
+bool LoginPage::ShowPasswordResetError(urnw::VerifySendNotice const& notice) {
+  const auto now = urnw::ResendCooldown::Clock::now();
+  resetRateLimit_.Start(notice, now);
+  resetRateLimitUserAuth_ = loginUserAuth_;
+  hstring message;
+  switch (notice.kind) {
+    case urnw::VerifySendNoticeKind::Sent:
+      return false;
+    case urnw::VerifySendNoticeKind::RateLimited:
+      message = hstring{urnw::Plural(urnw::PasswordResetNoticeKey(notice), notice.minutes)};
+      break;
+    case urnw::VerifySendNoticeKind::SendFailed:
+      message = Loc(urnw::PasswordResetNoticeKey(notice));
+      break;
+    case urnw::VerifySendNoticeKind::ServerMessage:
+      message = H(notice.message);
+      break;
+  }
+  ShowLoginErrorFor(LoginStep::Reset, message);
+  resetRateLimitText_ = message;
+  if (resetRateLimit_.Armed()) {
+    w_.SendResetButton().IsEnabled(false);
+    StartRateLimitTimer();
+  }
+  return true;
 }
 
 // ---- create network (sign-up) ----
@@ -860,6 +905,7 @@ void LoginPage::EnterVerifyStep(std::string const& userAuth) {
   w_.VerifyButton().IsEnabled(false);
   w_.VerifyInfo().IsOpen(false);
   w_.ResendCodeButton().IsEnabled(true);
+  verifyRateLimit_.Clear();
   ShowLoginStep(LoginStep::Verify);
   w_.VerifyCodeBox().Focus(FocusState::Programmatic);
 }
@@ -918,7 +964,8 @@ void LoginPage::OnResendCode(IInspectable const&, RoutedEventArgs const&) {
       if (!self) return;
       auto& page = self->login();
       if (page.ShowVerifySendError(notice)) {
-        self->ResendCodeButton().IsEnabled(true);
+        // a rate limit keeps Resend off until its retry time
+        self->ResendCodeButton().IsEnabled(!page.verifyRateLimit_.Armed());
         return;
       }
       self->VerifyInfo().Severity(InfoBarSeverity::Success);
@@ -931,6 +978,7 @@ void LoginPage::OnResendCode(IInspectable const&, RoutedEventArgs const&) {
 }
 
 bool LoginPage::ShowVerifySendError(urnw::VerifySendNotice const& notice) {
+  verifyRateLimit_.Start(notice, urnw::ResendCooldown::Clock::now());
   hstring message;
   switch (notice.kind) {
     case urnw::VerifySendNoticeKind::Sent:
@@ -946,7 +994,46 @@ bool LoginPage::ShowVerifySendError(urnw::VerifySendNotice const& notice) {
       break;
   }
   ShowLoginErrorFor(LoginStep::Verify, message);
+  verifyRateLimitText_ = message;
+  if (verifyRateLimit_.Armed()) {
+    w_.ResendCodeButton().IsEnabled(false);
+    StartRateLimitTimer();
+  }
   return true;
+}
+
+void LoginPage::StartRateLimitTimer() {
+  if (rateLimitTimer_ && !rateLimitTimer_.IsRunning()) rateLimitTimer_.Start();
+}
+
+void LoginPage::RefreshRateLimits() {
+  const auto now = urnw::ResendCooldown::Clock::now();
+  // the notice shows the minutes left; once the retry time has passed it
+  // closes and the control comes back
+  auto refresh = [now](urnw::ResendCooldown& rateLimit, hstring& shown, InfoBar const& info,
+                       Button const& send, std::string_view key) {
+    if (!rateLimit.Armed()) return;
+    // another verdict (a wrong code) may have replaced the rate-limit line
+    const bool ownsInfo = info.IsOpen() && info.Message() == shown;
+    if (rateLimit.CanSend(now)) {
+      rateLimit.Clear();
+      if (ownsInfo) info.IsOpen(false);
+      send.IsEnabled(true);
+      return;
+    }
+    send.IsEnabled(false);
+    if (ownsInfo) {
+      shown = hstring{urnw::Plural(key, rateLimit.Minutes(now))};
+      info.Message(shown);
+    }
+  };
+  refresh(verifyRateLimit_, verifyRateLimitText_, w_.VerifyInfo(), w_.ResendCodeButton(),
+          "verify_code_rate_limited");
+  refresh(resetRateLimit_, resetRateLimitText_, w_.ResetInfo(), w_.SendResetButton(),
+          "reset_link_rate_limited");
+  if (!verifyRateLimit_.Armed() && !resetRateLimit_.Armed() && rateLimitTimer_) {
+    rateLimitTimer_.Stop();
+  }
 }
 
 // ---- auth code login ----

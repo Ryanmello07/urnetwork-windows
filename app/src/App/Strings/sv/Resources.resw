@@ -1417,7 +1417,7 @@ rätt sätt</value>
   </data>
   <data name="error_sending_password_reset_link" xml:space="preserve">
     <value>Fel vid skickande av länk för lösenordsåterställning</value>
-    <comment>Snackbar shown when sending the password reset link fails. Used in Main/Account/Profile/ProfileView.swift.</comment>
+    <comment>Shown when sending the password reset link fails (the request failed, or the server reports it could not send the link). Used on the password reset and account screens.</comment>
   </data>
   <data name="error_sending_verification_code" xml:space="preserve">
     <value>Ett fel uppstod när verifieringskoden skickades.</value>
@@ -2923,6 +2923,14 @@ och mest decentraliserade in- och utgångsprotokoll.</value>
   <data name="reset_it" xml:space="preserve">
     <value>Återställ</value>
     <comment>Button text for resetting password</comment>
+  </data>
+  <data name="reset_link_rate_limited.one" xml:space="preserve">
+    <value>För många försök. Du kan begära en ny återställningslänk om {} minut.</value>
+    <comment>Password reset: the server refused to send a new password reset link because of too many recent attempts. The argument is the number of minutes until a new link can be requested.</comment>
+  </data>
+  <data name="reset_link_rate_limited.other" xml:space="preserve">
+    <value>För många försök. Du kan begära en ny återställningslänk om {} minuter.</value>
+    <comment>Password reset: the server refused to send a new password reset link because of too many recent attempts. The argument is the number of minutes until a new link can be requested.</comment>
   </data>
   <data name="reset_link_sent" xml:space="preserve">
     <value>Återställningslänk skickad</value>

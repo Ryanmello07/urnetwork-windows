@@ -73,3 +73,64 @@ func TestVerifySendNoticeWiring(t *testing.T) {
 		}
 	}
 }
+
+// A password reset link the server did not send must not read "sent": the
+// reset asks for result_errors and reads result.error (it used to treat any
+// answer as sent), both reset surfaces show the notice, a rate limit keeps
+// Resend / Send off until its retry time, and the en resources carry the keys.
+func TestPasswordResetSendNoticeWiring(t *testing.T) {
+	root := repositoryRoot(t)
+	app := filepath.Join(root, "app", "src", "App")
+	read := func(name string) string {
+		source, err := os.ReadFile(filepath.Join(app, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(source)
+	}
+	sdkHost := read("SdkHost.cpp")
+	start := strings.Index(sdkHost, "void SdkHost::SendPasswordResetLink(")
+	if start < 0 {
+		t.Fatal("SdkHost.cpp: no SendPasswordResetLink")
+	}
+	reset := sdkHost[start:]
+	if end := strings.Index(reset[1:], "\nvoid SdkHost::"); end >= 0 {
+		reset = reset[:end+1]
+	}
+	for _, want := range []string{"args.result_errors = true;", "VerifySendNoticeOf(result->error)"} {
+		if !strings.Contains(reset, want) {
+			t.Errorf("SdkHost::SendPasswordResetLink: missing %s", want)
+		}
+	}
+	loginPage := read("LoginPage.cpp")
+	for _, want := range []string{
+		"ShowPasswordResetError(notice)",
+		"PasswordResetNoticeKey(notice)",
+		"verifyRateLimit_.Start(notice",
+		"resetRateLimit_.Start(notice",
+		"RefreshRateLimits()",
+	} {
+		if !strings.Contains(loginPage, want) {
+			t.Errorf("LoginPage.cpp: missing %s", want)
+		}
+	}
+	accountPage := read("AccountPage.cpp")
+	if strings.Contains(accountPage, "api().authPasswordReset(") {
+		t.Error("AccountPage.cpp: sends the reset itself and ignores result.error")
+	}
+	for _, want := range []string{"SendPasswordResetLink(", "PasswordResetNoticeKey(notice)", "resetRateLimit_.Start(notice"} {
+		if !strings.Contains(accountPage, want) {
+			t.Errorf("AccountPage.cpp: missing %s", want)
+		}
+	}
+	resources := read(filepath.Join("Strings", "en", "Resources.resw"))
+	for _, want := range []string{
+		`name="error_sending_password_reset_link"`,
+		`name="reset_link_rate_limited.one"`,
+		`name="reset_link_rate_limited.other"`,
+	} {
+		if !strings.Contains(resources, want) {
+			t.Errorf("en Resources.resw: missing %s", want)
+		}
+	}
+}

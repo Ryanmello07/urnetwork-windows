@@ -14,6 +14,7 @@
 #include <utility>
 #include <vector>
 
+#include <winrt/Microsoft.UI.Dispatching.h>
 #include <winrt/Microsoft.UI.Xaml.h>
 #include <winrt/Microsoft.UI.Xaml.Controls.h>
 
@@ -21,6 +22,7 @@
 #include "ReferralTotalsState.h"
 #include "SettingsSheets.h"  // rows::FieldState + the row kit
 #include "UrComponents.h"
+#include "VerifySendNotice.h"
 
 namespace winrt::URnetwork::implementation {
 struct MainWindow;
@@ -103,6 +105,9 @@ class AccountPage {
   winrt::fire_and_forget ShowExtenderShareSheet();
   winrt::fire_and_forget ShowExtenderImportSheet();
   void SendPasswordReset();
+  // Counts a password reset rate limit down and turns Send back on once the
+  // retry time has passed (resetRateLimitTimer_ tick).
+  void RefreshResetRateLimit();
   // Every async field on this surface reaches one of these, for the same reason
   // the settings page does: before it, a 401 and an empty account looked
   // identical (the redeemed-codes list rendered "No balance codes found" for
@@ -143,6 +148,11 @@ class AccountPage {
   // Cancel restores
   std::string networkName_;
   bool sendingReset_ = false;
+  // after the server refused a reset link for too many attempts: Send stays
+  // off until the retry time, with a 1s tick counting the status line down
+  urnw::ResendCooldown resetRateLimit_;
+  winrt::hstring resetRateLimitText_;
+  winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer resetRateLimitTimer_{nullptr};
 
   // ---- pane D: extenders ---------------------------------------------------
   bool extenderBuilt_ = false;
