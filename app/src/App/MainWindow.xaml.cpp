@@ -108,6 +108,7 @@ MainWindow::MainWindow() {
   wallet_ = std::make_unique<urnw::WalletPage>(*this);
   settings_ = std::make_unique<urnw::SettingsPage>(*this);
   referrals_ = std::make_unique<urnw::ReferralsPage>(*this);
+  licenses_ = std::make_unique<urnw::LicensesPage>(*this);
   // Last: its ctor binds SdkHost's mode-notice handler and asks for a refresh,
   // so everything it may paint over must already exist.
   developer_ = std::make_unique<urnw::DeveloperPage>(*this);
@@ -410,6 +411,7 @@ void MainWindow::ApplyStrings() {
   wallet_->ApplyStrings();
   settings_->ApplyStrings();
   referrals_->ApplyStrings();
+  licenses_->ApplyStrings();
   developer_->ApplyStrings();
 }
 
@@ -482,6 +484,7 @@ void MainWindow::ApplyBreakpoint() {
   const bool accountFour = 1900.0 <= width;
   const bool accountThree = 1500.0 <= width;
   const bool accountTwo = 900.0 <= width;
+  const bool settingsThree = 1400.0 <= width;
   const bool settingsTwo = 900.0 <= width;
   // EVERY gate is computed above the early-out and EVERY gate is one of the
   // applied states it compares, because a gate the early-out does not compare
@@ -497,7 +500,8 @@ void MainWindow::ApplyBreakpoint() {
       stripTraffic == stripTrafficLayout_ &&
       earningsThree == earningsThreeLayout_ && earningsTwo == earningsTwoLayout_ &&
       accountFour == accountFourLayout_ && accountThree == accountThreeLayout_ &&
-      accountTwo == accountTwoLayout_ && settingsTwo == settingsTwoLayout_) return;
+      accountTwo == accountTwoLayout_ && settingsThree == settingsThreeLayout_ &&
+      settingsTwo == settingsTwoLayout_) return;
   breakpointApplied_ = true;
   wideLayout_ = wide;
   ultraLayout_ = ultra;
@@ -509,6 +513,7 @@ void MainWindow::ApplyBreakpoint() {
   accountFourLayout_ = accountFour;
   accountThreeLayout_ = accountThree;
   accountTwoLayout_ = accountTwo;
+  settingsThreeLayout_ = settingsThree;
   settingsTwoLayout_ = settingsTwo;
 
   // ---- Home: HOW MANY PANES FIT ---------------------------------------------
@@ -652,31 +657,38 @@ void MainWindow::ApplyBreakpoint() {
   // (Leaderboard's branch is gone with its destination: it is a tab inside
   // Earnings' ledger pane now, and shares that pane's widths.)
 
-  // ---- Settings: two constrained columns -----------------------------------
+  // ---- Settings: three constrained columns ---------------------------------
   // Windows guidance says settings is a single column of rows at a constrained
-  // width; the pane model says full bleed with no cap. Two equal star columns
-  // split the difference. The third pane (About) was deleted because it folded
-  // away below 1400dip, which left the app version unreachable in every folded
-  // layout - the fold rule bars a foldable pane from owning content with no
-  // second door, and the version had none. Its sections end pane B now.
+  // width; the pane model says full bleed with no cap. Three equal star columns
+  // split the difference.
   //
-  //   >=  900dip   two panes   general | device (+ version, community)
-  //   <   900dip   one pane    general
+  //   >= 1400dip   three panes   general | device | about
+  //   >=  900dip   two panes     general | device
+  //   <   900dip   one pane      general
   //
-  // Pane B's fold left two of its own rows with no second door, the same
-  // violation the About pane was deleted for: the Advanced-mode toggle (with
-  // Advanced OFF at a narrow window there was no way to turn it on) and the
-  // version/update rows. So those build twice too, the Support-contact pattern
-  // one block down: once into pane B and once into SettingsPage's fold-gated
-  // section at the end of pane A, and the gate shows exactly one copy.
-  // The gate is computed above the early-out, with the rest.
+  // About folds first, and the fold rule bars a foldable pane from owning
+  // content with no second door - the version rows were exactly such content,
+  // and About was once deleted over it. The rule now has its answer in
+  // SettingsPage: the version rows and the Licenses row build fold copies at
+  // the foot of General, and below 900 the Device pane's Advanced-mode toggle
+  // does the same. The two gates below are computed above the early-out, with
+  // the rest - settingsThree in particular must stay a tracked applied state,
+  // or the About pane's fold is the next stale-layout bug.
+  SetStar(SettingsPaneCColumn(), settingsThree ? 1 : 0);
+  SettingsPaneCRule().Visibility(settingsThree ? Visibility::Visible : Visibility::Collapsed);
+  SettingsPaneC().Visibility(settingsThree ? Visibility::Visible : Visibility::Collapsed);
   SetStar(SettingsPaneBColumn(), settingsTwo ? 1 : 0);
   SettingsPaneBRule().Visibility(settingsTwo ? Visibility::Visible : Visibility::Collapsed);
   SettingsPaneB().Visibility(settingsTwo ? Visibility::Visible : Visibility::Collapsed);
-  // The page mirrors the gate just applied (the same push shape as Home's
-  // ApplyPaneCFolded above): pane A's fold-gated copies show exactly while
-  // pane B is folded.
+  // The page mirrors the gates just applied (the same push shape as Home's
+  // ApplyPaneCFolded above): pane A's fold-gated copies show exactly while the
+  // pane each copies is folded - the Advanced toggle with pane B, the version
+  // rows and the Licenses row with About.
   settings_->ApplyPaneBFolded(!settingsTwo);
+  settings_->ApplyAboutPaneVisible(settingsThree);
+  // The Licenses page, shown in Settings' place, splits list | detail at the
+  // same width Settings keeps two panes.
+  licenses_->ApplyBreakpoint(settingsTwo);
 
   // ---- Support: the form, and the way to reach a human beside it -----------
   //
@@ -1515,6 +1527,9 @@ void MainWindow::OnNavSelectionChanged(NavigationView const&,
   // Refer and earn page that may have been open in Account's place
   referralsOpen_ = false;
   ReferralsView().Visibility(Visibility::Collapsed);
+  // ...and never on the Licenses page that may have been open in Settings'
+  if (LicensesView().Visibility() == Visibility::Visible) licenses_->OnClosed();
+  LicensesView().Visibility(Visibility::Collapsed);
   // The outgoing view, for the crossfade: it must stay Visible (overlapping
   // the incoming view inside HomeContentRoot) until its 120ms exit board's
   // Completed handler collapses it. Without that deferral the swap reads as a
@@ -1672,6 +1687,22 @@ void MainWindow::CloseReferrals() {
   referralsOpen_ = false;
   ReferralsView().Visibility(Visibility::Collapsed);
   AccountView().Visibility(Visibility::Visible);
+}
+
+// ---- the Licenses page (reached from Settings' Licenses row) -----------------
+// No session and no API: the list is embedded in the SDK dll, so this opens the
+// same way signed in, signed out and under --preview-ui.
+
+void MainWindow::OpenLicenses() {
+  SettingsView().Visibility(Visibility::Collapsed);
+  LicensesView().Visibility(Visibility::Visible);
+  licenses_->Load();
+}
+
+void MainWindow::CloseLicenses() {
+  licenses_->OnClosed();
+  LicensesView().Visibility(Visibility::Collapsed);
+  SettingsView().Visibility(Visibility::Visible);
 }
 
 // ---- balance / plan (SubscriptionBalanceStore relay) -----------------------
@@ -2154,15 +2185,15 @@ void MainWindow::OnUpdateBannerAction() {
   switch (updateSnapshot_.phase) {
     case Phase::Available:
     case Phase::Failed:
-      // Download / verify / extract / swap, or retry it from scratch — the
+      // Download / verify / install, or retry it from scratch — the
       // checker re-runs the whole pipeline rather than resuming a half state.
       urnw::pages::Updates().BeginApply();
       break;
-    case Phase::ManualUnzip:
-      // The zip is already downloaded and verified; the only help left to
+    case Phase::ManualInstall:
+      // The MSI is already downloaded and verified; the only help left to
       // offer is showing it again.
-      if (!updateSnapshot_.zipPath.empty())
-        urnw::UpdateChecker::RevealInExplorer(updateSnapshot_.zipPath);
+      if (!updateSnapshot_.installerPath.empty())
+        urnw::UpdateChecker::RevealInExplorer(updateSnapshot_.installerPath);
       break;
     default:
       break;  // Applying: the button is disabled; None: no banner to click

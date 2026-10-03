@@ -5,6 +5,7 @@
 // referral network, auth codes, sign-in methods), device (name, spec),
 // connections (kill switch, blocked locations), post-quantum identity,
 // preferences (product updates), subscription, logs, community links, version,
+// licenses (LicensesPage),
 // and — below sign out — delete account.
 //
 // The sections above the split rules are BUILT IN CODE, into the three empty
@@ -60,6 +61,10 @@ class SettingsPage {
   // would only fight the developer's console run. Pushed by
   // MainWindow::ApplyServiceSetup, the one writer of that snapshot.
   void ApplyServiceSetup(urnw::ServiceSetup::Snapshot const& snap);
+  // MainWindow::ApplyBreakpoint: whether the About pane is on screen. The
+  // Licenses row lives there, and moves to the foot of General while About is
+  // folded (see BuildLicensesRows).
+  void ApplyAboutPaneVisible(bool visible);
 
   // The update checker's snapshot changed (beta spec §5): the "Update" value
   // row in the Device pane's version section reads the running build plus the
@@ -140,6 +145,8 @@ class SettingsPage {
                                   bool withGroupHeader);
   void BuildSubscriptionSection(winrt::Microsoft::UI::Xaml::Controls::Panel const& host);
   void BuildVersionSection(winrt::Microsoft::UI::Xaml::Controls::Panel const& host);
+  void BuildLicensesRows(winrt::Microsoft::UI::Xaml::Controls::Panel const& about,
+                         winrt::Microsoft::UI::Xaml::Controls::Panel const& general);
   void BuildDangerSection();
   // The fold-gated SECOND copies (the fold rule; ApplyPaneBFolded above):
   // pane B's Advanced-mode toggle and version/update rows, built again at the
@@ -222,6 +229,10 @@ class SettingsPage {
   winrt::Microsoft::UI::Xaml::Controls::Button manageSubscription_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::TextBlock versionValue_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::Button deleteAccountButton_{nullptr};
+  // the Licenses row, twice: About's, and General's while About is folded
+  winrt::Microsoft::UI::Xaml::Controls::StackPanel licensesAboutRow_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::StackPanel licensesGeneralRow_{nullptr};
+  bool aboutPaneVisible_ = true;
   // >>> ADVANCED MODE GOES HERE (D5). <<< The first host in Settings' Advanced
   // group; see BuildAdvancedSection for the row shape to append.
   winrt::Microsoft::UI::Xaml::Controls::StackPanel advancedModeHost_{nullptr};
@@ -232,6 +243,11 @@ class SettingsPage {
   // toggle through ApplyAdvancedMode's one apply path, the version rows
   // through BuildSections and ApplyUpdateCheck).
   winrt::Microsoft::UI::Xaml::Controls::StackPanel paneBFoldHost_{nullptr};
+  // The version rows' fold host gates on the ABOUT pane, not pane B - post-
+  // merge the primary rows live in About, so ApplyAboutPaneVisible shows this
+  // copy exactly while the pane is folded (the Licenses row's fold copy beside
+  // it carries the About strip heading for both).
+  winrt::Microsoft::UI::Xaml::Controls::StackPanel versionFoldHost_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::ToggleSwitch advancedModeFold_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::TextBlock versionValueFold_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::TextBlock updateStateValueFold_{nullptr};

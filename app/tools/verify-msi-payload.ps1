@@ -40,12 +40,19 @@ param(
   #     absence means the app silently falls back to a system font.
   #   - App.xbf: the app's own compiled XAML for App.xaml. Without it the
   #     app cannot even construct its Application object.
+  #   - vcruntime140.dll / vcruntime140_1.dll / msvcp140.dll: the app-local
+  #     VC++ runtime (Service.vcxproj UrnStageVCRuntime). Without it the /MD
+  #     urnetworkd.exe cannot load on a machine lacking the VC++
+  #     Redistributable, and the MSI fails with error 1920.
   [string[]]$RequireNames = @(
     "Microsoft.WindowsAppRuntime.dll",
     "Microsoft.ui.xaml.dll",
     "resources.pri",
     "pp_neue_montreal_regular.ttf",
-    "App.xbf"
+    "App.xbf",
+    "vcruntime140.dll",
+    "vcruntime140_1.dll",
+    "msvcp140.dll"
   )
 )
 

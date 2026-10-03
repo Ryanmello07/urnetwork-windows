@@ -143,14 +143,16 @@ void SettingsPage::ApplyStrings() {
   Automation::AutomationProperties::SetName(w_.SupportPaneA(), Loc("feedback"));
   Automation::AutomationProperties::SetName(w_.SupportPaneB(), Loc("support"));
 
-  // settings: two pane headers, and a landmark name each so a screen reader
-  // can tell the two regions apart. The About pane is gone (fold rule: a pane
-  // that folds away below 1400dip may not own content with no second door, and
-  // the app version had none) - its sections live at the end of pane B now.
+  // settings: three pane headers, and a landmark name each so a screen reader
+  // can tell the three regions apart. About folds first (1400dip of window);
+  // its rows keep a second door at the foot of General (the fold hosts in
+  // BuildSections), which is what the first About pane lacked.
   w_.SettingsPaneATitle().Text(Loc("general"));
   w_.SettingsPaneBTitle().Text(Loc("device"));
+  w_.SettingsPaneCTitle().Text(Missing("about", L"About"));
   Automation::AutomationProperties::SetName(w_.SettingsPaneA(), Loc("general"));
   Automation::AutomationProperties::SetName(w_.SettingsPaneB(), Loc("device"));
+  Automation::AutomationProperties::SetName(w_.SettingsPaneC(), Missing("about", L"About"));
 
   // The heading over the destructive end. It sits on ACCOUNT now (the rows under
   // it are Sign out and Delete account), which is why it is painted from here
@@ -191,36 +193,44 @@ void SettingsPage::BuildSections() {
   BuildDangerSection();
   rows::SetPaneMode(false);
 
-  // ---- what stays on Settings: preferences, in two panes ------------------
-  // col 0 what the app DOES, col 1 everything else: what this machine IS, then
-  // what the app is (About's version and community links moved here when the
-  // third pane was deleted - it folded away below 1400dip, which made the app
-  // version unreachable in every folded layout; pane-model fold rule: a pane
-  // that can fold may not own content with no second door). Each pane is one
-  // constrained column of rows, which is how the Windows single-column
-  // settings guidance and the full-bleed pane model reconcile.
+  // ---- what stays on Settings: preferences, in three panes ----------------
+  // col 0 what the app DOES, col 1 what this machine IS, col 2 what the app is.
+  // Each pane is one constrained column of rows, which is how the Windows
+  // single-column settings guidance and the full-bleed pane model reconcile:
+  // three columns of ~660dip in the 2062dip window this app is judged in.
+  //
+  // About folds first (1400dip of window) and Device below 900
+  // (MainWindow::ApplyBreakpoint's settingsThree/settingsTwo gates), and the
+  // fold rule bars a foldable pane from owning content with no second door:
+  // About owns the version/update rows, Device the Advanced-mode toggle (with
+  // Advanced OFF at a narrow window there was no way to turn it on). So those
+  // rows build twice, the BuildSupportContactSection pattern one destination
+  // over: once into their own pane above, once into the fold hosts at the foot
+  // of General, and the gates show exactly one copy of each -
+  // ApplyAboutPaneVisible for the version copy (which joins the Licenses row's
+  // fold copy under its About strip, so the folded foot of General reads as
+  // one About block), ApplyPaneBFolded for the Advanced toggle.
   rows::SetPaneMode(true);
   auto general = w_.SettingsSections();
   auto device = w_.SettingsSectionsRight();
+  auto about = w_.SettingsAboutHost();
   BuildGeneralSection(general);
   BuildConnectionsSection(general);
   BuildDeviceSection(device);
   BuildIdentitySection(device);
   BuildAdvancedSection(device);
-  BuildVersionSection(device);
-  BuildStayInTouchSection(device);
-  // ---- the fold-gated second doors, at the END of pane A (the fold rule) ----
-  // Pane B folds below 900dip of window (MainWindow::ApplyBreakpoint's
-  // settingsTwo gate), and two of its rows have no other door: the
-  // Advanced-mode toggle (with Advanced OFF at a narrow window there was no
-  // way to turn it on) and the version/update rows. So they build twice, the
-  // BuildSupportContactSection pattern one destination over: once into pane B
-  // above, once into this host, and ApplyPaneBFolded shows exactly one copy.
+  BuildVersionSection(about);
+  BuildLicensesRows(about, general);
+  BuildStayInTouchSection(about);
+  versionFoldHost_ = StackPanel();
+  versionFoldHost_.Visibility(aboutPaneVisible_ ? Visibility::Collapsed
+                                                : Visibility::Visible);
+  general.Children().Append(versionFoldHost_);
+  BuildVersionFoldSection(versionFoldHost_);
   paneBFoldHost_ = StackPanel();
   paneBFoldHost_.Visibility(paneBFolded_ ? Visibility::Visible : Visibility::Collapsed);
   general.Children().Append(paneBFoldHost_);
   BuildAdvancedFoldSection(paneBFoldHost_);
-  BuildVersionFoldSection(paneBFoldHost_);
   rows::SetPaneMode(false);
 
   // ---- Support: the way to reach a human, in BOTH its homes ----------------
@@ -401,12 +411,12 @@ void SettingsPage::BuildAdvancedFoldSection(Panel const& host) {
 }
 
 // The version/update rows' SECOND door (BuildVersionSection is the primary,
-// and its comment carries the why and the replay contract). The pane-B copy
-// needs no group header - its pane header strip names it - but pane A's strip
-// says "General", so this one carries one, and the word is the deleted About
-// pane's: that is where these rows lived.
+// and its comment carries the why and the replay contract). The About-pane
+// copy needs no group header - its pane header strip names it - and this fold
+// copy needs none either: it renders directly under the Licenses row's fold
+// copy, whose About strip (BuildLicensesRows) heads the foot of General
+// whenever the pane is folded, so the two read as one About block.
 void SettingsPage::BuildVersionFoldSection(Panel const& host) {
-  Heading(host, Missing("about", L"About"), hstring{});
   auto card = Card(host);
   versionValueFold_ = ValueRow(card, Loc("version_info"));
   // the build's own stamp (Common/Version.h), verbatim - see the primary
@@ -769,6 +779,45 @@ void SettingsPage::ApplyUpdateCheck(UpdateChecker::Snapshot const& snap) {
   // ...and the fold-gated copy (BuildVersionFoldSection): one snapshot, both
   // rows, so the two can never disagree about the last check's outcome.
   if (updateStateValueFold_) updateStateValueFold_.Text(hstring{text});
+}
+
+// LICENSES: the open source software and data attributions the app ships
+// (LicensesPage), opened in Settings' place. The row belongs to About, under
+// the version rows - what the app is, then what it is built from.
+//
+// About is also the first pane to fold (MainWindow::ApplyBreakpoint, < 1400dip),
+// and some of these licenses REQUIRE their attribution to be reachable in the
+// product (GeoLite2's MaxMind notice), so a second copy of the row waits at the
+// foot of General under an About strip of its own. Exactly one of the two is
+// visible at any width: ApplyAboutPaneVisible switches them.
+void SettingsPage::BuildLicensesRows(Panel const& about, Panel const& general) {
+  auto row = [this](Panel const& card) {
+    TextBlock unused{nullptr};
+    auto button = NavRow(card, Loc("licenses"), unused);
+    button.Click([this](auto const&, auto const&) { w_.OpenLicenses(); });
+  };
+  licensesAboutRow_ = StackPanel();
+  about.Children().Append(licensesAboutRow_);
+  row(Card(licensesAboutRow_));
+
+  licensesGeneralRow_ = StackPanel();
+  general.Children().Append(licensesGeneralRow_);
+  Heading(licensesGeneralRow_, Missing("about", L"About"), hstring{});
+  row(Card(licensesGeneralRow_));
+
+  ApplyAboutPaneVisible(aboutPaneVisible_);
+}
+
+void SettingsPage::ApplyAboutPaneVisible(bool visible) {
+  aboutPaneVisible_ = visible;
+  // The version rows' fold copy shares this gate: About visible means the
+  // primary rows are on screen, About folded means the copy takes over.
+  if (versionFoldHost_) {
+    versionFoldHost_.Visibility(visible ? Visibility::Collapsed : Visibility::Visible);
+  }
+  if (!licensesAboutRow_) return;  // the sections are not built yet
+  licensesAboutRow_.Visibility(visible ? Visibility::Visible : Visibility::Collapsed);
+  licensesGeneralRow_.Visibility(visible ? Visibility::Collapsed : Visibility::Visible);
 }
 
 void SettingsPage::BuildDangerSection() {

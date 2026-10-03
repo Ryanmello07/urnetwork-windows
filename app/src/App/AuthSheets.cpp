@@ -676,11 +676,11 @@ void NetworkServerSheet::Build(XamlRoot const& root) {
 void NetworkServerSheet::ApplyDerivedPlaceholders() {
   const std::string typed = netserver::NormalizeHost(urnw::Narrow(hostBox_.Text().c_str()));
   const std::string host = typed.empty() ? DefaultHost() : typed;
-  // "official" means the PRODUCTION host specifically, not whatever this
-  // process treats as its default — only production carries the migration
-  // domain. A custom or test deployment derives straight off its own name.
-  const bool official = (host == std::string(ids::kNetworkSpaceHostName));
-  const std::string migration = official ? std::string("bringyour.com") : std::string();
+  // No space carries a migration domain: the official key IS the operator
+  // host (ids::kNetworkSpaceHostName, see SdkHost::BuildNetworkSpace), so
+  // production and a custom or test deployment alike derive straight off the
+  // host name.
+  const std::string migration;
   const std::string env(ids::kNetworkSpaceEnvName);
 
   hostBox_.PlaceholderText(H(DefaultHost()));
@@ -723,7 +723,7 @@ void NetworkServerSheet::Apply(std::string const& host, std::string const& apiUr
 
 void NetworkServerSheet::UseDefault() {
   // current_.defaultHostName, NOT ids::kNetworkSpaceHostName. This used to be
-  // the compiled-in "ur.network" both times, so on a session started against a
+  // the compiled-in host both times, so on a session started against a
   // test network (URNETWORK_NETWORK_HOST) the button labelled "Use default
   // network" moved the client to PRODUCTION without saying so.
   const std::string host = DefaultHost();

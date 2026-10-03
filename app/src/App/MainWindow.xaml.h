@@ -17,6 +17,7 @@
 #include "BalanceSheets.h"
 #include "ConnectPage.h"
 #include "DeveloperPage.h"
+#include "LicensesPage.h"
 #include "LocationSheets.h"
 #include "LoginPage.h"
 #include "Onboarding.h"
@@ -60,6 +61,7 @@ struct MainWindow : MainWindowT<MainWindow> {
   urnw::WalletPage& wallet() { return *wallet_; }
   urnw::SettingsPage& settings() { return *settings_; }
   urnw::ReferralsPage& referrals() { return *referrals_; }
+  urnw::LicensesPage& licenses() { return *licenses_; }
   urnw::DeveloperPage& developer() { return *developer_; }
 
   // ---- shared window-level state the pages need ----
@@ -89,6 +91,11 @@ struct MainWindow : MainWindowT<MainWindow> {
   // "‹ Account"; any rail navigation closes it too.
   void OpenReferrals();
   void CloseReferrals();
+  // The Licenses page: shown in place of the Settings panes the same way (no
+  // rail item), opened from Settings' Licenses row and closed from its own
+  // "‹ Settings"; any rail navigation closes it too.
+  void OpenLicenses();
+  void CloseLicenses();
   // last ContractStatus push (ConnectPage::ApplyStats) -> the warning InfoBar
   void SetInsufficientBalance(bool insufficient);
   // ---- the persistent status strip (D4) ----
@@ -471,6 +478,7 @@ struct MainWindow : MainWindowT<MainWindow> {
   std::unique_ptr<urnw::SettingsPage> settings_;
   std::unique_ptr<urnw::ReferralsPage> referrals_;
   bool referralsOpen_ = false;  // the Refer and earn page is up in Account's place
+  std::unique_ptr<urnw::LicensesPage> licenses_;
   std::unique_ptr<urnw::DeveloperPage> developer_;
   // The last nav tag OnNavSelectionChanged applied; the destination-swap fade
   // plays only when this actually changes (a SameItem re-selection plays none).
@@ -602,6 +610,9 @@ struct MainWindow : MainWindowT<MainWindow> {
   bool accountFourLayout_ = false;
   bool accountThreeLayout_ = false;
   bool accountTwoLayout_ = false;
+  // Settings' About-pane gate (1400dip of window) came in with the upstream
+  // merge; it joins the same tracked set rather than reintroducing the gap.
+  bool settingsThreeLayout_ = false;
   bool settingsTwoLayout_ = false;
   // The status strip's floor gate (kStatusStripTrafficFloorDip), one applied
   // state under the same early-out rule as the rest: a drag that crosses only

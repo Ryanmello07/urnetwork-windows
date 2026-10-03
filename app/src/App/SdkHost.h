@@ -662,7 +662,7 @@ class SdkHost {
 
   // ---- network server (iOS NetworkServerSheet parity) ----------------------
   // Which network API this client talks to. On a fork this is the difference
-  // between the official ur.network and a self-hosted deployment.
+  // between the official bringyour.com and a self-hosted deployment.
   struct NetworkServer {
     std::string hostName;
     std::string apiUrl;      // live, derived or overridden
@@ -672,8 +672,8 @@ class SdkHost {
     std::string configuredConnectUrl;
     // What "the default network" means for THIS process: normally the
     // compiled-in ids::kNetworkSpaceHostName, but URNETWORK_NETWORK_HOST
-    // when that is set. The sheet's "Use default network" hardcoded
-    // "ur.network", so pressing it in a test-network session silently moved
+    // when that is set. The sheet's "Use default network" hardcoded the
+    // compiled-in host, so pressing it in a test-network session silently moved
     // the client to PRODUCTION — the one place a mistake is unrecoverable.
     std::string defaultHostName;
     bool managerAvailable = false;

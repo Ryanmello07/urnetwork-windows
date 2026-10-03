@@ -938,17 +938,15 @@
                                      update-available banner stacks directly BELOW this one. -->
                                 <InfoBar x:Name="ServiceSetupBar" IsOpen="False" IsClosable="False"
                                          Margin="12,8" Severity="Warning" />
-                                <!-- a newer release exists (beta spec §5): one click downloads,
-                                     verifies against the asset's SHA-256 digest from the
-                                     releases API, rename-swaps the app's own
-                                     files and relaunches. Same bar shape and one-writer
-                                     discipline as the two above: everything is written by
+                                <!-- a newer release exists (beta spec §5): one click downloads
+                                     the official MSI, verifies it against the asset's SHA-256
+                                     digest from the releases API, starts the installer and
+                                     quits. Same bar shape and one-writer discipline as the two
+                                     above: everything is written by
                                      ConnectPage::ApplyUpdateChecker, and the action button is
                                      built in the MainWindow ctor beside theirs. Severity is
                                      set in code - Informational normally, Error when an apply
-                                     failed. After the swap the SERVICE still runs the renamed
-                                     old exe by design; the ServiceSetupBar's VersionMismatch
-                                     state directly above finishes the job. -->
+                                     failed. -->
                                 <InfoBar x:Name="UpdateBar" IsOpen="False" IsClosable="False"
                                          Margin="12,8" Severity="Informational" />
 
@@ -3137,28 +3135,33 @@
                      Windows guidance wants settings as a single constrained
                      column of rows, and the pane model wants full bleed with no
                      max-width cap. Those are reconciled by making each pane a
-                     constrained column: TWO equal star columns, so at the
-                     2062dip window this app is judged in each one is ~1000dip -
-                     wider than the guidance's measure, accepted because the
-                     rows inside are the kit's constrained vocabulary.
+                     constrained column: THREE equal star columns, so at the
+                     2062dip window this app is judged in each one is ~660dip -
+                     the guidance's own measure.
 
                        col 0  GENERAL   preferences, then VPN and privacy
-                       col 2  DEVICE    this machine, then Advanced, then what
-                                       the app is (version, community links)
+                       col 2  DEVICE    this machine, then Advanced
+                       col 4  ABOUT     what the app is: version, licenses,
+                                       community links
 
-                     There WAS a third pane (About), and it is gone: it folded
-                     away below 1400dip, which left the app version unreachable
-                     in every folded layout, and the fold rule bars a foldable
-                     pane from owning content with no second door. Its two
-                     sections end pane B now.
+                     About is the first pane to fold (below 1400dip of window),
+                     and the fold rule bars a foldable pane from owning content
+                     with no second door - the version rows were exactly such
+                     content, and About was once deleted over it. This time the
+                     rule is answered: below the gate the version rows and the
+                     Licenses row show fold copies at the foot of General
+                     (SettingsPage's fold hosts), and below 900dip the Device
+                     pane's Advanced-mode toggle does the same.
 
                      A list-pane-plus-detail reading was the other legitimate
                      option. It was rejected because there are ~14 preference
                      rows in the whole product: a navigation column for five
                      sections of three rows spends a third of the window on a
                      table of contents for a page that fits on one screen.
+                     (Licenses, ~95 rows of one species, IS that reading - it
+                     gets the list-plus-detail page below instead.)
 
-                     Every row here is built by SettingsPage into the two
+                     Every row here is built by SettingsPage into the three
                      hosts below, through the row kit in pane mode. -->
                 <Grid x:Name="SettingsView" Visibility="Collapsed"
                       Style="{StaticResource UrPaneStyle}">
@@ -3166,6 +3169,8 @@
                         <ColumnDefinition x:Name="SettingsPaneAColumn" Width="*" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition x:Name="SettingsPaneBColumn" Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition x:Name="SettingsPaneCColumn" Width="*" />
                     </Grid.ColumnDefinitions>
 
                     <!-- ============ PANE A: GENERAL / VPN AND PRIVACY ======= -->
@@ -3205,6 +3210,106 @@
                         <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled"
                                       VerticalScrollBarVisibility="Auto">
                             <StackPanel x:Name="SettingsSectionsRight" />
+                        </ScrollViewer>
+                    </Grid>
+
+                    <Border x:Name="SettingsPaneCRule" Grid.Column="3"
+                            Style="{StaticResource UrPaneVRuleStyle}" />
+
+                    <!-- ============ PANE C: ABOUT =========================== -->
+                    <Grid Grid.Column="4" x:Name="SettingsPaneC">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <Border Style="{StaticResource UrPaneHeaderStyle}">
+                            <Grid>
+                                <TextBlock x:Name="SettingsPaneCTitle"
+                                           Style="{StaticResource UrPaneTitleStyle}" />
+                            </Grid>
+                        </Border>
+                        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled"
+                                      VerticalScrollBarVisibility="Auto">
+                            <StackPanel x:Name="SettingsAboutHost" />
+                        </ScrollViewer>
+                    </Grid>
+                </Grid>
+
+                <!-- ==== LICENSES: shown in Settings' place ====================
+                     The open source software and data attributions the app
+                     ships (sdk.GetLicenses("windows")), reached from Settings'
+                     Licenses row and closed by its own "‹ Settings", exactly as
+                     the Refer and earn page stands in for Account. Any rail
+                     navigation closes it too.
+
+                     This one IS a list-pane-plus-detail reading, which Settings
+                     rejected for itself: ~95 entries of one row species, each
+                     opening a full license text, is what that shape is for.
+
+                       col 0  LIST     the intro, Data attributions, Open source
+                                       software
+                       col 2  DETAIL   the selected entry: notice, copyright,
+                                       project page, the full text
+
+                     Below the Settings two-pane width the detail folds; selecting
+                     a row then swaps the list for the detail, whose header grows
+                     a "‹ Licenses" back. LicensesPage owns that switch
+                     (ApplyBreakpoint); every row is built into the two hosts. -->
+                <Grid x:Name="LicensesView" Visibility="Collapsed"
+                      Style="{StaticResource UrPaneStyle}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition x:Name="LicensesPaneAColumn" Width="400" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition x:Name="LicensesPaneBColumn" Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- ============ PANE A: THE LIST ======================== -->
+                    <Grid Grid.Column="0" x:Name="LicensesPaneA"
+                          AutomationProperties.LandmarkType="Main">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <Border Style="{StaticResource UrPaneHeaderStyle}">
+                            <Grid>
+                                <StackPanel Orientation="Horizontal" Spacing="12"
+                                            VerticalAlignment="Center">
+                                    <Button x:Name="LicensesBackButton" Padding="8,4" />
+                                    <TextBlock x:Name="LicensesPaneTitle" VerticalAlignment="Center"
+                                               Style="{StaticResource UrPaneTitleStyle}" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled"
+                                      VerticalScrollBarVisibility="Auto">
+                            <StackPanel x:Name="LicensesListHost" />
+                        </ScrollViewer>
+                    </Grid>
+
+                    <Border x:Name="LicensesPaneBRule" Grid.Column="1"
+                            Style="{StaticResource UrPaneVRuleStyle}" />
+
+                    <!-- ============ PANE B: THE SELECTED ENTRY ============== -->
+                    <Grid Grid.Column="2" x:Name="LicensesPaneB">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <Border Style="{StaticResource UrPaneHeaderStyle}">
+                            <Grid>
+                                <StackPanel Orientation="Horizontal" Spacing="12"
+                                            VerticalAlignment="Center">
+                                    <Button x:Name="LicensesDetailBackButton" Padding="8,4"
+                                            Visibility="Collapsed" />
+                                    <TextBlock x:Name="LicensesDetailTitle" VerticalAlignment="Center"
+                                               Style="{StaticResource UrPaneTitleStyle}" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                        <ScrollViewer x:Name="LicensesDetailScroll" Grid.Row="1"
+                                      HorizontalScrollBarVisibility="Disabled"
+                                      VerticalScrollBarVisibility="Auto">
+                            <StackPanel x:Name="LicensesDetailHost" />
                         </ScrollViewer>
                     </Grid>
                 </Grid>
