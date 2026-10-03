@@ -1455,6 +1455,14 @@
     <value>URnetwork VPN 시작에 실패했습니다</value>
     <comment>Used in Shared/Intents/ConnectIntent.swift.</comment>
   </data>
+  <data name="fast_dns_on_connect" xml:space="preserve">
+    <value>연결 시 빠른 DNS</value>
+    <comment>DNS settings: label of the opt-in toggle (off by default) that answers DNS over the host's local network while the tunnel's DNS starts. Also the status row label in the connect drawer DNS summary.</comment>
+  </data>
+  <data name="fast_dns_on_connect_description" xml:space="preserve">
+    <value>터널 DNS가 시작되는 동안 로컬 네트워크를 통해 DNS에 응답합니다. 이로 인해 조회 내용이 로컬 네트워크에 노출될 수 있습니다. 끄면 DNS는 터널을 통해서만 확인됩니다.</value>
+    <comment>DNS settings: description under the Fast DNS on connect toggle. Explains that it answers DNS over the local network while the tunnel's DNS starts, which can reveal lookups to the local network.</comment>
+  </data>
   <data name="feedback" xml:space="preserve">
     <value>피드백</value>
     <comment>Used in Main/Feedback/FeedbackView.swift.</comment>
@@ -1778,14 +1786,6 @@
   <data name="local_dns" xml:space="preserve">
     <value>로컬 DNS</value>
     <comment>A label displayed in the custom dns settings section.</comment>
-  </data>
-  <data name="local_dns_fallback" xml:space="preserve">
-    <value>로컬 DNS 폴백</value>
-    <comment>A label displayed in the custom dns settings section.</comment>
-  </data>
-  <data name="local_dns_fallback_description" xml:space="preserve">
-    <value>터널이 시작되는 동안 로컬 리졸버에도 동시에 질의합니다. 끄면 DNS는 터널을 통해서만 확인됩니다.</value>
-    <comment>A description of the local DNS fallback setting.</comment>
   </data>
   <data name="local_dns_servers" xml:space="preserve">
     <value>로컬 DNS 서버</value>

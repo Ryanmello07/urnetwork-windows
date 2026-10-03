@@ -1455,6 +1455,14 @@ cách đúng đắn</value>
     <value>Không thể khởi động URnetwork VPN</value>
     <comment>Used in Shared/Intents/ConnectIntent.swift.</comment>
   </data>
+  <data name="fast_dns_on_connect" xml:space="preserve">
+    <value>DNS nhanh khi kết nối</value>
+    <comment>DNS settings: label of the opt-in toggle (off by default) that answers DNS over the host's local network while the tunnel's DNS starts. Also the status row label in the connect drawer DNS summary.</comment>
+  </data>
+  <data name="fast_dns_on_connect_description" xml:space="preserve">
+    <value>Trả lời DNS qua mạng cục bộ trong khi DNS của đường hầm khởi động. Điều này có thể để lộ các truy vấn của bạn cho mạng cục bộ. Khi tắt, DNS chỉ phân giải qua đường hầm.</value>
+    <comment>DNS settings: description under the Fast DNS on connect toggle. Explains that it answers DNS over the local network while the tunnel's DNS starts, which can reveal lookups to the local network.</comment>
+  </data>
   <data name="feedback" xml:space="preserve">
     <value>Phản hồi</value>
     <comment>Used in Main/Feedback/FeedbackView.swift.</comment>
@@ -1778,14 +1786,6 @@ cách đúng đắn</value>
   <data name="local_dns" xml:space="preserve">
     <value>DNS cục bộ</value>
     <comment>A label displayed in the custom dns settings section.</comment>
-  </data>
-  <data name="local_dns_fallback" xml:space="preserve">
-    <value>DNS dự phòng cục bộ</value>
-    <comment>A label displayed in the custom dns settings section.</comment>
-  </data>
-  <data name="local_dns_fallback_description" xml:space="preserve">
-    <value>Chạy song song một bộ phân giải cục bộ trong khi đường hầm khởi động. Khi tắt, DNS chỉ phân giải qua đường hầm.</value>
-    <comment>A description of the local DNS fallback setting.</comment>
   </data>
   <data name="local_dns_servers" xml:space="preserve">
     <value>Máy chủ DNS cục bộ</value>

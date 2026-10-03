@@ -1471,6 +1471,14 @@ maneira certa</value>
     <value>Não foi possível iniciar a URnetwork VPN</value>
     <comment>Used in Shared/Intents/ConnectIntent.swift.</comment>
   </data>
+  <data name="fast_dns_on_connect" xml:space="preserve">
+    <value>DNS rápido ao ligar</value>
+    <comment>DNS settings: label of the opt-in toggle (off by default) that answers DNS over the host's local network while the tunnel's DNS starts. Also the status row label in the connect drawer DNS summary.</comment>
+  </data>
+  <data name="fast_dns_on_connect_description" xml:space="preserve">
+    <value>Responde ao DNS através da rede local enquanto o DNS do túnel arranca. Isto pode revelar as suas pesquisas à rede local. Quando desativado, o DNS só é resolvido através do túnel.</value>
+    <comment>DNS settings: description under the Fast DNS on connect toggle. Explains that it answers DNS over the local network while the tunnel's DNS starts, which can reveal lookups to the local network.</comment>
+  </data>
   <data name="feedback" xml:space="preserve">
     <value>Feedback</value>
     <comment>Used in Main/Feedback/FeedbackView.swift.</comment>
@@ -1802,14 +1810,6 @@ maneira certa</value>
   <data name="local_dns" xml:space="preserve">
     <value>DNS local</value>
     <comment>A label displayed in the custom dns settings section.</comment>
-  </data>
-  <data name="local_dns_fallback" xml:space="preserve">
-    <value>Fallback de DNS local</value>
-    <comment>A label displayed in the custom dns settings section.</comment>
-  </data>
-  <data name="local_dns_fallback_description" xml:space="preserve">
-    <value>Consulta um resolvedor local em paralelo enquanto o túnel arranca. Quando desativado, o DNS só é resolvido através do túnel.</value>
-    <comment>A description of the local DNS fallback setting.</comment>
   </data>
   <data name="local_dns_servers" xml:space="preserve">
     <value>Servidores DNS locais</value>

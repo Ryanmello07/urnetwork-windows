@@ -14,6 +14,7 @@
 #include <cmath>
 #include <unordered_set>
 
+#include "FastDnsOnConnect.h"
 #include "Localization.h"
 #include "PageContext.h"   // pages::Adv: the transport editor's not-yet-in-store strings
 #include "Sdk.h"   // ReadSdkList: the list-getter null-unwrap guard
@@ -1192,7 +1193,7 @@ DnsEditorSheet::Draft DnsEditorSheet::FromSettings(
   draft.enableLocalDoh = settings->EnableLocalDoh;
   draft.enableRemoteDns = settings->EnableRemoteDns;
   draft.enableLocalDns = settings->EnableLocalDns;
-  draft.enableFallback = settings->EnableFallback;
+  draft.enableFallback = urnw::fast_dns_on_connect::FromSettings(settings);
   auto list = [](std::optional<urnet::StringList> const& values) {
     return values ? *values : std::vector<std::string>{};
   };
@@ -1213,7 +1214,7 @@ urnet::DnsResolverSettings DnsEditorSheet::ToSettings(const Draft& draft) {
   settings.EnableLocalDoh = draft.enableLocalDoh;
   settings.EnableRemoteDns = draft.enableRemoteDns;
   settings.EnableLocalDns = draft.enableLocalDns;
-  settings.EnableFallback = draft.enableFallback;
+  urnw::fast_dns_on_connect::ToSettings(settings, draft.enableFallback);
   settings.RemoteDohUrlsIpv4 = draft.remoteDohUrlsIpv4;
   settings.RemoteDohUrlsIpv6 = draft.remoteDohUrlsIpv6;
   settings.LocalDohUrlsIpv4 = draft.localDohUrlsIpv4;
@@ -1269,11 +1270,11 @@ void DnsEditorSheet::Build(XamlRoot const& root) {
 
   BuildResolverSection(body);
 
-  // local dns fallback + footer
-  body.Children().Append(SectionHeader(Loc("local_dns_fallback")));
+  // fast dns on connect (the opt-in host-network fallback, off by default) + footer
+  body.Children().Append(SectionHeader(Loc(urnw::fast_dns_on_connect::kLabelKey)));
   {
     Grid row = MakeStarAutoRow();
-    auto label = MakeText(Loc("local_dns_fallback"), 13);
+    auto label = MakeText(Loc(urnw::fast_dns_on_connect::kLabelKey), 13);
     label.VerticalAlignment(VerticalAlignment::Center);
     Grid::SetColumn(label, 0);
     row.Children().Append(label);
@@ -1291,7 +1292,7 @@ void DnsEditorSheet::Build(XamlRoot const& root) {
     row.Children().Append(fallbackToggle_);
     body.Children().Append(row);
     body.Children().Append(
-        MakeText(Loc("local_dns_fallback_description"), 11, FaintBrush(), true));
+        MakeText(Loc(urnw::fast_dns_on_connect::kDescriptionKey), 11, FaintBrush(), true));
   }
 
   BuildSuggestionSection(body);

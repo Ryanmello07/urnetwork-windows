@@ -1502,6 +1502,14 @@ správným způsobem</value>
     <value>Nepodařilo se spustit VPN URnetwork</value>
     <comment>Used in Shared/Intents/ConnectIntent.swift.</comment>
   </data>
+  <data name="fast_dns_on_connect" xml:space="preserve">
+    <value>Rychlé DNS při připojení</value>
+    <comment>DNS settings: label of the opt-in toggle (off by default) that answers DNS over the host's local network while the tunnel's DNS starts. Also the status row label in the connect drawer DNS summary.</comment>
+  </data>
+  <data name="fast_dns_on_connect_description" xml:space="preserve">
+    <value>Odpovídá na dotazy DNS přes místní síť, dokud se spouští DNS tunelu. Místní síť tak může vidět vaše dotazy. Když je vypnuto, DNS se překládá jen přes tunel.</value>
+    <comment>DNS settings: description under the Fast DNS on connect toggle. Explains that it answers DNS over the local network while the tunnel's DNS starts, which can reveal lookups to the local network.</comment>
+  </data>
   <data name="feedback" xml:space="preserve">
     <value>Odezva</value>
     <comment>Used in Main/Feedback/FeedbackView.swift.</comment>
@@ -1849,14 +1857,6 @@ správným způsobem</value>
   <data name="local_dns" xml:space="preserve">
     <value>Místní DNS</value>
     <comment>A label displayed in the custom dns settings section.</comment>
-  </data>
-  <data name="local_dns_fallback" xml:space="preserve">
-    <value>Záložní místní DNS</value>
-    <comment>A label displayed in the custom dns settings section.</comment>
-  </data>
-  <data name="local_dns_fallback_description" xml:space="preserve">
-    <value>Během startu tunelu se souběžně dotazuje místního resolveru. Když je vypnuto, DNS se překládá jen přes tunel.</value>
-    <comment>A description of the local DNS fallback setting.</comment>
   </data>
   <data name="local_dns_servers" xml:space="preserve">
     <value>Místní servery DNS</value>

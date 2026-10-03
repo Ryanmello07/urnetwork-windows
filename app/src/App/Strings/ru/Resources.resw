@@ -2475,6 +2475,14 @@
     <value>Не удалось запустить URnetwork VPN</value>
     <comment>Used in Shared/Intents/ConnectIntent.swift.</comment>
   </data>
+  <data name="fast_dns_on_connect" xml:space="preserve">
+    <value>Быстрый DNS при подключении</value>
+    <comment>DNS settings: label of the opt-in toggle (off by default) that answers DNS over the host's local network while the tunnel's DNS starts. Also the status row label in the connect drawer DNS summary.</comment>
+  </data>
+  <data name="fast_dns_on_connect_description" xml:space="preserve">
+    <value>Отвечает на DNS-запросы через локальную сеть, пока запускается DNS туннеля. Это может раскрыть ваши запросы локальной сети. Если выключено, DNS разрешается только через туннель.</value>
+    <comment>DNS settings: description under the Fast DNS on connect toggle. Explains that it answers DNS over the local network while the tunnel's DNS starts, which can reveal lookups to the local network.</comment>
+  </data>
   <data name="feedback" xml:space="preserve">
     <value>Обратная связь</value>
     <comment>Used in Main/Feedback/FeedbackView.swift.</comment>
@@ -3028,14 +3036,6 @@
   <data name="local_dns" xml:space="preserve">
     <value>Локальный DNS</value>
     <comment>A label displayed in the custom dns settings section.</comment>
-  </data>
-  <data name="local_dns_fallback" xml:space="preserve">
-    <value>Резервный локальный DNS</value>
-    <comment>A label displayed in the custom dns settings section.</comment>
-  </data>
-  <data name="local_dns_fallback_description" xml:space="preserve">
-    <value>Пока запускается туннель, параллельно опрашивает локальный резолвер и берёт первый ответ. Если выключено, DNS разрешается только через туннель.</value>
-    <comment>A description of the local DNS fallback setting.</comment>
   </data>
   <data name="local_dns_servers" xml:space="preserve">
     <value>Локальные DNS-серверы</value>
@@ -4920,10 +4920,6 @@
   <data name="site_app_dns_encrypted" xml:space="preserve">
     <value>Зашифрованный (DoH)</value>
     <comment>App connect: DNS summary encrypted</comment>
-  </data>
-  <data name="site_app_dns_fallback" xml:space="preserve">
-    <value>Быстрый резерв при запуске</value>
-    <comment>App connect DNS: fallback toggle</comment>
   </data>
   <data name="site_app_dns_local_dns" xml:space="preserve">
     <value>Стандартный DNS на этом устройстве</value>

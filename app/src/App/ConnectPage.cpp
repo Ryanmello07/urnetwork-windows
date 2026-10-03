@@ -17,6 +17,7 @@
 #include <utility>
 #include <vector>
 
+#include "FastDnsOnConnect.h"
 #include "Log.h"
 #include "MainWindow.xaml.h"
 #include "PageContext.h"
@@ -222,7 +223,7 @@ void ConnectPage::ApplyStrings() {
   w_.DohLabel().Text(Loc("dns_over_https"));
   w_.UdnsLabel().Text(Loc("unencrypted_dns"));
   w_.LdnsLabel().Text(Loc("local_dns"));
-  w_.FallbackLabel().Text(Loc("local_dns_fallback"));
+  w_.FallbackLabel().Text(Loc(urnw::fast_dns_on_connect::kLabelKey));
   w_.DohState().Text(Loc("off"));
   w_.UdnsState().Text(Loc("off"));
   w_.LdnsState().Text(Loc("off"));
