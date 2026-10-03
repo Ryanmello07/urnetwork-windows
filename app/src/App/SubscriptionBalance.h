@@ -157,6 +157,8 @@ class SubscriptionBalanceStore {
   std::optional<std::string> ReferralCode() const { return referral_.Code(); }
   // what the referral card shows where the code goes
   ReferralCodeView ReferralView() const { return referral_.View(); }
+  // Read the code again now (the card's Try again). Publishes.
+  void RetryReferral();
   int64_t TotalReferrals() const { return totalReferrals_; }
   // the cap and bonus, from the server with the code (defaults until then)
   urnw::ReferralTerms ReferralTerms() const { return terms_; }

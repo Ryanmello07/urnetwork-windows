@@ -275,6 +275,20 @@ void ReferralCard::Apply() {
       share.Content(winrt::box_value(Loc("copied")));
     });
     content.Children().Append(share);
+  } else if (view == ReferralCodeView::Unavailable) {
+    // the read failed with no code to show: say so, and offer the read again
+    // instead of a ring that only a later background poll could end
+    auto failed = MakeText(Loc("load_failed"), 14,
+                           colors::MakeBrush(colors::WithAlpha(colors::kUrLightBlue, 0xD9)), true);
+    failed.TextAlignment(TextAlignment::Center);
+    failed.HorizontalAlignment(HorizontalAlignment::Center);
+    failed.Margin(Thickness{0, 12, 0, 0});
+    content.Children().Append(failed);
+    Button retry;
+    retry.Content(winrt::box_value(Loc("try_again")));
+    retry.HorizontalAlignment(HorizontalAlignment::Center);
+    retry.Click([](auto const&, auto const&) { Balance().RetryReferral(); });
+    content.Children().Append(retry);
   } else {
     ProgressRing ring;
     ring.Width(24);

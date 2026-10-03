@@ -351,8 +351,12 @@ void SubscriptionBalanceStore::FetchReferral() {
           if (generation != generation_) return;  // logout superseded this fetch
           referralLoading_ = false;
           if (err || !result || result->error) {
-            if (err) LogWarn("referral: fetch failed: {}", *err);
-            // keep the last reading; the poll retries
+            LogWarn("referral: fetch failed: {}",
+                    err ? *err
+                        : (result && result->error ? result->error->message
+                                                   : std::string("no result")));
+            // keep the last reading (the poll retries), but a card with no
+            // code says so rather than spinning
             if (referral_.Fail()) Publish();
             return;
           }
@@ -362,6 +366,7 @@ void SubscriptionBalanceStore::FetchReferral() {
           if (result->referral_code) {
             MaybeCelebrateReferrals(*result->referral_code, result->total_referrals);
           }
+          // the referral card follows the store; this read is the one it waits on
           if (repaint) Publish();
         });
       });
@@ -393,6 +398,13 @@ void SubscriptionBalanceStore::MaybeCelebrateReferrals(std::string const& code,
     // referrals can be unlinked; re-baseline quietly
     SaveAppPref(key.c_str(), count);
   }
+}
+
+void SubscriptionBalanceStore::RetryReferral() {
+  if (!started_) return;
+  referral_.Retry();
+  Publish();
+  FetchReferral();  // an in-flight read answers this retry instead
 }
 
 void SubscriptionBalanceStore::EnsureReferralPolling() {
