@@ -2270,8 +2270,12 @@ winrt::fire_and_forget WalletPage::OnVerifySeeker(IInspectable const&, RoutedEve
                       std::optional<std::string> err) {
               std::string failure = err ? *err : std::string();
               if (failure.empty() && result && result->error) failure = result->error->message;
+              // the code picks the localized notice; the message is the fallback
+              const std::string errorCode =
+                  result && result->error ? result->error->code.value_or(std::string())
+                                          : std::string();
               const auto notice = urnw::SeekerVerifyNoticeFor(
-                  result.has_value(), result && result->success, failure);
+                  result.has_value(), result && result->success, failure, errorCode);
               if (notice != urnw::SeekerVerifyNoticeKind::Verified) {
                 urnw::LogError("seeker: verifySeekerHolder failed: {}", failure);
               }
