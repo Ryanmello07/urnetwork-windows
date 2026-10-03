@@ -2810,9 +2810,13 @@
     <value>رصيد غير كافٍ — أضف رصيدًا أو خطة</value>
     <comment>Connection status shown when the network has no data balance left.</comment>
   </data>
+  <data name="insufficient_balance_held_notice" xml:space="preserve">
+    <value>تبقى حركة بياناتك محتجزة داخل النفق حتى تقوم بالترقية أو قطع الاتصال.</value>
+    <comment>Alert body shown in the app and in a local notification when the account enters the insufficient balance state. Connect stays requested and the VPN keeps holding traffic (nothing leaves outside the tunnel); the user can upgrade or disconnect.</comment>
+  </data>
   <data name="insufficient_balance_message" xml:space="preserve">
     <value>أضف رصيدًا أو اشترك في خطة لمواصلة الاتصال.</value>
-    <comment>Body of the warning shown when the balance runs out; the tunnel disconnects without more balance or a plan.</comment>
+    <comment>Body of the warning shown when the balance runs out and no session is up; connecting needs more balance or a plan.</comment>
   </data>
   <data name="insufficient_funds" xml:space="preserve">
     <value>رصيد غير كافٍ</value>

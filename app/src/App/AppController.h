@@ -13,6 +13,7 @@
 #include <winrt/Microsoft.UI.Dispatching.h>
 #include <winrt/Microsoft.Windows.AppLifecycle.h>
 
+#include "BalanceGate.h"
 #include "SdkHost.h"
 #include "SubscriptionBalance.h"
 #include "TrayIcon.h"
@@ -64,6 +65,10 @@ class AppController {
   void OnAuthState(AuthState state, const std::string& error);
   void OnTunnelState(const proto::TunnelStatus& status);
   void OnStats(const LiveStats& stats);
+  // The reaction to a stats or balance push in the insufficient-balance gate
+  // (BalanceGate.h): a tray notice once per out-of-balance episode, and never
+  // a disconnect.
+  void ReactToBalance();
   void UpdateTray();
   // THE LAST STATUS THE SERVICE PUSHED, in the vocabulary of the shared
   // decision table (Common/ConnectAction.h). The tray reads this rather than
@@ -139,6 +144,10 @@ class AppController {
   bool windowMinimized_ = false;  // IsIconic, synced by SyncWindowMinimized
   bool windowVisible_ = false;    // the reconciled result: the presentation is running
   std::optional<proto::TunnelStatus> lastTunnelStatus_;
+  // the last contract status a stats push carried, and the once-per-episode
+  // out-of-balance notice (ReactToBalance)
+  bool insufficientBalance_ = false;
+  urnw::balance::GateNoticeTracker balanceNotice_;
 };
 
 // The single app controller instance (created in App::OnLaunched).

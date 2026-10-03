@@ -175,6 +175,8 @@ void AppController::Start() {
   balance_.Initialize(uiThread_);
   balance_.SetChangeHandler([this](const BalanceSnapshot& snapshot,
                                    const BalancePollState& poll) {
+    // a plan flip or a confirmation poll changes the gate
+    ReactToBalance();
     if (windowVisible_ && window_) {
       if (auto self = window_.try_as<winrt::URnetwork::implementation::MainWindow>())
         self->OnBalanceChanged(snapshot, poll);
@@ -361,11 +363,33 @@ void AppController::OnStats(const LiveStats& stats) {
     trayHealth_ = stats.health;
     UpdateTray();
   }
+  insufficientBalance_ = stats.insufficientBalance;
+  ReactToBalance();
   // Live stats otherwise only matter to the window; push only when visible.
   if (windowVisible_ && window_) {
     if (auto self = window_.try_as<winrt::URnetwork::implementation::MainWindow>())
       self->OnStatsChanged(stats);
   }
+}
+
+void AppController::ReactToBalance() {
+  // The sinks the shared reaction may use. Disconnect is the user path and is
+  // never called from there: out of balance, capture stays until the user
+  // disconnects, so nothing leaves outside the tunnel without them knowing.
+  struct Sinks {
+    AppController& app;
+    void Notice() {
+      // one line per posted notice: the acceptance driver counts these, since
+      // a balloon cannot be read back from the shell
+      LogInfo("app: insufficient balance notice posted");
+      app.tray_.ShowBalloon(Localized("insufficient_balance"),
+                            Localized("insufficient_balance_held_notice"));
+    }
+    void Disconnect() { app.sdk_.Disconnect(); }
+  } sinks{*this};
+  urnw::balance::ReactToBalancePush(balanceNotice_, insufficientBalance_,
+                                    balance_.Current().isPro,
+                                    balance_.CurrentPoll().confirming, sinks);
 }
 
 gesture::ServiceFacts AppController::CurrentServiceFacts() const {

@@ -1628,9 +1628,13 @@ cách đúng đắn</value>
     <value>Không đủ số dư — hãy thêm số dư hoặc gói</value>
     <comment>Connection status shown when the network has no data balance left.</comment>
   </data>
+  <data name="insufficient_balance_held_notice" xml:space="preserve">
+    <value>Lưu lượng của bạn được giữ trong đường hầm cho đến khi bạn nâng cấp hoặc ngắt kết nối.</value>
+    <comment>Alert body shown in the app and in a local notification when the account enters the insufficient balance state. Connect stays requested and the VPN keeps holding traffic (nothing leaves outside the tunnel); the user can upgrade or disconnect.</comment>
+  </data>
   <data name="insufficient_balance_message" xml:space="preserve">
     <value>Thêm số dư hoặc gói cước để tiếp tục kết nối.</value>
-    <comment>Body of the warning shown when the balance runs out; the tunnel disconnects without more balance or a plan.</comment>
+    <comment>Body of the warning shown when the balance runs out and no session is up; connecting needs more balance or a plan.</comment>
   </data>
   <data name="insufficient_funds" xml:space="preserve">
     <value>Không đủ tiền</value>

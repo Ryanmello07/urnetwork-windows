@@ -279,7 +279,8 @@
                          the field owns the padding above its underline. -->
                     <StackPanel Spacing="0">
                         <TextBlock x:Name="EmailLabel" Style="{StaticResource UrTextInputLabelStyle}" />
-                        <TextBox x:Name="EmailBox" Style="{StaticResource UrTextInputStyle}"
+                        <TextBox x:Name="EmailBox" AutomationProperties.AutomationId="acceptance.password.user"
+                                 Style="{StaticResource UrTextInputStyle}"
                                  TextChanged="OnUserAuthChanged" />
                     </StackPanel>
 
@@ -287,6 +288,7 @@
                          and android: an enabled primary button over an empty
                          field promises an action that cannot happen. -->
                     <Button x:Name="GetStartedButton" IsEnabled="False"
+                            AutomationProperties.AutomationId="acceptance.password.next"
                             Style="{StaticResource UrPrimaryButtonStyle}"
                             Click="OnGetStarted" />
 
@@ -333,9 +335,11 @@
                         <TextBlock x:Name="PasswordHeading" FontFamily="{StaticResource UrHeadingFontFamily}" FontSize="20" FontWeight="SemiBold" />
                         <TextBlock x:Name="PasswordEmailText"
                                    Foreground="{StaticResource UrTextMutedBrush}" />
-                        <PasswordBox x:Name="PasswordBox" Style="{StaticResource UrPasswordInputStyle}"
+                        <PasswordBox x:Name="PasswordBox" AutomationProperties.AutomationId="acceptance.password.input"
+                                     Style="{StaticResource UrPasswordInputStyle}"
                                      KeyDown="OnPasswordKeyDown" />
                         <Button x:Name="SignInButton"
+                                AutomationProperties.AutomationId="acceptance.password.submit"
                                 Style="{StaticResource AccentButtonStyle}"
                                 HorizontalAlignment="Stretch" Click="OnSignIn" />
                         <muxc:InfoBar x:Name="PasswordError" Severity="Error" IsOpen="False" IsClosable="False" />
@@ -660,7 +664,8 @@
                 </DataTemplate>
             </muxc:NavigationView.HeaderTemplate>
             <muxc:NavigationView.MenuItems>
-                <muxc:NavigationViewItem x:Name="ConnectNavItem" Tag="connect" IsSelected="True">
+                <muxc:NavigationViewItem x:Name="ConnectNavItem" Tag="connect" IsSelected="True"
+                                         AutomationProperties.AutomationId="acceptance.nav.connect">
                     <muxc:NavigationViewItem.Icon>
                         <FontIcon FontFamily="{StaticResource UrIconFontFamily}" FontSize="20" Glyph="&#xE80F;" />
                     </muxc:NavigationViewItem.Icon>
@@ -692,7 +697,8 @@
                         <FontIcon FontFamily="{StaticResource UrIconFontFamily}" FontSize="20" Glyph="&#xEBE8;" />
                     </muxc:NavigationViewItem.Icon>
                 </muxc:NavigationViewItem>
-                <muxc:NavigationViewItem x:Name="SettingsNavItem" Tag="settings">
+                <muxc:NavigationViewItem x:Name="SettingsNavItem" Tag="settings"
+                                         AutomationProperties.AutomationId="acceptance.nav.settings">
                     <muxc:NavigationViewItem.Icon>
                         <FontIcon FontFamily="{StaticResource UrIconFontFamily}" FontSize="20" Glyph="&#xE713;" />
                     </muxc:NavigationViewItem.Icon>
@@ -888,6 +894,7 @@
                                      UrPaneActionPrimaryStyle in App.xaml for why the
                                      full-bleed lime slab that used to be here is gone. -->
                                 <Button x:Name="ConnectButton"
+                                        AutomationProperties.AutomationId="acceptance.connect"
                                         Style="{StaticResource UrPaneActionPrimaryStyle}"
                                         Click="OnConnectToggle" />
                                 <!-- network peers (apple ConnectActions parity) -->
@@ -904,8 +911,13 @@
                                                    Foreground="{StaticResource UrTextMutedBrush}" />
                                     </StackPanel>
                                 </Button>
-                                <!-- out of balance: the action opens the upgrade flow -->
+                                <!-- out of balance: the action opens the upgrade flow. The
+                                     acceptance.* automation ids here and on the connect
+                                     button, sign-in fields and nav items are what the
+                                     insufficient-balance acceptance driver finds by UI
+                                     Automation; renaming one breaks that driver. -->
                                 <InfoBar x:Name="BalanceWarning" IsOpen="False" IsClosable="False"
+                                         AutomationProperties.AutomationId="acceptance.insufficient-balance.alert"
                                          Margin="12,8" Severity="Warning" />
                                 <!-- the VPN service needs setting up / starting / updating:
                                      the action is ONE elevated `urnetworkd install`. Title,
