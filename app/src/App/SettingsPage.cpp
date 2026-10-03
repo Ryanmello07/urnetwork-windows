@@ -13,6 +13,7 @@
 
 #include "BalanceSheets.h"  // SetMarkdownLinkText, for the community link rows
 #include "ClientEvents.h"
+#include "FeedbackSendState.h"
 #include "Ids.h"
 #include "Localization.h"
 #include "Log.h"
@@ -134,7 +135,7 @@ void SettingsPage::ApplyStrings() {
   // Send is now glyph + label, and a Button whose Content is a Panel gets NO
   // automatic automation name, so it needs an explicit one or the only way to
   // submit this form is nameless to a screen reader.
-  w_.SendFeedbackText().Text(Loc("send"));
+  ApplyFeedbackSendButton();
   // The contact card beside the form (D4). The feedback form is one-way; this
   // is the other way, and both strings already shipped with no call site.
   // SetMarkdownLinkText keeps the whole sentence and turns support@ur.io and
@@ -145,8 +146,6 @@ void SettingsPage::ApplyStrings() {
       w_.SupportContactText(),
       Localized("if_the_problem_persists_contact_us_at_support_ur"), 14);
   w_.SupportProtocolLink().Content(LocBox("learn_more_protocol_page"));
-  winrt::Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(
-      w_.SendFeedbackButton(), Loc("send"));
 
   // settings: three pane headers, and a landmark name each so a screen reader
   // can tell the three regions apart
@@ -1347,6 +1346,23 @@ void SettingsPage::PrefillFromCampaign(std::string const& token, int rating,
       });
 }
 
+// Send reads "Sending…" and stays disabled while the request is out; the
+// label also names the button for a screen reader (its content is a panel).
+// Kept in feedbackSending_ so ApplyStrings mid-send keeps the right label.
+void SettingsPage::SetFeedbackSending(bool sending) {
+  feedbackSending_ = sending;
+  ApplyFeedbackSendButton();
+}
+
+void SettingsPage::ApplyFeedbackSendButton() {
+  const FeedbackSendButton button = FeedbackSendButtonFor(feedbackSending_);
+  const winrt::hstring label = Loc(button.labelKey);
+  w_.SendFeedbackButton().IsEnabled(button.enabled);
+  w_.SendFeedbackText().Text(label);
+  winrt::Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(
+      w_.SendFeedbackButton(), label);
+}
+
 void SettingsPage::OnSendFeedback(IInspectable const&, RoutedEventArgs const&) {
   // This had NO session guard at all and reported success unconditionally: a
   // 401 rendered as "Thanks for the feedback!" while nothing had been sent.
@@ -1367,7 +1383,7 @@ void SettingsPage::OnSendFeedback(IInspectable const&, RoutedEventArgs const&) {
   const int64_t sentRating = args.star_count;  // for feedback.submitted
   const std::string sentText = text;
 
-  w_.SendFeedbackButton().IsEnabled(false);
+  SetFeedbackSending(true);
   auto queue = w_.DispatcherQueue();
   auto weak = w_.get_weak();
   Sdk().api().sendFeedback(
@@ -1388,7 +1404,7 @@ void SettingsPage::OnSendFeedback(IInspectable const&, RoutedEventArgs const&) {
           auto self = weak.get();
           if (!self) return;
           auto& page = self->settings();
-          self->SendFeedbackButton().IsEnabled(true);
+          page.SetFeedbackSending(false);
           if (!ok) {
             page.settingsSnackbar().Show(
                 error.empty() ? Loc("error_sending_feedback") : winrt::to_hstring(error),

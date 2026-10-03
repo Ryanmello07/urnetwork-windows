@@ -1475,6 +1475,10 @@
     <value>진심으로 말씀해 주세요</value>
     <comment>Feedback Screen</comment>
   </data>
+  <data name="feedback_sending" xml:space="preserve">
+    <value>보내는 중…</value>
+    <comment>Feedback screen: label of the Send button while the feedback is being sent.</comment>
+  </data>
   <data name="fixed_ip" xml:space="preserve">
     <value>고정 IP</value>
     <comment>A toggle that allows users to enable or disable a fixed IP for their connection.</comment>

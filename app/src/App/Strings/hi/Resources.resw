@@ -1490,6 +1490,10 @@
     <value>हमें बताएं कि आप वास्तव में कैसा महसूस करते हैं</value>
     <comment>Feedback Screen</comment>
   </data>
+  <data name="feedback_sending" xml:space="preserve">
+    <value>भेजा जा रहा है…</value>
+    <comment>Feedback screen: label of the Send button while the feedback is being sent.</comment>
+  </data>
   <data name="fixed_ip" xml:space="preserve">
     <value>स्थिर IP</value>
     <comment>A toggle that allows users to enable or disable a fixed IP for their connection.</comment>

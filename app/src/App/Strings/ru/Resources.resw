@@ -2495,6 +2495,10 @@
     <value>Расскажите нам, что вы думаете на самом деле</value>
     <comment>Feedback Screen</comment>
   </data>
+  <data name="feedback_sending" xml:space="preserve">
+    <value>Отправка…</value>
+    <comment>Feedback screen: label of the Send button while the feedback is being sent.</comment>
+  </data>
   <data name="fixed_ip" xml:space="preserve">
     <value>Фиксированный IP</value>
     <comment>A toggle that allows users to enable or disable a fixed IP for their connection.</comment>

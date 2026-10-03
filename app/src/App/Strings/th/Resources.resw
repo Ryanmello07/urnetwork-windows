@@ -1475,6 +1475,10 @@
     <value>บอกเราหน่อยสิว่ามีความเห็นอย่างไร</value>
     <comment>Feedback Screen</comment>
   </data>
+  <data name="feedback_sending" xml:space="preserve">
+    <value>กำลังส่ง…</value>
+    <comment>Feedback screen: label of the Send button while the feedback is being sent.</comment>
+  </data>
   <data name="fixed_ip" xml:space="preserve">
     <value>IP แบบคงที่</value>
     <comment>A toggle that allows users to enable or disable a fixed IP for their connection.</comment>

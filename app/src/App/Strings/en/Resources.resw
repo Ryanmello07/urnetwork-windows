@@ -2870,6 +2870,14 @@ right way</value>
     <value>Tell us how you really feel</value>
     <comment>Feedback Screen</comment>
   </data>
+  <data name="feedback_send_failed" xml:space="preserve">
+    <value>Your feedback wasn't sent. Check your connection and try again.</value>
+    <comment>Feedback screen: the feedback could not be sent. The text stays in the field so the user can send it again.</comment>
+  </data>
+  <data name="feedback_sending" xml:space="preserve">
+    <value>Sending…</value>
+    <comment>Feedback screen: label of the Send button while the feedback is being sent.</comment>
+  </data>
   <data name="fixed_ip" xml:space="preserve">
     <value>Fixed IP</value>
     <comment>A toggle that allows users to enable or disable a fixed IP for their connection.</comment>
