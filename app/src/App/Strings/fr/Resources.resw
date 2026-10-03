@@ -1648,9 +1648,13 @@ bonne manière</value>
     <value>Solde insuffisant — ajoutez du solde ou un plan</value>
     <comment>Connection status shown when the network has no data balance left.</comment>
   </data>
+  <data name="insufficient_balance_held_notice" xml:space="preserve">
+    <value>Votre trafic est retenu dans le tunnel jusqu’à ce que vous passiez à une offre supérieure ou que vous vous déconnectiez.</value>
+    <comment>Alert body shown in the app and in a local notification when the account enters the insufficient balance state. Connect stays requested and the VPN keeps holding traffic (nothing leaves outside the tunnel); the user can upgrade or disconnect.</comment>
+  </data>
   <data name="insufficient_balance_message" xml:space="preserve">
     <value>Ajoutez du solde ou un forfait pour continuer à vous connecter.</value>
-    <comment>Body of the warning shown when the balance runs out; the tunnel disconnects without more balance or a plan.</comment>
+    <comment>Body of the warning shown when the balance runs out and no session is up; connecting needs more balance or a plan.</comment>
   </data>
   <data name="insufficient_funds" xml:space="preserve">
     <value>Fonds insuffisants</value>
