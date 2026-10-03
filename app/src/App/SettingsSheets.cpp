@@ -11,6 +11,7 @@
 #include <winrt/Microsoft.UI.Xaml.Media.Imaging.h>
 #include <winrt/Windows.Storage.Streams.h>
 
+#include "DeleteAccountOutcome.h"
 #include "Localization.h"
 #include "Log.h"
 #include "PageContext.h"
@@ -1718,11 +1719,15 @@ void DeleteAccountSheet::Submit() {
   auto* sdk = &sdk_;
   sdk_.api().networkDelete([queue, weak, sdk](std::optional<urnet::NetworkDeleteResult> result,
                                               std::optional<std::string> err) {
-    // NetworkDeleteResult carries no error field, so a result plus no transport
-    // error is the whole success test. (iOS does not check even that far.)
-    const bool ok = !err && result.has_value();
-    const std::string error = err ? *err : std::string();
-    queue.TryEnqueue([weak, sdk, ok, error] {
+    // A refused deletion is a result with an error (HTTP 200): the account
+    // still exists, so only a result with no error signs out.
+    const bool serverError = result && result->error.has_value();
+    const auto outcome = account::DecideDeleteAccount(
+        err ? &*err : nullptr, result.has_value(), serverError,
+        serverError ? result->error->message : std::string());
+    const bool ok = outcome.deleted;
+    const std::string detail = outcome.detail;
+    queue.TryEnqueue([weak, sdk, ok, detail] {
       auto self = weak.lock();
       if (!self) return;
       self->deleting_ = false;
@@ -1733,8 +1738,10 @@ void DeleteAccountSheet::Submit() {
         sdk->Logout();
         return;
       }
+      // Still signed in: the sheet stays open with the primary enabled for a retry.
       self->dialog_.IsPrimaryButtonEnabled(true);
-      self->errorText_.Text(error.empty() ? Loc("error_deleting_account") : H(error));
+      self->errorText_.Text(H(account::DeleteAccountErrorText(
+          winrt::to_string(Loc("error_deleting_account")), detail)));
       self->errorText_.Visibility(Visibility::Visible);
     });
   });

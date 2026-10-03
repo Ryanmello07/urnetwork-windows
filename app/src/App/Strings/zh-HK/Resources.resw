@@ -1385,7 +1385,7 @@
   </data>
   <data name="error_deleting_account" xml:space="preserve">
     <value>抱歉，刪除帳戶時發生錯誤。</value>
-    <comment>Snackbar shown when deleting the account fails. Used in Main/Account/Settings/SettingsView.swift.</comment>
+    <comment>Shown when deleting the account fails, including when the server refuses the deletion (its reason follows on the next line). Apple Settings snackbar, android Settings, windows and linux delete-account sheet, web account settings.</comment>
   </data>
   <data name="error_loading_account_plan" xml:space="preserve">
     <value>載入你的帳戶方案時發生錯誤。</value>

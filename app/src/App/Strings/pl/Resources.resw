@@ -1433,7 +1433,7 @@ właściwy sposób</value>
   </data>
   <data name="error_deleting_account" xml:space="preserve">
     <value>Przepraszamy, wystąpił błąd podczas usuwania konta.</value>
-    <comment>Snackbar shown when deleting the account fails. Used in Main/Account/Settings/SettingsView.swift.</comment>
+    <comment>Shown when deleting the account fails, including when the server refuses the deletion (its reason follows on the next line). Apple Settings snackbar, android Settings, windows and linux delete-account sheet, web account settings.</comment>
   </data>
   <data name="error_loading_account_plan" xml:space="preserve">
     <value>Błąd podczas ładowania planu konta.</value>

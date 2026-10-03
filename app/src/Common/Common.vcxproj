@@ -45,6 +45,7 @@
     <ClInclude Include="ConnectAction.h" />
     <ClInclude Include="ConnectionHealth.h" />
     <ClInclude Include="CrashDumps.h" />
+    <ClInclude Include="DeleteAccountOutcome.h" />
     <ClInclude Include="Heartbeat.h" />
     <ClInclude Include="Ids.h" />
     <ClInclude Include="Log.h" />
