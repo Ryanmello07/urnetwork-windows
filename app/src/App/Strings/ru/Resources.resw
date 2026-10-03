@@ -1008,6 +1008,10 @@
     <value>Подключите приложение-кошелек Solana или введите адрес USDC в сети Solana вручную.</value>
     <comment>Note at the top of the Solana connect sheet/card, above the wallet-app button and the manual-entry link.</comment>
   </data>
+  <data name="connect_solana_wallet_to_add_sign_in_method" xml:space="preserve">
+    <value>Подключите кошелек Solana, чтобы добавить его как способ входа.</value>
+    <comment>Add sign-in method sheet (android): the wallet option's explanation.</comment>
+  </data>
   <data name="connect_to_location" xml:space="preserve">
     <value>Подключиться к {}</value>
     <comment>Call to action</comment>
@@ -1139,6 +1143,10 @@
   <data name="copy_to_clipboard" xml:space="preserve">
     <value>Копировать в буфер обмена</value>
     <comment>Button text to copy the seedphrase to the clipboard.</comment>
+  </data>
+  <data name="could_not_get_google_id_token" xml:space="preserve">
+    <value>Не удалось получить токен идентификатора Google</value>
+    <comment>Add sign-in method sheet (android): Google sign-in returned no identity token.</comment>
   </data>
   <data name="couldn_t_load_subscription_options" xml:space="preserve">
     <value>Не удалось загрузить варианты подписки. Проверьте подключение и повторите попытку.</value>
@@ -2323,6 +2331,10 @@
     <value>К сожалению, произошла ошибка при получении множителя: {}</value>
     <comment>Snackbar shown when claiming the earnings multiplier fails, with the underlying error message. Used in Main/Account/Settings/SettingsView.swift.</comment>
   </data>
+  <data name="error_connecting_to_wallet" xml:space="preserve">
+    <value>Ошибка подключения к кошельку</value>
+    <comment>Add sign-in method sheet (android): the wallet app could not be reached or did not sign.</comment>
+  </data>
   <data name="error_connecting_wallet" xml:space="preserve">
     <value>Произошла ошибка при подключении кошелька.</value>
     <comment>Snackbar shown when connecting a wallet fails. Used in Main/Account/Wallets/WalletsView.swift.</comment>
@@ -2343,6 +2355,10 @@
     <value>Ошибка загрузки вашего тарифного плана.</value>
     <comment>Call to action</comment>
   </data>
+  <data name="error_logging_in_please_try_again" xml:space="preserve">
+    <value>Ошибка входа, попробуйте еще раз.</value>
+    <comment>Sign-in screen (android): a Google or wallet sign-in failed.</comment>
+  </data>
   <data name="error_redeeming_transfer_balance_code" xml:space="preserve">
     <value>Ошибка при активации кода перевода баланса.</value>
     <comment>Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.</comment>
@@ -2362,6 +2378,10 @@
   <data name="error_setting_default_wallet_with_reason" xml:space="preserve">
     <value>Ошибка при установке кошелька по умолчанию: {}</value>
     <comment>Snackbar shown when setting the default payout wallet fails, with the underlying error message. Used in Main/Account/Wallet/WalletView.swift.</comment>
+  </data>
+  <data name="error_signing_in_with_google" xml:space="preserve">
+    <value>Ошибка входа через Google</value>
+    <comment>Add sign-in method sheet (android): Google sign-in failed or was cancelled.</comment>
   </data>
   <data name="error_updating_device_name" xml:space="preserve">
     <value>Произошла ошибка при обновлении имени устройства.</value>
@@ -3520,9 +3540,17 @@
     <value>Пока нечего получать. Alpha начисляется со следующей завершённой эпохи.</value>
     <comment>Empty state of the unclaimed tile once a wallet is connected.</comment>
   </data>
+  <data name="no_compatible_wallet_app_found" xml:space="preserve">
+    <value>На этом устройстве не найдено совместимое приложение кошелька.</value>
+    <comment>Add sign-in method sheet (android): no installed wallet app can sign the challenge.</comment>
+  </data>
   <data name="no_email_phone_or_password_needed_your" xml:space="preserve">
     <value>Не нужны электронная почта, телефон или пароль. Ваш аккаунт защищён сид-фразой.</value>
     <comment>A description of the benefits of creating an Instant Account.</comment>
+  </data>
+  <data name="no_ethos_wallet_found" xml:space="preserve">
+    <value>Кошелек EthOs не найден</value>
+    <comment>Sign-in screen (android, ethOS build): no ethOS system wallet is available.</comment>
   </data>
   <data name="no_installed_apps_found" xml:space="preserve">
     <value>Установленные приложения не найдены. (Приложения из Store не отображаются.)</value>

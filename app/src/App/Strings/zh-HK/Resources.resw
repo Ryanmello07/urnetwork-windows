@@ -836,6 +836,10 @@
     <value>連接帶有 Saga Genesis 或 Seeker 預購代幣的錢包</value>
     <comment>Call to action</comment>
   </data>
+  <data name="connect_solana_wallet_to_add_sign_in_method" xml:space="preserve">
+    <value>連接 Solana 錢包，將其新增為登入方式。</value>
+    <comment>Add sign-in method sheet (android): the wallet option's explanation.</comment>
+  </data>
   <data name="connect_to_location" xml:space="preserve">
     <value>連接到 {}</value>
     <comment>Call to action</comment>
@@ -935,6 +939,10 @@
   <data name="copy_to_clipboard" xml:space="preserve">
     <value>複製到剪貼簿</value>
     <comment>Button text to copy the seedphrase to the clipboard.</comment>
+  </data>
+  <data name="could_not_get_google_id_token" xml:space="preserve">
+    <value>無法取得 Google ID 權杖</value>
+    <comment>Add sign-in method sheet (android): Google sign-in returned no identity token.</comment>
   </data>
   <data name="couldnt_open_wallet" xml:space="preserve">
     <value>無法開啟錢包。請安裝後再試。</value>
@@ -1379,6 +1387,10 @@
     <value>抱歉，申領倍數時發生錯誤：{}</value>
     <comment>Snackbar shown when claiming the earnings multiplier fails, with the underlying error message. Used in Main/Account/Settings/SettingsView.swift.</comment>
   </data>
+  <data name="error_connecting_to_wallet" xml:space="preserve">
+    <value>連接錢包時出錯</value>
+    <comment>Add sign-in method sheet (android): the wallet app could not be reached or did not sign.</comment>
+  </data>
   <data name="error_connecting_wallet" xml:space="preserve">
     <value>連接錢包時發生錯誤。</value>
     <comment>Snackbar shown when connecting a wallet fails. Used in Main/Account/Wallets/WalletsView.swift.</comment>
@@ -1399,6 +1411,10 @@
     <value>載入你的帳戶方案時發生錯誤。</value>
     <comment>Call to action</comment>
   </data>
+  <data name="error_logging_in_please_try_again" xml:space="preserve">
+    <value>登入出錯，請重試。</value>
+    <comment>Sign-in screen (android): a Google or wallet sign-in failed.</comment>
+  </data>
   <data name="error_redeeming_transfer_balance_code" xml:space="preserve">
     <value>兌換轉帳餘額碼時出錯</value>
     <comment>Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.</comment>
@@ -1418,6 +1434,10 @@
   <data name="error_setting_default_wallet_with_reason" xml:space="preserve">
     <value>設定預設錢包時發生錯誤：{}</value>
     <comment>Snackbar shown when setting the default payout wallet fails, with the underlying error message. Used in Main/Account/Wallet/WalletView.swift.</comment>
+  </data>
+  <data name="error_signing_in_with_google" xml:space="preserve">
+    <value>使用 Google 登入時出錯</value>
+    <comment>Add sign-in method sheet (android): Google sign-in failed or was cancelled.</comment>
   </data>
   <data name="error_updating_device_name" xml:space="preserve">
     <value>更新裝置名稱時發生錯誤。</value>
@@ -2214,9 +2234,17 @@
     <value>沒有被屏蔽的位置</value>
     <comment>Call to action</comment>
   </data>
+  <data name="no_compatible_wallet_app_found" xml:space="preserve">
+    <value>此裝置上找不到相容的錢包應用程式。</value>
+    <comment>Add sign-in method sheet (android): no installed wallet app can sign the challenge.</comment>
+  </data>
   <data name="no_email_phone_or_password_needed_your" xml:space="preserve">
     <value>無需電郵、電話或密碼。你的帳戶由助記詞保護。</value>
     <comment>A description of the benefits of creating an Instant Account.</comment>
+  </data>
+  <data name="no_ethos_wallet_found" xml:space="preserve">
+    <value>找不到 EthOs 錢包</value>
+    <comment>Sign-in screen (android, ethOS build): no ethOS system wallet is available.</comment>
   </data>
   <data name="no_installed_apps_found" xml:space="preserve">
     <value>找不到已安裝的應用程式。（Store 應用程式不會列出。）</value>
@@ -3199,6 +3227,10 @@
     <value>國家乘數</value>
     <comment>Reliability: country multipliers heading</comment>
   </data>
+  <data name="site_app_email" xml:space="preserve">
+    <value>電郵</value>
+    <comment>App profile: email label</comment>
+  </data>
   <data name="site_app_fixed_ip" xml:space="preserve">
     <value>固定 IP</value>
     <comment>Connect drawer: fixed-IP toggle</comment>
@@ -4053,6 +4085,10 @@
   <data name="your_email" xml:space="preserve">
     <value>你的電郵</value>
     <comment>Label for the empty text field.</comment>
+  </data>
+  <data name="your_email_com" xml:space="preserve">
+    <value>name@email.com</value>
+    <comment>Placeholder text for the email field.</comment>
   </data>
   <data name="your_friend_gets_30_gib_month_for_life" xml:space="preserve">
     <value>你的朋友每月獲得30 GiB，永久有效</value>

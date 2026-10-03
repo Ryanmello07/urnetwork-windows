@@ -836,6 +836,10 @@
     <value>Saga Genesisまたはシーカー事前予約トークンでウォレットを接続する</value>
     <comment>Call to action</comment>
   </data>
+  <data name="connect_solana_wallet_to_add_sign_in_method" xml:space="preserve">
+    <value>Solana ウォレットを接続して、サインイン方法として追加します。</value>
+    <comment>Add sign-in method sheet (android): the wallet option's explanation.</comment>
+  </data>
   <data name="connect_to_location" xml:space="preserve">
     <value>{}に接続</value>
     <comment>Call to action</comment>
@@ -935,6 +939,10 @@
   <data name="copy_to_clipboard" xml:space="preserve">
     <value>クリップボードにコピー</value>
     <comment>Button text to copy the seedphrase to the clipboard.</comment>
+  </data>
+  <data name="could_not_get_google_id_token" xml:space="preserve">
+    <value>Google ID トークンを取得できませんでした</value>
+    <comment>Add sign-in method sheet (android): Google sign-in returned no identity token.</comment>
   </data>
   <data name="couldnt_open_wallet" xml:space="preserve">
     <value>ウォレットを開けませんでした。インストールしてからもう一度お試しください。</value>
@@ -1379,6 +1387,10 @@
     <value>申し訳ありません。乗数の受け取り中にエラーが発生しました：{}</value>
     <comment>Snackbar shown when claiming the earnings multiplier fails, with the underlying error message. Used in Main/Account/Settings/SettingsView.swift.</comment>
   </data>
+  <data name="error_connecting_to_wallet" xml:space="preserve">
+    <value>ウォレットへの接続エラー</value>
+    <comment>Add sign-in method sheet (android): the wallet app could not be reached or did not sign.</comment>
+  </data>
   <data name="error_connecting_wallet" xml:space="preserve">
     <value>ウォレットの接続中にエラーが発生しました。</value>
     <comment>Snackbar shown when connecting a wallet fails. Used in Main/Account/Wallets/WalletsView.swift.</comment>
@@ -1399,6 +1411,10 @@
     <value>アカウントプランの読み込み中にエラーが発生しました。</value>
     <comment>Call to action</comment>
   </data>
+  <data name="error_logging_in_please_try_again" xml:space="preserve">
+    <value>ログイン中にエラーが発生しました。もう一度お試しください。</value>
+    <comment>Sign-in screen (android): a Google or wallet sign-in failed.</comment>
+  </data>
   <data name="error_redeeming_transfer_balance_code" xml:space="preserve">
     <value>転送残高コードの引き換え時にエラーが発生しました。</value>
     <comment>Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.</comment>
@@ -1418,6 +1434,10 @@
   <data name="error_setting_default_wallet_with_reason" xml:space="preserve">
     <value>デフォルトウォレットの設定中にエラーが発生しました：{}</value>
     <comment>Snackbar shown when setting the default payout wallet fails, with the underlying error message. Used in Main/Account/Wallet/WalletView.swift.</comment>
+  </data>
+  <data name="error_signing_in_with_google" xml:space="preserve">
+    <value>Google でのサインイン中にエラーが発生しました</value>
+    <comment>Add sign-in method sheet (android): Google sign-in failed or was cancelled.</comment>
   </data>
   <data name="error_updating_device_name" xml:space="preserve">
     <value>デバイス名の更新中にエラーが発生しました。</value>
@@ -2211,9 +2231,17 @@
     <value>ブロックされた場所はありません</value>
     <comment>Call to action</comment>
   </data>
+  <data name="no_compatible_wallet_app_found" xml:space="preserve">
+    <value>このデバイスに対応するウォレットアプリが見つかりません。</value>
+    <comment>Add sign-in method sheet (android): no installed wallet app can sign the challenge.</comment>
+  </data>
   <data name="no_email_phone_or_password_needed_your" xml:space="preserve">
     <value>メールアドレスも電話番号もパスワードも不要です。アカウントはシードフレーズで保護されます。</value>
     <comment>A description of the benefits of creating an Instant Account.</comment>
+  </data>
+  <data name="no_ethos_wallet_found" xml:space="preserve">
+    <value>EthOs ウォレットが見つかりません</value>
+    <comment>Sign-in screen (android, ethOS build): no ethOS system wallet is available.</comment>
   </data>
   <data name="no_installed_apps_found" xml:space="preserve">
     <value>インストール済みのアプリが見つかりません。(Store アプリは一覧に表示されません。)</value>
@@ -3196,6 +3224,10 @@
     <value>国別倍率</value>
     <comment>Reliability: country multipliers heading</comment>
   </data>
+  <data name="site_app_email" xml:space="preserve">
+    <value>メール</value>
+    <comment>App profile: email label</comment>
+  </data>
   <data name="site_app_fixed_ip" xml:space="preserve">
     <value>固定IP</value>
     <comment>Connect drawer: fixed-IP toggle</comment>
@@ -4050,6 +4082,10 @@
   <data name="your_email" xml:space="preserve">
     <value>メールアドレス</value>
     <comment>Label for the empty text field.</comment>
+  </data>
+  <data name="your_email_com" xml:space="preserve">
+    <value>name@email.com</value>
+    <comment>Placeholder text for the email field.</comment>
   </data>
   <data name="your_friend_gets_30_gib_month_for_life" xml:space="preserve">
     <value>友達は30 GiB/月を一生獲得</value>
