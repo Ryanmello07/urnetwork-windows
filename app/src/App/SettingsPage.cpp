@@ -106,15 +106,6 @@ hstring Missing(std::string_view key, const wchar_t* english) {
   return hstring{value};
 }
 
-void OpenUrl(std::wstring_view url) {
-  try {
-    winrt::Windows::System::Launcher::LaunchUriAsync(
-        winrt::Windows::Foundation::Uri(hstring{url}));
-  } catch (...) {
-    LogWarn("settings: could not open {}", urnw::Narrow(url));
-  }
-}
-
 }  // namespace
 
 SettingsPage::SettingsPage(winrt::URnetwork::implementation::MainWindow& window)
@@ -1150,7 +1141,7 @@ winrt::fire_and_forget SettingsPage::OpenCustomerPortal() {
           auto& page = window->settings();
           page.manageSubscription_.IsEnabled(true);
           if (!url.empty()) {
-            OpenUrl(urnw::Widen(url));
+            page.LaunchCustomerPortal(url);
             return;
           }
           page.settingsSnackbar().Show(
@@ -1159,6 +1150,25 @@ winrt::fire_and_forget SettingsPage::OpenCustomerPortal() {
         });
       });
   co_return;
+}
+
+winrt::fire_and_forget SettingsPage::LaunchCustomerPortal(std::string url) {
+  auto self = w_.get_strong();  // keep the window alive across the launch
+  // Await the launcher's verdict: a fire-and-forget launch that failed looked
+  // exactly like a portal that opened (UPGRADE.md D5).
+  bool launched = false;
+  try {
+    launched = co_await winrt::Windows::System::Launcher::LaunchUriAsync(
+        winrt::Windows::Foundation::Uri(winrt::to_hstring(url)));
+  } catch (winrt::hresult_error const& e) {
+    LogWarn("settings: customer portal launch failed: {}", urnw::Narrow(std::wstring{e.message()}));
+    launched = false;
+  } catch (...) {
+    launched = false;
+  }
+  if (launched) co_return;
+  LogWarn("settings: the customer portal did not open");
+  snackbar_.Show(Loc("site_billing_portal_error"), InfoBarSeverity::Error);
 }
 
 winrt::fire_and_forget SettingsPage::SaveLogsToFile() {

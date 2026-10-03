@@ -145,6 +145,9 @@ class SettingsPage {
   // to Cancel, commits only on the explicit destructive button.
   winrt::fire_and_forget ConfirmUninstallService();
   winrt::fire_and_forget OpenCustomerPortal();
+  // Open the portal url in the browser, observing the launch: a failure shows
+  // site_billing_portal_error instead of looking like a portal that opened.
+  winrt::fire_and_forget LaunchCustomerPortal(std::string url);
   winrt::fire_and_forget SaveLogsToFile();
   // Attaches the SDK log directory to an ALREADY-ACCEPTED feedback report,
   // using the server's own feedback id. Only OnSendFeedback calls it, and only
