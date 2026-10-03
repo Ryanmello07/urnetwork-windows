@@ -614,6 +614,10 @@
     <value>Этот код баланса уже активирован. Если вы активировали его ранее, данные уже зачислены на ваш баланс.</value>
     <comment>Redeem balance code: the server answered that this code was already redeemed. Distinct from invalid -- the user may have redeemed it on an earlier attempt that looked like a failure.</comment>
   </data>
+  <data name="balance_code_data_added" xml:space="preserve">
+    <value>На ваш баланс добавлено {} данных.</value>
+    <comment>Redeem balance code: confirmation of the data a redeemed code added to the network's balance (amount is a formatted byte count, e.g. "5.00 GiB"). A balance code is data only: never a plan or Pro upgrade.</comment>
+  </data>
   <data name="balance_code_invalid_message" xml:space="preserve">
     <value>Этот код баланса недействителен. Проверьте код и попробуйте снова.</value>
     <comment>Redeem balance code: the server answered and rejected the code as unknown/invalid. Distinct from a transport failure, which must never be reported as a bad code.</comment>

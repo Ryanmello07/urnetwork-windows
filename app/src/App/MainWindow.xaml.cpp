@@ -1800,15 +1800,13 @@ winrt::fire_and_forget MainWindow::ShowRedeemSheet() {
   try {
     auto weak = get_weak();
     self->redeemSheet_ = urnw::RedeemCodeSheet::Create(
-        Content().XamlRoot(), Sdk(), [weak](bool credited) {
-          // redeemed: poll the balance up (macOS starts the confirmation poll);
-          // already redeemed by this network: the data is there, read it once.
-          // Either way refresh the redeemed-codes list.
-          if (credited) {
-            urnw::App().balance().StartConfirmationPolling();
-          } else {
-            urnw::App().balance().Refresh();
-          }
+        Content().XamlRoot(), Sdk(), [weak](bool /*credited*/) {
+          // Redeemed now or earlier, the code's data is on the balance: read it
+          // once and refresh the redeemed-codes list. A balance code is data
+          // only (the server grants it with pro = false), so never the Pro
+          // confirmation poll: it waits for a plan a code never grants, spins
+          // the plan ring and holds back the balance notice for 2 minutes.
+          urnw::App().balance().Refresh();
           if (auto self = weak.get()) self->account().LoadBalanceCodes();
         });
     co_await self->redeemSheet_->Dialog().ShowAsync();

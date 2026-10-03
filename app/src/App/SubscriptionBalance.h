@@ -132,8 +132,8 @@ class SubscriptionBalanceStore {
   // on the UI thread (AppController marshals it via OnUi).
   void OnJwtRefreshed();
 
-  // After a checkout was handed to the browser (or a balance code redeemed):
-  // poll every 5 seconds until the server confirms, giving up after 2 minutes
+  // After a checkout was handed to the browser: poll every 5 seconds until the
+  // server confirms Pro, giving up after 2 minutes
   // of ACTIVE polling. The budget pauses with the poll (SetVisible), so a slow
   // browser checkout can never burn it down to a false TimedOut.
   void StartConfirmationPolling();

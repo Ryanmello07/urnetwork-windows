@@ -51,10 +51,11 @@ void PairTermsLabel(winrt::Microsoft::UI::Xaml::Controls::CheckBox const& box,
 // ---- Redeem balance code ----------------------------------------------------
 // 26-character code entry (urnet::isBalanceCodeFormatValid) with inline
 // validation, a where-to-get-codes note, and a success state. The answer comes
-// from the SDK's classification (BalanceCodeRedeem.h). onRedeemed(credited)
-// fires when this call credited the code (the owner starts the confirmation
-// poll) or when the network already had it (credited=false: the owner
-// refreshes the balance); either way it refreshes the redeemed-codes list.
+// from the SDK's classification (BalanceCodeRedeem.h). The success state is
+// the data the code added (a code is data only, never a plan). onRedeemed
+// fires when this call credited the code (credited=true) or when the network
+// already had it (credited=false); either way the owner reads the balance once
+// and refreshes the redeemed-codes list.
 class RedeemCodeSheet : public std::enable_shared_from_this<RedeemCodeSheet> {
  public:
   static std::shared_ptr<RedeemCodeSheet> Create(
