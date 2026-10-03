@@ -605,7 +605,9 @@ void WalletPage::ApplyStrings() {
 
   // pane C
   w_.EarningMultipliersHeading().Text(Loc("earning_multipliers"));
-  w_.SeekerPointsOnlyText().Text(Loc("seeker_points_only"));
+  // points AND the free daily and referral data grants (server pro.yml
+  // seeker.data_multiplier, subsidy seeker_holder_multiplier); never Pro
+  w_.SeekerBenefitText().Text(Loc("seeker_multiplier_benefit"));
   w_.VerifySeekerButton().Content(LocBox("verify_seeker"));
   w_.NetworkReliabilityHeading().Text(Loc("site_app_network_reliability"));
   w_.WalletProvideModeLabel().Text(Loc("provide_mode"));
@@ -2164,7 +2166,7 @@ void WalletPage::ApplyReliability(std::optional<urnet::ReliabilityWindow> window
   }
 }
 
-// ---- the Seeker multiplier (points only) ------------------------------------
+// ---- the Seeker multiplier ---------------------------------------------------
 
 void WalletPage::ApplySeekerState() {
   if (seekerHolder_) {
@@ -2184,8 +2186,8 @@ void WalletPage::ApplySeekerState() {
 // Claim the 2x multiplier by proving a Solana wallet holds the Seeker token
 // (android SettingsScreen.signAndVerifySeekerHolder). The wallet signs a
 // timestamped challenge through the ur.io/wallet-connect browser bridge and
-// the signed triple goes to Api.verifySeekerHolder. Points only: the Seeker
-// wallet has no bearing on SN25a, which settles on the Bittensor coldkey.
+// the signed triple goes to Api.verifySeekerHolder. The Seeker wallet has no
+// bearing on SN25a, which settles on the Bittensor coldkey.
 winrt::fire_and_forget WalletPage::OnVerifySeeker(IInspectable const&, RoutedEventArgs const&) {
   if (w_.sheetOpen() || verifyingSeeker_) co_return;
   // Before the wallet picker, not after: with no session this ends in
