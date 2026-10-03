@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MPL-2.0
+#
+# Windows driver for MAIN's insufficient-balance case. The runner
+# (tests/runner/balance/main.go) invokes `<this> <verb> [arg]` and reads one
+# JSON object from stdout; the protocol is in tests/runner/RUN-MAIN.md
+# ("Driver protocol"). The driver itself is tests/insufficientbalance: it boots
+# the isolated Windows VM through build/all/windows/lib.sh, installs the MSI
+# that test-main.sh built, and drives the app by UI Automation.
+#
+# The program is built (not `go run`) so a failing verb's last stderr line is
+# the driver's own redacted message rather than go's "exit status 1".
+set -euo pipefail
+
+here="$(cd "$(dirname "$0")" && pwd)"
+state="${URNETWORK_INSUFFICIENT_BALANCE_STATE:-}"
+case "$state" in
+  /*) ;;
+  *) echo "URNETWORK_INSUFFICIENT_BALANCE_STATE must be an absolute path" >&2; exit 2 ;;
+esac
+export URNETWORK_ROOT="${URNETWORK_ROOT:-$(dirname "$here")}"
+# this checkout, for the guest scripts and the default MSI output directory
+export URNETWORK_IB_WINDOWS_DIR="$here"
+mkdir -p "$state/bin"
+chmod 700 "$state" "$state/bin"
+go -C "$here" build -trimpath -o "$state/bin/driver" ./tests/insufficientbalance
+exec "$state/bin/driver" "$@"

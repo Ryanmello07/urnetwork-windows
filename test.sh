@@ -25,6 +25,8 @@ if ! "$network_test_gate" --verify-held run-all; then
 fi
 
 (cd "$here" && go test "$@" ./tests)
+# the insufficient-balance acceptance driver (test-insufficient-balance-driver)
+(cd "$here" && go test "$@" ./tests/insufficientbalance)
 (cd "$root/build/all/windows" && go test "$@" ./...)
 
 # License drift: the Go modules and vendored libraries (sdk/licenses/extra.yml)
