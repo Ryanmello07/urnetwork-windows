@@ -972,6 +972,7 @@ winrt::fire_and_forget LoginPage::OnUseCode(IInspectable const&, RoutedEventArgs
   if (code.empty()) co_return;
 
   SetWalletSignInEnabled(false);
+  walletSignInInFlight_ = true;
   auto queue = self->DispatcherQueue();
   auto weak = self->get_weak();
   Sdk().LoginWithCode(code, [queue, weak](urnw::AuthResult r) {
@@ -979,6 +980,7 @@ winrt::fire_and_forget LoginPage::OnUseCode(IInspectable const&, RoutedEventArgs
       auto self = weak.get();
       if (!self) return;
       auto& page = self->login();
+      page.walletSignInInFlight_ = false;
       page.SetWalletSignInEnabled(true);
       if (!r.ok && !r.error.empty()) {
         page.ShowLoginErrorFor(LoginStep::Initial, H(r.error));
@@ -1026,6 +1028,7 @@ winrt::fire_and_forget LoginPage::ShowGuestModeSheet() {
 void LoginPage::OnSignInWithBittensor(IInspectable const&, RoutedEventArgs const&) {
   SetInitialLoginError(hstring());
   SetWalletSignInEnabled(false);
+  walletSignInInFlight_ = true;
   auto queue = w_.DispatcherQueue();
   auto weak = w_.get_weak();
   Sdk().SignInWithBittensor([queue, weak](urnw::AuthResult r) {
@@ -1071,6 +1074,7 @@ winrt::fire_and_forget LoginPage::OnSignInWithSolana(IInspectable const&,
                             ? urnw::WalletConnect::Provider::Solflare
                             : urnw::WalletConnect::Provider::Phantom;
   SetWalletSignInEnabled(false);
+  walletSignInInFlight_ = true;
   auto queue = self->DispatcherQueue();
   auto weak = self->get_weak();
   Sdk().SignInWithSolana(provider, [queue, weak](urnw::AuthResult r) {
@@ -1101,6 +1105,7 @@ void LoginPage::SetWalletSignInEnabled(bool enabled) {
 }
 
 void LoginPage::ApplyWalletSignInResult(urnw::AuthResult const& result) {
+  walletSignInInFlight_ = false;
   SetWalletSignInEnabled(true);
   // the wallet authenticated but has no network yet: finish sign-up with a
   // network name + terms; the retained wallet auth is the credential
@@ -1119,6 +1124,21 @@ void LoginPage::ApplyWalletSignInResult(urnw::AuthResult const& result) {
   ShowLoginErrorFor(LoginStep::Initial, H(result.error));
 }
 
+// The SSO / wallet browser flows re-enable the affordances only from their
+// deep-link callback, and a browser the user closed sends nothing - until the
+// app restarted, the buttons then stayed grey. Coming back to the window is
+// the flow being over from the user's side: re-enable the affordances, but
+// leave the SDK attempt ARMED. A late completion still lands (on_sso matches
+// the attempt's state and nonce) and a fresh click supersedes the attempt
+// through the SDK's answer semantics; there is no reliable "browser closed"
+// signal, so canceling here would only risk killing a flow still legitimately
+// open in another tab.
+void LoginPage::OnWindowReactivated() {
+  if (!walletSignInInFlight_) return;
+  walletSignInInFlight_ = false;
+  SetWalletSignInEnabled(true);
+}
+
 // ---- Sign in with Google / Apple (the provider's web flow) ------------------
 // Neither has a native desktop flow here, so both open the provider's own
 // sign-in page in the default browser with the api's callback as the redirect;
@@ -1131,6 +1151,7 @@ void LoginPage::ApplyWalletSignInResult(urnw::AuthResult const& result) {
 void LoginPage::StartSsoSignIn(const char* provider) {
   SetInitialLoginError(hstring());
   SetWalletSignInEnabled(false);
+  walletSignInInFlight_ = true;
   auto queue = w_.DispatcherQueue();
   auto weak = w_.get_weak();
   Sdk().SignInWithSso(provider, [queue, weak](urnw::AuthResult r) {

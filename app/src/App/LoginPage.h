@@ -51,6 +51,14 @@ class LoginPage {
   // nobody can see is pure wakeups (iOS gates the same timer on
   // presentationActive).
   void SetPresentationActive(bool active);
+  // Coming back to the window ends a browser sign-in flow from the user's
+  // side, but the SSO / wallet flows answer ONLY through the deep-link
+  // callback and a closed browser sends nothing - without this the affordances
+  // they disabled stayed grey until the app restarted. The SDK attempt is NOT
+  // cancelled here: a late completion still lands (SdkHost's on_sso matches
+  // the attempt), and a fresh click supersedes it through the SDK's answer
+  // semantics, so there is nothing to undo.
+  void OnWindowReactivated();
   // --preview-ui=seedphrase (Startup.h). Raise the seedphrase display sheet on
   // the BIP-39 test vector so its word grid, its refusal to be dismissed and
   // its copy button can be looked at without creating a real account — the
@@ -213,6 +221,12 @@ class LoginPage {
   bool newNetworkPending_ = false;  // see ConsumeNewNetwork
   bool verifyIsNewNetwork_ = false;  // the verify step follows a sign-up
   bool sendingReset_ = false;
+  // Every SetWalletSignInEnabled(false) call arms this: those attempts (the
+  // SSO / wallet browser round trips, the auth code) re-enable the affordances
+  // only from their SDK callback, and a browser the user closed never delivers
+  // one. OnWindowReactivated is the re-enable of last resort for exactly this
+  // state, so no other path may set it.
+  bool walletSignInInFlight_ = false;
   // create-network name availability (debounced; the generation drops stale checks)
   winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer nameCheckTimer_{nullptr};
   uint32_t nameCheckGeneration_ = 0;

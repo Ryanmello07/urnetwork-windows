@@ -275,13 +275,20 @@ MainWindow::MainWindow() {
   // The banner heals itself: coming back to the window (from the UAC prompt,
   // from an elevated terminal where the service was just installed by hand,
   // from anywhere) re-reads the SCM instead of trusting a stale classification.
+  // The same re-activation reading heals the sign-in panel: an SSO / wallet
+  // browser flow that never answered (the user closed the browser) left its
+  // buttons disabled forever, so the login page re-enables them here - the
+  // armed attempt is left alone, a late completion still lands.
   Activated([weak = get_weak()](auto const&,
                                 Microsoft::UI::Xaml::WindowActivatedEventArgs const& args) {
     if (args.WindowActivationState() ==
         Microsoft::UI::Xaml::WindowActivationState::Deactivated) {
       return;
     }
-    if (auto self = weak.get()) self->RefreshServiceSetup();
+    if (auto self = weak.get()) {
+      self->RefreshServiceSetup();
+      self->login_->OnWindowReactivated();
+    }
   });
   RefreshServiceSetup();  // the first reading; the ctor must not block on SCM
 
