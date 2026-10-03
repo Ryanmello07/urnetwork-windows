@@ -4694,6 +4694,10 @@
     <value>ينطبق مضاعف Seeker على النقاط فقط.</value>
     <comment>Note on the Seeker verification action.</comment>
   </data>
+  <data name="seeker_token_not_found" xml:space="preserve">
+    <value>لم يُعثر على رمز Seeker أو Saga في المحفظة …{}</value>
+    <comment>Seeker token verification: the wallet holds no Seeker or Saga token. The argument is the end of the wallet address.</comment>
+  </data>
   <data name="seeker_token_verified" xml:space="preserve">
     <value>تم التحقق من رمز Seeker!</value>
     <comment>Call to action</comment>

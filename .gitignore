@@ -9,3 +9,7 @@
 
 # Local main-acceptance diagnostics may contain account and service state.
 tests/__acceptance__/
+
+# patch(1) leftovers
+*.orig
+*.rej

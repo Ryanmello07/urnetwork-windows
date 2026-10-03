@@ -3179,6 +3179,10 @@ kontent světa</value>
     <value>To je {} slov — seed fráze má 12 nebo 24 slov</value>
     <comment>Login: warning when the pasted seedphrase has {count} words instead of 12 or 24.</comment>
   </data>
+  <data name="seeker_token_not_found" xml:space="preserve">
+    <value>V peněžence …{} nebyl nalezen žádný token Seeker ani Saga</value>
+    <comment>Seeker token verification: the wallet holds no Seeker or Saga token. The argument is the end of the wallet address.</comment>
+  </data>
   <data name="seeker_token_verified" xml:space="preserve">
     <value>Token Seeker ověřen!</value>
     <comment>Call to action</comment>

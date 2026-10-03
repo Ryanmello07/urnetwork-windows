@@ -3001,6 +3001,10 @@
     <value>這是 {} 個詞 — 助記詞應為 12 或 24 個詞</value>
     <comment>Login: warning when the pasted seedphrase has {count} words instead of 12 or 24.</comment>
   </data>
+  <data name="seeker_token_not_found" xml:space="preserve">
+    <value>在錢包 …{} 中找不到 Seeker 或 Saga 代幣</value>
+    <comment>Seeker token verification: the wallet holds no Seeker or Saga token. The argument is the end of the wallet address.</comment>
+  </data>
   <data name="seeker_token_verified" xml:space="preserve">
     <value>Seeker 權杖已驗證！</value>
     <comment>Call to action</comment>

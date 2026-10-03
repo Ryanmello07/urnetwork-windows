@@ -4375,6 +4375,10 @@ del mundo</value>
     <value>El multiplicador de Seeker solo se aplica a los puntos.</value>
     <comment>Note on the Seeker verification action.</comment>
   </data>
+  <data name="seeker_token_not_found" xml:space="preserve">
+    <value>No se encontró ningún token Seeker o Saga en la billetera …{}</value>
+    <comment>Seeker token verification: the wallet holds no Seeker or Saga token. The argument is the end of the wallet address.</comment>
+  </data>
   <data name="seeker_token_verified" xml:space="preserve">
     <value>¡Token Seeker verificado!</value>
     <comment>Call to action</comment>

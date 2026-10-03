@@ -4535,6 +4535,10 @@
     <value>Множитель Seeker применяется только к очкам.</value>
     <comment>Note on the Seeker verification action.</comment>
   </data>
+  <data name="seeker_token_not_found" xml:space="preserve">
+    <value>В кошельке …{} не найден токен Seeker или Saga</value>
+    <comment>Seeker token verification: the wallet holds no Seeker or Saga token. The argument is the end of the wallet address.</comment>
+  </data>
   <data name="seeker_token_verified" xml:space="preserve">
     <value>Токен Seeker проверен!</value>
     <comment>Call to action</comment>
