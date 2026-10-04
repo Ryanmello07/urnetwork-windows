@@ -1961,7 +1961,11 @@ enviamos para verificar tu identidad.</value>
     <value>Disponible hasta el {}</value>
     <comment>Onboarding offer screen: the static deadline sentence; the placeholder is a local date and time.</comment>
   </data>
-  <data name="offer_cta_start_trial_months_free" xml:space="preserve">
+  <data name="offer_cta_start_trial_months_free.one" xml:space="preserve">
+    <value>Empezar la prueba gratis con {} mes gratis</value>
+    <comment>Onboarding offer screen: the single primary button. The number is the months the discount equals.</comment>
+  </data>
+  <data name="offer_cta_start_trial_months_free.other" xml:space="preserve">
     <value>Empezar la prueba gratis con {} meses gratis</value>
     <comment>Onboarding offer screen: the single primary button. The number is the months the discount equals.</comment>
   </data>
@@ -1969,7 +1973,11 @@ enviamos para verificar tu identidad.</value>
     <value>{} tu primer año</value>
     <comment>Plan card with the welcome offer: the billed first-year amount (most prominent line).</comment>
   </data>
-  <data name="offer_months_free_headline" xml:space="preserve">
+  <data name="offer_months_free_headline.one" xml:space="preserve">
+    <value>{} mes de Pro, gratis</value>
+    <comment>Onboarding offer screen headline. The number is the months the discount equals.</comment>
+  </data>
+  <data name="offer_months_free_headline.other" xml:space="preserve">
     <value>{} meses de Pro, gratis</value>
     <comment>Onboarding offer screen headline. The number is the months the discount equals.</comment>
   </data>
@@ -1977,7 +1985,11 @@ enviamos para verificar tu identidad.</value>
     <value>{}% de descuento en tu primer año</value>
     <comment>Onboarding offer screen sub-line under the headline. The number is the percent off the first year.</comment>
   </data>
-  <data name="offer_terms_first_year" xml:space="preserve">
+  <data name="offer_terms_first_year.one" xml:space="preserve">
+    <value>{0} día gratis, después {1} tu primer año, después {2}/año. Cancela cuando quieras.</value>
+    <comment>Plan picker with the welcome offer: the terms line under the button (trial, discounted first year, renewal price).</comment>
+  </data>
+  <data name="offer_terms_first_year.other" xml:space="preserve">
     <value>{0} días gratis, después {1} tu primer año, después {2}/año. Cancela cuando quieras.</value>
     <comment>Plan picker with the welcome offer: the terms line under the button (trial, discounted first year, renewal price).</comment>
   </data>
@@ -2150,7 +2162,11 @@ más grande, seguro y descentralizado del mundo.</value>
     <value>Ahorra {}%</value>
     <comment>Plan picker: the saving badge on the yearly card; the number is the whole percent saved against twelve monthly payments.</comment>
   </data>
-  <data name="plan_terms_yearly" xml:space="preserve">
+  <data name="plan_terms_yearly.one" xml:space="preserve">
+    <value>{0} día gratis, después {1}/año. Cancela cuando quieras.</value>
+    <comment>Plan picker: the terms line under the button for the yearly plan with its trial.</comment>
+  </data>
+  <data name="plan_terms_yearly.other" xml:space="preserve">
     <value>{0} días gratis, después {1}/año. Cancela cuando quieras.</value>
     <comment>Plan picker: the terms line under the button for the yearly plan with its trial.</comment>
   </data>
@@ -2257,9 +2273,6 @@ más grande, seguro y descentralizado del mundo.</value>
   <data name="provider_count.other" xml:space="preserve">
     <value>{} proveedores</value>
     <comment>A label that shows the number of providers for a location. The argument is the number of providers.</comment>
-  </data>
-  <data name="provider_count_int" xml:space="preserve">
-    <value>{} proveedores</value>
   </data>
   <data name="provider_identities" xml:space="preserve">
     <value>Identidades de proveedores</value>
@@ -3664,10 +3677,10 @@ como debería ser.</value>
     <value>Recibes 3 GiB/día de por vida</value>
     <comment>Text displayed in a scrollable view within a VStack in the body of a view that is displayed when the user is viewing their referral code.</comment>
   </data>
-  <data name="you_have_1_other_device_online" xml:space="preserve">
-    <value>Tienes 1 dispositivo más en línea</value>
+  <data name="you_have_n_other_devices_online.one" xml:space="preserve">
+    <value>Tienes {} dispositivo más en línea</value>
   </data>
-  <data name="you_have_n_other_devices_online" xml:space="preserve">
+  <data name="you_have_n_other_devices_online.other" xml:space="preserve">
     <value>Tienes {} dispositivos más en línea</value>
   </data>
   <data name="you_ll_unlock_even_faster_speeds_and_first_dibs" xml:space="preserve">

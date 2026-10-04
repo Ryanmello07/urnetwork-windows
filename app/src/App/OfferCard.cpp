@@ -194,7 +194,8 @@ void OfferLines::Update(const OfferView& offer, const PriceTierView& tier, int64
   deadline_.Text(deadline);
   deadline_.Visibility(deadline.empty() ? Visibility::Collapsed : Visibility::Visible);
   if (chargeLine_) chargeLine_.Text(hstring{Format("offer_timeline_first_charge", first)});
-  terms_.Text(hstring{Format("offer_terms_first_year", trialDays, first, regular)});
+  // the trial length selects the plural form ("1 day", "14 days")
+  terms_.Text(hstring{PluralFormat("offer_terms_first_year", trialDays, trialDays, first, regular)});
 }
 
 }  // namespace urnw
