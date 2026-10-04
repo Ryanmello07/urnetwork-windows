@@ -5,8 +5,7 @@
 // compiler, with the tag and asset names build/all/run.sh actually publishes
 // and the stable urnetwork/windows releases carry.
 //
-//   c++ -std=c++20 -I ../src/Common -I ../src/App update-release-tests.cpp \
-//       -o /tmp/update-release-tests && /tmp/update-release-tests
+//   c++ -std=c++20 -I ../src/Common -I ../src/App update-release-tests.cpp -o /tmp/update-release-tests && /tmp/update-release-tests
 //
 // SPDX-License-Identifier: MPL-2.0
 

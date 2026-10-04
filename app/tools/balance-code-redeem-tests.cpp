@@ -5,8 +5,7 @@
 // after a lost-but-credited response must read "already redeemed", never
 // "invalid" (UPGRADE.md D2).
 //
-//   c++ -std=c++20 -I ../src/App balance-code-redeem-tests.cpp \
-//       -o /tmp/balance-code-redeem-tests && /tmp/balance-code-redeem-tests
+//   c++ -std=c++20 -I ../src/App balance-code-redeem-tests.cpp -o /tmp/balance-code-redeem-tests && /tmp/balance-code-redeem-tests
 //
 // SPDX-License-Identifier: MPL-2.0
 

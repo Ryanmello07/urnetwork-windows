@@ -4,8 +4,7 @@
 // or ChangeServiceConfig2W refuses the write and the self-restart never arms.
 // Runs against the SAME header the service compiles, on any C++20 host.
 //
-//   c++ -std=c++20 -I ../src/Service install-verb-tests.cpp \
-//       -o /tmp/install-verb-tests && /tmp/install-verb-tests
+//   c++ -std=c++20 -I ../src/Service install-verb-tests.cpp -o /tmp/install-verb-tests && /tmp/install-verb-tests
 //
 // SPDX-License-Identifier: MPL-2.0
 

@@ -11,8 +11,7 @@
 // fetch never blocks. Run against the SAME header the app compiles, on any
 // host with a C++20 compiler. No clocks: the time is an explicit input.
 //
-//   c++ -std=c++20 -I ../src/Common balance-gate-tests.cpp \
-//       -o /tmp/balance-gate-tests && /tmp/balance-gate-tests
+//   c++ -std=c++20 -I ../src/Common balance-gate-tests.cpp -o /tmp/balance-gate-tests && /tmp/balance-gate-tests
 //
 // SPDX-License-Identifier: MPL-2.0
 

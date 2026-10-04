@@ -3,8 +3,7 @@
 // Stripe subscription, never for a free network or a store subscription
 // (UPGRADE.md D7).
 //
-//   c++ -std=c++20 -I ../src/App manage-subscription-tests.cpp \
-//       -o /tmp/manage-subscription-tests && /tmp/manage-subscription-tests
+//   c++ -std=c++20 -I ../src/App manage-subscription-tests.cpp -o /tmp/manage-subscription-tests && /tmp/manage-subscription-tests
 //
 // SPDX-License-Identifier: MPL-2.0
 

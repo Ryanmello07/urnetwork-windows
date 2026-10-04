@@ -9,10 +9,7 @@
 // C++20 compiler and nlohmann/json. That is what keeps the projection math,
 // the TopoJSON stitching and the labels verified without a Windows machine.
 //
-//   c++ -std=c++20 -I ../src/App -I <dir containing nlohmann/json.hpp> \
-//       globe-tests.cpp ../src/App/GlobeGeometry.cpp \
-//       ../src/App/WorldTopology.cpp ../src/App/ProviderLocations.cpp \
-//       -o /tmp/globe-tests && /tmp/globe-tests
+//   c++ -std=c++20 -I ../src/App -I <dir containing nlohmann/json.hpp> globe-tests.cpp ../src/App/GlobeGeometry.cpp ../src/App/WorldTopology.cpp ../src/App/ProviderLocations.cpp -o /tmp/globe-tests && /tmp/globe-tests
 //
 // SPDX-License-Identifier: MPL-2.0
 

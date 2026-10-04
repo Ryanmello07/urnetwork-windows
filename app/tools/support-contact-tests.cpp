@@ -4,8 +4,7 @@
 // links the address with mailto - run against the SAME header the app
 // compiles, on any host with a C++20 compiler.
 //
-//   c++ -std=c++20 -I ../src/App support-contact-tests.cpp \
-//       -o /tmp/support-contact-tests && /tmp/support-contact-tests
+//   c++ -std=c++20 -I ../src/App support-contact-tests.cpp -o /tmp/support-contact-tests && /tmp/support-contact-tests
 //
 // SPDX-License-Identifier: MPL-2.0
 

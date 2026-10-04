@@ -3,8 +3,7 @@
 // sdk transport, which hand-backs a flow ignores, which manual errors keep
 // the form open, and the localized text for each sdk refusal code.
 //
-//   c++ -std=c++20 -I ../src/App bittensor-wallet-tests.cpp \
-//       -o /tmp/bittensor-wallet-tests && /tmp/bittensor-wallet-tests
+//   c++ -std=c++20 -I ../src/App bittensor-wallet-tests.cpp -o /tmp/bittensor-wallet-tests && /tmp/bittensor-wallet-tests
 //
 // SPDX-License-Identifier: MPL-2.0
 
