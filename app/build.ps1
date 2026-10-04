@@ -112,8 +112,30 @@ Remove-Item (Join-Path $OutDir "*.msi") -Force -ErrorAction SilentlyContinue
 # 1. Fetch wintun (pinned) + unzip the SDK + build the per-arch import libs.
 & "$PSScriptRoot\tools\fetch-deps.ps1" -SdkZip $SdkZip -Platforms $Platforms
 
-# 2. Set the version into the app + installer (single source of truth).
+# 2. Set the version into the app + installer. tools\UrVersion.ps1 is the one
+#    derivation (CI calls it too): from $Version, <YYYY.M.D>-<code> as run.sh
+#    passes it, it returns every Ur* property the projects read and the
+#    arguments that carry them. A malformed version, or a code more than 24 h
+#    ahead of this clock, stops the build here.
+#    0.0.0-0 is the version local builds pass: build.sh, test-main.sh and
+#    urnetwork/build's local Windows build. It is not a release version, so it
+#    builds unstamped, as every build did before: the projects' defaults make
+#    it 0.0.0-dev, code 0, which the update checker treats as "never update",
+#    in an MSI of version 0.0.1.
 #    (The SDK Version is baked into the DLL at cross-build time via -ldflags.)
+if ($Version -eq "0.0.0-0") {
+  $urMsbuildArgs = @()
+  $urWixArgs = @()
+  Write-Host "== version 0.0.0-0: an unstamped dev build (0.0.0-dev, code 0, MSI 0.0.1) =="
+} else {
+  $urVersion = & (Join-Path $PSScriptRoot "tools\UrVersion.ps1") -Version $Version
+  $urMsbuildArgs = @($urVersion.MsbuildArgs)
+  $urWixArgs = @($urVersion.WixArgs)
+  Write-Host ("== version {0}: code {1}, file version {2}.{3}.{4}.{5}, MSI {6} ==" -f
+    $urVersion.UrVersion, $urVersion.UrVersionCode, $urVersion.UrVersionMajor,
+    $urVersion.UrVersionMinor, $urVersion.UrVersionPatch, $urVersion.UrVersionBuild,
+    $urVersion.UrMsiVersion)
+}
 $env:URN_VERSION = $Version
 
 # Protocol v3 is only safe to roll out if an MSI upgrade replaces the service
@@ -145,9 +167,11 @@ foreach ($platform in $Platforms) {
     throw "NuGet (PackageReference) restore failed for $platform"
   }
 
-  # 3. Build the solution (Common, Service, App, SplitTunnel driver).
+  # 3. Build the solution (Common, Service, App, SplitTunnel driver), stamped
+  #    with the derived version (nothing for 0.0.0-0).
   & $msbuild URnetwork.sln `
     /p:Configuration=$Configuration /p:Platform=$platform `
+    @urMsbuildArgs `
     /p:Version=$Version /m /nologo /v:minimal
   if ($LASTEXITCODE -ne 0) {
     Diagnose-XamlCodegen -MsBuild $msbuild -Platform $platform -Configuration $Configuration
@@ -205,19 +229,21 @@ foreach ($platform in $Platforms) {
     # .sys/.cat replace the dev-signed ones in $bin before packaging.
   }
 
-  # 5. Build the MSI for this arch (WiX v5), staging from $bin. The driver payload
-  #    is compiled out of the package unless -IncludeDriver produced its .sys above.
+  # 5. Build the MSI for this arch (WiX v5), staging from $bin, with the
+  #    ProductVersion UrVersion.ps1 derived (the wixproj's default, 0.0.1, for
+  #    0.0.0-0). The driver payload is compiled out of the package unless
+  #    -IncludeDriver produced its .sys above.
   $wixPlatform = if ($platform -eq "ARM64") { "arm64" } else { "x64" }
   $wixArgs = @("build", "installer\Installer.wixproj", "-c", $Configuration,
-    "-p:Platform=$platform", "-p:BinDir=$bin", "-p:Version=$Version")
+    "-p:Platform=$platform", "-p:BinDir=$bin", "-p:Version=$Version") + $urWixArgs
   if ($IncludeDriver) { $wixArgs += "-p:IncludeDriver=true" }
   dotnet @wixArgs
   if ($LASTEXITCODE -ne 0) { throw "MSI build failed for $platform" }
 
-  # The shared Directory.Build.props redirects OutDir to build\<plat>\<cfg>, which
-  # also moves the WiX MSI there (next to the staged binaries), not the wixproj's
-  # default installer\bin\<plat>\<cfg>. Look in $bin first, with the default as a
-  # fallback so either layout works.
+  # The shared Directory.Build.props redirects OutDir to build\<plat>\<cfg> for
+  # the .vcxproj projects only, so the MSI lands in the wixproj's default
+  # installer\bin\<plat>\<cfg>. $bin is still looked in first, so a layout that
+  # redirects the wixproj too keeps working.
   $msi = Get-ChildItem "$bin\*.msi", "installer\bin\$platform\$Configuration\*.msi" `
     -ErrorAction SilentlyContinue | Select-Object -First 1
   if (-not $msi) { throw "MSI not produced for $platform (looked in $bin and installer\bin\$platform\$Configuration)" }

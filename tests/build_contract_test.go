@@ -845,7 +845,14 @@ func TestWindowsScriptsApplyTheSelectedArchitectureEndToEnd(t *testing.T) {
 	}
 	restore := strings.Index(appBuild, "& $msbuild URnetwork.sln /t:restore")
 	platformLoop := strings.Index(appBuild, "foreach ($platform in $Platforms)")
-	solutionBuild := strings.Index(appBuild, "/p:Version=$Version /m /nologo /v:minimal")
+	// The whole solution-compile command, not one substring of it: it must
+	// carry the version UrVersion.ps1 derived (TestReleaseBuildStampsTheVersion),
+	// where it used to pass only /p:Version, which no project reads.
+	solutionBuild := consecutiveLines(appBuild,
+		"& $msbuild URnetwork.sln `",
+		"/p:Configuration=$Configuration /p:Platform=$platform `",
+		"@urMsbuildArgs `",
+		"/p:Version=$Version /m /nologo /v:minimal")
 	if restore < 0 || platformLoop < 0 || solutionBuild < 0 || !(platformLoop < restore && restore < solutionBuild) {
 		t.Fatalf("solution compile is not scoped to selected platforms: restore=%d loop=%d build=%d", restore, platformLoop, solutionBuild)
 	}
@@ -869,6 +876,143 @@ func TestWindowsScriptsApplyTheSelectedArchitectureEndToEnd(t *testing.T) {
 	wintunHeader := strings.Index(fetchDependencies, `Copy-Item "$wintunExtract\wintun\include\wintun.h"`)
 	if wintunRoot < 0 || wintunHeader < 0 || wintunRoot >= wintunHeader {
 		t.Fatalf("Wintun root must exist before copying its header: root=%d header=%d", wintunRoot, wintunHeader)
+	}
+}
+
+// consecutiveLines returns the byte offset of the first of len(want) adjacent
+// lines whose trimmed text equals want, in order, or -1. It ignores
+// indentation and a CR before the LF, so a CRLF checkout matches as well.
+func consecutiveLines(source string, want ...string) int {
+	lines := strings.Split(source, "\n")
+	offset := 0
+	for start := range lines {
+		if start+len(want) <= len(lines) {
+			matched := true
+			for index, line := range want {
+				if strings.TrimSpace(lines[start+index]) != line {
+					matched = false
+					break
+				}
+			}
+			if matched {
+				return offset
+			}
+		}
+		offset += len(lines[start]) + 1
+	}
+	return -1
+}
+
+// urnetwork/build's release VM builds through app/build.ps1, which used to
+// pass only /p:Version, a property no project reads: every official MSI
+// shipped as ProductVersion 0.0.1 around code-0 binaries that never update.
+// build.ps1 must derive the version with tools/UrVersion.ps1 and hand every
+// value to both builds. The arrays' exact content is checked against the Go
+// oracle in ur_version_test.go; this checks that they reach both builds, that
+// the projects read them down to the VERSIONINFO fields, and that the local
+// builds' 0.0.0-0 still builds, unstamped.
+func TestReleaseBuildStampsTheVersion(t *testing.T) {
+	root := repositoryRoot(t)
+	read := func(relative string) string {
+		data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(relative)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(data)
+	}
+	appBuild := read("app/build.ps1")
+	urVersion := read("app/tools/UrVersion.ps1")
+	props := read("app/Directory.Build.props")
+	wixProject := read("app/installer/Installer.wixproj")
+
+	// The six msbuild properties and the installer's version, each built
+	// exactly once into the arrays UrVersion.ps1 returns, each read by a
+	// project.
+	for _, stamp := range []struct{ argument, reader, readerFile string }{
+		{`"/p:UrVersion=$Version"`, "UR_VERSION_RAW=$(UrVersion);", props},
+		{`"/p:UrVersionCode=$code"`, "UR_VERSION_CODE=$(UrVersionCode);", props},
+		{`"/p:UrVersionMajor=$year"`, "UR_VER_MAJOR=$(UrVersionMajor);", props},
+		{`"/p:UrVersionMinor=$month"`, "UR_VER_MINOR=$(UrVersionMinor);", props},
+		{`"/p:UrVersionPatch=$day"`, "UR_VER_PATCH=$(UrVersionPatch);", props},
+		{`"/p:UrVersionBuild=$build"`, "UR_VERSION_BUILD=$(UrVersionBuild);", props},
+		{`@("-p:UrMsiVersion=$msiVersion")`, "UrMsiVersion=$(UrMsiVersion)", wixProject},
+	} {
+		if count := strings.Count(urVersion, stamp.argument); count != 1 {
+			t.Errorf("UrVersion.ps1 builds %s %d times, want once", stamp.argument, count)
+		}
+		// ClCompile and ResourceCompile each need the definition.
+		want := 1
+		if stamp.readerFile == props {
+			want = 2
+		}
+		if count := strings.Count(stamp.readerFile, stamp.reader); count != want {
+			t.Errorf("%s appears %d times in its project file, want %d", stamp.reader, count, want)
+		}
+	}
+
+	// build.ps1 derives once, before the platform loop, from the version
+	// run.sh passes, and splats the two arrays into the two builds.
+	derive := strings.Index(appBuild, `$urVersion = & (Join-Path $PSScriptRoot "tools\UrVersion.ps1") -Version $Version`)
+	platformLoop := strings.Index(appBuild, "foreach ($platform in $Platforms)")
+	if derive < 0 || platformLoop < 0 || derive > platformLoop {
+		t.Errorf("build.ps1 must derive the version through tools/UrVersion.ps1 before building: derive=%d loop=%d", derive, platformLoop)
+	}
+	for _, required := range []string{
+		"$urMsbuildArgs = @($urVersion.MsbuildArgs)",
+		"$urWixArgs = @($urVersion.WixArgs)",
+		`"-p:Platform=$platform", "-p:BinDir=$bin", "-p:Version=$Version") + $urWixArgs`,
+		"dotnet @wixArgs",
+	} {
+		if strings.Count(appBuild, required) != 1 {
+			t.Errorf("build.ps1 must contain %q exactly once", required)
+		}
+	}
+	if consecutiveLines(appBuild, "@urMsbuildArgs `", "/p:Version=$Version /m /nologo /v:minimal") < 0 {
+		t.Error("build.ps1's solution build does not carry @urMsbuildArgs")
+	}
+
+	// 0.0.0-0 is the version build.sh, test-main.sh and urnetwork/build's local
+	// Windows build pass. It is not a release version (UrVersion.ps1 refuses
+	// it), so build.ps1 builds it unstamped, as before: its branch empties both
+	// arrays, and the arrays are the only way a Ur* property reaches a build.
+	dev := consecutiveLines(appBuild,
+		`if ($Version -eq "0.0.0-0") {`,
+		"$urMsbuildArgs = @()",
+		"$urWixArgs = @()")
+	release := consecutiveLines(appBuild,
+		"} else {",
+		`$urVersion = & (Join-Path $PSScriptRoot "tools\UrVersion.ps1") -Version $Version`)
+	if dev < 0 || release < 0 || !(dev < release && release < platformLoop) {
+		t.Errorf("build.ps1 must build 0.0.0-0 with no Ur* arguments and derive every other version: dev=%d release=%d loop=%d",
+			dev, release, platformLoop)
+	}
+	if count := strings.Count(appBuild, "p:Ur"); count != 0 {
+		t.Errorf(`build.ps1 names a Ur* property itself (%d "p:Ur"), outside the arrays a 0.0.0-0 build empties`, count)
+	}
+	for _, caller := range []struct{ name, line string }{
+		{"build.sh", `EXTERNAL_WARP_VERSION="${EXTERNAL_WARP_VERSION:-0.0.0-0}" \`},
+		{"test-main.sh", `version="${EXTERNAL_WARP_VERSION:-0.0.0-0}"`},
+	} {
+		if !strings.Contains(read(caller.name), caller.line) {
+			t.Errorf("%s no longer defaults to the 0.0.0-0 that build.ps1 builds unstamped: want %q", caller.name, caller.line)
+		}
+	}
+
+	// Both VERSIONINFO resources end FILEVERSION and PRODUCTVERSION in
+	// UR_VERSION_BUILD, so two builds of one day differ in file version.
+	statement := regexp.MustCompile(`(?m)^[ \t]*(FILEVERSION|PRODUCTVERSION)[ \t]+([^\r\n]*)`)
+	const wantFields = "UR_VER_MAJOR,UR_VER_MINOR,UR_VER_PATCH,UR_VERSION_BUILD"
+	for _, resource := range []string{"app/src/App/App.rc", "app/src/Service/Service.rc"} {
+		found := map[string]int{}
+		for _, match := range statement.FindAllStringSubmatch(read(resource), -1) {
+			found[match[1]]++
+			if fields := strings.Join(strings.Fields(match[2]), ""); fields != wantFields {
+				t.Errorf("%s: %s %s, want %s", resource, match[1], match[2], wantFields)
+			}
+		}
+		if found["FILEVERSION"] != 1 || found["PRODUCTVERSION"] != 1 {
+			t.Errorf("%s: want one FILEVERSION and one PRODUCTVERSION statement, found %v", resource, found)
+		}
 	}
 }
 
