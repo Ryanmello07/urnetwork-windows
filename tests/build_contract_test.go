@@ -1453,6 +1453,54 @@ func isIdentifierByte(character byte) bool {
 		'A' <= character && character <= 'Z'
 }
 
+// stripComments blanks every // and /* */ comment, as stripLineComments does
+// for //, so a contract that must find a statement cannot find it in a comment.
+// Line breaks are kept, so an offset still names its line, and string and
+// character literals are read the same way.
+func stripComments(source string) string {
+	out := []byte(source)
+	skipLiteral := func(at int, quote byte) int {
+		for at++; at < len(out) && out[at] != quote && out[at] != '\n'; at++ {
+			if out[at] == '\\' {
+				at++
+			}
+		}
+		return at
+	}
+	blank := func(from, to int) {
+		for ; from < to && from < len(out); from++ {
+			if out[from] != '\n' {
+				out[from] = ' '
+			}
+		}
+	}
+	for at := 0; at < len(out); at++ {
+		switch {
+		case out[at] == '"':
+			at = skipLiteral(at, '"')
+		case out[at] == '\'' && (at == 0 || !isIdentifierByte(out[at-1])):
+			// a character literal; a quote after a digit is a digit separator
+			at = skipLiteral(at, '\'')
+		case out[at] == '/' && at+1 < len(out) && out[at+1] == '/':
+			end := strings.IndexByte(string(out[at:]), '\n')
+			if end < 0 {
+				end = len(out) - at
+			}
+			blank(at, at+end)
+			at += end
+		case out[at] == '/' && at+1 < len(out) && out[at+1] == '*':
+			end := strings.Index(string(out[at+2:]), "*/")
+			stop := len(out)
+			if end >= 0 {
+				stop = at + 2 + end + 2
+			}
+			blank(at, stop)
+			at = stop - 1
+		}
+	}
+	return string(out)
+}
+
 // definitionBody is the source of the top-level definition that starts at
 // signature, through the closing brace in its first column.
 func definitionBody(t *testing.T, name, source, signature string) string {
@@ -1530,6 +1578,41 @@ func sortedNames(files map[string]string) []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+// A WM_CLOSE sent to the tray's hidden window (Alt+F4 on it, `taskkill /im`
+// without /f, an installer closing the app) quits the app the way the tray
+// menu's Quit does. DefWindowProc would destroy the window and leave the app
+// running with no icon and no way to quit it. The contract reads the code with
+// every comment blanked, and the case may only log and then call the Quit
+// callback, so a commented-out call, a call behind a constant condition or a
+// preprocessor block, an early return and DefWindowProc all fail it.
+func TestTrayWindowQuitsOnClose(t *testing.T) {
+	source := stripComments(readAppSource(t, "TrayIcon.cpp"))
+	wndProc := definitionBody(t, "TrayIcon.cpp", source, "LRESULT CALLBACK TrayIcon::WndProc(")
+	const label = "case WM_CLOSE:"
+	if count := strings.Count(wndProc, label); count != 1 {
+		t.Fatalf("TrayIcon::WndProc handles WM_CLOSE %d times, want once", count)
+	}
+	body := wndProc[strings.Index(wndProc, label)+len(label):]
+	end := strings.Index(body, "return 0;")
+	if end < 0 {
+		t.Fatal("TrayIcon::WndProc's WM_CLOSE case never returns 0")
+	}
+	quits := 0
+	for _, line := range strings.Split(body[:end], "\n") {
+		switch statement := strings.TrimSpace(line); {
+		case statement == "":
+		case statement == "if (self->cb_.onQuit) self->cb_.onQuit();":
+			quits++
+		case strings.HasPrefix(statement, "Log"):
+		default:
+			t.Errorf("TrayIcon::WndProc's WM_CLOSE case runs %q; it should only log and quit", statement)
+		}
+	}
+	if quits != 1 {
+		t.Errorf("TrayIcon::WndProc's WM_CLOSE case calls the tray menu's Quit callback %d times, want once", quits)
+	}
 }
 
 // A hide to the tray closes whatever sheet is open, through one sweep of the
