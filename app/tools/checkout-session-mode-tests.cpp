@@ -3,8 +3,7 @@
 // "never" and opens on the inline bridge url, so the payment hands back from
 // Stripe's onComplete; a hosted session leaves redirect_on_completion unset.
 //
-//   c++ -std=c++20 -I ../src/App checkout-session-mode-tests.cpp \
-//       -o /tmp/checkout-session-mode-tests && /tmp/checkout-session-mode-tests
+//   c++ -std=c++20 -I ../src/App checkout-session-mode-tests.cpp -o /tmp/checkout-session-mode-tests && /tmp/checkout-session-mode-tests
 //
 // SPDX-License-Identifier: MPL-2.0
 

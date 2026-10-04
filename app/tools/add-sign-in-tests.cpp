@@ -6,8 +6,7 @@
 // any host with a C++20 compiler, with a fake session that holds each answer
 // until the test releases it.
 //
-//   c++ -std=c++20 -I ../src/App add-sign-in-tests.cpp \
-//       -o /tmp/add-sign-in-tests && /tmp/add-sign-in-tests
+//   c++ -std=c++20 -I ../src/App add-sign-in-tests.cpp -o /tmp/add-sign-in-tests && /tmp/add-sign-in-tests
 //
 // SPDX-License-Identifier: MPL-2.0
 

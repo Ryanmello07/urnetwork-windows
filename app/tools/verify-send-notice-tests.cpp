@@ -3,8 +3,7 @@
 // failed, or rate limited) must not read "code sent" - run against the SAME
 // header the app compiles, on any host with a C++20 compiler.
 //
-//   c++ -std=c++20 -I ../src/App verify-send-notice-tests.cpp \
-//       -o /tmp/verify-send-notice-tests && /tmp/verify-send-notice-tests
+//   c++ -std=c++20 -I ../src/App verify-send-notice-tests.cpp -o /tmp/verify-send-notice-tests && /tmp/verify-send-notice-tests
 //
 // SPDX-License-Identifier: MPL-2.0
 

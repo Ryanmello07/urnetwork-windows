@@ -2,8 +2,7 @@
 // (App/UrlQuery.h), shared by the pay sheet and the wallet-connect and
 // sign-in bridges; the ur.io/checkout envelope is the SDK's.
 //
-//   c++ -std=c++20 -I ../src/App url-query-tests.cpp \
-//       -o /tmp/url-query-tests && /tmp/url-query-tests
+//   c++ -std=c++20 -I ../src/App url-query-tests.cpp -o /tmp/url-query-tests && /tmp/url-query-tests
 //
 // SPDX-License-Identifier: MPL-2.0
 
