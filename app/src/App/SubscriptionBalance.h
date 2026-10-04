@@ -24,6 +24,7 @@
 #include <functional>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include <winrt/Microsoft.UI.Dispatching.h>
 
@@ -47,6 +48,7 @@ struct BalanceSnapshot {
   std::string subscriptionStoreFamily;
   bool guest = false;
   bool loaded = false;  // at least one successful fetch this session
+  int64_t fetchedAtMillis = 0;  // steady clock, the last successful fetch
   // The plan response's price tier (standard/regional, from the storefront
   // country the server resolved), the network's welcome offer and the
   // in-app offer experiment's assignment (mmm/onboarding/PLAN.md). Defaults
@@ -133,6 +135,12 @@ class SubscriptionBalanceStore {
   void Stop();
   // Fetch now (navigating to the account panel, window shown, redeem success).
   void Refresh();
+  // Fetch now for a start connect (BalanceGate.h, FetchBalance) and call
+  // `settled` once the fetch has settled: succeeded, failed, or not back
+  // within kStartConnectFetchTimeoutMs. Waiters share one fetch.
+  void FetchThen(std::function<void()> settled);
+  // steady clock, when a fetch last settled (0 = never this session)
+  int64_t FetchSettledAtMillis() const { return fetchSettledAtMillis_; }
 
   // Re-derive Pro from the (freshly refreshed) jwt. Wired to the sdk's jwt-refresh
   // listener so a mid-session Pro change -- notably a Pro->free lapse a Pro
@@ -195,12 +203,17 @@ class SubscriptionBalanceStore {
   void StopBackground();
   void StopConfirmation(bool timedOut);
   void Publish();
+  // a fetch settled: run the FetchThen waiters
+  void Settle();
 
   SdkHost& sdk_;
   winrt::Microsoft::UI::Dispatching::DispatcherQueue queue_{nullptr};
   winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer backgroundTimer_{nullptr};
   winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer confirmTimer_{nullptr};
   winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer referralTimer_{nullptr};
+  winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer settleTimer_{nullptr};
+  std::vector<std::function<void()>> settleWaiters_;  // FetchThen
+  int64_t fetchSettledAtMillis_ = 0;
   ChangeHandler onChange_;
   ReferralCelebrationHandler onReferralCelebration_;
   ReferralCodeFetch referral_;

@@ -18,13 +18,16 @@
 //     tray's Connect, a location or peer row) is admitted only outside the
 //     gate. Blocked, it starts nothing and shows the upgrade path instead.
 //     SdkHost's connect entry points all pass through AdmitStartConnect, so a
-//     new surface cannot skip it.
+//     new surface cannot skip it. Out of balance there means the latch below
+//     or a fresh account balance with nothing left (DecideStartConnect), so
+//     the first connect after a launch on an empty account is blocked too.
 //   * ALREADY CONNECTED. A live session is never dropped for balance: the
 //     reaction below never disconnects, and a reattach (app launch resuming a
 //     running session, a network-server change, the service watchdog) is not
 //     a connect gesture and is never gated. Disconnect is always admitted.
 //
-// Pure, with no Windows headers or clocks, so tools/balance-gate-tests.cpp
+// Pure, with no Windows headers or clocks (the caller passes the time), so
+// tools/balance-gate-tests.cpp
 // runs it on any host with a C++20 compiler.
 //
 // SPDX-License-Identifier: MPL-2.0
@@ -148,16 +151,81 @@ inline constexpr ConnectGestureAction DecideConnectGesture(bool actionIsDisconne
   return ConnectGestureAction::Connect;
 }
 
-// The start-connect decision for an entry point that only connects. sinks
-// provides Upgrade(), the upgrade path shown in place of a blocked connect.
-// True when the connect may start.
-template <class Sinks>
-constexpr bool AdmitStartConnect(bool outOfBalance, Sinks& sinks) {
-  if (outOfBalance) {
-    sinks.Upgrade();
-    return false;
+// The subscription balance as last fetched. Times are monotonic milliseconds.
+struct AccountBalance {
+  bool known = false;  // fetched at least once this session
+  bool pro = false;
+  long long availableBytes = 0;
+  long long openTransferBytes = 0;  // held by open contracts, returned unused
+  long long fetchedAtMs = 0;
+};
+
+// A balance read this recently counts for a start connect; an older one is
+// fetched again first. The background poll is 30s, and a balance can change
+// on the web (a purchase, a redeem) at any time.
+inline constexpr long long kFreshBalanceMs = 60'000;
+// How long a start connect waits for that fetch before deciding without it.
+inline constexpr long long kStartConnectFetchTimeoutMs = 5'000;
+
+inline constexpr bool WithinFreshness(long long atMs, long long nowMs) {
+  return atMs <= nowMs && nowMs - atMs <= kFreshBalanceMs;
+}
+
+// Nothing left: none available and none held in open contracts. Unknown and
+// Pro are never exhausted. Matches android accountBalanceExhausted.
+inline constexpr bool AccountBalanceExhausted(const AccountBalance& b) {
+  return b.known && !b.pro && b.availableBytes <= 0 && b.openTransferBytes <= 0;
+}
+
+struct StartConnectFacts {
+  bool latched = false;  // OutOfBalanceLatch::InsufficientBalance
+  bool supporter = false;
+  bool confirming = false;
+  AccountBalance balance;
+  // when the last balance fetch settled (succeeded, failed or timed out)
+  bool fetchSettled = false;
+  long long fetchSettledAtMs = 0;
+  long long nowMs = 0;
+};
+
+enum class StartConnectStep { Connect, Upgrade, FetchBalance };
+
+// The start-connect decision. The latch covers a session that ran out; the
+// account balance covers a fresh launch on an empty account, where no contract
+// status exists yet. Only a fresh balance blocks: a stale one is fetched first
+// (FetchBalance), and when that fetch fails the connect starts (fail open: the
+// server refuses the contract anyway, and the held state and its notice take
+// over), so a funded user is never sent to upgrade on an old reading.
+inline constexpr StartConnectStep DecideStartConnect(const StartConnectFacts& f) {
+  if (OutOfBalance(f.latched, f.supporter, f.confirming)) return StartConnectStep::Upgrade;
+  if (f.supporter || f.confirming) return StartConnectStep::Connect;
+  if (f.balance.known && WithinFreshness(f.balance.fetchedAtMs, f.nowMs)) {
+    return AccountBalanceExhausted(f.balance) ? StartConnectStep::Upgrade
+                                              : StartConnectStep::Connect;
   }
-  return true;
+  if (f.fetchSettled && WithinFreshness(f.fetchSettledAtMs, f.nowMs)) {
+    return StartConnectStep::Connect;
+  }
+  return StartConnectStep::FetchBalance;
+}
+
+// The start-connect decision for an entry point that only connects. sinks
+// provides Upgrade(), the upgrade path shown in place of a blocked connect,
+// and FetchBalance(), which fetches the balance and asks again once the fetch
+// settles. True when the connect may start now.
+template <class Sinks>
+constexpr bool AdmitStartConnect(const StartConnectFacts& facts, Sinks& sinks) {
+  switch (DecideStartConnect(facts)) {
+    case StartConnectStep::Connect:
+      return true;
+    case StartConnectStep::Upgrade:
+      sinks.Upgrade();
+      return false;
+    case StartConnectStep::FetchBalance:
+      sinks.FetchBalance();
+      return false;
+  }
+  return false;
 }
 
 // Routes a toggle gesture. sinks provides Connect(), Disconnect() and

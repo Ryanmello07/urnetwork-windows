@@ -123,3 +123,61 @@ func TestStartConnectGateReadsTheLatch(t *testing.T) {
 		t.Errorf("AppController::OutOfBalance: does not read the latched state")
 	}
 }
+
+// The start-connect gate reads the subscription balance with its read time,
+// and on a stale one fetches it before deciding, so the first connect after a
+// launch on an empty account is blocked while no contract status exists yet.
+// Every connect entry point hands the gate the gesture to ask again once that
+// fetch settles; the fetch settles on success, failure and its timeout.
+func TestStartConnectGateReadsAFreshBalance(t *testing.T) {
+	app := stripLineComments(readAppSource(t, "AppController.cpp"))
+	facts := definitionBody(t, "AppController.cpp", app,
+		"urnw::balance::StartConnectFacts AppController::CurrentStartConnectFacts() const")
+	for _, want := range []string{
+		"f.latched = insufficientBalance_",
+		"f.balance.availableBytes = balance.availableByteCount",
+		"f.balance.openTransferBytes = balance.pendingByteCount",
+		"f.balance.fetchedAtMs = balance.fetchedAtMillis",
+		"f.fetchSettledAtMs = balance_.FetchSettledAtMillis()",
+	} {
+		if !strings.Contains(facts, want) {
+			t.Errorf("AppController::CurrentStartConnectFacts: missing %s", want)
+		}
+	}
+	if !strings.Contains(app, "balance_.FetchThen(") {
+		t.Errorf("AppController.cpp: the start-connect gate never fetches a stale balance")
+	}
+
+	host := stripLineComments(readAppSource(t, "SdkHost.cpp"))
+	for _, signature := range []string{
+		"void SdkHost::ConnectBestAvailable()",
+		"void SdkHost::Connect(const std::string& connectLocationJson)",
+		"void SdkHost::Connect(const urnet::ConnectLocation& location)",
+		"void SdkHost::ConnectFromRow(const urnet::ConnectLocation& location)",
+		"void SdkHost::ConnectBestAvailableFromRow()",
+	} {
+		body := definitionBody(t, "SdkHost.cpp", host, signature)
+		if !strings.Contains(body, "AdmitStartConnect(\"") || !strings.Contains(body, "[this") {
+			t.Errorf("%s: does not hand the gate the gesture to ask again", signature)
+		}
+	}
+	page := stripLineComments(readAppSource(t, "ConnectPage.cpp"))
+	toggle := definitionBody(t, "ConnectPage.cpp", page, "void ConnectPage::OnConnectToggle(")
+	if !strings.Contains(toggle, "AdmitStartConnect(\"connect button\", [") {
+		t.Errorf("ConnectPage::OnConnectToggle: does not hand the gate the press to ask again")
+	}
+
+	store := stripLineComments(readAppSource(t, "SubscriptionBalance.cpp"))
+	fetch := definitionBody(t, "SubscriptionBalance.cpp", store, "void SubscriptionBalanceStore::Fetch()")
+	if strings.Count(fetch, "Settle();") < 2 {
+		t.Errorf("SubscriptionBalanceStore::Fetch: a failed or successful fetch does not settle the waiters")
+	}
+	if !strings.Contains(store, "kStartConnectFetchTimeoutMs") {
+		t.Errorf("SubscriptionBalance.cpp: a start-connect fetch has no timeout")
+	}
+	apply := definitionBody(t, "SubscriptionBalance.cpp", store,
+		"void SubscriptionBalanceStore::Apply(urnet::SubscriptionBalanceResult const& result)")
+	if !strings.Contains(apply, "snapshot_.fetchedAtMillis = NowMillis()") {
+		t.Errorf("SubscriptionBalanceStore::Apply: does not stamp when the balance was read")
+	}
+}

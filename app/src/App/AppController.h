@@ -75,6 +75,10 @@ class AppController {
   // The start-connect gate's inputs for this instant (BalanceGate.h): out of
   // balance, not Pro, and no confirmation poll bridging a purchase.
   bool OutOfBalance() const;
+  // Everything a start connect decides on (BalanceGate.h, DecideStartConnect):
+  // the gate above plus the subscription balance and when it was read, so the
+  // first connect after a launch on an empty account is blocked too.
+  urnw::balance::StartConnectFacts CurrentStartConnectFacts() const;
   // In place of a blocked connect: bring the window forward on its upgrade
   // path (the upgrade sheet, or guest conversion), the same one the in-app
   // banner's Get Pro opens.
