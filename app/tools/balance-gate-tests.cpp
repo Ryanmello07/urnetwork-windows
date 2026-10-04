@@ -4,7 +4,9 @@
 // once per out-of-balance episode, never for a supporter or during a
 // confirmation poll. A connect gesture from any entry point (the tray's
 // Connect, a location row, the connect button) starts nothing out of balance
-// and shows the upgrade path; a session already connected is never dropped. Run against the SAME header the app compiles, on any host
+// and shows the upgrade path, including after the user's Disconnect resets the
+// contract status (OutOfBalanceLatch); a session already connected is never
+// dropped. Run against the SAME header the app compiles, on any host
 // with a C++20 compiler. No clocks: every input is an explicit push.
 //
 //   c++ -std=c++20 -I ../src/Common balance-gate-tests.cpp \
@@ -261,6 +263,72 @@ void TestAlreadyConnectedKept() {
         "connected: the user's Disconnect works out of balance");
 }
 
+// (g) held out of balance -> the user's Disconnect (the SDK resets the
+// contract status to an empty one) -> tray Connect. The gate read the raw
+// contract status, so the Connect started the tunnel again.
+void TestTrayConnectAfterDisconnectStaysBlocked() {
+  using Obs = OutOfBalanceLatch::Observation;
+  OutOfBalanceLatch latch;
+  FakeSinks sinks;
+  // connected and funded, providers attached
+  latch.Observe(Obs{false, true, true, 1000});
+  // the balance runs out: traffic is held
+  latch.Observe(Obs{true, false, true, 0});
+  // the user's Disconnect: the contract status is reset to empty
+  latch.Observe(Obs{false, false, true, 0});
+  RouteConnectGesture(/*actionIsDisconnect=*/false,
+                      OutOfBalance(latch.InsufficientBalance(), false, false), sinks);
+  Check(sinks.connects == 0, "latch: tray Connect after Disconnect out of balance started the "
+                             "tunnel " + std::to_string(sinks.connects) + " times, want 0");
+  Check(sinks.upgrades == 1, "latch: tray Connect after Disconnect shows the upgrade path");
+  // before the balance has ever been fetched, the reset still keeps the state
+  OutOfBalanceLatch unknown;
+  unknown.Observe(Obs{true, false, false, 0});
+  unknown.Observe(Obs{false, false, false, 0});
+  Check(unknown.InsufficientBalance(), "latch: kept across the reset with no balance read");
+}
+
+// (h) the latch ends only on evidence that the state is over
+void TestOutOfBalanceLatchClears() {
+  using Obs = OutOfBalanceLatch::Observation;
+  {
+    OutOfBalanceLatch latch;
+    latch.Observe(Obs{false, false, true, 0});
+    Check(!latch.InsufficientBalance(), "latch: a funded account never latches");
+  }
+  {
+    OutOfBalanceLatch latch;
+    latch.Observe(Obs{true, false, true, 100});
+    latch.Observe(Obs{false, false, true, 50});   // fell further
+    latch.Observe(Obs{false, false, true, 100});  // rose above the low (50)
+    Check(!latch.InsufficientBalance(), "latch: cleared by a balance above the lowest seen");
+  }
+  {
+    OutOfBalanceLatch latch;
+    latch.Observe(Obs{true, false, true, 100});
+    latch.Observe(Obs{false, false, true, 100});
+    latch.Observe(Obs{false, false, false, 0});  // an unknown balance is no evidence
+    Check(latch.InsufficientBalance(), "latch: kept by an unchanged or unknown balance");
+    latch.Observe(Obs{false, true, true, 100});
+    Check(!latch.InsufficientBalance(), "latch: cleared by providers attached on a live session");
+  }
+  {
+    OutOfBalanceLatch latch;
+    latch.Observe(Obs{true, false, true, 0});
+    latch.Observe(Obs{true, true, true, 0});  // still reported: providers do not clear it
+    Check(latch.InsufficientBalance(), "latch: held while the contract status reports it");
+    latch.Reset();  // sign-in or sign-out
+    Check(!latch.InsufficientBalance(), "latch: cleared by a sign-in or sign-out");
+  }
+  {
+    // a supporter is never gated, latched or not
+    OutOfBalanceLatch latch;
+    latch.Observe(Obs{true, false, true, 0});
+    Check(!OutOfBalance(latch.InsufficientBalance(), true, false),
+          "latch: a supporter is not gated");
+  }
+}
+
 }  // namespace
 
 int main() {
@@ -271,6 +339,8 @@ int main() {
   TestTrayConnectBlockedOutOfBalance();
   TestStartConnectBlockedOutOfBalance();
   TestAlreadyConnectedKept();
+  TestTrayConnectAfterDisconnectStaysBlocked();
+  TestOutOfBalanceLatchClears();
   std::cout << (gCases - gFailures) << "/" << gCases << " balance gate checks passed\n";
   return gFailures == 0 ? 0 : 1;
 }

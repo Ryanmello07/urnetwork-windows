@@ -69,6 +69,9 @@ class AppController {
   // (BalanceGate.h): a tray notice once per out-of-balance episode, and never
   // a disconnect.
   void ReactToBalance();
+  // Feed the out-of-balance latch the last stats push and the current balance,
+  // and read insufficientBalance_ back from it.
+  void ObserveBalanceLatch();
   // The start-connect gate's inputs for this instant (BalanceGate.h): out of
   // balance, not Pro, and no confirmation poll bridging a purchase.
   bool OutOfBalance() const;
@@ -153,9 +156,13 @@ class AppController {
   bool windowMinimized_ = false;  // IsIconic, synced by SyncWindowMinimized
   bool windowVisible_ = false;    // the reconciled result: the presentation is running
   std::optional<proto::TunnelStatus> lastTunnelStatus_;
-  // the last contract status a stats push carried, and the once-per-episode
-  // out-of-balance notice (ReactToBalance)
+  // the out-of-balance state, latched (OutOfBalanceLatch) because the contract
+  // status is reset with the destination and the raw push alone forgets it on
+  // Disconnect; the last raw push; and the once-per-episode notice
   bool insufficientBalance_ = false;
+  bool rawInsufficientBalance_ = false;
+  bool providersConnected_ = false;  // CONNECTED with providers in the window
+  urnw::balance::OutOfBalanceLatch balanceLatch_;
   urnw::balance::GateNoticeTracker balanceNotice_;
 };
 

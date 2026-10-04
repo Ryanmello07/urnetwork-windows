@@ -190,11 +190,15 @@ void AppController::Start() {
   balance_.Initialize(uiThread_);
   balance_.SetChangeHandler([this](const BalanceSnapshot& snapshot,
                                    const BalancePollState& poll) {
-    // a plan flip or a confirmation poll changes the gate
+    // a plan flip or a confirmation poll changes the gate, and a balance that
+    // rose ends a latched out-of-balance state
+    ObserveBalanceLatch();
     ReactToBalance();
     if (windowVisible_ && window_) {
-      if (auto self = window_.try_as<winrt::URnetwork::implementation::MainWindow>())
+      if (auto self = window_.try_as<winrt::URnetwork::implementation::MainWindow>()) {
+        self->SetInsufficientBalance(insufficientBalance_);
         self->OnBalanceChanged(snapshot, poll);
+      }
     }
   });
   // Referral celebrations (the king-frog gold moments). The store only polls
@@ -299,6 +303,13 @@ void AppController::OnAuthState(AuthState state, const std::string& error) {
   } else if (state == AuthState::LoggedOut && wasLoggedIn) {
     balance_.Stop();
   }
+  // a sign-in or sign-out ends the session the out-of-balance latch describes
+  if (state == AuthState::LoggedIn || (state == AuthState::LoggedOut && wasLoggedIn)) {
+    balanceLatch_.Reset();
+    rawInsufficientBalance_ = false;
+    providersConnected_ = false;
+    insufficientBalance_ = false;
+  }
   // the tray always reflects state; only push into the window when it is
   // actually visible (resynced on show) so a hidden window doesn't churn.
   if (windowVisible_ && window_) {
@@ -378,13 +389,32 @@ void AppController::OnStats(const LiveStats& stats) {
     trayHealth_ = stats.health;
     UpdateTray();
   }
-  insufficientBalance_ = stats.insufficientBalance;
+  // The contract status is reset with the destination, the user's Disconnect
+  // included, so the gate reads the latch, not the raw push (BalanceGate.h).
+  rawInsufficientBalance_ = stats.insufficientBalance;
+  providersConnected_ = stats.connectionStatus == "CONNECTED" && 0 < stats.providerCount;
+  ObserveBalanceLatch();
   ReactToBalance();
   // Live stats otherwise only matter to the window; push only when visible.
+  // The window's gate and banner read the same latched state.
   if (windowVisible_ && window_) {
-    if (auto self = window_.try_as<winrt::URnetwork::implementation::MainWindow>())
-      self->OnStatsChanged(stats);
+    if (auto self = window_.try_as<winrt::URnetwork::implementation::MainWindow>()) {
+      LiveStats latched = stats;
+      latched.insufficientBalance = insufficientBalance_;
+      self->OnStatsChanged(latched);
+    }
   }
+}
+
+void AppController::ObserveBalanceLatch() {
+  urnw::balance::OutOfBalanceLatch::Observation o;
+  o.insufficientBalance = rawInsufficientBalance_;
+  o.providersConnected = providersConnected_;
+  const BalanceSnapshot balance = balance_.Current();
+  o.balanceKnown = balance.loaded;
+  o.availableBytes = balance.availableByteCount;
+  balanceLatch_.Observe(o);
+  insufficientBalance_ = balanceLatch_.InsufficientBalance();
 }
 
 void AppController::ReactToBalance() {
