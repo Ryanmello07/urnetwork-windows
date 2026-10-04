@@ -95,11 +95,21 @@ void AppController::Start() {
   // over a machine that needed exactly one of them. Both now ask the same
   // predicate, which says Disconnect whenever there is anything for a disconnect
   // to DO.
+  //
+  // Out of balance the tray's Connect starts nothing and opens the upgrade path
+  // (BalanceGate.h, start connect); its Disconnect always works.
   cb.onConnectToggle = [this] {
-    if (gesture::ActionIsDisconnect(CurrentServiceFacts(), TrayHealth()))
-      sdk_.Disconnect();
-    else
-      sdk_.ConnectBestAvailable();
+    struct Sinks {
+      AppController& app;
+      void Connect() { app.sdk_.ConnectBestAvailable(); }
+      void Disconnect() { app.sdk_.Disconnect(); }
+      void Upgrade() {
+        LogInfo("app: tray connect blocked: out of balance");
+        app.ShowUpgradeForBlockedConnect();
+      }
+    } sinks{*this};
+    urnw::balance::RouteConnectGesture(
+        gesture::ActionIsDisconnect(CurrentServiceFacts(), TrayHealth()), OutOfBalance(), sinks);
   };
   cb.isConnected = [this] {
     return gesture::ActionIsDisconnect(CurrentServiceFacts(), TrayHealth());
@@ -150,6 +160,11 @@ void AppController::Start() {
         L"URnetwork.exe from Task Manager.",
         L"See the log for the failing Shell_NotifyIcon call.");
   }
+
+  // Every connect entry point (button, hero, tray, location and peer rows)
+  // passes through this before it starts anything (BalanceGate.h).
+  sdk_.SetStartConnectGate([this] { return OutOfBalance(); },
+                           [this] { ShowUpgradeForBlockedConnect(); });
 
   // SDK state -> tray + window (marshaled onto the UI thread).
   sdk_.SetAuthStateHandler([this](AuthState s, const std::string& e) {
@@ -390,6 +405,21 @@ void AppController::ReactToBalance() {
   urnw::balance::ReactToBalancePush(balanceNotice_, insufficientBalance_,
                                     balance_.Current().isPro,
                                     balance_.CurrentPoll().confirming, sinks);
+}
+
+bool AppController::OutOfBalance() const {
+  return urnw::balance::OutOfBalance(insufficientBalance_, balance_.Current().isPro,
+                                     balance_.CurrentPoll().confirming);
+}
+
+void AppController::ShowUpgradeForBlockedConnect() {
+  // Deferred: a row click lands here from inside the location chooser, whose
+  // dialog must close before the upgrade sheet can show.
+  OnUi([this] {
+    ShowWindow(nullptr);
+    if (auto self = window_.try_as<winrt::URnetwork::implementation::MainWindow>())
+      self->OnOpenUpgrade(nullptr, nullptr);
+  });
 }
 
 gesture::ServiceFacts AppController::CurrentServiceFacts() const {

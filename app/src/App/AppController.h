@@ -69,6 +69,13 @@ class AppController {
   // (BalanceGate.h): a tray notice once per out-of-balance episode, and never
   // a disconnect.
   void ReactToBalance();
+  // The start-connect gate's inputs for this instant (BalanceGate.h): out of
+  // balance, not Pro, and no confirmation poll bridging a purchase.
+  bool OutOfBalance() const;
+  // In place of a blocked connect: bring the window forward on its upgrade
+  // path (the upgrade sheet, or guest conversion), the same one the in-app
+  // banner's Get Pro opens.
+  void ShowUpgradeForBlockedConnect();
   void UpdateTray();
   // THE LAST STATUS THE SERVICE PUSHED, in the vocabulary of the shared
   // decision table (Common/ConnectAction.h). The tray reads this rather than

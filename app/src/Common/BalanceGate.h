@@ -11,6 +11,19 @@
 // It used to be disabled with the connect, which left the tray as the only
 // way out. The round hero button is unchanged.
 //
+// Two decisions, kept apart (owner decision 2026-10-03: "connect with no
+// balance should be blocked; however, connected and then runs out of balance
+// should keep the connection active"):
+//   * START CONNECT. Every connect gesture (the connect button and hero, the
+//     tray's Connect, a location or peer row) is admitted only outside the
+//     gate. Blocked, it starts nothing and shows the upgrade path instead.
+//     SdkHost's connect entry points all pass through AdmitStartConnect, so a
+//     new surface cannot skip it.
+//   * ALREADY CONNECTED. A live session is never dropped for balance: the
+//     reaction below never disconnects, and a reattach (app launch resuming a
+//     running session, a network-server change, the service watchdog) is not
+//     a connect gesture and is never gated. Disconnect is always admitted.
+//
 // Pure, with no Windows headers or clocks, so tools/balance-gate-tests.cpp
 // runs it on any host with a C++20 compiler.
 //
@@ -59,6 +72,47 @@ inline constexpr ConnectButton DecideConnectButton(bool failed, bool actionIsDis
     b.enabled = !blocked && (!transitional || watchdogFired);
   }
   return b;
+}
+
+// What a connect/disconnect gesture does: the tray's single toggle, and the
+// connect button and hero. actionIsDisconnect (gesture::ActionIsDisconnect)
+// wins, so a session that ran out of balance keeps its way out.
+enum class ConnectGestureAction { Connect, Disconnect, Upgrade };
+
+inline constexpr ConnectGestureAction DecideConnectGesture(bool actionIsDisconnect,
+                                                           bool outOfBalance) {
+  if (actionIsDisconnect) return ConnectGestureAction::Disconnect;
+  if (outOfBalance) return ConnectGestureAction::Upgrade;
+  return ConnectGestureAction::Connect;
+}
+
+// The start-connect decision for an entry point that only connects. sinks
+// provides Upgrade(), the upgrade path shown in place of a blocked connect.
+// True when the connect may start.
+template <class Sinks>
+constexpr bool AdmitStartConnect(bool outOfBalance, Sinks& sinks) {
+  if (outOfBalance) {
+    sinks.Upgrade();
+    return false;
+  }
+  return true;
+}
+
+// Routes a toggle gesture. sinks provides Connect(), Disconnect() and
+// Upgrade().
+template <class Sinks>
+constexpr void RouteConnectGesture(bool actionIsDisconnect, bool outOfBalance, Sinks& sinks) {
+  switch (DecideConnectGesture(actionIsDisconnect, outOfBalance)) {
+    case ConnectGestureAction::Disconnect:
+      sinks.Disconnect();
+      break;
+    case ConnectGestureAction::Upgrade:
+      sinks.Upgrade();
+      break;
+    case ConnectGestureAction::Connect:
+      sinks.Connect();
+      break;
+  }
 }
 
 // Posts the out-of-balance notice once per episode. An episode is the span in
