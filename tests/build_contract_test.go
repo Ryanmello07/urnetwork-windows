@@ -1136,6 +1136,30 @@ func TestInstallerContract(t *testing.T) {
 	if len(warningPolicies) == 0 || !strings.EqualFold(strings.TrimSpace(warningPolicies[0].Text), "true") {
 		t.Fatal("WiX warnings are not fatal")
 	}
+
+	// An update removes the old product inside its own transaction, so a
+	// failure rolls back to the old version rather than leaving neither, and
+	// of two codes that share a ProductVersion, the package installed second
+	// replaces the other instead of installing beside it (Package.wxs).
+	majorUpgrades := packageXML.descendants(wixNamespace, "MajorUpgrade")
+	if len(majorUpgrades) != 1 {
+		t.Fatalf("want one MajorUpgrade, got %d", len(majorUpgrades))
+	}
+	if schedule, _ := majorUpgrades[0].attribute("Schedule"); schedule != "afterInstallInitialize" {
+		t.Errorf("MajorUpgrade Schedule = %q, want afterInstallInitialize", schedule)
+	}
+	if same, _ := majorUpgrades[0].attribute("AllowSameVersionUpgrades"); !strings.EqualFold(same, "yes") {
+		t.Errorf("MajorUpgrade AllowSameVersionUpgrades = %q, want yes", same)
+	}
+	suppressed := map[string]bool{}
+	for _, node := range wixProject.descendants("", "SuppressIces") {
+		for _, ice := range strings.Split(node.Text, ";") {
+			suppressed[strings.TrimSpace(ice)] = true
+		}
+	}
+	if len(suppressed) != 2 || !suppressed["ICE03"] || !suppressed["ICE61"] {
+		t.Errorf("SuppressIces = %v, want exactly ICE03 and ICE61", suppressed)
+	}
 }
 
 func TestNeutralPluralResources(t *testing.T) {

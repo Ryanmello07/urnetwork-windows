@@ -21,14 +21,49 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
      xmlns:fw="http://wixtoolset.org/schemas/v4/wxs/firewall">
 
-  <!-- Version comes from the .wixproj (UrMsiVersion, yy.M.d from CI; 0.0.1
-       for a bare local build) because ProductVersion fields cannot hold the
-       app's four-digit year. -->
+  <!-- Version comes from the .wixproj: UrMsiVersion, which tools/UrVersion.ps1
+       derives from the release code as (Y-2000).M.<time of month>, because
+       ProductVersion fields cannot hold the app's four-digit year (0.0.1 for
+       a bare local build, and for build.ps1's 0.0.0-0). -->
   <Package Name="URnetwork" Manufacturer="URnetwork" Version="$(var.UrMsiVersion)"
            UpgradeCode="a7c1e2d3-4b5f-6081-9c2d-3e4f50617283"
            Scope="perMachine" Compressed="yes">
 
-    <MajorUpgrade DowngradeErrorMessage="A newer version of URnetwork is already installed." />
+    <!-- Schedule="afterInstallInitialize": RemoveExistingProducts runs right
+         after InstallInitialize, inside this install's transaction. The old
+         product is removed completely before any new file lands, and if the
+         install fails after that (StartServices error 1920, a full disk, or a
+         cancel in the full UI; /passive cannot be cancelled), Windows
+         Installer rolls the removal back too: the old files, registration and
+         service come back, and the service is started again. Its failure
+         actions probably do not: util:ServiceConfig below applies them only
+         when a product installs, so the rolled-back uninstall has none to
+         restore. Nothing relaunches the app or reconnects the tunnel. The WiX
+         default, afterInstallValidate, commits the removal on its own first,
+         so a failed update left neither version installed.
+
+         Files in use do not fail an install: Windows Installer replaces them
+         at the next reboot, and with /norestart the install returns 3010.
+         Until that reboot the new product is registered and its urnetworkd
+         runs, while the old files that were in use stay on disk.
+
+         Never afterInstallExecute, afterInstallExecuteAgain or
+         afterInstallFinalize. Those install the new product over the old one
+         first, which leans on file versioning (an equal-version file is kept,
+         not replaced) and on every harvested component keeping its GUID
+         across builds, or the old product's removal deletes files the new
+         one just installed.
+
+         AllowSameVersionUpgrades="yes": Windows Installer compares only the
+         first three ProductVersion fields, and UrMsiVersion steps about every
+         42 seconds, so two release codes can share one ProductVersion. The
+         ProductCode is regenerated on every build, so without this the second
+         package would install beside the first instead of replacing it. With
+         it, either package replaces the other, whichever is installed second.
+         It makes only the upgrade row inclusive; the downgrade row stays
+         exclusive, and Installer.wixproj suppresses ICE61 for it. -->
+    <MajorUpgrade Schedule="afterInstallInitialize" AllowSameVersionUpgrades="yes"
+                  DowngradeErrorMessage="A newer version of URnetwork is already installed." />
     <MediaTemplate EmbedCab="yes" />
 
     <!-- The app icon, for Add/Remove Programs and the Start Menu shortcut.
