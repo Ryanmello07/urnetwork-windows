@@ -19,16 +19,59 @@
      Distributed via the Microsoft Store as a Win32 MSI.
      SPDX-License-Identifier: MPL-2.0 -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
-     xmlns:fw="http://wixtoolset.org/schemas/v4/wxs/firewall">
+     xmlns:fw="http://wixtoolset.org/schemas/v4/wxs/firewall"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
 
-  <!-- Version comes from the .wixproj (UrMsiVersion, yy.M.d from CI; 0.0.1
-       for a bare local build) because ProductVersion fields cannot hold the
-       app's four-digit year. -->
+  <!-- Version comes from the .wixproj: UrMsiVersion, which tools/UrVersion.ps1
+       derives from the release code as (Y-2000).M.<time of month>, because
+       ProductVersion fields cannot hold the app's four-digit year (0.0.1 for
+       a bare local build). -->
   <Package Name="URnetwork" Manufacturer="URnetwork" Version="$(var.UrMsiVersion)"
            UpgradeCode="a7c1e2d3-4b5f-6081-9c2d-3e4f50617283"
            Scope="perMachine" Compressed="yes">
 
-    <MajorUpgrade DowngradeErrorMessage="A newer version of URnetwork is already installed." />
+    <!-- Schedule="afterInstallInitialize": RemoveExistingProducts runs right
+         after InstallInitialize, inside this install's transaction. The old
+         product is removed completely before any new file lands, and if
+         anything later fails (StartServices error 1920, files in use, a full
+         disk, a cancel), Windows Installer rolls the removal back too: the
+         old version is reinstalled and its urnetworkd restarted. The WiX
+         default, afterInstallValidate, commits the removal on its own first,
+         so a failed update left neither version installed.
+
+         Never afterInstallExecute, afterInstallExecuteAgain or
+         afterInstallFinalize. Those install the new product over the old one
+         first, which leans on file versioning (an equal-version file is kept,
+         not replaced) and on every harvested component keeping its GUID
+         across builds, or the old product's removal deletes files the new
+         one just installed.
+
+         AllowSameVersionUpgrades="yes": Windows Installer compares only the
+         first three ProductVersion fields, and UrMsiVersion steps about every
+         42 seconds, so two release codes can share one ProductVersion. The
+         ProductCode is regenerated on every build, so without this the second
+         package would install beside the first instead of replacing it. It
+         makes only the upgrade row inclusive; the downgrade row stays
+         exclusive, and Installer.wixproj suppresses ICE61 for it. -->
+    <MajorUpgrade Schedule="afterInstallInitialize" AllowSameVersionUpgrades="yes"
+                  DowngradeErrorMessage="A newer version of URnetwork is already installed." />
+
+    <!-- Close the tray app before the files-in-use check. The updater starts
+         msiexec and then quits, and the two race: an app still running at
+         InstallValidate turns the unattended (/passive) install into a
+         Restart Manager prompt, or a replace-at-reboot that /norestart
+         defers. Wix4CloseApplications sends WM_CLOSE to every top-level window
+         of URnetwork.exe (its tray window quits the app on WM_CLOSE,
+         TrayIcon.cpp) and waits up to Timeout seconds for it to exit. It is
+         moved from its default slot, before InstallFiles, to before
+         InstallValidate. RebootPrompt="no" because WiX turns it on by
+         default, and it would schedule a deferred action that demands a
+         reboot whenever the app outlives the timeout. -->
+    <util:CloseApplication Id="CloseTrayApp" Target="URnetwork.exe"
+                           CloseMessage="yes" RebootPrompt="no" Timeout="30" />
+    <InstallExecuteSequence>
+      <Custom Action="override Wix4CloseApplications_$(sys.BUILDARCHSHORT)" Before="InstallValidate" />
+    </InstallExecuteSequence>
     <MediaTemplate EmbedCab="yes" />
 
     <!-- The app icon, for Add/Remove Programs and the Start Menu shortcut.
@@ -110,8 +153,15 @@
                                 ThirdFailureActionType="none"
                                 RestartServiceDelayInSeconds="5" ResetPeriodInDays="1" />
           </ServiceInstall>
+          <!-- Remove="both": DeleteServices runs on install as well, so a
+               urnetworkd this package did not create (the portable zip
+               registers its own with `urnetworkd install`) is stopped and
+               deleted before InstallServices creates this one. An
+               MSI-installed predecessor is already gone by then, since
+               RemoveExistingProducts ran first, so upgrades are unchanged.
+               build.ps1 refuses to package without it. -->
           <ServiceControl Id="UrnetworkdControl" Name="urnetworkd"
-                          Start="install" Stop="both" Remove="uninstall" Wait="yes" />
+                          Start="install" Stop="both" Remove="both" Wait="yes" />
         </Component>
         <Component Id="WintunDll" Guid="*">
           <File Id="wintunDll" Source="$(var.BinDir)\wintun.dll" KeyPath="yes" />

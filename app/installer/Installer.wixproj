@@ -8,10 +8,11 @@
     <!-- default staging dir; override on the command line per arch/config -->
     <BinDir Condition="'$(BinDir)'==''">$(MSBuildThisFileDirectory)..\build\$(Platform)\Release</BinDir>
     <!-- MSI ProductVersion fields are 16-bit-bounded (and the first two
-         effectively 8-bit), so the MSI cannot carry the app's yyyy.M.d date:
-         CI passes -p:UrMsiVersion=yy.M.d instead. The default keeps a bare
-         `dotnet build` compiling. Real upgrade ordering is the signing
-         milestone's problem, not this compile-proof's. -->
+         effectively 8-bit), so the MSI cannot carry the app's yyyy.M.d date.
+         build.ps1 and CI pass -p:UrMsiVersion from tools/UrVersion.ps1,
+         (Y-2000).M.<time of month>, which rises with the release code. The
+         default keeps a bare `dotnet build` compiling; a 0.0.1 package
+         upgrades nothing and nothing upgrades to it. -->
     <UrMsiVersion Condition="'$(UrMsiVersion)'==''">0.0.1</UrMsiVersion>
     <DefineConstants>BinDir=$(BinDir);UrMsiVersion=$(UrMsiVersion)</DefineConstants>
     <!-- -p:IncludeDriver=true (build.ps1 -IncludeDriver) compiles the split-tunnel
@@ -41,8 +42,17 @@
          at all. Suppressing ICE03 does NOT suppress other ICEs — confirmed
          locally that ICE60 still runs with ICE03 suppressed. Private app
          fonts are authored explicitly as companion files of the versioned app
-         executable in Package.wxs. -->
-    <SuppressIces>ICE03</SuppressIces>
+         executable in Package.wxs.
+
+         ICE61 warns that the upgrade row's maximum version is not below this
+         package's own. That is MajorUpgrade AllowSameVersionUpgrades="yes",
+         on purpose (Package.wxs): two release codes can share a
+         ProductVersion, and the later one must replace the earlier rather
+         than install beside it. WiX only marks its own generated upgrade row
+         inclusive; the downgrade row stays exclusive, and this project
+         authors no Upgrade rows by hand, which is what ICE61 exists to catch.
+         Suppressing it does not suppress other ICEs. -->
+    <SuppressIces>ICE03;ICE61</SuppressIces>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="WixToolset.Util.wixext" Version="5.0.2" />

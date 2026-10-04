@@ -1097,6 +1097,80 @@ func TestInstallerContract(t *testing.T) {
 	if len(warningPolicies) == 0 || !strings.EqualFold(strings.TrimSpace(warningPolicies[0].Text), "true") {
 		t.Fatal("WiX warnings are not fatal")
 	}
+
+	// An update removes the old product inside its own transaction, so a
+	// failure rolls back to the old version rather than leaving neither, and
+	// two codes that share a ProductVersion still upgrade (Package.wxs).
+	majorUpgrades := packageXML.descendants(wixNamespace, "MajorUpgrade")
+	if len(majorUpgrades) != 1 {
+		t.Fatalf("want one MajorUpgrade, got %d", len(majorUpgrades))
+	}
+	if schedule, _ := majorUpgrades[0].attribute("Schedule"); schedule != "afterInstallInitialize" {
+		t.Errorf("MajorUpgrade Schedule = %q, want afterInstallInitialize", schedule)
+	}
+	if same, _ := majorUpgrades[0].attribute("AllowSameVersionUpgrades"); !strings.EqualFold(same, "yes") {
+		t.Errorf("MajorUpgrade AllowSameVersionUpgrades = %q, want yes", same)
+	}
+	suppressed := map[string]bool{}
+	for _, node := range wixProject.descendants("", "SuppressIces") {
+		for _, ice := range strings.Split(node.Text, ";") {
+			suppressed[strings.TrimSpace(ice)] = true
+		}
+	}
+	if len(suppressed) != 2 || !suppressed["ICE03"] || !suppressed["ICE61"] {
+		t.Errorf("SuppressIces = %v, want exactly ICE03 and ICE61", suppressed)
+	}
+
+	// The service is stopped and started synchronously, and replaced whoever
+	// registered it (build.ps1 enforces the same on the release path).
+	var serviceControl *xmlNode
+	for _, node := range packageXML.descendants(wixNamespace, "ServiceControl") {
+		if name, _ := node.attribute("Name"); name == "urnetworkd" {
+			serviceControl = node
+		}
+	}
+	if serviceControl == nil {
+		t.Fatal("urnetworkd ServiceControl is missing")
+	}
+	for attribute, want := range map[string]string{"Start": "install", "Stop": "both", "Remove": "both", "Wait": "yes"} {
+		if got, _ := serviceControl.attribute(attribute); got != want {
+			t.Errorf("urnetworkd ServiceControl %s = %q, want %q", attribute, got, want)
+		}
+	}
+
+	// The tray app is closed before the files-in-use check, without a reboot
+	// prompt, and its tray window answers WM_CLOSE by quitting.
+	closers := packageXML.descendants(utilNamespace, "CloseApplication")
+	if len(closers) != 1 {
+		t.Fatalf("want one util:CloseApplication, got %d", len(closers))
+	}
+	for attribute, want := range map[string]string{
+		"Target": "URnetwork.exe", "CloseMessage": "yes", "RebootPrompt": "no", "Timeout": "30",
+	} {
+		if got, _ := closers[0].attribute(attribute); got != want {
+			t.Errorf("util:CloseApplication %s = %q, want %q", attribute, got, want)
+		}
+	}
+	overridden := false
+	for _, node := range packageXML.descendants(wixNamespace, "Custom") {
+		action, _ := node.attribute("Action")
+		before, _ := node.attribute("Before")
+		if action == "override Wix4CloseApplications_$(sys.BUILDARCHSHORT)" && before == "InstallValidate" {
+			overridden = true
+		}
+	}
+	if !overridden {
+		t.Error("Wix4CloseApplications is not moved before InstallValidate")
+	}
+	tray := readAppSource(t, "TrayIcon.cpp")
+	closeCase := strings.Index(tray, "case WM_CLOSE:")
+	if closeCase < 0 {
+		t.Fatal("the tray window does not handle WM_CLOSE")
+	}
+	body := tray[closeCase:]
+	if end := strings.Index(body, "return 0;"); end < 0 || !strings.Contains(body[:end], "self->cb_.onQuit()") {
+		t.Error("the tray window's WM_CLOSE does not take the Quit path")
+	}
 }
 
 func TestNeutralPluralResources(t *testing.T) {

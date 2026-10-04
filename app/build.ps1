@@ -132,7 +132,9 @@ $env:URN_VERSION = $Version
 # Protocol v3 is only safe to roll out if an MSI upgrade replaces the service
 # process, not merely the files underneath the old process. Keep the WiX
 # stop/start contract on the release build path so a packaging edit cannot
-# silently strand a v3 app talking to a still-running older daemon.
+# silently strand a v3 app talking to a still-running older daemon. Remove
+# must be "both": an install then also deletes a urnetworkd it did not
+# create (the portable zip's), before creating its own.
 $installerSource = Join-Path $PSScriptRoot "installer\Package.wxs"
 [xml]$installerXml = Get-Content -Raw $installerSource
 $serviceControl = $installerXml.SelectSingleNode(
@@ -141,8 +143,9 @@ $serviceControl = $installerXml.SelectSingleNode(
 if (-not $serviceControl -or
     $serviceControl.Start -ne "install" -or
     $serviceControl.Stop -ne "both" -or
+    $serviceControl.Remove -ne "both" -or
     $serviceControl.Wait -ne "yes") {
-  throw "MSI must synchronously stop the old urnetworkd and start the matching service on upgrade"
+  throw "MSI must synchronously stop the old urnetworkd, replace any urnetworkd it did not install, and start the matching service on upgrade"
 }
 
 foreach ($platform in $Platforms) {
