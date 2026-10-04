@@ -684,11 +684,39 @@ class SdkHost {
   // urnetwork:// callback must be routed back in via HandleDeepLink.
   void SignInWithSolana(WalletConnect::Provider provider, std::function<void(AuthResult)> done);
 
-  // Sign in with a Bittensor wallet through the same bridge. One step (no
-  // connect handshake): the bridge signs the challenge with an injected
-  // substrate wallet and returns the ss58 address + sr25519 signature, which go
-  // to authLogin{wallet_auth{blockchain=TAO}}.
-  void SignInWithBittensor(std::function<void(AuthResult)> done);
+  // Sign in with a Bittensor wallet (`walletId`: "talisman" or "taocom",
+  // BittensorWalletFlow.h). The SDK session helper
+  // (urnet::BittensorWalletSession) runs the proof: Talisman through the ur.io
+  // bridge in the browser, TAO.com through the manual form (the manual
+  // handler below). The proof goes to authLogin{wallet_auth{blockchain=TAO}};
+  // a wallet with no network yet keeps its wallet for the create step.
+  void SignInWithBittensor(const std::string& walletId, std::function<void(AuthResult)> done);
+
+  // The manual form of a Bittensor proof (TAO.com documents no programmatic
+  // interface): the UI shows `message` for the user to sign in the wallet,
+  // takes the address (prefilled with `address` when the flow is bound to
+  // one) and the signature, and answers with SubmitBittensorManual, or
+  // CancelBittensorProof when the user closes it. The handler runs on an SDK
+  // thread; the UI marshals.
+  struct BittensorManualRequest {
+    std::string walletId;
+    std::string walletName;
+    std::string message;
+    std::string address;
+    std::string purpose;
+  };
+  void SetBittensorManualHandler(std::function<void(BittensorManualRequest)> handler);
+  // accepted=false keeps the form open when the error is correctable (a typo);
+  // `error` is localized. A non-correctable refusal ends the proof (its flow
+  // is answered) and closes the form (`closed`).
+  struct BittensorManualAnswer {
+    bool accepted = false;
+    bool closed = false;
+    std::string error;
+  };
+  BittensorManualAnswer SubmitBittensorManual(const std::string& address,
+                                              const std::string& signature);
+  void CancelBittensorProof();
 
   // Sign `message` with a Solana wallet through the same browser bridge and hand
   // the address and signature back WITHOUT authenticating. The Seeker multiplier
@@ -714,15 +742,17 @@ class SdkHost {
   void ConnectSolanaWallet(WalletConnect::Provider provider,
                            std::function<void(bool ok, std::string address, std::string error)> done);
 
-  // Sign a server-issued TAO challenge with a Bittensor wallet through the
-  // bridge WITHOUT authenticating: the signed triple attaches the coldkey to
-  // the provider (Api.snSetWallet / Device.connectSnWallet, Earnings). The
-  // challenge is fetched for `walletAddress` when the user pasted one (the
-  // bridge must then answer with that same address; the caller checks), or
-  // for whichever wallet the bridge picks when it is empty. `purpose` goes to
-  // the bridge ("connect"). `done` gets the address, the hex sr25519 signature
-  // and the exact message that was signed; same threading caveat as above.
-  void SignWithBittensorWallet(const std::string& walletAddress, const std::string& purpose,
+  // Sign a server-issued TAO challenge with a Bittensor wallet WITHOUT
+  // authenticating: the signed triple attaches the coldkey to the provider
+  // (Api.snSetWallet / Device.connectSnWallet, Earnings). The challenge is
+  // fetched for `walletAddress` when the user pasted one (the session then
+  // refuses any other signing account), or for whichever account the wallet
+  // picks when it is empty. `purpose` is the session's ("connect"). `done`
+  // gets the address, the hex sr25519 signature and the exact message that
+  // was signed, or a localized error (a superseded flow's starts with
+  // bridge::kSupersededPrefix); same threading caveat as above.
+  void SignWithBittensorWallet(const std::string& walletId, const std::string& walletAddress,
+                               const std::string& purpose,
                                std::function<void(bool ok, std::string address,
                                                   std::string signature, std::string message,
                                                   std::string error)> done);
@@ -2039,6 +2069,32 @@ class SdkHost {
 
   WalletConnect wallet_;
   std::function<void(AuthResult)> walletAuthDone_;
+
+  // ---- the Bittensor proof in flight (one at a time, like every bridge flow)
+  struct BittensorProofOutcome {
+    bool ok = false;
+    urnet::BittensorWalletProof proof;
+    std::string error;  // localized, or a superseded reason
+  };
+  // Start a proof for `flow` (walletFlows_): fetch the session's challenge,
+  // then open the bridge (Talisman) or ask the manual handler (TAO.com).
+  // `done` runs once: with the proof, a refusal, or a superseding flow's reason.
+  void BeginBittensorProof(uint64_t flow, const std::string& walletId, const std::string& purpose,
+                           const std::string& expectedAddress,
+                           std::function<void(BittensorProofOutcome)> done);
+  // the urnetwork://bittensor-sign-message hand-back (WalletConnect)
+  void HandleBittensorReturn(const std::string& url);
+  // Answer proof `serial` if it is still the one in flight.
+  void FinishBittensorProof(uint64_t serial, BittensorProofOutcome outcome);
+  // guards the four members below; never held while a callback runs
+  std::mutex bittensorLock_;
+  uint64_t bittensorSerial_ = 0;
+  std::shared_ptr<urnet::BittensorWalletSession> bittensorSession_;
+  std::function<void(BittensorProofOutcome)> bittensorDone_;
+  std::function<void(BittensorManualRequest)> bittensorManualHandler_;
+  // The wallet a Bittensor sign-in used: its network-create step (a fresh
+  // challenge bound to the same address) goes through the same wallet.
+  std::string pendingBittensorWalletId_;
   // A bare signature request (SignWithSolanaWallet) rather than a sign-in. Non-
   // null is what tells the shared bridge callbacks which flow they are in, so
   // both are cleared whenever the other starts.

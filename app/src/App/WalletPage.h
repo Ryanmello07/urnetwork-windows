@@ -246,6 +246,8 @@ class WalletPage {
                                 std::string const& warning);
   void SetConnectingWallet(bool connecting);
   void StartWalletConnect(std::string const& pinnedAddress);
+  // after the chooser: the proof with `walletId` ("talisman" | "taocom")
+  void ConnectWithWallet(std::string const& walletId, std::string const& pinnedAddress);
 
   // ---- the manual address (still signed)
   void ValidateWalletAddress();

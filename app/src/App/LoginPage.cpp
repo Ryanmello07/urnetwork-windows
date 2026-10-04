@@ -9,6 +9,7 @@
 #include <winrt/Microsoft.UI.Xaml.Automation.h>
 #include <winrt/Windows.System.h>
 
+#include "BittensorWalletDialogs.h"
 #include "Log.h"
 #include "MainWindow.xaml.h"
 #include "PageContext.h"
@@ -1095,14 +1096,21 @@ winrt::fire_and_forget LoginPage::OnUseCode(IInspectable const&, RoutedEventArgs
 // (main.cpp -> App::OnLaunched -> AppController::HandleDeepLink). `done` fires on
 // an SDK thread, so hop to the UI thread before touching the panel.
 
+// Bittensor asks which wallet first (Talisman or TAO.com): Talisman continues in
+// the browser through the bridge, TAO.com in the manual form (MainWindow
+// installs SdkHost's manual handler).
 void LoginPage::OnSignInWithBittensor(IInspectable const&, RoutedEventArgs const&) {
   SetInitialLoginError(hstring());
-  SetWalletSignInEnabled(false);
-  auto queue = w_.DispatcherQueue();
   auto weak = w_.get_weak();
-  Sdk().SignInWithBittensor([queue, weak](urnw::AuthResult r) {
-    queue.TryEnqueue([weak, r] {
-      if (auto self = weak.get()) self->login().ApplyWalletSignInResult(r);
+  ChooseBittensorWallet(w_.get_strong(), [weak](std::string walletId) {
+    auto self = weak.get();
+    if (!self || walletId.empty()) return;
+    self->login().SetWalletSignInEnabled(false);
+    auto queue = self->DispatcherQueue();
+    Sdk().SignInWithBittensor(walletId, [queue, weak](urnw::AuthResult r) {
+      queue.TryEnqueue([weak, r] {
+        if (auto self = weak.get()) self->login().ApplyWalletSignInResult(r);
+      });
     });
   });
 }

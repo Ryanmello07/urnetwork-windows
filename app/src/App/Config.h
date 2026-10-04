@@ -8,14 +8,10 @@
 namespace urnw::config {
 
 // WalletConnect Cloud project id — one project id shared by every URnetwork
-// client (see apple/NEXTSTEPS2.md). It is passed to the ur.io/wallet-connect
-// bridge as `wc_project_id` so the bridge can pair with a wallet app (QR /
-// mobile deep link).
-//
-// Empty is fine and is the common desktop case: the bridge then drives injected
-// (browser-extension) wallets only — Bittensor Wallet, SubWallet, Talisman,
-// polkadot-js for Bittensor; Phantom/Solflare for Solana. Nothing crashes and no
-// button dies; only mobile wallet pairing is lost.
+// client (see apple/NEXTSTEPS2.md). No flow passes it today: the Bittensor
+// proof is the SDK session helper's bridge url (Talisman's extension only, no
+// WalletConnect pairing; UPGRADE.md 4.6), and the Solana bridge drives the
+// Phantom/Solflare extensions. Kept so a build that injects it still compiles.
 //
 // Inject it on the build (CI / build machine, the way android takes it from
 // local.properties) rather than committing it:

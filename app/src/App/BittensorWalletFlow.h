@@ -1,0 +1,96 @@
+// The app-side decisions of a Bittensor wallet proof. The protocol itself is
+// the SDK's session helper (urnet::BittensorWalletSession, sdk
+// bittensor_wallet.go): what is signed, the bridge url, and whether a
+// hand-back or a pasted signature is acceptable. What stays here is what only
+// the app can decide: which wallet the chooser picked, what the user does next
+// (switch to the browser or fill the manual form), which hand-backs this flow
+// should ignore, and the localized text for each refusal code.
+//
+// The supported wallets are exactly Talisman and TAO.com (UPGRADE.md 4.6). On
+// Windows, Talisman is browser_bridge: the system browser opens the ur.io
+// page, which drives the Talisman extension and returns on the existing
+// urnetwork://bittensor-sign-message protocol handler (installer
+// Package.wxs). TAO.com documents no programmatic interface, so it is manual:
+// the user signs the shown message with the wallet and pastes the address and
+// the signature.
+//
+// Pure and header-only, so app/tools/bittensor-wallet-tests.cpp runs it
+// without WinRT or the SDK. The string constants mirror the SDK's
+// (urnet::BittensorWallet*); tests/bittensor_wallet_test.go reads the
+// SdkHost sources to keep the two tied together.
+//
+// SPDX-License-Identifier: MPL-2.0
+#pragma once
+
+#include <string>
+#include <string_view>
+
+namespace urnw::bittensor {
+
+inline constexpr std::string_view kPlatform = "windows";
+// the hand-back link the installer registers (urnetwork://) and the bridge
+// already returned on; owned by this app, not by the sdk
+inline constexpr std::string_view kRedirectLink = "urnetwork://bittensor-sign-message";
+
+inline constexpr std::string_view kWalletTalisman = "talisman";
+inline constexpr std::string_view kWalletTaoCom = "taocom";
+
+inline constexpr std::string_view kTransportBrowserBridge = "browser_bridge";
+inline constexpr std::string_view kTransportManual = "manual";
+
+inline constexpr std::string_view kPurposeLogin = "login";
+inline constexpr std::string_view kPurposeCreate = "create";
+inline constexpr std::string_view kPurposeConnect = "connect";
+
+// The chooser is a two-button dialog: primary = Talisman, secondary =
+// TAO.com, close = cancel ("").
+enum class ChooserButton { None, Primary, Secondary };
+
+inline std::string WalletForChooser(ChooserButton button) {
+  switch (button) {
+    case ChooserButton::Primary: return std::string(kWalletTalisman);
+    case ChooserButton::Secondary: return std::string(kWalletTaoCom);
+    default: return std::string();
+  }
+}
+
+// What the app does once the challenge is in hand.
+enum class NextStep { Unsupported, OpenBrowser, ManualEntry };
+
+inline NextStep NextStepFor(std::string_view transport) {
+  if (transport == kTransportBrowserBridge) return NextStep::OpenBrowser;
+  if (transport == kTransportManual) return NextStep::ManualEntry;
+  // "extension" is the web's; a desktop app never drives an extension itself
+  return NextStep::Unsupported;
+}
+
+// A refusal that is not this flow's answer: a hand-back for another purpose
+// (another flow's tab), a link that is not a Bittensor hand-back, or one that
+// arrives when nothing waits (the bridge page's "Return to URnetwork" after
+// its automatic redirect, a replay). The flow keeps waiting.
+inline bool IsForeignReturn(std::string_view errorCode) {
+  return errorCode == "purpose_mismatch" || errorCode == "not_bittensor_return" ||
+         errorCode == "not_awaiting_wallet";
+}
+
+// The manual form stays open on these: the user can correct a typo against
+// the same challenge.
+inline bool IsCorrectable(std::string_view errorCode) {
+  return errorCode == "invalid_signature" || errorCode == "invalid_ss58_address" ||
+         errorCode == "address_mismatch";
+}
+
+// The localization key for a refusal code. Empty for "wallet_error": the
+// bridge relays the wallet's own message, which is shown as is (falling back
+// to `fallbackKey` when it is empty).
+inline std::string ErrorKey(std::string_view errorCode, std::string_view fallbackKey) {
+  if (errorCode == "invalid_signature") return "bittensor_error_invalid_signature";
+  if (errorCode == "challenge_expired") return "bittensor_error_challenge_expired";
+  if (errorCode == "message_mismatch") return "bittensor_error_message_mismatch";
+  if (errorCode == "address_mismatch") return "earnings_wallet_mismatch";
+  if (errorCode == "invalid_ss58_address") return "invalid_ss58_address";
+  if (errorCode == "wallet_error") return std::string();
+  return std::string(fallbackKey);
+}
+
+}  // namespace urnw::bittensor
