@@ -11,13 +11,21 @@
 //   downloads the own-arch MSI to %LOCALAPPDATA%\URnetwork\updates\<tag>\,
 //   verifies it against the asset's own SHA-256 digest, stamped by GitHub in
 //     the same releases JSON the check parsed (CNG SHA-256 locally),
-//   starts it with msiexec (elevated: the package is per-machine), and quits
-//     the app so none of its files are held open. The MSI's MajorUpgrade
-//     replaces the install and its ServiceControl stops and restarts the
-//     service, so there is no second click for the service.
+//   starts it with msiexec (elevated: the package is per-machine), logging
+//     verbosely to install.log beside it, and quits the app so none of its
+//     files are held open. The MSI's MajorUpgrade replaces the install and
+//     its ServiceControl stops and restarts the service, so there is no
+//     second click for the service.
 //
 // If the installer cannot be started (the elevation prompt was declined, or
 // the launch failed), the verified MSI is shown in Explorer for the user to run.
+//
+// The app never sees msiexec's result, so the next launch reads it from disk:
+// a download dir whose release still outranks this build and holds a
+// finished install.log is an update that did not land (it failed or rolled
+// back). When a check offers that release again, the banner says so and
+// names the log. The installed release's own dir is kept: Windows Installer
+// recorded it as the product's source, and a repair reads the MSI from there.
 //
 // A dev build (urnw::version::kCode == 0) never self-updates: every release
 // would outrank it forever. The periodic checker is fully disabled there; the
@@ -38,6 +46,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <functional>
+#include <map>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -59,7 +68,15 @@ class UpdateChecker {
                     // Nothing was installed — the click retries from scratch.
   };
   enum class Stage { Idle, Downloading, Verifying, Installing };
-  enum class Failure { None, Download, Checksum };
+  enum class Failure {
+    None,
+    Download,
+    Checksum,
+    // An earlier launch started the installer for this release, its log is
+    // finished, and this build is still older: the install failed or rolled
+    // back. installerPath names the log.
+    Install,
+  };
 
   // What the last CHECK concluded — the developer screen's line, separate from
   // the banner phase because "checked and found nothing" must be reportable
@@ -82,7 +99,7 @@ class UpdateChecker {
     std::wstring version;
     std::uint64_t code = 0;
     // ManualInstall: where the verified MSI sits, for the banner's wording and
-    // its re-reveal action.
+    // its re-reveal action. Failed with Failure::Install: the installer's log.
     std::wstring installerPath;
     CheckOutcome lastCheck = CheckOutcome::NeverRan;
     // The newest release tag the last completed check parsed, whether or not
@@ -157,7 +174,8 @@ class UpdateChecker {
   void RunApply();
   // Best-effort startup hygiene: drop <name>.old / <name>.old-<code> leftovers
   // next to the exe (renamed images from the portable builds' old rename-swap
-  // updater) and download dirs whose tag no longer outranks this build.
+  // updater) and download dirs of releases older than this build, and note
+  // the releases whose install did not land (failedInstalls_).
   void CleanupStaleFiles();
 
   // Copy the snapshot under the lock, mutate, publish to the handler outside
@@ -176,6 +194,10 @@ class UpdateChecker {
   std::chrono::steady_clock::time_point nextAuto_{};
   Snapshot snapshot_;
   Offer offer_;
+  // Release code -> installer log, for the installs an earlier launch
+  // started that did not land. Filled by CleanupStaleFiles before the worker
+  // loop; read by RunCheck. Both run on the worker thread.
+  std::map<std::uint64_t, std::wstring> failedInstalls_;
 
   // The handlers' own lock, on SdkHost's advancedMutex_ reasoning: never held
   // across an invocation, never taken together with mutex_.

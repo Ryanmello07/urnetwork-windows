@@ -556,6 +556,15 @@ void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) 
                          L"The download didn't finish. Check the connection "
                          L"and click to try again.");
           break;
+        case Failure::Install:
+          // An earlier launch started the installer and this build is still
+          // the old one: it failed or rolled back. The log path is data.
+          message = AdvW("upd_failed_install",
+                         L"The update to this version didn't install, so "
+                         L"nothing changed. Click to try again. The "
+                         L"installer's log:");
+          if (!snap.installerPath.empty()) message += L" " + snap.installerPath;
+          break;
         default:  // Checksum
           message = AdvW("upd_failed_checksum",
                          L"The download didn't match the release's checksums, "

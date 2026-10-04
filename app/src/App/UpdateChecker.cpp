@@ -73,6 +73,24 @@ constexpr char kAutoCheckPrefKey[] = "check_updates_automatically";
 // isolates everything else.
 fs::path UpdatesDir() { return StorageRoot(/*isService=*/false).parent_path() / L"updates"; }
 
+// msiexec's verbose log, written next to the MSI in the release's download
+// dir (/l*v). The app quits once the installer starts and never sees its exit
+// code, so this file is how the next launch learns what happened.
+constexpr wchar_t kInstallLogName[] = L"install.log";
+
+// True when `log` exists and nothing holds it open for writing. msiexec keeps
+// its log open, with write access, until it exits, so opening it here without
+// sharing write access fails with a sharing violation while an install is
+// still running: a log being written is an install in progress, not a result.
+bool InstallerLogFinished(fs::path const& log) {
+  const HANDLE file = ::CreateFileW(log.c_str(), GENERIC_READ, FILE_SHARE_READ,
+                                    nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL,
+                                    nullptr);
+  if (file == INVALID_HANDLE_VALUE) return false;
+  ::CloseHandle(file);
+  return true;
+}
+
 // Unbounded, like the service's own OwnExePath (Service/main.cpp): the
 // portable folder can sit under a long-path-enabled tree, and a MAX_PATH
 // truncation here would silently disable the stale-file cleanup.
@@ -290,8 +308,12 @@ std::string Sha256File(fs::path const& file) {
 // "runas" verb: the package is per-machine, and asking here makes a declined
 // prompt an observable ERROR_CANCELLED instead of an installer that fails
 // later out of sight. /passive shows progress without questions; /norestart
-// because an update must never reboot the machine on its own.
-bool LaunchInstaller(fs::path const& msi, std::string& error) {
+// because an update must never reboot the machine on its own; /l*v writes the
+// verbose log the next launch reads (kInstallLogName). Both paths sit in the
+// release's download dir, whose name passed the tag grammar, so neither can
+// carry a quote.
+bool LaunchInstaller(fs::path const& msi, fs::path const& log,
+                     std::string& error) {
   wchar_t sys[MAX_PATH];
   const UINT n = ::GetSystemDirectoryW(sys, MAX_PATH);
   if (n == 0 || n >= MAX_PATH) {
@@ -299,8 +321,9 @@ bool LaunchInstaller(fs::path const& msi, std::string& error) {
     return false;
   }
   const std::wstring msiexec = std::wstring(sys, n) + L"\\msiexec.exe";
-  const std::wstring params =
-      L"/i \"" + msi.wstring() + L"\" /passive /norestart";
+  const std::wstring params = L"/i \"" + msi.wstring() +
+                              L"\" /passive /norestart /l*v \"" +
+                              log.wstring() + L"\"";
   SHELLEXECUTEINFOW sei{};
   sei.cbSize = sizeof(sei);
   sei.fMask = SEE_MASK_NOASYNC;
@@ -514,19 +537,35 @@ void UpdateChecker::CleanupStaleFiles() {
     if (removed) LogInfo("update: removed {} stale .old file(s)", removed);
   }
 
-  // Download dirs whose tag no longer outranks this build are spent — either
-  // this very update applied, or a newer one superseded it. A dev build
-  // (kCode 0) removes nothing: every tag outranks it by definition.
+  // Download dirs of releases OLDER than this build are spent: a newer update
+  // has applied since. The installed release's own dir (code == kCode) stays.
+  // Windows Installer recorded it as the product's source, does not accept
+  // its own cached copy as one, and reads the MSI from there for a repair
+  // (Settings > Apps, or the advertised shortcut's self-repair). It is
+  // removed once a later update lands. A dev build (kCode 0) removes
+  // nothing, since every release outranks it.
+  //
+  // A dir whose release still OUTRANKS this build and holds a finished
+  // installer log is an update an earlier launch started that did not land.
+  // RunCheck reports it when it offers that release again.
   for (auto const& entry : fs::directory_iterator(UpdatesDir(), ec)) {
     if (!entry.is_directory(ec)) continue;
-    const std::uint64_t code =
-        version::ParseReleaseCode(Narrow(entry.path().filename().wstring()));
-    if (code != 0 && code <= version::kCode) {
+    const std::string name = Narrow(entry.path().filename().wstring());
+    const std::uint64_t code = version::ParseReleaseCode(name);
+    if (code == 0 || version::kCode == 0) continue;
+    if (code < version::kCode) {
       std::error_code rmec;
       fs::remove_all(entry.path(), rmec);
-      if (!rmec)
-        LogInfo("update: removed spent download dir {}",
-                Narrow(entry.path().filename().wstring()));
+      if (!rmec) LogInfo("update: removed spent download dir {}", name);
+    } else if (code > version::kCode) {
+      const fs::path log = entry.path() / kInstallLogName;
+      if (InstallerLogFinished(log)) {
+        failedInstalls_[code] = log.wstring();
+        LogWarn("update: the update to {} did not install; this build is "
+                "still code {} (installer log: {})",
+                name, static_cast<unsigned long long>(version::kCode),
+                Narrow(log.wstring()));
+      }
     }
   }
 }
@@ -623,12 +662,16 @@ void UpdateChecker::RunCheck() {
       // an older one; the SAME release keeps its standing ManualInstall/Failed
       // state — a periodic check must not wipe the outcome of a click.
       if (snapshot_.phase == Phase::None || snapshot_.code != offer.code) {
-        snapshot_.phase = Phase::Available;
+        // An earlier launch's installer for this very release did not land:
+        // say so and name its log, and keep the click as the retry.
+        const auto failed = failedInstalls_.find(offer.code);
+        const bool installFailed = failed != failedInstalls_.end();
+        snapshot_.phase = installFailed ? Phase::Failed : Phase::Available;
         snapshot_.stage = Stage::Idle;
-        snapshot_.failure = Failure::None;
+        snapshot_.failure = installFailed ? Failure::Install : Failure::None;
         snapshot_.version = offer.version;
         snapshot_.code = offer.code;
-        snapshot_.installerPath.clear();
+        snapshot_.installerPath = installFailed ? failed->second : std::wstring{};
       }
     } else {
       snapshot_.lastCheck = CheckOutcome::NoUpdate;
@@ -741,7 +784,7 @@ void UpdateChecker::RunApply() {
   // ---- (c) start the installer, then get out of its way ---------------------
   Mutate([](Snapshot& s) { s.stage = Stage::Installing; });
   std::string launchError;
-  if (!LaunchInstaller(msiPath, launchError)) {
+  if (!LaunchInstaller(msiPath, dir / kInstallLogName, launchError)) {
     // Verified and on disk; hand the finish to the user and SHOW them the
     // file rather than describing where it is.
     LogWarn("update: installer not started ({}) — downloaded, not installed",
