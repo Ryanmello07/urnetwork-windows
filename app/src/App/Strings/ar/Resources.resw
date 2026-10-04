@@ -678,9 +678,49 @@
     <value>أفضل قيمة</value>
     <comment>Gold pill on the recommended (annual) plan card.</comment>
   </data>
+  <data name="bittensor_choose_wallet" xml:space="preserve">
+    <value>اختر محفظة Bittensor</value>
+    <comment>Title of the picker that chooses which Bittensor wallet (Talisman or TAO.com) signs.</comment>
+  </data>
+  <data name="bittensor_continue_in_browser" xml:space="preserve">
+    <value>تابع في متصفحك ووافق على الطلب في إضافة {}.</value>
+    <comment>Desktop: shown while the browser is open on the wallet page. The argument is the wallet product name (Talisman).</comment>
+  </data>
+  <data name="bittensor_error_challenge_expired" xml:space="preserve">
+    <value>انتهت صلاحية هذا الطلب. ابدأ من جديد للحصول على رسالة جديدة للتوقيع.</value>
+    <comment>Error: the single-use wallet challenge expired (5 minutes) before it was signed.</comment>
+  </data>
+  <data name="bittensor_error_extension_not_found" xml:space="preserve">
+    <value>لم يتم العثور على إضافة {} في هذا المتصفح. ثبّتها ثم حاول مرة أخرى.</value>
+    <comment>Error: the wallet's browser extension is not installed in this browser. The argument is the wallet product name (Talisman).</comment>
+  </data>
+  <data name="bittensor_error_invalid_signature" xml:space="preserve">
+    <value>هذا ليس توقيعًا صالحًا. الصق توقيع 0x الكامل من محفظتك.</value>
+    <comment>Error: the pasted or returned Bittensor signature is not a 64-byte hex signature.</comment>
+  </data>
+  <data name="bittensor_error_message_mismatch" xml:space="preserve">
+    <value>وقّعت المحفظة طلبًا مختلفًا. ابدأ من جديد.</value>
+    <comment>Error: the wallet returned a signature over a different challenge than the one issued.</comment>
+  </data>
+  <data name="bittensor_manual_sign_instructions" xml:space="preserve">
+    <value>وقّع هذه الرسالة باستخدام محفظة {} التي تملك مفتاحك البارد (coldkey)، ثم الصق العنوان والتوقيع أدناه.</value>
+    <comment>Manual Bittensor wallet proof: how to sign the shown challenge message. The argument is the wallet product name (Talisman or TAO.com).</comment>
+  </data>
+  <data name="bittensor_message_to_sign" xml:space="preserve">
+    <value>الرسالة المطلوب توقيعها</value>
+    <comment>Label above the challenge message the user signs in their Bittensor wallet.</comment>
+  </data>
   <data name="bittensor_sign_in" xml:space="preserve">
     <value>تسجيل الدخول باستخدام Bittensor</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="bittensor_signature_label" xml:space="preserve">
+    <value>التوقيع</value>
+    <comment>Label of the field where the user pastes the Bittensor wallet signature.</comment>
+  </data>
+  <data name="bittensor_signature_placeholder" xml:space="preserve">
+    <value>الصق التوقيع ‎0x…</value>
+    <comment>Placeholder of the Bittensor signature field (a 0x-prefixed hex signature).</comment>
   </data>
   <data name="bittensor_wallet" xml:space="preserve">
     <value>محفظة Bittensor</value>
