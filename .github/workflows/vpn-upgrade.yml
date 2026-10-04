@@ -1,0 +1,340 @@
+# Runner test for urnetwork/windows A2a, "official MSIs carry their version".
+# It installs and upgrades real stamped MSIs on a disposable windows-2022
+# runner; it publishes nothing and needs no write permission.
+#
+# Setup: on a throwaway branch of the fork that contains A2a (and A1, so the
+# tree matches what CI builds), add
+#   .github/workflows/vpn-upgrade.yml   (this file)
+#   .github/vpn-upgrade-lib.ps1          (runner-tests/vpn-upgrade-lib.ps1)
+# and push it as ci/vpn-upgrade-<anything>. The push runs this workflow:
+# workflow_dispatch only works for workflows on the default branch.
+#
+# What it proves, each claim in its own step:
+#   1. app\build.ps1 runs end to end under Windows PowerShell 5.1 (the org
+#      release VM's shell; no CI ran it before) and stamps each MSI's
+#      ProductVersion with UrVersion.ps1's UrMsiVersion.
+#   2. v1 -> v2, two codes 30 s apart that share ONE ProductVersion
+#      (AllowSameVersionUpgrades): upgraded in place, one product registered.
+#   3. v2 -> v3, the same UTC day, higher ProductVersion: upgraded in place.
+#   4. v3 -> v4, the next day: upgraded in place.
+#   5. v4 -> v5-broken, whose urnetworkd cannot start: the install fails, and
+#      afterInstallInitialize rolls back to v4 with its service running.
+#   6. v4 -> v5 with the v4 tray app running, msiexec /passive as the updater
+#      runs it: CloseApplication closes the app, no reboot is needed.
+#   7. A portable urnetworkd (registered with `urnetworkd install`) is replaced
+#      by the MSI's service (ServiceControl Remove="both").
+# After every install: exactly one URnetwork product, the expected
+# ProductVersion, urnetworkd running from Program Files, both exes at the
+# expected file version.
+#
+# SPDX-License-Identifier: MPL-2.0
+
+name: VPN MSI upgrade test (A2a)
+
+on:
+  push:
+    branches:
+      - 'ci/vpn-upgrade-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  # A green build-and-test run whose urnetwork-sdk-windows artifact matches
+  # this tree's SDK headers. 37202293063 is A1's fork run at af462b8.
+  SDK_RUN_ID: '37202293063'
+
+jobs:
+  plan:
+    name: Plan the release codes
+    runs-on: ubuntu-latest
+    outputs:
+      v1: ${{ steps.plan.outputs.v1 }}
+      v2: ${{ steps.plan.outputs.v2 }}
+      v3: ${{ steps.plan.outputs.v3 }}
+      v4: ${{ steps.plan.outputs.v4 }}
+      v5: ${{ steps.plan.outputs.v5 }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Fixed UTC instants two days and one day back, so every code is in the
+      # past (UrVersion.ps1 refuses codes more than 24 h ahead). The org's
+      # version string carries a date; any date is accepted, since only the
+      # code is used for numbers.
+      - name: Choose the versions
+        id: plan
+        run: |
+          founded=$(date -u -d 2023-05-23 +%s)
+          mk() {
+            local s
+            s=$(date -u -d "$1" +%s)
+            echo "$(date -u -d "$1" '+%Y.%-m.%-d')-$(( (s - founded) * 10 ))"
+          }
+          d2=$(date -u -d '2 days ago' +%Y-%m-%d)
+          d1=$(date -u -d '1 day ago' +%Y-%m-%d)
+          {
+            echo "v1=$(mk "$d2 09:59:50Z")"
+            echo "v2=$(mk "$d2 10:00:20Z")"
+            echo "v3=$(mk "$d2 14:00:00Z")"
+            echo "v4=$(mk "$d1 08:00:00Z")"
+            echo "v5=$(mk "$d1 09:00:00Z")"
+          } | tee -a "$GITHUB_OUTPUT"
+
+      # The relationships the test depends on, checked before anything builds.
+      - name: Check the planned ProductVersions
+        shell: pwsh
+        env:
+          V1: ${{ steps.plan.outputs.v1 }}
+          V2: ${{ steps.plan.outputs.v2 }}
+          V3: ${{ steps.plan.outputs.v3 }}
+          V4: ${{ steps.plan.outputs.v4 }}
+          V5: ${{ steps.plan.outputs.v5 }}
+        run: |
+          $v = @{}
+          foreach ($key in 'v1', 'v2', 'v3', 'v4', 'v5') {
+            $v[$key] = & ./app/tools/UrVersion.ps1 -Version ([Environment]::GetEnvironmentVariable($key.ToUpper()))
+            "{0}: {1} msi {2} file {3}.{4}.{5}.{6}" -f $key, $v[$key].UrVersion, $v[$key].UrMsiVersion,
+              $v[$key].UrVersionMajor, $v[$key].UrVersionMinor, $v[$key].UrVersionPatch, $v[$key].UrVersionBuild
+          }
+          if ($v.v1.UrMsiVersion -ne $v.v2.UrMsiVersion) { throw "v1 and v2 must share a ProductVersion" }
+          if ($v.v1.UrVersionBuild -eq $v.v2.UrVersionBuild) { throw "v1 and v2 must differ in file version" }
+          foreach ($pair in @('v2', 'v3'), @('v3', 'v4'), @('v4', 'v5')) {
+            if ([version]$v[$pair[0]].UrMsiVersion -ge [version]$v[$pair[1]].UrMsiVersion) {
+              throw "$($pair[0]) must have a lower ProductVersion than $($pair[1])"
+            }
+          }
+
+  build:
+    name: Build ${{ matrix.key }} with build.ps1 under Windows PowerShell 5.1
+    needs: plan
+    runs-on: windows-2022
+    strategy:
+      fail-fast: true
+      matrix:
+        key: [v1, v2, v3, v4]
+    env:
+      VERSION: ${{ needs.plan.outputs[matrix.key] }}
+      V5: ${{ needs.plan.outputs.v5 }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download the SDK zip from run ${{ env.SDK_RUN_ID }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          gh run download $env:SDK_RUN_ID -R $env:GITHUB_REPOSITORY -n urnetwork-sdk-windows -D sdk-zip
+          if ($LASTEXITCODE -ne 0) { throw "could not download the SDK zip" }
+          Get-ChildItem sdk-zip
+
+      # The org release path, as shipped: powershell.exe (5.1), the script's
+      # own vswhere/msbuild/dotnet resolution, x64 only.
+      - name: app\build.ps1 -Version ${{ env.VERSION }}
+        shell: cmd
+        run: >-
+          powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass
+          -File app\build.ps1 -Version %VERSION%
+          -SdkZip "%GITHUB_WORKSPACE%\sdk-zip\URnetworkSdkWindows.zip" -Platforms x64
+
+      - name: Check the MSI's ProductVersion and stage it
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-upgrade-lib.ps1"
+          $out = New-Item -ItemType Directory -Force (Join-Path $env:GITHUB_WORKSPACE 'staged')
+          function Stage([string]$key, [string]$version, [string]$msi, [string]$fileVersion) {
+            $ur = & .\app\tools\UrVersion.ps1 -Version $version
+            $actual = Get-UrMsiProductVersion $msi
+            if ($actual -ne $ur.UrMsiVersion) { throw "$key MSI ProductVersion $actual, want $($ur.UrMsiVersion)" }
+            Copy-Item $msi (Join-Path $out "$key.msi")
+            [pscustomobject]@{ key = $key; version = $version; code = [string]$ur.UrVersionCode;
+              msi_version = $ur.UrMsiVersion; file_version = $fileVersion } |
+              ConvertTo-Json | Set-Content -Encoding ascii (Join-Path $out "$key.json")
+            "staged $key : $version, ProductVersion $actual, payload files $fileVersion"
+          }
+          $ur = & .\app\tools\UrVersion.ps1 -Version $env:VERSION
+          $fileVersion = '{0}.{1}.{2}.{3}' -f $ur.UrVersionMajor, $ur.UrVersionMinor, $ur.UrVersionPatch, $ur.UrVersionBuild
+          $bin = Join-Path $env:GITHUB_WORKSPACE 'app\build\x64\Release'
+          foreach ($exe in 'URnetwork.exe', 'urnetworkd.exe') {
+            $actual = Get-UrFileVersion (Join-Path $bin $exe)
+            if ($actual -ne $fileVersion) { throw "$exe file version $actual, want $fileVersion" }
+          }
+          Stage '${{ matrix.key }}' $env:VERSION (Join-Path $env:GITHUB_WORKSPACE "app\build\out\URnetwork-$($env:VERSION)-x64.msi") $fileVersion
+
+      # v4's payload repackaged under v5's ProductVersion, twice: as is (for
+      # the upgrade while the app runs) and with a urnetworkd.exe that exits at
+      # once, so StartServices fails and the install must roll back.
+      - name: Package v5 and v5-broken from v4's payload
+        if: matrix.key == 'v4'
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-upgrade-lib.ps1"
+          $out = Join-Path $env:GITHUB_WORKSPACE 'staged'
+          $ur4 = & .\app\tools\UrVersion.ps1 -Version $env:VERSION
+          $ur5 = & .\app\tools\UrVersion.ps1 -Version $env:V5
+          $fileVersion = '{0}.{1}.{2}.{3}' -f $ur4.UrVersionMajor, $ur4.UrVersionMinor, $ur4.UrVersionPatch, $ur4.UrVersionBuild
+          $bin = Join-Path $env:GITHUB_WORKSPACE 'app\build\x64\Release'
+          $broken = Join-Path $env:RUNNER_TEMP 'bin-broken'
+          Copy-Item $bin $broken -Recurse
+          Copy-Item "$env:SystemRoot\System32\hostname.exe" (Join-Path $broken 'urnetworkd.exe') -Force
+          foreach ($case in @(@{ key = 'v5'; dir = $bin }, @{ key = 'v5-broken'; dir = $broken })) {
+            $wixArgs = @('build', 'app\installer\Installer.wixproj', '--no-incremental', '-c', 'Release',
+              '-p:Platform=x64', "-p:BinDir=$($case.dir)") + @($ur5.WixArgs)
+            dotnet @wixArgs
+            if ($LASTEXITCODE -ne 0) { throw "WiX build failed for $($case.key)" }
+            $msi = Get-ChildItem app\installer\bin -Recurse -Filter *.msi | Sort-Object LastWriteTime | Select-Object -Last 1
+            $actual = Get-UrMsiProductVersion $msi.FullName
+            if ($actual -ne $ur5.UrMsiVersion) { throw "$($case.key) ProductVersion $actual, want $($ur5.UrMsiVersion)" }
+            Copy-Item $msi.FullName (Join-Path $out "$($case.key).msi")
+            [pscustomobject]@{ key = $case.key; version = $env:V5; code = [string]$ur5.UrVersionCode;
+              msi_version = $ur5.UrMsiVersion; file_version = $fileVersion } |
+              ConvertTo-Json | Set-Content -Encoding ascii (Join-Path $out "$($case.key).json")
+            "staged $($case.key): ProductVersion $actual, payload files $fileVersion"
+          }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: msi-${{ matrix.key }}
+          path: staged/
+          if-no-files-found: error
+
+  upgrade:
+    name: Install, upgrade, roll back, take over
+    needs: build
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: msi-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/msis
+
+      - name: Inventory
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-upgrade-lib.ps1"
+          Get-ChildItem $UrMsiDir | Format-Table Name, Length -AutoSize | Out-String | Write-Host
+          if ((Get-UrProducts).Count -ne 0) { throw "a URnetwork product is already installed on this runner" }
+          if (Get-UrServiceInfo) { throw "a urnetworkd service already exists on this runner" }
+
+      - name: 1. Install v1
+        timeout-minutes: 10
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-upgrade-lib.ps1"
+          $code = Invoke-UrMsiexec '/i' (Get-UrMsiPath 'v1') '/qn' 'v1-install.log'
+          if ($code -ne 0) { throw "v1 install exit code $code" }
+          $product = Assert-UrInstalled (Get-UrExpect 'v1')
+          Set-Content -Encoding ascii (Join-Path $env:RUNNER_TEMP 'v1.productcode') $product.ProductCode
+
+      - name: 2. v1 -> v2, same ProductVersion (AllowSameVersionUpgrades)
+        timeout-minutes: 10
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-upgrade-lib.ps1"
+          $before = Get-Content (Join-Path $env:RUNNER_TEMP 'v1.productcode')
+          if ((Get-UrExpect 'v1').msi_version -ne (Get-UrExpect 'v2').msi_version) { throw "plan broke: v1/v2 ProductVersions differ" }
+          $code = Invoke-UrMsiexec '/i' (Get-UrMsiPath 'v2') '/qn' 'v2-upgrade.log'
+          if ($code -ne 0) { throw "v2 upgrade exit code $code" }
+          $product = Assert-UrInstalled (Get-UrExpect 'v2')
+          if ($product.ProductCode -eq $before) { throw "the v1 product is still registered: v2 did not replace it" }
+
+      - name: 3. v2 -> v3, same day
+        timeout-minutes: 10
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-upgrade-lib.ps1"
+          $code = Invoke-UrMsiexec '/i' (Get-UrMsiPath 'v3') '/qn' 'v3-upgrade.log'
+          if ($code -ne 0) { throw "v3 upgrade exit code $code" }
+          Assert-UrInstalled (Get-UrExpect 'v3') | Out-Null
+
+      - name: 4. v3 -> v4, next day
+        timeout-minutes: 10
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-upgrade-lib.ps1"
+          $code = Invoke-UrMsiexec '/i' (Get-UrMsiPath 'v4') '/qn' 'v4-upgrade.log'
+          if ($code -ne 0) { throw "v4 upgrade exit code $code" }
+          $product = Assert-UrInstalled (Get-UrExpect 'v4')
+          Set-Content -Encoding ascii (Join-Path $env:RUNNER_TEMP 'v4.productcode') $product.ProductCode
+          Set-Content -Encoding ascii (Join-Path $env:RUNNER_TEMP 'v4.servicehash') (Get-UrServiceHash)
+
+      - name: 5. v4 -> v5-broken fails and rolls back to v4
+        timeout-minutes: 15
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-upgrade-lib.ps1"
+          $code = Invoke-UrMsiexec '/i' (Get-UrMsiPath 'v5-broken') '/qn' 'v5-broken-upgrade.log'
+          if ($code -eq 0 -or $code -eq 3010) { throw "the broken package installed (exit $code); the test proves nothing" }
+          $log = Get-Content -Raw (Join-Path $UrLogDir 'v5-broken-upgrade.log')
+          if ($log -notmatch 'Error 1920') { Write-Host "warning: no 'Error 1920' in the log; exit $code" }
+          $product = Assert-UrInstalled (Get-UrExpect 'v4')
+          if ($product.ProductCode -ne (Get-Content (Join-Path $env:RUNNER_TEMP 'v4.productcode'))) { throw "a different product is registered after the rollback" }
+          if ((Get-UrServiceHash) -ne (Get-Content (Join-Path $env:RUNNER_TEMP 'v4.servicehash'))) { throw "urnetworkd.exe is not v4's after the rollback" }
+          "OK: exit $code, v4 restored with its service running"
+
+      - name: 6. v4 -> v5 while the v4 app runs, msiexec /passive like the updater
+        timeout-minutes: 10
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-upgrade-lib.ps1"
+          $app = Start-Process -FilePath (Join-Path $UrInstallDir 'URnetwork.exe') -PassThru
+          Start-Sleep -Seconds 15
+          if ($app.HasExited) { throw "the v4 app exited by itself (code $($app.ExitCode)) before the upgrade; the in-use case was not tested" }
+          "v4 app running as pid $($app.Id)"
+          $code = Invoke-UrMsiexec '/i' (Get-UrMsiPath 'v5') '/passive' 'v5-upgrade-in-use.log'
+          if ($code -ne 0) { throw "v5 upgrade exit code $code (3010 means a reboot was needed: CloseApplication did not close the app)" }
+          if (-not $app.HasExited) { throw "the v4 app (pid $($app.Id)) is still running after the upgrade" }
+          Assert-UrInstalled (Get-UrExpect 'v5') | Out-Null
+          $appLog = Join-Path $env:LOCALAPPDATA 'URnetwork\app\logs\urnetwork-app.log'
+          if (Test-Path $appLog) {
+            $closed = Select-String -Path $appLog -SimpleMatch 'tray: WM_CLOSE received, quitting'
+            if (-not $closed) { throw "the app log has no 'tray: WM_CLOSE received' line" }
+            "app log: $($closed[-1].Line)"
+          } else {
+            throw "no app log at $appLog"
+          }
+
+      - name: 7. A portable urnetworkd is taken over by the MSI's
+        timeout-minutes: 15
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-upgrade-lib.ps1"
+          $portable = 'C:\urn-portable'
+          Copy-Item $UrInstallDir $portable -Recurse
+          $product = (Get-UrProducts)[0]
+          $code = Invoke-UrMsiexec '/x' $product.ProductCode '/qn' 'uninstall.log'
+          if ($code -ne 0) { throw "uninstall exit code $code" }
+          if ((Get-UrProducts).Count -ne 0 -or (Get-UrServiceInfo)) { throw "the uninstall left a product or the service behind" }
+          & "$portable\urnetworkd.exe" install
+          if ($LASTEXITCODE -ne 0) { throw "urnetworkd install exit code $LASTEXITCODE" }
+          $service = Wait-UrServiceRunning
+          if ($service.PathName -notlike "*$portable\urnetworkd.exe*") { throw "portable service runs $($service.PathName)" }
+          "portable service: $($service.PathName)"
+          $code = Invoke-UrMsiexec '/i' (Get-UrMsiPath 'v4') '/qn' 'v4-over-portable.log'
+          if ($code -ne 0) { throw "MSI over the portable service exit code $code" }
+          Assert-UrInstalled (Get-UrExpect 'v4') | Out-Null
+          $services = @(Get-CimInstance Win32_Service | Where-Object { $_.Name -eq 'urnetworkd' -or $_.PathName -like '*urnetworkd.exe*' })
+          if ($services.Count -ne 1) { throw "want one urnetworkd service, found $($services.Count)" }
+
+      - name: Collect logs
+        if: always()
+        shell: powershell
+        run: |
+          $dest = Join-Path $env:RUNNER_TEMP 'upgrade-logs'
+          New-Item -ItemType Directory -Force $dest | Out-Null
+          foreach ($dir in "$env:LOCALAPPDATA\URnetwork\app\logs", "$env:ProgramData\URnetwork\service\logs") {
+            if (Test-Path $dir) { Copy-Item $dir (Join-Path $dest ((Split-Path $dir -Parent | Split-Path -Leaf) + '-logs')) -Recurse -Force }
+          }
+          Get-CimInstance Win32_Service | Where-Object { $_.PathName -like '*urnetwork*' } |
+            Format-List Name, State, PathName | Out-File (Join-Path $dest 'services.txt')
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: upgrade-logs
+          path: ${{ runner.temp }}/upgrade-logs/
+          if-no-files-found: warn
