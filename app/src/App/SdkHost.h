@@ -757,9 +757,27 @@ class SdkHost {
   //   * LOUD ON FAILURE. Every path that cannot produce a session publishes the
   //     reason on the notice channel (PublishSessionFailure) and pushes a stats
   //     snapshot, so the button does not sit on "Connecting" forever.
+  //
+  // OUT OF BALANCE, NONE OF THEM STARTS. Every connect entry point (these, the
+  // urnet::ConnectLocation overload and the two row variants below) first asks
+  // the start-connect gate (SetStartConnectGate, BalanceGate.h): blocked, it
+  // records nothing and shows the upgrade path instead. EnsureSession is a
+  // reattach, not a connect, and Disconnect is always admitted, so a session
+  // that runs out of balance is never dropped by this.
   void ConnectBestAvailable();
   void Connect(const std::string& connectLocationJson);
   void Disconnect();
+  // The start-connect gate. outOfBalance answers urnw::balance::OutOfBalance
+  // for this instant; upgrade shows the upgrade path in place of a blocked
+  // connect. Both are called on the caller's thread, which for every connect
+  // entry point is the UI thread. Unset, every connect is admitted.
+  void SetStartConnectGate(std::function<bool()> outOfBalance, std::function<void()> upgrade) {
+    startConnectOutOfBalance_ = std::move(outOfBalance);
+    startConnectUpgrade_ = std::move(upgrade);
+  }
+  // Whether a connect gesture may start now; when not, shows the upgrade path.
+  // `what` names the entry point in the log.
+  bool AdmitStartConnect(const char* what);
 
   // TURN THE SERVICE'S TUNNEL OFF. Not the same thing as Disconnect(), and the
   // difference is the whole of the owner's "kill the app and my internet stays
@@ -1721,6 +1739,8 @@ class SdkHost {
   std::optional<urnet::Api> api_;
   std::unique_ptr<ClientEventQueue> events_;
   std::function<void(const std::string& url)> onOnboardingLink_;
+  std::function<bool()> startConnectOutOfBalance_;  // SetStartConnectGate
+  std::function<void()> startConnectUpgrade_;
   bool productUpdatesOptOut_ = false;  // the next create's product_updates
   // the sign-up pages' opt-out onto a create's args (absent = opted in)
   void ApplySignupPreferences(urnet::NetworkCreateArgs& args) const;

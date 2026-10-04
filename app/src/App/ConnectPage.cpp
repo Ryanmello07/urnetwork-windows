@@ -257,6 +257,11 @@ void ConnectPage::OnConnectToggle(IInspectable const&, RoutedEventArgs const&) {
     Sdk().Disconnect();
     return;
   }
+  // Out of balance a connect starts nothing and the upgrade path shows instead
+  // (BalanceGate.h, start connect). Asked here, before the optimistic
+  // "Connecting" below, so a blocked press does not flash it; the button is
+  // disabled in that state, so this is the hero and a press racing the push.
+  if (!Sdk().AdmitStartConnect("connect button")) return;
   // Connect to what the user PICKED. This button used to call
   // ConnectBestAvailable() unconditionally, while the chooser's own rows
   // connect to their location directly -- so choosing Japan and then pressing
