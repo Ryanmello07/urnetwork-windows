@@ -726,6 +726,14 @@
     <value>محفظة Bittensor</value>
     <comment>Label of the connected wallet block.</comment>
   </data>
+  <data name="bittensor_walletconnect_continue" xml:space="preserve">
+    <value>تابع في متصفحك: امسح الرمز باستخدام تطبيق محفظتك، أو افتح المحفظة على هذا الجهاز.</value>
+    <comment>Shown while the browser is open on the WalletConnect page: the user scans the code or opens their wallet app there.</comment>
+  </data>
+  <data name="bittensor_walletconnect_hint" xml:space="preserve">
+    <value>Nova وNightly ومحافظ WalletConnect الأخرى</value>
+    <comment>Subtitle of the WalletConnect option in the Bittensor wallet chooser: which wallets it works with. Nova, Nightly and WalletConnect are product names.</comment>
+  </data>
   <data name="block_ads_and_trackers" xml:space="preserve">
     <value>حظر الإعلانات والمتعقبات</value>
     <comment>dns settings</comment>

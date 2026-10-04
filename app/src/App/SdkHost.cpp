@@ -26,6 +26,7 @@
 #include <nlohmann/json.hpp>
 
 #include "BalanceGate.h"
+#include "Config.h"
 #include "BittensorWalletFlow.h"
 #include "Ids.h"
 #include "Localization.h"
@@ -1680,6 +1681,11 @@ void SdkHost::BeginBittensorProof(uint64_t flow, const std::string& walletId,
     session = std::make_shared<urnet::BittensorWalletSession>(urnet::newBittensorWalletSession(
         walletId, std::string(bittensor::kPlatform), purpose,
         std::string(bittensor::kRedirectLink)));
+    // the WalletConnect page pairs with the app's configured project id, as
+    // the pre-helper bridge did ("" = the page's own)
+    if (bittensor::NeedsWalletConnectProjectId(walletId)) {
+      session->setWalletConnectProjectId(urnw::config::kWalletConnectProjectId);
+    }
   } catch (std::exception const& e) {
     LogError("sdkhost: no Bittensor wallet session for {}: {}", walletId, e.what());
     done({false, {}, Narrow(Localized("wallet_connect_failed"))});

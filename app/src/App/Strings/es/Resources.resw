@@ -694,6 +694,14 @@
     <value>Billetera de Bittensor</value>
     <comment>Label of the connected wallet block.</comment>
   </data>
+  <data name="bittensor_walletconnect_continue" xml:space="preserve">
+    <value>Continúa en tu navegador: escanea el código con la app de tu billetera o abre la billetera en este dispositivo.</value>
+    <comment>Shown while the browser is open on the WalletConnect page: the user scans the code or opens their wallet app there.</comment>
+  </data>
+  <data name="bittensor_walletconnect_hint" xml:space="preserve">
+    <value>Nova, Nightly y otras billeteras compatibles con WalletConnect</value>
+    <comment>Subtitle of the WalletConnect option in the Bittensor wallet chooser: which wallets it works with. Nova, Nightly and WalletConnect are product names.</comment>
+  </data>
   <data name="block_ads_and_trackers" xml:space="preserve">
     <value>Bloquear anuncios y rastreadores</value>
     <comment>dns settings</comment>

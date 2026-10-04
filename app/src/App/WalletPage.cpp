@@ -1105,11 +1105,15 @@ void WalletPage::StartWalletConnect(std::string const& pinnedAddress) {
 void WalletPage::ConnectWithWallet(std::string const& walletId, std::string const& pinnedAddress) {
   if (connectingWallet_) return;
   SetConnectingWallet(true);
-  if (walletId == bittensor::kWalletTalisman) {
+  // Talisman asks for the extension's approval, WalletConnect for a scan
+  const std::string browserHint = bittensor::BrowserHintKey(walletId);
+  if (browserHint == "bittensor_continue_in_browser") {
     kit::SetTextOrCollapse(
         w_.WalletConnectStatusText(),
         winrt::hstring{urnw::Format("bittensor_continue_in_browser",
                                     Widen(urnet::bittensorWalletDisplayName(walletId)))});
+  } else if (!browserHint.empty()) {
+    kit::SetTextOrCollapse(w_.WalletConnectStatusText(), Loc(browserHint));
   }
 
   // WalletConnect has no timeout, and its on_error only fires when the deep

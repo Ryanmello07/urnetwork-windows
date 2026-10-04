@@ -686,6 +686,14 @@
     <value>Bittensor 钱包</value>
     <comment>Label of the connected wallet block.</comment>
   </data>
+  <data name="bittensor_walletconnect_continue" xml:space="preserve">
+    <value>请在浏览器中继续：用钱包应用扫描二维码，或在此设备上打开钱包。</value>
+    <comment>Shown while the browser is open on the WalletConnect page: the user scans the code or opens their wallet app there.</comment>
+  </data>
+  <data name="bittensor_walletconnect_hint" xml:space="preserve">
+    <value>Nova、Nightly 及其他 WalletConnect 钱包</value>
+    <comment>Subtitle of the WalletConnect option in the Bittensor wallet chooser: which wallets it works with. Nova, Nightly and WalletConnect are product names.</comment>
+  </data>
   <data name="block_ads_and_trackers" xml:space="preserve">
     <value>拦截广告和跟踪器</value>
     <comment>dns settings</comment>

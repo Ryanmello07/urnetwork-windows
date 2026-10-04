@@ -1,4 +1,5 @@
-// The two Bittensor wallet dialogs: the chooser (Talisman / TAO.com) in front
+// The two Bittensor wallet dialogs: the chooser (Talisman / TAO.com /
+// WalletConnect) in front
 // of every Bittensor flow, and the manual form a TAO.com proof needs (the
 // message to sign, the coldkey address, the pasted signature). The protocol
 // behind both is the SDK session helper, run by SdkHost; these only collect
@@ -20,7 +21,8 @@ struct MainWindow;
 
 namespace urnw::pages {
 
-// `next` gets "talisman", "taocom", or "" when the user cancelled. Does
+// `next` gets "talisman", "taocom", "walletconnect", or "" when the user
+// cancelled. Does
 // nothing (and calls nothing) while another ContentDialog is open.
 winrt::fire_and_forget ChooseBittensorWallet(
     winrt::com_ptr<winrt::URnetwork::implementation::MainWindow> window,

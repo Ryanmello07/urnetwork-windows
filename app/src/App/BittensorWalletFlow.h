@@ -6,9 +6,11 @@
 // (switch to the browser or fill the manual form), which hand-backs this flow
 // should ignore, and the localized text for each refusal code.
 //
-// The supported wallets are exactly Talisman and TAO.com (UPGRADE.md 4.6). On
-// Windows, Talisman is browser_bridge: the system browser opens the ur.io
-// page, which drives the Talisman extension and returns on the existing
+// The supported wallets are Talisman, TAO.com (manual entry, also for any
+// other wallet) and WalletConnect (UPGRADE.md 4.6). On Windows, Talisman and
+// WalletConnect are browser_bridge: the system browser opens the ur.io page,
+// which drives the Talisman extension or pairs a WalletConnect wallet (Nova,
+// Nightly, ...: a QR to scan) and returns on the existing
 // urnetwork://bittensor-sign-message protocol handler (installer
 // Package.wxs). TAO.com documents no programmatic interface, so it is manual:
 // the user signs the shown message with the wallet and pastes the address and
@@ -34,6 +36,12 @@ inline constexpr std::string_view kRedirectLink = "urnetwork://bittensor-sign-me
 
 inline constexpr std::string_view kWalletTalisman = "talisman";
 inline constexpr std::string_view kWalletTaoCom = "taocom";
+inline constexpr std::string_view kWalletWalletConnect = "walletconnect";
+
+// The chooser's entries, in order (the sdk's BittensorWalletIdList).
+inline constexpr std::string_view kChooserWallets[] = {kWalletTalisman, kWalletTaoCom,
+                                                       kWalletWalletConnect};
+inline constexpr int kChooserWalletCount = 3;
 
 inline constexpr std::string_view kTransportBrowserBridge = "browser_bridge";
 inline constexpr std::string_view kTransportManual = "manual";
@@ -42,16 +50,35 @@ inline constexpr std::string_view kPurposeLogin = "login";
 inline constexpr std::string_view kPurposeCreate = "create";
 inline constexpr std::string_view kPurposeConnect = "connect";
 
-// The chooser is a two-button dialog: primary = Talisman, secondary =
-// TAO.com, close = cancel ("").
-enum class ChooserButton { None, Primary, Secondary };
+// The chooser lists kChooserWallets as buttons; the picked index (or -1 for
+// cancel) maps to a wallet id ("" = cancelled).
+inline std::string WalletForChoice(int index) {
+  if (index < 0 || index >= kChooserWalletCount) return std::string();
+  return std::string(kChooserWallets[index]);
+}
 
-inline std::string WalletForChooser(ChooserButton button) {
-  switch (button) {
-    case ChooserButton::Primary: return std::string(kWalletTalisman);
-    case ChooserButton::Secondary: return std::string(kWalletTaoCom);
-    default: return std::string();
-  }
+// The localization key of the line under a chooser entry ("" = none): the
+// manual entry is named as such, and WalletConnect says which wallets it
+// reaches.
+inline std::string ChooserHintKey(std::string_view walletId) {
+  if (walletId == kWalletTaoCom) return "enter_address_manually";
+  if (walletId == kWalletWalletConnect) return "bittensor_walletconnect_hint";
+  return std::string();
+}
+
+// The status line while the browser is open: Talisman asks for the
+// extension's approval (bittensor_continue_in_browser, with the wallet name),
+// WalletConnect for a scan or the wallet app (bittensor_walletconnect_continue).
+// "" for a manual wallet, which never opens the browser.
+inline std::string BrowserHintKey(std::string_view walletId) {
+  if (walletId == kWalletTalisman) return "bittensor_continue_in_browser";
+  if (walletId == kWalletWalletConnect) return "bittensor_walletconnect_continue";
+  return std::string();
+}
+
+// Only the WalletConnect page needs the app's WalletConnect project id.
+inline bool NeedsWalletConnectProjectId(std::string_view walletId) {
+  return walletId == kWalletWalletConnect;
 }
 
 // What the app does once the challenge is in hand.
