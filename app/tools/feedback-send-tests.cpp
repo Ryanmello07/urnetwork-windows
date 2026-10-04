@@ -3,8 +3,7 @@
 // puts back an enabled "Send" - run against the SAME header the app compiles,
 // on any host with a C++20 compiler.
 //
-//   c++ -std=c++20 -I ../src/App feedback-send-tests.cpp \
-//       -o /tmp/feedback-send-tests && /tmp/feedback-send-tests
+//   c++ -std=c++20 -I ../src/App feedback-send-tests.cpp -o /tmp/feedback-send-tests && /tmp/feedback-send-tests
 //
 // SPDX-License-Identifier: MPL-2.0
 

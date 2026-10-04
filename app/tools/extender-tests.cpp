@@ -12,10 +12,7 @@
 // cannot be built off Windows at all; what is verified here is every decision
 // they make before they touch a XAML object.
 //
-//   c++ -std=c++20 -I ../src/App -I ../third_party/qrcodegen \
-//       extender-tests.cpp ../src/App/ExtenderPresentation.cpp \
-//       ../third_party/qrcodegen/qrcodegen.cpp \
-//       -o /tmp/extender-tests && /tmp/extender-tests
+//   c++ -std=c++20 -I ../src/App -I ../third_party/qrcodegen extender-tests.cpp ../src/App/ExtenderPresentation.cpp ../third_party/qrcodegen/qrcodegen.cpp -o /tmp/extender-tests && /tmp/extender-tests
 //
 // SPDX-License-Identifier: MPL-2.0
 

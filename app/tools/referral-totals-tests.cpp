@@ -4,8 +4,7 @@
 // Try again goes back to Loading until the answer lands - run against the SAME
 // header the app compiles, on any host with a C++20 compiler.
 //
-//   c++ -std=c++20 -I ../src/App referral-totals-tests.cpp \
-//       -o /tmp/referral-totals-tests && /tmp/referral-totals-tests
+//   c++ -std=c++20 -I ../src/App referral-totals-tests.cpp -o /tmp/referral-totals-tests && /tmp/referral-totals-tests
 //
 // SPDX-License-Identifier: MPL-2.0
 

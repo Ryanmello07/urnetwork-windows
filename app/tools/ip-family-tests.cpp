@@ -8,9 +8,7 @@
 // NetworkConfig's settings validation and the WFP filter set) are covered by
 // the app build and urnetworkd's own selftest.
 //
-//   c++ -std=c++20 -I ../src/App -I ../src/Service ip-family-tests.cpp \
-//       ../src/App/IpFamilyStatus.cpp ../src/App/ProviderLocations.cpp \
-//       -o /tmp/ip-family-tests && /tmp/ip-family-tests
+//   c++ -std=c++20 -I ../src/App -I ../src/Service ip-family-tests.cpp ../src/App/IpFamilyStatus.cpp ../src/App/ProviderLocations.cpp -o /tmp/ip-family-tests && /tmp/ip-family-tests
 //
 // SPDX-License-Identifier: MPL-2.0
 

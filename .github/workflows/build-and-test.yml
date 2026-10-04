@@ -84,6 +84,13 @@ jobs:
       - name: Check out connect dependency
         run: git clone --depth 1 --branch main https://github.com/urnetwork/connect.git connect
 
+      # sdk@main and connect@main both replace gvisor.dev/gvisor with the
+      # sibling ../gvisor, urnetwork's fork on its default `go` branch. Without
+      # it the SDK build stops at "replacement directory ../../gvisor does not
+      # exist" before a line compiles.
+      - name: Check out gvisor dependency
+        run: git clone --depth 1 https://github.com/urnetwork/gvisor.git gvisor
+
       - name: Check out glog dependency
         run: git clone --depth 1 https://github.com/urnetwork/glog.git glog
 

@@ -4,8 +4,7 @@
 // urnet::DnsResolverSettings, the app sources and the generated English
 // strings, so it needs no SDK build and no Windows:
 //
-//   c++ -std=c++20 -I ../src/App dns-settings-tests.cpp \
-//       -o /tmp/dns-settings-tests && /tmp/dns-settings-tests ..
+//   c++ -std=c++20 -I ../src/App dns-settings-tests.cpp -o /tmp/dns-settings-tests && /tmp/dns-settings-tests ..
 //
 // The argument is the app directory (default ".."). The checks:
 //  - the toggle maps to and from EnableFallback unchanged, and shows off when

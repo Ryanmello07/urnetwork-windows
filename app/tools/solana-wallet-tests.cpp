@@ -11,9 +11,7 @@
 // cannot be built off Windows at all; what is verified here is every decision
 // they make before they touch a XAML object.
 //
-//   c++ -std=c++20 -I ../src/App solana-wallet-tests.cpp \
-//       ../src/App/SolanaWalletPresentation.cpp \
-//       -o /tmp/solana-wallet-tests && /tmp/solana-wallet-tests
+//   c++ -std=c++20 -I ../src/App solana-wallet-tests.cpp ../src/App/SolanaWalletPresentation.cpp -o /tmp/solana-wallet-tests && /tmp/solana-wallet-tests
 //
 // SPDX-License-Identifier: MPL-2.0
 

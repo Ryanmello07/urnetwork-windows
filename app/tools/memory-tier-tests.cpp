@@ -5,8 +5,7 @@
 // with a C++20 compiler -- the probe it feeds (GlobalMemoryStatusEx, Sdk.cpp)
 // is Windows-only and is not exercised here.
 //
-//   c++ -std=c++20 -I ../src/Common memory-tier-tests.cpp \
-//       -o /tmp/memory-tier-tests && /tmp/memory-tier-tests
+//   c++ -std=c++20 -I ../src/Common memory-tier-tests.cpp -o /tmp/memory-tier-tests && /tmp/memory-tier-tests
 //
 // SPDX-License-Identifier: MPL-2.0
 
