@@ -25,6 +25,8 @@
 #include <limits>
 #include <string_view>
 
+#include "BittensorWalletDialogs.h"
+#include "BittensorWalletFlow.h"
 #include "EarningsSheets.h"
 #include "EmojiKeyboard.h"
 #include "LeaderboardIndicator.h"
@@ -55,14 +57,15 @@ using winrt::Windows::Foundation::IInspectable;
 
 namespace {
 
-// The wallet bridge opens a browser and the user may take a while in it; a
-// plain api call does not.
-constexpr int kBridgeTimeoutMs = 180'000;
+// The wallet bridge opens a browser (or the manual form waits for a pasted
+// signature) and the user may take a while; a plain api call does not. The
+// challenge itself lives five minutes, so waiting longer cannot succeed.
+constexpr int kBridgeTimeoutMs = 300'000;
 constexpr int kApiTimeoutMs = 20'000;
 
-// The bridge's purpose for a signature that attaches a coldkey to the provider
-// (the sign-in leaves it empty).
-constexpr const char* kConnectPurpose = "connect";
+// The session's purpose for a signature that attaches a coldkey to the
+// provider (urnet::BittensorWalletPurposeConnect).
+constexpr std::string_view kConnectPurpose = bittensor::kPurposeConnect;
 
 // Where the claim and head-spot routes live on the web app.
 constexpr const char* kUrXyzUrl = "https://ur.xyz";
@@ -1080,8 +1083,9 @@ void WalletPage::SetConnectingWallet(bool connecting) {
 }
 
 // Both doors lead here. `pinnedAddress` is the pasted address (the challenge
-// is fetched for it and the bridge has to answer with it), or empty for the
-// bridge's own pick.
+// is fetched for it and the wallet has to sign with it), or empty for the
+// wallet's own pick. The user picks the wallet first: Talisman continues in the
+// browser, TAO.com in the manual form.
 void WalletPage::StartWalletConnect(std::string const& pinnedAddress) {
   if (connectingWallet_ || w_.sheetOpen()) return;
   // Before the browser opens, not after: with no session this ends in a
@@ -1090,7 +1094,23 @@ void WalletPage::StartWalletConnect(std::string const& pinnedAddress) {
     RefuseNoSession();
     return;
   }
+  auto weak = w_.get_weak();
+  ChooseBittensorWallet(w_.get_strong(), [weak, pinnedAddress](std::string walletId) {
+    auto self = weak.get();
+    if (!self || walletId.empty()) return;
+    self->wallet().ConnectWithWallet(walletId, pinnedAddress);
+  });
+}
+
+void WalletPage::ConnectWithWallet(std::string const& walletId, std::string const& pinnedAddress) {
+  if (connectingWallet_) return;
   SetConnectingWallet(true);
+  if (walletId == bittensor::kWalletTalisman) {
+    kit::SetTextOrCollapse(
+        w_.WalletConnectStatusText(),
+        winrt::hstring{urnw::Format("bittensor_continue_in_browser",
+                                    Widen(urnet::bittensorWalletDisplayName(walletId)))});
+  }
 
   // WalletConnect has no timeout, and its on_error only fires when the deep
   // link comes BACK carrying an error. A closed browser tab produces nothing
@@ -1106,7 +1126,7 @@ void WalletPage::StartWalletConnect(std::string const& pinnedAddress) {
   auto queue = w_.DispatcherQueue();
   auto weak = w_.get_weak();
   Sdk().SignWithBittensorWallet(
-      pinnedAddress, kConnectPurpose,
+      walletId, pinnedAddress, std::string(kConnectPurpose),
       [queue, weak, generation, pinnedAddress](bool ok, std::string address,
                                                std::string signature, std::string message,
                                                std::string error) {

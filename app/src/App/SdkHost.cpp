@@ -26,7 +26,9 @@
 #include <nlohmann/json.hpp>
 
 #include "BalanceGate.h"
+#include "BittensorWalletFlow.h"
 #include "Ids.h"
+#include "Localization.h"
 #include "Log.h"
 #include "NetworkSpaceStartup.h"
 #include "Paths.h"
@@ -803,6 +805,35 @@ void SdkHost::CreateNetwork(const CreateNetworkParams& params,
     // The creation is a wallet flow from here: it supersedes any other at once, and
     // its challenge opens the bridge only while it is still the current flow.
     const uint64_t flow = CancelPendingWalletFlows("superseded by wallet network creation");
+    if (blockchain == urnet::TAO) {
+      // a second proof with the same wallet, bound to the same address (the
+      // session refuses another signing account)
+      const std::string walletId = pendingBittensorWalletId_.empty()
+                                       ? std::string(bittensor::kWalletTalisman)
+                                       : pendingBittensorWalletId_;
+      BeginBittensorProof(
+          flow, walletId, std::string(bittensor::kPurposeCreate), expectedAddress,
+          [this, params, identity = *identity, flow,
+           done = std::move(done)](BittensorProofOutcome outcome) mutable {
+            if (!outcome.ok) {
+              if (!walletFlows_.IsCurrent(flow)) {
+                // another wallet flow superseded the creation; the auth state is its
+                if (done) done({false, false, outcome.error});
+                return;
+              }
+              AuthResult r{false, false, outcome.error};
+              SetAuthState(AuthState::LoggedOut, r.error);
+              if (done) done(r);
+              return;
+            }
+            auto createAuth = identity;
+            createAuth.wallet_address = outcome.proof.Address;
+            createAuth.wallet_message = outcome.proof.Message;
+            createAuth.wallet_signature = outcome.proof.Signature;
+            SubmitCreateNetwork(params, std::move(createAuth), std::move(done));
+          });
+      return;
+    }
     RequestWalletChallenge(
         blockchain, expectedAddress,
         [this, params, identity = *identity, expectedAddress, blockchain, flow,
@@ -852,11 +883,7 @@ void SdkHost::CreateNetwork(const CreateNetworkParams& params,
         SubmitCreateNetwork(params, std::move(createAuth), std::move(done));
       };
 
-      if (blockchain == urnet::TAO) {
-        wallet_.SignMessageBittensor(*message);
-      } else {
-        wallet_.SignMessage(*message);
-      }
+      wallet_.SignMessage(*message);
     });
     return;
   }
@@ -1495,7 +1522,24 @@ void SdkHost::SetupWalletCallbacks() {
     auto done = std::exchange(walletAuthDone_, nullptr);
     AuthLoginWithSso(attempt.provider, authJwt, done ? done : [](AuthResult) {});
   };
+  // Bittensor hand-backs go to the session helper, never through the routes
+  // above: it decides whether the link belongs to the proof in flight.
+  wallet_.on_bittensor_return = [this](std::string url) { HandleBittensorReturn(url); };
   wallet_.on_error = [this](std::string err) {
+    // The browser could not open for a Bittensor proof: answer that proof.
+    {
+      uint64_t serial = 0;
+      bool pending = false;
+      {
+        std::scoped_lock lock(bittensorLock_);
+        pending = static_cast<bool>(bittensorDone_);
+        serial = bittensorSerial_;
+      }
+      if (pending) {
+        FinishBittensorProof(serial, {false, {}, err});
+        return;
+      }
+    }
     // A failed connect or signature request is NOT a failed sign-in: the user is
     // signed in throughout, and pushing AuthState::Error here would tear the
     // session down because a browser tab was closed.
@@ -1536,6 +1580,19 @@ uint64_t SdkHost::CancelPendingWalletFlows(const char* reason) {
   // an sso attempt answers through walletAuthDone_ below; its state/nonce die
   // with it so the bridge's late answer is ignored rather than acted on
   ssoAttempt_.reset();
+  // a Bittensor proof is told, and its session refuses a late hand-back
+  std::function<void(BittensorProofOutcome)> bittensorDone;
+  {
+    std::scoped_lock lock(bittensorLock_);
+    bittensorDone = std::exchange(bittensorDone_, nullptr);
+    if (bittensorSession_) bittensorSession_->cancel();
+    bittensorSession_.reset();
+    ++bittensorSerial_;
+  }
+  if (bittensorDone) {
+    LogWarn("sdkhost: a Bittensor wallet proof was superseded ({})", reason);
+    bittensorDone({false, {}, reason});
+  }
   if (auto connectDone = std::exchange(walletConnectDone_, nullptr)) {
     LogWarn("sdkhost: a wallet connect request was superseded ({})", reason);
     connectDone(false, std::string(), reason);
@@ -1564,7 +1621,8 @@ void SdkHost::SignInWithSolana(WalletConnect::Provider provider,
   wallet_.Connect(provider);  // opens the browser; the rest continues on the deep-link callback
 }
 
-void SdkHost::SignInWithBittensor(std::function<void(AuthResult)> done) {
+void SdkHost::SignInWithBittensor(const std::string& walletId,
+                                  std::function<void(AuthResult)> done) {
   SetAuthState(AuthState::Authenticating);
   {
     std::scoped_lock lock(mutex_);
@@ -1572,23 +1630,218 @@ void SdkHost::SignInWithBittensor(std::function<void(AuthResult)> done) {
   }
   const uint64_t flow = CancelPendingWalletFlows("superseded by a wallet sign-in");
   walletAuthDone_ = std::move(done);
-  RequestWalletChallenge(urnet::TAO, std::string(),
-                         [this, flow](std::optional<std::string> message, std::string error) {
-    // A newer flow took the bridge while the challenge was on its way: it has
-    // answered this sign-in already, and no tab may open for it now.
+  pendingBittensorWalletId_ = walletId;
+  BeginBittensorProof(
+      flow, walletId, std::string(bittensor::kPurposeLogin), std::string(),
+      [this, flow](BittensorProofOutcome outcome) {
+        // A newer flow superseded this sign-in and has answered it already.
+        if (!walletFlows_.IsCurrent(flow)) return;
+        if (!outcome.ok) {
+          auto authDone = std::exchange(walletAuthDone_, nullptr);
+          if (!authDone) return;
+          if (bridge::IsSuperseded(outcome.error)) {
+            // the user closed the wallet form: back to the sign-in buttons
+            SetAuthState(AuthState::LoggedOut);
+            authDone({false, false, std::string()});
+            return;
+          }
+          SetAuthState(AuthState::Error, outcome.error);
+          authDone({false, false, outcome.error});
+          return;
+        }
+        AuthLoginWithWallet(outcome.proof.Address, outcome.proof.Signature,
+                            outcome.proof.Message, WalletConnect::Provider::Bittensor);
+      });
+}
+
+namespace {
+
+int64_t BittensorNowMillis() {
+  return std::chrono::duration_cast<std::chrono::milliseconds>(
+             std::chrono::system_clock::now().time_since_epoch())
+      .count();
+}
+
+std::string BittensorErrorText(std::string const& code, std::string const& walletMessage) {
+  const std::string key = bittensor::ErrorKey(code, "wallet_connect_failed");
+  if (key.empty()) {
+    return walletMessage.empty() ? Narrow(Localized("wallet_connect_failed")) : walletMessage;
+  }
+  return Narrow(Localized(key));
+}
+
+}  // namespace
+
+void SdkHost::BeginBittensorProof(uint64_t flow, const std::string& walletId,
+                                  const std::string& purpose, const std::string& expectedAddress,
+                                  std::function<void(BittensorProofOutcome)> done) {
+  std::shared_ptr<urnet::BittensorWalletSession> session;
+  try {
+    session = std::make_shared<urnet::BittensorWalletSession>(urnet::newBittensorWalletSession(
+        walletId, std::string(bittensor::kPlatform), purpose,
+        std::string(bittensor::kRedirectLink)));
+  } catch (std::exception const& e) {
+    LogError("sdkhost: no Bittensor wallet session for {}: {}", walletId, e.what());
+    done({false, {}, Narrow(Localized("wallet_connect_failed"))});
+    return;
+  }
+  uint64_t serial = 0;
+  {
+    std::scoped_lock lock(bittensorLock_);
+    serial = ++bittensorSerial_;
+    bittensorSession_ = session;
+    bittensorDone_ = std::move(done);
+  }
+  auto args = session->challengeArgs(expectedAddress);
+  if (!args) {
+    FinishBittensorProof(serial, {false, {}, Narrow(Localized("wallet_connect_failed"))});
+    return;
+  }
+  api_->authWalletChallenge(*args, [this, flow, serial, session, walletId, purpose,
+                                    expectedAddress](
+                                       std::optional<urnet::AuthWalletChallengeResult> result,
+                                       std::optional<std::string> err) {
+    // A newer flow took over while the challenge was on its way: it has
+    // answered this proof, and no tab or form may open for it now.
     if (!walletFlows_.IsCurrent(flow)) {
-      LogWarn("sdkhost: a superseded wallet sign-in's challenge arrived, dropping it");
+      LogWarn("sdkhost: a superseded Bittensor proof's challenge arrived, dropping it");
       return;
     }
-    if (!message) {
-      if (wallet_.on_error)
-        wallet_.on_error(error.empty() ? "could not fetch wallet challenge" : error);
+    if (err || !result) {
+      FinishBittensorProof(serial, {false, {}, err ? *err : std::string("wallet challenge returned no result")});
       return;
     }
-    walletAuthMessage_ = *message;
-    // one step: the bridge returns the address and the signature together
-    wallet_.SignMessageBittensor(*message);
+    if (result->error && !result->error->message.empty()) {
+      FinishBittensorProof(serial, {false, {}, result->error->message});
+      return;
+    }
+    try {
+      session->setChallenge(result, BittensorNowMillis());
+    } catch (std::exception const& e) {
+      LogError("sdkhost: the Bittensor challenge was refused: {}", e.what());
+      FinishBittensorProof(serial, {false, {}, Narrow(Localized("wallet_connect_failed"))});
+      return;
+    }
+    switch (bittensor::NextStepFor(session->transport())) {
+      case bittensor::NextStep::OpenBrowser: {
+        std::string url;
+        try {
+          url = session->bridgeUrl();
+        } catch (std::exception const& e) {
+          LogError("sdkhost: no Bittensor bridge url: {}", e.what());
+          FinishBittensorProof(serial, {false, {}, Narrow(Localized("wallet_connect_failed"))});
+          return;
+        }
+        wallet_.OpenBittensorBridge(url);
+        return;
+      }
+      case bittensor::NextStep::ManualEntry: {
+        std::function<void(BittensorManualRequest)> handler;
+        {
+          std::scoped_lock lock(bittensorLock_);
+          handler = bittensorManualHandler_;
+        }
+        if (!handler) {
+          FinishBittensorProof(serial, {false, {}, Narrow(Localized("wallet_connect_failed"))});
+          return;
+        }
+        handler({walletId, urnet::bittensorWalletDisplayName(walletId), session->message(),
+                 expectedAddress, purpose});
+        return;
+      }
+      case bittensor::NextStep::Unsupported:
+        break;
+    }
+    FinishBittensorProof(serial, {false, {}, Narrow(Localized("wallet_connect_failed"))});
   });
+}
+
+void SdkHost::HandleBittensorReturn(const std::string& url) {
+  std::shared_ptr<urnet::BittensorWalletSession> session;
+  uint64_t serial = 0;
+  {
+    std::scoped_lock lock(bittensorLock_);
+    session = bittensorSession_;
+    serial = bittensorSerial_;
+  }
+  if (!session) {
+    LogWarn("sdkhost: a Bittensor hand-back arrived with no proof in flight, ignoring it");
+    return;
+  }
+  auto result = session->handleBridgeReturn(url, BittensorNowMillis());
+  if (!result) {
+    FinishBittensorProof(serial, {false, {}, Narrow(Localized("wallet_connect_failed"))});
+    return;
+  }
+  if (result->Proof && result->ErrorCode.empty()) {
+    FinishBittensorProof(serial, {true, *result->Proof, std::string()});
+    return;
+  }
+  // another flow's tab, the bridge page's second "Return to URnetwork", a replay
+  if (bittensor::IsForeignReturn(result->ErrorCode)) {
+    LogWarn("sdkhost: ignoring a Bittensor hand-back that is not this proof's ({})",
+            result->ErrorCode);
+    return;
+  }
+  FinishBittensorProof(serial,
+                       {false, {}, BittensorErrorText(result->ErrorCode, result->ErrorMessage)});
+}
+
+void SdkHost::FinishBittensorProof(uint64_t serial, BittensorProofOutcome outcome) {
+  std::function<void(BittensorProofOutcome)> done;
+  {
+    std::scoped_lock lock(bittensorLock_);
+    if (serial != bittensorSerial_) return;
+    done = std::exchange(bittensorDone_, nullptr);
+    if (!outcome.ok && bittensorSession_) bittensorSession_->cancel();
+    bittensorSession_.reset();
+  }
+  if (done) done(std::move(outcome));
+}
+
+void SdkHost::SetBittensorManualHandler(std::function<void(BittensorManualRequest)> handler) {
+  std::scoped_lock lock(bittensorLock_);
+  bittensorManualHandler_ = std::move(handler);
+}
+
+SdkHost::BittensorManualAnswer SdkHost::SubmitBittensorManual(const std::string& address,
+                                                              const std::string& signature) {
+  std::shared_ptr<urnet::BittensorWalletSession> session;
+  uint64_t serial = 0;
+  {
+    std::scoped_lock lock(bittensorLock_);
+    session = bittensorSession_;
+    serial = bittensorSerial_;
+  }
+  BittensorManualAnswer answer;
+  if (!session) {
+    // superseded or abandoned meanwhile: the flow was answered already
+    answer.closed = true;
+    return answer;
+  }
+  auto result = session->handleSignature(address, signature, BittensorNowMillis());
+  if (result && result->Proof && result->ErrorCode.empty()) {
+    answer.accepted = true;
+    answer.closed = true;
+    FinishBittensorProof(serial, {true, *result->Proof, std::string()});
+    return answer;
+  }
+  const std::string code = result ? result->ErrorCode : std::string();
+  answer.error = BittensorErrorText(code, result ? result->ErrorMessage : std::string());
+  if (bittensor::IsCorrectable(code)) return answer;  // the form stays open
+  answer.closed = true;
+  FinishBittensorProof(serial, {false, {}, answer.error});
+  return answer;
+}
+
+void SdkHost::CancelBittensorProof() {
+  uint64_t serial = 0;
+  {
+    std::scoped_lock lock(bittensorLock_);
+    serial = bittensorSerial_;
+  }
+  // the user's own choice, answered like a superseded flow: no error shown
+  FinishBittensorProof(serial, {false, {}, std::string(bridge::kSupersededPrefix) + "the user closing the wallet form"});
 }
 
 void SdkHost::RequestWalletChallenge(
@@ -1641,38 +1894,20 @@ void SdkHost::ConnectSolanaWallet(
 }
 
 void SdkHost::SignWithBittensorWallet(
-    const std::string& walletAddress, const std::string& purpose,
+    const std::string& walletId, const std::string& walletAddress, const std::string& purpose,
     std::function<void(bool, std::string, std::string, std::string, std::string)> done) {
   // Not a sign-in: the auth state does not move (see on_error above).
   const uint64_t flow = CancelPendingWalletFlows("superseded by a wallet signature request");
-  // The bridge answers with the address and the signature; the message it
-  // signed is the one this flow handed it, kept in walletSignMessage_ until
-  // the answer (or a superseding flow) arrives.
-  walletSignDone_ = [this, done = std::move(done)](bool ok, std::string address,
-                                                   std::string signature, std::string error) {
-    done(ok, std::move(address), std::move(signature), walletSignMessage_, std::move(error));
-  };
-  RequestWalletChallenge(
-      urnet::TAO, walletAddress,
-      [this, purpose, flow](std::optional<std::string> message, std::string error) {
-        // A newer flow took the bridge while the challenge was on its way (the
-        // Solana sheet's connect, a Seeker request) and has answered this request.
-        // The late challenge must not open a Bittensor tab over that flow,
-        // overwrite the message it signs, reset its session or fail its request.
-        if (!walletFlows_.IsCurrent(flow)) {
-          LogWarn("sdkhost: a superseded wallet signature request's challenge arrived, dropping it");
-          return;
-        }
-        if (!message) {
-          if (auto signDone = std::exchange(walletSignDone_, nullptr)) {
-            signDone(false, std::string(), std::string(),
-                     error.empty() ? "could not fetch wallet challenge" : error);
-          }
-          return;
-        }
-        walletSignMessage_ = *message;
-        wallet_.SignMessageBittensor(*message, purpose);
-      });
+  BeginBittensorProof(flow, walletId, purpose, walletAddress,
+                      [done = std::move(done)](BittensorProofOutcome outcome) {
+                        if (!outcome.ok) {
+                          done(false, std::string(), std::string(), std::string(),
+                               std::move(outcome.error));
+                          return;
+                        }
+                        done(true, outcome.proof.Address, outcome.proof.Signature,
+                             outcome.proof.Message, std::string());
+                      });
 }
 
 void SdkHost::HandleDeepLink(const std::string& url) {

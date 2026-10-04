@@ -662,9 +662,49 @@
     <value>Выгоднее всего</value>
     <comment>Gold pill on the recommended (annual) plan card.</comment>
   </data>
+  <data name="bittensor_choose_wallet" xml:space="preserve">
+    <value>Выберите кошелек Bittensor</value>
+    <comment>Title of the picker that chooses which Bittensor wallet (Talisman or TAO.com) signs.</comment>
+  </data>
+  <data name="bittensor_continue_in_browser" xml:space="preserve">
+    <value>Продолжите в браузере и подтвердите запрос в расширении {}.</value>
+    <comment>Desktop: shown while the browser is open on the wallet page. The argument is the wallet product name (Talisman).</comment>
+  </data>
+  <data name="bittensor_error_challenge_expired" xml:space="preserve">
+    <value>Срок действия запроса истек. Начните заново, чтобы получить новое сообщение для подписи.</value>
+    <comment>Error: the single-use wallet challenge expired (5 minutes) before it was signed.</comment>
+  </data>
+  <data name="bittensor_error_extension_not_found" xml:space="preserve">
+    <value>Расширение {} не найдено в этом браузере. Установите его и повторите попытку.</value>
+    <comment>Error: the wallet's browser extension is not installed in this browser. The argument is the wallet product name (Talisman).</comment>
+  </data>
+  <data name="bittensor_error_invalid_signature" xml:space="preserve">
+    <value>Это недействительная подпись. Вставьте полную подпись 0x из вашего кошелька.</value>
+    <comment>Error: the pasted or returned Bittensor signature is not a 64-byte hex signature.</comment>
+  </data>
+  <data name="bittensor_error_message_mismatch" xml:space="preserve">
+    <value>Кошелек подписал другой запрос. Начните заново.</value>
+    <comment>Error: the wallet returned a signature over a different challenge than the one issued.</comment>
+  </data>
+  <data name="bittensor_manual_sign_instructions" xml:space="preserve">
+    <value>Подпишите это сообщение в кошельке {}, где хранится ваш coldkey, затем вставьте ниже адрес и подпись.</value>
+    <comment>Manual Bittensor wallet proof: how to sign the shown challenge message. The argument is the wallet product name (Talisman or TAO.com).</comment>
+  </data>
+  <data name="bittensor_message_to_sign" xml:space="preserve">
+    <value>Сообщение для подписи</value>
+    <comment>Label above the challenge message the user signs in their Bittensor wallet.</comment>
+  </data>
   <data name="bittensor_sign_in" xml:space="preserve">
     <value>Войти через Bittensor</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="bittensor_signature_label" xml:space="preserve">
+    <value>Подпись</value>
+    <comment>Label of the field where the user pastes the Bittensor wallet signature.</comment>
+  </data>
+  <data name="bittensor_signature_placeholder" xml:space="preserve">
+    <value>Вставьте подпись 0x…</value>
+    <comment>Placeholder of the Bittensor signature field (a 0x-prefixed hex signature).</comment>
   </data>
   <data name="bittensor_wallet" xml:space="preserve">
     <value>Кошелек Bittensor</value>

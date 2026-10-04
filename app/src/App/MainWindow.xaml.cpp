@@ -6,6 +6,8 @@
 #include "MainWindow.g.cpp"
 #endif
 
+#include "BittensorWalletDialogs.h"
+
 #include <winrt/Microsoft.UI.Xaml.Automation.h>
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.UI.ViewManagement.h>
@@ -271,6 +273,25 @@ MainWindow::MainWindow() {
     // Anything that failed BEFORE this handler existed is standing state in
     // SdkHost (sessionFailure_); this is what replays it.
     Sdk().RefreshModeNotice();
+  }
+
+  // ---- Bittensor manual proof (TAO.com) ----
+  // SdkHost asks for the manual form from an SDK thread once a TAO.com proof
+  // has its challenge; the form answers SdkHost directly. A window that is
+  // gone answers with a cancel so the flow is not left waiting.
+  {
+    auto queue = DispatcherQueue();
+    Sdk().SetBittensorManualHandler(
+        [weak = get_weak(), queue](urnw::SdkHost::BittensorManualRequest request) {
+          const bool queued = queue.TryEnqueue([weak, request] {
+            if (auto self = weak.get()) {
+              urnw::pages::ShowBittensorManualForm(self, request);
+            } else {
+              Sdk().CancelBittensorProof();
+            }
+          });
+          if (!queued) Sdk().CancelBittensorProof();
+        });
   }
 
   // ---- Advanced Mode (D5) ----

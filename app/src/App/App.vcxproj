@@ -279,6 +279,7 @@
     <ClCompile Include="AuthSheets.cpp" />
     <ClCompile Include="LoginCarousel.cpp" />
     <ClCompile Include="BalanceSheets.cpp" />
+    <ClCompile Include="BittensorWalletDialogs.cpp" />
     <ClCompile Include="Localization.cpp" />
     <ClCompile Include="LocationSheets.cpp" />
     <!-- The provider-locations pure logic is deliberately WinRT-free (no pch)
@@ -362,6 +363,8 @@
     <ClInclude Include="AppController.h" />
     <ClInclude Include="AuthSheets.h" />
     <ClInclude Include="BalanceSheets.h" />
+    <ClInclude Include="BittensorWalletDialogs.h" />
+    <ClInclude Include="BittensorWalletFlow.h" />
     <ClInclude Include="Config.h" />
     <ClInclude Include="BalanceCodeRedeem.h" />
     <ClInclude Include="LoginCarousel.h" />
