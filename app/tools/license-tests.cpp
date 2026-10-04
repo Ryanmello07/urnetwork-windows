@@ -7,8 +7,7 @@
 // The WinUI half (App/LicensesPage.cpp) cannot be built off Windows; what is
 // verified here is every decision it makes before it touches a XAML object.
 //
-//   c++ -std=c++20 -I ../src/App license-tests.cpp -o /tmp/license-tests \
-//       && /tmp/license-tests
+//   c++ -std=c++20 -I ../src/App license-tests.cpp -o /tmp/license-tests && /tmp/license-tests
 //
 // SPDX-License-Identifier: MPL-2.0
 

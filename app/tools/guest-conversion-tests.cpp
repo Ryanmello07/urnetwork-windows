@@ -4,8 +4,7 @@
 // its plan and balance. Run against the SAME header the app compiles, on any
 // host with a C++20 compiler, with a fake session that answers synchronously.
 //
-//   c++ -std=c++20 -I ../src/App guest-conversion-tests.cpp \
-//       -o /tmp/guest-conversion-tests && /tmp/guest-conversion-tests
+//   c++ -std=c++20 -I ../src/App guest-conversion-tests.cpp -o /tmp/guest-conversion-tests && /tmp/guest-conversion-tests
 //
 // SPDX-License-Identifier: MPL-2.0
 

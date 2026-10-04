@@ -3,8 +3,7 @@
 // is visible AND focused, so a hosted checkout paid in the browser never comes
 // back to a false "timed out" (UPGRADE.md D1).
 //
-//   c++ -std=c++20 -I ../src/App confirmation-poll-gate-tests.cpp \
-//       -o /tmp/confirmation-poll-gate-tests && /tmp/confirmation-poll-gate-tests
+//   c++ -std=c++20 -I ../src/App confirmation-poll-gate-tests.cpp -o /tmp/confirmation-poll-gate-tests && /tmp/confirmation-poll-gate-tests
 //
 // SPDX-License-Identifier: MPL-2.0
 

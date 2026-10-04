@@ -90,6 +90,13 @@ jobs:
       - name: Check out connect dependency
         run: git clone --depth 1 --branch main https://github.com/urnetwork/connect.git connect
 
+      # sdk@main and connect@main both replace gvisor.dev/gvisor with the
+      # sibling ../gvisor, urnetwork's fork on its default `go` branch. Without
+      # it the SDK build stops at "replacement directory ../../gvisor does not
+      # exist" before a line compiles.
+      - name: Check out gvisor dependency
+        run: git clone --depth 1 https://github.com/urnetwork/gvisor.git gvisor
+
       - name: Check out glog dependency
         run: git clone --depth 1 https://github.com/urnetwork/glog.git glog
 
@@ -279,6 +286,12 @@ jobs:
       # VERSIONINFO fields). Absent, the build defaults to 0.0.0-dev / code 0,
       # which the update checker treats as "never self-update" -- so a release
       # build MUST carry them or it would ship an artifact that cannot update.
+      #
+      # PreferredToolArchitecture=x64 picks the 64-bit-hosted compiler and
+      # linker. The default on this runner is the 32-bit-hosted pair
+      # (bin\HostX86\<target>), and linking the ARM64 app's whole-program
+      # code generation runs it out of heap: C1002, then a 64-bit relink that
+      # fails with C1083 on XamlTypeInfo.g.asm.
       - name: Build the solution (${{ matrix.platform }})
         shell: pwsh
         working-directory: app
@@ -295,6 +308,7 @@ jobs:
             /p:UrVersionPatch=${{ needs.build-sdk.outputs.version_patch }} `
             /p:UrVersionBuild=${{ needs.build-sdk.outputs.version_build }} `
             /p:RestorePackagesConfig=true `
+            /p:PreferredToolArchitecture=x64 `
             /m `
             /v:minimal `
             /clp:Summary `

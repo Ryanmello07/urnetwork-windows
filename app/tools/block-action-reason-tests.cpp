@@ -4,8 +4,7 @@
 // with a C++20 compiler. The expectations mirror sdk BlockAction.IsSecurity and
 // BlockAction.RouteLocalOverridable (sdk/device.go).
 //
-//   c++ -std=c++20 -I ../src/App block-action-reason-tests.cpp \
-//       -o /tmp/block-action-reason-tests && /tmp/block-action-reason-tests
+//   c++ -std=c++20 -I ../src/App block-action-reason-tests.cpp -o /tmp/block-action-reason-tests && /tmp/block-action-reason-tests
 //
 // SPDX-License-Identifier: MPL-2.0
 

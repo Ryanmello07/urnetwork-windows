@@ -4,8 +4,7 @@
 // only a result with no error signs out. Run against the SAME header the app
 // compiles, on any host with a C++20 compiler.
 //
-//   c++ -std=c++20 -I ../src/Common delete-account-tests.cpp \
-//       -o /tmp/delete-account-tests && /tmp/delete-account-tests
+//   c++ -std=c++20 -I ../src/Common delete-account-tests.cpp -o /tmp/delete-account-tests && /tmp/delete-account-tests
 //
 // SPDX-License-Identifier: MPL-2.0
 

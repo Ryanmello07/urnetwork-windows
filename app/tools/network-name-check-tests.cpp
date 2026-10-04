@@ -9,8 +9,7 @@
 //   - an api that was not ready when the debounce elapsed skipped the check
 //     and left the name checking.
 //
-//   c++ -std=c++20 -I ../src/App network-name-check-tests.cpp \
-//       -o /tmp/network-name-check-tests && /tmp/network-name-check-tests
+//   c++ -std=c++20 -I ../src/App network-name-check-tests.cpp -o /tmp/network-name-check-tests && /tmp/network-name-check-tests
 //
 // SPDX-License-Identifier: MPL-2.0
 
