@@ -1294,6 +1294,10 @@ winrt::fire_and_forget SettingsPage::ShowAddAuthSheet() {
       if (auto window = weak.get()) window->settings().LoadNetworkUser();
     });
     co_await addAuthSheet_->Dialog().ShowAsync();
+    // the added line for the method (apple's snackbar, ur.io's done step)
+    if (!addAuthSheet_->AddedMessageKey().empty()) {
+      snackbar_.Show(Loc(addAuthSheet_->AddedMessageKey()), InfoBarSeverity::Success);
+    }
   } catch (...) {
   }
   addAuthSheet_.reset();

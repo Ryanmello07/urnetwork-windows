@@ -560,6 +560,10 @@ de la manera correcta</value>
     <value>Conectar y abrir enlace</value>
     <comment>Call to action</comment>
   </data>
+  <data name="connect_bittensor_wallet_to_add_sign_in_method" xml:space="preserve">
+    <value>Conecta una billetera de Bittensor para agregarla como método de inicio de sesión.</value>
+    <comment>Add sign-in method sheet: the Bittensor wallet option's explanation (Talisman, WalletConnect, or a pasted signature).</comment>
+  </data>
   <data name="connect_options" xml:space="preserve">
     <value>Opciones de conexión</value>
     <comment>A label displayed above the options for connecting to a tunnel.</comment>

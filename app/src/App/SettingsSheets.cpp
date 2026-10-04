@@ -9,8 +9,11 @@
 #include <winrt/Microsoft.UI.Xaml.Automation.h>
 #include <winrt/Microsoft.UI.Xaml.Automation.Peers.h>
 #include <winrt/Microsoft.UI.Xaml.Media.Imaging.h>
+#include <winrt/Windows.ApplicationModel.DataTransfer.h>
 #include <winrt/Windows.Storage.Streams.h>
 
+#include "AddSignIn.h"
+#include "BittensorWalletFlow.h"
 #include "DeleteAccountOutcome.h"
 #include "Localization.h"
 #include "Log.h"
@@ -783,6 +786,82 @@ class SdkGuestConversionSession : public GuestConversionSession {
   std::shared_ptr<bool> alive_ = std::make_shared<bool>(true);
 };
 
+// The SDK side of adding Apple, Google or a wallet (AddSignIn.h). SdkHost
+// produces the credential under an add-owned flow; this posts it to addAuth on
+// the current network. Nothing here signs in, refreshes or replaces the jwt.
+// Every answer is marshalled onto the dialog's queue; one that arrives after
+// the sheet is gone is dropped by `alive_`.
+class SdkAddSignInSession : public add_sign_in::AddSignInSession {
+ public:
+  SdkAddSignInSession(SdkHost& sdk, winrt::Microsoft::UI::Dispatching::DispatcherQueue queue,
+                      std::function<void(SdkHost::BittensorManualRequest)> manualHandler)
+      : sdk_(sdk), queue_(std::move(queue)), manualHandler_(std::move(manualHandler)) {}
+  ~SdkAddSignInSession() override { *alive_ = false; }
+
+  void ProviderToken(std::string_view provider,
+                     std::function<void(std::string, std::string)> done) override {
+    sdk_.SsoTokenForAdd(std::string(provider), [queue = queue_, alive = alive_, done = std::move(done)](
+                                                   std::string idToken, std::string error) {
+      queue.TryEnqueue([alive, done, idToken, error] {
+        if (*alive) done(idToken, error);
+      });
+    });
+  }
+
+  void SignWallet(add_sign_in::WalletChain chain, std::string_view walletId,
+                  std::function<void(add_sign_in::WalletSignature, std::string)> done) override {
+    auto answer = [queue = queue_, alive = alive_, done = std::move(done)](
+                      std::string address, std::string signature, std::string message,
+                      std::string error) {
+      queue.TryEnqueue([alive, done, address, signature, message, error] {
+        if (*alive) done(add_sign_in::WalletSignature{address, signature, message}, error);
+      });
+    };
+    if (chain == add_sign_in::WalletChain::Solana) {
+      const auto provider = walletId == add_sign_in::kSolanaSolflare
+                                ? WalletConnect::Provider::Solflare
+                                : WalletConnect::Provider::Phantom;
+      sdk_.SignSolanaForAdd(provider, std::move(answer));
+      return;
+    }
+    sdk_.SignBittensorForAdd(std::string(walletId), manualHandler_, std::move(answer));
+  }
+
+  void AddAuth(add_sign_in::AddAuthBody const& body,
+               std::function<void(std::string)> done) override {
+    urnet::AddAuthArgs args;
+    args.user_auth = body.user_auth;
+    args.password = body.password;
+    args.auth_jwt = body.auth_jwt;
+    args.auth_jwt_type = body.auth_jwt_type;
+    if (body.wallet_auth) {
+      urnet::WalletAuthArgs wallet;
+      wallet.blockchain = body.wallet_auth->blockchain;
+      wallet.wallet_address = body.wallet_auth->address;
+      wallet.wallet_signature = body.wallet_auth->signature;
+      wallet.wallet_message = body.wallet_auth->message;
+      args.wallet_auth = wallet;
+    }
+    // the identity token and the signature are credentials; nothing logs args
+    sdk_.api().addAuth(args, [queue = queue_, alive = alive_, done = std::move(done)](
+                                 std::optional<urnet::AddAuthResult> result,
+                                 std::optional<std::string> err) {
+      std::string error = ServerError(result, err);
+      queue.TryEnqueue([alive, done, error] {
+        if (*alive) done(error);
+      });
+    });
+  }
+
+  void Cancel() override { sdk_.CancelAddSignIn(); }
+
+ private:
+  SdkHost& sdk_;
+  winrt::Microsoft::UI::Dispatching::DispatcherQueue queue_;
+  std::function<void(SdkHost::BittensorManualRequest)> manualHandler_;
+  std::shared_ptr<bool> alive_ = std::make_shared<bool>(true);
+};
+
 
 // The last code send's outcome under the code field: a sent code muted, a
 // failure or a counting-down rate limit as an error, nothing for none.
@@ -843,23 +922,205 @@ std::shared_ptr<AddAuthSheet> AddAuthSheet::Create(XamlRoot const& root, SdkHost
 
 AddAuthSheet::~AddAuthSheet() {
   if (cooldownTimer_) cooldownTimer_.Stop();
-  // the conversion goes first: it drops its answers before the session goes
+  // a browser or wallet step still open is answered and dropped
+  if (add_ && add_->Busy()) add_->Cancel();
+  // the flows go first: they drop their answers before the sessions go
+  add_.reset();
+  addSession_.reset();
   conversion_.reset();
   session_.reset();
 }
 
 void AddAuthSheet::Build(XamlRoot const& root) {
-  dialog_ = MakeSheet(root, Loc("site_app_login_methods"));
+  dialog_ = MakeSheet(root, Loc("add_a_sign_in_method"));
   dialog_.CloseButtonText(Loc("cancel"));
   dialog_.DefaultButton(ContentDialogButton::Primary);
   session_ = std::make_unique<SdkGuestConversionSession>(sdk_, nullptr, dialog_.DispatcherQueue());
   conversion_ = std::make_unique<GuestConversion>(*session_);
+  // TAO.com's manual form shows inside this sheet (a second ContentDialog
+  // cannot open over it); the request comes in on an SDK thread
+  auto manualHandler = [weak = weak_from_this(), queue = dialog_.DispatcherQueue()](
+                           SdkHost::BittensorManualRequest request) {
+    queue.TryEnqueue([weak, request] {
+      if (auto self = weak.lock()) self->ShowManual(request);
+    });
+  };
+  addSession_ = std::make_unique<SdkAddSignInSession>(sdk_, dialog_.DispatcherQueue(),
+                                                      std::move(manualHandler));
+  add_ = std::make_unique<add_sign_in::AddSignInFlow>(*addSession_);
 
   StackPanel content;
   content.MinWidth(380);
   content.Spacing(12);
 
-  // ---- page 1: the sign-in to add ----
+  // ---- the method: the same options and order as every app and ur.io ----
+  methodPicker_ = RadioButtons();
+  methodPicker_.Header(winrt::box_value(Loc("method")));
+  methodPicker_.MaxColumns(add_sign_in::kMethodCount);
+  int selected = 0;
+  for (int i = 0; i < add_sign_in::kMethodCount; ++i) {
+    methodPicker_.Items().Append(
+        winrt::box_value(Loc(std::string(add_sign_in::MethodLabelKey(add_sign_in::kMethods[i])))));
+    if (add_sign_in::kMethods[i] == method_) selected = i;
+  }
+  methodPicker_.SelectedIndex(selected);
+  methodPicker_.SelectionChanged([weak = weak_from_this()](IInspectable const&,
+                                                           SelectionChangedEventArgs const&) {
+    auto self = weak.lock();
+    if (!self) return;
+    const int index = self->methodPicker_.SelectedIndex();
+    if (index < 0 || add_sign_in::kMethodCount <= index) return;
+    self->SelectMethod(add_sign_in::kMethods[index]);
+  });
+  content.Children().Append(methodPicker_);
+
+  // ---- Apple / Google: the provider's web flow in the browser ----
+  providerPanel_ = StackPanel();
+  providerPanel_.Spacing(12);
+  providerHint_ = Supporting(providerPanel_, hstring{});
+  providerButton_ = Button();
+  providerButton_.Style(Lookup(L"UrPrimaryButtonStyle"));
+  providerButton_.HorizontalAlignment(HorizontalAlignment::Stretch);
+  providerButton_.Click([weak = weak_from_this()](auto const&, auto const&) {
+    auto self = weak.lock();
+    if (!self || !self->sdk_.IsLoggedIn()) return;
+    self->browserHint_ = hstring{};
+    self->add_->StartProvider(self->method_);
+  });
+  providerPanel_.Children().Append(providerButton_);
+  content.Children().Append(providerPanel_);
+
+  // ---- a wallet: Solana (Phantom / Solflare) or Bittensor (the chooser) ----
+  walletPanel_ = StackPanel();
+  walletPanel_.Spacing(8);
+  for (int c = 0; c < add_sign_in::kWalletChainCount; ++c) {
+    const add_sign_in::WalletChain chain = add_sign_in::kWalletChains[c];
+    TextBlock heading;
+    heading.Text(Loc(std::string(add_sign_in::WalletChainLabelKey(chain))));
+    heading.FontWeight(winrt::Windows::UI::Text::FontWeights::SemiBold());
+    walletPanel_.Children().Append(heading);
+    Supporting(walletPanel_, Loc(std::string(add_sign_in::WalletChainHintKey(chain))));
+    // Solana: the login page's two wallets; Bittensor: the shared chooser's
+    std::vector<std::pair<std::string, hstring>> wallets;
+    if (chain == add_sign_in::WalletChain::Solana) {
+      wallets.emplace_back(std::string(add_sign_in::kSolanaPhantom), Loc("phantom"));
+      wallets.emplace_back(std::string(add_sign_in::kSolanaSolflare), Loc("solflare"));
+    } else {
+      for (int i = 0; i < bittensor::kChooserWalletCount; ++i) {
+        const std::string walletId(bittensor::kChooserWallets[i]);
+        wallets.emplace_back(walletId, H(urnet::bittensorWalletDisplayName(walletId)));
+      }
+    }
+    for (auto const& [walletId, name] : wallets) {
+      StackPanel label;
+      TextBlock nameText;
+      nameText.Text(name);
+      label.Children().Append(nameText);
+      const std::string hintKey =
+          chain == add_sign_in::WalletChain::Bittensor ? bittensor::ChooserHintKey(walletId) : std::string();
+      if (!hintKey.empty()) {
+        TextBlock hint;
+        hint.Text(Loc(hintKey));
+        hint.Opacity(0.7);
+        hint.FontSize(12);
+        hint.TextWrapping(TextWrapping::Wrap);
+        label.Children().Append(hint);
+      }
+      Button button;
+      button.HorizontalAlignment(HorizontalAlignment::Stretch);
+      button.HorizontalContentAlignment(HorizontalAlignment::Left);
+      button.Content(label);
+      button.Click([weak = weak_from_this(), chain, walletId = walletId](auto const&, auto const&) {
+        if (auto self = weak.lock()) self->StartWallet(chain, walletId);
+      });
+      walletButtons_.push_back(button);
+      walletPanel_.Children().Append(button);
+    }
+  }
+  content.Children().Append(walletPanel_);
+
+  // ---- TAO.com: sign the message in the wallet, paste the signature ----
+  manualPanel_ = StackPanel();
+  manualPanel_.Spacing(8);
+  manualInstructions_ = TextBlock();
+  manualInstructions_.TextWrapping(TextWrapping::Wrap);
+  manualPanel_.Children().Append(manualInstructions_);
+  manualMessageBox_ = TextBox();
+  manualMessageBox_.Header(winrt::box_value(Loc("bittensor_message_to_sign")));
+  manualMessageBox_.IsReadOnly(true);
+  manualMessageBox_.AcceptsReturn(true);
+  manualMessageBox_.TextWrapping(TextWrapping::Wrap);
+  manualPanel_.Children().Append(manualMessageBox_);
+  Button copyButton;
+  copyButton.Content(winrt::box_value(Loc("copy")));
+  copyButton.Click([weak = weak_from_this()](auto const&, auto const&) {
+    auto self = weak.lock();
+    if (!self) return;
+    namespace dt = winrt::Windows::ApplicationModel::DataTransfer;
+    try {
+      dt::DataPackage package;
+      package.SetText(self->manualMessageBox_.Text());
+      dt::Clipboard::SetContent(package);
+    } catch (...) {
+      LogWarn("add sign-in: the clipboard refused the message");
+    }
+  });
+  manualPanel_.Children().Append(copyButton);
+  manualAddressBox_ = TextBox();
+  manualAddressBox_.PlaceholderText(Loc("earnings_address_placeholder"));
+  manualPanel_.Children().Append(manualAddressBox_);
+  manualSignatureBox_ = TextBox();
+  manualSignatureBox_.Header(winrt::box_value(Loc("bittensor_signature_label")));
+  manualSignatureBox_.PlaceholderText(Loc("bittensor_signature_placeholder"));
+  manualPanel_.Children().Append(manualSignatureBox_);
+  manualErrorText_ = TextBlock();
+  manualErrorText_.FontSize(12);
+  manualErrorText_.TextWrapping(TextWrapping::Wrap);
+  manualErrorText_.Foreground(colors::DangerBrush());
+  manualErrorText_.Visibility(Visibility::Collapsed);
+  manualPanel_.Children().Append(manualErrorText_);
+  StackPanel manualButtons;
+  manualButtons.Orientation(Orientation::Horizontal);
+  manualButtons.Spacing(8);
+  Button manualContinue;
+  manualContinue.Style(Lookup(L"UrPrimaryButtonStyle"));
+  manualContinue.Content(winrt::box_value(Loc("continue_txt")));
+  manualContinue.Click([weak = weak_from_this()](auto const&, auto const&) {
+    auto self = weak.lock();
+    if (!self || !self->manualRequest_) return;
+    const auto answer = self->sdk_.SubmitBittensorManual(
+        Narrow(self->manualAddressBox_.Text().c_str()), Narrow(self->manualSignatureBox_.Text().c_str()));
+    if (answer.closed) {
+      // the proof has its answer; the flow continues to addAuth
+      self->manualRequest_.reset();
+    } else {
+      self->manualErrorText_.Text(H(answer.error));
+      self->manualErrorText_.Visibility(Visibility::Visible);
+    }
+    self->Render();
+  });
+  manualButtons.Children().Append(manualContinue);
+  Button manualCancel;
+  manualCancel.Content(winrt::box_value(Loc("cancel")));
+  manualCancel.Click([weak = weak_from_this()](auto const&, auto const&) {
+    auto self = weak.lock();
+    if (!self || !self->manualRequest_) return;
+    self->manualRequest_.reset();
+    // answered as a quiet cancel: no error, back to the wallets
+    self->sdk_.CancelBittensorProof();
+    self->Render();
+  });
+  manualButtons.Children().Append(manualCancel);
+  manualPanel_.Children().Append(manualButtons);
+  content.Children().Append(manualPanel_);
+
+  statusText_ = TextBlock();
+  statusText_.FontSize(12);
+  statusText_.TextWrapping(TextWrapping::Wrap);
+  statusText_.Foreground(colors::MutedBrush());
+  content.Children().Append(statusText_);
+
+  // ---- email or phone: the sign-in to add ----
   signInPanel_ = StackPanel();
   signInPanel_.Spacing(12);
   authBox_ = TextBox();
@@ -879,7 +1140,7 @@ void AddAuthSheet::Build(XamlRoot const& root) {
   Supporting(signInPanel_, Loc("password_must_be_at_least_12_characters_long"));
   content.Children().Append(signInPanel_);
 
-  // ---- page 2: verify the added sign-in ----
+  // ---- page 2: verify the added email or phone ----
   codePanel_ = StackPanel();
   codePanel_.Spacing(12);
   Supporting(codePanel_, Loc("verify_explanation"));
@@ -903,14 +1164,17 @@ void AddAuthSheet::Build(XamlRoot const& root) {
   errorText_.Visibility(Visibility::Collapsed);
   content.Children().Append(errorText_);
 
-  dialog_.Content(content);
+  ScrollViewer scroller;
+  scroller.Content(content);
+  dialog_.Content(scroller);
   dialog_.PrimaryButtonClick(
       [weak = weak_from_this()](auto const&, ContentDialogButtonClickEventArgs const& args) {
         args.Cancel(true);  // the flow closes the dialog once the code is verified
         auto self = weak.lock();
         if (!self) return;
         if (self->conversion_->Step() == GuestConversionStep::EnterSignIn) {
-          if (!self->sdk_.IsLoggedIn()) return;
+          // only the email method has the Add button
+          if (self->method_ != add_sign_in::Method::Email || !self->sdk_.IsLoggedIn()) return;
           self->conversion_->SubmitSignIn(Narrow(self->authBox_.Text().c_str()),
                                           Narrow(self->passwordBox_.Password().c_str()));
         } else {
@@ -928,45 +1192,132 @@ void AddAuthSheet::Build(XamlRoot const& root) {
   conversion_->on_changed = [weak = weak_from_this()] {
     if (auto self = weak.lock()) self->Render();
   };
+  add_->on_changed = [weak = weak_from_this()] {
+    auto self = weak.lock();
+    if (!self) return;
+    // the browser or the wallet answered: its status line and form are done
+    if (!self->add_->Busy()) {
+      self->browserHint_ = hstring{};
+      self->manualRequest_.reset();
+    }
+    self->Render();
+  };
+  Render();
+}
+
+void AddAuthSheet::SelectMethod(add_sign_in::Method method) {
+  if (method == method_) return;
+  // a browser or wallet step for the previous method is abandoned
+  if (add_->Busy()) add_->Cancel();
+  manualRequest_.reset();
+  browserHint_ = hstring{};
+  method_ = method;
+  Render();
+}
+
+void AddAuthSheet::StartWallet(add_sign_in::WalletChain chain, std::string const& walletId) {
+  if (!sdk_.IsLoggedIn() || add_->Busy()) return;
+  // Talisman asks for the extension's approval, WalletConnect for a scan; a
+  // Solana wallet continues in the browser too
+  browserHint_ = hstring{};
+  if (chain == add_sign_in::WalletChain::Bittensor) {
+    const std::string hintKey = bittensor::BrowserHintKey(walletId);
+    if (hintKey == "bittensor_continue_in_browser") {
+      browserHint_ = hstring{
+          Format("bittensor_continue_in_browser", Widen(urnet::bittensorWalletDisplayName(walletId)))};
+    } else if (!hintKey.empty()) {
+      browserHint_ = Loc(hintKey);
+    }
+  }
+  add_->StartWallet(chain, walletId);
+}
+
+void AddAuthSheet::ShowManual(SdkHost::BittensorManualRequest request) {
+  // only while this sheet's Bittensor step waits for it
+  if (!add_->Busy() || method_ != add_sign_in::Method::Wallet) {
+    sdk_.CancelBittensorProof();
+    return;
+  }
+  manualInstructions_.Text(
+      hstring{Format("bittensor_manual_sign_instructions", Widen(request.walletName))});
+  manualMessageBox_.Text(H(request.message));
+  manualAddressBox_.Text(H(request.address));
+  manualSignatureBox_.Text(hstring{});
+  manualErrorText_.Visibility(Visibility::Collapsed);
+  manualRequest_ = std::move(request);
   Render();
 }
 
 void AddAuthSheet::Render() {
-  const GuestConversionStep step = conversion_->Step();
-  const bool busy = conversion_->Busy();
+  // Apple, Google and a wallet are added once addAuth accepts them (no code);
+  // an email or phone once its code is verified
+  const GuestConversionStep step =
+      add_->Added() ? GuestConversionStep::Done : conversion_->Step();
+  const bool busy = conversion_->Busy() || add_->Busy();
   const bool signIn =
       step == GuestConversionStep::EnterSignIn || step == GuestConversionStep::AddingSignIn;
-  signInPanel_.Visibility(signIn ? Visibility::Visible : Visibility::Collapsed);
-  codePanel_.Visibility(signIn ? Visibility::Collapsed : Visibility::Visible);
+  const bool email = method_ == add_sign_in::Method::Email;
+  const bool provider = !add_sign_in::SsoProvider(method_).empty();
+  const bool wallet = method_ == add_sign_in::Method::Wallet;
   if (step == GuestConversionStep::Done) {
-    // added only now that the code was accepted
+    // added only now that the code was accepted, or addAuth took the credential
     if (done_) return;
     done_ = true;
     if (cooldownTimer_) cooldownTimer_.Stop();
+    addedMessageKey_ = std::string(add_sign_in::AddedMessageKey(add_->Added() ? *add_->Added() : method_));
     if (onChanged_) onChanged_();
     dialog_.Hide();
     return;
   }
+  methodPicker_.Visibility(signIn ? Visibility::Visible : Visibility::Collapsed);
+  // the method can change while a browser step waits (it is abandoned), not
+  // while an email is being added
+  methodPicker_.IsEnabled(!conversion_->Busy());
+  signInPanel_.Visibility(signIn && email ? Visibility::Visible : Visibility::Collapsed);
+  codePanel_.Visibility(signIn ? Visibility::Collapsed : Visibility::Visible);
+  providerPanel_.Visibility(signIn && provider ? Visibility::Visible : Visibility::Collapsed);
+  walletPanel_.Visibility(signIn && wallet && !manualRequest_ ? Visibility::Visible
+                                                              : Visibility::Collapsed);
+  manualPanel_.Visibility(signIn && wallet && manualRequest_ ? Visibility::Visible
+                                                             : Visibility::Collapsed);
+  if (provider) {
+    providerHint_.Text(Loc(std::string(add_sign_in::MethodHintKey(method_))));
+    providerButton_.Content(winrt::box_value(Loc(std::string(add_sign_in::ProviderButtonKey(method_)))));
+    providerButton_.IsEnabled(!busy && sdk_.IsLoggedIn());
+  }
+  for (auto const& button : walletButtons_) button.IsEnabled(!busy && sdk_.IsLoggedIn());
+  const bool showHint = signIn && !email && add_->Busy() && !manualRequest_ && !browserHint_.empty();
+  statusText_.Text(showHint ? browserHint_ : hstring{});
+  statusText_.Visibility(showHint ? Visibility::Visible : Visibility::Collapsed);
+
   if (signIn && !sdk_.IsLoggedIn()) {
     // Adding a sign-in method to no account is not a thing; say so rather than
     // offering a form whose submit would 401 in silence.
     ApplyFieldState(errorText_, FieldState::NoSession);
     errorText_.Visibility(Visibility::Visible);
   } else {
+    hstring error;
+    if (email || !signIn) {
+      error = H(conversion_->Error());
+    } else if (!add_->Error().empty()) {
+      error = H(add_->Error());
+    } else if (!add_->ErrorKey().empty()) {
+      error = Loc(add_->ErrorKey());
+    }
     errorText_.Foreground(colors::DangerBrush());
-    errorText_.Text(H(conversion_->Error()));
-    errorText_.Visibility(conversion_->Error().empty() ? Visibility::Collapsed
-                                                       : Visibility::Visible);
+    errorText_.Text(error);
+    errorText_.Visibility(error.empty() ? Visibility::Collapsed : Visibility::Visible);
   }
   if (signIn) {
     // apple AddAuthSheet formValid for the email leg: an auth AND a 12-char
     // password. The server is the real validator; this only gates the button.
-    dialog_.PrimaryButtonText(Loc("add"));
+    // Apple, Google and the wallets have their own buttons and no Add.
+    dialog_.PrimaryButtonText(email ? Loc("add") : hstring{});
     dialog_.SecondaryButtonText(hstring{});
     authBox_.IsEnabled(!busy && sdk_.IsLoggedIn());
     passwordBox_.IsEnabled(!busy && sdk_.IsLoggedIn());
     dialog_.IsPrimaryButtonEnabled(
-        !busy && sdk_.IsLoggedIn() &&
+        email && !busy && sdk_.IsLoggedIn() &&
         GuestConversion::CanSubmitSignIn(Narrow(authBox_.Text().c_str()),
                                          Narrow(passwordBox_.Password().c_str())));
     return;

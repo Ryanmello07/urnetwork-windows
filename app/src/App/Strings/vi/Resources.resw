@@ -824,6 +824,10 @@ cách đúng đắn</value>
     <value>Kết nối và mở liên kết</value>
     <comment>Call to action</comment>
   </data>
+  <data name="connect_bittensor_wallet_to_add_sign_in_method" xml:space="preserve">
+    <value>Kết nối ví Bittensor để thêm làm phương thức đăng nhập.</value>
+    <comment>Add sign-in method sheet: the Bittensor wallet option's explanation (Talisman, WalletConnect, or a pasted signature).</comment>
+  </data>
   <data name="connect_options" xml:space="preserve">
     <value>Tùy chọn kết nối</value>
     <comment>A label displayed above the options for connecting to a tunnel.</comment>
