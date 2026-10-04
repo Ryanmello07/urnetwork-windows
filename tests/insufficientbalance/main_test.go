@@ -296,6 +296,8 @@ type fakeVm struct {
 	copies   []string
 	dumps    int
 	shutdown int
+	// the credentials file the sign-in step copied to the guest
+	signInCredentials []byte
 	// guest verb (with -Op) -> result JSON, or an error
 	reply func(verb, op, arg string) (string, error)
 }
@@ -332,9 +334,10 @@ func (self *fakeVm) CopyTo(ctx context.Context, st *vmState, local, remote strin
 			return err
 		}
 		info, _ := os.Stat(local)
-		if info.Mode().Perm() != 0600 || !bytes.Contains(b, []byte(`"password":"pw"`)) {
+		if info.Mode().Perm() != 0600 {
 			self.t.Errorf("credentials copy: mode %v", info.Mode().Perm())
 		}
+		self.signInCredentials = b
 	}
 	return nil
 }
@@ -390,17 +393,38 @@ func newTestDriver(t *testing.T, v *fakeVm) (*driver, string) {
 	privateDir := filepath.Join(dir, "private")
 	clock := &fakeClock{now: time.Unix(0, 0)}
 	return &driver{
-		vm:        v,
-		env:       environment{root: dir, stateDir: state, credentials: filepath.Join(dir, "creds"), msi: msi},
-		scriptDir: dir,
-		acceptLib: filepath.Join(dir, "run-windows-lib.ps1"),
-		sleep:     clock.sleep,
-		now:       func() time.Time { return clock.now },
-		readCreds: func(string) (credentials, error) {
-			return credentials{Email: "ib@example.com", Password: "pw", PasswordSendKeys: "pw"}, nil
-		},
+		vm:          v,
+		env:         environment{root: dir, stateDir: state, msi: msi},
+		scriptDir:   dir,
+		acceptLib:   filepath.Join(dir, "run-windows-lib.ps1"),
+		sleep:       clock.sleep,
+		now:         func() time.Time { return clock.now },
+		readCreds:   readCredentials,
 		privateTemp: func() (string, error) { return privateDir, os.MkdirAll(privateDir, 0700) },
 	}, privateDir
+}
+
+// A private credentials file as the runner writes one per case.
+func writeCredentials(t *testing.T, email, password string, mode os.FileMode) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "credentials.yml")
+	if err := os.WriteFile(path, []byte("email: "+email+"\npassword: '"+password+"'\n"), mode); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, mode); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+// The values the fake sign-in step received.
+func signedInAs(t *testing.T, v *fakeVm) credentials {
+	t.Helper()
+	var c credentials
+	if err := json.Unmarshal(v.signInCredentials, &c); err != nil {
+		t.Fatalf("no credentials reached the sign-in step: %v", err)
+	}
+	return c
 }
 
 const disconnectedFacts = `{"window":true,"elements":{"acceptance.connect":{"present":true,"offscreen":false,"enabled":true,"name":"Connect"}}}`
@@ -457,9 +481,13 @@ func TestSetup(t *testing.T) {
 	v := &fakeVm{t: t}
 	v.reply = setupReply(false)
 	d, privateDir := newTestDriver(t, v)
-	out, err := d.run(context.Background(), []string{"setup"})
+	creds := writeCredentials(t, "case-a@example.com", "pw-a", 0600)
+	out, err := d.run(context.Background(), []string{"setup", creds})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if c := signedInAs(t, v); c.Email != "case-a@example.com" || c.Password != "pw-a" {
+		t.Fatalf("sign-in saw %q", c.Email)
 	}
 	if b, _ := json.Marshal(out); string(b) != `{"kill_switch_supported":true}` {
 		t.Fatalf("setup output %s", b)
@@ -485,7 +513,7 @@ func TestSetupRefusesAConnectedApp(t *testing.T) {
 	v := &fakeVm{t: t}
 	v.reply = setupReply(true)
 	d, _ := newTestDriver(t, v)
-	if _, err := d.run(context.Background(), []string{"setup"}); err == nil || !strings.Contains(err.Error(), "connected after sign-in") {
+	if _, err := d.run(context.Background(), []string{"setup", writeCredentials(t, "a@example.com", "pw", 0600)}); err == nil || !strings.Contains(err.Error(), "connected after sign-in") {
 		t.Fatalf("got %v", err)
 	}
 	// the VM stays recorded so the runner's teardown stops it
@@ -504,7 +532,7 @@ func TestSetupRemovesCredentialsWhenSignInFails(t *testing.T) {
 		return base(verb, op, arg)
 	}
 	d, _ := newTestDriver(t, v)
-	_, err := d.run(context.Background(), []string{"setup"})
+	_, err := d.run(context.Background(), []string{"setup", writeCredentials(t, "a@example.com", "pw", 0600)})
 	if err == nil || !strings.Contains(err.Error(), "account discovery") {
 		t.Fatalf("got %v", err)
 	}
@@ -517,9 +545,90 @@ func TestSetupNeedsTheBuiltMsi(t *testing.T) {
 	v := &fakeVm{t: t}
 	d, _ := newTestDriver(t, v)
 	d.env.msi = filepath.Join(t.TempDir(), "missing.msi")
-	if _, err := d.run(context.Background(), []string{"setup"}); err == nil || v.booted != 0 {
+	if _, err := d.run(context.Background(), []string{"setup", writeCredentials(t, "a@example.com", "pw", 0600)}); err == nil || v.booted != 0 {
 		t.Fatalf("got %v, booted %d", err, v.booted)
 	}
+}
+
+// The runner gives each case a fresh account through `setup <file>` only; the
+// retired URNETWORK_INSUFFICIENT_BALANCE_CREDENTIALS is never read.
+func TestSetupReadsCredentialsOnlyFromItsArgument(t *testing.T) {
+	other := writeCredentials(t, "other@example.com", "other-pw", 0600)
+	for _, envValue := range []string{other, "garbage", ""} {
+		t.Setenv("URNETWORK_INSUFFICIENT_BALANCE_CREDENTIALS", envValue)
+		v := &fakeVm{t: t, reply: setupReply(false)}
+		d, _ := newTestDriver(t, v)
+		creds := writeCredentials(t, "case-b@example.com", "pw-b", 0600)
+		if _, err := d.run(context.Background(), []string{"setup", creds}); err != nil {
+			t.Fatalf("env %q: %v", envValue, err)
+		}
+		if c := signedInAs(t, v); c.Email != "case-b@example.com" || c.Password != "pw-b" {
+			t.Fatalf("env %q: sign-in saw %q", envValue, c.Email)
+		}
+
+		v = &fakeVm{t: t, reply: setupReply(false)}
+		d, _ = newTestDriver(t, v)
+		if _, err := d.run(context.Background(), []string{"setup"}); err == nil || v.booted != 0 || v.signInCredentials != nil {
+			t.Fatalf("env %q: setup without its argument: %v, booted %d", envValue, err, v.booted)
+		}
+	}
+}
+
+func TestSetupRejectsABadCredentialsArgument(t *testing.T) {
+	good := writeCredentials(t, "a@example.com", "secret-value", 0600)
+	relative, err := filepath.Rel(mustGetwd(t), good)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, args := range map[string][]string{
+		"missing":        {"setup"},
+		"extra":          {"setup", good, good},
+		"empty":          {"setup", ""},
+		"relative":       {"setup", relative},
+		"group readable": {"setup", writeCredentials(t, "a@example.com", "secret-value", 0640)},
+		"world readable": {"setup", writeCredentials(t, "a@example.com", "secret-value", 0604)},
+		"not found":      {"setup", filepath.Join(t.TempDir(), "absent.yml")},
+		"directory":      {"setup", privateDir(t)},
+		"malformed":      {"setup", writeFile(t, "email: a@example.com\npassword: secret-value\ntoken: x\n")},
+	} {
+		v := &fakeVm{t: t, reply: setupReply(false)}
+		d, _ := newTestDriver(t, v)
+		_, err := d.run(context.Background(), args)
+		if err == nil || v.booted != 0 || v.signInCredentials != nil {
+			t.Errorf("%s: got %v, booted %d", name, err, v.booted)
+			continue
+		}
+		if strings.Contains(err.Error(), "secret-value") || strings.Contains(err.Error(), "a@example.com") {
+			t.Errorf("%s: the error shows a credential: %v", name, err)
+		}
+	}
+}
+
+func mustGetwd(t *testing.T) string {
+	t.Helper()
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return wd
+}
+
+func privateDir(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+func writeFile(t *testing.T, text string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "credentials.yml")
+	if err := os.WriteFile(path, []byte(text), 0600); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }
 
 func startedDriver(t *testing.T, reply func(verb, op, arg string) (string, error)) (*driver, *fakeVm) {
@@ -662,55 +771,113 @@ func TestTeardown(t *testing.T) {
 	}
 }
 
-func TestMainCodeOutputAndRedaction(t *testing.T) {
+// The runner's two cases, each a separate process per verb with its own
+// account and state directory: verbs after setup find the case's credentials
+// (here, for redaction) only through what setup recorded in the state
+// directory, and teardown drops that record.
+func TestMainCodeCasesFindCredentialsThroughTheStateDir(t *testing.T) {
 	dir := t.TempDir()
-	creds := filepath.Join(dir, "creds")
-	if err := os.WriteFile(creds, []byte("email: ib@example.com\npassword: hunter2\n"), 0600); err != nil {
+	outDir := filepath.Join(dir, "out")
+	if err := os.MkdirAll(outDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(outDir, "URnetwork-0.0.0-0-arm64.msi"), []byte("msi"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("URNETWORK_ROOT", dir)
-	t.Setenv("URNETWORK_INSUFFICIENT_BALANCE_STATE", filepath.Join(dir, "state"))
-	t.Setenv("URNETWORK_INSUFFICIENT_BALANCE_CREDENTIALS", creds)
+	t.Setenv("URNETWORK_INSUFFICIENT_BALANCE_CREDENTIALS", writeCredentials(t, "retired@example.com", "retired-pw", 0600))
 	t.Setenv("URNETWORK_IB_WINDOWS_DIR", "")
 	t.Setenv("EXTERNAL_WARP_VERSION", "")
-	t.Setenv("UR_ACCEPT_WINDOWS_OUT", "")
+	t.Setenv("UR_ACCEPT_WINDOWS_OUT", outDir)
 
 	var reply func(verb, op, arg string) (string, error)
+	var lastVm *fakeVm
 	newFake := func(e environment) *driver {
-		v := &fakeVm{t: t, alive: true, reply: reply}
-		d, _ := newTestDriver(t, v)
+		lastVm = &fakeVm{t: t, alive: true, reply: reply}
+		d, _ := newTestDriver(t, lastVm)
 		d.env = e
 		return d
 	}
-	if err := os.MkdirAll(filepath.Join(dir, "state"), 0700); err != nil {
-		t.Fatal(err)
-	}
-	if err := saveState(filepath.Join(dir, "state"), &vmState{QemuPid: 4242, RunDir: "/tmp/tmp.fake"}); err != nil {
-		t.Fatal(err)
-	}
-
-	reply = func(verb, op, arg string) (string, error) { return `{"ip":"203.0.113.7"}`, nil }
-	var stdout, stderr bytes.Buffer
-	if code := mainCode(context.Background(), []string{"egress"}, &stdout, &stderr, newFake); code != 0 {
-		t.Fatalf("exit %d: %s", code, stderr.String())
-	}
-	if stdout.String() != "{\"ip\":\"203.0.113.7\"}\n" {
-		t.Fatalf("stdout %q", stdout.String())
+	call := func(args ...string) (int, string, string) {
+		var stdout, stderr bytes.Buffer
+		code := mainCode(context.Background(), args, &stdout, &stderr, newFake)
+		return code, stdout.String(), stderr.String()
 	}
 
+	for _, c := range []struct{ name, email, password string }{
+		{"held", "case-a@example.com", "pw-a"},
+		{"kill-switch", "case-b@example.com", "pw-b"},
+	} {
+		state := filepath.Join(dir, "artifacts", "windows", c.name)
+		t.Setenv("URNETWORK_INSUFFICIENT_BALANCE_STATE", state)
+		creds := writeCredentials(t, c.email, c.password, 0600)
+
+		reply = setupReply(false)
+		if code, stdout, stderr := call("setup", creds); code != 0 || stdout != "{\"kill_switch_supported\":true}\n" {
+			t.Fatalf("%s setup: exit %d %q %q", c.name, code, stdout, stderr)
+		}
+		if got := signedInAs(t, lastVm); got.Email != c.email || got.Password != c.password {
+			t.Fatalf("%s: sign-in saw %q", c.name, got.Email)
+		}
+
+		reply = func(verb, op, arg string) (string, error) { return `{"ip":"203.0.113.7"}`, nil }
+		if code, stdout, stderr := call("egress"); code != 0 || stdout != "{\"ip\":\"203.0.113.7\"}\n" {
+			t.Fatalf("%s egress: exit %d %q %q", c.name, code, stdout, stderr)
+		}
+
+		reply = func(verb, op, arg string) (string, error) {
+			return "", fmt.Errorf("guest said %s for\n%s", c.password, c.email)
+		}
+		code, stdout, stderr := call("egress")
+		if code != 1 || stdout != "" || strings.Count(stderr, "\n") != 1 ||
+			strings.Contains(stderr, c.password) || strings.Contains(stderr, c.email) || !strings.Contains(stderr, "[redacted]") {
+			t.Fatalf("%s: exit %d stdout %q stderr %q", c.name, code, stdout, stderr)
+		}
+
+		// a teardown that fails to clean the guest is still redacted
+		reply = func(verb, op, arg string) (string, error) {
+			if verb == "cleanup-private" {
+				return "", fmt.Errorf("could not remove %s of %s", c.password, c.email)
+			}
+			return `{"files":[]}`, nil
+		}
+		code, _, stderr = call("teardown")
+		if code != 1 || lastVm.shutdown != 1 || strings.Contains(stderr, c.password) || strings.Contains(stderr, c.email) {
+			t.Fatalf("%s teardown: exit %d shutdown %d stderr %q", c.name, code, lastVm.shutdown, stderr)
+		}
+		entries, err := os.ReadDir(state)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, entry := range entries {
+			if b, err := os.ReadFile(filepath.Join(state, entry.Name())); err == nil && bytes.Contains(b, []byte(creds)) {
+				t.Fatalf("%s: %s still records the credentials after teardown", c.name, entry.Name())
+			}
+		}
+	}
+
+	// a failing setup redacts the values of its own argument
+	t.Setenv("URNETWORK_INSUFFICIENT_BALANCE_STATE", filepath.Join(dir, "artifacts", "windows", "failed"))
+	base := setupReply(false)
 	reply = func(verb, op, arg string) (string, error) {
-		return "", errors.New("guest said hunter2 for\nib@example.com")
+		if op == "login" {
+			return `{"signed_in":false,"detail":"rejected pw-c for case-c@example.com"}`, nil
+		}
+		return base(verb, op, arg)
 	}
-	stdout.Reset()
-	stderr.Reset()
-	if code := mainCode(context.Background(), []string{"egress"}, &stdout, &stderr, newFake); code != 1 {
-		t.Fatalf("exit %d", code)
+	code, _, stderr := call("setup", writeCredentials(t, "case-c@example.com", "pw-c", 0600))
+	if code != 1 || strings.Contains(stderr, "pw-c") || strings.Contains(stderr, "case-c@example.com") {
+		t.Fatalf("exit %d stderr %q", code, stderr)
 	}
-	if stdout.Len() != 0 || strings.Count(stderr.String(), "\n") != 1 ||
-		strings.Contains(stderr.String(), "hunter2") || strings.Contains(stderr.String(), "ib@example.com") {
-		t.Fatalf("stdout %q stderr %q", stdout.String(), stderr.String())
-	}
+}
 
+func TestLoadEnvironmentDefaultMsi(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("URNETWORK_ROOT", dir)
+	t.Setenv("URNETWORK_INSUFFICIENT_BALANCE_STATE", filepath.Join(dir, "state"))
+	t.Setenv("URNETWORK_IB_WINDOWS_DIR", "")
+	t.Setenv("EXTERNAL_WARP_VERSION", "")
+	t.Setenv("UR_ACCEPT_WINDOWS_OUT", "")
 	if e, err := loadEnvironment(); err != nil || e.msi != filepath.Join(dir, "windows", "out", "acceptance", "URnetwork-0.0.0-0-arm64.msi") {
 		t.Fatalf("msi %q, %v", e.msi, err)
 	}

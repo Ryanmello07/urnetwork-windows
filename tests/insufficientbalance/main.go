@@ -7,7 +7,8 @@
 //
 // Each verb is a separate process, so everything that must survive between
 // verbs (the QEMU pid, its run dir and monitor socket, the notice baseline)
-// lives in state.json in URNETWORK_INSUFFICIENT_BALANCE_STATE. The VM is the
+// lives in state.json in URNETWORK_INSUFFICIENT_BALANCE_STATE, a fresh private
+// directory per case. The VM is the
 // repository's isolated Windows 11 ARM64 QEMU guest, booted, reached and shut
 // down through build/all/windows/lib.sh exactly as test-main.sh does, with
 // the MSI that test-main.sh built. The GUI is driven with UI Automation by
@@ -19,9 +20,14 @@
 // from the shell, so notices are counted from the app log line the notice
 // sink writes (AppController::ReactToBalance).
 //
-// Credentials arrive only as a private file path; the values are copied to
-// the guest for the sign-in step, deleted there right after, and never
-// printed.
+// The runner creates a fresh account per case and passes it only as
+// `setup <credentials-file>`, an absolute path to a private regular file
+// (URNETWORK_INSUFFICIENT_BALANCE_CREDENTIALS is retired and never read).
+// setup records that path in the state directory, where later verbs find it
+// to redact the values; teardown drops the record and discards the VM, so the
+// next case signs in fresh in a new guest. The values are copied to the guest
+// for the sign-in step, deleted there right after, and never printed. The
+// driver never creates or deletes accounts.
 package main
 
 import (
@@ -226,11 +232,17 @@ type credentials struct {
 }
 
 // Reads the private flat file with exactly `email:` and `password:` (the
-// runner's format). Values are never printed.
+// runner's format) at an absolute path. Values are never printed.
 func readCredentials(path string) (credentials, error) {
-	info, err := os.Stat(path)
+	if !filepath.IsAbs(path) {
+		return credentials{}, errors.New("the credentials file must be an absolute path")
+	}
+	info, err := os.Lstat(path)
 	if err != nil {
 		return credentials{}, fmt.Errorf("credentials: %w", errors.Unwrap(err))
+	}
+	if !info.Mode().IsRegular() {
+		return credentials{}, errors.New("the credentials file must be a regular file")
 	}
 	if info.Mode().Perm()&0077 != 0 {
 		return credentials{}, errors.New("credentials file must not be group/world readable")
@@ -356,21 +368,48 @@ func removeState(dir string) error {
 	return err
 }
 
+// The setup argument's path, kept for the case's later verbs. Only the path
+// is stored; the runner keeps the file until after teardown.
+const credentialsRecord = "credentials-path"
+
+func recordCredentialsPath(dir, path string) error {
+	record := filepath.Join(dir, credentialsRecord)
+	if err := os.WriteFile(record+".tmp", []byte(path), 0600); err != nil {
+		return err
+	}
+	return os.Rename(record+".tmp", record)
+}
+
+// "" when setup has not recorded one.
+func recordedCredentialsPath(dir string) (string, error) {
+	b, err := os.ReadFile(filepath.Join(dir, credentialsRecord))
+	if errors.Is(err, os.ErrNotExist) {
+		return "", nil
+	}
+	return string(b), err
+}
+
+func removeCredentialsRecord(dir string) error {
+	err := os.Remove(filepath.Join(dir, credentialsRecord))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	return err
+}
+
 // ---- entry ----
 
 type environment struct {
-	root        string
-	windowsDir  string
-	stateDir    string
-	credentials string
-	msi         string
+	root       string
+	windowsDir string
+	stateDir   string
+	msi        string
 }
 
 func loadEnvironment() (environment, error) {
 	e := environment{
-		root:        os.Getenv("URNETWORK_ROOT"),
-		stateDir:    os.Getenv("URNETWORK_INSUFFICIENT_BALANCE_STATE"),
-		credentials: os.Getenv("URNETWORK_INSUFFICIENT_BALANCE_CREDENTIALS"),
+		root:     os.Getenv("URNETWORK_ROOT"),
+		stateDir: os.Getenv("URNETWORK_INSUFFICIENT_BALANCE_STATE"),
 	}
 	if !filepath.IsAbs(e.root) || !filepath.IsAbs(e.stateDir) {
 		return e, errors.New("URNETWORK_ROOT and URNETWORK_INSUFFICIENT_BALANCE_STATE must be absolute")
@@ -417,7 +456,7 @@ func newDriver(e environment) *driver {
 // redacted stderr line and a nonzero exit.
 func mainCode(ctx context.Context, args []string, stdout, stderr io.Writer, newDriver func(environment) *driver) int {
 	if len(args) == 0 {
-		fmt.Fprintln(stderr, "usage: test-insufficient-balance-driver setup|direct-egress|connect|observe|egress|traffic|press-disconnect|kill-switch on|off|teardown")
+		fmt.Fprintln(stderr, "usage: test-insufficient-balance-driver setup <credentials-file>|direct-egress|connect|observe|egress|traffic|press-disconnect|kill-switch on|off|teardown")
 		return 2
 	}
 	e, err := loadEnvironment()
@@ -429,10 +468,12 @@ func mainCode(ctx context.Context, args []string, stdout, stderr io.Writer, newD
 		fmt.Fprintln(stderr, redactedLine(err.Error()))
 		return 1
 	}
+	// resolved before the verb runs: teardown drops the record
+	credentialsPath := credentialsPathFor(e, args)
 	out, err := newDriver(e).run(ctx, args)
 	if err != nil {
 		var secrets []string
-		if c, cerr := readCredentials(e.credentials); cerr == nil {
+		if c, cerr := readCredentials(credentialsPath); cerr == nil {
 			secrets = []string{c.Password, c.Email}
 		}
 		fmt.Fprintln(stderr, redactedLine(fmt.Sprintf("windows %s: %v", args[0], err), secrets...))
@@ -445,6 +486,19 @@ func mainCode(ctx context.Context, args []string, stdout, stderr io.Writer, newD
 	}
 	fmt.Fprintln(stdout, string(b))
 	return 0
+}
+
+// The case's credentials file: setup's own argument, otherwise the path setup
+// recorded in the state directory.
+func credentialsPathFor(e environment, args []string) string {
+	if args[0] == "setup" {
+		if len(args) == 2 {
+			return args[1]
+		}
+		return ""
+	}
+	path, _ := recordedCredentialsPath(e.stateDir)
+	return path
 }
 
 func sleepContext(ctx context.Context, d time.Duration) error {
