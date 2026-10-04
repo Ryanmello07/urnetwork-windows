@@ -472,28 +472,30 @@ type urScriptRow struct {
 	WixArgs        []string `json:"WixArgs"`
 }
 
+type urShell struct{ name, path string }
+
 // The PowerShells to run the script under: every one named in
 // UR_VERSION_SHELLS (all required), else whichever of pwsh and powershell.exe
-// this host has.
-func urVersionShells(t *testing.T) []string {
+// this host has. Subtests are named as requested ("pwsh", not the "pwsh.exe"
+// it resolves to on Windows), so CI can assert each leg ran by name.
+func urVersionShells(t *testing.T) []urShell {
 	t.Helper()
-	if required := os.Getenv("UR_VERSION_SHELLS"); required != "" {
-		var shells []string
-		for _, name := range strings.Split(required, ",") {
-			name = strings.TrimSpace(name)
-			path, err := exec.LookPath(name)
-			if err != nil {
+	names := []string{"pwsh", "powershell.exe"}
+	required := os.Getenv("UR_VERSION_SHELLS")
+	if required != "" {
+		names = strings.Split(required, ",")
+	}
+	var shells []urShell
+	for _, name := range names {
+		name = strings.TrimSpace(name)
+		path, err := exec.LookPath(name)
+		if err != nil {
+			if required != "" {
 				t.Fatalf("UR_VERSION_SHELLS requires %q, which is not on PATH: %v", name, err)
 			}
-			shells = append(shells, path)
+			continue
 		}
-		return shells
-	}
-	var shells []string
-	for _, name := range []string{"pwsh", "powershell.exe"} {
-		if path, err := exec.LookPath(name); err == nil {
-			shells = append(shells, path)
-		}
+		shells = append(shells, urShell{name, path})
 	}
 	return shells
 }
@@ -556,15 +558,15 @@ func TestUrVersionScriptMatchesOracle(t *testing.T) {
 	}
 
 	for _, shell := range shells {
-		t.Run(filepath.Base(shell), func(t *testing.T) {
+		t.Run(shell.name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 			defer cancel()
-			command := exec.CommandContext(ctx, shell, "-NoProfile", "-NonInteractive",
+			command := exec.CommandContext(ctx, shell.path, "-NoProfile", "-NonInteractive",
 				"-ExecutionPolicy", "Bypass", "-File", driver, "-Script", script, "-Vectors", vectorFile)
 			var stdout, stderr bytes.Buffer
 			command.Stdout, command.Stderr = &stdout, &stderr
 			if err := command.Run(); err != nil {
-				t.Fatalf("%s: %v\nstderr:\n%s\nstdout:\n%s", shell, err, stderr.String(), stdout.String())
+				t.Fatalf("%s: %v\nstderr:\n%s\nstdout:\n%s", shell.path, err, stderr.String(), stdout.String())
 			}
 			now := time.Now()
 			var rows []urScriptRow
@@ -620,7 +622,7 @@ func TestUrVersionScriptMatchesOracle(t *testing.T) {
 			for _, vector := range urRefusedVectors {
 				wantRefused[vector.class]++
 			}
-			t.Logf("%s: %d vectors, %d accepted, refused %v", filepath.Base(shell), len(rows), accepted, refused)
+			t.Logf("%s (%s): %d vectors, %d accepted, refused %v", shell.name, shell.path, len(rows), accepted, refused)
 			if !reflect.DeepEqual(refused, wantRefused) || accepted < 150 {
 				t.Errorf("vector coverage changed: %d accepted, refused %v, want refused %v", accepted, refused, wantRefused)
 			}
