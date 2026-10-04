@@ -227,13 +227,17 @@ class AuthCodeSheet : public std::enable_shared_from_this<AuthCodeSheet> {
 
 // ---- Add auth method (apple AddAuthSheet) ----------------------------------
 //
-// Email/phone + password. The wallet legs of iOS's sheet (Solana/Bittensor) are
-// NOT here: they need the browser signing bridge, which is P5's surface.
+// Email/phone + password, then the emailed code: an added email or phone counts
+// as added (onChanged reloads the methods, the dialog closes) only once the
+// code is verified (GuestConversion, the flow the guest conversion uses). The
+// wallet legs of iOS's sheet (Solana/Bittensor) are NOT here: they need the
+// browser signing bridge, which is P5's surface; there are no SSO legs either.
 class AddAuthSheet : public std::enable_shared_from_this<AddAuthSheet> {
  public:
   static std::shared_ptr<AddAuthSheet> Create(
       winrt::Microsoft::UI::Xaml::XamlRoot const& root, SdkHost& sdk,
       std::function<void()> onChanged);
+  ~AddAuthSheet();
 
   winrt::Microsoft::UI::Xaml::Controls::ContentDialog Dialog() const { return dialog_; }
 
@@ -241,17 +245,23 @@ class AddAuthSheet : public std::enable_shared_from_this<AddAuthSheet> {
   AddAuthSheet(SdkHost& sdk, std::function<void()> onChanged)
       : sdk_(sdk), onChanged_(std::move(onChanged)) {}
   void Build(winrt::Microsoft::UI::Xaml::XamlRoot const& root);
-  void Validate();
-  void Submit();
-  void ApplyResult(bool ok, std::string const& error);
+  void Render();
 
   SdkHost& sdk_;
   std::function<void()> onChanged_;
+  std::unique_ptr<GuestConversionSession> session_;
+  std::unique_ptr<GuestConversion> conversion_;
+  bool done_ = false;
   winrt::Microsoft::UI::Xaml::Controls::ContentDialog dialog_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::StackPanel signInPanel_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::StackPanel codePanel_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::TextBox authBox_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::PasswordBox passwordBox_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::TextBox codeBox_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::TextBlock errorText_{nullptr};
-  bool submitting_ = false;
+  winrt::Microsoft::UI::Xaml::Controls::TextBlock noticeText_{nullptr};
+  // re-renders each second while a rate limit counts down
+  winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer cooldownTimer_{nullptr};
 };
 
 // ---- Create an account, for a legacy guest network ------------------------
@@ -260,7 +270,7 @@ class AddAuthSheet : public std::enable_shared_from_this<AddAuthSheet> {
 // network and verifies it with the emailed code. The network, its plan and its
 // balance stay; nothing signs out (a guest network has no login to come back
 // to). Two pages in one dialog: the sign-in fields (Add), then the code
-// (Verify, Resend).
+// (Verify, Resend). Settings' AddAuthSheet runs the same flow.
 class GuestConversionSheet : public std::enable_shared_from_this<GuestConversionSheet> {
  public:
   static std::shared_ptr<GuestConversionSheet> Create(
@@ -289,6 +299,8 @@ class GuestConversionSheet : public std::enable_shared_from_this<GuestConversion
   winrt::Microsoft::UI::Xaml::Controls::TextBox codeBox_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::TextBlock errorText_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::TextBlock noticeText_{nullptr};
+  // re-renders each second while a rate limit counts down
+  winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer cooldownTimer_{nullptr};
 };
 
 // ---- Referral network (apple UpdateReferralNetworkSheet) -------------------

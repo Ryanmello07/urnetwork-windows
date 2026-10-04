@@ -119,7 +119,7 @@ func TestLegacyGuestAccountFlow(t *testing.T) {
 	// the sheet adds and verifies on this network, and never signs in or out
 	sheets := read("SettingsSheets.cpp")
 	session := functionBody(sheets, "class SdkGuestConversionSession")
-	for _, want := range []string{"sdk_.api().addAuth(", "sdk_.api().authVerify(", "sdk_.RefreshJwt()", "balance_.Refresh()"} {
+	for _, want := range []string{"sdk_.api().addAuth(", "sdk_.api().authVerify(", "sdk_.RefreshJwt()", "balance_->Refresh()"} {
 		if !strings.Contains(session, want) {
 			t.Errorf("SdkGuestConversionSession: missing %s", want)
 		}
@@ -127,6 +127,48 @@ func TestLegacyGuestAccountFlow(t *testing.T) {
 	for _, unwanted := range []string{"Logout", "sdk_.VerifyCode("} {
 		if strings.Contains(session, unwanted) {
 			t.Errorf("SdkGuestConversionSession: has %s", unwanted)
+		}
+	}
+
+	// Settings adds an email or phone through the same add -> code -> verify
+	// flow and reports it added (onChanged reloads the methods) only once the
+	// code is accepted; before, it reported it added as soon as addAuth answered.
+	build := functionBody(sheets, "void AddAuthSheet::Build(XamlRoot const& root)")
+	for _, want := range []string{
+		"std::make_unique<SdkGuestConversionSession>(sdk_, nullptr,",
+		"std::make_unique<GuestConversion>(*session_)",
+		"self->conversion_->SubmitSignIn(",
+		"self->conversion_->SubmitCode(",
+		"self->conversion_->Resend()",
+	} {
+		if !strings.Contains(build, want) {
+			t.Errorf("AddAuthSheet::Build: missing %s", want)
+		}
+	}
+	if strings.Contains(build, "sdk_.api().addAuth(") {
+		t.Error("AddAuthSheet::Build: adds the sign-in outside the verify flow")
+	}
+	if strings.Contains(sheets, "void AddAuthSheet::ApplyResult(") || strings.Contains(sheets, "void AddAuthSheet::Submit(") {
+		t.Error("AddAuthSheet: still reports a sign-in added straight from addAuth")
+	}
+	render := functionBody(sheets, "void AddAuthSheet::Render()")
+	changed := strings.Index(render, "onChanged_()")
+	doneStep := strings.Index(render, "if (step == GuestConversionStep::Done) {")
+	if changed < 0 || doneStep < 0 || changed < doneStep || strings.Count(render, "onChanged_()") != 1 ||
+		!strings.Contains(render[doneStep:changed], "done_ = true;") {
+		t.Error("AddAuthSheet::Render: onChanged_ does not run only on the Done (verified) step")
+	}
+	// both sheets wait out a send rate limit
+	guestRender := functionBody(sheets, "void GuestConversionSheet::Render()")
+	for name, body := range map[string]string{"AddAuthSheet": render, "GuestConversionSheet": guestRender} {
+		for _, want := range []string{
+			"dialog_.IsSecondaryButtonEnabled(conversion_->CanResend());",
+			"ShowSendNotice(noticeText_, conversion_->ShownNotice());",
+			"RunCooldownTimer(cooldownTimer_, *conversion_);",
+		} {
+			if !strings.Contains(body, want) {
+				t.Errorf("%s::Render: missing %s", name, want)
+			}
 		}
 	}
 
