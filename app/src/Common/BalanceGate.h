@@ -74,6 +74,68 @@ inline constexpr ConnectButton DecideConnectButton(bool failed, bool actionIsDis
   return b;
 }
 
+// The out-of-balance state the start-connect gate reads. The live signal,
+// ContractStatus.InsufficientBalance, does not survive a Disconnect: the SDK
+// resets the contract status to an empty one on every destination change, the
+// user's Disconnect included. Read raw, "held out of balance -> Disconnect ->
+// tray Connect" saw a funded account and started the tunnel again, so the gate
+// only held while a session was up, where the tray offers Disconnect anyway.
+// The latch keeps the state until there is evidence it is over: providers
+// attach on a live session, the subscription balance rises above the lowest
+// value seen since it latched, or the session ends (Reset on sign-in/out).
+// Matches the linux OutOfBalanceLatch.
+class OutOfBalanceLatch {
+ public:
+  struct Observation {
+    // ContractStatus.InsufficientBalance from the latest stats push
+    bool insufficientBalance = false;
+    // a session is up and the connect controller reports providers attached
+    bool providersConnected = false;
+    // the subscription balance has been fetched, and its available bytes
+    bool balanceKnown = false;
+    long long availableBytes = 0;
+  };
+
+  constexpr void Observe(const Observation& o) {
+    if (o.insufficientBalance) {
+      latched_ = true;
+      NoteBalance(o);
+      return;
+    }
+    if (!latched_) return;
+    if (o.providersConnected) {
+      Reset();
+      return;
+    }
+    if (o.balanceKnown && lowKnown_ && lowBytes_ < o.availableBytes) {
+      Reset();
+      return;
+    }
+    NoteBalance(o);
+  }
+
+  constexpr void Reset() {
+    latched_ = false;
+    lowKnown_ = false;
+    lowBytes_ = 0;
+  }
+
+  constexpr bool InsufficientBalance() const { return latched_; }
+
+ private:
+  constexpr void NoteBalance(const Observation& o) {
+    if (!o.balanceKnown) return;
+    if (!lowKnown_ || o.availableBytes < lowBytes_) {
+      lowKnown_ = true;
+      lowBytes_ = o.availableBytes;
+    }
+  }
+
+  bool latched_ = false;
+  bool lowKnown_ = false;
+  long long lowBytes_ = 0;
+};
+
 // What a connect/disconnect gesture does: the tray's single toggle, and the
 // connect button and hero. actionIsDisconnect (gesture::ActionIsDisconnect)
 // wins, so a session that ran out of balance keeps its way out.

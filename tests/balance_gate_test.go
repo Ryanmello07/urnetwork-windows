@@ -91,3 +91,35 @@ func TestConnectEntryPointsAdmitStartConnect(t *testing.T) {
 		t.Errorf("ConnectPage::OnConnectToggle: flips to Connecting before the start-connect gate")
 	}
 }
+
+// The start-connect gate reads the out-of-balance latch, not the raw contract
+// status the SDK resets on the user's Disconnect, and the window's gate and
+// banner read the same latched state.
+func TestStartConnectGateReadsTheLatch(t *testing.T) {
+	app := stripLineComments(readAppSource(t, "AppController.cpp"))
+	onStats := definitionBody(t, "AppController.cpp", app, "void AppController::OnStats(const LiveStats& stats)")
+	if strings.Contains(onStats, "insufficientBalance_ = stats.insufficientBalance") {
+		t.Errorf("AppController::OnStats: the gate reads the raw contract status, which Disconnect resets")
+	}
+	if !strings.Contains(onStats, "ObserveBalanceLatch()") {
+		t.Errorf("AppController::OnStats: does not feed the out-of-balance latch")
+	}
+	if !strings.Contains(onStats, "latched.insufficientBalance = insufficientBalance_") ||
+		strings.Contains(onStats, "OnStatsChanged(stats)") {
+		t.Errorf("AppController::OnStats: the window gets the raw contract status, not the latched one")
+	}
+	observe := definitionBody(t, "AppController.cpp", app, "void AppController::ObserveBalanceLatch()")
+	for _, want := range []string{"balanceLatch_.Observe(", "insufficientBalance_ = balanceLatch_.InsufficientBalance()"} {
+		if !strings.Contains(observe, want) {
+			t.Errorf("AppController::ObserveBalanceLatch: missing %s", want)
+		}
+	}
+	auth := definitionBody(t, "AppController.cpp", app, "void AppController::OnAuthState(")
+	if !strings.Contains(auth, "balanceLatch_.Reset()") {
+		t.Errorf("AppController::OnAuthState: a sign-in or sign-out does not reset the latch")
+	}
+	gate := definitionBody(t, "AppController.cpp", app, "bool AppController::OutOfBalance() const")
+	if !strings.Contains(gate, "insufficientBalance_") {
+		t.Errorf("AppController::OutOfBalance: does not read the latched state")
+	}
+}
