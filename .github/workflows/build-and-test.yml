@@ -365,11 +365,14 @@ jobs:
         if: matrix.platform == 'x64'
         shell: pwsh
         run: |
+          # UrFileVersion is the FILEVERSION the exes above were stamped with;
+          # the package refuses to install over a newer urnetworkd.exe.
           dotnet build app/installer/Installer.wixproj `
             -c Release `
             -p:Platform=x64 `
             -p:BinDir="$env:GITHUB_WORKSPACE\app\build\x64\Release" `
-            -p:UrMsiVersion=${{ needs.build-sdk.outputs.msi_version }}
+            -p:UrMsiVersion=${{ needs.build-sdk.outputs.msi_version }} `
+            -p:UrFileVersion=${{ needs.build-sdk.outputs.version_major }}.${{ needs.build-sdk.outputs.version_minor }}.${{ needs.build-sdk.outputs.version_patch }}.${{ needs.build-sdk.outputs.version_build }}
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           # flatten out of WiX's bin/<platform>/<config>/<culture>/ nest so the
           # release job downloads a file, not a directory shape to guess at

@@ -230,9 +230,10 @@ foreach ($platform in $Platforms) {
   }
 
   # 5. Build the MSI for this arch (WiX v5), staging from $bin, with the
-  #    ProductVersion UrVersion.ps1 derived (the wixproj's default, 0.0.1, for
-  #    0.0.0-0). The driver payload is compiled out of the package unless
-  #    -IncludeDriver produced its .sys above.
+  #    ProductVersion and FILEVERSION UrVersion.ps1 derived (the wixproj's
+  #    defaults, 0.0.1 and 0.0.0.0, for 0.0.0-0). The driver payload is
+  #    compiled out of the package unless -IncludeDriver produced its .sys
+  #    above.
   $wixPlatform = if ($platform -eq "ARM64") { "arm64" } else { "x64" }
   $wixArgs = @("build", "installer\Installer.wixproj", "-c", $Configuration,
     "-p:Platform=$platform", "-p:BinDir=$bin", "-p:Version=$Version") + $urWixArgs

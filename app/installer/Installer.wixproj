@@ -17,7 +17,18 @@
          build.ps1 stamped versions; any stamped package replaces it, and it
          is refused over a stamped one. -->
     <UrMsiVersion Condition="'$(UrMsiVersion)'==''">0.0.1</UrMsiVersion>
-    <DefineConstants>BinDir=$(BinDir);UrMsiVersion=$(UrMsiVersion)</DefineConstants>
+    <!-- This build's FILEVERSION, the four fields both exes carry. build.ps1
+         and CI pass -p:UrFileVersion from tools/UrVersion.ps1 with
+         UrMsiVersion. The default is what an unstamped build's exes carry
+         (Directory.Build.props defaults every Ur* field to 0), so a bare or
+         0.0.0-0 package compares itself, correctly, as 0.0.0.0. -->
+    <UrFileVersion Condition="'$(UrFileVersion)'==''">0.0.0.0</UrFileVersion>
+    <!-- The lowest FILEVERSION above this build's: the fourth field plus one.
+         Package.wxs refuses to install over a urnetworkd.exe at or above it.
+         A UrFileVersion without four fields leaves this empty, and the WiX
+         build then fails on the empty MinVersion. -->
+    <UrNewerFileVersion Condition="$([System.Version]::Parse('$(UrFileVersion)').Revision) &gt;= 0">$([System.Version]::Parse('$(UrFileVersion)').ToString(3)).$([MSBuild]::Add($([System.Version]::Parse('$(UrFileVersion)').Revision), 1))</UrNewerFileVersion>
+    <DefineConstants>BinDir=$(BinDir);UrMsiVersion=$(UrMsiVersion);UrNewerFileVersion=$(UrNewerFileVersion)</DefineConstants>
     <!-- -p:IncludeDriver=true (build.ps1 -IncludeDriver) compiles the split-tunnel
          driver component into the package; otherwise the .sys is omitted so the MSI
          builds without the (WDK-built) driver. -->

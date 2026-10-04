@@ -154,6 +154,8 @@ if ($GitHubOutput) {
     "/p:UrVersionPatch=$day",
     "/p:UrVersionBuild=$build"
   )
-  # Passed to the installer build (Installer.wixproj).
-  WixArgs        = @("-p:UrMsiVersion=$msiVersion")
+  # Passed to the installer build (Installer.wixproj): the ProductVersion, and
+  # the FILEVERSION the exes carry, against which the package refuses to
+  # install over a newer urnetworkd.exe (Package.wxs).
+  WixArgs        = @("-p:UrMsiVersion=$msiVersion", "-p:UrFileVersion=$year.$month.$day.$build")
 }
