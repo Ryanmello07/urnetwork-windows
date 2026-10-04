@@ -377,6 +377,11 @@ struct MainWindow : MainWindowT<MainWindow> {
   // re-read whatever page is already on screen (see the definition).
   void LoadCurrentDestination();
   void ApplyAuthState(urnw::AuthState state, std::string const& error);
+  // Pushes the network identity (name, guest, pro) to Connect, the status strip
+  // and the account menu. Guest is IsGuestNetwork(the jwt claim, the balance's
+  // guest): a refresh drops the claim, so the claim alone labels a refreshed
+  // guest by its network name. Re-run when the balance's guest changes.
+  void ApplyNetworkIdentity();
 
   // ---- the one responsive switch (D4) ----
   // Every destination declares a Narrow and a Wide visual state in markup; this
@@ -536,6 +541,12 @@ struct MainWindow : MainWindowT<MainWindow> {
   std::vector<winrt::Microsoft::UI::Xaml::UIElement> statusAdvancedParts_;
   std::string statusNetworkName_;
   bool statusGuest_ = false;
+  // the identity ApplyAuthState read from the jwt, for ApplyNetworkIdentity
+  bool identityLoggedIn_ = false;
+  bool identityShown_ = false;
+  std::string identityNetworkName_;
+  bool identityJwtGuest_ = false;
+  bool identityPro_ = false;
   bool statusSignedIn_ = false;
   bool statusConnected_ = false;
   std::string statusLocationName_;

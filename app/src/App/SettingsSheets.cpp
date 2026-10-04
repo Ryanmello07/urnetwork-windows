@@ -881,6 +881,8 @@ class SdkGuestConversionSession : public GuestConversionSession {
     });
   }
 
+  ResendCooldown::Clock::time_point Now() override { return ResendCooldown::Clock::now(); }
+
  private:
   SdkHost& sdk_;
   SubscriptionBalanceStore& balance_;
@@ -900,6 +902,7 @@ std::shared_ptr<GuestConversionSheet> GuestConversionSheet::Create(
 }
 
 GuestConversionSheet::~GuestConversionSheet() {
+  if (cooldownTimer_) cooldownTimer_.Stop();
   // the conversion goes first: it drops its answers before the session goes
   conversion_.reset();
   session_.reset();
@@ -981,6 +984,14 @@ void GuestConversionSheet::Build(XamlRoot const& root, SubscriptionBalanceStore&
   conversion_->on_changed = [weak = weak_from_this()] {
     if (auto self = weak.lock()) self->Render();
   };
+  // a rate limit counts down once a second and brings Resend back when it
+  // passes (the login verify step's RefreshRateLimits)
+  cooldownTimer_ = dialog_.DispatcherQueue().CreateTimer();
+  cooldownTimer_.Interval(std::chrono::seconds(1));
+  cooldownTimer_.IsRepeating(true);
+  cooldownTimer_.Tick([weak = weak_from_this()](auto const&, auto const&) {
+    if (auto self = weak.lock()) self->Render();
+  });
   Render();
 }
 
@@ -1014,10 +1025,16 @@ void GuestConversionSheet::Render() {
   }
   dialog_.PrimaryButtonText(Loc("verify"));
   dialog_.SecondaryButtonText(Loc("resend_verify_code"));
-  dialog_.IsSecondaryButtonEnabled(!busy);
+  // a rate limit holds Resend off until its retry time
+  dialog_.IsSecondaryButtonEnabled(conversion_->CanResend());
+  if (conversion_->CoolingDown()) {
+    if (!cooldownTimer_.IsRunning()) cooldownTimer_.Start();
+  } else if (cooldownTimer_.IsRunning()) {
+    cooldownTimer_.Stop();
+  }
   dialog_.IsPrimaryButtonEnabled(
       !busy && !GuestConversion::Trim(Narrow(codeBox_.Text().c_str())).empty());
-  if (auto const& notice = conversion_->Notice()) {
+  if (const auto notice = conversion_->Notice()) {
     hstring message;
     switch (notice->kind) {
       case VerifySendNoticeKind::Sent:

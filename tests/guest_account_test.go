@@ -168,3 +168,86 @@ func TestLegacyGuestAccountFlow(t *testing.T) {
 		}
 	}
 }
+
+// The network label (Connect, the status strip, the account menu) follows the
+// same guest rule as the purchase gates: the jwt claim OR the balance's guest.
+// The claim alone labels a refreshed guest (the refresh drops the claim) by
+// its network name, so the label is re-applied when the balance's guest
+// changes.
+func TestGuestNetworkIdentity(t *testing.T) {
+	root := repositoryRoot(t)
+	source, err := os.ReadFile(filepath.Join(root, "app", "src", "App", "MainWindow.xaml.cpp"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	window := string(source)
+
+	auth := functionBody(window, "void MainWindow::ApplyAuthState(")
+	if auth == "" {
+		t.Fatal("MainWindow.xaml.cpp: no ApplyAuthState")
+	}
+	for _, claimOnly := range []string{"SetNetworkIdentity(networkName, guestMode)", "statusGuest_ = guestMode", "ApplyAccountIdentity(networkName, guestMode"} {
+		if strings.Contains(auth, claimOnly) {
+			t.Errorf("ApplyAuthState: labels the network from the jwt claim alone (%s)", claimOnly)
+		}
+	}
+	if !strings.Contains(auth, "ApplyNetworkIdentity()") {
+		t.Error("ApplyAuthState: does not apply the network identity")
+	}
+
+	identity := functionBody(window, "void MainWindow::ApplyNetworkIdentity()")
+	if identity == "" {
+		t.Fatal("MainWindow.xaml.cpp: no ApplyNetworkIdentity")
+	}
+	if !strings.Contains(identity, "urnw::IsGuestNetwork(identityJwtGuest_, balance_.guest)") {
+		t.Error("ApplyNetworkIdentity: guest is not the claim or the balance's guest")
+	}
+	for _, want := range []string{
+		"connect_->SetNetworkIdentity(identityNetworkName_, guest)",
+		"statusGuest_ = guest;",
+		"login_->ApplyAccountIdentity(identityNetworkName_, guest,",
+	} {
+		if !strings.Contains(identity, want) {
+			t.Errorf("ApplyNetworkIdentity: missing %s", want)
+		}
+	}
+
+	balance := functionBody(window, "void MainWindow::OnBalanceChanged(")
+	if !strings.Contains(balance, "if (guestChanged) ApplyNetworkIdentity();") {
+		t.Error("OnBalanceChanged: a change in the server's guest does not relabel the network")
+	}
+}
+
+// The conversion sheet's Resend follows the rate limit the way the login
+// verify step does (GuestConversion's ResendCooldown, pinned in
+// guest-conversion-tests.cpp): off until the retry time, with the notice
+// re-rendered every second to count the minutes down.
+func TestGuestConversionResendCooldownWiring(t *testing.T) {
+	root := repositoryRoot(t)
+	source, err := os.ReadFile(filepath.Join(root, "app", "src", "App", "SettingsSheets.cpp"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sheets := string(source)
+	render := functionBody(sheets, "void GuestConversionSheet::Render()")
+	if render == "" {
+		t.Fatal("SettingsSheets.cpp: no GuestConversionSheet::Render")
+	}
+	for _, want := range []string{
+		"dialog_.IsSecondaryButtonEnabled(conversion_->CanResend());",
+		"if (conversion_->CoolingDown())",
+		"cooldownTimer_.Start();",
+	} {
+		if !strings.Contains(render, want) {
+			t.Errorf("GuestConversionSheet::Render: missing %s", want)
+		}
+	}
+	build := functionBody(sheets, "void GuestConversionSheet::Build(")
+	if !strings.Contains(build, "cooldownTimer_.Interval(std::chrono::seconds(1));") {
+		t.Error("GuestConversionSheet::Build: no one-second countdown tick")
+	}
+	session := functionBody(sheets, "class SdkGuestConversionSession")
+	if !strings.Contains(session, "Now() override { return ResendCooldown::Clock::now(); }") {
+		t.Error("SdkGuestConversionSession: no steady clock for the cooldown")
+	}
+}

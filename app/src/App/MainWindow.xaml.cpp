@@ -15,6 +15,7 @@
 
 #include "AppController.h"
 #include "ClientEvents.h"
+#include "GuestConversion.h"
 #include "Log.h"
 #include "OnboardingRouting.h"
 #include "PageContext.h"
@@ -1241,9 +1242,12 @@ void MainWindow::OnBalanceChanged(urnw::BalanceSnapshot const& snapshot,
   // snapshot), and the flight plays over whatever is on screen.
   const bool becamePro = balance_.loaded && !balance_.isPro && !balance_.guest &&
                          snapshot.isPro && !snapshot.guest;
+  const bool guestChanged = balance_.guest != snapshot.guest;
   balance_ = snapshot;
   balancePoll_ = poll;
   ApplyBalance();
+  // a refreshed guest is known only from the server's guest: relabel it
+  if (guestChanged) ApplyNetworkIdentity();
   if (becamePro) LaunchProCelebration();
 }
 
@@ -1855,39 +1859,19 @@ void MainWindow::ApplyAuthState(urnw::AuthState state, std::string const& error)
   // The network name behind the idle "{name} is ready to connect" copy. Read
   // from the stored jwt once per auth change (ParsedJwt re-parses on every
   // call, and the status line is rewritten on every stats push).
-  std::string networkName;
-  bool guestMode = false;
-  bool pro = false;
+  identityLoggedIn_ = loggedIn;
+  identityShown_ = showHome;
+  identityNetworkName_.clear();
+  identityJwtGuest_ = false;
+  identityPro_ = false;
   if (loggedIn) {
     if (auto jwt = Sdk().ParsedJwt()) {
-      networkName = jwt->NetworkName;
-      guestMode = jwt->GuestMode;
-      pro = jwt->Pro;
+      identityNetworkName_ = jwt->NetworkName;
+      identityJwtGuest_ = jwt->GuestMode;
+      identityPro_ = jwt->Pro;
     }
   }
-  connect_->SetNetworkIdentity(networkName, guestMode);  // re-renders the status
-  // ...and the same identity onto the status strip, which states it on every
-  // destination rather than only on Connect.
-  if (!statusSamplePinned_) {
-    statusSignedIn_ = loggedIn;
-    statusNetworkName_ = networkName;
-    statusGuest_ = guestMode;
-    if (!loggedIn) {
-      // a signed-out shell describes no provider and carries no traffic; leave
-      // nothing of the previous session's session behind it
-      statusLocationName_.clear();
-      statusConnected_ = false;
-      statusDownBps_ = statusUpBps_ = 0;
-    }
-    ApplyStatusStrip();
-  }
-  // The title-bar avatar + its menu (iOS AccountMenu): same jwt, one more
-  // reader. `showHome`, NOT `loggedIn` — EnterPreviewUi used to reveal the
-  // avatar itself and the very next auth push hid it again, so the one surface
-  // that is signed-in-only was the one surface preview could not show. The
-  // identity stays whatever the jwt says (empty in preview); only the
-  // visibility follows the pinned view.
-  login_->ApplyAccountIdentity(networkName, guestMode, pro, showHome);
+  ApplyNetworkIdentity();
   if (loggedIn && !wasVisible) {
     // the drawer just appeared: refresh its state and play the entrance
     connect_->ResyncDrawer();
@@ -1913,6 +1897,38 @@ void MainWindow::ApplyAuthState(urnw::AuthState state, std::string const& error)
     referrals_->ResetForSignOut();
     if (referralsOpen_) CloseReferrals();
   }
+}
+
+// The identity ApplyAuthState read, onto Connect, the status strip and the
+// account menu. Guest is the claim OR the balance's guest (the server's: no
+// login method), the same rule as the balance store and the purchase gates; a
+// refreshed guest has lost the claim and would otherwise show its network name.
+void MainWindow::ApplyNetworkIdentity() {
+  const bool guest =
+      identityLoggedIn_ && urnw::IsGuestNetwork(identityJwtGuest_, balance_.guest);
+  connect_->SetNetworkIdentity(identityNetworkName_, guest);  // re-renders the status
+  // ...and the same identity onto the status strip, which states it on every
+  // destination rather than only on Connect.
+  if (!statusSamplePinned_) {
+    statusSignedIn_ = identityLoggedIn_;
+    statusNetworkName_ = identityNetworkName_;
+    statusGuest_ = guest;
+    if (!identityLoggedIn_) {
+      // a signed-out shell describes no provider and carries no traffic; leave
+      // nothing of the previous session's session behind it
+      statusLocationName_.clear();
+      statusConnected_ = false;
+      statusDownBps_ = statusUpBps_ = 0;
+    }
+    ApplyStatusStrip();
+  }
+  // The title-bar avatar + its menu (iOS AccountMenu): same jwt, one more
+  // reader. `identityShown_` (showHome), NOT `identityLoggedIn_` — EnterPreviewUi
+  // used to reveal the avatar itself and the very next auth push hid it again,
+  // so the one surface that is signed-in-only was the one surface preview could
+  // not show. The identity stays whatever the jwt says (empty in preview); only
+  // the visibility follows the pinned view.
+  login_->ApplyAccountIdentity(identityNetworkName_, guest, identityPro_, identityShown_);
 }
 
 void MainWindow::OnTunnelStateChanged(urnw::proto::TunnelStatus const& status) {

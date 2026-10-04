@@ -9,6 +9,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+#include <chrono>
 #include <functional>
 #include <iostream>
 #include <string>
@@ -19,6 +20,7 @@
 using urnw::GuestConversion;
 using urnw::GuestConversionStep;
 using urnw::VerifySendNotice;
+using urnw::VerifySendNoticeKind;
 
 namespace {
 
@@ -39,6 +41,10 @@ class FakeSession : public urnw::GuestConversionSession {
   std::vector<std::string> calls;
   std::string addError;
   std::string verifyError;
+  // what every code send answers
+  VerifySendNotice sendNotice;
+  // the injected clock
+  urnw::ResendCooldown::Clock::time_point now{};
   std::function<void(std::string)> pendingAdd;
 
   void AddSignIn(const std::string& userAuth, const std::string& password,
@@ -50,13 +56,14 @@ class FakeSession : public urnw::GuestConversionSession {
   void RefreshBalance() override { calls.push_back("refreshBalance"); }
   void SendCode(const std::string& userAuth, std::function<void(VerifySendNotice)> done) override {
     calls.push_back("sendCode " + userAuth);
-    done(VerifySendNotice{});
+    done(sendNotice);
   }
   void VerifyCode(const std::string& userAuth, const std::string& code,
                   std::function<void(std::string)> done) override {
     calls.push_back("verify " + userAuth + " " + code);
     done(verifyError);
   }
+  urnw::ResendCooldown::Clock::time_point Now() override { return now; }
   void AnswerAdd() {
     auto done = std::move(pendingAdd);
     pendingAdd = nullptr;
@@ -137,6 +144,70 @@ void AnswerAfterResetIsDropped() {
   Expect("late answer: nothing after it", session.calls.size() == 1);
 }
 
+VerifySendNotice RateLimited(int64_t retryAfterSeconds) {
+  return urnw::VerifySendNoticeFor(false, "verify_rate_limited", "Too many attempts.",
+                                   retryAfterSeconds);
+}
+
+size_t SendCount(FakeSession const& session) {
+  size_t count = 0;
+  for (auto const& call : session.calls) {
+    if (call.rfind("sendCode ", 0) == 0) ++count;
+  }
+  return count;
+}
+
+// The login verify step holds Resend off for a rate limit's retry time and
+// counts the minutes down; the conversion's code step did neither, so Resend
+// asked again at once and the notice kept its first minute count.
+void RateLimitHoldsResendUntilItsRetryTime() {
+  FakeSession session;
+  GuestConversion conversion(session);
+  session.sendNotice = RateLimited(150);
+  conversion.SubmitSignIn("guest@example.com", "correct horse battery");
+  session.AnswerAdd();
+  Expect("rate limit: code step", conversion.Step() == GuestConversionStep::EnterCode);
+  Expect("rate limit: one send", SendCount(session) == 1);
+  conversion.Resend();
+  Expect("rate limit: Resend sends no second code", SendCount(session) == 1);
+  Expect("rate limit: Resend off", !conversion.CanResend());
+  Expect("rate limit: cooling down", conversion.CoolingDown());
+  auto notice = conversion.Notice();
+  Expect("rate limit: notice", notice && notice->kind == VerifySendNoticeKind::RateLimited &&
+                                   notice->minutes == 3);
+  session.now += std::chrono::seconds(100);
+  notice = conversion.Notice();
+  Expect("rate limit: minutes count down", notice && notice->minutes == 1);
+  conversion.Resend();
+  Expect("rate limit: still held", SendCount(session) == 1);
+  session.now += std::chrono::seconds(50);
+  Expect("rate limit passed: Resend back", conversion.CanResend());
+  Expect("rate limit passed: not cooling down", !conversion.CoolingDown());
+  Expect("rate limit passed: notice gone", !conversion.Notice());
+  session.sendNotice = VerifySendNotice{};
+  conversion.Resend();
+  Expect("rate limit passed: Resend sends", SendCount(session) == 2);
+  notice = conversion.Notice();
+  Expect("rate limit passed: sent", notice && notice->kind == VerifySendNoticeKind::Sent);
+}
+
+// A plain send failure keeps Resend usable, and reopening the sheet drops a
+// running rate limit.
+void SendFailureAndResetDoNotHoldResend() {
+  FakeSession session;
+  GuestConversion conversion(session);
+  session.sendNotice = urnw::VerifySendNoticeFor(false, "verify_send_failed", "", 0);
+  conversion.SubmitSignIn("guest@example.com", "correct horse battery");
+  session.AnswerAdd();
+  Expect("send failed: Resend usable", conversion.CanResend());
+  session.sendNotice = RateLimited(600);
+  conversion.Resend();
+  Expect("rate limited: Resend off", !conversion.CanResend());
+  conversion.Reset();
+  Expect("reset: no cooldown", !conversion.CoolingDown());
+  Expect("reset: no notice", !conversion.Notice());
+}
+
 }  // namespace
 
 int main() {
@@ -146,6 +217,8 @@ int main() {
   WrongCodeStaysOnTheCodeStep();
   ShortPasswordIsNotSubmitted();
   AnswerAfterResetIsDropped();
+  RateLimitHoldsResendUntilItsRetryTime();
+  SendFailureAndResetDoNotHoldResend();
   std::cout << (gCases - gFailures) << "/" << gCases << " guest conversion cases passed\n";
   return gFailures == 0 ? 0 : 1;
 }

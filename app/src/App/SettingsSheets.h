@@ -281,6 +281,8 @@ class GuestConversionSheet : public std::enable_shared_from_this<GuestConversion
   std::unique_ptr<GuestConversionSession> session_;
   std::unique_ptr<GuestConversion> conversion_;
   bool done_ = false;
+  // re-renders while a rate limit holds Resend off (the minutes count down)
+  winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer cooldownTimer_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::ContentDialog dialog_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::StackPanel signInPanel_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::StackPanel codePanel_{nullptr};
