@@ -1,0 +1,568 @@
+# Runner test for urnetwork/windows A2a, "official MSIs carry their version".
+# It builds real MSIs and installs, upgrades and removes them on a disposable
+# windows-2022 runner; it publishes nothing and needs no write permission.
+#
+# Setup: on a throwaway branch of the fork that contains A2a (and A1, so the
+# tree matches what CI builds), add
+#   .github/workflows/vpn-upgrade.yml   (this file)
+#   .github/vpn-upgrade-lib.ps1          (runner-tests/vpn-upgrade-lib.ps1)
+# and push it as ci/vpn-upgrade-<anything>. The push runs this workflow:
+# workflow_dispatch only works for workflows on the default branch.
+#
+# The packages:
+#   v1-v4      this branch's app\build.ps1 under Windows PowerShell 5.1 (the
+#              org release VM's shell), x64. Each MSI's ProductVersion must
+#              equal UrVersion.ps1's UrMsiVersion, and both exes its FILEVERSION.
+#   v0         upstream main before A2a (c53da6d), built the same way with
+#              -Version 0.0.0-0: ProductVersion 0.0.1 around code-0 exes at
+#              0.0.0.0, which is how every official MSI so far looks.
+#   v5-broken  v4's payload under v5's ProductVersion and FILEVERSION, with a
+#              urnetworkd.exe at file version 9999.0.0.0 that returns at once:
+#              costing installs it over v4's, and it cannot start as a service.
+#   v5-older   v4's payload under v5's ProductVersion, with hostname.exe as
+#              urnetworkd.exe, its file version (10.0.x) below v4's. It declares
+#              that file version as its FILEVERSION, as every real build
+#              declares its exes'. This is the package that, before the guard,
+#              installed with exit 0 and left no urnetworkd at all.
+#   Each of the two is built into its own output path.
+#
+# The steps. Each asserts what it says, except step 7, an OBSERVATION, which
+# prints what happened and never fails on it:
+#   0.  Install v0.
+#   1.  v0 -> v1, the upgrade every existing user takes: one product, v1's
+#       version, urnetworkd running from Program Files.
+#   2.  v1 -> v2, two codes 30 s apart that share ONE ProductVersion
+#       (AllowSameVersionUpgrades): v2 replaces v1.
+#   2b. v1 over v2, the older code with the same ProductVersion, is REFUSED by
+#       the guard against a newer urnetworkd.exe: exit 1603, the guard's
+#       message in the log, nothing costed or removed, and v2 still installed
+#       with both exes, its service running and every File row on disk.
+#   2c. Nothing changed: the product and urnetworkd.exe are step 2's.
+#   3.  v2 -> v3, the same UTC day, a higher ProductVersion.
+#   4.  v3 -> v4, the next day.
+#   5.  v4 -> v5-broken: the guard lets it through, its urnetworkd.exe is
+#       installed and cannot start, the install fails after
+#       RemoveExistingProducts began (its "Action start" line, then
+#       "Error 1920", in the log), and the transaction rolls back to v4, files
+#       and service included. Prints sc.exe qfailure urnetworkd (information).
+#   5b. v4 -> v5-older is REFUSED by the guard, as in 2b, and v4 is untouched.
+#   6.  The installed tray app quits on WM_CLOSE: started with a fresh app
+#       root, sent WM_CLOSE on each of its top-level windows (PostMessage; no
+#       mouse or keyboard input), it exits within 15 s and logs
+#       "tray: WM_CLOSE received, quitting".
+#   7.  OBSERVATION, measuring and not asserting: a urnetworkd that
+#       `urnetworkd install` registered from a portable copy, then the v4 MSI
+#       installed over it, with ServiceControl at upstream's
+#       Remove="uninstall". Prints msiexec's exit code, each urnetworkd
+#       service's binPath, and the service count. Only its setup can fail:
+#       the uninstall before it must leave nothing behind.
+# After every install or upgrade that must succeed: exactly one URnetwork
+# product at the expected ProductVersion, urnetworkd running from Program
+# Files, both exes at the expected file version, every File row of the MSI
+# on disk, and no "Disallowing installation of component" in its log.
+#
+# SPDX-License-Identifier: MPL-2.0
+
+name: VPN MSI upgrade test (A2a)
+
+on:
+  push:
+    branches:
+      - 'ci/vpn-upgrade-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  # A green build-and-test run whose urnetwork-sdk-windows artifact matches
+  # this tree's SDK headers. 37202293063 is A1's fork run at af462b8.
+  SDK_RUN_ID: '37202293063'
+  # upstream main before A2a: the tree every official MSI so far was built from
+  V0_REF: c53da6dbc8963e3aef49340f859828fcc6725e02
+
+jobs:
+  plan:
+    name: Plan the release codes
+    runs-on: ubuntu-latest
+    outputs:
+      v1: ${{ steps.plan.outputs.v1 }}
+      v2: ${{ steps.plan.outputs.v2 }}
+      v3: ${{ steps.plan.outputs.v3 }}
+      v4: ${{ steps.plan.outputs.v4 }}
+      v5: ${{ steps.plan.outputs.v5 }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Fixed UTC instants two days and one day back, so every code is in the
+      # past (UrVersion.ps1 refuses codes more than 24 h ahead). The org's
+      # version string carries a date; any date is accepted, since only the
+      # code is used for numbers.
+      - name: Choose the versions
+        id: plan
+        run: |
+          founded=$(date -u -d 2023-05-23 +%s)
+          mk() {
+            local s
+            s=$(date -u -d "$1" +%s)
+            echo "$(date -u -d "$1" '+%Y.%-m.%-d')-$(( (s - founded) * 10 ))"
+          }
+          d2=$(date -u -d '2 days ago' +%Y-%m-%d)
+          d1=$(date -u -d '1 day ago' +%Y-%m-%d)
+          {
+            echo "v1=$(mk "$d2 09:59:50Z")"
+            echo "v2=$(mk "$d2 10:00:20Z")"
+            echo "v3=$(mk "$d2 14:00:00Z")"
+            echo "v4=$(mk "$d1 08:00:00Z")"
+            echo "v5=$(mk "$d1 09:00:00Z")"
+          } | tee -a "$GITHUB_OUTPUT"
+
+      # The relationships the test depends on, checked before anything builds.
+      - name: Check the planned ProductVersions
+        shell: pwsh
+        env:
+          V1: ${{ steps.plan.outputs.v1 }}
+          V2: ${{ steps.plan.outputs.v2 }}
+          V3: ${{ steps.plan.outputs.v3 }}
+          V4: ${{ steps.plan.outputs.v4 }}
+          V5: ${{ steps.plan.outputs.v5 }}
+        run: |
+          $v = @{}
+          foreach ($key in 'v1', 'v2', 'v3', 'v4', 'v5') {
+            $v[$key] = & ./app/tools/UrVersion.ps1 -Version ([Environment]::GetEnvironmentVariable($key.ToUpper()))
+            "{0}: {1} msi {2} file {3}.{4}.{5}.{6}" -f $key, $v[$key].UrVersion, $v[$key].UrMsiVersion,
+              $v[$key].UrVersionMajor, $v[$key].UrVersionMinor, $v[$key].UrVersionPatch, $v[$key].UrVersionBuild
+          }
+          if ($v.v1.UrMsiVersion -ne $v.v2.UrMsiVersion) { throw "v1 and v2 must share a ProductVersion" }
+          if ($v.v1.UrVersionBuild -eq $v.v2.UrVersionBuild) { throw "v1 and v2 must differ in file version" }
+          if ($v.v1.UrVersionCode -ge $v.v2.UrVersionCode) { throw "v1 must be the older code" }
+          # The guard finds an installed urnetworkd.exe two or more FILEVERSION
+          # steps above the package's; step 2b relies on v2 being that far ahead.
+          if ($v.v2.UrVersionBuild - $v.v1.UrVersionBuild -lt 2) { throw "v2 must be at least two FILEVERSION steps above v1" }
+          foreach ($pair in @('v2', 'v3'), @('v3', 'v4'), @('v4', 'v5')) {
+            if ([version]$v[$pair[0]].UrMsiVersion -ge [version]$v[$pair[1]].UrMsiVersion) {
+              throw "$($pair[0]) must have a lower ProductVersion than $($pair[1])"
+            }
+          }
+
+  build:
+    name: Build ${{ matrix.key }} with build.ps1 under Windows PowerShell 5.1
+    needs: plan
+    runs-on: windows-2022
+    strategy:
+      fail-fast: true
+      matrix:
+        key: [v1, v2, v3, v4]
+    env:
+      VERSION: ${{ needs.plan.outputs[matrix.key] }}
+      V5: ${{ needs.plan.outputs.v5 }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download the SDK zip from run ${{ env.SDK_RUN_ID }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          gh run download $env:SDK_RUN_ID -R $env:GITHUB_REPOSITORY -n urnetwork-sdk-windows -D sdk-zip
+          if ($LASTEXITCODE -ne 0) { throw "could not download the SDK zip" }
+          Get-ChildItem sdk-zip
+
+      # The org release path, as shipped: powershell.exe (5.1), the script's
+      # own vswhere/msbuild/dotnet resolution, x64 only.
+      - name: app\build.ps1 -Version ${{ env.VERSION }}
+        shell: cmd
+        run: >-
+          powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass
+          -File app\build.ps1 -Version %VERSION%
+          -SdkZip "%GITHUB_WORKSPACE%\sdk-zip\URnetworkSdkWindows.zip" -Platforms x64
+
+      # The ProductVersion is read from the staged copy, and the library
+      # releases every COM object it opens, so no build output stays locked.
+      - name: Check the MSI's ProductVersion and stage it
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-upgrade-lib.ps1"
+          $out = New-Item -ItemType Directory -Force (Join-Path $env:GITHUB_WORKSPACE 'staged')
+          $ur = & .\app\tools\UrVersion.ps1 -Version $env:VERSION
+          $fileVersion = '{0}.{1}.{2}.{3}' -f $ur.UrVersionMajor, $ur.UrVersionMinor, $ur.UrVersionPatch, $ur.UrVersionBuild
+          $bin = Join-Path $env:GITHUB_WORKSPACE 'app\build\x64\Release'
+          foreach ($exe in 'URnetwork.exe', 'urnetworkd.exe') {
+            $actual = Get-UrFileVersion (Join-Path $bin $exe)
+            if ($actual -ne $fileVersion) { throw "$exe file version $actual, want $fileVersion" }
+          }
+          $staged = Join-Path $out '${{ matrix.key }}.msi'
+          Copy-Item (Join-Path $env:GITHUB_WORKSPACE "app\build\out\URnetwork-$($env:VERSION)-x64.msi") $staged
+          $actual = Get-UrMsiProductVersion $staged
+          if ($actual -ne $ur.UrMsiVersion) { throw "${{ matrix.key }} MSI ProductVersion $actual, want $($ur.UrMsiVersion)" }
+          [pscustomobject]@{ key = '${{ matrix.key }}'; version = $env:VERSION; code = [string]$ur.UrVersionCode;
+            msi_version = $ur.UrMsiVersion; file_version = $fileVersion } |
+            ConvertTo-Json | Set-Content -Encoding ascii (Join-Path $out '${{ matrix.key }}.json')
+          "staged ${{ matrix.key }}: $($env:VERSION), ProductVersion $actual, payload files $fileVersion"
+
+      # v4's payload repackaged under v5's ProductVersion twice, each into its
+      # own output path: v5-broken, whose newer urnetworkd.exe cannot start,
+      # so the install must roll back, and v5-older, whose older urnetworkd.exe
+      # the guard must refuse.
+      - name: Package v5-broken and v5-older from v4's payload
+        if: matrix.key == 'v4'
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-upgrade-lib.ps1"
+          $out = Join-Path $env:GITHUB_WORKSPACE 'staged'
+          $ur5 = & .\app\tools\UrVersion.ps1 -Version $env:V5
+          $v5FileVersion = '{0}.{1}.{2}.{3}' -f $ur5.UrVersionMajor, $ur5.UrVersionMinor, $ur5.UrVersionPatch, $ur5.UrVersionBuild
+          $bin = Join-Path $env:GITHUB_WORKSPACE 'app\build\x64\Release'
+          $v4Service = Get-UrFileVersion (Join-Path $bin 'urnetworkd.exe')
+
+          # v4's payload with another urnetworkd.exe, under v5's ProductVersion,
+          # declaring $fileVersion as the package's FILEVERSION. Returns the
+          # version the staged MSI's File table records for urnetworkd.exe.
+          function New-UrPackage([string]$key, [string]$serviceExe, [string]$fileVersion) {
+            $payload = Join-Path $env:RUNNER_TEMP "bin-$key"
+            Copy-Item $bin $payload -Recurse
+            Copy-Item $serviceExe (Join-Path $payload 'urnetworkd.exe') -Force
+            $wixOut = Join-Path $env:RUNNER_TEMP "wix-$key\"
+            $wixArgs = @('build', 'app\installer\Installer.wixproj', '--no-incremental', '-c', 'Release',
+              '-p:Platform=x64', "-p:BinDir=$payload", "-p:OutputPath=$wixOut",
+              "-p:UrMsiVersion=$($ur5.UrMsiVersion)", "-p:UrFileVersion=$fileVersion")
+            dotnet @wixArgs | Out-Host
+            if ($LASTEXITCODE -ne 0) { throw "WiX build failed for $key" }
+            $built = @(Get-ChildItem $wixOut -Recurse -Filter *.msi)
+            if ($built.Count -ne 1) { throw "want one MSI under $wixOut, found $($built.Count)" }
+            $staged = Join-Path $out "$key.msi"
+            Copy-Item $built[0].FullName $staged
+            $actual = Get-UrMsiProductVersion $staged
+            if ($actual -ne $ur5.UrMsiVersion) { throw "$key ProductVersion $actual, want $($ur5.UrMsiVersion)" }
+            $service = Get-UrMsiFileVersion $staged 'urnetworkd.exe'
+            [pscustomobject]@{ key = $key; version = $env:V5; code = [string]$ur5.UrVersionCode;
+              msi_version = $ur5.UrMsiVersion; file_version = $fileVersion } |
+              ConvertTo-Json | Set-Content -Encoding ascii (Join-Path $out "$key.json")
+            Write-Host "staged ${key}: ProductVersion $actual, FILEVERSION $fileVersion, urnetworkd.exe $service"
+            return $service
+          }
+
+          # v5-broken: a urnetworkd.exe newer than v4's, so costing installs it,
+          # that returns at once without calling StartServiceCtrlDispatcher, so
+          # the service control manager never sees it start (1053) and
+          # StartServices fails with 1920. The package declares v5's
+          # FILEVERSION, above v4's exe, so the guard lets it through.
+          $neverStarts = Join-Path $env:RUNNER_TEMP 'never-starts.exe'
+          Add-Type -OutputType ConsoleApplication -OutputAssembly $neverStarts -TypeDefinition @'
+          [assembly: System.Reflection.AssemblyVersion("9999.0.0.0")]
+          [assembly: System.Reflection.AssemblyFileVersion("9999.0.0.0")]
+          public static class NeverStarts {
+            public static int Main() { return 0; }
+          }
+          '@
+          $neverStartsVersion = Get-UrFileVersion $neverStarts
+          if ($neverStartsVersion -ne '9999.0.0.0') { throw "never-starts.exe is file version $neverStartsVersion, want 9999.0.0.0" }
+          if ([version]$v5FileVersion -le [version]$v4Service) { throw "v5's FILEVERSION $v5FileVersion is not above v4's urnetworkd.exe $v4Service" }
+          $service = New-UrPackage 'v5-broken' $neverStarts $v5FileVersion
+          if ($service -ne '9999.0.0.0') { throw "v5-broken carries urnetworkd.exe $service, want 9999.0.0.0" }
+
+          # v5-older: hostname.exe as urnetworkd.exe, older than v4's, declared
+          # at its own file version, as every real build declares its exes'.
+          $hostname = Join-Path $env:SystemRoot 'System32\hostname.exe'
+          $hostnameVersion = Get-UrFileVersion $hostname
+          if ([version]$hostnameVersion -ge [version]$v4Service) { throw "hostname.exe $hostnameVersion is not older than v4's urnetworkd.exe $v4Service" }
+          $service = New-UrPackage 'v5-older' $hostname $hostnameVersion
+          if ($service -ne $hostnameVersion) { throw "v5-older carries urnetworkd.exe $service, want $hostnameVersion" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: msi-${{ matrix.key }}
+          path: staged/
+          if-no-files-found: error
+
+  build-v0:
+    name: Build v0 (upstream before A2a, -Version 0.0.0-0) under Windows PowerShell 5.1
+    runs-on: windows-2022
+    steps:
+      # this branch, for the library
+      - uses: actions/checkout@v4
+
+      - name: Check out upstream main before A2a
+        uses: actions/checkout@v4
+        with:
+          repository: urnetwork/windows
+          ref: ${{ env.V0_REF }}
+          path: v0
+
+      - name: Download the SDK zip from run ${{ env.SDK_RUN_ID }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          gh run download $env:SDK_RUN_ID -R $env:GITHUB_REPOSITORY -n urnetwork-sdk-windows -D sdk-zip
+          if ($LASTEXITCODE -ne 0) { throw "could not download the SDK zip" }
+          Get-ChildItem sdk-zip
+
+      - name: v0\app\build.ps1 -Version 0.0.0-0
+        shell: cmd
+        run: >-
+          powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass
+          -File v0\app\build.ps1 -Version 0.0.0-0
+          -SdkZip "%GITHUB_WORKSPACE%\sdk-zip\URnetworkSdkWindows.zip" -Platforms x64
+
+      # What an official MSI so far looks like: ProductVersion 0.0.1, both exes
+      # at file version 0.0.0.0 (code 0).
+      - name: Check v0 and stage it
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-upgrade-lib.ps1"
+          $out = New-Item -ItemType Directory -Force (Join-Path $env:GITHUB_WORKSPACE 'staged')
+          $bin = Join-Path $env:GITHUB_WORKSPACE 'v0\app\build\x64\Release'
+          foreach ($exe in 'URnetwork.exe', 'urnetworkd.exe') {
+            $actual = Get-UrFileVersion (Join-Path $bin $exe)
+            if ($actual -ne '0.0.0.0') { throw "v0 $exe file version $actual, want 0.0.0.0" }
+          }
+          $staged = Join-Path $out 'v0.msi'
+          Copy-Item (Join-Path $env:GITHUB_WORKSPACE 'v0\app\build\out\URnetwork-0.0.0-0-x64.msi') $staged
+          $actual = Get-UrMsiProductVersion $staged
+          if ($actual -ne '0.0.1') { throw "v0 ProductVersion $actual, want 0.0.1" }
+          [pscustomobject]@{ key = 'v0'; version = '0.0.0-0'; code = '0'; msi_version = '0.0.1'; file_version = '0.0.0.0' } |
+            ConvertTo-Json | Set-Content -Encoding ascii (Join-Path $out 'v0.json')
+          "staged v0: ProductVersion $actual, payload files 0.0.0.0"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: msi-v0
+          path: staged/
+          if-no-files-found: error
+
+  upgrade:
+    name: Install, upgrade, roll back, close, observe
+    needs: [build, build-v0]
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: msi-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/msis
+
+      - name: Inventory
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-upgrade-lib.ps1"
+          Get-ChildItem $UrMsiDir | Format-Table Name, Length -AutoSize | Out-String | Write-Host
+          foreach ($key in 'v0', 'v1', 'v2', 'v3', 'v4', 'v5-broken', 'v5-older') { Get-UrMsiPath $key | Out-Null }
+          if ((Get-UrProducts).Count -ne 0) { throw "a URnetwork product is already installed on this runner" }
+          if (Get-UrServiceInfo) { throw "a urnetworkd service already exists on this runner" }
+
+      - name: 0. Install v0 (upstream, ProductVersion 0.0.1, code 0)
+        timeout-minutes: 10
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-upgrade-lib.ps1"
+          $code = Invoke-UrMsiexec '/i' (Get-UrMsiPath 'v0') '/qn' 'v0-install.log'
+          if ($code -ne 0) { throw "v0 install exit code $code" }
+          $product = Assert-UrInstalled (Get-UrExpect 'v0') 'v0-install.log'
+          Set-Content -Encoding ascii (Join-Path $env:RUNNER_TEMP 'v0.productcode') $product.ProductCode
+
+      - name: 1. v0 -> v1, the upgrade every existing user takes
+        timeout-minutes: 10
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-upgrade-lib.ps1"
+          $before = Get-Content (Join-Path $env:RUNNER_TEMP 'v0.productcode')
+          $code = Invoke-UrMsiexec '/i' (Get-UrMsiPath 'v1') '/qn' 'v1-over-v0.log'
+          if ($code -ne 0) { throw "v0 -> v1 upgrade exit code $code" }
+          $product = Assert-UrInstalled (Get-UrExpect 'v1') 'v1-over-v0.log'
+          if ($product.ProductCode -eq $before) { throw "the v0 product is still registered: v1 did not replace it" }
+
+      - name: 2. v1 -> v2, same ProductVersion (AllowSameVersionUpgrades)
+        timeout-minutes: 10
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-upgrade-lib.ps1"
+          $before = (Get-UrProducts)[0].ProductCode
+          if ((Get-UrExpect 'v1').msi_version -ne (Get-UrExpect 'v2').msi_version) { throw "plan broke: v1/v2 ProductVersions differ" }
+          $code = Invoke-UrMsiexec '/i' (Get-UrMsiPath 'v2') '/qn' 'v2-upgrade.log'
+          if ($code -ne 0) { throw "v2 upgrade exit code $code" }
+          $product = Assert-UrInstalled (Get-UrExpect 'v2') 'v2-upgrade.log'
+          if ($product.ProductCode -eq $before) { throw "the v1 product is still registered: v2 did not replace it" }
+          Set-Content -Encoding ascii (Join-Path $env:RUNNER_TEMP 'v2.productcode') $product.ProductCode
+          Set-Content -Encoding ascii (Join-Path $env:RUNNER_TEMP 'v2.servicehash') (Get-UrServiceHash)
+
+      # Before the guard, this install exited 0, disallowed both exes'
+      # components (their installed key files were newer), and then removed
+      # those files with v2: no URnetwork.exe, no urnetworkd.exe, no service.
+      - name: 2b. v1 (older code, same ProductVersion) over v2 is refused
+        timeout-minutes: 10
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-upgrade-lib.ps1"
+          $code = Invoke-UrMsiexec '/i' (Get-UrMsiPath 'v1') '/qn' 'v1-over-v2.log'
+          Assert-UrRefusedByGuard $code 'v1-over-v2.log'
+          Assert-UrInstalled (Get-UrExpect 'v2') | Out-Null
+
+      - name: 2c. Nothing changed - the product and urnetworkd.exe are step 2's
+        timeout-minutes: 5
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-upgrade-lib.ps1"
+          $products = Get-UrProducts
+          if ($products.Count -ne 1 -or $products[0].ProductCode -ne (Get-Content (Join-Path $env:RUNNER_TEMP 'v2.productcode'))) {
+            throw "the registered product is not step 2's v2"
+          }
+          if ((Get-UrServiceHash) -ne (Get-Content (Join-Path $env:RUNNER_TEMP 'v2.servicehash'))) { throw "urnetworkd.exe is not step 2's" }
+          "OK: v2 $($products[0].ProductCode) and its urnetworkd.exe are unchanged"
+
+      - name: 3. v2 -> v3, same day
+        timeout-minutes: 10
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-upgrade-lib.ps1"
+          $code = Invoke-UrMsiexec '/i' (Get-UrMsiPath 'v3') '/qn' 'v3-upgrade.log'
+          if ($code -ne 0) { throw "v3 upgrade exit code $code" }
+          Assert-UrInstalled (Get-UrExpect 'v3') 'v3-upgrade.log' | Out-Null
+
+      - name: 4. v3 -> v4, next day
+        timeout-minutes: 10
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-upgrade-lib.ps1"
+          $code = Invoke-UrMsiexec '/i' (Get-UrMsiPath 'v4') '/qn' 'v4-upgrade.log'
+          if ($code -ne 0) { throw "v4 upgrade exit code $code" }
+          $product = Assert-UrInstalled (Get-UrExpect 'v4') 'v4-upgrade.log'
+          Set-Content -Encoding ascii (Join-Path $env:RUNNER_TEMP 'v4.productcode') $product.ProductCode
+          Set-Content -Encoding ascii (Join-Path $env:RUNNER_TEMP 'v4.servicehash') (Get-UrServiceHash)
+
+      - name: 5. v4 -> v5-broken fails after the removal began and rolls back to v4
+        timeout-minutes: 15
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-upgrade-lib.ps1"
+          $code = Invoke-UrMsiexec '/i' (Get-UrMsiPath 'v5-broken') '/qn' 'v5-broken-upgrade.log'
+          if ($code -eq 0 -or $code -eq 3010) { throw "the broken package installed (exit $code); the test proves nothing" }
+          # A failure before RemoveExistingProducts (1618, a launch condition)
+          # would leave v4 untouched and pass every check below, so the log
+          # must show the removal starting and then the service failure.
+          $log = Read-UrLog 'v5-broken-upgrade.log'
+          $removal = [regex]::Match($log, 'Action start \d{1,2}:\d{2}:\d{2}: RemoveExistingProducts\.')
+          $failure = [regex]::Match($log, 'Error 1920\.')
+          if (-not $removal.Success) { throw "no 'Action start ...: RemoveExistingProducts.' in the log; exit $code" }
+          if (-not $failure.Success) { throw "no 'Error 1920.' in the log; exit $code" }
+          if ($failure.Index -lt $removal.Index) { throw "Error 1920 came before RemoveExistingProducts started" }
+          # Its urnetworkd.exe is newer than v4's, so costing installs it: the
+          # service that failed to start is the package's, not a leftover.
+          $disallowed = Get-UrLogLines $log 'Disallowing installation of component'
+          if ($disallowed.Count -ne 0) { throw "$($disallowed.Count) component(s) disallowed: the new urnetworkd.exe was not installed" }
+          (Get-UrLogLines $log 'Action start \d{1,2}:\d{2}:\d{2}: Rollback\.|Error 1920\.') | Select-Object -First 5 | ForEach-Object { "log: $_" }
+          $product = Assert-UrInstalled (Get-UrExpect 'v4')
+          if ($product.ProductCode -ne (Get-Content (Join-Path $env:RUNNER_TEMP 'v4.productcode'))) { throw "a different product is registered after the rollback" }
+          if ((Get-UrServiceHash) -ne (Get-Content (Join-Path $env:RUNNER_TEMP 'v4.servicehash'))) { throw "urnetworkd.exe is not v4's after the rollback" }
+          "OK: exit $code, v4 restored with its files and its service running"
+          # Information only: the restored service's failure actions. GitHub
+          # ends the step with sc.exe's exit code unless the script exits.
+          sc.exe qfailure urnetworkd | Out-Host
+          exit 0
+
+      # The original failure: before the guard, a package whose urnetworkd.exe
+      # was older than the installed one installed with exit 0 and left no
+      # service. v5-older declares its exe's real file version, below v4's.
+      - name: 5b. v4 -> v5-older (an older urnetworkd.exe) is refused
+        timeout-minutes: 10
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-upgrade-lib.ps1"
+          $code = Invoke-UrMsiexec '/i' (Get-UrMsiPath 'v5-older') '/qn' 'v5-older-refused.log'
+          Assert-UrRefusedByGuard $code 'v5-older-refused.log'
+          $product = Assert-UrInstalled (Get-UrExpect 'v4')
+          if ($product.ProductCode -ne (Get-Content (Join-Path $env:RUNNER_TEMP 'v4.productcode'))) { throw "a different product is registered" }
+          if ((Get-UrServiceHash) -ne (Get-Content (Join-Path $env:RUNNER_TEMP 'v4.servicehash'))) { throw "urnetworkd.exe is not v4's" }
+          "OK: v4 untouched"
+
+      - name: 6. The installed tray app quits on WM_CLOSE
+        timeout-minutes: 10
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-upgrade-lib.ps1"
+          # A fresh per-user root, so the log read below is this launch's alone.
+          $root = Join-Path $env:RUNNER_TEMP 'wmclose-app-root'
+          if (Test-Path $root) { Remove-Item -Recurse -Force $root }
+          New-Item -ItemType Directory -Force $root | Out-Null
+          $env:URNETWORK_APP_ROOT = $root
+          $logPath = Join-Path $root 'logs\urnetwork-app.log'
+          $app = Start-Process -FilePath (Join-Path $UrInstallDir 'URnetwork.exe') -PassThru
+          $null = $app.Handle
+          try {
+            $deadline = (Get-Date).AddSeconds(90)
+            $tray = $null
+            while (-not $tray -and (Get-Date) -lt $deadline) {
+              if ($app.HasExited) { throw "the app exited by itself (code $($app.ExitCode)) before WM_CLOSE" }
+              $tray = (Get-UrTopLevelWindows $app.Id) | Where-Object { $_.Class -eq 'URnetworkTrayWindow' } | Select-Object -First 1
+              if (-not $tray) { Start-Sleep -Milliseconds 500 }
+            }
+            if (-not $tray) { throw "no URnetworkTrayWindow for pid $($app.Id) after 90 s" }
+            "app running as pid $($app.Id), tray window $($tray.Handle)"
+            $posted = Send-UrWmClose $app.Id
+            if ($posted -lt 1) { throw "WM_CLOSE was not posted to any window" }
+            if (-not $app.WaitForExit(15000)) { throw "the app (pid $($app.Id)) is still running 15 s after WM_CLOSE" }
+            "app exited, code $($app.ExitCode)"
+            if (-not (Test-Path $logPath)) { throw "no app log at $logPath" }
+            $closed = @(Select-String -LiteralPath $logPath -SimpleMatch 'tray: WM_CLOSE received, quitting')
+            if ($closed.Count -eq 0) { throw "the app log has no 'tray: WM_CLOSE received, quitting' line" }
+            "app log: $($closed[-1].Line)"
+          } catch {
+            if (Test-Path $logPath) { Get-Content $logPath -Tail 40 | ForEach-Object { "app log: $_" } }
+            throw
+          } finally {
+            if (-not $app.HasExited) { Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue }
+          }
+
+      # OBSERVATION, measuring and not asserting: whether an MSI install takes
+      # over a service registered by `urnetworkd install`, with upstream's
+      # Remove="uninstall". Only the setup above the try can fail the step.
+      - name: 7. OBSERVATION - the v4 MSI over a portable urnetworkd
+        timeout-minutes: 15
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-upgrade-lib.ps1"
+          $portable = 'C:\urn-portable'
+          Copy-Item $UrInstallDir $portable -Recurse
+          Remove-UrProducts 'portable-setup-uninstall'
+          if (Get-UrServiceInfo) { throw "setup: the uninstall left urnetworkd behind" }
+          try {
+            & "$portable\urnetworkd.exe" install
+            "OBSERVED: urnetworkd install exit code $LASTEXITCODE"
+            try { $service = Wait-UrServiceRunning; "OBSERVED: portable service $($service.State): $($service.PathName)" }
+            catch { "OBSERVED: the portable service did not reach Running: $($_.Exception.Message)" }
+            $code = Invoke-UrMsiexec '/i' (Get-UrMsiPath 'v4') '/qn' 'v4-over-portable.log'
+            "OBSERVED: msiexec exit code $code"
+            Start-Sleep -Seconds 5
+            $services = Get-UrServices
+            "OBSERVED: $($services.Count) urnetworkd service(s)"
+            $services | ForEach-Object { "OBSERVED: service $($_.Name) $($_.State) binPath $($_.PathName)" }
+            "OBSERVED: products: $(((Get-UrProducts) | ForEach-Object { "$($_.ProductCode) $($_.Version)" }) -join '; ')"
+            (Get-UrLogLines (Read-UrLog 'v4-over-portable.log') 'Error 19\d\d|ServiceInstall|MainEngineThread is returning') |
+              Select-Object -First 10 | ForEach-Object { "log: $_" }
+          } catch {
+            "OBSERVATION incomplete: $($_.Exception.Message)"
+          }
+          exit 0
+
+      - name: Collect logs
+        if: always()
+        shell: powershell
+        run: |
+          $dest = Join-Path $env:RUNNER_TEMP 'upgrade-logs'
+          New-Item -ItemType Directory -Force $dest | Out-Null
+          foreach ($dir in "$env:LOCALAPPDATA\URnetwork\app\logs", "$env:ProgramData\URnetwork\service\logs",
+                           "$env:RUNNER_TEMP\wmclose-app-root\logs") {
+            if (Test-Path $dir) { Copy-Item $dir (Join-Path $dest ((Split-Path $dir -Parent | Split-Path -Leaf) + '-logs')) -Recurse -Force }
+          }
+          Get-CimInstance Win32_Service | Where-Object { $_.PathName -like '*urnetwork*' } |
+            Format-List Name, State, PathName | Out-File (Join-Path $dest 'services.txt')
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: upgrade-logs
+          path: ${{ runner.temp }}/upgrade-logs/
+          if-no-files-found: warn
