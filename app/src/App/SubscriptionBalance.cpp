@@ -37,6 +37,7 @@ SubscriptionBalanceStore::~SubscriptionBalanceStore() {
   if (backgroundTimer_) backgroundTimer_.Stop();
   if (confirmTimer_) confirmTimer_.Stop();
   if (referralTimer_) referralTimer_.Stop();
+  if (settleTimer_) settleTimer_.Stop();
 }
 
 void SubscriptionBalanceStore::Initialize(
@@ -53,6 +54,16 @@ void SubscriptionBalanceStore::Initialize(
   referralTimer_.Interval(kBackgroundInterval);
   referralTimer_.Tick([this](auto const&, auto const&) {
     FetchReferral();
+  });
+
+  // a start connect waits this long for its balance fetch, then decides
+  // without it (BalanceGate.h: a failed fetch does not block)
+  settleTimer_ = queue_.CreateTimer();
+  settleTimer_.Interval(std::chrono::milliseconds(balance::kStartConnectFetchTimeoutMs));
+  settleTimer_.IsRepeating(false);
+  settleTimer_.Tick([this](auto const&, auto const&) {
+    LogWarn("balance: start-connect fetch timed out");
+    Settle();
   });
 
   confirmTimer_ = queue_.CreateTimer();
@@ -77,6 +88,7 @@ void SubscriptionBalanceStore::Start() {
   timedOut_ = false;
   StopConfirmation(/*timedOut=*/false);
   snapshot_ = {};
+  fetchSettledAtMillis_ = 0;
 
   // Pro and guest are readable without any network call: they are claims baked
   // into the stored jwt.
@@ -112,13 +124,38 @@ void SubscriptionBalanceStore::Stop() {
   referralLoading_ = false;
   timedOut_ = false;
   snapshot_ = {};
+  fetchSettledAtMillis_ = 0;
   jwtPro_ = false;
   jwtGuest_ = false;
   serverGuest_ = false;
   Publish();
+  // nothing left to wait for; the waiters ask again (and find no session)
+  Settle();
 }
 
 void SubscriptionBalanceStore::Refresh() { Fetch(); }
+
+void SubscriptionBalanceStore::FetchThen(std::function<void()> settled) {
+  if (!started_ || !sdk_.IsLoggedIn()) {
+    // no balance to fetch: decide without it
+    fetchSettledAtMillis_ = NowMillis();
+    if (settled) settled();
+    return;
+  }
+  settleWaiters_.push_back(std::move(settled));
+  if (settleTimer_ && !settleTimer_.IsRunning()) settleTimer_.Start();
+  Fetch();  // joins a fetch already in flight
+}
+
+void SubscriptionBalanceStore::Settle() {
+  fetchSettledAtMillis_ = NowMillis();
+  if (settleTimer_) settleTimer_.Stop();
+  auto waiters = std::move(settleWaiters_);
+  settleWaiters_.clear();
+  for (auto& waiter : waiters) {
+    if (waiter) waiter();
+  }
+}
 
 void SubscriptionBalanceStore::SetVisible(bool visible) {
   if (visible_ == visible) return;
@@ -228,9 +265,12 @@ void SubscriptionBalanceStore::Fetch() {
           loading_ = false;
           if (err || !result) {
             if (err) LogWarn("balance: fetch failed: {}", *err);
-            return;  // keep the last snapshot; the poll retries
+            // keep the last snapshot; the poll retries
+            Settle();
+            return;
           }
           Apply(*result);
+          Settle();
         });
       });
 }
@@ -242,6 +282,7 @@ void SubscriptionBalanceStore::Apply(urnet::SubscriptionBalanceResult const& res
                             result.open_transfer_byte_count;
   snapshot_.startBalanceByteCount = result.start_balance_byte_count;
   snapshot_.loaded = true;
+  snapshot_.fetchedAtMillis = NowMillis();
   // no login method on the network (a legacy guest), read live by the server:
   // right even after a refresh cleared the jwt claim
   serverGuest_ = result.guest.value_or(false);
@@ -437,6 +478,7 @@ void SubscriptionBalanceStore::EnsureReferralPolling() {
 
 void SubscriptionBalanceStore::StopReferralPolling() {
   if (referralTimer_) referralTimer_.Stop();
+  if (settleTimer_) settleTimer_.Stop();
 }
 
 void SubscriptionBalanceStore::ApplyOffer(urnet::OnboardingOffer const& offer) {

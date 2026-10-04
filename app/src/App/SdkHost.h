@@ -19,6 +19,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "BalanceGate.h"
 #include "ClientEvents.h"
 #include "ConnectAction.h"
 #include "ConnectionHealth.h"
@@ -797,17 +798,23 @@ class SdkHost {
   void ConnectBestAvailable();
   void Connect(const std::string& connectLocationJson);
   void Disconnect();
-  // The start-connect gate. outOfBalance answers urnw::balance::OutOfBalance
-  // for this instant; upgrade shows the upgrade path in place of a blocked
-  // connect. Both are called on the caller's thread, which for every connect
-  // entry point is the UI thread. Unset, every connect is admitted.
-  void SetStartConnectGate(std::function<bool()> outOfBalance, std::function<void()> upgrade) {
-    startConnectOutOfBalance_ = std::move(outOfBalance);
+  // The start-connect gate. facts gives urnw::balance::StartConnectFacts for
+  // this instant; upgrade shows the upgrade path in place of a blocked
+  // connect; fetchBalance fetches the subscription balance and calls its
+  // argument once the fetch settles (succeeded, failed or timed out). All are
+  // called on the caller's thread, which for every connect entry point is the
+  // UI thread. Unset, every connect is admitted.
+  void SetStartConnectGate(std::function<urnw::balance::StartConnectFacts()> facts,
+                           std::function<void()> upgrade,
+                           std::function<void(std::function<void()>)> fetchBalance) {
+    startConnectFacts_ = std::move(facts);
     startConnectUpgrade_ = std::move(upgrade);
+    startConnectFetchBalance_ = std::move(fetchBalance);
   }
-  // Whether a connect gesture may start now; when not, shows the upgrade path.
-  // `what` names the entry point in the log.
-  bool AdmitStartConnect(const char* what);
+  // Whether a connect gesture may start now; when not, shows the upgrade path,
+  // or, on a stale balance, fetches it and runs `again` (the same gesture,
+  // asked anew) once the fetch settles. `what` names the entry point in the log.
+  bool AdmitStartConnect(const char* what, std::function<void()> again);
 
   // TURN THE SERVICE'S TUNNEL OFF. Not the same thing as Disconnect(), and the
   // difference is the whole of the owner's "kill the app and my internet stays
@@ -1769,8 +1776,10 @@ class SdkHost {
   std::optional<urnet::Api> api_;
   std::unique_ptr<ClientEventQueue> events_;
   std::function<void(const std::string& url)> onOnboardingLink_;
-  std::function<bool()> startConnectOutOfBalance_;  // SetStartConnectGate
+  // SetStartConnectGate
+  std::function<urnw::balance::StartConnectFacts()> startConnectFacts_;
   std::function<void()> startConnectUpgrade_;
+  std::function<void(std::function<void()>)> startConnectFetchBalance_;
   bool productUpdatesOptOut_ = false;  // the next create's product_updates
   // the sign-up pages' opt-out onto a create's args (absent = opted in)
   void ApplySignupPreferences(urnet::NetworkCreateArgs& args) const;

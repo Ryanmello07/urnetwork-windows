@@ -4,6 +4,7 @@
 #include "AppController.h"
 
 #include <algorithm>
+#include <chrono>
 #include <string_view>
 
 #include <winrt/Microsoft.UI.Windowing.h>
@@ -163,8 +164,11 @@ void AppController::Start() {
 
   // Every connect entry point (button, hero, tray, location and peer rows)
   // passes through this before it starts anything (BalanceGate.h).
-  sdk_.SetStartConnectGate([this] { return OutOfBalance(); },
-                           [this] { ShowUpgradeForBlockedConnect(); });
+  sdk_.SetStartConnectGate([this] { return CurrentStartConnectFacts(); },
+                           [this] { ShowUpgradeForBlockedConnect(); },
+                           [this](std::function<void()> settled) {
+                             balance_.FetchThen(std::move(settled));
+                           });
 
   // SDK state -> tray + window (marshaled onto the UI thread).
   sdk_.SetAuthStateHandler([this](AuthState s, const std::string& e) {
@@ -440,6 +444,26 @@ void AppController::ReactToBalance() {
 bool AppController::OutOfBalance() const {
   return urnw::balance::OutOfBalance(insufficientBalance_, balance_.Current().isPro,
                                      balance_.CurrentPoll().confirming);
+}
+
+urnw::balance::StartConnectFacts AppController::CurrentStartConnectFacts() const {
+  const BalanceSnapshot balance = balance_.Current();
+  urnw::balance::StartConnectFacts f;
+  f.latched = insufficientBalance_;
+  f.supporter = balance.isPro;
+  f.confirming = balance_.CurrentPoll().confirming;
+  f.balance.known = balance.loaded;
+  f.balance.pro = balance.isPro;
+  f.balance.availableBytes = balance.availableByteCount;
+  f.balance.openTransferBytes = balance.pendingByteCount;
+  f.balance.fetchedAtMs = balance.fetchedAtMillis;
+  f.fetchSettled = balance_.FetchSettledAtMillis() != 0;
+  f.fetchSettledAtMs = balance_.FetchSettledAtMillis();
+  // the same monotonic clock the store stamps its fetches with
+  f.nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now().time_since_epoch())
+                .count();
+  return f;
 }
 
 void AppController::ShowUpgradeForBlockedConnect() {

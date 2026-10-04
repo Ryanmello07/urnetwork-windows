@@ -6,15 +6,19 @@
 // Connect, a location row, the connect button) starts nothing out of balance
 // and shows the upgrade path, including after the user's Disconnect resets the
 // contract status (OutOfBalanceLatch); a session already connected is never
-// dropped. Run against the SAME header the app compiles, on any host
-// with a C++20 compiler. No clocks: every input is an explicit push.
+// dropped. The first connect after a launch on an empty account is blocked
+// too, but only on a fresh balance: a stale one is fetched first, and a failed
+// fetch never blocks. Run against the SAME header the app compiles, on any
+// host with a C++20 compiler. No clocks: the time is an explicit input.
 //
 //   c++ -std=c++20 -I ../src/Common balance-gate-tests.cpp \
 //       -o /tmp/balance-gate-tests && /tmp/balance-gate-tests
 //
 // SPDX-License-Identifier: MPL-2.0
 
+#include <functional>
 #include <iostream>
+#include <optional>
 #include <string>
 
 #include "BalanceGate.h"
@@ -58,17 +62,60 @@ struct FakeSinks {
   void Upgrade() { ++upgrades; }
 };
 
+constexpr long long kNow = 10'000'000;
+
+// A balance read at `at` with `available` bytes left and nothing held.
+AccountBalance Read(long long available, long long at = kNow, long long open = 0,
+                    bool pro = false) {
+  AccountBalance b;
+  b.known = true;
+  b.pro = pro;
+  b.availableBytes = available;
+  b.openTransferBytes = open;
+  b.fetchedAtMs = at;
+  return b;
+}
+
+// A funded account read just now: what a gate with no balance concern sees.
+StartConnectFacts Funded() {
+  StartConnectFacts f;
+  f.balance = Read(1'000'000);
+  f.nowMs = kNow;
+  return f;
+}
+
 // A stand-in for SdkHost's connect entry points: each asks AdmitStartConnect
-// before it records a session request, exactly as the app's do.
+// before it records a session request, exactly as the app's do, and a
+// FetchBalance holds the gesture until the test settles the fetch.
 struct FakeHost {
   FakeSinks& sinks;
-  bool outOfBalance = false;
+  StartConnectFacts facts = Funded();
   bool live = false;  // a session is up
   int sessionRequests = 0;
+  int fetches = 0;
+  std::function<void()> pending = nullptr;  // the gesture, asked again once the fetch settles
   void ConnectFromRow() {
-    if (!AdmitStartConnect(outOfBalance, sinks)) return;
+    struct Gate {
+      FakeHost& host;
+      void Upgrade() { host.sinks.Upgrade(); }
+      void FetchBalance() {
+        ++host.fetches;
+        host.pending = [h = &host] { h->ConnectFromRow(); };
+      }
+    } gate{*this};
+    if (!AdmitStartConnect(facts, gate)) return;
     ++sessionRequests;
     live = true;
+  }
+  // The fetch settles now: a read balance, or nullopt when it failed or timed
+  // out. Then the held gesture is asked again.
+  void SettleFetch(std::optional<AccountBalance> read) {
+    if (read) facts.balance = *read;
+    facts.fetchSettled = true;
+    facts.fetchSettledAtMs = facts.nowMs;
+    auto again = std::move(pending);
+    pending = nullptr;
+    if (again) again();
   }
   // a reattach (launch resume, server change, watchdog) is not a connect
   void EnsureSession() { ++sessionRequests; }
@@ -227,13 +274,13 @@ void TestTrayConnectBlockedOutOfBalance() {
 void TestStartConnectBlockedOutOfBalance() {
   FakeSinks sinks;
   FakeHost host{sinks};
-  host.outOfBalance = OutOfBalance(true, false, false);
+  host.facts.latched = true;
   host.ConnectFromRow();
   Check(host.sessionRequests == 0, "row: connect out of balance requested a session " +
                                        std::to_string(host.sessionRequests) + " times, want 0");
   Check(!host.live, "row: connect out of balance started the tunnel");
   Check(sinks.upgrades == 1, "row: a blocked connect shows the upgrade path");
-  host.outOfBalance = OutOfBalance(true, true, false);
+  host.facts.supporter = true;
   host.ConnectFromRow();
   Check(host.sessionRequests == 1 && host.live, "row: a supporter connects");
 }
@@ -246,7 +293,8 @@ void TestAlreadyConnectedKept() {
   host.ConnectFromRow();  // funded: connects
   Check(host.live, "connected: a funded connect starts");
   // the balance runs out while connected
-  host.outOfBalance = true;
+  host.facts.latched = true;
+  host.facts.balance = Read(0);
   GateNoticeTracker tracker;
   for (int push = 0; push < 1000; ++push) ReactToBalancePush(tracker, true, false, false, sinks);
   Check(sinks.disconnects == 0 && host.live,
@@ -329,6 +377,127 @@ void TestOutOfBalanceLatchClears() {
   }
 }
 
+// (i) a fresh launch on an account that is already empty: no contract status
+// exists before the first connect, so the latch is clear and only the
+// subscription balance can tell. The connect used to start the tunnel.
+void TestFreshStartEmptyAccountBlocked() {
+  FakeSinks sinks;
+  FakeHost host{sinks};
+  host.facts.balance = Read(0, kNow - 1'000);
+  host.ConnectFromRow();
+  Check(host.sessionRequests == 0 && !host.live,
+        "fresh start: connect on an empty account started the tunnel " +
+            std::to_string(host.sessionRequests) + " times, want 0");
+  Check(sinks.upgrades == 1, "fresh start: an empty account shows the upgrade path");
+  Check(host.fetches == 0, "fresh start: a fresh balance is not fetched again");
+}
+
+// (j) only a fresh balance blocks; a stale one is fetched first
+void TestStaleBalanceFetchedFirst() {
+  {
+    // stale and empty, the fetch fails: fail open
+    FakeSinks sinks;
+    FakeHost host{sinks};
+    host.facts.balance = Read(0, kNow - kFreshBalanceMs - 1);
+    host.ConnectFromRow();
+    Check(host.fetches == 1 && host.sessionRequests == 0,
+          "stale: a stale empty balance is fetched before deciding");
+    host.SettleFetch(std::nullopt);
+    Check(host.sessionRequests == 1 && sinks.upgrades == 0,
+          "stale: a failed fetch does not block the connect");
+    Check(host.fetches == 1, "stale: a settled fetch is not repeated");
+  }
+  {
+    // stale and empty, the fetch finds a funded account: connects
+    FakeSinks sinks;
+    FakeHost host{sinks};
+    host.facts.balance = Read(0, kNow - 30 * 60'000);
+    host.ConnectFromRow();
+    host.SettleFetch(Read(5'000));
+    Check(host.sessionRequests == 1 && sinks.upgrades == 0,
+          "stale: a funded user is not sent to upgrade on an old empty reading");
+  }
+  {
+    // stale and funded, the fetch finds it empty: blocked
+    FakeSinks sinks;
+    FakeHost host{sinks};
+    host.facts.balance = Read(5'000, kNow - kFreshBalanceMs - 1);
+    host.ConnectFromRow();
+    host.SettleFetch(Read(0));
+    Check(host.sessionRequests == 0 && sinks.upgrades == 1,
+          "stale: a fetch that reads an empty account blocks");
+  }
+  {
+    // never read this session (launch before the first fetch lands)
+    FakeSinks sinks;
+    FakeHost host{sinks};
+    host.facts.balance = AccountBalance{};
+    host.ConnectFromRow();
+    Check(host.fetches == 1 && host.sessionRequests == 0,
+          "unknown: an unread balance is fetched before deciding");
+    host.SettleFetch(Read(0));
+    Check(host.sessionRequests == 0 && sinks.upgrades == 1,
+          "unknown: the fetched empty balance blocks");
+  }
+  {
+    // fresh and funded: connects at once
+    FakeSinks sinks;
+    FakeHost host{sinks};
+    host.facts.balance = Read(5'000, kNow - kFreshBalanceMs);
+    host.ConnectFromRow();
+    Check(host.sessionRequests == 1 && host.fetches == 0 && sinks.upgrades == 0,
+          "fresh: a funded balance read 60s ago connects without a fetch");
+  }
+  // a balance from the future (a clock reset) is not fresh
+  {
+    StartConnectFacts f = Funded();
+    f.balance = Read(0, kNow + 1);
+    Check(DecideStartConnect(f) == StartConnectStep::FetchBalance,
+          "fresh: a reading stamped after now is fetched again");
+  }
+}
+
+// (k) what an exhausted account is: nothing available and nothing held
+void TestAccountBalanceExhausted() {
+  Check(AccountBalanceExhausted(Read(0)), "exhausted: nothing available or held");
+  Check(AccountBalanceExhausted(Read(-5)), "exhausted: a negative balance");
+  Check(!AccountBalanceExhausted(Read(1)), "exhausted: one byte left is not exhausted");
+  Check(!AccountBalanceExhausted(Read(0, kNow, 100)),
+        "exhausted: bytes held in open contracts are not exhausted");
+  Check(!AccountBalanceExhausted(Read(0, kNow, 0, true)), "exhausted: Pro never is");
+  Check(!AccountBalanceExhausted(AccountBalance{}), "exhausted: an unknown balance never is");
+  StartConnectFacts f = Funded();
+  f.balance = Read(0);
+  f.supporter = true;
+  Check(DecideStartConnect(f) == StartConnectStep::Connect, "start: a supporter connects");
+  f.supporter = false;
+  f.confirming = true;
+  Check(DecideStartConnect(f) == StartConnectStep::Connect,
+        "start: a confirmation poll bridging a purchase connects");
+  f.confirming = false;
+  f.latched = true;
+  f.balance = Read(5'000, kNow - kFreshBalanceMs - 1);
+  Check(DecideStartConnect(f) == StartConnectStep::Upgrade,
+        "start: the latch blocks without waiting for a fetch");
+}
+
+// (l) a session that is up when the balance reads empty is kept: the fresh
+// balance only ever decides a start connect
+void TestLiveSessionKeptOnEmptyBalance() {
+  FakeSinks sinks;
+  FakeHost host{sinks};
+  host.ConnectFromRow();
+  Check(host.live, "live: a funded connect starts");
+  host.facts.balance = Read(0);
+  GateNoticeTracker tracker;
+  for (int push = 0; push < 100; ++push) ReactToBalancePush(tracker, true, false, false, sinks);
+  host.EnsureSession();
+  Check(host.live && sinks.disconnects == 0 && sinks.upgrades == 0 && host.sessionRequests == 2,
+        "live: an empty balance dropped or gated the live session");
+  RouteConnectGesture(/*actionIsDisconnect=*/true, true, sinks);
+  Check(sinks.disconnects == 1, "live: the user's Disconnect works on an empty balance");
+}
+
 }  // namespace
 
 int main() {
@@ -341,6 +510,10 @@ int main() {
   TestAlreadyConnectedKept();
   TestTrayConnectAfterDisconnectStaysBlocked();
   TestOutOfBalanceLatchClears();
+  TestFreshStartEmptyAccountBlocked();
+  TestStaleBalanceFetchedFirst();
+  TestAccountBalanceExhausted();
+  TestLiveSessionKeptOnEmptyBalance();
   std::cout << (gCases - gFailures) << "/" << gCases << " balance gate checks passed\n";
   return gFailures == 0 ? 0 : 1;
 }

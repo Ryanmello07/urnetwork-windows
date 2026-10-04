@@ -261,7 +261,21 @@ void ConnectPage::OnConnectToggle(IInspectable const&, RoutedEventArgs const&) {
   // (BalanceGate.h, start connect). Asked here, before the optimistic
   // "Connecting" below, so a blocked press does not flash it; the button is
   // disabled in that state, so this is the hero and a press racing the push.
-  if (!Sdk().AdmitStartConnect("connect button")) return;
+  //
+  // On a stale balance the gate fetches it first and then asks again; that
+  // second ask connects to the selection directly through the SdkHost entry
+  // points (process lifetime, and gated themselves), never through this page,
+  // which may be gone by then.
+  if (!Sdk().AdmitStartConnect("connect button", [retry] {
+        if (retry) Sdk().Disconnect();
+        const auto selected = Sdk().SelectedLocation();
+        if (IsBestAvailableSelected(selected))
+          Sdk().ConnectBestAvailable();
+        else
+          Sdk().Connect(*selected);
+      })) {
+    return;
+  }
   // Connect to what the user PICKED. This button used to call
   // ConnectBestAvailable() unconditionally, while the chooser's own rows
   // connect to their location directly -- so choosing Japan and then pressing

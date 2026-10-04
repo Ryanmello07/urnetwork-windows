@@ -5054,21 +5054,30 @@ bool IsLocationSelected(std::optional<urnet::ConnectLocation> const& selected,
 // See the block on these three in SdkHost.h. Each records an intent and returns
 // immediately; the session worker below does the work.
 
-bool SdkHost::AdmitStartConnect(const char* what) {
+bool SdkHost::AdmitStartConnect(const char* what, std::function<void()> again) {
+  if (!startConnectFacts_) return true;
   struct Sinks {
     SdkHost& host;
     const char* what;
+    std::function<void()>& again;
     void Upgrade() {
       LogInfo("sdkhost: '{}' blocked: out of balance, showing the upgrade path", what);
       if (host.startConnectUpgrade_) host.startConnectUpgrade_();
     }
-  } sinks{*this, what};
-  const bool outOfBalance = startConnectOutOfBalance_ && startConnectOutOfBalance_();
-  return urnw::balance::AdmitStartConnect(outOfBalance, sinks);
+    void FetchBalance() {
+      LogInfo("sdkhost: '{}' waits for a fresh balance", what);
+      if (host.startConnectFetchBalance_) {
+        host.startConnectFetchBalance_(std::move(again));
+      } else if (again) {
+        again();
+      }
+    }
+  } sinks{*this, what, again};
+  return urnw::balance::AdmitStartConnect(startConnectFacts_(), sinks);
 }
 
 void SdkHost::ConnectBestAvailable() {
-  if (!AdmitStartConnect("connect (best available)")) return;
+  if (!AdmitStartConnect("connect (best available)", [this] { ConnectBestAvailable(); })) return;
   SessionRequest r;
   r.kind = ConnectKind::BestAvailable;
   r.reason = "connect (best available)";
@@ -5076,7 +5085,10 @@ void SdkHost::ConnectBestAvailable() {
 }
 
 void SdkHost::Connect(const std::string& connectLocationJson) {
-  if (!AdmitStartConnect("connect (location)")) return;
+  if (!AdmitStartConnect("connect (location)",
+                         [this, connectLocationJson] { Connect(connectLocationJson); })) {
+    return;
+  }
   SessionRequest r;
   try {
     r.location =
@@ -5099,7 +5111,7 @@ void SdkHost::Connect(const std::string& connectLocationJson) {
 // Connect to an SDK-supplied ConnectLocation as-is (the chooser already holds
 // the typed struct; skip the json round-trip). connect() takes an optional.
 void SdkHost::Connect(const urnet::ConnectLocation& location) {
-  if (!AdmitStartConnect("connect (location)")) return;
+  if (!AdmitStartConnect("connect (location)", [this, location] { Connect(location); })) return;
   SessionRequest r;
   r.kind = ConnectKind::Location;
   r.location = location;
@@ -5163,7 +5175,9 @@ void SdkHost::ConnectFromRow(const urnet::ConnectLocation& location) {
     CancelPendingRowConnect("re-selected the current location");
     return;
   }
-  if (!AdmitStartConnect("connect (row click)")) return;
+  if (!AdmitStartConnect("connect (row click)", [this, location] { ConnectFromRow(location); })) {
+    return;
+  }
   SessionRequest r;
   r.kind = ConnectKind::Location;
   r.location = location;
@@ -5180,7 +5194,10 @@ void SdkHost::ConnectBestAvailableFromRow() {
     CancelPendingRowConnect("re-selected best available");
     return;
   }
-  if (!AdmitStartConnect("connect (row click, best available)")) return;
+  if (!AdmitStartConnect("connect (row click, best available)",
+                         [this] { ConnectBestAvailableFromRow(); })) {
+    return;
+  }
   SessionRequest r;
   r.kind = ConnectKind::BestAvailable;
   r.reason = "connect (row click, best available)";
