@@ -28,22 +28,48 @@ winrt::fire_and_forget ChooseBittensorWallet(
     std::function<void(std::string walletId)> next) {
   if (!window || window->sheetOpen()) co_return;  // one ContentDialog at a time
 
-  // exactly the two supported wallets, by their product names
+  // the supported wallets, by their product names, each with the line that
+  // says what it is (manual entry; which WalletConnect wallets)
   ContentDialog dialog;
   dialog.XamlRoot(window->Content().XamlRoot());
   dialog.Title(winrt::box_value(Loc("bittensor_choose_wallet")));
-  dialog.PrimaryButtonText(
-      H(urnet::bittensorWalletDisplayName(std::string(bittensor::kWalletTalisman))));
-  dialog.SecondaryButtonText(
-      H(urnet::bittensorWalletDisplayName(std::string(bittensor::kWalletTaoCom))));
   dialog.CloseButtonText(Loc("cancel"));
-  dialog.DefaultButton(ContentDialogButton::Primary);
   dialog.Background(colors::SheetBrush());
 
+  auto choice = std::make_shared<int>(-1);
+  StackPanel list;
+  list.MinWidth(320);
+  list.Spacing(8);
+  for (int i = 0; i < bittensor::kChooserWalletCount; ++i) {
+    const std::string walletId(bittensor::kChooserWallets[i]);
+    StackPanel label;
+    TextBlock name;
+    name.Text(H(urnet::bittensorWalletDisplayName(walletId)));
+    name.FontWeight(winrt::Windows::UI::Text::FontWeights::SemiBold());
+    label.Children().Append(name);
+    const std::string hintKey = bittensor::ChooserHintKey(walletId);
+    if (!hintKey.empty()) {
+      TextBlock hint;
+      hint.Text(Loc(hintKey));
+      hint.Opacity(0.7);
+      hint.TextWrapping(TextWrapping::Wrap);
+      label.Children().Append(hint);
+    }
+    Button button;
+    button.HorizontalAlignment(HorizontalAlignment::Stretch);
+    button.HorizontalContentAlignment(HorizontalAlignment::Left);
+    button.Content(label);
+    button.Click([dialog, choice, i](auto const&, auto const&) {
+      *choice = i;
+      dialog.Hide();
+    });
+    list.Children().Append(button);
+  }
+  dialog.Content(list);
+
   window->SetSheetOpen(true);
-  ContentDialogResult result{ContentDialogResult::None};
   try {
-    result = co_await dialog.ShowAsync();
+    co_await dialog.ShowAsync();
   } catch (std::exception const& e) {
     urnw::LogError("bittensor wallet chooser: {}", e.what());
   } catch (...) {
@@ -51,10 +77,7 @@ winrt::fire_and_forget ChooseBittensorWallet(
   }
   window->SetSheetOpen(false);
 
-  bittensor::ChooserButton button = bittensor::ChooserButton::None;
-  if (result == ContentDialogResult::Primary) button = bittensor::ChooserButton::Primary;
-  if (result == ContentDialogResult::Secondary) button = bittensor::ChooserButton::Secondary;
-  if (next) next(bittensor::WalletForChooser(button));
+  if (next) next(bittensor::WalletForChoice(*choice));
 }
 
 winrt::fire_and_forget ShowBittensorManualForm(

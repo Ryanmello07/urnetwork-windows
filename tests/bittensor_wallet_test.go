@@ -10,8 +10,9 @@ import (
 )
 
 // UPGRADE.md 4.6: a Bittensor wallet proof is the SDK's session helper
-// (urnet::BittensorWalletSession), for exactly two wallets: Talisman through
-// the ur.io bridge in the browser, TAO.com through the manual form. The app
+// (urnet::BittensorWalletSession), for three wallets: Talisman and
+// WalletConnect through the ur.io bridge in the browser, TAO.com (and any
+// other wallet) through the manual form. The app
 // keeps only its own decisions (App/BittensorWalletFlow.h, compiled and run
 // here) and must not parse the hand-back or build the bridge url itself.
 func TestBittensorWalletSessionHelper(t *testing.T) {
@@ -43,6 +44,8 @@ func TestBittensorWalletSessionHelper(t *testing.T) {
 		"session->handleBridgeReturn(url,",
 		"session->handleSignature(address, signature,",
 		"bittensor::IsForeignReturn(",
+		"bittensor::NeedsWalletConnectProjectId(walletId)",
+		"session->setWalletConnectProjectId(urnw::config::kWalletConnectProjectId)",
 	} {
 		if !strings.Contains(host, want) {
 			t.Errorf("SdkHost.cpp: the Bittensor proof does not go through the session helper (missing %s)", want)
@@ -67,6 +70,9 @@ func TestBittensorWalletSessionHelper(t *testing.T) {
 	dialogs := stripLineComments(readAppSource(t, "BittensorWalletDialogs.cpp"))
 	for _, want := range []string{
 		"urnet::bittensorWalletDisplayName(",
+		"bittensor::kChooserWallets[i]",
+		"bittensor::ChooserHintKey(walletId)",
+		"bittensor::WalletForChoice(*choice)",
 		"Sdk().SubmitBittensorManual(",
 		"Sdk().CancelBittensorProof()",
 		`Loc("bittensor_choose_wallet")`,
@@ -77,7 +83,10 @@ func TestBittensorWalletSessionHelper(t *testing.T) {
 			t.Errorf("BittensorWalletDialogs.cpp: missing %s", want)
 		}
 	}
-	if strings.Contains(dialogs, `"Talisman"`) || strings.Contains(dialogs, `"TAO.com"`) {
+	if !strings.Contains(stripLineComments(readAppSource(t, "WalletPage.cpp")), "bittensor::BrowserHintKey(walletId)") {
+		t.Error("WalletPage.cpp: the browser hint does not follow the chosen wallet")
+	}
+	if strings.Contains(dialogs, `"Talisman"`) || strings.Contains(dialogs, `"TAO.com"`) || strings.Contains(dialogs, `"WalletConnect"`) {
 		t.Error("BittensorWalletDialogs.cpp: wallet names come from the sdk, not literals")
 	}
 	if !strings.Contains(readAppSource(t, "App.vcxproj"), `<ClCompile Include="BittensorWalletDialogs.cpp" />`) {

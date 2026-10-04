@@ -1,5 +1,5 @@
 // Executable spec for the app-side Bittensor wallet decisions
-// (App/BittensorWalletFlow.h): the chooser's two wallets, the next step per
+// (App/BittensorWalletFlow.h): the chooser's three wallets, the next step per
 // sdk transport, which hand-backs a flow ignores, which manual errors keep
 // the form open, and the localized text for each sdk refusal code.
 //
@@ -39,10 +39,28 @@ void Check(bool ok, std::string const& what) {
 }  // namespace
 
 int main() {
-  // exactly two wallets: Talisman and TAO.com
-  CheckEq("talisman", WalletForChooser(ChooserButton::Primary), "primary is Talisman");
-  CheckEq("taocom", WalletForChooser(ChooserButton::Secondary), "secondary is TAO.com");
-  CheckEq("", WalletForChooser(ChooserButton::None), "close cancels");
+  // three wallets, in the sdk's order: Talisman, TAO.com (manual), WalletConnect
+  Check(kChooserWalletCount == 3, "three chooser entries");
+  CheckEq("talisman", WalletForChoice(0), "first is Talisman");
+  CheckEq("taocom", WalletForChoice(1), "second is TAO.com");
+  CheckEq("walletconnect", WalletForChoice(2), "third is WalletConnect");
+  CheckEq("", WalletForChoice(-1), "close cancels");
+  CheckEq("", WalletForChoice(3), "no fourth wallet");
+
+  // the line under each entry
+  CheckEq("", ChooserHintKey("talisman"), "talisman has no hint");
+  CheckEq("enter_address_manually", ChooserHintKey("taocom"), "tao.com is manual entry");
+  CheckEq("bittensor_walletconnect_hint", ChooserHintKey("walletconnect"), "walletconnect wallets");
+
+  // while the browser is open
+  CheckEq("bittensor_continue_in_browser", BrowserHintKey("talisman"), "talisman hint");
+  CheckEq("bittensor_walletconnect_continue", BrowserHintKey("walletconnect"), "walletconnect hint");
+  CheckEq("", BrowserHintKey("taocom"), "manual never opens the browser");
+
+  // only the walletconnect page gets the app's project id
+  Check(NeedsWalletConnectProjectId("walletconnect"), "walletconnect takes the project id");
+  Check(!NeedsWalletConnectProjectId("talisman"), "talisman does not");
+  Check(!NeedsWalletConnectProjectId("taocom"), "tao.com does not");
 
   // the sdk transport decides the step; a desktop never drives an extension
   Check(NextStepFor("browser_bridge") == NextStep::OpenBrowser, "talisman opens the browser");
