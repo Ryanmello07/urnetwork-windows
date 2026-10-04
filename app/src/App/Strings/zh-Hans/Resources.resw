@@ -1012,6 +1012,10 @@
     <value>连接 Bittensor 钱包</value>
     <comment>Button to connect a Bittensor coldkey.</comment>
   </data>
+  <data name="connect_bittensor_wallet_to_add_sign_in_method" xml:space="preserve">
+    <value>连接 Bittensor 钱包，将其添加为登录方式。</value>
+    <comment>Add sign-in method sheet: the Bittensor wallet option's explanation (Talisman, WalletConnect, or a pasted signature).</comment>
+  </data>
   <data name="connect_options" xml:space="preserve">
     <value>连接选项</value>
     <comment>A label displayed above the options for connecting to a tunnel.</comment>

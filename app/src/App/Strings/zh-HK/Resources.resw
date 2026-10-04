@@ -824,6 +824,10 @@
     <value>連接並開啟連結</value>
     <comment>Call to action</comment>
   </data>
+  <data name="connect_bittensor_wallet_to_add_sign_in_method" xml:space="preserve">
+    <value>連接 Bittensor 錢包，將其新增為登入方式。</value>
+    <comment>Add sign-in method sheet: the Bittensor wallet option's explanation (Talisman, WalletConnect, or a pasted signature).</comment>
+  </data>
   <data name="connect_options" xml:space="preserve">
     <value>連接選項</value>
     <comment>A label displayed above the options for connecting to a tunnel.</comment>

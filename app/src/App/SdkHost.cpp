@@ -1520,6 +1520,15 @@ void SdkHost::SetupWalletCallbacks() {
       if (wallet_.on_error) wallet_.on_error("the identity token did not match this sign-in");
       return;
     }
+    // Who started the attempt decides where its token goes: an add-owned
+    // attempt adds the identity to the current network and never signs in.
+    switch (add_sign_in::RouteSsoReturn(attempt.purpose)) {
+      case add_sign_in::SsoReturnRoute::AddAuth:
+        if (auto addDone = std::exchange(ssoAddDone_, nullptr)) addDone(authJwt, std::string());
+        return;
+      case add_sign_in::SsoReturnRoute::AuthLogin:
+        break;
+    }
     auto done = std::exchange(walletAuthDone_, nullptr);
     AuthLoginWithSso(attempt.provider, authJwt, done ? done : [](AuthResult) {});
   };
@@ -1550,6 +1559,12 @@ void SdkHost::SetupWalletCallbacks() {
     }
     if (auto signDone = std::exchange(walletSignDone_, nullptr)) {
       signDone(false, std::string(), std::string(), err);
+      return;
+    }
+    // an add-owned sso attempt failed: the add sheet shows it, the session stays
+    if (auto addDone = std::exchange(ssoAddDone_, nullptr)) {
+      ssoAttempt_.reset();
+      addDone(std::string(), err);
       return;
     }
     // NO FLOW IS IN FLIGHT. The bridge is a pair of process-wide callbacks with
@@ -1601,6 +1616,10 @@ uint64_t SdkHost::CancelPendingWalletFlows(const char* reason) {
   if (auto signDone = std::exchange(walletSignDone_, nullptr)) {
     LogWarn("sdkhost: a wallet signature request was superseded ({})", reason);
     signDone(false, std::string(), std::string(), reason);
+  }
+  if (auto addDone = std::exchange(ssoAddDone_, nullptr)) {
+    LogWarn("sdkhost: adding a sign-in method was superseded ({})", reason);
+    addDone(std::string(), reason);
   }
   if (auto authDone = std::exchange(walletAuthDone_, nullptr)) {
     LogWarn("sdkhost: a wallet sign-in was superseded ({})", reason);
@@ -1675,7 +1694,8 @@ std::string BittensorErrorText(std::string const& code, std::string const& walle
 
 void SdkHost::BeginBittensorProof(uint64_t flow, const std::string& walletId,
                                   const std::string& purpose, const std::string& expectedAddress,
-                                  std::function<void(BittensorProofOutcome)> done) {
+                                  std::function<void(BittensorProofOutcome)> done,
+                                  std::function<void(BittensorManualRequest)> manualHandler) {
   std::shared_ptr<urnet::BittensorWalletSession> session;
   try {
     session = std::make_shared<urnet::BittensorWalletSession>(urnet::newBittensorWalletSession(
@@ -1704,7 +1724,7 @@ void SdkHost::BeginBittensorProof(uint64_t flow, const std::string& walletId,
     return;
   }
   api_->authWalletChallenge(*args, [this, flow, serial, session, walletId, purpose,
-                                    expectedAddress](
+                                    expectedAddress, manualHandler](
                                        std::optional<urnet::AuthWalletChallengeResult> result,
                                        std::optional<std::string> err) {
     // A newer flow took over while the challenge was on its way: it has
@@ -1742,8 +1762,9 @@ void SdkHost::BeginBittensorProof(uint64_t flow, const std::string& walletId,
         return;
       }
       case bittensor::NextStep::ManualEntry: {
-        std::function<void(BittensorManualRequest)> handler;
-        {
+        // the add sheet's own form, else the window's
+        std::function<void(BittensorManualRequest)> handler = manualHandler;
+        if (!handler) {
           std::scoped_lock lock(bittensorLock_);
           handler = bittensorManualHandler_;
         }
@@ -1972,6 +1993,10 @@ void SdkHost::SignInWithSso(const std::string& provider, std::function<void(Auth
   // the browser round trip has ONE pair of callbacks: whatever was waiting is TOLD
   CancelPendingWalletFlows("superseded by a sign-in");
   walletAuthDone_ = std::move(done);
+  OpenSsoAttempt(provider, add_sign_in::SsoPurpose::SignIn);
+}
+
+void SdkHost::OpenSsoAttempt(const std::string& provider, add_sign_in::SsoPurpose purpose) {
   // Fresh per attempt: `state` is echoed by the provider and `nonce` rides
   // inside the identity token it issues, so a stale or replayed callback can
   // match neither. Both come from the SDK's random source, like a wallet nonce.
@@ -1979,19 +2004,86 @@ void SdkHost::SignInWithSso(const std::string& provider, std::function<void(Auth
   // claim the api's callback reads to redirect back to this app
   // (urnetwork://oauth/<provider>).
   const std::string state = WalletConnect::OAuthState(urnet::generateNonce());
-  ssoAttempt_ = SsoAttempt{provider, state, urnet::generateNonce()};
+  ssoAttempt_ = SsoAttempt{provider, state, urnet::generateNonce(), purpose};
   std::string apiUrl;
   {
     std::scoped_lock lock(mutex_);
     if (networkSpace_) apiUrl = networkSpace_->getApiUrl();
   }
   // opens the browser; the rest continues on the deep-link callback (on_sso)
-  // the guard above admits only these two providers: no other flow exists
+  // both callers admit only these two providers: no other flow exists
   if (provider == "apple") {
     wallet_.OpenAppleOAuth(apiUrl, ssoAttempt_->state, ssoAttempt_->nonce);
   } else if (provider == "google") {
     wallet_.OpenGoogleOAuth(apiUrl, ssoAttempt_->state, ssoAttempt_->nonce);
   }
+}
+
+// ---- adding a sign-in method (AddSignIn.h) ---------------------------------
+// None of these touch the auth state, the pending sign-in auth or the jwt:
+// the add sheet posts what they return to addAuth on the current network.
+
+void SdkHost::SsoTokenForAdd(const std::string& provider,
+                             std::function<void(std::string, std::string)> done) {
+  if (provider != "google" && provider != "apple") {
+    if (done) done(std::string(), "unknown sign-in provider");
+    return;
+  }
+  // the browser round trip has ONE pair of callbacks: whatever was waiting is TOLD
+  CancelPendingWalletFlows("superseded by adding a sign-in method");
+  ssoAddDone_ = std::move(done);
+  OpenSsoAttempt(provider, add_sign_in::SsoPurpose::Add);
+}
+
+void SdkHost::SignSolanaForAdd(
+    WalletConnect::Provider provider,
+    std::function<void(std::string, std::string, std::string, std::string)> done) {
+  const uint64_t flow = CancelPendingWalletFlows("superseded by adding a sign-in method");
+  // the server's add-auth accepts only a message it issued, so always a fresh one
+  RequestWalletChallenge(urnet::SOL, std::string(), [this, flow, provider, done](
+                                                       std::optional<std::string> message,
+                                                       std::string error) {
+    if (!walletFlows_.IsCurrent(flow)) {
+      done(std::string(), std::string(), std::string(),
+           std::string(bridge::kSupersededPrefix) + "another wallet flow");
+      return;
+    }
+    if (!message) {
+      done(std::string(), std::string(), std::string(),
+           error.empty() ? std::string("could not fetch wallet challenge") : error);
+      return;
+    }
+    SignWithSolanaWallet(provider, *message,
+                         [done, message = *message](bool ok, std::string address,
+                                                    std::string signature, std::string signError) {
+                           if (!ok) {
+                             done(std::string(), std::string(), std::string(), std::move(signError));
+                             return;
+                           }
+                           done(std::move(address), std::move(signature), message, std::string());
+                         });
+  });
+}
+
+void SdkHost::SignBittensorForAdd(
+    const std::string& walletId, std::function<void(BittensorManualRequest)> manualHandler,
+    std::function<void(std::string, std::string, std::string, std::string)> done) {
+  const uint64_t flow = CancelPendingWalletFlows("superseded by adding a sign-in method");
+  BeginBittensorProof(
+      flow, walletId, std::string(bittensor::kPurposeAdd), std::string(),
+      [done = std::move(done)](BittensorProofOutcome outcome) {
+        if (!outcome.ok) {
+          done(std::string(), std::string(), std::string(), std::move(outcome.error));
+          return;
+        }
+        done(outcome.proof.Address, outcome.proof.Signature, outcome.proof.Message,
+             std::string());
+      },
+      std::move(manualHandler));
+}
+
+void SdkHost::CancelAddSignIn() {
+  CancelPendingWalletFlows("superseded by the add sheet closing");
 }
 
 void SdkHost::AuthLoginWithSso(const std::string& provider, const std::string& idToken,

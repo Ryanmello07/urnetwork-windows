@@ -49,6 +49,9 @@ inline constexpr std::string_view kTransportManual = "manual";
 inline constexpr std::string_view kPurposeLogin = "login";
 inline constexpr std::string_view kPurposeCreate = "create";
 inline constexpr std::string_view kPurposeConnect = "connect";
+// adding the wallet as a sign-in method (Settings' add sheet); a login
+// session refuses its hand-back, so it can never sign in
+inline constexpr std::string_view kPurposeAdd = "add";
 
 // The chooser lists kChooserWallets as buttons; the picked index (or -1 for
 // cancel) maps to a wallet id ("" = cancelled).

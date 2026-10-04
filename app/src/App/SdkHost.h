@@ -19,6 +19,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "AddSignIn.h"
 #include "BalanceGate.h"
 #include "ClientEvents.h"
 #include "ConnectAction.h"
@@ -731,6 +732,37 @@ class SdkHost {
   void SignWithSolanaWallet(WalletConnect::Provider provider, const std::string& message,
                             std::function<void(bool ok, std::string address,
                                                std::string signature, std::string error)> done);
+
+  // ---- adding a sign-in method (Settings' add sheet, AddSignIn.h) -----------
+  // Each produces a credential for addAuth on the CURRENT network and nothing
+  // else: no SetAuthState, no authLogin, no retained pending auth, no jwt. They
+  // share the browser bridge's single flow with the sign-ins (starting one
+  // supersedes whatever is in flight, which is told), and `done` runs on an SDK
+  // or deep-link thread, so a UI caller marshals. An error starting with
+  // "superseded by " is a quiet cancel.
+  //
+  // The provider's identity token from its web flow, like SignInWithSso, but
+  // the attempt is owned by the add sheet (add_sign_in::SsoPurpose::Add): its
+  // urnetwork://oauth/<provider> return is answered here and never reaches
+  // authLogin. `provider` is "google" or "apple".
+  void SsoTokenForAdd(const std::string& provider,
+                      std::function<void(std::string idToken, std::string error)> done);
+  // A fresh SOL /auth/wallet-challenge signed by the Solana wallet through the
+  // bridge, as a bare signature request (SignWithSolanaWallet).
+  void SignSolanaForAdd(WalletConnect::Provider provider,
+                        std::function<void(std::string address, std::string signature,
+                                           std::string message, std::string error)> done);
+  // A Bittensor proof under the session helper's add purpose
+  // (bittensor::kPurposeAdd): Talisman and WalletConnect through the bridge,
+  // TAO.com through `manualHandler` (the add sheet's own form, since a second
+  // ContentDialog cannot open over it), answered with SubmitBittensorManual /
+  // CancelBittensorProof as usual.
+  void SignBittensorForAdd(const std::string& walletId,
+                           std::function<void(BittensorManualRequest)> manualHandler,
+                           std::function<void(std::string address, std::string signature,
+                                              std::string message, std::string error)> done);
+  // The add sheet closed or switched method: answer and drop its flow.
+  void CancelAddSignIn();
 
   // Connect a Solana wallet through the same browser bridge and hand back its
   // public key WITHOUT signing anything and WITHOUT authenticating. The address
@@ -2088,9 +2120,12 @@ class SdkHost {
   // Start a proof for `flow` (walletFlows_): fetch the session's challenge,
   // then open the bridge (Talisman) or ask the manual handler (TAO.com).
   // `done` runs once: with the proof, a refusal, or a superseding flow's reason.
+  // `manualHandler` replaces the window's manual form for this proof (the add
+  // sheet shows its own); null = the window's (SetBittensorManualHandler).
   void BeginBittensorProof(uint64_t flow, const std::string& walletId, const std::string& purpose,
                            const std::string& expectedAddress,
-                           std::function<void(BittensorProofOutcome)> done);
+                           std::function<void(BittensorProofOutcome)> done,
+                           std::function<void(BittensorManualRequest)> manualHandler = nullptr);
   // the urnetwork://bittensor-sign-message hand-back (WalletConnect)
   void HandleBittensorReturn(const std::string& url);
   // Answer proof `serial` if it is still the one in flight.
@@ -2139,8 +2174,16 @@ class SdkHost {
     std::string provider;
     std::string state;
     std::string nonce;
+    // who started it: a login (authLogin) or the add sheet (addAuth)
+    add_sign_in::SsoPurpose purpose = add_sign_in::SsoPurpose::SignIn;
   };
   std::optional<SsoAttempt> ssoAttempt_;
+  // An add-owned sso attempt's answer (SsoTokenForAdd): the identity token or
+  // an error. Like walletAuthDone_, CancelPendingWalletFlows answers and
+  // clears it whenever another flow starts.
+  std::function<void(std::string, std::string)> ssoAddDone_;
+  // Open the provider's web flow for a fresh attempt (state + nonce).
+  void OpenSsoAttempt(const std::string& provider, add_sign_in::SsoPurpose purpose);
   // Identity of a wallet that has no network yet. The discovery signature has
   // already been consumed; create-network always requests a fresh bound
   // challenge before this value can be submitted.

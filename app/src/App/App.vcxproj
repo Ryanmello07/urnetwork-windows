@@ -363,6 +363,7 @@
     <ClInclude Include="AppController.h" />
     <ClInclude Include="AuthSheets.h" />
     <ClInclude Include="BalanceSheets.h" />
+    <ClInclude Include="AddSignIn.h" />
     <ClInclude Include="BittensorWalletDialogs.h" />
     <ClInclude Include="BittensorWalletFlow.h" />
     <ClInclude Include="Config.h" />
