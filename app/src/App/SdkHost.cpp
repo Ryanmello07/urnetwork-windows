@@ -505,7 +505,7 @@ bool SdkHost::Initialize() {
   // first tray click. Loading it into standing state now is what lets a window
   // built thirty seconds later ask, rather than having to have been listening.
   // See the field comment on advancedMode_ in SdkHost.h.
-  advancedMode_.store(LoadAppPrefs().value("advanced_mode", false),
+  advancedMode_.store(AppPrefBool(LoadAppPrefs(), "advanced_mode", false),
                       std::memory_order_release);
   requestedMode_ = StartModeFromEnvironment();
   if (requestedMode_ == proto::StartMode::RpcOnly) {
@@ -2289,8 +2289,9 @@ void SdkHost::SetAdvancedMode(bool on) {
   // for the same reason. The publish is best-effort; the recorded value is what
   // actually reaches a surface built later, through RefreshAdvancedMode().
   advancedMode_.store(on, std::memory_order_release);
-  SaveAppPref("advanced_mode", on);
-  LogInfo("sdkhost: advanced mode {}", on ? "on" : "off");
+  const bool saved = SaveAppPref("advanced_mode", on);
+  LogInfo("sdkhost: advanced mode {}{}", on ? "on" : "off",
+          saved ? "" : " for this session only (the preference was not saved)");
   RefreshAdvancedMode();
 }
 

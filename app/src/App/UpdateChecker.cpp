@@ -410,11 +410,13 @@ void UpdateChecker::BeginApply() {
 }
 
 bool UpdateChecker::AutoCheckEnabled() {
-  return LoadAppPrefs().value(kAutoCheckPrefKey, true);
+  // Type-checked: a hand-edited non-boolean value used to throw
+  // type_error.302 out of Start(), on the startup path.
+  return AppPrefBool(LoadAppPrefs(), kAutoCheckPrefKey, true);
 }
 
 void UpdateChecker::SetAutoCheckEnabled(bool on) {
-  SaveAppPref(kAutoCheckPrefKey, on);
+  const bool saved = SaveAppPref(kAutoCheckPrefKey, on);
   {
     std::lock_guard lock(mutex_);
     autoCheck_ = on;
@@ -422,7 +424,8 @@ void UpdateChecker::SetAutoCheckEnabled(bool on) {
     if (on) nextAuto_ = steady_clock::now();
   }
   cv_.notify_all();
-  LogInfo("update: automatic checking {}", on ? "enabled" : "disabled");
+  LogInfo("update: automatic checking {}{}", on ? "enabled" : "disabled",
+          saved ? "" : " for this session only (the preference was not saved)");
 }
 
 void UpdateChecker::RevealInExplorer(std::wstring const& file) {

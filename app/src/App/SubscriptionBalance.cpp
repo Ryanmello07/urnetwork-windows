@@ -444,15 +444,16 @@ void SubscriptionBalanceStore::MaybeCelebrateReferrals(std::string const& code,
   if (!jwt || !jwt->NetworkId) return;
   const std::string key = "referral_celebrated_count_" + *jwt->NetworkId;
 
-  nlohmann::json prefs = LoadAppPrefs();
-  if (!prefs.contains(key)) {
-    // first observation for this network on this machine: baseline only --
-    // pre-existing referrals are old news, not a surprise
+  const std::optional<int64_t> stored = AppPrefInt64(LoadAppPrefs(), key);
+  if (!stored) {
+    // first observation for this network on this machine, or a stored value
+    // that is not a count: baseline only -- pre-existing referrals are old
+    // news, not a surprise
     SaveAppPref(key.c_str(), count);
     return;
   }
 
-  const int64_t previous = prefs.value(key, int64_t{0});
+  const int64_t previous = *stored;
   if (count > previous) {
     ReferralCelebration celebration{count - previous, previous == 0};
     SaveAppPref(key.c_str(), count);

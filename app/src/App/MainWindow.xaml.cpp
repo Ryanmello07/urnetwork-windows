@@ -1491,7 +1491,7 @@ void MainWindow::NoteConnected() {
   const std::string networkId = byJwt->NetworkId ? *byJwt->NetworkId : byJwt->NetworkName;
   if (networkId.empty()) return;
   const std::string key = "connect_first_" + networkId;
-  if (urnw::LoadAppPrefs().value(key, false)) return;
+  if (urnw::AppPrefBool(urnw::LoadAppPrefs(), key, false)) return;
   urnw::SaveAppPref(key.c_str(), true);
   Sdk().events().ConnectFirst();
 }
