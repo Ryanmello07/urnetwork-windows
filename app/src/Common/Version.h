@@ -41,7 +41,10 @@
 #define UR_VERSION_CODE 0
 #endif
 
-// The date parts, for the four 16-bit numeric FILEVERSION fields.
+// The four 16-bit numeric FILEVERSION fields: the UTC date of the code's
+// instant, then half its second of the day (0..43199, tools/UrVersion.ps1).
+// The fourth field is what makes two builds of one day differ, and Windows
+// Installer replaces files by this number.
 #ifndef UR_VER_MAJOR
 #define UR_VER_MAJOR 0
 #endif
@@ -50,6 +53,9 @@
 #endif
 #ifndef UR_VER_PATCH
 #define UR_VER_PATCH 0
+#endif
+#ifndef UR_VERSION_BUILD
+#define UR_VERSION_BUILD 0
 #endif
 
 #ifndef RC_INVOKED

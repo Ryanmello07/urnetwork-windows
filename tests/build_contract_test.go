@@ -845,7 +845,15 @@ func TestWindowsScriptsApplyTheSelectedArchitectureEndToEnd(t *testing.T) {
 	}
 	restore := strings.Index(appBuild, "& $msbuild URnetwork.sln /t:restore")
 	platformLoop := strings.Index(appBuild, "foreach ($platform in $Platforms)")
-	solutionBuild := strings.Index(appBuild, "/p:Version=$Version /m /nologo /v:minimal")
+	// The whole solution-compile command, not one substring of it: it must
+	// carry the version UrVersion.ps1 derived and the explicit official feed
+	// default (TestReleaseBuildStampsTheVersion), where it used to pass only
+	// /p:Version, which no project reads.
+	solutionBuild := consecutiveLines(appBuild,
+		"& $msbuild URnetwork.sln `",
+		"/p:Configuration=$Configuration /p:Platform=$platform `",
+		"@urMsbuildArgs /p:UrnUpdateFeedDefault=official `",
+		"/p:Version=$Version /m /nologo /v:minimal")
 	if restore < 0 || platformLoop < 0 || solutionBuild < 0 || !(platformLoop < restore && restore < solutionBuild) {
 		t.Fatalf("solution compile is not scoped to selected platforms: restore=%d loop=%d build=%d", restore, platformLoop, solutionBuild)
 	}
@@ -869,6 +877,103 @@ func TestWindowsScriptsApplyTheSelectedArchitectureEndToEnd(t *testing.T) {
 	wintunHeader := strings.Index(fetchDependencies, `Copy-Item "$wintunExtract\wintun\include\wintun.h"`)
 	if wintunRoot < 0 || wintunHeader < 0 || wintunRoot >= wintunHeader {
 		t.Fatalf("Wintun root must exist before copying its header: root=%d header=%d", wintunRoot, wintunHeader)
+	}
+}
+
+// consecutiveLines returns the byte offset of the first of len(want) adjacent
+// lines whose trimmed text equals want, in order, or -1. It ignores
+// indentation and a CR before the LF, so a CRLF checkout matches as well.
+func consecutiveLines(source string, want ...string) int {
+	lines := strings.Split(source, "\n")
+	offset := 0
+	for start := range lines {
+		if start+len(want) <= len(lines) {
+			matched := true
+			for index, line := range want {
+				if strings.TrimSpace(lines[start+index]) != line {
+					matched = false
+					break
+				}
+			}
+			if matched {
+				return offset
+			}
+		}
+		offset += len(lines[start]) + 1
+	}
+	return -1
+}
+
+// urnetwork/build's release VM builds through app/build.ps1, which used to
+// pass only /p:Version, a property no project reads: every official MSI
+// shipped as ProductVersion 0.0.1 around code-0 binaries that never update.
+// build.ps1 must derive the version with tools/UrVersion.ps1 and hand every
+// value to both builds. The arrays' exact content is checked against the Go
+// oracle in ur_version_test.go; this checks that they reach both builds and
+// that the projects read them.
+func TestReleaseBuildStampsTheVersion(t *testing.T) {
+	root := repositoryRoot(t)
+	read := func(relative string) string {
+		data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(relative)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(data)
+	}
+	appBuild := read("app/build.ps1")
+	urVersion := read("app/tools/UrVersion.ps1")
+	props := read("app/Directory.Build.props")
+	wixProject := read("app/installer/Installer.wixproj")
+
+	// The six msbuild properties and the installer's version, each built
+	// exactly once into the arrays UrVersion.ps1 returns, each read by a
+	// project.
+	for _, stamp := range []struct{ argument, reader, readerFile string }{
+		{`"/p:UrVersion=$Version"`, "UR_VERSION_RAW=$(UrVersion);", props},
+		{`"/p:UrVersionCode=$code"`, "UR_VERSION_CODE=$(UrVersionCode);", props},
+		{`"/p:UrVersionMajor=$year"`, "UR_VER_MAJOR=$(UrVersionMajor);", props},
+		{`"/p:UrVersionMinor=$month"`, "UR_VER_MINOR=$(UrVersionMinor);", props},
+		{`"/p:UrVersionPatch=$day"`, "UR_VER_PATCH=$(UrVersionPatch);", props},
+		{`"/p:UrVersionBuild=$build"`, "UR_VERSION_BUILD=$(UrVersionBuild);", props},
+		{`@("-p:UrMsiVersion=$msiVersion")`, "UrMsiVersion=$(UrMsiVersion)", wixProject},
+	} {
+		if count := strings.Count(urVersion, stamp.argument); count != 1 {
+			t.Errorf("UrVersion.ps1 builds %s %d times, want once", stamp.argument, count)
+		}
+		// ClCompile and ResourceCompile each need the definition.
+		want := 1
+		if stamp.readerFile == props {
+			want = 2
+		}
+		if count := strings.Count(stamp.readerFile, stamp.reader); count != want {
+			t.Errorf("%s appears %d times in its project file, want %d", stamp.reader, count, want)
+		}
+	}
+
+	// build.ps1 derives once, before the platform loop, from the version
+	// run.sh passes, and splats the two arrays into the two builds.
+	derive := strings.Index(appBuild, `$urVersion = & (Join-Path $PSScriptRoot "tools\UrVersion.ps1") -Version $Version`)
+	platformLoop := strings.Index(appBuild, "foreach ($platform in $Platforms)")
+	if derive < 0 || platformLoop < 0 || derive > platformLoop {
+		t.Errorf("build.ps1 must derive the version through tools/UrVersion.ps1 before building: derive=%d loop=%d", derive, platformLoop)
+	}
+	for _, required := range []string{
+		"$urMsbuildArgs = @($urVersion.MsbuildArgs)",
+		"$urWixArgs = @($urVersion.WixArgs)",
+		`"-p:Platform=$platform", "-p:BinDir=$bin", "-p:Version=$Version") + $urWixArgs`,
+		"dotnet @wixArgs",
+	} {
+		if strings.Count(appBuild, required) != 1 {
+			t.Errorf("build.ps1 must contain %q exactly once", required)
+		}
+	}
+	if consecutiveLines(appBuild,
+		"@urMsbuildArgs /p:UrnUpdateFeedDefault=official `",
+		"/p:Version=$Version /m /nologo /v:minimal") < 0 {
+		t.Error("build.ps1's solution build does not carry @urMsbuildArgs and the official feed default")
+	}
+	if strings.Contains(appBuild, "UrnUpdateFeedDefault=beta") {
+		t.Error("an official build must never default to the beta feed")
 	}
 }
 

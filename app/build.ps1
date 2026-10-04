@@ -112,8 +112,21 @@ Remove-Item (Join-Path $OutDir "*.msi") -Force -ErrorAction SilentlyContinue
 # 1. Fetch wintun (pinned) + unzip the SDK + build the per-arch import libs.
 & "$PSScriptRoot\tools\fetch-deps.ps1" -SdkZip $SdkZip -Platforms $Platforms
 
-# 2. Set the version into the app + installer (single source of truth).
+# 2. Set the version into the app + installer. tools\UrVersion.ps1 is the one
+#    derivation (CI calls it too): from $Version, <YYYY.M.D>-<code> as run.sh
+#    passes it, it returns every Ur* property the projects read and the
+#    arguments that carry them. Without them a build is 0.0.0-dev / code 0,
+#    which the update checker treats as "never update", and its MSI is
+#    0.0.1, which never upgrades another. A malformed version, or a code
+#    more than 24 h ahead of this clock, stops the build here.
 #    (The SDK Version is baked into the DLL at cross-build time via -ldflags.)
+$urVersion = & (Join-Path $PSScriptRoot "tools\UrVersion.ps1") -Version $Version
+$urMsbuildArgs = @($urVersion.MsbuildArgs)
+$urWixArgs = @($urVersion.WixArgs)
+Write-Host ("== version {0}: code {1}, file version {2}.{3}.{4}.{5}, MSI {6} ==" -f
+  $urVersion.UrVersion, $urVersion.UrVersionCode, $urVersion.UrVersionMajor,
+  $urVersion.UrVersionMinor, $urVersion.UrVersionPatch, $urVersion.UrVersionBuild,
+  $urVersion.UrMsiVersion)
 $env:URN_VERSION = $Version
 
 # Protocol v3 is only safe to roll out if an MSI upgrade replaces the service
@@ -145,9 +158,14 @@ foreach ($platform in $Platforms) {
     throw "NuGet (PackageReference) restore failed for $platform"
   }
 
-  # 3. Build the solution (Common, Service, App, SplitTunnel driver).
+  # 3. Build the solution (Common, Service, App, SplitTunnel driver), stamped.
+  #    UrnUpdateFeedDefault is passed explicitly because a global property
+  #    beats an environment variable of the same name, which MSBuild would
+  #    otherwise read as a property: a build host's environment cannot pick
+  #    an official build's update feed.
   & $msbuild URnetwork.sln `
     /p:Configuration=$Configuration /p:Platform=$platform `
+    @urMsbuildArgs /p:UrnUpdateFeedDefault=official `
     /p:Version=$Version /m /nologo /v:minimal
   if ($LASTEXITCODE -ne 0) {
     Diagnose-XamlCodegen -MsBuild $msbuild -Platform $platform -Configuration $Configuration
@@ -205,11 +223,12 @@ foreach ($platform in $Platforms) {
     # .sys/.cat replace the dev-signed ones in $bin before packaging.
   }
 
-  # 5. Build the MSI for this arch (WiX v5), staging from $bin. The driver payload
-  #    is compiled out of the package unless -IncludeDriver produced its .sys above.
+  # 5. Build the MSI for this arch (WiX v5), staging from $bin, with the
+  #    ProductVersion UrVersion.ps1 derived. The driver payload is compiled
+  #    out of the package unless -IncludeDriver produced its .sys above.
   $wixPlatform = if ($platform -eq "ARM64") { "arm64" } else { "x64" }
   $wixArgs = @("build", "installer\Installer.wixproj", "-c", $Configuration,
-    "-p:Platform=$platform", "-p:BinDir=$bin", "-p:Version=$Version")
+    "-p:Platform=$platform", "-p:BinDir=$bin", "-p:Version=$Version") + $urWixArgs
   if ($IncludeDriver) { $wixArgs += "-p:IncludeDriver=true" }
   dotnet @wixArgs
   if ($LASTEXITCODE -ne 0) { throw "MSI build failed for $platform" }
