@@ -98,7 +98,7 @@ func TestLegacyGuestAccountFlow(t *testing.T) {
 	}
 
 	login := read("LoginPage.cpp")
-	open := functionBody(login, "winrt::fire_and_forget LoginPage::OpenGuestConversion()")
+	open := functionBody(login, "winrt::fire_and_forget LoginPage::OpenGuestConversion(")
 	if open == "" {
 		t.Fatal("LoginPage.cpp: no OpenGuestConversion")
 	}
@@ -137,7 +137,8 @@ func TestLegacyGuestAccountFlow(t *testing.T) {
 		"void MainWindow::OnOpenUpgrade(",
 	} {
 		body := functionBody(window, signature)
-		if !strings.Contains(body, "if (balance_.guest)") || !strings.Contains(body, "OpenGuestConversion()") {
+		if !strings.Contains(body, "if (balance_.guest)") ||
+			!(strings.Contains(body, "OpenGuestConversion()") || strings.Contains(body, "DivertGuestToConversion(")) {
 			t.Errorf("%s: a guest is not diverted to the conversion", signature)
 		}
 	}
@@ -249,5 +250,52 @@ func TestGuestConversionResendCooldownWiring(t *testing.T) {
 	session := functionBody(sheets, "class SdkGuestConversionSession")
 	if !strings.Contains(session, "Now() override { return ResendCooldown::Clock::now(); }") {
 		t.Error("SdkGuestConversionSession: no steady clock for the cooldown")
+	}
+}
+
+// A purchase entry that sent a guest to the conversion continues to the
+// checkout it was opening once the conversion is done and the guest clears
+// (GuestUpgradeContinuation, pinned in guest-conversion-tests.cpp); it used to
+// close back to where the user started. The plan card's "Create an account"
+// asked only for the conversion and does not continue.
+func TestGuestPurchaseContinuesAfterConversion(t *testing.T) {
+	root := repositoryRoot(t)
+	appDir := filepath.Join(root, "app", "src", "App")
+	read := func(name string) string {
+		source, err := os.ReadFile(filepath.Join(appDir, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(source)
+	}
+	window := read("MainWindow.xaml.cpp")
+	for _, signature := range []string{
+		"winrt::fire_and_forget MainWindow::ShowUpgradeSheet()",
+		"winrt::fire_and_forget MainWindow::ShowUpgradeCheckout(bool yearly)",
+	} {
+		if !strings.Contains(functionBody(window, signature), "DivertGuestToConversion(") {
+			t.Errorf("%s: a converted guest does not continue to its checkout", signature)
+		}
+	}
+	if !strings.Contains(functionBody(window, "void MainWindow::OnOpenUpgrade("), "login_->OpenGuestConversion();") {
+		t.Error("OnOpenUpgrade: the plan card's Create an account should open only the conversion")
+	}
+	divert := functionBody(window, "void MainWindow::DivertGuestToConversion(")
+	for _, want := range []string{
+		"guestUpgrade_.Divert(std::move(checkout));",
+		"if (done) self->guestUpgrade_.ConversionDone();",
+		"self->guestUpgrade_.ConversionClosed();",
+		"self->guestUpgrade_.Poll(self->balance_.guest);",
+	} {
+		if !strings.Contains(divert, want) {
+			t.Errorf("DivertGuestToConversion: missing %s", want)
+		}
+	}
+	if !strings.Contains(functionBody(window, "void MainWindow::OnBalanceChanged("), "guestUpgrade_.Poll(balance_.guest);") {
+		t.Error("OnBalanceChanged: the continuation does not wait for the guest to clear")
+	}
+	open := functionBody(read("LoginPage.cpp"), "winrt::fire_and_forget LoginPage::OpenGuestConversion(")
+	if !strings.Contains(open, "if (onClosed) onClosed(*done);") {
+		t.Error("OpenGuestConversion: does not report the close")
 	}
 }

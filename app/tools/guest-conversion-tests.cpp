@@ -208,6 +208,40 @@ void SendFailureAndResetDoNotHoldResend() {
   Expect("reset: no notice", !conversion.Notice());
 }
 
+// A purchase entry that sent a guest to the conversion continues to its
+// checkout once the conversion is done and the guest clears; it used to close
+// back to where the user started.
+void PurchaseContinuesAfterTheConversion() {
+  urnw::GuestUpgradeContinuation continuation;
+  int checkouts = 0;
+  continuation.Divert([&checkouts] { ++checkouts; });
+  continuation.Poll(/*isGuest=*/false);
+  Expect("continuation: not before the conversion is done", checkouts == 0);
+  continuation.ConversionDone();
+  continuation.ConversionClosed();
+  continuation.Poll(/*isGuest=*/true);  // the balance re-read is in flight
+  Expect("continuation: waits for the guest to clear", checkouts == 0);
+  continuation.Poll(/*isGuest=*/false);
+  Expect("continuation: opens the checkout", checkouts == 1);
+  continuation.Poll(false);
+  Expect("continuation: once", checkouts == 1);
+  Expect("continuation: spent", !continuation.Pending());
+}
+
+void CancelledConversionDoesNotContinue() {
+  urnw::GuestUpgradeContinuation continuation;
+  int checkouts = 0;
+  continuation.Divert([&checkouts] { ++checkouts; });
+  continuation.ConversionClosed();  // closed without adding a sign-in
+  continuation.Poll(false);
+  Expect("cancelled: no checkout", checkouts == 0);
+  Expect("cancelled: dropped", !continuation.Pending());
+  // a plain "Create an account" (no purchase) has nothing to continue
+  continuation.ConversionDone();
+  continuation.Poll(false);
+  Expect("no entry: no checkout", checkouts == 0);
+}
+
 }  // namespace
 
 int main() {
@@ -219,6 +253,8 @@ int main() {
   AnswerAfterResetIsDropped();
   RateLimitHoldsResendUntilItsRetryTime();
   SendFailureAndResetDoNotHoldResend();
+  PurchaseContinuesAfterTheConversion();
+  CancelledConversionDoesNotContinue();
   std::cout << (gCases - gFailures) << "/" << gCases << " guest conversion cases passed\n";
   return gFailures == 0 ? 0 : 1;
 }

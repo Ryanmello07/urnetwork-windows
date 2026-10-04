@@ -221,4 +221,51 @@ class GuestConversion {
   bool sending_ = false;
 };
 
+// A purchase entry (Get Pro, the upgrade sheet, the onboarding checkout) that
+// sent a guest to the conversion continues to the checkout it was opening once
+// the conversion is done and the network no longer reads as a guest. Without
+// it the conversion closed back to where the user started, and the upgrade
+// had to be opened again. A cancelled conversion drops it; the checkout stays
+// closed to a guest (the server's `guest` clears once the balance is re-read).
+class GuestUpgradeContinuation {
+ public:
+  // `checkout` opens what the entry was opening.
+  void Divert(std::function<void()> checkout) {
+    checkout_ = std::move(checkout);
+    converted_ = false;
+  }
+
+  // The sign-in was added and verified.
+  void ConversionDone() {
+    if (checkout_) converted_ = true;
+  }
+
+  // The conversion closed: a close before it was done drops the checkout.
+  void ConversionClosed() {
+    if (!converted_) checkout_ = nullptr;
+  }
+
+  // Called when the conversion closes and whenever the guest status changes;
+  // opens the checkout once, when the conversion is done and the network is no
+  // longer a guest.
+  void Poll(bool isGuest) {
+    if (!converted_ || !checkout_ || isGuest) return;
+    auto checkout = std::move(checkout_);
+    checkout_ = nullptr;
+    converted_ = false;
+    checkout();
+  }
+
+  void Clear() {
+    checkout_ = nullptr;
+    converted_ = false;
+  }
+
+  bool Pending() const { return checkout_ != nullptr; }
+
+ private:
+  std::function<void()> checkout_;
+  bool converted_ = false;
+};
+
 }  // namespace urnw

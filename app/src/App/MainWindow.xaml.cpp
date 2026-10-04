@@ -164,7 +164,9 @@ MainWindow::MainWindow() {
       auto self = weak.get();
       if (!self) return;
       if (self->balance_.guest) {
-        self->login().OpenGuestConversion();
+        self->DivertGuestToConversion([weak] {
+          if (auto self = weak.get()) self->ShowUpgradeSheet();
+        });
       } else {
         self->ShowUpgradeSheet();
       }
@@ -1248,6 +1250,8 @@ void MainWindow::OnBalanceChanged(urnw::BalanceSnapshot const& snapshot,
   ApplyBalance();
   // a refreshed guest is known only from the server's guest: relabel it
   if (guestChanged) ApplyNetworkIdentity();
+  // a converted guest's purchase continues once the server stops reporting a guest
+  guestUpgrade_.Poll(balance_.guest);
   if (becamePro) LaunchProCelebration();
 }
 
@@ -1475,7 +1479,9 @@ void MainWindow::NoteConnected() {
 // onboarding page picked (its own products page would only ask again).
 winrt::fire_and_forget MainWindow::ShowUpgradeCheckout(bool yearly) {
   if (balance_.guest) {  // no purchase for a guest network (ShowUpgradeSheet)
-    login_->OpenGuestConversion();
+    DivertGuestToConversion([weak = get_weak(), yearly] {
+      if (auto self = weak.get()) self->ShowUpgradeCheckout(yearly);
+    });
     co_return;
   }
   if (sheetOpen_) co_return;
@@ -1782,10 +1788,23 @@ void MainWindow::OnOpenUpgrade(IInspectable const&, RoutedEventArgs const&) {
   // a guest first creates a full account (the plan card's affordance reads
   // "Create an account" for them); checkout is for signed-in free accounts
   if (balance_.guest) {
+    // the plan card's "Create an account": the conversion is all it asked for
     login_->OpenGuestConversion();
     return;
   }
   ShowUpgradeSheet();
+}
+
+void MainWindow::DivertGuestToConversion(std::function<void()> checkout) {
+  guestUpgrade_.Divert(std::move(checkout));
+  login_->OpenGuestConversion([weak = get_weak()](bool done) {
+    auto self = weak.get();
+    if (!self) return;
+    if (done) self->guestUpgrade_.ConversionDone();
+    self->guestUpgrade_.ConversionClosed();
+    // the balance re-read may already have cleared the guest; else OnBalanceChanged
+    self->guestUpgrade_.Poll(self->balance_.guest);
+  });
 }
 
 void MainWindow::OnOpenRedeem(IInspectable const&, RoutedEventArgs const&) {
@@ -1800,7 +1819,9 @@ winrt::fire_and_forget MainWindow::ShowUpgradeSheet() {
   // No purchase for a legacy guest network: whatever was bought would stay
   // on a network with no login (every entry point lands here or checks first)
   if (balance_.guest) {
-    login_->OpenGuestConversion();
+    DivertGuestToConversion([weak = get_weak()] {
+      if (auto self = weak.get()) self->ShowUpgradeSheet();
+    });
     co_return;
   }
   if (sheetOpen_) co_return;  // only one ContentDialog can show at a time
@@ -1884,6 +1905,7 @@ void MainWindow::ApplyAuthState(urnw::AuthState state, std::string const& error)
     // existing account signing in never does
     if (login_->ConsumeNewNetwork()) ShowOnboarding();
   }
+  if (!loggedIn) guestUpgrade_.Clear();  // a purchase does not outlive its session
   if (!loggedIn && wasVisible) {
     // signed out: the flow starts over
     HideOnboarding();

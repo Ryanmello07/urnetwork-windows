@@ -18,6 +18,7 @@
 #include "BalanceSheets.h"
 #include "ConnectPage.h"
 #include "DeveloperPage.h"
+#include "GuestConversion.h"
 #include "LicensesPage.h"
 #include "LocationSheets.h"
 #include "LoginPage.h"
@@ -424,6 +425,11 @@ struct MainWindow : MainWindowT<MainWindow> {
   // ---- balance / plan (SubscriptionBalanceStore relay) ----
   void UpdateBalanceWarning();  // insufficient-balance InfoBar gating
   winrt::fire_and_forget ShowUpgradeSheet();
+  // A guest's purchase entry: the in-place conversion first, then `checkout`
+  // once it is done and the network no longer reads as a guest
+  // (GuestUpgradeContinuation).
+  void DivertGuestToConversion(std::function<void()> checkout);
+  urnw::GuestUpgradeContinuation guestUpgrade_;
   winrt::fire_and_forget ShowRedeemSheet();
 
   // ---- the in-app service manager (beta spec §3) ----
