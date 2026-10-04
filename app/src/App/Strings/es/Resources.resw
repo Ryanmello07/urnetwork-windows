@@ -4714,6 +4714,10 @@ del mundo</value>
     <value>Herramientas de la cuenta</value>
     <comment>Account panel: tools section heading</comment>
   </data>
+  <data name="site_add_sign_in_guest" xml:space="preserve">
+    <value>Añade una forma de iniciar sesión en esta red antes de comprar. Su plan y su saldo se quedan con ella.</value>
+    <comment>ur.io account: shown on a legacy guest network (one with no sign-in method) in place of checkout, and on the add sign-in method sheet. Adding a sign-in method converts the network in place: its plan and balance stay with it.</comment>
+  </data>
   <data name="site_app_add" xml:space="preserve">
     <value>Añadir</value>
     <comment>App wallets/blocked: add button</comment>
@@ -5101,6 +5105,10 @@ del mundo</value>
   <data name="site_app_pending" xml:space="preserve">
     <value>Pendiente</value>
     <comment>App wallets: pending payout status</comment>
+  </data>
+  <data name="site_app_phone" xml:space="preserve">
+    <value>Teléfono</value>
+    <comment>ur.io account profile: the label of a phone number sign-in method in the sign-in methods list.</comment>
   </data>
   <data name="site_app_plan" xml:space="preserve">
     <value>Plan</value>

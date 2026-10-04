@@ -4610,6 +4610,10 @@
     <value>账户工具</value>
     <comment>Account panel: tools section heading</comment>
   </data>
+  <data name="site_add_sign_in_guest" xml:space="preserve">
+    <value>购买前，请为此网络添加一种登录方式。其套餐和余额都会保留。</value>
+    <comment>ur.io account: shown on a legacy guest network (one with no sign-in method) in place of checkout, and on the add sign-in method sheet. Adding a sign-in method converts the network in place: its plan and balance stay with it.</comment>
+  </data>
   <data name="site_app_add" xml:space="preserve">
     <value>添加</value>
     <comment>App wallets/blocked: add button</comment>
@@ -4997,6 +5001,10 @@
   <data name="site_app_pending" xml:space="preserve">
     <value>待处理</value>
     <comment>App wallets: pending payout status</comment>
+  </data>
+  <data name="site_app_phone" xml:space="preserve">
+    <value>电话</value>
+    <comment>ur.io account profile: the label of a phone number sign-in method in the sign-in methods list.</comment>
   </data>
   <data name="site_app_plan" xml:space="preserve">
     <value>计划</value>
