@@ -4,7 +4,10 @@
 # Windows driver for MAIN's insufficient-balance case. The runner
 # (tests/runner/balance/main.go) invokes `<this> <verb> [arg]` and reads one
 # JSON object from stdout; the protocol is in tests/runner/RUN-MAIN.md
-# ("Driver protocol"). The driver itself is tests/insufficientbalance: it boots
+# ("Driver protocol"). The runner creates a fresh account per case and passes
+# it only as `setup <credentials-file>` (an absolute path to a private file);
+# URNETWORK_INSUFFICIENT_BALANCE_STATE is a fresh directory per case, and
+# teardown discards the VM so the next case signs in fresh. The driver itself is tests/insufficientbalance: it boots
 # the isolated Windows VM through build/all/windows/lib.sh, installs the MSI
 # that test-main.sh built, and drives the app by UI Automation.
 #

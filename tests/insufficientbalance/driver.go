@@ -62,13 +62,16 @@ func (self *driver) run(ctx context.Context, args []string) (any, error) {
 		}
 		return self.killSwitch(ctx, args[1] == "on")
 	}
+	if verb == "setup" {
+		if len(args) != 2 {
+			return nil, errors.New("usage: setup <credentials-file>")
+		}
+		return self.setup(ctx, args[1])
+	}
 	if len(args) != 1 {
 		return nil, fmt.Errorf("%s takes no arguments", verb)
 	}
-	switch verb {
-	case "setup":
-		return self.setup(ctx)
-	case "teardown":
+	if verb == "teardown" {
 		return struct{}{}, self.teardown(ctx)
 	}
 	st, err := self.liveState()
@@ -140,8 +143,9 @@ func (self *driver) guestInto(ctx context.Context, st *vmState, deadlineSeconds 
 	return nil
 }
 
-func (self *driver) setup(ctx context.Context) (any, error) {
-	creds, err := self.readCreds(self.env.credentials)
+// Boots a fresh VM and signs in the case's account from credentialsPath.
+func (self *driver) setup(ctx context.Context, credentialsPath string) (any, error) {
+	creds, err := self.readCreds(credentialsPath)
 	if err != nil {
 		return nil, err
 	}
@@ -151,6 +155,9 @@ func (self *driver) setup(ctx context.Context) (any, error) {
 	}
 	// a VM left by an interrupted attempt is never reused
 	if err := self.teardown(ctx); err != nil {
+		return nil, err
+	}
+	if err := recordCredentialsPath(self.env.stateDir, credentialsPath); err != nil {
 		return nil, err
 	}
 
@@ -374,9 +381,15 @@ func (self *driver) killSwitch(ctx context.Context, on bool) (any, error) {
 	return struct{}{}, nil
 }
 
-// Collects the app and service logs, removes private files and stops the VM.
-// Safe to call at any point, including before or after a partial setup.
-func (self *driver) teardown(ctx context.Context) error {
+// Collects the app and service logs, removes private files and the
+// credentials record, and stops the VM; its overlay (with the signed-in app)
+// is discarded, so the next case starts signed out. Safe to call at any
+// point, including before or after a partial setup.
+func (self *driver) teardown(ctx context.Context) (returnErr error) {
+	// also when stopping fails; the runner's next case uses a new state dir
+	defer func() {
+		returnErr = errors.Join(returnErr, removeCredentialsRecord(self.env.stateDir))
+	}()
 	st, err := loadState(self.env.stateDir)
 	if err != nil || st == nil {
 		return err
