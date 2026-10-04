@@ -935,7 +935,7 @@ func TestReleaseBuildStampsTheVersion(t *testing.T) {
 		{`"/p:UrVersionMinor=$month"`, "UR_VER_MINOR=$(UrVersionMinor);", props},
 		{`"/p:UrVersionPatch=$day"`, "UR_VER_PATCH=$(UrVersionPatch);", props},
 		{`"/p:UrVersionBuild=$build"`, "UR_VERSION_BUILD=$(UrVersionBuild);", props},
-		{`@("-p:UrMsiVersion=$msiVersion")`, "UrMsiVersion=$(UrMsiVersion)", wixProject},
+		{`"-p:UrMsiVersion=$msiVersion"`, "UrMsiVersion=$(UrMsiVersion)", wixProject},
 	} {
 		if count := strings.Count(urVersion, stamp.argument); count != 1 {
 			t.Errorf("UrVersion.ps1 builds %s %d times, want once", stamp.argument, count)
@@ -1159,6 +1159,129 @@ func TestInstallerContract(t *testing.T) {
 	}
 	if len(suppressed) != 2 || !suppressed["ICE03"] || !suppressed["ICE61"] {
 		t.Errorf("SuppressIces = %v, want exactly ICE03 and ICE61", suppressed)
+	}
+}
+
+// A package must not install over a newer urnetworkd.exe. Windows Installer
+// would skip ("disallow") each component whose installed key file is newer,
+// and the old product's removal would then delete those files, leaving the
+// machine with no service. The guard is an AppSearch for urnetworkd.exe where
+// INSTALLFOLDER puts it, at or above this build's FILEVERSION with the fourth
+// field plus one, and a launch condition on what it finds (Package.wxs).
+func TestInstallerRefusesAnOlderService(t *testing.T) {
+	root := repositoryRoot(t)
+	read := func(relative string) string {
+		data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(relative)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(data)
+	}
+	packageXML := parseXML(t, filepath.Join(root, "app", "installer", "Package.wxs"))
+
+	// The search: one secure property, holding a search of the folder the
+	// service is installed in, at depth 0, for urnetworkd.exe at the version
+	// Installer.wixproj derives.
+	var guard *xmlNode
+	for _, node := range packageXML.descendants(wixNamespace, "Property") {
+		if id, _ := node.attribute("Id"); id == "NEWER_URNETWORKD" {
+			guard = node
+		}
+	}
+	if guard == nil {
+		t.Fatal("Package.wxs has no NEWER_URNETWORKD search for an installed, newer urnetworkd.exe")
+	}
+	if secure, _ := guard.attribute("Secure"); !strings.EqualFold(secure, "yes") {
+		t.Errorf("NEWER_URNETWORKD Secure = %q, want yes", secure)
+	}
+	searches := guard.children(wixNamespace, "DirectorySearch")
+	if len(searches) != 1 {
+		t.Fatalf("NEWER_URNETWORKD holds %d DirectorySearch elements, want 1", len(searches))
+	}
+	for attribute, want := range map[string]string{"Path": "[ProgramFiles64Folder]URnetwork", "Depth": "0"} {
+		if got, _ := searches[0].attribute(attribute); got != want {
+			t.Errorf("the guard's DirectorySearch %s = %q, want %q", attribute, got, want)
+		}
+	}
+	fileSearches := searches[0].children(wixNamespace, "FileSearch")
+	if len(fileSearches) != 1 {
+		t.Fatalf("the guard's DirectorySearch holds %d FileSearch elements, want 1", len(fileSearches))
+	}
+	for attribute, want := range map[string]string{"Name": "urnetworkd.exe", "MinVersion": "$(var.UrNewerFileVersion)"} {
+		if got, _ := fileSearches[0].attribute(attribute); got != want {
+			t.Errorf("the guard's FileSearch %s = %q, want %q", attribute, got, want)
+		}
+	}
+
+	// That folder is where the service really goes: INSTALLFOLDER, named
+	// URnetwork under ProgramFiles64Folder, directly holds the ServiceExe
+	// component and its urnetworkd.exe. AppSearch runs before directories
+	// resolve, so the search cannot name INSTALLFOLDER itself.
+	var installFolder *xmlNode
+	for _, standard := range packageXML.descendants(wixNamespace, "StandardDirectory") {
+		if id, _ := standard.attribute("Id"); id == "ProgramFiles64Folder" {
+			installFolder = findByID(standard.children(wixNamespace, "Directory"), "INSTALLFOLDER")
+		}
+	}
+	if installFolder == nil {
+		t.Fatal("INSTALLFOLDER is no longer a Directory directly under ProgramFiles64Folder; move the guard's search with it")
+	}
+	if name, _ := installFolder.attribute("Name"); name != "URnetwork" {
+		t.Errorf("INSTALLFOLDER Name = %q, but the guard searches [ProgramFiles64Folder]URnetwork", name)
+	}
+	service := findByID(installFolder.children(wixNamespace, "Component"), "ServiceExe")
+	if service == nil {
+		t.Fatal("the ServiceExe component is no longer directly in INSTALLFOLDER, where the guard searches")
+	}
+	installsService := false
+	for _, file := range service.children(wixNamespace, "File") {
+		if source, _ := file.attribute("Source"); strings.HasSuffix(source, `\urnetworkd.exe`) {
+			installsService = true
+		}
+	}
+	if !installsService {
+		t.Error("ServiceExe no longer installs urnetworkd.exe, the file the guard searches for")
+	}
+
+	// The refusal: allowed only for the installed product itself (repair,
+	// uninstall), never for a package installing over a newer service.
+	refuses := false
+	for _, launch := range packageXML.descendants(wixNamespace, "Launch") {
+		condition, _ := launch.attribute("Condition")
+		message, _ := launch.attribute("Message")
+		if condition == "Installed OR NOT NEWER_URNETWORKD" && strings.TrimSpace(message) != "" {
+			refuses = true
+		}
+	}
+	if !refuses {
+		t.Error(`Package.wxs has no Launch Condition="Installed OR NOT NEWER_URNETWORKD" with a message`)
+	}
+
+	// The version: Installer.wixproj derives UrNewerFileVersion from this
+	// build's FILEVERSION, the fourth field plus one, with an unstamped
+	// build's 0.0.0.0 as the default, and hands it to WiX.
+	wixProject := read("app/installer/Installer.wixproj")
+	for _, line := range []string{
+		`<UrFileVersion Condition="'$(UrFileVersion)'==''">0.0.0.0</UrFileVersion>`,
+		`<UrNewerFileVersion Condition="$([System.Version]::Parse('$(UrFileVersion)').Revision) &gt;= 0">` +
+			`$([System.Version]::Parse('$(UrFileVersion)').ToString(3)).` +
+			`$([MSBuild]::Add($([System.Version]::Parse('$(UrFileVersion)').Revision), 1))</UrNewerFileVersion>`,
+		`<DefineConstants>BinDir=$(BinDir);UrMsiVersion=$(UrMsiVersion);UrNewerFileVersion=$(UrNewerFileVersion)</DefineConstants>`,
+	} {
+		if consecutiveLines(wixProject, line) < 0 {
+			t.Errorf("Installer.wixproj is missing %s", line)
+		}
+	}
+
+	// And every stamped build passes its FILEVERSION: UrVersion.ps1's WiX
+	// arguments, which build.ps1 splats into the WiX build, and CI's MSI build.
+	if count := strings.Count(read("app/tools/UrVersion.ps1"), `"-p:UrFileVersion=$year.$month.$day.$build"`); count != 1 {
+		t.Errorf("UrVersion.ps1 builds -p:UrFileVersion %d times, want once", count)
+	}
+	const ciFileVersion = "-p:UrFileVersion=${{ needs.build-sdk.outputs.version_major }}.${{ needs.build-sdk.outputs.version_minor }}." +
+		"${{ needs.build-sdk.outputs.version_patch }}.${{ needs.build-sdk.outputs.version_build }}"
+	if count := strings.Count(read(".github/workflows/build-and-test.yml"), ciFileVersion); count != 1 {
+		t.Errorf("CI's MSI build passes %q %d times, want once", ciFileVersion, count)
 	}
 }
 

@@ -59,11 +59,43 @@
          42 seconds, so two release codes can share one ProductVersion. The
          ProductCode is regenerated on every build, so without this the second
          package would install beside the first instead of replacing it. With
-         it, either package replaces the other, whichever is installed second.
+         it, the package installed second replaces the first; when that is the
+         older code, its exes are older too, and the guard below refuses it.
          It makes only the upgrade row inclusive; the downgrade row stays
          exclusive, and Installer.wixproj suppresses ICE61 for it. -->
     <MajorUpgrade Schedule="afterInstallInitialize" AllowSameVersionUpgrades="yes"
                   DowngradeErrorMessage="A newer version of URnetwork is already installed." />
+
+    <!-- Refuse to install over a newer urnetworkd.exe. Windows Installer costs
+         every component before RemoveExistingProducts runs. A component whose
+         key file on disk has a higher version is skipped ("Disallowing
+         installation of component ... since the same component with higher
+         versioned keyfile exists"), and the old product's removal then
+         deletes that file. Such an install ends with exit 0, the product
+         registered, and no URnetwork.exe, no urnetworkd.exe and no service.
+         An older code that shares this ProductVersion can do that
+         (AllowSameVersionUpgrades above), and so can any package with a
+         higher ProductVersion but older exes.
+
+         The search looks where INSTALLFOLDER puts the service,
+         [ProgramFiles64Folder]URnetwork: AppSearch runs before the
+         directories are resolved. Its MinVersion is UrNewerFileVersion, this
+         build's FILEVERSION with the fourth field plus one
+         (Installer.wixproj). The Signature table also compares the file's
+         language when its version equals MinVersion, and Languages is empty
+         here, so a file at exactly that version may not match. The plus one
+         keeps the guard clear of that edge: an equal or older urnetworkd.exe
+         is never found, and one at least two steps newer always is. (One
+         step is under 3 s of code time.) The exes of every MSI built before
+         versions were stamped are 0.0.0.0, so those installs are never
+         found. -->
+    <Property Id="NEWER_URNETWORKD" Secure="yes">
+      <DirectorySearch Id="UrnInstalledService" Path="[ProgramFiles64Folder]URnetwork" Depth="0">
+        <FileSearch Name="urnetworkd.exe" MinVersion="$(var.UrNewerFileVersion)" />
+      </DirectorySearch>
+    </Property>
+    <Launch Condition="Installed OR NOT NEWER_URNETWORKD"
+            Message="A newer build of URnetwork is already installed. Install that build or a later one." />
     <MediaTemplate EmbedCab="yes" />
 
     <!-- The app icon, for Add/Remove Programs and the Start Menu shortcut.

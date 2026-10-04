@@ -113,7 +113,10 @@ func deriveUrVersion(input string, now time.Time) (urVersion, error) {
 		fmt.Sprintf("/p:UrVersionPatch=%d", version.Patch),
 		fmt.Sprintf("/p:UrVersionBuild=%d", version.Build),
 	}
-	version.WixArgs = []string{"-p:UrMsiVersion=" + version.Msi}
+	version.WixArgs = []string{
+		"-p:UrMsiVersion=" + version.Msi,
+		fmt.Sprintf("-p:UrFileVersion=%d.%d.%d.%d", version.Major, version.Minor, version.Patch, version.Build),
+	}
 	return version, nil
 }
 
@@ -273,7 +276,7 @@ func TestUrVersionOracleFixedVectors(t *testing.T) {
 		"/p:UrVersionBuild=43098",
 	}
 	if strings.Join(got.MsbuildArgs, " ") != strings.Join(wantMsbuild, " ") ||
-		strings.Join(got.WixArgs, " ") != "-p:UrMsiVersion=26.10.6139" {
+		strings.Join(got.WixArgs, " ") != "-p:UrMsiVersion=26.10.6139 -p:UrFileVersion=2026.10.3.43098" {
 		t.Errorf("arguments: msbuild %q wix %q", got.MsbuildArgs, got.WixArgs)
 	}
 	// -beta changes the string and nothing else.
