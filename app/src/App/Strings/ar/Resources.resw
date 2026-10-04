@@ -3718,24 +3718,84 @@
     <value>متاح حتى {}</value>
     <comment>Onboarding offer screen: the static deadline sentence; the placeholder is a local date and time.</comment>
   </data>
-  <data name="offer_cta_start_trial_months_free" xml:space="preserve">
+  <data name="offer_cta_start_trial_months_free.zero" xml:space="preserve">
+    <value>ابدأ التجربة المجانية مع {} شهر مجانًا</value>
+    <comment>Onboarding offer screen: the single primary button. The number is the months the discount equals.</comment>
+  </data>
+  <data name="offer_cta_start_trial_months_free.one" xml:space="preserve">
+    <value>ابدأ التجربة المجانية مع شهر واحد مجانًا</value>
+    <comment>Onboarding offer screen: the single primary button. The number is the months the discount equals.</comment>
+  </data>
+  <data name="offer_cta_start_trial_months_free.two" xml:space="preserve">
+    <value>ابدأ التجربة المجانية مع شهرين مجانًا</value>
+    <comment>Onboarding offer screen: the single primary button. The number is the months the discount equals.</comment>
+  </data>
+  <data name="offer_cta_start_trial_months_free.few" xml:space="preserve">
     <value>ابدأ التجربة المجانية مع {} أشهر مجانًا</value>
+    <comment>Onboarding offer screen: the single primary button. The number is the months the discount equals.</comment>
+  </data>
+  <data name="offer_cta_start_trial_months_free.many" xml:space="preserve">
+    <value>ابدأ التجربة المجانية مع {} شهرًا مجانًا</value>
+    <comment>Onboarding offer screen: the single primary button. The number is the months the discount equals.</comment>
+  </data>
+  <data name="offer_cta_start_trial_months_free.other" xml:space="preserve">
+    <value>ابدأ التجربة المجانية مع {} شهر مجانًا</value>
     <comment>Onboarding offer screen: the single primary button. The number is the months the discount equals.</comment>
   </data>
   <data name="offer_first_year_price" xml:space="preserve">
     <value>{} لسنتك الأولى</value>
     <comment>Plan card with the welcome offer: the billed first-year amount (most prominent line).</comment>
   </data>
-  <data name="offer_months_free_headline" xml:space="preserve">
+  <data name="offer_months_free_headline.zero" xml:space="preserve">
+    <value>{} شهر من Pro مجانًا</value>
+    <comment>Onboarding offer screen headline. The number is the months the discount equals.</comment>
+  </data>
+  <data name="offer_months_free_headline.one" xml:space="preserve">
+    <value>شهر واحد من Pro مجانًا</value>
+    <comment>Onboarding offer screen headline. The number is the months the discount equals.</comment>
+  </data>
+  <data name="offer_months_free_headline.two" xml:space="preserve">
+    <value>شهران من Pro مجانًا</value>
+    <comment>Onboarding offer screen headline. The number is the months the discount equals.</comment>
+  </data>
+  <data name="offer_months_free_headline.few" xml:space="preserve">
     <value>{} أشهر من Pro مجانًا</value>
+    <comment>Onboarding offer screen headline. The number is the months the discount equals.</comment>
+  </data>
+  <data name="offer_months_free_headline.many" xml:space="preserve">
+    <value>{} شهرًا من Pro مجانًا</value>
+    <comment>Onboarding offer screen headline. The number is the months the discount equals.</comment>
+  </data>
+  <data name="offer_months_free_headline.other" xml:space="preserve">
+    <value>{} شهر من Pro مجانًا</value>
     <comment>Onboarding offer screen headline. The number is the months the discount equals.</comment>
   </data>
   <data name="offer_percent_off_first_year" xml:space="preserve">
     <value>خصم {}% على سنتك الأولى</value>
     <comment>Onboarding offer screen sub-line under the headline. The number is the percent off the first year.</comment>
   </data>
-  <data name="offer_terms_first_year" xml:space="preserve">
+  <data name="offer_terms_first_year.zero" xml:space="preserve">
+    <value>{0} يوم مجانًا، ثم {1} لسنتك الأولى، ثم {2}/سنة. يمكنك الإلغاء في أي وقت.</value>
+    <comment>Plan picker with the welcome offer: the terms line under the button (trial, discounted first year, renewal price).</comment>
+  </data>
+  <data name="offer_terms_first_year.one" xml:space="preserve">
+    <value>يوم واحد مجانًا، ثم {1} لسنتك الأولى، ثم {2}/سنة. يمكنك الإلغاء في أي وقت.</value>
+    <comment>Plan picker with the welcome offer: the terms line under the button (trial, discounted first year, renewal price).</comment>
+  </data>
+  <data name="offer_terms_first_year.two" xml:space="preserve">
+    <value>يومان مجانًا، ثم {1} لسنتك الأولى، ثم {2}/سنة. يمكنك الإلغاء في أي وقت.</value>
+    <comment>Plan picker with the welcome offer: the terms line under the button (trial, discounted first year, renewal price).</comment>
+  </data>
+  <data name="offer_terms_first_year.few" xml:space="preserve">
+    <value>{0} أيام مجانًا، ثم {1} لسنتك الأولى، ثم {2}/سنة. يمكنك الإلغاء في أي وقت.</value>
+    <comment>Plan picker with the welcome offer: the terms line under the button (trial, discounted first year, renewal price).</comment>
+  </data>
+  <data name="offer_terms_first_year.many" xml:space="preserve">
     <value>{0} يومًا مجانًا، ثم {1} لسنتك الأولى، ثم {2}/سنة. يمكنك الإلغاء في أي وقت.</value>
+    <comment>Plan picker with the welcome offer: the terms line under the button (trial, discounted first year, renewal price).</comment>
+  </data>
+  <data name="offer_terms_first_year.other" xml:space="preserve">
+    <value>{0} يوم مجانًا، ثم {1} لسنتك الأولى، ثم {2}/سنة. يمكنك الإلغاء في أي وقت.</value>
     <comment>Plan picker with the welcome offer: the terms line under the button (trial, discounted first year, renewal price).</comment>
   </data>
   <data name="offer_then_regular_price" xml:space="preserve">
@@ -3947,8 +4007,28 @@
     <value>وفّر {}%</value>
     <comment>Plan picker: the saving badge on the yearly card; the number is the whole percent saved against twelve monthly payments.</comment>
   </data>
-  <data name="plan_terms_yearly" xml:space="preserve">
+  <data name="plan_terms_yearly.zero" xml:space="preserve">
+    <value>{0} يوم مجانًا، ثم {1}/سنة. يمكنك الإلغاء في أي وقت.</value>
+    <comment>Plan picker: the terms line under the button for the yearly plan with its trial.</comment>
+  </data>
+  <data name="plan_terms_yearly.one" xml:space="preserve">
+    <value>يوم واحد مجانًا، ثم {1}/سنة. يمكنك الإلغاء في أي وقت.</value>
+    <comment>Plan picker: the terms line under the button for the yearly plan with its trial.</comment>
+  </data>
+  <data name="plan_terms_yearly.two" xml:space="preserve">
+    <value>يومان مجانًا، ثم {1}/سنة. يمكنك الإلغاء في أي وقت.</value>
+    <comment>Plan picker: the terms line under the button for the yearly plan with its trial.</comment>
+  </data>
+  <data name="plan_terms_yearly.few" xml:space="preserve">
+    <value>{0} أيام مجانًا، ثم {1}/سنة. يمكنك الإلغاء في أي وقت.</value>
+    <comment>Plan picker: the terms line under the button for the yearly plan with its trial.</comment>
+  </data>
+  <data name="plan_terms_yearly.many" xml:space="preserve">
     <value>{0} يومًا مجانًا، ثم {1}/سنة. يمكنك الإلغاء في أي وقت.</value>
+    <comment>Plan picker: the terms line under the button for the yearly plan with its trial.</comment>
+  </data>
+  <data name="plan_terms_yearly.other" xml:space="preserve">
+    <value>{0} يوم مجانًا، ثم {1}/سنة. يمكنك الإلغاء في أي وقت.</value>
     <comment>Plan picker: the terms line under the button for the yearly plan with its trial.</comment>
   </data>
   <data name="please_install_phantom_or_solflare_to_use_this" xml:space="preserve">
@@ -4150,9 +4230,6 @@
   <data name="provider_count.other" xml:space="preserve">
     <value>{} مزود</value>
     <comment>A label that shows the number of providers for a location. The argument is the number of providers.</comment>
-  </data>
-  <data name="provider_count_int" xml:space="preserve">
-    <value>{} مزود</value>
   </data>
   <data name="provider_identities" xml:space="preserve">
     <value>هويات المزودين</value>
@@ -4746,7 +4823,27 @@
     <value>اكتبها واحفظها في مكان آمن. إذا فقدتها، ستفقد الوصول إلى حسابك.</value>
     <comment>Seedphrase sheet: advice to write the seedphrase down and store it safely.</comment>
   </data>
-  <data name="seedphrase_word_count_warning" xml:space="preserve">
+  <data name="seedphrase_word_count_warning.zero" xml:space="preserve">
+    <value>هذه {} كلمة — عبارة الاسترداد تتكون من 12 أو 24 كلمة</value>
+    <comment>Login: warning when the pasted seedphrase has {count} words instead of 12 or 24.</comment>
+  </data>
+  <data name="seedphrase_word_count_warning.one" xml:space="preserve">
+    <value>هذه كلمة واحدة — عبارة الاسترداد تتكون من 12 أو 24 كلمة</value>
+    <comment>Login: warning when the pasted seedphrase has {count} words instead of 12 or 24.</comment>
+  </data>
+  <data name="seedphrase_word_count_warning.two" xml:space="preserve">
+    <value>هاتان كلمتان — عبارة الاسترداد تتكون من 12 أو 24 كلمة</value>
+    <comment>Login: warning when the pasted seedphrase has {count} words instead of 12 or 24.</comment>
+  </data>
+  <data name="seedphrase_word_count_warning.few" xml:space="preserve">
+    <value>هذه {} كلمات — عبارة الاسترداد تتكون من 12 أو 24 كلمة</value>
+    <comment>Login: warning when the pasted seedphrase has {count} words instead of 12 or 24.</comment>
+  </data>
+  <data name="seedphrase_word_count_warning.many" xml:space="preserve">
+    <value>هذه {} كلمة — عبارة الاسترداد تتكون من 12 أو 24 كلمة</value>
+    <comment>Login: warning when the pasted seedphrase has {count} words instead of 12 or 24.</comment>
+  </data>
+  <data name="seedphrase_word_count_warning.other" xml:space="preserve">
     <value>هذه {} كلمة — عبارة الاسترداد تتكون من 12 أو 24 كلمة</value>
     <comment>Login: warning when the pasted seedphrase has {count} words instead of 12 or 24.</comment>
   </data>
@@ -5848,8 +5945,28 @@
     <value>المتابعة بالخطة المجانية</value>
     <comment>Final offer screen: the always-visible decline link.</comment>
   </data>
-  <data name="site_offer_cta" xml:space="preserve">
+  <data name="site_offer_cta.zero" xml:space="preserve">
+    <value>ابدأ التجربة المجانية مع {} شهر مجانًا</value>
+    <comment>Final offer screen: the one primary button. {months} is a whole number.</comment>
+  </data>
+  <data name="site_offer_cta.one" xml:space="preserve">
+    <value>ابدأ التجربة المجانية مع شهر واحد مجانًا</value>
+    <comment>Final offer screen: the one primary button. {months} is a whole number.</comment>
+  </data>
+  <data name="site_offer_cta.two" xml:space="preserve">
+    <value>ابدأ التجربة المجانية مع شهرين مجانًا</value>
+    <comment>Final offer screen: the one primary button. {months} is a whole number.</comment>
+  </data>
+  <data name="site_offer_cta.few" xml:space="preserve">
     <value>ابدأ التجربة المجانية مع {} أشهر مجانًا</value>
+    <comment>Final offer screen: the one primary button. {months} is a whole number.</comment>
+  </data>
+  <data name="site_offer_cta.many" xml:space="preserve">
+    <value>ابدأ التجربة المجانية مع {} شهرًا مجانًا</value>
+    <comment>Final offer screen: the one primary button. {months} is a whole number.</comment>
+  </data>
+  <data name="site_offer_cta.other" xml:space="preserve">
+    <value>ابدأ التجربة المجانية مع {} شهر مجانًا</value>
     <comment>Final offer screen: the one primary button. {months} is a whole number.</comment>
   </data>
   <data name="site_offer_day_n" xml:space="preserve">
@@ -5864,8 +5981,28 @@
     <value>{} لسنتك الأولى</value>
     <comment>Welcome-offer card: the discounted first-year line. {price} is a formatted amount.</comment>
   </data>
-  <data name="site_offer_headline" xml:space="preserve">
+  <data name="site_offer_headline.zero" xml:space="preserve">
+    <value>{} شهر من Pro مجانًا</value>
+    <comment>Final offer screen: the headline. {months} is a whole number.</comment>
+  </data>
+  <data name="site_offer_headline.one" xml:space="preserve">
+    <value>شهر واحد من Pro مجانًا</value>
+    <comment>Final offer screen: the headline. {months} is a whole number.</comment>
+  </data>
+  <data name="site_offer_headline.two" xml:space="preserve">
+    <value>شهران من Pro مجانًا</value>
+    <comment>Final offer screen: the headline. {months} is a whole number.</comment>
+  </data>
+  <data name="site_offer_headline.few" xml:space="preserve">
     <value>{} أشهر من Pro مجانًا</value>
+    <comment>Final offer screen: the headline. {months} is a whole number.</comment>
+  </data>
+  <data name="site_offer_headline.many" xml:space="preserve">
+    <value>{} شهرًا من Pro مجانًا</value>
+    <comment>Final offer screen: the headline. {months} is a whole number.</comment>
+  </data>
+  <data name="site_offer_headline.other" xml:space="preserve">
+    <value>{} شهر من Pro مجانًا</value>
     <comment>Final offer screen: the headline. {months} is a whole number.</comment>
   </data>
   <data name="site_offer_sheet_line" xml:space="preserve">
@@ -5980,8 +6117,28 @@
     <value>وفّر {}%</value>
     <comment>Plan picker: the saving badge on the yearly card. {percent} is a whole number.</comment>
   </data>
-  <data name="site_plan_trial_terms" xml:space="preserve">
+  <data name="site_plan_trial_terms.zero" xml:space="preserve">
+    <value>{0} يوم مجانًا، ثم {1}/سنة. إلغاء في أي وقت.</value>
+    <comment>Under the yearly CTA: the trial terms. {price} is the yearly amount.</comment>
+  </data>
+  <data name="site_plan_trial_terms.one" xml:space="preserve">
+    <value>يوم واحد مجانًا، ثم {1}/سنة. إلغاء في أي وقت.</value>
+    <comment>Under the yearly CTA: the trial terms. {price} is the yearly amount.</comment>
+  </data>
+  <data name="site_plan_trial_terms.two" xml:space="preserve">
+    <value>يومان مجانًا، ثم {1}/سنة. إلغاء في أي وقت.</value>
+    <comment>Under the yearly CTA: the trial terms. {price} is the yearly amount.</comment>
+  </data>
+  <data name="site_plan_trial_terms.few" xml:space="preserve">
+    <value>{0} أيام مجانًا، ثم {1}/سنة. إلغاء في أي وقت.</value>
+    <comment>Under the yearly CTA: the trial terms. {price} is the yearly amount.</comment>
+  </data>
+  <data name="site_plan_trial_terms.many" xml:space="preserve">
     <value>{0} يومًا مجانًا، ثم {1}/سنة. إلغاء في أي وقت.</value>
+    <comment>Under the yearly CTA: the trial terms. {price} is the yearly amount.</comment>
+  </data>
+  <data name="site_plan_trial_terms.other" xml:space="preserve">
+    <value>{0} يوم مجانًا، ثم {1}/سنة. إلغاء في أي وقت.</value>
     <comment>Under the yearly CTA: the trial terms. {price} is the yearly amount.</comment>
   </data>
   <data name="site_principal" xml:space="preserve">
@@ -7200,10 +7357,22 @@
     <value>تحصل على بيانات مجانية كل يوم.</value>
     <comment>Detail line under the onboarding data page title.</comment>
   </data>
-  <data name="you_have_1_other_device_online" xml:space="preserve">
+  <data name="you_have_n_other_devices_online.zero" xml:space="preserve">
+    <value>ليس لديك أي أجهزة أخرى متصلة</value>
+  </data>
+  <data name="you_have_n_other_devices_online.one" xml:space="preserve">
     <value>لديك جهاز آخر متصل</value>
   </data>
-  <data name="you_have_n_other_devices_online" xml:space="preserve">
+  <data name="you_have_n_other_devices_online.two" xml:space="preserve">
+    <value>لديك جهازان آخران متصلان</value>
+  </data>
+  <data name="you_have_n_other_devices_online.few" xml:space="preserve">
+    <value>لديك {} أجهزة أخرى متصلة</value>
+  </data>
+  <data name="you_have_n_other_devices_online.many" xml:space="preserve">
+    <value>لديك {} جهازًا آخر متصلًا</value>
+  </data>
+  <data name="you_have_n_other_devices_online.other" xml:space="preserve">
     <value>لديك {} من الأجهزة الأخرى المتصلة</value>
   </data>
   <data name="you_ll_unlock_even_faster_speeds_and_first_dibs" xml:space="preserve">

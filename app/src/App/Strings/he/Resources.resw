@@ -2402,7 +2402,19 @@
     <value>זמין עד {}</value>
     <comment>Onboarding offer screen: the static deadline sentence; the placeholder is a local date and time.</comment>
   </data>
-  <data name="offer_cta_start_trial_months_free" xml:space="preserve">
+  <data name="offer_cta_start_trial_months_free.one" xml:space="preserve">
+    <value>התחילו ניסיון בחינם עם חודש אחד במתנה</value>
+    <comment>Onboarding offer screen: the single primary button. The number is the months the discount equals.</comment>
+  </data>
+  <data name="offer_cta_start_trial_months_free.two" xml:space="preserve">
+    <value>התחילו ניסיון בחינם עם חודשיים במתנה</value>
+    <comment>Onboarding offer screen: the single primary button. The number is the months the discount equals.</comment>
+  </data>
+  <data name="offer_cta_start_trial_months_free.many" xml:space="preserve">
+    <value>התחילו ניסיון בחינם עם {} חודשים במתנה</value>
+    <comment>Onboarding offer screen: the single primary button. The number is the months the discount equals.</comment>
+  </data>
+  <data name="offer_cta_start_trial_months_free.other" xml:space="preserve">
     <value>התחילו ניסיון בחינם עם {} חודשים במתנה</value>
     <comment>Onboarding offer screen: the single primary button. The number is the months the discount equals.</comment>
   </data>
@@ -2410,7 +2422,19 @@
     <value>{} לשנה הראשונה</value>
     <comment>Plan card with the welcome offer: the billed first-year amount (most prominent line).</comment>
   </data>
-  <data name="offer_months_free_headline" xml:space="preserve">
+  <data name="offer_months_free_headline.one" xml:space="preserve">
+    <value>חודש Pro אחד בחינם</value>
+    <comment>Onboarding offer screen headline. The number is the months the discount equals.</comment>
+  </data>
+  <data name="offer_months_free_headline.two" xml:space="preserve">
+    <value>חודשיים של Pro בחינם</value>
+    <comment>Onboarding offer screen headline. The number is the months the discount equals.</comment>
+  </data>
+  <data name="offer_months_free_headline.many" xml:space="preserve">
+    <value>{} חודשי Pro בחינם</value>
+    <comment>Onboarding offer screen headline. The number is the months the discount equals.</comment>
+  </data>
+  <data name="offer_months_free_headline.other" xml:space="preserve">
     <value>{} חודשי Pro בחינם</value>
     <comment>Onboarding offer screen headline. The number is the months the discount equals.</comment>
   </data>
@@ -2418,7 +2442,19 @@
     <value>{}% הנחה על השנה הראשונה</value>
     <comment>Onboarding offer screen sub-line under the headline. The number is the percent off the first year.</comment>
   </data>
-  <data name="offer_terms_first_year" xml:space="preserve">
+  <data name="offer_terms_first_year.one" xml:space="preserve">
+    <value>יום אחד בחינם, לאחר מכן {1} לשנה הראשונה, ואז {2}/שנה. אפשר לבטל בכל עת.</value>
+    <comment>Plan picker with the welcome offer: the terms line under the button (trial, discounted first year, renewal price).</comment>
+  </data>
+  <data name="offer_terms_first_year.two" xml:space="preserve">
+    <value>יומיים בחינם, לאחר מכן {1} לשנה הראשונה, ואז {2}/שנה. אפשר לבטל בכל עת.</value>
+    <comment>Plan picker with the welcome offer: the terms line under the button (trial, discounted first year, renewal price).</comment>
+  </data>
+  <data name="offer_terms_first_year.many" xml:space="preserve">
+    <value>{0} ימים בחינם, לאחר מכן {1} לשנה הראשונה, ואז {2}/שנה. אפשר לבטל בכל עת.</value>
+    <comment>Plan picker with the welcome offer: the terms line under the button (trial, discounted first year, renewal price).</comment>
+  </data>
+  <data name="offer_terms_first_year.other" xml:space="preserve">
     <value>{0} ימים בחינם, לאחר מכן {1} לשנה הראשונה, ואז {2}/שנה. אפשר לבטל בכל עת.</value>
     <comment>Plan picker with the welcome offer: the terms line under the button (trial, discounted first year, renewal price).</comment>
   </data>
@@ -2591,7 +2627,19 @@
     <value>חיסכון של {}%</value>
     <comment>Plan picker: the saving badge on the yearly card; the number is the whole percent saved against twelve monthly payments.</comment>
   </data>
-  <data name="plan_terms_yearly" xml:space="preserve">
+  <data name="plan_terms_yearly.one" xml:space="preserve">
+    <value>יום אחד בחינם, לאחר מכן {1}/שנה. אפשר לבטל בכל עת.</value>
+    <comment>Plan picker: the terms line under the button for the yearly plan with its trial.</comment>
+  </data>
+  <data name="plan_terms_yearly.two" xml:space="preserve">
+    <value>יומיים בחינם, לאחר מכן {1}/שנה. אפשר לבטל בכל עת.</value>
+    <comment>Plan picker: the terms line under the button for the yearly plan with its trial.</comment>
+  </data>
+  <data name="plan_terms_yearly.many" xml:space="preserve">
+    <value>{0} ימים בחינם, לאחר מכן {1}/שנה. אפשר לבטל בכל עת.</value>
+    <comment>Plan picker: the terms line under the button for the yearly plan with its trial.</comment>
+  </data>
+  <data name="plan_terms_yearly.other" xml:space="preserve">
     <value>{0} ימים בחינם, לאחר מכן {1}/שנה. אפשר לבטל בכל עת.</value>
     <comment>Plan picker: the terms line under the button for the yearly plan with its trial.</comment>
   </data>
@@ -2730,9 +2778,6 @@
   <data name="provider_count.other" xml:space="preserve">
     <value>{} ספקים</value>
     <comment>A label that shows the number of providers for a location. The argument is the number of providers.</comment>
-  </data>
-  <data name="provider_count_int" xml:space="preserve">
-    <value>{} ספקים</value>
   </data>
   <data name="provider_identities" xml:space="preserve">
     <value>זהויות ספקים</value>
@@ -3217,7 +3262,19 @@
     <value>כתבו אותו ושמרו אותו במקום בטוח. אם תאבדו אותו, תאבדו את הגישה לחשבון שלכם.</value>
     <comment>Seedphrase sheet: advice to write the seedphrase down and store it safely.</comment>
   </data>
-  <data name="seedphrase_word_count_warning" xml:space="preserve">
+  <data name="seedphrase_word_count_warning.one" xml:space="preserve">
+    <value>זו מילה אחת — ביטוי סיד הוא 12 או 24 מילים</value>
+    <comment>Login: warning when the pasted seedphrase has {count} words instead of 12 or 24.</comment>
+  </data>
+  <data name="seedphrase_word_count_warning.two" xml:space="preserve">
+    <value>אלה שתי מילים — ביטוי סיד הוא 12 או 24 מילים</value>
+    <comment>Login: warning when the pasted seedphrase has {count} words instead of 12 or 24.</comment>
+  </data>
+  <data name="seedphrase_word_count_warning.many" xml:space="preserve">
+    <value>אלה {} מילים — ביטוי סיד הוא 12 או 24 מילים</value>
+    <comment>Login: warning when the pasted seedphrase has {count} words instead of 12 or 24.</comment>
+  </data>
+  <data name="seedphrase_word_count_warning.other" xml:space="preserve">
     <value>אלה {} מילים — ביטוי סיד הוא 12 או 24 מילים</value>
     <comment>Login: warning when the pasted seedphrase has {count} words instead of 12 or 24.</comment>
   </data>
@@ -4272,10 +4329,16 @@
     <value>אתה מקבל 3 GiB/יום לכל החיים</value>
     <comment>Text displayed in a scrollable view within a VStack in the body of a view that is displayed when the user is viewing their referral code.</comment>
   </data>
-  <data name="you_have_1_other_device_online" xml:space="preserve">
+  <data name="you_have_n_other_devices_online.one" xml:space="preserve">
     <value>יש לך מכשיר נוסף אחד מחובר</value>
   </data>
-  <data name="you_have_n_other_devices_online" xml:space="preserve">
+  <data name="you_have_n_other_devices_online.two" xml:space="preserve">
+    <value>יש לך שני מכשירים נוספים מחוברים</value>
+  </data>
+  <data name="you_have_n_other_devices_online.many" xml:space="preserve">
+    <value>יש לך {} מכשירים נוספים מחוברים</value>
+  </data>
+  <data name="you_have_n_other_devices_online.other" xml:space="preserve">
     <value>יש לך {} מכשירים נוספים מחוברים</value>
   </data>
   <data name="you_ll_unlock_even_faster_speeds_and_first_dibs" xml:space="preserve">

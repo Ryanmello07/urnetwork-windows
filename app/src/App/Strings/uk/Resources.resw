@@ -685,7 +685,7 @@
     <comment>Onboarding Carousel</comment>
   </data>
   <data name="by_default_you_get_10_gib_month_here_s_how_you" xml:space="preserve">
-    <value>За замовчуванням ви отримуєте 10 ГіБ/місяць. Ось як можна отримати додаткову пропускну здатність:</value>
+    <value>За замовчуванням ви отримуєте 10 GiB/місяць. Ось як можна отримати додаткову пропускну здатність:</value>
     <comment>Used in Shared/Views/Introduction/IntroductionUsageBar.swift.</comment>
   </data>
   <data name="by_subscribing_you_agree_to_urnetwork_s_terms" xml:space="preserve">
@@ -1273,7 +1273,7 @@
     <comment>Prompt shown when user doesn't see the verification email or SMS.</comment>
   </data>
   <data name="earn_more_bullet_stay_connected" xml:space="preserve">
-    <value>Залишайтеся на зв'язку щодня = Заробляйте до {} ГіБ/день</value>
+    <value>Залишайтеся на зв'язку щодня = Заробляйте до {} GiB/день</value>
     <comment>Call to action</comment>
   </data>
   <data name="earning_multipliers" xml:space="preserve">
@@ -2402,7 +2402,19 @@
     <value>Доступно до {}</value>
     <comment>Onboarding offer screen: the static deadline sentence; the placeholder is a local date and time.</comment>
   </data>
-  <data name="offer_cta_start_trial_months_free" xml:space="preserve">
+  <data name="offer_cta_start_trial_months_free.one" xml:space="preserve">
+    <value>Почати пробний період із {} безкоштовним місяцем</value>
+    <comment>Onboarding offer screen: the single primary button. The number is the months the discount equals.</comment>
+  </data>
+  <data name="offer_cta_start_trial_months_free.few" xml:space="preserve">
+    <value>Почати пробний період із {} безкоштовними місяцями</value>
+    <comment>Onboarding offer screen: the single primary button. The number is the months the discount equals.</comment>
+  </data>
+  <data name="offer_cta_start_trial_months_free.many" xml:space="preserve">
+    <value>Почати пробний період із {} безкоштовними місяцями</value>
+    <comment>Onboarding offer screen: the single primary button. The number is the months the discount equals.</comment>
+  </data>
+  <data name="offer_cta_start_trial_months_free.other" xml:space="preserve">
     <value>Почати пробний період із {} безкоштовними місяцями</value>
     <comment>Onboarding offer screen: the single primary button. The number is the months the discount equals.</comment>
   </data>
@@ -2410,15 +2422,39 @@
     <value>{} за перший рік</value>
     <comment>Plan card with the welcome offer: the billed first-year amount (most prominent line).</comment>
   </data>
-  <data name="offer_months_free_headline" xml:space="preserve">
+  <data name="offer_months_free_headline.one" xml:space="preserve">
+    <value>{} місяць Pro безкоштовно</value>
+    <comment>Onboarding offer screen headline. The number is the months the discount equals.</comment>
+  </data>
+  <data name="offer_months_free_headline.few" xml:space="preserve">
     <value>{} місяці Pro безкоштовно</value>
+    <comment>Onboarding offer screen headline. The number is the months the discount equals.</comment>
+  </data>
+  <data name="offer_months_free_headline.many" xml:space="preserve">
+    <value>{} місяців Pro безкоштовно</value>
+    <comment>Onboarding offer screen headline. The number is the months the discount equals.</comment>
+  </data>
+  <data name="offer_months_free_headline.other" xml:space="preserve">
+    <value>{} місяців Pro безкоштовно</value>
     <comment>Onboarding offer screen headline. The number is the months the discount equals.</comment>
   </data>
   <data name="offer_percent_off_first_year" xml:space="preserve">
     <value>Знижка {}% на перший рік</value>
     <comment>Onboarding offer screen sub-line under the headline. The number is the percent off the first year.</comment>
   </data>
-  <data name="offer_terms_first_year" xml:space="preserve">
+  <data name="offer_terms_first_year.one" xml:space="preserve">
+    <value>{0} день безкоштовно, далі {1} за перший рік, потім {2}/рік. Скасування будь-коли.</value>
+    <comment>Plan picker with the welcome offer: the terms line under the button (trial, discounted first year, renewal price).</comment>
+  </data>
+  <data name="offer_terms_first_year.few" xml:space="preserve">
+    <value>{0} дні безкоштовно, далі {1} за перший рік, потім {2}/рік. Скасування будь-коли.</value>
+    <comment>Plan picker with the welcome offer: the terms line under the button (trial, discounted first year, renewal price).</comment>
+  </data>
+  <data name="offer_terms_first_year.many" xml:space="preserve">
+    <value>{0} днів безкоштовно, далі {1} за перший рік, потім {2}/рік. Скасування будь-коли.</value>
+    <comment>Plan picker with the welcome offer: the terms line under the button (trial, discounted first year, renewal price).</comment>
+  </data>
+  <data name="offer_terms_first_year.other" xml:space="preserve">
     <value>{0} днів безкоштовно, далі {1} за перший рік, потім {2}/рік. Скасування будь-коли.</value>
     <comment>Plan picker with the welcome offer: the terms line under the button (trial, discounted first year, renewal price).</comment>
   </data>
@@ -2451,7 +2487,7 @@
     <comment>A label for a DNS setting that is enabled.</comment>
   </data>
   <data name="one_gib_per_day" xml:space="preserve">
-    <value>1 ГіБ/день</value>
+    <value>1 GiB/день</value>
     <comment>Call to action</comment>
   </data>
   <data name="open_nested_link" xml:space="preserve">
@@ -2591,7 +2627,19 @@
     <value>Економія {}%</value>
     <comment>Plan picker: the saving badge on the yearly card; the number is the whole percent saved against twelve monthly payments.</comment>
   </data>
-  <data name="plan_terms_yearly" xml:space="preserve">
+  <data name="plan_terms_yearly.one" xml:space="preserve">
+    <value>{0} день безкоштовно, далі {1}/рік. Скасування будь-коли.</value>
+    <comment>Plan picker: the terms line under the button for the yearly plan with its trial.</comment>
+  </data>
+  <data name="plan_terms_yearly.few" xml:space="preserve">
+    <value>{0} дні безкоштовно, далі {1}/рік. Скасування будь-коли.</value>
+    <comment>Plan picker: the terms line under the button for the yearly plan with its trial.</comment>
+  </data>
+  <data name="plan_terms_yearly.many" xml:space="preserve">
+    <value>{0} днів безкоштовно, далі {1}/рік. Скасування будь-коли.</value>
+    <comment>Plan picker: the terms line under the button for the yearly plan with its trial.</comment>
+  </data>
+  <data name="plan_terms_yearly.other" xml:space="preserve">
     <value>{0} днів безкоштовно, далі {1}/рік. Скасування будь-коли.</value>
     <comment>Plan picker: the terms line under the button for the yearly plan with its trial.</comment>
   </data>
@@ -2731,9 +2779,6 @@
     <value>{} провайдера</value>
     <comment>A label that shows the number of providers for a location. The argument is the number of providers.</comment>
   </data>
-  <data name="provider_count_int" xml:space="preserve">
-    <value>{} провайдерів</value>
-  </data>
   <data name="provider_identities" xml:space="preserve">
     <value>Ідентичності провайдерів</value>
     <comment>Post quantum identity: title of the connected provider identity key details view.</comment>
@@ -2847,7 +2892,7 @@
     <comment>Used in Shared/Views/Introduction/IntroductionUsageBar.swift.</comment>
   </data>
   <data name="refer_a_friend_30_gib_month" xml:space="preserve">
-    <value>Порекомендувати друга = +30 ГіБ/місяць</value>
+    <value>Порекомендувати друга = +30 GiB/місяць</value>
     <comment>Used in Shared/Views/Introduction/IntroductionUsageBar.swift.</comment>
   </data>
   <data name="refer_a_friend_3_gib_day" xml:space="preserve">
@@ -2875,11 +2920,11 @@
     <comment>Call to action</comment>
   </data>
   <data name="refer_friends_perks" xml:space="preserve">
-    <value>Ви отримуєте +{} ГіБ/день назавжди</value>
+    <value>Ви отримуєте +{} GiB/день назавжди</value>
     <comment>Referral perk bullet on the introduction referral screen. The referral grant is per day (pro.yml referral.period: 24h).</comment>
   </data>
   <data name="refer_friends_they_get_data" xml:space="preserve">
-    <value>Ваш друг отримує +{} ГіБ/день назавжди</value>
+    <value>Ваш друг отримує +{} GiB/день назавжди</value>
     <comment>Referral perk bullet on the introduction referral screen (the referred side). The referral grant is per day (pro.yml referral.period: 24h).</comment>
   </data>
   <data name="referral" xml:space="preserve">
@@ -2887,7 +2932,7 @@
     <comment>Call to action</comment>
   </data>
   <data name="referral_bonus" xml:space="preserve">
-    <value>+{} ГіБ/день</value>
+    <value>+{} GiB/день</value>
     <comment>Referral earn rate shown next to the referral count (usage bar). The referral grant is per day (pro.yml referral.period: 24h).</comment>
   </data>
   <data name="referral_bonus_applied" xml:space="preserve">
@@ -3014,7 +3059,7 @@
     <comment>Call to action</comment>
   </data>
   <data name="reliability_bonus" xml:space="preserve">
-    <value>+{} ГіБ/день</value>
+    <value>+{} GiB/день</value>
     <comment>Call to action</comment>
   </data>
   <data name="reliability_settings" xml:space="preserve">
@@ -3217,7 +3262,19 @@
     <value>Запишіть її та зберігайте в надійному місці. Якщо втратите, втратите доступ до облікового запису.</value>
     <comment>Seedphrase sheet: advice to write the seedphrase down and store it safely.</comment>
   </data>
-  <data name="seedphrase_word_count_warning" xml:space="preserve">
+  <data name="seedphrase_word_count_warning.one" xml:space="preserve">
+    <value>Це {} слово — сід-фраза складається з 12 або 24 слів</value>
+    <comment>Login: warning when the pasted seedphrase has {count} words instead of 12 or 24.</comment>
+  </data>
+  <data name="seedphrase_word_count_warning.few" xml:space="preserve">
+    <value>Це {} слова — сід-фраза складається з 12 або 24 слів</value>
+    <comment>Login: warning when the pasted seedphrase has {count} words instead of 12 or 24.</comment>
+  </data>
+  <data name="seedphrase_word_count_warning.many" xml:space="preserve">
+    <value>Це {} слів — сід-фраза складається з 12 або 24 слів</value>
+    <comment>Login: warning when the pasted seedphrase has {count} words instead of 12 or 24.</comment>
+  </data>
+  <data name="seedphrase_word_count_warning.other" xml:space="preserve">
     <value>Це {} слів — сід-фраза складається з 12 або 24 слів</value>
     <comment>Login: warning when the pasted seedphrase has {count} words instead of 12 or 24.</comment>
   </data>
@@ -4265,17 +4322,23 @@
     <comment>Call to action</comment>
   </data>
   <data name="you_get_30_gib_month_for_life" xml:space="preserve">
-    <value>Ви отримуєте 30 ГіБ/місяць назавжди</value>
+    <value>Ви отримуєте 30 GiB/місяць назавжди</value>
     <comment>Used in Shared/Views/Introduction/ParticipateReferView.swift.</comment>
   </data>
   <data name="you_get_3_gib_day_for_life" xml:space="preserve">
     <value>Ви отримуєте 3 GiB/день назавжди</value>
     <comment>Text displayed in a scrollable view within a VStack in the body of a view that is displayed when the user is viewing their referral code.</comment>
   </data>
-  <data name="you_have_1_other_device_online" xml:space="preserve">
-    <value>У вас 1 інший пристрій онлайн</value>
+  <data name="you_have_n_other_devices_online.one" xml:space="preserve">
+    <value>У вас {} інший пристрій онлайн</value>
   </data>
-  <data name="you_have_n_other_devices_online" xml:space="preserve">
+  <data name="you_have_n_other_devices_online.few" xml:space="preserve">
+    <value>У вас {} інші пристрої онлайн</value>
+  </data>
+  <data name="you_have_n_other_devices_online.many" xml:space="preserve">
+    <value>У вас {} інших пристроїв онлайн</value>
+  </data>
+  <data name="you_have_n_other_devices_online.other" xml:space="preserve">
     <value>У вас {} інших пристроїв онлайн</value>
   </data>
   <data name="you_ll_unlock_even_faster_speeds_and_first_dibs" xml:space="preserve">
@@ -4303,7 +4366,7 @@
     <comment>Placeholder text for the email field.</comment>
   </data>
   <data name="your_friend_gets_30_gib_month_for_life" xml:space="preserve">
-    <value>Ваш друг отримує 30 ГіБ/місяць назавжди</value>
+    <value>Ваш друг отримує 30 GiB/місяць назавжди</value>
     <comment>Used in Shared/Views/Introduction/ParticipateReferView.swift.</comment>
   </data>
   <data name="your_friend_gets_3_gib_day_for" xml:space="preserve">

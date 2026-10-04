@@ -1254,7 +1254,7 @@ void LoginPage::ValidateSeedphrase() {
     // The count is the whole diagnostic — "invalid seedphrase" would not tell
     // anyone that they pasted 23 words.
     kit::ApplySupportingText(
-        line, hstring{urnw::Format("seedphrase_word_count_warning", words)},
+        line, hstring{urnw::Plural("seedphrase_word_count_warning", static_cast<int64_t>(words))},
         kit::ValidationState::Invalid);
   }
 }

@@ -2337,7 +2337,11 @@ enviamos para você verificar sua identidade.</value>
     <value>Disponível até {}</value>
     <comment>Onboarding offer screen: the static deadline sentence; the placeholder is a local date and time.</comment>
   </data>
-  <data name="offer_cta_start_trial_months_free" xml:space="preserve">
+  <data name="offer_cta_start_trial_months_free.one" xml:space="preserve">
+    <value>Começar o teste grátis com {} mês grátis</value>
+    <comment>Onboarding offer screen: the single primary button. The number is the months the discount equals.</comment>
+  </data>
+  <data name="offer_cta_start_trial_months_free.other" xml:space="preserve">
     <value>Começar o teste grátis com {} meses grátis</value>
     <comment>Onboarding offer screen: the single primary button. The number is the months the discount equals.</comment>
   </data>
@@ -2345,7 +2349,11 @@ enviamos para você verificar sua identidade.</value>
     <value>{} no primeiro ano</value>
     <comment>Plan card with the welcome offer: the billed first-year amount (most prominent line).</comment>
   </data>
-  <data name="offer_months_free_headline" xml:space="preserve">
+  <data name="offer_months_free_headline.one" xml:space="preserve">
+    <value>{} mês de Pro, grátis</value>
+    <comment>Onboarding offer screen headline. The number is the months the discount equals.</comment>
+  </data>
+  <data name="offer_months_free_headline.other" xml:space="preserve">
     <value>{} meses de Pro, grátis</value>
     <comment>Onboarding offer screen headline. The number is the months the discount equals.</comment>
   </data>
@@ -2353,7 +2361,11 @@ enviamos para você verificar sua identidade.</value>
     <value>{}% de desconto no primeiro ano</value>
     <comment>Onboarding offer screen sub-line under the headline. The number is the percent off the first year.</comment>
   </data>
-  <data name="offer_terms_first_year" xml:space="preserve">
+  <data name="offer_terms_first_year.one" xml:space="preserve">
+    <value>{0} dia grátis, depois {1} no primeiro ano, depois {2}/ano. Cancele quando quiser.</value>
+    <comment>Plan picker with the welcome offer: the terms line under the button (trial, discounted first year, renewal price).</comment>
+  </data>
+  <data name="offer_terms_first_year.other" xml:space="preserve">
     <value>{0} dias grátis, depois {1} no primeiro ano, depois {2}/ano. Cancele quando quiser.</value>
     <comment>Plan picker with the welcome offer: the terms line under the button (trial, discounted first year, renewal price).</comment>
   </data>
@@ -2526,7 +2538,11 @@ e mais descentralizado protocolo de entrada e saída do mundo.</value>
     <value>Poupe {}%</value>
     <comment>Plan picker: the saving badge on the yearly card; the number is the whole percent saved against twelve monthly payments.</comment>
   </data>
-  <data name="plan_terms_yearly" xml:space="preserve">
+  <data name="plan_terms_yearly.one" xml:space="preserve">
+    <value>{0} dia grátis, depois {1}/ano. Cancele quando quiser.</value>
+    <comment>Plan picker: the terms line under the button for the yearly plan with its trial.</comment>
+  </data>
+  <data name="plan_terms_yearly.other" xml:space="preserve">
     <value>{0} dias grátis, depois {1}/ano. Cancele quando quiser.</value>
     <comment>Plan picker: the terms line under the button for the yearly plan with its trial.</comment>
   </data>
@@ -2649,9 +2665,6 @@ e mais descentralizado protocolo de entrada e saída do mundo.</value>
   <data name="provider_count.other" xml:space="preserve">
     <value>{} fornecedores</value>
     <comment>A label that shows the number of providers for a location. The argument is the number of providers.</comment>
-  </data>
-  <data name="provider_count_int" xml:space="preserve">
-    <value>{} fornecedores</value>
   </data>
   <data name="provider_identities" xml:space="preserve">
     <value>Identidades dos fornecedores</value>
@@ -3096,7 +3109,11 @@ conteúdo do mundo</value>
     <value>Anote e guarde em um lugar seguro. Se você a perder, perderá o acesso à sua conta.</value>
     <comment>Seedphrase sheet: advice to write the seedphrase down and store it safely.</comment>
   </data>
-  <data name="seedphrase_word_count_warning" xml:space="preserve">
+  <data name="seedphrase_word_count_warning.one" xml:space="preserve">
+    <value>É {} palavra — uma frase-semente tem 12 ou 24 palavras</value>
+    <comment>Login: warning when the pasted seedphrase has {count} words instead of 12 or 24.</comment>
+  </data>
+  <data name="seedphrase_word_count_warning.other" xml:space="preserve">
     <value>São {} palavras — uma frase-semente tem 12 ou 24 palavras</value>
     <comment>Login: warning when the pasted seedphrase has {count} words instead of 12 or 24.</comment>
   </data>
@@ -4127,10 +4144,10 @@ como ela deveria ser.</value>
     <value>Recebe 3 GiB/dia para sempre</value>
     <comment>Text displayed in a scrollable view within a VStack in the body of a view that is displayed when the user is viewing their referral code.</comment>
   </data>
-  <data name="you_have_1_other_device_online" xml:space="preserve">
-    <value>Tem 1 outro dispositivo online</value>
+  <data name="you_have_n_other_devices_online.one" xml:space="preserve">
+    <value>Tem {} outro dispositivo online</value>
   </data>
-  <data name="you_have_n_other_devices_online" xml:space="preserve">
+  <data name="you_have_n_other_devices_online.other" xml:space="preserve">
     <value>Tem {} outros dispositivos online</value>
   </data>
   <data name="you_ll_unlock_even_faster_speeds_and_first_dibs" xml:space="preserve">
