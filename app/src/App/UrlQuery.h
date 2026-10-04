@@ -1,7 +1,7 @@
 // The app's one percent-encoder and query parser, for the urls the app builds
 // and the urnetwork:// hand-backs it reads (the pay sheet, the wallet-connect
 // and sign-in bridges). The ur.io/checkout bridge envelope itself is the SDK's
-// (urnet::buildCheckoutBridgeUrl, urnet::parseCheckoutRedirect).
+// (urnet::buildInlineCheckoutBridgeUrl, urnet::parseCheckoutRedirect).
 //
 // WinRT-free so tools/url-query-tests.cpp runs it on any host.
 // SPDX-License-Identifier: MPL-2.0

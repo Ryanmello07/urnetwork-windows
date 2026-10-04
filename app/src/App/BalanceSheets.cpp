@@ -4,6 +4,7 @@
 #include "BalanceSheets.h"
 
 #include "BalanceCodeRedeem.h"
+#include "CheckoutSessionMode.h"
 
 #include <winrt/Microsoft.UI.Xaml.Automation.h>
 #include <winrt/Microsoft.UI.Xaml.Documents.h>
@@ -49,8 +50,11 @@ constexpr winrt::Windows::UI::Color kTransparent{0, 0, 0, 0};
 // by navigating to the redirect_link:
 //   done:  urnetwork://checkout?status=complete&session_id=cs_...
 //   error: urnetwork://checkout?errorCode=-1&errorMessage=...
-// The url and the hand-back are the SDK's envelope (urnet::buildCheckoutBridgeUrl,
-// urnet::parseCheckoutRedirect; linux UpgradeSheet parity). There is no cancel
+// The session is redirect_on_completion "never" (CheckoutSessionMode.h), so the
+// done hand-back comes from Stripe's onComplete on the bridge page, in place.
+// The url and the hand-back are the SDK's envelope
+// (urnet::buildInlineCheckoutBridgeUrl, urnet::parseCheckoutRedirect; linux
+// UpgradeSheet parity). There is no cancel
 // url: Stripe's embedded flow never leaves the page, so the checkout header's
 // own close (X) is the only way out. Every urnetwork:// navigation in the
 // webview is a hand-back (the checkout bridge's or the pay page's).
@@ -909,11 +913,11 @@ void UpgradeSheet::RequestSession(bool embedded) {
   }
   urnet::StripeCreateCheckoutSessionArgs args;
   args.item_id = plans_.Yearly() ? "pro_yearly" : "pro_monthly";
-  args.ui_mode = embedded ? "embedded" : "hosted";
-  // redirect_on_completion stays unset: the bridge page hands control back
-  // only when Stripe returns the customer to the server's return_url.
-  // "never" would complete through Stripe's onComplete callback, which
-  // EmbeddedCheckout.jsx does not handle, so no hand-back would ever arrive.
+  const CheckoutSessionMode mode = CheckoutSessionModeFor(embedded);
+  args.ui_mode = mode.uiMode;
+  if (!mode.redirectOnCompletion.empty()) {
+    args.redirect_on_completion = mode.redirectOnCompletion;
+  }
 
   auto queue = dialog_.DispatcherQueue();
   auto weak = weak_from_this();
@@ -1070,7 +1074,9 @@ winrt::fire_and_forget UpgradeSheet::OpenEmbedded(std::string clientSecret) {
   checkoutRing_.IsActive(true);
   ShowPage(Page::Checkout);
 
-  const std::string url = urnet::buildCheckoutBridgeUrl(clientSecret);
+  // the session is "never" (CheckoutSessionModeFor(true)): the bridge hands
+  // back from Stripe's onComplete
+  const std::string url = urnet::buildInlineCheckoutBridgeUrl(clientSecret);
   try {
     // Explicit user data folder: WebView2's default is next to the exe, which
     // an install under Program Files cannot write. StorageRoot is the app's

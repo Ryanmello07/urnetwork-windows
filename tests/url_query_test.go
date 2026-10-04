@@ -11,7 +11,7 @@ import (
 )
 
 // UPGRADE.md §4.4: the checkout bridge url and its urnetwork://checkout
-// hand-back are the SDK's envelope (urnet::buildCheckoutBridgeUrl,
+// hand-back are the SDK's envelope (urnet::buildInlineCheckoutBridgeUrl,
 // urnet::isCheckoutRedirect, urnet::parseCheckoutRedirect), not a hand-built
 // copy, and the app keeps ONE percent-encoder (App/UrlQuery.h) for the urls it
 // still builds itself. Compiles and runs the encoder spec, then reads the
@@ -64,7 +64,7 @@ func TestCheckoutEnvelopeAndOneEncoder(t *testing.T) {
 	}
 	sheets := string(source)
 	for _, want := range []string{
-		"urnet::buildCheckoutBridgeUrl(clientSecret)",
+		"urnet::buildInlineCheckoutBridgeUrl(clientSecret)",
 		"urnet::isCheckoutRedirect(uri)",
 		"urnet::parseCheckoutRedirect(uri)",
 	} {
