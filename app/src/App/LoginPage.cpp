@@ -375,13 +375,15 @@ bool LoginPage::ConsumeNewNetwork() {
   return pending;
 }
 
-winrt::fire_and_forget LoginPage::OpenGuestConversion() {
+winrt::fire_and_forget LoginPage::OpenGuestConversion(std::function<void(bool done)> onClosed) {
   if (w_.sheetOpen()) co_return;  // only one ContentDialog can show at a time
   auto self = w_.get_strong();
 
   auto weak = w_.get_weak();
+  auto done = std::make_shared<bool>(false);
   guestConversionSheet_ = urnw::GuestConversionSheet::Create(
-      self->Content().XamlRoot(), Sdk(), Balance(), [weak] {
+      self->Content().XamlRoot(), Sdk(), Balance(), [weak, done] {
+        *done = true;
         if (auto self = weak.get()) {
           self->login().snackbar_->Show(Loc("sign_in_method_added_successfully"),
                                         InfoBarSeverity::Success);
@@ -399,6 +401,8 @@ winrt::fire_and_forget LoginPage::OpenGuestConversion() {
   }
   w_.SetSheetOpen(false);
   self->login().guestConversionSheet_.reset();
+  // after the sheet gate is released: the continuation may open the checkout
+  if (onClosed) onClosed(*done);
 }
 
 // ---- sign-in flow ----------------------------------------------------------

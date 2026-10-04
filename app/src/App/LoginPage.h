@@ -10,6 +10,7 @@
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <string>
 
@@ -80,7 +81,9 @@ class LoginPage {
   // in-place conversion (GuestConversionSheet): a sign-in is added to THIS
   // network and verified, so its plan and balance stay. Signing out would
   // abandon the network for good (it has no login to come back to).
-  winrt::fire_and_forget OpenGuestConversion();
+  // `onClosed(done)` runs once the sheet has closed (done: the sign-in was
+  // added and verified), so a purchase entry can continue to its checkout.
+  winrt::fire_and_forget OpenGuestConversion(std::function<void(bool done)> onClosed = {});
 
   // ---- XAML event handlers (forwarded from MainWindow) ----
   void OnGetStarted(winrt::Windows::Foundation::IInspectable const&,

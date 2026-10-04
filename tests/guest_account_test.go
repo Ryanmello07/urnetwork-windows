@@ -98,7 +98,7 @@ func TestLegacyGuestAccountFlow(t *testing.T) {
 	}
 
 	login := read("LoginPage.cpp")
-	open := functionBody(login, "winrt::fire_and_forget LoginPage::OpenGuestConversion()")
+	open := functionBody(login, "winrt::fire_and_forget LoginPage::OpenGuestConversion(")
 	if open == "" {
 		t.Fatal("LoginPage.cpp: no OpenGuestConversion")
 	}
@@ -179,7 +179,8 @@ func TestLegacyGuestAccountFlow(t *testing.T) {
 		"void MainWindow::OnOpenUpgrade(",
 	} {
 		body := functionBody(window, signature)
-		if !strings.Contains(body, "if (balance_.guest)") || !strings.Contains(body, "OpenGuestConversion()") {
+		if !strings.Contains(body, "if (balance_.guest)") ||
+			!(strings.Contains(body, "OpenGuestConversion()") || strings.Contains(body, "DivertGuestToConversion(")) {
 			t.Errorf("%s: a guest is not diverted to the conversion", signature)
 		}
 	}
@@ -208,5 +209,101 @@ func TestLegacyGuestAccountFlow(t *testing.T) {
 		if strings.Contains(resources, `name="`+key+`"`) {
 			t.Errorf("en Resources.resw: still has %s", key)
 		}
+	}
+}
+
+// The network label (Connect, the status strip, the account menu) follows the
+// same guest rule as the purchase gates: the jwt claim OR the balance's guest.
+// The claim alone labels a refreshed guest (the refresh drops the claim) by
+// its network name, so the label is re-applied when the balance's guest
+// changes.
+func TestGuestNetworkIdentity(t *testing.T) {
+	root := repositoryRoot(t)
+	source, err := os.ReadFile(filepath.Join(root, "app", "src", "App", "MainWindow.xaml.cpp"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	window := string(source)
+
+	auth := functionBody(window, "void MainWindow::ApplyAuthState(")
+	if auth == "" {
+		t.Fatal("MainWindow.xaml.cpp: no ApplyAuthState")
+	}
+	for _, claimOnly := range []string{"SetNetworkIdentity(networkName, guestMode)", "statusGuest_ = guestMode", "ApplyAccountIdentity(networkName, guestMode"} {
+		if strings.Contains(auth, claimOnly) {
+			t.Errorf("ApplyAuthState: labels the network from the jwt claim alone (%s)", claimOnly)
+		}
+	}
+	if !strings.Contains(auth, "ApplyNetworkIdentity()") {
+		t.Error("ApplyAuthState: does not apply the network identity")
+	}
+
+	identity := functionBody(window, "void MainWindow::ApplyNetworkIdentity()")
+	if identity == "" {
+		t.Fatal("MainWindow.xaml.cpp: no ApplyNetworkIdentity")
+	}
+	if !strings.Contains(identity, "urnw::IsGuestNetwork(identityJwtGuest_, balance_.guest)") {
+		t.Error("ApplyNetworkIdentity: guest is not the claim or the balance's guest")
+	}
+	for _, want := range []string{
+		"connect_->SetNetworkIdentity(identityNetworkName_, guest)",
+		"statusGuest_ = guest;",
+		"login_->ApplyAccountIdentity(identityNetworkName_, guest,",
+	} {
+		if !strings.Contains(identity, want) {
+			t.Errorf("ApplyNetworkIdentity: missing %s", want)
+		}
+	}
+
+	balance := functionBody(window, "void MainWindow::OnBalanceChanged(")
+	if !strings.Contains(balance, "if (guestChanged) ApplyNetworkIdentity();") {
+		t.Error("OnBalanceChanged: a change in the server's guest does not relabel the network")
+	}
+}
+
+// A purchase entry that sent a guest to the conversion continues to the
+// checkout it was opening once the conversion is done and the guest clears
+// (GuestUpgradeContinuation, pinned in guest-conversion-tests.cpp); it used to
+// close back to where the user started. The plan card's "Create an account"
+// asked only for the conversion and does not continue.
+func TestGuestPurchaseContinuesAfterConversion(t *testing.T) {
+	root := repositoryRoot(t)
+	appDir := filepath.Join(root, "app", "src", "App")
+	read := func(name string) string {
+		source, err := os.ReadFile(filepath.Join(appDir, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(source)
+	}
+	window := read("MainWindow.xaml.cpp")
+	for _, signature := range []string{
+		"winrt::fire_and_forget MainWindow::ShowUpgradeSheet()",
+		"winrt::fire_and_forget MainWindow::ShowUpgradeCheckout(bool yearly)",
+	} {
+		if !strings.Contains(functionBody(window, signature), "DivertGuestToConversion(") {
+			t.Errorf("%s: a converted guest does not continue to its checkout", signature)
+		}
+	}
+	if !strings.Contains(functionBody(window, "void MainWindow::OnOpenUpgrade("), "login_->OpenGuestConversion();") {
+		t.Error("OnOpenUpgrade: the plan card's Create an account should open only the conversion")
+	}
+	divert := functionBody(window, "void MainWindow::DivertGuestToConversion(")
+	for _, want := range []string{
+		"guestUpgrade_.Divert(std::move(checkout));",
+		"if (done) self->guestUpgrade_.ConversionDone();",
+		"self->guestUpgrade_.ConversionClosed();",
+		"self->guestUpgrade_.Poll(self->balance_.guest);",
+	} {
+		if !strings.Contains(divert, want) {
+			t.Errorf("DivertGuestToConversion: missing %s", want)
+		}
+	}
+	if !strings.Contains(functionBody(window, "void MainWindow::OnBalanceChanged("), "guestUpgrade_.Poll(balance_.guest);") {
+		t.Error("OnBalanceChanged: the continuation does not wait for the guest to clear")
+	}
+	open := functionBody(read("LoginPage.cpp"), "winrt::fire_and_forget LoginPage::OpenGuestConversion(")
+	if !strings.Contains(open, "if (onClosed) onClosed(*done);") {
+		t.Error("OpenGuestConversion: does not report the close")
 	}
 }
