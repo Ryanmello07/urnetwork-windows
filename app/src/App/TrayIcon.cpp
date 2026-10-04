@@ -330,6 +330,16 @@ LRESULT CALLBACK TrayIcon::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
         if (lParam && wcscmp(reinterpret_cast<const wchar_t*>(lParam), L"ImmersiveColorSet") == 0)
           self->OnThemeChanged();
         return 0;
+      case WM_CLOSE:
+        // A WM_CLOSE from outside the app: Alt+F4 while this hidden window is
+        // still in the foreground after the tray menu closes, or
+        // `taskkill /im URnetwork.exe` without /f. DefWindowProc would destroy
+        // this window and leave the app running with no tray icon and no way
+        // to quit it, so take the tray menu's Quit path instead. That also
+        // lets a later installer close the app with WM_CLOSE.
+        LogInfo("tray: WM_CLOSE received, quitting");
+        if (self->cb_.onQuit) self->cb_.onQuit();
+        return 0;
       default:
         return ::DefWindowProcW(hwnd, msg, wParam, lParam);
     }
