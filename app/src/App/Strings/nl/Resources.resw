@@ -1595,6 +1595,10 @@ juiste manier</value>
     <value>Vast IP-adres</value>
     <comment>A toggle that allows users to enable or disable a fixed IP for their connection.</comment>
   </data>
+  <data name="fixed_ip_subtitle" xml:space="preserve">
+    <value>Houdt één exit aan voor de sessie; wisselt alleen als die aanbieder offline gaat.</value>
+    <comment>Subtitle under the Fixed IP toggle in the connect options. With Fixed IP on, the connection keeps the same exit (provider) for the whole session, so the egress IP stays the same unless that provider goes offline.</comment>
+  </data>
   <data name="forget_password" xml:space="preserve">
     <value>Wachtwoord vergeten?</value>
     <comment>Login password</comment>

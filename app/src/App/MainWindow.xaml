@@ -1046,8 +1046,16 @@
                                         </Grid.ColumnDefinitions>
                                         <FontIcon Glyph="&#xE71B;" FontSize="14"
                                                   Style="{StaticResource UrRowIconStyle}" />
-                                        <TextBlock x:Name="FixedIpLabel" Grid.Column="1"
-                                                   Style="{StaticResource UrRowTitleStyle}" />
+                                        <!-- a Fixed IP window keeps its one exit for the
+                                             session (connect stickyExit) -->
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center"
+                                                    Spacing="1">
+                                            <TextBlock x:Name="FixedIpLabel"
+                                                       Style="{StaticResource UrRowTitleStyle}" />
+                                            <TextBlock x:Name="FixedIpNote" TextWrapping="Wrap"
+                                                       Style="{StaticResource UrRowNoteStyle}"
+                                                       TextTrimming="None" />
+                                        </StackPanel>
                                         <ToggleSwitch x:Name="FixedIpToggle" Grid.Column="2" Width="44"
                                                       Style="{StaticResource UrSwitchToggleStyle}"
                                                       AutomationProperties.LabeledBy="{Binding ElementName=FixedIpLabel}"

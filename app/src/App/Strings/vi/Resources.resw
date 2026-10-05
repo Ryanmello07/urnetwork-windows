@@ -1579,6 +1579,10 @@ cách đúng đắn</value>
     <value>IP cố định</value>
     <comment>A toggle that allows users to enable or disable a fixed IP for their connection.</comment>
   </data>
+  <data name="fixed_ip_subtitle" xml:space="preserve">
+    <value>Giữ một điểm thoát trong suốt phiên; chỉ thay đổi nếu nhà cung cấp đó ngoại tuyến.</value>
+    <comment>Subtitle under the Fixed IP toggle in the connect options. With Fixed IP on, the connection keeps the same exit (provider) for the whole session, so the egress IP stays the same unless that provider goes offline.</comment>
+  </data>
   <data name="forget_password" xml:space="preserve">
     <value>Quên mật khẩu?</value>
     <comment>Login password</comment>

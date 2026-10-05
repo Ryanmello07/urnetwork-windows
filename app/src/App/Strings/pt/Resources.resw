@@ -1595,6 +1595,10 @@ maneira certa</value>
     <value>IP fixo</value>
     <comment>A toggle that allows users to enable or disable a fixed IP for their connection.</comment>
   </data>
+  <data name="fixed_ip_subtitle" xml:space="preserve">
+    <value>Mantém uma única saída durante a sessão; só muda se esse provedor ficar offline.</value>
+    <comment>Subtitle under the Fixed IP toggle in the connect options. With Fixed IP on, the connection keeps the same exit (provider) for the whole session, so the egress IP stays the same unless that provider goes offline.</comment>
+  </data>
   <data name="forget_password" xml:space="preserve">
     <value>Esqueceu sua senha?</value>
     <comment>Login password</comment>

@@ -1579,6 +1579,10 @@
     <value>IP แบบคงที่</value>
     <comment>A toggle that allows users to enable or disable a fixed IP for their connection.</comment>
   </data>
+  <data name="fixed_ip_subtitle" xml:space="preserve">
+    <value>ใช้ทางออกเดียวตลอดเซสชัน และจะเปลี่ยนก็ต่อเมื่อผู้ให้บริการนั้นออฟไลน์เท่านั้น</value>
+    <comment>Subtitle under the Fixed IP toggle in the connect options. With Fixed IP on, the connection keeps the same exit (provider) for the whole session, so the egress IP stays the same unless that provider goes offline.</comment>
+  </data>
   <data name="forget_password" xml:space="preserve">
     <value>ลืมรหัสผ่านใช่หรือไม่?</value>
     <comment>Login password</comment>

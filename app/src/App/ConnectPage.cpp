@@ -184,6 +184,7 @@ void ConnectPage::ApplyStrings() {
   w_.ExtenderDescription().Text(Loc("extender_setting_description"));
   ApplyExtenderProvideRow();
   w_.FixedIpLabel().Text(Loc("fixed_ip"));
+  w_.FixedIpNote().Text(Loc("fixed_ip_subtitle"));
   w_.StrongAnonLabel().Text(Loc("strong_anonymization"));
   w_.PostQuantumLabel().Text(Loc("post_quantum_encryption"));
   // R3: these three are the STATISTICS pane's group headers now, not three

@@ -2611,6 +2611,10 @@ richtig auf</value>
     <value>Feste IP</value>
     <comment>A toggle that allows users to enable or disable a fixed IP for their connection.</comment>
   </data>
+  <data name="fixed_ip_subtitle" xml:space="preserve">
+    <value>Behält einen Exit für die Sitzung; wechselt nur, wenn dieser Anbieter offline geht.</value>
+    <comment>Subtitle under the Fixed IP toggle in the connect options. With Fixed IP on, the connection keeps the same exit (provider) for the whole session, so the egress IP stays the same unless that provider goes offline.</comment>
+  </data>
   <data name="forget_password" xml:space="preserve">
     <value>Passwort vergessen?</value>
     <comment>Login password</comment>
