@@ -6,7 +6,7 @@
 // something_went_wrong, like any id the build does not know
 // (VlessPresentation.h ErrorKey, ExtenderPresentation.h ControlDohErrorKey).
 //
-// THE APP'S ONE COPY OF IT. The presentation headers that name it stay
+// The app's one copy of it. The presentation headers that name it stay
 // SDK-free, so their harnesses build on any host without the git-ignored
 // header, which is why this mirrors the C header's define instead of
 // including it. SdkHost.cpp includes the C header for the calls that answer
