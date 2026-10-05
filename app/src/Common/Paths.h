@@ -28,6 +28,12 @@ std::filesystem::path LogDir(bool isService);
 // Persisted last-good RPC session file (app side only).
 std::filesystem::path RpcSessionFile();
 
+// Present while a sign-out is owed to the service (app side only;
+// Common/SignOut.h). Its own file rather than an app preference: the
+// preferences are a whole-object read-modify-write from several threads, and a
+// lost write here would be a service never told.
+std::filesystem::path SignOutOwedFile();
+
 // The APP's own preferences (app side only).
 //
 // Distinct from the SDK LocalState, and it has to be: LocalState is a fixed set

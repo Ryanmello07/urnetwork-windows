@@ -32,6 +32,7 @@
 #include "Sdk.h"
 #include "ServiceClient.h"
 #include "ServiceRecoveryPolicy.h"
+#include "SignOut.h"
 #include "VerifySendNotice.h"
 #include "WalletBridgeRoute.h"
 #include "WalletConnect.h"
@@ -812,6 +813,27 @@ class SdkHost {
   // Called from the app's protocol-activation handler.
   void HandleDeepLink(const std::string& url);
 
+  // Sign out of URnetwork (owner decision 2026-10-05: the tunnel and the
+  // provider stop as on Quit; the app keeps running, signed out). In order:
+  //   1. the session-request slot is emptied: a connect, a settling row click
+  //      or a reconcile queued for the signed-out account never runs;
+  //   2. the app is signed out (loggedIn_) before the lock, so a pass that
+  //      takes mutex_ first starts nothing for the account: BootstrapSession
+  //      and ReconcileProviderLocked read it before the stored jwt;
+  //   3. under mutex_, so after any pass in flight: the local credentials are
+  //      logged out, then the sign-out is recorded as owed (Common/SignOut.h)
+  //      and delivered: the control channel is dialled when it is down, then
+  //      Quit's stop_tunnel and stop_provider, in Quit's order, then the
+  //      service's logout, which severs the device identity and clears what
+  //      the service's sdk stored for the account;
+  //   4. the DeviceRemote, its feeds and the saved rpc session go.
+  // A delivery that does not complete (no service, a refused request) leaves
+  // the sign-out owed in a marker that outlives the app: the service watchdog
+  // retries it, every later pass delivers it first, and nothing is started
+  // until it has been delivered. The sign-out completes in the app either way.
+  // The kill switch is treated as Quit treats it: stop_tunnel lifts any
+  // firewall policy, the armed floor included. UI thread; it blocks on the
+  // lock and the pipe calls, as the stop_tunnel it replaces did.
   void Logout();
 
   // The tray's Quit, the service half (owner decision 2026-10-05,
@@ -1791,6 +1813,26 @@ class SdkHost {
   // RequestSession records nothing and ReconcileProviderLocked asks the service
   // nothing. Atomic because the reconcile reads it under mutex_ alone.
   std::atomic<bool> quitting_{false};
+
+  // ---- the sign-out the service is owed (Common/SignOut.h) -------------------
+  //
+  // Recorded by Logout and delivered by it when it can be; otherwise by the
+  // head of every session pass (SettleSignOutLocked), which the service
+  // watchdog keeps asking for while it is owed, signed in or not. Neither
+  // BootstrapSession nor ReconcileProviderLocked starts or adopts anything
+  // while it is owed.
+  //
+  // The service as a delivery sees it: the channel dialled when it is down, and
+  // each request on service_, its status adopted. Caller holds mutex_.
+  signout::Service SignOutServiceLocked();
+  // Deliver an owed sign-out at the head of a pass, and keep the watchdog
+  // retrying while it stays owed. `reason` names the pass in the log. Caller
+  // holds mutex_.
+  void SettleSignOutLocked(const char* reason);
+  // The marker file (Paths.h SignOutOwedFile).
+  static signout::Marker SignOutMarker();
+  // Loaded by Initialize. Owed() is read without mutex_ by the watchdog.
+  signout::Obligation signOut_{SignOutMarker()};
 
   // ---- the service-reconnect watchdog ---------------------------------------
   //

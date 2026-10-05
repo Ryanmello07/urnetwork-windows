@@ -41,8 +41,10 @@
 //     hidden window, which holds the foreground after its menu closes, is the
 //     same gesture aimed at a window nobody can see, and does nothing
 //     (TrayIcon::WndProc).
-//   * Signing out of URnetwork. SdkHost::Logout stops the tunnel and the
-//     service's logout retires the provider, and the app stays in the tray.
+//   * Signing out of URnetwork. SdkHost::Logout sends Quit's stop_tunnel and
+//     stop_provider, in Quit's order, then the service's logout, and the app
+//     stays in the tray, signed out. A sign-out the service could not be told
+//     stays owed until it is, and nothing starts before (SignOut.h).
 //   * Windows shutting down or the user signing out of Windows. The session
 //     end takes the app down without any of the above. At shutdown the SCM
 //     stops the service, which ends the session and the provider; at a sign-out

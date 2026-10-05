@@ -330,8 +330,8 @@ func TestQuitTrayNothingStartsAgainAfterQuit(t *testing.T) {
 
 // Not a Quit. A WM_CLOSE from outside the app and the updater's installer
 // handoff exit the app and leave the service as it is; signing out keeps the
-// app running in the tray (Logout stops the tunnel and the service's logout
-// retires the provider, as before).
+// app running in the tray (Logout stops the tunnel and the provider as Quit
+// does, then logs the service out: sign_out_wiring_test.go).
 func TestQuitTrayOtherEndingsLeaveTheService(t *testing.T) {
 	controller := appControllerSource(t)
 	provideRequire(t, "AppController::Start", controller,
