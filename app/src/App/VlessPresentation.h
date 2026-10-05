@@ -79,9 +79,15 @@ inline constexpr const char* kErrorIds[] = {
     kErrorShortIdInvalid,
 };
 
+// What the C ABI answers when the call could not run (URNET_ERROR_ID_INTERNAL:
+// an unknown handle, json that did not decode, a recovered panic). It says
+// nothing about the settings, so it is never shown as a refusal of them.
+inline constexpr const char* kErrorInternal = "internal_error";
+
 // The store key for an error id from ParseVlessLink, SetVlessSettings or
-// ValidateVlessSettings. An id this build does not know (a newer sdk) reads as
-// vless_error_link_invalid, never as the bare id on screen.
+// ValidateVlessSettings. An id this build does not know -- kErrorInternal, or
+// an id of a newer sdk -- reads as something_went_wrong, never as the bare id
+// on screen and never as a refusal the user did not cause.
 const char* ErrorKey(std::string_view errorId);
 
 // ---- the form ---------------------------------------------------------------

@@ -72,7 +72,8 @@ class VlessSheet : public std::enable_shared_from_this<VlessSheet> {
   // time, with the three commands off meanwhile.
   void SetBusy(bool busy);
   void ShowStatus(winrt::hstring const& text, kit::ValidationState state);
-  // The store's words for an sdk error id (an unknown id: an invalid link).
+  // The store's words for an sdk error id (an unknown id, the C ABI's internal
+  // one included: something went wrong).
   void ShowError(std::string const& errorId);
 
   SdkHost& sdk_;
