@@ -33,6 +33,7 @@
 #include "Log.h"
 #include "NetworkSpaceStartup.h"
 #include "Paths.h"
+#include "PeerLocation.h"
 #include "RpcSessionBlob.h"
 #include "Strings.h"
 #include "VlessPresentation.h"
@@ -5369,9 +5370,12 @@ void SdkHost::CancelPendingRowConnect(const char* why) {
 }
 
 void SdkHost::ConnectFromRow(const urnet::ConnectLocation& location) {
+  // Current means the same location reached the same way: a device picked from
+  // the peer list before peer rows set network_peer is still a public exit, and
+  // tapping it again reconnects it as a network peer (PeerLocation.h).
   if (RowClickIsCurrent(
           [&](const std::optional<urnet::ConnectLocation>& sel) {
-            return IsLocationSelected(sel, location);
+            return IsLocationSelected(sel, location) && SameNetworkPeer(sel, location);
           })) {
     // Already there. The only work left is un-queuing a newer intent, so a
     // "click B, regret it, click A again" round trip ends with zero rebuilds.

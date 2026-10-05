@@ -385,6 +385,8 @@
     <ClInclude Include="NetworkNameCheck.h" />
     <ClInclude Include="Localization.h" />
     <ClInclude Include="LocationSheets.h" />
+    <!-- header-only and WinRT-free: tools/peer-location-tests.cpp runs it -->
+    <ClInclude Include="PeerLocation.h" />
     <ClInclude Include="GlobeGeometry.h" />
     <ClInclude Include="WorldTopology.h" />
     <ClInclude Include="ProviderLocations.h" />
