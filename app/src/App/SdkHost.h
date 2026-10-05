@@ -2208,6 +2208,12 @@ class SdkHost {
   // for the verb answers "unknown request type" and keeps no country, as before
   // it existed. Safe from any thread; takes no mutex_.
   void PushNetworkCountry(const char* why);
+  // After a start_tunnel or start_provider that carried `sent`: the push above,
+  // when the reading is no longer `sent`. A start carries the reading it was
+  // built with, outside the push lock, so a change the watch pushed meanwhile
+  // can reach the service first and the start then puts the older country
+  // back; this puts the newer one back in turn. Takes no mutex_.
+  void PushNetworkCountryIfMoved(const netcountry::Reading& sent, const char* why);
   // The reading last applied to this process's sdk; empty before the first.
   netcountry::Reading CurrentNetworkCountry() const;
 

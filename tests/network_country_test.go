@@ -24,7 +24,7 @@ import (
 // are copied into a fixture tree of the same shape (NetworkCountryWatch.h
 // reaches the shared coalescer as ../Service/NetworkChangeNotify.h), so
 // `mutate`, keyed by file name, can rewrite one for a negative control.
-var networkCountryHeaders = map[string]string{
+var networkCountryHeaderDirs = map[string]string{
 	"NetworkCountry.h":      "Common",
 	"Protocol.h":            "Common",
 	"ProvideLifecycle.h":    "Common",
@@ -48,7 +48,7 @@ func networkCountryTestProgram(t *testing.T, harness string, mutate map[string]f
 	}
 	root := repositoryRoot(t)
 	fixture := t.TempDir()
-	for name, dir := range networkCountryHeaders {
+	for name, dir := range networkCountryHeaderDirs {
 		source, err := os.ReadFile(filepath.Join(root, "app", "src", dir, name))
 		if err != nil {
 			t.Fatal(err)
@@ -287,6 +287,53 @@ func TestNetworkCountryAppWiring(t *testing.T) {
 	set := definitionBody(t, "ServiceClient.cpp", client,
 		"bool ServiceClient::SetNetworkCountry(const proto::SetNetworkCountry& country)")
 	provideRequire(t, "ServiceClient::SetNetworkCountry", set, "proto::msg::kSetNetworkCountry")
+}
+
+// A start request carries the reading it was built with, and the watch's
+// thread can push a newer one while it is built. The pipe serves one call at a
+// time, so that push can reach the service first, and the start then puts the
+// older country back for as long as the network stays put. So after
+// start_tunnel and start_provider return, whether they succeeded or not (the
+// service applies the country before it can refuse), the app pushes again when
+// its reading is no longer the one the request carried.
+func TestNetworkCountryStartRequestsConverge(t *testing.T) {
+	host := sdkHostSource(t)
+	moved := definitionBody(t, "SdkHost.cpp", host,
+		"void SdkHost::PushNetworkCountryIfMoved(const netcountry::Reading& sent, const char* why)")
+	provideRequireOrder(t, "PushNetworkCountryIfMoved", moved,
+		"if (CurrentNetworkCountry() == sent) return;", "PushNetworkCountry(why);")
+	// BootstrapSession and ReconcileProviderLocked hold mutex_
+	requireNone(t, "PushNetworkCountryIfMoved", moved, "lock(mutex_", "mutex_, std::defer_lock")
+
+	for _, site := range []struct {
+		name      string
+		signature string
+		start     string
+		outcome   string
+	}{
+		{
+			name:      "BootstrapSession",
+			signature: "bool SdkHost::BootstrapSession(",
+			start:     "service_.StartTunnel(cfg)",
+			outcome:   "if (!proto::IsSessionLive(st.state)) {",
+		},
+		{
+			name:      "ReconcileProviderLocked",
+			signature: "void SdkHost::ReconcileProviderLocked(",
+			start:     "service_.StartProvider(request, &after, &error)",
+			outcome:   "if (started) {",
+		},
+	} {
+		body := definitionBody(t, "SdkHost.cpp", host, site.signature)
+		at := strings.Index(body, site.start)
+		if at < 0 {
+			t.Errorf("%s no longer calls %s; update this contract", site.name, site.start)
+			continue
+		}
+		// from the start request on: the push follows it, ahead of the branch
+		// that reads its outcome
+		provideRequireOrder(t, site.name, body[at:], "PushNetworkCountryIfMoved(networkCountry, ", site.outcome)
+	}
 }
 
 // The service applies what the app sends to its own sdk, process-wide: before

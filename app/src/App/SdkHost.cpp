@@ -2554,6 +2554,14 @@ void SdkHost::PushNetworkCountry(const char* why) {
   }
 }
 
+void SdkHost::PushNetworkCountryIfMoved(const netcountry::Reading& sent, const char* why) {
+  if (CurrentNetworkCountry() == sent) return;
+  LogInfo("sdkhost: the network country moved while a request carried \"{}\" ({}); "
+          "pushing the current one",
+          sent.code, why);
+  PushNetworkCountry(why);
+}
+
 netcountry::Reading SdkHost::CurrentNetworkCountry() const {
   std::scoped_lock lock(networkCountryMutex_);
   return networkCountry_;
@@ -2943,6 +2951,10 @@ bool SdkHost::BootstrapSession(const char* reason, bool attachOnly) {
       // waiting for it would leave the app's sockets in the tun for the gap.
       // Adopting it is idempotent with whatever arrives next.
       AdoptServiceFacts(st);
+      // Whatever the outcome, the service may have applied the request's
+      // network country (it does so partway through the start), and a newer
+      // one the watch pushed meanwhile may have reached it first.
+      PushNetworkCountryIfMoved(networkCountry, "start_tunnel");
       // Live, not "up": an rpc-only session reports state rpc_only and that is
       // success for this call. What the app must never do is treat it as a
       // tunnel, which is why sessionMode_ is taken from the SERVICE's answer
@@ -6298,6 +6310,9 @@ void SdkHost::ReconcileProviderLocked(const char* reason) {
   }
   const bool started = service_.StartProvider(request, &after, &error);
   if (after) AdoptServiceFacts(*after);
+  // As after start_tunnel: the request's country may be older than one the
+  // watch pushed while it was built.
+  PushNetworkCountryIfMoved(networkCountry, "start_provider");
   if (started) {
     LogInfo("sdkhost: provide: providing without a tunnel ({}, mode {}, tier {})", reason,
             provide::ToString(controlMode), serviceProviderMode_.load());
