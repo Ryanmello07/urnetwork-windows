@@ -1,7 +1,8 @@
 // Executable spec for the app-side Bittensor wallet decisions
 // (App/BittensorWalletFlow.h): the chooser's three wallets, the next step per
 // sdk transport, which hand-backs a flow ignores, which manual errors keep
-// the form open, and the localized text for each sdk refusal code.
+// the form open, and the localized text for each sdk refusal code and for
+// each bridge page code.
 //
 //   c++ -std=c++20 -I ../src/App bittensor-wallet-tests.cpp -o /tmp/bittensor-wallet-tests && /tmp/bittensor-wallet-tests
 //
@@ -92,6 +93,32 @@ int main() {
   CheckEq("invalid_ss58_address", ErrorKey("invalid_ss58_address", "x"), "invalid address");
   CheckEq("", ErrorKey("wallet_error", "x"), "the wallet's own message");
   CheckEq("wallet_connect_failed", ErrorKey("no_challenge", "wallet_connect_failed"), "fallback");
+
+  // a wallet_error carries the bridge page's code (BridgeErrorCode): the app's
+  // own words for a code it knows, with the wallet's name where the text has one
+  struct BridgeCase {
+    const char* code;
+    const char* key;
+    bool takesWalletName;
+  };
+  for (const BridgeCase& c : {
+           BridgeCase{"address_not_in_wallet", "bittensor_error_address_not_in_wallet", true},
+           BridgeCase{"address_mismatch", "earnings_wallet_mismatch", false},
+           BridgeCase{"extension_not_found", "bittensor_error_extension_not_found", true},
+           BridgeCase{"no_account", "bittensor_error_no_account", true},
+           BridgeCase{"user_rejected", "bittensor_error_user_rejected", false},
+           BridgeCase{"walletconnect_expired", "bittensor_error_walletconnect_expired", false},
+           BridgeCase{"walletconnect_unavailable", "bittensor_error_walletconnect_unavailable", false},
+       }) {
+    const BridgeErrorText text = BridgeErrorTextFor(c.code);
+    CheckEq(c.key, text.key, std::string("bridge code ") + c.code);
+    Check(text.takesWalletName == c.takesWalletName, std::string("wallet name for ") + c.code);
+  }
+  // a code this app does not know, the page's own other failures, and a page
+  // before the codes (no code): the page's text
+  for (const char* code : {"wallet_locked", "wallet_error", "invalid_request", ""}) {
+    CheckEq("", BridgeErrorTextFor(code).key, std::string("the page's text for \"") + code + "\"");
+  }
 
   std::cout << (gCases - gFailures) << "/" << gCases << " bittensor wallet checks passed\n";
   return gFailures == 0 ? 0 : 1;

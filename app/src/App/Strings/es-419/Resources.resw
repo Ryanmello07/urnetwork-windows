@@ -344,7 +344,27 @@
   </data>
   <data name="bittensor_error_address_not_in_wallet" xml:space="preserve">
     <value>Tu billetera {} no tiene la dirección que ingresaste. Agrega o conecta esa cuenta en la billetera, o ingresa una dirección que tenga.</value>
-    <comment>ur.io Bittensor wallet card and sign-in: the chosen wallet does not offer the account of the address the user typed (Talisman does not hold it or has not connected it to the site; a WalletConnect wallet connected another account), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect).</comment>
+    <comment>Bittensor wallet error, on the ur.io wallet card and sign-in, and in the apps when the ur.io bridge page returns address_not_in_wallet: the chosen wallet does not offer the account of the address the user typed (Talisman does not hold it or has not connected it to the site; a WalletConnect wallet connected another account), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect).</comment>
+  </data>
+  <data name="bittensor_error_extension_not_found" xml:space="preserve">
+    <value>No se encontró la extensión de {} en este navegador. Instálala y vuelve a intentarlo.</value>
+    <comment>Error: the wallet's browser extension is not installed in this browser (on ur.io, or in the apps when the ur.io bridge page returns extension_not_found). The argument is the wallet product name (Talisman).</comment>
+  </data>
+  <data name="bittensor_error_no_account" xml:space="preserve">
+    <value>Tu billetera {} no tiene ninguna cuenta con la que firmar. Agrega o conecta una cuenta en la billetera y vuelve a intentarlo.</value>
+    <comment>Bittensor wallet error in the apps, when the ur.io bridge page returns no_account: the chosen wallet shared no account it can sign with (none is connected to the site, or it holds only accounts of another chain), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect).</comment>
+  </data>
+  <data name="bittensor_error_user_rejected" xml:space="preserve">
+    <value>La solicitud se rechazó en tu billetera. Comienza de nuevo y apruébala para continuar.</value>
+    <comment>Bittensor wallet error in the apps, when the ur.io bridge page returns user_rejected: the user declined the connection or the signature request in the wallet (Talisman, or a WalletConnect wallet), so nothing was signed.</comment>
+  </data>
+  <data name="bittensor_error_walletconnect_expired" xml:space="preserve">
+    <value>La solicitud de WalletConnect venció antes de que respondiera la billetera. Comienza de nuevo.</value>
+    <comment>Bittensor wallet error in the apps, when the ur.io bridge page returns walletconnect_expired: the WalletConnect pairing or the signature request ran out of time before the wallet answered. WalletConnect is a product name.</comment>
+  </data>
+  <data name="bittensor_error_walletconnect_unavailable" xml:space="preserve">
+    <value>WalletConnect no está disponible en este momento. Inténtalo de nuevo más tarde o ingresa tu dirección manualmente.</value>
+    <comment>Bittensor wallet error in the apps, when the ur.io bridge page returns walletconnect_unavailable: the page has no WalletConnect project id, so it cannot pair a wallet. Manual entry still works. WalletConnect is a product name.</comment>
   </data>
   <data name="bittensor_sign_in" xml:space="preserve">
     <value>Iniciar sesión con Bittensor</value>

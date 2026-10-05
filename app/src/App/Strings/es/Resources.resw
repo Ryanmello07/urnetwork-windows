@@ -648,7 +648,7 @@
   </data>
   <data name="bittensor_error_address_not_in_wallet" xml:space="preserve">
     <value>Tu billetera {} no tiene la dirección que introdujiste. Añade o conecta esa cuenta en la billetera, o introduce una dirección que tenga.</value>
-    <comment>ur.io Bittensor wallet card and sign-in: the chosen wallet does not offer the account of the address the user typed (Talisman does not hold it or has not connected it to the site; a WalletConnect wallet connected another account), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect).</comment>
+    <comment>Bittensor wallet error, on the ur.io wallet card and sign-in, and in the apps when the ur.io bridge page returns address_not_in_wallet: the chosen wallet does not offer the account of the address the user typed (Talisman does not hold it or has not connected it to the site; a WalletConnect wallet connected another account), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect).</comment>
   </data>
   <data name="bittensor_error_challenge_expired" xml:space="preserve">
     <value>Esta solicitud caducó. Empieza de nuevo para obtener un mensaje nuevo para firmar.</value>
@@ -656,7 +656,7 @@
   </data>
   <data name="bittensor_error_extension_not_found" xml:space="preserve">
     <value>No se encontró la extensión de {} en este navegador. Instálala y vuelve a intentarlo.</value>
-    <comment>Error: the wallet's browser extension is not installed in this browser. The argument is the wallet product name (Talisman).</comment>
+    <comment>Error: the wallet's browser extension is not installed in this browser (on ur.io, or in the apps when the ur.io bridge page returns extension_not_found). The argument is the wallet product name (Talisman).</comment>
   </data>
   <data name="bittensor_error_invalid_signature" xml:space="preserve">
     <value>No es una firma válida. Pega la firma 0x completa de tu billetera.</value>
@@ -665,6 +665,22 @@
   <data name="bittensor_error_message_mismatch" xml:space="preserve">
     <value>La billetera firmó una solicitud diferente. Empieza de nuevo.</value>
     <comment>Error: the wallet returned a signature over a different challenge than the one issued.</comment>
+  </data>
+  <data name="bittensor_error_no_account" xml:space="preserve">
+    <value>Tu billetera {} no tiene ninguna cuenta con la que firmar. Añade o conecta una cuenta en la billetera y vuelve a intentarlo.</value>
+    <comment>Bittensor wallet error in the apps, when the ur.io bridge page returns no_account: the chosen wallet shared no account it can sign with (none is connected to the site, or it holds only accounts of another chain), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect).</comment>
+  </data>
+  <data name="bittensor_error_user_rejected" xml:space="preserve">
+    <value>La solicitud se rechazó en tu billetera. Empieza de nuevo y apruébala para continuar.</value>
+    <comment>Bittensor wallet error in the apps, when the ur.io bridge page returns user_rejected: the user declined the connection or the signature request in the wallet (Talisman, or a WalletConnect wallet), so nothing was signed.</comment>
+  </data>
+  <data name="bittensor_error_walletconnect_expired" xml:space="preserve">
+    <value>La solicitud de WalletConnect caducó antes de que respondiera la billetera. Empieza de nuevo.</value>
+    <comment>Bittensor wallet error in the apps, when the ur.io bridge page returns walletconnect_expired: the WalletConnect pairing or the signature request ran out of time before the wallet answered. WalletConnect is a product name.</comment>
+  </data>
+  <data name="bittensor_error_walletconnect_unavailable" xml:space="preserve">
+    <value>WalletConnect no está disponible en este momento. Inténtalo de nuevo más tarde o introduce tu dirección manualmente.</value>
+    <comment>Bittensor wallet error in the apps, when the ur.io bridge page returns walletconnect_unavailable: the page has no WalletConnect project id, so it cannot pair a wallet. Manual entry still works. WalletConnect is a product name.</comment>
   </data>
   <data name="bittensor_manual_sign_instructions" xml:space="preserve">
     <value>Firma este mensaje con la billetera {} que contiene tu coldkey y luego pega abajo la dirección y la firma.</value>

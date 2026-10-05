@@ -1736,9 +1736,19 @@ int64_t BittensorNowMillis() {
       .count();
 }
 
-std::string BittensorErrorText(std::string const& code, std::string const& walletMessage) {
+// A wallet_error from the bridge page reads in this app's words for the page's
+// code when the app knows it, else in the page's own text.
+std::string BittensorErrorText(std::string const& code, std::string const& walletMessage,
+                               std::string const& bridgeCode = std::string(),
+                               std::string const& walletId = std::string()) {
   const std::string key = bittensor::ErrorKey(code, "wallet_connect_failed");
   if (key.empty()) {
+    const bittensor::BridgeErrorText bridge = bittensor::BridgeErrorTextFor(bridgeCode);
+    if (!bridge.key.empty()) {
+      return bridge.takesWalletName
+                 ? Narrow(urnw::Format(bridge.key, Widen(urnet::bittensorWalletDisplayName(walletId))))
+                 : Narrow(Localized(bridge.key));
+    }
     return walletMessage.empty() ? Narrow(Localized("wallet_connect_failed")) : walletMessage;
   }
   return Narrow(Localized(key));
@@ -1864,8 +1874,9 @@ void SdkHost::HandleBittensorReturn(const std::string& url) {
             result->ErrorCode);
     return;
   }
-  FinishBittensorProof(serial,
-                       {false, {}, BittensorErrorText(result->ErrorCode, result->ErrorMessage)});
+  FinishBittensorProof(serial, {false, {}, BittensorErrorText(result->ErrorCode, result->ErrorMessage,
+                                                             result->BridgeErrorCode,
+                                                             session->walletId())});
 }
 
 void SdkHost::FinishBittensorProof(uint64_t serial, BittensorProofOutcome outcome) {
