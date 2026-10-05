@@ -1430,8 +1430,8 @@ func stripLineComments(source string) string {
 				at++
 			case character == '"':
 				inString = !inString
-			case !inString && character == '\'' && (at == 0 || !isIdentifierByte(line[at-1])):
-				// a character literal; a quote after a digit is a digit separator
+			case !inString && character == '\'' && opensCharacterLiteral(line, at):
+				// a character literal
 				for at++; at < len(line) && line[at] != '\''; at++ {
 					if line[at] == '\\' {
 						at++
@@ -1451,6 +1451,48 @@ func isIdentifierByte(character byte) bool {
 		'0' <= character && character <= '9' ||
 		'a' <= character && character <= 'z' ||
 		'A' <= character && character <= 'Z'
+}
+
+// Whether the quote at `at` opens a character literal. A quote after a word is
+// a digit separator (21'600, 0xFF'FF), except after a whole encoding-prefix
+// word (L'x', u'x', U'x', u8'x'), which opens a literal as a bare quote does.
+func opensCharacterLiteral(code string, at int) bool {
+	start := at
+	for start > 0 && isIdentifierByte(code[start-1]) {
+		start--
+	}
+	switch code[start:at] {
+	case "", "L", "u", "U", "u8":
+		return true
+	}
+	return false
+}
+
+// The comment strippers read a prefixed character literal (L'"', u8'[') as one,
+// so a quote inside it opens no string and the comment after it is still
+// stripped, and still read a quote after a digit as a digit separator.
+func TestCommentStrippersReadPrefixedCharacterLiterals(t *testing.T) {
+	cases := []struct {
+		source  string
+		comment string
+	}{
+		{source: `auto quote = text.find(L'"'); `, comment: `// a "quoted" note`},
+		{source: `auto open = text.find(u8'['); `, comment: `/* a "quoted" note */`},
+		{source: `auto mask = 0xFF'FF + U'x'; `, comment: `// it's a mask`},
+		{source: `int ms = 21'600; `, comment: `/* 1'000 "ms" */`},
+	}
+	for _, c := range cases {
+		code := stripComments(c.source + c.comment)
+		if want := c.source + strings.Repeat(" ", len(c.comment)); code != want {
+			t.Errorf("stripComments(%q) = %q, want %q", c.source+c.comment, code, want)
+		}
+		if !strings.HasPrefix(c.comment, "//") {
+			continue
+		}
+		if lineCode := stripLineComments(c.source + c.comment); lineCode != c.source {
+			t.Errorf("stripLineComments(%q) = %q, want %q", c.source+c.comment, lineCode, c.source)
+		}
+	}
 }
 
 // stripComments blanks every // and /* */ comment, as stripLineComments does
@@ -1478,8 +1520,9 @@ func stripComments(source string) string {
 		switch {
 		case out[at] == '"':
 			at = skipLiteral(at, '"')
-		case out[at] == '\'' && (at == 0 || !isIdentifierByte(out[at-1])):
-			// a character literal; a quote after a digit is a digit separator
+		case out[at] == '\'' && opensCharacterLiteral(source, at):
+			// a character literal; the word before a quote in code is never
+			// part of a comment, so the source answers for `out`
 			at = skipLiteral(at, '\'')
 		case out[at] == '/' && at+1 < len(out) && out[at+1] == '/':
 			end := strings.IndexByte(string(out[at:]), '\n')

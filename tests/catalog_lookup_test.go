@@ -3,6 +3,7 @@
 package tests
 
 import (
+	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -26,6 +27,19 @@ import (
 // as a lookup, with the wide literal after it as its English when the function
 // falls back to one; a key literal assigned to a name ending in Key
 // (row.labelKey = "...";), which a lookup reads later, is one as well.
+//
+// Every key the code names must also be tagged windows in the store. The
+// catalog carries every live key, so an untagged lookup shows its text today,
+// and shows the raw id the day the platforms the key is tagged for retire it:
+// the key goes dead and leaves the catalog (three Linux Earnings page strings
+// were lost that way). Strings/windows-keys.txt, generated next to the
+// catalogs, lists the keys tagged windows. Keys reach a lookup through calls
+// the scan above cannot follow (a ternary between two keys, a function that
+// returns one, a table row, a constant), so this check reads every narrow
+// literal spelled like a key id that names a catalog key, not only the calls.
+// The other way round, every key on that list must be looked up: a tag the app
+// no longer needs keeps the key alive in every desktop catalog and in front of
+// the translators for nothing.
 
 // How a lookup function finds its resource.
 type catalogLookupKind int
@@ -127,6 +141,74 @@ var catalogKeyPattern = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
 // A key literal assigned whole to a name ending in Key.
 var catalogAssignedKeyPattern = regexp.MustCompile(`\b(\w*Key)\s*=\s*"([a-z][a-z0-9_]*)"\s*;`)
 
+// Literals the code spells like the id of a catalog key without looking that
+// key up, each with what it is instead.
+var catalogNonLookupLiteralReasons = map[string]string{
+	"developer":  "a --preview-ui destination (MainWindow.xaml.cpp)",
+	"key":        "a JSON field (SdkHost.cpp, VlessPresentation.h)",
+	"other":      "a CLDR plural category (Localization.cpp)",
+	"provide":    "an onboarding step id (OnboardingRouting.h)",
+	"seedphrase": "a --preview-ui destination (MainWindow.xaml.cpp)",
+	"widgets":    "an onboarding link step (OnboardingRouting.h)",
+	"zero":       "a CLDR plural category (Localization.cpp)",
+}
+
+// Keys tagged windows that the app looks up only where the scan cannot see,
+// each with where. None today: every lookup is a call or a key literal of an
+// app source the scan reads.
+var catalogUnscannedTaggedKeyReasons = map[string]string{}
+
+// A narrow string literal of a source spelled like a key id, at its line.
+type catalogKeyLiteral struct {
+	file string
+	line int
+	key  string
+}
+
+// The value of the string literal whose opening quote is at `at`, escapes
+// decoded, and the index after it.
+func readCatalogLiteral(code string, at int) (string, int) {
+	var value strings.Builder
+	for at++; at < len(code) && code[at] != '"' && code[at] != '\n'; at++ {
+		if code[at] != '\\' || at+1 >= len(code) {
+			value.WriteByte(code[at])
+			continue
+		}
+		at++
+		switch code[at] {
+		case 'n':
+			value.WriteByte('\n')
+		case 't':
+			value.WriteByte('\t')
+		case 'u', 'U':
+			digitCount := 4
+			if code[at] == 'U' {
+				digitCount = 8
+			}
+			end := min(at+1+digitCount, len(code))
+			if point, err := strconv.ParseUint(code[at+1:end], 16, 32); err == nil {
+				value.WriteRune(rune(point))
+			}
+			at = end - 1
+		default:
+			value.WriteByte(code[at])
+		}
+	}
+	return value.String(), at + 1
+}
+
+// The index of the quote that closes the character literal opening at `at`, or
+// of the line break that ends it unclosed: a character literal never spans
+// lines, so a quote misread as one cannot swallow the code after it.
+func skipCatalogCharacterLiteral(code string, at int) int {
+	for at++; at < len(code) && code[at] != '\'' && code[at] != '\n'; at++ {
+		if code[at] == '\\' {
+			at++
+		}
+	}
+	return at
+}
+
 // The lookups in one source. Comments are blanked first, so a call in a comment
 // is none; a call through a member (x.count) or the standard library
 // (std::count) is not one of these functions.
@@ -136,50 +218,14 @@ func scanCatalogLookups(file string, source string) []catalogLookup {
 	isWordByte := func(at int) bool {
 		return 0 <= at && at < len(code) && isIdentifierByte(code[at])
 	}
-	// the value of the literal opening at `at` (a quote), escapes decoded, and
-	// the index after it
-	readLiteral := func(at int) (string, int) {
-		var value strings.Builder
-		for at++; at < len(code) && code[at] != '"' && code[at] != '\n'; at++ {
-			if code[at] != '\\' || at+1 >= len(code) {
-				value.WriteByte(code[at])
-				continue
-			}
-			at++
-			switch code[at] {
-			case 'n':
-				value.WriteByte('\n')
-			case 't':
-				value.WriteByte('\t')
-			case 'u', 'U':
-				digitCount := 4
-				if code[at] == 'U' {
-					digitCount = 8
-				}
-				end := min(at+1+digitCount, len(code))
-				if point, err := strconv.ParseUint(code[at+1:end], 16, 32); err == nil {
-					value.WriteRune(rune(point))
-				}
-				at = end - 1
-			default:
-				value.WriteByte(code[at])
-			}
-		}
-		return value.String(), at + 1
-	}
 	for at := 0; at < len(code); at++ {
 		switch {
 		case code[at] == '"':
-			_, next := readLiteral(at)
+			_, next := readCatalogLiteral(code, at)
 			at = next - 1
 			continue
-		case code[at] == '\'' && !isWordByte(at-1):
-			// a character literal; a quote after a digit is a digit separator
-			for at++; at < len(code) && code[at] != '\''; at++ {
-				if code[at] == '\\' {
-					at++
-				}
-			}
+		case code[at] == '\'' && opensCharacterLiteral(code, at):
+			at = skipCatalogCharacterLiteral(code, at)
 			continue
 		case !isIdentifierByte(code[at]) || isWordByte(at-1):
 			continue
@@ -215,7 +261,7 @@ func scanCatalogLookups(file string, source string) []catalogLookup {
 		for scan := open; scan < len(code); scan++ {
 			switch character := code[scan]; {
 			case character == '"':
-				value, next := readLiteral(scan)
+				value, next := readCatalogLiteral(code, scan)
 				if depth == 1 {
 					argument.value += value
 					if scan > 0 && isIdentifierByte(code[scan-1]) {
@@ -225,13 +271,9 @@ func scanCatalogLookups(file string, source string) []catalogLookup {
 					}
 				}
 				scan = next - 1
-			case character == '\'' && !isWordByte(scan-1):
+			case character == '\'' && opensCharacterLiteral(code, scan):
 				// a character literal argument, never a key
-				for scan++; scan < len(code) && code[scan] != '\''; scan++ {
-					if code[scan] == '\\' {
-						scan++
-					}
-				}
+				scan = skipCatalogCharacterLiteral(code, scan)
 				if depth == 1 {
 					argument.other = true
 				}
@@ -292,6 +334,66 @@ func scanCatalogLookups(file string, source string) []catalogLookup {
 	return lookups
 }
 
+// The narrow string literals of one source spelled like a key id. Comments are
+// blanked first; a wide or other prefixed literal (L"English") is English, not
+// a key.
+func scanCatalogKeyLiterals(file string, source string) []catalogKeyLiteral {
+	code := stripComments(source)
+	literals := []catalogKeyLiteral{}
+	for at := 0; at < len(code); at++ {
+		switch {
+		case code[at] == '"':
+			value, next := readCatalogLiteral(code, at)
+			if (at == 0 || !isIdentifierByte(code[at-1])) && catalogKeyPattern.MatchString(value) {
+				literals = append(literals, catalogKeyLiteral{
+					file: file,
+					line: strings.Count(code[:at], "\n") + 1,
+					key:  value,
+				})
+			}
+			at = next - 1
+		case code[at] == '\'' && opensCharacterLiteral(code, at):
+			at = skipCatalogCharacterLiteral(code, at)
+		}
+	}
+	return literals
+}
+
+// Why `taggedKeys` (the keys the store tags windows) does not cover `literal`,
+// or "" when it does.
+func catalogTagMiss(taggedKeys map[string]bool, literal catalogKeyLiteral) string {
+	if taggedKeys[literal.key] {
+		return ""
+	}
+	return literal.file + ":" + strconv.Itoa(literal.line) + ": \"" + literal.key +
+		"\" is looked up but the store does not tag it windows: add windows to the platforms of localizations/keys/" +
+		literal.key + ".yaml and regenerate the catalogs"
+}
+
+// Why `key`, tagged windows, is a stale tag, or "" when `lookedUpKeys` (the
+// keys the scan saw looked up) or catalogUnscannedTaggedKeyReasons has it.
+func catalogStaleTagMiss(lookedUpKeys map[string]bool, key string) string {
+	if _, ok := catalogUnscannedTaggedKeyReasons[key]; ok || lookedUpKeys[key] {
+		return ""
+	}
+	return `"` + key + `" is tagged windows but nothing looks it up: in localizations/keys/` + key +
+		`.yaml move windows from platforms to deprecated and regenerate the catalogs, ` +
+		`or list it in catalogUnscannedTaggedKeyReasons with where it is looked up`
+}
+
+// The ids of a generated key list: one per line, # comment lines skipped.
+func readCatalogTaggedKeys(text string) map[string]bool {
+	taggedKeys := map[string]bool{}
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		taggedKeys[line] = true
+	}
+	return taggedKeys
+}
+
 // Why the neutral catalog, `resourceValues` (each resource name's English),
 // does not answer `lookup`, or "" when it does.
 func catalogMiss(resourceValues map[string]string, lookup catalogLookup) string {
@@ -344,6 +446,7 @@ row.labelKey = "sample_field";
 static constexpr std::string_view kSampleKey = "sample_constant";
 if (row.labelKey == "sample_compared") {}
 const std::string key = "sample_prefix_" + id;
+const size_t open = value.find(L'[', pos); Loc("sample_after_wide_character");
 `
 	kindNames := map[catalogLookupKind]string{
 		catalogLookupPlain:  "plain",
@@ -367,11 +470,88 @@ const std::string key = "sample_prefix_" + id;
 		"fault:sample_fault:plain:18:Line\none — \"two\"",
 		"Adv:sample_composed:plain:19:",
 		"Loc:sample_loc:plain:20:",
+		"Loc:sample_after_wide_character:plain:25:",
 		"labelKey:sample_field:either:21:",
 		"kSampleKey:sample_constant:either:22:",
 	}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Errorf("lookups:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+
+	literalSource := `
+Loc("sample_title");
+auto fallback = Adv("sample_adv", L"wide_english");
+row.labelKey = flag ? "sample_branch_one" : "sample_branch_two";
+// "sample_comment"
+/* "sample_block" */
+const char* text = "Has spaces";
+const char* upper = "SampleUpper";
+const auto quote = value.find(L'"', 0);
+return "sample_after_quote";
+int ms = 21'600; const char* after = u8"sample_prefixed";
+auto bracket = value.find(u8'['); return "sample_after_bracket";
+`
+	gotLiterals := []string{}
+	for _, literal := range scanCatalogKeyLiterals("synthetic.cpp", literalSource) {
+		gotLiterals = append(gotLiterals, literal.key+":"+strconv.Itoa(literal.line))
+	}
+	wantLiterals := []string{
+		"sample_title:2",
+		"sample_adv:3",
+		"sample_branch_one:4",
+		"sample_branch_two:4",
+		"sample_after_quote:10",
+		"sample_after_bracket:12",
+	}
+	if strings.Join(gotLiterals, "\n") != strings.Join(wantLiterals, "\n") {
+		t.Errorf("key literals:\n%s\nwant:\n%s", strings.Join(gotLiterals, "\n"), strings.Join(wantLiterals, "\n"))
+	}
+
+	taggedKeys := readCatalogTaggedKeys(`# Generated by @urnetwork/localizations (gen/generate.mjs). DO NOT EDIT.
+# The store keys tagged windows: exactly the keys the app looks up.
+sample_title
+sample_adv` + "\r\n")
+	if len(taggedKeys) != 2 || !taggedKeys["sample_title"] || !taggedKeys["sample_adv"] {
+		t.Errorf("tagged keys: %v", taggedKeys)
+	}
+	tagCases := []struct {
+		literal catalogKeyLiteral
+		miss    string
+	}{
+		{
+			literal: catalogKeyLiteral{file: "f.cpp", line: 3, key: "sample_adv"},
+			miss:    "",
+		},
+		{
+			literal: catalogKeyLiteral{file: "f.cpp", line: 3, key: "sample_untagged"},
+			miss: `f.cpp:3: "sample_untagged" is looked up but the store does not tag it windows: ` +
+				`add windows to the platforms of localizations/keys/sample_untagged.yaml and regenerate the catalogs`,
+		},
+	}
+	for _, c := range tagCases {
+		if miss := catalogTagMiss(taggedKeys, c.literal); miss != c.miss {
+			t.Errorf("%q: %q, want %q", c.literal.key, miss, c.miss)
+		}
+	}
+	staleCases := []struct {
+		key  string
+		miss string
+	}{
+		{
+			key:  "sample_adv",
+			miss: "",
+		},
+		{
+			key: "sample_unused",
+			miss: `"sample_unused" is tagged windows but nothing looks it up: in localizations/keys/sample_unused.yaml ` +
+				`move windows from platforms to deprecated and regenerate the catalogs, ` +
+				`or list it in catalogUnscannedTaggedKeyReasons with where it is looked up`,
+		},
+	}
+	for _, c := range staleCases {
+		if miss := catalogStaleTagMiss(map[string]bool{"sample_adv": true}, c.key); miss != c.miss {
+			t.Errorf("%q: %q, want %q", c.key, miss, c.miss)
+		}
 	}
 
 	resourceValues := map[string]string{
@@ -465,6 +645,114 @@ func TestCatalogLookupEveryKeyIsInTheNeutralCatalog(t *testing.T) {
 	}
 	if assignedCount < 20 {
 		t.Errorf("the scan saw %d keys assigned to a name; the app has about thirty", assignedCount)
+	}
+}
+
+// Every key the code names is tagged windows, so it stays in the catalog for as
+// long as this app looks it up: each key a lookup call names, and each narrow
+// literal spelled like a key id that names a catalog key, except the literals
+// that are something else (catalogNonLookupLiteralReasons).
+func TestCatalogLookupEveryKeyIsTaggedWindows(t *testing.T) {
+	stringsDir := filepath.Join(repositoryRoot(t), "app", "src", "App", "Strings")
+	data, err := os.ReadFile(filepath.Join(stringsDir, "windows-keys.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	taggedKeys := readCatalogTaggedKeys(string(data))
+	if len(taggedKeys) < 500 {
+		t.Fatalf("Strings/windows-keys.txt lists %d keys", len(taggedKeys))
+	}
+	// a plural key's resources are <id>.<category>
+	catalogKeys := map[string]bool{}
+	document := parseXML(t, filepath.Join(stringsDir, "en", "Resources.resw"))
+	for _, node := range document.descendants("", "data") {
+		if name, ok := node.attribute("name"); ok {
+			catalogKeys[strings.SplitN(name, ".", 2)[0]] = true
+		}
+	}
+	files := appSourceFiles(t, ".cpp", ".h")
+	misses := map[string]bool{}
+	literalCount := 0
+	nonLookupKeys := map[string]bool{}
+	for _, file := range sortedNames(files) {
+		for _, lookup := range scanCatalogLookups(file, files[file]) {
+			literal := catalogKeyLiteral{file: lookup.file, line: lookup.line, key: lookup.key}
+			if miss := catalogTagMiss(taggedKeys, literal); miss != "" {
+				misses[miss] = true
+			}
+		}
+		for _, literal := range scanCatalogKeyLiterals(file, files[file]) {
+			if !catalogKeys[literal.key] {
+				continue
+			}
+			if _, ok := catalogNonLookupLiteralReasons[literal.key]; ok {
+				nonLookupKeys[literal.key] = true
+				continue
+			}
+			literalCount++
+			if miss := catalogTagMiss(taggedKeys, literal); miss != "" {
+				misses[miss] = true
+			}
+		}
+	}
+	if literalCount < 1000 {
+		t.Errorf("the scan saw %d literals naming a catalog key; the app has about seventeen hundred", literalCount)
+	}
+	missMessages := []string{}
+	for miss := range misses {
+		missMessages = append(missMessages, miss)
+	}
+	sort.Strings(missMessages)
+	for _, miss := range missMessages {
+		t.Error(miss)
+	}
+	// the exceptions shrink with the code
+	for key, reason := range catalogNonLookupLiteralReasons {
+		if !nonLookupKeys[key] {
+			t.Errorf("%q (%s) is no longer a literal of the app: drop it from catalogNonLookupLiteralReasons", key, reason)
+		}
+	}
+}
+
+// Every key tagged windows is looked up, by a call or a key literal the scan
+// sees or where catalogUnscannedTaggedKeyReasons says, so no tag outlives the
+// app's use of it.
+func TestCatalogLookupEveryTaggedKeyIsLookedUp(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join(repositoryRoot(t), "app", "src", "App", "Strings", "windows-keys.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	taggedKeys := readCatalogTaggedKeys(string(data))
+	if len(taggedKeys) < 500 {
+		t.Fatalf("Strings/windows-keys.txt lists %d keys", len(taggedKeys))
+	}
+	files := appSourceFiles(t, ".cpp", ".h")
+	lookedUpKeys := map[string]bool{}
+	for _, file := range sortedNames(files) {
+		for _, lookup := range scanCatalogLookups(file, files[file]) {
+			lookedUpKeys[lookup.key] = true
+		}
+		for _, literal := range scanCatalogKeyLiterals(file, files[file]) {
+			if _, ok := catalogNonLookupLiteralReasons[literal.key]; !ok {
+				lookedUpKeys[literal.key] = true
+			}
+		}
+	}
+	taggedKeyIds := []string{}
+	for key := range taggedKeys {
+		taggedKeyIds = append(taggedKeyIds, key)
+	}
+	sort.Strings(taggedKeyIds)
+	for _, key := range taggedKeyIds {
+		if miss := catalogStaleTagMiss(lookedUpKeys, key); miss != "" {
+			t.Error(miss)
+		}
+	}
+	// the exceptions shrink with the code
+	for key, reason := range catalogUnscannedTaggedKeyReasons {
+		if !taggedKeys[key] || lookedUpKeys[key] {
+			t.Errorf("%q (%s) is no longer tagged windows, or the scan now sees it: drop it from catalogUnscannedTaggedKeyReasons", key, reason)
+		}
 	}
 }
 

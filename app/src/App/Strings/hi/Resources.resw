@@ -68,10 +68,6 @@
     <value>{} (सत्यापित)</value>
     <comment>The account's email or phone, marked as verified. The argument is the email or phone number.</comment>
   </data>
-  <data name="account_needs_verification" xml:space="preserve">
-    <value>इस खाते के लिए सत्यापन आवश्यक है। अपना ईमेल देखें।</value>
-    <comment>Sign-in error shown when the account exists but has not been verified yet.</comment>
-  </data>
   <data name="activity" xml:space="preserve">
     <value>गतिविधि</value>
     <comment>A heading for the list of current block actions.</comment>
@@ -3284,10 +3280,6 @@
     <value>URnetwork पर मेरे साथ जुड़ें! ऐप डाउनलोड करें और साइन अप करते समय रेफ़रल कोड {} डालें।</value>
     <comment>Refer overlay</comment>
   </data>
-  <data name="referral_summary" xml:space="preserve">
-    <value>कोड: {0} · रेफ़रल: {1} · दोस्त साइन अप करते समय कोड डालते हैं</value>
-    <comment>One-line referral summary: the network's referral code, how many referrals it has, and how friends use it. The arguments are the referral code and the number of referrals.</comment>
-  </data>
   <data name="referral_toast_joined.one" xml:space="preserve">
     <value>आपके कोड से एक दोस्त जुड़ा! जीवनभर +{1} GiB/दिन।</value>
     <comment>Gold toast shown to the referrer for referrals after the first (the first gets the full-screen celebration). {count} friends just joined, {data} is the daily GiB bonus per referral (currently 3).</comment>
@@ -3657,10 +3649,6 @@
   </data>
   <data name="sign_in_methods" xml:space="preserve">
     <value>साइन-इन विधियाँ</value>
-  </data>
-  <data name="sign_in_with_code" xml:space="preserve">
-    <value>कोड से साइन इन करें</value>
-    <comment>Button that signs in with a pasted auth code instead of a password.</comment>
   </data>
   <data name="sign_in_with_google" xml:space="preserve">
     <value>Google से साइन इन करें</value>

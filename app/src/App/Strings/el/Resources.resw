@@ -68,10 +68,6 @@
     <value>{} (επαληθευμένο)</value>
     <comment>The account's email or phone, marked as verified. The argument is the email or phone number.</comment>
   </data>
-  <data name="account_needs_verification" xml:space="preserve">
-    <value>Αυτός ο λογαριασμός χρειάζεται επαλήθευση. Ελέγξτε το email σας.</value>
-    <comment>Sign-in error shown when the account exists but has not been verified yet.</comment>
-  </data>
   <data name="activity" xml:space="preserve">
     <value>Δραστηριότητα</value>
     <comment>A heading for the list of current block actions.</comment>
@@ -3286,10 +3282,6 @@
     <value>Έλα μαζί μου στο URnetwork! Κατέβασε την εφαρμογή και βάλε τον κωδικό παραπομπής {} στην εγγραφή σου.</value>
     <comment>Refer overlay</comment>
   </data>
-  <data name="referral_summary" xml:space="preserve">
-    <value>Κωδικός: {0} · Παραπομπές: {1} · Οι φίλοι σας εισάγουν τον κωδικό κατά την εγγραφή</value>
-    <comment>One-line referral summary: the network's referral code, how many referrals it has, and how friends use it. The arguments are the referral code and the number of referrals.</comment>
-  </data>
   <data name="referral_toast_joined.one" xml:space="preserve">
     <value>Ένας φίλος μπήκε με τον κωδικό σου! +{1} GiB/ημέρα, για πάντα.</value>
     <comment>Gold toast shown to the referrer for referrals after the first (the first gets the full-screen celebration). {count} friends just joined, {data} is the daily GiB bonus per referral (currently 3).</comment>
@@ -3660,10 +3652,6 @@
   </data>
   <data name="sign_in_methods" xml:space="preserve">
     <value>Μέθοδοι σύνδεσης</value>
-  </data>
-  <data name="sign_in_with_code" xml:space="preserve">
-    <value>Σύνδεση με κωδικό</value>
-    <comment>Button that signs in with a pasted auth code instead of a password.</comment>
   </data>
   <data name="sign_in_with_google" xml:space="preserve">
     <value>Σύνδεση με Google</value>

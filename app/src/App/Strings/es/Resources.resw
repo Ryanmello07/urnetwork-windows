@@ -72,10 +72,6 @@
     <value>Tu cuenta aún no está lista para compras. Reinicia la app e inténtalo de nuevo.</value>
     <comment>Shown when a purchase is refused before contacting the store because the account is not ready: on apple the networkId is missing or unparseable (Shared/ViewModels/AppStoreSubscriptionManager.swift), on android the active network space has no api yet (the Stripe sheet and pay page purchasers). The purchase could never be credited to anyone. This used to be a silent no-op.</comment>
   </data>
-  <data name="account_needs_verification" xml:space="preserve">
-    <value>Esta cuenta necesita verificación. Revisa tu correo electrónico.</value>
-    <comment>Sign-in error shown when the account exists but has not been verified yet.</comment>
-  </data>
   <data name="active_extenders" xml:space="preserve">
     <value>Extensores activos</value>
     <comment>Accessibility label of the row of rings, one per extender carrying a live connection.</comment>
@@ -4640,10 +4636,6 @@ más grande, seguro y descentralizado del mundo.</value>
     <value>¡Únete a URnetwork conmigo! Descarga la app e introduce el código de referencia {} al registrarte.</value>
     <comment>Refer overlay</comment>
   </data>
-  <data name="referral_summary" xml:space="preserve">
-    <value>Código: {0} · Referidos: {1} · Tus amigos ingresan el código al registrarse</value>
-    <comment>One-line referral summary: the network's referral code, how many referrals it has, and how friends use it. The arguments are the referral code and the number of referrals.</comment>
-  </data>
   <data name="referral_toast_joined.one" xml:space="preserve">
     <value>¡Un amigo se unió con tu código! +{1} GiB/día, de por vida.</value>
     <comment>Gold toast shown to the referrer for referrals after the first (the first gets the full-screen celebration). {count} friends just joined, {data} is the daily GiB bonus per referral (currently 3).</comment>
@@ -4813,10 +4805,6 @@ más grande, seguro y descentralizado del mundo.</value>
   <data name="save" xml:space="preserve">
     <value>Guardar</value>
     <comment>Profile</comment>
-  </data>
-  <data name="save_33_percent" xml:space="preserve">
-    <value>Ahorra 33%</value>
-    <comment>Line under the yearly plan's price: the saving against paying monthly.</comment>
   </data>
   <data name="save_logs" xml:space="preserve">
     <value>Guardar registros</value>
@@ -5110,10 +5098,6 @@ del mundo</value>
   <data name="sign_in_with_apple" xml:space="preserve">
     <value>Iniciar sesión con Apple</value>
     <comment>Login stack: full-width Apple sign-in button on platforms that use the ur.io browser bridge</comment>
-  </data>
-  <data name="sign_in_with_code" xml:space="preserve">
-    <value>Iniciar sesión con código</value>
-    <comment>Button that signs in with a pasted auth code instead of a password.</comment>
   </data>
   <data name="sign_in_with_google" xml:space="preserve">
     <value>Iniciar sesión con Google</value>

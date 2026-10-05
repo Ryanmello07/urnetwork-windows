@@ -68,10 +68,6 @@
     <value>{} (ověřeno)</value>
     <comment>The account's email or phone, marked as verified. The argument is the email or phone number.</comment>
   </data>
-  <data name="account_needs_verification" xml:space="preserve">
-    <value>Tento účet vyžaduje ověření. Zkontrolujte svůj e-mail.</value>
-    <comment>Sign-in error shown when the account exists but has not been verified yet.</comment>
-  </data>
   <data name="activity" xml:space="preserve">
     <value>Aktivita</value>
     <comment>A heading for the list of current block actions.</comment>
@@ -3429,10 +3425,6 @@ decentralizovaném protokolu na světě pro příchozí a odchozí provoz.</valu
     <value>Přidejte se ke mně na URnetwork! Stáhněte si aplikaci a při registraci zadejte doporučující kód {}.</value>
     <comment>Refer overlay</comment>
   </data>
-  <data name="referral_summary" xml:space="preserve">
-    <value>Kód: {0} · Doporučení: {1} · Přátelé zadají kód při registraci</value>
-    <comment>One-line referral summary: the network's referral code, how many referrals it has, and how friends use it. The arguments are the referral code and the number of referrals.</comment>
-  </data>
   <data name="referral_toast_joined.one" xml:space="preserve">
     <value>Přes váš kód se připojil přítel! +{1} GiB/den, na celý život.</value>
     <comment>Gold toast shown to the referrer for referrals after the first (the first gets the full-screen celebration). {count} friends just joined, {data} is the daily GiB bonus per referral (currently 3).</comment>
@@ -3826,10 +3818,6 @@ kontent světa</value>
   </data>
   <data name="sign_in_methods" xml:space="preserve">
     <value>Způsoby přihlášení</value>
-  </data>
-  <data name="sign_in_with_code" xml:space="preserve">
-    <value>Přihlásit se pomocí kódu</value>
-    <comment>Button that signs in with a pasted auth code instead of a password.</comment>
   </data>
   <data name="sign_in_with_google" xml:space="preserve">
     <value>Přihlásit se pomocí Google</value>

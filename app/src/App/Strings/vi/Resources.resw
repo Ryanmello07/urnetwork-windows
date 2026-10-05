@@ -68,10 +68,6 @@
     <value>{} (đã xác minh)</value>
     <comment>The account's email or phone, marked as verified. The argument is the email or phone number.</comment>
   </data>
-  <data name="account_needs_verification" xml:space="preserve">
-    <value>Tài khoản này cần được xác minh. Hãy kiểm tra email của bạn.</value>
-    <comment>Sign-in error shown when the account exists but has not been verified yet.</comment>
-  </data>
   <data name="activity" xml:space="preserve">
     <value>Hoạt động</value>
     <comment>A heading for the list of current block actions.</comment>
@@ -3215,10 +3211,6 @@ an toàn nhất và phi tập trung nhất thế giới.</value>
     <value>Tham gia URnetwork cùng mình nhé! Tải ứng dụng và nhập mã giới thiệu {} khi đăng ký.</value>
     <comment>Refer overlay</comment>
   </data>
-  <data name="referral_summary" xml:space="preserve">
-    <value>Mã: {0} · Giới thiệu: {1} · Bạn bè nhập mã khi đăng ký</value>
-    <comment>One-line referral summary: the network's referral code, how many referrals it has, and how friends use it. The arguments are the referral code and the number of referrals.</comment>
-  </data>
   <data name="referral_toast_joined.other" xml:space="preserve">
     <value>{0} người bạn đã tham gia bằng mã của bạn! +{1} GiB/ngày cho mỗi người, trọn đời.</value>
     <comment>Gold toast shown to the referrer for referrals after the first (the first gets the full-screen celebration). {count} friends just joined, {data} is the daily GiB bonus per referral (currently 3).</comment>
@@ -3576,10 +3568,6 @@ nội dung thế giới</value>
   </data>
   <data name="sign_in_methods" xml:space="preserve">
     <value>Phương thức đăng nhập</value>
-  </data>
-  <data name="sign_in_with_code" xml:space="preserve">
-    <value>Đăng nhập bằng mã</value>
-    <comment>Button that signs in with a pasted auth code instead of a password.</comment>
   </data>
   <data name="sign_in_with_google" xml:space="preserve">
     <value>Đăng nhập bằng Google</value>
