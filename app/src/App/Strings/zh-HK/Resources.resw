@@ -68,10 +68,6 @@
     <value>{}（已驗證）</value>
     <comment>The account's email or phone, marked as verified. The argument is the email or phone number.</comment>
   </data>
-  <data name="account_needs_verification" xml:space="preserve">
-    <value>此帳戶需要驗證。請查看您的電郵。</value>
-    <comment>Sign-in error shown when the account exists but has not been verified yet.</comment>
-  </data>
   <data name="activity" xml:space="preserve">
     <value>活動</value>
     <comment>A heading for the list of current block actions.</comment>
@@ -3451,10 +3447,6 @@
     <value>快來 URnetwork 與我一起！下載應用程式，註冊時輸入推薦碼 {}。</value>
     <comment>Refer overlay</comment>
   </data>
-  <data name="referral_summary" xml:space="preserve">
-    <value>推薦碼：{0} · 推薦人數：{1} · 好友註冊時輸入該碼</value>
-    <comment>One-line referral summary: the network's referral code, how many referrals it has, and how friends use it. The arguments are the referral code and the number of referrals.</comment>
-  </data>
   <data name="referral_toast_joined.other" xml:space="preserve">
     <value>{0} 位好友透過你的推薦碼加入了！每位 +{1} GiB/日，終身有效。</value>
     <comment>Gold toast shown to the referrer for referrals after the first (the first gets the full-screen celebration). {count} friends just joined, {data} is the daily GiB bonus per referral (currently 3).</comment>
@@ -3812,10 +3804,6 @@
   </data>
   <data name="sign_in_methods" xml:space="preserve">
     <value>登入方式</value>
-  </data>
-  <data name="sign_in_with_code" xml:space="preserve">
-    <value>使用認證碼登入</value>
-    <comment>Button that signs in with a pasted auth code instead of a password.</comment>
   </data>
   <data name="sign_in_with_google" xml:space="preserve">
     <value>使用 Google 登入</value>

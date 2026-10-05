@@ -72,10 +72,6 @@
     <value>Your account isn't ready for purchases. Please restart the app and try again.</value>
     <comment>Shown when a purchase is refused before contacting the store because the account is not ready: on apple the networkId is missing or unparseable (Shared/ViewModels/AppStoreSubscriptionManager.swift), on android the active network space has no api yet (the Stripe sheet and pay page purchasers). The purchase could never be credited to anyone. This used to be a silent no-op.</comment>
   </data>
-  <data name="account_needs_verification" xml:space="preserve">
-    <value>This account needs verification. Check your email.</value>
-    <comment>Sign-in error shown when the account exists but has not been verified yet.</comment>
-  </data>
   <data name="active_extenders" xml:space="preserve">
     <value>Active extenders</value>
     <comment>Accessibility label of the row of rings, one per extender carrying a live connection.</comment>
@@ -5048,10 +5044,6 @@ and most decentralized ingress and egress protocol.</value>
     <value>≈ {}/month · billed once a year</value>
     <comment>Plan picker: the subordinate line under the yearly price with the per-month equivalent (ceiling-rounded).</comment>
   </data>
-  <data name="plan_monthly_price" xml:space="preserve">
-    <value>$5/month</value>
-    <comment>The monthly plan card's price on the Linux onboarding page.</comment>
-  </data>
   <data name="plan_price_per_month" xml:space="preserve">
     <value>{}/month</value>
     <comment>Monthly plan card label: the store-formatted price per month.</comment>
@@ -5095,10 +5087,6 @@ and most decentralized ingress and egress protocol.</value>
   <data name="plan_terms_yearly_billed_today" xml:space="preserve">
     <value>{} billed today, then every year. Cancel anytime.</value>
     <comment>Plan picker terms line for the yearly plan without a trial or offer. {yearly_price} is a formatted price, for example $59.99.</comment>
-  </data>
-  <data name="plan_yearly_price" xml:space="preserve">
-    <value>$40/year</value>
-    <comment>The yearly plan card's price on the Linux onboarding page.</comment>
   </data>
   <data name="please_install_phantom_or_solflare_to_use_this" xml:space="preserve">
     <value>Please install Phantom or Solflare to use this feature</value>
@@ -5867,10 +5855,6 @@ and most decentralized ingress and egress protocol.</value>
     <value>Join me on URnetwork! Get the app and enter referral code {} when you sign up.</value>
     <comment>Refer overlay</comment>
   </data>
-  <data name="referral_summary" xml:space="preserve">
-    <value>Code: {0} · Referrals: {1} · Friends enter the code when they sign up</value>
-    <comment>One-line referral summary: the network's referral code, how many referrals it has, and how friends use it. The arguments are the referral code and the number of referrals.</comment>
-  </data>
   <data name="referral_toast_joined.zero" xml:space="preserve">
     <value>{0} friends joined with your code! +{1} GiB/day each, for life.</value>
     <comment>Gold toast shown to the referrer for referrals after the first (the first gets the full-screen celebration). {count} friends just joined, {data} is the daily GiB bonus per referral (currently 3).</comment>
@@ -6072,10 +6056,6 @@ and most decentralized ingress and egress protocol.</value>
   <data name="save" xml:space="preserve">
     <value>Save</value>
     <comment>Profile</comment>
-  </data>
-  <data name="save_33_percent" xml:space="preserve">
-    <value>Save 33%</value>
-    <comment>Line under the yearly plan's price: the saving against paying monthly.</comment>
   </data>
   <data name="save_logs" xml:space="preserve">
     <value>Save logs</value>
@@ -6400,10 +6380,6 @@ world's content</value>
   <data name="sign_in_with_apple" xml:space="preserve">
     <value>Sign in with Apple</value>
     <comment>Login stack: full-width Apple sign-in button on platforms that use the ur.io browser bridge</comment>
-  </data>
-  <data name="sign_in_with_code" xml:space="preserve">
-    <value>Sign in with code</value>
-    <comment>Button that signs in with a pasted auth code instead of a password.</comment>
   </data>
   <data name="sign_in_with_google" xml:space="preserve">
     <value>Sign in with Google</value>

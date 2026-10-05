@@ -68,10 +68,6 @@
     <value>{} (ยืนยันแล้ว)</value>
     <comment>The account's email or phone, marked as verified. The argument is the email or phone number.</comment>
   </data>
-  <data name="account_needs_verification" xml:space="preserve">
-    <value>บัญชีนี้ต้องได้รับการยืนยัน ตรวจสอบอีเมลของคุณ</value>
-    <comment>Sign-in error shown when the account exists but has not been verified yet.</comment>
-  </data>
   <data name="activity" xml:space="preserve">
     <value>กิจกรรม</value>
     <comment>A heading for the list of current block actions.</comment>
@@ -3451,10 +3447,6 @@
     <value>มาร่วม URnetwork กับฉันสิ! ดาวน์โหลดแอปแล้วกรอกรหัสแนะนำ {} ตอนสมัคร</value>
     <comment>Refer overlay</comment>
   </data>
-  <data name="referral_summary" xml:space="preserve">
-    <value>รหัส: {0} · การแนะนำ: {1} · เพื่อนกรอกรหัสตอนสมัคร</value>
-    <comment>One-line referral summary: the network's referral code, how many referrals it has, and how friends use it. The arguments are the referral code and the number of referrals.</comment>
-  </data>
   <data name="referral_toast_joined.other" xml:space="preserve">
     <value>เพื่อน {0} คนเข้าร่วมด้วยโค้ดของคุณ! +{1} GiB/วันต่อคน ตลอดชีวิต</value>
     <comment>Gold toast shown to the referrer for referrals after the first (the first gets the full-screen celebration). {count} friends just joined, {data} is the daily GiB bonus per referral (currently 3).</comment>
@@ -3812,10 +3804,6 @@
   </data>
   <data name="sign_in_methods" xml:space="preserve">
     <value>วิธีลงชื่อเข้าใช้</value>
-  </data>
-  <data name="sign_in_with_code" xml:space="preserve">
-    <value>เข้าสู่ระบบด้วยรหัส</value>
-    <comment>Button that signs in with a pasted auth code instead of a password.</comment>
   </data>
   <data name="sign_in_with_google" xml:space="preserve">
     <value>เข้าสู่ระบบด้วย Google</value>

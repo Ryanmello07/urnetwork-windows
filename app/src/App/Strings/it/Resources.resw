@@ -68,10 +68,6 @@
     <value>{} (verificato)</value>
     <comment>The account's email or phone, marked as verified. The argument is the email or phone number.</comment>
   </data>
-  <data name="account_needs_verification" xml:space="preserve">
-    <value>Questo account richiede la verifica. Controlla la tua email.</value>
-    <comment>Sign-in error shown when the account exists but has not been verified yet.</comment>
-  </data>
   <data name="activity" xml:space="preserve">
     <value>Attività</value>
     <comment>A heading for the list of current block actions.</comment>
@@ -3523,10 +3519,6 @@ più grande, sicuro e decentralizzato al mondo.</value>
     <value>Unisciti a me su URnetwork! Scarica l'app e inserisci il codice di riferimento {} quando ti registri.</value>
     <comment>Refer overlay</comment>
   </data>
-  <data name="referral_summary" xml:space="preserve">
-    <value>Codice: {0} · Inviti: {1} · Gli amici inseriscono il codice al momento della registrazione</value>
-    <comment>One-line referral summary: the network's referral code, how many referrals it has, and how friends use it. The arguments are the referral code and the number of referrals.</comment>
-  </data>
   <data name="referral_toast_joined.one" xml:space="preserve">
     <value>Un amico si è unito con il tuo codice! +{1} GiB/giorno, a vita.</value>
     <comment>Gold toast shown to the referrer for referrals after the first (the first gets the full-screen celebration). {count} friends just joined, {data} is the daily GiB bonus per referral (currently 3).</comment>
@@ -3896,10 +3888,6 @@ contenuti del mondo</value>
   </data>
   <data name="sign_in_methods" xml:space="preserve">
     <value>Metodi di accesso</value>
-  </data>
-  <data name="sign_in_with_code" xml:space="preserve">
-    <value>Accedi con codice</value>
-    <comment>Button that signs in with a pasted auth code instead of a password.</comment>
   </data>
   <data name="sign_in_with_google" xml:space="preserve">
     <value>Accedi con Google</value>
