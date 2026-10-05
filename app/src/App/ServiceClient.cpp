@@ -102,4 +102,32 @@ bool ServiceClient::Logout() {
   }
 }
 
+bool ServiceClient::StartProvider(const proto::StartProvider& request,
+                                  std::optional<proto::TunnelStatus>* status,
+                                  std::string* error) {
+  nlohmann::json body = request;
+  return CallProvider(proto::Request(proto::msg::kStartProvider, body), status, error);
+}
+
+bool ServiceClient::StopProvider(std::optional<proto::TunnelStatus>* status,
+                                 std::string* error) {
+  return CallProvider(proto::Request(proto::msg::kStopProvider), status, error);
+}
+
+bool ServiceClient::CallProvider(const nlohmann::json& request,
+                                 std::optional<proto::TunnelStatus>* status,
+                                 std::string* error) {
+  if (status) status->reset();
+  try {
+    proto::Reply r = pipe_.Call(request).get<proto::Reply>();
+    if (status) *status = r.status;
+    if (error) *error = r.error;
+    return r.ok;
+  } catch (const std::exception& e) {
+    LogError("service: {} failed: {}", proto::TypeOf(request), e.what());
+    if (error) *error = e.what();
+    return false;
+  }
+}
+
 }  // namespace urnw

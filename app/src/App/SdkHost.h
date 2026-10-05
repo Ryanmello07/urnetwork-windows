@@ -26,6 +26,7 @@
 #include "ConnectionHealth.h"
 #include "ExtenderPresentation.h"
 #include "PostQuantumIdentity.h"
+#include "ProvideLifecycle.h"
 #include "ProviderLocations.h"
 #include "Sdk.h"
 #include "ServiceClient.h"
@@ -121,6 +122,11 @@ struct LiveStats {
   // the provider holds a Network-mode provide key: with provideEnabled this
   // means the device is discoverable/connectable as a same-network peer
   bool provideHasNetworkKey = false;
+  // The three provide fields above came from the SERVICE's provider-only
+  // device (no session, so no DeviceRemote: SdkHost::ReconcileProviderLocked),
+  // which reports its tier and key but not its peers — so provideClients is
+  // unknown here, not zero, and nothing may render it as a count.
+  bool provideWithoutTunnel = false;
   std::string locationName;       // selected connect location (empty = best available)
   std::string countryCode;        // selected location country code (dns recommendations)
   std::string countryName;
@@ -875,7 +881,9 @@ class SdkHost {
   // points above.
   //
   // Called from: the resume path in Initialize(), a network-server change that
-  // lands on a signed-in space, and the service-reconnect watchdog.
+  // lands on a signed-in space, the service-reconnect watchdog, and an
+  // unexpected drop (the service's dead-tunnel failsafe), whose pass drops the
+  // stale DeviceRemote and hands providing to the provider-only device.
   void EnsureSession(const char* reason, bool automaticRecovery = false);
 
   // Whether a live service session exists, LOCK-FREE.
@@ -1566,7 +1574,12 @@ class SdkHost {
   // What a caller wants done once there is a session. `kind` is deliberately
   // separate from `location`: "best available" is also a nullopt location, so a
   // bare optional could not tell the two apart.
-  enum class ConnectKind { None, BestAvailable, Location, Disconnect };
+  //
+  // Provider is not a session request at all: "keep the provider-only device in
+  // step" (ReconcileProviderLocked), with no gesture, no bootstrap and no attach.
+  // Every pass of the worker that leaves no session ends with that reconcile, so
+  // a Provider request is covered by whatever else is pending.
+  enum class ConnectKind { None, BestAvailable, Location, Disconnect, Provider };
   struct SessionRequest {
     ConnectKind kind = ConnectKind::None;
     std::optional<urnet::ConnectLocation> location;
@@ -1596,6 +1609,7 @@ class SdkHost {
       case ConnectKind::Location:      return gesture::Gesture::ConnectRow;
       case ConnectKind::Disconnect:    return gesture::Gesture::Disconnect;
       case ConnectKind::None:          break;
+      case ConnectKind::Provider:      break;  // never reaches the table
     }
     return gesture::Gesture::EnsureSession;
   }
@@ -1622,6 +1636,28 @@ class SdkHost {
   // Discard a pending, still-settling row intent (and only that kind). Called
   // when a re-click of the current location makes the pending intent moot.
   void CancelPendingRowConnect(const char* why);
+
+  // ---- keep providing while disconnected (Common/ProvideLifecycle.h) --------
+  //
+  // With no session the service's provider-only device is the provider. This
+  // keeps it in step with the stored provide mode and provider transport policy
+  // — started, adopted or re-moded (start_provider is idempotent) or stopped,
+  // as provide::DisconnectedProviderStep says from one get_state — and leaves a
+  // session alone: its own device provides. A signed-out app counts as mode
+  // "never". Asks the service nothing for a mode that does not provide once its
+  // status is known to run nothing. Caller holds mutex_. The session worker runs
+  // it at the end of every pass that leaves no session (a Disconnect, a launch
+  // or a service recovery that found nothing to reattach to, a failed Connect)
+  // and for every RequestProviderReconcile.
+  void ReconcileProviderLocked(const char* reason);
+  // Queue that reconcile on the session worker, off the calling thread — the
+  // UI thread for a mode, policy or kill-switch change: start_provider builds a
+  // DeviceLocal in the service, and a click must not wait on it.
+  void RequestProviderReconcile(const char* reason);
+  // The provide fields of a snapshot with no DeviceRemote: the provider-only
+  // device as the service's last status said. Lock-free, for ReadStats and the
+  // control-pipe reader.
+  void FillProviderOnlyStats(LiveStats& stats) const;
 
   std::mutex pendingMutex_;
   // Signalled on every RequestSession and on CancelPendingRowConnect, so a
@@ -1887,6 +1923,14 @@ class SdkHost {
   // addProvideSecretKeysListener (DeviceRemote has no secret-keys getter --
   // the controller subscribes and caches the derived bit)
   std::atomic<bool> provideHasNetworkKey_{false};
+  // The service's provider-only device as its last adopted status said
+  // (AdoptServiceFacts): whether any status has been adopted at all, and the
+  // device's running bit, live tier and network-key bit. Atomic for the reason
+  // provideHasNetworkKey_ is: ReadStats reads them lock-free.
+  std::atomic<bool> serviceProviderKnown_{false};
+  std::atomic<bool> serviceProviderRunning_{false};
+  std::atomic<int64_t> serviceProviderMode_{0};
+  std::atomic<bool> serviceProviderNetworkKey_{false};
   std::optional<urnet::ConnectViewController> connectVc_;
   std::optional<urnet::ContractViewController> contractVc_;  // live throughput feed
   // K6/K7's one implementation of the settings, share and import rules.

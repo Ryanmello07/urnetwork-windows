@@ -22,6 +22,8 @@
 
 #include <nlohmann/json.hpp>
 
+#include "ProvideLifecycle.h"
+
 namespace urnw::proto {
 
 // bump when the wire format changes incompatibly; hello negotiates it
@@ -52,6 +54,13 @@ namespace urnw::proto {
 //    listener currently bound there.
 // 4: start_tunnel returns Preparing once RPC is usable. Capture is deferred
 //    until the selected destination has a usable proven provider.
+//
+//    NOT bumped for start_provider / stop_provider or the TunnelStatus
+//    provider_* fields, by the same test: does silence mean the wrong thing? It
+//    does not. A service that does not know the verbs answers "unknown request
+//    type" and runs nothing, which is the behaviour before they existed, and a
+//    peer that drops the provider_* fields reads as "no provider-only device",
+//    which claims less than the truth rather than more.
 inline constexpr int kProtocolVersion = 4;
 
 // The first version that understands StartTunnel::mode. Below this, an absent
@@ -70,6 +79,8 @@ inline constexpr const char* kGetState = "get_state";            // app -> servi
 inline constexpr const char* kSetSplitTunnel = "set_split_tunnel"; // app -> service
 inline constexpr const char* kSetKillSwitch = "set_kill_switch"; // app -> service
 inline constexpr const char* kLogout = "logout";                 // app -> service
+inline constexpr const char* kStartProvider = "start_provider";  // app -> service
+inline constexpr const char* kStopProvider = "stop_provider";    // app -> service
 inline constexpr const char* kReply = "reply";                   // service -> app
 inline constexpr const char* kEvent = "event";                   // service -> app (unsolicited)
 }  // namespace msg
@@ -211,6 +222,32 @@ struct SetKillSwitch {
   bool on = false;
 };
 
+// start_provider: KEEP PROVIDING WHILE DISCONNECTED (ProvideLifecycle.h). The
+// service runs a provider-only DeviceLocal built from the persisted device
+// identity and these credentials, in this network space, with this provide
+// mode — and nothing else: no wintun adapter, no route, no DNS entry, no
+// firewall policy and no device RPC listener, so it carries no RPC material.
+// Refused while a tunnel session exists or is starting, while the kill
+// switch's armed floor is in force, and for a mode that does not provide while
+// disconnected (provide::ProviderStartRefusal). The same request again keeps
+// the running device and only applies the mode (SameProviderDevice); any other
+// request replaces it. stop_provider retires it, and every tunnel teardown
+// retires it first, so a Connect never runs two devices under one identity.
+struct StartProvider {
+  std::string by_jwt;              // client JWT for this device
+  std::string network_space_json;  // NetworkSpace.toJson() from the app
+  std::string instance_id;         // stable instance UUID
+  std::string device_description;
+  std::string device_spec;
+  std::string app_version;
+  std::string provide_mode;        // the provide control mode: "always" | "network" | "auto"
+  // The app's mirror of the provider transport policy (TransportSettings json,
+  // SdkHost::ApplyTransportSettings). Empty when it was never edited here: the
+  // policy the service's DeviceLocal persisted (or its default) stands, exactly
+  // as BootstrapSession seeds a tunnel session's device only when one exists.
+  std::string provider_transport_settings_json;
+};
+
 // ---- reply / state payload ------------------------------------------------
 
 struct TunnelStatus {
@@ -300,6 +337,19 @@ struct TunnelStatus {
   // an automatic teardown is never a surprise. Defaults false — a peer that
   // cannot say simply never warns, which is today's behaviour.
   bool failsafe_armed = false;
+  // THE PROVIDER-ONLY DEVICE (start_provider), which provides while there is
+  // no tunnel session. Its running bit, the control mode it was asked for, its
+  // live tier as the sdk applied it (0 none, 1 network, 3 public) and whether
+  // it holds a Network-mode provide key, read off the device when it was built
+  // or re-moded. All false/empty while a tunnel session runs: that session's
+  // own device is the provider, and the app reads it over the device RPC.
+  //
+  // NO PROTOCOL BUMP (see kProtocolVersion): a peer too old to send these reads
+  // as "no provider-only device", which claims less than the truth.
+  bool provider_running = false;
+  std::string provider_control_mode;
+  int64_t provider_mode = 0;
+  bool provider_network_key = false;
 };
 
 struct Reply {
@@ -378,6 +428,45 @@ inline void from_json(const nlohmann::json& j, SetKillSwitch& v) {
   if (auto it = j.find("on"); it != j.end() && !it->is_null()) it->get_to(v.on);
 }
 
+inline void to_json(nlohmann::json& j, const StartProvider& v) {
+  j = {
+      {"by_jwt", v.by_jwt},
+      {"network_space_json", v.network_space_json},
+      {"instance_id", v.instance_id},
+      {"device_description", v.device_description},
+      {"device_spec", v.device_spec},
+      {"app_version", v.app_version},
+      {"provide_mode", v.provide_mode},
+      {"provider_transport_settings_json", v.provider_transport_settings_json},
+  };
+}
+
+inline void from_json(const nlohmann::json& j, StartProvider& v) {
+  auto get = [&](const char* k, auto& out) {
+    if (auto it = j.find(k); it != j.end() && !it->is_null()) it->get_to(out);
+  };
+  get("by_jwt", v.by_jwt);
+  get("network_space_json", v.network_space_json);
+  get("instance_id", v.instance_id);
+  get("device_description", v.device_description);
+  get("device_spec", v.device_spec);
+  get("app_version", v.app_version);
+  get("provide_mode", v.provide_mode);
+  get("provider_transport_settings_json", v.provider_transport_settings_json);
+}
+
+// "A device built from `a` can keep running for `b`." Everything that goes into
+// constructing the device must match — credentials, identity, space and the
+// provider transport policy; only the provide mode may differ, because the
+// running device takes a new mode in place. Shared by the service, which keeps
+// its device for such a request, and the tests.
+inline bool SameProviderDevice(const StartProvider& a, const StartProvider& b) {
+  return a.by_jwt == b.by_jwt && a.network_space_json == b.network_space_json &&
+         a.instance_id == b.instance_id && a.device_description == b.device_description &&
+         a.device_spec == b.device_spec && a.app_version == b.app_version &&
+         a.provider_transport_settings_json == b.provider_transport_settings_json;
+}
+
 inline void to_json(nlohmann::json& j, const TunnelStatus& v) {
   j = {
       {"state", ToString(v.state)},
@@ -396,6 +485,10 @@ inline void to_json(nlohmann::json& j, const TunnelStatus& v) {
       {"egress_index6", v.egress_index6},
       {"stop_reason", v.stop_reason},
       {"failsafe_armed", v.failsafe_armed},
+      {"provider_running", v.provider_running},
+      {"provider_control_mode", v.provider_control_mode},
+      {"provider_mode", v.provider_mode},
+      {"provider_network_key", v.provider_network_key},
   };
 }
 
@@ -424,6 +517,25 @@ inline void from_json(const nlohmann::json& j, TunnelStatus& v) {
   get("egress_index6", v.egress_index6);
   get("stop_reason", v.stop_reason);
   get("failsafe_armed", v.failsafe_armed);
+  get("provider_running", v.provider_running);
+  get("provider_control_mode", v.provider_control_mode);
+  get("provider_mode", v.provider_mode);
+  get("provider_network_key", v.provider_network_key);
+}
+
+// What one status says about the provider-only device, as the app's reconcile
+// reads it (provide::DisconnectedProviderStep). `answered` is the transport's
+// word that the service replied (ServiceClient::GetState); nothing in the
+// payload can carry it.
+inline provide::ServiceProviderFacts ProviderFactsFrom(const TunnelStatus& s, bool answered) {
+  provide::ServiceProviderFacts facts;
+  facts.answered = answered;
+  facts.tunnelSession = IsSessionLive(s.state) || s.state == TunnelState::Starting ||
+                        s.state == TunnelState::Stopping;
+  // Empty reads as off, as ConnectAction.h's WfpInForce does.
+  facts.killSwitchArmed = !s.wfp_state.empty() && s.wfp_state != "off";
+  facts.providerRunning = s.provider_running;
+  return facts;
 }
 
 // "The service stopped this tunnel BY ITSELF because it could not carry

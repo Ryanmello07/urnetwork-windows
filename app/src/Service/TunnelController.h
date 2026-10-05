@@ -1,7 +1,9 @@
 // Orchestrates one tunnel session, mirroring the macOS PacketTunnelProvider:
 // build the NetworkSpace + DeviceLocal from the app's config, start the mTLS RPC
 // listener the app's DeviceRemote dials, bring up the wintun adapter, apply
-// network settings, wire the packet pump, and keep R1 egress current.
+// network settings, wire the packet pump, and keep R1 egress current. While
+// there is no tunnel session it can instead run a provider-only DeviceLocal
+// (StartProvider) that touches none of that and never coexists with a session.
 //
 // Thread-safety: Start/Stop are serialized by the ControlServer (single client).
 //
@@ -152,6 +154,29 @@ class TunnelController {
 
   // Clear persisted auth/session state (mirrors the macOS logout message).
   void Logout();
+
+  // THE PROVIDER-ONLY DEVICE (start_provider; Common/ProvideLifecycle.h). Keeps
+  // providing while there is no tunnel session: a DeviceLocal built from the
+  // persisted identity and the request's credentials, network space, provider
+  // transport policy and provide mode — and nothing else. No wintun adapter, no
+  // route, no DNS entry, no firewall policy, no active marker and no device RPC
+  // listener, so this machine's own traffic is routed exactly as it would be
+  // without URnetwork, and no client can drive the device.
+  //
+  // Refused (false, `error` set) while a tunnel session exists or is starting,
+  // while the kill switch's armed floor is in force, while an abandoned
+  // teardown still holds a device under this identity, and for a mode that does
+  // not provide while disconnected (provide::ProviderStartRefusal) — every
+  // refusal before anything is built. The same request again keeps the running
+  // device and only applies the mode (proto::SameProviderDevice); any other
+  // request replaces it. Every teardown retires it (StopLocked: the first SDK
+  // teardown, right after the machine is given back), and every bring-up opens
+  // with a teardown, so a Connect never runs two devices under one identity.
+  bool StartProvider(const proto::StartProvider& request, std::string& error);
+  // stop_provider: retire the provider-only device and touch nothing else — no
+  // tunnel, no firewall policy. False only when the session lock could not be
+  // taken in budget.
+  bool StopProvider();
 
   // THE STATUS THE APP DECIDES ON, and it must never block.
   //
@@ -331,6 +356,32 @@ class TunnelController {
   // Load persisted DeviceLocalKeyMaterial blobs, or return nullopt on first run.
   std::optional<urnet::DeviceLocalKeyMaterial> LoadKeyMaterial();
   void PersistKeyMaterial(const urnet::DeviceLocalKeyMaterial& km);
+  // Steps 3 and 4 of a bring-up, shared by the tunnel session and the
+  // provider-only device so both come from ONE copy of the identity rules:
+  // the space imported into the service's own storage, and a DeviceLocal with
+  // the persisted key material (a new identity persisted only when none was
+  // stored), sized at the host's memory tier, with enable_rpc=false — a device
+  // gets a listener only from setRpcServer, which the provider-only device
+  // never calls. `who` prefixes the log line. Both throw on failure. Caller
+  // holds mutex_.
+  urnet::NetworkSpace ImportNetworkSpaceLocked(const std::string& networkSpaceJson);
+  urnet::DeviceLocal NewDeviceLocked(const urnet::NetworkSpace& space,
+                                     const std::string& byJwt,
+                                     const std::string& deviceDescription,
+                                     const std::string& deviceSpec,
+                                     const std::string& appVersion,
+                                     const std::string& instanceId, const char* who);
+  // Retire the provider-only device: clear and publish its status, then hand
+  // the device and its space to a bounded worker that closes them
+  // (RunBounded, AbandonHazard::HoldsSessionDevice — while that worker is
+  // outstanding a second device would run under the same identity, so it
+  // refuses a start exactly like an abandoned session teardown). A no-op
+  // without one. Caller holds mutex_.
+  void RetireProviderDeviceLocked();
+  // Read the provider-only device's live tier and network-key bit into the
+  // fields ComposeStatusLocked reports. SDK calls, so never from a publish
+  // path: only after the device is built or re-moded. Caller holds mutex_.
+  void ReadProviderFactsLocked();
   void PushExcludedToDriver(const std::vector<std::string>& paths, bool allowlist);
   // Re-point the driver at a new physical interface. Runs from the egress
   // monitor's change callback, on a system worker thread.
@@ -403,6 +454,17 @@ class TunnelController {
   std::optional<urnet::NetworkSpaceManager> spaceManager_;
   std::optional<urnet::NetworkSpace> networkSpace_;
   std::optional<urnet::DeviceLocal> device_;
+  // The provider-only device (StartProvider), its space and the request it was
+  // built from. SEPARATE slots from networkSpace_ and device_, which keep their
+  // one meaning — the tunnel session's — for every check that reads them (the
+  // capture precondition, the teardown, the published identity). Never engaged
+  // together with a tunnel session. providerTier_ and providerNetworkKey_ are
+  // what ReadProviderFactsLocked last read off the device. Guarded by mutex_.
+  std::optional<urnet::NetworkSpace> providerSpace_;
+  std::optional<urnet::DeviceLocal> providerDevice_;
+  proto::StartProvider providerRequest_;
+  int64_t providerTier_ = 0;
+  bool providerNetworkKey_ = false;
 
   // Native tunnel plumbing.
   std::unique_ptr<Wintun> wintun_;
