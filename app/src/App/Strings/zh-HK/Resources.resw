@@ -3185,6 +3185,10 @@
     <value>移除錢包</value>
     <comment>Used in Main/Account/AccountNavStackView.swift.</comment>
   </data>
+  <data name="remove_wallet_moves_or_holds_payouts" xml:space="preserve">
+    <value>USDC 支付會轉到你的另一個 Solana 或 Polygon 錢包；若沒有，則暫停發放，直到你連接一個錢包。</value>
+    <comment>Body of the remove confirmation for the payout wallet (the title is remove_wallet). Removing the payout wallet makes another of the account's active Solana or Polygon wallets the payout wallet when there is one (the server picks it; payouts_now_go_to names it after the removal), and holds USDC payouts until the user connects a wallet when there is none.</comment>
+  </data>
   <data name="resend_reset_link" xml:space="preserve">
     <value>重新發送連結</value>
     <comment>Reset link sent</comment>
