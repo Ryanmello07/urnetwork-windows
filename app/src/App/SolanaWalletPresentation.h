@@ -207,6 +207,24 @@ class LegacyLoad {
 // What the pane shows from a committed view: SolanaPanelFor over its parts.
 SolanaPanelView SolanaPanelFor(const LegacyCommitted& view);
 
+// A removal of the payout wallet, waiting for the reload that follows it.
+struct PayoutRemoval {
+  std::string networkId;      // the network the wallet was removed from
+  std::string removedId;      // the wallet removed
+  std::string priorPayoutId;  // the payout wallet id before the removal
+};
+
+// The wallet that became the payout wallet when `removal` removed it, from the
+// committed view of the reload that followed: removing the payout wallet makes
+// another active Solana or Polygon wallet of the network the payout wallet when
+// there is one (server fix/remove-wallet-promote), and the pane says so
+// ("Payouts now go to …", payouts_now_go_to). Nothing when the removed wallet
+// was not the payout wallet, when the payout read failed or found none (an
+// empty id keeps the removed one), when the new payout wallet is not one the
+// card shows, or when the view is another network's.
+std::optional<LegacyWallet> PromotedPayoutWallet(const PayoutRemoval& removal,
+                                                 const LegacyCommitted& view);
+
 // After a wallet is linked: POST /account/payout-wallet is needed unless the new
 // wallet already is the payout wallet. The server makes a new non-TAO wallet the
 // payout wallet by itself only when the network has none.

@@ -521,6 +521,71 @@ void LegacyLoadTests() {
 
 // ---- the connect sheet ------------------------------------------------------
 
+// Removing the payout wallet makes another active Solana or Polygon wallet of
+// the network the payout wallet when there is one (server
+// fix/remove-wallet-promote); the reload after the removal names it.
+void PromotionTests() {
+  const LegacyWallet removed = Wallet("w1", "SOL", kUsdcMint);
+  const LegacyWallet next = Wallet("w2", "SOL", kTokenProgram);
+  const LegacyWallet polygon = Wallet("w3", "MATIC", "0x4b2a9f3e1c7d8a6b5e0f2d1c3b4a596877665544");
+  const PayoutRemoval removal{"net-a", "w1", "w1"};
+  // the reload after the removal: the server's answers for the network
+  auto reload = [&](const std::vector<LegacyWallet>& wallets, const std::string& payoutId,
+                    bool payoutOk = true) {
+    LegacyCommitted view = CommittedView("net-a", removed, 0);
+    BeginLegacyLoad(view, "net-a", /*reset=*/true);
+    LegacyLoad load(2);
+    load.Answer(2, LegacyRead::Wallets, true, WalletsAnswer(wallets));
+    load.Answer(2, LegacyRead::Payout, payoutOk, PayoutAnswer(payoutId));
+    load.Answer(2, LegacyRead::Payments, true);
+    load.Commit(view, "net-a");
+    return view;
+  };
+  {
+    TEST_CASE("removingThePayoutWalletNamesThePromotedOne");
+    const LegacyCommitted view = reload({next, polygon}, "w2");
+    const auto promoted = PromotedPayoutWallet(removal, view);
+    Check(promoted.has_value(), "a promoted wallet");
+    if (promoted) CheckEq("w2", promoted->id, "the new payout wallet");
+    Check(SolanaPanelFor(view).showCard, "its card");
+  }
+  {
+    TEST_CASE("aPromotedPolygonWalletIsNamedToo");
+    const auto promoted = PromotedPayoutWallet(removal, reload({polygon}, "w3"));
+    Check(promoted.has_value() && promoted->id == "w3", "the Polygon wallet");
+  }
+  {
+    TEST_CASE("nothingPromotedNamesNothing");
+    // the server found no other Solana or Polygon wallet: no payout id, and the
+    // empty-id rule keeps the removed one
+    const LegacyCommitted view = reload({polygon}, "");
+    CheckEq("w1", view.payoutWalletId, "the removed id stands");
+    Check(!PromotedPayoutWallet(removal, view).has_value(), "no promotion");
+  }
+  {
+    TEST_CASE("aFailedPayoutReadNamesNothing");
+    Check(!PromotedPayoutWallet(removal, reload({next}, "w2", /*payoutOk=*/false)).has_value(),
+          "an unknown payout wallet is not called promoted");
+  }
+  {
+    TEST_CASE("removingAnotherWalletNamesNothing");
+    const PayoutRemoval notPayout{"net-a", "w9", "w1"};
+    Check(!PromotedPayoutWallet(notPayout, reload({next}, "w2")).has_value(),
+          "the removed wallet was not the payout wallet");
+  }
+  {
+    TEST_CASE("aPayoutWalletTheCardCannotShowNamesNothing");
+    const LegacyWallet tao = Wallet("w4", "TAO", kColdkey);
+    Check(!PromotedPayoutWallet(removal, reload({tao}, "w4")).has_value(), "a TAO payout wallet");
+  }
+  {
+    TEST_CASE("anotherNetworksViewNamesNothing");
+    LegacyCommitted view = reload({next}, "w2");
+    view.networkId = "net-b";
+    Check(!PromotedPayoutWallet(removal, view).has_value(), "the removal was net-a's");
+  }
+}
+
 void BridgeTests() {
   {
     TEST_CASE("aProviderOpensTheBrowser");
@@ -907,6 +972,8 @@ int main() {
   PanelTests();
   std::cout << "the three reads\n";
   LegacyLoadTests();
+  std::cout << "a removal that promotes another payout wallet\n";
+  PromotionTests();
   std::cout << "connect: wallet app\n";
   BridgeTests();
   std::cout << "connect: manual address\n";

@@ -285,7 +285,10 @@ class WalletPage {
   void ShowSolanaCardMenu(winrt::Microsoft::UI::Xaml::FrameworkElement const& anchor);
   winrt::fire_and_forget ConfirmRemoveSolanaWallet();
   void RemoveSolanaWallet(std::string const& walletId);
-  void ApplyRemoveResult(uint32_t generation, bool ok, std::string const& error);
+  void ApplyRemoveResult(uint32_t generation, bool ok, std::string const& error,
+                         solana::PayoutRemoval const& removal);
+  // the reload after a removal committed: name the wallet the server promoted
+  void NotifyPromotedPayoutWallet();
   void SetLegacyBusy(bool busy);
 
   // ---- history, claims, gas, head
@@ -466,6 +469,8 @@ class WalletPage {
   bool legacyBusy_ = false;
   Flow legacyFlow_;  // the payout read and switch after a link
   Flow removeFlow_;  // the removal, on its own flow: a link must never drop its answer
+  // a removal that landed, until the reload after it commits
+  std::optional<solana::PayoutRemoval> payoutRemoval_;
   std::shared_ptr<urnw::ConnectSolanaWalletSheet> solanaSheet_;
 
   struct PointsStatTile {
