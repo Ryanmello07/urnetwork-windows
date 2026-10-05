@@ -680,7 +680,7 @@
   </data>
   <data name="bittensor_error_address_not_in_wallet" xml:space="preserve">
     <value>محفظة {} لديك لا تحتوي على العنوان الذي أدخلته. أضف هذا الحساب أو اربطه في المحفظة، أو أدخل عنوانًا موجودًا فيها.</value>
-    <comment>ur.io Bittensor wallet card and sign-in: the chosen wallet does not offer the account of the address the user typed (Talisman does not hold it or has not connected it to the site; a WalletConnect wallet connected another account), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect).</comment>
+    <comment>Bittensor wallet error, on the ur.io wallet card and sign-in, and in the apps when the ur.io bridge page returns address_not_in_wallet: the chosen wallet does not offer the account of the address the user typed (Talisman does not hold it or has not connected it to the site; a WalletConnect wallet connected another account), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect).</comment>
   </data>
   <data name="bittensor_error_challenge_expired" xml:space="preserve">
     <value>انتهت صلاحية هذا الطلب. ابدأ من جديد للحصول على رسالة جديدة للتوقيع.</value>
@@ -688,7 +688,7 @@
   </data>
   <data name="bittensor_error_extension_not_found" xml:space="preserve">
     <value>لم يتم العثور على إضافة {} في هذا المتصفح. ثبّتها ثم حاول مرة أخرى.</value>
-    <comment>Error: the wallet's browser extension is not installed in this browser. The argument is the wallet product name (Talisman).</comment>
+    <comment>Error: the wallet's browser extension is not installed in this browser (on ur.io, or in the apps when the ur.io bridge page returns extension_not_found). The argument is the wallet product name (Talisman).</comment>
   </data>
   <data name="bittensor_error_invalid_signature" xml:space="preserve">
     <value>هذا ليس توقيعًا صالحًا. الصق توقيع 0x الكامل من محفظتك.</value>
@@ -697,6 +697,22 @@
   <data name="bittensor_error_message_mismatch" xml:space="preserve">
     <value>وقّعت المحفظة طلبًا مختلفًا. ابدأ من جديد.</value>
     <comment>Error: the wallet returned a signature over a different challenge than the one issued.</comment>
+  </data>
+  <data name="bittensor_error_no_account" xml:space="preserve">
+    <value>لا تحتوي محفظة {} لديك على حساب للتوقيع به. أضف حسابًا أو اربطه في المحفظة، ثم حاول مرة أخرى.</value>
+    <comment>Bittensor wallet error in the apps, when the ur.io bridge page returns no_account: the chosen wallet shared no account it can sign with (none is connected to the site, or it holds only accounts of another chain), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect).</comment>
+  </data>
+  <data name="bittensor_error_user_rejected" xml:space="preserve">
+    <value>تم رفض الطلب في محفظتك. ابدأ من جديد ووافق عليه للمتابعة.</value>
+    <comment>Bittensor wallet error in the apps, when the ur.io bridge page returns user_rejected: the user declined the connection or the signature request in the wallet (Talisman, or a WalletConnect wallet), so nothing was signed.</comment>
+  </data>
+  <data name="bittensor_error_walletconnect_expired" xml:space="preserve">
+    <value>انتهت صلاحية طلب WalletConnect قبل أن تستجيب المحفظة. ابدأ من جديد.</value>
+    <comment>Bittensor wallet error in the apps, when the ur.io bridge page returns walletconnect_expired: the WalletConnect pairing or the signature request ran out of time before the wallet answered. WalletConnect is a product name.</comment>
+  </data>
+  <data name="bittensor_error_walletconnect_unavailable" xml:space="preserve">
+    <value>WalletConnect غير متاح حاليًا. حاول مرة أخرى لاحقًا، أو أدخل عنوانك يدويًا.</value>
+    <comment>Bittensor wallet error in the apps, when the ur.io bridge page returns walletconnect_unavailable: the page has no WalletConnect project id, so it cannot pair a wallet. Manual entry still works. WalletConnect is a product name.</comment>
   </data>
   <data name="bittensor_manual_sign_instructions" xml:space="preserve">
     <value>وقّع هذه الرسالة باستخدام محفظة {} التي تملك مفتاحك البارد (coldkey)، ثم الصق العنوان والتوقيع أدناه.</value>

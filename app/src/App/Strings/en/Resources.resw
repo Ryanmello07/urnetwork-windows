@@ -691,7 +691,7 @@
   </data>
   <data name="bittensor_error_address_not_in_wallet" xml:space="preserve">
     <value>Your {} wallet doesn't have the address you entered. Add or connect that account in the wallet, or enter an address it has.</value>
-    <comment>ur.io Bittensor wallet card and sign-in: the chosen wallet does not offer the account of the address the user typed (Talisman does not hold it or has not connected it to the site; a WalletConnect wallet connected another account), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect).</comment>
+    <comment>Bittensor wallet error, on the ur.io wallet card and sign-in, and in the apps when the ur.io bridge page returns address_not_in_wallet: the chosen wallet does not offer the account of the address the user typed (Talisman does not hold it or has not connected it to the site; a WalletConnect wallet connected another account), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect).</comment>
   </data>
   <data name="bittensor_error_challenge_expired" xml:space="preserve">
     <value>This request expired. Start again to get a new message to sign.</value>
@@ -699,7 +699,7 @@
   </data>
   <data name="bittensor_error_extension_not_found" xml:space="preserve">
     <value>The {} extension was not found in this browser. Install it, then try again.</value>
-    <comment>Error: the wallet's browser extension is not installed in this browser. The argument is the wallet product name (Talisman).</comment>
+    <comment>Error: the wallet's browser extension is not installed in this browser (on ur.io, or in the apps when the ur.io bridge page returns extension_not_found). The argument is the wallet product name (Talisman).</comment>
   </data>
   <data name="bittensor_error_invalid_signature" xml:space="preserve">
     <value>That is not a valid signature. Paste the full 0x signature from your wallet.</value>
@@ -708,6 +708,22 @@
   <data name="bittensor_error_message_mismatch" xml:space="preserve">
     <value>The wallet signed a different request. Start again.</value>
     <comment>Error: the wallet returned a signature over a different challenge than the one issued.</comment>
+  </data>
+  <data name="bittensor_error_no_account" xml:space="preserve">
+    <value>Your {} wallet has no account to sign with. Add or connect an account in the wallet, then try again.</value>
+    <comment>Bittensor wallet error in the apps, when the ur.io bridge page returns no_account: the chosen wallet shared no account it can sign with (none is connected to the site, or it holds only accounts of another chain), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect).</comment>
+  </data>
+  <data name="bittensor_error_user_rejected" xml:space="preserve">
+    <value>The request was declined in your wallet. Start again and approve it to continue.</value>
+    <comment>Bittensor wallet error in the apps, when the ur.io bridge page returns user_rejected: the user declined the connection or the signature request in the wallet (Talisman, or a WalletConnect wallet), so nothing was signed.</comment>
+  </data>
+  <data name="bittensor_error_walletconnect_expired" xml:space="preserve">
+    <value>The WalletConnect request expired before the wallet answered. Start again.</value>
+    <comment>Bittensor wallet error in the apps, when the ur.io bridge page returns walletconnect_expired: the WalletConnect pairing or the signature request ran out of time before the wallet answered. WalletConnect is a product name.</comment>
+  </data>
+  <data name="bittensor_error_walletconnect_unavailable" xml:space="preserve">
+    <value>WalletConnect is not available right now. Try again later, or enter your address manually.</value>
+    <comment>Bittensor wallet error in the apps, when the ur.io bridge page returns walletconnect_unavailable: the page has no WalletConnect project id, so it cannot pair a wallet. Manual entry still works. WalletConnect is a product name.</comment>
   </data>
   <data name="bittensor_manual_sign_instructions" xml:space="preserve">
     <value>Sign this message with the {} wallet that holds your coldkey, then paste the address and the signature below.</value>

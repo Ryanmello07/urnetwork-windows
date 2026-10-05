@@ -640,7 +640,7 @@
   </data>
   <data name="bittensor_error_address_not_in_wallet" xml:space="preserve">
     <value>您的 {} 钱包中没有您输入的地址。请在钱包中添加或连接该账户，或输入钱包中已有的地址。</value>
-    <comment>ur.io Bittensor wallet card and sign-in: the chosen wallet does not offer the account of the address the user typed (Talisman does not hold it or has not connected it to the site; a WalletConnect wallet connected another account), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect).</comment>
+    <comment>Bittensor wallet error, on the ur.io wallet card and sign-in, and in the apps when the ur.io bridge page returns address_not_in_wallet: the chosen wallet does not offer the account of the address the user typed (Talisman does not hold it or has not connected it to the site; a WalletConnect wallet connected another account), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect).</comment>
   </data>
   <data name="bittensor_error_challenge_expired" xml:space="preserve">
     <value>此请求已过期。请重新开始以获取新的待签名消息。</value>
@@ -648,7 +648,7 @@
   </data>
   <data name="bittensor_error_extension_not_found" xml:space="preserve">
     <value>在此浏览器中未找到 {} 扩展。请安装后重试。</value>
-    <comment>Error: the wallet's browser extension is not installed in this browser. The argument is the wallet product name (Talisman).</comment>
+    <comment>Error: the wallet's browser extension is not installed in this browser (on ur.io, or in the apps when the ur.io bridge page returns extension_not_found). The argument is the wallet product name (Talisman).</comment>
   </data>
   <data name="bittensor_error_invalid_signature" xml:space="preserve">
     <value>这不是有效的签名。请粘贴钱包中完整的 0x 签名。</value>
@@ -657,6 +657,22 @@
   <data name="bittensor_error_message_mismatch" xml:space="preserve">
     <value>钱包签署了另一个请求。请重新开始。</value>
     <comment>Error: the wallet returned a signature over a different challenge than the one issued.</comment>
+  </data>
+  <data name="bittensor_error_no_account" xml:space="preserve">
+    <value>您的 {} 钱包中没有可用于签名的账户。请在钱包中添加或连接一个账户，然后重试。</value>
+    <comment>Bittensor wallet error in the apps, when the ur.io bridge page returns no_account: the chosen wallet shared no account it can sign with (none is connected to the site, or it holds only accounts of another chain), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect).</comment>
+  </data>
+  <data name="bittensor_error_user_rejected" xml:space="preserve">
+    <value>该请求已在您的钱包中被拒绝。请重新开始并批准该请求以继续。</value>
+    <comment>Bittensor wallet error in the apps, when the ur.io bridge page returns user_rejected: the user declined the connection or the signature request in the wallet (Talisman, or a WalletConnect wallet), so nothing was signed.</comment>
+  </data>
+  <data name="bittensor_error_walletconnect_expired" xml:space="preserve">
+    <value>钱包响应之前，WalletConnect 请求已过期。请重新开始。</value>
+    <comment>Bittensor wallet error in the apps, when the ur.io bridge page returns walletconnect_expired: the WalletConnect pairing or the signature request ran out of time before the wallet answered. WalletConnect is a product name.</comment>
+  </data>
+  <data name="bittensor_error_walletconnect_unavailable" xml:space="preserve">
+    <value>WalletConnect 目前不可用。请稍后重试，或手动输入您的地址。</value>
+    <comment>Bittensor wallet error in the apps, when the ur.io bridge page returns walletconnect_unavailable: the page has no WalletConnect project id, so it cannot pair a wallet. Manual entry still works. WalletConnect is a product name.</comment>
   </data>
   <data name="bittensor_manual_sign_instructions" xml:space="preserve">
     <value>请使用持有您 coldkey 的 {} 钱包签署此消息，然后在下方粘贴地址和签名。</value>
