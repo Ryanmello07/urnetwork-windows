@@ -2158,6 +2158,11 @@ void TunnelController::SetNetworkCountry(const std::string& code, const std::str
   }
 }
 
+std::optional<netcountry::Reading> TunnelController::NetworkCountry() {
+  std::scoped_lock lock(networkCountryMutex_);
+  return networkCountry_;
+}
+
 // See the contract in the header. NO SESSION LOCK: a copy of the snapshot that
 // was published at the last write, plus the two publishers that are lock-free by
 // design and are therefore read live. The app's whole connect/disconnect
