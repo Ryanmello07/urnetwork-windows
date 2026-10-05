@@ -2248,9 +2248,6 @@ void MainWindow::OnWalletProvideMode(IInspectable const&, RoutedEventArgs const&
 void MainWindow::OnWalletExtender(IInspectable const&, RoutedEventArgs const&) {
   HomeNav().SelectedItem(ConnectNavItem());
 }
-void MainWindow::OnVerifySeeker(IInspectable const& s, RoutedEventArgs const& e) {
-  wallet_->OnVerifySeeker(s, e);
-}
 void MainWindow::OnEarningsTableChanged(SelectorBar const& s,
                                         SelectorBarSelectionChangedEventArgs const& e) {
   wallet_->OnEarningsTableChanged(s, e);

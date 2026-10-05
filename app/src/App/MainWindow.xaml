@@ -1956,7 +1956,7 @@
                                          leaderboard table, one at a time, both
                                          filling to the floor
                        col 4  NETWORK    why the number is what it is - own
-                                         rank, the Seeker multiplier, reliability
+                                         rank, reliability
 
                      THE LEDGER PANE IS TABBED: history and the leaderboard are
                      both wide multi-column tables that want the same space,
@@ -2444,27 +2444,6 @@
                                 <muxc:InfoBar x:Name="LeaderboardInfo"
                                               Style="{StaticResource UrSnackbarStyle}"
                                               Margin="12,8" IsOpen="False" />
-
-                                <!-- earning multipliers: the Seeker token (2x points,
-                                     free daily data and referral data) ........... -->
-                                <Border Style="{StaticResource UrGroupHeaderStyle}">
-                                    <TextBlock x:Name="EarningMultipliersHeading"
-                                               Style="{StaticResource UrGroupHeaderTextStyle}" />
-                                </Border>
-                                <Border BorderBrush="{StaticResource UrBorderBrush}"
-                                        BorderThickness="0,0,0,1" Padding="12,10">
-                                    <StackPanel Spacing="10">
-                                        <TextBlock x:Name="SeekerStatusText" TextWrapping="Wrap"
-                                                   Style="{StaticResource UrKeyTextStyle}"
-                                                   TextTrimming="None" />
-                                        <TextBlock x:Name="SeekerBenefitText" TextWrapping="Wrap"
-                                                   Style="{StaticResource UrRowNoteStyle}"
-                                                   TextTrimming="None" />
-                                        <Button x:Name="VerifySeekerButton"
-                                                HorizontalAlignment="Stretch"
-                                                Click="OnVerifySeeker" />
-                                    </StackPanel>
-                                </Border>
 
                                 <!-- network reliability ........................ -->
                                 <Border Style="{StaticResource UrGroupHeaderStyle}">

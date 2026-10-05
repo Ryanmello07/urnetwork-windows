@@ -293,14 +293,11 @@ struct MainWindow : MainWindowT<MainWindow> {
   // where its switch lives, as the provide mode row does.
   void OnWalletExtender(winrt::Windows::Foundation::IInspectable const&,
                         winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
-  // wallet: Seeker-token multiplier verification. leaderboard: the
-  // public/private switch.
-  void OnVerifySeeker(winrt::Windows::Foundation::IInspectable const&,
-                      winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   // R4: the ledger pane's History / Leaderboard switch (Earnings).
   void OnEarningsTableChanged(
       winrt::Microsoft::UI::Xaml::Controls::SelectorBar const&,
       winrt::Microsoft::UI::Xaml::Controls::SelectorBarSelectionChangedEventArgs const&);
+  // leaderboard: the public/private switch.
   void OnLeaderboardPublicToggled(winrt::Windows::Foundation::IInspectable const&,
                                   winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
 

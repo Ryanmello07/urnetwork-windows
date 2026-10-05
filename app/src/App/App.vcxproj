@@ -357,7 +357,6 @@
     <ClInclude Include="LeaderboardIndicator.h" />
     <ClInclude Include="WalletPage.h" />
     <ClInclude Include="EarningsSheets.h" />
-    <ClInclude Include="SeekerVerifyNotice.h" />
     <ClInclude Include="SolanaWalletPresentation.h" />
     <ClInclude Include="SolanaWalletSheets.h" />
     <ClInclude Include="AppController.h" />

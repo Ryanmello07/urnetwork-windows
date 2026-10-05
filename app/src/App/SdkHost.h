@@ -721,9 +721,9 @@ class SdkHost {
   void CancelBittensorProof();
 
   // Sign `message` with a Solana wallet through the same browser bridge and hand
-  // the address and signature back WITHOUT authenticating. The Seeker multiplier
-  // is the caller (android SettingsScreen.signAndVerifySeekerHolder): it verifies
-  // the signed pair against the api rather than logging in with it.
+  // the address and signature back WITHOUT authenticating. Adding a Solana
+  // sign-in method is the caller (SignSolanaForAdd): it hands the signed pair to
+  // addAuth rather than logging in with it.
   //
   // Only one wallet flow can be in flight, because the bridge exposes a single
   // pair of callbacks: starting a sign-in supersedes a pending signature request

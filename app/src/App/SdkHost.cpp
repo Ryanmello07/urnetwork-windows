@@ -1450,7 +1450,7 @@ void SdkHost::SetupWalletCallbacks() {
         std::exchange(walletConnectDone_, nullptr)(true, std::move(publicKey), std::string());
         return;
       case bridge::PublicKeyRoute::SignForRequest:
-        // A bare signature request carries its own message (Seeker verification).
+        // A bare signature request carries its own message (SignSolanaForAdd).
         wallet_.SignMessage(walletSignMessage_);
         return;
       case bridge::PublicKeyRoute::SignIn:

@@ -11,7 +11,7 @@
 //           tile
 //   pane B  the per-epoch history (points; the alpha column only with a
 //           wallet) and the leaderboard, one at a time
-//   pane C  own ranking, the Seeker multiplier, reliability
+//   pane C  own ranking, reliability
 //
 // Points are URnetwork's own system and always the headline. Alpha accrues
 // from the first epoch after the wallet was attached, never retroactively.
@@ -40,7 +40,6 @@
 #include <winrt/Microsoft.UI.Xaml.Shapes.h>
 
 #include "EarningsSheets.h"
-#include "SeekerVerifyNotice.h"
 #include "SolanaWalletPresentation.h"
 
 namespace urnw {
@@ -90,10 +89,10 @@ class WalletPage {
   // Connect page's does.
   void SetPresentationActive(bool active);
 
-  // Every Earnings fetch: points, the Seeker flag, reliability, the epoch
-  // history, the coldkey, the head-spot status - and, once the coldkey is
-  // known, the claims and the gas key from the chain. Each settles its own
-  // panel independently, so one failing source does not blank the others.
+  // Every Earnings fetch: points, reliability, the epoch history, the coldkey,
+  // the head-spot status - and, once the coldkey is known, the claims and the
+  // gas key from the chain. Each settles its own panel independently, so one
+  // failing source does not blank the others.
   void LoadWallet();
   void LoadLeaderboard();
 
@@ -127,8 +126,6 @@ class WalletPage {
   void OnClaimTop200(winrt::Windows::Foundation::IInspectable const&,
                      winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OpenProtocolSite();  // the "Learn more" link beside the wallet note
-  winrt::fire_and_forget OnVerifySeeker(winrt::Windows::Foundation::IInspectable const&,
-                                        winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnEarningsTableChanged(
       winrt::Microsoft::UI::Xaml::Controls::SelectorBar const&,
       winrt::Microsoft::UI::Xaml::Controls::SelectorBarSelectionChangedEventArgs const&);
@@ -171,7 +168,7 @@ class WalletPage {
  private:
   // THE ONE GATE for every server call this destination makes. --preview-ui
   // deliberately has no session, and a guarded LOAD path is not enough: every
-  // ACTION here (connect, claim, verify, the leaderboard switch) has to pass
+  // ACTION here (connect, claim, the leaderboard switch) has to pass
   // through this too, or a preview build puts authenticated-looking requests
   // on the wire with no token.
   bool CanCallApi() const;
@@ -218,7 +215,6 @@ class WalletPage {
 
   // ---- fetches (the SDK adapters; every callback marshals to the UI thread)
   void LoadPoints();
-  void LoadSeeker();
   void LoadReliability();
   void LoadEpochs();
   void LoadSnWallet();
@@ -317,13 +313,6 @@ class WalletPage {
   void ApplyStatsSections(bool force);
   winrt::fire_and_forget ShowProviderTransportSettingsSheet();
 
-  // ---- the Seeker multiplier
-  void ApplySeekerState();
-  // `failure` is the error or server message behind a Reason notice; the
-  // wallet suffix goes with NotHolder
-  void ApplySeekerResult(uint32_t generation, urnw::SeekerVerifyNoticeKind notice,
-                         std::string const& failure, std::string const& walletSuffix);
-
   // ---- leaderboard
   void ApplyLeaderboard(urnet::LeaderboardEarnersList const& earners, Fetch state);
   void ApplyRanking(urnet::NetworkRanking const& ranking, bool ok);
@@ -371,8 +360,6 @@ class WalletPage {
   // the reading last painted; empty before the first
   std::optional<urnw::ExtenderStatsSections> statsSections_;
   PointsBreakdown accountPoints_;
-  bool seekerHolder_ = false;
-  bool verifyingSeeker_ = false;
   std::optional<urnet::ReliabilityWindow> reliability_;
 
   std::optional<SnWalletInfo> snWallet_;
@@ -400,7 +387,6 @@ class WalletPage {
   bool settingRankingPublic_ = false;
 
   Flow connectFlow_;
-  Flow seekerFlow_;
   Flow rankingFlow_;
 
   std::shared_ptr<urnw::ClaimAlphaSheet> claimSheet_;
