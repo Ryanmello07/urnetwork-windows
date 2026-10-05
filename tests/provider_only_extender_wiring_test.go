@@ -186,9 +186,9 @@ func TestProvideProtocolRejectsDroppedExtenderFields(t *testing.T) {
 	extra := provideJsonFlags(t)
 	requireProvideFailure(t, "provide-protocol-tests.cpp", map[string]func(string) string{
 		"Protocol.h": func(source string) string {
-			return strings.Replace(source,
-				"  if (auto it = j.find(\"extender_provide_status\"); it != j.end() && it->is_object())\n"+
-					"    v.extender_provide_status = *it;\n", "", 1)
+			return strings.Replace(source, `  if (auto it = j.find("extender_provide_status"); it != j.end() && it->is_object())
+    v.extender_provide_status = *it;
+`, "", 1)
 		},
 	}, "provider stats: extender_provide_status round-trips", extra...)
 	requireProvideFailure(t, "provide-protocol-tests.cpp", map[string]func(string) string{

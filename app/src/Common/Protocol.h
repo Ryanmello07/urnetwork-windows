@@ -380,7 +380,7 @@ struct TunnelStatus {
 // ExtenderProvideStatusOf), so this file needs no sdk header and the field
 // names keep one owner.
 //
-// The extender fields came after the verb, with NO PROTOCOL BUMP, by the test
+// The extender fields came after the verb, with no protocol bump, by the test
 // kProtocolVersion uses: a service that does not send them leaves no status,
 // which the app reads as the role unsupported and hides the extender row and
 // plot (EXTENDER.md N1), exactly as before they existed.

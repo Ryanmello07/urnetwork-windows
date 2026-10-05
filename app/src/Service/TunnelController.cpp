@@ -2125,7 +2125,7 @@ void TunnelController::WatchProviderNetworkLocked() {
   }
 }
 
-// See the contract in the header. NO SESSION LOCK AND NO DEVICE CALL: the copy
+// See the contract in the header. No session lock and no device call: the copy
 // the build and the listeners left, and the controller's sampled state.
 proto::ProviderStats TunnelController::ProviderStats() {
   proto::ProviderStats stats;
