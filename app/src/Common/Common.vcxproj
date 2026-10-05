@@ -41,6 +41,7 @@
   </ItemDefinitionGroup>
 
   <ItemGroup>
+    <ClInclude Include="AppLifetime.h" />
     <ClInclude Include="BalanceGate.h" />
     <ClInclude Include="ConnectAction.h" />
     <ClInclude Include="ConnectionHealth.h" />

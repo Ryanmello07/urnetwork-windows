@@ -14,6 +14,7 @@
 #include <winrt/Microsoft.UI.Dispatching.h>
 #include <winrt/Microsoft.Windows.AppLifecycle.h>
 
+#include "AppLifetime.h"
 #include "BalanceGate.h"
 #include "SdkHost.h"
 #include "SubscriptionBalance.h"
@@ -33,7 +34,11 @@ class AppController {
   ~AppController();
 
   void Start();
-  void Shutdown();
+  // End the app, once: the first call wins and every later one returns at
+  // once. Every ending stops the app's own work and exits; the tray menu's
+  // Quit also stops the tunnel and the provider in the service, after the
+  // window and the tray are gone (AppLifetime.h, SdkHost::Quit). UI thread.
+  void Shutdown(lifetime::Ending ending);
 
   SdkHost& sdk() { return sdk_; }
   // The subscription balance / plan store (fetch + polling; Phase 1 keystone).
@@ -156,9 +161,10 @@ class AppController {
   // cleared on any tunnel transition, because exit evidence is only valid
   // within the tunnel session that produced it (see OnTunnelState).
   std::optional<health::State> trayHealth_;
-  // Set when the tray "Quit" is chosen, so the window's Closing handler lets it
-  // close instead of hiding to tray (macOS parity: X/close hides, tray Quit
-  // exits). Atomic since D3: OnUi reads it from SDK callback threads as the
+  // Set when the app ends (Shutdown: the tray "Quit", a close request, the
+  // installer handoff), so the window's Closing handler lets it close instead
+  // of hiding to tray (macOS parity: X/close hides, tray Quit exits). Atomic
+  // since D3: OnUi reads it from SDK callback threads as the
   // "stop marshalling, the DispatcherQueue is tearing down" gate — a completion
   // that resumes on the queue after shutdown does not get to throw from inside
   // CoreMessaging, it simply is not queued.

@@ -150,7 +150,13 @@ void AppController::Start() {
     LogInfo("app: tray -> turn the kill switch off");
     sdk_.SetKillSwitch(false);
   };
-  cb.onQuit = [this] { Shutdown(); };
+  // The user's Quit stops the tunnel and the provider with the app; a close
+  // from outside the app only ends the app (AppLifetime.h).
+  cb.onQuit = [this] {
+    LogInfo("app: tray -> quit");
+    Shutdown(lifetime::Ending::Quit);
+  };
+  cb.onCloseRequest = [this] { Shutdown(lifetime::Ending::CloseRequest); };
   // The tray icon is the app's ONLY affordance on launch — no icon means no way
   // in, and from outside that is indistinguishable from a process that died. Say
   // so on screen. The app keeps running: TrayIcon re-adds itself on
@@ -240,8 +246,10 @@ void AppController::Start() {
   // and the 6h cadence; a started installer comes back through this handler,
   // and the app quits so the MSI finds none of its files in use. Marshalled
   // onto the UI thread because it is the tray-quit teardown, which is
-  // UI-thread machinery end to end.
-  updates_.SetInstallerStartedHandler([this] { OnUi([this] { Shutdown(); }); });
+  // UI-thread machinery end to end. Not the user's Quit: the MSI stops the
+  // service itself, and the tunnel and the provider with it.
+  updates_.SetInstallerStartedHandler(
+      [this] { OnUi([this] { Shutdown(lifetime::Ending::InstallerHandoff); }); });
   updates_.Start();
 
   LogInfo("app: initializing the sdk host");
@@ -261,13 +269,14 @@ void AppController::Start() {
   LogInfo("app: started");
 }
 
-void AppController::Shutdown() {
+void AppController::Shutdown(lifetime::Ending ending) {
   // Once. A double Quit click, or the relaunch handoff racing a tray quit,
   // must not run the teardown below twice against a window that is half gone.
   // exchange() also flips the OnUi gate before anything is torn down, so no
   // SDK callback can queue new UI work into the drain that follows.
   if (quitting_.exchange(true, std::memory_order_acq_rel)) return;
-  LogInfo("app: shutdown requested (tray quit)");
+  const lifetime::Plan plan = lifetime::PlanFor(ending);
+  LogInfo("app: shutdown requested ({}): {}", lifetime::ToString(ending), plan.why);
   // First, and joined: the checker's worker is the one thread here that does
   // long blocking I/O (a zip download), and it polls its stop flag between
   // reads, so this is bounded — see UpdateChecker::Stop.
@@ -293,14 +302,26 @@ void AppController::Shutdown() {
   //     own timers, by their documented contract — and every weak-ref lambda
   //     already queued finds null and no-ops instead of touching a dead tree.
   //
-  // Nothing here waits on anything unbounded: updates_.Stop() above is the
-  // only join, and it is bounded by design.
+  // Nothing up to the service stop below waits on anything unbounded:
+  // updates_.Stop() above is the only join, and it is bounded by design.
   if (placementSaveTimer_) placementSaveTimer_.Stop();
   balance_.Stop();
   tray_.Destroy();
   if (window_) window_.Close();
   window_ = nullptr;
   windowHwnd_ = nullptr;
+  // THE USER'S QUIT ENDS THE TUNNEL AND THE PROVIDER TOO (owner decision,
+  // 2026-10-05). Last before the exit, with the window and the tray already
+  // gone, because it blocks this thread: it joins SdkHost's own threads, waits
+  // out a session pass in flight and makes two pipe calls, each bounded by the
+  // pipe's timeout and in the service by StopBudget.h. Nothing on screen is
+  // left to freeze while it does. Nothing it throws may keep the app from
+  // exiting: the tray, its only way out, is already gone.
+  try {
+    if (plan.stopService) sdk_.Quit();
+  } catch (const std::exception& e) {
+    LogError("app: stopping the service on quit failed: {}", e.what());
+  }
   if (auto app = Application::Current()) app.Exit();
 }
 

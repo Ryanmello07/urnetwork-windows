@@ -814,6 +814,29 @@ class SdkHost {
 
   void Logout();
 
+  // THE TRAY'S QUIT, the service half (owner decision 2026-10-05,
+  // AppLifetime.h): the service ends with no session and no provider-only
+  // device, and nothing in this process starts either again. In order:
+  //   1. the session-request slot is emptied and closed for good, so a pass
+  //      already queued, the failsafe edge, a mode change or the watchdog's
+  //      recovery cannot reach start_tunnel or start_provider afterwards;
+  //   2. this object's own threads are stopped and joined: the service
+  //      watchdog, the presentation worker, the rpc-sync watchdog and the
+  //      provider-only statistics loop with its provider status poll;
+  //   3. under mutex_, so after any pass in flight: stop_tunnel, which ends
+  //      the session (tunnel or rpc-only) and lifts any firewall policy, the
+  //      kill switch's armed floor included, as Disconnect does; then
+  //      stop_provider; then the DeviceRemote and the saved rpc session go.
+  // The control channel is dialled first when it is down, because a service
+  // that is running still runs what it ran. The stored kill-switch setting, the
+  // provide mode and the auth are untouched: quitting is not signing out, and
+  // the next launch reconciles from them.
+  //
+  // BLOCKING (joins, the lock, two pipe calls), and it is the last thing the
+  // app does: AppController::Shutdown calls it from the UI thread after the
+  // window and the tray are gone. Not undone: the process is ending.
+  void Quit();
+
   // ---- connect ------------------------------------------------------------
   //
   // CONNECT STARTS THE TUNNEL. It used to only ask the SDK to pick providers,
@@ -1764,6 +1787,10 @@ class SdkHost {
   SessionRequest pending_;
   bool pendingRequested_ = false;
   bool sessionWorkerAlive_ = false;
+  // Set once by Quit, under pendingMutex_, and never cleared: from then on
+  // RequestSession records nothing and ReconcileProviderLocked asks the service
+  // nothing. Atomic because the reconcile reads it under mutex_ alone.
+  std::atomic<bool> quitting_{false};
 
   // ---- the service-reconnect watchdog ---------------------------------------
   //

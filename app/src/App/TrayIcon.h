@@ -28,7 +28,13 @@ class TrayIcon {
     std::function<void()> onShowWindow;              // menu: Open
     std::function<void()> onConnectToggle;           // menu: Connect/Disconnect
     std::function<bool()> isConnected;               // for the menu item label
-    std::function<void()> onQuit;                    // menu: Quit
+    // menu: Quit. The user's explicit Quit, which stops the tunnel and the
+    // provider in the service as well as the app (AppLifetime.h).
+    std::function<void()> onQuit;
+    // A WM_CLOSE sent to the tray's window from outside the app (`taskkill /im`
+    // without /f, an installer). The app exits and the service keeps what it
+    // runs: nobody chose Quit.
+    std::function<void()> onCloseRequest;
 
     // --- the two escapes, shown only when they are the answer to something ---
     //
