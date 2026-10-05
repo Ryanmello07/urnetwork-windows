@@ -1,6 +1,7 @@
 // Executable spec for the provider-locations pure logic: a port of the android
 // JVM tests GlobeGeometryTest.kt (25 cases) and WorldTopologyTest.kt (7 cases),
-// plus the row-label cases, run against the SAME C++ sources the app compiles.
+// plus the row-label and "Stay on this exit" cases (StayOnExitTest.kt), run
+// against the SAME C++ sources the app compiles.
 //
 // The windows app has no test project (the solution is Common/Service/App/
 // SplitTunnel/Installer), and a WinUI 3 app cannot be built or run on a
@@ -13,6 +14,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -542,6 +544,111 @@ void ProviderLocationsTests() {
   // tested there), so there is nothing to order here.
 }
 
+// ---- "Stay on this exit" (android StayOnExitTest) ---------------------------
+
+const std::string kClientId = "018f2b6e-3c4d-7a8b-9c0d-1e2f3a4b5c6d";
+const std::string kOtherClientId = "0192aaaa-bbbb-7ccc-8ddd-eeeeffff0001";
+
+ProviderLocationRow MakeExitRow(const std::string& clientId, const char* city = "",
+                                const char* region = "", const char* country = "",
+                                const char* countryCode = "") {
+  ProviderLocationRow row = MakeRow(city, region, country);
+  row.clientId = clientId;
+  row.countryCode = countryCode;
+  row.hasLocation = !row.city.empty() || !row.region.empty() || !row.country.empty();
+  return row;
+}
+
+std::string Upper(std::string s) {
+  for (char& c : s) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+  return s;
+}
+
+void StayOnExitTests() {
+  {
+    TEST_CASE("shortClientIdKeepsTheFirstAndLastFour");
+    CheckEqualString("018f\xE2\x80\xA6" "5c6d", ShortClientId(kClientId), "uuid");
+    CheckEqualString("018f\xE2\x80\xA6" "5c6d", ShortClientId(" " + kClientId + " "), "trimmed");
+    CheckEqualString("abcd1234", ShortClientId("abcd1234"), "short id as is");
+  }
+  {
+    TEST_CASE("nameIsTheShortIdThenCityAndCountry");
+    CheckEqualString("018f\xE2\x80\xA6" "5c6d \xC2\xB7 Berlin, Germany",
+                     StayOnExitName(MakeExitRow(kClientId, "Berlin", "Land Berlin", "Germany")),
+                     "city and country");
+  }
+  {
+    TEST_CASE("nameUsesTheRegionWhenTheCityIsUnknown");
+    CheckEqualString("018f\xE2\x80\xA6" "5c6d \xC2\xB7 California, United States",
+                     StayOnExitName(MakeExitRow(kClientId, "", "California", "United States")),
+                     "region and country");
+    CheckEqualString("018f\xE2\x80\xA6" "5c6d \xC2\xB7 Iceland",
+                     StayOnExitName(MakeExitRow(kClientId, "", "", "Iceland")), "country only");
+  }
+  {
+    TEST_CASE("nameIsTheShortIdWhenTheLocationIsUnknown");
+    CheckEqualString("018f\xE2\x80\xA6" "5c6d", StayOnExitName(MakeExitRow(kClientId)), "no place");
+  }
+  {
+    TEST_CASE("targetIsTheProviderClientIdWithItsLocation");
+    const auto target = MakeStayOnExitTarget(MakeExitRow(kClientId, "Osaka", "Osaka", "Japan", "jp"));
+    Check(target.has_value(), "a target");
+    if (target) {
+      StayOnExitTarget expected;
+      expected.clientId = kClientId;
+      expected.name = "018f\xE2\x80\xA6" "5c6d \xC2\xB7 Osaka, Japan";
+      expected.city = "Osaka";
+      expected.region = "Osaka";
+      expected.country = "Japan";
+      expected.countryCode = "jp";
+      Check(*target == expected, "client id, name and place");
+      CheckEqualString(expected.name, target->name, "name");
+    }
+  }
+  {
+    TEST_CASE("noTargetWithoutAClientId");
+    Check(!MakeStayOnExitTarget(MakeExitRow("")).has_value(), "empty id");
+    Check(!MakeStayOnExitTarget(MakeExitRow("  ")).has_value(), "blank id");
+  }
+  {
+    TEST_CASE("onlyTheSelectedRowOffersToStay");
+    Check(StayOnExitStateFor(MakeExitRow(kClientId), kClientId, "") == StayOnExitState::Offer,
+          "selected offers");
+    Check(StayOnExitStateFor(MakeExitRow(kOtherClientId), kClientId, "") == StayOnExitState::None,
+          "unselected offers nothing");
+    // nothing selected (no providers) offers nothing
+    Check(StayOnExitStateFor(MakeExitRow(kClientId), "", "") == StayOnExitState::None,
+          "no selection");
+  }
+  {
+    TEST_CASE("theProviderAlreadyStayedOnSaysSoInsteadOfOffering");
+    // selected or not, the stayed provider never offers itself again
+    Check(StayOnExitStateFor(MakeExitRow(kClientId), kClientId, kClientId) ==
+              StayOnExitState::Staying,
+          "selected stayed provider");
+    Check(StayOnExitStateFor(MakeExitRow(kClientId), kOtherClientId, kClientId) ==
+              StayOnExitState::Staying,
+          "unselected stayed provider");
+    // another selected provider can still be stayed on instead
+    Check(StayOnExitStateFor(MakeExitRow(kOtherClientId), kOtherClientId, kClientId) ==
+              StayOnExitState::Offer,
+          "another selected provider");
+  }
+  {
+    TEST_CASE("clientIdsMatchIgnoringCase");
+    Check(StayOnExitStateFor(MakeExitRow(kClientId), "", Upper(kClientId)) ==
+              StayOnExitState::Staying,
+          "staying id in upper case");
+    Check(StayOnExitStateFor(MakeExitRow(kClientId), Upper(kClientId), "") ==
+              StayOnExitState::Offer,
+          "selected id in upper case");
+  }
+  {
+    TEST_CASE("aRowWithoutAClientIdNeverOffers");
+    Check(StayOnExitStateFor(MakeExitRow(""), "", "") == StayOnExitState::None, "empty selection");
+  }
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -554,6 +661,8 @@ int main(int argc, char** argv) {
   WorldTopologyTests(assetPath);
   std::cout << "ProviderLocations\n";
   ProviderLocationsTests();
+  std::cout << "StayOnExit\n";
+  StayOnExitTests();
 
   std::cout << "\n" << gCases << " cases, " << gFailures << " failures\n";
   return gFailures == 0 ? 0 : 1;

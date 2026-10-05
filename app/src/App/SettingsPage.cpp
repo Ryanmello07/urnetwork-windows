@@ -13,6 +13,7 @@
 
 #include "BalanceSheets.h"  // SetMarkdownLinkText, for the community link rows
 #include "ClientEvents.h"
+#include "CloudProxyLink.h"
 #include "FeedbackSendState.h"
 #include "Ids.h"
 #include "Localization.h"
@@ -486,6 +487,14 @@ void SettingsPage::BuildConnectionsSection(Panel const& host) {
                                Loc("manage_apps"));
   splitButton.Click(
       [this](auto const& sender, auto const& args) { OnManageAppSplitTunnel(sender, args); });
+
+  // Cloud proxies. The app has no protocol switch, so WireGuard, SOCKS and
+  // HTTPS proxies are created on ur.io, and this row opens that page in the
+  // browser (CloudProxyLink.h).
+  auto proxies = kit::MakePaneTwoLineRowButton(Loc("use_wireguard_socks_https_proxy"),
+                                               Loc("use_wireguard_socks_https_proxy_note"));
+  proxies.root.Click([this](auto const&, auto const&) { OpenCloudProxies(); });
+  card.Children().Append(proxies.root);
 
   // Uninstall the VPN service (beta spec §3). Last in the group: it is the one
   // machine-level action on a page of preferences. Labels are Adv() ids — the
@@ -1185,6 +1194,23 @@ winrt::fire_and_forget SettingsPage::LaunchCustomerPortal(std::string url) {
   if (launched) co_return;
   LogWarn("settings: the customer portal did not open");
   snackbar_.Show(Loc("site_billing_portal_error"), InfoBarSeverity::Error);
+}
+
+winrt::fire_and_forget SettingsPage::OpenCloudProxies() {
+  auto self = w_.get_strong();  // keep the window alive across the launch
+  bool launched = false;
+  try {
+    launched = co_await winrt::Windows::System::Launcher::LaunchUriAsync(
+        winrt::Windows::Foundation::Uri(hstring{cloudproxy::kProxiesUrl}));
+  } catch (winrt::hresult_error const& e) {
+    LogWarn("settings: cloud proxies launch failed: {}", urnw::Narrow(std::wstring{e.message()}));
+    launched = false;
+  } catch (...) {
+    launched = false;
+  }
+  if (launched) co_return;
+  LogWarn("settings: the cloud proxies page did not open");
+  snackbar_.Show(Loc("something_went_wrong"), InfoBarSeverity::Error);
 }
 
 winrt::fire_and_forget SettingsPage::SaveLogsToFile() {

@@ -3567,6 +3567,14 @@
     <value>연락 유지하기</value>
     <comment>Settings</comment>
   </data>
+  <data name="stay_on_this_exit" xml:space="preserve">
+    <value>이 출구 유지</value>
+    <comment>Button under the selected provider in the Provider Locations sheet. Reconnects to that one provider (the exit), so the connection keeps its IP address.</comment>
+  </data>
+  <data name="stay_on_this_exit_note" xml:space="preserve">
+    <value>이 제공업체가 오프라인이 될 때까지 해당 IP 주소를 유지합니다.</value>
+    <comment>Muted line under the Stay on this exit button in the Provider Locations sheet: what staying on one provider does.</comment>
+  </data>
   <data name="stay_private" xml:space="preserve">
     <value>완전히
 프라이빗하고
@@ -3577,6 +3585,10 @@
   <data name="stay_private_description" xml:space="preserve">
     <value>URnetwork로 완전히 프라이빗하고 익명으로 유지하세요</value>
     <comment>Onboarding Carousel</comment>
+  </data>
+  <data name="staying_on_this_exit" xml:space="preserve">
+    <value>이 출구를 유지하는 중입니다. 오프라인이 되면 다른 위치를 선택하세요.</value>
+    <comment>Muted line on the provider the connection already stays on (after Stay on this exit), in the Provider Locations sheet. Says how to leave it.</comment>
   </data>
   <data name="step_in" xml:space="preserve">
     <value>인터넷이 마땅히 되어야 할 모습으로 들어가세요</value>
@@ -3908,6 +3920,14 @@
   <data name="use_recommended_settings" xml:space="preserve">
     <value>권장 설정 사용</value>
     <comment>dns settings</comment>
+  </data>
+  <data name="use_wireguard_socks_https_proxy" xml:space="preserve">
+    <value>WireGuard / SOCKS / HTTPS 프록시 사용</value>
+    <comment>Settings row that opens the cloud proxies page on ur.io (https://ur.io/app/proxies), where the user can create a WireGuard, SOCKS or HTTPS proxy. The app itself has no protocol switch.</comment>
+  </data>
+  <data name="use_wireguard_socks_https_proxy_note" xml:space="preserve">
+    <value>브라우저에서 ur.io를 엽니다. SOCKS와 WireGuard는 Pro가 필요합니다.</value>
+    <comment>Muted note under the Use WireGuard / SOCKS / HTTPS proxy settings row: the row leaves the app for ur.io, and SOCKS and WireGuard proxies are part of the Pro plan (HTTPS is not).</comment>
   </data>
   <data name="used_data_key" xml:space="preserve">
     <value>사용됨</value>
