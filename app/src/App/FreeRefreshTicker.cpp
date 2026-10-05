@@ -8,6 +8,8 @@
 
 #include "DataInfo.h"
 #include "Localization.h"
+#include "StatsFormat.h"
+#include "Strings.h"
 
 namespace urnw {
 namespace {
@@ -29,6 +31,18 @@ std::wstring FreeRefreshCountdownText() {
         return Format("provider_connected_duration_hours", hours, minutes);
       },
       [](int64_t minutes) { return Format("provider_connected_duration_minutes", minutes); });
+}
+
+std::wstring OutOfBalanceKindText(balance::OutOfBalanceKind kind, int64_t reservedByteCount) {
+  switch (kind) {
+    case balance::OutOfBalanceKind::Reserved:
+      return Format("insufficient_balance_reserved", Widen(FormatByteCountCompact(reservedByteCount)));
+    case balance::OutOfBalanceKind::Exhausted:
+      return Localized("insufficient_balance_exhausted");
+    case balance::OutOfBalanceKind::Unknown:
+      break;
+  }
+  return {};
 }
 
 void FreeRefreshTicker::Start(std::function<void()> apply) {

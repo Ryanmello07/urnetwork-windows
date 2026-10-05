@@ -181,3 +181,135 @@ func TestStartConnectGateReadsAFreshBalance(t *testing.T) {
 		t.Errorf("SubscriptionBalanceStore::Apply: does not stamp when the balance was read")
 	}
 }
+
+// A connect the balance blocked recovers by itself (BalanceGate.h,
+// BalanceRecovery): the gate hands the refused gesture to the app, which
+// waits on the balance with it; every stats and balance push feeds the
+// recovery, which runs the gesture again (or rebuilds a held connection) only
+// past the gate and says so; another connect, the user's Disconnect, a sign-in
+// or sign-out and the banner's Cancel end the wait. The banner says whether
+// the data is reserved or used up and that the app reconnects by itself.
+func TestBalanceRecoveryWiring(t *testing.T) {
+	root := repositoryRoot(t)
+	host := stripLineComments(readAppSource(t, "SdkHost.cpp"))
+	app := stripLineComments(readAppSource(t, "AppController.cpp"))
+	window := stripLineComments(readAppSource(t, "MainWindow.xaml.cpp"))
+	connect := stripLineComments(readAppSource(t, "ConnectPage.cpp"))
+	sheets := stripLineComments(readAppSource(t, "BalanceSheets.cpp"))
+	ticker := stripLineComments(readAppSource(t, "FreeRefreshTicker.cpp"))
+
+	admit := definitionBody(t, "SdkHost.cpp", host, "bool SdkHost::AdmitStartConnect(const char* what, std::function<void()> again)")
+	for _, want := range []string{
+		"if (!startConnectFacts_ || retryingRefusedConnect_) return true;",
+		"host.startConnectUpgrade_(again);",
+		"if (admitted && connectAdmitted_) connectAdmitted_();",
+	} {
+		if !strings.Contains(admit, want) {
+			t.Errorf("SdkHost::AdmitStartConnect: missing %s", want)
+		}
+	}
+	retry := definitionBody(t, "SdkHost.cpp", host, "void SdkHost::RetryRefusedConnect(const std::function<void()>& connect)")
+	set := strings.Index(retry, "retryingRefusedConnect_ = true;")
+	run := strings.Index(retry, "connect();")
+	clear := strings.Index(retry, "retryingRefusedConnect_ = false;")
+	if set < 0 || run < set || clear < run {
+		t.Error("SdkHost::RetryRefusedConnect does not run the gesture past the gate and close the gate after it")
+	}
+	if !strings.Contains(definitionBody(t, "SdkHost.cpp", host, "void SdkHost::Disconnect()"), "userDisconnected_();") {
+		t.Error("SdkHost::Disconnect does not end the wait on the balance")
+	}
+
+	// the gate's refused gesture and the tray's refused Connect wait on the balance
+	gate := strings.Index(app, "sdk_.SetStartConnectGate(")
+	if gate < 0 {
+		t.Fatal("AppController.cpp: no start-connect gate; update this contract")
+	}
+	wait := strings.Index(app[gate:], "WaitOnBalance(std::move(refused));")
+	show := strings.Index(app[gate:], "ShowUpgradeForBlockedConnect();")
+	if wait < 0 || show < wait {
+		t.Error("AppController.cpp: the gate's refused gesture does not wait on the balance before the upgrade path shows")
+	}
+	if !strings.Contains(app, "sdk_.SetConnectGestureObserver([this] { ClearBalanceRecovery(); },") {
+		t.Error("AppController.cpp: an admitted connect or the user's Disconnect does not end the wait")
+	}
+	tray := app[strings.Index(app, "cb.onConnectToggle = [this] {"):strings.Index(app, "cb.isConnected = ")]
+	if !strings.Contains(tray, "app.WaitOnBalance(") {
+		t.Error("AppController.cpp: the tray's refused Connect does not wait on the balance")
+	}
+	for _, signature := range []string{
+		"void AppController::OnStats(const LiveStats& stats)",
+	} {
+		body := definitionBody(t, "AppController.cpp", app, signature)
+		latch := strings.Index(body, "ObserveBalanceLatch();")
+		recovery := strings.Index(body, "ObserveBalanceRecovery();")
+		if latch < 0 || recovery < latch || !strings.Contains(body, "connectRequested_ = stats.connected;") {
+			t.Errorf("%s: does not feed the recovery after the latch", signature)
+		}
+	}
+	balancePush := app[strings.Index(app, "balance_.SetChangeHandler("):]
+	if latch, recovery := strings.Index(balancePush, "ObserveBalanceLatch();"), strings.Index(balancePush, "ObserveBalanceRecovery();"); latch < 0 || recovery < latch {
+		t.Error("AppController.cpp: a balance push does not feed the recovery after the latch")
+	}
+	observe := definitionBody(t, "AppController.cpp", app, "void AppController::ObserveBalanceRecovery()")
+	for _, want := range []string{
+		"balanceRecovery_.Observe(OutOfBalance(), connectRequested_, facts.balance, facts.nowMs);",
+		"sdk_.RetryRefusedConnect(step.target);",
+		`Localized("insufficient_balance_reconnecting")`,
+	} {
+		if !strings.Contains(observe, want) {
+			t.Errorf("AppController::ObserveBalanceRecovery: missing %s", want)
+		}
+	}
+	// every retry goes past the gate, never through a gated entry point directly
+	if strings.Count(observe, "sdk_.RetryRefusedConnect(") != 2 ||
+		strings.Count(observe, "sdk_.Connect") != strings.Count(observe, "sdk_.Connect(*location);")+strings.Count(observe, "sdk_.ConnectBestAvailable();") {
+		t.Error("AppController::ObserveBalanceRecovery: a retry does not go through RetryRefusedConnect")
+	}
+	auth := definitionBody(t, "AppController.cpp", app, "void AppController::OnAuthState(AuthState state, const std::string& error)")
+	if !strings.Contains(auth, "ClearBalanceRecovery();") {
+		t.Error("AppController::OnAuthState: a sign-in or sign-out does not end the wait")
+	}
+
+	// the banner: open for a waiting start, Cancel, and the lines
+	update := definitionBody(t, "MainWindow.xaml.cpp", window, "void MainWindow::UpdateBalanceWarning()")
+	if !strings.Contains(update, "urnw::balance::BannerOpen(outOfBalance(), balanceRecovery_)") {
+		t.Error("MainWindow::UpdateBalanceWarning: a waiting start does not keep the banner open")
+	}
+	if !strings.Contains(window, "urnw::App().ClearBalanceRecovery();") ||
+		!strings.Contains(window, `L"acceptance.insufficient-balance.cancel-reconnect"`) {
+		t.Error("MainWindow.xaml.cpp: the banner has no Cancel for a waiting start")
+	}
+	message := definitionBody(t, "ConnectPage.cpp", connect, "void ConnectPage::ApplyBalanceWarningMessage()")
+	for _, want := range []string{
+		"urnw::balance::RecoveryLinesFor(",
+		"urnw::OutOfBalanceKindText(recovery.kind, w_.reservedByteCount())",
+		`"insufficient_balance_will_reconnect"`,
+	} {
+		if !strings.Contains(message, want) {
+			t.Errorf("ConnectPage::ApplyBalanceWarningMessage: missing %s", want)
+		}
+	}
+	if !strings.Contains(definitionBody(t, "BalanceSheets.cpp", sheets, "void UpgradeSheet::Build("),
+		"OutOfBalanceKindText(balance::OutOfBalanceKindFor(read), snapshot.pendingByteCount)") {
+		t.Error("UpgradeSheet::Build: the blocked connect's sheet does not say whether the data is reserved or used up")
+	}
+	kind := definitionBody(t, "FreeRefreshTicker.cpp", ticker, "std::wstring OutOfBalanceKindText(balance::OutOfBalanceKind kind, int64_t reservedByteCount)")
+	for _, want := range []string{`"insufficient_balance_reserved"`, `"insufficient_balance_exhausted"`} {
+		if !strings.Contains(kind, want) {
+			t.Errorf("OutOfBalanceKindText: missing %s", want)
+		}
+	}
+
+	// every new string reaches the catalog, with its placeholder lowered
+	for key, want := range map[string]string{
+		"insufficient_balance_reserved":       "{} is reserved for your open connections. What they don't use is returned as they close.",
+		"insufficient_balance_exhausted":      "You're out of data until the free refresh or an upgrade.",
+		"insufficient_balance_will_reconnect": "You'll be reconnected when data is available again.",
+		"insufficient_balance_reconnecting":   "Data is available again. Reconnecting…",
+		"cancel":                              "Cancel",
+	} {
+		if got := reswValue(t, root, "en", key); got != want {
+			t.Errorf("en resw %s = %q, want %q", key, got, want)
+		}
+	}
+}

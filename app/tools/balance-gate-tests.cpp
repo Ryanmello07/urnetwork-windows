@@ -8,8 +8,12 @@
 // contract status (OutOfBalanceLatch); a session already connected is never
 // dropped. The first connect after a launch on an empty account is blocked
 // too, but only on a fresh balance: a stale one is fetched first, and a failed
-// fetch never blocks. Run against the SAME header the app compiles, on any
-// host with a C++20 compiler. No clocks: the time is an explicit input.
+// fetch never blocks. Out of balance the banner says whether the data is
+// reserved or used up, and a connect the balance blocked is retried by itself
+// once data is back (BalanceRecovery): once per recovery, at most three in a
+// row, never for a user who did not ask. Run against the SAME header the app
+// compiles, on any host with a C++20 compiler. No clocks: the time is an
+// explicit input.
 //
 //   c++ -std=c++20 -I ../src/Common balance-gate-tests.cpp -o /tmp/balance-gate-tests && /tmp/balance-gate-tests
 //
@@ -497,6 +501,263 @@ void TestLiveSessionKeptOnEmptyBalance() {
   Check(sinks.disconnects == 1, "live: the user's Disconnect works on an empty balance");
 }
 
+// ---- reserved or used up, and recovering by itself ----------------------
+
+constexpr long long kMinute = 60'000;
+constexpr long long kGib = 1024LL * 1024 * 1024;
+constexpr long long kLow = kRecoveryThresholdBytes - 1;
+constexpr long long kBack = kRecoveryThresholdBytes;
+
+using Recovery = BalanceRecovery<std::string>;
+
+RecoveryStepKind Held(Recovery& r, long long available, long long at) {
+  return r.Observe(/*gate=*/true, /*connectRequested=*/true, Read(available, at), at).kind;
+}
+
+RecoveryStepKind Disconnected(Recovery& r, long long available, long long at, bool gate = false) {
+  return r.Observe(gate, /*connectRequested=*/false, Read(available, at), at).kind;
+}
+
+// (m) the banner says whether the data is reserved or used up
+void TestOutOfBalanceKind() {
+  // the reported case: barely used, but open (or abandoned) connections hold
+  // the balance as Pending
+  Check(OutOfBalanceKindFor(Read(0, kNow, 30 * kGib)) == OutOfBalanceKind::Reserved,
+        "kind: a balance held as Pending is reserved");
+  Check(OutOfBalanceKindFor(Read(kLow, kNow, kBack)) == OutOfBalanceKind::Reserved,
+        "kind: reserved from the threshold");
+  Check(OutOfBalanceKindFor(Read(0, kNow, 0)) == OutOfBalanceKind::Exhausted,
+        "kind: nothing held is used up");
+  Check(OutOfBalanceKindFor(Read(0, kNow, kLow)) == OutOfBalanceKind::Exhausted,
+        "kind: less than the threshold held is used up");
+  Check(OutOfBalanceKindFor(AccountBalance{}) == OutOfBalanceKind::Unknown,
+        "kind: an unknown balance says neither");
+  Check(OutOfBalanceKindFor(Read(0, kNow, 0, /*pro=*/true)) == OutOfBalanceKind::Unknown,
+        "kind: Pro says neither");
+  Check(OutOfBalanceKindFor(Read(kBack, kNow, 30 * kGib)) == OutOfBalanceKind::Unknown,
+        "kind: a balance that reads available says neither");
+}
+
+// (n) the balance running out and coming back never connects a user who did
+// not ask to connect
+void TestRecoveryNeverConnectsWithoutAnAsk() {
+  Recovery r;
+  long long t = kNow;
+  bool any = false;
+  for (int round = 0; round < 5; ++round) {
+    for (bool gate : {true, false}) {
+      t += kMinute;
+      any |= Disconnected(r, 0, t, gate) != RecoveryStepKind::None;
+      t += kMinute;
+      any |= Disconnected(r, kBack, t, gate) != RecoveryStepKind::None;
+    }
+    t += kMinute;
+    any |= r.Observe(false, true, Read(kBack, t), t).kind != RecoveryStepKind::None;
+  }
+  Check(!any && !r.State().startWaiting, "recovery: connected a user who did not ask");
+}
+
+// (o) a refused start runs again once, when data is back, to what was asked
+void TestRecoveryRefusedStartOnce() {
+  Recovery r;
+  r.StartRefused("de", kNow);
+  Check(r.State().startWaiting, "recovery: a refused start waits");
+  Check(Disconnected(r, 0, kNow + kMinute, true) == RecoveryStepKind::None,
+        "recovery: an empty reading waits");
+  const RecoveryStep<std::string> step = r.Observe(false, false, Read(kBack, kNow + 2 * kMinute),
+                                                   kNow + 2 * kMinute);
+  Check(step.kind == RecoveryStepKind::Start && step.target == "de",
+        "recovery: data back runs the refused start to its target");
+  Check(!r.State().startWaiting, "recovery: the start no longer waits once run");
+  Check(Disconnected(r, kBack, kNow + 3 * kMinute) == RecoveryStepKind::None,
+        "recovery: the refused start runs once");
+}
+
+// (p) a balance read before the block, or at the start of a hold, never
+// retries
+void TestRecoveryStaleReadingsNeverRetry() {
+  Recovery r;
+  r.StartRefused("de", kNow);
+  Check(Disconnected(r, kBack, kNow - kMinute) == RecoveryStepKind::None,
+        "recovery: a reading from before the block retried");
+  Check(Disconnected(r, kBack, kNow + kMinute) == RecoveryStepKind::Start,
+        "recovery: a reading after the block decides");
+
+  Recovery hold;
+  Check(hold.Observe(true, true, Read(kBack, kNow - 10 * kMinute), kNow).kind ==
+            RecoveryStepKind::None,
+        "recovery: the reading from before a hold rebuilt it");
+  Check(Held(hold, 0, kNow + kMinute) == RecoveryStepKind::None, "recovery: the hold waits");
+  Check(Held(hold, kBack, kNow + 2 * kMinute) == RecoveryStepKind::Rebuild,
+        "recovery: a held connection is rebuilt when reserved data returns");
+}
+
+// (q) one retry per recovery, at most three in a row
+void TestRecoveryOncePerRecoveryAndBounded() {
+  Recovery r;
+  Held(r, 0, kNow);
+  Check(Held(r, kBack, kNow + kMinute) == RecoveryStepKind::Rebuild, "recovery: first rebuild");
+  Check(Held(r, kBack, kNow + 2 * kMinute) == RecoveryStepKind::None &&
+            Held(r, kBack, kNow + 3 * kMinute) == RecoveryStepKind::None,
+        "recovery: rebuilt again without the balance running out and coming back");
+  Held(r, 0, kNow + 4 * kMinute);
+  Check(Held(r, kBack, kNow + 5 * kMinute) == RecoveryStepKind::Rebuild,
+        "recovery: a second recovery rebuilds again");
+
+  Recovery bounded;
+  int rebuilds = 0;
+  long long t = kNow;
+  for (int round = 0; round < 10; ++round) {
+    t += kMinute;
+    Held(bounded, 0, t);
+    t += kMinute;
+    rebuilds += Held(bounded, kBack, t) == RecoveryStepKind::Rebuild ? 1 : 0;
+  }
+  Check(rebuilds == kRecoveryMaxRetries, "recovery: " + std::to_string(rebuilds) +
+                                             " rebuilds in a row, want " +
+                                             std::to_string(kRecoveryMaxRetries));
+  Check(!bounded.State().retriesLeft, "recovery: no retries left after the bound");
+
+  // a new ask from the user refills them
+  t += kMinute;
+  bounded.StartRefused("fr", t);
+  Check(bounded.State().retriesLeft, "recovery: a new ask refills the retries");
+  t += kMinute;
+  Check(Held(bounded, kBack, t) == RecoveryStepKind::Start, "recovery: the new ask runs");
+
+  // and so does a retried connection that stays out of the block
+  Recovery up;
+  t = kNow;
+  for (int round = 0; round < kRecoveryMaxRetries; ++round) {
+    t += kMinute;
+    Held(up, 0, t);
+    t += kMinute;
+    Held(up, kBack, t);
+  }
+  const long long lastRetry = t;
+  up.Observe(false, true, Read(kBack, t + 1), lastRetry + kMinute);
+  Check(!up.State().retriesLeft, "recovery: refilled before the connection stayed up long enough");
+  up.Observe(false, true, Read(kBack, lastRetry + kRecoveryBudgetResetMs),
+             lastRetry + kRecoveryBudgetResetMs);
+  Check(up.State().retriesLeft, "recovery: a connection that stayed up did not refill the retries");
+}
+
+// (r) Cancel and the user's Disconnect end the wait; a hold that ends by itself
+// is not rebuilt; data is back only at the threshold; the latest refused start
+// wins over the held connection
+void TestRecoveryEndsAndEdges() {
+  Recovery cancelled;
+  cancelled.StartRefused("de", kNow);
+  cancelled.Clear();
+  Check(!cancelled.State().startWaiting &&
+            Disconnected(cancelled, 0, kNow + kMinute) == RecoveryStepKind::None &&
+            Disconnected(cancelled, kBack, kNow + 2 * kMinute) == RecoveryStepKind::None,
+        "recovery: a cancelled start ran");
+
+  Recovery disconnected;
+  Held(disconnected, 0, kNow);
+  disconnected.Clear();
+  Check(Disconnected(disconnected, 0, kNow + kMinute, true) == RecoveryStepKind::None &&
+            Disconnected(disconnected, kBack, kNow + 2 * kMinute, true) == RecoveryStepKind::None,
+        "recovery: a held connection the user disconnected was reconnected");
+
+  Recovery recovered;
+  Held(recovered, 0, kNow);
+  recovered.Observe(false, true, Read(kBack, kNow + kMinute), kNow + kMinute);
+  Check(recovered.Observe(false, true, Read(kBack, kNow + 2 * kMinute), kNow + 2 * kMinute).kind ==
+            RecoveryStepKind::None,
+        "recovery: a hold that ended by itself was rebuilt");
+
+  Recovery threshold;
+  threshold.StartRefused("", kNow);
+  Check(Disconnected(threshold, kLow, kNow + kMinute) == RecoveryStepKind::None,
+        "recovery: data counted back below the threshold");
+  Check(threshold.Observe(true, false, AccountBalance{}, kNow + 2 * kMinute).kind ==
+            RecoveryStepKind::None,
+        "recovery: an unknown balance retried");
+  Check(Disconnected(threshold, kBack, kNow + 3 * kMinute) == RecoveryStepKind::Start,
+        "recovery: data back at the threshold");
+
+  Recovery latest;
+  Held(latest, 0, kNow);
+  latest.StartRefused("jp", kNow + kMinute / 2);
+  const RecoveryStep<std::string> step =
+      latest.Observe(true, true, Read(kBack, kNow + kMinute), kNow + kMinute);
+  Check(step.kind == RecoveryStepKind::Start && step.target == "jp",
+        "recovery: the latest refused start wins over the held connection");
+}
+
+// (s) the app's wiring in miniature: the gate's Upgrade records the refused
+// gesture, and the recovery runs it again past the gate once data is back
+void TestRecoveryRunsTheRefusedGesturePastTheGate() {
+  FakeSinks sinks;
+  FakeHost host{sinks};
+  BalanceRecovery<std::function<void()>> recovery;
+  bool bypass = false;  // SdkHost::RetryRefusedConnect
+  std::function<void()> connect;
+  connect = [&] {
+    struct Gate {
+      FakeHost& host;
+      BalanceRecovery<std::function<void()>>& recovery;
+      std::function<void()>& again;
+      void Upgrade() {
+        host.sinks.Upgrade();
+        recovery.StartRefused(again, host.facts.nowMs);
+      }
+      void FetchBalance() {}
+    } gate{host, recovery, connect};
+    if (!bypass && !AdmitStartConnect(host.facts, gate)) return;
+    ++host.sessionRequests;
+    host.live = true;
+  };
+  host.facts.latched = true;
+  connect();
+  Check(sinks.upgrades == 1 && host.sessionRequests == 0 && recovery.State().startWaiting,
+        "wiring: the refused gesture does not wait on the balance");
+  host.facts.nowMs += kMinute;
+  RecoveryStep<std::function<void()>> step =
+      recovery.Observe(true, false, Read(0, host.facts.nowMs), host.facts.nowMs);
+  Check(step.kind == RecoveryStepKind::None && host.sessionRequests == 0,
+        "wiring: an empty balance ran the gesture");
+  host.facts.nowMs += kMinute;
+  step = recovery.Observe(true, false, Read(30 * kGib, host.facts.nowMs), host.facts.nowMs);
+  if (step.kind == RecoveryStepKind::Start && step.target) {
+    bypass = true;
+    step.target();
+    bypass = false;
+  }
+  Check(host.sessionRequests == 1 && host.live && sinks.upgrades == 1,
+        "wiring: data back did not run the refused gesture past the gate");
+}
+
+// (t) the banner's lines for the kind and the recovery, and when it opens
+void TestRecoveryLines() {
+  const RecoveryState waiting{false, true};
+  const RecoveryState startWaiting{true, true};
+  const RecoveryState spent{false, false};
+  for (OutOfBalanceKind kind :
+       {OutOfBalanceKind::Unknown, OutOfBalanceKind::Reserved, OutOfBalanceKind::Exhausted}) {
+    Check(RecoveryLinesFor(true, true, kind, std::nullopt).kind == kind,
+          "lines: the kind shows while out of balance");
+    Check(RecoveryLinesFor(false, false, kind, std::nullopt).kind == OutOfBalanceKind::Unknown,
+          "lines: the kind shows outside the gate");
+  }
+  Check(RecoveryLinesFor(true, true, OutOfBalanceKind::Reserved, waiting) ==
+            RecoveryLines{OutOfBalanceKind::Reserved, true, false},
+        "lines: a held connection is promised a reconnect, with no Cancel");
+  Check(RecoveryLinesFor(false, false, OutOfBalanceKind::Unknown, startWaiting) ==
+            RecoveryLines{OutOfBalanceKind::Unknown, true, true},
+        "lines: a refused start waits with Cancel outside the gate");
+  Check(!RecoveryLinesFor(true, false, OutOfBalanceKind::Exhausted, waiting).willReconnect,
+        "lines: promised a reconnect with nothing waiting");
+  Check(!RecoveryLinesFor(true, true, OutOfBalanceKind::Exhausted, spent).willReconnect &&
+            !RecoveryLinesFor(true, true, OutOfBalanceKind::Exhausted, std::nullopt).willReconnect,
+        "lines: promised a reconnect with no retries left");
+  Check(BannerOpen(true, std::nullopt) && BannerOpen(false, startWaiting) &&
+            !BannerOpen(false, waiting) && !BannerOpen(false, std::nullopt),
+        "lines: the banner opens out of balance and for a waiting start only");
+}
+
 }  // namespace
 
 int main() {
@@ -513,6 +774,14 @@ int main() {
   TestStaleBalanceFetchedFirst();
   TestAccountBalanceExhausted();
   TestLiveSessionKeptOnEmptyBalance();
+  TestOutOfBalanceKind();
+  TestRecoveryNeverConnectsWithoutAnAsk();
+  TestRecoveryRefusedStartOnce();
+  TestRecoveryStaleReadingsNeverRetry();
+  TestRecoveryOncePerRecoveryAndBounded();
+  TestRecoveryEndsAndEdges();
+  TestRecoveryRunsTheRefusedGesturePastTheGate();
+  TestRecoveryLines();
   std::cout << (gCases - gFailures) << "/" << gCases << " balance gate checks passed\n";
   return gFailures == 0 ? 0 : 1;
 }

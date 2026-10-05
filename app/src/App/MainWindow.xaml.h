@@ -100,6 +100,10 @@ struct MainWindow : MainWindowT<MainWindow> {
   void CloseLicenses();
   // last ContractStatus push (ConnectPage::ApplyStats) -> the warning InfoBar
   void SetInsufficientBalance(bool insufficient);
+  // the balance recovery's state (AppController, BalanceGate.h) -> the warning
+  // InfoBar: "You'll be reconnected when data is available again." and, for a
+  // refused start, Cancel; a waiting start keeps the banner open on its own
+  void SetBalanceRecovery(urnw::balance::RecoveryState state);
   // ---- the persistent status strip (D4) ----
   // ProtonVPN's bottom line, at window level: it is true whichever destination
   // is on screen, so it cannot live on a page.
@@ -123,6 +127,20 @@ struct MainWindow : MainWindowT<MainWindow> {
     return urnw::balance::OutOfBalance(insufficientBalance_, balance_.isPro,
                                        balancePoll_.confirming);
   }
+  // The banner's recovery state (SetBalanceRecovery), and whether the missing
+  // data is reserved or used up, with the reserved amount, from the same
+  // balance the banner reads.
+  urnw::balance::RecoveryState balanceRecovery() const { return balanceRecovery_; }
+  urnw::balance::OutOfBalanceKind outOfBalanceKind() const {
+    urnw::balance::AccountBalance b;
+    b.known = balance_.loaded;
+    b.pro = balance_.isPro;
+    b.availableBytes = balance_.availableByteCount;
+    b.openTransferBytes = balance_.pendingByteCount;
+    b.fetchedAtMs = balance_.fetchedAtMillis;
+    return urnw::balance::OutOfBalanceKindFor(b);
+  }
+  int64_t reservedByteCount() const { return balance_.pendingByteCount; }
   // #27: the last firewall state the SERVICE reported ("off" | "armed" |
   // "connecting" | "connected"), for the connect page's blocked-traffic line.
   // Read from here rather than re-cached on the page for the balance reason
@@ -477,6 +495,9 @@ struct MainWindow : MainWindowT<MainWindow> {
   urnw::BalancePollState balancePoll_;
   std::unique_ptr<urnw::UsageBar> accountUsageBar_;
   bool insufficientBalance_ = false;  // last ContractStatus push
+  urnw::balance::RecoveryState balanceRecovery_;  // SetBalanceRecovery
+  // the warning InfoBar's Cancel, shown while a refused start waits
+  winrt::Microsoft::UI::Xaml::Controls::HyperlinkButton balanceRecoveryCancel_{nullptr};
   std::shared_ptr<urnw::UpgradeSheet> upgradeSheet_;
   std::shared_ptr<urnw::RedeemCodeSheet> redeemSheet_;
   std::shared_ptr<urnw::DataInfoSheet> dataInfoSheet_;

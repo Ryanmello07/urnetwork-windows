@@ -832,21 +832,39 @@ class SdkHost {
   void Disconnect();
   // The start-connect gate. facts gives urnw::balance::StartConnectFacts for
   // this instant; upgrade shows the upgrade path in place of a blocked
-  // connect; fetchBalance fetches the subscription balance and calls its
-  // argument once the fetch settles (succeeded, failed or timed out). All are
-  // called on the caller's thread, which for every connect entry point is the
-  // UI thread. Unset, every connect is admitted.
+  // connect, and is handed the refused gesture (the same gesture, asked anew)
+  // so the balance recovery can run it once data is back; fetchBalance fetches
+  // the subscription balance and calls its argument once the fetch settles
+  // (succeeded, failed or timed out). All are called on the caller's thread,
+  // which for every connect entry point is the UI thread. Unset, every connect
+  // is admitted.
   void SetStartConnectGate(std::function<urnw::balance::StartConnectFacts()> facts,
-                           std::function<void()> upgrade,
+                           std::function<void(std::function<void()>)> upgrade,
                            std::function<void(std::function<void()>)> fetchBalance) {
     startConnectFacts_ = std::move(facts);
     startConnectUpgrade_ = std::move(upgrade);
     startConnectFetchBalance_ = std::move(fetchBalance);
   }
+  // The user's connect gestures, for the balance recovery (BalanceGate.h,
+  // BalanceRecovery): admitted runs when the gate lets a connect gesture
+  // start (it replaces a connect still waiting on the balance), disconnected
+  // when the user disconnects (nothing is reconnected by itself after it).
+  // Called on the caller's thread, the UI thread.
+  void SetConnectGestureObserver(std::function<void()> admitted,
+                                 std::function<void()> disconnected) {
+    connectAdmitted_ = std::move(admitted);
+    userDisconnected_ = std::move(disconnected);
+  }
   // Whether a connect gesture may start now; when not, shows the upgrade path,
   // or, on a stale balance, fetches it and runs `again` (the same gesture,
   // asked anew) once the fetch settles. `what` names the entry point in the log.
   bool AdmitStartConnect(const char* what, std::function<void()> again);
+  // Runs a connect gesture the gate refused earlier (the one upgrade was
+  // handed) past the gate, and not as a new gesture: the balance recovery
+  // decided on a fresh balance that data is back. Also how it rebuilds a
+  // connection held out of balance, which the latched gate would refuse. UI
+  // thread.
+  void RetryRefusedConnect(const std::function<void()>& connect);
 
   // TURN THE SERVICE'S TUNNEL OFF. Not the same thing as Disconnect(), and the
   // difference is the whole of the owner's "kill the app and my internet stays
@@ -1847,8 +1865,13 @@ class SdkHost {
   std::function<void(const std::string& url)> onOnboardingLink_;
   // SetStartConnectGate
   std::function<urnw::balance::StartConnectFacts()> startConnectFacts_;
-  std::function<void()> startConnectUpgrade_;
+  std::function<void(std::function<void()>)> startConnectUpgrade_;
   std::function<void(std::function<void()>)> startConnectFetchBalance_;
+  // SetConnectGestureObserver
+  std::function<void()> connectAdmitted_;
+  std::function<void()> userDisconnected_;
+  // RetryRefusedConnect is running the refused gesture: the gate admits it
+  bool retryingRefusedConnect_ = false;
   bool productUpdatesOptOut_ = false;  // the next create's product_updates
   // the sign-up pages' opt-out onto a create's args (absent = opted in)
   void ApplySignupPreferences(urnet::NetworkCreateArgs& args) const;

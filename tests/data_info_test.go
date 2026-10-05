@@ -91,7 +91,8 @@ func TestDataInfoEntryPoints(t *testing.T) {
 	if count := strings.Count(window, `L"acceptance.insufficient-balance.why"`); count != 1 {
 		t.Errorf("MainWindow.xaml.cpp names the banner's Why? %d times, want once", count)
 	}
-	if !strings.Contains(window, "BalanceWarning().Content(why);") {
+	if !strings.Contains(window, "links.Children().Append(why);") ||
+		!strings.Contains(window, "BalanceWarning().Content(links);") {
 		t.Error("the out-of-balance banner no longer carries the Why? link")
 	}
 	if !strings.Contains(definitionBody(t, "MainWindow.xaml.cpp", window, "void MainWindow::OnOpenDataInfo("),

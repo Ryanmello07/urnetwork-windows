@@ -1744,6 +1744,10 @@ maneira certa</value>
     <value>Saldo insuficiente — adicione saldo ou um plano</value>
     <comment>Connection status shown when the network has no data balance left.</comment>
   </data>
+  <data name="insufficient_balance_exhausted" xml:space="preserve">
+    <value>Seus dados acabaram até a renovação grátis ou um upgrade.</value>
+    <comment>Out-of-balance notice (and the Upgrade screen when a blocked connect opened it), shown when the data is used up and almost nothing is held by open connections, so nothing meaningful will come back on its own. It follows the "Free data refreshes in {time}." line, which says when the free refresh is.</comment>
+  </data>
   <data name="insufficient_balance_held_notice" xml:space="preserve">
     <value>Seu tráfego fica retido no túnel até você fazer upgrade ou desconectar.</value>
     <comment>Alert body shown in the app and in a local notification when the account enters the insufficient balance state. Connect stays requested and the VPN keeps holding traffic (nothing leaves outside the tunnel); the user can upgrade or disconnect.</comment>
@@ -1752,9 +1756,21 @@ maneira certa</value>
     <value>Adicione saldo ou um plano para continuar a ligar-se.</value>
     <comment>Body of the warning shown when the balance runs out and no session is up; connecting needs more balance or a plan.</comment>
   </data>
+  <data name="insufficient_balance_reconnecting" xml:space="preserve">
+    <value>Há dados disponíveis novamente. Reconectando…</value>
+    <comment>Short note shown when the balance comes back (reserved data returned, the free refresh or an upgrade) and the app retries, by itself, the connect that insufficient balance had blocked.</comment>
+  </data>
   <data name="insufficient_balance_refreshes_in" xml:space="preserve">
     <value>Os dados grátis são renovados em {}.</value>
     <comment>Leads the out-of-balance notice (and the Upgrade screen when a blocked connect opened it): when the free daily data is granted again. {time} is the time left until the next 00:00 UTC as a compact duration (e.g. 5h 12m).</comment>
+  </data>
+  <data name="insufficient_balance_reserved" xml:space="preserve">
+    <value>{} estão reservados para suas conexões abertas. O que elas não usarem é devolvido à medida que forem fechadas.</value>
+    <comment>Out-of-balance notice (and the Upgrade screen when a blocked connect opened it), shown when most of what is missing is held by open connections rather than used up. {amount} is the reserved (Pending) data as a size, e.g. 1.4 GB. The unused part is returned as those connections close. Do not add a time promise.</comment>
+  </data>
+  <data name="insufficient_balance_will_reconnect" xml:space="preserve">
+    <value>Você será reconectado quando houver dados disponíveis novamente.</value>
+    <comment>Out-of-balance notice, while a connect the user asked for is waiting on the balance: the app retries that connect by itself once data is available again (reserved data returned, the free refresh or an upgrade). Shown with a Cancel action when the connect has not started yet.</comment>
   </data>
   <data name="insufficient_funds" xml:space="preserve">
     <value>Fundos insuficientes</value>

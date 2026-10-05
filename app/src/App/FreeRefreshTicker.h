@@ -5,16 +5,25 @@
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
 
+#include <cstdint>
 #include <functional>
 #include <string>
 
 #include <winrt/Microsoft.UI.Dispatching.h>
+
+#include "BalanceGate.h"
 
 namespace urnw {
 
 // The time left until the next 00:00 UTC as a compact duration ("5h 12m"),
 // with the provider_connected_duration strings.
 std::wstring FreeRefreshCountdownText();
+
+// The line under the refresh line that says whether the missing data is
+// reserved by open connections, with the reserved amount, or used up
+// (balance::OutOfBalanceKindFor); empty for neither. The banner and the
+// upgrade sheet a blocked connect opens both show it.
+std::wstring OutOfBalanceKindText(balance::OutOfBalanceKind kind, int64_t reservedByteCount);
 
 // Calls `apply` now and again each time the displayed countdown changes, on
 // the UI thread's dispatcher, until Stop. Start and Stop on the UI thread.

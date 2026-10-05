@@ -610,8 +610,9 @@ void ConnectPage::ApplyConnectStatus() {
   // balance is mid-flight, and showing a warning for it would be wrong.
   const bool processing = w_.balanceConfirming();
   const bool outOfBalance = w_.outOfBalance();
-  // the banner's message, kept current while it is open (ApplyBalanceWarningMessage)
-  if (outOfBalance) {
+  // the banner's message, kept current while it is open (ApplyBalanceWarningMessage);
+  // a refused start waiting on the balance keeps it open on its own
+  if (urnw::balance::BannerOpen(outOfBalance, w_.balanceRecovery())) {
     if (balanceRefreshTicker_.Running()) {
       ApplyBalanceWarningMessage();
     } else {
@@ -2431,18 +2432,30 @@ void ConnectPage::ApplyDnsRecommendationPill() {
 
 // The banner leads with when the free data refreshes (DataInfo.h), so Get Pro
 // does not read as the only way back; Why? beside it opens the "About your
-// data" sheet. Then it says the traffic is held while a session is up, which is
-// the state the tray notice announced; otherwise it asks for balance.
+// data" sheet. Then whether the data is reserved or used up (BalanceGate.h),
+// and that the traffic is held while a session is up, which is the state the
+// tray notice announced; otherwise it asks for balance. While a connect the
+// user asked for waits on the balance it says the app reconnects by itself (a
+// refused start keeps the banner open with only that line and Cancel).
 void ConnectPage::ApplyBalanceWarningMessage() {
-  const auto lines =
-      urnw::datainfo::BannerLinesFor(w_.outOfBalance(), ConnectActionIsDisconnect());
+  const bool outOfBalance = w_.outOfBalance();
+  const bool sessionUp = ConnectActionIsDisconnect();
+  const auto lines = urnw::datainfo::BannerLinesFor(outOfBalance, sessionUp);
+  const auto recovery = urnw::balance::RecoveryLinesFor(outOfBalance, sessionUp,
+                                                        w_.outOfBalanceKind(), w_.balanceRecovery());
   std::wstring message;
   if (lines.refresh) {
     message = urnw::Format("insufficient_balance_refreshes_in", urnw::FreeRefreshCountdownText()) +
               L"\n";
+    const std::wstring kind = urnw::OutOfBalanceKindText(recovery.kind, w_.reservedByteCount());
+    if (!kind.empty()) message += kind + L"\n";
+    message += urnw::Localized(lines.held ? "insufficient_balance_held_notice"
+                                          : "insufficient_balance_message");
   }
-  message += urnw::Localized(lines.held ? "insufficient_balance_held_notice"
-                                        : "insufficient_balance_message");
+  if (recovery.willReconnect) {
+    if (!message.empty()) message += L"\n";
+    message += urnw::Localized("insufficient_balance_will_reconnect");
+  }
   w_.BalanceWarning().Message(hstring{message});
 }
 

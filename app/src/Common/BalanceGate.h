@@ -33,6 +33,9 @@
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
 
+#include <optional>
+#include <utility>
+
 namespace urnw::balance {
 
 // Out of balance, not a supporter, and no confirmation poll bridging a
@@ -275,6 +278,184 @@ template <class Sinks>
 constexpr void ReactToBalancePush(GateNoticeTracker& tracker, bool insufficientBalance,
                                   bool supporter, bool confirming, Sinks& sinks) {
   if (tracker.Update(insufficientBalance, supporter, confirming)) sinks.Notice();
+}
+
+// ---- reserved or used up, and recovering by itself --------------------------
+// Out of balance reads the same whether the balance is used up or only held as
+// Pending by open (or abandoned) connections, which return what they do not
+// use as they close. The banner says which (OutOfBalanceKindFor), and a
+// connect the user asked for that the balance blocked recovers by itself
+// (BalanceRecovery): a start connect the gate refused waits with the gesture,
+// and a requested connection held out of balance waits too. Every balance
+// reading is fed in, and once the available balance is back at
+// kRecoveryThresholdBytes the connect is retried: the refused gesture runs
+// again past the gate, or the held connection is rebuilt, which asks for new
+// contracts and drops the latched status a held connection that sends nothing
+// never clears. The same rules as android BalanceRecovery.kt.
+//
+// The retry is bounded:
+//   * Once per recovery. A block arms it, and so does a reading below the
+//     threshold; a retry disarms it. Only a reading fetched at or after the
+//     arming counts, so a balance read before the block never retries.
+//   * At most kRecoveryMaxRetries in a row. A new ask from the user refills
+//     them, and so does a connection that stays out of the block for
+//     kRecoveryBudgetResetMs after a retry.
+// It never connects a user who did not ask: only a refused gesture or a
+// connection already requested is retried, and the user's Disconnect, a
+// sign-in or sign-out, another connect or Cancel ends the wait (Clear).
+
+// The available balance at which data counts as back for a blocked connect,
+// and the reserved balance whose return could bring it back. The server grants
+// a contract down to 1 MiB, but a connection opens several at once and ramps
+// each to 128 MiB, so a few MiB back would only block again.
+inline constexpr long long kRecoveryThresholdBytes = 64LL * 1024 * 1024;
+// Retries in a row before the user has to act again.
+inline constexpr int kRecoveryMaxRetries = 3;
+// How long a retried connection stays out of the block to refill the retries.
+inline constexpr long long kRecoveryBudgetResetMs = 10LL * 60 * 1000;
+
+enum class OutOfBalanceKind {
+  // no balance known, Pro, or the balance reads available again: say neither
+  Unknown,
+  // enough is reserved (Pending) that its return could bring data back
+  Reserved,
+  // nothing meaningful is reserved: out until the free refresh or an upgrade
+  Exhausted,
+};
+
+// Reserved or used up, by the same threshold the recovery waits for: reserved
+// when at least that much is held by open connections. No time is promised
+// for its return; connections close when they are used up or end.
+inline constexpr OutOfBalanceKind OutOfBalanceKindFor(const AccountBalance& b) {
+  if (!b.known || b.pro) return OutOfBalanceKind::Unknown;
+  if (kRecoveryThresholdBytes <= b.availableBytes) return OutOfBalanceKind::Unknown;
+  if (kRecoveryThresholdBytes <= b.openTransferBytes) return OutOfBalanceKind::Reserved;
+  return OutOfBalanceKind::Exhausted;
+}
+
+// What the banner says about the recovery.
+struct RecoveryState {
+  // a refused start is waiting for the balance (Cancel clears it)
+  bool startWaiting = false;
+  // a retry is still allowed: "You'll be reconnected when data is available again."
+  bool retriesLeft = true;
+  constexpr bool operator==(const RecoveryState&) const = default;
+};
+
+enum class RecoveryStepKind {
+  None,
+  // run the refused gesture again (RecoveryStep::target), past the gate
+  Start,
+  // rebuild the held connection (connect again to its location)
+  Rebuild,
+};
+
+template <class Target>
+struct RecoveryStep {
+  RecoveryStepKind kind = RecoveryStepKind::None;
+  Target target{};
+};
+
+// Not thread safe; the app feeds it from the UI thread. Times are monotonic
+// milliseconds, the clock AccountBalance::fetchedAtMs is stamped with.
+template <class Target>
+class BalanceRecovery {
+ public:
+  RecoveryState State() const { return {refusedStart_.has_value(), retries_ < kRecoveryMaxRetries}; }
+
+  // The gate refused a start the user asked for: wait for the balance to run
+  // it again. A new ask refills the retries.
+  void StartRefused(Target target, long long nowMs) {
+    refusedStart_ = std::move(target);
+    retries_ = 0;
+    Arm(nowMs);
+  }
+
+  // The user took the connect into their own hands (connected, disconnected,
+  // signed in or out, or cancelled the wait): nothing is waiting any more.
+  void Clear() {
+    refusedStart_.reset();
+    armedAtMs_.reset();
+    retries_ = 0;
+  }
+
+  // One observation: whether the out-of-balance gate holds (OutOfBalance),
+  // whether a connection is requested, and the last balance reading. Returns
+  // the retry to make now, at most one per recovery.
+  RecoveryStep<Target> Observe(bool gate, bool connectRequested, const AccountBalance& balance,
+                               long long nowMs) {
+    const bool heldNow = gate && connectRequested;
+    if (heldNow && !held_) Arm(nowMs);  // a connection the user asked for is newly held
+    held_ = heldNow;
+    if (connectRequested && !heldNow && 0 < retries_ &&
+        kRecoveryBudgetResetMs <= nowMs - lastRetryAtMs_) {
+      retries_ = 0;
+    }
+    if (!refusedStart_ && !heldNow) {
+      armedAtMs_.reset();
+      return {};
+    }
+    if (!balance.known) return {};
+    if (balance.availableBytes < kRecoveryThresholdBytes) {
+      Arm(balance.fetchedAtMs);
+      return {};
+    }
+    if (!armedAtMs_ || balance.fetchedAtMs < *armedAtMs_ || kRecoveryMaxRetries <= retries_) {
+      return {};
+    }
+    armedAtMs_.reset();
+    ++retries_;
+    lastRetryAtMs_ = nowMs;
+    RecoveryStep<Target> step;
+    if (refusedStart_) {
+      step.kind = RecoveryStepKind::Start;
+      step.target = std::move(*refusedStart_);
+      refusedStart_.reset();
+    } else {
+      step.kind = RecoveryStepKind::Rebuild;
+    }
+    return step;
+  }
+
+ private:
+  void Arm(long long atMs) {
+    if (!armedAtMs_) armedAtMs_ = atMs;
+  }
+
+  std::optional<Target> refusedStart_;
+  bool held_ = false;
+  std::optional<long long> armedAtMs_;
+  int retries_ = 0;
+  long long lastRetryAtMs_ = 0;
+};
+
+// The lines the out-of-balance banner adds under the refresh line
+// (DataInfo.h BannerLinesFor): whether the data is reserved or used up while
+// the banner is open, and the recovery's promise. A refused start waits
+// outside the gate too (its gate can lift before data is back), so it opens
+// the banner on its own (BannerOpen) with Cancel, the only way to stop it.
+struct RecoveryLines {
+  OutOfBalanceKind kind = OutOfBalanceKind::Unknown;
+  // "You'll be reconnected when data is available again."
+  bool willReconnect = false;
+  // Cancel beside it: a refused start has no Disconnect to stop it
+  bool cancel = false;
+  constexpr bool operator==(const RecoveryLines&) const = default;
+};
+
+inline constexpr RecoveryLines RecoveryLinesFor(bool outOfBalance, bool sessionUp,
+                                                OutOfBalanceKind kind,
+                                                std::optional<RecoveryState> recovery) {
+  const bool startWaiting = recovery && recovery->startWaiting;
+  const bool willReconnect =
+      recovery && recovery->retriesLeft && (startWaiting || (outOfBalance && sessionUp));
+  return {outOfBalance ? kind : OutOfBalanceKind::Unknown, willReconnect,
+          willReconnect && startWaiting};
+}
+
+// The banner shows while out of balance, and while a refused start waits.
+inline constexpr bool BannerOpen(bool outOfBalance, std::optional<RecoveryState> recovery) {
+  return outOfBalance || (recovery && recovery->startWaiting && recovery->retriesLeft);
 }
 
 }  // namespace urnw::balance
