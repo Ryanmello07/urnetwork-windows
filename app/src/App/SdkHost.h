@@ -859,7 +859,7 @@ class SdkHost {
   void SetConnectGestureObserver(std::function<void()> admitted,
                                  std::function<void()> disconnected) {
     connectAdmitted_ = std::move(admitted);
-    userDisconnected_ = std::move(disconnected);
+    onUserDisconnect_ = std::move(disconnected);
   }
   // Whether a connect gesture may start now; when not, shows the upgrade path,
   // or, on a stale balance, fetches it and runs `again` (the same gesture,
@@ -1925,9 +1925,10 @@ class SdkHost {
   std::function<urnw::balance::StartConnectFacts()> startConnectFacts_;
   std::function<void(std::function<void()>)> startConnectUpgrade_;
   std::function<void(std::function<void()>)> startConnectFetchBalance_;
-  // SetConnectGestureObserver
+  // SetConnectGestureObserver (not userDisconnected_: that name is the session
+  // worker's own fact, below)
   std::function<void()> connectAdmitted_;
-  std::function<void()> userDisconnected_;
+  std::function<void()> onUserDisconnect_;
   // RetryRefusedConnect is running the refused gesture: the gate admits it
   bool retryingRefusedConnect_ = false;
   bool productUpdatesOptOut_ = false;  // the next create's product_updates

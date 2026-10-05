@@ -6283,7 +6283,7 @@ void SdkHost::StopSyncWatchdog() {
 // nothing connected and nothing to do.
 void SdkHost::Disconnect() {
   // the user's disconnect: a connect waiting on the balance is not run after it
-  if (userDisconnected_) userDisconnected_();
+  if (onUserDisconnect_) onUserDisconnect_();
   SessionRequest r;
   r.kind = ConnectKind::Disconnect;
   r.reason = "disconnect";

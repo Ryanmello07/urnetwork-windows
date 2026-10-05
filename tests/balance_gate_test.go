@@ -215,7 +215,7 @@ func TestBalanceRecoveryWiring(t *testing.T) {
 	if set < 0 || run < set || clear < run {
 		t.Error("SdkHost::RetryRefusedConnect does not run the gesture past the gate and close the gate after it")
 	}
-	if !strings.Contains(definitionBody(t, "SdkHost.cpp", host, "void SdkHost::Disconnect()"), "userDisconnected_();") {
+	if !strings.Contains(definitionBody(t, "SdkHost.cpp", host, "void SdkHost::Disconnect()"), "if (onUserDisconnect_) onUserDisconnect_();") {
 		t.Error("SdkHost::Disconnect does not end the wait on the balance")
 	}
 
