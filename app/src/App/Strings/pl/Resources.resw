@@ -630,6 +630,10 @@
     <value>WalletConnect jest teraz niedostępny. Spróbuj ponownie później lub wprowadź adres ręcznie.</value>
     <comment>Bittensor wallet error in the apps, when the ur.io bridge page returns walletconnect_unavailable: the page has no WalletConnect project id, so it cannot pair a wallet. Manual entry still works. WalletConnect is a product name.</comment>
   </data>
+  <data name="bittensor_error_signature_mismatch" xml:space="preserve">
+    <value>Ten podpis nie pochodzi z wprowadzonego adresu. W portfelu {} podpisz wiadomość tym adresem, a następnie ponownie wklej podpis.</value>
+    <comment>Bittensor wallet connect (Earnings), manual entry (TAO.com, or Talisman on a phone): the server refused the pasted signature because it does not verify for the address the user typed over the shown message (POST /sn/wallet error.code signature_mismatch). Usually the user signed with another account in the wallet. The server cannot tell which account signed. The argument is the wallet product name (TAO.com or Talisman).</comment>
+  </data>
   <data name="bittensor_sign_in" xml:space="preserve">
     <value>Zaloguj się przez Bittensor</value>
     <comment>Call to action</comment>

@@ -68,6 +68,16 @@ int main() {
   Check(NextStepFor("extension") == NextStep::Unsupported, "extension is web-only");
   Check(NextStepFor("") == NextStep::Unsupported, "unknown transport");
 
+  // POST /sn/wallet refuses a signature that is not from the entered address
+  // (signature_mismatch): after a manual entry the page says to sign again in
+  // that wallet; a bridge signature and every other refusal read as before
+  CheckEq("bittensor_error_signature_mismatch", ConnectErrorKey("signature_mismatch", "manual"),
+          "a pasted signature from another account");
+  CheckEq("", ConnectErrorKey("signature_mismatch", "browser_bridge"), "the bridge signed");
+  CheckEq("", ConnectErrorKey("signature_mismatch", ""), "no wallet known");
+  CheckEq("", ConnectErrorKey("server_error", "manual"), "an uncoded refusal");
+  CheckEq("", ConnectErrorKey("", "manual"), "a transport error");
+
   // the app keeps its own hand-back link
   CheckEq("urnetwork://bittensor-sign-message", std::string(kRedirectLink), "redirect link");
   CheckEq("windows", std::string(kPlatform), "platform");

@@ -143,9 +143,11 @@ urnet::SnError TransportError(std::string const& message) {
 }
 
 // SnSetWallet predates the common coded SnError result shape. Adapt its
-// message explicitly instead of assigning between two unrelated optionals.
+// code and message explicitly instead of assigning between two unrelated
+// optionals (the code reaches ApplyWalletConnectResult as on the device path).
 urnet::SnError SetWalletError(urnet::SnSetWalletError const& source) {
   urnet::SnError error;
+  error.code = source.code;
   error.message = source.message;
   return error;
 }
@@ -1209,6 +1211,7 @@ void WalletPage::StartWalletConnect(std::string const& pinnedAddress) {
 void WalletPage::ConnectWithWallet(std::string const& walletId, std::string const& pinnedAddress) {
   if (connectingWallet_) return;
   SetConnectingWallet(true);
+  connectWalletId_ = walletId;
   // Talisman asks for the extension's approval, WalletConnect for a scan
   const std::string browserHint = bittensor::BrowserHintKey(walletId);
   if (browserHint == "bittensor_continue_in_browser") {
@@ -1409,6 +1412,19 @@ void WalletPage::ApplyWalletConnectResult(uint32_t generation, bool ok,
   }
   SetConnectingWallet(false);
   if (!ok) {
+    // a signature pasted from the manual wallet that is not from the entered
+    // address: say so, and what to do in that wallet
+    const std::string transport =
+        connectWalletId_.empty()
+            ? std::string()
+            : urnet::bittensorWalletTransportFor(connectWalletId_, std::string(bittensor::kPlatform));
+    const std::string key = bittensor::ConnectErrorKey(
+        error ? error->code.value_or(std::string()) : std::string(), transport);
+    if (!key.empty()) {
+      Notify(hstring{urnw::Format(key, Widen(urnet::bittensorWalletDisplayName(connectWalletId_)))},
+             InfoBarSeverity::Error);
+      return;
+    }
     Notify(error ? SnErrorText(error) : Loc("wallet_connect_failed"), InfoBarSeverity::Error);
     return;
   }
