@@ -472,7 +472,7 @@ void AppController::ShowUpgradeForBlockedConnect() {
   OnUi([this] {
     ShowWindow(nullptr);
     if (auto self = window_.try_as<winrt::URnetwork::implementation::MainWindow>())
-      self->OnOpenUpgrade(nullptr, nullptr);
+      self->OpenUpgradeForBlockedConnect();
   });
 }
 

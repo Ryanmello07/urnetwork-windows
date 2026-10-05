@@ -18,6 +18,7 @@
 #include "PlanPicker.h"
 #include "OfferCard.h"
 #include "SubscriptionBalance.h"
+#include "FreeRefreshTicker.h"
 
 namespace urnw {
 
@@ -89,6 +90,28 @@ class RedeemCodeSheet : public std::enable_shared_from_this<RedeemCodeSheet> {
   bool redeeming_ = false;
 };
 
+// ---- About your data --------------------------------------------------------
+// What Used, Pending and Available mean, the daily balance the server reports
+// and when the free data refreshes (DataInfo.h), from the window's balance
+// snapshot. Opened from the info button on the Account usage card and from
+// Why? in the out-of-balance banner.
+class DataInfoSheet {
+ public:
+  static std::shared_ptr<DataInfoSheet> Create(
+      winrt::Microsoft::UI::Xaml::XamlRoot const& root, BalanceSnapshot const& balance);
+
+  winrt::Microsoft::UI::Xaml::Controls::ContentDialog Dialog() const { return dialog_; }
+
+ private:
+  DataInfoSheet() = default;
+
+  void Build(winrt::Microsoft::UI::Xaml::XamlRoot const& root, BalanceSnapshot const& balance);
+
+  winrt::Microsoft::UI::Xaml::Controls::ContentDialog dialog_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::TextBlock refreshText_{nullptr};
+  FreeRefreshTicker refreshTicker_;
+};
+
 // ---- Upgrade to UR Pro -------------------------------------------------------
 // Product cards (yearly / monthly) → Stripe checkout → waiting state while the
 // balance store's confirmation poll runs → purchase-success (or timeout) state.
@@ -108,9 +131,12 @@ class UpgradeSheet : public std::enable_shared_from_this<UpgradeSheet> {
       winrt::Microsoft::UI::Xaml::XamlRoot const& root, SdkHost& sdk,
       SubscriptionBalanceStore& balance, bool yearly);
 
+  // `freeRefresh`: a start connect refused for the balance opened the sheet
+  // (datainfo::UpgradeShowsFreeRefresh), so it says when the free data
+  // refreshes and offers Wait for refresh.
   static std::shared_ptr<UpgradeSheet> Create(
       winrt::Microsoft::UI::Xaml::XamlRoot const& root, SdkHost& sdk,
-      SubscriptionBalanceStore& balance);
+      SubscriptionBalanceStore& balance, bool freeRefresh = false);
 
   winrt::Microsoft::UI::Xaml::Controls::ContentDialog Dialog() const { return dialog_; }
 
@@ -189,6 +215,9 @@ class UpgradeSheet : public std::enable_shared_from_this<UpgradeSheet> {
   OfferLines offerLine_;            // the active welcome offer, read-only
   bool purchaseEmitted_ = false;    // purchase.completed once per checkout
   bool paySheetActive_ = false;     // the web view shows the pay page (not Checkout)
+  bool freeRefresh_ = false;        // opened by a blocked connect (Create)
+  winrt::Microsoft::UI::Xaml::Controls::TextBlock freeRefreshText_{nullptr};
+  FreeRefreshTicker freeRefreshTicker_;
 
   Page page_ = Page::Products;
   bool checkingOut_ = false;

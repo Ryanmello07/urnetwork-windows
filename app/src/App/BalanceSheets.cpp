@@ -16,6 +16,7 @@
 #include <nlohmann/json.hpp>
 
 #include "ClientEvents.h"
+#include "DataInfo.h"
 #include "Localization.h"
 #include "Log.h"
 #include "Paths.h"
@@ -417,11 +418,107 @@ void RedeemCodeSheet::ApplyResult(std::string const& outcome,
   errorText_.Visibility(Visibility::Visible);
 }
 
+// ---- DataInfoSheet ----------------------------------------------------------
+
+namespace {
+
+// One amount: the usage bar's dot and name with the amount at the right, and
+// what it means under them.
+StackPanel MakeDataInfoRow(hstring const& name, winrt::Windows::UI::Color const& dot,
+                           std::wstring const& amount, hstring const& explanation) {
+  StackPanel row;
+  row.Spacing(4);
+  Grid line;
+  line.ColumnSpacing(8);
+  ColumnDefinition nameColumn;
+  nameColumn.Width(GridLength{1, GridUnitType::Star});
+  ColumnDefinition amountColumn;
+  amountColumn.Width(GridLength{0, GridUnitType::Auto});
+  line.ColumnDefinitions().Append(nameColumn);
+  line.ColumnDefinitions().Append(amountColumn);
+  StackPanel key;
+  key.Orientation(Orientation::Horizontal);
+  key.Spacing(6);
+  ShapeEllipse mark;
+  mark.Width(8);
+  mark.Height(8);
+  mark.VerticalAlignment(VerticalAlignment::Center);
+  mark.Fill(SolidColorBrush(dot));
+  key.Children().Append(mark);
+  key.Children().Append(MakeText(name, 14, colors::MutedBrush()));
+  line.Children().Append(key);
+  auto value = MakeText(hstring{amount}, 14, colors::MutedBrush());
+  Grid::SetColumn(value, 1);
+  line.Children().Append(value);
+  row.Children().Append(line);
+  row.Children().Append(MakeText(explanation, 14, colors::TextBrush(), true));
+  return row;
+}
+
+}  // namespace
+
+std::shared_ptr<DataInfoSheet> DataInfoSheet::Create(XamlRoot const& root,
+                                                     BalanceSnapshot const& balance) {
+  auto sheet = std::shared_ptr<DataInfoSheet>(new DataInfoSheet());
+  sheet->Build(root, balance);
+  return sheet;
+}
+
+void DataInfoSheet::Build(XamlRoot const& root, BalanceSnapshot const& balance) {
+  dialog_ = MakeDialog(root, Loc("data_info_title"));
+
+  StackPanel content;
+  content.Spacing(16);
+  content.MinWidth(360);
+  content.MaxWidth(440);
+
+  // the usage bar's split, names and colors (UsageBar.cpp)
+  const auto info = datainfo::DataInfoFrom(
+      balance.startBalanceByteCount, balance.availableByteCount, balance.pendingByteCount,
+      [](int64_t bytes) { return Widen(FormatByteCountCompact(bytes)); });
+  content.Children().Append(MakeDataInfoRow(Loc("used_data_key"), colors::kUrElectricBlue,
+                                            info.used, Loc("data_info_used")));
+  content.Children().Append(MakeDataInfoRow(Loc("pending_data_key"), colors::kUrCoral,
+                                            info.pending, Loc("data_info_pending")));
+  content.Children().Append(MakeDataInfoRow(Loc("available_data_key"), colors::kTextFaint,
+                                            info.available, Loc("data_info_available")));
+
+  // the daily balance, as the Account card's row prints it
+  Grid daily;
+  daily.ColumnSpacing(8);
+  ColumnDefinition labelColumn;
+  labelColumn.Width(GridLength{1, GridUnitType::Star});
+  ColumnDefinition valueColumn;
+  valueColumn.Width(GridLength{0, GridUnitType::Auto});
+  daily.ColumnDefinitions().Append(labelColumn);
+  daily.ColumnDefinitions().Append(valueColumn);
+  daily.Children().Append(MakeText(Loc("daily_data_balance_label"), 14, colors::MutedBrush()));
+  auto dailyValue = MakeText(hstring{info.daily}, 14, colors::MutedBrush());
+  Grid::SetColumn(dailyValue, 1);
+  daily.Children().Append(dailyValue);
+  content.Children().Append(daily);
+
+  // Pro gets no free daily grant, so no refresh line
+  if (datainfo::ShowsFreeRefresh(balance.isPro)) {
+    refreshText_ = MakeText(hstring{L""}, 14, colors::MutedBrush(), true);
+    content.Children().Append(refreshText_);
+    auto text = refreshText_;
+    // stopped with the sheet, which the window drops once ShowAsync returns
+    refreshTicker_.Start([text] {
+      text.Text(hstring{Format("data_info_refresh_at", FreeRefreshCountdownText())});
+    });
+  }
+
+  dialog_.Content(content);
+}
+
 // ---- UpgradeSheet -----------------------------------------------------------
 
 std::shared_ptr<UpgradeSheet> UpgradeSheet::Create(XamlRoot const& root, SdkHost& sdk,
-                                                   SubscriptionBalanceStore& balance) {
+                                                   SubscriptionBalanceStore& balance,
+                                                   bool freeRefresh) {
   auto sheet = std::shared_ptr<UpgradeSheet>(new UpgradeSheet(sdk, balance));
+  sheet->freeRefresh_ = freeRefresh;
   sheet->Build(root);
   return sheet;
 }
@@ -451,7 +548,26 @@ void UpgradeSheet::Build(XamlRoot const& root) {
   proTitle.FontWeight(winrt::Windows::UI::Text::FontWeights::Bold());
   productsPanel_.Children().Append(proTitle);
   // No explainer under the title: the sheet is the title and the two plan
-  // options (android UpgradeScreenHeader).
+  // options (android UpgradeScreenHeader). A blocked connect is the exception:
+  // upgrading must not read as the only way back, so the sheet says when the
+  // free data refreshes and offers to wait for it.
+  if (freeRefresh_) {
+    freeRefreshText_ = MakeText(hstring{L""}, 14, colors::MutedBrush(), true);
+    productsPanel_.Children().Append(freeRefreshText_);
+    auto text = freeRefreshText_;
+    freeRefreshTicker_.Start([text] {
+      text.Text(hstring{Format("insufficient_balance_refreshes_in", FreeRefreshCountdownText())});
+    });
+    Button waitForRefresh;
+    waitForRefresh.Content(winrt::box_value(Loc("wait_for_refresh")));
+    waitForRefresh.HorizontalAlignment(HorizontalAlignment::Stretch);
+    winrt::Microsoft::UI::Xaml::Automation::AutomationProperties::SetAutomationId(
+        waitForRefresh, L"acceptance.upgrade.wait-for-refresh");
+    waitForRefresh.Click([weak = weak_from_this()](auto const&, auto const&) {
+      if (auto self = weak.lock()) self->dialog_.Hide();
+    });
+    productsPanel_.Children().Append(waitForRefresh);
+  }
 
   // the plan picker the onboarding welcome page shows: yearly in the gold
   // dress with the trial, selected by default, monthly plain below it. One
@@ -643,6 +759,7 @@ void UpgradeSheet::Build(XamlRoot const& root) {
         self->purchaseEmitted_ = true;
       }
       if (self->haloStoryboard_) self->haloStoryboard_.Stop();
+      self->freeRefreshTicker_.Stop();
       self->TeardownWebView();
     }
   });

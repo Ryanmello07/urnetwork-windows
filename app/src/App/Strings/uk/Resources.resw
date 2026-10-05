@@ -1124,6 +1124,30 @@
     <value>Ця смуга в застосунку показує, скільки безкоштовних даних ви заробляєте від свого провайдера. Ви можете будь-коли перевірити її та налаштувати параметри, щоб максимізувати свій заробіток.</value>
     <comment>Call to action</comment>
   </data>
+  <data name="data_info_available" xml:space="preserve">
+    <value>Дані, які ви ще можете використати.</value>
+    <comment>"About your data" sheet: explains the Available part of the usage bar, shown under the Available amount.</comment>
+  </data>
+  <data name="data_info_pending" xml:space="preserve">
+    <value>Дані, зарезервовані для ваших відкритих підключень. Те, що вони не використають, повертається, коли вони закриваються.</value>
+    <comment>"About your data" sheet: explains the Pending part of the usage bar, shown under the Pending amount. Pending is balance held (escrowed) by the user's open connections; the unused part is returned when they close. Do not add a time promise.</comment>
+  </data>
+  <data name="data_info_refresh_at" xml:space="preserve">
+    <value>Безкоштовні дані оновлюються щодня о 00:00 UTC (через {}).</value>
+    <comment>"About your data" sheet: when the free daily data is granted again. {time} is the time left until the next 00:00 UTC as a compact duration (e.g. 5h 12m). Keep 00:00 UTC as is. Shown only to accounts without Pro (Pro does not get the free grant).</comment>
+  </data>
+  <data name="data_info_title" xml:space="preserve">
+    <value>Про ваші дані</value>
+    <comment>Title of the "About your data" sheet, opened from the info button next to the daily data balance in the usage bar and from the Why? link under an out-of-balance notice. Also the info button's accessibility label.</comment>
+  </data>
+  <data name="data_info_used" xml:space="preserve">
+    <value>Дані, які ви вже використали.</value>
+    <comment>"About your data" sheet: explains the Used part of the usage bar, shown under the Used amount.</comment>
+  </data>
+  <data name="data_info_why" xml:space="preserve">
+    <value>Чому?</value>
+    <comment>Link under the out-of-balance notice that opens the "About your data" sheet.</comment>
+  </data>
   <data name="data_usage" xml:space="preserve">
     <value>Використання даних</value>
     <comment>Call to action</comment>
@@ -1727,6 +1751,10 @@
   <data name="insufficient_balance_message" xml:space="preserve">
     <value>Поповніть баланс або підключіть тариф, щоб продовжувати підключатися.</value>
     <comment>Body of the warning shown when the balance runs out and no session is up; connecting needs more balance or a plan.</comment>
+  </data>
+  <data name="insufficient_balance_refreshes_in" xml:space="preserve">
+    <value>Безкоштовні дані оновляться через {}.</value>
+    <comment>Leads the out-of-balance notice (and the Upgrade screen when a blocked connect opened it): when the free daily data is granted again. {time} is the time left until the next 00:00 UTC as a compact duration (e.g. 5h 12m).</comment>
   </data>
   <data name="insufficient_funds" xml:space="preserve">
     <value>Недостатньо коштів</value>
@@ -4244,6 +4272,10 @@
   <data name="via_exit" xml:space="preserve">
     <value>через {}</value>
     <comment>Android app string: via exit.</comment>
+  </data>
+  <data name="wait_for_refresh" xml:space="preserve">
+    <value>Дочекатися оновлення</value>
+    <comment>Upgrade screen, when a connect blocked by insufficient balance opened it: closes the screen to wait for the free daily data instead of upgrading.</comment>
   </data>
   <data name="waiting_for_approval" xml:space="preserve">
     <value>Очікування підтвердження</value>

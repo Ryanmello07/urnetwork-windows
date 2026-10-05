@@ -25,6 +25,7 @@
 
 #include "ConnectCanvas.h"
 #include "ExtenderPanel.h"
+#include "FreeRefreshTicker.h"
 #include "IpFamilyStatusRow.h"
 #include "LocationSheets.h"
 #include "ProviderLocationsSheet.h"
@@ -114,6 +115,9 @@ class ConnectPage {
   // live on MainWindow: UpdateBalanceWarning calls this so the hero's error and
   // processing states and the InfoBar can never disagree.
   void ApplyConnectStatus();
+  // the out-of-balance banner's message (ApplyConnectStatus, then once per
+  // displayed minute of the free refresh countdown while it is open)
+  void ApplyBalanceWarningMessage();
 
   // ---- XAML event handlers (forwarded from MainWindow) ----
   void OnConnectToggle(winrt::Windows::Foundation::IInspectable const&,
@@ -382,6 +386,7 @@ class ConnectPage {
   std::optional<urnet::TransportSettings> clientTransportSettings_;
   std::optional<urnet::TransportSettings> providerTransportSettings_;
   winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer chartTimer_{nullptr};
+  urnw::FreeRefreshTicker balanceRefreshTicker_;  // the banner's countdown
   uint32_t chartTickCount_ = 0;
   std::vector<urnw::ContractPeerRow> contractRows_;
   std::vector<urnw::BlockActionItem> blockActions_;

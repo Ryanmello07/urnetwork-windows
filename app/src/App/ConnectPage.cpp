@@ -3,6 +3,7 @@
 
 #include "ConnectPage.h"
 #include "ProvideModeVisual.h"
+#include "DataInfo.h"
 
 #include <winrt/Microsoft.UI.Xaml.Automation.h>
 #include <winrt/Microsoft.UI.Xaml.Media.Animation.h>
@@ -609,12 +610,15 @@ void ConnectPage::ApplyConnectStatus() {
   // balance is mid-flight, and showing a warning for it would be wrong.
   const bool processing = w_.balanceConfirming();
   const bool outOfBalance = w_.outOfBalance();
-  // the banner says the traffic is held while a session is up, which is the
-  // state the tray notice announced; otherwise it asks for balance
+  // the banner's message, kept current while it is open (ApplyBalanceWarningMessage)
   if (outOfBalance) {
-    w_.BalanceWarning().Message(ConnectActionIsDisconnect()
-                                    ? Loc("insufficient_balance_held_notice")
-                                    : Loc("insufficient_balance_message"));
+    if (balanceRefreshTicker_.Running()) {
+      ApplyBalanceWarningMessage();
+    } else {
+      balanceRefreshTicker_.Start([this] { ApplyBalanceWarningMessage(); });
+    }
+  } else {
+    balanceRefreshTicker_.Stop();
   }
   switch (render) {
     case Health::Connected:
@@ -2423,6 +2427,23 @@ void ConnectPage::ApplyDnsRecommendationPill() {
     return;
   }
   w_.DnsRecPill().Visibility(Visibility::Collapsed);
+}
+
+// The banner leads with when the free data refreshes (DataInfo.h), so Get Pro
+// does not read as the only way back; Why? beside it opens the "About your
+// data" sheet. Then it says the traffic is held while a session is up, which is
+// the state the tray notice announced; otherwise it asks for balance.
+void ConnectPage::ApplyBalanceWarningMessage() {
+  const auto lines =
+      urnw::datainfo::BannerLinesFor(w_.outOfBalance(), ConnectActionIsDisconnect());
+  std::wstring message;
+  if (lines.refresh) {
+    message = urnw::Format("insufficient_balance_refreshes_in", urnw::FreeRefreshCountdownText()) +
+              L"\n";
+  }
+  message += urnw::Localized(lines.held ? "insufficient_balance_held_notice"
+                                        : "insufficient_balance_message");
+  w_.BalanceWarning().Message(hstring{message});
 }
 
 void ConnectPage::OnChartTick() {
