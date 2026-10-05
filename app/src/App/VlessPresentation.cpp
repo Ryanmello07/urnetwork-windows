@@ -39,7 +39,7 @@ const char* ErrorKey(std::string_view errorId) {
   for (const char* id : kErrorIds) {
     if (errorId == id) return id;
   }
-  return kErrorLinkInvalid;
+  return "something_went_wrong";
 }
 
 namespace detail {

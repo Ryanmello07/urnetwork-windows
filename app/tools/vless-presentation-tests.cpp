@@ -480,15 +480,25 @@ int main(int argc, char** argv) {
 #endif
   }
 
-  Case("an error id this build does not know reads as an invalid link");
+  Case("an id this build does not know, the C ABI's internal one included, reads as something went wrong");
   {
-    Check(std::string(vless::ErrorKey("vless_error_from_a_newer_sdk")) ==
-              "vless_error_link_invalid",
-          "an unknown id is not shown as an invalid link");
-    Check(std::string(vless::ErrorKey("")) == "vless_error_link_invalid",
-          "an empty id is not shown as an invalid link");
-    Check(std::string(vless::ErrorKey("VLESS_ERROR_PORT_INVALID")) == "vless_error_link_invalid",
+    // the C ABI answers it for a call that could not run, which is no refusal
+    // of the settings: a save that never ran must not read as an invalid link
+    Check(std::string(vless::kErrorInternal) == "internal_error",
+          "the C ABI's internal id is not internal_error");
+    Check(std::string(vless::ErrorKey(vless::kErrorInternal)) == "something_went_wrong",
+          "the C ABI's internal id is not shown as something went wrong");
+    Check(std::string(vless::ErrorKey("vless_error_from_a_newer_sdk")) == "something_went_wrong",
+          "an unknown id is not shown as something went wrong");
+    Check(std::string(vless::ErrorKey("")) == "something_went_wrong",
+          "an empty id is not shown as something went wrong");
+    Check(std::string(vless::ErrorKey("VLESS_ERROR_PORT_INVALID")) == "something_went_wrong",
           "ids are matched loosely");
+    Check(HasString(resw, "something_went_wrong"), "something_went_wrong is not in en/Resources.resw");
+#if defined(URNW_VLESS_TESTS_SDK) && defined(URNET_ERROR_ID_INTERNAL)
+    Check(std::string(URNET_ERROR_ID_INTERNAL) == vless::kErrorInternal,
+          "the internal id is not the sdk's URNET_ERROR_ID_INTERNAL");
+#endif
   }
 
   // ---- the pickers -------------------------------------------------------------
