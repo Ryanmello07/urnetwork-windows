@@ -3929,6 +3929,10 @@
     <value>Кошелек для выплат обновлен</value>
     <comment>Snackbar shown after the payout wallet is changed. Used in Main/Account/Wallet/WalletView.swift.</comment>
   </data>
+  <data name="payouts_now_go_to" xml:space="preserve">
+    <value>Выплаты теперь поступают на {}.</value>
+    <comment>Status line or snackbar after removing the payout wallet made another of the account's wallets the payout wallet (the server promotes the newest other Solana or Polygon wallet). The placeholder is the new payout wallet's shortened address, its first and last four characters around an ellipsis.</comment>
+  </data>
   <data name="peer_count_one" xml:space="preserve">
     <value>1 узел</value>
     <comment>Post quantum identity panel: peer identity count indicator, singular.</comment>

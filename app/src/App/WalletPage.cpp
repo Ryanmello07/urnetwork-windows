@@ -1533,7 +1533,22 @@ void WalletPage::ApplyLegacyAnswer(uint32_t generation, solana::LegacyRead which
   // another load's answer, or a read that already answered
   if (!legacyLoad_.Answer(generation, which, ok, std::move(answer))) return;
   // legacy_.networkId is the network the current load was begun for
-  if (legacyLoad_.Commit(legacy_, legacy_.networkId)) RebuildSolanaPanel();
+  if (legacyLoad_.Commit(legacy_, legacy_.networkId)) {
+    RebuildSolanaPanel();
+    NotifyPromotedPayoutWallet();
+  }
+}
+
+void WalletPage::NotifyPromotedPayoutWallet() {
+  if (!payoutRemoval_) return;
+  const solana::PayoutRemoval removal = *payoutRemoval_;
+  payoutRemoval_.reset();
+  // the card shows the promoted wallet now; the line says payouts moved to it
+  if (auto promoted = solana::PromotedPayoutWallet(removal, legacy_)) {
+    Notify(hstring{urnw::Format("payouts_now_go_to",
+                                urnw::Widen(solana::ShortAddress(promoted->address)))},
+           InfoBarSeverity::Success);
+  }
 }
 
 void WalletPage::RebuildSolanaPanel() {
@@ -1808,22 +1823,25 @@ void WalletPage::RemoveSolanaWallet(std::string const& walletId) {
 
   urnet::RemoveWalletArgs args;
   args.wallet_id = walletId;
+  // the payout wallet now, to tell a promotion from no payout wallet afterwards
+  const solana::PayoutRemoval removal{legacy_.networkId, walletId, legacy_.payoutWalletId};
   auto queue = w_.DispatcherQueue();
   auto weak = w_.get_weak();
   Sdk().api().removeWallet(
-      args, [queue, weak, generation](std::optional<urnet::RemoveWalletResult> result,
-                                      std::optional<std::string> err) {
+      args, [queue, weak, generation, removal](std::optional<urnet::RemoveWalletResult> result,
+                                               std::optional<std::string> err) {
         std::string error = err ? *err : std::string();
         if (error.empty() && result && result->error) error = result->error->message;
         const bool ok = result && result->success && error.empty();
         if (!ok) urnw::LogError("earnings: removeWallet failed: {}", error);
-        queue.TryEnqueue([weak, generation, ok, error] {
-          if (auto self = weak.get()) self->wallet().ApplyRemoveResult(generation, ok, error);
+        queue.TryEnqueue([weak, generation, ok, error, removal] {
+          if (auto self = weak.get()) self->wallet().ApplyRemoveResult(generation, ok, error, removal);
         });
       });
 }
 
-void WalletPage::ApplyRemoveResult(uint32_t generation, bool ok, std::string const& error) {
+void WalletPage::ApplyRemoveResult(uint32_t generation, bool ok, std::string const& error,
+                                   solana::PayoutRemoval const& removal) {
   if (!SettleFlow(removeFlow_, generation)) {
     urnw::LogWarn("earnings: dropping a remove result for an abandoned request (ok={})", ok);
     return;
@@ -1834,8 +1852,11 @@ void WalletPage::ApplyRemoveResult(uint32_t generation, bool ok, std::string con
     Notify(SolanaFailureText(error), InfoBarSeverity::Error);
     return;
   }
-  // No snackbar on success: the store has no "wallet removed" sentence, so the
-  // removal reports itself the way the old wallet sheet's did - the card goes.
+  // Removing the payout wallet makes another active Solana or Polygon wallet
+  // the payout wallet when the network has one: the reload's commit names it
+  // (NotifyPromotedPayoutWallet). Otherwise the removal reports itself the way
+  // the old wallet sheet's did - the card goes.
+  payoutRemoval_ = removal;
   LoadLegacyWallets(/*reset=*/true);
 }
 

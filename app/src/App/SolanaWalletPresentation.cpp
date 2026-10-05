@@ -206,6 +206,14 @@ SolanaPanelView SolanaPanelFor(const LegacyCommitted& view) {
                         view.pendingNanoCents);
 }
 
+std::optional<LegacyWallet> PromotedPayoutWallet(const PayoutRemoval& removal,
+                                                 const LegacyCommitted& view) {
+  if (removal.removedId.empty() || removal.priorPayoutId != removal.removedId) return std::nullopt;
+  if (view.networkId != removal.networkId || !view.ready || !view.reads.payout) return std::nullopt;
+  if (view.payoutWalletId.empty() || view.payoutWalletId == removal.removedId) return std::nullopt;
+  return PayoutWalletFor(view.wallets, view.payoutWalletId);
+}
+
 bool NeedsPayoutSwitch(const std::string& newWalletId, const std::string& payoutWalletId) {
   return !newWalletId.empty() && newWalletId != payoutWalletId;
 }
