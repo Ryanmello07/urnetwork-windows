@@ -28,6 +28,7 @@
 #include "PostQuantumIdentity.h"
 #include "ProvideLifecycle.h"
 #include "ProviderLocations.h"
+#include "ProviderStatusPresentation.h"
 #include "Sdk.h"
 #include "ServiceClient.h"
 #include "ServiceRecoveryPolicy.h"
@@ -122,11 +123,13 @@ struct LiveStats {
   // the provider holds a Network-mode provide key: with provideEnabled this
   // means the device is discoverable/connectable as a same-network peer
   bool provideHasNetworkKey = false;
-  // The three provide fields above came from the SERVICE's provider-only
-  // device (no session, so no DeviceRemote: SdkHost::ReconcileProviderLocked),
-  // which reports its tier and key but not its peers — so provideClients is
-  // unknown here, not zero, and nothing may render it as a count.
-  bool provideWithoutTunnel = false;
+  // provideClients is UNKNOWN, not zero, and nothing may render it as a count.
+  // Only while the SERVICE's provider-only device provides (no session, so no
+  // DeviceRemote: SdkHost::ReconcileProviderLocked): its status says its tier
+  // and key, and its peers come only from get_provider_stats, which an older
+  // service does not answer and which is read while the window presents
+  // (SdkHost::ProviderOnlyStatsLoop).
+  bool provideClientsUnknown = false;
   std::string locationName;       // selected connect location (empty = best available)
   std::string countryCode;        // selected location country code (dns recommendations)
   std::string countryName;
@@ -392,6 +395,12 @@ struct ProviderThroughputSnapshot {
   std::optional<TransportDistributionSnapshot> providerDistribution;
 };
 
+// The Earnings provider status of the service's provider-only device (no
+// session): the readings a ProviderStatusViewController would publish, kept
+// from GET /network/provider-status answers read on the api
+// (SdkHost::SetProviderOnlyStatusWanted).
+using ProviderOnlyStatus = providerstatus::Readings<urnet::ProviderStatus>;
+
 // Which device transport policy a surface reads/edits: the CLIENT policy (the
 // carrier this device uses to reach providers) or the PROVIDER policy (the
 // carrier it uses when relaying for remote clients). Both are SDK
@@ -506,6 +515,9 @@ class SdkHost {
   using ExtenderProvideStatusHandler = std::function<void(ExtenderProvideStatusView)>;
   // The Earnings page's statistics feed (O5, O8), every throughput tick.
   using ProviderThroughputHandler = std::function<void(ProviderThroughputSnapshot)>;
+  // The provider-only device's provider status (no session), every change of
+  // the readings: a poll answered or failed, or the source gone.
+  using ProviderOnlyStatusHandler = std::function<void(ProviderOnlyStatus)>;
   // The client / provider transport policy in force (device change listeners +
   // the initial read); nullopt = no device / no policy known.
   using TransportSettingsHandler =
@@ -1070,6 +1082,9 @@ class SdkHost {
   void SetProviderThroughputHandler(ProviderThroughputHandler h) {
     onProviderThroughput_ = std::move(h);
   }
+  void SetProviderOnlyStatusHandler(ProviderOnlyStatusHandler h) {
+    onProviderOnlyStatus_ = std::move(h);
+  }
   void SetTransportDistributionHandler(TransportDistributionHandler h) {
     onTransportDistribution_ = std::move(h);
   }
@@ -1165,6 +1180,25 @@ class SdkHost {
   // provider-stats reading engaged: the seed when the Earnings page is built and
   // when it shows. A cache read under the drawer lock, no rpc.
   ProviderThroughputSnapshot CurrentProviderThroughput();
+  // ---- the provider-only device's provider status (P008, no session) --------
+  //
+  // With no session the Earnings provider status cannot come from a
+  // ProviderStatusViewController: the sdk opens one only on a device, and the
+  // provider is the service's provider-only device. So this reads the same
+  // GET /network/provider-status on the api, at the controller's cadence, and
+  // keeps the row whose client id the service reports for its device
+  // (get_provider_stats): providerstatus::Readings.
+  //
+  // Wanted while the Earnings destination shows with providing enabled, the
+  // window presents and there is no session — the controller's started state.
+  // A want polls at once and then about once a minute; an unwant drops the poll
+  // in flight and keeps the snapshot, as the controller's stop() does. The
+  // readings reset when the provider-only device stops being the provider (a
+  // session, or no device), and say the status is unavailable while the
+  // service reports no statistics (an older service, or no device running).
+  // Both calls take only a light lock: safe on the UI thread.
+  void SetProviderOnlyStatusWanted(bool wanted);
+  ProviderOnlyStatus CurrentProviderOnlyStatus();
   // The SDK's ExtenderViewController for this session (K6, K7): the settings
   // form, the share payload and the import all go through it, so every app
   // applies one implementation of those rules. Null with no session -- the
@@ -1673,9 +1707,54 @@ class SdkHost {
   // DeviceLocal in the service, and a click must not wait on it.
   void RequestProviderReconcile(const char* reason);
   // The provide fields of a snapshot with no DeviceRemote: the provider-only
-  // device as the service's last status said. Lock-free, for ReadStats and the
+  // device as the service's last status said, and its client count as the
+  // last get_provider_stats answer said. Lock-free, for ReadStats and the
   // control-pipe reader.
   void FillProviderOnlyStats(LiveStats& stats) const;
+
+  // ---- the provider-only device's statistics (no session) -------------------
+  //
+  // get_provider_stats, asked every kProviderOnlyStatsInterval by one thread of
+  // its own, and only while it can matter: no session, the service reports a
+  // provider-only device, the control channel is up and the window presents.
+  // An answer feeds what a session's DeviceRemote feeds — the Earnings provider
+  // plots, their gate and the "no traffic yet" line (the drawer caches and
+  // onProviderThroughput_), the Connect page's client count
+  // (serviceProviderClients_) — and names the client whose provider status the
+  // api read above keeps. Off the UI thread because the pipe serializes calls:
+  // a poll can wait behind a start_tunnel for as long as that takes. Started by
+  // Initialize, joined by the destructor.
+  static constexpr std::chrono::seconds kProviderOnlyStatsInterval{2};
+  // the sdk's ProviderStatusViewController poll interval
+  static constexpr std::chrono::seconds kProviderOnlyStatusInterval{60};
+  void ProviderOnlyStatsLoop();
+  void StopProviderOnlyStats();  // called from the destructor; joins the thread
+  // Re-evaluate now rather than at the next tick: a presentation, a want or a
+  // provider that started or stopped.
+  void KickProviderOnlyStats();
+  // Put one answer on screen; take what this loop showed off it again,
+  // forgetting the count and the gate too when the provider is gone (a hide
+  // keeps them, ClearDrawer's rule). Caller holds mutex_, with no session.
+  void ShowProviderOnlyStatsLocked(const proto::ProviderStats& stats);
+  void ClearProviderOnlyStatsLocked(bool providerGone);
+  // One GET /network/provider-status on the api, applied to the readings when
+  // it answers unless they moved on meanwhile. Caller holds mutex_ (api_).
+  void FetchProviderOnlyStatusLocked(const std::string& clientId);
+  // The readings changed hands: forget them (the source is gone) or mark them
+  // unavailable (the service reports no statistics), publishing a change.
+  void ResetProviderOnlyStatus();
+  void ProviderOnlyStatusUnavailable();
+
+  std::thread providerOnlyThread_;
+  std::mutex providerOnlyMutex_;
+  std::condition_variable providerOnlyCv_;
+  bool providerOnlyStop_ = false;
+  bool providerOnlyKick_ = false;
+  bool providerOnlyStatusWanted_ = false;
+  // Bumped whenever the readings stop belonging to the polls in flight (an
+  // unwant, a reset), so a late answer is dropped, the controller's rule.
+  uint64_t providerOnlyStatusGeneration_ = 0;
+  ProviderOnlyStatus providerOnlyStatus_;
 
   std::mutex pendingMutex_;
   // Signalled on every RequestSession and on CancelPendingRowConnect, so a
@@ -1955,6 +2034,10 @@ class SdkHost {
   std::atomic<bool> serviceProviderRunning_{false};
   std::atomic<int64_t> serviceProviderMode_{0};
   std::atomic<bool> serviceProviderNetworkKey_{false};
+  // Its connected network peers as the last get_provider_stats answer said
+  // (ProviderOnlyStatsLoop); -1 while unknown (no answer yet, an older service,
+  // or a provider that stopped), which hides the count.
+  std::atomic<int64_t> serviceProviderClients_{-1};
   std::optional<urnet::ConnectViewController> connectVc_;
   std::optional<urnet::ContractViewController> contractVc_;  // live throughput feed
   // K6/K7's one implementation of the settings, share and import rules.
@@ -2358,6 +2441,7 @@ class SdkHost {
   ExtenderStatusHandler onExtenderStatus_;
   ExtenderProvideStatusHandler onExtenderProvideStatus_;
   ProviderThroughputHandler onProviderThroughput_;
+  ProviderOnlyStatusHandler onProviderOnlyStatus_;
   TransportSettingsHandler onTransportSettings_;
   LocationsHandler onLocations_;
   PeersHandler onPeers_;

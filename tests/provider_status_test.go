@@ -203,7 +203,8 @@ func TestProviderStatusWiring(t *testing.T) {
 		"ApplyProviderStatus();")
 	requireAll("WalletPage::ProviderStatusView", body("providerstatus::View WalletPage::ProviderStatusView() const {"),
 		"providerstatus::ViewFor(providerStatusLoaded_",
-		"!providerStatusVc_ || !providerStatusError_.empty()")
+		"(!providerStatusVc_ && !providerOnlySource_) ||",
+		"!providerStatusError_.empty()")
 	render := body("void WalletPage::ApplyProviderStatus() {")
 	requireAll("WalletPage::ApplyProviderStatus", render,
 		"statsSections_ && statsSections_->providerVisible",
@@ -313,4 +314,46 @@ func TestProviderStatusWiring(t *testing.T) {
 			t.Errorf("en resw %s = %q, want %q", key, got, want)
 		}
 	}
+}
+
+// Run the provider status spec against a rewritten copy of
+// ProviderStatusPresentation.h and require that it fails, naming want. The
+// rest of the header's includes still come from the app.
+func requireProviderStatusFailure(t *testing.T, mutate func(string) string, want string) {
+	t.Helper()
+	root := repositoryRoot(t)
+	source, err := os.ReadFile(filepath.Join(root, "app", "src", "App", "ProviderStatusPresentation.h"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	changed := mutate(string(source))
+	if changed == string(source) {
+		t.Fatal("negative control did not change the production ProviderStatusPresentation.h")
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "ProviderStatusPresentation.h"), []byte(changed), 0600); err != nil {
+		t.Fatal(err)
+	}
+	// -iquote: searched for the harness's quoted include ahead of the app's -I
+	program := buildProviderStatusTests(t, "-iquote", dir)
+	output, err := exec.Command(program).CombinedOutput()
+	if err == nil || !strings.Contains(string(output), want) {
+		t.Fatalf("negative control was not detected (want %q): %v\n%s", want, err, output)
+	}
+}
+
+// The provider-only device's status read on the api applies an answer as the
+// controller applies a poll: a failed poll that dropped the snapshot would
+// blank Demand on every 404 or timeout, and a reading that took the network's
+// first provider row would show another device's demand as this one's.
+func TestProviderStatusReadingsRejectBrokenApply(t *testing.T) {
+	requireProviderStatusFailure(t, func(source string) string {
+		return strings.Replace(source,
+			"    error = message.empty() ? std::string(\"no provider status\") : std::string(message);\n",
+			"    error = message.empty() ? std::string(\"no provider status\") : std::string(message);\n    status.reset();\n", 1)
+	}, "api: a failed poll keeps the last snapshot")
+	requireProviderStatusFailure(t, func(source string) string {
+		return strings.Replace(source, "if (candidate.client_id && *candidate.client_id == clientId) {",
+			"if (candidate.client_id) {", 1)
+	}, "api: the first row whose client id is this device's")
 }

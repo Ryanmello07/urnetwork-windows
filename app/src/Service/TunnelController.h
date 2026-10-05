@@ -20,6 +20,7 @@
 
 #include "EgressMonitor.h"
 #include "FlowOwner.h"
+#include "NetworkChangeNotify.h"
 #include "NetworkConfig.h"
 #include "PacketPump.h"
 #include "Protocol.h"
@@ -177,6 +178,15 @@ class TunnelController {
   // tunnel, no firewall policy. False only when the session lock could not be
   // taken in budget.
   bool StopProvider();
+  // get_provider_stats (Protocol.h ProviderStats): the provider-only device's
+  // statistics, for the screens a session's DeviceRemote feeds. NEVER BLOCKS on
+  // the session lock or the device, for Status()'s reason: it is served on the
+  // control pipe, and every later get_state would queue behind it. It copies
+  // the client id and peer count the build and the peers listener left, and
+  // reads the device's ContractViewController, whose getters answer from its
+  // own sampled state and never call into the device. `available` is false
+  // while none runs.
+  proto::ProviderStats ProviderStats();
 
   // THE STATUS THE APP DECIDES ON, and it must never block.
   //
@@ -382,6 +392,21 @@ class TunnelController {
   // fields ComposeStatusLocked reports. SDK calls, so never from a publish
   // path: only after the device is built or re-moded. Caller holds mutex_.
   void ReadProviderFactsLocked();
+  // Open what get_provider_stats reads on a freshly built provider-only
+  // device: its client id, a ContractViewController (the controller the app
+  // opens on the DeviceRemote, sampling once a second) and a network peers
+  // listener that keeps the client count. Best effort: providing does not
+  // depend on it, and a failure leaves the statistics unavailable. Caller
+  // holds mutex_.
+  void OpenProviderStatsLocked();
+  // TELL THE PROVIDER-ONLY DEVICE THE NETWORK MOVED, as the tunnel session's
+  // device is told by TunnelWatchdog's sampler, which EgressMonitor feeds. An
+  // observe-only EgressMonitor (it binds nothing, so the device's sockets
+  // still follow the route table) feeds a NetworkChangeNotifier, whose own
+  // thread calls networkChanged() once per burst and networkQualityChanged()
+  // for a Wi-Fi signal change. Best effort, like the statistics. Caller holds
+  // mutex_.
+  void WatchProviderNetworkLocked();
   void PushExcludedToDriver(const std::vector<std::string>& paths, bool allowlist);
   // Re-point the driver at a new physical interface. Runs from the egress
   // monitor's change callback, on a system worker thread.
@@ -460,11 +485,31 @@ class TunnelController {
   // capture precondition, the teardown, the published identity). Never engaged
   // together with a tunnel session. providerTier_ and providerNetworkKey_ are
   // what ReadProviderFactsLocked last read off the device. Guarded by mutex_.
+  //
+  // The device lives in a unique_ptr because the network notifier's calls hold
+  // a raw pointer to it: its address does not move when the retire hands it to
+  // the teardown worker, which ends the notifier (a join) before it closes the
+  // device.
   std::optional<urnet::NetworkSpace> providerSpace_;
-  std::optional<urnet::DeviceLocal> providerDevice_;
+  std::unique_ptr<urnet::DeviceLocal> providerDevice_;
   proto::StartProvider providerRequest_;
   int64_t providerTier_ = 0;
   bool providerNetworkKey_ = false;
+  // The provider-only device's network watch (WatchProviderNetworkLocked).
+  // Guarded by mutex_; retired with the device.
+  std::unique_ptr<EgressMonitor> providerEgress_;
+  std::unique_ptr<NetworkChangeNotifier> providerNetwork_;
+  // What get_provider_stats reads (ProviderStats), under a mutex of its own,
+  // never mutex_: the request is served on the control pipe and must not queue
+  // behind a bring-up holding the session lock. Innermost — taken under mutex_
+  // by the build and the retire, alone by ProviderStats() — and never held
+  // across a call into the device. providerClients_ is shared with the peers
+  // listener, which can still be running after the retire has dropped it.
+  std::mutex providerStatsMutex_;
+  std::optional<urnet::ContractViewController> providerStatsVc_;
+  urnet::Sub providerPeersSub_;
+  std::shared_ptr<std::atomic<int64_t>> providerClients_;
+  std::string providerClientId_;
 
   // Native tunnel plumbing.
   std::unique_ptr<Wintun> wintun_;

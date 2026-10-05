@@ -62,6 +62,11 @@ class ServiceClient {
   // nothing else. Same out-params as StartProvider.
   bool StopProvider(std::optional<proto::TunnelStatus>* status = nullptr,
                     std::string* error = nullptr);
+  // get_provider_stats (Protocol.h ProviderStats). True when the service
+  // answered with them; false for a transport failure or for a service too old
+  // to know the verb ("unknown request type"), which the app reads as "no
+  // statistics" and renders as it did before they existed.
+  bool GetProviderStats(proto::ProviderStats& stats);
 
  private:
   proto::TunnelStatus CallStatus(const nlohmann::json& request,

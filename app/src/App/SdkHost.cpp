@@ -337,6 +337,8 @@ SdkHost::~SdkHost() {
   // Same rule, same reason: the rpc-sync watchdog takes mutex_ to look at the
   // device, so it is stopped and JOINED here, above the lock.
   StopSyncWatchdog();
+  // And the provider-only statistics loop, which takes mutex_ to publish.
+  StopProviderOnlyStats();
   // Drain the session-request slot. The worker is detached by design (see
   // RequestSession) and a request mid-flight at destruction has always been a
   // shutdown race the process exit wins; but the row-click settle added a
@@ -585,6 +587,11 @@ bool SdkHost::Initialize() {
     });
     service_.SetDisconnectHandler([this] { OnServiceDisconnected(); });
     service_.Connect();  // ok if the service isn't up yet; retried on demand
+    // The provider-only device's statistics (ProviderOnlyStatsLoop): idle until
+    // there is a provider-only device to ask about and a window to show it in.
+    if (!providerOnlyThread_.joinable()) {
+      providerOnlyThread_ = std::thread([this] { ProviderOnlyStatsLoop(); });
+    }
 
     // RESTORE THE API'S AUTHORIZATION FROM THE PERSISTED SESSION.
     //
@@ -2437,10 +2444,14 @@ void SdkHost::AdoptServiceFacts(const proto::TunnelStatus& st) {
   lastServiceRoutesInstalled_.store(st.routes_installed);
   // ...and the provider-only device, which only the service holds: what the
   // provide indicator shows while there is no session (FillProviderOnlyStats).
-  serviceProviderRunning_.store(st.provider_running);
+  const bool providerWasRunning = serviceProviderRunning_.exchange(st.provider_running);
   serviceProviderMode_.store(st.provider_running ? st.provider_mode : 0);
   serviceProviderNetworkKey_.store(st.provider_running && st.provider_network_key);
   serviceProviderKnown_.store(true);
+  // Its client count is get_provider_stats' to say again; a provider that
+  // started or stopped is that loop's to show or take off now, not next tick.
+  if (!st.provider_running) serviceProviderClients_.store(-1);
+  if (providerWasRunning != st.provider_running) KickProviderOnlyStats();
   // Bind this process's SDK during bootstrap, before the service installs
   // routes. The connected route flag keeps that binding through activation.
   const bool bindEgress = st.routes_installed ||
@@ -2509,6 +2520,8 @@ void SdkHost::OnServiceDisconnected() {
   serviceProviderRunning_.store(false);
   serviceProviderMode_.store(0);
   serviceProviderNetworkKey_.store(false);
+  serviceProviderClients_.store(-1);
+  KickProviderOnlyStats();  // its plots come off now
   // ...and the tun went with it, so nothing must stay pinned to the interface
   // that existed to avoid it. A binding retained across the service's death
   // would outlive the reason for it and pin this process to one NIC for the rest
@@ -3392,7 +3405,11 @@ void SdkHost::FillProviderOnlyStats(LiveStats& stats) const {
   // exists exactly when the tier is not none.
   stats.provideEnabled = stats.provideMode != 0;
   stats.provideHasNetworkKey = serviceProviderNetworkKey_.load();
-  stats.provideWithoutTunnel = stats.provideEnabled;
+  // Its peers, as the last get_provider_stats answer said. Until one says (or
+  // from an older service, which never does) a count would be a guess.
+  const int64_t clients = serviceProviderClients_.load();
+  stats.provideClients = clients < 0 ? 0 : clients;
+  stats.provideClientsUnknown = stats.provideEnabled && clients < 0;
 }
 
 void SdkHost::PublishStats() {
@@ -3697,6 +3714,224 @@ void SdkHost::PublishThroughput(std::optional<bool> deviceHasProviderStats) {
     onTransportDistribution_(std::move(distribution));
   }
   if (onProviderThroughput_) onProviderThroughput_(std::move(provider));
+}
+
+// ---- the provider-only device's statistics (no session) ---------------------
+//
+// See the contract in the header (ProviderOnlyStatsLoop, and the provider-only
+// provider status beside CurrentProviderThroughput).
+
+void SdkHost::ProviderOnlyStatsLoop() {
+  // What this loop has on screen, so taking it off never touches what a
+  // session's own feed published.
+  bool shown = false;
+  bool wasWanted = false;
+  int64_t lastClients = -1;
+  std::chrono::steady_clock::time_point nextStatus{};
+  for (;;) {
+    bool wanted = false;
+    {
+      std::unique_lock lock(providerOnlyMutex_);
+      providerOnlyCv_.wait_for(lock, kProviderOnlyStatsInterval,
+                               [this] { return providerOnlyStop_ || providerOnlyKick_; });
+      if (providerOnlyStop_) return;
+      providerOnlyKick_ = false;
+      wanted = providerOnlyStatusWanted_;
+    }
+    try {
+      bool presenting = false;
+      {
+        std::scoped_lock lock(presentationMutex_);
+        presenting = presentationDesired_;
+      }
+      // OUTSIDE mutex_, which a bootstrap holds for seconds. Nothing is asked
+      // of a service that runs no provider-only device, nor while nothing
+      // presents.
+      const bool asking = presenting && !HasSession() && serviceProviderRunning_.load() &&
+                          service_.IsConnected();
+      proto::ProviderStats stats;
+      const bool answered = asking && service_.GetProviderStats(stats) && stats.available;
+      // A want polls at once, as the controller's start() does.
+      if (wanted && !wasWanted) nextStatus = {};
+      wasWanted = wanted;
+      if (!answered && !shown && !wanted) {
+        // Nothing on screen and nothing asked for, which is most passes: no
+        // session lock, only a snapshot whose source went to forget.
+        if (HasSession() || !serviceProviderRunning_.load() || !service_.IsConnected()) {
+          ResetProviderOnlyStatus();
+        }
+      } else {
+        std::scoped_lock lock(mutex_);
+        if (device_) {
+          // A session's own device feeds every surface now, and its
+          // controller the provider status.
+          shown = false;
+          serviceProviderClients_.store(-1);
+          lastClients = -1;
+          ResetProviderOnlyStatus();
+          continue;
+        }
+        const bool providerGone = !serviceProviderRunning_.load() || !service_.IsConnected();
+        if (answered) {
+          ShowProviderOnlyStatsLocked(stats);
+          shown = true;
+          const auto now = std::chrono::steady_clock::now();
+          if (wanted && now >= nextStatus && !stats.client_id.empty()) {
+            nextStatus = now + kProviderOnlyStatusInterval;
+            FetchProviderOnlyStatusLocked(stats.client_id);
+          }
+        } else if (shown) {
+          ClearProviderOnlyStatsLocked(providerGone);
+          shown = false;
+        }
+        if (providerGone) ResetProviderOnlyStatus();
+        // Wanted, and the service cannot say (an older service, no
+        // provider-only device, no channel): unavailable, never loading for
+        // good.
+        if (wanted && !answered && (asking || providerGone)) ProviderOnlyStatusUnavailable();
+      }
+      // The Connect page's count follows the answers.
+      if (const int64_t clients = serviceProviderClients_.load(); clients != lastClients) {
+        lastClients = clients;
+        PublishStats();
+      }
+    } catch (const std::exception& e) {
+      LogWarn("sdkhost: provide: a provider statistics pass failed: {}", e.what());
+    }
+  }
+}
+
+void SdkHost::StopProviderOnlyStats() {
+  {
+    std::scoped_lock lock(providerOnlyMutex_);
+    providerOnlyStop_ = true;
+  }
+  providerOnlyCv_.notify_all();
+  // Joined, not detached, for StopPresentationWorker's reason. At worst it
+  // waits out a get_provider_stats in flight: a loopback round trip, or the
+  // pipe's own timeout against a service that stopped answering.
+  if (providerOnlyThread_.joinable()) providerOnlyThread_.join();
+}
+
+void SdkHost::KickProviderOnlyStats() {
+  {
+    std::scoped_lock lock(providerOnlyMutex_);
+    providerOnlyKick_ = true;
+  }
+  providerOnlyCv_.notify_all();
+}
+
+void SdkHost::ShowProviderOnlyStatsLocked(const proto::ProviderStats& stats) {
+  // caller holds mutex_, with no session
+  serviceProviderClients_.store(stats.client_count);
+  // The same snapshot PublishThroughput builds from a session's controller,
+  // from the provider-only device's own controller in the service.
+  ProviderThroughputSnapshot provider;
+  provider.windowSeconds = stats.window_seconds > 0 ? stats.window_seconds : 60;
+  provider.providerPoints = proto::ProviderPointsOf<urnet::ThroughputPoint>(stats);
+  provider.hasProviderStats = stats.has_provider_stats;
+  TransportDistributionSnapshot distribution = MapTransportDistribution(
+      proto::ProviderDistributionOf<urnet::TransportDistribution>(stats));
+  {
+    std::scoped_lock lock(drawerMutex_);
+    lastProviderPoints_ = provider.providerPoints;
+    lastHasProviderStats_ = stats.has_provider_stats;
+    // published only when it changed, as PublishThroughput does
+    if (distribution != lastProviderDistribution_) {
+      lastProviderDistribution_ = distribution;
+      provider.providerDistribution = std::move(distribution);
+    }
+  }
+  if (onProviderThroughput_) onProviderThroughput_(std::move(provider));
+}
+
+void SdkHost::ClearProviderOnlyStatsLocked(bool providerGone) {
+  // caller holds mutex_, with no session
+  if (providerGone) serviceProviderClients_.store(-1);
+  {
+    std::scoped_lock lock(drawerMutex_);
+    lastProviderPoints_.clear();
+    lastProviderDistribution_ = {};
+    if (providerGone) lastHasProviderStats_ = false;
+  }
+  if (onProviderThroughput_) {
+    ProviderThroughputSnapshot empty;
+    empty.providerDistribution = TransportDistributionSnapshot{};
+    if (providerGone) empty.hasProviderStats = false;
+    onProviderThroughput_(std::move(empty));
+  }
+}
+
+void SdkHost::FetchProviderOnlyStatusLocked(const std::string& clientId) {
+  // caller holds mutex_: ApplyNetworkServer reassigns api_ under it
+  if (!api_) return;
+  uint64_t generation = 0;
+  {
+    std::scoped_lock lock(providerOnlyMutex_);
+    generation = providerOnlyStatusGeneration_;
+  }
+  try {
+    api_->getProviderStatus([this, generation, clientId](
+                                std::optional<urnet::GetProviderStatusResult> result,
+                                std::optional<std::string> error) {
+      ProviderOnlyStatus status;
+      {
+        std::scoped_lock lock(providerOnlyMutex_);
+        // unwanted or reset while this poll was in flight: it answers nobody
+        if (generation != providerOnlyStatusGeneration_) return;
+        providerOnlyStatus_.Fetched(result, error, clientId);
+        status = providerOnlyStatus_;
+      }
+      if (onProviderOnlyStatus_) onProviderOnlyStatus_(std::move(status));
+    });
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: provide: the provider status request failed: {}", e.what());
+  }
+}
+
+void SdkHost::ResetProviderOnlyStatus() {
+  ProviderOnlyStatus status;
+  {
+    std::scoped_lock lock(providerOnlyMutex_);
+    // a poll in flight belongs to the source that went
+    ++providerOnlyStatusGeneration_;
+    // Only a snapshot is forgotten: an "unavailable" stays until an answer
+    // replaces it, so a source that stays gone publishes nothing per tick.
+    if (!providerOnlyStatus_.loaded) return;
+    providerOnlyStatus_ = ProviderOnlyStatus{};
+    status = providerOnlyStatus_;
+  }
+  if (onProviderOnlyStatus_) onProviderOnlyStatus_(std::move(status));
+}
+
+void SdkHost::ProviderOnlyStatusUnavailable() {
+  ProviderOnlyStatus status;
+  {
+    std::scoped_lock lock(providerOnlyMutex_);
+    // a failed poll already says so, and so does an earlier pass
+    if (!providerOnlyStatus_.error.empty()) return;
+    providerOnlyStatus_.Failed("the service reports no provider-only device statistics");
+    status = providerOnlyStatus_;
+  }
+  if (onProviderOnlyStatus_) onProviderOnlyStatus_(std::move(status));
+}
+
+void SdkHost::SetProviderOnlyStatusWanted(bool wanted) {
+  {
+    std::scoped_lock lock(providerOnlyMutex_);
+    if (providerOnlyStatusWanted_ == wanted) return;
+    providerOnlyStatusWanted_ = wanted;
+    // An unwant drops the poll in flight and keeps the snapshot, the
+    // controller's stop().
+    if (!wanted) ++providerOnlyStatusGeneration_;
+    providerOnlyKick_ = true;
+  }
+  providerOnlyCv_.notify_all();
+}
+
+ProviderOnlyStatus SdkHost::CurrentProviderOnlyStatus() {
+  std::scoped_lock lock(providerOnlyMutex_);
+  return providerOnlyStatus_;
 }
 
 void SdkHost::PublishContractRows() {
@@ -4234,6 +4469,10 @@ bool SdkHost::SetNetExtender(const std::optional<urnet::NetExtender>& value) {
     // (sdk network_space.go onlyExtenderValuesChanged) and hands back a handle
     // to the SAME space; nothing derived from it is invalidated.
     networkSpace_ = spaceManager_->updateNetworkSpaceValues(key, values);
+    // No session: the provider-only device runs on the space it was built
+    // from. The reconcile's request carries this one (start_provider's
+    // network_space_json), so the service builds the device again on it.
+    if (!device_) RequestProviderReconcile("private extender saved");
     return true;
   } catch (const std::exception& e) {
     LogWarn("sdkhost: set net extender failed: {}", e.what());
@@ -4273,6 +4512,9 @@ std::optional<std::string> SdkHost::SetVlessSettings(const urnet::VlessSettings&
     std::string errorId = networkSpace_->setVlessSettings(settings);
     if (errorId.empty()) {
       LogInfo("sdkhost: vless settings saved (enabled={})", settings.enabled.value_or(false));
+      // No session: the provider-only device reaches the platform through the
+      // space it was built from; the reconcile rebuilds it on this one.
+      if (!device_) RequestProviderReconcile("vless settings saved");
     }
     return errorId;
   } catch (const std::exception& e) {
@@ -4345,7 +4587,14 @@ std::optional<std::string> SdkHost::SetControlDohUrls(const std::vector<std::str
     // updateInPlaceValues): the strategy's DoH cache is swapped and this handle
     // stays the same space, so there is nothing to re-take.
     std::string errorId = networkSpace_->setControlDohUrls(urnet::StringList(urls));
-    if (errorId.empty()) LogInfo("sdkhost: bootstrap doh servers saved");
+    if (errorId.empty()) {
+      LogInfo("sdkhost: bootstrap doh servers saved");
+      // No session: the provider-only device resolves the api through the
+      // servers of the space it was built from, so in China it may never reach
+      // it until it is rebuilt. The reconcile's request carries the saved
+      // space, and a changed request builds a new device (start_provider).
+      if (!device_) RequestProviderReconcile("bootstrap doh servers saved");
+    }
     return errorId;
   } catch (const std::exception& e) {
     LogWarn("sdkhost: set control doh urls failed: {}", e.what());
@@ -6414,15 +6663,20 @@ void SdkHost::SetPresentationActive(bool active) {
     if (presentationStop_) return;
     presentationDesired_ = active;
     presentationDirty_ = true;
-    if (presentationWorkerRunning_) return;  // it re-checks dirty before exiting
-    presentationWorkerRunning_ = true;
-    // A previous worker that has already returned still leaves a joinable
-    // thread object behind; joining it here (it is not running) is what keeps
-    // the move-assign below from calling std::terminate. Same trap
-    // ScheduleServiceRetry documents.
-    if (presentationWorker_.joinable()) presentationWorker_.join();
-    presentationWorker_ = std::thread([this] { PresentationWorkerLoop(); });
+    // A running worker re-checks dirty before exiting.
+    if (!presentationWorkerRunning_) {
+      presentationWorkerRunning_ = true;
+      // A previous worker that has already returned still leaves a joinable
+      // thread object behind; joining it here (it is not running) is what keeps
+      // the move-assign below from calling std::terminate. Same trap
+      // ScheduleServiceRetry documents.
+      if (presentationWorker_.joinable()) presentationWorker_.join();
+      presentationWorker_ = std::thread([this] { PresentationWorkerLoop(); });
+    }
   }
+  // The provider-only statistics follow the window at once, not at the next
+  // tick; the loop reads presentationDesired_, written above.
+  KickProviderOnlyStats();
 }
 
 void SdkHost::PresentationWorkerLoop() {
@@ -6604,6 +6858,7 @@ void SdkHost::Logout() {
     serviceProviderRunning_.store(false);
     serviceProviderMode_.store(0);
     serviceProviderNetworkKey_.store(false);
+    serviceProviderClients_.store(-1);
     sessionFailure_.clear();  // belongs to the session that just ended
     SetAuthState(AuthState::LoggedOut);
     LogInfo("sdkhost: logged out");

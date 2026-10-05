@@ -182,3 +182,42 @@ func TestProvideProtocolRejectsDroppedFields(t *testing.T) {
 		},
 	}, "same device: a different provider_transport_settings_json builds a new device", extra...)
 }
+
+// The provider-only device's statistics on the wire, read back on the generated
+// header's own urnet::ThroughputPoint and urnet::TransportDistribution: what the
+// service writes with their to_json comes back through the reply and their
+// from_json unchanged. The header is git-ignored, so a host without one skips.
+func TestProvideProtocolAgainstSdkHeader(t *testing.T) {
+	root := repositoryRoot(t)
+	sdkDir := providerStatusSdkHeaderDir(t, root)
+	if sdkDir == "" {
+		t.Skip("no urnetwork_sdk.hpp with the provider status API (set URNETWORK_SDK_INCLUDE)")
+	}
+	// System includes: the generated wrapper does not build with -Wextra -Werror.
+	extra := append([]string{"-DURNW_PROVIDE_PROTOCOL_TESTS_SDK", "-isystem", sdkDir},
+		provideJsonFlags(t)...)
+	program := provideTestProgram(t, "provide-protocol-tests.cpp", nil, extra...)
+	if output, err := exec.Command(program).CombinedOutput(); err != nil {
+		t.Fatalf("provide protocol against the sdk header: %v\n%s", err, output)
+	} else {
+		t.Logf("%s", output)
+	}
+}
+
+// A reader that drops the client count shows "Providing to 0 clients" over a
+// provider that has some; a reply that does not carry the statistics reads, to
+// the app, exactly like an older service that has none.
+func TestProvideProtocolRejectsDroppedProviderStats(t *testing.T) {
+	extra := provideJsonFlags(t)
+	requireProvideFailure(t, "provide-protocol-tests.cpp", map[string]func(string) string{
+		"Protocol.h": func(source string) string {
+			return strings.Replace(source, "  get(\"client_count\", v.client_count);\n", "", 1)
+		},
+	}, "provider stats: client_count round-trips", extra...)
+	requireProvideFailure(t, "provide-protocol-tests.cpp", map[string]func(string) string{
+		"Protocol.h": func(source string) string {
+			return strings.Replace(source,
+				"  if (v.provider_stats) j[\"provider_stats\"] = *v.provider_stats;\n", "", 1)
+		},
+	}, "reply: provider_stats round-trips", extra...)
+}

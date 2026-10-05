@@ -3,20 +3,79 @@
 // StartProvider request on the wire, the TunnelStatus provider_* fields and
 // their reading from a service too old to send them, the request comparison
 // that keeps a running device (SameProviderDevice), and what one status tells
-// the app's reconcile (ProviderFactsFrom). Run against the SAME header the
+// the app's reconcile (ProviderFactsFrom). And get_provider_stats: the verb,
+// the ProviderStats payload in a reply and an older service's silence, and the
+// readers that turn its sdk documents back into the app's types
+// (ProviderPointsOf, ProviderDistributionOf). Run against the SAME header the
 // service and the app compile; it needs nlohmann/json, like the app.
 //
 //   c++ -std=c++20 -I ../src/Common -I <dir with nlohmann/json.hpp> provide-protocol-tests.cpp -o /tmp/provide-protocol-tests && /tmp/provide-protocol-tests
 //
+// With URNW_PROVIDE_PROTOCOL_TESTS_SDK the readers run on the generated
+// header's own urnet::ThroughputPoint and urnet::TransportDistribution, written
+// the way the service writes them (their to_json), so the wire is proved to
+// carry the sdk's documents back unchanged. The header is a system include,
+// like nlohmann/json: the generated code does not build with -Wextra -Werror.
+//
 // SPDX-License-Identifier: MPL-2.0
 
 #include <iostream>
+#include <optional>
 #include <string>
+#include <vector>
 
 #include "Protocol.h"
 
+#if defined(URNW_PROVIDE_PROTOCOL_TESTS_SDK)
+#include "urnetwork_sdk.hpp"
+#endif
+
 using namespace urnw;
 using namespace urnw::proto;
+
+#if !defined(URNW_PROVIDE_PROTOCOL_TESTS_SDK)
+// The fields of the sdk's documents the readers are checked on, by the
+// generated wrapper's names, with json conversions of the same shape.
+namespace sample {
+struct ThroughputSample {
+  int64_t EgressByteCount = 0;
+  int64_t IngressByteCount = 0;
+};
+struct ThroughputPoint {
+  int64_t Time = 0;
+  std::optional<ThroughputSample> Local;
+};
+struct TransportDistribution {
+  int64_t ByteCount = 0;
+  bool Active = false;
+};
+inline void to_json(nlohmann::json& j, const ThroughputSample& v) {
+  j = {{"EgressByteCount", v.EgressByteCount}, {"IngressByteCount", v.IngressByteCount}};
+}
+inline void from_json(const nlohmann::json& j, ThroughputSample& v) {
+  j.at("EgressByteCount").get_to(v.EgressByteCount);
+  j.at("IngressByteCount").get_to(v.IngressByteCount);
+}
+inline void to_json(nlohmann::json& j, const ThroughputPoint& v) {
+  j = {{"Time", v.Time}};
+  if (v.Local) j["Local"] = *v.Local;
+}
+inline void from_json(const nlohmann::json& j, ThroughputPoint& v) {
+  j.at("Time").get_to(v.Time);
+  if (auto it = j.find("Local"); it != j.end() && !it->is_null()) v.Local = it->get<ThroughputSample>();
+}
+inline void to_json(nlohmann::json& j, const TransportDistribution& v) {
+  j = {{"ByteCount", v.ByteCount}, {"Active", v.Active}};
+}
+inline void from_json(const nlohmann::json& j, TransportDistribution& v) {
+  j.at("ByteCount").get_to(v.ByteCount);
+  j.at("Active").get_to(v.Active);
+}
+}  // namespace sample
+namespace doc = sample;
+#else
+namespace doc = urnet;
+#endif
 
 namespace {
 
@@ -204,6 +263,102 @@ void TestProviderFacts() {
         "facts: nothing starts under the armed floor");
 }
 
+// (f) get_provider_stats: the verb, the payload and an older service's silence
+void TestProviderStatsReply() {
+  Check(std::string(msg::kGetProviderStats) == "get_provider_stats", "stats: the tag");
+  Check(TypeOf(Request(msg::kGetProviderStats)) == "get_provider_stats",
+        "stats: the request carries its type");
+
+  ProviderStats sent;
+  sent.available = true;
+  sent.client_id = "018f2b1e-0000-7000-8000-00000000c0de";
+  sent.client_count = 3;
+  sent.window_seconds = 60;
+  sent.has_provider_stats = true;
+  sent.provider_points = nlohmann::json::parse(R"([{"Time":1000,"Local":{"EgressByteCount":5,"IngressByteCount":7}}])");
+  sent.provider_distribution = nlohmann::json::parse(R"({"ByteCount":12,"Active":true})");
+  Reply reply;
+  reply.ok = true;
+  reply.in_reply_to = msg::kGetProviderStats;
+  reply.provider_stats = sent;
+  const Reply back = nlohmann::json::parse(DumpForWire(nlohmann::json(reply))).get<Reply>();
+  Check(back.ok && back.provider_stats.has_value(), "reply: provider_stats round-trips");
+  if (back.provider_stats) {
+    const ProviderStats& got = *back.provider_stats;
+    Check(got.available, "provider stats: available round-trips");
+    Check(got.client_id == sent.client_id, "provider stats: client_id round-trips");
+    Check(got.client_count == 3, "provider stats: client_count round-trips");
+    Check(got.window_seconds == 60, "provider stats: window_seconds round-trips");
+    Check(got.has_provider_stats, "provider stats: has_provider_stats round-trips");
+    Check(got.provider_points == sent.provider_points, "provider stats: the points arrive unchanged");
+    Check(got.provider_distribution == sent.provider_distribution,
+          "provider stats: the distribution arrives unchanged");
+  }
+  Check(!back.status, "reply: get_provider_stats carries no tunnel status");
+
+  // an older service: "unknown request type", and nothing that reads as stats
+  const Reply old = nlohmann::json::parse(
+      R"({"type":"reply","ok":false,"error":"unknown request type: get_provider_stats","in_reply_to":"get_provider_stats"})")
+                        .get<Reply>();
+  Check(!old.ok && !old.provider_stats, "stats: an older service's reply carries no statistics");
+  // nothing runs: unavailable, and every field empty
+  const ProviderStats none = nlohmann::json::parse(DumpForWire(nlohmann::json(ProviderStats{}))).get<ProviderStats>();
+  Check(!none.available && none.client_id.empty() && none.client_count == 0 &&
+            !none.has_provider_stats && none.provider_points.empty() &&
+            none.provider_distribution.is_null(),
+        "stats: no provider-only device reads as unavailable and empty");
+  // a document of the wrong shape reads as none, never as a throw that loses the rest
+  const ProviderStats odd = nlohmann::json::parse(
+      R"({"available":true,"client_count":2,"provider_points":{"Time":1},"provider_distribution":[1,2]})")
+                                .get<ProviderStats>();
+  Check(odd.available && odd.client_count == 2 && odd.provider_points.empty() &&
+            odd.provider_distribution.is_null(),
+        "stats: wrong-shaped sdk documents read as none");
+}
+
+// (g) the readers, on the sdk's own types when built against the header: the
+// service writes them with to_json, the app reads them back with from_json
+void TestProviderStatsReaders() {
+  std::vector<doc::ThroughputPoint> points(2);
+  points[0].Time = 1000;
+  points[1].Time = 2000;
+  doc::ThroughputSample local{};
+  local.EgressByteCount = 5;
+  local.IngressByteCount = 7;
+  points[1].Local = local;
+  doc::TransportDistribution distribution{};
+  distribution.ByteCount = 12;
+  distribution.Active = true;
+
+  ProviderStats stats;
+  stats.available = true;
+  stats.provider_points = points;              // the service's write
+  stats.provider_distribution = distribution;
+  const ProviderStats wire = nlohmann::json::parse(DumpForWire(nlohmann::json(stats))).get<ProviderStats>();
+
+  const std::vector<doc::ThroughputPoint> read = ProviderPointsOf<doc::ThroughputPoint>(wire);
+  Check(read.size() == 2 && read[0].Time == 1000 && read[1].Time == 2000,
+        "readers: the points come back, oldest first");
+  Check(read.size() == 2 && !read[0].Local && read[1].Local &&
+            read[1].Local->EgressByteCount == 5 && read[1].Local->IngressByteCount == 7,
+        "readers: a point's samples come back");
+  const std::optional<doc::TransportDistribution> back =
+      ProviderDistributionOf<doc::TransportDistribution>(wire);
+  Check(back && back->ByteCount == 12 && back->Active, "readers: the distribution comes back");
+
+  ProviderStats empty;
+  Check(ProviderPointsOf<doc::ThroughputPoint>(empty).empty(), "readers: no points read as none");
+  Check(!ProviderDistributionOf<doc::TransportDistribution>(empty),
+        "readers: no distribution reads as none");
+  ProviderStats unreadable;
+  unreadable.provider_points = nlohmann::json::parse(R"([{"Time":"soon"}])");
+  unreadable.provider_distribution = nlohmann::json::parse(R"({"ByteCount":"many"})");
+  Check(ProviderPointsOf<doc::ThroughputPoint>(unreadable).empty(),
+        "readers: points the type cannot read are none, never a partial window");
+  Check(!ProviderDistributionOf<doc::TransportDistribution>(unreadable),
+        "readers: a distribution the type cannot read is none");
+}
+
 }  // namespace
 
 int main() {
@@ -212,6 +367,12 @@ int main() {
   TestStatusFields();
   TestSameProviderDevice();
   TestProviderFacts();
-  std::cout << (gCases - gFailures) << "/" << gCases << " provide protocol checks passed\n";
+  TestProviderStatsReply();
+  TestProviderStatsReaders();
+  std::cout << (gCases - gFailures) << "/" << gCases << " provide protocol checks passed"
+#if defined(URNW_PROVIDE_PROTOCOL_TESTS_SDK)
+            << " (against urnetwork_sdk.hpp)"
+#endif
+            << "\n";
   return gFailures == 0 ? 0 : 1;
 }

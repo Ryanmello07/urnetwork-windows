@@ -9,7 +9,9 @@
 // The data is the sdk's ProviderStatusViewController's, which reads
 // GET /network/provider-status about once a minute: how often the network
 // offered this device to clients in each minute of the last hour, the numbers
-// the provider search ranks it by, and the first reason holding it back.
+// the provider search ranks it by, and the first reason holding it back. With
+// no session, when the service's provider-only device provides, it is the same
+// answer read on the api (Readings).
 //
 // It is all here, and all pure, for the reason ExtenderPresentation.h gives:
 // the windows solution has no test project and a WinUI 3 app cannot be built
@@ -154,6 +156,58 @@ View ViewFor(bool loaded, bool fetchFailed, const std::optional<Status>& status)
       SectionsFor(loaded, fetchFailed, status.has_value(), hasAppearances, view.histogram.empty);
   return view;
 }
+
+// ---- a status read on the api ------------------------------------------------
+
+// The three readings ViewFor takes, for a device the sdk cannot open a
+// ProviderStatusViewController on. The sdk opens one only on a device, and
+// while disconnected the provider is the service's provider-only device, so
+// SdkHost reads the same GET /network/provider-status on the api and keeps the
+// readings here, applying each answer exactly as the controller applies a poll
+// (fetchDone): a failure keeps the last snapshot and records the error; an
+// answer marks the readings loaded, clears the error and takes the first row
+// whose client id is this device's, or none when the network's list has no
+// row for it. A template over the sdk's result and status, like ViewFor.
+template <typename Status>
+struct Readings {
+  bool loaded = false;
+  // the last failed poll's error, "" once a poll succeeds
+  std::string error;
+  std::optional<Status> status;
+
+  // A failure always reads as one, even with no message.
+  void Failed(std::string_view message) {
+    error = message.empty() ? std::string("no provider status") : std::string(message);
+  }
+
+  template <typename Result>
+  void Answered(const Result& result, std::string_view clientId) {
+    loaded = true;
+    error.clear();
+    status.reset();
+    if (!result.providers || clientId.empty()) return;
+    for (const auto& candidate : *result.providers) {
+      if (candidate.client_id && *candidate.client_id == clientId) {
+        status = candidate;
+        return;
+      }
+    }
+  }
+
+  // One callback's arguments (urnet::GetProviderStatusCallback): an error, no
+  // result at all (the controller's "no provider status"), or the answer.
+  template <typename Result>
+  void Fetched(const std::optional<Result>& result, const std::optional<std::string>& fetchError,
+               std::string_view clientId) {
+    if (fetchError) {
+      Failed(*fetchError);
+    } else if (!result) {
+      Failed({});
+    } else {
+      Answered(*result, clientId);
+    }
+  }
+};
 
 // ---- the line under the provide mode row -------------------------------------
 

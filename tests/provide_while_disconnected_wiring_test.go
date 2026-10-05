@@ -56,7 +56,8 @@ func TestProvideWiringProviderTouchesNoMachineState(t *testing.T) {
 		"bool TunnelController::StartProvider(")
 	provideRequire(t, "StartProvider", start,
 		"providerSpace_ = ImportNetworkSpaceLocked(request.network_space_json);",
-		"providerDevice_ = NewDeviceLocked(",
+		"providerDevice_ = std::make_unique<urnet::DeviceLocal>(",
+		"NewDeviceLocked(*providerSpace_",
 		"providerDevice_->setProviderTransportSettings(",
 		"providerDevice_->setProvideControlMode(request.provide_mode);",
 		"PublishStatusLocked();")
@@ -145,7 +146,7 @@ func TestProvideWiringStatusReportsTheProvider(t *testing.T) {
 	compose := definitionBody(t, "TunnelController.cpp", source,
 		"proto::TunnelStatus TunnelController::ComposeStatusLocked()")
 	provideRequire(t, "ComposeStatusLocked", compose,
-		"s.provider_running = providerDevice_.has_value();",
+		"s.provider_running = providerDevice_ != nullptr;",
 		"s.provider_control_mode = providerRequest_.provide_mode;",
 		"s.provider_mode = providerTier_;",
 		"s.provider_network_key = providerNetworkKey_;")
@@ -279,7 +280,8 @@ func TestProvideWiringReconcileUsesTheSharedStep(t *testing.T) {
 
 // With no DeviceRemote the provide dot, its ring and the discoverable line read
 // the service's provider-only device, not a hard "not providing"; the client
-// count it cannot know is not shown as zero.
+// count is its get_provider_stats answer, and one it does not know is not shown
+// as zero.
 func TestProvideWiringIndicatorShowsTheProvider(t *testing.T) {
 	source := sdkHostSource(t)
 	stats := definitionBody(t, "SdkHost.cpp", source, "LiveStats SdkHost::ReadStats()")
@@ -291,11 +293,13 @@ func TestProvideWiringIndicatorShowsTheProvider(t *testing.T) {
 		"stats.provideMode = serviceProviderMode_.load();",
 		"stats.provideEnabled = stats.provideMode != 0;",
 		"stats.provideHasNetworkKey = serviceProviderNetworkKey_.load();",
-		"stats.provideWithoutTunnel = stats.provideEnabled;")
+		"const int64_t clients = serviceProviderClients_.load();",
+		"stats.provideClients = clients < 0 ? 0 : clients;",
+		"stats.provideClientsUnknown = stats.provideEnabled && clients < 0;")
 	adopt := definitionBody(t, "SdkHost.cpp", source,
 		"void SdkHost::AdoptServiceFacts(const proto::TunnelStatus& st)")
 	provideRequire(t, "AdoptServiceFacts", adopt,
-		"serviceProviderRunning_.store(st.provider_running);",
+		"serviceProviderRunning_.exchange(st.provider_running);",
 		"serviceProviderKnown_.store(true);")
 	for _, name := range []string{"void SdkHost::OnServiceDisconnected()", "void SdkHost::Logout()"} {
 		body := definitionBody(t, "SdkHost.cpp", source, name)
@@ -307,7 +311,7 @@ func TestProvideWiringIndicatorShowsTheProvider(t *testing.T) {
 		"if (!HasSession()) FillProviderOnlyStats(stats);", "onStats_(stats);")
 	page := stripComments(readAppSource(t, "ConnectPage.cpp"))
 	provideRequire(t, "ConnectPage.cpp", page,
-		"if (stats.provideEnabled && !stats.provideWithoutTunnel) {",
+		"if (stats.provideEnabled && !stats.provideClientsUnknown) {",
 		"urnw::ProvideModeVisualFor(stats.provideMode, stats.providePaused)",
 		"stats.provideEnabled && stats.provideHasNetworkKey")
 	project := readCommonSource(t, "Common.vcxproj")

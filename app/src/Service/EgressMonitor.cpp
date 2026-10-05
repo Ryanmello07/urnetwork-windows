@@ -45,7 +45,9 @@ bool InterfaceExists(uint32_t ifIndex) {
 EgressMonitor::~EgressMonitor() { Stop(); }
 
 bool EgressMonitor::Start() {
-  Refresh();
+  // An observing monitor has nothing to bind, and starting to watch is not a
+  // network change to report (see Binding).
+  if (binding_ == Binding::Bind) Refresh();
   bool ok = true;
   DWORD err = ::NotifyIpInterfaceChange(AF_UNSPEC, &EgressMonitor::OnChange,
                                         this, FALSE, &notifyHandle_);
@@ -129,6 +131,18 @@ void EgressMonitor::SetOnNetworkQualityEvent(NetworkQualityEventHandler handler)
 }
 
 void EgressMonitor::Refresh() {
+  // OBSERVE ONLY: report the observation and stop. No discovery, no binding and
+  // no R1 log line — none of it applies to a device that binds nothing.
+  if (binding_ == Binding::ObserveOnly) {
+    NetworkEventHandler observed;
+    {
+      std::scoped_lock lock(mutex_);
+      observed = onNetworkEvent_;
+    }
+    if (observed) observed();
+    return;
+  }
+
   ChangeHandler handler;
   NetworkEventHandler networkEvent;
   EgressInterfaces egress;
