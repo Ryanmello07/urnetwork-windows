@@ -5490,6 +5490,10 @@
     <value>强匿名化</value>
     <comment>Connect drawer: strong-anonymization toggle</comment>
   </data>
+  <data name="site_app_strong_anon_note" xml:space="preserve">
+    <value>在浏览器中始终开启，浏览器从不直接连接提供商。</value>
+    <comment>Connect drawer: note under the Strong Anonymization toggle, which is locked on in the browser. Strong Anonymization means no direct connection to a provider (a direct connection would show the provider your IP). The browser's connection always goes through URnetwork's hosted device, which never connects to a provider directly, so the option cannot be turned off there.</comment>
+  </data>
   <data name="site_app_support_intro" xml:space="preserve">
     <value>直接向我们发送反馈，或加入社区获取直接支持。</value>
     <comment>App support: intro line</comment>

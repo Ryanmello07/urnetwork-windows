@@ -3645,6 +3645,10 @@
     <value>強力な匿名化</value>
     <comment>Connect drawer: strong-anonymization toggle</comment>
   </data>
+  <data name="site_app_strong_anon_note" xml:space="preserve">
+    <value>ブラウザーでは常にオンです。ブラウザーがプロバイダーに直接接続することはありません。</value>
+    <comment>Connect drawer: note under the Strong Anonymization toggle, which is locked on in the browser. Strong Anonymization means no direct connection to a provider (a direct connection would show the provider your IP). The browser's connection always goes through URnetwork's hosted device, which never connects to a provider directly, so the option cannot be turned off there.</comment>
+  </data>
   <data name="site_app_throughput" xml:space="preserve">
     <value>転送量</value>
     <comment>Connect drawer: live transfer timeseries section</comment>

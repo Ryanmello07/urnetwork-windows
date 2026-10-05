@@ -6404,6 +6404,10 @@ world's content</value>
     <value>Strong Anonymization</value>
     <comment>Connect drawer: strong-anonymization toggle</comment>
   </data>
+  <data name="site_app_strong_anon_note" xml:space="preserve">
+    <value>Always on in the browser, which never connects to providers directly.</value>
+    <comment>Connect drawer: note under the Strong Anonymization toggle, which is locked on in the browser. Strong Anonymization means no direct connection to a provider (a direct connection would show the provider your IP). The browser's connection always goes through URnetwork's hosted device, which never connects to a provider directly, so the option cannot be turned off there.</comment>
+  </data>
   <data name="site_app_support_intro" xml:space="preserve">
     <value>Send us your feedback directly, or join the community for direct support.</value>
     <comment>App support: intro line</comment>

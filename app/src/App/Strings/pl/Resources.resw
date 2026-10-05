@@ -3899,6 +3899,10 @@ treść świata</value>
     <value>Silna anonimizacja</value>
     <comment>Connect drawer: strong-anonymization toggle</comment>
   </data>
+  <data name="site_app_strong_anon_note" xml:space="preserve">
+    <value>W przeglądarce zawsze włączona, bo przeglądarka nigdy nie łączy się bezpośrednio z dostawcami.</value>
+    <comment>Connect drawer: note under the Strong Anonymization toggle, which is locked on in the browser. Strong Anonymization means no direct connection to a provider (a direct connection would show the provider your IP). The browser's connection always goes through URnetwork's hosted device, which never connects to a provider directly, so the option cannot be turned off there.</comment>
+  </data>
   <data name="site_app_throughput" xml:space="preserve">
     <value>Transfer</value>
     <comment>Connect drawer: live transfer timeseries section</comment>
