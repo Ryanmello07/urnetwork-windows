@@ -318,8 +318,8 @@
     <ClCompile Include="ExtenderPanel.cpp" />
     <ClCompile Include="ExtenderSheets.cpp" />
     <!-- The VLESS settings sheet's decisions (field visibility, the form <->
-         settings mapping, error keys, picker options, the carry-over of a
-         space's server) are WinRT-free (no pch) so
+         settings mapping, error keys, picker options, the reading of a space's
+         stored values) are WinRT-free (no pch) so
          tools/vless-presentation-tests.cpp runs them on any host; the sheet
          that draws them uses the pch. -->
     <ClCompile Include="VlessPresentation.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>

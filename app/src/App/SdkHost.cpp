@@ -420,36 +420,20 @@ urnet::NetworkSpace SdkHost::BuildNetworkSpace() {
   key.host_name = bundled.key.hostName;
   key.env_name = bundled.key.envName;
 
-  urnet::NetworkSpaceValues values;
-  values.bundled = true;
-  values.net_expose_server_ips = true;
-  values.net_expose_server_host_names = true;
-  values.link_host_name = "ur.io";
-  // NO migration host name, official or overridden. sdk/network_space.go's
-  // ServiceUrl prefers MigrationHostName over the key's HostName, so one here
-  // would silently redirect every api/connect url: the official key IS the
-  // operator host (ids::kNetworkSpaceHostName), and an override must talk to
-  // the host it names. Left unset rather than "": these wrapper fields are
-  // std::optional<std::string> and the Go side omits an unset one.
-  values.store = "";
-  values.wallet = "circle";
-  // Google (and Apple) sign-in run in the system browser against the provider,
-  // with the api's callback returning the token (SignInWithSso); nothing is
-  // compiled in, so the space always offers it.
-  values.sso_google = true;
-  values.env_secret = "";
-
   if (!bundled.official) {
     LogWarn("sdkhost: NETWORK OVERRIDE - host={} env={}. "
             "This client is NOT talking to production.",
             bundled.key.hostName, bundled.key.envName);
   }
 
-  // These values replace the stored ones WHOLE, at every launch. The VLESS
-  // server the user saved in this space (Settings > VLESS, or the login
-  // screen's network sheet) is not among them, so it comes from the space's
-  // stored values; without this every launch would drop it.
-  values = vless::WithStoredVless(std::move(values), StoredSpaceValuesLocked(key));
+  // These values replace the stored ones WHOLE, at every launch, so the
+  // bundled space's own values go OVER what the space stores: the extender
+  // settings, the private extender, the bootstrap DNS-over-HTTPS servers and
+  // the VLESS server the user saved in it are not among them, and a write from
+  // nothing dropped them all on every launch. No migration host and no url
+  // overrides (NetworkSpaceStartup.h BundledSpaceValuesOver).
+  const urnet::NetworkSpaceValues values = netspace::BundledSpaceValuesOver(
+      StoredSpaceValuesLocked(key).value_or(urnet::NetworkSpaceValues{}));
 
   urnet::NetworkSpace space = spaceManager_->updateNetworkSpaceValues(key, values);
 
@@ -1250,33 +1234,23 @@ bool SdkHost::ApplyNetworkServer(const std::string& hostName, const std::string&
 
     try {
       const bool official = (hostName == std::string(ids::kNetworkSpaceHostName));
-      const bool explicitUrls = !apiUrl.empty() || !connectUrl.empty();
 
       urnet::NetworkSpaceKey key;
       key.host_name = hostName;
       key.env_name = std::string(ids::kNetworkSpaceEnvName);
 
       // The same value set BuildNetworkSpace writes, with the host-dependent
-      // parts varied (iOS DeviceManager.applyNetworkSpace parity). `bundled` is
-      // true only for the official host with no overrides: a bundled space
-      // carries pinned endpoints a custom deployment does not have.
-      urnet::NetworkSpaceValues values;
-      values.bundled = official && !explicitUrls;
-      values.net_expose_server_ips = true;
-      values.net_expose_server_host_names = true;
-      values.link_host_name = official ? std::string("ur.io") : hostName;
-      // no migration host name for any space, see BuildNetworkSpace
-      values.store = "";
-      values.wallet = "circle";
-      values.sso_google = true;  // Google's own web flow with the api's callback, see SignInWithSso
-      values.env_secret = "";
-      values.api_url = apiUrl;
-      values.platform_url = connectUrl;
-      // A space's VLESS server belongs to that space and is edited on its own
-      // sheet, not here, but these values replace the stored ones WHOLE: carry
-      // it from the values stored under this key, so applying a domain or its
-      // urls again never drops it. A host never applied before has none.
-      values = vless::WithStoredVless(std::move(values), StoredSpaceValuesLocked(key));
+      // parts varied (iOS DeviceManager.applyNetworkSpace parity), and written
+      // OVER what the space stores under this key, because these values
+      // replace the stored ones WHOLE: what the user saved in that space -- its
+      // extender settings, private extender, bootstrap DNS-over-HTTPS servers
+      // and VLESS server, each edited on its own screen -- survives applying
+      // the domain or its urls again. A host never applied before has none.
+      // Only the host's values and the url overrides change
+      // (NetworkSpaceStartup.h ServerSpaceValuesOver).
+      const urnet::NetworkSpaceValues values = netspace::ServerSpaceValuesOver(
+          StoredSpaceValuesLocked(key).value_or(urnet::NetworkSpaceValues{}), official, hostName,
+          apiUrl, connectUrl);
 
       networkSpace_ = spaceManager_->updateNetworkSpaceValues(key, values);
       spaceManager_->setActiveNetworkSpace(*networkSpace_);

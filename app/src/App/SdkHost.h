@@ -1533,9 +1533,10 @@ class SdkHost {
   // The values the space manager holds for `key`, read out of the space's own
   // json (the getters return EFFECTIVE values); nullopt when the manager has no
   // such space or its json could not be read. BuildNetworkSpace and
-  // ApplyNetworkServer write a space's values WHOLE, so they take the space's
-  // VLESS server from here (VlessPresentation.h WithStoredVless). Needs
-  // mutex_, like everything else that touches spaceManager_.
+  // ApplyNetworkServer write a space's values WHOLE, so they write their own
+  // values over these (NetworkSpaceStartup.h BundledSpaceValuesOver,
+  // ServerSpaceValuesOver). Needs mutex_, like everything else that touches
+  // spaceManager_.
   std::optional<urnet::NetworkSpaceValues> StoredSpaceValuesLocked(
       const urnet::NetworkSpaceKey& key);
 

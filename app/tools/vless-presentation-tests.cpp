@@ -2,25 +2,26 @@
 // (App/VlessPresentation.h): the new form, which fields show for each
 // transport and security, the form <-> VlessSettings mapping (spiderX carried,
 // a hidden flow cleared), the store key of every sdk error id, the picker
-// options, and the carry-over that keeps a space's VLESS server when SdkHost
-// writes the space's values whole (BuildNetworkSpace, ApplyNetworkServer).
+// options, and the reading of a space's stored values, VLESS server included,
+// that SdkHost's whole-values writers start from (BuildNetworkSpace,
+// ApplyNetworkServer; their values are tools/network-space-tests.cpp's).
 // Run against the SAME sources the app compiles, on any host with a C++20
 // compiler. The sheet itself (VlessSheet.cpp) cannot be built off Windows;
 // what is verified here is every decision it makes before it touches a XAML
 // object.
 //
 // By default the templates are instantiated with stand-ins that carry the
-// fields of urnet::VlessSettings, urnet::NetworkSpaceKey and
-// urnet::NetworkSpaceValues under the generated wrapper's names and types, so
-// the spec needs neither the SDK nor a json library:
+// fields of urnet::VlessSettings and urnet::NetworkSpaceKey under the generated
+// wrapper's names and types, so the spec needs neither the SDK nor a json
+// library:
 //
 //   c++ -std=c++20 -Wall -Wextra -Werror -I ../src/App \
 //       vless-presentation-tests.cpp ../src/App/VlessPresentation.cpp \
 //       -o /tmp/vless-presentation-tests && /tmp/vless-presentation-tests ..
 //
 // With URNW_VLESS_TESTS_SDK it is built against the generated header itself,
-// so the mapping and the carry-over compile against the SDK's own types and
-// the carry-over reads a space export through the header's json conversions
+// so the mapping compiles against the SDK's own types and a space export's
+// stored values are read through the header's json conversions
 // (the header needs nlohmann/json; it is a system include because the
 // generated code does not build with -Wextra -Werror):
 //
@@ -113,17 +114,10 @@ struct Settings {
   std::optional<std::string> host;
 };
 
-// As much of urnet::NetworkSpaceKey and urnet::NetworkSpaceValues as the
-// carry-over touches, plus two values SdkHost writes, to show they are left
-// alone.
+// As much of urnet::NetworkSpaceKey as the space key comparison reads.
 struct SpaceKey {
   std::optional<std::string> host_name;
   std::optional<std::string> env_name;
-};
-struct SpaceValues {
-  std::optional<bool> bundled;
-  std::optional<std::string> api_url;
-  std::optional<Settings> vless;
 };
 #endif
 
@@ -140,10 +134,13 @@ bool SameSettings(const Settings& a, const Settings& b) {
          a.host == b.host;
 }
 
+#if defined(URNW_VLESS_TESTS_SDK)
+// the stored values read out of a space export, whose server may be absent
 bool SameSettings(const std::optional<Settings>& a, const std::optional<Settings>& b) {
   if (!a || !b) return !a && !b;
   return SameSettings(*a, *b);
 }
+#endif
 
 // A shared REALITY link, as ParseVlessLink hands it back (enabled), spiderX and all.
 Settings RealitySettings() {
@@ -572,51 +569,6 @@ int main(int argc, char** argv) {
     Check(vless::SameSpaceKey(unset, empty), "an unset key field is not the empty one");
   }
 
-  Case("fresh values keep the stored space's VLESS server");
-  {
-    // what ApplyNetworkServer and BuildNetworkSpace write: everything but vless
-    SpaceValues fresh;
-    fresh.bundled = false;
-    fresh.api_url = "https://api.example.com";
-    SpaceValues stored;
-    stored.bundled = true;
-    stored.api_url = "https://old.example.com";
-    stored.vless = RealitySettings();
-    const SpaceValues written = vless::WithStoredVless(fresh, std::optional<SpaceValues>{stored});
-    Check(SameSettings(written.vless, stored.vless), "the stored VLESS server was dropped");
-    Check(written.api_url == fresh.api_url && written.bundled == fresh.bundled,
-          "the carry-over touched a value the writer owns");
-  }
-
-  Case("a server that is off is carried too, so the space keeps what was typed");
-  {
-    SpaceValues stored;
-    Settings off = TlsWebSocketSettings();
-    off.enabled = std::nullopt;
-    stored.vless = off;
-    const SpaceValues written =
-        vless::WithStoredVless(SpaceValues{}, std::optional<SpaceValues>{stored});
-    Check(SameSettings(written.vless, stored.vless), "a server that is off was dropped");
-  }
-
-  Case("no stored values, or none with a server, carry nothing");
-  {
-    Check(!vless::WithStoredVless(SpaceValues{}, std::optional<SpaceValues>{}).vless,
-          "a space never written gained a server");
-    Check(!vless::WithStoredVless(SpaceValues{}, std::optional<SpaceValues>{SpaceValues{}}).vless,
-          "a space with no server gained one");
-  }
-
-  Case("values that name a server keep their own");
-  {
-    SpaceValues fresh;
-    fresh.vless = TlsWebSocketSettings();
-    SpaceValues stored;
-    stored.vless = RealitySettings();
-    const SpaceValues written = vless::WithStoredVless(fresh, std::optional<SpaceValues>{stored});
-    Check(SameSettings(written.vless, fresh.vless), "the stored server replaced an explicit one");
-  }
-
 #if defined(URNW_VLESS_TESTS_SDK)
   // ---- against the SDK header: the json the C ABI and toJson carry -----------
 
@@ -662,7 +614,7 @@ int main(int argc, char** argv) {
           "a refused link does not show its error");
   }
 
-  Case("the stored server is read out of a space export and carried into fresh values");
+  Case("a space export's stored values are read for its own key, the VLESS server with them");
   {
     // NetworkSpace::toJson: {"key": ..., "values": ...} (sdk ExportNetworkSpace)
     const nlohmann::json document = nlohmann::json::parse(R"({
@@ -696,16 +648,9 @@ int main(int argc, char** argv) {
         vless::StoredValuesFor<SpaceKey, SpaceValues>(key, document);
     Check(stored && SameSettings(stored->vless, std::optional<Settings>{RealitySettings()}),
           "the export's VLESS server was not read");
-
-    SpaceValues fresh;
-    fresh.bundled = true;
-    fresh.link_host_name = "ur.io";
-    fresh.api_url = "";
-    const SpaceValues written = vless::WithStoredVless(fresh, stored);
-    const nlohmann::json writtenJson = written;
-    Check(writtenJson.contains("vless") &&
-              writtenJson["vless"] == document["values"]["vless"],
-          "the values written do not carry the server: " + writtenJson.dump());
+    const nlohmann::json storedJson = stored ? nlohmann::json(*stored) : nlohmann::json();
+    Check(storedJson == document["values"],
+          "the stored values are not what the export holds: " + storedJson.dump());
 
     SpaceKey other = key;
     other.host_name = "example.com";
@@ -718,8 +663,7 @@ int main(int argc, char** argv) {
         R"({"key": {"host_name": "bringyour.com", "env_name": "main"}, "values": {"bundled": true}})");
     const std::optional<SpaceValues> withoutServer =
         vless::StoredValuesFor<SpaceKey, SpaceValues>(key, noServer);
-    Check(withoutServer && !vless::WithStoredVless(SpaceValues{}, withoutServer).vless,
-          "a space with no server gained one");
+    Check(withoutServer && !withoutServer->vless, "a space with no server read one");
   }
 #endif
 
