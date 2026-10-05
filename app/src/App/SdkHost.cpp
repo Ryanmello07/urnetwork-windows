@@ -36,6 +36,7 @@
 #include "Paths.h"
 #include "PeerLocation.h"
 #include "RpcSessionBlob.h"
+#include "SdkErrorId.h"
 #include "Strings.h"
 #include "SystemProxy.h"
 #include "VlessPresentation.h"
@@ -4664,6 +4665,16 @@ bool SdkHost::SetNetExtender(const std::optional<urnet::NetExtender>& value) {
 //
 // Nothing here logs a link or a field of the settings: the user id IS the
 // credential of the user's server.
+
+// The error-id calls here and below (setVlessSettings, validateVlessSettings,
+// setControlDohUrls) answer URNET_ERROR_ID_INTERNAL when the call could not
+// run, and the sheets know it by the app's one copy of it (SdkErrorId.h). This
+// file includes the C header, so the two are held equal here; a header from
+// before the define has nothing to hold it to.
+#if defined(URNET_ERROR_ID_INTERNAL)
+static_assert(std::string_view{URNET_ERROR_ID_INTERNAL} == kSdkErrorIdInternal,
+              "SdkErrorId.h no longer mirrors urnetwork_sdk.h's URNET_ERROR_ID_INTERNAL");
+#endif
 
 std::optional<urnet::VlessSettings> SdkHost::CurrentVlessSettings() {
   std::scoped_lock lock(mutex_);

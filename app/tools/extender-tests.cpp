@@ -31,6 +31,7 @@
 
 #include "ExtenderPresentation.h"
 #include "ExtenderRingGeometry.h"
+#include "SdkErrorId.h"
 #include "qrcodegen.hpp"
 
 using namespace urnw;
@@ -1465,7 +1466,6 @@ https://203.0.113.53/dns-query)",
     TEST_CASE("anyOtherIdIsSomethingWentWrong");
     // Loc() of a key the store does not carry shows the key itself, and none
     // of these is about the url the user typed
-    CheckEq("internal_error", kSdkErrorIdInternal, "the sdk's id for a call that could not run");
     CheckEq("something_went_wrong", ControlDohErrorKey(kSdkErrorIdInternal),
             "the call could not run (urnet::ErrorIdInternal)");
     CheckEq("something_went_wrong", ControlDohErrorKey("control_doh_error_from_a_newer_sdk"),
