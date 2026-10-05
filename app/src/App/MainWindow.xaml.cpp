@@ -1538,14 +1538,23 @@ winrt::fire_and_forget MainWindow::ShowUpgradeCheckout(bool yearly) {
   if (sheetOpen_) co_return;
   auto self = get_strong();
   self->sheetOpen_ = true;
+  bool guestSignInRequired = false;
   try {
     self->upgradeSheet_ =
         urnw::UpgradeSheet::CreateForCheckout(Content().XamlRoot(), Sdk(), Balance(), yearly);
     co_await self->upgradeSheet_->Dialog().ShowAsync();
+    guestSignInRequired = self->upgradeSheet_->GuestSignInRequired();
   } catch (...) {
   }
   self->upgradeSheet_.reset();
   self->sheetOpen_ = false;
+  // the server refused the checkout for a guest network the balance had not
+  // reported yet: the conversion, then this checkout once it is done
+  if (guestSignInRequired) {
+    self->DivertGuestToConversion([weak = self->get_weak(), yearly] {
+      if (auto self = weak.get()) self->ShowUpgradeCheckout(yearly);
+    });
+  }
 }
 
 void MainWindow::HideReferralCelebration() {
@@ -1904,6 +1913,7 @@ winrt::fire_and_forget MainWindow::ShowUpgradeSheet() {
   if (sheetOpen_) co_return;  // only one ContentDialog can show at a time
   auto self = get_strong();
   self->sheetOpen_ = true;
+  bool guestSignInRequired = false;
   try {
     // a blocked connect's sheet says when the free data refreshes
     const bool freeRefresh =
@@ -1911,10 +1921,18 @@ winrt::fire_and_forget MainWindow::ShowUpgradeSheet() {
     self->upgradeSheet_ =
         urnw::UpgradeSheet::Create(Content().XamlRoot(), Sdk(), Balance(), freeRefresh);
     co_await self->upgradeSheet_->Dialog().ShowAsync();
+    guestSignInRequired = self->upgradeSheet_->GuestSignInRequired();
   } catch (...) {
   }
   self->upgradeSheet_.reset();
   self->sheetOpen_ = false;
+  // the server refused the checkout for a guest network the balance had not
+  // reported yet: the conversion, then the upgrade once it is done
+  if (guestSignInRequired) {
+    self->DivertGuestToConversion([weak = self->get_weak()] {
+      if (auto self = weak.get()) self->ShowUpgradeSheet();
+    });
+  }
 }
 
 winrt::fire_and_forget MainWindow::ShowDataInfoSheet() {

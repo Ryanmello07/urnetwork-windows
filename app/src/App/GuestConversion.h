@@ -38,6 +38,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 
 #include "VerifySendNotice.h"
@@ -46,6 +47,24 @@ namespace urnw {
 
 inline bool IsGuestNetwork(bool guestModeClaim, bool serverGuest) {
   return guestModeClaim || serverGuest;
+}
+
+// The server's code for a checkout or payment intent it refused because the
+// network is a legacy guest (server refuseGuestPurchase; the SDK's
+// urnet::PurchaseErrorCodeGuestSignInRequired).
+inline constexpr std::string_view kPurchaseErrorCodeGuestSignInRequired = "guest_sign_in_required";
+
+// What a refused payment sheet or checkout session leads to. The server refuses
+// a guest network with guest_sign_in_required when the app did not know it was
+// one (a refreshed guest before its balance loaded): no later checkout stage
+// can sell it a plan, so the upgrade sheet closes and the conversion opens, as
+// it does for every purchase entry of a known guest. Any other refusal is the
+// payment error it always was.
+enum class PurchaseRefusal { PaymentError, AddSignIn };
+
+inline PurchaseRefusal PurchaseRefusalFor(std::string_view code) {
+  return code == kPurchaseErrorCodeGuestSignInRequired ? PurchaseRefusal::AddSignIn
+                                                       : PurchaseRefusal::PaymentError;
 }
 
 // the server's minimum (model.MinPasswordLength), and AddAuthSheet's gate

@@ -17,6 +17,7 @@
 
 #include "ClientEvents.h"
 #include "DataInfo.h"
+#include "GuestConversion.h"
 #include "Localization.h"
 #include "Log.h"
 #include "Paths.h"
@@ -847,6 +848,21 @@ void UpgradeSheet::ShowCheckoutError(hstring const& message) {
   checkoutErrorText_.Visibility(Visibility::Visible);
 }
 
+void UpgradeSheet::RefuseForGuest() {
+  if (!purchaseEmitted_) {
+    EmitPurchase("failed", std::string(kPurchaseErrorCodeGuestSignInRequired));
+    purchaseEmitted_ = true;
+  }
+  checkingOut_ = false;
+  subscribeRing_.IsActive(false);
+  subscribeButton_.IsEnabled(true);
+  plans_.SetEnabled(true);
+  guestSignInRequired_ = true;
+  // only one ContentDialog can show at a time: the opener starts the
+  // conversion once this one is gone (MainWindow::ShowUpgradeSheet)
+  dialog_.Hide();
+}
+
 void UpgradeSheet::BeginCheckout() {
   if (checkingOut_ || !sdk_.IsLoggedIn()) return;
   checkingOut_ = true;
@@ -883,6 +899,9 @@ void UpgradeSheet::RequestPaymentSheet() {
         // trial defers the charge), the PaymentIntent for monthly
         std::string clientSecret;
         std::string publishableKey;
+        const PurchaseRefusal refusal =
+            result && result->error ? PurchaseRefusalFor(result->error->code.value_or(std::string()))
+                                    : PurchaseRefusal::PaymentError;
         if (!err && result && !result->error) {
           if (result->setup_intent_client_secret && !result->setup_intent_client_secret->empty()) {
             clientSecret = *result->setup_intent_client_secret;
@@ -893,9 +912,13 @@ void UpgradeSheet::RequestPaymentSheet() {
           if (result->publishable_key) publishableKey = *result->publishable_key;
         }
         if (err) LogWarn("upgrade: payment sheet failed: {}", *err);
-        queue.TryEnqueue([weak, clientSecret, publishableKey] {
+        queue.TryEnqueue([weak, clientSecret, publishableKey, refusal] {
           auto self = weak.lock();
           if (!self || self->closed_) return;
+          if (refusal == PurchaseRefusal::AddSignIn) {
+            self->RefuseForGuest();
+            return;
+          }
           if (clientSecret.empty() || publishableKey.empty()) {
             // nothing rendered yet: the embedded checkout session saves the purchase
             self->RequestSession(/*embedded=*/true);
@@ -1060,15 +1083,23 @@ void UpgradeSheet::RequestSession(bool embedded) {
         // the api callback runs on an sdk thread; decide on the ui thread
         const std::string serverError =
             result && result->error ? result->error->message : std::string();
+        const PurchaseRefusal refusal =
+            result && result->error ? PurchaseRefusalFor(result->error->code.value_or(std::string()))
+                                    : PurchaseRefusal::PaymentError;
         const std::string url =
             result && result->checkout_url ? *result->checkout_url : std::string();
         const std::string clientSecret =
             result && result->client_secret ? *result->client_secret : std::string();
         const std::string transportError = err ? *err : std::string();
         queue.TryEnqueue([weak, embedded, serverError, url, clientSecret,
-                          transportError] {
+                          transportError, refusal] {
           auto self = weak.lock();
           if (!self || self->closed_) return;
+          if (refusal == PurchaseRefusal::AddSignIn) {
+            // a guest network: no other session can sell it a plan either
+            self->RefuseForGuest();
+            return;
+          }
           if (embedded) {
             // Any embedded failure — transport, server error, or a session
             // without a client_secret — retries once as hosted: nothing has
