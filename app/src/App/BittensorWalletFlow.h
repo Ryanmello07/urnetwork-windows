@@ -111,8 +111,9 @@ inline bool IsCorrectable(std::string_view errorCode) {
 }
 
 // The localization key for a refusal code. Empty for "wallet_error": the
-// bridge relays the wallet's own message, which is shown as is (falling back
-// to `fallbackKey` when it is empty).
+// failure the bridge page handed back, shown in this app's words for the
+// page's code (BridgeErrorTextFor), or as the page's own message, falling
+// back to `fallbackKey` when it is empty.
 inline std::string ErrorKey(std::string_view errorCode, std::string_view fallbackKey) {
   if (errorCode == "invalid_signature") return "bittensor_error_invalid_signature";
   if (errorCode == "challenge_expired") return "bittensor_error_challenge_expired";
@@ -121,6 +122,27 @@ inline std::string ErrorKey(std::string_view errorCode, std::string_view fallbac
   if (errorCode == "invalid_ss58_address") return "invalid_ss58_address";
   if (errorCode == "wallet_error") return std::string();
   return std::string(fallbackKey);
+}
+
+// What this app says for the bridge page's own code for a "wallet_error"
+// (the sdk's BittensorWalletResult::BridgeErrorCode, one of
+// urnet::BittensorWalletBridgeError*): a store key, and whether it takes the
+// wallet's product name ("{}"). An empty key for a code this app does not know
+// (or none, from a page before the codes): the page's own text is shown then.
+struct BridgeErrorText {
+  std::string key;
+  bool takesWalletName = false;
+};
+
+inline BridgeErrorText BridgeErrorTextFor(std::string_view bridgeCode) {
+  if (bridgeCode == "address_not_in_wallet") return {"bittensor_error_address_not_in_wallet", true};
+  if (bridgeCode == "address_mismatch") return {"earnings_wallet_mismatch", false};
+  if (bridgeCode == "extension_not_found") return {"bittensor_error_extension_not_found", true};
+  if (bridgeCode == "no_account") return {"bittensor_error_no_account", true};
+  if (bridgeCode == "user_rejected") return {"bittensor_error_user_rejected", false};
+  if (bridgeCode == "walletconnect_expired") return {"bittensor_error_walletconnect_expired", false};
+  if (bridgeCode == "walletconnect_unavailable") return {"bittensor_error_walletconnect_unavailable", false};
+  return {};
 }
 
 }  // namespace urnw::bittensor
