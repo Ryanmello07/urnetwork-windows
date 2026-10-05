@@ -2,8 +2,9 @@
 // whether a pasted address is worth asking the server about, its short form,
 // which of the account's wallets is the Solana payout wallet, the USDC still
 // waiting to be paid out, how the three reads behind the card commit and what
-// the Earnings pane shows from them, the connect sheet's state machine, and the
-// store key a failure renders with.
+// the Earnings pane shows from them, the connect sheet's state machine, the
+// store key a failure renders with, and the words for the wallet bridge page's
+// own failure codes.
 //
 // Why it exists: USDC payouts continue until the migration to Bittensor
 // completes, and a network whose payouts are held for want of a wallet is
@@ -25,6 +26,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace urnw::solana {
@@ -320,5 +322,24 @@ bool CheckIsError(const ConnectMachine& m);
 // error_connecting_wallet_with_reason (formatted with the detail) when there is a
 // detail, something_went_wrong when there is none - as after a watchdog gave up.
 const char* FailureKey(const std::string& detail);
+
+// ---- the bridge page's failures ---------------------------------------------
+//
+// The ur.io wallet bridge hands a failure back with a stable code (the SDK's
+// urnet::SolanaWalletBridgeError*) next to its English text, on the connect or
+// the sign step (WalletConnect.cpp). The codes it shares with the Bittensor
+// bridge page mean the same, so they read in the same strings, with Phantom or
+// Solflare as the wallet's name.
+
+// What this app says for a code: the store key, and whether it takes the
+// wallet's product name ("{}"). An empty key for any other code (the page's
+// invalid_request and wallet_error, a code this app does not know, the -1 of
+// pages before the codes): the page's own text is shown then.
+struct BridgeErrorText {
+  std::string key;
+  bool takesWalletName = false;
+};
+
+BridgeErrorText BridgeErrorTextFor(std::string_view code);
 
 }  // namespace urnw::solana

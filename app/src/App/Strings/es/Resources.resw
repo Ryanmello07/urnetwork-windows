@@ -656,7 +656,7 @@
   </data>
   <data name="bittensor_error_extension_not_found" xml:space="preserve">
     <value>No se encontró la extensión de {} en este navegador. Instálala y vuelve a intentarlo.</value>
-    <comment>Error: the wallet's browser extension is not installed in this browser (on ur.io, or in the apps when the ur.io bridge page returns extension_not_found). The argument is the wallet product name (Talisman).</comment>
+    <comment>Error: the wallet's browser extension is not installed in this browser (on ur.io, or in the apps when a ur.io wallet bridge page returns extension_not_found). The argument is the wallet product name (Talisman on the Bittensor page, Phantom or Solflare on the Solana page).</comment>
   </data>
   <data name="bittensor_error_invalid_signature" xml:space="preserve">
     <value>No es una firma válida. Pega la firma 0x completa de tu billetera.</value>
@@ -668,11 +668,11 @@
   </data>
   <data name="bittensor_error_no_account" xml:space="preserve">
     <value>Tu billetera {} no tiene ninguna cuenta con la que firmar. Añade o conecta una cuenta en la billetera y vuelve a intentarlo.</value>
-    <comment>Bittensor wallet error in the apps, when the ur.io bridge page returns no_account: the chosen wallet shared no account it can sign with (none is connected to the site, or it holds only accounts of another chain), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect).</comment>
+    <comment>Wallet error in the apps, when a ur.io wallet bridge page returns no_account: the chosen wallet shared no account it can sign with (none is connected to the site, or it holds only accounts of another chain), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect on the Bittensor page, Phantom or Solflare on the Solana page).</comment>
   </data>
   <data name="bittensor_error_user_rejected" xml:space="preserve">
     <value>La solicitud se rechazó en tu billetera. Empieza de nuevo y apruébala para continuar.</value>
-    <comment>Bittensor wallet error in the apps, when the ur.io bridge page returns user_rejected: the user declined the connection or the signature request in the wallet (Talisman, or a WalletConnect wallet), so nothing was signed.</comment>
+    <comment>Wallet error in the apps, when a ur.io wallet bridge page returns user_rejected: the user declined the connection or the signature request in the wallet, so nothing was signed. The Bittensor page (Talisman, or a WalletConnect wallet) and the Solana page of the desktop apps (Phantom or Solflare) both return it; on iOS, Phantom and Solflare decline with 4001, which reads the same.</comment>
   </data>
   <data name="bittensor_error_walletconnect_expired" xml:space="preserve">
     <value>La solicitud de WalletConnect caducó antes de que respondiera la billetera. Empieza de nuevo.</value>
@@ -847,6 +847,14 @@ de la manera correcta</value>
   <data name="checkout_browser_launch_failed" xml:space="preserve">
     <value>No pudimos abrir tu navegador. Copia este enlace en un navegador para completar el pago:</value>
     <comment>Upgrade sheet: the system browser could not be opened for the hosted checkout url. The app appends the url itself on the next line (selectable) so the user can copy it into a browser by hand — never advancing to the waiting page with no payment page open.</comment>
+  </data>
+  <data name="checkout_error_payment_form_unavailable" xml:space="preserve">
+    <value>No se pudo cargar el formulario de pago. Comprueba tu conexión a internet y vuelve a intentarlo.</value>
+    <comment>Checkout error in the desktop apps (the macOS direct download, Windows and Linux) when the ur.io checkout page hands back stripe_unavailable: Stripe's payment form could not be loaded in the checkout page (usually no internet connection, or a network that blocks it). Nothing was charged.</comment>
+  </data>
+  <data name="checkout_error_unavailable" xml:space="preserve">
+    <value>El pago no está disponible en este momento. Inténtalo de nuevo más tarde.</value>
+    <comment>Checkout error in the desktop apps (the macOS direct download, Windows and Linux) when the ur.io checkout page hands back checkout_unavailable: the site cannot open Stripe's checkout right now (it has no Stripe key), so no payment form was shown and nothing was charged. The user cannot fix it; it may work later.</comment>
   </data>
   <data name="checkout_interrupted_confirming" xml:space="preserve">
     <value>La ventana de pago se cerró inesperadamente. Si tu pago se completó, tu plan se actualizará aquí automáticamente — no hace falta volver a comprar.</value>
@@ -6361,6 +6369,10 @@ del mundo</value>
   <data name="solana_wallet" xml:space="preserve">
     <value>Billetera de Solana</value>
     <comment>Label of the connected Solana wallet block on the Earnings screen (parallel to bittensor_wallet).</comment>
+  </data>
+  <data name="solana_wallet_error_session_not_found" xml:space="preserve">
+    <value>No se encontró la conexión de la billetera en este navegador. Empieza de nuevo para volver a conectar tu billetera.</value>
+    <comment>Solana wallet error in the desktop apps (macOS, Windows, Linux) when the ur.io wallet bridge page returns session_not_found: the browser no longer has the wallet connection made in the connect step (another browser or a private window, or its site data was cleared), so nothing was signed. Starting again reconnects the wallet (Phantom or Solflare).</comment>
   </data>
   <data name="something_went_wrong" xml:space="preserve">
     <value>Algo salió mal.</value>

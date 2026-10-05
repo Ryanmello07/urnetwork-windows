@@ -17,6 +17,9 @@
 #include <nlohmann/json.hpp>
 
 #include "Config.h"
+#include "Localization.h"
+#include "SolanaWalletPresentation.h"
+#include "Strings.h"
 #include "UrlQuery.h"
 
 namespace urnw {
@@ -81,6 +84,19 @@ std::string Base64Url(const std::string& s) {
   }
   while (!out.empty() && out.back() == '=') out.pop_back();
   return out;
+}
+
+// The words for a failure the bridge page handed back: this app's own for a
+// code it knows (solana::BridgeErrorTextFor), with the wallet's name where the
+// string takes it, else the page's text.
+std::string LocalizedBridgeError(WalletConnect::Provider p, const std::string& code,
+                                 const std::string& pageText) {
+  const solana::BridgeErrorText text = solana::BridgeErrorTextFor(code);
+  if (text.key.empty()) return pageText;
+  if (!text.takesWalletName) return Narrow(Localized(text.key));
+  const std::wstring walletName =
+      Localized(p == WalletConnect::Provider::Solflare ? "solflare" : "phantom");
+  return Narrow(Format(text.key, walletName));
 }
 
 void SplitUrl(const std::string& url, std::string& host, std::string& query) {
@@ -279,7 +295,11 @@ bool WalletConnect::HandleDeepLink(const std::string& url) {
 void WalletConnect::HandleConnect(Provider p, const std::string& query) {
   auto params = ParseQueryString(query);
   if (params.count("errorCode")) {
-    if (on_error) on_error(params.count("errorMessage") ? params["errorMessage"] : "wallet connect error");
+    if (on_error) {
+      const std::string pageText =
+          params.count("errorMessage") ? params["errorMessage"] : "wallet connect error";
+      on_error(LocalizedBridgeError(p, params["errorCode"], pageText));
+    }
     return;
   }
   const std::string keyParam = std::string(Host(p)) + "_encryption_public_key";
@@ -312,7 +332,11 @@ void WalletConnect::HandleConnect(Provider p, const std::string& query) {
 void WalletConnect::HandleSignMessage(Provider p, const std::string& query) {
   auto params = ParseQueryString(query);
   if (params.count("errorCode")) {
-    if (on_error) on_error(params.count("errorMessage") ? params["errorMessage"] : "wallet signing error");
+    if (on_error) {
+      const std::string pageText =
+          params.count("errorMessage") ? params["errorMessage"] : "wallet signing error";
+      on_error(LocalizedBridgeError(p, params["errorCode"], pageText));
+    }
     return;
   }
   if (!params.count("nonce") || !params.count("data") || !dappKeyPair_ ||

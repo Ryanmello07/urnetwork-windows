@@ -4,6 +4,7 @@
 #include "BalanceSheets.h"
 
 #include "BalanceCodeRedeem.h"
+#include "CheckoutBridgeError.h"
 #include "CheckoutSessionMode.h"
 
 #include <winrt/Microsoft.UI.Xaml.Automation.h>
@@ -51,7 +52,8 @@ constexpr winrt::Windows::UI::Color kTransparent{0, 0, 0, 0};
 // Stripe's iframe, no card data ever touches the app — and hands control back
 // by navigating to the redirect_link:
 //   done:  urnetwork://checkout?status=complete&session_id=cs_...
-//   error: urnetwork://checkout?errorCode=-1&errorMessage=...
+//   error: urnetwork://checkout?errorCode=<code>&errorMessage=...
+// (the error's code is one of urnet::CheckoutBridgeError*, CheckoutBridgeError.h)
 // The session is redirect_on_completion "never" (CheckoutSessionMode.h), so the
 // done hand-back comes from Stripe's onComplete on the bridge page, in place.
 // The url and the hand-back are the SDK's envelope
@@ -1276,11 +1278,13 @@ void UpgradeSheet::HandleCheckoutCallback(std::string const& uri) {
   // the checkout bridge's hand-back is the SDK's envelope; the pay page's
   // (urnetwork://pay/done, urnetwork://pay/error?errorMessage=) is this sheet's
   bool complete = false;
+  std::string errorCode;
   std::string errorMessage;
   if (urnet::isCheckoutRedirect(uri)) {
     try {
       if (auto redirect = urnet::parseCheckoutRedirect(uri)) {
         complete = redirect->Complete;
+        errorCode = redirect->ErrorCode;
         errorMessage = redirect->ErrorMessage;
       }
     } catch (...) {
@@ -1310,7 +1314,9 @@ void UpgradeSheet::HandleCheckoutCallback(std::string const& uri) {
     purchaseEmitted_ = true;
   }
   ShowPage(Page::Products);
-  ShowCheckoutError(!errorMessage.empty() ? H(errorMessage) : Loc("something_went_wrong"));
+  // the page's code in this app's words when it knows it, else the page's text
+  const CheckoutFailureText failure = CheckoutFailureTextFor(errorCode, errorMessage);
+  ShowCheckoutError(failure.key.empty() ? H(failure.pageText) : Loc(failure.key));
 }
 
 void UpgradeSheet::FallBackToHosted() {

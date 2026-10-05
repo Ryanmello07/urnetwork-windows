@@ -148,3 +148,91 @@ func TestRemoveConfirmationSaysPayoutsMoveOrAreHeld(t *testing.T) {
 		}
 	}
 }
+
+// The ur.io wallet bridge hands a failure back with its own code (the sdk's
+// SolanaWalletBridgeError*) next to its English text, on the connect and the
+// sign step. WalletConnect.cpp says a code the app knows in the app's words
+// (App/SolanaWalletPresentation.h BridgeErrorTextFor, run by
+// TestSolanaWalletPresentation), with Phantom or Solflare where the string
+// takes the wallet's name; any other code still shows the page's text.
+func TestSolanaBridgeErrorCodes(t *testing.T) {
+	bridge := stripLineComments(readAppSource(t, "WalletConnect.cpp"))
+	localized := functionBody(bridge, "std::string LocalizedBridgeError(")
+	for _, want := range []string{
+		"solana::BridgeErrorTextFor(code)",
+		"if (text.key.empty()) return pageText;",
+		`Localized(p == WalletConnect::Provider::Solflare ? "solflare" : "phantom")`,
+		"Format(text.key, walletName)",
+	} {
+		if !strings.Contains(localized, want) {
+			t.Errorf("WalletConnect.cpp LocalizedBridgeError: missing %s", want)
+		}
+	}
+	for _, handler := range []string{"void WalletConnect::HandleConnect(", "void WalletConnect::HandleSignMessage("} {
+		if !strings.Contains(functionBody(bridge, handler), `on_error(LocalizedBridgeError(p, params["errorCode"], pageText));`) {
+			t.Errorf("WalletConnect.cpp %s: the bridge page's code does not reach the error text", handler)
+		}
+	}
+
+	// every key BridgeErrorTextFor returns is translated in every language, with
+	// the wallet name's {} exactly where the key takes it
+	root := repositoryRoot(t)
+	entries, err := os.ReadDir(filepath.Join(root, "app", "src", "App", "Strings"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, takesWalletName := range map[string]bool{
+		"bittensor_error_extension_not_found":   true,
+		"bittensor_error_no_account":            true,
+		"bittensor_error_user_rejected":         false,
+		"solana_wallet_error_session_not_found": false,
+	} {
+		englishValue := reswValue(t, root, "en", name)
+		if englishValue == "" {
+			t.Errorf("en/Resources.resw has no %s", name)
+			continue
+		}
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
+			}
+			value := reswValue(t, root, entry.Name(), name)
+			if value == "" {
+				t.Errorf("%s/Resources.resw has no %s", entry.Name(), name)
+				continue
+			}
+			if entry.Name() != "en" && value == englishValue {
+				t.Errorf("%s/Resources.resw %s is English", entry.Name(), name)
+			}
+			if strings.Contains(value, "{}") != takesWalletName {
+				t.Errorf("%s/Resources.resw %s = %q, want the wallet name placeholder: %v", entry.Name(), name, value, takesWalletName)
+			}
+		}
+	}
+	for _, name := range []string{"phantom", "solflare"} {
+		if reswValue(t, root, "en", name) == "" {
+			t.Errorf("en/Resources.resw has no %s, the wallet name the strings take", name)
+		}
+	}
+}
+
+// The codes BridgeErrorTextFor knows are the sdk's own
+// (urnet::SolanaWalletBridgeError*). Skipped without an sdk header that has
+// them (see sdkHeaderWith).
+func TestSolanaBridgeCodesMatchTheSdkHeader(t *testing.T) {
+	headerSource := sdkHeaderWith(t, "SolanaWalletBridgeError")
+	presentationSource := readAppSource(t, "SolanaWalletPresentation.cpp")
+	for name, code := range map[string]string{
+		"SolanaWalletBridgeErrorExtensionNotFound": "extension_not_found",
+		"SolanaWalletBridgeErrorNoAccount":         "no_account",
+		"SolanaWalletBridgeErrorSessionNotFound":   "session_not_found",
+		"SolanaWalletBridgeErrorUserRejected":      "user_rejected",
+	} {
+		if !strings.Contains(headerSource, `inline constexpr const char* `+name+` = "`+code+`";`) {
+			t.Errorf("urnetwork_sdk.hpp: urnet::%s is not %q", name, code)
+		}
+		if !strings.Contains(presentationSource, `if (code == "`+code+`")`) {
+			t.Errorf("SolanaWalletPresentation.cpp: BridgeErrorTextFor does not know the sdk's %q", code)
+		}
+	}
+}

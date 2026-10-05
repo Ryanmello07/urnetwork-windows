@@ -2,7 +2,8 @@
 // Solana connect option on Earnings): the address check a pasted address
 // passes before it is sent to the server, the short form, which account wallet
 // is the Solana payout wallet, the USDC still waiting, what the pane shows from
-// those, and the connect sheet's state machine (App/SolanaWalletPresentation.h),
+// those, the connect sheet's state machine and the words for the bridge page's
+// failure codes (App/SolanaWalletPresentation.h),
 // plus where the wallet bridge's returns go and when a late challenge may still
 // open the bridge (App/WalletBridgeRoute.h) - run
 // against the SAME sources the app compiles, on any host with a C++20 compiler.
@@ -832,6 +833,40 @@ void LinkTests() {
   }
 }
 
+// ---- the bridge page's failure codes ---------------------------------------
+
+void BridgeErrorTests() {
+  {
+    TEST_CASE("theBridgePagesCodesReadInTheAppsWords");
+    // the page's code (urnet::SolanaWalletBridgeError*), the store key, and
+    // whether the string names the wallet (Phantom or Solflare)
+    struct Expected {
+      const char* code;
+      const char* key;
+      bool takesWalletName;
+    };
+    for (const Expected& c : {
+             Expected{"extension_not_found", "bittensor_error_extension_not_found", true},
+             Expected{"no_account", "bittensor_error_no_account", true},
+             Expected{"session_not_found", "solana_wallet_error_session_not_found", false},
+             Expected{"user_rejected", "bittensor_error_user_rejected", false},
+         }) {
+      const BridgeErrorText text = BridgeErrorTextFor(c.code);
+      CheckEq(c.key, text.key, std::string("the key for ") + c.code);
+      Check(text.takesWalletName == c.takesWalletName,
+            std::string("the wallet's name for ") + c.code);
+    }
+  }
+  {
+    TEST_CASE("anyOtherCodeShowsThePagesText");
+    // the page's other failures, a code this app does not know, a page before
+    // the codes (-1), and a wallet's own numeric code
+    for (const char* code : {"invalid_request", "wallet_error", "wallet_locked", "-1", "4001", ""}) {
+      CheckEq("", BridgeErrorTextFor(code).key, std::string("no key for \"") + code + "\"");
+    }
+  }
+}
+
 // ---- where a wallet-bridge return goes (WalletBridgeRoute.h) -----------------
 
 std::string RouteName(urnw::bridge::PublicKeyRoute route) {
@@ -980,6 +1015,8 @@ int main() {
   ManualTests();
   std::cout << "connect: linking\n";
   LinkTests();
+  std::cout << "the bridge page's failure codes\n";
+  BridgeErrorTests();
   std::cout << "wallet bridge routing\n";
   BridgeRouteTests();
 

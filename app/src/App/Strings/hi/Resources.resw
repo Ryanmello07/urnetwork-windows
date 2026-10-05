@@ -600,15 +600,15 @@
   </data>
   <data name="bittensor_error_extension_not_found" xml:space="preserve">
     <value>इस ब्राउज़र में {} एक्सटेंशन नहीं मिला। इसे इंस्टॉल करें, फिर दोबारा प्रयास करें।</value>
-    <comment>Error: the wallet's browser extension is not installed in this browser (on ur.io, or in the apps when the ur.io bridge page returns extension_not_found). The argument is the wallet product name (Talisman).</comment>
+    <comment>Error: the wallet's browser extension is not installed in this browser (on ur.io, or in the apps when a ur.io wallet bridge page returns extension_not_found). The argument is the wallet product name (Talisman on the Bittensor page, Phantom or Solflare on the Solana page).</comment>
   </data>
   <data name="bittensor_error_no_account" xml:space="preserve">
     <value>आपके {} वॉलेट में हस्ताक्षर करने के लिए कोई खाता नहीं है। वॉलेट में कोई खाता जोड़ें या कनेक्ट करें, फिर दोबारा प्रयास करें।</value>
-    <comment>Bittensor wallet error in the apps, when the ur.io bridge page returns no_account: the chosen wallet shared no account it can sign with (none is connected to the site, or it holds only accounts of another chain), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect).</comment>
+    <comment>Wallet error in the apps, when a ur.io wallet bridge page returns no_account: the chosen wallet shared no account it can sign with (none is connected to the site, or it holds only accounts of another chain), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect on the Bittensor page, Phantom or Solflare on the Solana page).</comment>
   </data>
   <data name="bittensor_error_user_rejected" xml:space="preserve">
     <value>आपके वॉलेट में अनुरोध अस्वीकार कर दिया गया। जारी रखने के लिए फिर से शुरू करें और अनुरोध को स्वीकृत करें।</value>
-    <comment>Bittensor wallet error in the apps, when the ur.io bridge page returns user_rejected: the user declined the connection or the signature request in the wallet (Talisman, or a WalletConnect wallet), so nothing was signed.</comment>
+    <comment>Wallet error in the apps, when a ur.io wallet bridge page returns user_rejected: the user declined the connection or the signature request in the wallet, so nothing was signed. The Bittensor page (Talisman, or a WalletConnect wallet) and the Solana page of the desktop apps (Phantom or Solflare) both return it; on iOS, Phantom and Solflare decline with 4001, which reads the same.</comment>
   </data>
   <data name="bittensor_error_walletconnect_expired" xml:space="preserve">
     <value>वॉलेट के जवाब देने से पहले WalletConnect अनुरोध की समय-सीमा समाप्त हो गई। फिर से शुरू करें।</value>
@@ -738,6 +738,14 @@
   <data name="checking_solana_transactions" xml:space="preserve">
     <value>Solana लेन-देन की जांच हो रही है</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="checkout_error_payment_form_unavailable" xml:space="preserve">
+    <value>भुगतान फ़ॉर्म लोड नहीं हो सका। अपना इंटरनेट कनेक्शन जांचें, फिर दोबारा प्रयास करें।</value>
+    <comment>Checkout error in the desktop apps (the macOS direct download, Windows and Linux) when the ur.io checkout page hands back stripe_unavailable: Stripe's payment form could not be loaded in the checkout page (usually no internet connection, or a network that blocks it). Nothing was charged.</comment>
+  </data>
+  <data name="checkout_error_unavailable" xml:space="preserve">
+    <value>चेकआउट अभी उपलब्ध नहीं है। कृपया बाद में फिर से प्रयास करें।</value>
+    <comment>Checkout error in the desktop apps (the macOS direct download, Windows and Linux) when the ur.io checkout page hands back checkout_unavailable: the site cannot open Stripe's checkout right now (it has no Stripe key), so no payment form was shown and nothing was charged. The user cannot fix it; it may work later.</comment>
   </data>
   <data name="checkout_opened_in_browser" xml:space="preserve">
     <value>ब्राउज़र में अपनी खरीदारी पूरी करें। भुगतान की पुष्टि होते ही आपकी योजना यहां अपने आप अपडेट हो जाएगी।</value>
@@ -3956,6 +3964,10 @@
   <data name="solana_sign_in" xml:space="preserve">
     <value>Solana से साइन इन करें</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="solana_wallet_error_session_not_found" xml:space="preserve">
+    <value>इस ब्राउज़र में वॉलेट कनेक्शन नहीं मिला। अपना वॉलेट फिर से कनेक्ट करने के लिए दोबारा शुरू करें।</value>
+    <comment>Solana wallet error in the desktop apps (macOS, Windows, Linux) when the ur.io wallet bridge page returns session_not_found: the browser no longer has the wallet connection made in the connect step (another browser or a private window, or its site data was cleared), so nothing was signed. Starting again reconnects the wallet (Phantom or Solflare).</comment>
   </data>
   <data name="something_went_wrong" xml:space="preserve">
     <value>कुछ गलत हो गया।</value>
