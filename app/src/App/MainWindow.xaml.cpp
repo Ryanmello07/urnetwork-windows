@@ -22,6 +22,7 @@
 #include "OnboardingRouting.h"
 #include "PageContext.h"
 #include "Paths.h"
+#include "ReferralShare.h"
 #include "StatsFormat.h"
 #include "UrColors.h"
 
@@ -1347,8 +1348,9 @@ void MainWindow::ShowReferralCelebration(urnw::ReferralCelebration const& celebr
       const auto current = Balance().ReferralCode();
       if (!current) return;
       winrt::Windows::ApplicationModel::DataTransfer::DataPackage package;
-      package.SetText(
-          hstring{urnw::Format("referral_share_message", urnw::Widen(*current))});
+      package.SetText(hstring{urnw::ReferralShareText(
+          urnw::Format("referral_share_message", urnw::Widen(*current)),
+          urnw::Widen(urnw::ReferralLinkUrl(Sdk().linkHostName(), *current)))});
       winrt::Windows::ApplicationModel::DataTransfer::Clipboard::SetContent(package);
       self->HideReferralCelebration();
       if (!self->referralSnackbar_) {

@@ -3356,6 +3356,10 @@ du monde</value>
     <value>Transfert</value>
     <comment>Connect drawer: live transfer timeseries section</comment>
   </data>
+  <data name="site_connect_code_hint" xml:space="preserve">
+    <value>Entre ce code lors de ton inscription dans l'application.</value>
+    <comment>Referral link page (ur.io/c): under the referral code to copy, on iOS and on Android when the app did not open.</comment>
+  </data>
   <data name="site_connect_ext_fix_title" xml:space="preserve">
     <value>Configurez l'extension pour vous connecter</value>
     <comment>Connect: extension fix alert title</comment>

@@ -3356,6 +3356,10 @@ inhoud van de wereld</value>
     <value>Overdracht</value>
     <comment>Connect drawer: live transfer timeseries section</comment>
   </data>
+  <data name="site_connect_code_hint" xml:space="preserve">
+    <value>Voer deze code in wanneer je je aanmeldt in de app.</value>
+    <comment>Referral link page (ur.io/c): under the referral code to copy, on iOS and on Android when the app did not open.</comment>
+  </data>
   <data name="site_connect_ext_fix_title" xml:space="preserve">
     <value>Stel de extensie in om te verbinden</value>
     <comment>Connect: extension fix alert title</comment>

@@ -5781,6 +5781,10 @@
     <value>بلغت خطتك الحد الأقصى للعملاء المتزامنين — يرفعه Pro إلى 1,000.</value>
     <comment>Account panel: concurrent-client-limit upgrade prompt</comment>
   </data>
+  <data name="site_connect_code_hint" xml:space="preserve">
+    <value>أدخل هذا الرمز عند التسجيل في التطبيق.</value>
+    <comment>Referral link page (ur.io/c): under the referral code to copy, on iOS and on Android when the app did not open.</comment>
+  </data>
   <data name="site_connect_ext_fix_title" xml:space="preserve">
     <value>أعدّ الإضافة للاتصال</value>
     <comment>Connect: extension fix alert title</comment>

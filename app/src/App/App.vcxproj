@@ -338,6 +338,7 @@
     <ClInclude Include="AccountPage.h" />
     <ClInclude Include="ReferralCard.h" />
     <ClInclude Include="ReferralCodeState.h" />
+    <ClInclude Include="ReferralShare.h" />
     <ClInclude Include="ReferralTotalsState.h" />
     <ClInclude Include="ReferralsPage.h" />
     <ClInclude Include="LicensesPage.h" />

@@ -5262,6 +5262,10 @@
     <value>您的套餐已达并发客户端上限——Pro可将上限提升至1,000。</value>
     <comment>Account panel: concurrent-client-limit upgrade prompt</comment>
   </data>
+  <data name="site_connect_code_hint" xml:space="preserve">
+    <value>在应用中注册时请输入此推荐码。</value>
+    <comment>Referral link page (ur.io/c): under the referral code to copy, on iOS and on Android when the app did not open.</comment>
+  </data>
   <data name="site_connect_ext_fix_title" xml:space="preserve">
     <value>设置扩展以进行连接</value>
     <comment>Connect: extension fix alert title</comment>

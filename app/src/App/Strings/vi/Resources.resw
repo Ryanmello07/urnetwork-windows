@@ -3276,6 +3276,10 @@ nội dung thế giới</value>
     <value>Truyền tải</value>
     <comment>Connect drawer: live transfer timeseries section</comment>
   </data>
+  <data name="site_connect_code_hint" xml:space="preserve">
+    <value>Nhập mã này khi đăng ký trong ứng dụng.</value>
+    <comment>Referral link page (ur.io/c): under the referral code to copy, on iOS and on Android when the app did not open.</comment>
+  </data>
   <data name="site_connect_ext_fix_title" xml:space="preserve">
     <value>Thiết lập tiện ích mở rộng để kết nối</value>
     <comment>Connect: extension fix alert title</comment>

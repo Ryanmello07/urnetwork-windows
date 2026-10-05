@@ -5366,6 +5366,10 @@ del mundo</value>
     <value>Tu plan alcanzó su límite de clientes simultáneos; Pro lo amplía a 1000.</value>
     <comment>Account panel: concurrent-client-limit upgrade prompt</comment>
   </data>
+  <data name="site_connect_code_hint" xml:space="preserve">
+    <value>Introduce este código al registrarte en la app.</value>
+    <comment>Referral link page (ur.io/c): under the referral code to copy, on iOS and on Android when the app did not open.</comment>
+  </data>
   <data name="site_connect_ext_fix_title" xml:space="preserve">
     <value>Configura la extensión para conectarte</value>
     <comment>Connect: extension fix alert title</comment>

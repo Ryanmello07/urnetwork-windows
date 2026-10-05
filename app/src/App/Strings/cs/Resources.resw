@@ -3514,6 +3514,10 @@ kontent světa</value>
     <value>Přenos</value>
     <comment>Connect drawer: live transfer timeseries section</comment>
   </data>
+  <data name="site_connect_code_hint" xml:space="preserve">
+    <value>Tento kód zadejte při registraci v aplikaci.</value>
+    <comment>Referral link page (ur.io/c): under the referral code to copy, on iOS and on Android when the app did not open.</comment>
+  </data>
   <data name="site_connect_ext_fix_title" xml:space="preserve">
     <value>Nastavte rozšíření pro připojení</value>
     <comment>Connect: extension fix alert title</comment>
