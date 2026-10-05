@@ -594,6 +594,10 @@
     <value>Bästa träffar</value>
     <comment>Label for a list or section showing the best matching results.</comment>
   </data>
+  <data name="bittensor_error_address_not_in_wallet" xml:space="preserve">
+    <value>Din {}-plånbok har inte adressen du angav. Lägg till eller anslut det kontot i plånboken, eller ange en adress som finns i den.</value>
+    <comment>ur.io Bittensor wallet card and sign-in: the chosen wallet does not offer the account of the address the user typed (Talisman does not hold it or has not connected it to the site; a WalletConnect wallet connected another account), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect).</comment>
+  </data>
   <data name="bittensor_sign_in" xml:space="preserve">
     <value>Logga in med Bittensor</value>
     <comment>Call to action</comment>

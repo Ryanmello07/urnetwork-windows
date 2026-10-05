@@ -594,6 +594,10 @@
     <value>Mechi bora</value>
     <comment>Label for a list or section showing the best matching results.</comment>
   </data>
+  <data name="bittensor_error_address_not_in_wallet" xml:space="preserve">
+    <value>Pochi yako ya {} haina anwani uliyoweka. Ongeza au unganisha akaunti hiyo kwenye pochi, au weka anwani iliyomo kwenye pochi hiyo.</value>
+    <comment>ur.io Bittensor wallet card and sign-in: the chosen wallet does not offer the account of the address the user typed (Talisman does not hold it or has not connected it to the site; a WalletConnect wallet connected another account), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect).</comment>
+  </data>
   <data name="bittensor_sign_in" xml:space="preserve">
     <value>Ingia na Bittensor</value>
     <comment>Call to action</comment>
