@@ -90,3 +90,61 @@ func TestRemovalNamesThePromotedPayoutWallet(t *testing.T) {
 		}
 	}
 }
+
+// Before the removal, the confirmation covers both outcomes of removing the
+// payout wallet: another of the network's Solana or Polygon wallets takes over
+// (the server picks it, and the line above names it afterwards), or USDC
+// payouts are held while there is none (remove_wallet_moves_or_holds_payouts).
+// The retired remove_wallet_holds_payouts said they were always held, so no app
+// source may show it again.
+func TestRemoveConfirmationSaysPayoutsMoveOrAreHeld(t *testing.T) {
+	root := repositoryRoot(t)
+	appDir := filepath.Join(root, "app", "src", "App")
+	confirm := functionBody(readAppSource(t, "WalletPage.cpp"), "winrt::fire_and_forget WalletPage::ConfirmRemoveSolanaWallet(")
+	if !strings.Contains(confirm, `dialog.Content(winrt::box_value(Loc("remove_wallet_moves_or_holds_payouts")));`) {
+		t.Error("the remove confirmation does not show remove_wallet_moves_or_holds_payouts")
+	}
+	sources, err := os.ReadDir(appDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range sources {
+		ext := filepath.Ext(entry.Name())
+		if entry.IsDir() || (ext != ".cpp" && ext != ".h" && ext != ".xaml") {
+			continue
+		}
+		if strings.Contains(readAppSource(t, entry.Name()), `"remove_wallet_holds_payouts"`) {
+			t.Errorf("%s shows remove_wallet_holds_payouts; payouts move to another wallet when there is one", entry.Name())
+		}
+	}
+
+	const confirmation = "USDC payouts move to another of your Solana or Polygon wallets, or are held until you connect one."
+	if english := reswValue(t, root, "en", "remove_wallet_moves_or_holds_payouts"); english != confirmation {
+		t.Fatalf("en/Resources.resw remove_wallet_moves_or_holds_payouts = %q", english)
+	}
+	locales, err := os.ReadDir(filepath.Join(appDir, "Strings"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range locales {
+		if !entry.IsDir() {
+			continue
+		}
+		if reswValue(t, root, entry.Name(), "remove_wallet_holds_payouts") != "" {
+			t.Errorf("%s keeps the retired remove_wallet_holds_payouts", entry.Name())
+		}
+		if entry.Name() == "en" {
+			continue
+		}
+		value := reswValue(t, root, entry.Name(), "remove_wallet_moves_or_holds_payouts")
+		if value == "" || value == confirmation {
+			t.Errorf("%s remove_wallet_moves_or_holds_payouts = %q", entry.Name(), value)
+			continue
+		}
+		for _, name := range []string{"USDC", "Solana", "Polygon"} {
+			if !strings.Contains(value, name) {
+				t.Errorf("%s remove_wallet_moves_or_holds_payouts drops %s: %q", entry.Name(), name, value)
+			}
+		}
+	}
+}

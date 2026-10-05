@@ -1870,7 +1870,10 @@ winrt::fire_and_forget WalletPage::ConfirmRemoveSolanaWallet() {
   ContentDialog dialog;
   dialog.XamlRoot(self->Content().XamlRoot());
   dialog.Title(winrt::box_value(Loc("remove_wallet")));
-  dialog.Content(winrt::box_value(Loc("remove_wallet_holds_payouts")));
+  // Removing the payout wallet makes another of the network's Solana or
+  // Polygon wallets the payout wallet when there is one (the server picks it)
+  // and holds USDC payouts when there is none: one line for both.
+  dialog.Content(winrt::box_value(Loc("remove_wallet_moves_or_holds_payouts")));
   dialog.PrimaryButtonText(Loc("remove"));
   dialog.IsPrimaryButtonEnabled(allowActions);
   dialog.CloseButtonText(Loc("cancel"));

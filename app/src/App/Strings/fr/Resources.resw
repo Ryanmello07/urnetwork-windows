@@ -3336,6 +3336,10 @@ le plus vaste, le plus sûr et le plus décentralisé au monde.</value>
     <value>Supprimer le portefeuille</value>
     <comment>Used in Main/Account/AccountNavStackView.swift.</comment>
   </data>
+  <data name="remove_wallet_moves_or_holds_payouts" xml:space="preserve">
+    <value>Les paiements en USDC sont envoyés à un autre de vos portefeuilles Solana ou Polygon, ou retenus jusqu’à ce que vous en connectiez un.</value>
+    <comment>Body of the remove confirmation for the payout wallet (the title is remove_wallet). Removing the payout wallet makes another of the account's active Solana or Polygon wallets the payout wallet when there is one (the server picks it; payouts_now_go_to names it after the removal), and holds USDC payouts until the user connects a wallet when there is none.</comment>
+  </data>
   <data name="resend_reset_link" xml:space="preserve">
     <value>Renvoyer le lien</value>
     <comment>Reset link sent</comment>
