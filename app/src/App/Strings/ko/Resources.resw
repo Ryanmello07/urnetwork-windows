@@ -736,6 +736,10 @@
     <value>자동 생성된 이름을 대체할 사용자 지정 네트워크 이름을 만드세요</value>
     <comment>A description of the benefits of claiming a custom network name.</comment>
   </data>
+  <data name="claims_open_after_finalization" xml:space="preserve">
+    <value>각 에포크의 받기는 해당 지급 목록이 확정된 후 열리며 만료될 때까지 열려 있습니다.</value>
+    <comment>Explainer in the claim dialog and on the unclaimed tile. No durations: the claim-open time and the expiry come from the chain's epoch schedule (sn_payout_schedule_times), so the copy never fixes the 48-hour finalize offset or the nine-epoch claim window.</comment>
+  </data>
   <data name="clear" xml:space="preserve">
     <value>지우기</value>
     <comment>General UI string: a button that clears a field or setting.</comment>
@@ -3105,6 +3109,14 @@
     <value>보냈습니다! 피드백 감사합니다.</value>
     <comment>Snackbar shown after feedback is sent successfully. Used in Main/Feedback/FeedbackView.swift.</comment>
   </data>
+  <data name="set_coldkey" xml:space="preserve">
+    <value>coldkey 설정</value>
+    <comment>Earnings card: the action next to set_coldkey_to_get_paid. Opens the existing coldkey setting (the connect Bittensor wallet flow).</comment>
+  </data>
+  <data name="set_coldkey_to_get_paid" xml:space="preserve">
+    <value>지급을 받으려면 Bittensor coldkey를 설정하세요</value>
+    <comment>Earnings card: shown in place of sn_payout_schedule while no Bittensor coldkey is set. SN payouts go only to a coldkey; the set_coldkey action next to it opens the coldkey (connect wallet) flow.</comment>
+  </data>
   <data name="settings" xml:space="preserve">
     <value>설정</value>
     <comment>Account Screen</comment>
@@ -3454,6 +3466,14 @@
   <data name="site_sub_stripe_body" xml:space="preserve">
     <value>Pro 구독은 Stripe를 통해 청구됩니다. 아래에서 언제든지 결제 정보를 업데이트하거나 구독을 취소할 수 있습니다.</value>
     <comment>Subscription: Stripe-billed body</comment>
+  </data>
+  <data name="sn_payout_schedule" xml:space="preserve">
+    <value>수익은 에포크마다 정산되며, 받기를 하면 SN25α로 Bittensor coldkey에 지급됩니다.</value>
+    <comment>Earnings card: how providers are paid on the UR subnet (WHITEPAPER §5.2, §8.3). Earnings settle per epoch and are paid in SN25α as stake to the provider's Bittensor coldkey once the provider claims them; nothing is paid automatically. Followed by sn_payout_schedule_times when the epoch schedule is known.</comment>
+  </data>
+  <data name="sn_payout_schedule_times" xml:space="preserve">
+    <value>이번 에포크는 {0}에 끝납니다. 내 몫은 {1}부터 {2}까지 받을 수 있습니다.</value>
+    <comment>Earnings card, after sn_payout_schedule: when the current epoch ends, when its share can be claimed and when an unclaimed share expires. The three values are local date-times the app fills from the chain's epoch schedule (the coordinator's policy: the claim-open offset and the claim TTL), never fixed durations.</comment>
   </data>
   <data name="solana_sign_in" xml:space="preserve">
     <value>Solana로 로그인</value>
@@ -3869,6 +3889,10 @@
   <data name="usdc_solana_network_only" xml:space="preserve">
     <value>USDC는 Solana 네트워크로만 보내세요. 다른 네트워크로 보낸 USDC는 도착하지 않습니다.</value>
     <comment>Payment: the chain to send on. Shown wherever a USDC payment is requested, because USDC exists on many chains and a transfer sent on the wrong one is lost.</comment>
+  </data>
+  <data name="usdc_waiting" xml:space="preserve">
+    <value>마지막 USDC 지급: {} USDC 대기 중</value>
+    <comment>The last USDC payout still pending since provider payouts moved to the UR subnet; shown on the Solana wallet block and, while no Solana wallet is connected, next to the wallet actions, only while a USDC amount is pending. Mirrors the email headline.</comment>
   </data>
   <data name="usdc_wallet_address" xml:space="preserve">
     <value>USDC 월렛 주소</value>

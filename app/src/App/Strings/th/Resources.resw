@@ -736,6 +736,10 @@
     <value>รับชื่อเครือข่ายที่กำหนดเองเพื่อแทนที่ชื่อที่สร้างขึ้นอัตโนมัติ</value>
     <comment>A description of the benefits of claiming a custom network name.</comment>
   </data>
+  <data name="claims_open_after_finalization" xml:space="preserve">
+    <value>การรับของแต่ละอีพอคจะเปิดหลังจากรายการจ่ายเงินของอีพอคนั้นสรุปแล้ว และเปิดอยู่จนกว่าจะหมดอายุ</value>
+    <comment>Explainer in the claim dialog and on the unclaimed tile. No durations: the claim-open time and the expiry come from the chain's epoch schedule (sn_payout_schedule_times), so the copy never fixes the 48-hour finalize offset or the nine-epoch claim window.</comment>
+  </data>
   <data name="clear" xml:space="preserve">
     <value>ล้าง</value>
     <comment>General UI string: a button that clears a field or setting.</comment>
@@ -3106,6 +3110,14 @@
     <value>ส่งแล้ว! ขอบคุณสำหรับข้อเสนอแนะ</value>
     <comment>Snackbar shown after feedback is sent successfully. Used in Main/Feedback/FeedbackView.swift.</comment>
   </data>
+  <data name="set_coldkey" xml:space="preserve">
+    <value>ตั้งค่า coldkey</value>
+    <comment>Earnings card: the action next to set_coldkey_to_get_paid. Opens the existing coldkey setting (the connect Bittensor wallet flow).</comment>
+  </data>
+  <data name="set_coldkey_to_get_paid" xml:space="preserve">
+    <value>ตั้งค่า coldkey Bittensor ของคุณเพื่อรับเงิน</value>
+    <comment>Earnings card: shown in place of sn_payout_schedule while no Bittensor coldkey is set. SN payouts go only to a coldkey; the set_coldkey action next to it opens the coldkey (connect wallet) flow.</comment>
+  </data>
   <data name="settings" xml:space="preserve">
     <value>การตั้งค่า</value>
     <comment>Account Screen</comment>
@@ -3455,6 +3467,14 @@
   <data name="site_sub_stripe_body" xml:space="preserve">
     <value>ระบบเรียกเก็บเงินการสมัคร Pro ของคุณผ่าน Stripe อัปเดตรายละเอียดการชำระเงินหรือยกเลิกได้ทุกเมื่อด้านล่าง</value>
     <comment>Subscription: Stripe-billed body</comment>
+  </data>
+  <data name="sn_payout_schedule" xml:space="preserve">
+    <value>รายได้จะสรุปทุกอีพอคและจ่ายเป็น SN25α ไปยัง coldkey Bittensor ของคุณเมื่อคุณกดรับ</value>
+    <comment>Earnings card: how providers are paid on the UR subnet (WHITEPAPER §5.2, §8.3). Earnings settle per epoch and are paid in SN25α as stake to the provider's Bittensor coldkey once the provider claims them; nothing is paid automatically. Followed by sn_payout_schedule_times when the epoch schedule is known.</comment>
+  </data>
+  <data name="sn_payout_schedule_times" xml:space="preserve">
+    <value>อีพอคนี้สิ้นสุด {0} รับส่วนแบ่งของคุณได้ตั้งแต่ {1} ถึง {2}</value>
+    <comment>Earnings card, after sn_payout_schedule: when the current epoch ends, when its share can be claimed and when an unclaimed share expires. The three values are local date-times the app fills from the chain's epoch schedule (the coordinator's policy: the claim-open offset and the claim TTL), never fixed durations.</comment>
   </data>
   <data name="solana_sign_in" xml:space="preserve">
     <value>เข้าสู่ระบบด้วยเครือข่าย Solana</value>
@@ -3870,6 +3890,10 @@
   <data name="usdc_solana_network_only" xml:space="preserve">
     <value>ส่ง USDC บนเครือข่าย Solana เท่านั้น USDC ที่ส่งบนเครือข่ายอื่นจะไม่เข้าบัญชี</value>
     <comment>Payment: the chain to send on. Shown wherever a USDC payment is requested, because USDC exists on many chains and a transfer sent on the wrong one is lost.</comment>
+  </data>
+  <data name="usdc_waiting" xml:space="preserve">
+    <value>การจ่าย USDC ครั้งสุดท้าย: {} USDC รอการโอน</value>
+    <comment>The last USDC payout still pending since provider payouts moved to the UR subnet; shown on the Solana wallet block and, while no Solana wallet is connected, next to the wallet actions, only while a USDC amount is pending. Mirrors the email headline.</comment>
   </data>
   <data name="usdc_wallet_address" xml:space="preserve">
     <value>ที่อยู่กระเป๋าเงิน USDC</value>
