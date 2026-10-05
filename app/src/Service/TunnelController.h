@@ -22,6 +22,7 @@
 #include "FlowOwner.h"
 #include "NetworkChangeNotify.h"
 #include "NetworkConfig.h"
+#include "NetworkCountry.h"
 #include "PacketPump.h"
 #include "Protocol.h"
 #include "Sdk.h"
@@ -187,6 +188,24 @@ class TunnelController {
   // own sampled state and never call into the device. `available` is false
   // while none runs.
   proto::ProviderStats ProviderStats();
+
+  // The network country the app read (Common/NetworkCountry.h; open bug P052):
+  // the country of the mobile broadband network carrying the default route, ""
+  // for none. The extender dials of this process's devices front with that
+  // country's spoof list while the extender hint cannot be fetched.
+  //
+  // urnet::setNetworkCountryCode is process-wide inside this service's sdk, so
+  // one call reaches the tunnel session's device and the provider-only device
+  // alike, in place from their next extender dial. start_tunnel and
+  // start_provider apply theirs before the space is imported (StartLocked,
+  // StartProvider), so a new device's first dials already have it; the app's
+  // set_network_country brings every later change. Normalized on the way in
+  // (netcountry::Normalized) and logged when it changes.
+  //
+  // No session lock: a connect wedged inside the sdk holds mutex_ for as long as
+  // the process lives, and the app's push must not queue behind it. Its own
+  // lock, innermost, held across the one store into the sdk.
+  void SetNetworkCountry(const std::string& code, const std::string& source);
 
   // THE STATUS THE APP DECIDES ON, and it must never block.
   //
@@ -510,6 +529,12 @@ class TunnelController {
   urnet::Sub providerPeersSub_;
   std::shared_ptr<std::atomic<int64_t>> providerClients_;
   std::string providerClientId_;
+
+  // The network country last applied to this process's sdk
+  // (SetNetworkCountry), empty until the app first sends one. Guarded by
+  // networkCountryMutex_ alone.
+  std::mutex networkCountryMutex_;
+  std::optional<netcountry::Reading> networkCountry_;
 
   // Native tunnel plumbing.
   std::unique_ptr<Wintun> wintun_;

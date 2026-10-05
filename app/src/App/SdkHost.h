@@ -25,6 +25,8 @@
 #include "ConnectAction.h"
 #include "ConnectionHealth.h"
 #include "ExtenderPresentation.h"
+#include "MobileBroadband.h"
+#include "NetworkCountryWatch.h"
 #include "PostQuantumIdentity.h"
 #include "ProvideLifecycle.h"
 #include "ProviderLocations.h"
@@ -2179,6 +2181,36 @@ class SdkHost {
   // Idempotent and change-gated; safe from the pipe reader thread.
   void ApplySdkEgressBind(int64_t index4, int64_t index6, const char* why);
 
+  // ---- the network country (Common/NetworkCountry.h; open bug P052) ---------
+  //
+  // The country of the mobile broadband network carrying the default route, ""
+  // for none: what the sdk's extender dials fall back to while the extender
+  // hint cannot be fetched. Like the egress binding above it is process-global
+  // inside one copy of the sdk (urnet::setNetworkCountryCode), and two
+  // processes dial: this one (sign-in, account, the api) and the service, whose
+  // devices are the tunnel session's and the provider-only one. So this
+  // process reads it, applies it to its own sdk before the network spaces are
+  // built, and hands it to the service — in start_tunnel and start_provider,
+  // which apply it before their device is built, and in set_network_country
+  // whenever it changes and whenever this process greets a service
+  // (BootstrapSession), whose running devices may hold an older one.
+
+  // Start the watch (NetworkCountryWatch.h), subscribe it to the OS's route and
+  // interface changes, and wait briefly for its first report. Once, from
+  // Initialize, before the space manager exists.
+  void StartNetworkCountryWatch();
+  // The watch's report, on its thread: this process's sdk first, then the
+  // service. Never takes mutex_: Initialize holds it while it waits for the
+  // first report.
+  void ApplyNetworkCountry(const netcountry::Reading& reading);
+  // set_network_country with the current reading, read under the push lock so
+  // the last push the service hears carries the last reading. A service too old
+  // for the verb answers "unknown request type" and keeps no country, as before
+  // it existed. Safe from any thread; takes no mutex_.
+  void PushNetworkCountry(const char* why);
+  // The reading last applied to this process's sdk; empty before the first.
+  netcountry::Reading CurrentNetworkCountry() const;
+
   // The control channel dropped. Runs on the pipe reader thread.
   void OnServiceDisconnected();
   // Build and push the persistent notice from the CURRENT session state.
@@ -2278,6 +2310,18 @@ class SdkHost {
   // deadlock.
   std::mutex egressMutex_;
   int64_t sdkEgressBound_ = -1;
+  // The network country last applied to this process's sdk, under its own
+  // lock: written by the watch's thread, read by the bootstrap and the provider
+  // reconcile for their requests.
+  mutable std::mutex networkCountryMutex_;
+  netcountry::Reading networkCountry_;
+  // Serializes the pushes (PushNetworkCountry). mutex_ may be held when it is
+  // taken, never the other way round.
+  std::mutex networkCountryPushMutex_;
+  // The watch's notifications are torn down before the watch (~SdkHost), so
+  // nothing records into it once it is joining.
+  std::unique_ptr<NetworkCountryWatch> networkCountryWatch_;
+  std::unique_ptr<DefaultRouteChanges> networkCountryChanges_;
   // The STANDING reason there is no session, in words a user can act on, or
   // empty when there is nothing to report. Distinct from bootstrapError_, which
   // is per-attempt scratch: this survives the attempt so that a view created

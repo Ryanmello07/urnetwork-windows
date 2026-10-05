@@ -128,6 +128,18 @@ bool ServiceClient::GetProviderStats(proto::ProviderStats& stats) {
   }
 }
 
+bool ServiceClient::SetNetworkCountry(const proto::SetNetworkCountry& country) {
+  nlohmann::json body = country;
+  try {
+    // An older service's "unknown request type" is a reply too: not ok.
+    nlohmann::json reply = pipe_.Call(proto::Request(proto::msg::kSetNetworkCountry, body));
+    return reply.value("ok", false);
+  } catch (const std::exception& e) {
+    LogError("service: set network country failed: {}", e.what());
+    return false;
+  }
+}
+
 bool ServiceClient::CallProvider(const nlohmann::json& request,
                                  std::optional<proto::TunnelStatus>* status,
                                  std::string* error) {

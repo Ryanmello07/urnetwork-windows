@@ -780,6 +780,9 @@ proto::TunnelStatus TunnelController::StartLocked(const proto::StartTunnel& conf
 
     // --- 3/8 NetworkSpace (own storage; import the app's space json) ---
     step = "3/8 network space";
+    // The network country the app read, in force before the space and its
+    // device exist, so their first extender dials already have it.
+    SetNetworkCountry(config.network_country_code, config.network_country_source);
     LogInfo("tunnel: [3/8] opening the network space in {}",
             SdkStorageDir(true).string());
     networkSpace_ = ImportNetworkSpaceLocked(config.network_space_json);
@@ -1837,6 +1840,10 @@ bool TunnelController::StartProvider(const proto::StartProvider& request,
     return false;
   }
 
+  // The network country the app read: in place for a device that keeps running,
+  // and in force before a new one is built.
+  SetNetworkCountry(request.network_country_code, request.network_country_source);
+
   // The same request again — a relaunched app adopting the provider an earlier
   // run left, or a reconcile after a mode change: keep the device and apply the
   // mode in place.
@@ -2130,6 +2137,25 @@ proto::ProviderStats TunnelController::ProviderStats() {
     stats.has_provider_stats = providerStatsVc_->getProviderPacketStats().has_value();
   });
   return stats;
+}
+
+// See the contract in the header. No session lock: the country is a fact about
+// the network, not about a session, and its one sdk call is a store.
+void TunnelController::SetNetworkCountry(const std::string& code, const std::string& source) {
+  const netcountry::Reading reading = netcountry::Normalized(code, source);
+  std::scoped_lock lock(networkCountryMutex_);
+  if (networkCountry_ && *networkCountry_ == reading) return;
+  networkCountry_ = reading;
+  urnet::setNetworkCountryCode(reading.code);
+  if (reading.code.empty()) {
+    LogInfo("tunnel: no network country ({}): extender dials take the extender "
+            "hint's country, or the global spoof list",
+            reading.source);
+  } else {
+    LogInfo("tunnel: network country \"{}\" ({}): while the extender hint cannot be "
+            "fetched, extender dials front with that country's spoof list",
+            reading.code, reading.source);
+  }
 }
 
 // See the contract in the header. NO SESSION LOCK: a copy of the snapshot that

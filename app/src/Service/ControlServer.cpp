@@ -120,6 +120,14 @@ nlohmann::json ControlServer::Handle(const nlohmann::json& request) {
       reply.ok = tunnel_.StopProvider();
       reply.status = tunnel_.Status();
       PushState();
+    } else if (type == proto::msg::kSetNetworkCountry) {
+      // The network country the app reads changed, or the app has just greeted
+      // this service (TunnelController::SetNetworkCountry). No session lock, and
+      // nothing a status reports moves, so nothing is pushed.
+      proto::SetNetworkCountry s = request.get<proto::SetNetworkCountry>();
+      tunnel_.SetNetworkCountry(s.network_country_code, s.network_country_source);
+      reply.ok = true;
+      reply.status = tunnel_.Status();
     } else if (type == proto::msg::kGetProviderStats) {
       // The provider-only device's statistics (TunnelController::ProviderStats),
       // answered like get_state: no session lock, no device call, and nothing

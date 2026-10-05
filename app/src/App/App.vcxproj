@@ -336,6 +336,11 @@
     <ClCompile Include="..\..\third_party\qrcodegen\qrcodegen.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
     <ClCompile Include="UsageBar.cpp" />
     <ClCompile Include="WalletConnect.cpp" />
+    <!-- The network country's Win32 half (IP helper and MbnApi): plain Win32 and
+         COM with no WinRT, so no pch. Its decisions are Common/NetworkCountry.h
+         and its thread NetworkCountryWatch.h, which
+         tools/network-country-tests.cpp runs on any host. -->
+    <ClCompile Include="MobileBroadband.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
     <ClCompile Include="ServiceClient.cpp" />
     <ClCompile Include="ServiceSetup.cpp" />
     <ClCompile Include="TrayIcon.cpp" />
@@ -444,6 +449,9 @@
     <!-- header-only and WinRT-free: tools/solana-wallet-tests.cpp runs it -->
     <ClInclude Include="WalletBridgeRoute.h" />
     <ClInclude Include="WindowShell.h" />
+    <ClInclude Include="MobileBroadband.h" />
+    <!-- header-only and WinRT-free: tools/network-country-tests.cpp runs it -->
+    <ClInclude Include="NetworkCountryWatch.h" />
     <ClInclude Include="ServiceClient.h" />
     <ClInclude Include="ServiceSetup.h" />
     <ClInclude Include="TrayIcon.h" />
