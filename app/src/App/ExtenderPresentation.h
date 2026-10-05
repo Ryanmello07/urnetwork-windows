@@ -384,6 +384,11 @@ inline constexpr const char* kExtenderProvideErrorActivationRefused = "activatio
 //                    the queued or last-known value while the device process is
 //                    out of contact, so the switch holds through a daemon
 //                    restart.
+//   providerOnly     the status is the service's provider-only device's, the
+//                    provider while there is no session (get_provider_stats),
+//                    not a session's device's. The app reads that device but
+//                    cannot write its setting: SdkHost::SetProvideExtender
+//                    writes through a session's device only.
 //
 // A default-constructed view is "no session": unsupported, so both rows hide.
 struct ExtenderProvideStatusView {
@@ -396,16 +401,19 @@ struct ExtenderProvideStatusView {
   bool refused = false;
   bool enabled = false;
   bool provideExtender = false;
+  bool providerOnly = false;
 
   // The device pushes a status after any change of the setting, the provide
   // state or the role, coalesced to one status per epoch and never on
   // registration. SdkHost keeps a push equal to the last one off the UI thread
-  // on this comparison, so it covers every field the row and the sections read.
+  // on this comparison, so it covers every field the row and the sections read,
+  // and which device the status is of: a session that takes over from the
+  // provider-only device with the same reading still brings its switch back.
   bool operator==(const ExtenderProvideStatusView& o) const {
     return supported == o.supported && state == o.state && errorCase == o.errorCase &&
            reason == o.reason && activatedV4 == o.activatedV4 &&
            activatedV6 == o.activatedV6 && refused == o.refused && enabled == o.enabled &&
-           provideExtender == o.provideExtender;
+           provideExtender == o.provideExtender && providerOnly == o.providerOnly;
   }
   bool operator!=(const ExtenderProvideStatusView& o) const { return !(*this == o); }
 };
@@ -449,6 +457,12 @@ struct ExtenderProvideRowModel {
   // The row, its description and its switch show at all: the view's
   // `supported`. Hidden, never disabled (N1).
   bool visible = false;
+  // The Connect page's row, the one with the switch, shows: `visible`, and the
+  // status is a session's device's, which takes the switch's write. The
+  // provider-only device's status (no session) has no writer, so that row
+  // stays hidden for it, never a dead switch (N1), while the Earnings row,
+  // which has no switch, reads `visible` and shows it.
+  bool switchVisible = false;
   ExtenderProvideTone tone = ExtenderProvideTone::Grey;
   // The state key. Empty when `argument` renders bare: an error case this
   // build does not know (a newer device process), or a state it does not know.
@@ -464,8 +478,8 @@ struct ExtenderProvideRowModel {
   bool on = false;
 
   bool operator==(const ExtenderProvideRowModel& o) const {
-    return visible == o.visible && tone == o.tone && textKey == o.textKey &&
-           argument == o.argument && argumentKind == o.argumentKind &&
+    return visible == o.visible && switchVisible == o.switchVisible && tone == o.tone &&
+           textKey == o.textKey && argument == o.argument && argumentKind == o.argumentKind &&
            suffixKey == o.suffixKey && suffixArgument == o.suffixArgument && on == o.on;
   }
   bool operator!=(const ExtenderProvideRowModel& o) const { return !(*this == o); }
@@ -493,8 +507,9 @@ ExtenderProvideRowModel ExtenderProvideRowModelFor(const ExtenderProvideStatusVi
 // answers (N7): off is grey Off; on is yellow Setting up while the device is
 // providing and grey Not providing while it is not. The view comes back with
 // the state and the setting guessed and the rest of the SDK's reading cleared,
-// so it draws through ExtenderProvideRowModelFor like any status; the next
-// pushed status replaces it.
+// still of the device it was read from, so it draws through
+// ExtenderProvideRowModelFor like any status; the next pushed status replaces
+// it.
 ExtenderProvideStatusView ExtenderProvideGuessFor(const ExtenderProvideStatusView& current,
                                                   bool on, bool providing);
 

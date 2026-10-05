@@ -1177,7 +1177,9 @@ class SdkHost {
   // change listener, never by polling.
   ExtenderStatusView CurrentExtenderStatus();
   // The last published provider extender status (N7), the same kind of cache
-  // read: refreshed by the device's change listener, never by polling.
+  // read: refreshed by the device's change listener, never by polling. With no
+  // session it is the provider-only device's, as the last get_provider_stats
+  // answer said (providerOnly).
   ExtenderProvideStatusView CurrentExtenderProvideStatus();
   // The last published statistics feed (O8), with the distribution and the
   // provider-stats reading engaged: the seed when the Earnings page is built and
@@ -1733,11 +1735,13 @@ class SdkHost {
   // provider-only device, the control channel is up and the window presents.
   // An answer feeds what a session's DeviceRemote feeds — the Earnings provider
   // plots, their gate and the "no traffic yet" line (the drawer caches and
-  // onProviderThroughput_), the Connect page's client count
-  // (serviceProviderClients_) — and names the client whose provider status the
-  // api read above keeps. Off the UI thread because the pipe serializes calls:
-  // a poll can wait behind a start_tunnel for as long as that takes. Started by
-  // Initialize, joined by the destructor.
+  // onProviderThroughput_), the Earnings extender row and extender plot (the
+  // extender points and onExtenderProvideStatus_, as the provider-only
+  // device's status, whose setting no switch can write), the Connect page's
+  // client count (serviceProviderClients_) — and names the client whose
+  // provider status the api read above keeps. Off the UI thread because the
+  // pipe serializes calls: a poll can wait behind a start_tunnel for as long as
+  // that takes. Started by Initialize, joined by the destructor.
   static constexpr std::chrono::seconds kProviderOnlyStatsInterval{2};
   // the sdk's ProviderStatusViewController poll interval
   static constexpr std::chrono::seconds kProviderOnlyStatusInterval{60};
@@ -1748,7 +1752,9 @@ class SdkHost {
   void KickProviderOnlyStats();
   // Put one answer on screen; take what this loop showed off it again,
   // forgetting the count and the gate too when the provider is gone (a hide
-  // keeps them, ClearDrawer's rule). Caller holds mutex_, with no session.
+  // keeps them, ClearDrawer's rule, and the extender status with them; the
+  // loop forgets that status wherever the provider stops being the source).
+  // Caller holds mutex_, with no session.
   void ShowProviderOnlyStatsLocked(const proto::ProviderStats& stats);
   void ClearProviderOnlyStatsLocked(bool providerGone);
   // One GET /network/provider-status on the api, applied to the readings when
@@ -1996,6 +2002,16 @@ class SdkHost {
   // read beside it, mapped and pushed when it changed. Called on an SDK callback
   // thread.
   void PublishExtenderProvideStatus(std::optional<urnet::ExtenderProvideStatus> status);
+  // Push one mapped view when it changed: a session's device's
+  // (PublishExtenderProvideStatus) or, with no session, the provider-only
+  // device's as get_provider_stats reported it (ShowProviderOnlyStatsLocked).
+  // One dedup baseline for both, so a session that takes over with the same
+  // reading still publishes (the view's providerOnly differs).
+  void PublishExtenderProvideView(ExtenderProvideStatusView view);
+  // Take the provider-only device's extender status off the screens when that
+  // device stops being the source (a session, or no provider), publishing
+  // the unsupported view. A session's own status is never touched.
+  void ForgetProviderOnlyExtenderStatus();
   // Read getLocalOverrideAppIds(), compute {paths, allowlist} (Android inversion:
   // any include-in-tunnel app => allowlist with the tunnel set, else denylist with
   // the bypass set), and push to the service -> driver. Called from the override

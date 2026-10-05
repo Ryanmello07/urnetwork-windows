@@ -186,10 +186,10 @@ class TunnelController {
   // statistics, for the screens a session's DeviceRemote feeds. Never blocks on
   // the session lock or the device, for Status()'s reason: it is served on the
   // control pipe, and every later get_state would queue behind it. It copies
-  // the client id and peer count the build and the peers listener left, and
-  // reads the device's ContractViewController, whose getters answer from its
-  // own sampled state and never call into the device. `available` is false
-  // while none runs.
+  // the client id, the peer count, the extender status and the extender
+  // setting the build and the listeners left, and reads the device's
+  // ContractViewController, whose getters answer from its own sampled state
+  // and never call into the device. `available` is false while none runs.
   proto::ProviderStats ProviderStats();
 
   // The network country the app read (Common/NetworkCountry.h; open bug P052):
@@ -460,9 +460,12 @@ class TunnelController {
   void ReadProviderFactsLocked();
   // Open what get_provider_stats reads on a freshly built provider-only
   // device: its client id, a ContractViewController (the controller the app
-  // opens on the DeviceRemote, sampling once a second) and a network peers
-  // listener that keeps the client count. Best effort: providing does not
-  // depend on it, and a failure leaves the statistics unavailable. Caller
+  // opens on the DeviceRemote, sampling once a second, whose extender series
+  // is the extender plot's), a network peers listener that keeps the client
+  // count, and an extender status listener with the setting read beside it
+  // (the Earnings extender row and its plot's gate). Best effort: providing
+  // does not depend on it, a failure leaves the statistics unavailable, and a
+  // failure of the extender reading alone leaves the role unreported. Caller
   // holds mutex_.
   void OpenProviderStatsLocked();
   // TELL THE PROVIDER-ONLY DEVICE THE NETWORK MOVED, as the tunnel session's
@@ -587,17 +590,43 @@ class TunnelController {
   // Guarded by mutex_; retired with the device.
   std::unique_ptr<EgressMonitor> providerEgress_;
   std::unique_ptr<NetworkChangeNotifier> providerNetwork_;
+  // The provider extender role's last status (EXTENDER.md N2): what its
+  // listener pushed last, or what the statistics' opening read before the
+  // first push. Shared with that listener, never the controller, as the peer
+  // count is, and locked inside its own two calls only.
+  class LatestExtenderProvideStatus {
+   public:
+    void Store(std::optional<urnet::ExtenderProvideStatus> status) {
+      std::scoped_lock lock(mutex_);
+      status_ = std::move(status);
+    }
+    std::optional<urnet::ExtenderProvideStatus> Load() const {
+      std::scoped_lock lock(mutex_);
+      return status_;
+    }
+
+   private:
+    mutable std::mutex mutex_;
+    std::optional<urnet::ExtenderProvideStatus> status_;
+  };
   // What get_provider_stats reads (ProviderStats), under a mutex of its own,
   // never mutex_: the request is served on the control pipe and must not queue
   // behind a bring-up holding the session lock. Innermost — taken under mutex_
   // by the build and the retire, alone by ProviderStats() — and never held
-  // across a call into the device. providerClients_ is shared with the peers
-  // listener, which can still be running after the retire has dropped it.
+  // across a call into the device. providerClients_ and providerExtender_ are
+  // shared with the peers and extender status listeners, which can still be
+  // running after the retire has dropped them. providerExtenderSetting_ is the
+  // provide extender setting, read once when the statistics open: only a
+  // session's device writes it (the app's SdkHost::SetProvideExtender), and
+  // none runs beside this one.
   std::mutex providerStatsMutex_;
   std::optional<urnet::ContractViewController> providerStatsVc_;
   urnet::Sub providerPeersSub_;
   std::shared_ptr<std::atomic<int64_t>> providerClients_;
   std::string providerClientId_;
+  urnet::Sub providerExtenderSub_;
+  std::shared_ptr<LatestExtenderProvideStatus> providerExtender_;
+  bool providerExtenderSetting_ = false;
   // The standalone log upload device's slot (LogUploadDevice), empty while
   // none was built. A third device slot, never engaged beside device_ or
   // providerDevice_: both are built only after RetireLogUploadDeviceLocked.
