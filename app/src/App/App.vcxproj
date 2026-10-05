@@ -408,6 +408,7 @@
     <ClInclude Include="SubscriptionBalance.h" />
     <ClInclude Include="SupportContact.h" />
     <ClInclude Include="CloudProxyLink.h" />
+    <ClInclude Include="CheckoutBridgeError.h" />
     <ClInclude Include="CheckoutSessionMode.h" />
     <ClInclude Include="ConfirmationPollGate.h" />
     <ClInclude Include="ClientEvents.h" />
