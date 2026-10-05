@@ -814,7 +814,7 @@ class SdkHost {
 
   void Logout();
 
-  // THE TRAY'S QUIT, the service half (owner decision 2026-10-05,
+  // The tray's Quit, the service half (owner decision 2026-10-05,
   // AppLifetime.h): the service ends with no session and no provider-only
   // device, and nothing in this process starts either again. In order:
   //   1. the session-request slot is emptied and closed for good, so a pass
@@ -832,7 +832,7 @@ class SdkHost {
   // provide mode and the auth are untouched: quitting is not signing out, and
   // the next launch reconciles from them.
   //
-  // BLOCKING (joins, the lock, two pipe calls), and it is the last thing the
+  // Blocking (joins, the lock, two pipe calls), and it is the last thing the
   // app does: AppController::Shutdown calls it from the UI thread after the
   // window and the tray are gone. Not undone: the process is ending.
   void Quit();

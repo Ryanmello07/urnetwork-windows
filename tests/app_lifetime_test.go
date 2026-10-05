@@ -10,6 +10,9 @@ import (
 	"testing"
 )
 
+// What each ending of the tray app stops in the service (Common/AppLifetime.h)
+// as a C++ spec, with negative controls that rewrite a copy of the header.
+
 // Compile the app-lifetime spec (app/tools/app-lifetime-tests.cpp) against
 // Common/AppLifetime.h, the owner's 2026-10-05 decision on what each ending of
 // the tray app stops in the service. `mutate`, when set, rewrites a copy of the
@@ -62,6 +65,8 @@ func TestAppLifetime(t *testing.T) {
 	}
 }
 
+// Run the spec against a rewritten copy of the header and require that it
+// fails, naming want.
 func requireAppLifetimeFailure(t *testing.T, mutate func(string) string, want string) {
 	t.Helper()
 	program := appLifetimeTestProgram(t, mutate)
@@ -71,7 +76,7 @@ func requireAppLifetimeFailure(t *testing.T, mutate func(string) string, want st
 	}
 }
 
-// THE DEFECT: the tray's Quit left the session and the provider-only device
+// The defect: the tray's Quit left the session and the provider-only device
 // running in the service. Put that back and the spec must fail.
 func TestAppLifetimeRejectsQuitLeavingTheService(t *testing.T) {
 	requireAppLifetimeFailure(t, func(source string) string {

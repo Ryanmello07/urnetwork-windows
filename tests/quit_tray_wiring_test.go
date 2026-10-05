@@ -55,6 +55,7 @@ func quitRequireSequence(t *testing.T, where, text string, patterns ...string) {
 	}
 }
 
+// Each needle must be absent from text; why says what running it would break.
 func quitForbid(t *testing.T, where, text string, why string, needles ...string) {
 	t.Helper()
 	for _, needle := range needles {
@@ -64,11 +65,12 @@ func quitForbid(t *testing.T, where, text string, why string, needles ...string)
 	}
 }
 
+// The app's AppController.cpp, comments stripped.
 func appControllerSource(t *testing.T) string {
 	return stripComments(readAppSource(t, "AppController.cpp"))
 }
 
-// CLOSE -> HIDE. The main window's own close (its X, Alt+F4, the taskbar's or
+// Close -> hide. The main window's own close (its X, Alt+F4, the taskbar's or
 // the system menu's Close) is cancelled and hides the window to the tray;
 // nothing on that path ends the app, stops the tunnel or stops the provider.
 // Only Shutdown closes the window for real or exits the application.
@@ -125,7 +127,7 @@ func TestQuitTrayAltF4OnTheTrayWindowDoesNotQuit(t *testing.T) {
 		"Alt+F4 is a close, and closing never quits", "cb_.onQuit", "cb_.onCloseRequest")
 }
 
-// QUIT -> STOP_TUNNEL AND STOP_PROVIDER -> EXIT. The tray menu's Quit reaches
+// Quit -> stop_tunnel and stop_provider -> exit. The tray menu's Quit reaches
 // Shutdown(Quit); Shutdown takes the window and the tray down first, then has
 // SdkHost stop the service, then exits; SdkHost::Quit closes every way of
 // starting anything again before it sends stop_tunnel and then stop_provider
@@ -216,7 +218,7 @@ func TestQuitTrayQuitStopsTheTunnelAndTheProviderThenExits(t *testing.T) {
 	provideRequire(t, "TunnelController::StopProvider", stopProviderBody, "RetireProviderDeviceLocked();")
 }
 
-// NO AUTO-RESTART AFTER QUIT. Every start in this app goes through the session
+// No auto-restart after Quit. Every start in this app goes through the session
 // worker, which only serves what RequestSession recorded: the latch Quit sets
 // stops RequestSession recording anything, a pass already running cannot start
 // the provider (ReconcileProviderLocked), the threads that ask by themselves
@@ -326,7 +328,7 @@ func TestQuitTrayNothingStartsAgainAfterQuit(t *testing.T) {
 	provideRequire(t, "SdkHost::SessionWorkerLoop", worker, "if (!device_) ReconcileProviderLocked(req.reason);")
 }
 
-// NOT A QUIT. A WM_CLOSE from outside the app and the updater's installer
+// Not a Quit. A WM_CLOSE from outside the app and the updater's installer
 // handoff exit the app and leave the service as it is; signing out keeps the
 // app running in the tray (Logout stops the tunnel and the service's logout
 // retires the provider, as before).

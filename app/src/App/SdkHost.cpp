@@ -5794,7 +5794,7 @@ void SdkHost::RequestSession(SessionRequest request) {
   // waited on that is a frozen window, which is the failure this app has
   // already paid for twice (see IsLoggedIn's comment).
   std::scoped_lock lock(pendingMutex_);
-  // THE TRAY'S QUIT CLOSED THE SLOT (Quit). What it stopped in the service
+  // The tray's Quit closed the slot (Quit). What it stopped in the service
   // must not be started again by a request that lands after it: the failsafe
   // edge, a pipe drop's recovery, a setting saved on the way out.
   if (quitting_.load()) {
@@ -6889,7 +6889,7 @@ void SdkHost::Quit() {
     pendingRequested_ = false;
   }
   pendingCv_.notify_all();
-  // 2. The threads that act on their own, joined OUTSIDE mutex_ because each
+  // 2. The threads that act on their own, joined outside mutex_ because each
   // of them takes it (the destructor's rule; its own calls then find them
   // stopped). The watchdog first: its recovery pass is the one that dials the
   // service and ends in a provider reconcile.
@@ -6907,7 +6907,7 @@ void SdkHost::Quit() {
     // and the provider-only device all ended with its process.
     if (!service_.IsConnected()) service_.Connect();
     if (service_.IsConnected()) {
-      // THE MACHINE FIRST, as in every teardown here. stop_tunnel ends the
+      // The machine first, as in every teardown here. stop_tunnel ends the
       // session whatever its mode (Disconnect keeps an rpc-only one; a quit
       // keeps nothing), lifts any firewall policy, the armed floor included
       // (StopLocked, finalDisarm), and retires the provider-only device with
@@ -6946,7 +6946,7 @@ void SdkHost::Quit() {
     // rpc session, which names a listener the stop just destroyed, so the
     // next launch does not try to adopt it. stopTunnel=false: sent above.
     //
-    // The device is closed FIRST, as TeardownSessionLocked closes it for a
+    // The device is closed first, as TeardownSessionLocked closes it for a
     // dead control channel: the DeviceLocal it talks to is gone, so its close
     // cancels the rpc transport and turns the courtesy unsubscribes that follow
     // into local no-ops, instead of rpcs to a listener that no longer exists

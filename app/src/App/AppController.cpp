@@ -310,7 +310,7 @@ void AppController::Shutdown(lifetime::Ending ending) {
   if (window_) window_.Close();
   window_ = nullptr;
   windowHwnd_ = nullptr;
-  // THE USER'S QUIT ENDS THE TUNNEL AND THE PROVIDER TOO (owner decision,
+  // The user's Quit ends the tunnel and the provider too (owner decision,
   // 2026-10-05). Last before the exit, with the window and the tray already
   // gone, because it blocks this thread: it joins SdkHost's own threads, waits
   // out a session pass in flight and makes two pipe calls, each bounded by the

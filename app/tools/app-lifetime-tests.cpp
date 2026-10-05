@@ -2,7 +2,7 @@
 // decision 2026-10-05): the tray menu's Quit stops the tunnel session and the
 // provider-only device in the service, while a WM_CLOSE from outside the app
 // and the updater's installer handoff exit and leave the service as it is. Run
-// against the SAME header the app compiles, on any host with a C++20 compiler.
+// against the same header the app compiles, on any host with a C++20 compiler.
 //
 //   c++ -std=c++20 -I ../src/Common app-lifetime-tests.cpp -o /tmp/app-lifetime-tests && /tmp/app-lifetime-tests
 //

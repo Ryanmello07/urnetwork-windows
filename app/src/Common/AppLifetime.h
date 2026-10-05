@@ -1,11 +1,11 @@
 // How the tray app ends, and what each ending leaves running in the service
 // (owner decision, 2026-10-05; support inbox 1521).
 //
-// THE DECISION. "Quit on Windows should stop the background provider, as
+// The decision. "Quit on Windows should stop the background provider, as
 // Linux does. Closing the window should minimize to the system tray. Quit in
 // the system tray menu should quit the provider and background work."
 //
-// WHAT IT CHANGES. The service owns the tunnel session and, while there is no
+// What it changes. The service owns the tunnel session and, while there is no
 // session, the provider-only device (ProvideLifecycle.h). The tray's Quit used
 // to leave both running there: it tore down the window, the tray and the app's
 // own timers and exited, and the next launch adopted whatever the service still
@@ -13,7 +13,7 @@
 // screen, and after an unexpected drop with the kill switch on the armed floor
 // kept the machine blocked with nothing left to lift it.
 //
-// THE ENDINGS, and what each asks of the service:
+// The endings, and what each asks of the service:
 //   Quit              the tray menu's Quit, the user's explicit one. stop_tunnel
 //                     ends any session, tunnel or rpc-only, and lifts whatever
 //                     firewall policy is in force, the armed floor included,
@@ -34,7 +34,7 @@
 // The last two exit the app and leave the service as it is, which is what they
 // always did: neither is the user asking to stop anything.
 //
-// NOT ENDINGS, so not in the table:
+// Not endings, so not in the table:
 //   * Closing the main window (its X, Alt+F4, the taskbar's or the system
 //     menu's Close) hides it to the tray, and the tunnel and the provider carry
 //     on (AppController's AppWindow.Closing handler). Alt+F4 on the tray's own
