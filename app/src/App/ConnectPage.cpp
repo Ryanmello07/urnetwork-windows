@@ -418,10 +418,8 @@ urnw::health::State ConnectPage::RenderHealth() const {
 // The service-setup banner (beta spec §3). Renders MainWindow's one snapshot
 // onto ServiceSetupBar, the InfoBar sitting under BalanceWarning in this pane
 // — same bar shape, same one-writer discipline. Every label goes through
-// Adv(): the store's 916 keys were searched and carry nothing for a Windows
-// service surface (the only "Set up"/"Install" strings are the browser
-// extension's), so these ids wait for the store the same way the inspector's
-// do. The two shipped strings that DO fit are used: "Update" (the generic
+// Adv() with its `svc_` store id (the store's other "Set up"/"Install" strings
+// are the browser extension's). The two older keys that fit are used: "Update" (the generic
 // CTA) and "Setting up…" (site_ext_setting_up — its comment scopes it to the
 // extension, but its value is exactly this moment).
 void ConnectPage::ApplyServiceSetup(urnw::ServiceSetup::Snapshot const& snap) {
@@ -495,10 +493,9 @@ void ConnectPage::ApplyServiceSetup(urnw::ServiceSetup::Snapshot const& snap) {
 
 // The update banner (beta spec §5). Renders MainWindow's snapshot copy onto
 // UpdateBar, directly under the service bar — same shape, same one-writer
-// rule. Labels go through Adv() with `upd_` ids for the same reason the
-// service bar's use `svc_`: the store carries nothing for an update surface,
-// and the version string itself is DATA (release grammar, never translated),
-// so appending it is composition, not a hidden literal.
+// rule. Labels go through Adv() with `upd_` store ids, as the service bar's
+// use `svc_`. The version is DATA (release grammar, never translated) and goes
+// in through the title's placeholder; the installer path is appended as data.
 void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) {
   using Phase = urnw::UpdateChecker::Phase;
   using Stage = urnw::UpdateChecker::Stage;
@@ -510,9 +507,9 @@ void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) 
   }
 
   // The headline is the spec's wording in every phase — the banner keeps
-  // saying what it is FOR while the message says what is happening to it.
-  const winrt::hstring title{
-      AdvW("upd_available_title", L"Update available:") + L" v" + snap.version};
+  // saying what it is for while the message says what is happening to it. The
+  // version goes in through the key's placeholder, so a translation places it.
+  const winrt::hstring title{urnw::Format("upd_available_title_version", snap.version)};
   winrt::hstring action = Loc("update");
   bool enabled = true;
   std::wstring message;
@@ -1891,8 +1888,7 @@ void ConnectPage::ApplySessionRows() {
 // ASN/org, per-connection duration and per-connection RTT. None of those exists
 // on any feed this client can reach. They are in the report as bridging work.
 //
-// Every label here is an Adv() id — see pages::Adv. The store has 945 keys and
-// not one of them names a field of a connection inspector.
+// Every label here is an Adv() id, a store key of its own — see pages::Adv.
 
 void ConnectPage::SelectConnection(std::string const& id) {
   // A second click on the selected row clears it. The alternative is a selection

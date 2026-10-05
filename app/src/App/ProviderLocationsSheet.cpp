@@ -390,7 +390,7 @@ Grid ProviderLocationsSheet::MakeProviderRow(const ProviderLocationRow& row) {
     tag.VerticalAlignment(VerticalAlignment::Top);
     TextBlock tagText = MakeText(IpFamilyLabelText(row.ipFamilyLabel), 10, colors::MutedBrush());
     tag.Child(tagText);
-    ToolTipService::SetToolTip(tag, box_value(pages::Adv("ip_families", L"IP families")));
+    ToolTipService::SetToolTip(tag, box_value(pages::Adv("ip_families", L"IP versions")));
     Grid::SetColumn(tag, 1);
     placeRow.Children().Append(tag);
     text.Children().Append(placeRow);

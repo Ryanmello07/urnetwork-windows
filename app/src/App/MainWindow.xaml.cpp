@@ -716,8 +716,8 @@ void MainWindow::BuildStatusStrip() {
   // particular are the difference between "connected" and "carrying packets",
   // which is the distinction this strip exists to keep visible.
   //
-  // Their labels are Adv() ids — the store has 945 keys and no word for any of
-  // them. See pages::Adv in PageContext.h.
+  // Their labels are Adv() ids, store keys of their own. See pages::Adv in
+  // PageContext.h.
   //
   // NOT here, and reported rather than invented: the egress interface index.
   // The spec's advanced list names it, the driver knows it, and nothing on the
@@ -740,7 +740,7 @@ void MainWindow::BuildStatusStrip() {
     advSection(statusMode_, Adv("adv_session_mode", L"Session"));
     advSection(statusRoutes_, Adv("adv_routes", L"Routes"));
     advSection(statusRpcPort_, Adv("adv_rpc", L"RPC"));
-    advSection(statusRaw_, Adv("adv_raw_status", L"Raw"));
+    advSection(statusRaw_, Adv("adv_raw_status", L"Raw status"));
   } else {
     statusMode_ = {};
     statusRoutes_ = {};

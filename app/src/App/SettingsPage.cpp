@@ -315,8 +315,7 @@ void SettingsPage::BuildGeneralSection(Panel const& host) {
   // — it describes this installation, not the account — which is why it needs
   // no session, no FieldState and no server round-trip. Default ON; turning it
   // on also fires a check right away (see SetAutoCheckEnabled). The labels are
-  // Adv() ids like every update-surface string: the store carries nothing for
-  // an updater.
+  // Adv() ids like every update-surface string.
   autoUpdateCheck_ = ToggleRow(
       card, Adv("upd_auto_check", L"Check for updates automatically"),
       Adv("upd_auto_check_note",
@@ -498,15 +497,15 @@ void SettingsPage::BuildConnectionsSection(Panel const& host) {
 
   // Uninstall the VPN service (beta spec §3). Last in the group: it is the one
   // machine-level action on a page of preferences. Labels are Adv() ids — the
-  // store carries nothing for a Windows service surface (see the banner in
-  // ConnectPage::ApplyServiceSetup) — and the row starts COLLAPSED until a
+  // Windows wording of the service row, not linux's systemd one (see the banner
+  // in ConnectPage::ApplyServiceSetup) — and the row starts COLLAPSED until a
   // classification proves a service is actually registered; ApplyServiceSetup
   // below is the only writer of that visibility.
   serviceRowHost_ = StackPanel();
   card.Children().Append(serviceRowHost_);
   uninstallServiceButton_ = ButtonRow(
       serviceRowHost_, Adv("svc_service_label", L"VPN service"),
-      Adv("svc_uninstall_note",
+      Adv("svc_uninstall_note_windows",
           L"Remove the Windows service URnetwork uses to carry traffic."),
       Adv("svc_uninstall_action", L"Uninstall"));
   uninstallServiceButton_.Click(
@@ -1001,7 +1000,7 @@ winrt::fire_and_forget SettingsPage::ConfirmUninstallService() {
     dialog.CloseButtonText(Loc("cancel"));
     dialog.DefaultButton(ContentDialogButton::Close);  // Enter must not remove
     TextBlock body;
-    body.Text(Adv("svc_uninstall_confirm",
+    body.Text(Adv("svc_uninstall_confirm_windows",
                   L"This stops the URnetwork service and removes it from "
                   L"Windows. The app can't connect until it is set up again. "
                   L"Windows will ask for administrator permission."));

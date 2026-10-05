@@ -263,7 +263,7 @@ void LoginPage::ApplyStrings() {
   // sign in — seedphrase step
   w_.SeedphraseBackButton().Content(LocBox("back"));
   w_.SeedphraseHeading().Text(Loc("sign_in_with_seedphrase"));
-  w_.SeedphraseBox().PlaceholderText(Loc("seedphrase_input_placeholder"));
+  w_.SeedphraseBox().PlaceholderText(Loc("seedphrase_paste_hint"));
   w_.SeedphraseSubmitButton().Content(LocBox("sign_in"));
 
   // sign in — instant account step
