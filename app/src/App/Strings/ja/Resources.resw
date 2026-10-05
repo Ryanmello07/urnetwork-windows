@@ -100,10 +100,6 @@
     <value>紹介コードを追加</value>
     <comment>Call to action</comment>
   </data>
-  <data name="add_referral_extra_rewards" xml:space="preserve">
-    <value>紹介コードを追加して追加の特典を獲得</value>
-    <comment>Call to action</comment>
-  </data>
   <data name="add_sign_in_method" xml:space="preserve">
     <value>サインイン方法を追加</value>
   </data>
@@ -444,10 +440,6 @@
   <data name="apple_sign_in_method_added" xml:space="preserve">
     <value>Appleのサインイン方法を追加しました</value>
     <comment>Snackbar message displayed when an Apple sign-in method is added.</comment>
-  </data>
-  <data name="apply_bonus" xml:space="preserve">
-    <value>ボーナスを適用</value>
-    <comment>Call to action</comment>
   </data>
   <data name="apps" xml:space="preserve">
     <value>アプリ</value>
@@ -796,10 +788,6 @@
     <value>相手</value>
     <comment>A label displayed next to a companion contract.</comment>
   </data>
-  <data name="confirm_seeker_token" xml:space="preserve">
-    <value>シーカートークンを確認</value>
-    <comment>Used in Main/Account/Settings/SettingsView.swift.</comment>
-  </data>
   <data name="conn_connect_on_launch" xml:space="preserve">
     <value>アプリ起動時に自動的に接続</value>
     <comment>Settings: switch that connects automatically when the app starts.</comment>
@@ -923,6 +911,54 @@
   <data name="contribute_bandwidth" xml:space="preserve">
     <value>帯域幅の提供</value>
     <comment>Used in Shared/Views/Introduction/IntroductionParticipateSettingsView.swift.</comment>
+  </data>
+  <data name="control_doh_error_https_required" xml:space="preserve">
+    <value>URL は https:// で始める必要があります。</value>
+    <comment>Bootstrap DNS-over-HTTPS server error: the URL does not start with https://. https:// is literal and is not translated.</comment>
+  </data>
+  <data name="control_doh_error_ip_required" xml:space="preserve">
+    <value>ホスト名ではなく IP アドレスを使用してください（例: https://223.5.5.5/dns-query）。</value>
+    <comment>Bootstrap DNS-over-HTTPS server error: the URL names a host name where an IP address is needed. The example URL is literal and is not translated.</comment>
+  </data>
+  <data name="control_doh_error_too_many" xml:space="preserve">
+    <value>サーバーが多すぎます。いくつか削除してから、もう一度保存してください。</value>
+    <comment>Bootstrap DNS-over-HTTPS server error: the list has more servers of one IP version than the app accepts.</comment>
+  </data>
+  <data name="control_doh_error_url_invalid" xml:space="preserve">
+    <value>完全な URL を入力してください（例: https://223.5.5.5/dns-query）。</value>
+    <comment>Bootstrap DNS-over-HTTPS server error: the line is not a complete URL the app can query (no path, a query or fragment, user info or a bad port). The example URL is literal and is not translated.</comment>
+  </data>
+  <data name="control_doh_urls" xml:space="preserve">
+    <value>ブートストラップ DNS-over-HTTPS サーバー</value>
+    <comment>Extender settings: the title of the list of bootstrap DNS-over-HTTPS servers a user can add for the lookups of URnetwork's own server names. DNS-over-HTTPS is a protocol name and is not translated.</comment>
+  </data>
+  <data name="control_doh_urls_description" xml:space="preserve">
+    <value>URnetwork は自身のサーバー名を DNS-over-HTTPS で検索します。お使いのネットワークで内蔵サーバーがブロックされている場合は、そのネットワークで使えるサーバーを追加してください。URnetwork はそれらを最初に試し、追加したサーバーはこれらの検索を見ることができます。</value>
+    <comment>Extender settings: explains the bootstrap DNS-over-HTTPS server list. It must say that URnetwork looks up its own server names through the added servers first, and that those servers can see these lookups.</comment>
+  </data>
+  <data name="control_doh_urls_hint" xml:space="preserve">
+    <value>1 行に 1 つの URL を、https:// と IP アドレスで始めて入力します（例: https://223.5.5.5/dns-query）。</value>
+    <comment>Extender settings: help text under the bootstrap DNS-over-HTTPS server list. https:// and the example URL are literal and are not translated.</comment>
+  </data>
+  <data name="control_doh_urls_next_connect" xml:space="preserve">
+    <value>VPN は次回の接続時に新しいブートストラップサーバーを使用します。</value>
+    <comment>Bootstrap DNS-over-HTTPS servers: note after saving where the VPN runs separately from the app (the iOS tunnel extension, the desktop service). It reads the servers at its next start.</comment>
+  </data>
+  <data name="control_doh_urls_reset" xml:space="preserve">
+    <value>内蔵サーバーのみを使用</value>
+    <comment>Extender settings: button that clears the bootstrap DNS-over-HTTPS server list, so only the built-in servers are used.</comment>
+  </data>
+  <data name="control_doh_urls_saved" xml:space="preserve">
+    <value>ブートストラップ DNS-over-HTTPS サーバーを保存しました</value>
+    <comment>Confirmation after the bootstrap DNS-over-HTTPS servers are saved.</comment>
+  </data>
+  <data name="control_doh_use_china" xml:space="preserve">
+    <value>中国のリゾルバーを使用</value>
+    <comment>Extender settings: button that fills the bootstrap DNS-over-HTTPS server list with resolvers that are reachable in mainland China.</comment>
+  </data>
+  <data name="control_doh_use_china_hint" xml:space="preserve">
+    <value>中国本土からアクセスできる AliDNS と DNSPod のサーバーを入力します。</value>
+    <comment>Extender settings: note under the Use China resolvers button naming the operators it fills in. AliDNS and DNSPod are product names and are not translated.</comment>
   </data>
   <data name="copied" xml:space="preserve">
     <value>コピーしました！</value>
@@ -1079,6 +1115,30 @@
   <data name="data_bar_explanation" xml:space="preserve">
     <value>アプリ内のこのバーは、プロバイダーからどれだけ無料データを獲得しているかを表示します。いつでも確認でき、設定を調整して獲得量を最大化できます</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="data_info_available" xml:space="preserve">
+    <value>まだ使用できるデータです。</value>
+    <comment>"About your data" sheet: explains the Available part of the usage bar, shown under the Available amount.</comment>
+  </data>
+  <data name="data_info_pending" xml:space="preserve">
+    <value>開いている接続のために予約されたデータです。使われなかった分は、接続が閉じると戻ります。</value>
+    <comment>"About your data" sheet: explains the Pending part of the usage bar, shown under the Pending amount. Pending is balance held (escrowed) by the user's open connections; the unused part is returned when they close. Do not add a time promise.</comment>
+  </data>
+  <data name="data_info_refresh_at" xml:space="preserve">
+    <value>無料データは毎日 00:00 UTC に更新されます（あと {}）。</value>
+    <comment>"About your data" sheet: when the free daily data is granted again. {time} is the time left until the next 00:00 UTC as a compact duration (e.g. 5h 12m). Keep 00:00 UTC as is. Shown only to accounts without Pro (Pro does not get the free grant).</comment>
+  </data>
+  <data name="data_info_title" xml:space="preserve">
+    <value>データについて</value>
+    <comment>Title of the "About your data" sheet, opened from the info button next to the daily data balance in the usage bar and from the Why? link under an out-of-balance notice. Also the info button's accessibility label.</comment>
+  </data>
+  <data name="data_info_used" xml:space="preserve">
+    <value>これまでに使用したデータです。</value>
+    <comment>"About your data" sheet: explains the Used part of the usage bar, shown under the Used amount.</comment>
+  </data>
+  <data name="data_info_why" xml:space="preserve">
+    <value>なぜ？</value>
+    <comment>Link under the out-of-balance notice that opens the "About your data" sheet.</comment>
   </data>
   <data name="data_usage" xml:space="preserve">
     <value>データ使用量</value>
@@ -1259,10 +1319,6 @@
   <data name="edit_profile" xml:space="preserve">
     <value>プロフィールを編集</value>
     <comment>Profile</comment>
-  </data>
-  <data name="edit_referral_code" xml:space="preserve">
-    <value>紹介コードを編集</value>
-    <comment>Call to action</comment>
   </data>
   <data name="edit_split_rule" xml:space="preserve">
     <value>分割ルールを編集</value>
@@ -1624,6 +1680,10 @@
     <value>バッテリー最適化を無視する</value>
     <comment>Call to action</comment>
   </data>
+  <data name="import_extenders_control_doh_urls" xml:space="preserve">
+    <value>このコードはブートストラップ DNS-over-HTTPS サーバーも設定します。これらのサーバーは URnetwork のサーバー検索を見ることができます: {}</value>
+    <comment>Extender import: shown before the user takes the settings of a share code that also sets bootstrap DNS-over-HTTPS servers. The argument is the list of server URLs, comma separated.</comment>
+  </data>
   <data name="in_guest_mode" xml:space="preserve">
     <value>ゲストモードです</value>
     <comment>Guest mode overlay</comment>
@@ -1671,6 +1731,10 @@
   <data name="insufficient_balance_message" xml:space="preserve">
     <value>接続を続けるには、残高またはプランを追加してください。</value>
     <comment>Body of the warning shown when the balance runs out and no session is up; connecting needs more balance or a plan.</comment>
+  </data>
+  <data name="insufficient_balance_refreshes_in" xml:space="preserve">
+    <value>無料データはあと {} で更新されます。</value>
+    <comment>Leads the out-of-balance notice (and the Upgrade screen when a blocked connect opened it): when the free daily data is granted again. {time} is the time left until the next 00:00 UTC as a compact duration (e.g. 5h 12m).</comment>
   </data>
   <data name="insufficient_funds" xml:space="preserve">
     <value>残高不足</value>
@@ -2289,7 +2353,7 @@
   </data>
   <data name="none" xml:space="preserve">
     <value>なし</value>
-    <comment>Empty value: the Referrals section shows it when no referral network is linked (apple), and the android referral network row.</comment>
+    <comment>Empty value: the VLESS settings show it for no security and no flow (all apps), and the Referrals section shows it on windows and linux when no referral network is linked.</comment>
   </data>
   <data name="notifications_label" xml:space="preserve">
     <value>通知</value>
@@ -2560,6 +2624,14 @@
     <value>あなたのプロバイダーIDキーはこのデバイスにローカル保存されます。いずれかのピアのキーがローカルに保存されたキーと異なって表示される場合、そのネットワーク運営者は信頼できません。</value>
     <comment>Account tab: explanation under the post quantum identity panel — what the identity key is and how verifying provider keys detects interception.</comment>
   </data>
+  <data name="private_dns_open_settings" xml:space="preserve">
+    <value>ネットワーク設定を開く</value>
+    <comment>Button under the strict Private DNS notice that opens the Android wireless/network settings screen (there is no public Private DNS intent).</comment>
+  </data>
+  <data name="private_dns_strict_notice" xml:space="preserve">
+    <value>プライベートDNSが{}に設定されています。AndroidはURnetworkを経由せず、そこへ直接名前解決を送信します。サイトが読み込めなくなった場合は、プライベートDNSを「自動」に設定してください。</value>
+    <comment>Muted notice on the connect screen shown while connected when Android Private DNS is set to a strict hostname, which sends DoT lookups outside the tunnel. %1$s is the configured DNS provider host.</comment>
+  </data>
   <data name="private_network" xml:space="preserve">
     <value>プライベートネットワーク</value>
     <comment>Network name when privacy is enabled</comment>
@@ -2620,6 +2692,26 @@
     <value>プロバイダーのID</value>
     <comment>Post quantum identity: title of the connected provider identity key details view.</comment>
   </data>
+  <data name="provider_idle_auto_not_connected" xml:space="preserve">
+    <value>「自動」は接続中のみ、すべての人と共有します。接続していないときも収益を得るには「常に」を選択してください。</value>
+    <comment>Provider card, under the provide mode row: why an enabled provider gets no traffic. The device is in Auto mode and not connected, so it shares only with the user's own devices. 'Always' is the provide mode label (key always).</comment>
+  </data>
+  <data name="provider_idle_network_only" xml:space="preserve">
+    <value>自分のデバイスとのみ共有しています。すべての人と共有するには「常に」を選択してください。</value>
+    <comment>Provider card, under the provide mode row: the provide mode is Network, so the device shares only with the user's own devices. 'Always' is the provide mode label (key always).</comment>
+  </data>
+  <data name="provider_idle_no_traffic_yet" xml:space="preserve">
+    <value>新しいプロバイダーには、クライアントが割り当てられる前に数時間の安定した稼働と速度テストが必要です。トラフィックはお住まいの地域の需要にも左右されます。</value>
+    <comment>Provider card, under the provide mode row: the device provides to everyone but has carried no traffic yet.</comment>
+  </data>
+  <data name="provider_idle_paused_no_network" xml:space="preserve">
+    <value>一時停止中：このデバイスは現在のネットワークでは提供できません。</value>
+    <comment>Provider card, under the provide mode row: providing is paused because the current network can't be used for providing (no network, or a constrained or metered one).</comment>
+  </data>
+  <data name="provider_idle_paused_wifi_only" xml:space="preserve">
+    <value>一時停止中：提供はWi-Fiのみに設定されていますが、このデバイスはWi-Fiに接続されていません。</value>
+    <comment>Provider card, under the provide mode row: providing is paused because it is limited to Wi-Fi and the device is on another network.</comment>
+  </data>
   <data name="provider_location_unknown" xml:space="preserve">
     <value>場所は不明</value>
     <comment>Row subtitle in the provider locations list when a provider's location is not known.</comment>
@@ -2639,6 +2731,190 @@
   <data name="provider_statistics" xml:space="preserve">
     <value>プロバイダー統計</value>
     <comment>Title of a section that shows statistics about the provider.</comment>
+  </data>
+  <data name="provider_status_demand" xml:space="preserve">
+    <value>需要</value>
+    <comment>Title of the provider chart, shown with the other provider plots, of how many times clients were offered this device each minute over the last hour.</comment>
+  </data>
+  <data name="provider_status_help_country" xml:space="preserve">
+    <value>この国を選択したクライアントに、このデバイスが提示されることがあります。</value>
+    <comment>Provider status 'Why?' list: explanation under the country the device is offered in.</comment>
+  </data>
+  <data name="provider_status_help_latency" xml:space="preserve">
+    <value>この地域で想定される値を上回って測定された遅延です。遅延が小さいほど頻繁に提示されます。</value>
+    <comment>Provider status 'Why?' list: explanation under the delay.</comment>
+  </data>
+  <data name="provider_status_help_reliability_12h" xml:space="preserve">
+    <value>過去12時間にこのデバイスがどれだけ安定して接続していたかを示します。クライアントに提示されるには最低値に達する必要があります。新規開始からは、約8時間の安定した稼働が必要です。</value>
+    <comment>Provider status 'Why?' list: explanation under the 12-hour reliability.</comment>
+  </data>
+  <data name="provider_status_help_reliability_1h" xml:space="preserve">
+    <value>過去1時間にこのデバイスがどれだけ安定して接続していたかを示します。クライアントに提示されるには最低値に達する必要があります。切断すると下がり、安定して稼働すると上がります。</value>
+    <comment>Provider status 'Why?' list: explanation under the 1-hour reliability.</comment>
+  </data>
+  <data name="provider_status_help_reliability_5m" xml:space="preserve">
+    <value>過去5分間にこのデバイスがどれだけ安定して接続していたかを示します。クライアントに提示される頻度に影響し、接続を維持すると上がります。</value>
+    <comment>Provider status 'Why?' list: explanation under the 5-minute reliability.</comment>
+  </data>
+  <data name="provider_status_help_reliability_other" xml:space="preserve">
+    <value>より長い期間にこのデバイスがどれだけ安定して接続していたかを示します。クライアントに提示されるには最低値に達する必要があります。</value>
+    <comment>Provider status 'Why?' list: explanation under a reliability measured over another window.</comment>
+  </data>
+  <data name="provider_status_help_speed_test" xml:space="preserve">
+    <value>このデバイスを通じて測定された速度です。速い接続ほど頻繁に提示されます。</value>
+    <comment>Provider status 'Why?' list: explanation under the speed test.</comment>
+  </data>
+  <data name="provider_status_help_tier" xml:space="preserve">
+    <value>クライアントは低いティアから試します。0が最良で、3は速度または遅延の基準を超えていることを示します。</value>
+    <comment>Provider status 'Why?' list: explanation under both tiers.</comment>
+  </data>
+  <data name="provider_status_help_url_checks" xml:space="preserve">
+    <value>過去8時間にこの接続を通じて読み込めたテストサイト。大半が読み込める必要があります。インターネットプロバイダーによるフィルタリングがあると下がります。</value>
+    <comment>Provider status 'Why?' list: explanation under the network checks.</comment>
+  </data>
+  <data name="provider_status_help_weight" xml:space="preserve">
+    <value>信頼性、速度、合格したネットワークチェックを組み合わせた値です。重みが大きいプロバイダーほど、クライアントに頻繁に提示されます。</value>
+    <comment>Provider status 'Why?' list: explanation under both selection weights.</comment>
+  </data>
+  <data name="provider_status_histogram_empty" xml:space="preserve">
+    <value>過去1時間、クライアントに提示されていません</value>
+    <comment>Provider card chart: shown when every bar is zero.</comment>
+  </data>
+  <data name="provider_status_histogram_end" xml:space="preserve">
+    <value>現在</value>
+    <comment>Provider card chart: label under the right (current minute) end of the axis.</comment>
+  </data>
+  <data name="provider_status_histogram_start" xml:space="preserve">
+    <value>60分前</value>
+    <comment>Provider card chart: label under the left (oldest) end of the 60-minute axis.</comment>
+  </data>
+  <data name="provider_status_histogram_title" xml:space="preserve">
+    <value>このデバイスがクライアントに提示された回数（1分ごと、過去1時間）</value>
+    <comment>Provider card: title of a 60-bar chart of how many times the network offered this device to clients in each minute of the last hour.</comment>
+  </data>
+  <data name="provider_status_histogram_total.other" xml:space="preserve">
+    <value>過去1時間で{}回</value>
+    <comment>Provider card chart: total of the 60 bars. The argument is the number of times this device was offered to clients in the last hour.</comment>
+  </data>
+  <data name="provider_status_number_latency" xml:space="preserve">
+    <value>遅延</value>
+    <comment>Provider status 'Why?' list: label of the measured delay (latency) in milliseconds.</comment>
+  </data>
+  <data name="provider_status_number_reliability_12h" xml:space="preserve">
+    <value>信頼性（過去12時間）</value>
+    <comment>Provider status 'Why?' list: label of the reliability over the last 12 hours.</comment>
+  </data>
+  <data name="provider_status_number_reliability_1h" xml:space="preserve">
+    <value>信頼性（過去1時間）</value>
+    <comment>Provider status 'Why?' list: label of the reliability over the last hour.</comment>
+  </data>
+  <data name="provider_status_number_reliability_5m" xml:space="preserve">
+    <value>信頼性（過去5分）</value>
+    <comment>Provider status 'Why?' list: label of the reliability over the last 5 minutes (a share of steady uptime).</comment>
+  </data>
+  <data name="provider_status_number_speed_test" xml:space="preserve">
+    <value>速度テスト</value>
+    <comment>Provider status 'Why?' list: label of the measured speed.</comment>
+  </data>
+  <data name="provider_status_number_tier_quality" xml:space="preserve">
+    <value>ティア（品質）</value>
+    <comment>Provider status 'Why?' list: label of the device's tier for quality-ranked requests (0 is best).</comment>
+  </data>
+  <data name="provider_status_number_tier_speed" xml:space="preserve">
+    <value>ティア（速度）</value>
+    <comment>Provider status 'Why?' list: label of the device's tier for speed-ranked requests.</comment>
+  </data>
+  <data name="provider_status_number_url_checks" xml:space="preserve">
+    <value>ネットワークチェック</value>
+    <comment>Provider status 'Why?' list: label of the network check result (test sites loaded through the device).</comment>
+  </data>
+  <data name="provider_status_number_weight_quality" xml:space="preserve">
+    <value>選択の重み（品質）</value>
+    <comment>Provider status 'Why?' list: label of the device's selection weight for quality-ranked requests (a relative number).</comment>
+  </data>
+  <data name="provider_status_number_weight_speed" xml:space="preserve">
+    <value>選択の重み（速度）</value>
+    <comment>Provider status 'Why?' list: label of the device's selection weight for speed-ranked requests.</comment>
+  </data>
+  <data name="provider_status_reason_egress_failing" xml:space="preserve">
+    <value>過去8時間に、この接続を通じて読み込めなかったテストサイトが多すぎます。チェック済みのプロバイダーが足りなくなった場合にのみクライアントに提示されます。</value>
+    <comment>Provider status reason (egress_failing): too many test sites failed to load through the device.</comment>
+  </data>
+  <data name="provider_status_reason_egress_unprobed" xml:space="preserve">
+    <value>この接続ではまだネットワークチェックが実行されていません。合格するまでは、チェック済みのプロバイダーが足りなくなった場合にのみクライアントに提示されます。</value>
+    <comment>Provider status reason (egress_unprobed): the network check (loading test sites through the device) has not run yet.</comment>
+  </data>
+  <data name="provider_status_reason_location_invalid" xml:space="preserve">
+    <value>このデバイスは複数のアドレスから接続しているか、位置が不明です。クライアントには、アドレスが1つで位置がわかっているデバイスのみが提示されます。</value>
+    <comment>Provider status reason (location_invalid): the device was seen at more than one IP address, or its location is unknown.</comment>
+  </data>
+  <data name="provider_status_reason_network_only" xml:space="preserve">
+    <value>このデバイスは自分のデバイスにのみ提供しています。すべての人と共有するには「常に」を選択してください。</value>
+    <comment>Provider status reason (network_only). 'Always' is the provide mode label (key always).</comment>
+  </data>
+  <data name="provider_status_reason_none" xml:space="preserve">
+    <value>すべて問題ありません。このデバイスがクライアントに提示される頻度は、その地域の需要と、近くのプロバイダーと比べた順位によって決まります。</value>
+    <comment>Provider status reason (none): passes every check.</comment>
+  </data>
+  <data name="provider_status_reason_not_connected" xml:space="preserve">
+    <value>このデバイスは現在接続されていません。クライアントには接続中のデバイスのみが提示されます。</value>
+    <comment>Provider status reason (not_connected).</comment>
+  </data>
+  <data name="provider_status_reason_not_eligible" xml:space="preserve">
+    <value>この接続は現在、提供の対象外です。</value>
+    <comment>Provider status reason (not_eligible): one generic reason for every anti-abuse check. Keep it generic; do not add detail.</comment>
+  </data>
+  <data name="provider_status_reason_not_providing" xml:space="preserve">
+    <value>このデバイスは接続を共有するように設定されていません。</value>
+    <comment>Provider status reason (not_providing): the device is not set to provide.</comment>
+  </data>
+  <data name="provider_status_reason_reliability_low" xml:space="preserve">
+    <value>過去1時間の信頼性がクライアントに必要な水準を下回っています。このデバイスが接続を維持する1分ごとに上がり、切断すると下がります。</value>
+    <comment>Provider status reason (reliability_low): the last hour's reliability is below the minimum.</comment>
+  </data>
+  <data name="provider_status_reason_reliability_warming_up" xml:space="preserve">
+    <value>信頼性を構築中です。このデバイスは過去1時間安定しています。12時間の信頼性が最低値に達するとクライアントに提示されます（新規開始から約8時間）。</value>
+    <comment>Provider status reason (reliability_warming_up): steady for the last hour, but the 12-hour reliability is still below the minimum.</comment>
+  </data>
+  <data name="provider_status_reason_slow" xml:space="preserve">
+    <value>この接続はクライアントに必要な速度を下回ったため、提示される頻度がかなり低くなります。</value>
+    <comment>Provider status reason (slow): past the speed or delay cutoff.</comment>
+  </data>
+  <data name="provider_status_reason_speed_test_missing" xml:space="preserve">
+    <value>速度テストはまだ行われていません。テストが完了するまで、このデバイスがクライアントに提示される頻度はかなり低くなります。</value>
+    <comment>Provider status reason (speed_test_missing).</comment>
+  </data>
+  <data name="provider_status_unavailable" xml:space="preserve">
+    <value>プロバイダーのステータスは現在利用できません。</value>
+    <comment>Provider card: shown instead of the chart and reason when the status could not be loaded.</comment>
+  </data>
+  <data name="provider_status_value_count_of_total" xml:space="preserve">
+    <value>{1}件中{0}件読み込み</value>
+    <comment>Provider status 'Why?' list: how many test sites loaded through the device out of all that were tried, e.g. '19 of 20 loaded'.</comment>
+  </data>
+  <data name="provider_status_value_no_history" xml:space="preserve">
+    <value>履歴なし</value>
+    <comment>Provider status 'Why?' list: value of a reliability with no history yet (which does not count against the device).</comment>
+  </data>
+  <data name="provider_status_value_not_in_pool" xml:space="preserve">
+    <value>このプールには含まれません</value>
+    <comment>Provider status 'Why?' list: value of a selection weight when the device is not in that pool right now.</comment>
+  </data>
+  <data name="provider_status_value_not_yet" xml:space="preserve">
+    <value>未実施</value>
+    <comment>Provider status 'Why?' list: value shown when a measurement (speed test, delay, network check) has not happened yet.</comment>
+  </data>
+  <data name="provider_status_value_with_maximum" xml:space="preserve">
+    <value>{0}（上限: {1}）</value>
+    <comment>Provider status 'Why?' list: a value with the most the network allows, e.g. '35 ms (at most 200 ms)'. Both arguments are already formatted text.</comment>
+  </data>
+  <data name="provider_status_value_with_minimum" xml:space="preserve">
+    <value>{0}（必要: {1}）</value>
+    <comment>Provider status 'Why?' list: a value with the minimum the network requires, e.g. '82% (needs 95%)'. Both arguments are already formatted text.</comment>
+  </data>
+  <data name="provider_status_why" xml:space="preserve">
+    <value>なぜ？</value>
+    <comment>Provider card: expandable section title that reveals the numbers the network ranks this device by, with explanations.</comment>
   </data>
   <data name="providing" xml:space="preserve">
     <value>提供中</value>
@@ -2783,6 +3059,10 @@
   <data name="referral_code_load_failed" xml:space="preserve">
     <value>紹介コードを読み込めませんでした。</value>
     <comment>Shown in the referral panel in place of the code when fetching the referral code failed; a Retry button follows.</comment>
+  </data>
+  <data name="referral_code_optional" xml:space="preserve">
+    <value>紹介コード（任意）</value>
+    <comment>Sign-up: label of the optional referral code field above Continue.</comment>
   </data>
   <data name="referral_crowned_congrats.other" xml:space="preserve">
     <value>友達{0}人が参加済み。毎日+{1} GiBを一生獲得中。</value>
@@ -3529,6 +3809,14 @@
     <value>名前は ASCII 形式で入力してください。</value>
     <comment>Split rules: validation error for a host name with non-ASCII characters; the rule wants the punycode form.</comment>
   </data>
+  <data name="split_rule_preset_google_meet_calls" xml:space="preserve">
+    <value>Google Meetの通話</value>
+    <comment>Split rules preset: Google Meet call media, from the address ranges Google publishes for routing it outside a VPN. Keep the product name Google Meet unchanged.</comment>
+  </data>
+  <data name="split_rule_preset_microsoft_teams_calls" xml:space="preserve">
+    <value>Microsoft Teamsの通話</value>
+    <comment>Split rules preset: Microsoft Teams call media, from the address ranges Microsoft publishes for routing it outside a VPN. Keep the product name Microsoft Teams unchanged.</comment>
+  </data>
   <data name="split_rules" xml:space="preserve">
     <value>分割ルール</value>
     <comment>transfer stats and split rules</comment>
@@ -3548,6 +3836,18 @@
   <data name="split_rules_info_note" xml:space="preserve">
     <value>除外は関連するネットワーククラスタ全体に適用されるため、関連するトラフィックもまとめて対象になります。</value>
     <comment>transfer stats and split rules</comment>
+  </data>
+  <data name="split_rules_match_sites_not_apps" xml:space="preserve">
+    <value>分割ルールが対象にするのはアプリではなく、サイトとアドレスです。Appleはアプリ単位のVPNを、組織が管理するデバイス（MDM）でのみ許可しています。アプリをVPNの対象外にするには、そのアプリが使うサイトをローカルにルーティングするか、プリセットから始めてください。ローカルネットワークのアドレスは、すでにVPNを経由しません。</value>
+    <comment>Split rules screen (iOS/macOS): why the rules match sites and addresses rather than apps. Apple's per-app VPN (NEAppRule) is available only on devices an organization manages (MDM). Points to host rules and presets, and notes that local network addresses already bypass the VPN. Keep Apple, VPN and MDM unchanged.</comment>
+  </data>
+  <data name="split_rules_preset_ranges_header" xml:space="preserve">
+    <value>各サービスがVPN外での利用向けに公開しているアドレス範囲</value>
+    <comment>Split rules screen: header of the preset menu. Each preset holds the address ranges its service publishes for routing that service's traffic outside a VPN.</comment>
+  </data>
+  <data name="split_rules_start_from_preset" xml:space="preserve">
+    <value>プリセットから始める</value>
+    <comment>Split rules screen: the menu that starts a route-locally rule from a preset, the address ranges a service publishes for use outside a VPN.</comment>
   </data>
   <data name="start_earning_join" xml:space="preserve">
     <value>収益を得始めるには、ネットワークに参加してください</value>
@@ -3911,6 +4211,14 @@
   <data name="usdc_wallet_address" xml:space="preserve">
     <value>USDCウォレットアドレス</value>
   </data>
+  <data name="use_as_proxy_no_vpn" xml:space="preserve">
+    <value>代わりにプロキシとして使用（VPNなし）</value>
+    <comment>Settings row (Connections) that opens the ur.io cloud proxies page so the user can run URnetwork as a proxy without taking the Android VPN slot.</comment>
+  </data>
+  <data name="use_as_proxy_no_vpn_detail" xml:space="preserve">
+    <value>ur.io を開いて、VPN なしで URnetwork を HTTPS プロキシとして使用します。SOCKS と WireGuard は Pro で利用できます。</value>
+    <comment>Subtitle under the cloud-proxy Settings row explaining that it opens ur.io and that SOCKS and WireGuard require Pro.</comment>
+  </data>
   <data name="use_most_stable_provider" xml:space="preserve">
     <value>最も安定したプロバイダーを使用します</value>
     <comment>Note under the location sync toggle explaining that the most stable (longest-connected) provider's location is used. Doubles as the resting status when no more specific status applies.</comment>
@@ -4145,6 +4453,10 @@
   <data name="vless_user_id" xml:space="preserve">
     <value>ユーザー ID（UUID）</value>
     <comment>VLESS settings: the user ID field label. The ID is a UUID the server issued.</comment>
+  </data>
+  <data name="wait_for_refresh" xml:space="preserve">
+    <value>更新を待つ</value>
+    <comment>Upgrade screen, when a connect blocked by insufficient balance opened it: closes the screen to wait for the free daily data instead of upgrading.</comment>
   </data>
   <data name="waiting_for_approval" xml:space="preserve">
     <value>承認待ち</value>

@@ -100,10 +100,6 @@
     <value>Προσθήκη κωδικού παραπομπής</value>
     <comment>Call to action</comment>
   </data>
-  <data name="add_referral_extra_rewards" xml:space="preserve">
-    <value>Προσθέστε κωδικό παραπομπής για να κερδίσετε επιπλέον ανταμοιβές</value>
-    <comment>Call to action</comment>
-  </data>
   <data name="add_sign_in_method" xml:space="preserve">
     <value>Προσθήκη μεθόδου σύνδεσης</value>
   </data>
@@ -444,10 +440,6 @@
   <data name="apple_sign_in_method_added" xml:space="preserve">
     <value>Η μέθοδος σύνδεσης Apple προστέθηκε</value>
     <comment>Snackbar message displayed when an Apple sign-in method is added.</comment>
-  </data>
-  <data name="apply_bonus" xml:space="preserve">
-    <value>Εφαρμογή μπόνους</value>
-    <comment>Call to action</comment>
   </data>
   <data name="apps" xml:space="preserve">
     <value>Εφαρμογές</value>
@@ -804,10 +796,6 @@
     <value>Συμβαλλόμενος</value>
     <comment>A label displayed next to a companion contract.</comment>
   </data>
-  <data name="confirm_seeker_token" xml:space="preserve">
-    <value>Επιβεβαίωση Token Seeker</value>
-    <comment>Used in Main/Account/Settings/SettingsView.swift.</comment>
-  </data>
   <data name="conn_connect_on_launch" xml:space="preserve">
     <value>Αυτόματη σύνδεση κατά την εκκίνηση της εφαρμογής</value>
     <comment>Settings: switch that connects automatically when the app starts.</comment>
@@ -939,6 +927,54 @@
   <data name="contribute_bandwidth" xml:space="preserve">
     <value>Συνεισφέρετε εύρος ζώνης</value>
     <comment>Used in Shared/Views/Introduction/IntroductionParticipateSettingsView.swift.</comment>
+  </data>
+  <data name="control_doh_error_https_required" xml:space="preserve">
+    <value>Το URL πρέπει να ξεκινά με https://.</value>
+    <comment>Bootstrap DNS-over-HTTPS server error: the URL does not start with https://. https:// is literal and is not translated.</comment>
+  </data>
+  <data name="control_doh_error_ip_required" xml:space="preserve">
+    <value>Χρησιμοποιήστε διεύθυνση IP αντί για όνομα κεντρικού υπολογιστή, όπως https://223.5.5.5/dns-query.</value>
+    <comment>Bootstrap DNS-over-HTTPS server error: the URL names a host name where an IP address is needed. The example URL is literal and is not translated.</comment>
+  </data>
+  <data name="control_doh_error_too_many" xml:space="preserve">
+    <value>Πάρα πολλοί διακομιστές. Αφαιρέστε μερικούς και αποθηκεύστε ξανά.</value>
+    <comment>Bootstrap DNS-over-HTTPS server error: the list has more servers of one IP version than the app accepts.</comment>
+  </data>
+  <data name="control_doh_error_url_invalid" xml:space="preserve">
+    <value>Εισαγάγετε ένα πλήρες URL, όπως https://223.5.5.5/dns-query.</value>
+    <comment>Bootstrap DNS-over-HTTPS server error: the line is not a complete URL the app can query (no path, a query or fragment, user info or a bad port). The example URL is literal and is not translated.</comment>
+  </data>
+  <data name="control_doh_urls" xml:space="preserve">
+    <value>Διακομιστές εκκίνησης DNS-over-HTTPS</value>
+    <comment>Extender settings: the title of the list of bootstrap DNS-over-HTTPS servers a user can add for the lookups of URnetwork's own server names. DNS-over-HTTPS is a protocol name and is not translated.</comment>
+  </data>
+  <data name="control_doh_urls_description" xml:space="preserve">
+    <value>Το URnetwork αναζητά τα ονόματα των δικών του διακομιστών μέσω DNS-over-HTTPS. Αν οι ενσωματωμένοι διακομιστές είναι αποκλεισμένοι στο δίκτυό σας, προσθέστε διακομιστές που λειτουργούν εκεί. Το URnetwork τους δοκιμάζει πρώτους και αυτοί μπορούν να βλέπουν αυτές τις αναζητήσεις.</value>
+    <comment>Extender settings: explains the bootstrap DNS-over-HTTPS server list. It must say that URnetwork looks up its own server names through the added servers first, and that those servers can see these lookups.</comment>
+  </data>
+  <data name="control_doh_urls_hint" xml:space="preserve">
+    <value>Ένα URL ανά γραμμή, που ξεκινά με https:// και μια διεύθυνση IP, όπως https://223.5.5.5/dns-query.</value>
+    <comment>Extender settings: help text under the bootstrap DNS-over-HTTPS server list. https:// and the example URL are literal and are not translated.</comment>
+  </data>
+  <data name="control_doh_urls_next_connect" xml:space="preserve">
+    <value>Το VPN θα χρησιμοποιήσει τους νέους διακομιστές εκκίνησης την επόμενη φορά που θα συνδεθεί.</value>
+    <comment>Bootstrap DNS-over-HTTPS servers: note after saving where the VPN runs separately from the app (the iOS tunnel extension, the desktop service). It reads the servers at its next start.</comment>
+  </data>
+  <data name="control_doh_urls_reset" xml:space="preserve">
+    <value>Χρήση μόνο ενσωματωμένων διακομιστών</value>
+    <comment>Extender settings: button that clears the bootstrap DNS-over-HTTPS server list, so only the built-in servers are used.</comment>
+  </data>
+  <data name="control_doh_urls_saved" xml:space="preserve">
+    <value>Οι διακομιστές εκκίνησης DNS-over-HTTPS αποθηκεύτηκαν</value>
+    <comment>Confirmation after the bootstrap DNS-over-HTTPS servers are saved.</comment>
+  </data>
+  <data name="control_doh_use_china" xml:space="preserve">
+    <value>Χρήση κινεζικών διακομιστών DNS</value>
+    <comment>Extender settings: button that fills the bootstrap DNS-over-HTTPS server list with resolvers that are reachable in mainland China.</comment>
+  </data>
+  <data name="control_doh_use_china_hint" xml:space="preserve">
+    <value>Συμπληρώνει τους διακομιστές AliDNS και DNSPod, που είναι προσβάσιμοι στην ηπειρωτική Κίνα.</value>
+    <comment>Extender settings: note under the Use China resolvers button naming the operators it fills in. AliDNS and DNSPod are product names and are not translated.</comment>
   </data>
   <data name="copied" xml:space="preserve">
     <value>Αντιγράφηκε!</value>
@@ -1095,6 +1131,30 @@
   <data name="data_bar_explanation" xml:space="preserve">
     <value>Αυτή η γραμμή στην εφαρμογή σας δείχνει πόσα δωρεάν δεδομένα κερδίζετε από τον πάροχό σας. Μπορείτε να ελέγχετε οποιαδήποτε στιγμή και να προσαρμόζετε τις ρυθμίσεις σας για να μεγιστοποιήσετε τα κέρδη σας.</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="data_info_available" xml:space="preserve">
+    <value>Δεδομένα που μπορείτε ακόμα να χρησιμοποιήσετε.</value>
+    <comment>"About your data" sheet: explains the Available part of the usage bar, shown under the Available amount.</comment>
+  </data>
+  <data name="data_info_pending" xml:space="preserve">
+    <value>Δεδομένα δεσμευμένα για τις ανοιχτές συνδέσεις σας. Ό,τι δεν χρησιμοποιήσουν επιστρέφεται όταν κλείσουν.</value>
+    <comment>"About your data" sheet: explains the Pending part of the usage bar, shown under the Pending amount. Pending is balance held (escrowed) by the user's open connections; the unused part is returned when they close. Do not add a time promise.</comment>
+  </data>
+  <data name="data_info_refresh_at" xml:space="preserve">
+    <value>Τα δωρεάν δεδομένα ανανεώνονται καθημερινά στις 00:00 UTC (σε {}).</value>
+    <comment>"About your data" sheet: when the free daily data is granted again. {time} is the time left until the next 00:00 UTC as a compact duration (e.g. 5h 12m). Keep 00:00 UTC as is. Shown only to accounts without Pro (Pro does not get the free grant).</comment>
+  </data>
+  <data name="data_info_title" xml:space="preserve">
+    <value>Σχετικά με τα δεδομένα σας</value>
+    <comment>Title of the "About your data" sheet, opened from the info button next to the daily data balance in the usage bar and from the Why? link under an out-of-balance notice. Also the info button's accessibility label.</comment>
+  </data>
+  <data name="data_info_used" xml:space="preserve">
+    <value>Δεδομένα που έχετε χρησιμοποιήσει μέχρι τώρα.</value>
+    <comment>"About your data" sheet: explains the Used part of the usage bar, shown under the Used amount.</comment>
+  </data>
+  <data name="data_info_why" xml:space="preserve">
+    <value>Γιατί;</value>
+    <comment>Link under the out-of-balance notice that opens the "About your data" sheet.</comment>
   </data>
   <data name="data_usage" xml:space="preserve">
     <value>Χρήση δεδομένων</value>
@@ -1275,10 +1335,6 @@
   <data name="edit_profile" xml:space="preserve">
     <value>Επεξεργασία προφίλ</value>
     <comment>Profile</comment>
-  </data>
-  <data name="edit_referral_code" xml:space="preserve">
-    <value>Επεξεργασία κωδικού παραπομπής</value>
-    <comment>Call to action</comment>
   </data>
   <data name="edit_split_rule" xml:space="preserve">
     <value>Επεξεργασία κανόνα διαχωρισμού</value>
@@ -1644,6 +1700,10 @@
     <value>Παράβλεψη βελτιστοποιήσεων μπαταρίας</value>
     <comment>Call to action</comment>
   </data>
+  <data name="import_extenders_control_doh_urls" xml:space="preserve">
+    <value>Αυτός ο κωδικός ορίζει επίσης διακομιστές εκκίνησης DNS-over-HTTPS. Θα βλέπουν τις αναζητήσεις διακομιστών του URnetwork: {}</value>
+    <comment>Extender import: shown before the user takes the settings of a share code that also sets bootstrap DNS-over-HTTPS servers. The argument is the list of server URLs, comma separated.</comment>
+  </data>
   <data name="in_guest_mode" xml:space="preserve">
     <value>Είστε σε λειτουργία επισκέπτη</value>
     <comment>Guest mode overlay</comment>
@@ -1691,6 +1751,10 @@
   <data name="insufficient_balance_message" xml:space="preserve">
     <value>Προσθέστε υπόλοιπο ή ένα πρόγραμμα για να συνεχίσετε να συνδέεστε.</value>
     <comment>Body of the warning shown when the balance runs out and no session is up; connecting needs more balance or a plan.</comment>
+  </data>
+  <data name="insufficient_balance_refreshes_in" xml:space="preserve">
+    <value>Τα δωρεάν δεδομένα ανανεώνονται σε {}.</value>
+    <comment>Leads the out-of-balance notice (and the Upgrade screen when a blocked connect opened it): when the free daily data is granted again. {time} is the time left until the next 00:00 UTC as a compact duration (e.g. 5h 12m).</comment>
   </data>
   <data name="insufficient_funds" xml:space="preserve">
     <value>Ανεπαρκή κεφάλαια</value>
@@ -2323,7 +2387,7 @@
   </data>
   <data name="none" xml:space="preserve">
     <value>Κανένα</value>
-    <comment>Empty value: the Referrals section shows it when no referral network is linked (apple), and the android referral network row.</comment>
+    <comment>Empty value: the VLESS settings show it for no security and no flow (all apps), and the Referrals section shows it on windows and linux when no referral network is linked.</comment>
   </data>
   <data name="notifications_label" xml:space="preserve">
     <value>Ειδοποιήσεις</value>
@@ -2614,6 +2678,14 @@
     <value>Το κλειδί ταυτότητας παρόχου σας αποθηκεύεται τοπικά σε αυτή τη συσκευή. Αν το κλειδί κάποιου κόμβου εμφανίζεται διαφορετικό από το τοπικά αποθηκευμένο κλειδί του, σημαίνει ότι δεν μπορείτε να εμπιστευτείτε τον διαχειριστή του δικτύου.</value>
     <comment>Account tab: explanation under the post quantum identity panel — what the identity key is and how verifying provider keys detects interception.</comment>
   </data>
+  <data name="private_dns_open_settings" xml:space="preserve">
+    <value>Άνοιγμα ρυθμίσεων δικτύου</value>
+    <comment>Button under the strict Private DNS notice that opens the Android wireless/network settings screen (there is no public Private DNS intent).</comment>
+  </data>
+  <data name="private_dns_strict_notice" xml:space="preserve">
+    <value>Το Ιδιωτικό DNS έχει οριστεί σε {}. Το Android στέλνει τα ερωτήματα απευθείας εκεί αντί μέσω του URnetwork. Αν οι ιστότοποι σταματήσουν να φορτώνουν, ορίστε το Ιδιωτικό DNS σε Αυτόματο.</value>
+    <comment>Muted notice on the connect screen shown while connected when Android Private DNS is set to a strict hostname, which sends DoT lookups outside the tunnel. %1$s is the configured DNS provider host.</comment>
+  </data>
   <data name="private_network" xml:space="preserve">
     <value>Ιδιωτικό δίκτυο</value>
     <comment>Network name when privacy is enabled</comment>
@@ -2678,6 +2750,26 @@
     <value>Ταυτότητες παρόχων</value>
     <comment>Post quantum identity: title of the connected provider identity key details view.</comment>
   </data>
+  <data name="provider_idle_auto_not_connected" xml:space="preserve">
+    <value>Το Αυτόματο μοιράζεται με όλους μόνο όσο είστε συνδεδεμένοι. Επιλέξτε Πάντα για να κερδίζετε και όταν δεν είστε συνδεδεμένοι.</value>
+    <comment>Provider card, under the provide mode row: why an enabled provider gets no traffic. The device is in Auto mode and not connected, so it shares only with the user's own devices. 'Always' is the provide mode label (key always).</comment>
+  </data>
+  <data name="provider_idle_network_only" xml:space="preserve">
+    <value>Κοινοποιείται μόνο στις δικές σας συσκευές. Επιλέξτε Πάντα για κοινή χρήση με όλους.</value>
+    <comment>Provider card, under the provide mode row: the provide mode is Network, so the device shares only with the user's own devices. 'Always' is the provide mode label (key always).</comment>
+  </data>
+  <data name="provider_idle_no_traffic_yet" xml:space="preserve">
+    <value>Οι νέοι πάροχοι χρειάζονται αρκετές ώρες σταθερής λειτουργίας και μια δοκιμή ταχύτητας πριν τους αποσταλούν πελάτες. Η κίνηση εξαρτάται επίσης από τη ζήτηση στην περιοχή σας.</value>
+    <comment>Provider card, under the provide mode row: the device provides to everyone but has carried no traffic yet.</comment>
+  </data>
+  <data name="provider_idle_paused_no_network" xml:space="preserve">
+    <value>Σε παύση: αυτή η συσκευή δεν μπορεί να παρέχει στο τρέχον δίκτυό της.</value>
+    <comment>Provider card, under the provide mode row: providing is paused because the current network can't be used for providing (no network, or a constrained or metered one).</comment>
+  </data>
+  <data name="provider_idle_paused_wifi_only" xml:space="preserve">
+    <value>Σε παύση: η παροχή έχει οριστεί μόνο για Wi-Fi και αυτή η συσκευή δεν είναι συνδεδεμένη σε Wi-Fi.</value>
+    <comment>Provider card, under the provide mode row: providing is paused because it is limited to Wi-Fi and the device is on another network.</comment>
+  </data>
   <data name="provider_location_unknown" xml:space="preserve">
     <value>Άγνωστη τοποθεσία</value>
     <comment>Row subtitle in the provider locations list when a provider's location is not known.</comment>
@@ -2697,6 +2789,194 @@
   <data name="provider_statistics" xml:space="preserve">
     <value>Στατιστικά παρόχου</value>
     <comment>Title of a section that shows statistics about the provider.</comment>
+  </data>
+  <data name="provider_status_demand" xml:space="preserve">
+    <value>Ζήτηση</value>
+    <comment>Title of the provider chart, shown with the other provider plots, of how many times clients were offered this device each minute over the last hour.</comment>
+  </data>
+  <data name="provider_status_help_country" xml:space="preserve">
+    <value>Αυτή η συσκευή μπορεί να προταθεί σε πελάτες που επιλέγουν αυτή τη χώρα.</value>
+    <comment>Provider status 'Why?' list: explanation under the country the device is offered in.</comment>
+  </data>
+  <data name="provider_status_help_latency" xml:space="preserve">
+    <value>Καθυστέρηση που μετρήθηκε πάνω από την αναμενόμενη για αυτή την τοποθεσία. Η μικρότερη καθυστέρηση προτείνεται συχνότερα.</value>
+    <comment>Provider status 'Why?' list: explanation under the delay.</comment>
+  </data>
+  <data name="provider_status_help_reliability_12h" xml:space="preserve">
+    <value>Πόσο σταθερά έμεινε συνδεδεμένη αυτή η συσκευή τις τελευταίες 12 ώρες. Πρέπει να φτάσει το ελάχιστο για να προτείνεται σε πελάτες· μετά από νέα εκκίνηση αυτό απαιτεί περίπου 8 ώρες σταθερής λειτουργίας.</value>
+    <comment>Provider status 'Why?' list: explanation under the 12-hour reliability.</comment>
+  </data>
+  <data name="provider_status_help_reliability_1h" xml:space="preserve">
+    <value>Πόσο σταθερά έμεινε συνδεδεμένη αυτή η συσκευή την τελευταία ώρα. Πρέπει να φτάσει το ελάχιστο για να προτείνεται σε πελάτες· οι αποσυνδέσεις τη μειώνουν και η σταθερή λειτουργία την αυξάνει.</value>
+    <comment>Provider status 'Why?' list: explanation under the 1-hour reliability.</comment>
+  </data>
+  <data name="provider_status_help_reliability_5m" xml:space="preserve">
+    <value>Πόσο σταθερά έμεινε συνδεδεμένη αυτή η συσκευή τα τελευταία 5 λεπτά. Επηρεάζει πόσο συχνά προτείνεται σε πελάτες· η συνεχής σύνδεση την αυξάνει.</value>
+    <comment>Provider status 'Why?' list: explanation under the 5-minute reliability.</comment>
+  </data>
+  <data name="provider_status_help_reliability_other" xml:space="preserve">
+    <value>Πόσο σταθερά έμεινε συνδεδεμένη αυτή η συσκευή σε μεγαλύτερο διάστημα. Πρέπει να φτάσει το ελάχιστο για να προτείνεται σε πελάτες.</value>
+    <comment>Provider status 'Why?' list: explanation under a reliability measured over another window.</comment>
+  </data>
+  <data name="provider_status_help_speed_test" xml:space="preserve">
+    <value>Ταχύτητα που μετρήθηκε μέσω αυτής της συσκευής. Οι ταχύτερες συνδέσεις προτείνονται συχνότερα.</value>
+    <comment>Provider status 'Why?' list: explanation under the speed test.</comment>
+  </data>
+  <data name="provider_status_help_tier" xml:space="preserve">
+    <value>Οι πελάτες δοκιμάζουν πρώτα τις χαμηλότερες βαθμίδες. Το 0 είναι το καλύτερο· το 3 σημαίνει πέρα από το όριο ταχύτητας ή καθυστέρησης.</value>
+    <comment>Provider status 'Why?' list: explanation under both tiers.</comment>
+  </data>
+  <data name="provider_status_help_url_checks" xml:space="preserve">
+    <value>Δοκιμαστικοί ιστότοποι που φόρτωσαν μέσω αυτής της σύνδεσης τις τελευταίες 8 ώρες. Οι περισσότεροι πρέπει να φορτώνουν· το φιλτράρισμα από τον πάροχο διαδικτύου σας μειώνει το αποτέλεσμα.</value>
+    <comment>Provider status 'Why?' list: explanation under the network checks.</comment>
+  </data>
+  <data name="provider_status_help_weight" xml:space="preserve">
+    <value>Συνδυάζει αξιοπιστία, ταχύτητα και επιτυχημένους ελέγχους δικτύου. Οι πάροχοι με μεγαλύτερο βάρος προτείνονται συχνότερα στους πελάτες.</value>
+    <comment>Provider status 'Why?' list: explanation under both selection weights.</comment>
+  </data>
+  <data name="provider_status_histogram_empty" xml:space="preserve">
+    <value>Δεν προτάθηκε σε πελάτες την τελευταία ώρα</value>
+    <comment>Provider card chart: shown when every bar is zero.</comment>
+  </data>
+  <data name="provider_status_histogram_end" xml:space="preserve">
+    <value>Τώρα</value>
+    <comment>Provider card chart: label under the right (current minute) end of the axis.</comment>
+  </data>
+  <data name="provider_status_histogram_start" xml:space="preserve">
+    <value>πριν από 60 λεπτά</value>
+    <comment>Provider card chart: label under the left (oldest) end of the 60-minute axis.</comment>
+  </data>
+  <data name="provider_status_histogram_title" xml:space="preserve">
+    <value>Φορές που προτάθηκε αυτή η συσκευή σε πελάτες, ανά λεπτό, τελευταία ώρα</value>
+    <comment>Provider card: title of a 60-bar chart of how many times the network offered this device to clients in each minute of the last hour.</comment>
+  </data>
+  <data name="provider_status_histogram_total.one" xml:space="preserve">
+    <value>{} φορά την τελευταία ώρα</value>
+    <comment>Provider card chart: total of the 60 bars. The argument is the number of times this device was offered to clients in the last hour.</comment>
+  </data>
+  <data name="provider_status_histogram_total.other" xml:space="preserve">
+    <value>{} φορές την τελευταία ώρα</value>
+    <comment>Provider card chart: total of the 60 bars. The argument is the number of times this device was offered to clients in the last hour.</comment>
+  </data>
+  <data name="provider_status_number_latency" xml:space="preserve">
+    <value>Καθυστέρηση</value>
+    <comment>Provider status 'Why?' list: label of the measured delay (latency) in milliseconds.</comment>
+  </data>
+  <data name="provider_status_number_reliability_12h" xml:space="preserve">
+    <value>Αξιοπιστία, τελευταίες 12 ώρες</value>
+    <comment>Provider status 'Why?' list: label of the reliability over the last 12 hours.</comment>
+  </data>
+  <data name="provider_status_number_reliability_1h" xml:space="preserve">
+    <value>Αξιοπιστία, τελευταία ώρα</value>
+    <comment>Provider status 'Why?' list: label of the reliability over the last hour.</comment>
+  </data>
+  <data name="provider_status_number_reliability_5m" xml:space="preserve">
+    <value>Αξιοπιστία, τελευταία 5 λεπτά</value>
+    <comment>Provider status 'Why?' list: label of the reliability over the last 5 minutes (a share of steady uptime).</comment>
+  </data>
+  <data name="provider_status_number_speed_test" xml:space="preserve">
+    <value>Δοκιμή ταχύτητας</value>
+    <comment>Provider status 'Why?' list: label of the measured speed.</comment>
+  </data>
+  <data name="provider_status_number_tier_quality" xml:space="preserve">
+    <value>Βαθμίδα (ποιότητα)</value>
+    <comment>Provider status 'Why?' list: label of the device's tier for quality-ranked requests (0 is best).</comment>
+  </data>
+  <data name="provider_status_number_tier_speed" xml:space="preserve">
+    <value>Βαθμίδα (ταχύτητα)</value>
+    <comment>Provider status 'Why?' list: label of the device's tier for speed-ranked requests.</comment>
+  </data>
+  <data name="provider_status_number_url_checks" xml:space="preserve">
+    <value>Έλεγχοι δικτύου</value>
+    <comment>Provider status 'Why?' list: label of the network check result (test sites loaded through the device).</comment>
+  </data>
+  <data name="provider_status_number_weight_quality" xml:space="preserve">
+    <value>Βάρος επιλογής (ποιότητα)</value>
+    <comment>Provider status 'Why?' list: label of the device's selection weight for quality-ranked requests (a relative number).</comment>
+  </data>
+  <data name="provider_status_number_weight_speed" xml:space="preserve">
+    <value>Βάρος επιλογής (ταχύτητα)</value>
+    <comment>Provider status 'Why?' list: label of the device's selection weight for speed-ranked requests.</comment>
+  </data>
+  <data name="provider_status_reason_egress_failing" xml:space="preserve">
+    <value>Πάρα πολλοί δοκιμαστικοί ιστότοποι απέτυχαν να φορτώσουν μέσω αυτής της σύνδεσης τις τελευταίες 8 ώρες. Η συσκευή προτείνεται σε πελάτες μόνο όταν εξαντληθούν οι ελεγμένοι πάροχοι.</value>
+    <comment>Provider status reason (egress_failing): too many test sites failed to load through the device.</comment>
+  </data>
+  <data name="provider_status_reason_egress_unprobed" xml:space="preserve">
+    <value>Ο έλεγχος δικτύου δεν έχει εκτελεστεί ακόμη σε αυτή τη σύνδεση. Μέχρι να περάσει, η συσκευή προτείνεται σε πελάτες μόνο όταν εξαντληθούν οι ελεγμένοι πάροχοι.</value>
+    <comment>Provider status reason (egress_unprobed): the network check (loading test sites through the device) has not run yet.</comment>
+  </data>
+  <data name="provider_status_reason_location_invalid" xml:space="preserve">
+    <value>Αυτή η συσκευή συνδέεται από περισσότερες από μία διευθύνσεις ή η τοποθεσία της είναι άγνωστη. Στους πελάτες προτείνονται μόνο συσκευές με μία διεύθυνση και γνωστή τοποθεσία.</value>
+    <comment>Provider status reason (location_invalid): the device was seen at more than one IP address, or its location is unknown.</comment>
+  </data>
+  <data name="provider_status_reason_network_only" xml:space="preserve">
+    <value>Αυτή η συσκευή παρέχει μόνο στις δικές σας συσκευές. Επιλέξτε Πάντα για κοινή χρήση με όλους.</value>
+    <comment>Provider status reason (network_only). 'Always' is the provide mode label (key always).</comment>
+  </data>
+  <data name="provider_status_reason_none" xml:space="preserve">
+    <value>Όλα είναι εντάξει. Το πόσο συχνά προτείνεται αυτή η συσκευή σε πελάτες εξαρτάται από τη ζήτηση στην περιοχή της και από την κατάταξή της σε σχέση με κοντινούς παρόχους.</value>
+    <comment>Provider status reason (none): passes every check.</comment>
+  </data>
+  <data name="provider_status_reason_not_connected" xml:space="preserve">
+    <value>Αυτή η συσκευή δεν είναι συνδεδεμένη αυτή τη στιγμή. Στους πελάτες προτείνονται μόνο συνδεδεμένες συσκευές.</value>
+    <comment>Provider status reason (not_connected).</comment>
+  </data>
+  <data name="provider_status_reason_not_eligible" xml:space="preserve">
+    <value>Αυτή η σύνδεση δεν είναι επιλέξιμη για παροχή αυτή τη στιγμή.</value>
+    <comment>Provider status reason (not_eligible): one generic reason for every anti-abuse check. Keep it generic; do not add detail.</comment>
+  </data>
+  <data name="provider_status_reason_not_providing" xml:space="preserve">
+    <value>Αυτή η συσκευή δεν έχει ρυθμιστεί να μοιράζεται τη σύνδεσή της.</value>
+    <comment>Provider status reason (not_providing): the device is not set to provide.</comment>
+  </data>
+  <data name="provider_status_reason_reliability_low" xml:space="preserve">
+    <value>Η αξιοπιστία της τελευταίας ώρας είναι χαμηλότερη από όση χρειάζονται οι πελάτες. Αυξάνεται με κάθε λεπτό που η συσκευή μένει συνδεδεμένη· οι αποσυνδέσεις τη μειώνουν.</value>
+    <comment>Provider status reason (reliability_low): the last hour's reliability is below the minimum.</comment>
+  </data>
+  <data name="provider_status_reason_reliability_warming_up" xml:space="preserve">
+    <value>Δημιουργία αξιοπιστίας. Αυτή η συσκευή ήταν σταθερή την τελευταία ώρα· θα προτείνεται σε πελάτες μόλις η αξιοπιστία 12 ωρών φτάσει το ελάχιστο, περίπου 8 ώρες μετά από νέα εκκίνηση.</value>
+    <comment>Provider status reason (reliability_warming_up): steady for the last hour, but the 12-hour reliability is still below the minimum.</comment>
+  </data>
+  <data name="provider_status_reason_slow" xml:space="preserve">
+    <value>Αυτή η σύνδεση μετρήθηκε πιο αργή από όσο χρειάζονται οι πελάτες, γι' αυτό προτείνεται πολύ λιγότερο συχνά.</value>
+    <comment>Provider status reason (slow): past the speed or delay cutoff.</comment>
+  </data>
+  <data name="provider_status_reason_speed_test_missing" xml:space="preserve">
+    <value>Δεν έχει γίνει ακόμη δοκιμή ταχύτητας. Μέχρι να ολοκληρωθεί μία, η συσκευή προτείνεται σε πελάτες πολύ λιγότερο συχνά.</value>
+    <comment>Provider status reason (speed_test_missing).</comment>
+  </data>
+  <data name="provider_status_unavailable" xml:space="preserve">
+    <value>Η κατάσταση παρόχου δεν είναι διαθέσιμη αυτή τη στιγμή.</value>
+    <comment>Provider card: shown instead of the chart and reason when the status could not be loaded.</comment>
+  </data>
+  <data name="provider_status_value_count_of_total" xml:space="preserve">
+    <value>Φορτώθηκαν {0} από {1}</value>
+    <comment>Provider status 'Why?' list: how many test sites loaded through the device out of all that were tried, e.g. '19 of 20 loaded'.</comment>
+  </data>
+  <data name="provider_status_value_no_history" xml:space="preserve">
+    <value>Δεν υπάρχει ιστορικό ακόμη</value>
+    <comment>Provider status 'Why?' list: value of a reliability with no history yet (which does not count against the device).</comment>
+  </data>
+  <data name="provider_status_value_not_in_pool" xml:space="preserve">
+    <value>Εκτός αυτής της ομάδας</value>
+    <comment>Provider status 'Why?' list: value of a selection weight when the device is not in that pool right now.</comment>
+  </data>
+  <data name="provider_status_value_not_yet" xml:space="preserve">
+    <value>Όχι ακόμη</value>
+    <comment>Provider status 'Why?' list: value shown when a measurement (speed test, delay, network check) has not happened yet.</comment>
+  </data>
+  <data name="provider_status_value_with_maximum" xml:space="preserve">
+    <value>{0} (το πολύ {1})</value>
+    <comment>Provider status 'Why?' list: a value with the most the network allows, e.g. '35 ms (at most 200 ms)'. Both arguments are already formatted text.</comment>
+  </data>
+  <data name="provider_status_value_with_minimum" xml:space="preserve">
+    <value>{0} (απαιτείται {1})</value>
+    <comment>Provider status 'Why?' list: a value with the minimum the network requires, e.g. '82% (needs 95%)'. Both arguments are already formatted text.</comment>
+  </data>
+  <data name="provider_status_why" xml:space="preserve">
+    <value>Γιατί;</value>
+    <comment>Provider card: expandable section title that reveals the numbers the network ranks this device by, with explanations.</comment>
   </data>
   <data name="providing" xml:space="preserve">
     <value>Παροχή</value>
@@ -2849,6 +3129,10 @@
   <data name="referral_code_load_failed" xml:space="preserve">
     <value>Δεν ήταν δυνατή η φόρτωση του κωδικού παραπομπής σας.</value>
     <comment>Shown in the referral panel in place of the code when fetching the referral code failed; a Retry button follows.</comment>
+  </data>
+  <data name="referral_code_optional" xml:space="preserve">
+    <value>Κωδικός παραπομπής (προαιρετικό)</value>
+    <comment>Sign-up: label of the optional referral code field above Continue.</comment>
   </data>
   <data name="referral_crowned_congrats.one" xml:space="preserve">
     <value>Ένας φίλος μπήκε — κερδίζεις +{1} GiB/ημέρα, για πάντα.</value>
@@ -3616,6 +3900,14 @@
     <value>Χρησιμοποιήστε τη μορφή ASCII του ονόματος.</value>
     <comment>Split rules: validation error for a host name with non-ASCII characters; the rule wants the punycode form.</comment>
   </data>
+  <data name="split_rule_preset_google_meet_calls" xml:space="preserve">
+    <value>Κλήσεις Google Meet</value>
+    <comment>Split rules preset: Google Meet call media, from the address ranges Google publishes for routing it outside a VPN. Keep the product name Google Meet unchanged.</comment>
+  </data>
+  <data name="split_rule_preset_microsoft_teams_calls" xml:space="preserve">
+    <value>Κλήσεις Microsoft Teams</value>
+    <comment>Split rules preset: Microsoft Teams call media, from the address ranges Microsoft publishes for routing it outside a VPN. Keep the product name Microsoft Teams unchanged.</comment>
+  </data>
   <data name="split_rules" xml:space="preserve">
     <value>Κανόνες διαχωρισμού</value>
     <comment>transfer stats and split rules</comment>
@@ -3635,6 +3927,18 @@
   <data name="split_rules_info_note" xml:space="preserve">
     <value>Οι εξαιρέσεις ισχύουν για ολόκληρη τη συσχετισμένη ομάδα δικτύων, ώστε η σχετική κίνηση να καλύπτεται μαζί.</value>
     <comment>transfer stats and split rules</comment>
+  </data>
+  <data name="split_rules_match_sites_not_apps" xml:space="preserve">
+    <value>Οι κανόνες διαχωρισμού ισχύουν για ιστότοπους και διευθύνσεις, όχι για εφαρμογές: η Apple επιτρέπει VPN ανά εφαρμογή μόνο σε συσκευές που διαχειρίζεται κάποιος οργανισμός (MDM). Για να κρατήσετε μια εφαρμογή εκτός VPN, δρομολογήστε τοπικά τους ιστότοπους που χρησιμοποιεί ή ξεκινήστε από μια προεπιλογή. Οι διευθύνσεις του τοπικού δικτύου παρακάμπτουν ήδη το VPN.</value>
+    <comment>Split rules screen (iOS/macOS): why the rules match sites and addresses rather than apps. Apple's per-app VPN (NEAppRule) is available only on devices an organization manages (MDM). Points to host rules and presets, and notes that local network addresses already bypass the VPN. Keep Apple, VPN and MDM unchanged.</comment>
+  </data>
+  <data name="split_rules_preset_ranges_header" xml:space="preserve">
+    <value>Εύρη που δημοσιεύει κάθε υπηρεσία για χρήση εκτός VPN</value>
+    <comment>Split rules screen: header of the preset menu. Each preset holds the address ranges its service publishes for routing that service's traffic outside a VPN.</comment>
+  </data>
+  <data name="split_rules_start_from_preset" xml:space="preserve">
+    <value>Έναρξη από προεπιλογή</value>
+    <comment>Split rules screen: the menu that starts a route-locally rule from a preset, the address ranges a service publishes for use outside a VPN.</comment>
   </data>
   <data name="start_earning_join" xml:space="preserve">
     <value>Για να ξεκινήσετε να κερδίζετε, γίνετε μέλος του δικτύου</value>
@@ -4002,6 +4306,14 @@
   <data name="usdc_wallet_address" xml:space="preserve">
     <value>Διεύθυνση πορτοφολιού USDC</value>
   </data>
+  <data name="use_as_proxy_no_vpn" xml:space="preserve">
+    <value>Χρήση ως διακομιστή μεσολάβησης (χωρίς VPN)</value>
+    <comment>Settings row (Connections) that opens the ur.io cloud proxies page so the user can run URnetwork as a proxy without taking the Android VPN slot.</comment>
+  </data>
+  <data name="use_as_proxy_no_vpn_detail" xml:space="preserve">
+    <value>Ανοίγει το ur.io για χρήση του URnetwork ως διακομιστή μεσολάβησης HTTPS χωρίς VPN. Τα SOCKS και WireGuard διατίθενται με το Pro.</value>
+    <comment>Subtitle under the cloud-proxy Settings row explaining that it opens ur.io and that SOCKS and WireGuard require Pro.</comment>
+  </data>
   <data name="use_most_stable_provider" xml:space="preserve">
     <value>Χρησιμοποιεί τον πιο σταθερό πάροχο</value>
     <comment>Note under the location sync toggle explaining that the most stable (longest-connected) provider's location is used. Doubles as the resting status when no more specific status applies.</comment>
@@ -4240,6 +4552,10 @@
   <data name="vless_user_id" xml:space="preserve">
     <value>Αναγνωριστικό χρήστη (UUID)</value>
     <comment>VLESS settings: the user ID field label. The ID is a UUID the server issued.</comment>
+  </data>
+  <data name="wait_for_refresh" xml:space="preserve">
+    <value>Αναμονή για ανανέωση</value>
+    <comment>Upgrade screen, when a connect blocked by insufficient balance opened it: closes the screen to wait for the free daily data instead of upgrading.</comment>
   </data>
   <data name="waiting_for_approval" xml:space="preserve">
     <value>Αναμονή έγκρισης</value>
