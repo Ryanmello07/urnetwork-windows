@@ -263,6 +263,14 @@
     <value>Совпадение</value>
     <comment>Connection inspector: label of the matched rule row.</comment>
   </data>
+  <data name="adv_mode_rpc_only" xml:space="preserve">
+    <value>только RPC</value>
+    <comment>Windows status strip (Advanced Mode), Session value: a session that talks to the service over RPC without a tunnel. Lowercase, a short status value.</comment>
+  </data>
+  <data name="adv_mode_tunnel" xml:space="preserve">
+    <value>туннель</value>
+    <comment>Windows status strip (Advanced Mode), Session value: a full tunnel session. Lowercase, a short status value.</comment>
+  </data>
   <data name="adv_na" xml:space="preserve">
     <value>—</value>
     <comment>Connection inspector: placeholder dash for a value that is not available.</comment>
@@ -297,7 +305,7 @@
   </data>
   <data name="adv_raw_status" xml:space="preserve">
     <value>Сырой статус</value>
-    <comment>Connection inspector: label of the raw status row.</comment>
+    <comment>Connection inspector (Linux) and Advanced Mode status strip (Windows): label of the raw status field.</comment>
   </data>
   <data name="adv_reason" xml:space="preserve">
     <value>Причина</value>
@@ -319,6 +327,26 @@
     <value>Переопределение маршрута</value>
     <comment>Connection inspector: decision reason, a route override applied.</comment>
   </data>
+  <data name="adv_routes" xml:space="preserve">
+    <value>Маршруты</value>
+    <comment>Windows status strip (Advanced Mode): label of the field that shows whether the tunnel's routes are installed.</comment>
+  </data>
+  <data name="adv_routes_dns_degraded" xml:space="preserve">
+    <value>вкл., DNS не применён</value>
+    <comment>Windows status strip (Advanced Mode), Routes value: routes are installed but the tunnel's DNS is not. Lowercase, a short status value.</comment>
+  </data>
+  <data name="adv_routes_kill_switch_armed" xml:space="preserve">
+    <value>выкл., Kill switch взведён</value>
+    <comment>Windows status strip (Advanced Mode), Routes value: no routes are installed and the kill switch is blocking traffic. Lowercase, a short status value.</comment>
+  </data>
+  <data name="adv_routes_no_firewall" xml:space="preserve">
+    <value>вкл., без защиты от утечек</value>
+    <comment>Windows status strip (Advanced Mode), Routes value: routes are installed but no leak-prevention firewall policy is in force. Lowercase, a short status value.</comment>
+  </data>
+  <data name="adv_rpc" xml:space="preserve">
+    <value>RPC</value>
+    <comment>Windows status strip (Advanced Mode): label of the field that shows the service's RPC endpoint (host:port). RPC is a technical term.</comment>
+  </data>
   <data name="adv_select_a_row" xml:space="preserve">
     <value>Выберите строку в разделе «Активность», чтобы изучить её</value>
     <comment>Connection inspector: hint to select a row in the Activity list.</comment>
@@ -334,6 +362,10 @@
   <data name="adv_session_exit_country" xml:space="preserve">
     <value>Страна выхода сессии</value>
     <comment>Connection inspector: label of the session exit country row.</comment>
+  </data>
+  <data name="adv_session_mode" xml:space="preserve">
+    <value>Сессия</value>
+    <comment>Windows status strip (Advanced Mode): label of the field that shows which kind of session the service granted (tunnel or rpc-only).</comment>
   </data>
   <data name="adv_unknown_exit" xml:space="preserve">
     <value>Нет в таблице маршрутизации</value>
@@ -682,6 +714,10 @@
     <value>В вашем кошельке {} нет аккаунта для подписи. Добавьте или подключите аккаунт в кошельке и попробуйте еще раз.</value>
     <comment>Wallet error in the apps, when a ur.io wallet bridge page returns no_account: the chosen wallet shared no account it can sign with (none is connected to the site, or it holds only accounts of another chain), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect on the Bittensor page, Phantom or Solflare on the Solana page).</comment>
   </data>
+  <data name="bittensor_error_signature_mismatch" xml:space="preserve">
+    <value>Эта подпись сделана не с того адреса, который вы ввели. В кошельке {} подпишите сообщение с введённого адреса, затем снова вставьте подпись.</value>
+    <comment>Bittensor wallet connect (Earnings), manual entry (TAO.com, or Talisman on a phone): the server refused the pasted signature because it does not verify for the address the user typed over the shown message (POST /sn/wallet error.code signature_mismatch). Usually the user signed with another account in the wallet. The server cannot tell which account signed. The argument is the wallet product name (TAO.com or Talisman).</comment>
+  </data>
   <data name="bittensor_error_user_rejected" xml:space="preserve">
     <value>Запрос отклонен в вашем кошельке. Начните заново и подтвердите его, чтобы продолжить.</value>
     <comment>Wallet error in the apps, when a ur.io wallet bridge page returns user_rejected: the user declined the connection or the signature request in the wallet, so nothing was signed. The Bittensor page (Talisman, or a WalletConnect wallet) and the Solana page of the desktop apps (Phantom or Solflare) both return it; on iOS, Phantom and Solflare decline with 4001, which reads the same.</comment>
@@ -765,6 +801,10 @@
   <data name="blocked_locations_load_failed" xml:space="preserve">
     <value>Не удалось загрузить заблокированные локации. Потяните вниз, чтобы попробовать ещё раз.</value>
     <comment>Blocked locations: the list could not be loaded.</comment>
+  </data>
+  <data name="blocked_locations_search_placeholder" xml:space="preserve">
+    <value>Поиск стран</value>
+    <comment>macOS Blocked locations screen: placeholder of the country search field.</comment>
   </data>
   <data name="blocks" xml:space="preserve">
     <value>Блоки</value>
@@ -872,6 +912,10 @@
     <value>Не удалось открыть браузер. Скопируйте эту ссылку в браузер, чтобы завершить оплату:</value>
     <comment>Upgrade sheet: the system browser could not be opened for the hosted checkout url. The app appends the url itself on the next line (selectable) so the user can copy it into a browser by hand — never advancing to the waiting page with no payment page open.</comment>
   </data>
+  <data name="checkout_confirming_purchase" xml:space="preserve">
+    <value>Мы подтверждаем вашу покупку. Ваш тариф обновится автоматически.</value>
+    <comment>Purchase confirmation message while the app waits for the payment to be confirmed.</comment>
+  </data>
   <data name="checkout_error_payment_form_unavailable" xml:space="preserve">
     <value>Не удалось загрузить форму оплаты. Проверьте подключение к интернету и повторите попытку.</value>
     <comment>Checkout error in the desktop apps (the macOS direct download, Windows and Linux) when the ur.io checkout page hands back stripe_unavailable: Stripe's payment form could not be loaded in the checkout page (usually no internet connection, or a network that blocks it). Nothing was charged.</comment>
@@ -880,6 +924,10 @@
     <value>Оплата сейчас недоступна. Повторите попытку позже.</value>
     <comment>Checkout error in the desktop apps (the macOS direct download, Windows and Linux) when the ur.io checkout page hands back checkout_unavailable: the site cannot open Stripe's checkout right now (it has no Stripe key), so no payment form was shown and nothing was charged. The user cannot fix it; it may work later.</comment>
   </data>
+  <data name="checkout_finish_in_browser" xml:space="preserve">
+    <value>Завершите в браузере.</value>
+    <comment>Purchase confirmation title after the app opened Stripe's checkout page in the browser.</comment>
+  </data>
   <data name="checkout_interrupted_confirming" xml:space="preserve">
     <value>Окно оплаты неожиданно закрылось. Если платёж прошёл, ваш тариф обновится здесь автоматически — покупать повторно не нужно.</value>
     <comment>Upgrade sheet waiting page: the embedded checkout webview crashed after the payment form had rendered, so a charge may already have gone through with only the redirect lost. Shown while the confirmation poll asks the server for the payment webhook; must never invite buying again.</comment>
@@ -887,6 +935,10 @@
   <data name="checkout_opened_in_browser" xml:space="preserve">
     <value>Завершите покупку в браузере. Ваш тариф обновится здесь автоматически, как только платеж будет подтвержден.</value>
     <comment>Shown after the app hands the user to the Stripe hosted checkout in the system browser. The app polls the server and flips the plan automatically when the payment webhook lands.</comment>
+  </data>
+  <data name="checkout_restore_checking" xml:space="preserve">
+    <value>Проверяем ваш тариф ещё раз.</value>
+    <comment>Message after Restore purchases in the Stripe-paid app: nothing to restore locally, the app re-reads the plan from the server.</comment>
   </data>
   <data name="choose_file" xml:space="preserve">
     <value>Выбрать файл</value>
@@ -1028,6 +1080,10 @@
     <value>Партнёр</value>
     <comment>A label displayed next to a companion contract.</comment>
   </data>
+  <data name="conn_blocked_kill_switch" xml:space="preserve">
+    <value>Заблокировано — Kill switch включён</value>
+    <comment>Windows Connect page status when the connection is down and the kill switch is deliberately blocking this computer's traffic.</comment>
+  </data>
   <data name="conn_connect_on_launch" xml:space="preserve">
     <value>Подключаться автоматически при запуске приложения</value>
     <comment>Settings: switch that connects automatically when the app starts.</comment>
@@ -1036,13 +1092,93 @@
     <value>По умолчанию выключено. Когда включено, URnetwork подключается к выбранному провайдеру сразу после открытия приложения. Это действует со следующего запуска - сейчас подключения не будет.</value>
     <comment>Settings: explanation under the connect-on-launch switch.</comment>
   </data>
+  <data name="conn_degraded" xml:space="preserve">
+    <value>Соединение ухудшилось — переподключение</value>
+    <comment>Windows connection status (Connect page headline and tray tooltip) when a working connection dropped and the app is reconnecting on its own.</comment>
+  </data>
+  <data name="conn_disconnecting" xml:space="preserve">
+    <value>Отключение — ваш трафик всё ещё идёт через туннель</value>
+    <comment>Windows Connect page status while the tunnel is being stopped but its routes are still installed.</comment>
+  </data>
   <data name="conn_failed" xml:space="preserve">
     <value>Не удалось подключиться</value>
     <comment>Connect screen status when the connect attempt failed: no provider could be reached (the sdk's CONNECT_FAILED). The connection keeps trying, and the app offers Retry.</comment>
   </data>
+  <data name="conn_failed_detail" xml:space="preserve">
+    <value>Не удалось связаться ни с одним провайдером. Повторная попытка заново выстраивает соединение с нуля.</value>
+    <comment>Windows Connect page reason line when connecting failed.</comment>
+  </data>
+  <data name="conn_failsafe_armed" xml:space="preserve">
+    <value>Если в ближайшее время ничего не пройдёт, URnetwork автоматически отключит туннель, чтобы вы не остались без интернета.</value>
+    <comment>Windows Connect page: sentence appended to the line above when the service will stop a tunnel that carries nothing.</comment>
+  </data>
+  <data name="conn_failsafe_blocked" xml:space="preserve">
+    <value>Туннель не мог передавать трафик, поэтому URnetwork его отключил. Kill switch включён, поэтому ничто не покидает этот компьютер, пока вы снова не подключитесь или не выключите Kill switch, — утечек нет.</value>
+    <comment>Windows Connect page line after the service stopped a tunnel that carried nothing, while the kill switch keeps this computer blocked.</comment>
+  </data>
+  <data name="conn_failsafe_restored" xml:space="preserve">
+    <value>URnetwork отключил вас, чтобы вы оставались в сети: туннель работал, но через него ничего не проходило. Сейчас ваш трафик идёт напрямую и НЕ защищён. Нажмите «Подключить», чтобы попробовать снова.</value>
+    <comment>Windows Connect page line and tray notification after the service stopped a tunnel that carried nothing, with the kill switch off. Keep the emphasis on NOT.</comment>
+  </data>
+  <data name="conn_finding_providers" xml:space="preserve">
+    <value>Поиск провайдеров…</value>
+    <comment>Connection status while the app has providers but none is proven to work yet (Linux and Windows Connect page headline, Windows tray tooltip).</comment>
+  </data>
   <data name="conn_not_protected" xml:space="preserve">
     <value>Ваш интернет-трафик не защищён.</value>
     <comment>Connect page: warning that the internet traffic is not protected.</comment>
+  </data>
+  <data name="conn_reason_auth" xml:space="preserve">
+    <value>Не удаётся войти на платформу…</value>
+    <comment>Windows Connect page reason line while the app's sign-in to the URnetwork platform keeps failing.</comment>
+  </data>
+  <data name="conn_reason_platform" xml:space="preserve">
+    <value>Связь с платформой…</value>
+    <comment>Windows Connect page reason line while the app cannot reach the URnetwork platform (the API servers).</comment>
+  </data>
+  <data name="conn_reason_providers" xml:space="preserve">
+    <value>Провайдеры не отвечают — повторная попытка…</value>
+    <comment>Windows Connect page reason line while the selected providers do not answer.</comment>
+  </data>
+  <data name="conn_reason_rate_limited" xml:space="preserve">
+    <value>Превышен лимит запросов — ожидание…</value>
+    <comment>Windows Connect page reason line while the platform asks the app to slow down.</comment>
+  </data>
+  <data name="conn_traffic_blocked" xml:space="preserve">
+    <value>Сейчас нет работающего провайдера — ваш трафик заблокирован, а не открыт. Отключитесь, чтобы вернуться к обычному подключению.</value>
+    <comment>Windows Connect page line while connected but no provider carries traffic, with leak protection in force.</comment>
+  </data>
+  <data name="conn_traffic_blocked_unprotected" xml:space="preserve">
+    <value>Сейчас нет работающего провайдера — трафик, отправленный в туннель, никуда не уходит, а защита от утечек выключена, поэтому часть трафика может идти в обход. Отключитесь, чтобы вернуться к обычному подключению.</value>
+    <comment>Windows Connect page line while connected but no provider carries traffic, and leak protection (the firewall policy) is not in force.</comment>
+  </data>
+  <data name="conn_tray_blocked_kill_switch" xml:space="preserve">
+    <value>Заблокировано (Kill switch включён)</value>
+    <comment>Windows tray tooltip when the kill switch is deliberately blocking this computer's traffic.</comment>
+  </data>
+  <data name="conn_tray_blocked_no_tunnel" xml:space="preserve">
+    <value>Заблокировано — защита от утечек всё ещё действует, хотя туннель не поднят</value>
+    <comment>Windows tray tooltip when leak protection blocks traffic while no tunnel is up.</comment>
+  </data>
+  <data name="conn_tray_disconnecting" xml:space="preserve">
+    <value>Отключение — трафик всё ещё идёт через туннель</value>
+    <comment>Windows tray tooltip while the tunnel is being stopped but its routes are still installed.</comment>
+  </data>
+  <data name="conn_tray_failsafe_blocked" xml:space="preserve">
+    <value>Туннель не мог передавать трафик, поэтому URnetwork его отключил. Kill switch включён, поэтому этот компьютер остаётся заблокированным и утечек нет. Подключитесь снова или выключите Kill switch в этом меню.</value>
+    <comment>Windows tray notification after the service stopped a tunnel that carried nothing, while the kill switch keeps this computer blocked. "This menu" is the tray icon's menu.</comment>
+  </data>
+  <data name="conn_tray_failsafe_stopped" xml:space="preserve">
+    <value>Отключено (сбой туннеля)</value>
+    <comment>Windows tray tooltip after the service stopped a tunnel that carried nothing.</comment>
+  </data>
+  <data name="conn_tray_force_tunnel_off" xml:space="preserve">
+    <value>Принудительно выключить туннель (восстановление)</value>
+    <comment>Windows tray menu item that stops the tunnel directly when the normal Disconnect is stuck.</comment>
+  </data>
+  <data name="conn_tray_lift_kill_switch" xml:space="preserve">
+    <value>Выключить Kill switch (разблокировать этот компьютер)</value>
+    <comment>Windows tray menu item that lifts the kill switch's block on this computer.</comment>
   </data>
   <data name="connect" xml:space="preserve">
     <value>Подключить</value>
@@ -1194,7 +1330,7 @@
   </data>
   <data name="contribute_bandwidth" xml:space="preserve">
     <value>Делитесь пропускной способностью</value>
-    <comment>Used in Shared/Views/Introduction/IntroductionParticipateSettingsView.swift.</comment>
+    <comment>Onboarding: title of the step that asks whether this device may share bandwidth with the network (provide).</comment>
   </data>
   <data name="control_doh_error_https_required" xml:space="preserve">
     <value>URL должен начинаться с https://.</value>
@@ -1376,13 +1512,25 @@
     <value>На этом устройстве нет службы авторизации polkit, поэтому системная служба URnetwork использует группу 'urnetwork'. Добавьте в неё своего пользователя, затем выйдите из системы и войдите снова.</value>
     <comment>Connect error: no polkit service, the daemon falls back to the urnetwork group.</comment>
   </data>
+  <data name="daemon_legacy_group_auth" xml:space="preserve">
+    <value>Системная служба URnetwork на этом устройстве — старая версия, которой всё ещё нужно членство в группе. Обновите службу или добавьте своего пользователя в группу 'urnetwork', затем выйдите из системы и войдите снова.</value>
+    <comment>Linux notice when an older system service refuses the app's user. 'urnetwork' is the literal Linux group name; keep it as is.</comment>
+  </data>
   <data name="daemon_no_answer" xml:space="preserve">
     <value>Системная служба URnetwork не ответила.</value>
     <comment>Error: the system service did not answer.</comment>
   </data>
+  <data name="daemon_not_reachable" xml:space="preserve">
+    <value>Не удалось связаться с системной службой URnetwork.</value>
+    <comment>Linux notice when the app cannot reach the URnetwork system service for an unexpected reason.</comment>
+  </data>
   <data name="daemon_sdk_mismatch" xml:space="preserve">
     <value>Сборки приложения и системной службы URnetwork не совпадают. Обновите оба компонента до одной версии.</value>
     <comment>Shown on the linux home screen when the app and the urnetworkd system service carry different URnetwork SDK builds (they update on independent schedules and must match exactly). The fix is updating both to the same release.</comment>
+  </data>
+  <data name="daemon_stale_sandbox_mount" xml:space="preserve">
+    <value>Системная служба URnetwork перезапустилась, пока это приложение было открыто. Закройте приложение и откройте его снова, чтобы заново подключиться к службе.</value>
+    <comment>Linux notice when the app cannot reach the URnetwork system service because the service restarted under a sandboxed (Flatpak) app.</comment>
   </data>
   <data name="daemon_too_old" xml:space="preserve">
     <value>Системная служба URnetwork устарела. Обновите её, чтобы подключиться.</value>
@@ -1472,6 +1620,14 @@
     <value>Введите {} для подтверждения.</value>
     <comment>Delete account dialog: asks the user to type the network name back before the delete button enables. {network} is the account's network name.</comment>
   </data>
+  <data name="dev_action_declined" xml:space="preserve">
+    <value>Без изменений: SDK отклонил это действие.</value>
+    <comment>Developer page: report line when the SDK refused a requested action.</comment>
+  </data>
+  <data name="dev_actions_are_requests" xml:space="preserve">
+    <value>Действия — это запросы: проверяйте их результат в измерениях и строках выходов, которые обновляются ниже.</value>
+    <comment>Developer page: note that the action buttons only request changes.</comment>
+  </data>
   <data name="dev_affinity_performance" xml:space="preserve">
     <value>Привязка с учётом производительности</value>
     <comment>Developer tools screen (reliability surface): performance-aware affinity control label.</comment>
@@ -1487,6 +1643,14 @@
   <data name="dev_affinity_sticky_detail" xml:space="preserve">
     <value>Новые соединения сайта остаются на выходе, который уже используют его прежние соединения, даже сверх лимита потоков, чтобы загруженный сайт сохранял один исходящий IP. Лимит по-прежнему определяет, какие выходы принимают новые сайты. Если выключено, восстанавливается строгий лимит</value>
     <comment>Developer tools screen: explanatory subtext under the 'affinity sticky' control.</comment>
+  </data>
+  <data name="dev_all" xml:space="preserve">
+    <value>Все</value>
+    <comment>Developer page: what a setting's 0 means when it probes every host ('Probe hosts per pass').</comment>
+  </data>
+  <data name="dev_app_version" xml:space="preserve">
+    <value>Версия приложения</value>
+    <comment>Developer page: label of the app version row.</comment>
   </data>
   <data name="dev_behaviour" xml:space="preserve">
     <value>Поведение</value>
@@ -1528,6 +1692,14 @@
     <value>Когда выход зависает, его один раз пингуют, прежде чем осудить. Перегруженный, но живой выход отвечает и сохраняет свои потоки; мёртвый всё равно отключается. Если выключено, выход осуждается по порогу зависания</value>
     <comment>Developer tools screen: explanatory subtext under the 'busy probe' control.</comment>
   </data>
+  <data name="dev_busy_probe_wait" xml:space="preserve">
+    <value>Ожидание пробы занятости</value>
+    <comment>Developer page: label of the 'Busy probe wait' setting.</comment>
+  </data>
+  <data name="dev_busy_probe_wait_detail" xml:space="preserve">
+    <value>Как долго проба зависания ждёт ответа, прежде чем осудить выход, в мс. Если выключено, берётся половина порога зависания</value>
+    <comment>Developer page: the explanation under the 'Busy probe wait' setting.</comment>
+  </data>
   <data name="dev_busy_probes" xml:space="preserve">
     <value>Пробы занятости</value>
     <comment>Developer tools screen (reliability surface): busy probes control label.</comment>
@@ -1539,6 +1711,10 @@
   <data name="dev_busy_probes_value" xml:space="preserve">
     <value>{0} отправлено / {1} оправдано</value>
     <comment>Developer tools screen: formatted value readout for 'busy probes'.</comment>
+  </data>
+  <data name="dev_check_updates" xml:space="preserve">
+    <value>Проверить обновления</value>
+    <comment>Developer page: button that checks for a new release now.</comment>
   </data>
   <data name="dev_choose_logs" xml:space="preserve">
     <value>Выбрать логи…</value>
@@ -1560,6 +1736,58 @@
     <value>Удерживает сайт на одном выходе, когда его имя хоста не видно</value>
     <comment>Developer tools screen: explanatory subtext under the 'cluster affinity' control.</comment>
   </data>
+  <data name="dev_col_actions" xml:space="preserve">
+    <value>Действия</value>
+    <comment>Developer page: table column header for the per-row action buttons.</comment>
+  </data>
+  <data name="dev_col_connect" xml:space="preserve">
+    <value>Подключение</value>
+    <comment>Developer page: table column header for the connect timing.</comment>
+  </data>
+  <data name="dev_col_destination" xml:space="preserve">
+    <value>Адресат</value>
+    <comment>Developer page: table column header for a destination host.</comment>
+  </data>
+  <data name="dev_col_exit" xml:space="preserve">
+    <value>Выход</value>
+    <comment>Developer page: table column header for the exit a flow uses.</comment>
+  </data>
+  <data name="dev_col_failed_dials" xml:space="preserve">
+    <value>Неудачные попытки соединения</value>
+    <comment>Developer page: table column header for the number of failed dials.</comment>
+  </data>
+  <data name="dev_col_flows" xml:space="preserve">
+    <value>Потоки</value>
+    <comment>Developer page: table column header for the number of flows.</comment>
+  </data>
+  <data name="dev_col_kind" xml:space="preserve">
+    <value>Тип</value>
+    <comment>Developer page: table column header for the probe kind.</comment>
+  </data>
+  <data name="dev_col_outcome" xml:space="preserve">
+    <value>Результат</value>
+    <comment>Developer page: table column header for a probe outcome.</comment>
+  </data>
+  <data name="dev_col_state" xml:space="preserve">
+    <value>Состояние</value>
+    <comment>Developer page: table column header for an exit state.</comment>
+  </data>
+  <data name="dev_col_target" xml:space="preserve">
+    <value>Цель</value>
+    <comment>Developer page: table column header for a probe target.</comment>
+  </data>
+  <data name="dev_col_tier" xml:space="preserve">
+    <value>Уровень</value>
+    <comment>Developer page: table column header for an exit tier.</comment>
+  </data>
+  <data name="dev_col_total" xml:space="preserve">
+    <value>Всего</value>
+    <comment>Developer page: table column header for the total timing.</comment>
+  </data>
+  <data name="dev_col_window" xml:space="preserve">
+    <value>Окно</value>
+    <comment>Developer page: table column header for the measurement window.</comment>
+  </data>
   <data name="dev_comparative_connect" xml:space="preserve">
     <value>Рано обрывать мёртвые подключения</value>
     <comment>Developer tools screen (reliability surface): comparative connect control label.</comment>
@@ -1567,6 +1795,46 @@
   <data name="dev_comparative_connect_detail" xml:space="preserve">
     <value>Раньше отключает выход, который ничего не установил, когда два соседних выхода получают данные. Если выключено, выжидается полный порог подключения в 30 с</value>
     <comment>Developer tools screen: explanatory subtext under the 'comparative connect' control.</comment>
+  </data>
+  <data name="dev_connect_for_live_tools" xml:space="preserve">
+    <value>Подключитесь, чтобы пользоваться инструментами активного соединения. Диагностика ниже работает в любом случае.</value>
+    <comment>Developer page (Apple): note shown while disconnected.</comment>
+  </data>
+  <data name="dev_corroborate_silent_exits" xml:space="preserve">
+    <value>Подтверждать молчащие выходы</value>
+    <comment>Developer page: label of the 'Corroborate silent exits' setting.</comment>
+  </data>
+  <data name="dev_corroborate_silent_exits_detail" xml:space="preserve">
+    <value>Сколько разных адресатов должны молчать, прежде чем выход будет осуждён за отсутствие приёма, чтобы один мёртвый сайт не мог удалить рабочий выход</value>
+    <comment>Developer page: the explanation under the 'Corroborate silent exits' setting.</comment>
+  </data>
+  <data name="dev_count_affected" xml:space="preserve">
+    <value>затронуто</value>
+    <comment>Developer page: suffix after a count of affected flows.</comment>
+  </data>
+  <data name="dev_cut_dead_connects_early" xml:space="preserve">
+    <value>Рано обрывать мёртвые подключения</value>
+    <comment>Developer page: label of the 'Cut dead connects early' setting.</comment>
+  </data>
+  <data name="dev_cut_dead_connects_early_detail" xml:space="preserve">
+    <value>Раньше отключает выход, который ничего не установил, когда два соседних выхода получают данные, в мс. Если выключено, выжидается полный порог подключения в 30 с</value>
+    <comment>Developer page: the explanation under the 'Cut dead connects early' setting.</comment>
+  </data>
+  <data name="dev_declined_exit" xml:space="preserve">
+    <value>Без изменений: SDK отклонил этот выход</value>
+    <comment>Developer page: report line when the SDK refused an exit action.</comment>
+  </data>
+  <data name="dev_destinations" xml:space="preserve">
+    <value>Адресаты</value>
+    <comment>Developer page: heading of the destinations table.</comment>
+  </data>
+  <data name="dev_destinations_detail" xml:space="preserve">
+    <value>На какой выход приходят потоки каждого адресата. Сайт, разбросанный по нескольким строкам, — это сайт, потерявший свой единственный исходящий IP.</value>
+    <comment>Developer page: explanation under the destinations table.</comment>
+  </data>
+  <data name="dev_developer" xml:space="preserve">
+    <value>Разработчик</value>
+    <comment>Developer page: page title.</comment>
   </data>
   <data name="dev_dial_failure_rerace" xml:space="preserve">
     <value>Повторять отклонённые подключения через другой выход</value>
@@ -1587,6 +1855,18 @@
   <data name="dev_drop_exit" xml:space="preserve">
     <value>Отключить</value>
     <comment>Developer tools screen (reliability surface): drop exit control label.</comment>
+  </data>
+  <data name="dev_drop_stalled_exits_fast" xml:space="preserve">
+    <value>Быстро отключать зависшие выходы</value>
+    <comment>Developer page: label of the 'Drop stalled exits fast' setting.</comment>
+  </data>
+  <data name="dev_drop_stalled_exits_fast_detail" xml:space="preserve">
+    <value>Как долго выход может ничего не доставлять, прежде чем его отключат, в мс. Если выключено, ожидание 30 с</value>
+    <comment>Developer page: the explanation under the 'Drop stalled exits fast' setting.</comment>
+  </data>
+  <data name="dev_dropped_exit" xml:space="preserve">
+    <value>Отключён выход</value>
+    <comment>Developer page: report line after an exit was dropped.</comment>
   </data>
   <data name="dev_effective_tier" xml:space="preserve">
     <value>Понижение уровня в реальном времени</value>
@@ -1615,6 +1895,10 @@
   <data name="dev_exits" xml:space="preserve">
     <value>Выходы</value>
     <comment>Developer tools screen (reliability surface): exits control label.</comment>
+  </data>
+  <data name="dev_exits_actions_detail" xml:space="preserve">
+    <value>«Отключить», «Заморозить» и «Перемешать» намеренно и сразу ухудшают активное соединение. Здесь ничего не ставится в очередь и не повторяется: неудачное действие отображается в отчёте, а не выполняется заново.</value>
+    <comment>Developer page: explanation of the drop, stall and shuffle actions.</comment>
   </data>
   <data name="dev_export_all_logs" xml:space="preserve">
     <value>Экспортировать все логи (необработанные)</value>
@@ -1664,6 +1948,14 @@
     <value>Экспорт…</value>
     <comment>Developer tools screen: progress label shown while a diagnostic bundle is being exported.</comment>
   </data>
+  <data name="dev_fast_first_exit_poll" xml:space="preserve">
+    <value>Быстрый опрос первого выхода</value>
+    <comment>Developer page: label of the 'Fast first-exit poll' setting.</comment>
+  </data>
+  <data name="dev_fast_first_exit_poll_detail" xml:space="preserve">
+    <value>Как часто подключающийся поток перепроверяет пустое окно, в мс, чтобы первый запрос ушёл сразу после появления первого выхода. Если выключено, используется интервал повтора 2 с</value>
+    <comment>Developer page: the explanation under the 'Fast first-exit poll' setting.</comment>
+  </data>
   <data name="dev_flows_opened" xml:space="preserve">
     <value>Открыто потоков</value>
     <comment>Developer tools screen (reliability surface): flows opened control label.</comment>
@@ -1691,6 +1983,22 @@
   <data name="dev_flows_reraced_detail" xml:space="preserve">
     <value>Сколько из этих сбоев было незаметно перенесено, а не зависло</value>
     <comment>Developer tools screen: explanatory subtext under the 'flows reraced' control.</comment>
+  </data>
+  <data name="dev_follow_benched_exits" xml:space="preserve">
+    <value>Следовать за отстранёнными выходами</value>
+    <comment>Developer page: label of the 'Follow benched exits' setting.</comment>
+  </data>
+  <data name="dev_follow_benched_exits_detail" xml:space="preserve">
+    <value>Выход на карантине сохраняет новые соединения своих сайтов в начале отстранения, когда вердикт наименее обоснован. Новые сайты по-прежнему его избегают</value>
+    <comment>Developer page: the explanation under the 'Follow benched exits' setting.</comment>
+  </data>
+  <data name="dev_follow_window" xml:space="preserve">
+    <value>Окно следования</value>
+    <comment>Developer page: label of the 'Follow window' setting.</comment>
+  </data>
+  <data name="dev_follow_window_detail" xml:space="preserve">
+    <value>Как долго после начала отстранения новые соединения сайта продолжают следовать за своим выходом, в мс. Если выключено, соединения сразу распределяются</value>
+    <comment>Developer page: the explanation under the 'Follow window' setting.</comment>
   </data>
   <data name="dev_formation_poll" xml:space="preserve">
     <value>Быстрый опрос первого выхода</value>
@@ -1724,6 +2032,10 @@
     <value>Как долго после начала отстранения новые соединения сайта продолжают следовать за своим выходом — ранние отстранения обычно оказываются ложными тревогами; затянувшееся ведёт к удалению, и выход перестаёт принимать потоки. Если выключено, соединения сразу распределяются</value>
     <comment>Developer tools screen: explanatory subtext under the 'group follow window' control.</comment>
   </data>
+  <data name="dev_group_follow_window_ms_detail" xml:space="preserve">
+    <value>Как долго после начала отстранения новые соединения сайта продолжают следовать за своим выходом, в мс — ранние отстранения обычно оказываются ложными тревогами; затянувшееся ведёт к удалению, и выход перестаёт принимать потоки. Если выключено, соединения сразу распределяются</value>
+    <comment>Developer page (Apple): the explanation under the 'Follow window' setting, with its unit.</comment>
+  </data>
   <data name="dev_heartbeat" xml:space="preserve">
     <value>Пульс состояния</value>
     <comment>Developer tools screen (reliability surface): heartbeat control label.</comment>
@@ -1731,6 +2043,54 @@
   <data name="dev_heartbeat_detail" xml:space="preserve">
     <value>Как часто в лог записывается строка со сводкой текущего состояния для последующего анализа. Если выключено, запись отключается; меньший интервал позволяет заметить переход, больший — сохранить больше буфера</value>
     <comment>Developer tools screen: explanatory subtext under the 'heartbeat' control.</comment>
+  </data>
+  <data name="dev_heartbeat_ms_detail" xml:space="preserve">
+    <value>Как часто в лог записывается строка со сводкой текущего состояния для последующего анализа, в мс. Если выключено, запись отключается; меньший интервал позволяет заметить переход, больший — сохранить больше буфера</value>
+    <comment>Developer page (Apple): the explanation under the 'State heartbeat' setting, with its unit.</comment>
+  </data>
+  <data name="dev_intro" xml:space="preserve">
+    <value>Инструменты для диагностики зависаний соединения. Они воздействуют на активное соединение.</value>
+    <comment>Developer page: intro line under the title.</comment>
+  </data>
+  <data name="dev_ip_family" xml:space="preserve">
+    <value>Управляющие соединения</value>
+    <comment>Developer screen: title of the control-plane IP family setting.</comment>
+  </data>
+  <data name="dev_ip_family_auto" xml:space="preserve">
+    <value>Автоматически</value>
+    <comment>Developer screen: the automatic IP family option.</comment>
+  </data>
+  <data name="dev_ip_family_auto_demoted_detail" xml:space="preserve">
+    <value>Автоматически. {}.</value>
+    <comment>Developer screen: the automatic option's detail when one family was demoted; {reason} is the demotion reason.</comment>
+  </data>
+  <data name="dev_ip_family_auto_detail" xml:space="preserve">
+    <value>Использует семейство адресов, которое подключится первым, и обходит то, что отказывает после подключения.</value>
+    <comment>Developer screen: detail line of the automatic IP family option.</comment>
+  </data>
+  <data name="dev_ip_family_force4" xml:space="preserve">
+    <value>Только IPv4</value>
+    <comment>Developer screen: the IPv4-only option.</comment>
+  </data>
+  <data name="dev_ip_family_force4_detail" xml:space="preserve">
+    <value>Управляющие соединения используют только IPv4. Выключите это в сети только с IPv6.</value>
+    <comment>Developer screen: detail line of the IPv4-only option.</comment>
+  </data>
+  <data name="dev_ip_family_force6" xml:space="preserve">
+    <value>Только IPv6</value>
+    <comment>Developer screen: the IPv6-only option.</comment>
+  </data>
+  <data name="dev_ip_family_force6_detail" xml:space="preserve">
+    <value>Управляющие соединения используют только IPv6. Выключите это, если приложение не может связаться с сервером.</value>
+    <comment>Developer screen: detail line of the IPv6-only option.</comment>
+  </data>
+  <data name="dev_keep_quiet_providers_longer" xml:space="preserve">
+    <value>Дольше сохранять молчащих провайдеров</value>
+    <comment>Developer page: label of the 'Keep quiet providers longer' setting.</comment>
+  </data>
+  <data name="dev_keep_quiet_providers_longer_detail" xml:space="preserve">
+    <value>Как долго провайдер, который ещё подтверждает трафик, может ничего не возвращать, прежде чем его отключат, в мс. Если выключено, он сохраняется, пока не перестанет подтверждать</value>
+    <comment>Developer page: the explanation under the 'Keep quiet providers longer' setting.</comment>
   </data>
   <data name="dev_load_corroboration" xml:space="preserve">
     <value>Подтверждение с учётом нагрузки</value>
@@ -1784,6 +2144,14 @@
     <value>Логи записывают ваш реальный трафик</value>
     <comment>Developer tools screen: title for the detailed traffic logging privacy warning.</comment>
   </data>
+  <data name="dev_longer_tcp_idle_timeout" xml:space="preserve">
+    <value>Увеличенный тайм-аут простоя TCP</value>
+    <comment>Developer page: label of the 'Longer TCP idle timeout' setting.</comment>
+  </data>
+  <data name="dev_longer_tcp_idle_timeout_detail" xml:space="preserve">
+    <value>Как долго TCP-соединение может простаивать, в мс. Если выключено, используется предел для UDP</value>
+    <comment>Developer page: the explanation under the 'Longer TCP idle timeout' setting.</comment>
+  </data>
   <data name="dev_max_flows_per_exit" xml:space="preserve">
     <value>Макс. соединений на выход</value>
     <comment>Developer tools screen (reliability surface): max flows per exit control label.</comment>
@@ -1804,9 +2172,17 @@
     <value>Во что обходится сбой провайдера. Сбросьте, запустите тест, посмотрите результат.</value>
     <comment>Developer tools screen: explanatory subtext under the 'measurements' control.</comment>
   </data>
+  <data name="dev_migrate" xml:space="preserve">
+    <value>Перенести</value>
+    <comment>Developer page: button that migrates the live connection.</comment>
+  </data>
   <data name="dev_migrate_exit" xml:space="preserve">
     <value>Перенести</value>
     <comment>Developer tools screen (reliability surface): migrate exit control label.</comment>
+  </data>
+  <data name="dev_migrated_exit" xml:space="preserve">
+    <value>Перенесён выход</value>
+    <comment>Developer page: last-action report after moving an exit's flows to another exit; the exit's short id follows.</comment>
   </data>
   <data name="dev_min_blackhole_destinations" xml:space="preserve">
     <value>Подтверждать молчащие выходы</value>
@@ -1816,9 +2192,45 @@
     <value>Сколько разных адресатов должны молчать, прежде чем выход будет осуждён за отсутствие приёма, чтобы один мёртвый сайт не мог удалить рабочий выход. Если выключено, для осуждения достаточно одного адресата</value>
     <comment>Developer tools screen: explanatory subtext under the 'min blackhole destinations' control.</comment>
   </data>
+  <data name="dev_never_came_back_value" xml:space="preserve">
+    <value>{0} из {1}</value>
+    <comment>Developer page: value of the flows that never came back, {done} of {total}.</comment>
+  </data>
+  <data name="dev_no_destinations" xml:space="preserve">
+    <value>Адресатов пока нет.</value>
+    <comment>Developer page: empty state of the destinations table.</comment>
+  </data>
+  <data name="dev_no_device" xml:space="preserve">
+    <value>Нет сеанса. Войдите и подключитесь, чтобы пользоваться этими инструментами.</value>
+    <comment>Developer page: shown when there is no session to act on.</comment>
+  </data>
   <data name="dev_no_exits" xml:space="preserve">
     <value>Нет выходов. Сначала подключитесь.</value>
     <comment>Developer tools screen (reliability surface): no exits control label.</comment>
+  </data>
+  <data name="dev_no_probe_results" xml:space="preserve">
+    <value>Результатов проверок пока нет. Запустите набор.</value>
+    <comment>Developer page: empty state of the probe results table.</comment>
+  </data>
+  <data name="dev_no_provider_failures" xml:space="preserve">
+    <value>Сбоев провайдеров пока нет.</value>
+    <comment>Developer page: empty state of the provider failures table.</comment>
+  </data>
+  <data name="dev_not_applied" xml:space="preserve">
+    <value>Не применено: нет действующего переопределения надёжности, которое можно изменить.</value>
+    <comment>Developer page: report line when no reliability override is in force.</comment>
+  </data>
+  <data name="dev_not_issued" xml:space="preserve">
+    <value>Не отправлено: нет активного сеанса, на который можно воздействовать.</value>
+    <comment>Developer page: report line when there is no live session to act on.</comment>
+  </data>
+  <data name="dev_nothing_in_force" xml:space="preserve">
+    <value>Переопределение надёжности не действует, поэтому разделы настроек скрыты, а не показаны с нулями. Измерения и сводка по выходам ниже обновляются в реальном времени.</value>
+    <comment>Developer page: note shown when no reliability override is in force.</comment>
+  </data>
+  <data name="dev_one_min" xml:space="preserve">
+    <value>1 (мин.)</value>
+    <comment>Developer page: what a setting's 0 means when it falls back to the minimum of 1 ('Candidates evaluated per slot').</comment>
   </data>
   <data name="dev_open_tools" xml:space="preserve">
     <value>Открыть инструменты разработчика</value>
@@ -1827,6 +2239,18 @@
   <data name="dev_probe_all" xml:space="preserve">
     <value>Проверить все выходы сейчас</value>
     <comment>Developer tools screen (reliability surface): probe all control label.</comment>
+  </data>
+  <data name="dev_probe_all_exits_now" xml:space="preserve">
+    <value>Проверить все выходы сейчас</value>
+    <comment>Developer page: button that probes every exit now.</comment>
+  </data>
+  <data name="dev_probe_failed" xml:space="preserve">
+    <value>ошибка</value>
+    <comment>Developer page: probe outcome, failed.</comment>
+  </data>
+  <data name="dev_probe_ok" xml:space="preserve">
+    <value>успешно</value>
+    <comment>Developer page: probe outcome, ok.</comment>
   </data>
   <data name="dev_probe_providers" xml:space="preserve">
     <value>Пробы провайдеров</value>
@@ -1844,6 +2268,62 @@
     <value>Сколько проверочных сайтов один проход квалификации вызывает через выход. 0 — проверять весь встроенный список; меньшее число перебирает его блоками</value>
     <comment>Developer tools screen: explanatory subtext under the 'probe sample hosts' control.</comment>
   </data>
+  <data name="dev_probe_silence_streak" xml:space="preserve">
+    <value>Серия молчаливых проб</value>
+    <comment>Developer page: label of the 'Probe silence streak' setting.</comment>
+  </data>
+  <data name="dev_probe_silence_streak_detail" xml:space="preserve">
+    <value>Сколько проходов проб подряд выход может отвечать полной тишиной, прежде чем получит предупреждение и будет исключён из размещения новых потоков. Только размещение</value>
+    <comment>Developer page: the explanation under the 'Probe silence streak' setting.</comment>
+  </data>
+  <data name="dev_probe_silence_streak_long_detail" xml:space="preserve">
+    <value>Сколько проходов проб подряд выход может отвечать полной тишиной, прежде чем получит предупреждение и будет исключён из размещения новых потоков — это поправка на провайдеров, которые покидают сеть посреди сеанса. Только размещение: удаление по-прежнему зависит от трафика, а любой признак жизни сбрасывает серию</value>
+    <comment>Developer page (Apple): the explanation under the 'Probe silence streak' setting.</comment>
+  </data>
+  <data name="dev_probe_stalled_exits" xml:space="preserve">
+    <value>Проверять зависшие выходы перед отключением</value>
+    <comment>Developer page: label of the 'Probe stalled exits before dropping' setting.</comment>
+  </data>
+  <data name="dev_probe_stalled_exits_detail" xml:space="preserve">
+    <value>Когда выход зависает, его один раз пингуют, прежде чем осудить. Перегруженный, но живой выход отвечает и сохраняет свои потоки; мёртвый всё равно отключается</value>
+    <comment>Developer page: the explanation under the 'Probe stalled exits before dropping' setting.</comment>
+  </data>
+  <data name="dev_probe_suite" xml:space="preserve">
+    <value>Набор проверок</value>
+    <comment>Developer page: heading of the probe suite section.</comment>
+  </data>
+  <data name="dev_probe_suite_detail" xml:space="preserve">
+    <value>Обращается к реальным целям через активное соединение и замеряет время каждого этапа. Работает с собственной конфигурацией SDK по умолчанию.</value>
+    <comment>Developer page: explanation of the probe suite.</comment>
+  </data>
+  <data name="dev_probe_suite_idle" xml:space="preserve">
+    <value>Не запущен.</value>
+    <comment>Developer page: probe suite status when it is not running.</comment>
+  </data>
+  <data name="dev_probe_suite_not_started" xml:space="preserve">
+    <value>Набор проверок не запущен: нет активного сеанса или один уже выполняется.</value>
+    <comment>Developer page: report line when the probe suite could not start.</comment>
+  </data>
+  <data name="dev_probe_suite_running" xml:space="preserve">
+    <value>Выполняется.</value>
+    <comment>Developer page: probe suite status while it runs.</comment>
+  </data>
+  <data name="dev_probe_suite_start" xml:space="preserve">
+    <value>Запустить набор проверок</value>
+    <comment>Developer page: button that starts the probe suite.</comment>
+  </data>
+  <data name="dev_probe_suite_started" xml:space="preserve">
+    <value>Набор проверок запущен</value>
+    <comment>Developer page: report line after the probe suite started.</comment>
+  </data>
+  <data name="dev_probe_suite_stop" xml:space="preserve">
+    <value>Остановить</value>
+    <comment>Developer page: button that stops the probe suite.</comment>
+  </data>
+  <data name="dev_probe_suite_stopped" xml:space="preserve">
+    <value>Набор проверок остановлен</value>
+    <comment>Developer page: report line after the probe suite stopped.</comment>
+  </data>
   <data name="dev_probe_timeout" xml:space="preserve">
     <value>Ожидание пробы</value>
     <comment>Developer tools screen (reliability surface): probe timeout control label.</comment>
@@ -1851,6 +2331,18 @@
   <data name="dev_probe_timeout_detail" xml:space="preserve">
     <value>Как долго проба квалификации ждёт ответа. Если выключено, используются встроенные 4 с. Ограничивает только ожидание подтверждения и никогда не осуждает</value>
     <comment>Developer tools screen: explanatory subtext under the 'probe timeout' control.</comment>
+  </data>
+  <data name="dev_probe_wait" xml:space="preserve">
+    <value>Ожидание пробы</value>
+    <comment>Developer page: label of the 'Probe wait' setting.</comment>
+  </data>
+  <data name="dev_probe_wait_detail" xml:space="preserve">
+    <value>Как долго проба квалификации ждёт ответа, в мс. Если выключено, используются встроенные 4 с. Ограничивает только ожидание подтверждения и никогда не осуждает</value>
+    <comment>Developer page: the explanation under the 'Probe wait' setting.</comment>
+  </data>
+  <data name="dev_probed_exits" xml:space="preserve">
+    <value>Проверенные выходы</value>
+    <comment>Developer page: heading of the probed exits table.</comment>
   </data>
   <data name="dev_probes" xml:space="preserve">
     <value>Пробы</value>
@@ -1863,6 +2355,10 @@
   <data name="dev_probes_value" xml:space="preserve">
     <value>{0} отправлено / {1} с ответом</value>
     <comment>Developer tools screen: formatted value readout for 'probes'.</comment>
+  </data>
+  <data name="dev_quic_flows_rebound_value" xml:space="preserve">
+    <value>{0} ({1} принято / {2} переподключено)</value>
+    <comment>Developer page: value of the QUIC flows that rebound: {count} total, {accepted} accepted, {redialed} re-dialed.</comment>
   </data>
   <data name="dev_quic_rebind" xml:space="preserve">
     <value>Перепривязывать QUIC при потере выхода</value>
@@ -1892,6 +2388,10 @@
     <value>{0} из {1}</value>
     <comment>Developer tools screen: formatted value readout for 'recovery missed'.</comment>
   </data>
+  <data name="dev_recovery_time_value" xml:space="preserve">
+    <value>в среднем {0}, худшее {1}</value>
+    <comment>Developer page: value of the recovery time, {average} and {worst} are durations.</comment>
+  </data>
   <data name="dev_recovery_value" xml:space="preserve">
     <value>в среднем {0}, худшее {1}</value>
     <comment>Developer tools screen: formatted value readout for 'recovery'.</comment>
@@ -1899,6 +2399,14 @@
   <data name="dev_refresh" xml:space="preserve">
     <value>Обновить</value>
     <comment>Developer tools screen (reliability surface): refresh control label.</comment>
+  </data>
+  <data name="dev_release_stuck_retransmits" xml:space="preserve">
+    <value>Отпускать застрявшие повторные передачи</value>
+    <comment>Developer page: label of the 'Release stuck retransmits' setting.</comment>
+  </data>
+  <data name="dev_release_stuck_retransmits_detail" xml:space="preserve">
+    <value>Как долго удерживаются повторные передачи, прежде чем одна будет отпущена, в мс. Если выключено, ожидание 30 с</value>
+    <comment>Developer page: the explanation under the 'Release stuck retransmits' setting.</comment>
   </data>
   <data name="dev_removal_budget_count" xml:space="preserve">
     <value>Лимит шторма удалений</value>
@@ -1916,6 +2424,22 @@
     <value>Окно, за которое считается лимит удалений. Выключенное значение (как и лимит 0) отключает предохранитель</value>
     <comment>Developer tools screen: explanatory subtext under the 'removal budget window' control.</comment>
   </data>
+  <data name="dev_removal_storm_limit" xml:space="preserve">
+    <value>Лимит шторма удалений</value>
+    <comment>Developer page: label of the 'Removal storm limit' setting.</comment>
+  </data>
+  <data name="dev_removal_storm_limit_detail" xml:space="preserve">
+    <value>Сколько удалений по вердикту разрешено за окно, прежде чем остальные откладываются; всплеск скорее вызван одной локальной причиной, чем множеством сбоев</value>
+    <comment>Developer page: the explanation under the 'Removal storm limit' setting.</comment>
+  </data>
+  <data name="dev_removal_storm_window" xml:space="preserve">
+    <value>Окно шторма удалений</value>
+    <comment>Developer page: label of the 'Removal storm window' setting.</comment>
+  </data>
+  <data name="dev_removal_storm_window_detail" xml:space="preserve">
+    <value>Окно, за которое считается лимит удалений, в мс. Выключенное значение (как и лимит 0) отключает предохранитель</value>
+    <comment>Developer page: the explanation under the 'Removal storm window' setting.</comment>
+  </data>
   <data name="dev_removals_deferred" xml:space="preserve">
     <value>Отложенные удаления</value>
     <comment>Developer tools screen (reliability surface): removals deferred control label.</comment>
@@ -1924,6 +2448,10 @@
     <value>Удаления, которые предохранитель от шторма придержал после коррелированного всплеска</value>
     <comment>Developer tools screen: explanatory subtext under the 'removals deferred' control.</comment>
   </data>
+  <data name="dev_requested" xml:space="preserve">
+    <value>Запрошено:</value>
+    <comment>Developer page: label before the requested value of an override.</comment>
+  </data>
   <data name="dev_reset_defaults" xml:space="preserve">
     <value>Сбросить к заводским значениям</value>
     <comment>Developer tools screen (reliability surface): reset defaults control label.</comment>
@@ -1931,6 +2459,10 @@
   <data name="dev_reset_measurements" xml:space="preserve">
     <value>Сбросить измерения</value>
     <comment>Developer tools screen (reliability surface): reset measurements control label.</comment>
+  </data>
+  <data name="dev_reset_to_shipped_defaults" xml:space="preserve">
+    <value>Сбросить к заводским значениям</value>
+    <comment>Developer page: button that resets the reliability settings.</comment>
   </data>
   <data name="dev_scheduler_pause_recovery" xml:space="preserve">
     <value>Окно восстановления после приостановки</value>
@@ -1947,6 +2479,10 @@
   <data name="dev_scheduler_pause_tolerance_detail" xml:space="preserve">
     <value>Какое превышение таймера считается приостановкой телефона, а не зависанием выхода, чтобы после пробуждения телефон не осудил сразу все выходы. Если выключено, детектор не работает</value>
     <comment>Developer tools screen: explanatory subtext under the 'scheduler pause tolerance' control.</comment>
+  </data>
+  <data name="dev_scheduler_pause_tolerance_ms_detail" xml:space="preserve">
+    <value>Какое превышение таймера считается приостановкой телефона, а не зависанием выхода, в мс, чтобы после пробуждения телефон не осудил сразу все выходы. Если выключено, детектор не работает</value>
+    <comment>Developer page (Apple): the explanation under the 'Suspend detector' setting, with its unit.</comment>
   </data>
   <data name="dev_scheduler_pauses" xml:space="preserve">
     <value>Обнаружено приостановок</value>
@@ -1996,6 +2532,46 @@
     <value>Переносит последующие соединения на выход, который уже использует первое</value>
     <comment>Developer tools screen: explanatory subtext under the 'server name bridge' control.</comment>
   </data>
+  <data name="dev_service_detached" xml:space="preserve">
+    <value>Служба URnetwork не подключена, поэтому прочитать активное соединение нельзя.</value>
+    <comment>Developer page: shown when the system service is not attached.</comment>
+  </data>
+  <data name="dev_session_log" xml:space="preserve">
+    <value>Лог сеанса</value>
+    <comment>Developer page: heading of the daemon session log.</comment>
+  </data>
+  <data name="dev_session_log_denied" xml:space="preserve">
+    <value>Эта учётная запись может управлять службой, но не может читать её лог.</value>
+    <comment>Developer page: shown when this account may not read the daemon log.</comment>
+  </data>
+  <data name="dev_session_log_detail" xml:space="preserve">
+    <value>Что служба записала с момента запуска. Строки надёжности ([rel] event=...) показывают, что настройка ниже действительно что-то изменила.</value>
+    <comment>Developer page: explanation of the session log.</comment>
+  </data>
+  <data name="dev_session_log_dropped" xml:space="preserve">
+    <value>Строк отброшено до этого места: {}</value>
+    <comment>Developer page: line in the session log when {count} earlier lines were dropped.</comment>
+  </data>
+  <data name="dev_session_log_empty" xml:space="preserve">
+    <value>Служба пока ничего не записала.</value>
+    <comment>Developer page: empty state of the session log.</comment>
+  </data>
+  <data name="dev_session_log_follow" xml:space="preserve">
+    <value>Следить</value>
+    <comment>Developer page: toggle that follows the session log tail.</comment>
+  </data>
+  <data name="dev_session_log_restarted" xml:space="preserve">
+    <value>Служба перезапустилась. Это новый лог; строк предыдущего запуска больше нет.</value>
+    <comment>Developer page: note when the daemon restarted and the log began again.</comment>
+  </data>
+  <data name="dev_set" xml:space="preserve">
+    <value>Применить</value>
+    <comment>Developer page (Apple): button that applies a typed value.</comment>
+  </data>
+  <data name="dev_share_file" xml:space="preserve">
+    <value>Поделиться: {}</value>
+    <comment>Developer page (Apple): button that shares an exported log file. {name} is the file name.</comment>
+  </data>
   <data name="dev_shuffle_exits" xml:space="preserve">
     <value>Перемешать все выходы</value>
     <comment>Developer tools screen (reliability surface): shuffle exits control label.</comment>
@@ -2016,6 +2592,10 @@
     <value>Заморозить</value>
     <comment>Developer tools screen (reliability surface): stall exit control label.</comment>
   </data>
+  <data name="dev_stalled_exit" xml:space="preserve">
+    <value>Заморожен выход</value>
+    <comment>Developer page: report line after an exit was stalled.</comment>
+  </data>
   <data name="dev_standing_reserve" xml:space="preserve">
     <value>Держать запасной выход наготове</value>
     <comment>Developer tools screen (reliability surface): standing reserve control label.</comment>
@@ -2023,6 +2603,66 @@
   <data name="dev_standing_reserve_detail" xml:space="preserve">
     <value>Делает каждое окно на один выход больше целевого размера, чтобы замена уже была подключена. Если выключено, пополнение происходит только после потери</value>
     <comment>Developer tools screen: explanatory subtext under the 'standing reserve' control.</comment>
+  </data>
+  <data name="dev_state_benched" xml:space="preserve">
+    <value>отстранён</value>
+    <comment>Developer page: exit state, benched.</comment>
+  </data>
+  <data name="dev_state_done" xml:space="preserve">
+    <value>завершён</value>
+    <comment>Developer page: exit state, done.</comment>
+  </data>
+  <data name="dev_state_heartbeat" xml:space="preserve">
+    <value>Пульс состояния</value>
+    <comment>Developer page: label of the 'State heartbeat' setting.</comment>
+  </data>
+  <data name="dev_state_heartbeat_detail" xml:space="preserve">
+    <value>Как часто в лог записывается строка со сводкой текущего состояния для последующего анализа, в мс. Если выключено, запись отключается</value>
+    <comment>Developer page: the explanation under the 'State heartbeat' setting.</comment>
+  </data>
+  <data name="dev_state_proven" xml:space="preserve">
+    <value>проверен</value>
+    <comment>Developer page: exit state, proven.</comment>
+  </data>
+  <data name="dev_state_warned" xml:space="preserve">
+    <value>предупреждён</value>
+    <comment>Developer page: exit state, warned.</comment>
+  </data>
+  <data name="dev_sticky_site_affinity" xml:space="preserve">
+    <value>Устойчивая привязка сайтов</value>
+    <comment>Developer page: label of the 'Sticky site affinity' setting.</comment>
+  </data>
+  <data name="dev_sticky_site_affinity_detail" xml:space="preserve">
+    <value>Новые соединения сайта остаются на выходе, который уже используют его прежние соединения, даже сверх лимита потоков, чтобы загруженный сайт сохранял один исходящий IP</value>
+    <comment>Developer page: the explanation under the 'Sticky site affinity' setting.</comment>
+  </data>
+  <data name="dev_suspend_detector" xml:space="preserve">
+    <value>Детектор приостановки</value>
+    <comment>Developer page: label of the 'Suspend detector' setting.</comment>
+  </data>
+  <data name="dev_suspend_detector_detail" xml:space="preserve">
+    <value>Какое превышение таймера считается приостановкой компьютера, а не зависанием выхода, в мс, чтобы после пробуждения компьютер не осудил сразу все выходы. Если выключено, детектор не работает</value>
+    <comment>Developer page: the explanation under the 'Suspend detector' setting.</comment>
+  </data>
+  <data name="dev_suspend_recovery_window" xml:space="preserve">
+    <value>Окно восстановления после приостановки</value>
+    <comment>Developer page: label of the 'Suspend recovery window' setting.</comment>
+  </data>
+  <data name="dev_suspend_recovery_window_detail" xml:space="preserve">
+    <value>Как долго вердикты удерживаются после обнаруженной приостановки, в мс, чтобы транспорты успели перерегистрироваться. Если выключено, используются встроенные 5 с</value>
+    <comment>Developer page: the explanation under the 'Suspend recovery window' setting.</comment>
+  </data>
+  <data name="dev_suspends_caught" xml:space="preserve">
+    <value>Обнаружено приостановок</value>
+    <comment>Developer page: label of the 'Suspends caught' setting.</comment>
+  </data>
+  <data name="dev_suspends_caught_detail" xml:space="preserve">
+    <value>Приостановки хоста, обнаруженные детектором; каждая — это пакет вердиктов, отложенных, а не исполненных на только что проснувшемся компьютере</value>
+    <comment>Developer page: the explanation under the 'Suspends caught' setting.</comment>
+  </data>
+  <data name="dev_sync" xml:space="preserve">
+    <value>Синхронизировать</value>
+    <comment>Developer page: button that syncs the reliability settings.</comment>
   </data>
   <data name="dev_tcp_collapse_hold" xml:space="preserve">
     <value>Отпускать застрявшие повторные передачи</value>
@@ -2048,6 +2688,14 @@
     <value>Тайм-аут простоя UDP</value>
     <comment>Developer tools screen (reliability surface): udp idle timeout control label.</comment>
   </data>
+  <data name="dev_udp_idle_timeout_desktop" xml:space="preserve">
+    <value>Тайм-аут простоя UDP</value>
+    <comment>Developer page: label of the 'UDP idle timeout' setting (desktop wording of dev_udp_idle_timeout).</comment>
+  </data>
+  <data name="dev_udp_idle_timeout_desktop_detail" xml:space="preserve">
+    <value>Как долго поток не-TCP может простаивать, прежде чем его закроют, в мс</value>
+    <comment>Developer page: the explanation under the 'UDP idle timeout' setting, with the unit the number box takes.</comment>
+  </data>
   <data name="dev_udp_idle_timeout_detail" xml:space="preserve">
     <value>Как долго поток не-TCP может простаивать, прежде чем его закроют</value>
     <comment>Developer tools screen: explanatory subtext under the 'udp idle timeout' control.</comment>
@@ -2060,6 +2708,62 @@
     <value>Сообщает DNS и QUIC, что путь пропал, вместо того чтобы молчать</value>
     <comment>Developer tools screen: explanatory subtext under the 'udp teardown' control.</comment>
   </data>
+  <data name="dev_unlimited" xml:space="preserve">
+    <value>Без ограничений</value>
+    <comment>Developer page: what a setting's 0 means when it removes the cap ('Max connections per exit').</comment>
+  </data>
+  <data name="dev_unstall" xml:space="preserve">
+    <value>Разморозить</value>
+    <comment>Developer page: per-exit button that releases an exit stalled with Stall.</comment>
+  </data>
+  <data name="dev_unstalled_exit" xml:space="preserve">
+    <value>Разморожен выход</value>
+    <comment>Developer page: report line after a stall was cleared on an exit.</comment>
+  </data>
+  <data name="dev_update_check_failed" xml:space="preserve">
+    <value>Не удалось проверить обновления — подробности в логах приложения.</value>
+    <comment>Developer page: report line when the update check failed.</comment>
+  </data>
+  <data name="dev_update_checking" xml:space="preserve">
+    <value>Проверка обновлений…</value>
+    <comment>Developer page: update check status while checking.</comment>
+  </data>
+  <data name="dev_update_dev_build" xml:space="preserve">
+    <value>Сборка для разработки: новейший выпуск — v{}, а сборка для разработки никогда не обновляется автоматически.</value>
+    <comment>Developer page: update check result on a development build. {version} is the newest release version.</comment>
+  </data>
+  <data name="dev_update_dev_build_note" xml:space="preserve">
+    <value>это сборка для разработки (код 0), которая никогда не обновляется сама</value>
+    <comment>Developer page (Windows): the rest of the development build line, after the version.</comment>
+  </data>
+  <data name="dev_update_found" xml:space="preserve">
+    <value>Доступно обновление: v{} — см. Настройки.</value>
+    <comment>Developer page: update check result when a newer release exists; Settings shows the update. {version} is the release version.</comment>
+  </data>
+  <data name="dev_update_found_label" xml:space="preserve">
+    <value>Найдено обновление:</value>
+    <comment>Developer page (Windows): prefix of the update check result when a newer release exists; the version follows.</comment>
+  </data>
+  <data name="dev_update_newest_release_is" xml:space="preserve">
+    <value>Новейший выпуск:</value>
+    <comment>Developer page (Windows): prefix of the update check result on a development build; the version follows.</comment>
+  </data>
+  <data name="dev_update_newest_seen" xml:space="preserve">
+    <value>новейший замеченный выпуск:</value>
+    <comment>Developer page (Windows): inside the parentheses after 'No update', before the newest release's version.</comment>
+  </data>
+  <data name="dev_update_no_releases" xml:space="preserve">
+    <value>Стабильный выпуск ещё не опубликован.</value>
+    <comment>Developer page: update check result when there is no stable release.</comment>
+  </data>
+  <data name="dev_update_none" xml:space="preserve">
+    <value>Обновлений нет: это актуальная сборка</value>
+    <comment>Developer page (Windows): update check result on the newest release; the version details follow in parentheses.</comment>
+  </data>
+  <data name="dev_update_up_to_date" xml:space="preserve">
+    <value>Обновлений нет. Новейший выпуск: v{}</value>
+    <comment>Developer page: update check result on the newest release. {version} is the release version.</comment>
+  </data>
   <data name="dev_uplink_gate" xml:space="preserve">
     <value>Порог тишины аплинка</value>
     <comment>Developer tools screen (reliability surface): uplink gate control label.</comment>
@@ -2068,9 +2772,25 @@
     <value>Как долго весь туннель может молчать, прежде чем вердикты о провайдерах будут отложены как недопустимые. 0 — осуждать как раньше</value>
     <comment>Developer tools screen: explanatory subtext under the 'uplink gate' control.</comment>
   </data>
+  <data name="dev_uplink_silence_gate" xml:space="preserve">
+    <value>Порог тишины аплинка</value>
+    <comment>Developer page: label of the 'Uplink silence gate' setting.</comment>
+  </data>
+  <data name="dev_uplink_silence_gate_detail" xml:space="preserve">
+    <value>Как долго весь туннель может молчать, прежде чем вердикты о провайдерах будут отложены как недопустимые, в мс. 0 — осуждать как раньше</value>
+    <comment>Developer page: the explanation under the 'Uplink silence gate' setting.</comment>
+  </data>
   <data name="dev_verdicts_held" xml:space="preserve">
     <value>Отложенные вердикты</value>
     <comment>Developer tools screen (reliability surface): verdicts held control label.</comment>
+  </data>
+  <data name="dev_verdicts_held_desktop" xml:space="preserve">
+    <value>Отложенные вердикты</value>
+    <comment>Developer page: label of the 'Verdicts held' measurement (desktop wording of dev_verdicts_held).</comment>
+  </data>
+  <data name="dev_verdicts_held_desktop_detail" xml:space="preserve">
+    <value>Осуждения, отложенные потому, что молчал собственный аплинк этого компьютера, а не провайдер (аплинк / транспорт)</value>
+    <comment>Developer page: the explanation under the 'Verdicts held' measurement (desktop wording).</comment>
   </data>
   <data name="dev_verdicts_held_detail" xml:space="preserve">
     <value>Осуждения, отложенные потому, что молчал собственный аплинк телефона, а не провайдер (аплинк / транспорт)</value>
@@ -2091,6 +2811,10 @@
   <data name="dev_worst_loss_value" xml:space="preserve">
     <value>Соединений: {}</value>
     <comment>Developer tools screen: formatted value readout for 'worst loss'.</comment>
+  </data>
+  <data name="dev_worst_single_failure_value" xml:space="preserve">
+    <value>Соединений: {}</value>
+    <comment>Developer page: value of the worst single failure, {count} connections.</comment>
   </data>
   <data name="developer" xml:space="preserve">
     <value>Разработчик</value>
@@ -2139,6 +2863,98 @@
   <data name="devices" xml:space="preserve">
     <value>Устройства</value>
     <comment>Provider list group title for devices</comment>
+  </data>
+  <data name="direct_update_allow" xml:space="preserve">
+    <value>Разрешить</value>
+    <comment>macOS folder-access panel button that grants the app access to the Applications folder for the update.</comment>
+  </data>
+  <data name="direct_update_allow_applications" xml:space="preserve">
+    <value>Чтобы установить обновление, разрешите URnetwork заменить себя в папке «Программы». Выберите «Программы» и нажмите «Разрешить».</value>
+    <comment>macOS folder-access panel message when installing an update: the user selects the Applications folder to grant access. Keep "Allow" consistent with the panel's button.</comment>
+  </data>
+  <data name="direct_update_available" xml:space="preserve">
+    <value>Доступно обновление: {}</value>
+    <comment>macOS Settings &gt; Software update status when a newer release exists. {version} is its version.</comment>
+  </data>
+  <data name="direct_update_check" xml:space="preserve">
+    <value>Проверить обновления</value>
+    <comment>macOS Settings &gt; Software update button that checks now.</comment>
+  </data>
+  <data name="direct_update_check_failed" xml:space="preserve">
+    <value>Не удалось проверить обновления: {}</value>
+    <comment>macOS Settings &gt; Software update error. {detail} is a short technical reason (often English, from the system).</comment>
+  </data>
+  <data name="direct_update_checking" xml:space="preserve">
+    <value>Проверка обновлений…</value>
+    <comment>macOS Settings &gt; Software update status while checking.</comment>
+  </data>
+  <data name="direct_update_checksum_failed" xml:space="preserve">
+    <value>Загруженный файл не совпал с контрольной суммой выпуска и был удалён.</value>
+    <comment>macOS Settings &gt; Software update error: the downloaded file failed its integrity check and was deleted.</comment>
+  </data>
+  <data name="direct_update_development_build" xml:space="preserve">
+    <value>Сборка для разработки; новейший выпуск — {}.</value>
+    <comment>macOS Settings &gt; Software update status on a development build, which never updates itself. {version} is the newest release version.</comment>
+  </data>
+  <data name="direct_update_download_failed" xml:space="preserve">
+    <value>Загрузка не удалась: {}</value>
+    <comment>macOS Settings &gt; Software update error. {detail} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_downloading_version" xml:space="preserve">
+    <value>Загрузка {}…</value>
+    <comment>macOS Settings &gt; Software update status while the release downloads. {version} is its version.</comment>
+  </data>
+  <data name="direct_update_install" xml:space="preserve">
+    <value>Установить обновление</value>
+    <comment>macOS Settings &gt; Software update button that downloads, verifies and installs the update.</comment>
+  </data>
+  <data name="direct_update_install_failed" xml:space="preserve">
+    <value>Не удалось установить обновление: {}</value>
+    <comment>macOS Settings &gt; Software update error. {detail} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_installing" xml:space="preserve">
+    <value>Установка обновления…</value>
+    <comment>macOS Settings &gt; Software update status while the verified update is installed.</comment>
+  </data>
+  <data name="direct_update_last_checked" xml:space="preserve">
+    <value>Последняя проверка: {}</value>
+    <comment>macOS Settings &gt; Software update: when updates were last checked. {when} is a relative date, for example "5 minutes ago" or "yesterday".</comment>
+  </data>
+  <data name="direct_update_manual_install" xml:space="preserve">
+    <value>Версия {} загружена и проверена. Перетащите новый URnetwork в папку «Программы» и откройте его оттуда.</value>
+    <comment>macOS Settings &gt; Software update status when the app could not replace itself. {version} is the downloaded release's version.</comment>
+  </data>
+  <data name="direct_update_not_checked" xml:space="preserve">
+    <value>Обновления ещё не проверялись.</value>
+    <comment>macOS Settings &gt; Software update status before the first check.</comment>
+  </data>
+  <data name="direct_update_relaunching" xml:space="preserve">
+    <value>Перезапуск URnetwork…</value>
+    <comment>macOS Settings &gt; Software update status while the app restarts on the new version.</comment>
+  </data>
+  <data name="direct_update_section_title" xml:space="preserve">
+    <value>Обновление ПО</value>
+    <comment>macOS Settings: title of the section that checks for and installs app updates (direct-download app).</comment>
+  </data>
+  <data name="direct_update_show_in_finder" xml:space="preserve">
+    <value>Показать в Finder</value>
+    <comment>macOS Settings &gt; Software update button that reveals the downloaded update in Finder (the macOS file manager).</comment>
+  </data>
+  <data name="direct_update_signature_rejected" xml:space="preserve">
+    <value>Обновление отклонено: {}</value>
+    <comment>macOS Settings &gt; Software update error when the downloaded app's code signature did not check out. {detail} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_unpack_failed" xml:space="preserve">
+    <value>Не удалось распаковать загруженный файл: {}</value>
+    <comment>macOS Settings &gt; Software update error. {detail} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_unusable_release" xml:space="preserve">
+    <value>Выпуск {0} не может быть установлен приложением ({1}).</value>
+    <comment>macOS Settings &gt; Software update error when the newest release has no file this app can install. {version} is the release version; {reason} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_up_to_date" xml:space="preserve">
+    <value>У вас последняя версия URnetwork.</value>
+    <comment>macOS Settings &gt; Software update status when no newer release exists.</comment>
   </data>
   <data name="disable_ignore_battery_hint" xml:space="preserve">
     <value>Чтобы отключить, перейдите в Использование батареи приложением в системных настройках</value>
@@ -2393,7 +3209,7 @@
     <comment>Section header of the per-transport enable toggles shown when the transport mode is Auto.</comment>
   </data>
   <data name="enabled_under_auto_footer" xml:space="preserve">
-    <value>Указаны в порядке предпочтения: сначала H3 и H1, затем whodis, затем whodis pump. Порядок фиксирован. Хотя бы один транспорт всегда остаётся включённым.</value>
+    <value>Указаны в порядке предпочтения: сначала H1, затем H3, whodis и whodis pump. Порядок фиксирован. Хотя бы один транспорт всегда остаётся включённым.</value>
     <comment>Footer of the Auto transports section explaining the fixed preference order.</comment>
   </data>
   <data name="enjoying_urnetwork" xml:space="preserve">
@@ -2438,6 +3254,10 @@
   <data name="enter_urnetwork" xml:space="preserve">
     <value>Войти в URnetwork</value>
     <comment>Used in Authenticate/LoginInitial/GuestModeSheet.swift.</comment>
+  </data>
+  <data name="enter_wallet_address" xml:space="preserve">
+    <value>Введите адрес кошелька</value>
+    <comment>Used in Main/Account/Wallets/ConnectWalletSheet/EnterWalletAddress/EnterWalletAddressView.swift.</comment>
   </data>
   <data name="epoch_column_epoch_linux" xml:space="preserve">
     <value>Эпоха</value>
@@ -3539,6 +4359,10 @@
     <value>Нужно больше данных и выше скорость?</value>
     <comment>Call to action</comment>
   </data>
+  <data name="net_points_earned" xml:space="preserve">
+    <value>заработано очков (нетто)</value>
+    <comment>Earnings page: lowercase caption under the net points total.</comment>
+  </data>
   <data name="net_provided" xml:space="preserve">
     <value>Предоставлено (нетто)</value>
     <comment>Call to action</comment>
@@ -3615,6 +4439,10 @@
     <value>Кто-то пригласил вас присоединиться 🥳 
 Получите свой бонус, создав сеть!</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="network_earnings" xml:space="preserve">
+    <value>Доход сети</value>
+    <comment>Used in Main/Account/AccountRootView.swift.</comment>
   </data>
   <data name="network_name_changed_to_n" xml:space="preserve">
     <value>Имя сети изменено на {}</value>
@@ -3799,6 +4627,10 @@
   <data name="none" xml:space="preserve">
     <value>Нет</value>
     <comment>Empty value: the VLESS settings show it for no security and no flow (all apps), and the Referrals section shows it on windows and linux when no referral network is linked.</comment>
+  </data>
+  <data name="not_now" xml:space="preserve">
+    <value>Не сейчас</value>
+    <comment>macOS button that dismisses the prompt to enable the VPN system extension for now.</comment>
   </data>
   <data name="notifications_label" xml:space="preserve">
     <value>Уведомления</value>
@@ -4089,6 +4921,10 @@
     <value>Экономия {}%</value>
     <comment>Plan picker: the saving badge on the yearly card; the number is the whole percent saved against twelve monthly payments.</comment>
   </data>
+  <data name="plan_terms_first_year_price" xml:space="preserve">
+    <value>{0} за первый год, затем {1}/год. Отменить можно в любой момент.</value>
+    <comment>Plan picker terms line for the yearly plan with a first-year offer and no free trial. {first_year_price} and {yearly_price} are formatted prices, for example $39.99.</comment>
+  </data>
   <data name="plan_terms_yearly.one" xml:space="preserve">
     <value>{0} день бесплатно, далее {1}/год. Отмена в любой момент.</value>
     <comment>Plan picker: the terms line under the button for the yearly plan with its trial.</comment>
@@ -4104,6 +4940,10 @@
   <data name="plan_terms_yearly.other" xml:space="preserve">
     <value>{0} дней бесплатно, далее {1}/год. Отмена в любой момент.</value>
     <comment>Plan picker: the terms line under the button for the yearly plan with its trial.</comment>
+  </data>
+  <data name="plan_terms_yearly_billed_today" xml:space="preserve">
+    <value>{} списывается сегодня, затем каждый год. Отменить можно в любой момент.</value>
+    <comment>Plan picker terms line for the yearly plan without a trial or offer. {yearly_price} is a formatted price, for example $59.99.</comment>
   </data>
   <data name="please_install_phantom_or_solflare_to_use_this" xml:space="preserve">
     <value>Пожалуйста, установите Phantom или Solflare, чтобы использовать эту функцию</value>
@@ -5082,7 +5922,7 @@
   </data>
   <data name="seedphrase_paste_hint" xml:space="preserve">
     <value>Вставьте сюда сид-фразу из 12 или 24 слов</value>
-    <comment>Seed sign-in sheet: placeholder of the seedphrase field (android accepts 12 or 24 words).</comment>
+    <comment>Seed sign-in sheet: placeholder of the seedphrase field (android and windows accept 12 or 24 words).</comment>
   </data>
   <data name="seedphrase_required" xml:space="preserve">
     <value>Введите сид-фразу</value>
@@ -6682,6 +7522,22 @@
     <value>Используйте ASCII-форму имени.</value>
     <comment>Split rules: validation error for a host name with non-ASCII characters; the rule wants the punycode form.</comment>
   </data>
+  <data name="split_rule_mode_excluded_description" xml:space="preserve">
+    <value>Выбранные хосты обходят туннель.</value>
+    <comment>Split rule editor: description of the Route locally mode.</comment>
+  </data>
+  <data name="split_rule_mode_included_description" xml:space="preserve">
+    <value>По умолчанию: выбранные хосты используют туннель без закрепления.</value>
+    <comment>Split rule editor: description of the Route through VPN mode (the default). A pin is the Keep on one provider mode.</comment>
+  </data>
+  <data name="split_rule_mode_pinned_description" xml:space="preserve">
+    <value>Выбранные хосты дольше остаются у своего провайдера, а не переносятся при первых признаках проблем, поэтому сайт реже меняет IP-адрес во время сессии.</value>
+    <comment>Split rule editor: description of the Keep on one provider mode.</comment>
+  </data>
+  <data name="split_rule_mode_pinned_title" xml:space="preserve">
+    <value>Держать у одного провайдера</value>
+    <comment>Split rule editor: title of the mode that keeps the selected hosts on the same VPN provider longer.</comment>
+  </data>
   <data name="split_rule_preset_google_meet_calls" xml:space="preserve">
     <value>Звонки Google Meet</value>
     <comment>Split rules preset: Google Meet call media, from the address ranges Google publishes for routing it outside a VPN. Keep the product name Google Meet unchanged.</comment>
@@ -6698,6 +7554,10 @@
     <value>Активность маршрутизации появится здесь при подключении.</value>
     <comment>A description of the content of the "Activity" section of the split rules view.</comment>
   </data>
+  <data name="split_rules_connect_to_load" xml:space="preserve">
+    <value>Подключитесь один раз, чтобы загрузить уже созданные правила.</value>
+    <comment>Split rules screen: note under the disabled Add a rule button before the app has connected once and loaded the saved rules.</comment>
+  </data>
   <data name="split_rules_hint" xml:space="preserve">
     <value>Нажмите на трафик ниже, чтобы направить его локально, в обход туннеля.</value>
     <comment>A description of how to route traffic locally.</comment>
@@ -6706,9 +7566,17 @@
     <value>Добавьте хост выше или нажмите на трафик ниже, чтобы направить его локально, в обход туннеля.</value>
     <comment>Split rules on android, which has a host input above the traffic list: how to add to the rule. The apple/linux screens without the input keep split_rules_hint.</comment>
   </data>
+  <data name="split_rules_host_hint_modes" xml:space="preserve">
+    <value>Добавьте хост выше или нажмите на трафик ниже, чтобы направить его локально или закрепить за одним провайдером.</value>
+    <comment>Split rules screen: hint shown while there are no rules yet. Routing locally sends traffic outside the VPN; holding to one provider keeps a site on the same VPN exit.</comment>
+  </data>
   <data name="split_rules_info_note" xml:space="preserve">
     <value>Исключения применяются ко всему связанному сетевому кластеру, поэтому сопутствующий трафик исключается вместе.</value>
     <comment>transfer stats and split rules</comment>
+  </data>
+  <data name="split_rules_info_note_modes" xml:space="preserve">
+    <value>Правила применяются ко всему связанному сетевому кластеру, поэтому сопутствующий трафик учитывается вместе.</value>
+    <comment>Split rules screen: note that a rule matches every host in the same network cluster (related hosts of one site or service), whatever the rule's mode.</comment>
   </data>
   <data name="split_rules_match_sites_not_apps" xml:space="preserve">
     <value>Правила разделения применяются к сайтам и адресам, а не к приложениям: Apple разрешает VPN для отдельных приложений только на устройствах, которыми управляет организация (MDM). Чтобы приложение работало вне VPN, направьте сайты, которые оно использует, локально или начните с шаблона. Адреса локальной сети уже идут в обход VPN.</value>
@@ -6721,6 +7589,14 @@
   <data name="split_rules_start_from_preset" xml:space="preserve">
     <value>Начать с шаблона</value>
     <comment>Split rules screen: the menu that starts a route-locally rule from a preset, the address ranges a service publishes for use outside a VPN.</comment>
+  </data>
+  <data name="sso_browser_open_failed" xml:space="preserve">
+    <value>Не удалось открыть браузер. Попробуйте снова.</value>
+    <comment>macOS error when adding a sign-in method could not open the browser for the provider's sign-in page.</comment>
+  </data>
+  <data name="sso_sign_in_timed_out" xml:space="preserve">
+    <value>Время на вход истекло. Попробуйте снова.</value>
+    <comment>Error when a browser sign-in (Google or Apple through the browser) took too long and expired.</comment>
   </data>
   <data name="start_earning_join" xml:space="preserve">
     <value>Чтобы начать зарабатывать, присоединяйтесь к сети</value>
@@ -6794,6 +7670,10 @@
     <value>Подписаться</value>
     <comment>Button on the plan picker for the monthly plan, which has no free trial.</comment>
   </data>
+  <data name="subscription_portal_open_failed" xml:space="preserve">
+    <value>Не удалось открыть портал подписки. Попробуйте снова.</value>
+    <comment>Snackbar error when the Stripe subscription management page (Manage subscription) could not be opened.</comment>
+  </data>
   <data name="subscription_purchased_under_different_account" xml:space="preserve">
     <value>Ваша подписка была оформлена в другом аккаунте. Войдите в этот аккаунт, чтобы пользоваться ею.</value>
     <comment>The store purchase belongs to a different network than the one logged in — crediting must not go to the wrong account, so tell the user which way out exists. Apple: restore-purchases outcome (Shared/ViewModels/AppStoreSubscriptionManager.swift). Android: terminal `wrong_network` answer from the Play purchase report (google/PlanViewModel.kt); the purchase is still acknowledged so Play does not auto-refund it.</comment>
@@ -6822,9 +7702,41 @@
     <value>Pro</value>
     <comment>Display name for the paid plan. The WIRE value stays "supporter" (subscription_type / current_subscription.plan) because already-shipped app versions parse that string; only what the user reads changes.</comment>
   </data>
+  <data name="svc_action_failed" xml:space="preserve">
+    <value>Действие не завершилось — служба не изменилась. Подробности — в логах приложения.</value>
+    <comment>Windows banner text when installing, starting or updating the VPN service failed.</comment>
+  </data>
   <data name="svc_service_label" xml:space="preserve">
     <value>Служба VPN</value>
     <comment>Settings: label of the VPN service row.</comment>
+  </data>
+  <data name="svc_setup_action" xml:space="preserve">
+    <value>Настроить</value>
+    <comment>Windows banner button that installs the VPN service (Windows asks for administrator permission).</comment>
+  </data>
+  <data name="svc_setup_message" xml:space="preserve">
+    <value>URnetwork использует службу Windows для передачи трафика. Один щелчок — Windows запросит разрешение администратора.</value>
+    <comment>Windows banner text under 'Set up the VPN service'.</comment>
+  </data>
+  <data name="svc_setup_title" xml:space="preserve">
+    <value>Настройте службу VPN</value>
+    <comment>Windows banner title when the URnetwork Windows service that carries traffic is not installed yet.</comment>
+  </data>
+  <data name="svc_start_action" xml:space="preserve">
+    <value>Запустить</value>
+    <comment>Windows banner button that starts the stopped VPN service.</comment>
+  </data>
+  <data name="svc_start_message" xml:space="preserve">
+    <value>Служба установлена, но не запущена.</value>
+    <comment>Windows banner text under 'Start the VPN service'.</comment>
+  </data>
+  <data name="svc_start_title" xml:space="preserve">
+    <value>Запустите службу VPN</value>
+    <comment>Windows banner title when the VPN service is installed but stopped.</comment>
+  </data>
+  <data name="svc_uac_declined" xml:space="preserve">
+    <value>Windows запросила разрешение, и окно запроса было закрыто. Нажмите ещё раз, когда будете готовы.</value>
+    <comment>Windows banner text after the user closed the administrator permission (UAC) prompt without approving.</comment>
   </data>
   <data name="svc_uninstall_action" xml:space="preserve">
     <value>Удалить</value>
@@ -6834,9 +7746,25 @@
     <value>Это остановит службу URnetwork и удалит её юнит systemd. Приложение не сможет подключаться, пока служба не будет настроена заново. Потребуется разрешение администратора.</value>
     <comment>Settings: confirmation text before uninstalling the VPN service.</comment>
   </data>
+  <data name="svc_uninstall_confirm_windows" xml:space="preserve">
+    <value>Это остановит службу URnetwork и удалит её из Windows. Приложение не сможет подключаться, пока служба не будет настроена заново. Windows запросит разрешение администратора.</value>
+    <comment>Windows Settings: confirmation dialog before uninstalling the VPN service.</comment>
+  </data>
   <data name="svc_uninstall_note" xml:space="preserve">
     <value>Удалить службу systemd, через которую URnetwork передаёт трафик.</value>
     <comment>Settings: explanation under the uninstall service button.</comment>
+  </data>
+  <data name="svc_uninstall_note_windows" xml:space="preserve">
+    <value>Удалить службу Windows, через которую URnetwork передаёт трафик.</value>
+    <comment>Windows Settings &gt; VPN service row: what the Uninstall button removes.</comment>
+  </data>
+  <data name="svc_update_message" xml:space="preserve">
+    <value>Версия установленной службы отличается от версии этого приложения.</value>
+    <comment>Windows banner text under 'Update the VPN service'. The two version numbers follow it in parentheses.</comment>
+  </data>
+  <data name="svc_update_title" xml:space="preserve">
+    <value>Обновите службу VPN</value>
+    <comment>Windows banner title when the installed VPN service is a different version than the app.</comment>
   </data>
   <data name="switch_account" xml:space="preserve">
     <value>Сменить аккаунт</value>
@@ -7132,6 +8060,82 @@
   <data name="upd_auto_check_note" xml:space="preserve">
     <value>Искать новые выпуски вскоре после запуска и каждые шесть часов. Без нажатия ничего не устанавливается.</value>
     <comment>Settings: explanation under the automatic update check switch.</comment>
+  </data>
+  <data name="upd_available_appimage_message" xml:space="preserve">
+    <value>Одним щелчком выпуск загружается, проверяется по контрольной сумме выпуска и заменяет этот AppImage. Служба VPN обновляется отдельно.</value>
+    <comment>Linux Settings update notice, AppImage installs: what the Install button does. The AppImage is the single-file Linux app; the VPN service is the separate system service package.</comment>
+  </data>
+  <data name="upd_available_msi_message" xml:space="preserve">
+    <value>Одним щелчком выпуск загружается, проверяется и запускается его установщик, который обновляет приложение и службу VPN. На время установки приложение закроется.</value>
+    <comment>Windows update banner: what the Update button does (downloads the MSI installer, checks it, runs it).</comment>
+  </data>
+  <data name="upd_available_package_message" xml:space="preserve">
+    <value>Загрузите {} со страницы выпуска, затем выполните команду ниже.</value>
+    <comment>Linux Settings update notice, package installs (.deb, .rpm, tarball) that the app does not replace itself. {file} is the release file name, for example urnetwork_2026.10.5_amd64.deb. The shell command is shown in the row below.</comment>
+  </data>
+  <data name="upd_available_title_version" xml:space="preserve">
+    <value>Доступно обновление: v{}</value>
+    <comment>Update notice title (Linux Settings, Windows update banner): a newer release is available. {version} is the release version, for example 2026.10.5-1024555910; keep the "v" before it.</comment>
+  </data>
+  <data name="upd_downloaded_message" xml:space="preserve">
+    <value>Папка этого AppImage недоступна для записи, поэтому проверенный файл сохранён ниже. Замените им AppImage вручную.</value>
+    <comment>Linux Settings update notice when the app cannot replace itself: the verified file's path is shown in the row below.</comment>
+  </data>
+  <data name="upd_failed_checksum" xml:space="preserve">
+    <value>Загруженный файл не совпал с контрольными суммами выпуска и был удалён. Нажмите, чтобы попробовать снова.</value>
+    <comment>Update notice error (Linux Settings, Windows update banner): the downloaded file failed its integrity check and was deleted.</comment>
+  </data>
+  <data name="upd_failed_download" xml:space="preserve">
+    <value>Загрузка не завершилась. Проверьте подключение и нажмите, чтобы попробовать снова.</value>
+    <comment>Update notice error (Linux Settings, Windows update banner): the release download failed.</comment>
+  </data>
+  <data name="upd_failed_install" xml:space="preserve">
+    <value>Не удалось заменить AppImage. Проверьте права доступа к папке и нажмите, чтобы попробовать снова.</value>
+    <comment>Linux Settings update notice error: the verified download could not be swapped in for the running AppImage.</comment>
+  </data>
+  <data name="upd_install" xml:space="preserve">
+    <value>Установить</value>
+    <comment>Linux Settings update notice: button that downloads, verifies and installs the update.</comment>
+  </data>
+  <data name="upd_manual_install_message" xml:space="preserve">
+    <value>Установщик не запустился (нужно одобрение администратора). Проверенный файл показан в Проводнике — закройте приложение и запустите его.</value>
+    <comment>Windows update banner when the installer could not be started: the user runs it by hand. Explorer is the Windows file manager.</comment>
+  </data>
+  <data name="upd_ready_message" xml:space="preserve">
+    <value>Новый AppImage на месте и проверен. Перезапустите приложение, чтобы начать им пользоваться; до тех пор предыдущий файл хранится рядом.</value>
+    <comment>Linux Settings update notice once the update is installed and waiting for a relaunch.</comment>
+  </data>
+  <data name="upd_ready_title" xml:space="preserve">
+    <value>Готово к перезапуску: v{}</value>
+    <comment>Linux Settings update notice title once the new AppImage is installed. {version} is the release version; keep the "v" before it.</comment>
+  </data>
+  <data name="upd_relaunch" xml:space="preserve">
+    <value>Перезапустить</value>
+    <comment>Linux Settings update notice: button that restarts the app on the newly installed version.</comment>
+  </data>
+  <data name="upd_release_page" xml:space="preserve">
+    <value>Страница выпуска</value>
+    <comment>Linux Settings update notice: button that opens the release's download page in the browser.</comment>
+  </data>
+  <data name="upd_show_file" xml:space="preserve">
+    <value>Показать файл</value>
+    <comment>Update notice button (Linux Settings, Windows update banner) that opens the folder holding the verified download.</comment>
+  </data>
+  <data name="upd_stage_downloading" xml:space="preserve">
+    <value>Загрузка обновления…</value>
+    <comment>Update notice progress line (Linux Settings, Windows update banner) while the release downloads.</comment>
+  </data>
+  <data name="upd_stage_installing" xml:space="preserve">
+    <value>Запуск установщика…</value>
+    <comment>Windows update banner progress line while the verified installer is being launched.</comment>
+  </data>
+  <data name="upd_stage_replacing" xml:space="preserve">
+    <value>Замена AppImage…</value>
+    <comment>Linux Settings update notice progress line while the verified download replaces the running AppImage file.</comment>
+  </data>
+  <data name="upd_stage_verifying" xml:space="preserve">
+    <value>Проверка загруженного файла…</value>
+    <comment>Update progress line (Linux Settings, Windows update banner, macOS Settings &gt; Software update) while the downloaded release is checked against its published checksum.</comment>
   </data>
   <data name="update" xml:space="preserve">
     <value>Обновить</value>
@@ -7562,6 +8566,10 @@
     <value>Когда вы приглашаете друга:</value>
     <comment>Call to action</comment>
   </data>
+  <data name="widget_chart_peak" xml:space="preserve">
+    <value>пик</value>
+    <comment>Throughput widget: lowercase word after the peak packet-rate figure, as in "1.2k pkt/s peak".</comment>
+  </data>
   <data name="widget_client" xml:space="preserve">
     <value>Клиент</value>
     <comment>Dashboard widget chart title: this device's own traffic.</comment>
@@ -7605,6 +8613,10 @@
   <data name="widget_globe_description" xml:space="preserve">
     <value>Ваши подключённые провайдеры на глобусе.</value>
     <comment>Description of the provider globe widget in the widget gallery.</comment>
+  </data>
+  <data name="widget_intent_source_parameter" xml:space="preserve">
+    <value>Источник</value>
+    <comment>Title of a hidden parameter of the Connect/Disconnect control: which surface (widget, control, shortcut) made the request.</comment>
   </data>
   <data name="widget_more_providers" xml:space="preserve">
     <value>+ ещё {}</value>
@@ -7701,6 +8713,10 @@
   <data name="widget_quick_tile_added" xml:space="preserve">
     <value>Плитка быстрого подключения добавлена</value>
     <comment>Toast after the system added the Quick Settings tile.</comment>
+  </data>
+  <data name="widget_refresh_intent_title" xml:space="preserve">
+    <value>Обновить виджеты URnetwork</value>
+    <comment>Title of the action that refreshes the app's Home Screen widgets.</comment>
   </data>
   <data name="widget_toggle_intent_title" xml:space="preserve">
     <value>Переключить VPN URnetwork</value>

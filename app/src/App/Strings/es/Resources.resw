@@ -263,6 +263,14 @@
     <value>Coincidencia</value>
     <comment>Connection inspector: label of the matched rule row.</comment>
   </data>
+  <data name="adv_mode_rpc_only" xml:space="preserve">
+    <value>solo RPC</value>
+    <comment>Windows status strip (Advanced Mode), Session value: a session that talks to the service over RPC without a tunnel. Lowercase, a short status value.</comment>
+  </data>
+  <data name="adv_mode_tunnel" xml:space="preserve">
+    <value>túnel</value>
+    <comment>Windows status strip (Advanced Mode), Session value: a full tunnel session. Lowercase, a short status value.</comment>
+  </data>
   <data name="adv_na" xml:space="preserve">
     <value>—</value>
     <comment>Connection inspector: placeholder dash for a value that is not available.</comment>
@@ -297,7 +305,7 @@
   </data>
   <data name="adv_raw_status" xml:space="preserve">
     <value>Estado sin procesar</value>
-    <comment>Connection inspector: label of the raw status row.</comment>
+    <comment>Connection inspector (Linux) and Advanced Mode status strip (Windows): label of the raw status field.</comment>
   </data>
   <data name="adv_reason" xml:space="preserve">
     <value>Motivo</value>
@@ -319,6 +327,26 @@
     <value>Anulación de ruta</value>
     <comment>Connection inspector: decision reason, a route override applied.</comment>
   </data>
+  <data name="adv_routes" xml:space="preserve">
+    <value>Rutas</value>
+    <comment>Windows status strip (Advanced Mode): label of the field that shows whether the tunnel's routes are installed.</comment>
+  </data>
+  <data name="adv_routes_dns_degraded" xml:space="preserve">
+    <value>activas, DNS sin aplicar</value>
+    <comment>Windows status strip (Advanced Mode), Routes value: routes are installed but the tunnel's DNS is not. Lowercase, a short status value.</comment>
+  </data>
+  <data name="adv_routes_kill_switch_armed" xml:space="preserve">
+    <value>inactivas, Kill switch armado</value>
+    <comment>Windows status strip (Advanced Mode), Routes value: no routes are installed and the kill switch is blocking traffic. Lowercase, a short status value.</comment>
+  </data>
+  <data name="adv_routes_no_firewall" xml:space="preserve">
+    <value>activas, sin protección contra fugas</value>
+    <comment>Windows status strip (Advanced Mode), Routes value: routes are installed but no leak-prevention firewall policy is in force. Lowercase, a short status value.</comment>
+  </data>
+  <data name="adv_rpc" xml:space="preserve">
+    <value>RPC</value>
+    <comment>Windows status strip (Advanced Mode): label of the field that shows the service's RPC endpoint (host:port). RPC is a technical term.</comment>
+  </data>
   <data name="adv_select_a_row" xml:space="preserve">
     <value>Selecciona una fila en Actividad para inspeccionarla</value>
     <comment>Connection inspector: hint to select a row in the Activity list.</comment>
@@ -334,6 +362,10 @@
   <data name="adv_session_exit_country" xml:space="preserve">
     <value>País de salida de la sesión</value>
     <comment>Connection inspector: label of the session exit country row.</comment>
+  </data>
+  <data name="adv_session_mode" xml:space="preserve">
+    <value>Sesión</value>
+    <comment>Windows status strip (Advanced Mode): label of the field that shows which kind of session the service granted (tunnel or rpc-only).</comment>
   </data>
   <data name="adv_unknown_exit" xml:space="preserve">
     <value>No está en la tabla de rutas</value>
@@ -666,6 +698,10 @@
     <value>Tu billetera {} no tiene ninguna cuenta con la que firmar. Añade o conecta una cuenta en la billetera y vuelve a intentarlo.</value>
     <comment>Wallet error in the apps, when a ur.io wallet bridge page returns no_account: the chosen wallet shared no account it can sign with (none is connected to the site, or it holds only accounts of another chain), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect on the Bittensor page, Phantom or Solflare on the Solana page).</comment>
   </data>
+  <data name="bittensor_error_signature_mismatch" xml:space="preserve">
+    <value>Esta firma no es de la dirección que introdujiste. En {}, firma el mensaje con esa dirección y vuelve a pegar la firma.</value>
+    <comment>Bittensor wallet connect (Earnings), manual entry (TAO.com, or Talisman on a phone): the server refused the pasted signature because it does not verify for the address the user typed over the shown message (POST /sn/wallet error.code signature_mismatch). Usually the user signed with another account in the wallet. The server cannot tell which account signed. The argument is the wallet product name (TAO.com or Talisman).</comment>
+  </data>
   <data name="bittensor_error_user_rejected" xml:space="preserve">
     <value>La solicitud se rechazó en tu billetera. Empieza de nuevo y apruébala para continuar.</value>
     <comment>Wallet error in the apps, when a ur.io wallet bridge page returns user_rejected: the user declined the connection or the signature request in the wallet, so nothing was signed. The Bittensor page (Talisman, or a WalletConnect wallet) and the Solana page of the desktop apps (Phantom or Solflare) both return it; on iOS, Phantom and Solflare decline with 4001, which reads the same.</comment>
@@ -749,6 +785,10 @@
   <data name="blocked_locations_load_failed" xml:space="preserve">
     <value>No se pudieron cargar tus ubicaciones bloqueadas. Desliza hacia abajo para volver a intentarlo.</value>
     <comment>Blocked locations: the list could not be loaded.</comment>
+  </data>
+  <data name="blocked_locations_search_placeholder" xml:space="preserve">
+    <value>Buscar países</value>
+    <comment>macOS Blocked locations screen: placeholder of the country search field.</comment>
   </data>
   <data name="blocks" xml:space="preserve">
     <value>Bloques</value>
@@ -856,6 +896,10 @@ de la manera correcta</value>
     <value>No pudimos abrir tu navegador. Copia este enlace en un navegador para completar el pago:</value>
     <comment>Upgrade sheet: the system browser could not be opened for the hosted checkout url. The app appends the url itself on the next line (selectable) so the user can copy it into a browser by hand — never advancing to the waiting page with no payment page open.</comment>
   </data>
+  <data name="checkout_confirming_purchase" xml:space="preserve">
+    <value>Estamos confirmando tu compra. Tu plan se actualizará automáticamente.</value>
+    <comment>Purchase confirmation message while the app waits for the payment to be confirmed.</comment>
+  </data>
   <data name="checkout_error_payment_form_unavailable" xml:space="preserve">
     <value>No se pudo cargar el formulario de pago. Comprueba tu conexión a internet y vuelve a intentarlo.</value>
     <comment>Checkout error in the desktop apps (the macOS direct download, Windows and Linux) when the ur.io checkout page hands back stripe_unavailable: Stripe's payment form could not be loaded in the checkout page (usually no internet connection, or a network that blocks it). Nothing was charged.</comment>
@@ -864,6 +908,10 @@ de la manera correcta</value>
     <value>El pago no está disponible en este momento. Inténtalo de nuevo más tarde.</value>
     <comment>Checkout error in the desktop apps (the macOS direct download, Windows and Linux) when the ur.io checkout page hands back checkout_unavailable: the site cannot open Stripe's checkout right now (it has no Stripe key), so no payment form was shown and nothing was charged. The user cannot fix it; it may work later.</comment>
   </data>
+  <data name="checkout_finish_in_browser" xml:space="preserve">
+    <value>Termina en tu navegador.</value>
+    <comment>Purchase confirmation title after the app opened Stripe's checkout page in the browser.</comment>
+  </data>
   <data name="checkout_interrupted_confirming" xml:space="preserve">
     <value>La ventana de pago se cerró inesperadamente. Si tu pago se completó, tu plan se actualizará aquí automáticamente — no hace falta volver a comprar.</value>
     <comment>Upgrade sheet waiting page: the embedded checkout webview crashed after the payment form had rendered, so a charge may already have gone through with only the redirect lost. Shown while the confirmation poll asks the server for the payment webhook; must never invite buying again.</comment>
@@ -871,6 +919,10 @@ de la manera correcta</value>
   <data name="checkout_opened_in_browser" xml:space="preserve">
     <value>Completa tu compra en el navegador. Tu plan se actualizará aquí automáticamente cuando se confirme el pago.</value>
     <comment>Shown after the app hands the user to the Stripe hosted checkout in the system browser. The app polls the server and flips the plan automatically when the payment webhook lands.</comment>
+  </data>
+  <data name="checkout_restore_checking" xml:space="preserve">
+    <value>Volviendo a comprobar tu plan.</value>
+    <comment>Message after Restore purchases in the Stripe-paid app: nothing to restore locally, the app re-reads the plan from the server.</comment>
   </data>
   <data name="choose_file" xml:space="preserve">
     <value>Elegir archivo</value>
@@ -1012,6 +1064,10 @@ de la manera correcta</value>
     <value>Compañero</value>
     <comment>A label displayed next to a companion contract.</comment>
   </data>
+  <data name="conn_blocked_kill_switch" xml:space="preserve">
+    <value>Bloqueado: Kill switch activado</value>
+    <comment>Windows Connect page status when the connection is down and the kill switch is deliberately blocking this computer's traffic.</comment>
+  </data>
   <data name="conn_connect_on_launch" xml:space="preserve">
     <value>Conectar automáticamente al iniciar la app</value>
     <comment>Settings: switch that connects automatically when the app starts.</comment>
@@ -1020,13 +1076,93 @@ de la manera correcta</value>
     <value>Desactivado por defecto. Cuando está activado, URnetwork se conecta a tu proveedor seleccionado en cuanto abres la app. Esto cambia el próximo inicio - no conecta ahora.</value>
     <comment>Settings: explanation under the connect-on-launch switch.</comment>
   </data>
+  <data name="conn_degraded" xml:space="preserve">
+    <value>Conexión degradada: reconectando</value>
+    <comment>Windows connection status (Connect page headline and tray tooltip) when a working connection dropped and the app is reconnecting on its own.</comment>
+  </data>
+  <data name="conn_disconnecting" xml:space="preserve">
+    <value>Desconectando: tu tráfico todavía pasa por el túnel</value>
+    <comment>Windows Connect page status while the tunnel is being stopped but its routes are still installed.</comment>
+  </data>
   <data name="conn_failed" xml:space="preserve">
     <value>No se pudo conectar</value>
     <comment>Connect screen status when the connect attempt failed: no provider could be reached (the sdk's CONNECT_FAILED). The connection keeps trying, and the app offers Retry.</comment>
   </data>
+  <data name="conn_failed_detail" xml:space="preserve">
+    <value>No se pudo contactar con ningún proveedor. Reintentar reconstruye la conexión desde cero.</value>
+    <comment>Windows Connect page reason line when connecting failed.</comment>
+  </data>
+  <data name="conn_failsafe_armed" xml:space="preserve">
+    <value>Si nada consigue pasar en breve, URnetwork desactivará el túnel automáticamente para que no te quedes sin internet.</value>
+    <comment>Windows Connect page: sentence appended to the line above when the service will stop a tunnel that carries nothing.</comment>
+  </data>
+  <data name="conn_failsafe_blocked" xml:space="preserve">
+    <value>El túnel no podía transportar tráfico, así que URnetwork lo cerró. El Kill switch está activado, así que nada sale de este ordenador hasta que vuelvas a conectarte o desactives el Kill switch: no hay ninguna fuga.</value>
+    <comment>Windows Connect page line after the service stopped a tunnel that carried nothing, while the kill switch keeps this computer blocked.</comment>
+  </data>
+  <data name="conn_failsafe_restored" xml:space="preserve">
+    <value>URnetwork te desconectó para que sigas en línea: el túnel estaba activo, pero no pasaba nada. Tu tráfico sale ahora con normalidad y NO está protegido. Pulsa Conectar para volver a intentarlo.</value>
+    <comment>Windows Connect page line and tray notification after the service stopped a tunnel that carried nothing, with the kill switch off. Keep the emphasis on NOT.</comment>
+  </data>
+  <data name="conn_finding_providers" xml:space="preserve">
+    <value>Buscando proveedores…</value>
+    <comment>Connection status while the app has providers but none is proven to work yet (Linux and Windows Connect page headline, Windows tray tooltip).</comment>
+  </data>
   <data name="conn_not_protected" xml:space="preserve">
     <value>Tu tráfico de internet no está protegido.</value>
     <comment>Connect page: warning that the internet traffic is not protected.</comment>
+  </data>
+  <data name="conn_reason_auth" xml:space="preserve">
+    <value>El inicio de sesión en la plataforma está fallando…</value>
+    <comment>Windows Connect page reason line while the app's sign-in to the URnetwork platform keeps failing.</comment>
+  </data>
+  <data name="conn_reason_platform" xml:space="preserve">
+    <value>Contactando con la plataforma…</value>
+    <comment>Windows Connect page reason line while the app cannot reach the URnetwork platform (the API servers).</comment>
+  </data>
+  <data name="conn_reason_providers" xml:space="preserve">
+    <value>Los proveedores no responden: reintentando…</value>
+    <comment>Windows Connect page reason line while the selected providers do not answer.</comment>
+  </data>
+  <data name="conn_reason_rate_limited" xml:space="preserve">
+    <value>Límite de solicitudes alcanzado: esperando…</value>
+    <comment>Windows Connect page reason line while the platform asks the app to slow down.</comment>
+  </data>
+  <data name="conn_traffic_blocked" xml:space="preserve">
+    <value>No hay ningún proveedor que funcione ahora mismo: tu tráfico está bloqueado, no expuesto. Desconéctate para volver a tu conexión normal.</value>
+    <comment>Windows Connect page line while connected but no provider carries traffic, with leak protection in force.</comment>
+  </data>
+  <data name="conn_traffic_blocked_unprotected" xml:space="preserve">
+    <value>No hay ningún proveedor que funcione ahora mismo: el tráfico que entra en el túnel no llega a ninguna parte y la protección contra fugas está desactivada, así que parte del tráfico puede saltársela. Desconéctate para volver a tu conexión normal.</value>
+    <comment>Windows Connect page line while connected but no provider carries traffic, and leak protection (the firewall policy) is not in force.</comment>
+  </data>
+  <data name="conn_tray_blocked_kill_switch" xml:space="preserve">
+    <value>Bloqueado (Kill switch activado)</value>
+    <comment>Windows tray tooltip when the kill switch is deliberately blocking this computer's traffic.</comment>
+  </data>
+  <data name="conn_tray_blocked_no_tunnel" xml:space="preserve">
+    <value>Bloqueado: la protección contra fugas sigue en vigor sin ningún túnel activo</value>
+    <comment>Windows tray tooltip when leak protection blocks traffic while no tunnel is up.</comment>
+  </data>
+  <data name="conn_tray_disconnecting" xml:space="preserve">
+    <value>Desconectando: el tráfico todavía pasa por el túnel</value>
+    <comment>Windows tray tooltip while the tunnel is being stopped but its routes are still installed.</comment>
+  </data>
+  <data name="conn_tray_failsafe_blocked" xml:space="preserve">
+    <value>El túnel no podía transportar tráfico, así que URnetwork lo cerró. El Kill switch está activado, así que este ordenador sigue bloqueado y no hay ninguna fuga. Vuelve a conectarte o desactiva el Kill switch desde este menú.</value>
+    <comment>Windows tray notification after the service stopped a tunnel that carried nothing, while the kill switch keeps this computer blocked. "This menu" is the tray icon's menu.</comment>
+  </data>
+  <data name="conn_tray_failsafe_stopped" xml:space="preserve">
+    <value>Desconectado (el túnel falló)</value>
+    <comment>Windows tray tooltip after the service stopped a tunnel that carried nothing.</comment>
+  </data>
+  <data name="conn_tray_force_tunnel_off" xml:space="preserve">
+    <value>Forzar el cierre del túnel (recuperación)</value>
+    <comment>Windows tray menu item that stops the tunnel directly when the normal Disconnect is stuck.</comment>
+  </data>
+  <data name="conn_tray_lift_kill_switch" xml:space="preserve">
+    <value>Desactivar el Kill switch (desbloquear este ordenador)</value>
+    <comment>Windows tray menu item that lifts the kill switch's block on this computer.</comment>
   </data>
   <data name="connect" xml:space="preserve">
     <value>Conecta</value>
@@ -1162,7 +1298,7 @@ de la manera correcta</value>
   </data>
   <data name="contribute_bandwidth" xml:space="preserve">
     <value>Aportar ancho de banda</value>
-    <comment>Used in Shared/Views/Introduction/IntroductionParticipateSettingsView.swift.</comment>
+    <comment>Onboarding: title of the step that asks whether this device may share bandwidth with the network (provide).</comment>
   </data>
   <data name="control_doh_error_https_required" xml:space="preserve">
     <value>La URL debe empezar por https://.</value>
@@ -1344,13 +1480,25 @@ de la manera correcta</value>
     <value>Este dispositivo no tiene servicio de autorización polkit, así que el servicio del sistema de URnetwork recurre al grupo 'urnetwork'. Añade tu usuario a él y cierra y vuelve a iniciar sesión.</value>
     <comment>Connect error: no polkit service, the daemon falls back to the urnetwork group.</comment>
   </data>
+  <data name="daemon_legacy_group_auth" xml:space="preserve">
+    <value>El servicio del sistema URnetwork de este dispositivo es una versión anterior que todavía exige pertenecer a un grupo. Actualiza el servicio, o añade tu usuario al grupo 'urnetwork' y cierra la sesión y vuelve a iniciarla.</value>
+    <comment>Linux notice when an older system service refuses the app's user. 'urnetwork' is the literal Linux group name; keep it as is.</comment>
+  </data>
   <data name="daemon_no_answer" xml:space="preserve">
     <value>El servicio del sistema de URnetwork no respondió.</value>
     <comment>Error: the system service did not answer.</comment>
   </data>
+  <data name="daemon_not_reachable" xml:space="preserve">
+    <value>No se pudo contactar con el servicio del sistema URnetwork.</value>
+    <comment>Linux notice when the app cannot reach the URnetwork system service for an unexpected reason.</comment>
+  </data>
   <data name="daemon_sdk_mismatch" xml:space="preserve">
     <value>La aplicación y el servicio del sistema URnetwork son compilaciones distintas. Actualiza ambos a la misma versión.</value>
     <comment>Shown on the linux home screen when the app and the urnetworkd system service carry different URnetwork SDK builds (they update on independent schedules and must match exactly). The fix is updating both to the same release.</comment>
+  </data>
+  <data name="daemon_stale_sandbox_mount" xml:space="preserve">
+    <value>El servicio del sistema URnetwork se reinició mientras esta app estaba abierta. Cierra la app y vuelve a abrirla para reconectarte a él.</value>
+    <comment>Linux notice when the app cannot reach the URnetwork system service because the service restarted under a sandboxed (Flatpak) app.</comment>
   </data>
   <data name="daemon_too_old" xml:space="preserve">
     <value>El servicio del sistema URnetwork está desactualizado. Actualízalo para conectarte.</value>
@@ -1440,6 +1588,14 @@ de la manera correcta</value>
     <value>Escriba {} para confirmar.</value>
     <comment>Delete account dialog: asks the user to type the network name back before the delete button enables. {network} is the account's network name.</comment>
   </data>
+  <data name="dev_action_declined" xml:space="preserve">
+    <value>Sin cambios: el SDK rechazó esa acción.</value>
+    <comment>Developer page: report line when the SDK refused a requested action.</comment>
+  </data>
+  <data name="dev_actions_are_requests" xml:space="preserve">
+    <value>Las acciones son solicitudes: comprueba su efecto en las mediciones y las filas de salidas, que se actualizan debajo.</value>
+    <comment>Developer page: note that the action buttons only request changes.</comment>
+  </data>
   <data name="dev_affinity_performance" xml:space="preserve">
     <value>Afinidad según rendimiento</value>
     <comment>Developer tools screen (reliability surface): performance-aware affinity control label.</comment>
@@ -1455,6 +1611,14 @@ de la manera correcta</value>
   <data name="dev_affinity_sticky_detail" xml:space="preserve">
     <value>Las conexiones nuevas de un sitio se quedan en la salida que ya usan las anteriores, incluso por encima del límite de flujos, para que un sitio con mucho tráfico conserve una sola IP de salida. El límite sigue decidiendo qué salidas aceptan sitios nuevos. Si está desactivado, se restablece el límite estricto</value>
     <comment>Developer tools screen: explanatory subtext under the 'affinity sticky' control.</comment>
+  </data>
+  <data name="dev_all" xml:space="preserve">
+    <value>Todos</value>
+    <comment>Developer page: what a setting's 0 means when it probes every host ('Probe hosts per pass').</comment>
+  </data>
+  <data name="dev_app_version" xml:space="preserve">
+    <value>Versión de la app</value>
+    <comment>Developer page: label of the app version row.</comment>
   </data>
   <data name="dev_behaviour" xml:space="preserve">
     <value>Comportamiento</value>
@@ -1496,6 +1660,14 @@ de la manera correcta</value>
     <value>Cuando una salida se bloquea, se le hace ping una vez antes de condenarla. Una salida congestionada pero viva responde y conserva sus flujos; una muerta se descarta igualmente. Si está desactivado, se condena al alcanzar el umbral de bloqueo</value>
     <comment>Developer tools screen: explanatory subtext under the 'busy probe' control.</comment>
   </data>
+  <data name="dev_busy_probe_wait" xml:space="preserve">
+    <value>Espera de la sonda de ocupación</value>
+    <comment>Developer page: label of the 'Busy probe wait' setting.</comment>
+  </data>
+  <data name="dev_busy_probe_wait_detail" xml:space="preserve">
+    <value>Cuánto espera la sonda de bloqueo una respuesta antes de condenar, en ms. Si está desactivado, se usa la mitad del umbral de bloqueo</value>
+    <comment>Developer page: the explanation under the 'Busy probe wait' setting.</comment>
+  </data>
   <data name="dev_busy_probes" xml:space="preserve">
     <value>Sondas de ocupación</value>
     <comment>Developer tools screen (reliability surface): busy probes control label.</comment>
@@ -1507,6 +1679,10 @@ de la manera correcta</value>
   <data name="dev_busy_probes_value" xml:space="preserve">
     <value>{0} enviadas / {1} absueltas</value>
     <comment>Developer tools screen: formatted value readout for 'busy probes'.</comment>
+  </data>
+  <data name="dev_check_updates" xml:space="preserve">
+    <value>Buscar actualizaciones</value>
+    <comment>Developer page: button that checks for a new release now.</comment>
   </data>
   <data name="dev_choose_logs" xml:space="preserve">
     <value>Elegir registros…</value>
@@ -1528,6 +1704,58 @@ de la manera correcta</value>
     <value>Mantiene un sitio en una sola salida cuando su nombre de host no es visible</value>
     <comment>Developer tools screen: explanatory subtext under the 'cluster affinity' control.</comment>
   </data>
+  <data name="dev_col_actions" xml:space="preserve">
+    <value>Acciones</value>
+    <comment>Developer page: table column header for the per-row action buttons.</comment>
+  </data>
+  <data name="dev_col_connect" xml:space="preserve">
+    <value>Conexión</value>
+    <comment>Developer page: table column header for the connect timing.</comment>
+  </data>
+  <data name="dev_col_destination" xml:space="preserve">
+    <value>Destino</value>
+    <comment>Developer page: table column header for a destination host.</comment>
+  </data>
+  <data name="dev_col_exit" xml:space="preserve">
+    <value>Salida</value>
+    <comment>Developer page: table column header for the exit a flow uses.</comment>
+  </data>
+  <data name="dev_col_failed_dials" xml:space="preserve">
+    <value>Conexiones fallidas</value>
+    <comment>Developer page: table column header for the number of failed dials.</comment>
+  </data>
+  <data name="dev_col_flows" xml:space="preserve">
+    <value>Flujos</value>
+    <comment>Developer page: table column header for the number of flows.</comment>
+  </data>
+  <data name="dev_col_kind" xml:space="preserve">
+    <value>Tipo</value>
+    <comment>Developer page: table column header for the probe kind.</comment>
+  </data>
+  <data name="dev_col_outcome" xml:space="preserve">
+    <value>Resultado</value>
+    <comment>Developer page: table column header for a probe outcome.</comment>
+  </data>
+  <data name="dev_col_state" xml:space="preserve">
+    <value>Estado</value>
+    <comment>Developer page: table column header for an exit state.</comment>
+  </data>
+  <data name="dev_col_target" xml:space="preserve">
+    <value>Objetivo</value>
+    <comment>Developer page: table column header for a probe target.</comment>
+  </data>
+  <data name="dev_col_tier" xml:space="preserve">
+    <value>Nivel</value>
+    <comment>Developer page: table column header for an exit tier.</comment>
+  </data>
+  <data name="dev_col_total" xml:space="preserve">
+    <value>Total</value>
+    <comment>Developer page: table column header for the total timing.</comment>
+  </data>
+  <data name="dev_col_window" xml:space="preserve">
+    <value>Ventana</value>
+    <comment>Developer page: table column header for the measurement window.</comment>
+  </data>
   <data name="dev_comparative_connect" xml:space="preserve">
     <value>Cortar pronto las conexiones muertas</value>
     <comment>Developer tools screen (reliability surface): comparative connect control label.</comment>
@@ -1535,6 +1763,46 @@ de la manera correcta</value>
   <data name="dev_comparative_connect_detail" xml:space="preserve">
     <value>Descarta antes una salida que no ha establecido nada cuando dos salidas hermanas están recibiendo. Si está desactivado, se espera el umbral de conexión completo de 30 s</value>
     <comment>Developer tools screen: explanatory subtext under the 'comparative connect' control.</comment>
+  </data>
+  <data name="dev_connect_for_live_tools" xml:space="preserve">
+    <value>Conéctate para usar las herramientas de la conexión activa. El diagnóstico de abajo funciona en cualquier caso.</value>
+    <comment>Developer page (Apple): note shown while disconnected.</comment>
+  </data>
+  <data name="dev_corroborate_silent_exits" xml:space="preserve">
+    <value>Corroborar salidas silenciosas</value>
+    <comment>Developer page: label of the 'Corroborate silent exits' setting.</comment>
+  </data>
+  <data name="dev_corroborate_silent_exits_detail" xml:space="preserve">
+    <value>Cuántos destinos distintos deben quedar en silencio antes de condenar una salida por no recibir, para que un solo sitio caído no pueda eliminar una salida que funciona</value>
+    <comment>Developer page: the explanation under the 'Corroborate silent exits' setting.</comment>
+  </data>
+  <data name="dev_count_affected" xml:space="preserve">
+    <value>afectados</value>
+    <comment>Developer page: suffix after a count of affected flows.</comment>
+  </data>
+  <data name="dev_cut_dead_connects_early" xml:space="preserve">
+    <value>Cortar pronto las conexiones muertas</value>
+    <comment>Developer page: label of the 'Cut dead connects early' setting.</comment>
+  </data>
+  <data name="dev_cut_dead_connects_early_detail" xml:space="preserve">
+    <value>Descarta antes una salida que no ha establecido nada cuando dos salidas hermanas están recibiendo, en ms. Si está desactivado, se espera el umbral de conexión completo de 30 s</value>
+    <comment>Developer page: the explanation under the 'Cut dead connects early' setting.</comment>
+  </data>
+  <data name="dev_declined_exit" xml:space="preserve">
+    <value>Sin cambios: el SDK rechazó esa salida</value>
+    <comment>Developer page: report line when the SDK refused an exit action.</comment>
+  </data>
+  <data name="dev_destinations" xml:space="preserve">
+    <value>Destinos</value>
+    <comment>Developer page: heading of the destinations table.</comment>
+  </data>
+  <data name="dev_destinations_detail" xml:space="preserve">
+    <value>En qué salida terminan los flujos de cada destino. Un sitio repartido en varias filas es un sitio que perdió su única IP de salida.</value>
+    <comment>Developer page: explanation under the destinations table.</comment>
+  </data>
+  <data name="dev_developer" xml:space="preserve">
+    <value>Desarrollador</value>
+    <comment>Developer page: page title.</comment>
   </data>
   <data name="dev_dial_failure_rerace" xml:space="preserve">
     <value>Reintentar en otra salida las conexiones rechazadas</value>
@@ -1555,6 +1823,18 @@ de la manera correcta</value>
   <data name="dev_drop_exit" xml:space="preserve">
     <value>Descartar</value>
     <comment>Developer tools screen (reliability surface): drop exit control label.</comment>
+  </data>
+  <data name="dev_drop_stalled_exits_fast" xml:space="preserve">
+    <value>Descartar rápido las salidas bloqueadas</value>
+    <comment>Developer page: label of the 'Drop stalled exits fast' setting.</comment>
+  </data>
+  <data name="dev_drop_stalled_exits_fast_detail" xml:space="preserve">
+    <value>Cuánto tiempo puede una salida dejar de entregar antes de descartarla, en ms. Si está desactivado, espera 30 s</value>
+    <comment>Developer page: the explanation under the 'Drop stalled exits fast' setting.</comment>
+  </data>
+  <data name="dev_dropped_exit" xml:space="preserve">
+    <value>Salida descartada</value>
+    <comment>Developer page: report line after an exit was dropped.</comment>
   </data>
   <data name="dev_effective_tier" xml:space="preserve">
     <value>Degradación de nivel en vivo</value>
@@ -1583,6 +1863,10 @@ de la manera correcta</value>
   <data name="dev_exits" xml:space="preserve">
     <value>Salidas</value>
     <comment>Developer tools screen (reliability surface): exits control label.</comment>
+  </data>
+  <data name="dev_exits_actions_detail" xml:space="preserve">
+    <value>Descartar, Bloquear y Reordenar degradan la conexión activa a propósito y al instante. Aquí nada se pone en cola ni se reintenta: una acción que falla se informa, no se repite.</value>
+    <comment>Developer page: explanation of the drop, stall and shuffle actions.</comment>
   </data>
   <data name="dev_export_all_logs" xml:space="preserve">
     <value>Exportar todos los registros (sin procesar)</value>
@@ -1624,6 +1908,14 @@ de la manera correcta</value>
     <value>Exportando…</value>
     <comment>Developer tools screen: progress label shown while a diagnostic bundle is being exported.</comment>
   </data>
+  <data name="dev_fast_first_exit_poll" xml:space="preserve">
+    <value>Sondeo rápido de la primera salida</value>
+    <comment>Developer page: label of the 'Fast first-exit poll' setting.</comment>
+  </data>
+  <data name="dev_fast_first_exit_poll_detail" xml:space="preserve">
+    <value>Con qué frecuencia un flujo que se está conectando vuelve a comprobar una ventana vacía, en ms, para que la primera solicitud salga justo cuando llega la primera salida. Si está desactivado, se espera el ritmo de reintento de 2 s</value>
+    <comment>Developer page: the explanation under the 'Fast first-exit poll' setting.</comment>
+  </data>
   <data name="dev_flows_opened" xml:space="preserve">
     <value>Flujos abiertos</value>
     <comment>Developer tools screen (reliability surface): flows opened control label.</comment>
@@ -1651,6 +1943,22 @@ de la manera correcta</value>
   <data name="dev_flows_reraced_detail" xml:space="preserve">
     <value>Cuántos de esos fallos se movieron sin que se notara en lugar de quedarse colgados</value>
     <comment>Developer tools screen: explanatory subtext under the 'flows reraced' control.</comment>
+  </data>
+  <data name="dev_follow_benched_exits" xml:space="preserve">
+    <value>Seguir a las salidas en el banquillo</value>
+    <comment>Developer page: label of the 'Follow benched exits' setting.</comment>
+  </data>
+  <data name="dev_follow_benched_exits_detail" xml:space="preserve">
+    <value>Una salida en cuarentena conserva las conexiones nuevas de sus propios sitios durante el inicio del banquillo, cuando el veredicto es menos seguro. Los sitios nuevos la siguen evitando</value>
+    <comment>Developer page: the explanation under the 'Follow benched exits' setting.</comment>
+  </data>
+  <data name="dev_follow_window" xml:space="preserve">
+    <value>Ventana de seguimiento</value>
+    <comment>Developer page: label of the 'Follow window' setting.</comment>
+  </data>
+  <data name="dev_follow_window_detail" xml:space="preserve">
+    <value>Durante cuánto tiempo, ya en el banquillo, las conexiones nuevas de un sitio siguen a su salida, en ms. Si está desactivado, se dispersan de inmediato</value>
+    <comment>Developer page: the explanation under the 'Follow window' setting.</comment>
   </data>
   <data name="dev_formation_poll" xml:space="preserve">
     <value>Sondeo rápido de la primera salida</value>
@@ -1684,6 +1992,10 @@ de la manera correcta</value>
     <value>Durante cuánto tiempo, ya en el banquillo, las conexiones nuevas de un sitio siguen a su salida — los banquillos tempranos suelen ser falsas alarmas; uno que se prolonga tiende a la eliminación y deja de recibir flujos. Si está desactivado, se dispersan de inmediato</value>
     <comment>Developer tools screen: explanatory subtext under the 'group follow window' control.</comment>
   </data>
+  <data name="dev_group_follow_window_ms_detail" xml:space="preserve">
+    <value>Durante cuánto tiempo, ya en el banquillo, las conexiones nuevas de un sitio siguen a su salida, en ms — los banquillos tempranos suelen ser falsas alarmas; uno que se prolonga tiende a la eliminación y deja de recibir flujos. Si está desactivado, se dispersan de inmediato</value>
+    <comment>Developer page (Apple): the explanation under the 'Follow window' setting, with its unit.</comment>
+  </data>
   <data name="dev_heartbeat" xml:space="preserve">
     <value>Latido de estado</value>
     <comment>Developer tools screen (reliability surface): heartbeat control label.</comment>
@@ -1691,6 +2003,54 @@ de la manera correcta</value>
   <data name="dev_heartbeat_detail" xml:space="preserve">
     <value>Con qué frecuencia se escribe en el registro una línea que resume el estado actual para un análisis forense posterior. Si está desactivado, se silencia; un intervalo más corto detecta una transición y uno más largo conserva más búfer</value>
     <comment>Developer tools screen: explanatory subtext under the 'heartbeat' control.</comment>
+  </data>
+  <data name="dev_heartbeat_ms_detail" xml:space="preserve">
+    <value>Con qué frecuencia se escribe en el registro una línea que resume el estado actual para un análisis forense posterior, en ms. Si está desactivado, se silencia; un intervalo más corto detecta una transición y uno más largo conserva más búfer</value>
+    <comment>Developer page (Apple): the explanation under the 'State heartbeat' setting, with its unit.</comment>
+  </data>
+  <data name="dev_intro" xml:space="preserve">
+    <value>Herramientas para diagnosticar bloqueos de la conexión. Actúan sobre la conexión activa.</value>
+    <comment>Developer page: intro line under the title.</comment>
+  </data>
+  <data name="dev_ip_family" xml:space="preserve">
+    <value>Conexiones de control</value>
+    <comment>Developer screen: title of the control-plane IP family setting.</comment>
+  </data>
+  <data name="dev_ip_family_auto" xml:space="preserve">
+    <value>Automático</value>
+    <comment>Developer screen: the automatic IP family option.</comment>
+  </data>
+  <data name="dev_ip_family_auto_demoted_detail" xml:space="preserve">
+    <value>Automático. {}.</value>
+    <comment>Developer screen: the automatic option's detail when one family was demoted; {reason} is the demotion reason.</comment>
+  </data>
+  <data name="dev_ip_family_auto_detail" xml:space="preserve">
+    <value>Usa la familia que se conecta primero y esquiva la que falla después de conectarse.</value>
+    <comment>Developer screen: detail line of the automatic IP family option.</comment>
+  </data>
+  <data name="dev_ip_family_force4" xml:space="preserve">
+    <value>Forzar IPv4</value>
+    <comment>Developer screen: the IPv4-only option.</comment>
+  </data>
+  <data name="dev_ip_family_force4_detail" xml:space="preserve">
+    <value>Las conexiones de control solo usan IPv4. Desactívalo en una red solo IPv6.</value>
+    <comment>Developer screen: detail line of the IPv4-only option.</comment>
+  </data>
+  <data name="dev_ip_family_force6" xml:space="preserve">
+    <value>Forzar IPv6</value>
+    <comment>Developer screen: the IPv6-only option.</comment>
+  </data>
+  <data name="dev_ip_family_force6_detail" xml:space="preserve">
+    <value>Las conexiones de control solo usan IPv6. Desactívalo si la app no llega al servidor.</value>
+    <comment>Developer screen: detail line of the IPv6-only option.</comment>
+  </data>
+  <data name="dev_keep_quiet_providers_longer" xml:space="preserve">
+    <value>Mantener más tiempo a los proveedores silenciosos</value>
+    <comment>Developer page: label of the 'Keep quiet providers longer' setting.</comment>
+  </data>
+  <data name="dev_keep_quiet_providers_longer_detail" xml:space="preserve">
+    <value>Cuánto tiempo puede un proveedor que aún confirma el tráfico no devolver nada antes de descartarlo, en ms. Si está desactivado, se mantiene hasta que deje de confirmar</value>
+    <comment>Developer page: the explanation under the 'Keep quiet providers longer' setting.</comment>
   </data>
   <data name="dev_load_corroboration" xml:space="preserve">
     <value>Corroboración por carga</value>
@@ -1744,6 +2104,14 @@ de la manera correcta</value>
     <value>Los registros están guardando tu tráfico real</value>
     <comment>Developer tools screen: title for the detailed traffic logging privacy warning.</comment>
   </data>
+  <data name="dev_longer_tcp_idle_timeout" xml:space="preserve">
+    <value>Tiempo de inactividad de TCP más largo</value>
+    <comment>Developer page: label of the 'Longer TCP idle timeout' setting.</comment>
+  </data>
+  <data name="dev_longer_tcp_idle_timeout_detail" xml:space="preserve">
+    <value>Cuánto tiempo puede permanecer inactiva una conexión TCP, en ms. Si está desactivado, se usa el límite de UDP</value>
+    <comment>Developer page: the explanation under the 'Longer TCP idle timeout' setting.</comment>
+  </data>
   <data name="dev_max_flows_per_exit" xml:space="preserve">
     <value>Máx. de conexiones por salida</value>
     <comment>Developer tools screen (reliability surface): max flows per exit control label.</comment>
@@ -1764,9 +2132,17 @@ de la manera correcta</value>
     <value>Lo que cuesta un fallo de proveedor. Restablece, ejecuta una prueba y lee el resultado.</value>
     <comment>Developer tools screen: explanatory subtext under the 'measurements' control.</comment>
   </data>
+  <data name="dev_migrate" xml:space="preserve">
+    <value>Migrar</value>
+    <comment>Developer page: button that migrates the live connection.</comment>
+  </data>
   <data name="dev_migrate_exit" xml:space="preserve">
     <value>Migrar</value>
     <comment>Developer tools screen (reliability surface): migrate exit control label.</comment>
+  </data>
+  <data name="dev_migrated_exit" xml:space="preserve">
+    <value>Salida migrada</value>
+    <comment>Developer page: last-action report after moving an exit's flows to another exit; the exit's short id follows.</comment>
   </data>
   <data name="dev_min_blackhole_destinations" xml:space="preserve">
     <value>Corroborar salidas silenciosas</value>
@@ -1776,9 +2152,45 @@ de la manera correcta</value>
     <value>Cuántos destinos distintos deben quedar en silencio antes de condenar una salida por no recibir, para que un solo sitio caído no pueda eliminar una salida que funciona. Si está desactivado, basta un único destino para condenar</value>
     <comment>Developer tools screen: explanatory subtext under the 'min blackhole destinations' control.</comment>
   </data>
+  <data name="dev_never_came_back_value" xml:space="preserve">
+    <value>{0} de {1}</value>
+    <comment>Developer page: value of the flows that never came back, {done} of {total}.</comment>
+  </data>
+  <data name="dev_no_destinations" xml:space="preserve">
+    <value>Aún no hay destinos.</value>
+    <comment>Developer page: empty state of the destinations table.</comment>
+  </data>
+  <data name="dev_no_device" xml:space="preserve">
+    <value>No hay sesión. Inicia sesión y conéctate para usar estas herramientas.</value>
+    <comment>Developer page: shown when there is no session to act on.</comment>
+  </data>
   <data name="dev_no_exits" xml:space="preserve">
     <value>No hay salidas. Conéctate primero.</value>
     <comment>Developer tools screen (reliability surface): no exits control label.</comment>
+  </data>
+  <data name="dev_no_probe_results" xml:space="preserve">
+    <value>Aún no hay resultados de sondeo. Inicia el conjunto.</value>
+    <comment>Developer page: empty state of the probe results table.</comment>
+  </data>
+  <data name="dev_no_provider_failures" xml:space="preserve">
+    <value>Aún no hay fallos de proveedores.</value>
+    <comment>Developer page: empty state of the provider failures table.</comment>
+  </data>
+  <data name="dev_not_applied" xml:space="preserve">
+    <value>No aplicado: no hay ninguna anulación de fiabilidad activa que cambiar.</value>
+    <comment>Developer page: report line when no reliability override is in force.</comment>
+  </data>
+  <data name="dev_not_issued" xml:space="preserve">
+    <value>No enviado: no hay ninguna sesión activa sobre la que actuar.</value>
+    <comment>Developer page: report line when there is no live session to act on.</comment>
+  </data>
+  <data name="dev_nothing_in_force" xml:space="preserve">
+    <value>No hay ninguna anulación de fiabilidad activa, así que las secciones de ajustes se ocultan en lugar de mostrarse a cero. Las mediciones y la lectura de salidas de abajo están en directo.</value>
+    <comment>Developer page: note shown when no reliability override is in force.</comment>
+  </data>
+  <data name="dev_one_min" xml:space="preserve">
+    <value>1 (mín.)</value>
+    <comment>Developer page: what a setting's 0 means when it falls back to the minimum of 1 ('Candidates evaluated per slot').</comment>
   </data>
   <data name="dev_open_tools" xml:space="preserve">
     <value>Abrir herramientas para desarrolladores</value>
@@ -1787,6 +2199,18 @@ de la manera correcta</value>
   <data name="dev_probe_all" xml:space="preserve">
     <value>Sondear todas las salidas ahora</value>
     <comment>Developer tools screen (reliability surface): probe all control label.</comment>
+  </data>
+  <data name="dev_probe_all_exits_now" xml:space="preserve">
+    <value>Sondear todas las salidas ahora</value>
+    <comment>Developer page: button that probes every exit now.</comment>
+  </data>
+  <data name="dev_probe_failed" xml:space="preserve">
+    <value>fallido</value>
+    <comment>Developer page: probe outcome, failed.</comment>
+  </data>
+  <data name="dev_probe_ok" xml:space="preserve">
+    <value>ok</value>
+    <comment>Developer page: probe outcome, ok.</comment>
   </data>
   <data name="dev_probe_providers" xml:space="preserve">
     <value>Sondear proveedores</value>
@@ -1804,6 +2228,62 @@ de la manera correcta</value>
     <value>Cuántos sitios de comprobación contacta una pasada de calificación a través de una salida. 0 sondea toda la lista integrada; un número menor la recorre por bloques</value>
     <comment>Developer tools screen: explanatory subtext under the 'probe sample hosts' control.</comment>
   </data>
+  <data name="dev_probe_silence_streak" xml:space="preserve">
+    <value>Racha de sondeos en silencio</value>
+    <comment>Developer page: label of the 'Probe silence streak' setting.</comment>
+  </data>
+  <data name="dev_probe_silence_streak_detail" xml:space="preserve">
+    <value>Cuántas pasadas de sondeo consecutivas puede responder una salida con silencio total antes de quedar advertida y fuera de la asignación de flujos nuevos. Solo afecta a la asignación</value>
+    <comment>Developer page: the explanation under the 'Probe silence streak' setting.</comment>
+  </data>
+  <data name="dev_probe_silence_streak_long_detail" xml:space="preserve">
+    <value>Cuántas pasadas de sondeo consecutivas puede responder una salida con silencio total antes de quedar advertida y fuera de la asignación de flujos nuevos — la compensación por los proveedores que abandonan la red en mitad de la sesión. Solo afecta a la asignación: la eliminación sigue basándose en el tráfico, y cualquier señal de vida reinicia la racha</value>
+    <comment>Developer page (Apple): the explanation under the 'Probe silence streak' setting.</comment>
+  </data>
+  <data name="dev_probe_stalled_exits" xml:space="preserve">
+    <value>Sondear las salidas bloqueadas antes de descartarlas</value>
+    <comment>Developer page: label of the 'Probe stalled exits before dropping' setting.</comment>
+  </data>
+  <data name="dev_probe_stalled_exits_detail" xml:space="preserve">
+    <value>Cuando una salida se bloquea, se le hace ping una vez antes de condenarla. Una salida congestionada pero viva responde y conserva sus flujos; una muerta se descarta igualmente</value>
+    <comment>Developer page: the explanation under the 'Probe stalled exits before dropping' setting.</comment>
+  </data>
+  <data name="dev_probe_suite" xml:space="preserve">
+    <value>Conjunto de sondeos</value>
+    <comment>Developer page: heading of the probe suite section.</comment>
+  </data>
+  <data name="dev_probe_suite_detail" xml:space="preserve">
+    <value>Contacta objetivos reales a través de la conexión activa y mide el tiempo de cada etapa. Se ejecuta con la configuración predeterminada del propio SDK.</value>
+    <comment>Developer page: explanation of the probe suite.</comment>
+  </data>
+  <data name="dev_probe_suite_idle" xml:space="preserve">
+    <value>No se está ejecutando.</value>
+    <comment>Developer page: probe suite status when it is not running.</comment>
+  </data>
+  <data name="dev_probe_suite_not_started" xml:space="preserve">
+    <value>El conjunto de sondeos no se inició: no hay sesión activa o ya hay uno en ejecución.</value>
+    <comment>Developer page: report line when the probe suite could not start.</comment>
+  </data>
+  <data name="dev_probe_suite_running" xml:space="preserve">
+    <value>En ejecución.</value>
+    <comment>Developer page: probe suite status while it runs.</comment>
+  </data>
+  <data name="dev_probe_suite_start" xml:space="preserve">
+    <value>Iniciar conjunto de sondeos</value>
+    <comment>Developer page: button that starts the probe suite.</comment>
+  </data>
+  <data name="dev_probe_suite_started" xml:space="preserve">
+    <value>Conjunto de sondeos iniciado</value>
+    <comment>Developer page: report line after the probe suite started.</comment>
+  </data>
+  <data name="dev_probe_suite_stop" xml:space="preserve">
+    <value>Detener</value>
+    <comment>Developer page: button that stops the probe suite.</comment>
+  </data>
+  <data name="dev_probe_suite_stopped" xml:space="preserve">
+    <value>Conjunto de sondeos detenido</value>
+    <comment>Developer page: report line after the probe suite stopped.</comment>
+  </data>
   <data name="dev_probe_timeout" xml:space="preserve">
     <value>Espera de la sonda</value>
     <comment>Developer tools screen (reliability surface): probe timeout control label.</comment>
@@ -1811,6 +2291,18 @@ de la manera correcta</value>
   <data name="dev_probe_timeout_detail" xml:space="preserve">
     <value>Cuánto espera una sonda de calificación una respuesta. Si está desactivado, se usan los 4 s integrados. Solo limita la espera de una prueba; nunca condena</value>
     <comment>Developer tools screen: explanatory subtext under the 'probe timeout' control.</comment>
+  </data>
+  <data name="dev_probe_wait" xml:space="preserve">
+    <value>Espera de la sonda</value>
+    <comment>Developer page: label of the 'Probe wait' setting.</comment>
+  </data>
+  <data name="dev_probe_wait_detail" xml:space="preserve">
+    <value>Cuánto espera una sonda de calificación una respuesta, en ms. Si está desactivado, se usan los 4 s integrados. Solo limita la espera de una prueba; nunca condena</value>
+    <comment>Developer page: the explanation under the 'Probe wait' setting.</comment>
+  </data>
+  <data name="dev_probed_exits" xml:space="preserve">
+    <value>Salidas sondeadas</value>
+    <comment>Developer page: heading of the probed exits table.</comment>
   </data>
   <data name="dev_probes" xml:space="preserve">
     <value>Sondas</value>
@@ -1823,6 +2315,10 @@ de la manera correcta</value>
   <data name="dev_probes_value" xml:space="preserve">
     <value>{0} enviadas / {1} respondidas</value>
     <comment>Developer tools screen: formatted value readout for 'probes'.</comment>
+  </data>
+  <data name="dev_quic_flows_rebound_value" xml:space="preserve">
+    <value>{0} ({1} aceptados / {2} reconectados)</value>
+    <comment>Developer page: value of the QUIC flows that rebound: {count} total, {accepted} accepted, {redialed} re-dialed.</comment>
   </data>
   <data name="dev_quic_rebind" xml:space="preserve">
     <value>Reasociar QUIC al perder una salida</value>
@@ -1852,6 +2348,10 @@ de la manera correcta</value>
     <value>{0} de {1}</value>
     <comment>Developer tools screen: formatted value readout for 'recovery missed'.</comment>
   </data>
+  <data name="dev_recovery_time_value" xml:space="preserve">
+    <value>media {0}, peor {1}</value>
+    <comment>Developer page: value of the recovery time, {average} and {worst} are durations.</comment>
+  </data>
   <data name="dev_recovery_value" xml:space="preserve">
     <value>media {0}, peor {1}</value>
     <comment>Developer tools screen: formatted value readout for 'recovery'.</comment>
@@ -1859,6 +2359,14 @@ de la manera correcta</value>
   <data name="dev_refresh" xml:space="preserve">
     <value>Actualizar</value>
     <comment>Developer tools screen (reliability surface): refresh control label.</comment>
+  </data>
+  <data name="dev_release_stuck_retransmits" xml:space="preserve">
+    <value>Liberar retransmisiones atascadas</value>
+    <comment>Developer page: label of the 'Release stuck retransmits' setting.</comment>
+  </data>
+  <data name="dev_release_stuck_retransmits_detail" xml:space="preserve">
+    <value>Cuánto tiempo se retienen las retransmisiones antes de liberar una, en ms. Si está desactivado, espera 30 s</value>
+    <comment>Developer page: the explanation under the 'Release stuck retransmits' setting.</comment>
   </data>
   <data name="dev_removal_budget_count" xml:space="preserve">
     <value>Límite de tormenta de eliminaciones</value>
@@ -1876,6 +2384,22 @@ de la manera correcta</value>
     <value>La ventana en la que se cuenta el límite de eliminaciones. Desactivado (como un límite de 0) apaga el disyuntor</value>
     <comment>Developer tools screen: explanatory subtext under the 'removal budget window' control.</comment>
   </data>
+  <data name="dev_removal_storm_limit" xml:space="preserve">
+    <value>Límite de tormenta de eliminaciones</value>
+    <comment>Developer page: label of the 'Removal storm limit' setting.</comment>
+  </data>
+  <data name="dev_removal_storm_limit_detail" xml:space="preserve">
+    <value>Cuántas eliminaciones por veredicto se permiten por ventana antes de aplazar el resto; una ráfaga suele deberse a una causa local más que a muchos fallos</value>
+    <comment>Developer page: the explanation under the 'Removal storm limit' setting.</comment>
+  </data>
+  <data name="dev_removal_storm_window" xml:space="preserve">
+    <value>Ventana de tormenta de eliminaciones</value>
+    <comment>Developer page: label of the 'Removal storm window' setting.</comment>
+  </data>
+  <data name="dev_removal_storm_window_detail" xml:space="preserve">
+    <value>La ventana en la que se cuenta el límite de eliminaciones, en ms. Desactivado (como un límite de 0) apaga el disyuntor</value>
+    <comment>Developer page: the explanation under the 'Removal storm window' setting.</comment>
+  </data>
   <data name="dev_removals_deferred" xml:space="preserve">
     <value>Eliminaciones aplazadas</value>
     <comment>Developer tools screen (reliability surface): removals deferred control label.</comment>
@@ -1884,6 +2408,10 @@ de la manera correcta</value>
     <value>Eliminaciones que el disyuntor de tormentas retuvo tras una ráfaga correlacionada</value>
     <comment>Developer tools screen: explanatory subtext under the 'removals deferred' control.</comment>
   </data>
+  <data name="dev_requested" xml:space="preserve">
+    <value>Solicitado:</value>
+    <comment>Developer page: label before the requested value of an override.</comment>
+  </data>
   <data name="dev_reset_defaults" xml:space="preserve">
     <value>Restablecer los valores de fábrica</value>
     <comment>Developer tools screen (reliability surface): reset defaults control label.</comment>
@@ -1891,6 +2419,10 @@ de la manera correcta</value>
   <data name="dev_reset_measurements" xml:space="preserve">
     <value>Restablecer mediciones</value>
     <comment>Developer tools screen (reliability surface): reset measurements control label.</comment>
+  </data>
+  <data name="dev_reset_to_shipped_defaults" xml:space="preserve">
+    <value>Restablecer los valores de fábrica</value>
+    <comment>Developer page: button that resets the reliability settings.</comment>
   </data>
   <data name="dev_scheduler_pause_recovery" xml:space="preserve">
     <value>Ventana de recuperación tras suspensión</value>
@@ -1907,6 +2439,10 @@ de la manera correcta</value>
   <data name="dev_scheduler_pause_tolerance_detail" xml:space="preserve">
     <value>Cuánto retraso del temporizador se interpreta como que el teléfono estuvo suspendido y no como una salida bloqueada, para que un teléfono reanudado no condene todas las salidas a la vez. Si está desactivado, no se aplica</value>
     <comment>Developer tools screen: explanatory subtext under the 'scheduler pause tolerance' control.</comment>
+  </data>
+  <data name="dev_scheduler_pause_tolerance_ms_detail" xml:space="preserve">
+    <value>Cuánto retraso del temporizador se interpreta como que el teléfono estuvo suspendido y no como una salida bloqueada, en ms, para que un teléfono reanudado no condene todas las salidas a la vez. Si está desactivado, no se aplica</value>
+    <comment>Developer page (Apple): the explanation under the 'Suspend detector' setting, with its unit.</comment>
   </data>
   <data name="dev_scheduler_pauses" xml:space="preserve">
     <value>Suspensiones detectadas</value>
@@ -1956,6 +2492,46 @@ de la manera correcta</value>
     <value>Mueve las conexiones posteriores a la salida que ya usa la primera</value>
     <comment>Developer tools screen: explanatory subtext under the 'server name bridge' control.</comment>
   </data>
+  <data name="dev_service_detached" xml:space="preserve">
+    <value>El servicio de URnetwork no está conectado, así que no se puede leer la conexión activa.</value>
+    <comment>Developer page: shown when the system service is not attached.</comment>
+  </data>
+  <data name="dev_session_log" xml:space="preserve">
+    <value>Registro de la sesión</value>
+    <comment>Developer page: heading of the daemon session log.</comment>
+  </data>
+  <data name="dev_session_log_denied" xml:space="preserve">
+    <value>Esta cuenta puede controlar el servicio, pero no leer su registro.</value>
+    <comment>Developer page: shown when this account may not read the daemon log.</comment>
+  </data>
+  <data name="dev_session_log_detail" xml:space="preserve">
+    <value>Lo que el servicio ha escrito desde que se inició. Las líneas de fiabilidad ([rel] event=...) son la prueba de que un ajuste de abajo cambió algo.</value>
+    <comment>Developer page: explanation of the session log.</comment>
+  </data>
+  <data name="dev_session_log_dropped" xml:space="preserve">
+    <value>Líneas descartadas antes de este punto: {}</value>
+    <comment>Developer page: line in the session log when {count} earlier lines were dropped.</comment>
+  </data>
+  <data name="dev_session_log_empty" xml:space="preserve">
+    <value>El servicio aún no ha escrito nada.</value>
+    <comment>Developer page: empty state of the session log.</comment>
+  </data>
+  <data name="dev_session_log_follow" xml:space="preserve">
+    <value>Seguir</value>
+    <comment>Developer page: toggle that follows the session log tail.</comment>
+  </data>
+  <data name="dev_session_log_restarted" xml:space="preserve">
+    <value>El servicio se reinició. Este es un registro nuevo; las líneas de la ejecución anterior ya no están.</value>
+    <comment>Developer page: note when the daemon restarted and the log began again.</comment>
+  </data>
+  <data name="dev_set" xml:space="preserve">
+    <value>Aplicar</value>
+    <comment>Developer page (Apple): button that applies a typed value.</comment>
+  </data>
+  <data name="dev_share_file" xml:space="preserve">
+    <value>Compartir {}</value>
+    <comment>Developer page (Apple): button that shares an exported log file. {name} is the file name.</comment>
+  </data>
   <data name="dev_shuffle_exits" xml:space="preserve">
     <value>Reordenar al azar todas las salidas</value>
     <comment>Developer tools screen (reliability surface): shuffle exits control label.</comment>
@@ -1976,6 +2552,10 @@ de la manera correcta</value>
     <value>Bloquear</value>
     <comment>Developer tools screen (reliability surface): stall exit control label.</comment>
   </data>
+  <data name="dev_stalled_exit" xml:space="preserve">
+    <value>Salida bloqueada</value>
+    <comment>Developer page: report line after an exit was stalled.</comment>
+  </data>
   <data name="dev_standing_reserve" xml:space="preserve">
     <value>Mantener una salida de reserva lista</value>
     <comment>Developer tools screen (reliability surface): standing reserve control label.</comment>
@@ -1983,6 +2563,66 @@ de la manera correcta</value>
   <data name="dev_standing_reserve_detail" xml:space="preserve">
     <value>Dimensiona cada ventana con una salida más que su objetivo para que ya haya un reemplazo conectado. Si está desactivado, espera a que haya una pérdida para reponer</value>
     <comment>Developer tools screen: explanatory subtext under the 'standing reserve' control.</comment>
+  </data>
+  <data name="dev_state_benched" xml:space="preserve">
+    <value>en el banquillo</value>
+    <comment>Developer page: exit state, benched.</comment>
+  </data>
+  <data name="dev_state_done" xml:space="preserve">
+    <value>terminada</value>
+    <comment>Developer page: exit state, done.</comment>
+  </data>
+  <data name="dev_state_heartbeat" xml:space="preserve">
+    <value>Latido de estado</value>
+    <comment>Developer page: label of the 'State heartbeat' setting.</comment>
+  </data>
+  <data name="dev_state_heartbeat_detail" xml:space="preserve">
+    <value>Con qué frecuencia se escribe en el registro una línea que resume el estado actual para un análisis forense posterior, en ms. Si está desactivado, se silencia</value>
+    <comment>Developer page: the explanation under the 'State heartbeat' setting.</comment>
+  </data>
+  <data name="dev_state_proven" xml:space="preserve">
+    <value>comprobada</value>
+    <comment>Developer page: exit state, proven.</comment>
+  </data>
+  <data name="dev_state_warned" xml:space="preserve">
+    <value>advertida</value>
+    <comment>Developer page: exit state, warned.</comment>
+  </data>
+  <data name="dev_sticky_site_affinity" xml:space="preserve">
+    <value>Afinidad persistente por sitio</value>
+    <comment>Developer page: label of the 'Sticky site affinity' setting.</comment>
+  </data>
+  <data name="dev_sticky_site_affinity_detail" xml:space="preserve">
+    <value>Las conexiones nuevas de un sitio se quedan en la salida que ya usan las anteriores, incluso por encima del límite de flujos, para que un sitio con mucho tráfico conserve una sola IP de salida</value>
+    <comment>Developer page: the explanation under the 'Sticky site affinity' setting.</comment>
+  </data>
+  <data name="dev_suspend_detector" xml:space="preserve">
+    <value>Detector de suspensión</value>
+    <comment>Developer page: label of the 'Suspend detector' setting.</comment>
+  </data>
+  <data name="dev_suspend_detector_detail" xml:space="preserve">
+    <value>Cuánto retraso del temporizador se interpreta como que el equipo estuvo suspendido y no como una salida bloqueada, en ms, para que un equipo reanudado no condene todas las salidas a la vez. Si está desactivado, no se aplica</value>
+    <comment>Developer page: the explanation under the 'Suspend detector' setting.</comment>
+  </data>
+  <data name="dev_suspend_recovery_window" xml:space="preserve">
+    <value>Ventana de recuperación tras suspensión</value>
+    <comment>Developer page: label of the 'Suspend recovery window' setting.</comment>
+  </data>
+  <data name="dev_suspend_recovery_window_detail" xml:space="preserve">
+    <value>Cuánto tiempo se retienen los veredictos tras detectar una suspensión, en ms, para dar tiempo a los transportes a volver a registrarse. Si está desactivado, se usan los 5 s integrados</value>
+    <comment>Developer page: the explanation under the 'Suspend recovery window' setting.</comment>
+  </data>
+  <data name="dev_suspends_caught" xml:space="preserve">
+    <value>Suspensiones detectadas</value>
+    <comment>Developer page: label of the 'Suspends caught' setting.</comment>
+  </data>
+  <data name="dev_suspends_caught_detail" xml:space="preserve">
+    <value>Suspensiones del host que captó el detector; cada una es un lote de veredictos retenidos en lugar de ejecutados en un equipo recién reanudado</value>
+    <comment>Developer page: the explanation under the 'Suspends caught' setting.</comment>
+  </data>
+  <data name="dev_sync" xml:space="preserve">
+    <value>Sincronizar</value>
+    <comment>Developer page: button that syncs the reliability settings.</comment>
   </data>
   <data name="dev_tcp_collapse_hold" xml:space="preserve">
     <value>Liberar retransmisiones atascadas</value>
@@ -2008,6 +2648,14 @@ de la manera correcta</value>
     <value>Tiempo de inactividad de UDP</value>
     <comment>Developer tools screen (reliability surface): udp idle timeout control label.</comment>
   </data>
+  <data name="dev_udp_idle_timeout_desktop" xml:space="preserve">
+    <value>Tiempo de inactividad de UDP</value>
+    <comment>Developer page: label of the 'UDP idle timeout' setting (desktop wording of dev_udp_idle_timeout).</comment>
+  </data>
+  <data name="dev_udp_idle_timeout_desktop_detail" xml:space="preserve">
+    <value>Cuánto tiempo puede permanecer inactivo un flujo que no es TCP antes de cerrarlo, en ms</value>
+    <comment>Developer page: the explanation under the 'UDP idle timeout' setting, with the unit the number box takes.</comment>
+  </data>
   <data name="dev_udp_idle_timeout_detail" xml:space="preserve">
     <value>Cuánto tiempo puede permanecer inactivo un flujo que no es TCP antes de cerrarlo</value>
     <comment>Developer tools screen: explanatory subtext under the 'udp idle timeout' control.</comment>
@@ -2020,6 +2668,62 @@ de la manera correcta</value>
     <value>Avisa a DNS y QUIC de que la ruta ya no existe en lugar de quedarse en silencio</value>
     <comment>Developer tools screen: explanatory subtext under the 'udp teardown' control.</comment>
   </data>
+  <data name="dev_unlimited" xml:space="preserve">
+    <value>Sin límite</value>
+    <comment>Developer page: what a setting's 0 means when it removes the cap ('Max connections per exit').</comment>
+  </data>
+  <data name="dev_unstall" xml:space="preserve">
+    <value>Desbloquear</value>
+    <comment>Developer page: per-exit button that releases an exit stalled with Stall.</comment>
+  </data>
+  <data name="dev_unstalled_exit" xml:space="preserve">
+    <value>Se desbloqueó la salida</value>
+    <comment>Developer page: report line after a stall was cleared on an exit.</comment>
+  </data>
+  <data name="dev_update_check_failed" xml:space="preserve">
+    <value>No se pudieron buscar actualizaciones; consulta el registro de la app.</value>
+    <comment>Developer page: report line when the update check failed.</comment>
+  </data>
+  <data name="dev_update_checking" xml:space="preserve">
+    <value>Buscando actualizaciones…</value>
+    <comment>Developer page: update check status while checking.</comment>
+  </data>
+  <data name="dev_update_dev_build" xml:space="preserve">
+    <value>Compilación de desarrollo: la versión más reciente es la v{}, y una compilación de desarrollo nunca se actualiza automáticamente.</value>
+    <comment>Developer page: update check result on a development build. {version} is the newest release version.</comment>
+  </data>
+  <data name="dev_update_dev_build_note" xml:space="preserve">
+    <value>esta es una compilación de desarrollo (código 0), que nunca se actualiza sola</value>
+    <comment>Developer page (Windows): the rest of the development build line, after the version.</comment>
+  </data>
+  <data name="dev_update_found" xml:space="preserve">
+    <value>Actualización disponible: v{} — consulta Ajustes.</value>
+    <comment>Developer page: update check result when a newer release exists; Settings shows the update. {version} is the release version.</comment>
+  </data>
+  <data name="dev_update_found_label" xml:space="preserve">
+    <value>Actualización encontrada:</value>
+    <comment>Developer page (Windows): prefix of the update check result when a newer release exists; the version follows.</comment>
+  </data>
+  <data name="dev_update_newest_release_is" xml:space="preserve">
+    <value>La versión más reciente es</value>
+    <comment>Developer page (Windows): prefix of the update check result on a development build; the version follows.</comment>
+  </data>
+  <data name="dev_update_newest_seen" xml:space="preserve">
+    <value>versión más reciente vista:</value>
+    <comment>Developer page (Windows): inside the parentheses after 'No update', before the newest release's version.</comment>
+  </data>
+  <data name="dev_update_no_releases" xml:space="preserve">
+    <value>Todavía no se ha publicado ninguna versión estable.</value>
+    <comment>Developer page: update check result when there is no stable release.</comment>
+  </data>
+  <data name="dev_update_none" xml:space="preserve">
+    <value>Sin actualizaciones: esta compilación está al día</value>
+    <comment>Developer page (Windows): update check result on the newest release; the version details follow in parentheses.</comment>
+  </data>
+  <data name="dev_update_up_to_date" xml:space="preserve">
+    <value>Al día. Versión más reciente: v{}</value>
+    <comment>Developer page: update check result on the newest release. {version} is the release version.</comment>
+  </data>
   <data name="dev_uplink_gate" xml:space="preserve">
     <value>Filtro de silencio del enlace ascendente</value>
     <comment>Developer tools screen (reliability surface): uplink gate control label.</comment>
@@ -2028,9 +2732,25 @@ de la manera correcta</value>
     <value>Cuánto tiempo puede estar en silencio todo el túnel antes de que los veredictos sobre proveedores se retengan como inadmisibles. 0 condena como antes</value>
     <comment>Developer tools screen: explanatory subtext under the 'uplink gate' control.</comment>
   </data>
+  <data name="dev_uplink_silence_gate" xml:space="preserve">
+    <value>Filtro de silencio del enlace ascendente</value>
+    <comment>Developer page: label of the 'Uplink silence gate' setting.</comment>
+  </data>
+  <data name="dev_uplink_silence_gate_detail" xml:space="preserve">
+    <value>Cuánto tiempo puede estar en silencio todo el túnel antes de que los veredictos sobre proveedores se retengan como inadmisibles, en ms. 0 condena como antes</value>
+    <comment>Developer page: the explanation under the 'Uplink silence gate' setting.</comment>
+  </data>
   <data name="dev_verdicts_held" xml:space="preserve">
     <value>Veredictos retenidos</value>
     <comment>Developer tools screen (reliability surface): verdicts held control label.</comment>
+  </data>
+  <data name="dev_verdicts_held_desktop" xml:space="preserve">
+    <value>Veredictos retenidos</value>
+    <comment>Developer page: label of the 'Verdicts held' measurement (desktop wording of dev_verdicts_held).</comment>
+  </data>
+  <data name="dev_verdicts_held_desktop_detail" xml:space="preserve">
+    <value>Condenas retenidas porque el enlace ascendente de este equipo, y no el proveedor, estaba en silencio (enlace ascendente / transporte)</value>
+    <comment>Developer page: the explanation under the 'Verdicts held' measurement (desktop wording).</comment>
   </data>
   <data name="dev_verdicts_held_detail" xml:space="preserve">
     <value>Condenas retenidas porque el enlace ascendente del propio teléfono, y no el proveedor, estaba en silencio (enlace ascendente / transporte)</value>
@@ -2051,6 +2771,10 @@ de la manera correcta</value>
   <data name="dev_worst_loss_value" xml:space="preserve">
     <value>Conexiones: {}</value>
     <comment>Developer tools screen: formatted value readout for 'worst loss'.</comment>
+  </data>
+  <data name="dev_worst_single_failure_value" xml:space="preserve">
+    <value>Conexiones: {}</value>
+    <comment>Developer page: value of the worst single failure, {count} connections.</comment>
   </data>
   <data name="developer" xml:space="preserve">
     <value>Desarrollador</value>
@@ -2099,6 +2823,98 @@ de la manera correcta</value>
   <data name="devices" xml:space="preserve">
     <value>Dispositivos</value>
     <comment>Provider list group title for devices</comment>
+  </data>
+  <data name="direct_update_allow" xml:space="preserve">
+    <value>Permitir</value>
+    <comment>macOS folder-access panel button that grants the app access to the Applications folder for the update.</comment>
+  </data>
+  <data name="direct_update_allow_applications" xml:space="preserve">
+    <value>Para instalar la actualización, permite que URnetwork se sustituya en la carpeta Aplicaciones. Selecciona Aplicaciones y haz clic en Permitir.</value>
+    <comment>macOS folder-access panel message when installing an update: the user selects the Applications folder to grant access. Keep "Allow" consistent with the panel's button.</comment>
+  </data>
+  <data name="direct_update_available" xml:space="preserve">
+    <value>Actualización disponible: {}</value>
+    <comment>macOS Settings &gt; Software update status when a newer release exists. {version} is its version.</comment>
+  </data>
+  <data name="direct_update_check" xml:space="preserve">
+    <value>Buscar actualizaciones</value>
+    <comment>macOS Settings &gt; Software update button that checks now.</comment>
+  </data>
+  <data name="direct_update_check_failed" xml:space="preserve">
+    <value>No se pudieron buscar actualizaciones: {}</value>
+    <comment>macOS Settings &gt; Software update error. {detail} is a short technical reason (often English, from the system).</comment>
+  </data>
+  <data name="direct_update_checking" xml:space="preserve">
+    <value>Buscando actualizaciones…</value>
+    <comment>macOS Settings &gt; Software update status while checking.</comment>
+  </data>
+  <data name="direct_update_checksum_failed" xml:space="preserve">
+    <value>La descarga no coincidía con la suma de comprobación de la versión y se descartó.</value>
+    <comment>macOS Settings &gt; Software update error: the downloaded file failed its integrity check and was deleted.</comment>
+  </data>
+  <data name="direct_update_development_build" xml:space="preserve">
+    <value>Compilación de desarrollo; la versión más reciente es {}.</value>
+    <comment>macOS Settings &gt; Software update status on a development build, which never updates itself. {version} is the newest release version.</comment>
+  </data>
+  <data name="direct_update_download_failed" xml:space="preserve">
+    <value>La descarga falló: {}</value>
+    <comment>macOS Settings &gt; Software update error. {detail} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_downloading_version" xml:space="preserve">
+    <value>Descargando {}…</value>
+    <comment>macOS Settings &gt; Software update status while the release downloads. {version} is its version.</comment>
+  </data>
+  <data name="direct_update_install" xml:space="preserve">
+    <value>Instalar actualización</value>
+    <comment>macOS Settings &gt; Software update button that downloads, verifies and installs the update.</comment>
+  </data>
+  <data name="direct_update_install_failed" xml:space="preserve">
+    <value>No se pudo instalar la actualización: {}</value>
+    <comment>macOS Settings &gt; Software update error. {detail} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_installing" xml:space="preserve">
+    <value>Instalando la actualización…</value>
+    <comment>macOS Settings &gt; Software update status while the verified update is installed.</comment>
+  </data>
+  <data name="direct_update_last_checked" xml:space="preserve">
+    <value>Última comprobación: {}</value>
+    <comment>macOS Settings &gt; Software update: when updates were last checked. {when} is a relative date, for example "5 minutes ago" or "yesterday".</comment>
+  </data>
+  <data name="direct_update_manual_install" xml:space="preserve">
+    <value>{} se descargó y verificó. Arrastra el nuevo URnetwork a la carpeta Aplicaciones y ábrelo desde allí.</value>
+    <comment>macOS Settings &gt; Software update status when the app could not replace itself. {version} is the downloaded release's version.</comment>
+  </data>
+  <data name="direct_update_not_checked" xml:space="preserve">
+    <value>Todavía no se han buscado actualizaciones.</value>
+    <comment>macOS Settings &gt; Software update status before the first check.</comment>
+  </data>
+  <data name="direct_update_relaunching" xml:space="preserve">
+    <value>Reiniciando URnetwork…</value>
+    <comment>macOS Settings &gt; Software update status while the app restarts on the new version.</comment>
+  </data>
+  <data name="direct_update_section_title" xml:space="preserve">
+    <value>Actualización de software</value>
+    <comment>macOS Settings: title of the section that checks for and installs app updates (direct-download app).</comment>
+  </data>
+  <data name="direct_update_show_in_finder" xml:space="preserve">
+    <value>Mostrar en el Finder</value>
+    <comment>macOS Settings &gt; Software update button that reveals the downloaded update in Finder (the macOS file manager).</comment>
+  </data>
+  <data name="direct_update_signature_rejected" xml:space="preserve">
+    <value>La actualización se rechazó: {}</value>
+    <comment>macOS Settings &gt; Software update error when the downloaded app's code signature did not check out. {detail} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_unpack_failed" xml:space="preserve">
+    <value>No se pudo descomprimir la descarga: {}</value>
+    <comment>macOS Settings &gt; Software update error. {detail} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_unusable_release" xml:space="preserve">
+    <value>La app no puede instalar la versión {0} ({1}).</value>
+    <comment>macOS Settings &gt; Software update error when the newest release has no file this app can install. {version} is the release version; {reason} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_up_to_date" xml:space="preserve">
+    <value>URnetwork está actualizado.</value>
+    <comment>macOS Settings &gt; Software update status when no newer release exists.</comment>
   </data>
   <data name="disable_ignore_battery_hint" xml:space="preserve">
     <value>Para desactivar, ve a Uso de batería de la aplicación en Configuración del sistema</value>
@@ -2353,7 +3169,7 @@ de la manera correcta</value>
     <comment>Section header of the per-transport enable toggles shown when the transport mode is Auto.</comment>
   </data>
   <data name="enabled_under_auto_footer" xml:space="preserve">
-    <value>Ordenados por preferencia: primero H3 y H1, luego whodis y después whodis pump. El orden es fijo. Al menos un transporte permanece activado.</value>
+    <value>Ordenados por preferencia: primero H1, luego H3, whodis y whodis pump. El orden es fijo. Al menos un transporte permanece activado.</value>
     <comment>Footer of the Auto transports section explaining the fixed preference order.</comment>
   </data>
   <data name="enjoying_urnetwork" xml:space="preserve">
@@ -2398,6 +3214,10 @@ de la manera correcta</value>
   <data name="enter_urnetwork" xml:space="preserve">
     <value>Entrar en URnetwork</value>
     <comment>Used in Authenticate/LoginInitial/GuestModeSheet.swift.</comment>
+  </data>
+  <data name="enter_wallet_address" xml:space="preserve">
+    <value>Ingrese la dirección de la billetera</value>
+    <comment>Used in Main/Account/Wallets/ConnectWalletSheet/EnterWalletAddress/EnterWalletAddressView.swift.</comment>
   </data>
   <data name="epoch_column_epoch_linux" xml:space="preserve">
     <value>Época</value>
@@ -3451,6 +4271,10 @@ enviamos para verificar tu identidad.</value>
     <value>¿Necesitas más datos, más rápido?</value>
     <comment>Call to action</comment>
   </data>
+  <data name="net_points_earned" xml:space="preserve">
+    <value>Puntos netos obtenidos</value>
+    <comment>Earnings page: lowercase caption under the net points total.</comment>
+  </data>
   <data name="net_provided" xml:space="preserve">
     <value>Red Proporcionada</value>
     <comment>Call to action</comment>
@@ -3526,6 +4350,10 @@ enviamos para verificar tu identidad.</value>
   <data name="network_create_bonus_message" xml:space="preserve">
     <value>¡Alguien te invitó a unirte 🥳\n¡Reclama tu bonificación creando una red!</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="network_earnings" xml:space="preserve">
+    <value>Ganancias de la red</value>
+    <comment>Used in Main/Account/AccountRootView.swift.</comment>
   </data>
   <data name="network_name_changed_to_n" xml:space="preserve">
     <value>El nombre de la red se cambió a {}</value>
@@ -3694,6 +4522,10 @@ enviamos para verificar tu identidad.</value>
   <data name="none" xml:space="preserve">
     <value>Ninguno</value>
     <comment>Empty value: the VLESS settings show it for no security and no flow (all apps), and the Referrals section shows it on windows and linux when no referral network is linked.</comment>
+  </data>
+  <data name="not_now" xml:space="preserve">
+    <value>Ahora no</value>
+    <comment>macOS button that dismisses the prompt to enable the VPN system extension for now.</comment>
   </data>
   <data name="notifications_label" xml:space="preserve">
     <value>Notificaciones</value>
@@ -3960,6 +4792,10 @@ más grande, seguro y descentralizado del mundo.</value>
     <value>Ahorra {}%</value>
     <comment>Plan picker: the saving badge on the yearly card; the number is the whole percent saved against twelve monthly payments.</comment>
   </data>
+  <data name="plan_terms_first_year_price" xml:space="preserve">
+    <value>{0} el primer año y después {1}/año. Cancela cuando quieras.</value>
+    <comment>Plan picker terms line for the yearly plan with a first-year offer and no free trial. {first_year_price} and {yearly_price} are formatted prices, for example $39.99.</comment>
+  </data>
   <data name="plan_terms_yearly.one" xml:space="preserve">
     <value>{0} día gratis, después {1}/año. Cancela cuando quieras.</value>
     <comment>Plan picker: the terms line under the button for the yearly plan with its trial.</comment>
@@ -3967,6 +4803,10 @@ más grande, seguro y descentralizado del mundo.</value>
   <data name="plan_terms_yearly.other" xml:space="preserve">
     <value>{0} días gratis, después {1}/año. Cancela cuando quieras.</value>
     <comment>Plan picker: the terms line under the button for the yearly plan with its trial.</comment>
+  </data>
+  <data name="plan_terms_yearly_billed_today" xml:space="preserve">
+    <value>{} cobrados hoy y después cada año. Cancela cuando quieras.</value>
+    <comment>Plan picker terms line for the yearly plan without a trial or offer. {yearly_price} is a formatted price, for example $59.99.</comment>
   </data>
   <data name="please_install_phantom_or_solflare_to_use_this" xml:space="preserve">
     <value>Por favor, instala Phantom o Solflare para usar esta función</value>
@@ -4882,7 +5722,7 @@ del mundo</value>
   </data>
   <data name="seedphrase_paste_hint" xml:space="preserve">
     <value>Pega aquí tu frase semilla de 12 o 24 palabras</value>
-    <comment>Seed sign-in sheet: placeholder of the seedphrase field (android accepts 12 or 24 words).</comment>
+    <comment>Seed sign-in sheet: placeholder of the seedphrase field (android and windows accept 12 or 24 words).</comment>
   </data>
   <data name="seedphrase_required" xml:space="preserve">
     <value>Introduce una frase semilla</value>
@@ -6434,6 +7274,22 @@ del mundo</value>
     <value>Usa la forma ASCII del nombre.</value>
     <comment>Split rules: validation error for a host name with non-ASCII characters; the rule wants the punycode form.</comment>
   </data>
+  <data name="split_rule_mode_excluded_description" xml:space="preserve">
+    <value>Los hosts seleccionados evitan el túnel.</value>
+    <comment>Split rule editor: description of the Route locally mode.</comment>
+  </data>
+  <data name="split_rule_mode_included_description" xml:space="preserve">
+    <value>La opción predeterminada: los hosts seleccionados usan el túnel sin fijar.</value>
+    <comment>Split rule editor: description of the Route through VPN mode (the default). A pin is the Keep on one provider mode.</comment>
+  </data>
+  <data name="split_rule_mode_pinned_description" xml:space="preserve">
+    <value>Los hosts seleccionados mantienen su proveedor durante más tiempo en vez de moverse a la primera señal de problemas, así el sitio cambia de dirección IP con menos frecuencia durante la sesión.</value>
+    <comment>Split rule editor: description of the Keep on one provider mode.</comment>
+  </data>
+  <data name="split_rule_mode_pinned_title" xml:space="preserve">
+    <value>Mantener en un solo proveedor</value>
+    <comment>Split rule editor: title of the mode that keeps the selected hosts on the same VPN provider longer.</comment>
+  </data>
   <data name="split_rule_preset_google_meet_calls" xml:space="preserve">
     <value>Llamadas de Google Meet</value>
     <comment>Split rules preset: Google Meet call media, from the address ranges Google publishes for routing it outside a VPN. Keep the product name Google Meet unchanged.</comment>
@@ -6450,6 +7306,10 @@ del mundo</value>
     <value>La actividad de enrutamiento aparece aquí mientras estás conectado.</value>
     <comment>A description of the content of the "Activity" section of the split rules view.</comment>
   </data>
+  <data name="split_rules_connect_to_load" xml:space="preserve">
+    <value>Conéctate una vez para cargar las reglas que ya tienes.</value>
+    <comment>Split rules screen: note under the disabled Add a rule button before the app has connected once and loaded the saved rules.</comment>
+  </data>
   <data name="split_rules_hint" xml:space="preserve">
     <value>Pulsa el tráfico de abajo para enrutarlo localmente, evitando el túnel.</value>
     <comment>A description of how to route traffic locally.</comment>
@@ -6458,9 +7318,17 @@ del mundo</value>
     <value>Añade un host arriba o pulsa el tráfico de abajo para enrutarlo localmente, evitando el túnel.</value>
     <comment>Split rules on android, which has a host input above the traffic list: how to add to the rule. The apple/linux screens without the input keep split_rules_hint.</comment>
   </data>
+  <data name="split_rules_host_hint_modes" xml:space="preserve">
+    <value>Añade un host arriba o pulsa el tráfico de abajo para enrutarlo localmente o mantenerlo en un solo proveedor.</value>
+    <comment>Split rules screen: hint shown while there are no rules yet. Routing locally sends traffic outside the VPN; holding to one provider keeps a site on the same VPN exit.</comment>
+  </data>
   <data name="split_rules_info_note" xml:space="preserve">
     <value>Las exclusiones se aplican a todo el clúster de red asociado, así que el tráfico relacionado queda cubierto en conjunto.</value>
     <comment>transfer stats and split rules</comment>
+  </data>
+  <data name="split_rules_info_note_modes" xml:space="preserve">
+    <value>Las reglas se aplican a todo el clúster de red asociado, así que el tráfico relacionado queda cubierto en conjunto.</value>
+    <comment>Split rules screen: note that a rule matches every host in the same network cluster (related hosts of one site or service), whatever the rule's mode.</comment>
   </data>
   <data name="split_rules_match_sites_not_apps" xml:space="preserve">
     <value>Las reglas de división se aplican a sitios y direcciones, no a apps: Apple solo permite la VPN por app en dispositivos administrados por una organización (MDM). Para dejar una app fuera de la VPN, enruta localmente los sitios que usa o empieza con una plantilla. Las direcciones de la red local ya omiten la VPN.</value>
@@ -6473,6 +7341,14 @@ del mundo</value>
   <data name="split_rules_start_from_preset" xml:space="preserve">
     <value>Empezar con una plantilla</value>
     <comment>Split rules screen: the menu that starts a route-locally rule from a preset, the address ranges a service publishes for use outside a VPN.</comment>
+  </data>
+  <data name="sso_browser_open_failed" xml:space="preserve">
+    <value>No se pudo abrir el navegador. Inténtalo de nuevo.</value>
+    <comment>macOS error when adding a sign-in method could not open the browser for the provider's sign-in page.</comment>
+  </data>
+  <data name="sso_sign_in_timed_out" xml:space="preserve">
+    <value>Se agotó el tiempo para iniciar sesión. Inténtalo de nuevo.</value>
+    <comment>Error when a browser sign-in (Google or Apple through the browser) took too long and expired.</comment>
   </data>
   <data name="start_earning_join" xml:space="preserve">
     <value>Para empezar a ganar, únete a la red</value>
@@ -6546,6 +7422,10 @@ como debería ser.</value>
     <value>Suscribirse</value>
     <comment>Button on the plan picker for the monthly plan, which has no free trial.</comment>
   </data>
+  <data name="subscription_portal_open_failed" xml:space="preserve">
+    <value>No se pudo abrir el portal de suscripciones. Inténtalo de nuevo.</value>
+    <comment>Snackbar error when the Stripe subscription management page (Manage subscription) could not be opened.</comment>
+  </data>
   <data name="subscription_purchased_under_different_account" xml:space="preserve">
     <value>Tu suscripción se compró con otra cuenta. Inicia sesión en esa cuenta para usarla.</value>
     <comment>The store purchase belongs to a different network than the one logged in — crediting must not go to the wrong account, so tell the user which way out exists. Apple: restore-purchases outcome (Shared/ViewModels/AppStoreSubscriptionManager.swift). Android: terminal `wrong_network` answer from the Play purchase report (google/PlanViewModel.kt); the purchase is still acknowledged so Play does not auto-refund it.</comment>
@@ -6574,9 +7454,41 @@ como debería ser.</value>
     <value>Pro</value>
     <comment>Display name for the paid plan. The WIRE value stays "supporter" (subscription_type / current_subscription.plan) because already-shipped app versions parse that string; only what the user reads changes.</comment>
   </data>
+  <data name="svc_action_failed" xml:space="preserve">
+    <value>No se completó: el servicio no ha cambiado. Los detalles están en el registro de la app.</value>
+    <comment>Windows banner text when installing, starting or updating the VPN service failed.</comment>
+  </data>
   <data name="svc_service_label" xml:space="preserve">
     <value>Servicio VPN</value>
     <comment>Settings: label of the VPN service row.</comment>
+  </data>
+  <data name="svc_setup_action" xml:space="preserve">
+    <value>Configurar</value>
+    <comment>Windows banner button that installs the VPN service (Windows asks for administrator permission).</comment>
+  </data>
+  <data name="svc_setup_message" xml:space="preserve">
+    <value>URnetwork usa un servicio de Windows para transportar el tráfico. Un clic: Windows pedirá permiso de administrador.</value>
+    <comment>Windows banner text under 'Set up the VPN service'.</comment>
+  </data>
+  <data name="svc_setup_title" xml:space="preserve">
+    <value>Configurar el servicio VPN</value>
+    <comment>Windows banner title when the URnetwork Windows service that carries traffic is not installed yet.</comment>
+  </data>
+  <data name="svc_start_action" xml:space="preserve">
+    <value>Iniciar</value>
+    <comment>Windows banner button that starts the stopped VPN service.</comment>
+  </data>
+  <data name="svc_start_message" xml:space="preserve">
+    <value>El servicio está instalado, pero no se está ejecutando.</value>
+    <comment>Windows banner text under 'Start the VPN service'.</comment>
+  </data>
+  <data name="svc_start_title" xml:space="preserve">
+    <value>Iniciar el servicio VPN</value>
+    <comment>Windows banner title when the VPN service is installed but stopped.</comment>
+  </data>
+  <data name="svc_uac_declined" xml:space="preserve">
+    <value>Windows pidió permiso y se cerró la solicitud. Haz clic de nuevo cuando estés listo.</value>
+    <comment>Windows banner text after the user closed the administrator permission (UAC) prompt without approving.</comment>
   </data>
   <data name="svc_uninstall_action" xml:space="preserve">
     <value>Desinstalar</value>
@@ -6586,9 +7498,25 @@ como debería ser.</value>
     <value>Esto detiene el servicio de URnetwork y elimina su unidad de systemd. La app no podrá conectarse hasta que se configure de nuevo. Se te pedirá permiso de administrador.</value>
     <comment>Settings: confirmation text before uninstalling the VPN service.</comment>
   </data>
+  <data name="svc_uninstall_confirm_windows" xml:space="preserve">
+    <value>Esto detiene el servicio de URnetwork y lo elimina de Windows. La app no podrá conectarse hasta que se configure de nuevo. Windows pedirá permiso de administrador.</value>
+    <comment>Windows Settings: confirmation dialog before uninstalling the VPN service.</comment>
+  </data>
   <data name="svc_uninstall_note" xml:space="preserve">
     <value>Eliminar el servicio de systemd que URnetwork usa para transportar el tráfico.</value>
     <comment>Settings: explanation under the uninstall service button.</comment>
+  </data>
+  <data name="svc_uninstall_note_windows" xml:space="preserve">
+    <value>Eliminar el servicio de Windows que URnetwork usa para transportar el tráfico.</value>
+    <comment>Windows Settings &gt; VPN service row: what the Uninstall button removes.</comment>
+  </data>
+  <data name="svc_update_message" xml:space="preserve">
+    <value>El servicio instalado tiene una versión distinta a la de esta app.</value>
+    <comment>Windows banner text under 'Update the VPN service'. The two version numbers follow it in parentheses.</comment>
+  </data>
+  <data name="svc_update_title" xml:space="preserve">
+    <value>Actualizar el servicio VPN</value>
+    <comment>Windows banner title when the installed VPN service is a different version than the app.</comment>
   </data>
   <data name="switch_account" xml:space="preserve">
     <value>Cambiar cuenta</value>
@@ -6876,6 +7804,82 @@ como debería ser.</value>
   <data name="upd_auto_check_note" xml:space="preserve">
     <value>Buscar nuevas versiones poco después de iniciar y cada seis horas. Nunca se instala nada sin un clic.</value>
     <comment>Settings: explanation under the automatic update check switch.</comment>
+  </data>
+  <data name="upd_available_appimage_message" xml:space="preserve">
+    <value>Con un clic se descarga la versión, se verifica con la suma de comprobación de la versión y se sustituye esta AppImage. El servicio VPN se actualiza por separado.</value>
+    <comment>Linux Settings update notice, AppImage installs: what the Install button does. The AppImage is the single-file Linux app; the VPN service is the separate system service package.</comment>
+  </data>
+  <data name="upd_available_msi_message" xml:space="preserve">
+    <value>Con un clic se descarga la versión, se verifica y se ejecuta su instalador, que actualiza la app y el servicio VPN. La app se cierra mientras se instala.</value>
+    <comment>Windows update banner: what the Update button does (downloads the MSI installer, checks it, runs it).</comment>
+  </data>
+  <data name="upd_available_package_message" xml:space="preserve">
+    <value>Descarga {} desde la página de la versión y luego ejecuta el comando de abajo.</value>
+    <comment>Linux Settings update notice, package installs (.deb, .rpm, tarball) that the app does not replace itself. {file} is the release file name, for example urnetwork_2026.10.5_amd64.deb. The shell command is shown in the row below.</comment>
+  </data>
+  <data name="upd_available_title_version" xml:space="preserve">
+    <value>Actualización disponible: v{}</value>
+    <comment>Update notice title (Linux Settings, Windows update banner): a newer release is available. {version} is the release version, for example 2026.10.5-1024555910; keep the "v" before it.</comment>
+  </data>
+  <data name="upd_downloaded_message" xml:space="preserve">
+    <value>La carpeta de esta AppImage no admite escritura, así que la descarga verificada se guardó abajo. Sustituye la AppImage por ella manualmente.</value>
+    <comment>Linux Settings update notice when the app cannot replace itself: the verified file's path is shown in the row below.</comment>
+  </data>
+  <data name="upd_failed_checksum" xml:space="preserve">
+    <value>La descarga no coincidía con las sumas de comprobación de la versión y se descartó. Haz clic para volver a intentarlo.</value>
+    <comment>Update notice error (Linux Settings, Windows update banner): the downloaded file failed its integrity check and was deleted.</comment>
+  </data>
+  <data name="upd_failed_download" xml:space="preserve">
+    <value>La descarga no terminó. Comprueba la conexión y haz clic para volver a intentarlo.</value>
+    <comment>Update notice error (Linux Settings, Windows update banner): the release download failed.</comment>
+  </data>
+  <data name="upd_failed_install" xml:space="preserve">
+    <value>No se pudo sustituir la AppImage. Comprueba los permisos de la carpeta y haz clic para volver a intentarlo.</value>
+    <comment>Linux Settings update notice error: the verified download could not be swapped in for the running AppImage.</comment>
+  </data>
+  <data name="upd_install" xml:space="preserve">
+    <value>Instalar</value>
+    <comment>Linux Settings update notice: button that downloads, verifies and installs the update.</comment>
+  </data>
+  <data name="upd_manual_install_message" xml:space="preserve">
+    <value>El instalador no se inició (necesita la aprobación de un administrador). La descarga verificada se mostró en el Explorador de archivos: cierra la app y ejecútalo.</value>
+    <comment>Windows update banner when the installer could not be started: the user runs it by hand. Explorer is the Windows file manager.</comment>
+  </data>
+  <data name="upd_ready_message" xml:space="preserve">
+    <value>La nueva AppImage ya está en su sitio y verificada. Reinicia para empezar a usarla; el archivo anterior se conserva al lado hasta entonces.</value>
+    <comment>Linux Settings update notice once the update is installed and waiting for a relaunch.</comment>
+  </data>
+  <data name="upd_ready_title" xml:space="preserve">
+    <value>Listo para reiniciar: v{}</value>
+    <comment>Linux Settings update notice title once the new AppImage is installed. {version} is the release version; keep the "v" before it.</comment>
+  </data>
+  <data name="upd_relaunch" xml:space="preserve">
+    <value>Reiniciar</value>
+    <comment>Linux Settings update notice: button that restarts the app on the newly installed version.</comment>
+  </data>
+  <data name="upd_release_page" xml:space="preserve">
+    <value>Página de la versión</value>
+    <comment>Linux Settings update notice: button that opens the release's download page in the browser.</comment>
+  </data>
+  <data name="upd_show_file" xml:space="preserve">
+    <value>Mostrar archivo</value>
+    <comment>Update notice button (Linux Settings, Windows update banner) that opens the folder holding the verified download.</comment>
+  </data>
+  <data name="upd_stage_downloading" xml:space="preserve">
+    <value>Descargando la actualización…</value>
+    <comment>Update notice progress line (Linux Settings, Windows update banner) while the release downloads.</comment>
+  </data>
+  <data name="upd_stage_installing" xml:space="preserve">
+    <value>Iniciando el instalador…</value>
+    <comment>Windows update banner progress line while the verified installer is being launched.</comment>
+  </data>
+  <data name="upd_stage_replacing" xml:space="preserve">
+    <value>Sustituyendo la AppImage…</value>
+    <comment>Linux Settings update notice progress line while the verified download replaces the running AppImage file.</comment>
+  </data>
+  <data name="upd_stage_verifying" xml:space="preserve">
+    <value>Verificando la descarga…</value>
+    <comment>Update progress line (Linux Settings, Windows update banner, macOS Settings &gt; Software update) while the downloaded release is checked against its published checksum.</comment>
   </data>
   <data name="update" xml:space="preserve">
     <value>Actualizar</value>
@@ -7298,6 +8302,10 @@ como debería ser.</value>
     <value>Cuando recomiendas a un amigo:</value>
     <comment>Call to action</comment>
   </data>
+  <data name="widget_chart_peak" xml:space="preserve">
+    <value>pico</value>
+    <comment>Throughput widget: lowercase word after the peak packet-rate figure, as in "1.2k pkt/s peak".</comment>
+  </data>
   <data name="widget_client" xml:space="preserve">
     <value>Cliente</value>
     <comment>Dashboard widget chart title: this device's own traffic.</comment>
@@ -7333,6 +8341,10 @@ como debería ser.</value>
   <data name="widget_globe_description" xml:space="preserve">
     <value>Tus proveedores conectados en el globo.</value>
     <comment>Description of the provider globe widget in the widget gallery.</comment>
+  </data>
+  <data name="widget_intent_source_parameter" xml:space="preserve">
+    <value>Origen</value>
+    <comment>Title of a hidden parameter of the Connect/Disconnect control: which surface (widget, control, shortcut) made the request.</comment>
   </data>
   <data name="widget_more_providers" xml:space="preserve">
     <value>+{} más</value>
@@ -7405,6 +8417,10 @@ como debería ser.</value>
   <data name="widget_quick_tile_added" xml:space="preserve">
     <value>Icono de conexión rápida añadido</value>
     <comment>Toast after the system added the Quick Settings tile.</comment>
+  </data>
+  <data name="widget_refresh_intent_title" xml:space="preserve">
+    <value>Actualizar los widgets de URnetwork</value>
+    <comment>Title of the action that refreshes the app's Home Screen widgets.</comment>
   </data>
   <data name="widget_toggle_intent_title" xml:space="preserve">
     <value>Activar o desactivar la VPN de URnetwork</value>
