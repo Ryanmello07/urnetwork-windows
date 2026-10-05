@@ -1473,7 +1473,7 @@ juiste manier</value>
     <comment>Disconnect VPN button text</comment>
   </data>
   <data name="disconnect_urnetwork_vpn" xml:space="preserve">
-    <value>URnetwork VPM verbinding verbreken</value>
+    <value>URnetwork VPN verbinding verbreken</value>
     <comment>Used in Shared/Intents/DisconnectIntent.swift.</comment>
   </data>
   <data name="disconnected" xml:space="preserve">
