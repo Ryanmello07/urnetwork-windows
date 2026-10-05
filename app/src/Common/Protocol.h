@@ -72,6 +72,9 @@ namespace urnw::proto {
 //    or does not know the verb sets no network country, which is the
 //    behaviour before they existed, and an app too old to send them leaves a
 //    new service with none.
+//
+//    Nor for StartTunnel::system_proxy, a diagnostic only: a service that drops
+//    it writes no proxy line, and an app too old to send it gets "unknown".
 inline constexpr int kProtocolVersion = 4;
 
 // The first version that understands StartTunnel::mode. Below this, an absent
@@ -233,6 +236,13 @@ struct StartTunnel {
   // country, which is what a service did before the field existed.
   std::string network_country_code;
   std::string network_country_source;
+  // The kind of the user's system proxy (Common/DiagnosticLines.h
+  // UserProxyKind), which the service writes to the log feedback uploads
+  // ([app][proxy]). Per user (WinINet), so the LocalSystem service cannot read
+  // it, and only its kind: never a host, a port, a URL or the bypass list. The
+  // service takes nothing but a kind UserProxyKind can produce. Absent, from
+  // an older app, it is written as "unknown"; an older service ignores it.
+  std::string system_proxy;
 };
 
 struct SetSplitTunnel {
@@ -449,6 +459,7 @@ inline void to_json(nlohmann::json& j, const StartTunnel& v) {
       {"kill_switch", v.kill_switch},
       {"network_country_code", v.network_country_code},
       {"network_country_source", v.network_country_source},
+      {"system_proxy", v.system_proxy},
   };
 }
 
@@ -479,6 +490,7 @@ inline void from_json(const nlohmann::json& j, StartTunnel& v) {
   get("kill_switch", v.kill_switch);
   get("network_country_code", v.network_country_code);
   get("network_country_source", v.network_country_source);
+  get("system_proxy", v.system_proxy);
 }
 
 inline void to_json(nlohmann::json& j, const SetSplitTunnel& v) {

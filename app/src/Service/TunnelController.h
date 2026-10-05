@@ -206,6 +206,16 @@ class TunnelController {
   // the process lives, and the app's push must not queue behind it. Its own
   // lock, innermost, held across the one store into the sdk.
   void SetNetworkCountry(const std::string& code, const std::string& source);
+  // The country in force, none until the app first sends one: what the log
+  // feedback uploads says ([app][network-country], ServiceDiagnostics). Under
+  // the same lock, never mutex_.
+  std::optional<netcountry::Reading> NetworkCountry();
+
+  // The kill-switch preference the app last sent (start_tunnel or
+  // set_kill_switch), for the diagnostic lines: the firewall state a status
+  // reports does not say it, and "on" over a firewall that is off is the
+  // difference between a guarantee and a hope. Lock-free, like killSwitch_.
+  bool KillSwitchPreference() const { return killSwitch_.load(); }
 
   // THE STATUS THE APP DECIDES ON, and it must never block.
   //

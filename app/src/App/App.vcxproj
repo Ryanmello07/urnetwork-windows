@@ -341,6 +341,10 @@
          and its thread NetworkCountryWatch.h, which
          tools/network-country-tests.cpp runs on any host. -->
     <ClCompile Include="MobileBroadband.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <!-- The user's system proxy, by kind (WinHTTP, no WinRT, so no pch); the
+         kind is Common/DiagnosticLines.h's, which
+         tools/diagnostic-lines-tests.cpp runs on any host. -->
+    <ClCompile Include="SystemProxy.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
     <ClCompile Include="ServiceClient.cpp" />
     <ClCompile Include="ServiceSetup.cpp" />
     <ClCompile Include="TrayIcon.cpp" />
@@ -452,6 +456,7 @@
     <ClInclude Include="MobileBroadband.h" />
     <!-- header-only and WinRT-free: tools/network-country-tests.cpp runs it -->
     <ClInclude Include="NetworkCountryWatch.h" />
+    <ClInclude Include="SystemProxy.h" />
     <ClInclude Include="ServiceClient.h" />
     <ClInclude Include="ServiceSetup.h" />
     <ClInclude Include="TrayIcon.h" />

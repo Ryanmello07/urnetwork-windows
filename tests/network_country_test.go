@@ -28,6 +28,7 @@ var networkCountryHeaders = map[string]string{
 	"NetworkCountry.h":      "Common",
 	"Protocol.h":            "Common",
 	"ProvideLifecycle.h":    "Common",
+	"DiagnosticLines.h":     "Common",
 	"NetworkCountryWatch.h": "App",
 	"NetworkChangeNotify.h": "Service",
 }

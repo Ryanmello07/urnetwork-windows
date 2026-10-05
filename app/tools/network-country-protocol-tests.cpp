@@ -3,8 +3,10 @@
 // network_country_* fields of start_tunnel and start_provider and an older
 // app's silence, the comparison that keeps a running provider-only device when
 // only the country moves, and what the service makes of a payload
-// (Common/NetworkCountry.h Normalized). Run against the same header the service
-// and the app compile; it needs nlohmann/json, like the app.
+// (Common/NetworkCountry.h Normalized). And start_tunnel's system_proxy, the
+// other fact about this PC's network the app hands the service for the log
+// feedback uploads (Common/DiagnosticLines.h). Run against the same header the
+// service and the app compile; it needs nlohmann/json, like the app.
 //
 //   c++ -std=c++20 -I ../src/Common -I <dir with nlohmann/json.hpp> network-country-protocol-tests.cpp -o /tmp/network-country-protocol-tests && /tmp/network-country-protocol-tests
 //
@@ -13,6 +15,7 @@
 #include <iostream>
 #include <string>
 
+#include "DiagnosticLines.h"
 #include "NetworkCountry.h"
 #include "Protocol.h"
 
@@ -82,6 +85,26 @@ void TestStartTunnel() {
         "pipe: an older app's start_tunnel reads as no country");
 }
 
+// start_tunnel's system proxy kind, an older app's silence, and a proxy list
+// where a kind belongs.
+void TestStartTunnelSystemProxy() {
+  proto::StartTunnel start;
+  start.instance_id = "instance";
+  start.system_proxy = "pac+manual-loopback";
+  nlohmann::json startJson = start;
+  const auto back = startJson.get<proto::StartTunnel>();
+  Check(back.system_proxy == "pac+manual-loopback", "pipe: start_tunnel carries the system proxy kind");
+  Check(diag::ProxyLine(back.system_proxy) == "user=pac+manual-loopback",
+        "pipe: the service writes the kind it was sent");
+  startJson.erase("system_proxy");
+  const auto older = startJson.get<proto::StartTunnel>();
+  Check(older.system_proxy.empty() && diag::ProxyLine(older.system_proxy) == "user=unknown",
+        "pipe: an older app's start_tunnel reads as an unknown proxy");
+  startJson["system_proxy"] = "http=203.0.113.9:8080";
+  Check(diag::ProxyLine(startJson.get<proto::StartTunnel>().system_proxy) == "user=unknown",
+        "pipe: a proxy list where a kind belongs is never written");
+}
+
 // start_provider's network country, which never rebuilds a running device.
 void TestStartProvider() {
   proto::StartProvider provider;
@@ -115,6 +138,7 @@ void TestStartProvider() {
 int main() {
   TestVerb();
   TestStartTunnel();
+  TestStartTunnelSystemProxy();
   TestStartProvider();
   std::cout << (gCases - gFailures) << "/" << gCases << " network country protocol checks passed"
             << std::endl;

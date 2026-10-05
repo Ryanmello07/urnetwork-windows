@@ -36,6 +36,7 @@
 #include "PeerLocation.h"
 #include "RpcSessionBlob.h"
 #include "Strings.h"
+#include "SystemProxy.h"
 #include "VlessPresentation.h"
 #include "WalletBridgeRoute.h"
 
@@ -2904,6 +2905,10 @@ bool SdkHost::BootstrapSession(const char* reason, bool attachOnly) {
       const netcountry::Reading networkCountry = CurrentNetworkCountry();
       cfg.network_country_code = networkCountry.code;
       cfg.network_country_source = networkCountry.source;
+      // The user's system proxy, by kind only, for the service's line in the
+      // log feedback uploads (SystemProxy.h): this process is the one that
+      // can read the user's setting.
+      cfg.system_proxy = ReadUserProxyKind();
       // Seed split tunneling from the persisted per-app overrides so the driver is
       // correct at tunnel-up (device_ isn't connected yet - read the app LocalState).
       // PushLocalOverrideAppsToDriver re-applies it live once the device is up.

@@ -55,6 +55,8 @@ nlohmann::json ControlServer::Handle(const nlohmann::json& request) {
             "start_tunnel requires an exact instance id, RPC session id, "
             "loopback endpoint, and per-session mTLS credentials");
       }
+      // The user's system proxy, as the app read it for this connect.
+      diagnostics_.NoteStart(cfg);
       proto::TunnelStatus st = tunnel_.Start(cfg);
       // "ok" means "I did what you asked" — live AND in the mode requested.
       // A clamped process serving a tunnel request produces a live session, but
@@ -126,6 +128,8 @@ nlohmann::json ControlServer::Handle(const nlohmann::json& request) {
       // nothing a status reports moves, so nothing is pushed.
       proto::SetNetworkCountry s = request.get<proto::SetNetworkCountry>();
       tunnel_.SetNetworkCountry(s.network_country_code, s.network_country_source);
+      // The country now in force, for the log feedback uploads, when it moved.
+      diagnostics_.NoteNetworkCountry(tunnel_.NetworkCountry());
       reply.ok = true;
       reply.status = tunnel_.Status();
     } else if (type == proto::msg::kGetProviderStats) {
@@ -163,6 +167,11 @@ void ControlServer::PushState() {
   // has returned and released mutex_, so it cannot sequence a call that may
   // block inside the Go runtime ahead of the route revert. See the note on
   // TunnelController::SetStateLocked.
+  //
+  // The diagnostic lines of the state being pushed go first, for the same
+  // reason and so the flush takes them along (ServiceDiagnostics.h).
+  diagnostics_.NoteStatus(tunnel_.Status(), tunnel_.KillSwitchPreference(),
+                          tunnel_.NetworkCountry());
   urnet::flushGlog();
   nlohmann::json event;
   event["event"] = "tunnel_state";
