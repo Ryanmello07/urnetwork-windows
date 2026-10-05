@@ -4,23 +4,23 @@
 // fields show for the chosen transport and security, the form <-> VlessSettings
 // mapping, the store key of an sdk error id, and the picker options.
 //
-// And the one rule that keeps the settings at all. SdkHost writes a space's
-// values WHOLE in two places, BuildNetworkSpace at every launch and
-// ApplyNetworkServer when the login sheet applies a network: both build a FRESH
-// urnet::NetworkSpaceValues, and updateNetworkSpaceValues replaces the stored
-// set with it. Neither knows about VLESS, so without the carry-over below every
-// launch would drop the bundled space's VLESS server, and every apply the
-// applied space's.
+// And the reading of what a space stores. SdkHost writes a space's values
+// WHOLE in two places, BuildNetworkSpace at every launch and
+// ApplyNetworkServer when the login sheet applies a network, and
+// updateNetworkSpaceValues replaces the stored set with them. Both write their
+// own values over the space's stored ones (NetworkSpaceStartup.h), read out of
+// the space's export by StoredValuesFor below, so the VLESS server saved in a
+// space survives them with everything else it stores.
 //
 // It is all pure for the reason ExtenderPresentation.h gives: a WinUI 3 app
 // cannot be built off Windows, so every decision expressed on plain values is
 // verified by tools/vless-presentation-tests.cpp on any host, and only the
 // drawing is unverified. The SDK header is not included: the mapping and the
-// carry-over are templates over urnet::VlessSettings, urnet::NetworkSpaceKey
-// and urnet::NetworkSpaceValues by the SDK's field names, so the tests hand
-// them stand-ins with the same fields (and the SDK's own types when they are
-// built against urnetwork_sdk.hpp), and the app hands them the SDK's types
-// (VlessSheet.cpp, SdkHost.cpp).
+// stored-values reading are templates over urnet::VlessSettings,
+// urnet::NetworkSpaceKey and urnet::NetworkSpaceValues by the SDK's field
+// names, so the tests hand them stand-ins with the same fields (and the SDK's
+// own types when they are built against urnetwork_sdk.hpp), and the app hands
+// them the SDK's types (VlessSheet.cpp, SdkHost.cpp).
 //
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
@@ -279,7 +279,7 @@ int IndexOf(std::vector<Option> const& options, std::string_view value);
 // field) for an index with no entry, such as a picker with nothing selected.
 std::string ValueAt(std::vector<Option> const& options, int index);
 
-// ---- keeping the server across a write of the whole space -------------------
+// ---- what a space stores ------------------------------------------------------
 
 // Whether two NetworkSpaceKeys name the same space. An unset field is the empty
 // one, as the sdk's json reads it.
@@ -292,9 +292,10 @@ bool SameSpaceKey(Key const& a, Key const& b) {
 // The values a space's export (NetworkSpace::toJson: {"key": ..., "values":
 // ...}) holds for `key`, read with the json library's conversions for the SDK
 // types (SdkHost::SetNetExtender reads it the same way). nullopt when the export
-// is for another space, so another space's server is never carried. A template
-// over the document so this header needs no json library: SdkHost hands it an
-// nlohmann::json, as do the host tests when built against the SDK header.
+// is for another space, so another space's values are never written over. A
+// template over the document so this header needs no json library: SdkHost
+// hands it an nlohmann::json, as do the host tests when built against the SDK
+// header.
 template <class Key, class Values, class Json>
 std::optional<Values> StoredValuesFor(Key const& key, Json const& document) {
   if (!document.is_object()) return std::nullopt;
@@ -308,15 +309,6 @@ std::optional<Values> StoredValuesFor(Key const& key, Json const& document) {
     it->get_to(values);
   }
   return values;
-}
-
-// `next`, the values about to be written whole for a space, with the VLESS
-// server of the values stored for that same space (`stored`; nullopt when the
-// space has none yet). Values that name a server of their own keep it.
-template <class Values>
-Values WithStoredVless(Values next, std::optional<Values> const& stored) {
-  if (!next.vless && stored && stored->vless) next.vless = stored->vless;
-  return next;
 }
 
 }  // namespace urnw::vless

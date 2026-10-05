@@ -50,16 +50,15 @@ func runVlessPresentationTests(t *testing.T, program string) {
 // new form, the field visibility for every transport and security, the form <->
 // VlessSettings round trip (spiderX carried, a hidden flow cleared), the store
 // key of all 12 sdk error ids and of an unknown one, the picker options, and the
-// carry-over that keeps a space's VLESS server when SdkHost writes the space's
-// values whole (BuildNetworkSpace, ApplyNetworkServer).
+// space key comparison that reading a space's stored values rests on.
 func TestVlessPresentation(t *testing.T) {
 	runVlessPresentationTests(t, buildVlessPresentationTests(t))
 }
 
 // The same spec built against the generated SDK header, so the mapping and the
-// carry-over are instantiated with urnet::VlessSettings, urnet::NetworkSpaceKey
-// and urnet::NetworkSpaceValues, and the carry-over reads a space export
-// through the header's json conversions. The header is git-ignored (fetch-deps
+// stored-values reading are instantiated with urnet::VlessSettings,
+// urnet::NetworkSpaceKey and urnet::NetworkSpaceValues, and a space export's
+// stored values are read through the header's json conversions. The header is git-ignored (fetch-deps
 // unpacks it into app/third_party/urnetwork-sdk/<arch>; URNETWORK_SDK_INCLUDE
 // names another directory) and needs nlohmann/json, so a host without them
 // skips this, and so does a stale copy from before the VLESS API.
@@ -141,8 +140,9 @@ func jsonIncludeDir(root string) (dir string, found bool) {
 // The sheet, its two doors and SdkHost's half cannot be built off Windows, so
 // what they must keep doing is checked on their source: every string the sheet
 // shows exists, Settings and the login screen's network sheet open it, every
-// sdk call it makes runs off the UI thread through SdkHost, and both of
-// SdkHost's whole-values writers carry the space's VLESS server.
+// sdk call it makes runs off the UI thread through SdkHost, and the space's
+// stored values, its VLESS server among them, are read for its own key (the
+// whole-values writers start from them: TestNetworkSpaceWritersStartFromTheStoredValues).
 func TestVlessSettingsWiring(t *testing.T) {
 	root := repositoryRoot(t)
 	document := parseXML(t, filepath.Join(root, "app", "src", "App", "Strings", "en", "Resources.resw"))
@@ -246,8 +246,8 @@ func TestVlessSettingsWiring(t *testing.T) {
 		t.Error("LoginPage::OnChangeNetworkServer does not open the VLESS sheet after the network sheet asks for it")
 	}
 
-	// SdkHost: the wrappers, and the carry-over in both whole-values writers,
-	// ahead of the write it protects.
+	// SdkHost: the wrappers, and the stored values the whole-values writers
+	// start from.
 	host := stripLineComments(readAppSource(t, "SdkHost.cpp"))
 	for _, want := range []string{
 		"networkSpace_->getVlessSettings()",
@@ -264,17 +264,6 @@ func TestVlessSettingsWiring(t *testing.T) {
 	if !strings.Contains(stored, "spaceManager_->getNetworkSpace(key)") ||
 		!strings.Contains(stored, "vless::StoredValuesFor<urnet::NetworkSpaceKey, urnet::NetworkSpaceValues>(") {
 		t.Error("SdkHost::StoredSpaceValuesLocked does not read the space's stored values for its key")
-	}
-	for _, name := range []string{
-		"urnet::NetworkSpace SdkHost::BuildNetworkSpace(",
-		"bool SdkHost::ApplyNetworkServer(",
-	} {
-		body := functionBody(host, name)
-		carried := strings.Index(body, "vless::WithStoredVless(std::move(values), StoredSpaceValuesLocked(key))")
-		written := strings.Index(body, "updateNetworkSpaceValues(key, values)")
-		if carried < 0 || written < 0 || written < carried {
-			t.Errorf("%s writes the space's values without carrying its VLESS server", name)
-		}
 	}
 
 	// The project builds both units, the pure one without the pch.
