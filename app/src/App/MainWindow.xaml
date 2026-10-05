@@ -2013,6 +2013,35 @@
                                     </StackPanel>
                                 </Border>
                                 <StackPanel x:Name="AccountPointsPanel" />
+                                <!-- how and when SN payouts happen, under the figure:
+                                     the explanation, this epoch's times and Claim while
+                                     something is claimable; with no coldkey, the prompt
+                                     to set it. Collapsed until the coldkey is known
+                                     (WalletPage::RebuildPayoutLine) -->
+                                <Border x:Name="SnPayoutPanel" Visibility="Collapsed"
+                                        BorderBrush="{StaticResource UrBorderBrush}"
+                                        BorderThickness="0,0,0,1" Padding="12,10">
+                                    <StackPanel Spacing="6">
+                                        <TextBlock x:Name="SnPayoutText" TextWrapping="Wrap"
+                                                   Style="{StaticResource UrRowNoteStyle}"
+                                                   TextTrimming="None" />
+                                        <TextBlock x:Name="SnPayoutTimesText" TextWrapping="Wrap"
+                                                   Style="{StaticResource UrRowNoteStyle}"
+                                                   TextTrimming="None" Visibility="Collapsed" />
+                                        <!-- the coldkey flow the Bittensor block's button opens -->
+                                        <HyperlinkButton x:Name="SetColdkeyButton"
+                                                         Padding="0" Margin="0"
+                                                         HorizontalAlignment="Left"
+                                                         Visibility="Collapsed"
+                                                         Click="OnConnectWallet" />
+                                        <!-- the claim dialog the unclaimed tile opens -->
+                                        <Button x:Name="SnPayoutClaimButton"
+                                                Style="{StaticResource UrPaneActionPrimaryStyle}"
+                                                HorizontalAlignment="Stretch"
+                                                Visibility="Collapsed"
+                                                Click="OnClaimAlpha" />
+                                    </StackPanel>
+                                </Border>
 
                                 <!-- the protocol note and the ur.xyz link -->
 

@@ -273,6 +273,7 @@
          USDC waiting, the connect sheet's state machine) are WinRT-free (no
          pch) so tools/solana-wallet-tests.cpp runs them on any host; the page
          and the sheet that draw them use the pch. -->
+    <ClCompile Include="SnPayoutPresentation.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
     <ClCompile Include="SolanaWalletPresentation.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
     <ClCompile Include="SolanaWalletSheets.cpp" />
     <ClCompile Include="AppController.cpp" />
@@ -358,6 +359,7 @@
     <ClInclude Include="WalletPage.h" />
     <ClInclude Include="EarningsSheets.h" />
     <ClInclude Include="SeekerVerifyNotice.h" />
+    <ClInclude Include="SnPayoutPresentation.h" />
     <ClInclude Include="SolanaWalletPresentation.h" />
     <ClInclude Include="SolanaWalletSheets.h" />
     <ClInclude Include="AppController.h" />

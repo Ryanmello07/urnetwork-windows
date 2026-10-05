@@ -74,6 +74,33 @@ constexpr const char* kTop200Path = "/app/account/top200";
 // A head score this close to the eviction floor is worth a warning.
 constexpr double kDemotionWarningRatio = 1.15;
 
+int64_t NowMillis() {
+  return std::chrono::duration_cast<std::chrono::milliseconds>(
+             std::chrono::system_clock::now().time_since_epoch())
+      .count();
+}
+
+// The user's zone's offset from UTC at `millis`, in minutes, by Windows' rules
+// for that date (daylight time included); 0 when Windows cannot say.
+int32_t LocalUtcOffsetMinutes(int64_t millis) {
+  // a FILETIME counts 100 ns ticks from 1601-01-01
+  constexpr int64_t kUnixEpochFileTimeMillis = 11'644'473'600'000;
+  const uint64_t ticks = static_cast<uint64_t>(millis + kUnixEpochFileTimeMillis) * 10'000;
+  FILETIME utcFile{static_cast<DWORD>(ticks & 0xFFFFFFFF), static_cast<DWORD>(ticks >> 32)};
+  SYSTEMTIME utc{};
+  SYSTEMTIME local{};
+  FILETIME localFile{};
+  if (!FileTimeToSystemTime(&utcFile, &utc) ||
+      !SystemTimeToTzSpecificLocalTime(nullptr, &utc, &local) ||
+      !SystemTimeToFileTime(&local, &localFile)) {
+    return 0;
+  }
+  const uint64_t localTicks =
+      (static_cast<uint64_t>(localFile.dwHighDateTime) << 32) | localFile.dwLowDateTime;
+  return static_cast<int32_t>((static_cast<int64_t>(localTicks) - static_cast<int64_t>(ticks)) /
+                              600'000'000);
+}
+
 // A stat tile's value, in the colour its state deserves. The dash is a
 // PLACEHOLDER, not a number: faint for the placeholder, text colour for a real
 // figure.
@@ -601,6 +628,8 @@ void WalletPage::ApplyStrings() {
   }
   w_.UnclaimedHeading().Text(Loc("unclaimed"));
   w_.ClaimButton().Content(LocBox("claim"));
+  w_.SetColdkeyButton().Content(LocBox("set_coldkey"));
+  w_.SnPayoutClaimButton().Content(LocBox("claim"));
   w_.Top200Heading().Text(Loc("top200"));
   w_.Top200Button().Content(LocBox("claim_your_spot"));
   w_.Top200Warning().Text(Loc("top200_demotion_warning"));
@@ -648,8 +677,10 @@ void WalletPage::ApplyStrings() {
   ShowManualPanel(manualPanelOpen_);
   // Not part of the Loading seeding above: the Solana card and the waiting line
   // stay collapsed until their reads land. Their formatted text and names are
-  // in the language, though, so a strings change redraws them.
+  // in the language, though, so a strings change redraws them. So does the
+  // payout line, collapsed until the coldkey is known.
   RebuildSolanaPanel();
+  RebuildPayoutLine();
 }
 
 // The ledger pane shows ONE table at a time; this is the switch in its header.
@@ -873,8 +904,17 @@ void WalletPage::LoadClaims() {
     const bool ok = !error.has_value();
     std::vector<EpochClaim> claims;
     int64_t total = 0;
+    std::optional<snpayout::EpochSchedule> schedule;
     if (ok) {
       total = result->total_claimable_rao;
+      if (result->schedule) {
+        snpayout::EpochSchedule s;
+        s.epoch = result->schedule->epoch;
+        s.endMillis = result->schedule->end_millis;
+        s.claimOpenMillis = result->schedule->claim_open_millis;
+        s.expiryMillis = result->schedule->expiry_millis;
+        schedule = s;
+      }
       if (result->claims) {
         for (auto const& c : *result->claims) {
           EpochClaim claim;
@@ -894,9 +934,10 @@ void WalletPage::LoadClaims() {
       urnw::LogError("earnings: snClaims failed: {} {}", error->code.value_or(std::string()),
                      error->message);
     }
-    queue.TryEnqueue([weak, claims = std::move(claims), total, ok, error] {
+    queue.TryEnqueue([weak, claims = std::move(claims), total, ok, error, schedule] {
       if (auto self = weak.get())
-        self->wallet().ApplyClaims(claims, total, ok ? Fetch::Ready : Fetch::Failed, error);
+        self->wallet().ApplyClaims(claims, total, ok ? Fetch::Ready : Fetch::Failed, error,
+                                   schedule);
     });
   });
 }
@@ -1058,9 +1099,11 @@ void WalletPage::ApplySnWallet(std::optional<SnWalletInfo> wallet, Fetch state) 
   if (!connected) {
     claims_.clear();
     totalClaimableRao_ = 0;
+    schedule_.reset();
     gas_.reset();
   }
   RebuildHistory();
+  RebuildPayoutLine();
   if (connected && !w_.previewUi()) {
     EnsureChainSettings([weak = w_.get_weak()] {
       if (auto self = weak.get()) {
@@ -1929,10 +1972,13 @@ void WalletPage::ApplyLedgerMeta() {
 // ---- claims, gas, head -----------------------------------------------------
 
 void WalletPage::ApplyClaims(std::vector<EpochClaim> const& claims, int64_t totalClaimableRao,
-                             Fetch state, std::optional<urnet::SnError> const& error) {
+                             Fetch state, std::optional<urnet::SnError> const& error,
+                             std::optional<snpayout::EpochSchedule> const& schedule) {
   claims_ = claims;
   totalClaimableRao_ = totalClaimableRao;
   claimsState_ = state;
+  schedule_ = schedule;
+  RebuildPayoutLine();
   size_t claimable = 0;
   for (auto const& claim : claims_) {
     if (claim.status == "claimable") ++claimable;
@@ -1961,6 +2007,33 @@ void WalletPage::ApplyClaims(std::vector<EpochClaim> const& claims, int64_t tota
   const bool previewSample = w_.previewUi() && PreviewSample() && !claims_.empty();
   w_.ClaimButton().IsEnabled((totalClaimableRao_ > 0 && CanClaim()) || previewSample);
   RebuildHistory();
+}
+
+// How and when SN payouts happen, under the points figure. The decision is
+// snpayout::PayoutLineFor's; the times are the reader's local time, with the
+// zone's offset taken at each instant. Claim opens the claim dialog and Set
+// coldkey the coldkey flow, the same handlers as the unclaimed tile's button and
+// the Bittensor block's; the app never claims by itself.
+void WalletPage::RebuildPayoutLine() {
+  const bool walletKnown = walletState_ == Fetch::Ready || snWallet_.has_value();
+  const auto view = snpayout::PayoutLineFor(
+      walletKnown, snWallet_.has_value(), totalClaimableRao_, schedule_, NowMillis(),
+      [](int64_t millis) {
+        return snpayout::FormatScheduleTime(millis, LocalUtcOffsetMinutes(millis));
+      });
+  const bool shown = view.kind != snpayout::LineKind::Hidden;
+  w_.SnPayoutPanel().Visibility(shown ? Visibility::Visible : Visibility::Collapsed);
+  if (!shown) return;
+  const bool setColdkey = view.kind == snpayout::LineKind::SetColdkey;
+  w_.SnPayoutText().Text(setColdkey ? Loc("set_coldkey_to_get_paid") : Loc("sn_payout_schedule"));
+  kit::SetTextOrCollapse(
+      w_.SnPayoutTimesText(),
+      view.showTimes ? hstring{urnw::Format("sn_payout_schedule_times", urnw::Widen(view.epochEnd),
+                                            urnw::Widen(view.claimOpen), urnw::Widen(view.expiry))}
+                     : hstring{});
+  w_.SetColdkeyButton().Visibility(setColdkey ? Visibility::Visible : Visibility::Collapsed);
+  w_.SnPayoutClaimButton().Visibility(view.showClaim ? Visibility::Visible : Visibility::Collapsed);
+  w_.SnPayoutClaimButton().IsEnabled(view.showClaim && CanClaim());
 }
 
 void WalletPage::ApplyGas(std::optional<GasKeyInfo> gas) { gas_ = std::move(gas); }
@@ -2422,7 +2495,14 @@ void WalletPage::ShowPreviewWalletState() {
     claims.push_back(claim(120, 3'241'000'000, "claimable", nullptr));
     claims.push_back(claim(119, 2'980'500'000, "claimed", "0xSAMPLEtxHASHnotREAL111111"));
     claims.push_back(claim(118, 2'700'000'000, "expired", nullptr));
-    ApplyClaims(claims, 3'241'000'000, Fetch::Ready, std::nullopt);
+    // epoch 121 closes three days out on the sample's 12 s blocks: the
+    // 14,400-block finalize offset, then 8 claim epochs plus 1 grace epoch
+    snpayout::EpochSchedule schedule;
+    schedule.epoch = 121;
+    schedule.endMillis = NowMillis() + 21'600LL * 12'000;
+    schedule.claimOpenMillis = schedule.endMillis + 14'400LL * 12'000;
+    schedule.expiryMillis = schedule.endMillis + (9LL * 50'400 - 1) * 12'000;
+    ApplyClaims(claims, 3'241'000'000, Fetch::Ready, std::nullopt, schedule);
     GasKeyInfo gas;
     gas.address = kSampleGasAddress;
     gas.mirrorSs58 = kSampleGasMirror;
