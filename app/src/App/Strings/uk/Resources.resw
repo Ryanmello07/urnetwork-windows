@@ -1627,6 +1627,10 @@
     <value>Фіксований IP</value>
     <comment>A toggle that allows users to enable or disable a fixed IP for their connection.</comment>
   </data>
+  <data name="fixed_ip_subtitle" xml:space="preserve">
+    <value>Зберігає один вихід на всю сесію; змінюється, лише якщо цей провайдер відключиться.</value>
+    <comment>Subtitle under the Fixed IP toggle in the connect options. With Fixed IP on, the connection keeps the same exit (provider) for the whole session, so the egress IP stays the same unless that provider goes offline.</comment>
+  </data>
   <data name="forget_password" xml:space="preserve">
     <value>Забули пароль?</value>
     <comment>Login password</comment>

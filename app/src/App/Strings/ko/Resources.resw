@@ -1579,6 +1579,10 @@
     <value>고정 IP</value>
     <comment>A toggle that allows users to enable or disable a fixed IP for their connection.</comment>
   </data>
+  <data name="fixed_ip_subtitle" xml:space="preserve">
+    <value>세션 동안 하나의 출구를 유지하며, 해당 제공자가 오프라인이 될 때만 바뀝니다.</value>
+    <comment>Subtitle under the Fixed IP toggle in the connect options. With Fixed IP on, the connection keeps the same exit (provider) for the whole session, so the egress IP stays the same unless that provider goes offline.</comment>
+  </data>
   <data name="forget_password" xml:space="preserve">
     <value>비밀번호를 잊으셨나요?</value>
     <comment>Login password</comment>
