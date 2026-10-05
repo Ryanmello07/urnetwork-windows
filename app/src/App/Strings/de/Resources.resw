@@ -722,6 +722,10 @@
     <value>Blockiert</value>
     <comment>Label for the blocked traffic relayed for remote clients.</comment>
   </data>
+  <data name="blocked_location_block_failed" xml:space="preserve">
+    <value>{} konnte nicht blockiert werden. Bitte versuche es erneut.</value>
+    <comment>Blocked locations: blocking a location failed. The argument is the location name.</comment>
+  </data>
   <data name="blocked_location_could_not_be_added_please_try" xml:space="preserve">
     <value>Blockierter Standort konnte nicht hinzugefügt werden. Bitte versuche es später erneut.</value>
     <comment>Used in Main/Account/BlockedLocations/BlockedLocationsViewModel.swift.</comment>
@@ -729,6 +733,10 @@
   <data name="blocked_location_could_not_be_removed_please_try" xml:space="preserve">
     <value>Blockierter Standort konnte nicht entfernt werden. Bitte versuche es später erneut.</value>
     <comment>Used in Main/Account/BlockedLocations/BlockedLocationsViewModel.swift.</comment>
+  </data>
+  <data name="blocked_location_unblock_failed" xml:space="preserve">
+    <value>{} konnte nicht entsperrt werden. Bitte versuche es erneut.</value>
+    <comment>Blocked locations: unblocking a location failed, so it is back in the list. The argument is the location name.</comment>
   </data>
   <data name="blocked_locations" xml:space="preserve">
     <value>Blockierte Standorte</value>
@@ -741,6 +749,10 @@
   <data name="blocked_locations_could_not_be_loaded" xml:space="preserve">
     <value>Blockierte Standorte konnten nicht geladen werden.</value>
     <comment>Shown on the Blocked locations screen when the list could not be fetched, above a Retry button.</comment>
+  </data>
+  <data name="blocked_locations_load_failed" xml:space="preserve">
+    <value>Deine blockierten Standorte konnten nicht geladen werden. Zum erneuten Versuchen nach unten ziehen.</value>
+    <comment>Blocked locations: the list could not be loaded.</comment>
   </data>
   <data name="blocks" xml:space="preserve">
     <value>Blöcke</value>
@@ -2280,6 +2292,10 @@ richtig auf</value>
     <value>Ich bin nicht sicher, ob ich einem VPN vertraue</value>
     <comment>Onboarding feedback email, not-activated variant: one-tap reason 3.</comment>
   </data>
+  <data name="email_support_at" xml:space="preserve">
+    <value>Schreib dem Support unter</value>
+    <comment>Settings: label before the support email address link.</comment>
+  </data>
   <data name="emoji_group_activities" xml:space="preserve">
     <value>Aktivitäten</value>
     <comment>Emoji keyboard group: sports, games and activities.</comment>
@@ -2654,6 +2670,10 @@ richtig auf</value>
   <data name="feedback_placeholder" xml:space="preserve">
     <value>Sag uns, was du wirklich denkst</value>
     <comment>Feedback Screen</comment>
+  </data>
+  <data name="feedback_send_failed" xml:space="preserve">
+    <value>Dein Feedback wurde nicht gesendet. Prüfe deine Verbindung und versuche es erneut.</value>
+    <comment>Feedback screen: the feedback could not be sent. The text stays in the field so the user can send it again.</comment>
   </data>
   <data name="feedback_sending" xml:space="preserve">
     <value>Wird gesendet…</value>
@@ -4931,6 +4951,10 @@ der Welt</value>
   <data name="send" xml:space="preserve">
     <value>Sende</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="send_feedback_contact" xml:space="preserve">
+    <value>Schick uns dein Feedback direkt, schreib uns an {0} oder tritt unserem {1} bei, um direkt Hilfe zu bekommen.</value>
+    <comment>Feedback screen: support contacts. The first argument is the support email address, the second is the name of the community chat (Discord); both are links.</comment>
   </data>
   <data name="send_product_updates" xml:space="preserve">
     <value>Sende mir Produkt-Updates</value>
