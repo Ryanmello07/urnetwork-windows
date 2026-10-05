@@ -1,11 +1,13 @@
-// The build's own identity, stamped by CI and readable from code.
+// The build's own identity, stamped by release builds and CI, and readable
+// from code.
 //
-// CI passes /p:UrVersion=<full string> /p:UrVersionCode=<code> plus the three
-// numeric date parts; app/Directory.Build.props turns them into UR_*
-// preprocessor definitions for every TU and every .rc in the solution. This
-// header is the one place those raw tokens become usable constants, with dev
-// defaults when the definitions are absent entirely (an IDE parsing a single
-// file, say) — so nothing else ever #ifdefs on how the build was invoked.
+// app/build.ps1 and CI pass /p:UrVersion=<full string> /p:UrVersionCode=<code>
+// plus the four numeric FILEVERSION fields, all derived by tools/UrVersion.ps1;
+// app/Directory.Build.props turns them into UR_* preprocessor definitions for
+// every TU and every .rc in the solution. This header is the one place those
+// raw tokens become usable constants, with dev defaults when the definitions
+// are absent entirely (an IDE parsing a single file, say) — so nothing else
+// ever #ifdefs on how the build was invoked.
 //
 // UR_VERSION_RAW arrives as a BARE token (2026.8.9-101076420-beta), not a
 // quoted literal: a \" escaped inside PreprocessorDefinitions does not survive
@@ -26,7 +28,7 @@
 #define UR_VERSION_STRINGIZE(x) UR_VERSION_STRINGIZE_(x)
 
 // The full version string in the release grammar, without the tag's leading v
-// ("2026.8.9-101076420-beta"), or "0.0.0-dev" for any build CI did not stamp.
+// ("2026.8.9-101076420-beta"), or "0.0.0-dev" for any unstamped build.
 #ifndef UR_VERSION_STRING
 #ifdef UR_VERSION_RAW
 #define UR_VERSION_STRING UR_VERSION_STRINGIZE(UR_VERSION_RAW)
@@ -41,7 +43,10 @@
 #define UR_VERSION_CODE 0
 #endif
 
-// The date parts, for the four 16-bit numeric FILEVERSION fields.
+// The four 16-bit numeric FILEVERSION fields: the UTC date of the code's
+// instant, then half its second of the day (0..43199, tools/UrVersion.ps1).
+// The fourth field is what makes two builds of one day differ, and Windows
+// Installer replaces files by this number.
 #ifndef UR_VER_MAJOR
 #define UR_VER_MAJOR 0
 #endif
@@ -50,6 +55,9 @@
 #endif
 #ifndef UR_VER_PATCH
 #define UR_VER_PATCH 0
+#endif
+#ifndef UR_VERSION_BUILD
+#define UR_VERSION_BUILD 0
 #endif
 
 #ifndef RC_INVOKED

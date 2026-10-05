@@ -845,7 +845,14 @@ func TestWindowsScriptsApplyTheSelectedArchitectureEndToEnd(t *testing.T) {
 	}
 	restore := strings.Index(appBuild, "& $msbuild URnetwork.sln /t:restore")
 	platformLoop := strings.Index(appBuild, "foreach ($platform in $Platforms)")
-	solutionBuild := strings.Index(appBuild, "/p:Version=$Version /m /nologo /v:minimal")
+	// The whole solution-compile command, not one substring of it: it must
+	// carry the version UrVersion.ps1 derived (TestReleaseBuildStampsTheVersion),
+	// where it used to pass only /p:Version, which no project reads.
+	solutionBuild := consecutiveLines(appBuild,
+		"& $msbuild URnetwork.sln `",
+		"/p:Configuration=$Configuration /p:Platform=$platform `",
+		"@urMsbuildArgs `",
+		"/p:Version=$Version /m /nologo /v:minimal")
 	if restore < 0 || platformLoop < 0 || solutionBuild < 0 || !(platformLoop < restore && restore < solutionBuild) {
 		t.Fatalf("solution compile is not scoped to selected platforms: restore=%d loop=%d build=%d", restore, platformLoop, solutionBuild)
 	}
@@ -869,6 +876,143 @@ func TestWindowsScriptsApplyTheSelectedArchitectureEndToEnd(t *testing.T) {
 	wintunHeader := strings.Index(fetchDependencies, `Copy-Item "$wintunExtract\wintun\include\wintun.h"`)
 	if wintunRoot < 0 || wintunHeader < 0 || wintunRoot >= wintunHeader {
 		t.Fatalf("Wintun root must exist before copying its header: root=%d header=%d", wintunRoot, wintunHeader)
+	}
+}
+
+// consecutiveLines returns the byte offset of the first of len(want) adjacent
+// lines whose trimmed text equals want, in order, or -1. It ignores
+// indentation and a CR before the LF, so a CRLF checkout matches as well.
+func consecutiveLines(source string, want ...string) int {
+	lines := strings.Split(source, "\n")
+	offset := 0
+	for start := range lines {
+		if start+len(want) <= len(lines) {
+			matched := true
+			for index, line := range want {
+				if strings.TrimSpace(lines[start+index]) != line {
+					matched = false
+					break
+				}
+			}
+			if matched {
+				return offset
+			}
+		}
+		offset += len(lines[start]) + 1
+	}
+	return -1
+}
+
+// urnetwork/build's release VM builds through app/build.ps1, which used to
+// pass only /p:Version, a property no project reads: every official MSI
+// shipped as ProductVersion 0.0.1 around code-0 binaries that never update.
+// build.ps1 must derive the version with tools/UrVersion.ps1 and hand every
+// value to both builds. The arrays' exact content is checked against the Go
+// oracle in ur_version_test.go; this checks that they reach both builds, that
+// the projects read them down to the VERSIONINFO fields, and that the local
+// builds' 0.0.0-0 still builds, unstamped.
+func TestReleaseBuildStampsTheVersion(t *testing.T) {
+	root := repositoryRoot(t)
+	read := func(relative string) string {
+		data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(relative)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(data)
+	}
+	appBuild := read("app/build.ps1")
+	urVersion := read("app/tools/UrVersion.ps1")
+	props := read("app/Directory.Build.props")
+	wixProject := read("app/installer/Installer.wixproj")
+
+	// The six msbuild properties and the installer's version, each built
+	// exactly once into the arrays UrVersion.ps1 returns, each read by a
+	// project.
+	for _, stamp := range []struct{ argument, reader, readerFile string }{
+		{`"/p:UrVersion=$Version"`, "UR_VERSION_RAW=$(UrVersion);", props},
+		{`"/p:UrVersionCode=$code"`, "UR_VERSION_CODE=$(UrVersionCode);", props},
+		{`"/p:UrVersionMajor=$year"`, "UR_VER_MAJOR=$(UrVersionMajor);", props},
+		{`"/p:UrVersionMinor=$month"`, "UR_VER_MINOR=$(UrVersionMinor);", props},
+		{`"/p:UrVersionPatch=$day"`, "UR_VER_PATCH=$(UrVersionPatch);", props},
+		{`"/p:UrVersionBuild=$build"`, "UR_VERSION_BUILD=$(UrVersionBuild);", props},
+		{`"-p:UrMsiVersion=$msiVersion"`, "UrMsiVersion=$(UrMsiVersion)", wixProject},
+	} {
+		if count := strings.Count(urVersion, stamp.argument); count != 1 {
+			t.Errorf("UrVersion.ps1 builds %s %d times, want once", stamp.argument, count)
+		}
+		// ClCompile and ResourceCompile each need the definition.
+		want := 1
+		if stamp.readerFile == props {
+			want = 2
+		}
+		if count := strings.Count(stamp.readerFile, stamp.reader); count != want {
+			t.Errorf("%s appears %d times in its project file, want %d", stamp.reader, count, want)
+		}
+	}
+
+	// build.ps1 derives once, before the platform loop, from the version
+	// run.sh passes, and splats the two arrays into the two builds.
+	derive := strings.Index(appBuild, `$urVersion = & (Join-Path $PSScriptRoot "tools\UrVersion.ps1") -Version $Version`)
+	platformLoop := strings.Index(appBuild, "foreach ($platform in $Platforms)")
+	if derive < 0 || platformLoop < 0 || derive > platformLoop {
+		t.Errorf("build.ps1 must derive the version through tools/UrVersion.ps1 before building: derive=%d loop=%d", derive, platformLoop)
+	}
+	for _, required := range []string{
+		"$urMsbuildArgs = @($urVersion.MsbuildArgs)",
+		"$urWixArgs = @($urVersion.WixArgs)",
+		`"-p:Platform=$platform", "-p:BinDir=$bin", "-p:Version=$Version") + $urWixArgs`,
+		"dotnet @wixArgs",
+	} {
+		if strings.Count(appBuild, required) != 1 {
+			t.Errorf("build.ps1 must contain %q exactly once", required)
+		}
+	}
+	if consecutiveLines(appBuild, "@urMsbuildArgs `", "/p:Version=$Version /m /nologo /v:minimal") < 0 {
+		t.Error("build.ps1's solution build does not carry @urMsbuildArgs")
+	}
+
+	// 0.0.0-0 is the version build.sh, test-main.sh and urnetwork/build's local
+	// Windows build pass. It is not a release version (UrVersion.ps1 refuses
+	// it), so build.ps1 builds it unstamped, as before: its branch empties both
+	// arrays, and the arrays are the only way a Ur* property reaches a build.
+	dev := consecutiveLines(appBuild,
+		`if ($Version -eq "0.0.0-0") {`,
+		"$urMsbuildArgs = @()",
+		"$urWixArgs = @()")
+	release := consecutiveLines(appBuild,
+		"} else {",
+		`$urVersion = & (Join-Path $PSScriptRoot "tools\UrVersion.ps1") -Version $Version`)
+	if dev < 0 || release < 0 || !(dev < release && release < platformLoop) {
+		t.Errorf("build.ps1 must build 0.0.0-0 with no Ur* arguments and derive every other version: dev=%d release=%d loop=%d",
+			dev, release, platformLoop)
+	}
+	if count := strings.Count(appBuild, "p:Ur"); count != 0 {
+		t.Errorf(`build.ps1 names a Ur* property itself (%d "p:Ur"), outside the arrays a 0.0.0-0 build empties`, count)
+	}
+	for _, caller := range []struct{ name, line string }{
+		{"build.sh", `EXTERNAL_WARP_VERSION="${EXTERNAL_WARP_VERSION:-0.0.0-0}" \`},
+		{"test-main.sh", `version="${EXTERNAL_WARP_VERSION:-0.0.0-0}"`},
+	} {
+		if !strings.Contains(read(caller.name), caller.line) {
+			t.Errorf("%s no longer defaults to the 0.0.0-0 that build.ps1 builds unstamped: want %q", caller.name, caller.line)
+		}
+	}
+
+	// Both VERSIONINFO resources end FILEVERSION and PRODUCTVERSION in
+	// UR_VERSION_BUILD, so two builds of one day differ in file version.
+	statement := regexp.MustCompile(`(?m)^[ \t]*(FILEVERSION|PRODUCTVERSION)[ \t]+([^\r\n]*)`)
+	const wantFields = "UR_VER_MAJOR,UR_VER_MINOR,UR_VER_PATCH,UR_VERSION_BUILD"
+	for _, resource := range []string{"app/src/App/App.rc", "app/src/Service/Service.rc"} {
+		found := map[string]int{}
+		for _, match := range statement.FindAllStringSubmatch(read(resource), -1) {
+			found[match[1]]++
+			if fields := strings.Join(strings.Fields(match[2]), ""); fields != wantFields {
+				t.Errorf("%s: %s %s, want %s", resource, match[1], match[2], wantFields)
+			}
+		}
+		if found["FILEVERSION"] != 1 || found["PRODUCTVERSION"] != 1 {
+			t.Errorf("%s: want one FILEVERSION and one PRODUCTVERSION statement, found %v", resource, found)
+		}
 	}
 }
 
@@ -991,6 +1135,153 @@ func TestInstallerContract(t *testing.T) {
 	warningPolicies := wixProject.descendants("", "TreatWarningsAsErrors")
 	if len(warningPolicies) == 0 || !strings.EqualFold(strings.TrimSpace(warningPolicies[0].Text), "true") {
 		t.Fatal("WiX warnings are not fatal")
+	}
+
+	// An update removes the old product inside its own transaction, so a
+	// failure rolls back to the old version rather than leaving neither, and
+	// of two codes that share a ProductVersion, the package installed second
+	// replaces the other instead of installing beside it (Package.wxs).
+	majorUpgrades := packageXML.descendants(wixNamespace, "MajorUpgrade")
+	if len(majorUpgrades) != 1 {
+		t.Fatalf("want one MajorUpgrade, got %d", len(majorUpgrades))
+	}
+	if schedule, _ := majorUpgrades[0].attribute("Schedule"); schedule != "afterInstallInitialize" {
+		t.Errorf("MajorUpgrade Schedule = %q, want afterInstallInitialize", schedule)
+	}
+	if same, _ := majorUpgrades[0].attribute("AllowSameVersionUpgrades"); !strings.EqualFold(same, "yes") {
+		t.Errorf("MajorUpgrade AllowSameVersionUpgrades = %q, want yes", same)
+	}
+	suppressed := map[string]bool{}
+	for _, node := range wixProject.descendants("", "SuppressIces") {
+		for _, ice := range strings.Split(node.Text, ";") {
+			suppressed[strings.TrimSpace(ice)] = true
+		}
+	}
+	if len(suppressed) != 2 || !suppressed["ICE03"] || !suppressed["ICE61"] {
+		t.Errorf("SuppressIces = %v, want exactly ICE03 and ICE61", suppressed)
+	}
+}
+
+// A package must not install over a newer urnetworkd.exe. Windows Installer
+// would skip ("disallow") each component whose installed key file is newer,
+// and the old product's removal would then delete those files, leaving the
+// machine with no service. The guard is an AppSearch for urnetworkd.exe where
+// INSTALLFOLDER puts it, at or above this build's FILEVERSION with the fourth
+// field plus one, and a launch condition on what it finds (Package.wxs).
+func TestInstallerRefusesAnOlderService(t *testing.T) {
+	root := repositoryRoot(t)
+	read := func(relative string) string {
+		data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(relative)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(data)
+	}
+	packageXML := parseXML(t, filepath.Join(root, "app", "installer", "Package.wxs"))
+
+	// The search: one secure property, holding a search of the folder the
+	// service is installed in, at depth 0, for urnetworkd.exe at the version
+	// Installer.wixproj derives.
+	var guard *xmlNode
+	for _, node := range packageXML.descendants(wixNamespace, "Property") {
+		if id, _ := node.attribute("Id"); id == "NEWER_URNETWORKD" {
+			guard = node
+		}
+	}
+	if guard == nil {
+		t.Fatal("Package.wxs has no NEWER_URNETWORKD search for an installed, newer urnetworkd.exe")
+	}
+	if secure, _ := guard.attribute("Secure"); !strings.EqualFold(secure, "yes") {
+		t.Errorf("NEWER_URNETWORKD Secure = %q, want yes", secure)
+	}
+	searches := guard.children(wixNamespace, "DirectorySearch")
+	if len(searches) != 1 {
+		t.Fatalf("NEWER_URNETWORKD holds %d DirectorySearch elements, want 1", len(searches))
+	}
+	for attribute, want := range map[string]string{"Path": "[ProgramFiles64Folder]URnetwork", "Depth": "0"} {
+		if got, _ := searches[0].attribute(attribute); got != want {
+			t.Errorf("the guard's DirectorySearch %s = %q, want %q", attribute, got, want)
+		}
+	}
+	fileSearches := searches[0].children(wixNamespace, "FileSearch")
+	if len(fileSearches) != 1 {
+		t.Fatalf("the guard's DirectorySearch holds %d FileSearch elements, want 1", len(fileSearches))
+	}
+	for attribute, want := range map[string]string{"Name": "urnetworkd.exe", "MinVersion": "$(var.UrNewerFileVersion)"} {
+		if got, _ := fileSearches[0].attribute(attribute); got != want {
+			t.Errorf("the guard's FileSearch %s = %q, want %q", attribute, got, want)
+		}
+	}
+
+	// That folder is where the service really goes: INSTALLFOLDER, named
+	// URnetwork under ProgramFiles64Folder, directly holds the ServiceExe
+	// component and its urnetworkd.exe. AppSearch runs before directories
+	// resolve, so the search cannot name INSTALLFOLDER itself.
+	var installFolder *xmlNode
+	for _, standard := range packageXML.descendants(wixNamespace, "StandardDirectory") {
+		if id, _ := standard.attribute("Id"); id == "ProgramFiles64Folder" {
+			installFolder = findByID(standard.children(wixNamespace, "Directory"), "INSTALLFOLDER")
+		}
+	}
+	if installFolder == nil {
+		t.Fatal("INSTALLFOLDER is no longer a Directory directly under ProgramFiles64Folder; move the guard's search with it")
+	}
+	if name, _ := installFolder.attribute("Name"); name != "URnetwork" {
+		t.Errorf("INSTALLFOLDER Name = %q, but the guard searches [ProgramFiles64Folder]URnetwork", name)
+	}
+	service := findByID(installFolder.children(wixNamespace, "Component"), "ServiceExe")
+	if service == nil {
+		t.Fatal("the ServiceExe component is no longer directly in INSTALLFOLDER, where the guard searches")
+	}
+	installsService := false
+	for _, file := range service.children(wixNamespace, "File") {
+		if source, _ := file.attribute("Source"); strings.HasSuffix(source, `\urnetworkd.exe`) {
+			installsService = true
+		}
+	}
+	if !installsService {
+		t.Error("ServiceExe no longer installs urnetworkd.exe, the file the guard searches for")
+	}
+
+	// The refusal: allowed only for the installed product itself (repair,
+	// uninstall), never for a package installing over a newer service.
+	refuses := false
+	for _, launch := range packageXML.descendants(wixNamespace, "Launch") {
+		condition, _ := launch.attribute("Condition")
+		message, _ := launch.attribute("Message")
+		if condition == "Installed OR NOT NEWER_URNETWORKD" && strings.TrimSpace(message) != "" {
+			refuses = true
+		}
+	}
+	if !refuses {
+		t.Error(`Package.wxs has no Launch Condition="Installed OR NOT NEWER_URNETWORKD" with a message`)
+	}
+
+	// The version: Installer.wixproj derives UrNewerFileVersion from this
+	// build's FILEVERSION, the fourth field plus one, with an unstamped
+	// build's 0.0.0.0 as the default, and hands it to WiX.
+	wixProject := read("app/installer/Installer.wixproj")
+	for _, line := range []string{
+		`<UrFileVersion Condition="'$(UrFileVersion)'==''">0.0.0.0</UrFileVersion>`,
+		`<UrNewerFileVersion Condition="$([System.Version]::Parse('$(UrFileVersion)').Revision) &gt;= 0">` +
+			`$([System.Version]::Parse('$(UrFileVersion)').ToString(3)).` +
+			`$([MSBuild]::Add($([System.Version]::Parse('$(UrFileVersion)').Revision), 1))</UrNewerFileVersion>`,
+		`<DefineConstants>BinDir=$(BinDir);UrMsiVersion=$(UrMsiVersion);UrNewerFileVersion=$(UrNewerFileVersion)</DefineConstants>`,
+	} {
+		if consecutiveLines(wixProject, line) < 0 {
+			t.Errorf("Installer.wixproj is missing %s", line)
+		}
+	}
+
+	// And every stamped build passes its FILEVERSION: UrVersion.ps1's WiX
+	// arguments, which build.ps1 splats into the WiX build, and CI's MSI build.
+	if count := strings.Count(read("app/tools/UrVersion.ps1"), `"-p:UrFileVersion=$year.$month.$day.$build"`); count != 1 {
+		t.Errorf("UrVersion.ps1 builds -p:UrFileVersion %d times, want once", count)
+	}
+	const ciFileVersion = "-p:UrFileVersion=${{ needs.build-sdk.outputs.version_major }}.${{ needs.build-sdk.outputs.version_minor }}." +
+		"${{ needs.build-sdk.outputs.version_patch }}.${{ needs.build-sdk.outputs.version_build }}"
+	if count := strings.Count(read(".github/workflows/build-and-test.yml"), ciFileVersion); count != 1 {
+		t.Errorf("CI's MSI build passes %q %d times, want once", ciFileVersion, count)
 	}
 }
 
@@ -1162,6 +1453,54 @@ func isIdentifierByte(character byte) bool {
 		'A' <= character && character <= 'Z'
 }
 
+// stripComments blanks every // and /* */ comment, as stripLineComments does
+// for //, so a contract that must find a statement cannot find it in a comment.
+// Line breaks are kept, so an offset still names its line, and string and
+// character literals are read the same way.
+func stripComments(source string) string {
+	out := []byte(source)
+	skipLiteral := func(at int, quote byte) int {
+		for at++; at < len(out) && out[at] != quote && out[at] != '\n'; at++ {
+			if out[at] == '\\' {
+				at++
+			}
+		}
+		return at
+	}
+	blank := func(from, to int) {
+		for ; from < to && from < len(out); from++ {
+			if out[from] != '\n' {
+				out[from] = ' '
+			}
+		}
+	}
+	for at := 0; at < len(out); at++ {
+		switch {
+		case out[at] == '"':
+			at = skipLiteral(at, '"')
+		case out[at] == '\'' && (at == 0 || !isIdentifierByte(out[at-1])):
+			// a character literal; a quote after a digit is a digit separator
+			at = skipLiteral(at, '\'')
+		case out[at] == '/' && at+1 < len(out) && out[at+1] == '/':
+			end := strings.IndexByte(string(out[at:]), '\n')
+			if end < 0 {
+				end = len(out) - at
+			}
+			blank(at, at+end)
+			at += end
+		case out[at] == '/' && at+1 < len(out) && out[at+1] == '*':
+			end := strings.Index(string(out[at+2:]), "*/")
+			stop := len(out)
+			if end >= 0 {
+				stop = at + 2 + end + 2
+			}
+			blank(at, stop)
+			at = stop - 1
+		}
+	}
+	return string(out)
+}
+
 // definitionBody is the source of the top-level definition that starts at
 // signature, through the closing brace in its first column.
 func definitionBody(t *testing.T, name, source, signature string) string {
@@ -1239,6 +1578,41 @@ func sortedNames(files map[string]string) []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+// A WM_CLOSE sent to the tray's hidden window (Alt+F4 on it, `taskkill /im`
+// without /f, an installer closing the app) quits the app the way the tray
+// menu's Quit does. DefWindowProc would destroy the window and leave the app
+// running with no icon and no way to quit it. The contract reads the code with
+// every comment blanked, and the case may only log and then call the Quit
+// callback, so a commented-out call, a call behind a constant condition or a
+// preprocessor block, an early return and DefWindowProc all fail it.
+func TestTrayWindowQuitsOnClose(t *testing.T) {
+	source := stripComments(readAppSource(t, "TrayIcon.cpp"))
+	wndProc := definitionBody(t, "TrayIcon.cpp", source, "LRESULT CALLBACK TrayIcon::WndProc(")
+	const label = "case WM_CLOSE:"
+	if count := strings.Count(wndProc, label); count != 1 {
+		t.Fatalf("TrayIcon::WndProc handles WM_CLOSE %d times, want once", count)
+	}
+	body := wndProc[strings.Index(wndProc, label)+len(label):]
+	end := strings.Index(body, "return 0;")
+	if end < 0 {
+		t.Fatal("TrayIcon::WndProc's WM_CLOSE case never returns 0")
+	}
+	quits := 0
+	for _, line := range strings.Split(body[:end], "\n") {
+		switch statement := strings.TrimSpace(line); {
+		case statement == "":
+		case statement == "if (self->cb_.onQuit) self->cb_.onQuit();":
+			quits++
+		case strings.HasPrefix(statement, "Log"):
+		default:
+			t.Errorf("TrayIcon::WndProc's WM_CLOSE case runs %q; it should only log and quit", statement)
+		}
+	}
+	if quits != 1 {
+		t.Errorf("TrayIcon::WndProc's WM_CLOSE case calls the tray menu's Quit callback %d times, want once", quits)
+	}
 }
 
 // A hide to the tray closes whatever sheet is open, through one sweep of the
