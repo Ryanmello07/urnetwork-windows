@@ -2575,6 +2575,24 @@
                                         </Grid>
                                     </Button>
                                 </Border>
+                                <!-- why providing is enabled but idle (P008): one muted line
+                                     under the provide mode row, and Change, which opens the
+                                     Connect page's provide group as the row above does.
+                                     WalletPage::ApplyProvideReason writes the line and
+                                     collapses the row when there is nothing to say. -->
+                                <Border x:Name="WalletProvideReasonRow" Visibility="Collapsed"
+                                        Style="{StaticResource UrPaneRowStyle}"
+                                        MinHeight="0" Padding="12,8">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock x:Name="WalletProvideReasonText" TextWrapping="Wrap"
+                                                   Style="{StaticResource UrRowNoteStyle}"
+                                                   TextTrimming="None" />
+                                        <HyperlinkButton x:Name="WalletProvideReasonChange"
+                                                         Padding="0" Margin="0"
+                                                         HorizontalAlignment="Left"
+                                                         Click="OnWalletProvideMode" />
+                                    </StackPanel>
+                                </Border>
                                 <!-- the read-only extender row (N7): the Connect page's
                                      extender row with a chevron in place of the switch,
                                      opening the Connect page where the switch lives, as the
@@ -2632,6 +2650,87 @@
                                         Style="{StaticResource UrPaneRowStyle}"
                                         MinHeight="0" Padding="12,0">
                                     <Grid x:Name="WalletProviderBlockedChartHost" Height="66" />
+                                </Border>
+                                <!-- Demand (P008): how many times the network offered this
+                                     device to clients in each minute of the last hour, 60
+                                     bars with the current minute at the right, from the
+                                     SDK's provider status controller. It sits with the
+                                     plots above and under their gate; inside it the
+                                     controller's state shows loading, unavailable, the
+                                     empty hour or the bars with their total, at the
+                                     Blocked chart's height. WalletPage::ApplyProviderStatus
+                                     writes it and BuildCharts adds the bars. -->
+                                <Border x:Name="WalletProviderDemandRow" Visibility="Collapsed"
+                                        Style="{StaticResource UrPaneRowStyle}"
+                                        MinHeight="0" Padding="12,6,12,8">
+                                    <StackPanel Spacing="2">
+                                        <Grid ColumnSpacing="8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <!-- the Local and Blocked titles' face (TransferChart) -->
+                                            <TextBlock x:Name="WalletProviderDemandTitle"
+                                                       FontSize="11" FontWeight="Medium"
+                                                       Foreground="{StaticResource UrTextMutedBrush}" />
+                                            <TextBlock x:Name="WalletProviderDemandTotal" Grid.Column="1"
+                                                       Visibility="Collapsed"
+                                                       Style="{StaticResource UrPaneMetaStyle}" />
+                                        </Grid>
+                                        <TextBlock x:Name="WalletProviderDemandCaption" TextWrapping="Wrap"
+                                                   Style="{StaticResource UrRowNoteStyle}"
+                                                   TextTrimming="None" />
+                                        <TextBlock x:Name="WalletProviderDemandStatus" Visibility="Collapsed"
+                                                   Margin="0,6,0,0" TextWrapping="Wrap"
+                                                   Style="{StaticResource UrRowNoteStyle}"
+                                                   TextTrimming="None" />
+                                        <Grid x:Name="WalletProviderDemandChart" Visibility="Collapsed"
+                                              Height="66" Margin="0,4,0,0">
+                                            <Grid x:Name="WalletProviderDemandBars" Margin="0,0,0,1" />
+                                            <Border Height="1" VerticalAlignment="Bottom"
+                                                    Background="{StaticResource UrBorderBrush}" />
+                                            <TextBlock x:Name="WalletProviderDemandEmpty" Visibility="Collapsed"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                       Style="{StaticResource UrRowNoteStyle}" />
+                                        </Grid>
+                                        <Grid x:Name="WalletProviderDemandAxis" Visibility="Collapsed">
+                                            <TextBlock x:Name="WalletProviderDemandStart"
+                                                       Style="{StaticResource UrRowNoteStyle}" />
+                                            <TextBlock x:Name="WalletProviderDemandEnd"
+                                                       HorizontalAlignment="Right"
+                                                       Style="{StaticResource UrRowNoteStyle}" />
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+                                <!-- Why?: collapsed until opened; then one row per number the
+                                     network ranks this device by, in the server's order,
+                                     and the country, each a label, a value (amber while it
+                                     holds the device back) and a help line. A disclosure
+                                     row rather than an Expander, as on Account. Shown with
+                                     the Demand row (WalletPage::ApplyProviderStatus). -->
+                                <Border x:Name="WalletProviderWhyRow" Visibility="Collapsed"
+                                        BorderBrush="{StaticResource UrBorderBrush}"
+                                        BorderThickness="0,0,0,1">
+                                    <StackPanel>
+                                        <Button x:Name="WalletProviderWhyButton"
+                                                Style="{StaticResource UrPaneRowButtonStyle}"
+                                                BorderThickness="0">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock x:Name="WalletProviderWhyLabel"
+                                                           Style="{StaticResource UrKeyTextStyle}"
+                                                           AutomationProperties.AccessibilityView="Raw" />
+                                                <FontIcon x:Name="WalletProviderWhyChevron" Grid.Column="1"
+                                                          Glyph="&#xE70D;" FontSize="12"
+                                                          Style="{StaticResource UrRowIconStyle}" />
+                                            </Grid>
+                                        </Button>
+                                        <StackPanel x:Name="WalletProviderWhyPanel" Visibility="Collapsed"
+                                                    Padding="12,2,12,10" Spacing="10" />
+                                    </StackPanel>
                                 </Border>
                             </StackPanel>
                         </ScrollViewer>

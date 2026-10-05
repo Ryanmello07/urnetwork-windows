@@ -1145,6 +1145,9 @@ void MainWindow::OnNavSelectionChanged(NavigationView const&,
   // re-renders from whatever snapshot exists now. Same shape as the developer
   // poll above - a destination that is not on screen does not hold a feed open.
   network_->SetSelected(tag == L"network");
+  // ...and Earnings' provider status (P008): the controller opens the first
+  // time the destination shows, and polls only while it shows.
+  wallet_->SetSelected(tag == L"wallet");
   // The Earnings statistics (EXTENDER.md O8) re-seed from SdkHost's caches as the
   // destination shows. A cache read with no request, so it runs in preview too.
   if (tag == L"wallet") wallet_->ResyncProviderStats();

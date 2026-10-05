@@ -40,6 +40,8 @@
 #include <winrt/Microsoft.UI.Xaml.Shapes.h>
 
 #include "EarningsSheets.h"
+#include "ProviderIdleReason.h"
+#include "ProviderStatusPresentation.h"
 #include "SnPayoutPresentation.h"
 #include "SolanaWalletPresentation.h"
 
@@ -70,9 +72,10 @@ class WalletPage {
   void ApplyStrings();
 
   // The provide-mode row (the Connect page's indicator + label with the
-  // current mode) and the providing gate: with providing off the reliability
-  // chart hides and the group says so, the same gate and message as the
-  // stats widget. MainWindow relays each live-stats update here.
+  // current mode), the idle reason under it (P008) and the providing gate:
+  // with providing off the reliability chart hides and the group says so, the
+  // same gate and message as the stats widget. MainWindow relays each
+  // live-stats update here.
   void ApplyProvideState(urnw::LiveStats const& stats);
 
   // The read-only extender row under the provide mode row (connect/EXTENDER.md
@@ -87,8 +90,11 @@ class WalletPage {
   // destination shows: cache reads, no rpc.
   void ResyncProviderStats();
   // The statistics charts' clock runs only while the window presents, as the
-  // Connect page's does.
+  // Connect page's does, and so does the provider status poll (P008).
   void SetPresentationActive(bool active);
+  // Whether the Earnings destination is the one showing: the other half of
+  // the provider status poll's gate, from MainWindow's navigation.
+  void SetSelected(bool selected);
 
   // Every Earnings fetch: points, reliability, the epoch history, the coldkey,
   // the head-spot status - and, once the coldkey is known, the claims and the
@@ -315,6 +321,33 @@ class WalletPage {
   void OnChartTick();
   // the read-only extender row, from extenderProvideView_ (N7)
   void ApplyExtenderProvideRow();
+  // The line under the provide mode row (P008): why providing is enabled but
+  // idle (provideridle::ProviderIdleReasonFor), from the last live stats and
+  // the provider bytes in the window, merged with the server's reason once a
+  // status for this device has loaded (providerstatus::LineFor); collapsed
+  // when there is nothing to say.
+  void ApplyProvideReason();
+  // ---- the provider status (P008): the SDK's ProviderStatusViewController,
+  // which reads GET /network/provider-status about once a minute. Opened on
+  // the device once the destination shows with providing enabled (never while
+  // it is off), polling only while the destination shows and the window
+  // presents, and closed with the typed close when providing turns off, the
+  // device it was opened on goes, or the page goes.
+  void ReconcileProviderStatus();
+  void OpenProviderStatus(uint64_t device);
+  // Releases the controller and forgets its readings; touches no XAML, so the
+  // destructor can call it.
+  void CloseProviderStatus(bool deviceAlive);
+  // Mirrors the controller into the page: loaded, the last poll's error and
+  // this device's status (one value copy of the SDK's struct).
+  void ReadProviderStatus();
+  // The controller's readings through providerstatus::ViewFor; no controller
+  // reads as a failed poll.
+  providerstatus::View ProviderStatusView() const;
+  // The Demand row and Why? under the provider plots' gate, and the line.
+  void ApplyProviderStatus();
+  void RebuildProviderWhy();
+  void ToggleProviderWhy();
   // Both groups' visibility and the provider header's meta label, from
   // ExtenderStatsSectionsFor. Only a changed reading is painted unless `force`.
   void ApplyStatsSections(bool force);
@@ -366,6 +399,30 @@ class WalletPage {
   bool providerDistributionSeen_ = false;
   // the reading last painted; empty before the first
   std::optional<urnw::ExtenderStatsSections> statsSections_;
+  // the idle reason's inputs (P008): the control mode and the live provide
+  // state from the last live stats, and the provider bytes in the window from
+  // the last provider distribution
+  provideridle::ProvideControlMode provideControlMode_ = provideridle::ProvideControlMode::Unknown;
+  int64_t liveProvideMode_ = 0;
+  bool providePaused_ = false;
+  int64_t providerWindowBytes_ = 0;
+  // ---- the provider status (P008)
+  bool selected_ = false;            // the Earnings destination shows
+  bool presentationActive_ = false;  // the window presents
+  // a live stats reading has set providingEnabled_: until then the gate's
+  // default says nothing, and the controller must not open on it
+  bool provideStateKnown_ = false;
+  std::optional<urnet::ProviderStatusViewController> providerStatusVc_;
+  std::optional<urnet::Sub> providerStatusSub_;
+  // the device handle the controller was opened (or tried) on; 0 for none
+  uint64_t providerStatusVcDevice_ = 0;
+  bool providerStatusStarted_ = false;
+  bool providerStatusLoaded_ = false;
+  std::string providerStatusError_;
+  std::optional<urnet::ProviderStatus> providerStatus_;
+  bool providerWhyOpen_ = false;  // Why? starts collapsed
+  // the Demand chart's 60 bars, oldest first (BuildCharts)
+  std::vector<winrt::Microsoft::UI::Xaml::Shapes::Rectangle> demandBars_;
   PointsBreakdown accountPoints_;
   std::optional<urnet::ReliabilityWindow> reliability_;
 
