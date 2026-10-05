@@ -326,6 +326,12 @@ void ClearRpcSession() {
 // LoadAppPrefs / SaveAppPref moved to Common/Paths at the third
 // preference site, as the note below prescribed.
 
+// A service older than a verb answers it with "unknown request type"
+// (ControlServer::Handle) and runs nothing of the kind the verb names.
+bool IsUnknownRequestReply(const std::string& error) {
+  return error.rfind("unknown request type", 0) == 0;
+}
+
 }  // namespace
 
 SdkHost::~SdkHost() {
@@ -538,6 +544,13 @@ bool SdkHost::Initialize() {
   // See the field comment on advancedMode_ in SdkHost.h.
   advancedMode_.store(LoadAppPrefs().value("advanced_mode", false),
                       std::memory_order_release);
+  // A sign-out an earlier run could not deliver, read before any pass: the
+  // launch's first pass delivers it before it adopts or starts anything.
+  signOut_.Load();
+  if (signOut_.Owed()) {
+    LogWarn("sdkhost: a sign-out is still owed to the service from an earlier run; "
+            "the first pass delivers it before anything starts");
+  }
   requestedMode_ = StartModeFromEnvironment();
   if (requestedMode_ == proto::StartMode::RpcOnly) {
     LogWarn("sdkhost: URNETWORK_RPC_ONLY is set â€” asking the service for an "
@@ -2709,6 +2722,15 @@ bool SdkHost::BootstrapSession(const char* reason, bool attachOnly) {
   // failure, it is the click-only policy declining a cold start. The worker
   // reads it to keep the decline off the failure-notice channel.
   bootstrapDeclined_ = false;
+  // Signed out: no session, adopted or started, and nothing to report. Read off
+  // loggedIn_ rather than the stored jwt, which a sign-out's asynchronous local
+  // logout may not have removed yet (Logout).
+  if (!loggedIn_.load(std::memory_order_acquire)) {
+    bootstrapDeclined_ = true;
+    LogInfo("sdkhost: '{}' found the app signed out: no session is adopted or started",
+            reason);
+    return false;
+  }
   const std::string clientJwt = localState_->getByClientJwt();
   if (clientJwt.empty()) {
     bootstrapError_ = "no client credentials are stored for this device";
@@ -2729,6 +2751,19 @@ bool SdkHost::BootstrapSession(const char* reason, bool attachOnly) {
     bootstrapError_ =
         "the URnetwork service is not running or cannot be reached";
     LogError("sdkhost: service not reachable");
+    return false;
+  }
+  // A sign-out the service has not done yet: what it runs may still be the old
+  // account's, and its identity the old account's. Nothing is adopted or
+  // started until it is done; this pass tried first, and the watchdog keeps
+  // trying (SignOut.h).
+  if (signOut_.Owed()) {
+    bootstrapServiceRetryable_ = true;
+    bootstrapError_ =
+        "the URnetwork service has not yet stopped what the previous sign-in ran";
+    LogWarn("sdkhost: '{}' adopts and starts no session: a sign-out is still owed to "
+            "the service",
+            reason);
     return false;
   }
 
@@ -6080,6 +6115,8 @@ void SdkHost::SessionWorkerLoop() {
     if (req.kind == ConnectKind::Provider) {
       {
         std::scoped_lock lock(mutex_);
+        // An owed sign-out first, in every pass (SignOut.h).
+        SettleSignOutLocked(req.reason);
         ReconcileProviderLocked(req.reason);
       }
       PublishStats();
@@ -6089,6 +6126,9 @@ void SdkHost::SessionWorkerLoop() {
     bool ok = false;
     {
       std::scoped_lock lock(mutex_);
+      // An owed sign-out first, before the pass reads or changes anything: the
+      // bootstrap and the reconcile below start nothing while it is owed.
+      SettleSignOutLocked(req.reason);
       // "Is there a session" is device_ AND a live control channel, not device_
       // alone. A DeviceRemote whose service process has exited still exists and
       // still answers its cached getters — connecting into one is the "hero
@@ -6361,12 +6401,17 @@ void SdkHost::ReconcileProviderLocked(const char* reason) {
   std::string clientJwt;
   std::string instanceId;
   // Signed out, nothing provides: a provider an earlier run left for another
-  // space's account is stopped like any mode that does not provide.
+  // space's account is stopped like any mode that does not provide. Signed out
+  // is loggedIn_, not only an empty stored jwt: a sign-out's local logout lands
+  // asynchronously (Logout), and a pass in that gap must not start a provider
+  // for the account that just left.
+  const bool signedIn = loggedIn_.load(std::memory_order_acquire);
   std::string mode = "never";
   try {
     clientJwt = localState_->getByClientJwt();
     instanceId = localState_->getInstanceId();
-    if (!clientJwt.empty() && !instanceId.empty()) mode = localState_->getProvideControlMode();
+    if (signedIn && !clientJwt.empty() && !instanceId.empty())
+      mode = localState_->getProvideControlMode();
   } catch (const std::exception& e) {
     LogWarn("sdkhost: provide: reading the stored provide mode failed: {}", e.what());
     return;
@@ -6403,6 +6448,15 @@ void SdkHost::ReconcileProviderLocked(const char* reason) {
     return;
   }
 
+  // A sign-out the service has not done yet: its device identity may still be
+  // the old account's, or the old account may still be providing on it. The
+  // pass delivered what it could; the watchdog keeps trying (SignOut.h).
+  if (signOut_.Owed()) {
+    LogWarn("sdkhost: provide: not starting the provider-only device ({}): a sign-out "
+            "is still owed to the service",
+            reason);
+    return;
+  }
   // Start, with the whole request every time: the service keeps the device it
   // runs for an identical request and only applies the mode, and builds a new
   // one for a changed jwt, space or provider transport policy.
@@ -6635,21 +6689,24 @@ void SdkHost::ScheduleServiceRetry() {
 void SdkHost::ServiceWatchdogLoop() {
   LogInfo("sdkhost: watching for a recoverable URnetwork service/session");
   std::size_t attempt = 0;
+  // Nothing to recover and no sign-out owed. An owed sign-out keeps the watch
+  // whatever a pass decided about recovery: the service has to be told
+  // (SignOut.h).
+  const auto idle = [this] {
+    return !serviceRecoveryNeeded_.load(std::memory_order_acquire) && !signOut_.Owed();
+  };
   for (;;) {
     const auto delay = recovery::ServiceRetryDelay(attempt);
     {
       std::unique_lock<std::mutex> lock(watchdogMutex_);
-      watchdogCv_.wait_for(lock, delay, [this] {
-        return watchdogStop_ ||
-               !serviceRecoveryNeeded_.load(std::memory_order_acquire);
-      });
-      if (watchdogStop_ ||
-          !serviceRecoveryNeeded_.load(std::memory_order_acquire)) {
+      watchdogCv_.wait_for(lock, delay, [this, &idle] { return watchdogStop_ || idle(); });
+      if (watchdogStop_ || idle()) {
         watchdogRunning_ = false;
         return;
       }
     }
-    if (!loggedIn_.load(std::memory_order_acquire)) {
+    const bool signedIn = loggedIn_.load(std::memory_order_acquire);
+    if (!signedIn && !signOut_.Owed()) {
       serviceRecoveryNeeded_.store(false, std::memory_order_release);
       break;
     }
@@ -6663,8 +6720,14 @@ void SdkHost::ServiceWatchdogLoop() {
     LogInfo("sdkhost: automatic service recovery attempt {} (next backoff {}s)",
             attempt + 1, static_cast<long long>(delay.count()));
     // Only a signed-in client has a session to restore. A signed-out one gets
-    // its session from the sign-in itself (RegisterNetworkClient).
-    EnsureSession("automatic service recovery", /*automaticRecovery=*/true);
+    // its session from the sign-in itself (RegisterNetworkClient), and is
+    // here only for the sign-out it owes the service: a provider pass delivers
+    // it first, and a signed-out reconcile can only stop a provider.
+    if (signedIn) {
+      EnsureSession("automatic service recovery", /*automaticRecovery=*/true);
+    } else {
+      RequestProviderReconcile("automatic service recovery, sign-out owed");
+    }
     ++attempt;
   }
   std::scoped_lock lock(watchdogMutex_);
@@ -7170,7 +7233,22 @@ void SdkHost::TeardownSessionLocked(bool stopTunnel) {
   PublishModeNotice();
 }
 
+// See the contract in the header.
 void SdkHost::Logout() {
+  // 1. The signed-out account's queued work goes: a connect, a row click still
+  // settling, a reconcile. A worker sleeping out a settle wakes to the empty
+  // slot and exits.
+  {
+    std::scoped_lock lock(pendingMutex_);
+    pending_ = SessionRequest{};
+    pendingRequested_ = false;
+  }
+  pendingCv_.notify_all();
+  // 2. Signed out from here, before the lock: a pass that takes mutex_ ahead of
+  // this one reads it and starts nothing for the account that is leaving
+  // (BootstrapSession, ReconcileProviderLocked). Also before SetAuthState below,
+  // whose handler asks IsLoggedIn().
+  loggedIn_.store(false, std::memory_order_release);
   std::scoped_lock lock(mutex_);
   try {
     pendingWalletAuth_.reset();
@@ -7181,19 +7259,39 @@ void SdkHost::Logout() {
     // register a device against a stale jwt.
     pendingInstantJwt_.reset();
     if (events_) events_->NewSession();  // the next sign-in is a new session
-    TeardownSessionLocked();
-    // Explicit logout deliberately severs the device identity: clear the
-    // service-persisted key material (TunnelController::Logout) so the next
-    // login starts with a fresh identity.
-    if (service_.IsConnected()) service_.Logout();
+    // The local credentials first, because nothing can hold them up: the app
+    // is signed out on disk even if it is ended while the service half below
+    // waits on the pipe.
     if (asyncLocalState_) asyncLocalState_->logout([](bool) {});
-    // Before SetAuthState, and not waiting on the async logout above: the auth
-    // handler runs synchronously from here and the window asks IsLoggedIn().
-    loggedIn_.store(false, std::memory_order_release);
-    serviceRecoveryNeeded_.store(false, std::memory_order_release);
-    watchdogCv_.notify_all();
-    // The stop_tunnel and the logout above retired the provider-only device:
-    // nothing provides for a signed-out app.
+    // 3. The service, as Quit stops it, then the logout, which severs the
+    // device identity and clears what the service's sdk stored for the
+    // account. Owed until all three succeed (SignOut.h).
+    const signout::Delivery delivery = signOut_.Begin(SignOutServiceLocked());
+    if (delivery == signout::Delivery::Delivered) {
+      LogInfo("sdkhost: sign-out: the service is stopped and has forgotten the account "
+              "(stop_tunnel, stop_provider, logout)");
+      serviceRecoveryNeeded_.store(false, std::memory_order_release);
+      watchdogCv_.notify_all();
+    } else {
+      LogWarn("sdkhost: sign-out: {}; the sign-out stays owed to the service, which is "
+              "told as soon as it can be, and nothing starts until it has been",
+              signout::ToString(delivery));
+      ScheduleServiceRetry();
+    }
+    // 4. This side of the session: the DeviceRemote, its feeds and the saved
+    // rpc session. The device first, as Quit closes it: the DeviceLocal it
+    // talks to is gone, so its close turns the courtesy unsubscribes that
+    // follow into local no-ops. stopTunnel=false: sent above.
+    if (device_) {
+      try {
+        device_->close();
+      } catch (const std::exception& e) {
+        LogWarn("sdkhost: sign-out: closing the DeviceRemote failed: {}", e.what());
+      }
+    }
+    TeardownSessionLocked(/*stopTunnel=*/false);
+    // The stop_tunnel and the stop_provider above retired the provider-only
+    // device: nothing provides for a signed-out app.
     serviceProviderRunning_.store(false);
     serviceProviderMode_.store(0);
     serviceProviderNetworkKey_.store(false);
@@ -7204,6 +7302,109 @@ void SdkHost::Logout() {
   } catch (const std::exception& e) {
     LogError("sdkhost: logout failed: {}", e.what());
   }
+}
+
+signout::Service SdkHost::SignOutServiceLocked() {
+  // caller holds mutex_, across the calls the delivery makes
+  signout::Service service;
+  service.reach = [this] {
+    // A dropped channel is not a stopped service (Quit's rule): one that is
+    // still running still runs what it ran, so dial it. Dialling a service
+    // that is not running fails at once.
+    if (!service_.IsConnected()) service_.Connect();
+    return service_.IsConnected();
+  };
+  service.send = [this](signout::Request request) {
+    switch (request) {
+      case signout::Request::StopTunnel: {
+        bool answered = false;
+        const proto::TunnelStatus stopped = service_.StopTunnel(&answered);
+        if (!answered) {
+          LogWarn("sdkhost: sign-out: stop_tunnel did not answer: {}",
+                  stopped.error.empty() ? "no detail" : stopped.error);
+          return false;
+        }
+        AdoptServiceFacts(stopped);
+        // Quit's warning, for the same reason: the kill switch's lock-free
+        // escape keeps the policy when the session lock is wedged.
+        if (!stopped.wfp_state.empty() && stopped.wfp_state != "off") {
+          LogError("sdkhost: sign-out: a firewall policy is still in force after the "
+                   "stop (wfp={}); restarting the urnetworkd service lifts it",
+                   stopped.wfp_state);
+        }
+        return true;
+      }
+      case signout::Request::StopProvider: {
+        std::optional<proto::TunnelStatus> after;
+        std::string error;
+        const bool stopped = service_.StopProvider(&after, &error);
+        if (after) AdoptServiceFacts(*after);
+        // A service older than stop_provider runs no provider-only device, and
+        // its stop_tunnel ended everything it did run.
+        if (stopped || IsUnknownRequestReply(error)) return true;
+        LogWarn("sdkhost: sign-out: stop_provider failed: {}",
+                error.empty() ? "no detail" : error);
+        return false;
+      }
+      case signout::Request::Logout: {
+        proto::Logout logout;
+        try {
+          // The account's space, whose sdk state the service clears.
+          if (networkSpace_) logout.network_space_json = networkSpace_->toJson();
+        } catch (const std::exception& e) {
+          LogWarn("sdkhost: sign-out: the network space for the logout: {}", e.what());
+        }
+        const bool done = service_.Logout(logout);
+        if (!done) LogWarn("sdkhost: sign-out: the service's logout did not complete");
+        return done;
+      }
+    }
+    return false;
+  };
+  return service;
+}
+
+void SdkHost::SettleSignOutLocked(const char* reason) {
+  // caller holds mutex_
+  if (!signOut_.Owed()) return;
+  const signout::Delivery delivery = signOut_.Settle(SignOutServiceLocked());
+  if (delivery == signout::Delivery::Delivered) {
+    LogInfo("sdkhost: the owed sign-out is delivered ({}): stop_tunnel, stop_provider "
+            "and logout",
+            reason);
+    // A signed-out app watched the service for this alone.
+    if (!loggedIn_.load(std::memory_order_acquire)) {
+      serviceRecoveryNeeded_.store(false, std::memory_order_release);
+      watchdogCv_.notify_all();
+    }
+    return;
+  }
+  LogWarn("sdkhost: the sign-out is still owed ({}): {}; nothing starts until it is "
+          "delivered",
+          reason, signout::ToString(delivery));
+  ScheduleServiceRetry();
+}
+
+signout::Marker SdkHost::SignOutMarker() {
+  signout::Marker marker;
+  marker.read = [] {
+    std::error_code ec;
+    return std::filesystem::exists(SignOutOwedFile(), ec);
+  };
+  marker.write = [](bool owed) {
+    std::error_code ec;
+    if (!owed) {
+      // One left behind is delivered again at the next launch, which stops
+      // whatever runs then; logged, as that is the one way it can surprise.
+      std::filesystem::remove(SignOutOwedFile(), ec);
+      if (ec) LogError("sdkhost: sign-out: the owed marker could not be removed: {}", ec.message());
+      return;
+    }
+    std::ofstream file(SignOutOwedFile(), std::ios::trunc);
+    file << "a sign-out the URnetwork service has not done yet\n";
+    if (!file) LogError("sdkhost: sign-out: the owed marker could not be written");
+  };
+  return marker;
 }
 
 // See the contract in the header.

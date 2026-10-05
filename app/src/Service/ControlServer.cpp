@@ -93,8 +93,11 @@ nlohmann::json ControlServer::Handle(const nlohmann::json& request) {
       reply.status = tunnel_.Status();
       PushState();
     } else if (type == proto::msg::kLogout) {
-      tunnel_.Logout();
-      reply.ok = true;
+      // Not ok when the session lock was not free or the account's sdk state
+      // could not be cleared: the app keeps the sign-out owed and sends it
+      // again (Common/SignOut.h).
+      const proto::Logout req = request.get<proto::Logout>();
+      reply.ok = tunnel_.Logout(req.network_space_json);
       reply.status = tunnel_.Status();
       PushState();
     } else if (type == proto::msg::kStartProvider) {

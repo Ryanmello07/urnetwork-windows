@@ -1883,10 +1883,21 @@ bool TunnelController::SetSplitTunnel(const std::vector<std::string>& excludedPa
   return true;
 }
 
-void TunnelController::Logout() {
+bool TunnelController::Logout(const std::string& networkSpaceJson) {
   stopGeneration_.fetch_add(1);
   CancelCapture();
-  std::scoped_lock lock(mutex_);
+  // Timed, as Stop() takes it: a connect attempt wedged inside the sdk holds
+  // mutex_ for as long as the process lives, and a logout that waited behind it
+  // held the control pipe with it, so every later request queued behind a lock
+  // that never came back. The app sends stop_tunnel first, whose own escape
+  // gives the machine back, and keeps this logout owed until it succeeds.
+  std::unique_lock<std::timed_mutex> lock(mutex_, std::defer_lock);
+  if (!lock.try_lock_for(kStopLockBudget)) {
+    LogWarn("tunnel: logout could not take the session lock within {}ms; the device "
+            "identity and the account's sdk state were not cleared",
+            kStopLockBudget.count());
+    return false;
+  }
   // As deliberate as a disconnect, so it is reported as one. See Stop().
   lastStopReason_.store(kStopReasonUser);
   // finalDisarm: signing out is as deliberate as disconnecting, and there is no
@@ -1900,7 +1911,28 @@ void TunnelController::Logout() {
   std::filesystem::remove(storageDir_ / L"client_key_seed.bin", ec);
   std::filesystem::remove(storageDir_ / L"provide_cert.pem", ec);
   std::filesystem::remove(storageDir_ / L"provide_key.pem", ec);
-  LogInfo("tunnel: logged out (cleared device identity)");
+  // ...and what the sdk stored in the account's space: a DeviceLocal persists
+  // its client credential and instance there when it starts, with its peer pins
+  // and transport policy. Imported here rather than looked up, because a
+  // service restarted since the account's last device has imported no space.
+  bool cleared = true;
+  if (!networkSpaceJson.empty()) {
+    try {
+      const urnet::NetworkSpace space = ImportNetworkSpaceLocked(networkSpaceJson);
+      const urnet::AsyncLocalState asyncLocalState = space.getAsyncLocalState();
+      const urnet::LocalState localState =
+          asyncLocalState ? asyncLocalState.getLocalState() : urnet::LocalState{};
+      if (!localState) throw std::runtime_error("the network space has no local state");
+      localState.logout();
+    } catch (const std::exception& e) {
+      LogError("tunnel: logout could not clear the account's sdk state: {}", e.what());
+      cleared = false;
+    }
+  }
+  LogInfo("tunnel: logged out (cleared device identity{})",
+          networkSpaceJson.empty() ? "; no network space named, so no sdk state"
+                                   : (cleared ? " and the account's sdk state" : ""));
+  return cleared;
 }
 
 // --- the provider-only device (start_provider) ------------------------------

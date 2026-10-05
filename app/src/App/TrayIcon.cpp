@@ -352,6 +352,20 @@ LRESULT CALLBACK TrayIcon::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
         LogInfo("tray: WM_CLOSE received, exiting");
         if (self->cb_.onCloseRequest) self->cb_.onCloseRequest();
         return 0;
+      case WM_ENDSESSION:
+        // Windows is ending the session: a sign-out of Windows, a shutdown or a
+        // restart. Stopped as on Quit before this returns, because Windows may
+        // end the process as soon as it does. Not when the end was cancelled
+        // (a false wParam), and not the Restart Manager closing the app for an
+        // installer (ENDSESSION_CLOSEAPP), which is left to Windows as before.
+        // WM_QUERYENDSESSION is DefWindowProc's: the app never holds the end
+        // up.
+        if (wParam && !(lParam & ENDSESSION_CLOSEAPP)) {
+          LogInfo("tray: the Windows session is ending ({}), stopping as on quit",
+                  (lParam & ENDSESSION_LOGOFF) ? "sign-out" : "shutdown or restart");
+          if (self->cb_.onSessionEnd) self->cb_.onSessionEnd();
+        }
+        return 0;
       default:
         return ::DefWindowProcW(hwnd, msg, wParam, lParam);
     }

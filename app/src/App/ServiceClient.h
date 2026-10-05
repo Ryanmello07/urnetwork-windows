@@ -27,7 +27,9 @@ class ServiceClient {
 
   proto::TunnelStatus Hello();
   proto::TunnelStatus StartTunnel(const proto::StartTunnel& config);
-  proto::TunnelStatus StopTunnel();
+  // `answered` as for GetState below: whether the service replied with a
+  // status at all, which a failed call's default status cannot say.
+  proto::TunnelStatus StopTunnel(bool* answered = nullptr);
   // `answered` is DID THE SERVICE ACTUALLY REPLY, and it has to be an explicit
   // out-param rather than something inferred from the returned struct. A failed
   // call yields a default-constructed TunnelStatus — "nothing running, no
@@ -48,7 +50,10 @@ class ServiceClient {
   // Tell the service the kill switch changed. The app still owns the setting
   // and its persistence; the service owns the WFP policy the setting now drives.
   bool SetKillSwitch(bool on);
-  bool Logout();
+  // logout (Protocol.h Logout): the service severs this machine's device
+  // identity and clears what its sdk stored for the account in this network
+  // space. True when the service answered that it did.
+  bool Logout(const proto::Logout& request);
   // Keep providing while there is no tunnel session (Protocol.h start_provider).
   // True when the service runs the provider-only device, or kept the one it was
   // running for an identical request. `status` receives the status the reply

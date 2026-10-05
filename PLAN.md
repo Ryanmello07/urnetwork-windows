@@ -313,7 +313,11 @@ Product — DECIDED 2026-07-09:
   firewall policy, as Disconnect does, then exits. An app that is killed or closed by
   a WM_CLOSE from outside leaves the service as it is (the next launch adopts what it
   runs); the updater's handoff leaves it to the MSI, which stops the service itself.
-  See `app/src/Common/AppLifetime.h`.
+  See `app/src/Common/AppLifetime.h`. **Owner decision 2026-10-05: signing out of
+  Windows (or a shutdown) stops the tunnel and the provider the same as Quit**
+  (WM_ENDSESSION, `Ending::SessionEnd`), and so does signing out of URnetwork,
+  which keeps the app running and stays owed to an unreachable service until it is
+  delivered (`app/src/Common/SignOut.h`).
 - **Provide defaults**: ethernet maps as unmetered/provide-eligible via NetworkCostType.
 - **Per-app split tunneling: IN SCOPE for v1** (M3.5) via a clean-room, MPL-2.0,
   attestation-signed WFP callout driver implemented from first principles (Microsoft docs +

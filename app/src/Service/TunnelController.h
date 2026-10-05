@@ -157,8 +157,20 @@ class TunnelController {
   //     deliberately — see StopLocked.
   bool SetKillSwitch(bool on);
 
-  // Clear persisted auth/session state (mirrors the macOS logout message).
-  void Logout();
+  // The account signed out (logout; Common/SignOut.h). Ends any session and
+  // the provider-only device as Stop() does, deletes this machine's device
+  // identity, and logs out what the sdk stored in `networkSpaceJson`'s space
+  // (mirrors the macOS logout message clearing LocalState): the client
+  // credential and instance a DeviceLocal persists when it starts, among the
+  // rest, so nothing kept here belongs to the account that left. An empty
+  // space, from an older app, deletes the identity alone.
+  //
+  // Timed like Stop() and StopProvider(): false, with nothing cleared, when the
+  // session lock is not free within kStopLockBudget, and false when the sdk
+  // state could not be logged out. The app keeps a refused logout owed and
+  // sends it again; the stop_tunnel it sends first gives the machine back
+  // without the lock.
+  bool Logout(const std::string& networkSpaceJson);
 
   // The provider-only device (start_provider; Common/ProvideLifecycle.h). Keeps
   // providing while there is no tunnel session: a DeviceLocal built from the

@@ -26,13 +26,25 @@
 //                     starts fresh: the resume finds no session to reattach to
 //                     (D8) and the provider reconcile starts what the stored
 //                     provide mode says.
+//   SessionEnd        Windows ends the user's session: they sign out of
+//                     Windows, or it shuts down or restarts (WM_ENDSESSION).
+//                     Owner decision, 2026-10-05: "Windows sign-out: stop the
+//                     tunnel and provider, the same as Quit", so the same stop
+//                     as Quit. The service is LocalSystem and outlives the
+//                     session: at a sign-out it kept running them for a user no
+//                     longer there until a later launch adopted them, and a
+//                     shutdown with Fast Startup hibernates the service rather
+//                     than stopping it. A shutdown that does stop the service
+//                     finds nothing left to stop.
 //   CloseRequest      a WM_CLOSE sent to the tray's window from outside the app:
 //                     `taskkill /im URnetwork.exe` without /f, or an installer.
 //   InstallerHandoff  the in-app updater started the MSI, which needs the app's
 //                     files. The MSI stops the service itself (ServiceControl
 //                     Stop="both"), and the session and the provider go with it.
 // The last two exit the app and leave the service as it is, which is what they
-// always did: neither is the user asking to stop anything.
+// always did: neither is the user asking to stop anything. The Restart Manager
+// closing the app for an installer (WM_ENDSESSION with ENDSESSION_CLOSEAPP) is
+// not a session end either: TrayIcon leaves it to Windows, as before.
 //
 // Not endings, so not in the table:
 //   * Closing the main window (its X, Alt+F4, the taskbar's or the system
@@ -41,12 +53,10 @@
 //     hidden window, which holds the foreground after its menu closes, is the
 //     same gesture aimed at a window nobody can see, and does nothing
 //     (TrayIcon::WndProc).
-//   * Signing out of URnetwork. SdkHost::Logout stops the tunnel and the
-//     service's logout retires the provider, and the app stays in the tray.
-//   * Windows shutting down or the user signing out of Windows. The session
-//     end takes the app down without any of the above. At shutdown the SCM
-//     stops the service, which ends the session and the provider; at a sign-out
-//     the service keeps running them, and the next launch adopts them.
+//   * Signing out of URnetwork. SdkHost::Logout sends Quit's stop_tunnel and
+//     stop_provider, in Quit's order, then the service's logout, and the app
+//     stays in the tray, signed out. A sign-out the service could not be told
+//     stays owed until it is, and nothing starts before (SignOut.h).
 //
 // Pure and header-only, constexpr, no Windows headers and no allocation, like
 // ConnectAction.h and ProvideLifecycle.h: tools/app-lifetime-tests.cpp runs it
@@ -57,12 +67,13 @@
 
 namespace urnw::lifetime {
 
-enum class Ending { Quit, CloseRequest, InstallerHandoff };
+enum class Ending { Quit, SessionEnd, CloseRequest, InstallerHandoff };
 
 // For logs.
 constexpr const char* ToString(Ending ending) {
   switch (ending) {
     case Ending::Quit: return "quit";
+    case Ending::SessionEnd: return "session end";
     case Ending::CloseRequest: return "close request";
     case Ending::InstallerHandoff: return "installer handoff";
   }
@@ -88,6 +99,12 @@ constexpr Plan PlanFor(Ending ending) {
       p.why =
           "the user quit: the tunnel and the provider stop with the app, and "
           "nothing starts them until it runs again";
+      return p;
+    case Ending::SessionEnd:
+      p.stopService = true;
+      p.why =
+          "Windows is ending the session: the tunnel and the provider stop as "
+          "on quit, and nothing starts them until the app runs again";
       return p;
     case Ending::CloseRequest:
       p.why =

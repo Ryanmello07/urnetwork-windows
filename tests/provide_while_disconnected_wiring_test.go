@@ -124,7 +124,8 @@ func TestProvideWiringEveryTeardownRetiresTheProvider(t *testing.T) {
 	provideRequire(t, "RetireProviderDeviceLocked", retire,
 		"providerDevice_.reset();", "device->close();", "AbandonHazard::HoldsSessionDevice")
 	provideRequireOrder(t, "RetireProviderDeviceLocked", retire, "PublishStatusLocked();", "RunBounded(")
-	logout := definitionBody(t, "TunnelController.cpp", source, "void TunnelController::Logout()")
+	logout := definitionBody(t, "TunnelController.cpp", source,
+		"bool TunnelController::Logout(const std::string& networkSpaceJson)")
 	provideRequire(t, "Logout", logout, "StopLocked(")
 	stopProvider := definitionBody(t, "TunnelController.cpp", source,
 		"bool TunnelController::StopProvider()")

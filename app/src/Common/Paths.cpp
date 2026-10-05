@@ -75,6 +75,10 @@ std::filesystem::path RpcSessionFile() {
   return StorageRoot(/*isService=*/false) / L"rpc_session.json";
 }
 
+std::filesystem::path SignOutOwedFile() {
+  return StorageRoot(/*isService=*/false) / L"sign_out_owed";
+}
+
 std::filesystem::path AppPrefsFile() {
   return StorageRoot(/*isService=*/false) / L"app_prefs.json";
 }

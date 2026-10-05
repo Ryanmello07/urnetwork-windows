@@ -57,8 +57,8 @@ proto::TunnelStatus ServiceClient::StartTunnel(const proto::StartTunnel& config)
   return CallStatus(proto::Request(proto::msg::kStartTunnel, body));
 }
 
-proto::TunnelStatus ServiceClient::StopTunnel() {
-  return CallStatus(proto::Request(proto::msg::kStopTunnel));
+proto::TunnelStatus ServiceClient::StopTunnel(bool* answered) {
+  return CallStatus(proto::Request(proto::msg::kStopTunnel), answered);
 }
 
 proto::TunnelStatus ServiceClient::GetState(bool* answered) {
@@ -92,9 +92,10 @@ bool ServiceClient::SetKillSwitch(bool on) {
   }
 }
 
-bool ServiceClient::Logout() {
+bool ServiceClient::Logout(const proto::Logout& request) {
+  nlohmann::json body = request;
   try {
-    nlohmann::json reply = pipe_.Call(proto::Request(proto::msg::kLogout));
+    nlohmann::json reply = pipe_.Call(proto::Request(proto::msg::kLogout, body));
     return reply.value("ok", false);
   } catch (const std::exception& e) {
     LogError("service: logout failed: {}", e.what());

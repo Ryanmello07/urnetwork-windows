@@ -268,6 +268,18 @@ struct SetSplitTunnel {
   bool allowlist_mode = false;
 };
 
+// logout: the account signed out (Common/SignOut.h). The service ends any
+// session and the provider-only device, deletes this machine's device identity,
+// and logs out what its sdk stored in this network space for the account: the
+// client credential and instance a device persists when it starts, among the
+// rest. The space comes from the app because a restarted service has imported
+// none. Absent, as an older app sends it, the identity alone is deleted, as
+// before. No protocol bump: an older service ignores the field and deletes the
+// identity, which is what it always did.
+struct Logout {
+  std::string network_space_json;  // NetworkSpace.toJson() from the app
+};
+
 struct SetKillSwitch {
   bool on = false;
 };
@@ -654,6 +666,14 @@ inline void from_json(const nlohmann::json& j, SetSplitTunnel& v) {
   };
   get("excluded_app_paths", v.excluded_app_paths);
   get("allowlist_mode", v.allowlist_mode);
+}
+
+inline void to_json(nlohmann::json& j, const Logout& v) {
+  j = {{"network_space_json", v.network_space_json}};
+}
+inline void from_json(const nlohmann::json& j, Logout& v) {
+  if (auto it = j.find("network_space_json"); it != j.end() && it->is_string())
+    it->get_to(v.network_space_json);
 }
 
 inline void to_json(nlohmann::json& j, const SetKillSwitch& v) {
