@@ -638,6 +638,9 @@ void WalletPage::ApplyStrings() {
   w_.NetworkReliabilityHeading().Text(Loc("site_app_network_reliability"));
   w_.WalletProvideModeLabel().Text(Loc("provide_mode"));
   w_.WalletProvideModeValue().Text(Loc(Sdk().CurrentProvideControlMode().c_str()));
+  // the idle reason's action (P008) and its line, in the language
+  w_.WalletProvideReasonChange().Content(LocBox("change"));
+  ApplyProvideReason();
   // the two statistics groups (connect/EXTENDER.md O8) and the read-only
   // extender row (N7), whose state line follows the language too
   w_.WalletExtenderStatsHeading().Text(Loc("extender_statistics"));
@@ -3746,12 +3749,20 @@ void WalletPage::ApplyProvideState(urnw::LiveStats const& stats) {
   w_.WalletProvideModeDot().Fill(urnw::colors::MakeBrush(visual.color));
   w_.WalletProvideModeRing().Stroke(urnw::colors::MakeBrush(visual.color));
   w_.WalletProvideModeRing().Visibility(visual.ring ? Visibility::Visible : Visibility::Collapsed);
+  // read once: on the DeviceRemote the control mode is an rpc into the service
+  const std::string controlMode = Sdk().CurrentProvideControlMode();
   // the control mode strings are the store keys of their labels
-  w_.WalletProvideModeValue().Text(Loc(Sdk().CurrentProvideControlMode().c_str()));
+  w_.WalletProvideModeValue().Text(Loc(controlMode));
+  // The idle reason under the row (P008) follows every live update, so it is
+  // painted ahead of the gate's early return.
+  provideControlMode_ = provideridle::ProvideControlModeFrom(controlMode);
+  liveProvideMode_ = stats.provideMode;
+  providePaused_ = stats.providePaused;
+  ApplyProvideReason();
   // the gate reads the same value the row shows: the provide mode the user
   // picked. Never hides every provider plot behind the disabled message,
   // whatever the device's live provide state says.
-  const bool enabled = Sdk().CurrentProvideControlMode() != "never";
+  const bool enabled = controlMode != "never";
   if (enabled == providingEnabled_) return;
   providingEnabled_ = enabled;
   // the provider statistics share this gate (O8)
@@ -3815,6 +3826,18 @@ void WalletPage::ApplyExtenderProvideState(urnw::ExtenderProvideStatusView const
   }
 }
 
+void WalletPage::ApplyProvideReason() {
+  const provideridle::ProviderIdleReason reason = provideridle::ProviderIdleReasonFor(
+      provideControlMode_, liveProvideMode_, providePaused_,
+      // the desktop provides on any network, so it is never paused for Wi-Fi
+      provideridle::ProvideNetworkMode::All, providerWindowBytes_);
+  const char* key = provideridle::ProviderIdleReasonKey(reason);
+  // Change opens the Connect page's provide group, as the row above does
+  // (OnWalletProvideMode in the markup); it never changes the mode itself
+  w_.WalletProvideReasonText().Text(*key ? Loc(key) : hstring{});
+  w_.WalletProvideReasonRow().Visibility(*key ? Visibility::Visible : Visibility::Collapsed);
+}
+
 void WalletPage::ApplyExtenderProvideRow() {
   const urnw::ExtenderProvideRowModel model =
       urnw::ExtenderProvideRowModelFor(extenderProvideView_);
@@ -3846,6 +3869,9 @@ void WalletPage::ApplyProviderThroughput(urnw::ProviderThroughputSnapshot const&
   if (snapshot.providerDistribution) {
     providerTransportBar_->SetDistribution(*snapshot.providerDistribution);
     providerDistributionSeen_ = !snapshot.providerDistribution->shares.empty();
+    // the idle reason's "no traffic yet" reads the provider bytes in the window
+    providerWindowBytes_ = snapshot.providerDistribution->byteCount;
+    ApplyProvideReason();
   }
   // a hide's clear carries no reading, and the page keeps the one it has
   if (snapshot.hasProviderStats) hasProviderStats_ = *snapshot.hasProviderStats;

@@ -427,6 +427,8 @@
     <ClInclude Include="UsageBar.h" />
     <ClInclude Include="UrColors.h" />
     <ClInclude Include="ProvideModeVisual.h" />
+    <!-- header-only and WinRT-free: tools/provider-idle-tests.cpp runs it -->
+    <ClInclude Include="ProviderIdleReason.h" />
     <ClInclude Include="UrComponents.h" />
     <ClInclude Include="WalletConnect.h" />
     <!-- header-only and WinRT-free: tools/feedback-send-tests.cpp runs it -->

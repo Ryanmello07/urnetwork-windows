@@ -40,6 +40,7 @@
 #include <winrt/Microsoft.UI.Xaml.Shapes.h>
 
 #include "EarningsSheets.h"
+#include "ProviderIdleReason.h"
 #include "SnPayoutPresentation.h"
 #include "SolanaWalletPresentation.h"
 
@@ -70,9 +71,10 @@ class WalletPage {
   void ApplyStrings();
 
   // The provide-mode row (the Connect page's indicator + label with the
-  // current mode) and the providing gate: with providing off the reliability
-  // chart hides and the group says so, the same gate and message as the
-  // stats widget. MainWindow relays each live-stats update here.
+  // current mode), the idle reason under it (P008) and the providing gate:
+  // with providing off the reliability chart hides and the group says so, the
+  // same gate and message as the stats widget. MainWindow relays each
+  // live-stats update here.
   void ApplyProvideState(urnw::LiveStats const& stats);
 
   // The read-only extender row under the provide mode row (connect/EXTENDER.md
@@ -315,6 +317,10 @@ class WalletPage {
   void OnChartTick();
   // the read-only extender row, from extenderProvideView_ (N7)
   void ApplyExtenderProvideRow();
+  // The line under the provide mode row (P008): why providing is enabled but
+  // idle (provideridle::ProviderIdleReasonFor), from the last live stats and
+  // the provider bytes in the window; collapsed when there is nothing to say.
+  void ApplyProvideReason();
   // Both groups' visibility and the provider header's meta label, from
   // ExtenderStatsSectionsFor. Only a changed reading is painted unless `force`.
   void ApplyStatsSections(bool force);
@@ -366,6 +372,13 @@ class WalletPage {
   bool providerDistributionSeen_ = false;
   // the reading last painted; empty before the first
   std::optional<urnw::ExtenderStatsSections> statsSections_;
+  // the idle reason's inputs (P008): the control mode and the live provide
+  // state from the last live stats, and the provider bytes in the window from
+  // the last provider distribution
+  provideridle::ProvideControlMode provideControlMode_ = provideridle::ProvideControlMode::Unknown;
+  int64_t liveProvideMode_ = 0;
+  bool providePaused_ = false;
+  int64_t providerWindowBytes_ = 0;
   PointsBreakdown accountPoints_;
   std::optional<urnet::ReliabilityWindow> reliability_;
 

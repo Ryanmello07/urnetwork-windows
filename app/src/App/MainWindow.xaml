@@ -2575,6 +2575,24 @@
                                         </Grid>
                                     </Button>
                                 </Border>
+                                <!-- why providing is enabled but idle (P008): one muted line
+                                     under the provide mode row, and Change, which opens the
+                                     Connect page's provide group as the row above does.
+                                     WalletPage::ApplyProvideReason writes the line and
+                                     collapses the row when there is nothing to say. -->
+                                <Border x:Name="WalletProvideReasonRow" Visibility="Collapsed"
+                                        Style="{StaticResource UrPaneRowStyle}"
+                                        MinHeight="0" Padding="12,8">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock x:Name="WalletProvideReasonText" TextWrapping="Wrap"
+                                                   Style="{StaticResource UrRowNoteStyle}"
+                                                   TextTrimming="None" />
+                                        <HyperlinkButton x:Name="WalletProvideReasonChange"
+                                                         Padding="0" Margin="0"
+                                                         HorizontalAlignment="Left"
+                                                         Click="OnWalletProvideMode" />
+                                    </StackPanel>
+                                </Border>
                                 <!-- the read-only extender row (N7): the Connect page's
                                      extender row with a chevron in place of the switch,
                                      opening the Connect page where the switch lives, as the
