@@ -442,7 +442,6 @@ WalletPage::~WalletPage() {
   *alive_ = false;  // the controller's listener and the sheet's completions stop here
   if (walletValidateTimer_) walletValidateTimer_.Stop();
   if (chartTimer_) chartTimer_.Stop();
-  if (seekerFlow_.timer) seekerFlow_.timer.Stop();
   if (connectFlow_.timer) connectFlow_.timer.Stop();
   if (rankingFlow_.timer) rankingFlow_.timer.Stop();
   if (pointsPublicFlow_.timer) pointsPublicFlow_.timer.Stop();
@@ -607,11 +606,6 @@ void WalletPage::ApplyStrings() {
   w_.UpgradeButton().Content(LocBox("upgrade_with_stripe"));
 
   // pane C
-  w_.EarningMultipliersHeading().Text(Loc("earning_multipliers"));
-  // points AND the free daily and referral data grants (server pro.yml
-  // seeker.data_multiplier, subsidy seeker_holder_multiplier); never Pro
-  w_.SeekerBenefitText().Text(Loc("seeker_multiplier_benefit"));
-  w_.VerifySeekerButton().Content(LocBox("verify_seeker"));
   w_.NetworkReliabilityHeading().Text(Loc("site_app_network_reliability"));
   w_.WalletProvideModeLabel().Text(Loc("provide_mode"));
   w_.WalletProvideModeValue().Text(Loc(Sdk().CurrentProvideControlMode().c_str()));
@@ -644,7 +638,6 @@ void WalletPage::ApplyStrings() {
   SetStatValue(w_.UnclaimedValue(), dash, false);
   SetStatValue(w_.LeaderboardRankValue(), dash, false);
   SetStatValue(w_.LeaderboardNetProvidedValue(), dash, false);
-  ApplySeekerState();
   ShowManualPanel(manualPanelOpen_);
   // Not part of the Loading seeding above: the Solana card and the waiting line
   // stay collapsed until their reads land. Their formatted text and names are
@@ -669,7 +662,6 @@ void WalletPage::LoadWallet() {
   if (!Sdk().IsLoggedIn()) return;  // the caller's guard is not the only one
   if (auto jwt = Sdk().ParsedJwt(); jwt && jwt->NetworkId) ownNetworkId_ = *jwt->NetworkId;
   LoadPoints();
-  LoadSeeker();
   LoadReliability();
   LoadEpochs();
   LoadSnWallet();  // continues into LoadClaims/LoadGas once the coldkey is known
@@ -697,33 +689,6 @@ void WalletPage::LoadPoints() {
         self->wallet().ApplyPoints(points, ok ? Fetch::Ready : Fetch::Failed);
     });
   });
-}
-
-// The Seeker flag still lives on the account's wallets (has_seeker_token on
-// the verified Solana wallet). Nothing else about those wallets is shown.
-void WalletPage::LoadSeeker() {
-  auto queue = w_.DispatcherQueue();
-  auto weak = w_.get_weak();
-  Sdk().api().getAccountWallets(
-      [queue, weak](std::optional<urnet::GetAccountWalletsResult> result,
-                    std::optional<std::string> err) {
-        bool holder = false;
-        if (result && result->wallets && !err) {
-          for (auto const& wallet : *result->wallets) {
-            if (wallet.has_seeker_token) holder = true;
-          }
-        } else {
-          urnw::LogError("earnings: getAccountWallets failed{}",
-                         err ? (": " + *err) : std::string());
-        }
-        queue.TryEnqueue([weak, holder] {
-          if (auto self = weak.get()) {
-            self->wallet().seekerHolder_ = holder;
-            self->wallet().ApplySeekerState();
-            self->wallet().RebuildPointsRows();
-          }
-        });
-      });
 }
 
 void WalletPage::LoadReliability() {
@@ -1009,8 +974,9 @@ void WalletPage::ApplyPoints(std::vector<urnet::AccountPoint> const& points, Fet
 }
 
 // The breakdown as rows on the pane's grid: providing, referral, reliability,
-// and the Seeker 2x only for a holder (it is points only, and it is the one
-// row that says so).
+// and the Seeker 2x whenever the points carry a multiplier (payout_multiplier).
+// That is read from the points alone, never a wallet lookup: Seeker
+// verification lives only in the Android Solana dApp Store build.
 void WalletPage::RebuildPointsRows() {
   auto panel = w_.AccountPointsPanel();
   panel.Children().Clear();
@@ -1021,7 +987,7 @@ void WalletPage::RebuildPointsRows() {
   add(Loc("providing"), accountPoints_.payout);
   add(Loc("referral"), accountPoints_.referral);
   add(Loc("reliability"), accountPoints_.reliability);
-  if (seekerHolder_) {
+  if (accountPoints_.multiplier > 0) {
     auto row = kit::MakePaneKeyValueRow(
         Loc("seeker_token_verified"),
         hstring{urnw::Format("plus_amount", FormatPointsValue(accountPoints_.multiplier))});
@@ -1168,8 +1134,9 @@ void WalletPage::ApplyWalletSigned(uint32_t generation, bool ok, std::string con
     SettleFlow(connectFlow_, generation);
     SetConnectingWallet(false);
     if (bridge::IsSuperseded(error)) {
-      // the user started another wallet flow (the Solana sheet, Seeker): this
-      // attempt ended by their choice, and the block is simply ready again
+      // the user started another wallet flow (the Solana sheet, or adding a
+      // sign-in method in Settings): this attempt ended by their choice, and
+      // the block is simply ready again
       urnw::LogInfo("earnings: the Bittensor wallet connect was superseded ({})", error);
       return;
     }
@@ -2190,171 +2157,6 @@ void WalletPage::ApplyReliability(std::optional<urnet::ReliabilityWindow> window
   }
 }
 
-// ---- the Seeker multiplier ---------------------------------------------------
-
-void WalletPage::ApplySeekerState() {
-  if (seekerHolder_) {
-    w_.SeekerStatusText().Text(
-        hstring{urnw::Localized("seeker_token_verified") + L" " +
-                urnw::Localized("you_re_earning_2x_points")});
-    w_.VerifySeekerButton().Visibility(Visibility::Collapsed);
-    return;
-  }
-  // "Waiting" is a state the user must be able to SEE.
-  w_.SeekerStatusText().Text(verifyingSeeker_ ? Loc("opening_wallet_in_browser")
-                                              : Loc("connect_seeker_wallet"));
-  w_.VerifySeekerButton().Visibility(Visibility::Visible);
-  w_.VerifySeekerButton().IsEnabled(!verifyingSeeker_);
-}
-
-// Claim the 2x multiplier by proving a Solana wallet holds the Seeker token
-// (android SettingsScreen.signAndVerifySeekerHolder). The wallet signs a
-// timestamped challenge through the ur.io/wallet-connect browser bridge and
-// the signed triple goes to Api.verifySeekerHolder. The Seeker wallet has no
-// bearing on SN25a, which settles on the Bittensor coldkey.
-winrt::fire_and_forget WalletPage::OnVerifySeeker(IInspectable const&, RoutedEventArgs const&) {
-  if (w_.sheetOpen() || verifyingSeeker_) co_return;
-  // Before the wallet picker, not after: with no session this ends in
-  // verifySeekerHolder, and it opens a BROWSER on the way there.
-  if (!CanCallApi()) {
-    RefuseNoSession();
-    co_return;
-  }
-  auto self = w_.get_strong();
-
-  ContentDialog dialog;
-  dialog.XamlRoot(self->Content().XamlRoot());
-  dialog.Title(winrt::box_value(Loc("confirm_seeker_token")));
-  dialog.Content(winrt::box_value(Loc("connect_seeker_wallet")));
-  dialog.PrimaryButtonText(Loc("phantom"));
-  dialog.SecondaryButtonText(Loc("solflare"));
-  dialog.CloseButtonText(Loc("cancel"));
-  dialog.DefaultButton(ContentDialogButton::Primary);
-  dialog.Background(colors::SheetBrush());
-
-  self->SetSheetOpen(true);
-  ContentDialogResult result{ContentDialogResult::None};
-  try {
-    result = co_await dialog.ShowAsync();
-  } catch (...) {
-  }
-  self->SetSheetOpen(false);
-  if (result == ContentDialogResult::None) co_return;
-
-  const auto provider = (result == ContentDialogResult::Secondary)
-                            ? urnw::WalletConnect::Provider::Solflare
-                            : urnw::WalletConnect::Provider::Phantom;
-
-  self->wallet().verifyingSeeker_ = true;
-  self->wallet().ApplySeekerState();
-
-  // A closed browser tab produces nothing at all, so the watchdog is what
-  // brings the button back.
-  const uint32_t generation = self->wallet().BeginFlow(
-      self->wallet().seekerFlow_, kBridgeTimeoutMs, [weak = self->get_weak()] {
-        if (auto w = weak.get()) {
-          w->wallet().verifyingSeeker_ = false;
-          w->wallet().ApplySeekerState();
-          w->wallet().Notify(Loc("error_claiming_multiplier"), InfoBarSeverity::Error);
-        }
-      });
-
-  // android's challenge shape, timestamp and all: a fixed string would be
-  // replayable
-  const std::string message =
-      "Verify Seeker Token Holder - " +
-      std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(
-                         std::chrono::system_clock::now().time_since_epoch())
-                         .count());
-
-  auto queue = self->DispatcherQueue();
-  auto weak = self->get_weak();
-  Sdk().SignWithSolanaWallet(
-      provider, message,
-      [queue, weak, message, generation](bool ok, std::string address, std::string signature,
-                                         std::string error) {
-        if (!ok) {
-          // a superseded request is not a failure (ApplySeekerResult says so quietly)
-          if (!bridge::IsSuperseded(error)) {
-            urnw::LogError("seeker: wallet signature failed: {}", error);
-          }
-          queue.TryEnqueue([weak, error, generation] {
-            if (auto w = weak.get()) {
-              w->wallet().ApplySeekerResult(
-                  generation, urnw::SeekerVerifyNoticeFor(false, false, error), error, {});
-            }
-          });
-          return;
-        }
-        urnet::VerifySeekerNftHolderArgs args;
-        args.wallet_address = address;
-        args.wallet_signature = signature;
-        args.wallet_message = message;
-        Sdk().api().verifySeekerHolder(
-            args, [queue, weak, generation, walletSuffix = urnw::SeekerWalletSuffix(address)](
-                      std::optional<urnet::VerifySeekerNftHolderResult> result,
-                      std::optional<std::string> err) {
-              std::string failure = err ? *err : std::string();
-              if (failure.empty() && result && result->error) failure = result->error->message;
-              // the code picks the localized notice; the message is the fallback
-              const std::string errorCode =
-                  result && result->error ? result->error->code.value_or(std::string())
-                                          : std::string();
-              const auto notice = urnw::SeekerVerifyNoticeFor(
-                  result.has_value(), result && result->success, failure, errorCode);
-              if (notice != urnw::SeekerVerifyNoticeKind::Verified) {
-                urnw::LogError("seeker: verifySeekerHolder failed: {}", failure);
-              }
-              queue.TryEnqueue([weak, notice, failure, walletSuffix, generation] {
-                if (auto w = weak.get())
-                  w->wallet().ApplySeekerResult(generation, notice, failure, walletSuffix);
-              });
-            });
-      });
-}
-
-void WalletPage::ApplySeekerResult(uint32_t generation, urnw::SeekerVerifyNoticeKind notice,
-                                   std::string const& failure,
-                                   std::string const& walletSuffix) {
-  const bool ok = notice == urnw::SeekerVerifyNoticeKind::Verified;
-  // The watchdog already gave up on this one and said so: do not now contradict
-  // it by reporting the outcome of a request the user was told had failed.
-  if (!SettleFlow(seekerFlow_, generation)) {
-    urnw::LogWarn("seeker: dropping a result for an abandoned verification (ok={})", ok);
-    return;
-  }
-  verifyingSeeker_ = false;
-  if (!ok && bridge::IsSuperseded(failure)) {
-    // the user started another wallet flow (the Solana sheet): this attempt
-    // ended by their choice, and the button is simply ready again
-    urnw::LogInfo("seeker: the wallet signature was superseded ({})", failure);
-    ApplySeekerState();
-    return;
-  }
-  hstring message;
-  switch (notice) {
-    case urnw::SeekerVerifyNoticeKind::Verified:
-      message = Loc("successfully_claimed_multiplier");
-      break;
-    case urnw::SeekerVerifyNoticeKind::NotHolder:
-      // the server checked the wallet: not a failed request
-      message = hstring{urnw::Format("seeker_token_not_found", urnw::Widen(walletSuffix))};
-      break;
-    case urnw::SeekerVerifyNoticeKind::Reason:
-      message = hstring{urnw::Format("error_claiming_multiplier_with_reason", urnw::Widen(failure))};
-      break;
-    case urnw::SeekerVerifyNoticeKind::Failed:
-      message = Loc("error_claiming_multiplier");
-      break;
-  }
-  Notify(message, ok ? InfoBarSeverity::Success : InfoBarSeverity::Error);
-  if (ok) {
-    LoadSeeker();  // has_seeker_token now reads true on the verified wallet
-    return;
-  }
-  ApplySeekerState();
-}
-
 void WalletPage::ShowPreviewSnackbar() {
   snackbar_.Show(Loc("wallet_connect_failed"), InfoBarSeverity::Error);
 }
@@ -2393,7 +2195,6 @@ void WalletPage::ShowPreviewWalletState() {
   ApplyLegacyAnswer(legacyGeneration, solana::LegacyRead::Payout, true, payout);
   ApplyLegacyAnswer(legacyGeneration, solana::LegacyRead::Payments, true, payments);
   if (PreviewSample()) {
-    seekerHolder_ = true;
     ApplyPoints(SamplePoints(), Fetch::Ready);
     ApplyReliability(SampleReliability(), Fetch::Ready);
     std::vector<EpochRow> epochs;

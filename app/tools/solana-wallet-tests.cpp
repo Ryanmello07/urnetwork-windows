@@ -805,7 +805,7 @@ void BridgeRouteTests() {
   {
     TEST_CASE("aSignatureRequestSignsBeforeASignIn");
     CheckEq("SignForRequest", RouteName(RoutePublicKey(false, false, true, true)),
-            "the Seeker request's own message is signed");
+            "an add-sign-in request's own message is signed");
   }
   {
     TEST_CASE("aWalletSignInStillSignsIn");
