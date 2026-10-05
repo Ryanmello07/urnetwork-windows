@@ -80,7 +80,9 @@ namespace urnw::proto {
 //
 //    Nor for upload_logs: a service that does not know it answers "unknown
 //    request type", and the app falls back to what it did before the verb
-//    existed (the DeviceRemote's UploadLogs while a session is bound).
+//    existed (the DeviceRemote's UploadLogs while a session is bound). Its
+//    Reply::log_upload_* and TunnelStatus::log_upload_* fields read as no
+//    upload from a peer too old to send them.
 inline constexpr int kProtocolVersion = 4;
 
 // The first version that understands StartTunnel::mode. Below this, an absent
@@ -316,8 +318,15 @@ struct SetNetworkCountry {
 // the sdk's, unchanged: the zip of the service's glog files, POST
 // /log/{feedback_id}/upload on the space's API with the device's client
 // credentials, the server's 100 MB cap and its rate limit of one upload per
-// network per 5 minutes. Nothing goes anywhere it did not go before. The reply
-// comes once the upload has started; its outcome is the service's to log.
+// network per 5 minutes. Nothing goes anywhere it did not go before.
+//
+// The reply comes once the upload is admitted (log_upload_id): the zip and the
+// post run on a thread of their own (logupload::Flight), never under the
+// session lock, which a zip of up to the upload's cap would hold for as long as
+// it reads the disk. One upload at a time: a request while one is in flight is
+// refused with log_upload_busy. The outcome reaches the app in the status the
+// service pushes when the upload ends: log_upload_id names the upload and
+// log_upload_state says how it ended (logupload::CompletionFor).
 //
 // One set of logs: the server keeps one file per feedback and admits one
 // upload per network per 5 minutes, and the sdk zips one process's log
@@ -477,6 +486,15 @@ struct TunnelStatus {
   std::string provider_control_mode;
   int64_t provider_mode = 0;
   bool provider_network_key = false;
+  // THE LOG UPLOAD (upload_logs): the last upload the app asked the service
+  // for, as logupload::Flight reads it. Its id (the reply's log_upload_id; 0
+  // before the first), where it is (logupload::ToString(FlightState):
+  // "running", "uploaded", "refused", "failed") and the device that carries
+  // it. The app reads the outcome of its upload here. No protocol bump: a peer
+  // too old to send these reads as no upload.
+  int64_t log_upload_id = 0;
+  std::string log_upload_state;
+  std::string log_upload_carrier;
 };
 
 // get_provider_stats: what the provider-only device carries, for the screens a
@@ -518,6 +536,11 @@ struct Reply {
   // upload_logs' answer: the device that carries the upload
   // (logupload::ToString), empty in every other reply
   std::string log_upload_carrier;
+  // upload_logs' answer: the id status reports the upload under; 0 in every
+  // other reply, and from a service too old to say
+  int64_t log_upload_id = 0;
+  // upload_logs refused because an upload is in flight already
+  bool log_upload_busy = false;
 };
 
 // ---- JSON (de)serialization ----------------------------------------------
@@ -673,6 +696,9 @@ inline void to_json(nlohmann::json& j, const TunnelStatus& v) {
       {"provider_control_mode", v.provider_control_mode},
       {"provider_mode", v.provider_mode},
       {"provider_network_key", v.provider_network_key},
+      {"log_upload_id", v.log_upload_id},
+      {"log_upload_state", v.log_upload_state},
+      {"log_upload_carrier", v.log_upload_carrier},
   };
 }
 
@@ -705,6 +731,9 @@ inline void from_json(const nlohmann::json& j, TunnelStatus& v) {
   get("provider_control_mode", v.provider_control_mode);
   get("provider_mode", v.provider_mode);
   get("provider_network_key", v.provider_network_key);
+  get("log_upload_id", v.log_upload_id);
+  get("log_upload_state", v.log_upload_state);
+  get("log_upload_carrier", v.log_upload_carrier);
 }
 
 // What one status says about the provider-only device, as the app's reconcile
@@ -791,6 +820,8 @@ inline void to_json(nlohmann::json& j, const Reply& v) {
   if (v.status) j["status"] = *v.status;
   if (v.provider_stats) j["provider_stats"] = *v.provider_stats;
   if (!v.log_upload_carrier.empty()) j["log_upload_carrier"] = v.log_upload_carrier;
+  if (v.log_upload_id != 0) j["log_upload_id"] = v.log_upload_id;
+  if (v.log_upload_busy) j["log_upload_busy"] = true;
 }
 
 inline void from_json(const nlohmann::json& j, Reply& v) {
@@ -811,6 +842,8 @@ inline void from_json(const nlohmann::json& j, Reply& v) {
     v.provider_stats = std::move(s);
   }
   get("log_upload_carrier", v.log_upload_carrier);
+  get("log_upload_id", v.log_upload_id);
+  get("log_upload_busy", v.log_upload_busy);
 }
 
 // Envelope helpers: every message on the wire has a top-level "type" tag.

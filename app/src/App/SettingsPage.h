@@ -157,10 +157,10 @@ class SettingsPage {
   winrt::fire_and_forget OpenCloudProxies();
   winrt::fire_and_forget SaveLogsToFile();
   // Attaches the service's logs to an already-accepted feedback report, using
-  // the server's own feedback id, off the UI thread (SdkHost::UploadFeedbackLogs:
-  // the service first, connected or not, then the DeviceRemote). Only
+  // the server's own feedback id (SdkHost::UploadFeedbackLogs: the service
+  // first, connected or not, then the DeviceRemote, on its own thread). Only
   // OnSendFeedback calls it, and only when the user ticked the box.
-  winrt::fire_and_forget UploadLogs(std::string feedbackId);
+  void UploadLogs(std::string const& feedbackId);
   void SetFeedbackSending(bool sending);
   void ApplyFeedbackSendButton();
 

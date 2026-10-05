@@ -39,6 +39,86 @@ int64_t NowMillis() {
       .count();
 }
 
+// The log upload flight's clock: it bounds how long an upload may run, which a
+// wall clock that jumps would misjudge.
+int64_t SteadyMillis() {
+  return std::chrono::duration_cast<std::chrono::milliseconds>(
+             std::chrono::steady_clock::now().time_since_epoch())
+      .count();
+}
+
+// How long the service's teardown waits for a log upload's thread to come out
+// of the sdk's call (the zip): past it the process exits around it.
+constexpr std::chrono::milliseconds kLogUploadReturnBudget{2000};
+
+// What the sdk's upload callback needs to end the upload. Owned by the call
+// once the sdk took it, freed by the callback.
+struct LogUploadReport {
+  std::shared_ptr<logupload::Flight> flight;
+  int64_t uploadId = 0;
+  const char* carrierName = "";
+  // tells the standalone device's waiter that the upload reported; empty for
+  // the session's and the provider-only device
+  std::function<void()> reported;
+};
+
+// The sdk's upload callback (urnet_upload_logs_cb), on an SDK thread: the
+// server's answer or the post's error ends the upload in the flight, whose
+// finish hook pushes the status.
+void OnLogUploadReport(void* userData, const char* resultJson, const char* error) {
+  std::unique_ptr<LogUploadReport> report(static_cast<LogUploadReport*>(userData));
+  logupload::FlightState state = logupload::FlightState::Uploaded;
+  if (error != nullptr) {
+    state = logupload::FlightState::Failed;
+    LogWarn("logs: the log upload ({} device) failed: {}", report->carrierName, error);
+  } else if (resultJson != nullptr) {
+    try {
+      const auto result = nlohmann::json::parse(resultJson).get<urnet::UploadLogsResult>();
+      if (result.error) {
+        state = logupload::FlightState::Refused;
+        LogWarn("logs: the log upload ({} device) was refused: {}", report->carrierName,
+                result.error->message);
+      }
+    } catch (const std::exception& e) {
+      state = logupload::FlightState::Failed;
+      LogWarn("logs: the log upload's ({} device) answer did not parse: {}",
+              report->carrierName, e.what());
+    }
+  }
+  if (state == logupload::FlightState::Uploaded) {
+    LogInfo("logs: the log upload ({} device) finished", report->carrierName);
+  }
+  if (report->reported) report->reported();
+  report->flight->Finish(report->uploadId, state);
+}
+
+// The upload's own thread (logupload::Flight::Run): the sdk zips this process's
+// log files and starts the post to /log/{feedback_id}/upload. The call goes
+// through the c abi by the device's handle, which the flight keeps valid until
+// it returns, so that nothing of TunnelController is touched here.
+void UploadLogsOnDevice(const std::shared_ptr<logupload::Flight>& flight, int64_t uploadId,
+                        uint64_t deviceHandle, const std::string& feedbackId,
+                        const char* carrierName, const std::function<void()>& reported) {
+  auto report = std::make_unique<LogUploadReport>();
+  report->flight = flight;
+  report->uploadId = uploadId;
+  report->carrierName = carrierName;
+  report->reported = reported;
+  char* error = nullptr;
+  const bool started = urnet_device_upload_logs(deviceHandle, feedbackId.c_str(),
+                                                &OnLogUploadReport, report.get(), &error);
+  if (started) {
+    // the callback owns it now
+    report.release();
+    return;
+  }
+  const std::string message = error != nullptr ? error : "the device is gone";
+  if (error != nullptr) urnet_free_string(error);
+  LogWarn("logs: the log upload ({} device) did not start: {}", carrierName, message);
+  if (reported) reported();
+  flight->Finish(uploadId, logupload::FlightState::Failed);
+}
+
 std::vector<uint8_t> ReadFileBytes(const std::filesystem::path& p) {
   std::ifstream f(p, std::ios::binary);
   if (!f) return {};
@@ -71,11 +151,26 @@ std::string Join(const std::vector<std::string>& parts) {
 
 }  // namespace
 
-TunnelController::TunnelController() : sdkVersion_(urnet::version()) {
+TunnelController::TunnelController()
+    : logUploadFlight_(std::make_shared<logupload::Flight>(NowMillis())),
+      sdkVersion_(urnet::version()) {
   storageDir_ = StorageRoot(/*isService=*/true);
+  // An upload's end pushes the status that carries it, as a transition does.
+  logUploadFlight_->SetOnFinished([this] { NotifyStateChanged(); });
 }
 
-TunnelController::~TunnelController() { Stop(); }
+TunnelController::~TunnelController() {
+  // First: the hook reaches into this object, and no call of it may run once
+  // it is going.
+  logUploadFlight_->ClearOnFinished();
+  Stop();
+  // A log upload still zipping is given a moment to come out of the sdk's
+  // call, and no more: it holds nothing of this object, and the service's exit
+  // must not wait on a disk.
+  if (!logUploadFlight_->WaitReturned(kLogUploadReturnBudget)) {
+    LogWarn("logs: a log upload was still zipping when the service stopped");
+  }
+}
 
 std::optional<urnet::DeviceLocalKeyMaterial> TunnelController::LoadKeyMaterial() {
   auto seed = ReadFileBytes(storageDir_ / L"client_key_seed.bin");
@@ -1558,7 +1653,7 @@ bool TunnelController::TearDownSessionLocked() {
       [pump = std::move(pump), split = std::move(split),
        egress = std::move(egress), device = std::move(device),
        adapter = std::move(adapter), wintun = std::move(wintun),
-       space = std::move(space)]() mutable {
+       space = std::move(space), flight = logUploadFlight_]() mutable {
         if (pump) pump->Stop();
         pump.reset();
         split.Close();
@@ -1572,6 +1667,10 @@ bool TunnelController::TearDownSessionLocked() {
           LogInfo("tunnel: closing the device (this is the call that can block "
                   "on wedged transports)");
           device->close();
+          // A log upload's call may still be on it: the flight then keeps it
+          // until the call returns, and releases it.
+          flight->KeepUntilReturned(device->handle(),
+                                    std::make_shared<urnet::DeviceLocal>(std::move(*device)));
         }
         device.reset();
         adapter.reset();
@@ -1969,7 +2068,7 @@ void TunnelController::RetireProviderDeviceLocked() {
       kSdkTeardownBudget,
       [egress = std::move(egress), network = std::move(network), peersSub = std::move(peersSub),
        statsVc = std::move(statsVc), device = std::move(device),
-       space = std::move(space)]() mutable {
+       space = std::move(space), flight = logUploadFlight_]() mutable {
         // After this returns no further OS observation reaches the notifier.
         if (egress) egress->Stop();
         egress.reset();
@@ -1983,6 +2082,13 @@ void TunnelController::RetireProviderDeviceLocked() {
         if (device && statsVc) device->closeContractViewController(*statsVc);
         statsVc.reset();
         if (device) device->close();
+        // A log upload's call may still be on it: the flight then keeps it
+        // until the call returns, and releases it.
+        if (device) {
+          const uint64_t deviceHandle = device->handle();
+          flight->KeepUntilReturned(deviceHandle,
+                                    std::shared_ptr<urnet::DeviceLocal>(std::move(device)));
+        }
         device.reset();
         space.reset();
       },
@@ -2177,37 +2283,46 @@ std::optional<netcountry::Reading> TunnelController::NetworkCountry() {
 // It used to reach them only through the app's DeviceRemote, i.e. only while a
 // session ran. Now the app asks here, connected or not.
 
-bool TunnelController::UploadLogs(const proto::UploadLogs& request, std::string& error,
-                                  std::string& carrier,
-                                  const std::function<void(std::string_view)>& noteCarrier) {
+TunnelController::LogUploadResult TunnelController::UploadLogs(
+    const proto::UploadLogs& request, const std::function<void(std::string_view)>& noteCarrier) {
+  LogUploadResult result;
   // Timed, like StartProvider: a connect attempt wedged inside the SDK holds
   // mutex_, and an upload that waited behind it would hold the control pipe.
   std::unique_lock<std::timed_mutex> lock(mutex_, std::defer_lock);
   if (!lock.try_lock_for(kStopLockBudget)) {
-    error = "a tunnel operation is in progress";
+    result.error = "a tunnel operation is in progress";
     LogWarn("logs: upload_logs refused: the session lock was not free within {}ms",
             kStopLockBudget.count());
-    return false;
+    return result;
   }
   const logupload::Carrier which =
       logupload::CarrierFor(device_.has_value(), providerDevice_ != nullptr);
   const char* carrierName = logupload::ToString(which);
+  // Admitted before anything is built: one upload at a time.
+  const int64_t uploadId = logUploadFlight_->Begin(which, SteadyMillis());
+  if (uploadId == 0) {
+    result.busy = true;
+    result.error = "a log upload is in flight already";
+    LogInfo("logs: upload_logs refused: a log upload is in flight already");
+    return result;
+  }
   std::shared_ptr<LogUploadDevice> slot;
-  urnet::DeviceLocal* device = nullptr;
+  uint64_t deviceHandle = 0;
   const char* step = "upload";
   try {
     if (which == logupload::Carrier::Tunnel) {
-      device = &*device_;
+      deviceHandle = device_->handle();
     } else if (which == logupload::Carrier::Provider) {
-      device = providerDevice_.get();
+      deviceHandle = providerDevice_->handle();
     } else {
       const AbandonedTeardownSweep abandoned = SweepAbandonedTeardowns();
       const logupload::StandaloneRefusal refusal =
           logupload::StandaloneRefusalFor(abandoned.outstanding > 0, SelfRestartPending());
       if (refusal != logupload::StandaloneRefusal::None) {
-        error = logupload::RefusalReason(refusal);
-        LogInfo("logs: upload_logs refused: {}", error);
-        return false;
+        logUploadFlight_->Finish(uploadId, logupload::FlightState::Failed);
+        result.error = logupload::RefusalReason(refusal);
+        LogInfo("logs: upload_logs refused: {}", result.error);
+        return result;
       }
       // Neither runs: a device for the upload alone, built as StartProvider
       // builds the provider-only device (the persisted identity, the request's
@@ -2216,6 +2331,7 @@ bool TunnelController::UploadLogs(const proto::UploadLogs& request, std::string&
       // to nobody. One at a time, under the one identity.
       RetireLogUploadDeviceLocked();
       slot = std::make_shared<LogUploadDevice>();
+      slot->flight = logUploadFlight_;
       step = "network space";
       slot->space = ImportNetworkSpaceLocked(request.network_space_json);
       step = "device";
@@ -2226,47 +2342,49 @@ bool TunnelController::UploadLogs(const proto::UploadLogs& request, std::string&
       step = "provide mode";
       slot->device->setProvideControlMode("never");
       logUpload_ = slot;
-      device = slot->device.get();
+      deviceHandle = slot->device->handle();
       step = "upload";
     }
-    // Into the files being uploaded, before the sdk zips them: which device
-    // carried the upload tells support whether a tunnel was up when it was sent.
-    if (noteCarrier) noteCarrier(carrierName);
-    // The sdk flushes glog, zips this process's log files and posts them to
-    // POST /log/{feedback_id}/upload with the device's client credentials. The
-    // callback runs on an SDK thread: it logs and tells the waiter, and touches
-    // nothing of this object.
-    device->uploadLogs(
-        request.feedback_id,
-        [slot, carrierName](std::optional<urnet::UploadLogsResult> uploaded,
-                            std::optional<std::string> err) {
-          if (err) {
-            LogWarn("logs: the log upload ({} device) failed: {}", carrierName, *err);
-          } else if (uploaded && uploaded->error) {
-            LogWarn("logs: the log upload ({} device) was refused: {}", carrierName,
-                    uploaded->error->message);
-          } else {
-            LogInfo("logs: the log upload ({} device) finished", carrierName);
-          }
-          if (!slot) return;
-          {
-            std::scoped_lock slotLock(slot->mutex);
-            slot->uploadReported = true;
-          }
-          slot->reported.notify_all();
-        });
   } catch (const std::exception&) {
     // The stage names the failure, as StartProvider's does, without copying an
     // SDK message that can carry endpoints or identifiers into the reply.
-    error = std::string("the logs could not be uploaded at the ") + step + " step";
+    result.error = std::string("the logs could not be uploaded at the ") + step + " step";
     LogError("logs: stage=upload outcome=failed component={}", step);
+    logUploadFlight_->Finish(uploadId, logupload::FlightState::Failed);
     // a standalone device built before the failure is closed, not just released
     if (slot) {
       CloseLogUploadDevice(slot);
       logUpload_.reset();
     }
-    return false;
+    return result;
   }
+  // Into the files being uploaded, before the upload's thread zips them: which
+  // device carried the upload tells support whether a tunnel was up when it
+  // was sent.
+  if (noteCarrier) noteCarrier(carrierName);
+  // The standalone device's waiter learns that the upload reported from the
+  // upload's callback, and retires the device then.
+  std::function<void()> reported;
+  if (slot) {
+    reported = [slot] {
+      {
+        std::scoped_lock slotLock(slot->mutex);
+        slot->uploadReported = true;
+      }
+      slot->reported.notify_all();
+    };
+  }
+  // The zip and the post, on the upload's own thread. It holds the flight, the
+  // device's handle and the waiter's signal, and nothing else of this object;
+  // the flight keeps the device alive until the call returns (each teardown
+  // hands it over), and the call's callback ends the upload in it, whose
+  // finish hook pushes the status.
+  logUploadFlight_->Run(uploadId, deviceHandle,
+                        [flight = logUploadFlight_, uploadId, deviceHandle,
+                         feedbackId = request.feedback_id, carrierName, reported] {
+                          UploadLogsOnDevice(flight, uploadId, deviceHandle, feedbackId,
+                                             carrierName, reported);
+                        });
   if (slot) {
     // The waiter retires the standalone device once its upload reports, or at
     // the bound if it never does. It owns a share of the slot and nothing else,
@@ -2283,9 +2401,11 @@ bool TunnelController::UploadLogs(const proto::UploadLogs& request, std::string&
       });
     }).detach();
   }
-  carrier = carrierName;
+  result.ok = true;
+  result.carrier = carrierName;
+  result.uploadId = uploadId;
   LogInfo("logs: uploading this service's logs for a feedback ({} device)", carrierName);
-  return true;
+  return result;
 }
 
 void TunnelController::CloseLogUploadDevice(const std::shared_ptr<LogUploadDevice>& slot) {
@@ -2304,8 +2424,15 @@ void TunnelController::CloseLogUploadDevice(const std::shared_ptr<LogUploadDevic
   LogInfo("logs: retiring the device that carried a log upload");
   const bool finished = RunBounded(
       kSdkTeardownBudget,
-      [device = std::move(device), space = std::move(space)]() mutable {
+      [device = std::move(device), space = std::move(space), flight = slot->flight]() mutable {
         device->close();
+        // The upload's call may still be on it: the flight then keeps it until
+        // the call returns, and releases it.
+        if (flight) {
+          const uint64_t deviceHandle = device->handle();
+          flight->KeepUntilReturned(deviceHandle,
+                                    std::shared_ptr<urnet::DeviceLocal>(std::move(device)));
+        }
         device.reset();
         space.reset();
       },
@@ -2351,6 +2478,11 @@ proto::TunnelStatus TunnelController::Status() {
   s.failsafe_armed = deadTunnelWatchdog_.FailsafeArmed();
   const int64_t upSince = upSinceMirror_.load();
   s.tunnel_local_up_millis = upSince ? (NowMillis() - upSince) : 0;
+  // The log upload in flight, off the flight's own lock (never the session's).
+  const logupload::Flight::Reading upload = logUploadFlight_->Read(SteadyMillis());
+  s.log_upload_id = upload.id;
+  s.log_upload_state = logupload::ToString(upload.state);
+  s.log_upload_carrier = upload.id == 0 ? "" : logupload::ToString(upload.carrier);
   return s;
 }
 

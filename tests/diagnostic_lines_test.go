@@ -178,7 +178,7 @@ func TestDiagnosticLinesServiceWiring(t *testing.T) {
 		t.Fatal("ControlServer::Handle does not answer upload_logs")
 	}
 	provideRequireOrder(t, "the upload_logs branch", handle[at:],
-		"tunnel_.UploadLogs(req, error, carrier, [this](std::string_view chosen) {",
+		"tunnel_.UploadLogs(req, [this](std::string_view chosen) {",
 		"diagnostics_.NoteLogUpload(chosen);")
 	header := stripComments(readServiceSource(t, "ControlServer.h"))
 	// declared first, destroyed last: the pipe and the tunnel push into it

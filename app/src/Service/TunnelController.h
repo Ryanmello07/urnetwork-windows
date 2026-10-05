@@ -22,6 +22,7 @@
 
 #include "EgressMonitor.h"
 #include "FlowOwner.h"
+#include "LogUpload.h"
 #include "NetworkChangeNotify.h"
 #include "NetworkConfig.h"
 #include "NetworkCountry.h"
@@ -228,16 +229,30 @@ class TunnelController {
   // retired once its upload reports or after
   // logupload::kStandaloneDeviceMaxLifetime (a waiter thread that owns only
   // the device's slot), and before any other device under this identity is
-  // built (every teardown, start_provider, the next upload). Refused (false,
-  // `error` set) when the session lock is not free in budget, and for a
-  // standalone device while a held device or a restart is pending; the app
-  // then falls back to its DeviceRemote. True once the upload has started, with
-  // `carrier` naming the device (logupload::ToString). `noteCarrier` gets that
-  // name once the device is chosen and before the sdk zips the log, under the
-  // session lock, so the line it writes is in this upload (ControlServer
-  // passes ServiceDiagnostics::NoteLogUpload).
-  bool UploadLogs(const proto::UploadLogs& request, std::string& error, std::string& carrier,
-                  const std::function<void(std::string_view)>& noteCarrier);
+  // built (every teardown, start_provider, the next upload).
+  //
+  // The sdk's call (the zip, then the post started) runs on the upload's own
+  // thread (logupload::Flight), never under the session lock; it holds the
+  // device's handle, and the device stays alive until the call returns (each
+  // teardown hands it to the flight while the call is on it). One upload at a
+  // time: `busy` while one is in flight. Refused too when the session lock is
+  // not free in budget, and for a standalone device while a held device or a
+  // restart is pending; the app then falls back to its DeviceRemote. Returns
+  // once the upload is admitted, with `carrier` naming the device
+  // (logupload::ToString) and `uploadId` the id status reports its outcome
+  // under; the service pushes its status when the upload ends. `noteCarrier`
+  // gets the carrier's name once the device is chosen and before the upload's
+  // thread starts the zip, under the session lock, so the line it writes is in
+  // this upload (ControlServer passes ServiceDiagnostics::NoteLogUpload).
+  struct LogUploadResult {
+    bool ok = false;
+    bool busy = false;
+    int64_t uploadId = 0;
+    std::string carrier;
+    std::string error;
+  };
+  LogUploadResult UploadLogs(const proto::UploadLogs& request,
+                             const std::function<void(std::string_view)>& noteCarrier);
 
   // THE STATUS THE APP DECIDES ON, and it must never block.
   //
@@ -470,6 +485,8 @@ class TunnelController {
     bool uploadReported = false;
     std::unique_ptr<urnet::DeviceLocal> device;
     std::optional<urnet::NetworkSpace> space;
+    // the flight whose call may still be on the device when it is closed
+    std::shared_ptr<logupload::Flight> flight;
   };
   // Takes the device out of `slot` and closes it on a bounded worker, as the
   // provider-only device's retire does (AbandonHazard::HoldsSessionDevice). A
@@ -586,6 +603,11 @@ class TunnelController {
   // providerDevice_: both are built only after RetireLogUploadDeviceLocked.
   // Guarded by mutex_.
   std::shared_ptr<LogUploadDevice> logUpload_;
+  // The log upload in flight, shared with its thread, its callback and the
+  // teardown workers, which hold nothing else of this object
+  // (logupload::Flight: its own lock). Its finish hook pushes the status; the
+  // destructor clears it before anything it uses is gone.
+  std::shared_ptr<logupload::Flight> logUploadFlight_;
 
   // The network country last applied to this process's sdk
   // (SetNetworkCountry), empty until the app first sends one. Guarded by

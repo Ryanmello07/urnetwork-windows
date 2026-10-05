@@ -328,6 +328,11 @@ void ClearRpcSession() {
 }  // namespace
 
 SdkHost::~SdkHost() {
+  // The feedback log request first: its steps take mutex_ and the pipe, and
+  // one that runs is waited out; its old path's call, which touches nothing of
+  // this host, is left past a short budget (FeedbackLogUpload.h), by the rule
+  // the network country's read follows.
+  feedbackLogUpload_.reset();
   // The network country's notifications, then its thread, joined above the
   // lock like the loops below: its report pushes over the pipe and must not run
   // against a host being destroyed.
@@ -2471,6 +2476,9 @@ void SdkHost::AdoptServiceFacts(const proto::TunnelStatus& st) {
                      bindEgress ? st.egress_index6 : 0,
                      bindEgress ? "the service is preparing or carrying traffic"
                                 : "the service reports no tunnel session");
+  // The outcome of a feedback's log upload rides on the status the service
+  // pushes when the upload ends.
+  FollowServiceLogUpload(st);
   std::scoped_lock lock(wfpStateMutex_);
   lastServiceWfpState_ = st.wfp_state;
 }
@@ -6310,13 +6318,53 @@ void SdkHost::ReconcileProviderLocked(const char* reason) {
 
 // ---- send feedback with logs ------------------------------------------------
 //
-// See the contract in the header and Common/LogUpload.h.
+// See the contract in the header, App/FeedbackLogUpload.h and Common/LogUpload.h.
+
+namespace {
+
+// The DeviceRemote's upload callback (urnet_upload_logs_cb): an sdk whose
+// DeviceRemote reports the upload's result calls it, and it is logged.
+void OnDeviceRemoteLogUploadResult(void*, const char* resultJson, const char* error) {
+  if (error != nullptr) {
+    LogWarn("sdkhost: log attach failed: {}", error);
+    return;
+  }
+  if (resultJson == nullptr) return;
+  try {
+    const auto result = nlohmann::json::parse(resultJson).get<urnet::UploadLogsResult>();
+    if (result.error) LogWarn("sdkhost: log attach failed: {}", result.error->message);
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: the log attach's answer did not parse: {}", e.what());
+  }
+}
+
+// The old path's upload, through the c abi by the DeviceRemote's handle, so
+// that it touches nothing of SdkHost: with a service that predates upload_logs
+// it answers only after the device's zip, and FeedbackLogUpload leaves it
+// running past the app's exit budget.
+void UploadLogsThroughDeviceRemote(uint64_t deviceHandle, const std::string& feedbackId) {
+  char* error = nullptr;
+  if (urnet_device_upload_logs(deviceHandle, feedbackId.c_str(), &OnDeviceRemoteLogUploadResult,
+                               nullptr, &error)) {
+    return;
+  }
+  LogWarn("sdkhost: log attach failed: {}", error != nullptr ? error : "the device is gone");
+  if (error != nullptr) urnet_free_string(error);
+}
+
+}  // namespace
 
 void SdkHost::UploadFeedbackLogs(const std::string& feedbackId) {
   if (feedbackId.empty()) {
     LogWarn("sdkhost: log attach skipped (no feedback id)");
     return;
   }
+  if (!feedbackLogUpload_ || !feedbackLogUpload_->Send(feedbackId)) {
+    LogWarn("sdkhost: log attach skipped (a log upload request is still being sent)");
+  }
+}
+
+logupload::ServiceAnswer SdkHost::AskServiceToUploadLogs(const std::string& feedbackId) {
   // The request start_provider sends, so a service with no device builds the
   // same one. Read under the lock; the pipe call is made without it.
   proto::UploadLogs request;
@@ -6338,38 +6386,51 @@ void SdkHost::UploadFeedbackLogs(const std::string& feedbackId) {
       LogWarn("sdkhost: building the log upload request failed: {}", e.what());
     }
   }
-  bool serviceAccepted = false;
-  if (haveRequest && service_.IsConnected()) {
-    std::string carrier;
-    std::string error;
-    serviceAccepted = service_.UploadLogs(request, &carrier, &error);
-    if (serviceAccepted) {
-      LogInfo("sdkhost: the service is uploading its logs ({} device)", carrier);
-    } else {
+  if (!haveRequest || !service_.IsConnected()) return logupload::ServiceAnswer::NotTaken;
+  std::string carrier;
+  int64_t uploadId = 0;
+  std::string error;
+  const logupload::ServiceAnswer answer = service_.UploadLogs(request, &carrier, &uploadId, &error);
+  switch (answer) {
+    case logupload::ServiceAnswer::Accepted:
+      // its outcome comes in the service's status (FollowServiceLogUpload)
+      pendingLogUploadId_.store(uploadId);
+      LogInfo("sdkhost: the service took the log upload ({} device)", carrier);
+      break;
+    case logupload::ServiceAnswer::Busy:
+      LogInfo("sdkhost: the service is uploading its logs for an earlier feedback already");
+      break;
+    case logupload::ServiceAnswer::NotTaken:
       // "unknown request type" from a service that predates the verb
       LogWarn("sdkhost: the service did not upload its logs: {}",
               error.empty() ? "no detail" : error);
-    }
+      break;
   }
+  return answer;
+}
+
+std::function<void()> SdkHost::PrepareDeviceRemoteLogUpload(const std::string& feedbackId) {
   std::scoped_lock lock(mutex_);
-  const logupload::AppStep step =
-      logupload::AppStepAfterService(serviceAccepted, device_.has_value());
-  if (step == logupload::AppStep::Done) return;
-  if (step == logupload::AppStep::Skip) {
+  if (!device_.has_value()) {
     LogWarn("sdkhost: log attach skipped (the service did not take it and no device is bound)");
-    return;
+    return {};
   }
-  try {
-    device_->uploadLogs(feedbackId, [](std::optional<urnet::UploadLogsResult> result,
-                                       std::optional<std::string> err) {
-      std::string error;
-      if (result && result->error) error = result->error->message;
-      else if (err) error = *err;
-      if (!error.empty()) LogWarn("sdkhost: log attach failed: {}", error);
-    });
-  } catch (const std::exception& e) {
-    // Device::uploadLogs throws synchronously when the C call fails.
-    LogWarn("sdkhost: log attach threw: {}", e.what());
+  const uint64_t deviceHandle = device_->handle();
+  return [deviceHandle, feedbackId] { UploadLogsThroughDeviceRemote(deviceHandle, feedbackId); };
+}
+
+void SdkHost::FollowServiceLogUpload(const proto::TunnelStatus& st) {
+  int64_t pendingUploadId = pendingLogUploadId_.load();
+  const std::optional<logupload::FlightState> outcome = logupload::CompletionFor(
+      pendingUploadId, st.log_upload_id, logupload::FlightStateFromString(st.log_upload_state));
+  if (!outcome) return;
+  // once: a later status that names the same outcome finds nothing pending
+  if (!pendingLogUploadId_.compare_exchange_strong(pendingUploadId, 0)) return;
+  if (*outcome == logupload::FlightState::Uploaded) {
+    LogInfo("sdkhost: the service uploaded its logs ({} device)", st.log_upload_carrier);
+  } else {
+    LogWarn("sdkhost: the service's log upload ended {} ({} device)", st.log_upload_state,
+            st.log_upload_carrier);
   }
 }
 

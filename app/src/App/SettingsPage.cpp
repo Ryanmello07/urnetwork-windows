@@ -1253,20 +1253,18 @@ winrt::fire_and_forget SettingsPage::SaveLogsToFile() {
 //
 // SdkHost asks the service first, which uploads its own logs whether or not a
 // tunnel runs, and falls back to the DeviceRemote, the only path before the
-// service could be asked. The one blocks on the control pipe and the other on
-// the device rpc, so this leaves the UI thread first.
+// service could be asked. It returns at once: the request runs on its own
+// thread (App/FeedbackLogUpload.h), never on this one.
 //
 // Failure is silent by design here and only here: the feedback itself was
 // accepted, so telling the user their report failed would be false, and the
 // attachment is an extra. It is logged.
-winrt::fire_and_forget SettingsPage::UploadLogs(std::string feedbackId) {
+void SettingsPage::UploadLogs(std::string const& feedbackId) {
   if (feedbackId.empty()) {
     LogWarn("settings: log attach skipped (no feedback id)");
-    co_return;
+    return;
   }
-  SdkHost* const sdk = &Sdk();
-  co_await winrt::resume_background();
-  sdk->UploadFeedbackLogs(feedbackId);
+  Sdk().UploadFeedbackLogs(feedbackId);
 }
 
 // ---- sheets ----------------------------------------------------------------

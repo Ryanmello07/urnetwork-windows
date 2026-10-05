@@ -146,16 +146,19 @@ nlohmann::json ControlServer::Handle(const nlohmann::json& request) {
             "upload_logs requires the server's feedback id, the device's client "
             "jwt, its exact instance id, and the network space");
       }
-      std::string error;
-      std::string carrier;
       // The carrier's line goes into the upload itself, so it is written from
-      // inside, once the device is chosen (ServiceDiagnostics.h).
-      reply.ok = tunnel_.UploadLogs(req, error, carrier, [this](std::string_view chosen) {
-        diagnostics_.NoteLogUpload(chosen);
-      });
-      reply.error = error;
-      reply.log_upload_carrier = carrier;
-      // nothing the status reports changed, so nothing is pushed
+      // inside, once the device is chosen (ServiceDiagnostics.h). The reply
+      // comes once the upload is admitted; its end pushes the status that
+      // carries its outcome (TunnelController's flight hook).
+      const TunnelController::LogUploadResult result =
+          tunnel_.UploadLogs(req, [this](std::string_view chosen) {
+            diagnostics_.NoteLogUpload(chosen);
+          });
+      reply.ok = result.ok;
+      reply.error = result.error;
+      reply.log_upload_carrier = result.carrier;
+      reply.log_upload_id = result.uploadId;
+      reply.log_upload_busy = result.busy;
     } else if (type == proto::msg::kGetProviderStats) {
       // The provider-only device's statistics (TunnelController::ProviderStats),
       // answered like get_state: no session lock, no device call, and nothing

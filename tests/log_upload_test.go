@@ -14,11 +14,20 @@ import (
 	"testing"
 )
 
-// Builds the log upload harness against copies of the shared headers
-// (Common/LogUpload.h, and Common/Protocol.h with the ProvideLifecycle.h it
-// includes) in an isolated include directory, so `mutate`, when set, can
-// rewrite one of them for a negative control. Skips without nlohmann/json, as
-// the provide protocol harness does.
+// The headers the log upload harness includes, by the directory under app/src
+// each lives in.
+var logUploadHeaderDirs = map[string]string{
+	"LogUpload.h":         "Common",
+	"Protocol.h":          "Common",
+	"ProvideLifecycle.h":  "Common",
+	"FeedbackLogUpload.h": "App",
+}
+
+// Builds the log upload harness against copies of the headers it includes
+// (Common/LogUpload.h, Common/Protocol.h with the ProvideLifecycle.h it
+// includes, and App/FeedbackLogUpload.h) in an isolated include directory, so
+// `mutate`, when set, can rewrite one of them for a negative control. Skips
+// without nlohmann/json, as the provide protocol harness does.
 func logUploadTestProgram(t *testing.T, mutate map[string]func(string) string) string {
 	t.Helper()
 	compiler, err := exec.LookPath("c++")
@@ -28,9 +37,8 @@ func logUploadTestProgram(t *testing.T, mutate map[string]func(string) string) s
 	jsonFlags := provideJsonFlags(t)
 	root := repositoryRoot(t)
 	includeDir := t.TempDir()
-	commonDir := filepath.Join(root, "app", "src", "Common")
-	for _, headerName := range []string{"LogUpload.h", "Protocol.h", "ProvideLifecycle.h"} {
-		source, err := os.ReadFile(filepath.Join(commonDir, headerName))
+	for headerName, headerDir := range logUploadHeaderDirs {
+		source, err := os.ReadFile(filepath.Join(root, "app", "src", headerDir, headerName))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -56,8 +64,10 @@ func logUploadTestProgram(t *testing.T, mutate map[string]func(string) string) s
 }
 
 // Execute the spec: the carrier, the standalone device's refusals and
-// lifetime, the app's fallback, the request and reply on the wire and the
-// feedback id check.
+// lifetime, the app's fallback, the request, reply and status on the wire, the
+// feedback id check, the upload in flight (off the caller's thread, one at a
+// time, its device kept until the call returns, its outcome and finish hook)
+// and the app's request thread with its exit rule.
 func TestLogUpload(t *testing.T) {
 	program := logUploadTestProgram(t, nil)
 	output, err := exec.Command(program).CombinedOutput()
@@ -109,9 +119,93 @@ func TestLogUploadNegativeControls(t *testing.T) {
 		{
 			defect:     "the app uploads through the DeviceRemote beside the service",
 			headerName: "LogUpload.h",
-			find:       "  if (serviceAccepted) return AppStep::Done;\n  if (deviceRemoteBound) return AppStep::DeviceRemote;",
-			replace:    "  if (deviceRemoteBound) return AppStep::DeviceRemote;\n  if (serviceAccepted) return AppStep::Done;",
+			find:       "  if (answer != ServiceAnswer::NotTaken) return AppStep::Done;\n  if (deviceRemoteBound) return AppStep::DeviceRemote;",
+			replace:    "  if (deviceRemoteBound) return AppStep::DeviceRemote;\n  if (answer != ServiceAnswer::NotTaken) return AppStep::Done;",
 			want:       "app: no second upload through the DeviceRemote beside the service's",
+		},
+		{
+			defect:     "the app falls back beside an upload in flight",
+			headerName: "LogUpload.h",
+			find:       "  if (answer != ServiceAnswer::NotTaken) return AppStep::Done;",
+			replace:    "  if (answer == ServiceAnswer::Accepted) return AppStep::Done;",
+			want:       "app: no second upload beside the one in flight",
+		},
+		{
+			defect:     "the flight runs the upload on the caller's thread",
+			headerName: "LogUpload.h",
+			find:       "    std::thread([flight = shared_from_this(), id, call = std::move(call)] {",
+			replace:    "    struct InPlace {\n      explicit InPlace(std::function<void()> work) { work(); }\n      void detach() {}\n    };\n    InPlace([flight = shared_from_this(), id, call = std::move(call)] {",
+			want:       "flight: the upload does not run on the caller's thread",
+		},
+		{
+			defect:     "more than one upload in flight",
+			headerName: "LogUpload.h",
+			find:       "    if (BusyWithLock()) return 0;\n",
+			replace:    "",
+			want:       "one at a time: busy while running",
+		},
+		{
+			defect:     "an upload admitted while the last one's thread is still in the call",
+			headerName: "LogUpload.h",
+			find:       "    return calling_ || releasing_ || reading_.state == FlightState::Running;",
+			replace:    "    return reading_.state == FlightState::Running;",
+			want:       "one at a time: busy while its thread is still in the call",
+		},
+		{
+			defect:     "the call's device released under it",
+			headerName: "LogUpload.h",
+			find:       "    if (!calling_ || callingDeviceHandle_ != deviceHandle || deviceHandle == 0) return device;\n",
+			replace:    "    (void)deviceHandle;\n    return device;\n",
+			want:       "kept device: the call's device is kept",
+		},
+		{
+			defect:     "a later outcome overwrites the first",
+			headerName: "LogUpload.h",
+			find:       "      if (reading_.id != id || IsFinished(reading_.state) || !IsFinished(state)) return;",
+			replace:    "      if (reading_.id != id || !IsFinished(state)) return;",
+			want:       "outcome: the first is kept",
+		},
+		{
+			defect:     "a silent upload never given up on",
+			headerName: "LogUpload.h",
+			find:       "        nowMillis - sinceMillis_ >= kSilentUploadMaxMillis) {",
+			replace:    "        nowMillis - sinceMillis_ >= kSilentUploadMaxMillis * 1000000) {",
+			want:       "outcome: a silent upload is failed at the bound",
+		},
+		{
+			defect:     "clearing the finish hook does not wait out a running one",
+			headerName: "LogUpload.h",
+			find:       "    wake_.wait(lock, [this] { return notifying_ == 0; });\n",
+			replace:    "",
+			want:       "finish hook: clearing waits out a running hook",
+		},
+		{
+			defect:     "another upload's outcome taken for the app's",
+			headerName: "LogUpload.h",
+			find:       "  if (pendingId == 0 || statusId != pendingId || !IsFinished(statusState)) return std::nullopt;",
+			replace:    "  if (pendingId == 0 || statusId == 0 || !IsFinished(statusState)) return std::nullopt;",
+			want:       "completion: never another upload's",
+		},
+		{
+			defect:     "the app's request runs on the caller's thread",
+			headerName: "FeedbackLogUpload.h",
+			find:       "    thread_ = std::thread([channel = channel_, feedbackId = std::move(feedbackId)] {",
+			replace:    "    struct InPlace {\n      explicit InPlace(std::function<void()> work) { work(); }\n    };\n    InPlace inPlace([channel = channel_, feedbackId = std::move(feedbackId)] {",
+			want:       "request: the ask does not run on the caller's thread",
+		},
+		{
+			defect:     "Cancel does not wait out a host step",
+			headerName: "FeedbackLogUpload.h",
+			find:       "    channel_->wake.wait(lock, [this] { return !channel_->hostStep; });\n",
+			replace:    "",
+			want:       "cancel: waits out the running ask",
+		},
+		{
+			defect:     "the app's exit waits for the old path's call without a bound",
+			headerName: "FeedbackLogUpload.h",
+			find:       "      return channel_->wake.wait_for(lock, callJoinBudget_, [this] { return !channel_->running; });",
+			replace:    "      (void)callJoinBudget_;\n      channel_->wake.wait(lock, [this] { return !channel_->running; });\n      return true;",
+			want:       "exit: destruction returns while the old path's call still runs",
 		},
 		{
 			defect:     "a path separator in the feedback id",
@@ -133,6 +227,20 @@ func TestLogUploadNegativeControls(t *testing.T) {
 			find:       "  if (!v.log_upload_carrier.empty()) j[\"log_upload_carrier\"] = v.log_upload_carrier;\n",
 			replace:    "",
 			want:       "reply: the carrier comes back",
+		},
+		{
+			defect:     "the upload's id left off the reply",
+			headerName: "Protocol.h",
+			find:       "  if (v.log_upload_id != 0) j[\"log_upload_id\"] = v.log_upload_id;\n",
+			replace:    "",
+			want:       "reply: the upload's id comes back",
+		},
+		{
+			defect:     "the upload left off the status",
+			headerName: "Protocol.h",
+			find:       "      {\"log_upload_state\", v.log_upload_state},\n",
+			replace:    "",
+			want:       "status: the upload comes back",
 		},
 	}
 	for _, control := range controls {
