@@ -106,6 +106,8 @@ void AppController::Start() {
       void Disconnect() { app.sdk_.Disconnect(); }
       void Upgrade() {
         LogInfo("app: tray connect blocked: out of balance");
+        // the refused Connect waits on the balance and runs again once it is back
+        app.WaitOnBalance([self = &app] { self->sdk_.ConnectBestAvailable(); });
         app.ShowUpgradeForBlockedConnect();
       }
     } sinks{*this};
@@ -165,10 +167,16 @@ void AppController::Start() {
   // Every connect entry point (button, hero, tray, location and peer rows)
   // passes through this before it starts anything (BalanceGate.h).
   sdk_.SetStartConnectGate([this] { return CurrentStartConnectFacts(); },
-                           [this] { ShowUpgradeForBlockedConnect(); },
+                           [this](std::function<void()> refused) {
+                             WaitOnBalance(std::move(refused));
+                             ShowUpgradeForBlockedConnect();
+                           },
                            [this](std::function<void()> settled) {
                              balance_.FetchThen(std::move(settled));
                            });
+  // another connect, or the user's Disconnect, ends any wait on the balance
+  sdk_.SetConnectGestureObserver([this] { ClearBalanceRecovery(); },
+                                 [this] { ClearBalanceRecovery(); });
 
   // SDK state -> tray + window (marshaled onto the UI thread).
   sdk_.SetAuthStateHandler([this](AuthState s, const std::string& e) {
@@ -198,6 +206,8 @@ void AppController::Start() {
     // rose ends a latched out-of-balance state
     ObserveBalanceLatch();
     ReactToBalance();
+    // and a balance that is back runs a connect the balance blocked
+    ObserveBalanceRecovery();
     if (windowVisible_ && window_) {
       if (auto self = window_.try_as<winrt::URnetwork::implementation::MainWindow>()) {
         self->SetInsufficientBalance(insufficientBalance_);
@@ -313,6 +323,9 @@ void AppController::OnAuthState(AuthState state, const std::string& error) {
     rawInsufficientBalance_ = false;
     providersConnected_ = false;
     insufficientBalance_ = false;
+    // a connect the previous session asked for must not start in this one
+    connectRequested_ = false;
+    ClearBalanceRecovery();
   }
   // the tray always reflects state; only push into the window when it is
   // actually visible (resynced on show) so a hidden window doesn't churn.
@@ -397,8 +410,10 @@ void AppController::OnStats(const LiveStats& stats) {
   // included, so the gate reads the latch, not the raw push (BalanceGate.h).
   rawInsufficientBalance_ = stats.insufficientBalance;
   providersConnected_ = stats.connectionStatus == "CONNECTED" && 0 < stats.providerCount;
+  connectRequested_ = stats.connected;
   ObserveBalanceLatch();
   ReactToBalance();
+  ObserveBalanceRecovery();
   // Live stats otherwise only matter to the window; push only when visible.
   // The window's gate and banner read the same latched state.
   if (windowVisible_ && window_) {
@@ -474,6 +489,46 @@ void AppController::ShowUpgradeForBlockedConnect() {
     if (auto self = window_.try_as<winrt::URnetwork::implementation::MainWindow>())
       self->OpenUpgradeForBlockedConnect();
   });
+}
+
+void AppController::WaitOnBalance(std::function<void()> refused) {
+  if (!refused) return;
+  balanceRecovery_.StartRefused(std::move(refused), CurrentStartConnectFacts().nowMs);
+  PublishBalanceRecovery();
+}
+
+void AppController::ClearBalanceRecovery() {
+  balanceRecovery_.Clear();
+  PublishBalanceRecovery();
+}
+
+void AppController::ObserveBalanceRecovery() {
+  // the balance as the start-connect gate reads it, on the same monotonic clock
+  const urnw::balance::StartConnectFacts facts = CurrentStartConnectFacts();
+  auto step = balanceRecovery_.Observe(OutOfBalance(), connectRequested_, facts.balance, facts.nowMs);
+  PublishBalanceRecovery();
+  if (step.kind == urnw::balance::RecoveryStepKind::None) return;
+  LogInfo("app: the balance is back: retrying the connect it blocked");
+  // Past the gate: the recovery decided on a fresh balance, and a held
+  // connection keeps the gate latched until the rebuild replaces it.
+  if (step.kind == urnw::balance::RecoveryStepKind::Start) {
+    sdk_.RetryRefusedConnect(step.target);
+  } else {
+    sdk_.RetryRefusedConnect([this] {
+      if (auto location = sdk_.SelectedLocation()) {
+        sdk_.Connect(*location);
+      } else {
+        sdk_.ConnectBestAvailable();
+      }
+    });
+  }
+  tray_.ShowBalloon(Localized("app_name"), Localized("insufficient_balance_reconnecting"));
+}
+
+void AppController::PublishBalanceRecovery() {
+  if (!windowVisible_ || !window_) return;
+  if (auto self = window_.try_as<winrt::URnetwork::implementation::MainWindow>())
+    self->SetBalanceRecovery(balanceRecovery_.State());
 }
 
 gesture::ServiceFacts AppController::CurrentServiceFacts() const {

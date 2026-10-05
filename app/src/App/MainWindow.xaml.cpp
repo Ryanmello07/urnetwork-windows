@@ -186,7 +186,20 @@ MainWindow::MainWindow() {
     why.Click([weak = get_weak()](auto const&, auto const&) {
       if (auto self = weak.get()) self->ShowDataInfoSheet();
     });
-    BalanceWarning().Content(why);
+    // a refused start waits on the balance and is run by itself once data is
+    // back (BalanceGate.h, BalanceRecovery); Cancel ends the wait, since a
+    // connect that never started has no Disconnect
+    balanceRecoveryCancel_ = HyperlinkButton();
+    balanceRecoveryCancel_.Content(LocBox("cancel"));
+    balanceRecoveryCancel_.Visibility(Visibility::Collapsed);
+    Automation::AutomationProperties::SetAutomationId(
+        balanceRecoveryCancel_, L"acceptance.insufficient-balance.cancel-reconnect");
+    balanceRecoveryCancel_.Click([](auto const&, auto const&) { urnw::App().ClearBalanceRecovery(); });
+    StackPanel links;
+    links.Orientation(winrt::Microsoft::UI::Xaml::Controls::Orientation::Horizontal);
+    links.Children().Append(why);
+    links.Children().Append(balanceRecoveryCancel_);
+    BalanceWarning().Content(links);
   }
 
   // The service-setup banner's one click (beta spec §3): a single elevated
@@ -1628,10 +1641,24 @@ void MainWindow::SetInsufficientBalance(bool insufficient) {
   UpdateBalanceWarning();
 }
 
+void MainWindow::SetBalanceRecovery(urnw::balance::RecoveryState state) {
+  // pushed with every stats and balance push; re-render only on a change
+  if (state == balanceRecovery_) return;
+  balanceRecovery_ = state;
+  UpdateBalanceWarning();
+}
+
 void MainWindow::UpdateBalanceWarning() {
   // macOS ConnectActions: the insufficient-balance CTA shows for a non-Pro
-  // account when no confirmation poll is bridging a just-made purchase
-  BalanceWarning().IsOpen(outOfBalance());
+  // account when no confirmation poll is bridging a just-made purchase. A
+  // refused start waiting on the balance keeps it open with its Cancel.
+  BalanceWarning().IsOpen(urnw::balance::BannerOpen(outOfBalance(), balanceRecovery_));
+  if (balanceRecoveryCancel_) {
+    const bool cancel = urnw::balance::RecoveryLinesFor(outOfBalance(), false, outOfBalanceKind(),
+                                                        balanceRecovery_)
+                            .cancel;
+    balanceRecoveryCancel_.Visibility(cancel ? Visibility::Visible : Visibility::Collapsed);
+  }
   // The hero canvas renders the same two account states (error / processing)
   // off the same fields, so it is re-rendered from the ONE place they change.
   // Guarded: the balance relay can land before the pages are constructed.

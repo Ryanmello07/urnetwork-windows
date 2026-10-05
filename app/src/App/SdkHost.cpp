@@ -5362,14 +5362,17 @@ bool IsLocationSelected(std::optional<urnet::ConnectLocation> const& selected,
 // immediately; the session worker below does the work.
 
 bool SdkHost::AdmitStartConnect(const char* what, std::function<void()> again) {
-  if (!startConnectFacts_) return true;
+  // the balance recovery's retry decided on a fresh balance already, and it is
+  // not a new gesture, so the observer is not told either
+  if (!startConnectFacts_ || retryingRefusedConnect_) return true;
   struct Sinks {
     SdkHost& host;
     const char* what;
     std::function<void()>& again;
     void Upgrade() {
       LogInfo("sdkhost: '{}' blocked: out of balance, showing the upgrade path", what);
-      if (host.startConnectUpgrade_) host.startConnectUpgrade_();
+      // the refused gesture goes along: it waits on the balance to run again
+      if (host.startConnectUpgrade_) host.startConnectUpgrade_(again);
     }
     void FetchBalance() {
       LogInfo("sdkhost: '{}' waits for a fresh balance", what);
@@ -5380,7 +5383,16 @@ bool SdkHost::AdmitStartConnect(const char* what, std::function<void()> again) {
       }
     }
   } sinks{*this, what, again};
-  return urnw::balance::AdmitStartConnect(startConnectFacts_(), sinks);
+  const bool admitted = urnw::balance::AdmitStartConnect(startConnectFacts_(), sinks);
+  if (admitted && connectAdmitted_) connectAdmitted_();
+  return admitted;
+}
+
+void SdkHost::RetryRefusedConnect(const std::function<void()>& connect) {
+  if (!connect) return;
+  retryingRefusedConnect_ = true;
+  connect();
+  retryingRefusedConnect_ = false;
 }
 
 void SdkHost::ConnectBestAvailable() {
@@ -6270,6 +6282,8 @@ void SdkHost::StopSyncWatchdog() {
 // A Disconnect NEVER starts a session (see the worker): with no session there is
 // nothing connected and nothing to do.
 void SdkHost::Disconnect() {
+  // the user's disconnect: a connect waiting on the balance is not run after it
+  if (userDisconnected_) userDisconnected_();
   SessionRequest r;
   r.kind = ConnectKind::Disconnect;
   r.reason = "disconnect";

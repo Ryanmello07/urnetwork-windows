@@ -6,6 +6,7 @@
 #pragma once
 
 #include <atomic>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -53,6 +54,11 @@ class AppController {
   void ShowWindow(const POINT* anchor = nullptr);
   void HideWindow();
 
+  // The banner's Cancel (and every gesture that takes the connect into the
+  // user's own hands): a connect waiting on the balance is not run by itself
+  // any more (BalanceGate.h, BalanceRecovery). UI thread.
+  void ClearBalanceRecovery();
+
  private:
   void ShowWindowImpl(const POINT* anchor);
   // AppWindow.Changed relay: notices a move or resize the user made.
@@ -83,6 +89,15 @@ class AppController {
   // path (the upgrade sheet, or guest conversion), the same one the in-app
   // banner's Get Pro opens.
   void ShowUpgradeForBlockedConnect();
+  // A connect gesture the gate refused waits on the balance and runs again,
+  // past the gate, once data is back (BalanceGate.h, BalanceRecovery).
+  void WaitOnBalance(std::function<void()> refused);
+  // Feed the balance recovery the gate, the connect request and the current
+  // balance after a stats or balance push, and make the retry it decides on.
+  void ObserveBalanceRecovery();
+  // Push the recovery's state to the banner (visible window only; resynced on
+  // show through OnStats).
+  void PublishBalanceRecovery();
   void UpdateTray();
   // THE LAST STATUS THE SERVICE PUSHED, in the vocabulary of the shared
   // decision table (Common/ConnectAction.h). The tray reads this rather than
@@ -168,6 +183,11 @@ class AppController {
   bool providersConnected_ = false;  // CONNECTED with providers in the window
   urnw::balance::OutOfBalanceLatch balanceLatch_;
   urnw::balance::GateNoticeTracker balanceNotice_;
+  // a connect the balance blocked, retried by itself once data is back: the
+  // refused gesture, or the connection held out of balance (a destination is
+  // set: LiveStats.connected from the last push)
+  urnw::balance::BalanceRecovery<std::function<void()>> balanceRecovery_;
+  bool connectRequested_ = false;
 };
 
 // The single app controller instance (created in App::OnLaunched).

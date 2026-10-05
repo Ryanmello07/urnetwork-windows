@@ -558,6 +558,21 @@ void UpgradeSheet::Build(XamlRoot const& root) {
     freeRefreshTicker_.Start([text] {
       text.Text(hstring{Format("insufficient_balance_refreshes_in", FreeRefreshCountdownText())});
     });
+    // reserved data may come back before the refresh; used up does not
+    {
+      const BalanceSnapshot snapshot = balance_.Current();
+      balance::AccountBalance read;
+      read.known = snapshot.loaded;
+      read.pro = snapshot.isPro;
+      read.availableBytes = snapshot.availableByteCount;
+      read.openTransferBytes = snapshot.pendingByteCount;
+      read.fetchedAtMs = snapshot.fetchedAtMillis;
+      const std::wstring kind =
+          OutOfBalanceKindText(balance::OutOfBalanceKindFor(read), snapshot.pendingByteCount);
+      if (!kind.empty()) {
+        productsPanel_.Children().Append(MakeText(hstring{kind}, 14, colors::MutedBrush(), true));
+      }
+    }
     Button waitForRefresh;
     waitForRefresh.Content(winrt::box_value(Loc("wait_for_refresh")));
     waitForRefresh.HorizontalAlignment(HorizontalAlignment::Stretch);
