@@ -68,9 +68,17 @@
     <value>{}（確認済み）</value>
     <comment>The account's email or phone, marked as verified. The argument is the email or phone number.</comment>
   </data>
+  <data name="account_isn_t_ready_for_purchases" xml:space="preserve">
+    <value>アカウントはまだ購入できる状態になっていません。アプリを再起動してもう一度お試しください。</value>
+    <comment>Shown when a purchase is refused before contacting the store because the account is not ready: on apple the networkId is missing or unparseable (Shared/ViewModels/AppStoreSubscriptionManager.swift), on android the active network space has no api yet (the Stripe sheet and pay page purchasers). The purchase could never be credited to anyone. This used to be a silent no-op.</comment>
+  </data>
   <data name="account_needs_verification" xml:space="preserve">
     <value>このアカウントは確認が必要です。メールを確認してください。</value>
     <comment>Sign-in error shown when the account exists but has not been verified yet.</comment>
+  </data>
+  <data name="active_extenders" xml:space="preserve">
+    <value>アクティブなエクステンダー</value>
+    <comment>Accessibility label of the row of rings, one per extender carrying a live connection.</comment>
   </data>
   <data name="activity" xml:space="preserve">
     <value>アクティビティ</value>
@@ -96,6 +104,10 @@
     <value>絵文字を追加</value>
     <comment>Points leaderboard: button that opens the emoji tag editor when no tag is set yet.</comment>
   </data>
+  <data name="add_local_split_rule" xml:space="preserve">
+    <value>ローカルにルーティング</value>
+    <comment>Call to action on a split-rule activity row blocked by URnetwork safety rules: create a local split rule for its hosts.</comment>
+  </data>
   <data name="add_referral_code" xml:space="preserve">
     <value>紹介コードを追加</value>
     <comment>Call to action</comment>
@@ -106,6 +118,10 @@
   <data name="add_sign_in_method_2" xml:space="preserve">
     <value>サインイン方法を追加</value>
     <comment>Button text for adding a sign-in method.</comment>
+  </data>
+  <data name="add_tao_for_gas" xml:space="preserve">
+    <value>ガス用の TAO を追加</value>
+    <comment>State when the gas key has no TAO.</comment>
   </data>
   <data name="adjust_setting_always_fill_data_faster" xml:space="preserve">
     <value>設定を「常に」に変更すると、無料データがより早く増えます。</value>
@@ -437,6 +453,10 @@
     <value>アプリのバージョン</value>
     <comment>Settings, about: label of the app version row.</comment>
   </data>
+  <data name="apple" xml:space="preserve">
+    <value>Apple</value>
+    <comment>A method of adding a sign-in method.</comment>
+  </data>
   <data name="apple_sign_in_method_added" xml:space="preserve">
     <value>Appleのサインイン方法を追加しました</value>
     <comment>Snackbar message displayed when an Apple sign-in method is added.</comment>
@@ -558,9 +578,25 @@
     <value>残高コード</value>
     <comment>Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.</comment>
   </data>
+  <data name="balance_code_already_redeemed_message" xml:space="preserve">
+    <value>この残高コードはすでに引き換えられています。以前に引き換えた場合、データはすでに残高に反映されています。</value>
+    <comment>Redeem balance code: the server answered that this code was already redeemed. Distinct from invalid -- the user may have redeemed it on an earlier attempt that looked like a failure.</comment>
+  </data>
+  <data name="balance_code_data_added" xml:space="preserve">
+    <value>{} のデータが残高に追加されました。</value>
+    <comment>Redeem balance code: confirmation of the data a redeemed code added to the network's balance (amount is a formatted byte count, e.g. "5.00 GiB"). A balance code is data only: never a plan or Pro upgrade.</comment>
+  </data>
+  <data name="balance_code_invalid_message" xml:space="preserve">
+    <value>この残高コードは無効です。コードを確認してもう一度お試しください。</value>
+    <comment>Redeem balance code: the server answered and rejected the code as unknown/invalid. Distinct from a transport failure, which must never be reported as a bad code.</comment>
+  </data>
   <data name="balance_code_redeemed" xml:space="preserve">
     <value>残高コードを利用しました。</value>
     <comment>Confirmation shown after a balance code is redeemed.</comment>
+  </data>
+  <data name="balance_code_transport_error" xml:space="preserve">
+    <value>サーバーに接続できませんでした。接続を確認してください。請求済みの場合、コードはすでに適用されている可能性があります。もう一度試す前に残高を確認してください。</value>
+    <comment>Redeem balance code: the request never got a server answer (network failure). Must NOT be worded as 'bad code' -- the redeem may have committed server-side, so tell the user to check their balance before retrying.</comment>
   </data>
   <data name="balance_code_where_to_buy" xml:space="preserve">
     <value>コードをお持ちでない方は、ur.ioでデータコードを購入すると、メールで届きます。</value>
@@ -569,6 +605,10 @@
   <data name="balance_codes_link" xml:space="preserve">
     <value>残高コード</value>
     <comment>Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.</comment>
+  </data>
+  <data name="balance_codes_load_error" xml:space="preserve">
+    <value>残高コードを読み込めませんでした。接続を確認してもう一度お試しください。</value>
+    <comment>Linux redeem-code sheet: shown in place of the redeemed-codes history when getNetworkRedeemedBalanceCodes FAILS (transport error, no response, or a server-side error) — distinct from the empty state's "No balance codes found", which is only for a successful fetch with no codes.</comment>
   </data>
   <data name="balance_codes_title" xml:space="preserve">
     <value>残高コード</value>
@@ -586,13 +626,69 @@
     <value>最適な一致</value>
     <comment>Label for a list or section showing the best matching results.</comment>
   </data>
+  <data name="best_value" xml:space="preserve">
+    <value>いちばんお得</value>
+    <comment>Gold pill on the recommended (annual) plan card.</comment>
+  </data>
+  <data name="bittensor_choose_wallet" xml:space="preserve">
+    <value>Bittensor ウォレットを選択</value>
+    <comment>Title of the picker that chooses which Bittensor wallet (Talisman or TAO.com) signs.</comment>
+  </data>
+  <data name="bittensor_continue_in_browser" xml:space="preserve">
+    <value>ブラウザで続行し、{} 拡張機能でリクエストを承認してください。</value>
+    <comment>Desktop: shown while the browser is open on the wallet page. The argument is the wallet product name (Talisman).</comment>
+  </data>
   <data name="bittensor_error_address_not_in_wallet" xml:space="preserve">
     <value>お使いの{}ウォレットに、入力したアドレスがありません。ウォレットでそのアカウントを追加または接続するか、ウォレットにあるアドレスを入力してください。</value>
     <comment>ur.io Bittensor wallet card and sign-in: the chosen wallet does not offer the account of the address the user typed (Talisman does not hold it or has not connected it to the site; a WalletConnect wallet connected another account), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect).</comment>
   </data>
+  <data name="bittensor_error_challenge_expired" xml:space="preserve">
+    <value>このリクエストは期限切れです。最初からやり直して、署名する新しいメッセージを取得してください。</value>
+    <comment>Error: the single-use wallet challenge expired (5 minutes) before it was signed.</comment>
+  </data>
+  <data name="bittensor_error_extension_not_found" xml:space="preserve">
+    <value>このブラウザに {} 拡張機能が見つかりません。インストールしてからもう一度お試しください。</value>
+    <comment>Error: the wallet's browser extension is not installed in this browser. The argument is the wallet product name (Talisman).</comment>
+  </data>
+  <data name="bittensor_error_invalid_signature" xml:space="preserve">
+    <value>有効な署名ではありません。ウォレットの 0x 署名全体を貼り付けてください。</value>
+    <comment>Error: the pasted or returned Bittensor signature is not a 64-byte hex signature.</comment>
+  </data>
+  <data name="bittensor_error_message_mismatch" xml:space="preserve">
+    <value>ウォレットが別のリクエストに署名しました。最初からやり直してください。</value>
+    <comment>Error: the wallet returned a signature over a different challenge than the one issued.</comment>
+  </data>
+  <data name="bittensor_manual_sign_instructions" xml:space="preserve">
+    <value>coldkey を保管している {} ウォレットでこのメッセージに署名し、アドレスと署名を下に貼り付けてください。</value>
+    <comment>Manual Bittensor wallet proof: how to sign the shown challenge message. The argument is the wallet product name (Talisman or TAO.com).</comment>
+  </data>
+  <data name="bittensor_message_to_sign" xml:space="preserve">
+    <value>署名するメッセージ</value>
+    <comment>Label above the challenge message the user signs in their Bittensor wallet.</comment>
+  </data>
   <data name="bittensor_sign_in" xml:space="preserve">
     <value>Bittensorでサインイン</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="bittensor_signature_label" xml:space="preserve">
+    <value>署名</value>
+    <comment>Label of the field where the user pastes the Bittensor wallet signature.</comment>
+  </data>
+  <data name="bittensor_signature_placeholder" xml:space="preserve">
+    <value>0x… の署名を貼り付け</value>
+    <comment>Placeholder of the Bittensor signature field (a 0x-prefixed hex signature).</comment>
+  </data>
+  <data name="bittensor_wallet" xml:space="preserve">
+    <value>Bittensor ウォレット</value>
+    <comment>Label of the connected wallet block.</comment>
+  </data>
+  <data name="bittensor_walletconnect_continue" xml:space="preserve">
+    <value>ブラウザで続行してください。ウォレットアプリでコードをスキャンするか、このデバイスでウォレットを開きます。</value>
+    <comment>Shown while the browser is open on the WalletConnect page: the user scans the code or opens their wallet app there.</comment>
+  </data>
+  <data name="bittensor_walletconnect_hint" xml:space="preserve">
+    <value>Nova、Nightly などの WalletConnect 対応ウォレット</value>
+    <comment>Subtitle of the WalletConnect option in the Bittensor wallet chooser: which wallets it works with. Nova, Nightly and WalletConnect are product names.</comment>
   </data>
   <data name="block_ads_and_trackers" xml:space="preserve">
     <value>広告とトラッカーをブロック</value>
@@ -602,6 +698,10 @@
     <value>ブロック</value>
     <comment>Label for the blocked traffic relayed for remote clients.</comment>
   </data>
+  <data name="blocked_location_block_failed" xml:space="preserve">
+    <value>{} をブロックできませんでした。もう一度お試しください。</value>
+    <comment>Blocked locations: blocking a location failed. The argument is the location name.</comment>
+  </data>
   <data name="blocked_location_could_not_be_added_please_try" xml:space="preserve">
     <value>ブロックされた場所を追加できませんでした。しばらくしてからもう一度お試しください。</value>
     <comment>Used in Main/Account/BlockedLocations/BlockedLocationsViewModel.swift.</comment>
@@ -609,6 +709,10 @@
   <data name="blocked_location_could_not_be_removed_please_try" xml:space="preserve">
     <value>ブロックされた場所を削除できませんでした。しばらくしてからもう一度お試しください。</value>
     <comment>Used in Main/Account/BlockedLocations/BlockedLocationsViewModel.swift.</comment>
+  </data>
+  <data name="blocked_location_unblock_failed" xml:space="preserve">
+    <value>{} のブロックを解除できませんでした。もう一度お試しください。</value>
+    <comment>Blocked locations: unblocking a location failed, so it is back in the list. The argument is the location name.</comment>
   </data>
   <data name="blocked_locations" xml:space="preserve">
     <value>ブロックされた場所</value>
@@ -621,6 +725,10 @@
   <data name="blocked_locations_could_not_be_loaded" xml:space="preserve">
     <value>ブロックした地域を読み込めませんでした。</value>
     <comment>Shown on the Blocked locations screen when the list could not be fetched, above a Retry button.</comment>
+  </data>
+  <data name="blocked_locations_load_failed" xml:space="preserve">
+    <value>ブロックした場所を読み込めませんでした。下に引っ張ってもう一度お試しください。</value>
+    <comment>Blocked locations: the list could not be loaded.</comment>
   </data>
   <data name="blocks" xml:space="preserve">
     <value>ブロック</value>
@@ -668,9 +776,17 @@
     <value>VPNを迂回</value>
     <comment>App split rules: rule choice sending the app around the VPN (local route).</comment>
   </data>
+  <data name="camera_permission_needed" xml:space="preserve">
+    <value>コードをスキャンするにはカメラへのアクセスが必要です。</value>
+    <comment>Shown when the camera permission was denied on the scan screen.</comment>
+  </data>
   <data name="cancel" xml:space="preserve">
     <value>キャンセル</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="chain_rpc_unreachable" xml:space="preserve">
+    <value>チェーンの RPC に接続できません。もう一度お試しください。</value>
+    <comment>Error when the subnet RPC cannot be reached.</comment>
   </data>
   <data name="change" xml:space="preserve">
     <value>変更</value>
@@ -712,9 +828,33 @@
     <value>Solanaのトランザクションを確認中</value>
     <comment>Call to action</comment>
   </data>
+  <data name="checking_wallet_address" xml:space="preserve">
+    <value>アドレスを確認しています…</value>
+    <comment>Progress text while the address is validated.</comment>
+  </data>
+  <data name="checkout_browser_launch_failed" xml:space="preserve">
+    <value>ブラウザを開けませんでした。このリンクをブラウザにコピーして支払いを完了してください：</value>
+    <comment>Upgrade sheet: the system browser could not be opened for the hosted checkout url. The app appends the url itself on the next line (selectable) so the user can copy it into a browser by hand — never advancing to the waiting page with no payment page open.</comment>
+  </data>
+  <data name="checkout_interrupted_confirming" xml:space="preserve">
+    <value>支払い画面が予期せず閉じました。支払いが完了していれば、プランはここで自動的に更新されます。もう一度購入する必要はありません。</value>
+    <comment>Upgrade sheet waiting page: the embedded checkout webview crashed after the payment form had rendered, so a charge may already have gone through with only the redirect lost. Shown while the confirmation poll asks the server for the payment webhook; must never invite buying again.</comment>
+  </data>
   <data name="checkout_opened_in_browser" xml:space="preserve">
     <value>ブラウザで購入を完了してください。支払いが確認されると、プランはここで自動的に更新されます。</value>
     <comment>Shown after the app hands the user to the Stripe hosted checkout in the system browser. The app polls the server and flips the plan automatically when the payment webhook lands.</comment>
+  </data>
+  <data name="choose_file" xml:space="preserve">
+    <value>ファイルを選択</value>
+    <comment>Button on desktop: pick a file that contains a QR code image.</comment>
+  </data>
+  <data name="choose_image_file" xml:space="preserve">
+    <value>画像ファイルを選択</value>
+    <comment>Button on desktop: pick an image file that contains a QR code.</comment>
+  </data>
+  <data name="choose_photo" xml:space="preserve">
+    <value>写真を選択</value>
+    <comment>Button: pick a photo that contains a QR code.</comment>
   </data>
   <data name="cities" xml:space="preserve">
     <value>都市</value>
@@ -724,6 +864,30 @@
     <value>受け取る</value>
     <comment>Call to action</comment>
   </data>
+  <data name="claim_across_epochs" xml:space="preserve">
+    <value>確定済みの {} エポック分</value>
+    <comment>Subtitle of the claim dialog.</comment>
+  </data>
+  <data name="claim_alpha_title" xml:space="preserve">
+    <value>SN25α を受け取る</value>
+    <comment>Title of the claim dialog.</comment>
+  </data>
+  <data name="claim_amount_button" xml:space="preserve">
+    <value>{} を受け取る</value>
+    <comment>Claim button with the amount.</comment>
+  </data>
+  <data name="claim_confirmed" xml:space="preserve">
+    <value>受け取り済み</value>
+    <comment>Claim state: confirmed on chain.</comment>
+  </data>
+  <data name="claim_expired" xml:space="preserve">
+    <value>期限切れ</value>
+    <comment>Claim state: past the vault's expiry block.</comment>
+  </data>
+  <data name="claim_failed" xml:space="preserve">
+    <value>失敗</value>
+    <comment>Claim state: failed.</comment>
+  </data>
   <data name="claim_multiplier" xml:space="preserve">
     <value>乗数を受け取る</value>
     <comment>Call to action</comment>
@@ -731,6 +895,34 @@
   <data name="claim_network_name_hint" xml:space="preserve">
     <value>自動生成されたネットワーク名の代わりに、カスタムのネットワーク名を取得しましょう</value>
     <comment>A description of the benefits of claiming a custom network name.</comment>
+  </data>
+  <data name="claim_sending_linux" xml:space="preserve">
+    <value>送信中…</value>
+    <comment>Per-epoch status while the claim transaction is being sent.</comment>
+  </data>
+  <data name="claim_sends_from_device" xml:space="preserve">
+    <value>このデバイスが受け取りリクエストをボールトコントラクトに送信します。ガス代はガスキーから TAO で支払われます。Alpha は coldkey に届きます。</value>
+    <comment>Explainer under the claim button.</comment>
+  </data>
+  <data name="claim_sent" xml:space="preserve">
+    <value>送信済み</value>
+    <comment>Claim state: transaction sent.</comment>
+  </data>
+  <data name="claim_to_address_linux" xml:space="preserve">
+    <value>送り先：{}</value>
+    <comment>Destination line on the claim dialog: the coldkey the alpha lands on.</comment>
+  </data>
+  <data name="claim_unavailable_linux" xml:space="preserve">
+    <value>このデバイスではまだ受け取りを利用できません。</value>
+    <comment>Shown when the device cannot send claims (no gas key on this host).</comment>
+  </data>
+  <data name="claim_your_spot" xml:space="preserve">
+    <value>枠を確保する</value>
+    <comment>Button on the Top 200 tile.</comment>
+  </data>
+  <data name="claims_for_epoch_expired" xml:space="preserve">
+    <value>エポック {} の受け取り期限が切れました。</value>
+    <comment>Error when an epoch can no longer be claimed.</comment>
   </data>
   <data name="claims_open_after_finalization" xml:space="preserve">
     <value>各エポックの受け取りは、その支払いリストが確定した後に開始され、期限切れになるまで受け付けられます。</value>
@@ -824,6 +1016,10 @@
     <value>接続してリンクを開く</value>
     <comment>Call to action</comment>
   </data>
+  <data name="connect_bittensor_wallet" xml:space="preserve">
+    <value>Bittensor ウォレットを接続</value>
+    <comment>Button to connect a Bittensor coldkey.</comment>
+  </data>
   <data name="connect_bittensor_wallet_to_add_sign_in_method" xml:space="preserve">
     <value>Bittensor ウォレットを接続して、サインイン方法として追加します。</value>
     <comment>Add sign-in method sheet: the Bittensor wallet option's explanation (Talisman, WalletConnect, or a pasted signature).</comment>
@@ -835,6 +1031,14 @@
   <data name="connect_seeker_wallet" xml:space="preserve">
     <value>Saga Genesisまたはシーカー事前予約トークンでウォレットを接続する</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="connect_solana_wallet" xml:space="preserve">
+    <value>Solana ウォレットを接続</value>
+    <comment>Overflow menu item next to “Connect Bittensor wallet” on the Earnings screen, and the title of the Solana connect sheet/card: connect a Solana USDC payout wallet (wallet app, or manual address entry). USDC payouts continue until the migration to Bittensor completes.</comment>
+  </data>
+  <data name="connect_solana_wallet_note" xml:space="preserve">
+    <value>Solana ウォレットアプリを接続するか、Solana の USDC アドレスを手動で入力してください。</value>
+    <comment>Note at the top of the Solana connect sheet/card, above the wallet-app button and the manual-entry link.</comment>
   </data>
   <data name="connect_solana_wallet_to_add_sign_in_method" xml:space="preserve">
     <value>Solana ウォレットを接続して、サインイン方法として追加します。</value>
@@ -851,6 +1055,10 @@
   <data name="connect_wallet" xml:space="preserve">
     <value>ウォレットを接続</value>
     <comment>Used in Main/Account/Wallets/ConnectWalletSheet/EnterWalletAddress/EnterWalletAddressView.swift.</comment>
+  </data>
+  <data name="connect_wallet_first" xml:space="preserve">
+    <value>先に Bittensor ウォレットを接続してください。</value>
+    <comment>Error when claiming without a wallet.</comment>
   </data>
   <data name="connected" xml:space="preserve">
     <value>接続済み</value>
@@ -984,6 +1192,10 @@
     <value>クライアントIDをコピー</value>
     <comment>A label for a context menu item that copies a client ID to the clipboard.</comment>
   </data>
+  <data name="copy_share_text" xml:space="preserve">
+    <value>共有テキストをコピー</value>
+    <comment>Button on the share screen: copy the text form of the code.</comment>
+  </data>
   <data name="copy_to_clipboard" xml:space="preserve">
     <value>クリップボードにコピー</value>
     <comment>Button text to copy the seedphrase to the clipboard.</comment>
@@ -991,6 +1203,14 @@
   <data name="could_not_get_google_id_token" xml:space="preserve">
     <value>Google ID トークンを取得できませんでした</value>
     <comment>Add sign-in method sheet (android): Google sign-in returned no identity token.</comment>
+  </data>
+  <data name="couldn_t_load_subscription_options" xml:space="preserve">
+    <value>サブスクリプションのオプションを読み込めませんでした。接続を確認してもう一度お試しください。</value>
+    <comment>Shown in the upgrade sheet and intro funnel when the App Store product fetch failed, with a retry action — replaces the eternal spinner (Shared/Views/UpgradeSubscriptionSheet.swift, Shared/Views/Introduction/IntroductionView.swift).</comment>
+  </data>
+  <data name="couldn_t_restore_purchases" xml:space="preserve">
+    <value>購入を復元できませんでした。もう一度お試しください。</value>
+    <comment>Restore-purchases outcome: the App Store sync failed (e.g. the user cancelled the credentials prompt or the store was unreachable) and no entitlement was found locally (Shared/ViewModels/AppStoreSubscriptionManager.swift).</comment>
   </data>
   <data name="couldnt_open_wallet" xml:space="preserve">
     <value>ウォレットを開けませんでした。インストールしてからもう一度お試しください。</value>
@@ -1156,6 +1376,10 @@
     <value>{} の支払い</value>
     <comment>Call to action</comment>
   </data>
+  <data name="default_daily_data" xml:space="preserve">
+    <value>デフォルトでは、毎日 {} を受け取れます。</value>
+    <comment>Onboarding data page: the daily free allowance, formatted from the server's balance (pro.yml free.data per data_period).</comment>
+  </data>
   <data name="default_option" xml:space="preserve">
     <value>デフォルト</value>
     <comment>Generic default choice label, e.g. the app split rule combo state meaning no rule.</comment>
@@ -1179,6 +1403,626 @@
   <data name="delete_account_type_network_name" xml:space="preserve">
     <value>確認のため {} と入力してください。</value>
     <comment>Delete account dialog: asks the user to type the network name back before the delete button enables. {network} is the account's network name.</comment>
+  </data>
+  <data name="dev_affinity_performance" xml:space="preserve">
+    <value>性能を考慮したアフィニティ</value>
+    <comment>Developer tools screen (reliability surface): performance-aware affinity control label.</comment>
+  </data>
+  <data name="dev_affinity_performance_detail" xml:space="preserve">
+    <value>新しい TLS レースを、各プロバイダーの確認済みバイトのピーク速度と公表帯域幅の比で重み付けします。ハードアフィニティが有効な場合、測定値の低い提供元はレースで譲ります。既存の接続と明示的な固定は変わりません</value>
+    <comment>Developer tools screen: explanatory subtext under the performance-aware affinity control.</comment>
+  </data>
+  <data name="dev_affinity_sticky" xml:space="preserve">
+    <value>サイトの固定アフィニティ</value>
+    <comment>Developer tools screen (reliability surface): affinity sticky control label.</comment>
+  </data>
+  <data name="dev_affinity_sticky_detail" xml:space="preserve">
+    <value>サイトの新しい接続は、フロー上限を超えても、以前の接続が使っている出口にとどまります。これにより、混雑したサイトでも出口 IP がひとつに保たれます。新しいサイトをどの出口が受け入れるかは引き続き上限で決まります。オフにすると厳密な上限に戻ります</value>
+    <comment>Developer tools screen: explanatory subtext under the 'affinity sticky' control.</comment>
+  </data>
+  <data name="dev_behaviour" xml:space="preserve">
+    <value>動作</value>
+    <comment>Developer tools screen (reliability surface): behaviour control label.</comment>
+  </data>
+  <data name="dev_blackhole_receive" xml:space="preserve">
+    <value>無応答のプロバイダーを長めに保持</value>
+    <comment>Developer tools screen (reliability surface): blackhole receive control label.</comment>
+  </data>
+  <data name="dev_blackhole_receive_detail" xml:space="preserve">
+    <value>トラフィックへの確認応答を続けているプロバイダーが、何も返さないまま除外されるまでの時間。オフにすると、確認応答をやめるまで保持します</value>
+    <comment>Developer tools screen: explanatory subtext under the 'blackhole receive' control.</comment>
+  </data>
+  <data name="dev_blast_radius" xml:space="preserve">
+    <value>影響範囲</value>
+    <comment>Developer tools screen (reliability surface): blast radius control label.</comment>
+  </data>
+  <data name="dev_blast_radius_detail" xml:space="preserve">
+    <value>プロバイダー障害 1 回あたりに失われる接続数。少ないほど良好です</value>
+    <comment>Developer tools screen: explanatory subtext under the 'blast radius' control.</comment>
+  </data>
+  <data name="dev_blast_radius_value" xml:space="preserve">
+    <value>障害あたり {}</value>
+    <comment>Developer tools screen: formatted value readout for 'blast radius'.</comment>
+  </data>
+  <data name="dev_busy_probe" xml:space="preserve">
+    <value>停止した出口を除外前に確認</value>
+    <comment>Developer tools screen (reliability surface): busy probe control label.</comment>
+  </data>
+  <data name="dev_busy_probe_budget" xml:space="preserve">
+    <value>ビジー確認の待機時間</value>
+    <comment>Developer tools screen (reliability surface): busy probe budget control label.</comment>
+  </data>
+  <data name="dev_busy_probe_budget_detail" xml:space="preserve">
+    <value>停止確認が判定を下すまでに応答を待つ時間。オフにすると停止しきい値の半分を使います</value>
+    <comment>Developer tools screen: explanatory subtext under the 'busy probe budget' control.</comment>
+  </data>
+  <data name="dev_busy_probe_detail" xml:space="preserve">
+    <value>出口が停止すると、判定の前に一度 ping を送ります。混雑していても生きている出口は応答してフローを維持し、停止した出口はそのまま除外されます。オフにすると停止しきい値で判定します</value>
+    <comment>Developer tools screen: explanatory subtext under the 'busy probe' control.</comment>
+  </data>
+  <data name="dev_busy_probes" xml:space="preserve">
+    <value>ビジー確認</value>
+    <comment>Developer tools screen (reliability surface): busy probes control label.</comment>
+  </data>
+  <data name="dev_busy_probes_detail" xml:space="preserve">
+    <value>停止した出口に送った生存確認の ping。無罪となった出口は応答して維持されました。確認によって防がれた除外です</value>
+    <comment>Developer tools screen: explanatory subtext under the 'busy probes' control.</comment>
+  </data>
+  <data name="dev_busy_probes_value" xml:space="preserve">
+    <value>{0} 送信 / {1} 無罪</value>
+    <comment>Developer tools screen: formatted value readout for 'busy probes'.</comment>
+  </data>
+  <data name="dev_choose_logs" xml:space="preserve">
+    <value>ログを選択…</value>
+    <comment>Developer tools screen: action for choosing individual log files to export.</comment>
+  </data>
+  <data name="dev_clear_logs" xml:space="preserve">
+    <value>ログを消去</value>
+    <comment>Developer tools screen: action that deletes the diagnostics log files without touching local state, preferences or rules.</comment>
+  </data>
+  <data name="dev_clearing_logs" xml:space="preserve">
+    <value>ログを消去しています…</value>
+    <comment>Developer tools screen: the clear-logs action's label while it runs.</comment>
+  </data>
+  <data name="dev_cluster_affinity" xml:space="preserve">
+    <value>IP をサイトごとにまとめる</value>
+    <comment>Developer tools screen (reliability surface): cluster affinity control label.</comment>
+  </data>
+  <data name="dev_cluster_affinity_detail" xml:space="preserve">
+    <value>ホスト名が見えない場合でもサイトをひとつの出口に保ちます</value>
+    <comment>Developer tools screen: explanatory subtext under the 'cluster affinity' control.</comment>
+  </data>
+  <data name="dev_comparative_connect" xml:space="preserve">
+    <value>失敗した接続を早めに打ち切る</value>
+    <comment>Developer tools screen (reliability surface): comparative connect control label.</comment>
+  </data>
+  <data name="dev_comparative_connect_detail" xml:space="preserve">
+    <value>兄弟出口が 2 つ受信している間に何も確立できていない出口を早めに除外します。オフにすると 30 秒の接続しきい値まで待ちます</value>
+    <comment>Developer tools screen: explanatory subtext under the 'comparative connect' control.</comment>
+  </data>
+  <data name="dev_dial_failure_rerace" xml:space="preserve">
+    <value>拒否された接続を別の出口で再試行</value>
+    <comment>Developer tools screen (reliability surface): dial failure rerace control label.</comment>
+  </data>
+  <data name="dev_dial_failure_rerace_detail" xml:space="preserve">
+    <value>プロバイダーがサイトに到達できない場合、接続を放置せず別の出口に移します</value>
+    <comment>Developer tools screen: explanatory subtext under the 'dial failure rerace' control.</comment>
+  </data>
+  <data name="dev_dial_failures" xml:space="preserve">
+    <value>プロバイダーの接続失敗</value>
+    <comment>Developer tools screen (reliability surface): dial failures control label.</comment>
+  </data>
+  <data name="dev_dial_failures_detail" xml:space="preserve">
+    <value>プロバイダーが上流への接続を開けなかったと報告した回数</value>
+    <comment>Developer tools screen: explanatory subtext under the 'dial failures' control.</comment>
+  </data>
+  <data name="dev_drop_exit" xml:space="preserve">
+    <value>除外</value>
+    <comment>Developer tools screen (reliability surface): drop exit control label.</comment>
+  </data>
+  <data name="dev_effective_tier" xml:space="preserve">
+    <value>ティアのリアルタイム降格</value>
+    <comment>Developer tools screen (reliability surface): effective tier control label.</comment>
+  </data>
+  <data name="dev_effective_tier_detail" xml:space="preserve">
+    <value>接続失敗や乗り越えた判定によって、プロバイダーは 1 秒以内にランキングを下げられます。元に戻るには、問題のない数分間と実証済みの接続が必要です</value>
+    <comment>Developer tools screen: explanatory subtext under the 'effective tier' control.</comment>
+  </data>
+  <data name="dev_evaluation_pool" xml:space="preserve">
+    <value>スロットごとの評価候補数</value>
+    <comment>Developer tools screen (reliability surface): evaluation pool control label.</comment>
+  </data>
+  <data name="dev_evaluation_pool_detail" xml:space="preserve">
+    <value>ウィンドウの拡張時に、必要なスロットごとに ping してランク付けするプロバイダーの数。最も良いものを残します。1 は必要な数だけを評価します</value>
+    <comment>Developer tools screen: explanatory subtext under the 'evaluation pool' control.</comment>
+  </data>
+  <data name="dev_exit_dial_failures" xml:space="preserve">
+    <value>接続失敗：{}</value>
+    <comment>Developer tools screen (reliability surface): exit dial failures control label.</comment>
+  </data>
+  <data name="dev_exit_flows" xml:space="preserve">
+    <value>フロー：{}</value>
+    <comment>Developer tools screen (reliability surface): exit flows control label.</comment>
+  </data>
+  <data name="dev_exits" xml:space="preserve">
+    <value>出口</value>
+    <comment>Developer tools screen (reliability surface): exits control label.</comment>
+  </data>
+  <data name="dev_export_all_logs" xml:space="preserve">
+    <value>すべてのログをエクスポート（未加工）</value>
+    <comment>Developer tools screen: action for exporting all diagnostic logs without redaction.</comment>
+  </data>
+  <data name="dev_export_failed" xml:space="preserve">
+    <value>エクスポートに失敗しました：{}</value>
+    <comment>Developer tools screen: error shown when diagnostic log export fails.</comment>
+  </data>
+  <data name="dev_export_not_included" xml:space="preserve">
+    <value>含まれていません：{}</value>
+    <comment>Developer tools screen: explanation that a requested diagnostic item was omitted from an export.</comment>
+  </data>
+  <data name="dev_export_redacted_logs" xml:space="preserve">
+    <value>匿名化したログをエクスポート</value>
+    <comment>Developer tools screen: action for exporting diagnostic logs with sensitive traffic details redacted.</comment>
+  </data>
+  <data name="dev_export_selected" xml:space="preserve">
+    <value>選択した項目をエクスポート</value>
+    <comment>Developer tools screen: action for exporting the selected diagnostic log files.</comment>
+  </data>
+  <data name="dev_export_share" xml:space="preserve">
+    <value>診断バンドルを共有</value>
+    <comment>Developer tools screen: action for sharing a diagnostic bundle.</comment>
+  </data>
+  <data name="dev_export_summary.other" xml:space="preserve">
+    <value>{0} 件のログファイルをエクスポートしました（{1}）</value>
+    <comment>Developer tools screen: summary of the number and total size of diagnostic log files exported.</comment>
+  </data>
+  <data name="dev_export_unavailable" xml:space="preserve">
+    <value>利用できません：{}</value>
+    <comment>Developer tools screen: explanation that a diagnostic export option is unavailable.</comment>
+  </data>
+  <data name="dev_exporting" xml:space="preserve">
+    <value>エクスポートしています…</value>
+    <comment>Developer tools screen: progress label shown while a diagnostic bundle is being exported.</comment>
+  </data>
+  <data name="dev_flows_opened" xml:space="preserve">
+    <value>開いたフロー</value>
+    <comment>Developer tools screen (reliability surface): flows opened control label.</comment>
+  </data>
+  <data name="dev_flows_opened_detail" xml:space="preserve">
+    <value>リセット以降の合計。長さの異なる実行を比較できます</value>
+    <comment>Developer tools screen: explanatory subtext under the 'flows opened' control.</comment>
+  </data>
+  <data name="dev_flows_rebound" xml:space="preserve">
+    <value>再バインドされた QUIC フロー</value>
+    <comment>Developer tools screen (reliability surface): flows rebound control label.</comment>
+  </data>
+  <data name="dev_flows_rebound_detail" xml:space="preserve">
+    <value>除外中にウォームな出口へ移されたフロー。「受理」は、サーバーが再接続なしで経路の変更を受け入れたことを意味します</value>
+    <comment>Developer tools screen: explanatory subtext under the 'flows rebound' control.</comment>
+  </data>
+  <data name="dev_flows_rebound_value" xml:space="preserve">
+    <value>{0}（受理 {1} / 再接続 {2}）</value>
+    <comment>Developer tools screen: formatted value readout for 'flows rebound'.</comment>
+  </data>
+  <data name="dev_flows_reraced" xml:space="preserve">
+    <value>別の出口に移動</value>
+    <comment>Developer tools screen (reliability surface): flows reraced control label.</comment>
+  </data>
+  <data name="dev_flows_reraced_detail" xml:space="preserve">
+    <value>それらの失敗のうち、止まったままにせず静かに移動できた数</value>
+    <comment>Developer tools screen: explanatory subtext under the 'flows reraced' control.</comment>
+  </data>
+  <data name="dev_formation_poll" xml:space="preserve">
+    <value>最初の出口の高速ポーリング</value>
+    <comment>Developer tools screen (reliability surface): formation poll control label.</comment>
+  </data>
+  <data name="dev_formation_poll_detail" xml:space="preserve">
+    <value>接続中のフローが空のウィンドウを再確認する頻度。最初の出口が到着した直後に最初のリクエストを送れます。オフにすると 2 秒の再試行間隔を待ちます</value>
+    <comment>Developer tools screen: explanatory subtext under the 'formation poll' control.</comment>
+  </data>
+  <data name="dev_fresh_flow_affinity" xml:space="preserve">
+    <value>新規フローのハードアフィニティ</value>
+    <comment>Developer tools screen (reliability surface): hard fresh-flow affinity control label.</comment>
+  </data>
+  <data name="dev_fresh_flow_affinity_detail" xml:space="preserve">
+    <value>新しい接続を、その IP またはドメインがすでに使っている出口に割り当てます。デフォルトはオフで、通常の新しい接続はすべてプロバイダーのレースに参加します。既存の接続と明示的な固定は常にそのままです</value>
+    <comment>Developer tools screen: explanatory subtext under the hard fresh-flow affinity control.</comment>
+  </data>
+  <data name="dev_group_follow" xml:space="preserve">
+    <value>待機中の出口に追従</value>
+    <comment>Developer tools screen (reliability surface): group follow control label.</comment>
+  </data>
+  <data name="dev_group_follow_detail" xml:space="preserve">
+    <value>隔離された出口は、判定の裏付けが最も弱い待機の初期段階では、自分のサイトの新しい接続を保持します。これにより、待機によってサイトの出口 IP が分かれることを防ぎます。新しいサイトは引き続きその出口を避けます。オフにすると分散させます</value>
+    <comment>Developer tools screen: explanatory subtext under the 'group follow' control.</comment>
+  </data>
+  <data name="dev_group_follow_window" xml:space="preserve">
+    <value>追従ウィンドウ</value>
+    <comment>Developer tools screen (reliability surface): group follow window control label.</comment>
+  </data>
+  <data name="dev_group_follow_window_detail" xml:space="preserve">
+    <value>待機が始まってから、サイトの新しい接続が出口に追従し続ける時間。初期の待機はたいてい誤検知ですが、長引く待機は除外に向かい、フローを受け付けなくなります。オフにするとすぐに分散させます</value>
+    <comment>Developer tools screen: explanatory subtext under the 'group follow window' control.</comment>
+  </data>
+  <data name="dev_heartbeat" xml:space="preserve">
+    <value>状態ハートビート</value>
+    <comment>Developer tools screen (reliability surface): heartbeat control label.</comment>
+  </data>
+  <data name="dev_heartbeat_detail" xml:space="preserve">
+    <value>後で調査するために、現在の状態を要約した 1 行をログに書き込む頻度。オフにすると停止します。短くすると状態遷移を捉えやすく、長くするとバッファを多く保持できます</value>
+    <comment>Developer tools screen: explanatory subtext under the 'heartbeat' control.</comment>
+  </data>
+  <data name="dev_load_corroboration" xml:space="preserve">
+    <value>負荷による裏付け</value>
+    <comment>Developer tools screen (reliability surface): load corroboration control label.</comment>
+  </data>
+  <data name="dev_load_corroboration_detail" xml:space="preserve">
+    <value>弱い証拠で混雑した出口を待機させる前に、このフロー数ごとに必要な追加の無応答宛先。値が 8 のとき、24 フローの出口では無応答サイトが 2 つではなく 3 つ必要です。オフにすると固定の最小値を保ちます</value>
+    <comment>Developer tools screen: explanatory subtext under the 'load corroboration' control.</comment>
+  </data>
+  <data name="dev_log_verbosity" xml:space="preserve">
+    <value>ログの詳細度</value>
+    <comment>Developer tools screen: control label for diagnostic log detail.</comment>
+  </data>
+  <data name="dev_log_verbosity_default" xml:space="preserve">
+    <value>デフォルト</value>
+    <comment>Developer tools screen: default diagnostic log detail level.</comment>
+  </data>
+  <data name="dev_log_verbosity_default_detail" xml:space="preserve">
+    <value>接続エラーと契約の ping</value>
+    <comment>Developer tools screen: explanation of the default diagnostic log detail level.</comment>
+  </data>
+  <data name="dev_log_verbosity_trace" xml:space="preserve">
+    <value>トレース</value>
+    <comment>Developer tools screen: trace diagnostic log detail level.</comment>
+  </data>
+  <data name="dev_log_verbosity_trace_detail" xml:space="preserve">
+    <value>トランスポートとウィンドウの内部情報。ログが非常に大きくなります</value>
+    <comment>Developer tools screen: explanation of the trace diagnostic log detail level.</comment>
+  </data>
+  <data name="dev_log_verbosity_unavailable" xml:space="preserve">
+    <value>利用不可</value>
+    <comment>Developer tools screen: label used when the diagnostic log detail level cannot be read.</comment>
+  </data>
+  <data name="dev_log_verbosity_unavailable_detail" xml:space="preserve">
+    <value>ログレベルを読み取るデバイスがまだありません。先にサインインしてください</value>
+    <comment>Developer tools screen: explanation shown when the diagnostic log detail level cannot be read.</comment>
+  </data>
+  <data name="dev_log_verbosity_verbose" xml:space="preserve">
+    <value>詳細</value>
+    <comment>Developer tools screen: verbose diagnostic log detail level.</comment>
+  </data>
+  <data name="dev_log_verbosity_verbose_detail" xml:space="preserve">
+    <value>契約の集計とパケットごとのブロック判定。宛先の IP アドレスを含みます</value>
+    <comment>Developer tools screen: explanation of the verbose diagnostic log detail level.</comment>
+  </data>
+  <data name="dev_log_verbosity_warning" xml:space="preserve">
+    <value>「詳細」以上では、送信するトラフィックの宛先 IP アドレスとポートがログに含まれます。共有するには「匿名化したログをエクスポート」を使ってください。未加工のバンドルはこのデバイスの外に出さないでください。</value>
+    <comment>Developer tools screen: privacy warning shown when detailed traffic logging is enabled.</comment>
+  </data>
+  <data name="dev_log_verbosity_warning_title" xml:space="preserve">
+    <value>ログに実際のトラフィックが記録されています</value>
+    <comment>Developer tools screen: title for the detailed traffic logging privacy warning.</comment>
+  </data>
+  <data name="dev_max_flows_per_exit" xml:space="preserve">
+    <value>出口あたりの最大接続数</value>
+    <comment>Developer tools screen (reliability surface): max flows per exit control label.</comment>
+  </data>
+  <data name="dev_max_flows_per_exit_detail" xml:space="preserve">
+    <value>出口を失うと、その上の接続はすべて切れます。値を小さくすると被害が分散されますが、サイトが複数の出口 IP を使うことがあります</value>
+    <comment>Developer tools screen: explanatory subtext under the 'max flows per exit' control.</comment>
+  </data>
+  <data name="dev_measure_none" xml:space="preserve">
+    <value>プロバイダー障害はまだありません。下の出口を停止させると障害を発生させられます。</value>
+    <comment>Developer tools screen (reliability surface): measure none control label.</comment>
+  </data>
+  <data name="dev_measurements" xml:space="preserve">
+    <value>測定</value>
+    <comment>Developer tools screen (reliability surface): measurements control label.</comment>
+  </data>
+  <data name="dev_measurements_detail" xml:space="preserve">
+    <value>プロバイダー障害がどれだけの損失になるか。リセットしてテストを実行し、結果を確認します。</value>
+    <comment>Developer tools screen: explanatory subtext under the 'measurements' control.</comment>
+  </data>
+  <data name="dev_migrate_exit" xml:space="preserve">
+    <value>移行</value>
+    <comment>Developer tools screen (reliability surface): migrate exit control label.</comment>
+  </data>
+  <data name="dev_min_blackhole_destinations" xml:space="preserve">
+    <value>無応答の出口を裏付ける</value>
+    <comment>Developer tools screen (reliability surface): min blackhole destinations control label.</comment>
+  </data>
+  <data name="dev_min_blackhole_destinations_detail" xml:space="preserve">
+    <value>受信なしで出口を判定するまでに無応答でなければならない異なる宛先の数。1 つのサイトの停止で正常な出口が除外されることを防ぎます。オフにすると 1 つの宛先だけで判定します</value>
+    <comment>Developer tools screen: explanatory subtext under the 'min blackhole destinations' control.</comment>
+  </data>
+  <data name="dev_no_exits" xml:space="preserve">
+    <value>出口がありません。先に接続してください。</value>
+    <comment>Developer tools screen (reliability surface): no exits control label.</comment>
+  </data>
+  <data name="dev_open_tools" xml:space="preserve">
+    <value>開発者ツールを開く</value>
+    <comment>Developer tools screen (reliability surface): open tools control label.</comment>
+  </data>
+  <data name="dev_probe_all" xml:space="preserve">
+    <value>すべての出口を今すぐ確認</value>
+    <comment>Developer tools screen (reliability surface): probe all control label.</comment>
+  </data>
+  <data name="dev_probe_providers" xml:space="preserve">
+    <value>プロバイダーを確認</value>
+    <comment>Developer tools screen (reliability surface): probe providers control label.</comment>
+  </data>
+  <data name="dev_probe_providers_detail" xml:space="preserve">
+    <value>実際のサイトに出口経由で接続して、出口を検証します。応答があれば出口が実証され、無応答が不利に数えられることはありません</value>
+    <comment>Developer tools screen: explanatory subtext under the 'probe providers' control.</comment>
+  </data>
+  <data name="dev_probe_sample_hosts" xml:space="preserve">
+    <value>1 回の確認で使うホスト数</value>
+    <comment>Developer tools screen (reliability surface): probe sample hosts control label.</comment>
+  </data>
+  <data name="dev_probe_sample_hosts_detail" xml:space="preserve">
+    <value>1 回の検証で出口経由で接続するヘルスチェック用サイトの数。0 は組み込みリスト全体を確認し、小さい数ではリストをブロックごとに巡回します</value>
+    <comment>Developer tools screen: explanatory subtext under the 'probe sample hosts' control.</comment>
+  </data>
+  <data name="dev_probe_timeout" xml:space="preserve">
+    <value>確認の待機時間</value>
+    <comment>Developer tools screen (reliability surface): probe timeout control label.</comment>
+  </data>
+  <data name="dev_probe_timeout_detail" xml:space="preserve">
+    <value>検証の確認が応答を待つ時間。オフにすると組み込みの 4 秒を使います。証拠を待つ時間を制限するだけで、判定には使われません</value>
+    <comment>Developer tools screen: explanatory subtext under the 'probe timeout' control.</comment>
+  </data>
+  <data name="dev_probes" xml:space="preserve">
+    <value>確認</value>
+    <comment>Developer tools screen (reliability surface): probes control label.</comment>
+  </data>
+  <data name="dev_probes_detail" xml:space="preserve">
+    <value>このセッションの検証確認</value>
+    <comment>Developer tools screen: explanatory subtext under the 'probes' control.</comment>
+  </data>
+  <data name="dev_probes_value" xml:space="preserve">
+    <value>{0} 送信 / {1} 応答</value>
+    <comment>Developer tools screen: formatted value readout for 'probes'.</comment>
+  </data>
+  <data name="dev_quic_rebind" xml:space="preserve">
+    <value>出口の喪失時に QUIC を再バインド</value>
+    <comment>Developer tools screen (reliability surface): quic rebind control label.</comment>
+  </data>
+  <data name="dev_quic_rebind_detail" xml:space="preserve">
+    <value>除外中に、確立済みの QUIC フローを切断せず、生きている出口に再固定します</value>
+    <comment>Developer tools screen: explanatory subtext under the 'quic rebind' control.</comment>
+  </data>
+  <data name="dev_recovery" xml:space="preserve">
+    <value>復旧時間</value>
+    <comment>Developer tools screen (reliability surface): recovery control label.</comment>
+  </data>
+  <data name="dev_recovery_detail" xml:space="preserve">
+    <value>出口が停止してから、そのサイトが再び応答するまで</value>
+    <comment>Developer tools screen: explanatory subtext under the 'recovery' control.</comment>
+  </data>
+  <data name="dev_recovery_missed" xml:space="preserve">
+    <value>復旧しなかった</value>
+    <comment>Developer tools screen (reliability surface): recovery missed control label.</comment>
+  </data>
+  <data name="dev_recovery_missed_detail" xml:space="preserve">
+    <value>復旧せずに見放されたサイト</value>
+    <comment>Developer tools screen: explanatory subtext under the 'recovery missed' control.</comment>
+  </data>
+  <data name="dev_recovery_missed_value" xml:space="preserve">
+    <value>{0} / {1}</value>
+    <comment>Developer tools screen: formatted value readout for 'recovery missed'.</comment>
+  </data>
+  <data name="dev_recovery_value" xml:space="preserve">
+    <value>平均 {0}、最悪 {1}</value>
+    <comment>Developer tools screen: formatted value readout for 'recovery'.</comment>
+  </data>
+  <data name="dev_refresh" xml:space="preserve">
+    <value>更新</value>
+    <comment>Developer tools screen (reliability surface): refresh control label.</comment>
+  </data>
+  <data name="dev_removal_budget_count" xml:space="preserve">
+    <value>除外ストームの上限</value>
+    <comment>Developer tools screen (reliability surface): removal budget count control label.</comment>
+  </data>
+  <data name="dev_removal_budget_count_detail" xml:space="preserve">
+    <value>判定による除外をウィンドウごとに何件まで許可し、残りを延期するか。一斉発生は多数の障害よりもローカルの原因 1 つによる可能性が高いためです。オフにすると上限なく除外します</value>
+    <comment>Developer tools screen: explanatory subtext under the 'removal budget count' control.</comment>
+  </data>
+  <data name="dev_removal_budget_window" xml:space="preserve">
+    <value>除外ストームのウィンドウ</value>
+    <comment>Developer tools screen (reliability surface): removal budget window control label.</comment>
+  </data>
+  <data name="dev_removal_budget_window_detail" xml:space="preserve">
+    <value>除外の上限を数える期間。オフ（上限 0 と同じ）にするとブレーカーが無効になります</value>
+    <comment>Developer tools screen: explanatory subtext under the 'removal budget window' control.</comment>
+  </data>
+  <data name="dev_removals_deferred" xml:space="preserve">
+    <value>延期された除外</value>
+    <comment>Developer tools screen (reliability surface): removals deferred control label.</comment>
+  </data>
+  <data name="dev_removals_deferred_detail" xml:space="preserve">
+    <value>相関した一斉発生の後にストームブレーカーが保留した除外</value>
+    <comment>Developer tools screen: explanatory subtext under the 'removals deferred' control.</comment>
+  </data>
+  <data name="dev_reset_defaults" xml:space="preserve">
+    <value>出荷時のデフォルトに戻す</value>
+    <comment>Developer tools screen (reliability surface): reset defaults control label.</comment>
+  </data>
+  <data name="dev_reset_measurements" xml:space="preserve">
+    <value>測定をリセット</value>
+    <comment>Developer tools screen (reliability surface): reset measurements control label.</comment>
+  </data>
+  <data name="dev_scheduler_pause_recovery" xml:space="preserve">
+    <value>スリープ後の復旧ウィンドウ</value>
+    <comment>Developer tools screen (reliability surface): scheduler pause recovery control label.</comment>
+  </data>
+  <data name="dev_scheduler_pause_recovery_detail" xml:space="preserve">
+    <value>スリープを検出した後に判定を保留する時間。トランスポートが再登録する時間を確保します。オフにすると組み込みの 5 秒を使います</value>
+    <comment>Developer tools screen: explanatory subtext under the 'scheduler pause recovery' control.</comment>
+  </data>
+  <data name="dev_scheduler_pause_tolerance" xml:space="preserve">
+    <value>スリープ検出</value>
+    <comment>Developer tools screen (reliability surface): scheduler pause tolerance control label.</comment>
+  </data>
+  <data name="dev_scheduler_pause_tolerance_detail" xml:space="preserve">
+    <value>どれだけのタイマーの遅れを、出口の停止ではなく端末のスリープとみなすか。復帰した端末がすべての出口を一度に判定するのを防ぎます。オフにすると無効になります</value>
+    <comment>Developer tools screen: explanatory subtext under the 'scheduler pause tolerance' control.</comment>
+  </data>
+  <data name="dev_scheduler_pauses" xml:space="preserve">
+    <value>検出したスリープ</value>
+    <comment>Developer tools screen (reliability surface): scheduler pauses control label.</comment>
+  </data>
+  <data name="dev_scheduler_pauses_detail" xml:space="preserve">
+    <value>検出されたホストのスリープ。それぞれ、復帰直後の端末で実行せず保留した判定のまとまりです</value>
+    <comment>Developer tools screen: explanatory subtext under the 'scheduler pauses' control.</comment>
+  </data>
+  <data name="dev_section_detection" xml:space="preserve">
+    <value>検出</value>
+    <comment>Developer tools screen: section heading for the detection controls.</comment>
+  </data>
+  <data name="dev_section_diagnostics" xml:space="preserve">
+    <value>診断</value>
+    <comment>Developer tools screen: section heading for diagnostic log controls.</comment>
+  </data>
+  <data name="dev_section_observability" xml:space="preserve">
+    <value>可観測性</value>
+    <comment>Developer tools screen: section heading for the observability controls.</comment>
+  </data>
+  <data name="dev_section_placement" xml:space="preserve">
+    <value>配置</value>
+    <comment>Developer tools screen: section heading for the placement controls.</comment>
+  </data>
+  <data name="dev_section_probing" xml:space="preserve">
+    <value>確認</value>
+    <comment>Developer tools screen: section heading for the probing controls.</comment>
+  </data>
+  <data name="dev_section_recovery" xml:space="preserve">
+    <value>復旧</value>
+    <comment>Developer tools screen: section heading for the recovery controls.</comment>
+  </data>
+  <data name="dev_send_stall" xml:space="preserve">
+    <value>停止した出口をすばやく除外</value>
+    <comment>Developer tools screen (reliability surface): send stall control label.</comment>
+  </data>
+  <data name="dev_send_stall_detail" xml:space="preserve">
+    <value>出口が配信を止めてから除外されるまでの時間。オフにすると 30 秒待ちます</value>
+    <comment>Developer tools screen: explanatory subtext under the 'send stall' control.</comment>
+  </data>
+  <data name="dev_server_name_bridge" xml:space="preserve">
+    <value>遅れて名前が付いたフローを集約</value>
+    <comment>Developer tools screen (reliability surface): server name bridge control label.</comment>
+  </data>
+  <data name="dev_server_name_bridge_detail" xml:space="preserve">
+    <value>後続の接続を、最初の接続がすでに使っている出口に移します</value>
+    <comment>Developer tools screen: explanatory subtext under the 'server name bridge' control.</comment>
+  </data>
+  <data name="dev_shuffle_exits" xml:space="preserve">
+    <value>すべての出口をシャッフル</value>
+    <comment>Developer tools screen (reliability surface): shuffle exits control label.</comment>
+  </data>
+  <data name="dev_simulate_network_change" xml:space="preserve">
+    <value>ネットワーク変更をシミュレート</value>
+    <comment>Developer tools screen (reliability surface): simulate network change control label.</comment>
+  </data>
+  <data name="dev_soft_verdict" xml:space="preserve">
+    <value>除外の前に降格</value>
+    <comment>Developer tools screen (reliability surface): soft verdict control label.</comment>
+  </data>
+  <data name="dev_soft_verdict_detail" xml:space="preserve">
+    <value>あいまいな判定では、フローを切断せずに出口を待機させます。除外には継続的な証拠か空の出口が必要です</value>
+    <comment>Developer tools screen: explanatory subtext under the 'soft verdict' control.</comment>
+  </data>
+  <data name="dev_stall_exit" xml:space="preserve">
+    <value>停止させる</value>
+    <comment>Developer tools screen (reliability surface): stall exit control label.</comment>
+  </data>
+  <data name="dev_standing_reserve" xml:space="preserve">
+    <value>予備の出口を待機させておく</value>
+    <comment>Developer tools screen (reliability surface): standing reserve control label.</comment>
+  </data>
+  <data name="dev_standing_reserve_detail" xml:space="preserve">
+    <value>各ウィンドウを目標より 1 つ多い出口で構成し、代わりの出口を接続済みにしておきます。オフにすると、失われてから補充します</value>
+    <comment>Developer tools screen: explanatory subtext under the 'standing reserve' control.</comment>
+  </data>
+  <data name="dev_tcp_collapse_hold" xml:space="preserve">
+    <value>詰まった再送を解放</value>
+    <comment>Developer tools screen (reliability surface): tcp collapse hold control label.</comment>
+  </data>
+  <data name="dev_tcp_collapse_hold_detail" xml:space="preserve">
+    <value>再送を保留してから 1 つ解放するまでの時間。オフにすると 30 秒待ちます</value>
+    <comment>Developer tools screen: explanatory subtext under the 'tcp collapse hold' control.</comment>
+  </data>
+  <data name="dev_tcp_idle_timeout" xml:space="preserve">
+    <value>TCP のアイドルタイムアウトを延長</value>
+    <comment>Developer tools screen (reliability surface): tcp idle timeout control label.</comment>
+  </data>
+  <data name="dev_tcp_idle_timeout_detail" xml:space="preserve">
+    <value>TCP 接続がアイドル状態でいられる時間。オフにすると UDP の上限を使います</value>
+    <comment>Developer tools screen: explanatory subtext under the 'tcp idle timeout' control.</comment>
+  </data>
+  <data name="dev_timing" xml:space="preserve">
+    <value>タイミング</value>
+    <comment>Developer tools screen (reliability surface): timing control label.</comment>
+  </data>
+  <data name="dev_udp_idle_timeout" xml:space="preserve">
+    <value>UDP のアイドルタイムアウト</value>
+    <comment>Developer tools screen (reliability surface): udp idle timeout control label.</comment>
+  </data>
+  <data name="dev_udp_idle_timeout_detail" xml:space="preserve">
+    <value>TCP 以外のフローが片付けられるまでにアイドル状態でいられる時間</value>
+    <comment>Developer tools screen: explanatory subtext under the 'udp idle timeout' control.</comment>
+  </data>
+  <data name="dev_udp_teardown" xml:space="preserve">
+    <value>UDP の終了を通知</value>
+    <comment>Developer tools screen (reliability surface): udp teardown control label.</comment>
+  </data>
+  <data name="dev_udp_teardown_detail" xml:space="preserve">
+    <value>黙り込む代わりに、経路がなくなったことを DNS と QUIC に知らせます</value>
+    <comment>Developer tools screen: explanatory subtext under the 'udp teardown' control.</comment>
+  </data>
+  <data name="dev_uplink_gate" xml:space="preserve">
+    <value>アップリンク無通信ゲート</value>
+    <comment>Developer tools screen (reliability surface): uplink gate control label.</comment>
+  </data>
+  <data name="dev_uplink_gate_detail" xml:space="preserve">
+    <value>トンネル全体が無通信のままでいられる時間。これを超えると、プロバイダーへの判定は採用不可として保留されます。0 は以前どおり判定します</value>
+    <comment>Developer tools screen: explanatory subtext under the 'uplink gate' control.</comment>
+  </data>
+  <data name="dev_verdicts_held" xml:space="preserve">
+    <value>保留された判定</value>
+    <comment>Developer tools screen (reliability surface): verdicts held control label.</comment>
+  </data>
+  <data name="dev_verdicts_held_detail" xml:space="preserve">
+    <value>プロバイダーではなく端末自身のアップリンクが無通信だったため保留された判定（アップリンク / トランスポート）</value>
+    <comment>Developer tools screen: explanatory subtext under the 'verdicts held' control.</comment>
+  </data>
+  <data name="dev_verdicts_held_value" xml:space="preserve">
+    <value>{0} / {1}</value>
+    <comment>Developer tools screen: formatted value readout for 'verdicts held'.</comment>
+  </data>
+  <data name="dev_worst_loss" xml:space="preserve">
+    <value>最悪の単一障害</value>
+    <comment>Developer tools screen (reliability surface): worst loss control label.</comment>
+  </data>
+  <data name="dev_worst_loss_detail" xml:space="preserve">
+    <value>ユーザーが実際に体感するもの</value>
+    <comment>Developer tools screen: explanatory subtext under the 'worst loss' control.</comment>
+  </data>
+  <data name="dev_worst_loss_value" xml:space="preserve">
+    <value>{} 件の接続</value>
+    <comment>Developer tools screen: formatted value readout for 'worst loss'.</comment>
+  </data>
+  <data name="developer" xml:space="preserve">
+    <value>開発者</value>
+    <comment>Developer tools screen: developer.</comment>
+  </data>
+  <data name="developer_description" xml:space="preserve">
+    <value>接続のフリーズを診断するツールです。現在の接続に対して動作します。</value>
+    <comment>Developer tools screen: developer description.</comment>
+  </data>
+  <data name="developer_disconnected" xml:space="preserve">
+    <value>これらのツールを使うには接続してください。</value>
+    <comment>Developer tools screen: developer disconnected.</comment>
   </data>
   <data name="device" xml:space="preserve">
     <value>デバイス</value>
@@ -1312,6 +2156,62 @@
     <value>収益</value>
     <comment>Wallet Screen</comment>
   </data>
+  <data name="earnings_address_placeholder" xml:space="preserve">
+    <value>Bittensor アドレスを入力</value>
+    <comment>Placeholder of the manual Bittensor address field on the Earnings page.</comment>
+  </data>
+  <data name="earnings_change_wallet" xml:space="preserve">
+    <value>ウォレットを変更</value>
+    <comment>Button on the Earnings page that starts connecting a different Bittensor wallet.</comment>
+  </data>
+  <data name="earnings_claim_sending" xml:space="preserve">
+    <value>送信中…</value>
+    <comment>Progress text while a claim transaction is being sent.</comment>
+  </data>
+  <data name="earnings_claims_need_session" xml:space="preserve">
+    <value>アプリにセッションがあると、受け取り情報がチェーンから読み込まれます。先に「接続」を押してください。</value>
+    <comment>Shown in place of the unclaimed figure when the app has no device session to read the chain with.</comment>
+  </data>
+  <data name="earnings_copy_address" xml:space="preserve">
+    <value>アドレスをコピー</value>
+    <comment>Button that copies an address to the clipboard.</comment>
+  </data>
+  <data name="earnings_date_column" xml:space="preserve">
+    <value>日付</value>
+    <comment>Column header of the per-epoch history table: the date the epoch ended.</comment>
+  </data>
+  <data name="earnings_epoch_column" xml:space="preserve">
+    <value>エポック</value>
+    <comment>Column header of the per-epoch history table.</comment>
+  </data>
+  <data name="earnings_gas_balance" xml:space="preserve">
+    <value>ガス残高</value>
+    <comment>Label of the gas key's TAO balance in the claim dialog.</comment>
+  </data>
+  <data name="earnings_network_pane_title" xml:space="preserve">
+    <value>あなたのネットワーク</value>
+    <comment>Title of the Earnings destination's third pane: own rank, multipliers and reliability.</comment>
+  </data>
+  <data name="earnings_points_column" xml:space="preserve">
+    <value>ポイント</value>
+    <comment>Column header of the per-epoch history table: points earned in the epoch.</comment>
+  </data>
+  <data name="earnings_share_column" xml:space="preserve">
+    <value>シェア</value>
+    <comment>Column header of the per-epoch history table: the network's share of the block.</comment>
+  </data>
+  <data name="earnings_status_column" xml:space="preserve">
+    <value>ステータス</value>
+    <comment>Column header of the per-epoch history table: the claim status of the epoch's alpha.</comment>
+  </data>
+  <data name="earnings_view_transaction" xml:space="preserve">
+    <value>トランザクションを表示</value>
+    <comment>Link that opens a claim transaction in the block explorer.</comment>
+  </data>
+  <data name="earnings_wallet_mismatch" xml:space="preserve">
+    <value>署名したウォレットは、入力されたアドレスのものではありません。</value>
+    <comment>Error when the wallet that signed the connect challenge is not the address the user entered.</comment>
+  </data>
   <data name="edit_device_name" xml:space="preserve">
     <value>デバイス名を編集</value>
     <comment>device</comment>
@@ -1347,6 +2247,10 @@
   <data name="email_e4_reason_trust" xml:space="preserve">
     <value>VPN を信用していいか分からない</value>
     <comment>Onboarding feedback email, not-activated variant: one-tap reason 3.</comment>
+  </data>
+  <data name="email_support_at" xml:space="preserve">
+    <value>サポートへのメール：</value>
+    <comment>Settings: label before the support email address link.</comment>
   </data>
   <data name="emoji_group_activities" xml:space="preserve">
     <value>アクティビティ</value>
@@ -1404,6 +2308,14 @@
     <value>別の候補</value>
     <comment>Points leaderboard: the emoji editor's shuffle button, replaces the draft with a new random suggestion.</comment>
   </data>
+  <data name="enabled_under_auto" xml:space="preserve">
+    <value>自動で有効</value>
+    <comment>Section header of the per-transport enable toggles shown when the transport mode is Auto.</comment>
+  </data>
+  <data name="enabled_under_auto_footer" xml:space="preserve">
+    <value>優先順に表示：まず H3 と H1、次に whodis、その次に whodis pump。順序は固定です。少なくとも 1 つのトランスポートは常に有効です。</value>
+    <comment>Footer of the Auto transports section explaining the fixed preference order.</comment>
+  </data>
   <data name="enjoying_urnetwork" xml:space="preserve">
     <value>URnetworkを楽しんでいますか？</value>
     <comment>Call to action</comment>
@@ -1427,6 +2339,10 @@
   <data name="enter_a_solana_usdc_wallet_address" xml:space="preserve">
     <value>Solana USDCウォレットアドレスを入力してください</value>
   </data>
+  <data name="enter_address_manually" xml:space="preserve">
+    <value>アドレスを手動で入力</value>
+    <comment>Fallback link to paste an ss58 address.</comment>
+  </data>
   <data name="enter_balance_code" xml:space="preserve">
     <value>残高コードを入力</value>
     <comment>Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.</comment>
@@ -1442,6 +2358,34 @@
   <data name="enter_urnetwork" xml:space="preserve">
     <value>URnetworkに入る</value>
     <comment>Used in Authenticate/LoginInitial/GuestModeSheet.swift.</comment>
+  </data>
+  <data name="epoch_column_epoch_linux" xml:space="preserve">
+    <value>エポック</value>
+    <comment>History table column: the epoch number.</comment>
+  </data>
+  <data name="epoch_column_points_linux" xml:space="preserve">
+    <value>ポイント</value>
+    <comment>History table column: points earned.</comment>
+  </data>
+  <data name="epoch_column_share_linux" xml:space="preserve">
+    <value>ブロックのシェア</value>
+    <comment>History table column: the network's share of the block.</comment>
+  </data>
+  <data name="epoch_column_status_linux" xml:space="preserve">
+    <value>ステータス</value>
+    <comment>History table column: the claim status of the epoch's alpha.</comment>
+  </data>
+  <data name="epoch_history" xml:space="preserve">
+    <value>履歴</value>
+    <comment>Label of the per-epoch history list.</comment>
+  </data>
+  <data name="epoch_row_title" xml:space="preserve">
+    <value>エポック {}</value>
+    <comment>History row title.</comment>
+  </data>
+  <data name="epoch_share_of_block" xml:space="preserve">
+    <value>ブロックの {}</value>
+    <comment>History row: the network's share of the block.</comment>
   </data>
   <data name="error_changing_network_name" xml:space="preserve">
     <value>ネットワーク名の変更中にエラーが発生しました</value>
@@ -1555,6 +2499,90 @@
     <value>ログをエクスポート</value>
     <comment>Used in Shared/Views/ExportLogsButton/ExportLogsButton.swift.</comment>
   </data>
+  <data name="extender" xml:space="preserve">
+    <value>エクステンダー</value>
+    <comment>Title of the Extender row under the provide mode row in settings, and of the read-only row where the provide mode row is repeated.</comment>
+  </data>
+  <data name="extender_activation_failed" xml:space="preserve">
+    <value>有効化に失敗しました：{}</value>
+    <comment>Extender status when the last activation failed and no family is active. The argument is the error.</comment>
+  </data>
+  <data name="extender_activation_refused" xml:space="preserve">
+    <value>有効化が拒否されました：{}</value>
+    <comment>Extender status when the operator refused the activation and no family is active. The argument is the operator's reason.</comment>
+  </data>
+  <data name="extender_active" xml:space="preserve">
+    <value>有効 · {}</value>
+    <comment>Extender status when at least one address family is activated. The argument is the family or families, from the IPv4, IPv6 and IPv4 and IPv6 labels.</comment>
+  </data>
+  <data name="extender_default_value" xml:space="preserve">
+    <value>デフォルト：{}</value>
+    <comment>Placeholder shown in an empty extender settings field, naming the default value that applies.</comment>
+  </data>
+  <data name="extender_dns_name" xml:space="preserve">
+    <value>エクステンダーの DNS 名</value>
+    <comment>Label of the extender DNS name field. Empty means the network space default.</comment>
+  </data>
+  <data name="extender_hosts" xml:space="preserve">
+    <value>エクステンダーのホスト</value>
+    <comment>Label of the manual extender list field: hostnames or IP addresses, one per line.</comment>
+  </data>
+  <data name="extender_hosts_hint" xml:space="preserve">
+    <value>1 行に 1 つのホスト名または IP アドレス。検出されたエクステンダーに追加されます。</value>
+    <comment>Help text under the manual extender list field.</comment>
+  </data>
+  <data name="extender_listen_failed" xml:space="preserve">
+    <value>待ち受けできませんでした：{}</value>
+    <comment>Extender status when no carrier could bind. The argument is the carrier errors.</comment>
+  </data>
+  <data name="extender_not_providing" xml:space="preserve">
+    <value>提供していません</value>
+    <comment>Extender status when the setting is on but this device is not providing. Apple is not listed because its catalog is keyed by the English text, which widget_not_providing already carries.</comment>
+  </data>
+  <data name="extender_revoked" xml:space="preserve">
+    <value>オペレーターにより取り消されました</value>
+    <comment>Extender status when the operator revoked this device's extender key.</comment>
+  </data>
+  <data name="extender_setting_description" xml:space="preserve">
+    <value>提供中は、ネットワークへのアクセスがブロックされている人のために、このデバイスが TCP と UDP 443、UDP 4053 で中継も行います。</value>
+    <comment>Secondary text under the Extender setting: what turning it on does, and the ports the extender listens on.</comment>
+  </data>
+  <data name="extender_setting_up" xml:space="preserve">
+    <value>設定中</value>
+    <comment>Extender status while the role is starting and there is no outcome yet: the carriers are binding, or the first activation is in flight.</comment>
+  </data>
+  <data name="extender_settings" xml:space="preserve">
+    <value>エクステンダー設定</value>
+    <comment>Title of the extender settings form under account &gt; Extenders.</comment>
+  </data>
+  <data name="extender_settings_next_connect" xml:space="preserve">
+    <value>トンネルは次回の接続時に新しいエクステンダー設定を使用します。</value>
+    <comment>Note on iOS after saving extender settings: the packet tunnel extension reads them at its next start.</comment>
+  </data>
+  <data name="extender_settings_saved" xml:space="preserve">
+    <value>エクステンダー設定を保存しました</value>
+    <comment>Confirmation after the extender settings are saved.</comment>
+  </data>
+  <data name="extender_start_failed" xml:space="preserve">
+    <value>開始できませんでした：{}</value>
+    <comment>Extender status when the setting is on and the device is providing, but the role could not start in this network space: no extender directory or no identity. The argument is the reason.</comment>
+  </data>
+  <data name="extender_statistics" xml:space="preserve">
+    <value>エクステンダーの統計</value>
+    <comment>Title of the section that shows statistics about the extender, directly above the provider statistics section.</comment>
+  </data>
+  <data name="extenders" xml:space="preserve">
+    <value>エクステンダー</value>
+    <comment>Title of the extenders panel in the connect drawer and of the Extenders section under account.</comment>
+  </data>
+  <data name="extenders_active_of_reserve" xml:space="preserve">
+    <value>{0} / {1}</value>
+    <comment>The extender panel count: extenders carrying a live connection now, of every usable extender the app knows.</comment>
+  </data>
+  <data name="extenders_no_session" xml:space="preserve">
+    <value>エクステンダーを管理するには、サインインして接続してください。</value>
+    <comment>Shown in the account Extenders section when there is no signed-in device to manage extenders with.</comment>
+  </data>
   <data name="failed_to_connect" xml:space="preserve">
     <value>接続に失敗しました</value>
     <comment>Used in Shared/Intents/ConnectIntent.swift.</comment>
@@ -1599,6 +2627,10 @@
     <value>本音をお聞かせください</value>
     <comment>Feedback Screen</comment>
   </data>
+  <data name="feedback_send_failed" xml:space="preserve">
+    <value>フィードバックを送信できませんでした。接続を確認してもう一度お試しください。</value>
+    <comment>Feedback screen: the feedback could not be sent. The text stays in the field so the user can send it again.</comment>
+  </data>
   <data name="feedback_sending" xml:space="preserve">
     <value>送信中…</value>
     <comment>Feedback screen: label of the Send button while the feedback is being sent.</comment>
@@ -1626,6 +2658,10 @@
   <data name="friends_save_too" xml:space="preserve">
     <value>あなたの友達も節約できる -- みんなが得をします。</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="gas_key" xml:space="preserve">
+    <value>ガスキー</value>
+    <comment>Label of the gas key row.</comment>
   </data>
   <data name="general" xml:space="preserve">
     <value>一般</value>
@@ -1660,6 +2696,10 @@
     <value>戻る</value>
     <comment>Confirmation button that leaves the seedphrase screen after the warning.</comment>
   </data>
+  <data name="google" xml:space="preserve">
+    <value>Google</value>
+    <comment>A label for Google sign-in.</comment>
+  </data>
   <data name="google_auth_btn_text" xml:space="preserve">
     <value>Googleでログイン</value>
     <comment>Login initial</comment>
@@ -1668,6 +2708,22 @@
     <value>Googleのサインイン方法を追加しました</value>
     <comment>Snackbar message displayed when a Google sign-in method is successfully added.</comment>
   </data>
+  <data name="gossip_connecting" xml:space="preserve">
+    <value>接続中</value>
+    <comment>Gossip network status: a dial or reconnect is in progress (yellow).</comment>
+  </data>
+  <data name="gossip_events_per_minute.other" xml:space="preserve">
+    <value>{} 件/分</value>
+    <comment>The count of extender records and revocations applied from the gossip network or the feed in the last minute.</comment>
+  </data>
+  <data name="gossip_network" xml:space="preserve">
+    <value>ゴシップネットワーク</value>
+    <comment>Label of the gossip network status dot in the extender panel.</comment>
+  </data>
+  <data name="gossip_url" xml:space="preserve">
+    <value>ゴシップ URL</value>
+    <comment>Label of the gossip URL field. Empty means the network space default.</comment>
+  </data>
   <data name="got_it" xml:space="preserve">
     <value>了解</value>
     <comment>Used in Shared/Views/UpgradeSubscriptionSheet.swift.</comment>
@@ -1675,6 +2731,16 @@
   <data name="guest" xml:space="preserve">
     <value>ゲスト</value>
     <comment>Account Screen</comment>
+  </data>
+  <data name="guest_convert_explanation" xml:space="preserve">
+    <value>このネットワークにサインインするためのメールアドレスとパスワードを追加します。プランと残高はこのネットワークに引き継がれます。</value>
+    <comment>Desktop: the first step of "Create an account" on a legacy guest network. The user adds an email and a password to the network they are on now, so they can sign in to it again; its plan and balance stay with it (nothing moves to a new account).</comment>
+  </data>
+  <data name="hash_count" xml:space="preserve">
+    <value>#{}</value>
+  </data>
+  <data name="hash_value" xml:space="preserve">
+    <value>#{}</value>
   </data>
   <data name="hide_provider_list" xml:space="preserve">
     <value>プロバイダーリストを非表示</value>
@@ -1712,9 +2778,29 @@
     <value>バッテリー最適化を無視する</value>
     <comment>Call to action</comment>
   </data>
+  <data name="import_extenders" xml:space="preserve">
+    <value>エクステンダーをインポート</value>
+    <comment>Button and screen title: import extenders from a QR code, a photo, or pasted text.</comment>
+  </data>
+  <data name="import_extenders_confirm_settings" xml:space="preserve">
+    <value>このコードのエクステンダー設定を使いますか？エクステンダーの検索には {} が使われます。</value>
+    <comment>Confirmation before applying the extender settings from a share code. The argument is the operator host the settings point at.</comment>
+  </data>
   <data name="import_extenders_control_doh_urls" xml:space="preserve">
     <value>このコードはブートストラップ DNS-over-HTTPS サーバーも設定します。これらのサーバーは URnetwork のサーバー検索を見ることができます: {}</value>
     <comment>Extender import: shown before the user takes the settings of a share code that also sets bootstrap DNS-over-HTTPS servers. The argument is the list of server URLs, comma separated.</comment>
+  </data>
+  <data name="import_extenders_foreign_host" xml:space="preserve">
+    <value>このコードはこのネットワークではなく {} 用です。ネットワークを切り替えるにはエクステンダー設定を使ってください。</value>
+    <comment>Error when a share code belongs to another network. The argument is that network's host.</comment>
+  </data>
+  <data name="import_extenders_imported.other" xml:space="preserve">
+    <value>{} 件のエクステンダーをインポートしました</value>
+    <comment>Confirmation after an import, with the number of extenders added.</comment>
+  </data>
+  <data name="import_extenders_invalid" xml:space="preserve">
+    <value>このコードはエクステンダーの共有コードではありません。</value>
+    <comment>Error when the scanned or pasted text is not an extender share code.</comment>
   </data>
   <data name="in_guest_mode" xml:space="preserve">
     <value>ゲストモードです</value>
@@ -1728,6 +2814,10 @@
     <value>含めたアプリのみトンネルを使用します。</value>
     <comment>transfer stats and split rules</comment>
   </data>
+  <data name="include_extender_settings" xml:space="preserve">
+    <value>エクステンダー設定を含める</value>
+    <comment>Toggle on the share screen: also include the extender DNS name, gossip URL and root keys in the code.</comment>
+  </data>
   <data name="include_in_vpn" xml:space="preserve">
     <value>VPNに含める</value>
     <comment>App split rules: rule choice routing the app through the VPN.</comment>
@@ -1735,6 +2825,10 @@
   <data name="included" xml:space="preserve">
     <value>含める</value>
     <comment>transfer stats and split rules</comment>
+  </data>
+  <data name="includes_free_trial_days" xml:space="preserve">
+    <value>{} 日間の無料トライアル付き</value>
+    <comment>Line under the annual plan card. The number of days is the free trial length.</comment>
   </data>
   <data name="instant_account_explainer" xml:space="preserve">
     <value>メール、電話番号、パスワードは不要です。アカウントはシードフレーズで保護されます。</value>
@@ -1788,6 +2882,54 @@
     <value>残高不足</value>
     <comment>Circle Wallet Transfer Screen</comment>
   </data>
+  <data name="intro_control_manual_ios" xml:space="preserve">
+    <value>コントロールセンターを開き、＋をタップし、「コントロールを追加」をタップして URnetwork を選びます。</value>
+    <comment>How to add the quick connect control on iOS (no add-control API).</comment>
+  </data>
+  <data name="intro_control_manual_macos" xml:space="preserve">
+    <value>コントロールセンターを開き、「コントロールを編集」を選んで URnetwork を追加します。</value>
+    <comment>How to add the quick connect control on macOS.</comment>
+  </data>
+  <data name="intro_quick_connect_details" xml:space="preserve">
+    <value>クイック設定から URnetwork のオンとオフを切り替え、ホーム画面から状態を確認できます。</value>
+    <comment>Detail line of the last onboarding page.</comment>
+  </data>
+  <data name="intro_quick_connect_details_apple" xml:space="preserve">
+    <value>コントロールセンターから URnetwork のオンとオフを切り替え、ホーム画面から状態を確認できます。</value>
+    <comment>Detail line of the last onboarding page on iOS/macOS (Control Center instead of Quick Settings).</comment>
+  </data>
+  <data name="intro_quick_connect_title" xml:space="preserve">
+    <value>ワンタップで接続</value>
+    <comment>Title of the last onboarding page: the quick connect tile and the home screen widgets.</comment>
+  </data>
+  <data name="intro_quick_tile_added" xml:space="preserve">
+    <value>クイック設定に追加しました</value>
+    <comment>Label shown on the last onboarding page once the quick connect tile is in Quick Settings.</comment>
+  </data>
+  <data name="intro_quick_tile_manual" xml:space="preserve">
+    <value>クイック設定を開き、鉛筆アイコンをタップして、URnetwork を配置したい場所にドラッグします。</value>
+    <comment>Manual steps for adding the quick connect tile on Android versions without the system add-tile request (before Android 13).</comment>
+  </data>
+  <data name="intro_verifiable_encryption" xml:space="preserve">
+    <value>毎日使える暗号化。</value>
+    <comment>Tagline under 'Welcome to URnetwork' on the first onboarding page. Replaces 'URnetwork is the most local and most private network on the planet.'</comment>
+  </data>
+  <data name="intro_widgets_manual" xml:space="preserve">
+    <value>ホーム画面を長押しし、「ウィジェット」を選んで URnetwork を選択します。</value>
+    <comment>Manual steps for adding widgets on launchers without the pin dialog.</comment>
+  </data>
+  <data name="intro_widgets_manual_ios" xml:space="preserve">
+    <value>ホーム画面を長押しし、＋をタップして URnetwork を検索し、ウィジェットを追加します。</value>
+    <comment>How to add a Home Screen widget on iOS (no pin-widget API).</comment>
+  </data>
+  <data name="intro_widgets_manual_macos" xml:space="preserve">
+    <value>通知センターからウィジェットギャラリーを開き、URnetwork を検索して、ウィジェットをデスクトップにドラッグします。</value>
+    <comment>How to add a desktop widget on macOS.</comment>
+  </data>
+  <data name="intro_widgets_tap_to_add" xml:space="preserve">
+    <value>ウィジェットをタップするとホーム画面に追加されます。</value>
+    <comment>Hint under the widget previews on the last onboarding page: tapping a preview asks the launcher to add that widget.</comment>
+  </data>
   <data name="invalid_balance_code" xml:space="preserve">
     <value>無効な残高コード</value>
     <comment>Used in Shared/Views/RedeemBalanceCodeSheet/RedeemBalanceCodeSheet.swift.</comment>
@@ -1800,6 +2942,14 @@
     <value>無効な紹介コードです。もう一度お試しください。</value>
     <comment>Used in Main/Account/Settings/UpdateReferralNetworkSheet/UpdateReferralNetworkSheetViewModel.swift.</comment>
   </data>
+  <data name="invalid_solana_address" xml:space="preserve">
+    <value>有効な Solana アドレスではありません。</value>
+    <comment>Validation error under the manual address field when the address is not a valid Solana address (parallel to invalid_ss58_address).</comment>
+  </data>
+  <data name="invalid_ss58_address" xml:space="preserve">
+    <value>有効な Bittensor アドレスではありません。</value>
+    <comment>Validation error for a coldkey address.</comment>
+  </data>
   <data name="ip_address" xml:space="preserve">
     <value>IPアドレス</value>
     <comment>dns settings</comment>
@@ -1808,9 +2958,45 @@
     <value>{} 個の IP</value>
     <comment>A label showing the number of IP addresses in a block action cluster, rendered as a single pill. The argument is the number of IPs.</comment>
   </data>
+  <data name="ip_families" xml:space="preserve">
+    <value>IP バージョン</value>
+    <comment>IP versions: the tooltip of the address-family tag column in the provider locations sheet (windows, linux). It also titled the connect drawer's IP version histogram before that became the Dualstack / IPv4 / IPv6 status row.</comment>
+  </data>
+  <data name="ip_family_both" xml:space="preserve">
+    <value>両方</value>
+    <comment>Row label of the IP version histogram, and the provider row tag, for a provider that carries both IPv4 and IPv6.</comment>
+  </data>
+  <data name="ip_family_connected_count.other" xml:space="preserve">
+    <value>{} 件接続済み</value>
+    <comment>Status line of one column of the IP version status row in the connect drawer: how many providers of that family (dualstack, IPv4 or IPv6) are connected. Shown under the family label only when the count is not zero. Lowercase.</comment>
+  </data>
+  <data name="ip_family_connecting_count.other" xml:space="preserve">
+    <value>{} 件接続中</value>
+    <comment>Status line of one column of the IP version status row in the connect drawer: how many providers of that family (dualstack, IPv4 or IPv6) are still connecting. Shown under the connected line only when the count is not zero. Lowercase.</comment>
+  </data>
+  <data name="ip_family_disconnected" xml:space="preserve">
+    <value>未接続</value>
+    <comment>Status line of one column of the IP version status row in the connect drawer, when no provider of that family (dualstack, IPv4 or IPv6) is connected or connecting. Lowercase, under the family label.</comment>
+  </data>
+  <data name="ip_family_dualstack" xml:space="preserve">
+    <value>デュアルスタック</value>
+    <comment>Column label of the IP version status row in the connect drawer, for providers that carry both IPv4 and IPv6. Set in the pixel display face beside the IPv4 and IPv6 labels, so keep it short.</comment>
+  </data>
+  <data name="ip_family_v4" xml:space="preserve">
+    <value>v4</value>
+    <comment>Row label of the IP version histogram, and the provider row tag, for a provider that carries only IPv4.</comment>
+  </data>
+  <data name="ip_family_v6" xml:space="preserve">
+    <value>v6</value>
+    <comment>Row label of the IP version histogram, and the provider row tag, for a provider that carries only IPv6.</comment>
+  </data>
   <data name="ipv4" xml:space="preserve">
     <value>IPv4</value>
     <comment>Label for a list of IPv4 addresses.</comment>
+  </data>
+  <data name="ipv4_and_ipv6" xml:space="preserve">
+    <value>IPv4 と IPv6</value>
+    <comment>Accessibility label for a provider that carries both IPv4 and IPv6 traffic.</comment>
   </data>
   <data name="ipv6" xml:space="preserve">
     <value>IPv6</value>
@@ -1851,6 +3037,18 @@
   <data name="kill_switch" xml:space="preserve">
     <value>キルスイッチ</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="kill_switch_exception" xml:space="preserve">
+    <value>キルスイッチの例外</value>
+    <comment>Title for the disclosure explaining traffic that intentionally bypasses the VPN kill switch.</comment>
+  </data>
+  <data name="kill_switch_exception_smtp_detail" xml:space="preserve">
+    <value>VPN 接続中は、IPv6 も IPv4 と同様に URnetwork 経由でルーティングされます。TCP ポート 25 の送信 SMTP は、キルスイッチがオンでも VPN を経由しないため、あなたのローカルのパブリック IP がそれらのメールサーバーに知られる可能性があります。ポート 465 と 587 の SMTP は VPN 内にとどまり、TLS を確立する必要があります。</value>
+    <comment>Explains the deliberate SMTP port 25 exception to the VPN kill switch, that IPv6 is routed through the tunnel, and the encrypted SMTP behavior.</comment>
+  </data>
+  <data name="kill_switch_exception_unrecognized_encrypted" xml:space="preserve">
+    <value>キルスイッチがオフのとき、URnetwork の安全ルールによってネットワークから除外されるトラフィック（認識できない暗号化プロトコルなど）は VPN を経由せず、あなたのローカルのパブリック IP を使います。キルスイッチがオンのときは、そのトラフィックはブロックされます。</value>
+    <comment>Explains that, with the kill switch off, traffic URnetwork safety rules keep off the network (such as unrecognized encrypted protocols) bypasses the VPN.</comment>
   </data>
   <data name="launch" xml:space="preserve">
     <value>起動</value>
@@ -1915,6 +3113,10 @@
   <data name="link_another_way_to_sign_in_to" xml:space="preserve">
     <value>アカウントにサインインする別の方法をリンクします。</value>
     <comment>A description of the add auth sheet.</comment>
+  </data>
+  <data name="load_failed" xml:space="preserve">
+    <value>読み込めませんでした。接続を確認してもう一度お試しください。</value>
+    <comment>A section (points, wallet, referral code, epoch history, payout wallet) could not be loaded. Shown in place of the loading spinner or the section's data, next to a Try again (Retry on apple) button.</comment>
   </data>
   <data name="loading" xml:space="preserve">
     <value>読み込み中...</value>
@@ -2163,6 +3365,10 @@
     <value>倍率</value>
     <comment>Call to action</comment>
   </data>
+  <data name="n_20" xml:space="preserve">
+    <value>{}/20</value>
+    <comment>A progress bar that shows how many friends you've invited. The first argument is the number of friends you've invited. The second argument is the maximum number of friends you can invite.</comment>
+  </data>
   <data name="n_gib_day" xml:space="preserve">
     <value>+{} GiB/日</value>
     <comment>A label that shows the daily data usage from referrals. The argument is the number of referrals.</comment>
@@ -2347,6 +3553,10 @@
     <value>ブロックされた場所はありません</value>
     <comment>Call to action</comment>
   </data>
+  <data name="no_claims_yet_linux" xml:space="preserve">
+    <value>受け取れるものはまだありません。Alpha は次に確定するエポックから貯まります。</value>
+    <comment>Empty state of the unclaimed tile once a wallet is connected.</comment>
+  </data>
   <data name="no_compatible_wallet_app_found" xml:space="preserve">
     <value>このデバイスに対応するウォレットアプリが見つかりません。</value>
     <comment>Add sign-in method sheet (android): no installed wallet app can sign the challenge.</comment>
@@ -2378,6 +3588,14 @@
   <data name="no_open_contracts" xml:space="preserve">
     <value>有効な契約はありません</value>
     <comment>A label displayed when there are no open contracts.</comment>
+  </data>
+  <data name="no_points_yet" xml:space="preserve">
+    <value>まだエポックがありません。最初のエポックが確定するとポイントが表示されます。</value>
+    <comment>Empty state of the points history.</comment>
+  </data>
+  <data name="no_previous_purchases_were_found" xml:space="preserve">
+    <value>以前の購入は見つかりませんでした。</value>
+    <comment>Restore-purchases outcome: the sync succeeded and there is genuinely nothing to restore (Shared/ViewModels/AppStoreSubscriptionManager.swift).</comment>
   </data>
   <data name="no_providers_found" xml:space="preserve">
     <value>プロバイダーが見つかりませんでした。</value>
@@ -2471,6 +3689,10 @@
     <value>オン</value>
     <comment>A label for a DNS setting that is enabled.</comment>
   </data>
+  <data name="onboarding_step_of" xml:space="preserve">
+    <value>ステップ {0} / {1}</value>
+    <comment>Accessibility description of the onboarding step bubbles: the current step and the total.</comment>
+  </data>
   <data name="one_gib_per_day" xml:space="preserve">
     <value>1 GiB/日</value>
     <comment>Call to action</comment>
@@ -2503,6 +3725,10 @@
     <value>その他</value>
     <comment>Used in Main/Account/Wallets/ConnectWalletSheet/ConnectWalletSheetView.swift.</comment>
   </data>
+  <data name="paid_in_usdc_on_solana" xml:space="preserve">
+    <value>Solana 上の USDC で支払い。</value>
+    <comment>The one USDC mention: the Solana subscription payment note.</comment>
+  </data>
   <data name="participate" xml:space="preserve">
     <value>参加する</value>
     <comment>Call to action</comment>
@@ -2532,6 +3758,10 @@
     <value>パスワードは12文字以上である必要があります</value>
     <comment>Hint for password input length requirements.</comment>
   </data>
+  <data name="paste_share_text" xml:space="preserve">
+    <value>共有テキストを貼り付け</value>
+    <comment>Button and field label: paste the text form of a share code.</comment>
+  </data>
   <data name="paste_your_24_word_seedphrase_here" xml:space="preserve">
     <value>24単語のシードフレーズをここに貼り付け</value>
     <comment>A placeholder text for the seedphrase field.</comment>
@@ -2544,9 +3774,29 @@
     <value>Stripeで参加する</value>
     <comment>Call to action</comment>
   </data>
+  <data name="payment_confirmation_delayed" xml:space="preserve">
+    <value>確認に予想以上の時間がかかっています。確認され次第、プランは自動的に更新されます。もう一度購入する必要はありません。</value>
+    <comment>Shown when the post-payment confirmation poll exhausts its budget (2 minutes) without the server confirming the subscription. The payment evidence is real (store or payment sheet reported success), so say that plainly, and head off a second purchase. Android also shows it, without the "Payment received" title, when the 2-minute Solana Pay return-path check ends without the payment landing.</comment>
+  </data>
+  <data name="payment_confirmation_processing" xml:space="preserve">
+    <value>お支払いを確認しています。プランは自動的に更新されます。何もする必要はありません。</value>
+    <comment>Body of the post-purchase overlay while the server has not yet confirmed the subscription. Replaces the optimistic 'You're premium.' claim until currentSubscription actually confirms.</comment>
+  </data>
+  <data name="payment_not_completed" xml:space="preserve">
+    <value>お支払いを完了できませんでした。</value>
+    <comment>Shown in the payment-problem dialog when the Stripe payment sheet reports a failure. The sheet's own error detail is appended by the caller.</comment>
+  </data>
   <data name="payment_problem" xml:space="preserve">
     <value>支払いの問題</value>
     <comment>Billing errors. Every one is shown to the user WITH a remedy: a payment error they cannot see is a payment error they will hit again.</comment>
+  </data>
+  <data name="payment_received" xml:space="preserve">
+    <value>お支払いを受け付けました。</value>
+    <comment>Title of the post-purchase screen while the server has not yet confirmed the entitlement (Shared/Views/PurchaseSuccessView.swift). StoreKit took the payment; the confirmation poll is still running — the copy must not claim premium yet.</comment>
+  </data>
+  <data name="payment_received_title" xml:space="preserve">
+    <value>お支払いを受け付けました</value>
+    <comment>Title for the post-purchase overlay and the confirmation-timeout dialog. Deliberately claims only what is known -- the payment was received -- not that the plan is active yet.</comment>
   </data>
   <data name="payout_wallet_updated" xml:space="preserve">
     <value>支払いウォレットを更新しました</value>
@@ -2612,6 +3862,14 @@
     <value>≈ {}/月 · 年1回請求</value>
     <comment>Plan picker: the subordinate line under the yearly price with the per-month equivalent (ceiling-rounded).</comment>
   </data>
+  <data name="plan_price_per_month" xml:space="preserve">
+    <value>{}/月</value>
+    <comment>Monthly plan card label: the store-formatted price per month.</comment>
+  </data>
+  <data name="plan_price_per_year" xml:space="preserve">
+    <value>{}/年</value>
+    <comment>Yearly plan card label: the store-formatted price per year.</comment>
+  </data>
   <data name="plan_save_percent" xml:space="preserve">
     <value>{}%お得</value>
     <comment>Plan picker: the saving badge on the yearly card; the number is the whole percent saved against twelve monthly payments.</comment>
@@ -2648,6 +3906,10 @@
     <value>ポイント</value>
     <comment>Points leaderboard: tab label, stat tile label and sort chip.</comment>
   </data>
+  <data name="points_earned" xml:space="preserve">
+    <value>獲得ポイント</value>
+    <comment>Headline label of the earnings screen.</comment>
+  </data>
   <data name="points_leaderboard_description" xml:space="preserve">
     <value>累計ポイント。ブロックは確定した1エポック。連続は最新ブロックまでポイントを獲得した連続ブロック数です。</value>
     <comment>Points leaderboard: the explanation under the list header.</comment>
@@ -2659,6 +3921,10 @@
   <data name="points_leaderboard_private_hint" xml:space="preserve">
     <value>オンにするまで、あなたのネットワークは匿名として表示されます。</value>
     <comment>Points leaderboard: shown under the own-stats card while the name switch is off. The network is listed either way, as Anonymous until the switch is on.</comment>
+  </data>
+  <data name="points_short" xml:space="preserve">
+    <value>{} pt</value>
+    <comment>Points count with unit for history rows.</comment>
   </data>
   <data name="post_quantum_encryption" xml:space="preserve">
     <value>ポスト量子暗号</value>
@@ -2683,6 +3949,22 @@
   <data name="private_dns_strict_notice" xml:space="preserve">
     <value>プライベートDNSが{}に設定されています。AndroidはURnetworkを経由せず、そこへ直接名前解決を送信します。サイトが読み込めなくなった場合は、プライベートDNSを「自動」に設定してください。</value>
     <comment>Muted notice on the connect screen shown while connected when Android Private DNS is set to a strict hostname, which sends DoT lookups outside the tunnel. %1$s is the configured DNS provider host.</comment>
+  </data>
+  <data name="private_extender" xml:space="preserve">
+    <value>プライベートエクステンダー</value>
+    <comment>Title of the advanced private extender fields: one extender with a secret that replaces discovery.</comment>
+  </data>
+  <data name="private_extender_hint" xml:space="preserve">
+    <value>プライベートエクステンダーは、検出されたすべてのエクステンダーの代わりに使われます。検出を使う場合は空欄のままにしてください。</value>
+    <comment>Help text under the private extender fields.</comment>
+  </data>
+  <data name="private_extender_ip" xml:space="preserve">
+    <value>IP アドレス</value>
+    <comment>Label of the private extender IP address field.</comment>
+  </data>
+  <data name="private_extender_secret" xml:space="preserve">
+    <value>シークレット</value>
+    <comment>Label of the private extender secret field.</comment>
   </data>
   <data name="private_network" xml:space="preserve">
     <value>プライベートネットワーク</value>
@@ -2716,9 +3998,33 @@
     <value>提供</value>
     <comment>Label of the switch that turns on providing bandwidth to the network.</comment>
   </data>
+  <data name="provide_intro_bullet_devices" xml:space="preserve">
+    <value>自分のデバイス同士でインターネットを共有できるようにする</value>
+    <comment>First bullet on the onboarding Contribute bandwidth page.</comment>
+  </data>
+  <data name="provide_intro_bullet_people" xml:space="preserve">
+    <value>インターネットをほかの人と共有する ❤️</value>
+    <comment>Second bullet on the onboarding Contribute bandwidth page, with a heart.</comment>
+  </data>
+  <data name="provide_intro_lead" xml:space="preserve">
+    <value>完全に任意です。選べるのは：</value>
+    <comment>Lead line above the two bullets on the onboarding Contribute bandwidth page.</comment>
+  </data>
   <data name="provide_mode" xml:space="preserve">
     <value>提供モード</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="provide_mode_always_description" xml:space="preserve">
+    <value>アプリの実行中は、すべての人に提供します。</value>
+    <comment>One-line explanation of the Always provide mode in the onboarding Contribute bandwidth picker.</comment>
+  </data>
+  <data name="provide_mode_auto_description" xml:space="preserve">
+    <value>接続中はすべての人に提供し、それ以外は自分のデバイスにのみ提供します。</value>
+    <comment>One-line explanation of the Auto provide mode in the onboarding Contribute bandwidth picker: public providing only while connected, same-network peers otherwise.</comment>
+  </data>
+  <data name="provide_mode_network_description" xml:space="preserve">
+    <value>自分のネットワークのデバイスにのみ提供します。</value>
+    <comment>One-line explanation of the Network provide mode in the onboarding Contribute bandwidth picker: the private provider for the network's own devices.</comment>
   </data>
   <data name="provide_power_mode" xml:space="preserve">
     <value>バッテリー駆動時</value>
@@ -3000,6 +4306,10 @@
     <value>なぜ？</value>
     <comment>Provider card: expandable section title that reveals the numbers the network ranks this device by, with explanations.</comment>
   </data>
+  <data name="provider_transports" xml:space="preserve">
+    <value>プロバイダーのトランスポート</value>
+    <comment>Title of the transport settings editor for the provider transport policy.</comment>
+  </data>
   <data name="providing" xml:space="preserve">
     <value>提供中</value>
     <comment>Used in Main/Account/Wallets/WalletsView.swift.</comment>
@@ -3020,6 +4330,18 @@
     <value>購入をまだ確認できませんでした。チェックアウトを完了した場合、プランは数分以内に自動的に更新されます。再度購入する必要はありません。</value>
     <comment>Shown when the post-checkout confirmation poll gives up (2 minutes) without the server confirming the subscription. The purchase is still likely to land later; the background poll and the next launch pick it up. On apple: the delayed phase of PurchaseSuccessView and the MainView snackbar.</comment>
   </data>
+  <data name="purchase_could_not_be_verified" xml:space="preserve">
+    <value>この購入を Google Play で確認できなかったため、アカウントに適用できません。請求されたのにプランが更新されない場合は、サポートにお問い合わせください。</value>
+    <comment>Error dialog body when the server's verify answer for a Play purchase is terminal `invalid` — the proof will never verify (unknown token, disallowed product, canceled before completing). The purchase is still acknowledged with Play so a real charge is not auto-refunded; this dialog is how the failure reaches the user instead of a silent nothing (android google/PlanViewModel.kt report path).</comment>
+  </data>
+  <data name="purchase_found_confirming_your_plan" xml:space="preserve">
+    <value>購入が見つかりました。プランを確認しています。自動的に更新されます。</value>
+    <comment>Restore-purchases outcome: an entitlement for the current network was found; the confirmation poll now bridges the gap until the server credits it (Shared/ViewModels/AppStoreSubscriptionManager.swift).</comment>
+  </data>
+  <data name="qr_code_not_found" xml:space="preserve">
+    <value>画像から QR コードが見つかりませんでした。</value>
+    <comment>Error when a chosen photo or image file holds no QR code.</comment>
+  </data>
   <data name="quit" xml:space="preserve">
     <value>終了</value>
     <comment>Tray menu item that exits the app (tears the tunnel down).</comment>
@@ -3031,6 +4353,10 @@
   <data name="ranked_networks_count" xml:space="preserve">
     <value>ランク付けされたネットワーク {}</value>
     <comment>Points leaderboard: how many networks hold a rank. {count} is preformatted with separators.</comment>
+  </data>
+  <data name="reads_per_second" xml:space="preserve">
+    <value>読み取り/秒</value>
+    <comment>Unit the extender chart labels its rates with, where the provider chart says pkt/s. The compact count is prepended by the app, as it is for pkt/s.</comment>
   </data>
   <data name="ready_to_connect" xml:space="preserve">
     <value>接続準備完了</value>
@@ -3159,6 +4485,18 @@
   <data name="referral_network_updated" xml:space="preserve">
     <value>紹介ネットワークを更新しました</value>
     <comment>Snackbar on the Referrals screen after the referral network was changed.</comment>
+  </data>
+  <data name="referral_panel_detail" xml:space="preserve">
+    <value>紹介が 1 件確認されるごとに、お二人とも {} GiB/日 を無料で永久に受け取れます。</value>
+    <comment>Detail line of the gold referral panel. The amount is the daily GiB each side earns per verified referral (pro.yml referral).</comment>
+  </data>
+  <data name="referral_panel_heading" xml:space="preserve">
+    <value>友達を紹介すると、二人とも無料データがもらえます</value>
+    <comment>Heading of the gold referral panel (the ur.io referral panel) before the network has a referral.</comment>
+  </data>
+  <data name="referral_panel_none" xml:space="preserve">
+    <value>まだ友達はいません。コードを共有して、王冠が現れるのを見てみましょう。👑</value>
+    <comment>Status line of the gold referral panel while the network has no referral yet.</comment>
   </data>
   <data name="referral_points" xml:space="preserve">
     <value>紹介ポイント</value>
@@ -3298,9 +4636,17 @@
     <value>リゾルバー</value>
     <comment>A section header for the DNS resolvers.</comment>
   </data>
+  <data name="restore_default_transports" xml:space="preserve">
+    <value>デフォルトのトランスポートに戻す</value>
+    <comment>Button that resets the transport settings draft to the SDK default policy.</comment>
+  </data>
   <data name="restore_most_secure_settings" xml:space="preserve">
     <value>最も安全な設定に戻す</value>
     <comment>dns settings</comment>
+  </data>
+  <data name="restore_purchases" xml:space="preserve">
+    <value>購入を復元</value>
+    <comment>Action label that resyncs App Store purchases (AppStore.sync + entitlement scan). Shown in Settings and in the upgrade flow's failure states (Main/Account/Settings/SettingsForm-iOS.swift, SettingsForm-macOS.swift, Shared/Views/UpgradeSubscriptionSheet.swift, Shared/Views/PurchaseSuccessView.swift, Shared/Views/Introduction/IntroductionView.swift).</comment>
   </data>
   <data name="retry" xml:space="preserve">
     <value>再試行</value>
@@ -3314,17 +4660,37 @@
     <value>URnetworkを評価</value>
     <comment>Used in Main/Account/AccountRootView.swift.</comment>
   </data>
+  <data name="route_internet" xml:space="preserve">
+    <value>インターネット</value>
+    <comment>Right stop label of the onboarding route line the anonymized member travels along.</comment>
+  </data>
   <data name="route_local" xml:space="preserve">
     <value>切断時にローカルトラフィックを許可する</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="route_you" xml:space="preserve">
+    <value>あなた</value>
+    <comment>Left stop label of the onboarding route line the anonymized member travels along (you -&gt; URnetwork -&gt; internet).</comment>
   </data>
   <data name="rules" xml:space="preserve">
     <value>ルール</value>
     <comment>A heading for the pinned split rules.</comment>
   </data>
+  <data name="safety_rule" xml:space="preserve">
+    <value>安全ルール</value>
+    <comment>A short label on a blocked or locally routed split-rule activity row whose traffic URnetwork safety rules kept off the network.</comment>
+  </data>
+  <data name="safety_rule_detail" xml:space="preserve">
+    <value>URnetwork の安全ルールにより、このトラフィックはネットワークから除外されています。たとえば、識別できない暗号化プロトコルなどです。ローカル分割ルールを使うと、あなた自身の IP から VPN の外へ送られます。</value>
+    <comment>Explains a split-rule activity row that URnetwork safety rules kept off the network, and how a local split rule can use it outside the VPN.</comment>
+  </data>
   <data name="save" xml:space="preserve">
     <value>保存</value>
     <comment>Profile</comment>
+  </data>
+  <data name="save_33_percent" xml:space="preserve">
+    <value>33% お得</value>
+    <comment>Line under the yearly plan's price: the saving against paying monthly.</comment>
   </data>
   <data name="save_logs" xml:space="preserve">
     <value>ログを保存</value>
@@ -3337,6 +4703,10 @@
   <data name="saved_as" xml:space="preserve">
     <value>{} として保存されます</value>
     <comment>Split rules: note under the host input when the entry will be stored in a normalised form. {value} is that form, for example 10.0.0.0/8 for a typed 10.0.0.5/8.</comment>
+  </data>
+  <data name="scan_qr_code" xml:space="preserve">
+    <value>QR コードをスキャン</value>
+    <comment>Button: open the camera to scan a QR code.</comment>
   </data>
   <data name="search_apps_placeholder" xml:space="preserve">
     <value>アプリを検索</value>
@@ -3451,6 +4821,10 @@
     <value>送信</value>
     <comment>Call to action</comment>
   </data>
+  <data name="send_feedback_contact" xml:space="preserve">
+    <value>フィードバックを直接お送りいただくか、{0} までメールするか、{1} に参加して直接サポートを受けてください。</value>
+    <comment>Feedback screen: support contacts. The first argument is the support email address, the second is the name of the community chat (Discord); both are links.</comment>
+  </data>
   <data name="send_product_updates" xml:space="preserve">
     <value>製品のアップデートを送信する</value>
     <comment>Settings</comment>
@@ -3462,6 +4836,10 @@
   <data name="send_reset_link_2" xml:space="preserve">
     <value>リセットリンクを送信</value>
     <comment>Used in Authenticate/ResetPassword/ResetPasswordView.swift.</comment>
+  </data>
+  <data name="send_tao_to_mirror" xml:space="preserve">
+    <value>ガス代として約 {0} TAO を {1} に送ってください。</value>
+    <comment>Instruction to fund the gas key.</comment>
   </data>
   <data name="send_us_your_feedback_directly_or_join_our" xml:space="preserve">
     <value>フィードバックを直接送信するか、直接サポートを受けるために[Discordに参加](https://discord.com/invite/RUNZXMwPRK)してください。</value>
@@ -3487,9 +4865,41 @@
     <value>設定</value>
     <comment>Account Screen</comment>
   </data>
+  <data name="settings_add_quick_tile" xml:space="preserve">
+    <value>クイック接続タイルを追加</value>
+    <comment>Settings row that asks the system to add the Quick Settings tile (Android 13+).</comment>
+  </data>
+  <data name="settings_add_quick_tile_description" xml:space="preserve">
+    <value>クイック設定パネルとロック画面から接続・切断できます。</value>
+    <comment>Description under the add-tile settings row.</comment>
+  </data>
+  <data name="settings_add_widgets" xml:space="preserve">
+    <value>ホーム画面にウィジェットを追加</value>
+    <comment>Settings row that opens the widget picker to pin the app's widgets.</comment>
+  </data>
+  <data name="settings_add_widgets_description" xml:space="preserve">
+    <value>クイック接続、データ残高、地球儀上のプロバイダー、主要な契約。</value>
+    <comment>Description under the add-widgets settings row.</comment>
+  </data>
   <data name="share" xml:space="preserve">
     <value>共有</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="share_extenders" xml:space="preserve">
+    <value>エクステンダーを共有</value>
+    <comment>Button and screen title: share the known extenders as a QR code.</comment>
+  </data>
+  <data name="share_extenders_count.other" xml:space="preserve">
+    <value>{} 件のエクステンダー</value>
+    <comment>How many extenders the share code carries.</comment>
+  </data>
+  <data name="share_extenders_hint" xml:space="preserve">
+    <value>このコードを別の URnetwork アプリでスキャンすると、これらのエクステンダーを共有できます。</value>
+    <comment>Help text on the share screen under the QR code.</comment>
+  </data>
+  <data name="share_extenders_too_large" xml:space="preserve">
+    <value>共有コードが大きすぎて QR コードにできません。代わりに共有テキストをコピーしてください。</value>
+    <comment>Shown on the share screen when the share payload exceeds what a QR code can hold; the text form is still offered.</comment>
   </data>
   <data name="share_logs" xml:space="preserve">
     <value>ログを共有</value>
@@ -3499,9 +4909,21 @@
     <value>ログを共有</value>
     <comment>Used in Shared/Views/ExportLogsButton/ExportLogsButton.swift.</comment>
   </data>
+  <data name="share_text_copied" xml:space="preserve">
+    <value>共有テキストをコピーしました</value>
+    <comment>Confirmation after the share text of an extender code was copied to the clipboard.</comment>
+  </data>
   <data name="share_urnetwork" xml:space="preserve">
     <value>URnetworkを共有</value>
     <comment>Used in Shared/Views/AccountMenu.swift.</comment>
+  </data>
+  <data name="shortcut_connect_long" xml:space="preserve">
+    <value>URnetwork に接続</value>
+    <comment>Long label of the launcher shortcut that connects the VPN.</comment>
+  </data>
+  <data name="shortcut_disconnect_long" xml:space="preserve">
+    <value>URnetwork から切断</value>
+    <comment>Long label of the launcher shortcut that disconnects the VPN.</comment>
   </data>
   <data name="show" xml:space="preserve">
     <value>表示</value>
@@ -3510,6 +4932,10 @@
   <data name="show_icon_when_connected" xml:space="preserve">
     <value>接続時にURアイコンを表示</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="show_kill_switch_exception" xml:space="preserve">
+    <value>キルスイッチの例外を表示</value>
+    <comment>Accessibility label for the kill switch exception information button.</comment>
   </data>
   <data name="show_on_points_leaderboard" xml:space="preserve">
     <value>ネットワーク名を表示</value>
@@ -3545,6 +4971,10 @@
   </data>
   <data name="sign_in_methods" xml:space="preserve">
     <value>サインイン方法</value>
+  </data>
+  <data name="sign_in_with_apple" xml:space="preserve">
+    <value>Apple でサインイン</value>
+    <comment>Login stack: full-width Apple sign-in button on platforms that use the ur.io browser bridge</comment>
   </data>
   <data name="sign_in_with_code" xml:space="preserve">
     <value>コードでサインイン</value>
@@ -3593,6 +5023,14 @@
     <value>接続するとリアルタイムのアクティビティが表示されます</value>
     <comment>Disabled stat cards: connect-to-view hint</comment>
   </data>
+  <data name="site_app_contracts" xml:space="preserve">
+    <value>契約</value>
+    <comment>App connect screen: contract details section title</comment>
+  </data>
+  <data name="site_app_copied" xml:space="preserve">
+    <value>コピーしました</value>
+    <comment>App: copied flash. Also the linux share-dialog toast after copying the identity payload.</comment>
+  </data>
   <data name="site_app_country" xml:space="preserve">
     <value>国</value>
     <comment>Reliability: country column</comment>
@@ -3637,6 +5075,10 @@
     <value>プラン</value>
     <comment>Connect drawer: plan section label</comment>
   </data>
+  <data name="site_app_providers" xml:space="preserve">
+    <value>プロバイダー</value>
+    <comment>App connect screen: provider grid section title</comment>
+  </data>
   <data name="site_app_proxies" xml:space="preserve">
     <value>プロキシ</value>
     <comment>App account: proxies row/screen title</comment>
@@ -3656,6 +5098,10 @@
   <data name="site_app_throughput" xml:space="preserve">
     <value>転送量</value>
     <comment>Connect drawer: live transfer timeseries section</comment>
+  </data>
+  <data name="site_billing_portal_error" xml:space="preserve">
+    <value>請求ポータルを開けませんでした。</value>
+    <comment>Account panel: billing portal failed to open</comment>
   </data>
   <data name="site_connect_code_hint" xml:space="preserve">
     <value>アプリで登録するときにこのコードを入力してください。</value>
@@ -3841,6 +5287,10 @@
     <value>Pro サブスクリプションは Stripe 経由で請求されています。以下でいつでもお支払い情報の更新や解約ができます。</value>
     <comment>Subscription: Stripe-billed body</comment>
   </data>
+  <data name="skip" xml:space="preserve">
+    <value>スキップ</value>
+    <comment>Small muted button at the top of the post-login onboarding flow that leaves the whole flow.</comment>
+  </data>
   <data name="sn_payout_schedule" xml:space="preserve">
     <value>収益はエポックごとに確定し、受け取ると SN25α で Bittensor の coldkey に支払われます。</value>
     <comment>Earnings card: how providers are paid on the UR subnet (WHITEPAPER §5.2, §8.3). Earnings settle per epoch and are paid in SN25α as stake to the provider's Bittensor coldkey once the provider claims them; nothing is paid automatically. Followed by sn_payout_schedule_times when the epoch schedule is known.</comment>
@@ -3849,9 +5299,33 @@
     <value>このエポックは {0} に終了します。あなたの取り分は {1} から {2} まで受け取れます。</value>
     <comment>Earnings card, after sn_payout_schedule: when the current epoch ends, when its share can be claimed and when an unclaimed share expires. The three values are local date-times the app fills from the chain's epoch schedule (the coordinator's policy: the claim-open offset and the claim TTL), never fixed durations.</comment>
   </data>
+  <data name="sn_status_claimable" xml:space="preserve">
+    <value>受け取り可能</value>
+    <comment>Claim status of an epoch whose alpha can be claimed now.</comment>
+  </data>
+  <data name="sn_status_not_finalized" xml:space="preserve">
+    <value>未確定</value>
+    <comment>Claim status of an epoch the vault has not finalized yet.</comment>
+  </data>
+  <data name="sn_status_open" xml:space="preserve">
+    <value>進行中</value>
+    <comment>Claim status of an epoch that is still open (not yet finalized on chain).</comment>
+  </data>
+  <data name="solana_one_time_payment" xml:space="preserve">
+    <value>Solana 上の USDC での支払いは年 1 回の一括払いで、無料トライアルはありません。</value>
+    <comment>Note under the Solana payment button on the plan picker: Solana is a one-time yearly payment, the free trial is Stripe only.</comment>
+  </data>
+  <data name="solana_payment_still_checking" xml:space="preserve">
+    <value>Solana での支払いをまだ確認しています。ネットワーク上の確認には 1～2 分かかることがあります。</value>
+    <comment>Shown once when the check for a Solana Pay payment (started when the app returns from the wallet) has run 20 seconds without the payment landing. The check keeps going for up to two minutes; the app cannot know whether the wallet actually sent anything, so do not say the payment was received.</comment>
+  </data>
   <data name="solana_sign_in" xml:space="preserve">
     <value>Solanaでサインイン</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="solana_wallet" xml:space="preserve">
+    <value>Solana ウォレット</value>
+    <comment>Label of the connected Solana wallet block on the Earnings screen (parallel to bittensor_wallet).</comment>
   </data>
   <data name="something_went_wrong" xml:space="preserve">
     <value>エラーが発生しました。</value>
@@ -3945,6 +5419,10 @@
     <value>収益を得始めるには、ネットワークに参加してください</value>
     <comment>Guest mode overlay</comment>
   </data>
+  <data name="start_free_trial" xml:space="preserve">
+    <value>無料トライアルを開始</value>
+    <comment>Primary button of the plan picker (onboarding and upgrade): starts the paid plan's free trial. Replaces 'Join the movement'.</comment>
+  </data>
   <data name="stay" xml:space="preserve">
     <value>とどまる</value>
     <comment>Confirmation button that keeps the user on the seedphrase screen after the warning.</comment>
@@ -4005,6 +5483,14 @@
     <value>強力な匿名化</value>
     <comment>Connect drawer: strong anonymization toggle — the inverse of allow direct (direct connections expose the real source IP to the provider).</comment>
   </data>
+  <data name="subscribe" xml:space="preserve">
+    <value>購読する</value>
+    <comment>Button on the plan picker for the monthly plan, which has no free trial.</comment>
+  </data>
+  <data name="subscription_purchased_under_different_account" xml:space="preserve">
+    <value>サブスクリプションは別のアカウントで購入されています。利用するにはそのアカウントでログインしてください。</value>
+    <comment>The store purchase belongs to a different network than the one logged in — crediting must not go to the wrong account, so tell the user which way out exists. Apple: restore-purchases outcome (Shared/ViewModels/AppStoreSubscriptionManager.swift). Android: terminal `wrong_network` answer from the Play purchase report (google/PlanViewModel.kt); the purchase is still acknowledged so Play does not auto-refund it.</comment>
+  </data>
   <data name="successfully_claimed_multiplier" xml:space="preserve">
     <value>乗数を受け取りました！</value>
     <comment>Snackbar shown when the earnings multiplier is claimed successfully. Used in Main/Account/Settings/SettingsView.swift.</comment>
@@ -4053,6 +5539,10 @@
     <value>{} から切断してアカウントを切り替えますか？</value>
     <comment>Call to action</comment>
   </data>
+  <data name="symbol_ellipsis" xml:space="preserve">
+    <value>...</value>
+    <comment>An ellipsis character used to indicate ongoing processing.</comment>
+  </data>
   <data name="sync_device_location_with_oldest_provider" xml:space="preserve">
     <value>デバイスの位置情報を接続時間が最も長いプロバイダーと同期</value>
     <comment>Toggle that makes the device report the location of the longest-connected provider (Android mock location) instead of the real location.</comment>
@@ -4064,6 +5554,10 @@
   <data name="system" xml:space="preserve">
     <value>システム</value>
     <comment>Used in Main/Account/Settings/SettingsForm-macOS.swift.</comment>
+  </data>
+  <data name="tao_amount_linux" xml:space="preserve">
+    <value>{} TAO</value>
+    <comment>A TAO amount with its unit (the gas key balance).</comment>
   </data>
   <data name="tap_to_connect" xml:space="preserve">
     <value>タップして接続</value>
@@ -4089,6 +5583,10 @@
     <value>フィードバックありがとうございます！</value>
     <comment>Confirmation shown after feedback is sent.</comment>
   </data>
+  <data name="the_purchase_could_not_be_completed" xml:space="preserve">
+    <value>購入を完了できませんでした。もう一度お試しください。</value>
+    <comment>Shown inline in the upgrade flow when a StoreKit purchase attempt throws (Shared/ViewModels/AppStoreSubscriptionManager.swift). Every purchase failure is shown to the user — a payment error they cannot see is one they will hit again. User cancellation is not an error and never shows this.</comment>
+  </data>
   <data name="there_was_an_error_checking_the_network_name" xml:space="preserve">
     <value>ネットワーク名の確認中にエラーが発生しました</value>
     <comment>Used in Authenticate/CreateNetwork/CreateNetworkViewModel.swift.</comment>
@@ -4105,6 +5603,10 @@
     <value>⚠️ 表示されるのはこの一度きりです。</value>
     <comment>A warning message displayed in the seedphrase display view.</comment>
   </data>
+  <data name="this_purchase_couldn_t_be_verified" xml:space="preserve">
+    <value>この購入を App Store で確認できなかったため、アカウントに適用できません。請求されたのにプランが更新されない場合は、サポートにお問い合わせください。</value>
+    <comment>Shown inline in the upgrade flow when the server's verify answer for a purchase's transaction JWS is terminal `invalid` — the proof will never verify. The transaction is still finished so StoreKit stops redelivering it; this message is how the failure reaches the user instead of a silent success (Shared/ViewModels/AppStoreSubscriptionManager.swift). Apple sibling of purchase_could_not_be_verified (android).</comment>
+  </data>
   <data name="this_region" xml:space="preserve">
     <value>この地域</value>
     <comment>dns settings</comment>
@@ -4119,6 +5621,30 @@
   </data>
   <data name="title_login" xml:space="preserve">
     <value>ログイン</value>
+  </data>
+  <data name="top200" xml:space="preserve">
+    <value>トップ 200</value>
+    <comment>Badge text for the head mining spot.</comment>
+  </data>
+  <data name="top200_bound_detail" xml:space="preserve">
+    <value>エミッションは coldkey に直接支払われます。バインドはエポックごとに更新されます。</value>
+    <comment>Detail under the bound status.</comment>
+  </data>
+  <data name="top200_bound_status" xml:space="preserve">
+    <value>UID {0} · 順位 #{1}</value>
+    <comment>Status row once bound.</comment>
+  </data>
+  <data name="top200_demotion_warning" xml:space="preserve">
+    <value>スコアが除外ラインに近づいています。枠を維持するには、ルーティング可能な IP を追加してください。</value>
+    <comment>Warning when the score nears the floor.</comment>
+  </data>
+  <data name="top200_detail" xml:space="preserve">
+    <value>あなたのネットワークのルーティング可能な IP の幅は、上位 {1} 枠のうち約 #{0} 位です。上位のマイナーは tempo ごとに SN25α を直接獲得します。</value>
+    <comment>Detail of the Top 200 tile when eligible.</comment>
+  </data>
+  <data name="top200_you_qualify" xml:space="preserve">
+    <value>資格があります</value>
+    <comment>Headline of the Top 200 tile when eligible.</comment>
   </data>
   <data name="top_matches" xml:space="preserve">
     <value>トップマッチ</value>
@@ -4164,6 +5690,62 @@
     <value>送金が開始されました。チェーン上で取引が処理されると完了します。</value>
     <comment>Transfer Submitted Overlay</comment>
   </data>
+  <data name="transport" xml:space="preserve">
+    <value>トランスポート</value>
+    <comment>Section header of the transport mode selection (Auto or a single transport).</comment>
+  </data>
+  <data name="transport_auto_degraded" xml:space="preserve">
+    <value>システムの制約により一部の有効なトランスポートを実行できないため、自動モードは制限付きで動作しています。</value>
+    <comment>Generic warning banner in the transport settings editor when the Auto policy is degraded for a constraint this app version does not recognize (the SDK may report new constraint kinds; "memory" has its own banner).</comment>
+  </data>
+  <data name="transport_auto_degraded_memory" xml:space="preserve">
+    <value>システムのメモリ制限により一部の有効なトランスポートを実行できないため、自動モードは制限付きで動作しています。</value>
+    <comment>Warning banner in the transport settings editor when the Auto policy is degraded because the platform memory budget cannot admit every enabled transport.</comment>
+  </data>
+  <data name="transport_auto_description" xml:space="preserve">
+    <value>推奨。下で有効にしたトランスポートを使います。</value>
+    <comment>Subtitle of the Auto transport mode row.</comment>
+  </data>
+  <data name="transport_client_footer" xml:space="preserve">
+    <value>このデバイスがプロバイダーに接続するときに使うトランスポート。自動モードでは、有効なトランスポートを優先順に試し、同じ階層の正常なトランスポートをすべて並行して接続しておきます。</value>
+    <comment>Footer of the client transport mode section.</comment>
+  </data>
+  <data name="transport_dns_description" xml:space="preserve">
+    <value>DNS トラフィックに偽装します。直接接続をフィルタリングするネットワーク向けです。</value>
+    <comment>One line description of the whodis (DNS) transport in the transport settings editor.</comment>
+  </data>
+  <data name="transport_dnspump_description" xml:space="preserve">
+    <value>応答を常に送り続ける DNS トラフィックに偽装します。帯域幅は最も低く、可用性は最も高くなります。</value>
+    <comment>One line description of the whodis pump (DNS pump) transport in the transport settings editor.</comment>
+  </data>
+  <data name="transport_h1_description" xml:space="preserve">
+    <value>TLS で直接接続。ほとんどのネットワークで動作します。</value>
+    <comment>One line description of the H1 transport in the transport settings editor.</comment>
+  </data>
+  <data name="transport_h3_description" xml:space="preserve">
+    <value>QUIC で直接接続。フィルタリングされていない環境では最速です。</value>
+    <comment>One line description of the H3 transport in the transport settings editor.</comment>
+  </data>
+  <data name="transport_provider_footer" xml:space="preserve">
+    <value>このデバイスがほかの人に提供するときに使うトランスポート。自動モードでは、有効なトランスポートを優先順に試し、同じ階層の正常なトランスポートをすべて並行して接続しておきます。</value>
+    <comment>Footer of the provider transport mode section.</comment>
+  </data>
+  <data name="transport_queued" xml:space="preserve">
+    <value>待機中</value>
+    <comment>Transport bar label for traffic admitted for sending but not yet attributed to a physical transport.</comment>
+  </data>
+  <data name="transport_unavailable_system_constraints" xml:space="preserve">
+    <value>システムの制約により利用できません</value>
+    <comment>Accessibility label / tooltip on the warning icon next to a transport that is enabled under Auto but not currently eligible under a system constraint (for example the platform memory budget). A runtime warning, not a settings restriction: the toggle stays editable.</comment>
+  </data>
+  <data name="transport_unused" xml:space="preserve">
+    <value>未使用</value>
+    <comment>Prefix of the transport bar footer listing the enabled transports that carried no traffic in the stats window.</comment>
+  </data>
+  <data name="transports" xml:space="preserve">
+    <value>トランスポート</value>
+    <comment>Title of the transport distribution bar under the client statistics chart and of the transport settings editor.</comment>
+  </data>
   <data name="trusted_by_over_100_000_private_networks" xml:space="preserve">
     <value>10万以上のプライベートネットワークに信頼されています</value>
     <comment>Used in Shared/Views/Introduction/IntroductionView.swift.</comment>
@@ -4187,6 +5769,10 @@
   <data name="tunnel_stopped_unexpectedly" xml:space="preserve">
     <value>接続が停止しました。</value>
     <comment>Connect: notice that the connection stopped on its own.</comment>
+  </data>
+  <data name="unclaimed" xml:space="preserve">
+    <value>未受け取り</value>
+    <comment>Label of the unclaimed alpha tile.</comment>
   </data>
   <data name="unencrypted_dns" xml:space="preserve">
     <value>暗号化なしのDNS</value>
@@ -4292,6 +5878,10 @@
     <value>URnetwork VPN が起動しました</value>
     <comment>Used in Shared/Intents/ConnectIntent.swift.</comment>
   </data>
+  <data name="usdc_payouts_until_migration" xml:space="preserve">
+    <value>Bittensor への移行が完了するまで、USDC の支払いは引き続きこのウォレットに送られます。</value>
+    <comment>Second paragraph of the Solana connect sheet/card, and the body line under a connected Solana wallet.</comment>
+  </data>
   <data name="usdc_solana_network_only" xml:space="preserve">
     <value>USDCはSolanaネットワークでのみ送金してください。他のネットワークで送金したUSDCは届きません。</value>
     <comment>Payment: the chain to send on. Shown wherever a USDC payment is requested, because USDC exists on many chains and a transfer sent on the wrong one is lost.</comment>
@@ -4310,6 +5900,10 @@
   <data name="use_as_proxy_no_vpn_detail" xml:space="preserve">
     <value>ur.io を開いて、VPN なしで URnetwork を HTTPS プロキシとして使用します。SOCKS と WireGuard は Pro で利用できます。</value>
     <comment>Subtitle under the cloud-proxy Settings row explaining that it opens ur.io and that SOCKS and WireGuard require Pro.</comment>
+  </data>
+  <data name="use_extender_settings" xml:space="preserve">
+    <value>エクステンダー設定を使う</value>
+    <comment>Toggle on the import screen: also apply the extender settings carried by the code.</comment>
   </data>
   <data name="use_most_stable_provider" xml:space="preserve">
     <value>最も安定したプロバイダーを使用します</value>
@@ -4350,6 +5944,9 @@
   <data name="uses_ur_protocol" xml:space="preserve">
     <value>UR Protocolを使用</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="value_string" xml:space="preserve">
+    <value>{}</value>
   </data>
   <data name="value_with_unit" xml:space="preserve">
     <value>{0} {1}</value>
@@ -4393,6 +5990,10 @@
   <data name="verify_input_label" xml:space="preserve">
     <value>認証コード</value>
     <comment>Label for the verification code input field</comment>
+  </data>
+  <data name="verify_seeker" xml:space="preserve">
+    <value>Seeker を確認</value>
+    <comment>Standalone Seeker verification action (points multiplier only).</comment>
   </data>
   <data name="verify_seeker_token_btn" xml:space="preserve">
     <value>シーカー事前予約トークンを認証</value>
@@ -4562,17 +6163,41 @@
     <value>ウォレット</value>
     <comment>Account Screen</comment>
   </data>
+  <data name="wallet_blocked" xml:space="preserve">
+    <value>このウォレットは URnetwork では使用できません。</value>
+    <comment>Error when a wallet address is on the operator's ban list; the user cannot continue.</comment>
+  </data>
   <data name="wallet_connect_failed" xml:space="preserve">
     <value>ウォレットを接続できませんでした。</value>
     <comment>Error shown when connecting an external wallet to the account fails.</comment>
+  </data>
+  <data name="wallet_connect_signed_note_linux" xml:space="preserve">
+    <value>ウォレットがメッセージに署名して、あなたのものであることを証明します。チェーンには何も送信されません。</value>
+    <comment>Note under the manual address entry: the wallet only signs a proof of ownership.</comment>
   </data>
   <data name="wallet_connected" xml:space="preserve">
     <value>ウォレットを接続しました。</value>
     <comment>Confirmation shown after an external wallet is connected to the account.</comment>
   </data>
+  <data name="wallet_connected_to_protocol" xml:space="preserve">
+    <value>UR プロトコルに接続済みです。受け取りはここに届きます。Alpha は接続後の次のエポックから貯まります。</value>
+    <comment>Line under the connected coldkey.</comment>
+  </data>
+  <data name="wallet_looks_new_warning" xml:space="preserve">
+    <value>このアドレスには Bittensor チェーン上の活動がまだありません。新しいウォレットのようです。続行する前に、自分のものか確認してください。</value>
+    <comment>Warning when a wallet address has no activity on the Bittensor chain yet; the user may continue.</comment>
+  </data>
   <data name="wallet_needs_network" xml:space="preserve">
     <value>このウォレットはまだネットワークにリンクされていません。ネットワーク名を選んで作成してください。</value>
     <comment>Shown on the create-network step after a wallet sign-in when the wallet isn't linked to any network yet. The user picks a network name and accepts the terms to create one; the wallet signature carries over.</comment>
+  </data>
+  <data name="wallet_not_retroactive" xml:space="preserve">
+    <value>ウォレットを接続すると、次のエポックから SN25α を獲得できます。以前のエポックはさかのぼって精算されません。</value>
+    <comment>Line on the wallet block before a wallet is connected.</comment>
+  </data>
+  <data name="wallet_options" xml:space="preserve">
+    <value>ウォレットのオプション</value>
+    <comment>Accessibility label of the three-dot overflow button next to “Connect Bittensor wallet” and on the connected Bittensor wallet block.</comment>
   </data>
   <data name="wallet_sign_in_failed" xml:space="preserve">
     <value>ウォレットでのサインインに失敗しました</value>
@@ -4581,6 +6206,14 @@
   <data name="wallet_sign_in_method_added" xml:space="preserve">
     <value>ウォレットのサインイン方法を追加しました</value>
     <comment>Snackbar message displayed when a wallet sign-in method is successfully added.</comment>
+  </data>
+  <data name="wallet_signature_mismatch_linux" xml:space="preserve">
+    <value>署名したウォレットは、入力されたアドレスのものではありません。</value>
+    <comment>Error when the bridge signed with a different wallet than the address the user typed.</comment>
+  </data>
+  <data name="we_re_confirming_your_purchase_with_the_app_store" xml:space="preserve">
+    <value>App Store で購入を確認しています。プランは自動的に更新されます。</value>
+    <comment>Body of the post-purchase screen while the confirmation poll runs (Shared/Views/PurchaseSuccessView.swift). Processing-shaped, not premium-shaped: the server learns of the purchase by webhook and has not confirmed yet.</comment>
   </data>
   <data name="welcome_offer_eyebrow" xml:space="preserve">
     <value>ウェルカムオファー</value>
@@ -4597,6 +6230,110 @@
   <data name="when_you_refer_a_friend" xml:space="preserve">
     <value>友達を紹介するとき：</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="widget_client" xml:space="preserve">
+    <value>クライアント</value>
+    <comment>Dashboard widget chart title: this device's own traffic.</comment>
+  </data>
+  <data name="widget_connect_once" xml:space="preserve">
+    <value>一度接続すると、ここにトラフィックが表示されます</value>
+    <comment>Dashboard widget footer before the tunnel has ever written data.</comment>
+  </data>
+  <data name="widget_connect_to_see_contracts" xml:space="preserve">
+    <value>接続すると契約が表示されます</value>
+    <comment>Contracts widget empty state while the tunnel is down.</comment>
+  </data>
+  <data name="widget_contract_stack_accessibility.other" xml:space="preserve">
+    <value>{0} 件の契約、{1}</value>
+    <comment>Accessibility label for one contract stack in the contracts widget. The arguments are the number of contracts and the bytes moved.</comment>
+  </data>
+  <data name="widget_contracts_description" xml:space="preserve">
+    <value>主要なクライアント契約が、発生と終了に合わせて流れるように表示されます。</value>
+    <comment>Description of the contracts widget in the widget gallery.</comment>
+  </data>
+  <data name="widget_control_description" xml:space="preserve">
+    <value>URnetwork の VPN を接続または切断します。</value>
+    <comment>Description of the quick connect control in the Control Center gallery.</comment>
+  </data>
+  <data name="widget_dashboard_description" xml:space="preserve">
+    <value>データ残高、接続中の場所、トラフィック、クイック接続。</value>
+    <comment>Description of the dashboard widget in the widget gallery.</comment>
+  </data>
+  <data name="widget_globe_description" xml:space="preserve">
+    <value>接続中のプロバイダーを地球儀に表示します。</value>
+    <comment>Description of the provider globe widget in the widget gallery.</comment>
+  </data>
+  <data name="widget_more_providers" xml:space="preserve">
+    <value>ほか {} 件</value>
+    <comment>Provider globe widget: providers not shown in the list. The argument is a count.</comment>
+  </data>
+  <data name="widget_no_contracts" xml:space="preserve">
+    <value>契約なし</value>
+    <comment>Contracts widget empty state while connected with no open client contracts.</comment>
+  </data>
+  <data name="widget_no_providers" xml:space="preserve">
+    <value>プロバイダーなし</value>
+    <comment>Badge on the small provider globe widget when no providers are connected.</comment>
+  </data>
+  <data name="widget_not_providing" xml:space="preserve">
+    <value>提供していません</value>
+    <comment>Dashboard widget provider chart label when providing is off.</comment>
+  </data>
+  <data name="widget_not_signed_in" xml:space="preserve">
+    <value>未サインイン</value>
+    <comment>Quick connect control / widget value when the app has no tunnel configuration yet (fresh install or logged out).</comment>
+  </data>
+  <data name="widget_open" xml:space="preserve">
+    <value>開く</value>
+    <comment>Button on the Home Screen widget that opens the app when the tunnel is not configured yet.</comment>
+  </data>
+  <data name="widget_open_to_set_up" xml:space="preserve">
+    <value>URnetwork を開いて設定</value>
+    <comment>Widget subtitle when the app has no tunnel configuration yet.</comment>
+  </data>
+  <data name="widget_peak_rate" xml:space="preserve">
+    <value>ピーク {}</value>
+    <comment>Chart label; the argument is a formatted byte rate such as '1.2 MB/s'.</comment>
+  </data>
+  <data name="widget_peer_count.other" xml:space="preserve">
+    <value>{} ピア</value>
+    <comment>Contracts widget header: number of peers with open contracts.</comment>
+  </data>
+  <data name="widget_provider" xml:space="preserve">
+    <value>プロバイダー</value>
+    <comment>Dashboard widget chart title: traffic relayed for others while providing.</comment>
+  </data>
+  <data name="widget_provider_count.other" xml:space="preserve">
+    <value>{} プロバイダー</value>
+    <comment>Widget subtitle: number of connected providers.</comment>
+  </data>
+  <data name="widget_provider_count_providing.other" xml:space="preserve">
+    <value>{} プロバイダー · 提供中</value>
+    <comment>Widget subtitle: number of connected providers while this device is also providing.</comment>
+  </data>
+  <data name="widget_provider_mode_title" xml:space="preserve">
+    <value>プロバイダー · {}</value>
+    <comment>Title above the provider traffic chart in the dashboard widget: the chart name with the current provide mode (Auto, Always, Network, Never).</comment>
+  </data>
+  <data name="widget_provider_stats_when_enabled" xml:space="preserve">
+    <value>プロバイダーを有効にすると、プロバイダーの統計が表示されます。</value>
+    <comment>Shown in the dashboard widget in place of the provider traffic chart while providing is off.</comment>
+  </data>
+  <data name="widget_quick_tile_added" xml:space="preserve">
+    <value>クイック接続タイルを追加しました</value>
+    <comment>Toast after the system added the Quick Settings tile.</comment>
+  </data>
+  <data name="widget_toggle_intent_title" xml:space="preserve">
+    <value>URnetwork VPN のオン/オフ</value>
+    <comment>Title of the Set-Value intent behind the quick connect control and widget toggle (shown by the system in Shortcuts/debug UI).</comment>
+  </data>
+  <data name="widget_updated_ago" xml:space="preserve">
+    <value>{}に更新</value>
+    <comment>Dashboard widget footer; the argument is a localized relative time such as '3 min. ago'.</comment>
+  </data>
+  <data name="widget_updated_just_now" xml:space="preserve">
+    <value>たった今更新</value>
+    <comment>Dashboard widget footer in the widget gallery preview.</comment>
   </data>
   <data name="widgets" xml:space="preserve">
     <value>ウィジェット</value>
@@ -4638,6 +6375,10 @@
     <value>あなたは生涯 3 GiB/日 を獲得できます</value>
     <comment>Text displayed in a scrollable view within a VStack in the body of a view that is displayed when the user is viewing their referral code.</comment>
   </data>
+  <data name="you_get_free_data_every_day" xml:space="preserve">
+    <value>毎日無料のデータを受け取れます。</value>
+    <comment>Detail line under the onboarding data page title.</comment>
+  </data>
   <data name="you_have_n_other_devices_online.other" xml:space="preserve">
     <value>他に{}台のデバイスがオンラインです</value>
   </data>
@@ -4656,6 +6397,10 @@
   <data name="you_re_premium" xml:space="preserve">
     <value>あなたはプレミアムです。</value>
     <comment>Used in Main/Account/AccountRootView.swift.</comment>
+  </data>
+  <data name="your_bandwidth" xml:space="preserve">
+    <value>あなたの帯域幅</value>
+    <comment>Title of the onboarding data page (was 'Boost your bandwidth').</comment>
   </data>
   <data name="your_email" xml:space="preserve">
     <value>メールアドレス</value>
@@ -4676,6 +6421,10 @@
   <data name="your_purchase_needs_to_be_approved_before_it_can" xml:space="preserve">
     <value>購入を完了するには承認が必要です。承認されるとUR Proは自動的に有効になります。もう一度購入する必要はありません。</value>
     <comment>Used in Shared/Views/UpgradeSubscriptionSheet.swift.</comment>
+  </data>
+  <data name="your_referral_code" xml:space="preserve">
+    <value>あなたの紹介コード</value>
+    <comment>Label above the referral code pill in the gold referral panel.</comment>
   </data>
   <data name="your_referral_link" xml:space="preserve">
     <value>あなたの紹介リンク</value>

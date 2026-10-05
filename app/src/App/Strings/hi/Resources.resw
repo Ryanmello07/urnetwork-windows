@@ -68,9 +68,17 @@
     <value>{} (सत्यापित)</value>
     <comment>The account's email or phone, marked as verified. The argument is the email or phone number.</comment>
   </data>
+  <data name="account_isn_t_ready_for_purchases" xml:space="preserve">
+    <value>आपका खाता अभी खरीदारी के लिए तैयार नहीं है। ऐप को फिर से शुरू करें और दोबारा कोशिश करें।</value>
+    <comment>Shown when a purchase is refused before contacting the store because the account is not ready: on apple the networkId is missing or unparseable (Shared/ViewModels/AppStoreSubscriptionManager.swift), on android the active network space has no api yet (the Stripe sheet and pay page purchasers). The purchase could never be credited to anyone. This used to be a silent no-op.</comment>
+  </data>
   <data name="account_needs_verification" xml:space="preserve">
     <value>इस खाते के लिए सत्यापन आवश्यक है। अपना ईमेल देखें।</value>
     <comment>Sign-in error shown when the account exists but has not been verified yet.</comment>
+  </data>
+  <data name="active_extenders" xml:space="preserve">
+    <value>सक्रिय एक्सटेंडर</value>
+    <comment>Accessibility label of the row of rings, one per extender carrying a live connection.</comment>
   </data>
   <data name="activity" xml:space="preserve">
     <value>गतिविधि</value>
@@ -96,6 +104,10 @@
     <value>इमोजी जोड़ें</value>
     <comment>Points leaderboard: button that opens the emoji tag editor when no tag is set yet.</comment>
   </data>
+  <data name="add_local_split_rule" xml:space="preserve">
+    <value>स्थानीय रूप से रूट करें</value>
+    <comment>Call to action on a split-rule activity row blocked by URnetwork safety rules: create a local split rule for its hosts.</comment>
+  </data>
   <data name="add_referral_code" xml:space="preserve">
     <value>रेफरल कोड जोड़ें</value>
     <comment>Call to action</comment>
@@ -106,6 +118,10 @@
   <data name="add_sign_in_method_2" xml:space="preserve">
     <value>साइन-इन विधि जोड़ें</value>
     <comment>Button text for adding a sign-in method.</comment>
+  </data>
+  <data name="add_tao_for_gas" xml:space="preserve">
+    <value>गैस के लिए TAO जोड़ें</value>
+    <comment>State when the gas key has no TAO.</comment>
   </data>
   <data name="adjust_setting_always_fill_data_faster" xml:space="preserve">
     <value>आप सेटिंग को "हमेशा" पर समायोजित कर सकते हैं ताकि मुफ्त डेटा तेजी से भर सके।</value>
@@ -437,6 +453,10 @@
     <value>ऐप संस्करण</value>
     <comment>Settings, about: label of the app version row.</comment>
   </data>
+  <data name="apple" xml:space="preserve">
+    <value>Apple</value>
+    <comment>A method of adding a sign-in method.</comment>
+  </data>
   <data name="apple_sign_in_method_added" xml:space="preserve">
     <value>Apple साइन-इन विधि जोड़ी गई</value>
     <comment>Snackbar message displayed when an Apple sign-in method is added.</comment>
@@ -566,9 +586,25 @@
     <value>बैलेंस कोड</value>
     <comment>Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.</comment>
   </data>
+  <data name="balance_code_already_redeemed_message" xml:space="preserve">
+    <value>यह बैलेंस कोड पहले ही रिडीम हो चुका है। अगर आपने इसे पहले रिडीम किया था, तो डेटा पहले से आपके बैलेंस में है।</value>
+    <comment>Redeem balance code: the server answered that this code was already redeemed. Distinct from invalid -- the user may have redeemed it on an earlier attempt that looked like a failure.</comment>
+  </data>
+  <data name="balance_code_data_added" xml:space="preserve">
+    <value>आपके बैलेंस में {} डेटा जोड़ा गया।</value>
+    <comment>Redeem balance code: confirmation of the data a redeemed code added to the network's balance (amount is a formatted byte count, e.g. "5.00 GiB"). A balance code is data only: never a plan or Pro upgrade.</comment>
+  </data>
+  <data name="balance_code_invalid_message" xml:space="preserve">
+    <value>यह बैलेंस कोड मान्य नहीं है। कोड जाँचें और दोबारा कोशिश करें।</value>
+    <comment>Redeem balance code: the server answered and rejected the code as unknown/invalid. Distinct from a transport failure, which must never be reported as a bad code.</comment>
+  </data>
   <data name="balance_code_redeemed" xml:space="preserve">
     <value>बैलेंस कोड रिडीम कर लिया गया।</value>
     <comment>Confirmation shown after a balance code is redeemed.</comment>
+  </data>
+  <data name="balance_code_transport_error" xml:space="preserve">
+    <value>हम सर्वर तक नहीं पहुँच सके — अपना कनेक्शन जाँचें। अगर आपसे शुल्क लिया गया है, तो हो सकता है कोड पहले ही लागू हो चुका हो; दोबारा कोशिश करने से पहले अपना बैलेंस जाँचें।</value>
+    <comment>Redeem balance code: the request never got a server answer (network failure). Must NOT be worded as 'bad code' -- the redeem may have committed server-side, so tell the user to check their balance before retrying.</comment>
   </data>
   <data name="balance_code_where_to_buy" xml:space="preserve">
     <value>कोड नहीं है? डेटा कोड ur.io पर खरीदे जा सकते हैं और आपको ईमेल कर दिए जाते हैं।</value>
@@ -577,6 +613,10 @@
   <data name="balance_codes_link" xml:space="preserve">
     <value>बैलेंस कोड्स</value>
     <comment>Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.</comment>
+  </data>
+  <data name="balance_codes_load_error" xml:space="preserve">
+    <value>आपके बैलेंस कोड लोड नहीं हो सके। अपना कनेक्शन जाँचें और दोबारा कोशिश करें।</value>
+    <comment>Linux redeem-code sheet: shown in place of the redeemed-codes history when getNetworkRedeemedBalanceCodes FAILS (transport error, no response, or a server-side error) — distinct from the empty state's "No balance codes found", which is only for a successful fetch with no codes.</comment>
   </data>
   <data name="balance_codes_title" xml:space="preserve">
     <value>बैलेंस कोड्स</value>
@@ -594,13 +634,69 @@
     <value>सर्वश्रेष्ठ मेल</value>
     <comment>Label for a list or section showing the best matching results.</comment>
   </data>
+  <data name="best_value" xml:space="preserve">
+    <value>सबसे किफ़ायती</value>
+    <comment>Gold pill on the recommended (annual) plan card.</comment>
+  </data>
+  <data name="bittensor_choose_wallet" xml:space="preserve">
+    <value>अपना Bittensor वॉलेट चुनें</value>
+    <comment>Title of the picker that chooses which Bittensor wallet (Talisman or TAO.com) signs.</comment>
+  </data>
+  <data name="bittensor_continue_in_browser" xml:space="preserve">
+    <value>अपने ब्राउज़र में जारी रखें और {} एक्सटेंशन में अनुरोध को मंज़ूरी दें।</value>
+    <comment>Desktop: shown while the browser is open on the wallet page. The argument is the wallet product name (Talisman).</comment>
+  </data>
   <data name="bittensor_error_address_not_in_wallet" xml:space="preserve">
     <value>आपके {} वॉलेट में वह पता नहीं है जो आपने दर्ज किया है। उस खाते को वॉलेट में जोड़ें या कनेक्ट करें, या ऐसा पता दर्ज करें जो वॉलेट में हो।</value>
     <comment>ur.io Bittensor wallet card and sign-in: the chosen wallet does not offer the account of the address the user typed (Talisman does not hold it or has not connected it to the site; a WalletConnect wallet connected another account), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect).</comment>
   </data>
+  <data name="bittensor_error_challenge_expired" xml:space="preserve">
+    <value>यह अनुरोध समाप्त हो गया है। साइन करने के लिए नया संदेश पाने हेतु फिर से शुरू करें।</value>
+    <comment>Error: the single-use wallet challenge expired (5 minutes) before it was signed.</comment>
+  </data>
+  <data name="bittensor_error_extension_not_found" xml:space="preserve">
+    <value>इस ब्राउज़र में {} एक्सटेंशन नहीं मिला। इसे इंस्टॉल करें, फिर दोबारा कोशिश करें।</value>
+    <comment>Error: the wallet's browser extension is not installed in this browser. The argument is the wallet product name (Talisman).</comment>
+  </data>
+  <data name="bittensor_error_invalid_signature" xml:space="preserve">
+    <value>यह मान्य हस्ताक्षर नहीं है। अपने वॉलेट से पूरा 0x हस्ताक्षर पेस्ट करें।</value>
+    <comment>Error: the pasted or returned Bittensor signature is not a 64-byte hex signature.</comment>
+  </data>
+  <data name="bittensor_error_message_mismatch" xml:space="preserve">
+    <value>वॉलेट ने किसी दूसरे अनुरोध पर साइन किया। फिर से शुरू करें।</value>
+    <comment>Error: the wallet returned a signature over a different challenge than the one issued.</comment>
+  </data>
+  <data name="bittensor_manual_sign_instructions" xml:space="preserve">
+    <value>इस संदेश पर उस {} वॉलेट से साइन करें जिसमें आपकी coldkey है, फिर नीचे पता और हस्ताक्षर पेस्ट करें।</value>
+    <comment>Manual Bittensor wallet proof: how to sign the shown challenge message. The argument is the wallet product name (Talisman or TAO.com).</comment>
+  </data>
+  <data name="bittensor_message_to_sign" xml:space="preserve">
+    <value>साइन करने के लिए संदेश</value>
+    <comment>Label above the challenge message the user signs in their Bittensor wallet.</comment>
+  </data>
   <data name="bittensor_sign_in" xml:space="preserve">
     <value>Bittensor से साइन इन करें</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="bittensor_signature_label" xml:space="preserve">
+    <value>हस्ताक्षर</value>
+    <comment>Label of the field where the user pastes the Bittensor wallet signature.</comment>
+  </data>
+  <data name="bittensor_signature_placeholder" xml:space="preserve">
+    <value>0x… हस्ताक्षर पेस्ट करें</value>
+    <comment>Placeholder of the Bittensor signature field (a 0x-prefixed hex signature).</comment>
+  </data>
+  <data name="bittensor_wallet" xml:space="preserve">
+    <value>Bittensor वॉलेट</value>
+    <comment>Label of the connected wallet block.</comment>
+  </data>
+  <data name="bittensor_walletconnect_continue" xml:space="preserve">
+    <value>अपने ब्राउज़र में जारी रखें: अपने वॉलेट ऐप से कोड स्कैन करें, या इस डिवाइस पर वॉलेट खोलें।</value>
+    <comment>Shown while the browser is open on the WalletConnect page: the user scans the code or opens their wallet app there.</comment>
+  </data>
+  <data name="bittensor_walletconnect_hint" xml:space="preserve">
+    <value>Nova, Nightly और अन्य WalletConnect वॉलेट</value>
+    <comment>Subtitle of the WalletConnect option in the Bittensor wallet chooser: which wallets it works with. Nova, Nightly and WalletConnect are product names.</comment>
   </data>
   <data name="block_ads_and_trackers" xml:space="preserve">
     <value>विज्ञापन और ट्रैकर ब्लॉक करें</value>
@@ -610,6 +706,10 @@
     <value>अवरुद्ध</value>
     <comment>Label for the blocked traffic relayed for remote clients.</comment>
   </data>
+  <data name="blocked_location_block_failed" xml:space="preserve">
+    <value>{} को ब्लॉक नहीं किया जा सका। कृपया दोबारा कोशिश करें।</value>
+    <comment>Blocked locations: blocking a location failed. The argument is the location name.</comment>
+  </data>
   <data name="blocked_location_could_not_be_added_please_try" xml:space="preserve">
     <value>अवरुद्ध स्थान जोड़ा नहीं जा सका। कृपया बाद में पुनः प्रयास करें।</value>
     <comment>Used in Main/Account/BlockedLocations/BlockedLocationsViewModel.swift.</comment>
@@ -617,6 +717,10 @@
   <data name="blocked_location_could_not_be_removed_please_try" xml:space="preserve">
     <value>अवरुद्ध स्थान हटाया नहीं जा सका। कृपया बाद में पुनः प्रयास करें।</value>
     <comment>Used in Main/Account/BlockedLocations/BlockedLocationsViewModel.swift.</comment>
+  </data>
+  <data name="blocked_location_unblock_failed" xml:space="preserve">
+    <value>{} को अनब्लॉक नहीं किया जा सका। कृपया दोबारा कोशिश करें।</value>
+    <comment>Blocked locations: unblocking a location failed, so it is back in the list. The argument is the location name.</comment>
   </data>
   <data name="blocked_locations" xml:space="preserve">
     <value>अवरुद्ध स्थान</value>
@@ -629,6 +733,10 @@
   <data name="blocked_locations_could_not_be_loaded" xml:space="preserve">
     <value>अवरुद्ध स्थान लोड नहीं हो सके।</value>
     <comment>Shown on the Blocked locations screen when the list could not be fetched, above a Retry button.</comment>
+  </data>
+  <data name="blocked_locations_load_failed" xml:space="preserve">
+    <value>आपकी ब्लॉक की गई लोकेशन लोड नहीं हो सकीं। दोबारा कोशिश करने के लिए नीचे खींचें।</value>
+    <comment>Blocked locations: the list could not be loaded.</comment>
   </data>
   <data name="blocks" xml:space="preserve">
     <value>ब्लॉक</value>
@@ -675,9 +783,17 @@
     <value>VPN बायपास करें</value>
     <comment>App split rules: rule choice sending the app around the VPN (local route).</comment>
   </data>
+  <data name="camera_permission_needed" xml:space="preserve">
+    <value>कोड स्कैन करने के लिए कैमरा एक्सेस ज़रूरी है।</value>
+    <comment>Shown when the camera permission was denied on the scan screen.</comment>
+  </data>
   <data name="cancel" xml:space="preserve">
     <value>रद्द करें</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="chain_rpc_unreachable" xml:space="preserve">
+    <value>चेन RPC तक नहीं पहुँचा जा सकता। दोबारा कोशिश करें।</value>
+    <comment>Error when the subnet RPC cannot be reached.</comment>
   </data>
   <data name="change" xml:space="preserve">
     <value>बदलें</value>
@@ -719,9 +835,33 @@
     <value>Solana लेन-देन की जांच हो रही है</value>
     <comment>Call to action</comment>
   </data>
+  <data name="checking_wallet_address" xml:space="preserve">
+    <value>पता जाँचा जा रहा है…</value>
+    <comment>Progress text while the address is validated.</comment>
+  </data>
+  <data name="checkout_browser_launch_failed" xml:space="preserve">
+    <value>हम आपका ब्राउज़र नहीं खोल सके। चेकआउट पूरा करने के लिए यह लिंक किसी ब्राउज़र में कॉपी करें:</value>
+    <comment>Upgrade sheet: the system browser could not be opened for the hosted checkout url. The app appends the url itself on the next line (selectable) so the user can copy it into a browser by hand — never advancing to the waiting page with no payment page open.</comment>
+  </data>
+  <data name="checkout_interrupted_confirming" xml:space="preserve">
+    <value>चेकआउट व्यू अचानक बंद हो गया। अगर आपका भुगतान हो गया है, तो आपका प्लान यहाँ अपने-आप अपडेट हो जाएगा — दोबारा खरीदने की ज़रूरत नहीं है।</value>
+    <comment>Upgrade sheet waiting page: the embedded checkout webview crashed after the payment form had rendered, so a charge may already have gone through with only the redirect lost. Shown while the confirmation poll asks the server for the payment webhook; must never invite buying again.</comment>
+  </data>
   <data name="checkout_opened_in_browser" xml:space="preserve">
     <value>ब्राउज़र में अपनी खरीदारी पूरी करें। भुगतान की पुष्टि होते ही आपकी योजना यहां अपने आप अपडेट हो जाएगी।</value>
     <comment>Shown after the app hands the user to the Stripe hosted checkout in the system browser. The app polls the server and flips the plan automatically when the payment webhook lands.</comment>
+  </data>
+  <data name="choose_file" xml:space="preserve">
+    <value>फ़ाइल चुनें</value>
+    <comment>Button on desktop: pick a file that contains a QR code image.</comment>
+  </data>
+  <data name="choose_image_file" xml:space="preserve">
+    <value>इमेज फ़ाइल चुनें</value>
+    <comment>Button on desktop: pick an image file that contains a QR code.</comment>
+  </data>
+  <data name="choose_photo" xml:space="preserve">
+    <value>फ़ोटो चुनें</value>
+    <comment>Button: pick a photo that contains a QR code.</comment>
   </data>
   <data name="cities" xml:space="preserve">
     <value>शहर</value>
@@ -731,6 +871,30 @@
     <value>दावा करें</value>
     <comment>Call to action</comment>
   </data>
+  <data name="claim_across_epochs" xml:space="preserve">
+    <value>{} पूर्ण एपोक में</value>
+    <comment>Subtitle of the claim dialog.</comment>
+  </data>
+  <data name="claim_alpha_title" xml:space="preserve">
+    <value>SN25α का दावा करें</value>
+    <comment>Title of the claim dialog.</comment>
+  </data>
+  <data name="claim_amount_button" xml:space="preserve">
+    <value>{} का दावा करें</value>
+    <comment>Claim button with the amount.</comment>
+  </data>
+  <data name="claim_confirmed" xml:space="preserve">
+    <value>दावा किया गया</value>
+    <comment>Claim state: confirmed on chain.</comment>
+  </data>
+  <data name="claim_expired" xml:space="preserve">
+    <value>समाप्त</value>
+    <comment>Claim state: past the vault's expiry block.</comment>
+  </data>
+  <data name="claim_failed" xml:space="preserve">
+    <value>विफल</value>
+    <comment>Claim state: failed.</comment>
+  </data>
   <data name="claim_multiplier" xml:space="preserve">
     <value>गुणक का दावा करें</value>
     <comment>Call to action</comment>
@@ -738,6 +902,34 @@
   <data name="claim_network_name_hint" xml:space="preserve">
     <value>अपने-आप बने नाम की जगह लेने के लिए कस्टम नेटवर्क नाम चुनें</value>
     <comment>A description of the benefits of claiming a custom network name.</comment>
+  </data>
+  <data name="claim_sending_linux" xml:space="preserve">
+    <value>भेजा जा रहा है…</value>
+    <comment>Per-epoch status while the claim transaction is being sent.</comment>
+  </data>
+  <data name="claim_sends_from_device" xml:space="preserve">
+    <value>आपका डिवाइस दावा वॉल्ट कॉन्ट्रैक्ट को भेजता है। गैस का भुगतान आपकी गैस कुंजी से TAO में होता है। Alpha आपकी coldkey पर पहुँचता है।</value>
+    <comment>Explainer under the claim button.</comment>
+  </data>
+  <data name="claim_sent" xml:space="preserve">
+    <value>भेजा गया</value>
+    <comment>Claim state: transaction sent.</comment>
+  </data>
+  <data name="claim_to_address_linux" xml:space="preserve">
+    <value>{} को</value>
+    <comment>Destination line on the claim dialog: the coldkey the alpha lands on.</comment>
+  </data>
+  <data name="claim_unavailable_linux" xml:space="preserve">
+    <value>इस डिवाइस पर अभी दावा करना उपलब्ध नहीं है।</value>
+    <comment>Shown when the device cannot send claims (no gas key on this host).</comment>
+  </data>
+  <data name="claim_your_spot" xml:space="preserve">
+    <value>अपनी जगह पक्की करें</value>
+    <comment>Button on the Top 200 tile.</comment>
+  </data>
+  <data name="claims_for_epoch_expired" xml:space="preserve">
+    <value>एपोक {} के दावे समाप्त हो गए हैं।</value>
+    <comment>Error when an epoch can no longer be claimed.</comment>
   </data>
   <data name="claims_open_after_finalization" xml:space="preserve">
     <value>हर एपोक के दावे उसकी भुगतान सूची अंतिम होने के बाद खुलते हैं और समाप्त होने तक खुले रहते हैं।</value>
@@ -831,6 +1023,10 @@
     <value>कनेक्ट करें और लिंक खोलें</value>
     <comment>Call to action</comment>
   </data>
+  <data name="connect_bittensor_wallet" xml:space="preserve">
+    <value>Bittensor वॉलेट कनेक्ट करें</value>
+    <comment>Button to connect a Bittensor coldkey.</comment>
+  </data>
   <data name="connect_bittensor_wallet_to_add_sign_in_method" xml:space="preserve">
     <value>Bittensor वॉलेट को साइन-इन विधि के रूप में जोड़ने के लिए उसे कनेक्ट करें।</value>
     <comment>Add sign-in method sheet: the Bittensor wallet option's explanation (Talisman, WalletConnect, or a pasted signature).</comment>
@@ -842,6 +1038,14 @@
   <data name="connect_seeker_wallet" xml:space="preserve">
     <value>सागा जेनेसिस या सीकर प्री-ऑर्डर टोकन के साथ एक वॉलेट कनेक्ट करें</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="connect_solana_wallet" xml:space="preserve">
+    <value>Solana वॉलेट कनेक्ट करें</value>
+    <comment>Overflow menu item next to “Connect Bittensor wallet” on the Earnings screen, and the title of the Solana connect sheet/card: connect a Solana USDC payout wallet (wallet app, or manual address entry). USDC payouts continue until the migration to Bittensor completes.</comment>
+  </data>
+  <data name="connect_solana_wallet_note" xml:space="preserve">
+    <value>कोई Solana वॉलेट ऐप कनेक्ट करें, या Solana USDC पता मैन्युअल रूप से डालें।</value>
+    <comment>Note at the top of the Solana connect sheet/card, above the wallet-app button and the manual-entry link.</comment>
   </data>
   <data name="connect_solana_wallet_to_add_sign_in_method" xml:space="preserve">
     <value>Solana वॉलेट को साइन-इन विधि के रूप में जोड़ने के लिए उसे कनेक्ट करें।</value>
@@ -858,6 +1062,10 @@
   <data name="connect_wallet" xml:space="preserve">
     <value>वॉलेट कनेक्ट करें</value>
     <comment>Used in Main/Account/Wallets/ConnectWalletSheet/EnterWalletAddress/EnterWalletAddressView.swift.</comment>
+  </data>
+  <data name="connect_wallet_first" xml:space="preserve">
+    <value>पहले Bittensor वॉलेट कनेक्ट करें।</value>
+    <comment>Error when claiming without a wallet.</comment>
   </data>
   <data name="connected" xml:space="preserve">
     <value>कनेक्टेड</value>
@@ -999,6 +1207,10 @@
     <value>क्लाइंट ID कॉपी करें</value>
     <comment>A label for a context menu item that copies a client ID to the clipboard.</comment>
   </data>
+  <data name="copy_share_text" xml:space="preserve">
+    <value>शेयर टेक्स्ट कॉपी करें</value>
+    <comment>Button on the share screen: copy the text form of the code.</comment>
+  </data>
   <data name="copy_to_clipboard" xml:space="preserve">
     <value>क्लिपबोर्ड पर कॉपी करें</value>
     <comment>Button text to copy the seedphrase to the clipboard.</comment>
@@ -1006,6 +1218,14 @@
   <data name="could_not_get_google_id_token" xml:space="preserve">
     <value>Google ID टोकन प्राप्त नहीं हो सका</value>
     <comment>Add sign-in method sheet (android): Google sign-in returned no identity token.</comment>
+  </data>
+  <data name="couldn_t_load_subscription_options" xml:space="preserve">
+    <value>सदस्यता विकल्प लोड नहीं हो सके। अपना कनेक्शन जाँचें और दोबारा कोशिश करें।</value>
+    <comment>Shown in the upgrade sheet and intro funnel when the App Store product fetch failed, with a retry action — replaces the eternal spinner (Shared/Views/UpgradeSubscriptionSheet.swift, Shared/Views/Introduction/IntroductionView.swift).</comment>
+  </data>
+  <data name="couldn_t_restore_purchases" xml:space="preserve">
+    <value>खरीदारियाँ बहाल नहीं हो सकीं। दोबारा कोशिश करें।</value>
+    <comment>Restore-purchases outcome: the App Store sync failed (e.g. the user cancelled the credentials prompt or the store was unreachable) and no entitlement was found locally (Shared/ViewModels/AppStoreSubscriptionManager.swift).</comment>
   </data>
   <data name="couldnt_open_wallet" xml:space="preserve">
     <value>वॉलेट खोला नहीं जा सका। कृपया इसे इंस्टॉल करें और पुनः प्रयास करें।</value>
@@ -1171,6 +1391,10 @@
     <value>{} भुगतान</value>
     <comment>Call to action</comment>
   </data>
+  <data name="default_daily_data" xml:space="preserve">
+    <value>डिफ़ॉल्ट रूप से, आपको हर दिन {} मिलता है।</value>
+    <comment>Onboarding data page: the daily free allowance, formatted from the server's balance (pro.yml free.data per data_period).</comment>
+  </data>
   <data name="default_option" xml:space="preserve">
     <value>डिफ़ॉल्ट</value>
     <comment>Generic default choice label, e.g. the app split rule combo state meaning no rule.</comment>
@@ -1194,6 +1418,630 @@
   <data name="delete_account_type_network_name" xml:space="preserve">
     <value>पुष्टि करने के लिए {} टाइप करें।</value>
     <comment>Delete account dialog: asks the user to type the network name back before the delete button enables. {network} is the account's network name.</comment>
+  </data>
+  <data name="dev_affinity_performance" xml:space="preserve">
+    <value>प्रदर्शन-आधारित एफ़िनिटी</value>
+    <comment>Developer tools screen (reliability surface): performance-aware affinity control label.</comment>
+  </data>
+  <data name="dev_affinity_performance_detail" xml:space="preserve">
+    <value>नई TLS रेस को हर प्रदाता की पुष्टि किए गए बाइट की अधिकतम दर के आधार पर, उसकी घोषित बैंडविड्थ के अनुपात में तौलें। हार्ड एफ़िनिटी चालू होने पर कम मापे गए प्रदाता रेस को रास्ता देते हैं। मौजूदा कनेक्शन और स्पष्ट पिन नहीं बदलते</value>
+    <comment>Developer tools screen: explanatory subtext under the performance-aware affinity control.</comment>
+  </data>
+  <data name="dev_affinity_sticky" xml:space="preserve">
+    <value>स्टिकी साइट एफ़िनिटी</value>
+    <comment>Developer tools screen (reliability surface): affinity sticky control label.</comment>
+  </data>
+  <data name="dev_affinity_sticky_detail" xml:space="preserve">
+    <value>किसी साइट के नए कनेक्शन उसी एग्ज़िट पर रहते हैं जिसे उसके पिछले कनेक्शन पहले से इस्तेमाल कर रहे हैं, फ़्लो सीमा से ऊपर भी, ताकि व्यस्त साइट का एक ही इग्रेस IP बना रहे। सीमा अब भी तय करती है कि कौन-से एग्ज़िट नई साइटें लेंगे। बंद करने पर सख़्त सीमा लौट आती है</value>
+    <comment>Developer tools screen: explanatory subtext under the 'affinity sticky' control.</comment>
+  </data>
+  <data name="dev_behaviour" xml:space="preserve">
+    <value>व्यवहार</value>
+    <comment>Developer tools screen (reliability surface): behaviour control label.</comment>
+  </data>
+  <data name="dev_blackhole_receive" xml:space="preserve">
+    <value>शांत प्रदाताओं को ज़्यादा देर रखें</value>
+    <comment>Developer tools screen (reliability surface): blackhole receive control label.</comment>
+  </data>
+  <data name="dev_blackhole_receive_detail" xml:space="preserve">
+    <value>ट्रैफ़िक की पुष्टि करता प्रदाता कुछ भी लौटाए बिना कितनी देर रह सकता है, इससे पहले कि उसे हटाया जाए। बंद करने पर वे तब तक रहते हैं जब तक पुष्टि करना बंद न कर दें</value>
+    <comment>Developer tools screen: explanatory subtext under the 'blackhole receive' control.</comment>
+  </data>
+  <data name="dev_blast_radius" xml:space="preserve">
+    <value>असर का दायरा</value>
+    <comment>Developer tools screen (reliability surface): blast radius control label.</comment>
+  </data>
+  <data name="dev_blast_radius_detail" xml:space="preserve">
+    <value>हर प्रदाता विफलता पर खोए कनेक्शन। जितने कम, उतना बेहतर</value>
+    <comment>Developer tools screen: explanatory subtext under the 'blast radius' control.</comment>
+  </data>
+  <data name="dev_blast_radius_value" xml:space="preserve">
+    <value>प्रति विफलता {}</value>
+    <comment>Developer tools screen: formatted value readout for 'blast radius'.</comment>
+  </data>
+  <data name="dev_busy_probe" xml:space="preserve">
+    <value>हटाने से पहले अटके एग्ज़िट की जाँच करें</value>
+    <comment>Developer tools screen (reliability surface): busy probe control label.</comment>
+  </data>
+  <data name="dev_busy_probe_budget" xml:space="preserve">
+    <value>व्यस्तता प्रोब की प्रतीक्षा</value>
+    <comment>Developer tools screen (reliability surface): busy probe budget control label.</comment>
+  </data>
+  <data name="dev_busy_probe_budget_detail" xml:space="preserve">
+    <value>अटकाव प्रोब दोषी ठहराने से पहले जवाब के लिए कितनी देर रुकता है। बंद करने पर अटकाव सीमा का आधा इस्तेमाल होता है</value>
+    <comment>Developer tools screen: explanatory subtext under the 'busy probe budget' control.</comment>
+  </data>
+  <data name="dev_busy_probe_detail" xml:space="preserve">
+    <value>जब कोई एग्ज़िट अटकता है, तो दोषी ठहराने से पहले उसे एक बार पिंग किया जाता है। भीड़भाड़ वाला लेकिन चालू एग्ज़िट जवाब देता है और अपने फ़्लो रखता है; बंद पड़ा एग्ज़िट फिर भी हटाया जाता है। बंद करने पर अटकाव सीमा पर ही दोषी ठहराया जाता है</value>
+    <comment>Developer tools screen: explanatory subtext under the 'busy probe' control.</comment>
+  </data>
+  <data name="dev_busy_probes" xml:space="preserve">
+    <value>व्यस्तता प्रोब</value>
+    <comment>Developer tools screen (reliability surface): busy probes control label.</comment>
+  </data>
+  <data name="dev_busy_probes_detail" xml:space="preserve">
+    <value>अटके एग्ज़िट को भेजे गए लाइवनेस पिंग; बरी हुए एग्ज़िट ने जवाब दिया और उन्हें रखा गया — ये वे निष्कासन हैं जिन्हें प्रोब ने रोका</value>
+    <comment>Developer tools screen: explanatory subtext under the 'busy probes' control.</comment>
+  </data>
+  <data name="dev_busy_probes_value" xml:space="preserve">
+    <value>{0} भेजे / {1} बरी</value>
+    <comment>Developer tools screen: formatted value readout for 'busy probes'.</comment>
+  </data>
+  <data name="dev_choose_logs" xml:space="preserve">
+    <value>लॉग चुनें…</value>
+    <comment>Developer tools screen: action for choosing individual log files to export.</comment>
+  </data>
+  <data name="dev_clear_logs" xml:space="preserve">
+    <value>लॉग साफ़ करें</value>
+    <comment>Developer tools screen: action that deletes the diagnostics log files without touching local state, preferences or rules.</comment>
+  </data>
+  <data name="dev_clearing_logs" xml:space="preserve">
+    <value>लॉग साफ़ किए जा रहे हैं…</value>
+    <comment>Developer tools screen: the clear-logs action's label while it runs.</comment>
+  </data>
+  <data name="dev_cluster_affinity" xml:space="preserve">
+    <value>IP को साइट के अनुसार समूहित करें</value>
+    <comment>Developer tools screen (reliability surface): cluster affinity control label.</comment>
+  </data>
+  <data name="dev_cluster_affinity_detail" xml:space="preserve">
+    <value>जब साइट का होस्टनेम दिखाई नहीं देता, तब भी उसे एक ही एग्ज़िट पर रखता है</value>
+    <comment>Developer tools screen: explanatory subtext under the 'cluster affinity' control.</comment>
+  </data>
+  <data name="dev_comparative_connect" xml:space="preserve">
+    <value>मृत कनेक्शन जल्दी काटें</value>
+    <comment>Developer tools screen (reliability surface): comparative connect control label.</comment>
+  </data>
+  <data name="dev_comparative_connect_detail" xml:space="preserve">
+    <value>जब दो सहोदर एग्ज़िट डेटा पा रहे हों, तो कुछ भी स्थापित न कर पाए एग्ज़िट को जल्दी हटाएँ। बंद करने पर पूरी 30 सेकंड की कनेक्ट सीमा तक इंतज़ार होता है</value>
+    <comment>Developer tools screen: explanatory subtext under the 'comparative connect' control.</comment>
+  </data>
+  <data name="dev_dial_failure_rerace" xml:space="preserve">
+    <value>अस्वीकृत कनेक्शन कहीं और आज़माएँ</value>
+    <comment>Developer tools screen (reliability surface): dial failure rerace control label.</comment>
+  </data>
+  <data name="dev_dial_failure_rerace_detail" xml:space="preserve">
+    <value>जब कोई प्रदाता किसी साइट तक नहीं पहुँच पाता, तो कनेक्शन को लटकने देने के बजाय दूसरे एग्ज़िट पर ले जाएँ</value>
+    <comment>Developer tools screen: explanatory subtext under the 'dial failure rerace' control.</comment>
+  </data>
+  <data name="dev_dial_failures" xml:space="preserve">
+    <value>प्रदाता कनेक्ट विफलताएँ</value>
+    <comment>Developer tools screen (reliability surface): dial failures control label.</comment>
+  </data>
+  <data name="dev_dial_failures_detail" xml:space="preserve">
+    <value>कितनी बार किसी प्रदाता ने बताया कि वह अपस्ट्रीम कनेक्शन नहीं खोल सका</value>
+    <comment>Developer tools screen: explanatory subtext under the 'dial failures' control.</comment>
+  </data>
+  <data name="dev_drop_exit" xml:space="preserve">
+    <value>हटाएँ</value>
+    <comment>Developer tools screen (reliability surface): drop exit control label.</comment>
+  </data>
+  <data name="dev_effective_tier" xml:space="preserve">
+    <value>लाइव टियर अवनति</value>
+    <comment>Developer tools screen (reliability surface): effective tier control label.</comment>
+  </data>
+  <data name="dev_effective_tier_detail" xml:space="preserve">
+    <value>विफल डायल और बच निकले फ़ैसले एक सेकंड के भीतर प्रदाता को रैंकिंग में नीचे कर देते हैं; वापस ऊपर आने के लिए बिना त्रुटि के कुछ मिनट और एक सिद्ध कनेक्शन चाहिए</value>
+    <comment>Developer tools screen: explanatory subtext under the 'effective tier' control.</comment>
+  </data>
+  <data name="dev_evaluation_pool" xml:space="preserve">
+    <value>हर स्लॉट के लिए जाँचे गए उम्मीदवार</value>
+    <comment>Developer tools screen (reliability surface): evaluation pool control label.</comment>
+  </data>
+  <data name="dev_evaluation_pool_detail" xml:space="preserve">
+    <value>विंडो विस्तार अपनी ज़रूरत के हर स्लॉट के लिए कितने प्रदाताओं को पिंग और रैंक करता है, और सबसे अच्छे रखता है। 1 ठीक उतने ही जाँचता है जितने चाहिए</value>
+    <comment>Developer tools screen: explanatory subtext under the 'evaluation pool' control.</comment>
+  </data>
+  <data name="dev_exit_dial_failures" xml:space="preserve">
+    <value>विफल डायल: {}</value>
+    <comment>Developer tools screen (reliability surface): exit dial failures control label.</comment>
+  </data>
+  <data name="dev_exit_flows" xml:space="preserve">
+    <value>फ़्लो: {}</value>
+    <comment>Developer tools screen (reliability surface): exit flows control label.</comment>
+  </data>
+  <data name="dev_exits" xml:space="preserve">
+    <value>एग्ज़िट</value>
+    <comment>Developer tools screen (reliability surface): exits control label.</comment>
+  </data>
+  <data name="dev_export_all_logs" xml:space="preserve">
+    <value>सभी लॉग एक्सपोर्ट करें (रॉ)</value>
+    <comment>Developer tools screen: action for exporting all diagnostic logs without redaction.</comment>
+  </data>
+  <data name="dev_export_failed" xml:space="preserve">
+    <value>एक्सपोर्ट विफल: {}</value>
+    <comment>Developer tools screen: error shown when diagnostic log export fails.</comment>
+  </data>
+  <data name="dev_export_not_included" xml:space="preserve">
+    <value>शामिल नहीं: {}</value>
+    <comment>Developer tools screen: explanation that a requested diagnostic item was omitted from an export.</comment>
+  </data>
+  <data name="dev_export_redacted_logs" xml:space="preserve">
+    <value>संपादित लॉग एक्सपोर्ट करें</value>
+    <comment>Developer tools screen: action for exporting diagnostic logs with sensitive traffic details redacted.</comment>
+  </data>
+  <data name="dev_export_selected" xml:space="preserve">
+    <value>चुने हुए एक्सपोर्ट करें</value>
+    <comment>Developer tools screen: action for exporting the selected diagnostic log files.</comment>
+  </data>
+  <data name="dev_export_share" xml:space="preserve">
+    <value>डायग्नोस्टिक बंडल शेयर करें</value>
+    <comment>Developer tools screen: action for sharing a diagnostic bundle.</comment>
+  </data>
+  <data name="dev_export_summary.one" xml:space="preserve">
+    <value>{0} लॉग फ़ाइल एक्सपोर्ट की गई ({1})</value>
+    <comment>Developer tools screen: summary of the number and total size of diagnostic log files exported.</comment>
+  </data>
+  <data name="dev_export_summary.other" xml:space="preserve">
+    <value>{0} लॉग फ़ाइलें एक्सपोर्ट की गईं ({1})</value>
+    <comment>Developer tools screen: summary of the number and total size of diagnostic log files exported.</comment>
+  </data>
+  <data name="dev_export_unavailable" xml:space="preserve">
+    <value>उपलब्ध नहीं: {}</value>
+    <comment>Developer tools screen: explanation that a diagnostic export option is unavailable.</comment>
+  </data>
+  <data name="dev_exporting" xml:space="preserve">
+    <value>एक्सपोर्ट हो रहा है…</value>
+    <comment>Developer tools screen: progress label shown while a diagnostic bundle is being exported.</comment>
+  </data>
+  <data name="dev_flows_opened" xml:space="preserve">
+    <value>खोले गए फ़्लो</value>
+    <comment>Developer tools screen (reliability surface): flows opened control label.</comment>
+  </data>
+  <data name="dev_flows_opened_detail" xml:space="preserve">
+    <value>रीसेट के बाद से कुल, ताकि अलग-अलग अवधि के रन की तुलना हो सके</value>
+    <comment>Developer tools screen: explanatory subtext under the 'flows opened' control.</comment>
+  </data>
+  <data name="dev_flows_rebound" xml:space="preserve">
+    <value>दोबारा बाँधे गए QUIC फ़्लो</value>
+    <comment>Developer tools screen (reliability surface): flows rebound control label.</comment>
+  </data>
+  <data name="dev_flows_rebound_detail" xml:space="preserve">
+    <value>निष्कासन के दौरान किसी तैयार एग्ज़िट पर ले जाए गए फ़्लो; स्वीकृत का मतलब है कि सर्वर ने बिना दोबारा डायल किए पथ बदलाव मान लिया</value>
+    <comment>Developer tools screen: explanatory subtext under the 'flows rebound' control.</comment>
+  </data>
+  <data name="dev_flows_rebound_value" xml:space="preserve">
+    <value>{0} ({1} स्वीकृत / {2} दोबारा डायल)</value>
+    <comment>Developer tools screen: formatted value readout for 'flows rebound'.</comment>
+  </data>
+  <data name="dev_flows_reraced" xml:space="preserve">
+    <value>दूसरे एग्ज़िट पर ले जाए गए</value>
+    <comment>Developer tools screen (reliability surface): flows reraced control label.</comment>
+  </data>
+  <data name="dev_flows_reraced_detail" xml:space="preserve">
+    <value>उन विफलताओं में से कितनी लटकने के बजाय चुपचाप दूसरी जगह ले जाई गईं</value>
+    <comment>Developer tools screen: explanatory subtext under the 'flows reraced' control.</comment>
+  </data>
+  <data name="dev_formation_poll" xml:space="preserve">
+    <value>पहले एग्ज़िट की तेज़ जाँच</value>
+    <comment>Developer tools screen (reliability surface): formation poll control label.</comment>
+  </data>
+  <data name="dev_formation_poll_detail" xml:space="preserve">
+    <value>कनेक्ट हो रहा फ़्लो खाली विंडो को कितनी बार दोबारा जाँचता है, ताकि पहला अनुरोध पहले एग्ज़िट के आते ही निकल जाए। बंद करने पर 2 सेकंड की पुनःप्रयास गति का इंतज़ार होता है</value>
+    <comment>Developer tools screen: explanatory subtext under the 'formation poll' control.</comment>
+  </data>
+  <data name="dev_fresh_flow_affinity" xml:space="preserve">
+    <value>नए फ़्लो के लिए हार्ड एफ़िनिटी</value>
+    <comment>Developer tools screen (reliability surface): hard fresh-flow affinity control label.</comment>
+  </data>
+  <data name="dev_fresh_flow_affinity_detail" xml:space="preserve">
+    <value>हर नए कनेक्शन को उसी एग्ज़िट पर लगाएँ जिसे उसका IP या डोमेन पहले से इस्तेमाल कर रहा है। डिफ़ॉल्ट रूप से बंद: हर सामान्य नया कनेक्शन प्रदाता रेस तक पहुँचता है। मौजूदा कनेक्शन और स्पष्ट पिन हमेशा वैसे ही रहते हैं</value>
+    <comment>Developer tools screen: explanatory subtext under the hard fresh-flow affinity control.</comment>
+  </data>
+  <data name="dev_group_follow" xml:space="preserve">
+    <value>बेंच पर बैठे एग्ज़िट का पीछा करें</value>
+    <comment>Developer tools screen (reliability surface): group follow control label.</comment>
+  </data>
+  <data name="dev_group_follow_detail" xml:space="preserve">
+    <value>क्वारंटीन में रखा एग्ज़िट बेंच के शुरुआती दौर में, जब फ़ैसला सबसे कम सिद्ध होता है, अपनी साइटों के नए कनेक्शन रखता है, ताकि बेंच साइट के इग्रेस IP को न बाँटे। नई साइटें अब भी उससे बचती हैं। बंद करने पर वे बिखर जाते हैं</value>
+    <comment>Developer tools screen: explanatory subtext under the 'group follow' control.</comment>
+  </data>
+  <data name="dev_group_follow_window" xml:space="preserve">
+    <value>पीछा करने की विंडो</value>
+    <comment>Developer tools screen (reliability surface): group follow window control label.</comment>
+  </data>
+  <data name="dev_group_follow_window_detail" xml:space="preserve">
+    <value>बेंच की शुरुआत से कितनी देर तक किसी साइट के नए कनेक्शन अपने एग्ज़िट का पीछा करते रहते हैं — शुरुआती बेंच अक्सर झूठे अलार्म होते हैं; जो बेंच लंबी चलती है वह निष्कासन की ओर बढ़ती है और फ़्लो लेना बंद कर देती है। बंद करने पर तुरंत बिखराव होता है</value>
+    <comment>Developer tools screen: explanatory subtext under the 'group follow window' control.</comment>
+  </data>
+  <data name="dev_heartbeat" xml:space="preserve">
+    <value>स्थिति हार्टबीट</value>
+    <comment>Developer tools screen (reliability surface): heartbeat control label.</comment>
+  </data>
+  <data name="dev_heartbeat_detail" xml:space="preserve">
+    <value>बाद की जाँच के लिए लाइव स्थिति का सार बताने वाली एक पंक्ति लॉग में कितनी बार लिखी जाती है। बंद करने पर यह बंद हो जाती है; छोटा अंतराल बदलाव पकड़ता है, लंबा ज़्यादा बफ़र रखता है</value>
+    <comment>Developer tools screen: explanatory subtext under the 'heartbeat' control.</comment>
+  </data>
+  <data name="dev_load_corroboration" xml:space="preserve">
+    <value>लोड से पुष्टि</value>
+    <comment>Developer tools screen (reliability surface): load corroboration control label.</comment>
+  </data>
+  <data name="dev_load_corroboration_detail" xml:space="preserve">
+    <value>किसी व्यस्त एग्ज़िट को कमज़ोर सबूत पर बेंच भेजने से पहले हर इतने फ़्लो पर ज़रूरी अतिरिक्त शांत गंतव्य: 8 पर 24 फ़्लो वाले एग्ज़िट को 2 नहीं, 3 शांत साइटें चाहिए। बंद करने पर तय न्यूनतम बना रहता है</value>
+    <comment>Developer tools screen: explanatory subtext under the 'load corroboration' control.</comment>
+  </data>
+  <data name="dev_log_verbosity" xml:space="preserve">
+    <value>लॉग विवरण</value>
+    <comment>Developer tools screen: control label for diagnostic log detail.</comment>
+  </data>
+  <data name="dev_log_verbosity_default" xml:space="preserve">
+    <value>डिफ़ॉल्ट</value>
+    <comment>Developer tools screen: default diagnostic log detail level.</comment>
+  </data>
+  <data name="dev_log_verbosity_default_detail" xml:space="preserve">
+    <value>कनेक्शन त्रुटियाँ और कॉन्ट्रैक्ट पिंग</value>
+    <comment>Developer tools screen: explanation of the default diagnostic log detail level.</comment>
+  </data>
+  <data name="dev_log_verbosity_trace" xml:space="preserve">
+    <value>ट्रेस</value>
+    <comment>Developer tools screen: trace diagnostic log detail level.</comment>
+  </data>
+  <data name="dev_log_verbosity_trace_detail" xml:space="preserve">
+    <value>ट्रांसपोर्ट और विंडो के अंदरूनी विवरण। बहुत बड़े लॉग</value>
+    <comment>Developer tools screen: explanation of the trace diagnostic log detail level.</comment>
+  </data>
+  <data name="dev_log_verbosity_unavailable" xml:space="preserve">
+    <value>उपलब्ध नहीं</value>
+    <comment>Developer tools screen: label used when the diagnostic log detail level cannot be read.</comment>
+  </data>
+  <data name="dev_log_verbosity_unavailable_detail" xml:space="preserve">
+    <value>लॉग स्तर पढ़ने के लिए अभी कोई डिवाइस नहीं है। पहले साइन इन करें</value>
+    <comment>Developer tools screen: explanation shown when the diagnostic log detail level cannot be read.</comment>
+  </data>
+  <data name="dev_log_verbosity_verbose" xml:space="preserve">
+    <value>विस्तृत</value>
+    <comment>Developer tools screen: verbose diagnostic log detail level.</comment>
+  </data>
+  <data name="dev_log_verbosity_verbose_detail" xml:space="preserve">
+    <value>कॉन्ट्रैक्ट हिसाब-किताब और हर पैकेट के ब्लॉक फ़ैसले। गंतव्य IP पते शामिल हैं</value>
+    <comment>Developer tools screen: explanation of the verbose diagnostic log detail level.</comment>
+  </data>
+  <data name="dev_log_verbosity_warning" xml:space="preserve">
+    <value>विस्तृत और उससे ऊपर के स्तर पर लॉग में आपके भेजे गए ट्रैफ़िक के गंतव्य IP पते और पोर्ट होते हैं। उन्हें शेयर करने के लिए "संपादित लॉग एक्सपोर्ट करें" का इस्तेमाल करें; रॉ बंडल इस डिवाइस से बाहर नहीं जाना चाहिए।</value>
+    <comment>Developer tools screen: privacy warning shown when detailed traffic logging is enabled.</comment>
+  </data>
+  <data name="dev_log_verbosity_warning_title" xml:space="preserve">
+    <value>लॉग आपका असली ट्रैफ़िक रिकॉर्ड कर रहे हैं</value>
+    <comment>Developer tools screen: title for the detailed traffic logging privacy warning.</comment>
+  </data>
+  <data name="dev_max_flows_per_exit" xml:space="preserve">
+    <value>प्रति एग्ज़िट अधिकतम कनेक्शन</value>
+    <comment>Developer tools screen (reliability surface): max flows per exit control label.</comment>
+  </data>
+  <data name="dev_max_flows_per_exit_detail" xml:space="preserve">
+    <value>एक एग्ज़िट खोने से उस पर का हर कनेक्शन खत्म हो जाता है। कम मान नुकसान को फैलाता है; तब कोई साइट एक से ज़्यादा एग्ज़िट IP इस्तेमाल कर सकती है</value>
+    <comment>Developer tools screen: explanatory subtext under the 'max flows per exit' control.</comment>
+  </data>
+  <data name="dev_measure_none" xml:space="preserve">
+    <value>अभी तक कोई प्रदाता विफलता नहीं। एक विफलता पैदा करने के लिए नीचे किसी एग्ज़िट को अटकाएँ।</value>
+    <comment>Developer tools screen (reliability surface): measure none control label.</comment>
+  </data>
+  <data name="dev_measurements" xml:space="preserve">
+    <value>माप</value>
+    <comment>Developer tools screen (reliability surface): measurements control label.</comment>
+  </data>
+  <data name="dev_measurements_detail" xml:space="preserve">
+    <value>प्रदाता विफलता की कीमत क्या है। रीसेट करें, टेस्ट चलाएँ, नतीजा पढ़ें।</value>
+    <comment>Developer tools screen: explanatory subtext under the 'measurements' control.</comment>
+  </data>
+  <data name="dev_migrate_exit" xml:space="preserve">
+    <value>माइग्रेट करें</value>
+    <comment>Developer tools screen (reliability surface): migrate exit control label.</comment>
+  </data>
+  <data name="dev_min_blackhole_destinations" xml:space="preserve">
+    <value>शांत एग्ज़िट की पुष्टि करें</value>
+    <comment>Developer tools screen (reliability surface): min blackhole destinations control label.</comment>
+  </data>
+  <data name="dev_min_blackhole_destinations_detail" xml:space="preserve">
+    <value>किसी एग्ज़िट को कुछ न मिलने के आधार पर दोषी ठहराने से पहले कितने अलग गंतव्यों का शांत होना ज़रूरी है, ताकि एक बंद साइट काम करते एग्ज़िट को न हटा सके। बंद करने पर एक ही गंतव्य दोषी ठहरा सकता है</value>
+    <comment>Developer tools screen: explanatory subtext under the 'min blackhole destinations' control.</comment>
+  </data>
+  <data name="dev_no_exits" xml:space="preserve">
+    <value>कोई एग्ज़िट नहीं। पहले कनेक्ट करें।</value>
+    <comment>Developer tools screen (reliability surface): no exits control label.</comment>
+  </data>
+  <data name="dev_open_tools" xml:space="preserve">
+    <value>डेवलपर टूल खोलें</value>
+    <comment>Developer tools screen (reliability surface): open tools control label.</comment>
+  </data>
+  <data name="dev_probe_all" xml:space="preserve">
+    <value>अभी सभी एग्ज़िट की जाँच करें</value>
+    <comment>Developer tools screen (reliability surface): probe all control label.</comment>
+  </data>
+  <data name="dev_probe_providers" xml:space="preserve">
+    <value>प्रदाताओं की जाँच करें</value>
+    <comment>Developer tools screen (reliability surface): probe providers control label.</comment>
+  </data>
+  <data name="dev_probe_providers_detail" xml:space="preserve">
+    <value>एग्ज़िट के ज़रिए असली साइटों को डायल करके उन्हें योग्य ठहराएँ। जवाब एग्ज़िट को सिद्ध करता है; चुप्पी कभी उसके ख़िलाफ़ नहीं गिनी जाती</value>
+    <comment>Developer tools screen: explanatory subtext under the 'probe providers' control.</comment>
+  </data>
+  <data name="dev_probe_sample_hosts" xml:space="preserve">
+    <value>हर पास में जाँचे जाने वाले होस्ट</value>
+    <comment>Developer tools screen (reliability surface): probe sample hosts control label.</comment>
+  </data>
+  <data name="dev_probe_sample_hosts_detail" xml:space="preserve">
+    <value>एक योग्यता पास किसी एग्ज़िट के ज़रिए कितनी हेल्थ साइटों को डायल करता है। 0 पूरी अंतर्निहित सूची जाँचता है; छोटी संख्या उसे ब्लॉकों में घुमाती है</value>
+    <comment>Developer tools screen: explanatory subtext under the 'probe sample hosts' control.</comment>
+  </data>
+  <data name="dev_probe_timeout" xml:space="preserve">
+    <value>प्रोब प्रतीक्षा</value>
+    <comment>Developer tools screen (reliability surface): probe timeout control label.</comment>
+  </data>
+  <data name="dev_probe_timeout_detail" xml:space="preserve">
+    <value>योग्यता प्रोब जवाब के लिए कितनी देर रुकता है। बंद करने पर अंतर्निहित 4 सेकंड इस्तेमाल होते हैं। यह सिर्फ़ सबूत के इंतज़ार को सीमित करता है, कभी दोषी नहीं ठहराता</value>
+    <comment>Developer tools screen: explanatory subtext under the 'probe timeout' control.</comment>
+  </data>
+  <data name="dev_probes" xml:space="preserve">
+    <value>प्रोब</value>
+    <comment>Developer tools screen (reliability surface): probes control label.</comment>
+  </data>
+  <data name="dev_probes_detail" xml:space="preserve">
+    <value>इस सत्र के योग्यता प्रोब</value>
+    <comment>Developer tools screen: explanatory subtext under the 'probes' control.</comment>
+  </data>
+  <data name="dev_probes_value" xml:space="preserve">
+    <value>{0} भेजे / {1} जवाब मिले</value>
+    <comment>Developer tools screen: formatted value readout for 'probes'.</comment>
+  </data>
+  <data name="dev_quic_rebind" xml:space="preserve">
+    <value>एग्ज़िट खोने पर QUIC दोबारा बाँधें</value>
+    <comment>Developer tools screen (reliability surface): quic rebind control label.</comment>
+  </data>
+  <data name="dev_quic_rebind_detail" xml:space="preserve">
+    <value>निष्कासन के दौरान स्थापित QUIC फ़्लो को तोड़ने के बजाय किसी चालू एग्ज़िट पर दोबारा पिन करें</value>
+    <comment>Developer tools screen: explanatory subtext under the 'quic rebind' control.</comment>
+  </data>
+  <data name="dev_recovery" xml:space="preserve">
+    <value>रिकवरी समय</value>
+    <comment>Developer tools screen (reliability surface): recovery control label.</comment>
+  </data>
+  <data name="dev_recovery_detail" xml:space="preserve">
+    <value>किसी एग्ज़िट के बंद होने से लेकर उस साइट के फिर से जवाब देने तक</value>
+    <comment>Developer tools screen: explanatory subtext under the 'recovery' control.</comment>
+  </data>
+  <data name="dev_recovery_missed" xml:space="preserve">
+    <value>कभी वापस नहीं आईं</value>
+    <comment>Developer tools screen (reliability surface): recovery missed control label.</comment>
+  </data>
+  <data name="dev_recovery_missed_detail" xml:space="preserve">
+    <value>साइटें जो रिकवर होने के बजाय छोड़ दी गईं</value>
+    <comment>Developer tools screen: explanatory subtext under the 'recovery missed' control.</comment>
+  </data>
+  <data name="dev_recovery_missed_value" xml:space="preserve">
+    <value>{1} में से {0}</value>
+    <comment>Developer tools screen: formatted value readout for 'recovery missed'.</comment>
+  </data>
+  <data name="dev_recovery_value" xml:space="preserve">
+    <value>औसत {0}, सबसे ख़राब {1}</value>
+    <comment>Developer tools screen: formatted value readout for 'recovery'.</comment>
+  </data>
+  <data name="dev_refresh" xml:space="preserve">
+    <value>रीफ़्रेश करें</value>
+    <comment>Developer tools screen (reliability surface): refresh control label.</comment>
+  </data>
+  <data name="dev_removal_budget_count" xml:space="preserve">
+    <value>निष्कासन तूफ़ान सीमा</value>
+    <comment>Developer tools screen (reliability surface): removal budget count control label.</comment>
+  </data>
+  <data name="dev_removal_budget_count_detail" xml:space="preserve">
+    <value>बाकी को टालने से पहले हर विंडो में फ़ैसले पर आधारित कितने निष्कासन की अनुमति है; अचानक बौछार कई विफलताओं के बजाय किसी एक स्थानीय कारण से होने की ज़्यादा संभावना है। बंद करने पर बिना सीमा के हटाया जाता है</value>
+    <comment>Developer tools screen: explanatory subtext under the 'removal budget count' control.</comment>
+  </data>
+  <data name="dev_removal_budget_window" xml:space="preserve">
+    <value>निष्कासन तूफ़ान विंडो</value>
+    <comment>Developer tools screen (reliability surface): removal budget window control label.</comment>
+  </data>
+  <data name="dev_removal_budget_window_detail" xml:space="preserve">
+    <value>वह विंडो जिसमें निष्कासन सीमा गिनी जाती है। बंद (0 की सीमा की तरह) ब्रेकर को बंद कर देता है</value>
+    <comment>Developer tools screen: explanatory subtext under the 'removal budget window' control.</comment>
+  </data>
+  <data name="dev_removals_deferred" xml:space="preserve">
+    <value>टाले गए निष्कासन</value>
+    <comment>Developer tools screen (reliability surface): removals deferred control label.</comment>
+  </data>
+  <data name="dev_removals_deferred_detail" xml:space="preserve">
+    <value>निष्कासन जिन्हें तूफ़ान ब्रेकर ने एक जुड़ी हुई बौछार के बाद रोक लिया</value>
+    <comment>Developer tools screen: explanatory subtext under the 'removals deferred' control.</comment>
+  </data>
+  <data name="dev_reset_defaults" xml:space="preserve">
+    <value>मूल डिफ़ॉल्ट पर रीसेट करें</value>
+    <comment>Developer tools screen (reliability surface): reset defaults control label.</comment>
+  </data>
+  <data name="dev_reset_measurements" xml:space="preserve">
+    <value>माप रीसेट करें</value>
+    <comment>Developer tools screen (reliability surface): reset measurements control label.</comment>
+  </data>
+  <data name="dev_scheduler_pause_recovery" xml:space="preserve">
+    <value>सस्पेंड के बाद रिकवरी विंडो</value>
+    <comment>Developer tools screen (reliability surface): scheduler pause recovery control label.</comment>
+  </data>
+  <data name="dev_scheduler_pause_recovery_detail" xml:space="preserve">
+    <value>पता चले सस्पेंड के बाद फ़ैसले कितनी देर रोके रहते हैं, ताकि ट्रांसपोर्ट को दोबारा रजिस्टर होने का समय मिले। बंद करने पर अंतर्निहित 5 सेकंड इस्तेमाल होते हैं</value>
+    <comment>Developer tools screen: explanatory subtext under the 'scheduler pause recovery' control.</comment>
+  </data>
+  <data name="dev_scheduler_pause_tolerance" xml:space="preserve">
+    <value>सस्पेंड डिटेक्टर</value>
+    <comment>Developer tools screen (reliability surface): scheduler pause tolerance control label.</comment>
+  </data>
+  <data name="dev_scheduler_pause_tolerance_detail" xml:space="preserve">
+    <value>टाइमर की कितनी देरी को एग्ज़िट के अटकने के बजाय फ़ोन के सस्पेंड होने के रूप में पढ़ा जाता है, ताकि फिर से चालू हुआ फ़ोन सभी एग्ज़िट को एक साथ दोषी न ठहराए। बंद करने पर यह बंद हो जाता है</value>
+    <comment>Developer tools screen: explanatory subtext under the 'scheduler pause tolerance' control.</comment>
+  </data>
+  <data name="dev_scheduler_pauses" xml:space="preserve">
+    <value>पकड़े गए सस्पेंड</value>
+    <comment>Developer tools screen (reliability surface): scheduler pauses control label.</comment>
+  </data>
+  <data name="dev_scheduler_pauses_detail" xml:space="preserve">
+    <value>होस्ट के सस्पेंड जिन्हें डिटेक्टर ने पकड़ा; हर एक फ़ैसलों का एक बैच है जिसे अभी-अभी चालू हुए फ़ोन पर लागू करने के बजाय रोका गया</value>
+    <comment>Developer tools screen: explanatory subtext under the 'scheduler pauses' control.</comment>
+  </data>
+  <data name="dev_section_detection" xml:space="preserve">
+    <value>पहचान</value>
+    <comment>Developer tools screen: section heading for the detection controls.</comment>
+  </data>
+  <data name="dev_section_diagnostics" xml:space="preserve">
+    <value>डायग्नोस्टिक्स</value>
+    <comment>Developer tools screen: section heading for diagnostic log controls.</comment>
+  </data>
+  <data name="dev_section_observability" xml:space="preserve">
+    <value>ऑब्ज़र्वेबिलिटी</value>
+    <comment>Developer tools screen: section heading for the observability controls.</comment>
+  </data>
+  <data name="dev_section_placement" xml:space="preserve">
+    <value>प्लेसमेंट</value>
+    <comment>Developer tools screen: section heading for the placement controls.</comment>
+  </data>
+  <data name="dev_section_probing" xml:space="preserve">
+    <value>प्रोबिंग</value>
+    <comment>Developer tools screen: section heading for the probing controls.</comment>
+  </data>
+  <data name="dev_section_recovery" xml:space="preserve">
+    <value>रिकवरी</value>
+    <comment>Developer tools screen: section heading for the recovery controls.</comment>
+  </data>
+  <data name="dev_send_stall" xml:space="preserve">
+    <value>अटके एग्ज़िट तुरंत हटाएँ</value>
+    <comment>Developer tools screen (reliability surface): send stall control label.</comment>
+  </data>
+  <data name="dev_send_stall_detail" xml:space="preserve">
+    <value>कोई एग्ज़िट हटाए जाने से पहले कितनी देर तक डिलीवरी रोक सकता है। बंद करने पर 30 सेकंड इंतज़ार होता है</value>
+    <comment>Developer tools screen: explanatory subtext under the 'send stall' control.</comment>
+  </data>
+  <data name="dev_server_name_bridge" xml:space="preserve">
+    <value>देर से नामित फ़्लो को मिलाएँ</value>
+    <comment>Developer tools screen (reliability surface): server name bridge control label.</comment>
+  </data>
+  <data name="dev_server_name_bridge_detail" xml:space="preserve">
+    <value>बाद के कनेक्शनों को उसी एग्ज़िट पर ले जाता है जिसे पहला कनेक्शन पहले से इस्तेमाल कर रहा है</value>
+    <comment>Developer tools screen: explanatory subtext under the 'server name bridge' control.</comment>
+  </data>
+  <data name="dev_shuffle_exits" xml:space="preserve">
+    <value>सभी एग्ज़िट फेंटें</value>
+    <comment>Developer tools screen (reliability surface): shuffle exits control label.</comment>
+  </data>
+  <data name="dev_simulate_network_change" xml:space="preserve">
+    <value>नेटवर्क बदलाव का अनुकरण करें</value>
+    <comment>Developer tools screen (reliability surface): simulate network change control label.</comment>
+  </data>
+  <data name="dev_soft_verdict" xml:space="preserve">
+    <value>हटाने से पहले अवनत करें</value>
+    <comment>Developer tools screen (reliability surface): soft verdict control label.</comment>
+  </data>
+  <data name="dev_soft_verdict_detail" xml:space="preserve">
+    <value>अस्पष्ट फ़ैसले एग्ज़िट के फ़्लो तोड़ने के बजाय उसे बेंच पर भेजते हैं; हटाने के लिए लगातार सबूत या खाली एग्ज़िट चाहिए</value>
+    <comment>Developer tools screen: explanatory subtext under the 'soft verdict' control.</comment>
+  </data>
+  <data name="dev_stall_exit" xml:space="preserve">
+    <value>अटकाएँ</value>
+    <comment>Developer tools screen (reliability surface): stall exit control label.</comment>
+  </data>
+  <data name="dev_standing_reserve" xml:space="preserve">
+    <value>एक अतिरिक्त एग्ज़िट तैयार रखें</value>
+    <comment>Developer tools screen (reliability surface): standing reserve control label.</comment>
+  </data>
+  <data name="dev_standing_reserve_detail" xml:space="preserve">
+    <value>हर विंडो को उसके लक्ष्य से एक एग्ज़िट बड़ा रखें, ताकि बदलने वाला पहले से कनेक्ट रहे। बंद करने पर कमी भरने के लिए नुकसान का इंतज़ार होता है</value>
+    <comment>Developer tools screen: explanatory subtext under the 'standing reserve' control.</comment>
+  </data>
+  <data name="dev_tcp_collapse_hold" xml:space="preserve">
+    <value>अटके रीट्रांसमिट छोड़ें</value>
+    <comment>Developer tools screen (reliability surface): tcp collapse hold control label.</comment>
+  </data>
+  <data name="dev_tcp_collapse_hold_detail" xml:space="preserve">
+    <value>किसी एक को छोड़ने से पहले रीट्रांसमिट कितनी देर रोके जाते हैं। बंद करने पर 30 सेकंड इंतज़ार होता है</value>
+    <comment>Developer tools screen: explanatory subtext under the 'tcp collapse hold' control.</comment>
+  </data>
+  <data name="dev_tcp_idle_timeout" xml:space="preserve">
+    <value>लंबा TCP निष्क्रियता टाइमआउट</value>
+    <comment>Developer tools screen (reliability surface): tcp idle timeout control label.</comment>
+  </data>
+  <data name="dev_tcp_idle_timeout_detail" xml:space="preserve">
+    <value>कोई TCP कनेक्शन कितनी देर निष्क्रिय रह सकता है। बंद करने पर UDP सीमा इस्तेमाल होती है</value>
+    <comment>Developer tools screen: explanatory subtext under the 'tcp idle timeout' control.</comment>
+  </data>
+  <data name="dev_timing" xml:space="preserve">
+    <value>समय</value>
+    <comment>Developer tools screen (reliability surface): timing control label.</comment>
+  </data>
+  <data name="dev_udp_idle_timeout" xml:space="preserve">
+    <value>UDP निष्क्रियता टाइमआउट</value>
+    <comment>Developer tools screen (reliability surface): udp idle timeout control label.</comment>
+  </data>
+  <data name="dev_udp_idle_timeout_detail" xml:space="preserve">
+    <value>गैर-TCP फ़्लो हटाए जाने से पहले कितनी देर निष्क्रिय रह सकता है</value>
+    <comment>Developer tools screen: explanatory subtext under the 'udp idle timeout' control.</comment>
+  </data>
+  <data name="dev_udp_teardown" xml:space="preserve">
+    <value>UDP बंद होने का संकेत दें</value>
+    <comment>Developer tools screen (reliability surface): udp teardown control label.</comment>
+  </data>
+  <data name="dev_udp_teardown_detail" xml:space="preserve">
+    <value>चुप हो जाने के बजाय DNS और QUIC को बताता है कि पथ ख़त्म हो गया है</value>
+    <comment>Developer tools screen: explanatory subtext under the 'udp teardown' control.</comment>
+  </data>
+  <data name="dev_uplink_gate" xml:space="preserve">
+    <value>अपलिंक चुप्पी गेट</value>
+    <comment>Developer tools screen (reliability surface): uplink gate control label.</comment>
+  </data>
+  <data name="dev_uplink_gate_detail" xml:space="preserve">
+    <value>प्रदाता फ़ैसलों को अस्वीकार्य मानकर रोके जाने से पहले पूरी टनल कितनी देर चुप रह सकती है। 0 पहले की तरह दोषी ठहराता है</value>
+    <comment>Developer tools screen: explanatory subtext under the 'uplink gate' control.</comment>
+  </data>
+  <data name="dev_verdicts_held" xml:space="preserve">
+    <value>रोके गए फ़ैसले</value>
+    <comment>Developer tools screen (reliability surface): verdicts held control label.</comment>
+  </data>
+  <data name="dev_verdicts_held_detail" xml:space="preserve">
+    <value>सज़ाएँ जो इसलिए रोकी गईं क्योंकि प्रदाता नहीं, बल्कि फ़ोन का अपना अपलिंक चुप था (अपलिंक / ट्रांसपोर्ट)</value>
+    <comment>Developer tools screen: explanatory subtext under the 'verdicts held' control.</comment>
+  </data>
+  <data name="dev_verdicts_held_value" xml:space="preserve">
+    <value>{0} / {1}</value>
+    <comment>Developer tools screen: formatted value readout for 'verdicts held'.</comment>
+  </data>
+  <data name="dev_worst_loss" xml:space="preserve">
+    <value>सबसे बड़ी एकल विफलता</value>
+    <comment>Developer tools screen (reliability surface): worst loss control label.</comment>
+  </data>
+  <data name="dev_worst_loss_detail" xml:space="preserve">
+    <value>वह जिसे उपयोगकर्ता सच में महसूस करता है</value>
+    <comment>Developer tools screen: explanatory subtext under the 'worst loss' control.</comment>
+  </data>
+  <data name="dev_worst_loss_value" xml:space="preserve">
+    <value>{} कनेक्शन</value>
+    <comment>Developer tools screen: formatted value readout for 'worst loss'.</comment>
+  </data>
+  <data name="developer" xml:space="preserve">
+    <value>डेवलपर</value>
+    <comment>Developer tools screen: developer.</comment>
+  </data>
+  <data name="developer_description" xml:space="preserve">
+    <value>कनेक्शन फ़्रीज़ का निदान करने वाले टूल। ये लाइव कनेक्शन पर काम करते हैं।</value>
+    <comment>Developer tools screen: developer description.</comment>
+  </data>
+  <data name="developer_disconnected" xml:space="preserve">
+    <value>इन टूल का इस्तेमाल करने के लिए कनेक्ट करें।</value>
+    <comment>Developer tools screen: developer disconnected.</comment>
   </data>
   <data name="device" xml:space="preserve">
     <value>डिवाइस</value>
@@ -1327,6 +2175,62 @@
     <value>आय</value>
     <comment>Wallet Screen</comment>
   </data>
+  <data name="earnings_address_placeholder" xml:space="preserve">
+    <value>Bittensor पता डालें</value>
+    <comment>Placeholder of the manual Bittensor address field on the Earnings page.</comment>
+  </data>
+  <data name="earnings_change_wallet" xml:space="preserve">
+    <value>वॉलेट बदलें</value>
+    <comment>Button on the Earnings page that starts connecting a different Bittensor wallet.</comment>
+  </data>
+  <data name="earnings_claim_sending" xml:space="preserve">
+    <value>भेजा जा रहा है…</value>
+    <comment>Progress text while a claim transaction is being sent.</comment>
+  </data>
+  <data name="earnings_claims_need_session" xml:space="preserve">
+    <value>ऐप का सत्र होते ही दावे चेन से लोड होते हैं। पहले कनेक्ट दबाएँ।</value>
+    <comment>Shown in place of the unclaimed figure when the app has no device session to read the chain with.</comment>
+  </data>
+  <data name="earnings_copy_address" xml:space="preserve">
+    <value>पता कॉपी करें</value>
+    <comment>Button that copies an address to the clipboard.</comment>
+  </data>
+  <data name="earnings_date_column" xml:space="preserve">
+    <value>तारीख़</value>
+    <comment>Column header of the per-epoch history table: the date the epoch ended.</comment>
+  </data>
+  <data name="earnings_epoch_column" xml:space="preserve">
+    <value>एपोक</value>
+    <comment>Column header of the per-epoch history table.</comment>
+  </data>
+  <data name="earnings_gas_balance" xml:space="preserve">
+    <value>गैस बैलेंस</value>
+    <comment>Label of the gas key's TAO balance in the claim dialog.</comment>
+  </data>
+  <data name="earnings_network_pane_title" xml:space="preserve">
+    <value>आपका नेटवर्क</value>
+    <comment>Title of the Earnings destination's third pane: own rank, multipliers and reliability.</comment>
+  </data>
+  <data name="earnings_points_column" xml:space="preserve">
+    <value>पॉइंट</value>
+    <comment>Column header of the per-epoch history table: points earned in the epoch.</comment>
+  </data>
+  <data name="earnings_share_column" xml:space="preserve">
+    <value>हिस्सा</value>
+    <comment>Column header of the per-epoch history table: the network's share of the block.</comment>
+  </data>
+  <data name="earnings_status_column" xml:space="preserve">
+    <value>स्थिति</value>
+    <comment>Column header of the per-epoch history table: the claim status of the epoch's alpha.</comment>
+  </data>
+  <data name="earnings_view_transaction" xml:space="preserve">
+    <value>ट्रांज़ैक्शन देखें</value>
+    <comment>Link that opens a claim transaction in the block explorer.</comment>
+  </data>
+  <data name="earnings_wallet_mismatch" xml:space="preserve">
+    <value>जिस वॉलेट ने साइन किया, वह आपके डाले गए पते का नहीं है।</value>
+    <comment>Error when the wallet that signed the connect challenge is not the address the user entered.</comment>
+  </data>
   <data name="edit_device_name" xml:space="preserve">
     <value>डिवाइस का नाम संपादित करें</value>
     <comment>device</comment>
@@ -1362,6 +2266,10 @@
   <data name="email_e4_reason_trust" xml:space="preserve">
     <value>मुझे VPN पर भरोसा नहीं है</value>
     <comment>Onboarding feedback email, not-activated variant: one-tap reason 3.</comment>
+  </data>
+  <data name="email_support_at" xml:space="preserve">
+    <value>सपोर्ट को ईमेल करें:</value>
+    <comment>Settings: label before the support email address link.</comment>
   </data>
   <data name="emoji_group_activities" xml:space="preserve">
     <value>गतिविधियां</value>
@@ -1419,6 +2327,14 @@
     <value>दूसरा सुझाव</value>
     <comment>Points leaderboard: the emoji editor's shuffle button, replaces the draft with a new random suggestion.</comment>
   </data>
+  <data name="enabled_under_auto" xml:space="preserve">
+    <value>ऑटो में चालू</value>
+    <comment>Section header of the per-transport enable toggles shown when the transport mode is Auto.</comment>
+  </data>
+  <data name="enabled_under_auto_footer" xml:space="preserve">
+    <value>पसंद के क्रम में सूचीबद्ध: पहले H3 और H1, फिर whodis, फिर whodis pump। क्रम तय है। कम से कम एक ट्रांसपोर्ट चालू रहता है।</value>
+    <comment>Footer of the Auto transports section explaining the fixed preference order.</comment>
+  </data>
   <data name="enjoying_urnetwork" xml:space="preserve">
     <value>क्या आप URnetwork का आनंद ले रहे हैं?</value>
     <comment>Call to action</comment>
@@ -1442,6 +2358,10 @@
   <data name="enter_a_solana_usdc_wallet_address" xml:space="preserve">
     <value>Solana USDC वॉलेट पता दर्ज करें</value>
   </data>
+  <data name="enter_address_manually" xml:space="preserve">
+    <value>पता मैन्युअल रूप से डालें</value>
+    <comment>Fallback link to paste an ss58 address.</comment>
+  </data>
   <data name="enter_balance_code" xml:space="preserve">
     <value>बैलेंस कोड दर्ज करें</value>
     <comment>Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.</comment>
@@ -1457,6 +2377,34 @@
   <data name="enter_urnetwork" xml:space="preserve">
     <value>URnetwork में प्रवेश करें</value>
     <comment>Used in Authenticate/LoginInitial/GuestModeSheet.swift.</comment>
+  </data>
+  <data name="epoch_column_epoch_linux" xml:space="preserve">
+    <value>एपोक</value>
+    <comment>History table column: the epoch number.</comment>
+  </data>
+  <data name="epoch_column_points_linux" xml:space="preserve">
+    <value>पॉइंट</value>
+    <comment>History table column: points earned.</comment>
+  </data>
+  <data name="epoch_column_share_linux" xml:space="preserve">
+    <value>ब्लॉक में हिस्सा</value>
+    <comment>History table column: the network's share of the block.</comment>
+  </data>
+  <data name="epoch_column_status_linux" xml:space="preserve">
+    <value>स्थिति</value>
+    <comment>History table column: the claim status of the epoch's alpha.</comment>
+  </data>
+  <data name="epoch_history" xml:space="preserve">
+    <value>इतिहास</value>
+    <comment>Label of the per-epoch history list.</comment>
+  </data>
+  <data name="epoch_row_title" xml:space="preserve">
+    <value>एपोक {}</value>
+    <comment>History row title.</comment>
+  </data>
+  <data name="epoch_share_of_block" xml:space="preserve">
+    <value>ब्लॉक का {}</value>
+    <comment>History row: the network's share of the block.</comment>
   </data>
   <data name="error_changing_network_name" xml:space="preserve">
     <value>नेटवर्क का नाम बदलने में त्रुटि</value>
@@ -1570,6 +2518,90 @@
     <value>लॉग्स एक्सपोर्ट करें</value>
     <comment>Used in Shared/Views/ExportLogsButton/ExportLogsButton.swift.</comment>
   </data>
+  <data name="extender" xml:space="preserve">
+    <value>एक्सटेंडर</value>
+    <comment>Title of the Extender row under the provide mode row in settings, and of the read-only row where the provide mode row is repeated.</comment>
+  </data>
+  <data name="extender_activation_failed" xml:space="preserve">
+    <value>सक्रियण विफल: {}</value>
+    <comment>Extender status when the last activation failed and no family is active. The argument is the error.</comment>
+  </data>
+  <data name="extender_activation_refused" xml:space="preserve">
+    <value>सक्रियण अस्वीकार: {}</value>
+    <comment>Extender status when the operator refused the activation and no family is active. The argument is the operator's reason.</comment>
+  </data>
+  <data name="extender_active" xml:space="preserve">
+    <value>सक्रिय · {}</value>
+    <comment>Extender status when at least one address family is activated. The argument is the family or families, from the IPv4, IPv6 and IPv4 and IPv6 labels.</comment>
+  </data>
+  <data name="extender_default_value" xml:space="preserve">
+    <value>डिफ़ॉल्ट: {}</value>
+    <comment>Placeholder shown in an empty extender settings field, naming the default value that applies.</comment>
+  </data>
+  <data name="extender_dns_name" xml:space="preserve">
+    <value>एक्सटेंडर DNS नाम</value>
+    <comment>Label of the extender DNS name field. Empty means the network space default.</comment>
+  </data>
+  <data name="extender_hosts" xml:space="preserve">
+    <value>एक्सटेंडर होस्ट</value>
+    <comment>Label of the manual extender list field: hostnames or IP addresses, one per line.</comment>
+  </data>
+  <data name="extender_hosts_hint" xml:space="preserve">
+    <value>हर पंक्ति में एक होस्टनेम या IP पता। इन्हें खोजे गए एक्सटेंडर में जोड़ा जाता है।</value>
+    <comment>Help text under the manual extender list field.</comment>
+  </data>
+  <data name="extender_listen_failed" xml:space="preserve">
+    <value>सुन नहीं सका: {}</value>
+    <comment>Extender status when no carrier could bind. The argument is the carrier errors.</comment>
+  </data>
+  <data name="extender_not_providing" xml:space="preserve">
+    <value>प्रदान नहीं कर रहा</value>
+    <comment>Extender status when the setting is on but this device is not providing. Apple is not listed because its catalog is keyed by the English text, which widget_not_providing already carries.</comment>
+  </data>
+  <data name="extender_revoked" xml:space="preserve">
+    <value>ऑपरेटर ने रद्द किया</value>
+    <comment>Extender status when the operator revoked this device's extender key.</comment>
+  </data>
+  <data name="extender_setting_description" xml:space="preserve">
+    <value>जब आप प्रदान कर रहे होते हैं, तब यह डिवाइस उन लोगों के लिए भी रिले करता है जिनकी नेटवर्क तक पहुँच अवरुद्ध है, TCP और UDP 443 और UDP 4053 पर।</value>
+    <comment>Secondary text under the Extender setting: what turning it on does, and the ports the extender listens on.</comment>
+  </data>
+  <data name="extender_setting_up" xml:space="preserve">
+    <value>सेट किया जा रहा है</value>
+    <comment>Extender status while the role is starting and there is no outcome yet: the carriers are binding, or the first activation is in flight.</comment>
+  </data>
+  <data name="extender_settings" xml:space="preserve">
+    <value>एक्सटेंडर सेटिंग</value>
+    <comment>Title of the extender settings form under account &gt; Extenders.</comment>
+  </data>
+  <data name="extender_settings_next_connect" xml:space="preserve">
+    <value>टनल अगली बार कनेक्ट होने पर नई एक्सटेंडर सेटिंग इस्तेमाल करेगी।</value>
+    <comment>Note on iOS after saving extender settings: the packet tunnel extension reads them at its next start.</comment>
+  </data>
+  <data name="extender_settings_saved" xml:space="preserve">
+    <value>एक्सटेंडर सेटिंग सहेजी गईं</value>
+    <comment>Confirmation after the extender settings are saved.</comment>
+  </data>
+  <data name="extender_start_failed" xml:space="preserve">
+    <value>शुरू नहीं हो सका: {}</value>
+    <comment>Extender status when the setting is on and the device is providing, but the role could not start in this network space: no extender directory or no identity. The argument is the reason.</comment>
+  </data>
+  <data name="extender_statistics" xml:space="preserve">
+    <value>एक्सटेंडर आँकड़े</value>
+    <comment>Title of the section that shows statistics about the extender, directly above the provider statistics section.</comment>
+  </data>
+  <data name="extenders" xml:space="preserve">
+    <value>एक्सटेंडर</value>
+    <comment>Title of the extenders panel in the connect drawer and of the Extenders section under account.</comment>
+  </data>
+  <data name="extenders_active_of_reserve" xml:space="preserve">
+    <value>{1} में से {0}</value>
+    <comment>The extender panel count: extenders carrying a live connection now, of every usable extender the app knows.</comment>
+  </data>
+  <data name="extenders_no_session" xml:space="preserve">
+    <value>एक्सटेंडर प्रबंधित करने के लिए साइन इन करें और कनेक्ट करें।</value>
+    <comment>Shown in the account Extenders section when there is no signed-in device to manage extenders with.</comment>
+  </data>
   <data name="failed_to_connect" xml:space="preserve">
     <value>कनेक्ट नहीं हो सका</value>
     <comment>Used in Shared/Intents/ConnectIntent.swift.</comment>
@@ -1614,6 +2646,10 @@
     <value>हमें बताएं कि आप वास्तव में कैसा महसूस करते हैं</value>
     <comment>Feedback Screen</comment>
   </data>
+  <data name="feedback_send_failed" xml:space="preserve">
+    <value>आपका फ़ीडबैक नहीं भेजा गया। अपना कनेक्शन जाँचें और दोबारा कोशिश करें।</value>
+    <comment>Feedback screen: the feedback could not be sent. The text stays in the field so the user can send it again.</comment>
+  </data>
   <data name="feedback_sending" xml:space="preserve">
     <value>भेजा जा रहा है…</value>
     <comment>Feedback screen: label of the Send button while the feedback is being sent.</comment>
@@ -1641,6 +2677,10 @@
   <data name="friends_save_too" xml:space="preserve">
     <value>आपके दोस्त भी बचत करते हैं -- सभी जीतते हैं।</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="gas_key" xml:space="preserve">
+    <value>गैस कुंजी</value>
+    <comment>Label of the gas key row.</comment>
   </data>
   <data name="general" xml:space="preserve">
     <value>सामान्य</value>
@@ -1675,6 +2715,10 @@
     <value>वापस जाएँ</value>
     <comment>Confirmation button that leaves the seedphrase screen after the warning.</comment>
   </data>
+  <data name="google" xml:space="preserve">
+    <value>Google</value>
+    <comment>A label for Google sign-in.</comment>
+  </data>
   <data name="google_auth_btn_text" xml:space="preserve">
     <value>Google से लॉग इन करें</value>
     <comment>Login initial</comment>
@@ -1683,6 +2727,26 @@
     <value>Google साइन-इन विधि जोड़ी गई</value>
     <comment>Snackbar message displayed when a Google sign-in method is successfully added.</comment>
   </data>
+  <data name="gossip_connecting" xml:space="preserve">
+    <value>कनेक्ट हो रहा है</value>
+    <comment>Gossip network status: a dial or reconnect is in progress (yellow).</comment>
+  </data>
+  <data name="gossip_events_per_minute.one" xml:space="preserve">
+    <value>{} इवेंट/मिनट</value>
+    <comment>The count of extender records and revocations applied from the gossip network or the feed in the last minute.</comment>
+  </data>
+  <data name="gossip_events_per_minute.other" xml:space="preserve">
+    <value>{} इवेंट/मिनट</value>
+    <comment>The count of extender records and revocations applied from the gossip network or the feed in the last minute.</comment>
+  </data>
+  <data name="gossip_network" xml:space="preserve">
+    <value>गॉसिप नेटवर्क</value>
+    <comment>Label of the gossip network status dot in the extender panel.</comment>
+  </data>
+  <data name="gossip_url" xml:space="preserve">
+    <value>गॉसिप URL</value>
+    <comment>Label of the gossip URL field. Empty means the network space default.</comment>
+  </data>
   <data name="got_it" xml:space="preserve">
     <value>समझ गया</value>
     <comment>Used in Shared/Views/UpgradeSubscriptionSheet.swift.</comment>
@@ -1690,6 +2754,16 @@
   <data name="guest" xml:space="preserve">
     <value>अतिथि</value>
     <comment>Account Screen</comment>
+  </data>
+  <data name="guest_convert_explanation" xml:space="preserve">
+    <value>इस नेटवर्क में साइन इन करने के लिए ईमेल और पासवर्ड जोड़ें। इसका प्लान और बैलेंस इसी के साथ रहते हैं।</value>
+    <comment>Desktop: the first step of "Create an account" on a legacy guest network. The user adds an email and a password to the network they are on now, so they can sign in to it again; its plan and balance stay with it (nothing moves to a new account).</comment>
+  </data>
+  <data name="hash_count" xml:space="preserve">
+    <value>#{}</value>
+  </data>
+  <data name="hash_value" xml:space="preserve">
+    <value>#{}</value>
   </data>
   <data name="hide_provider_list" xml:space="preserve">
     <value>प्रदाता सूची छिपाएं</value>
@@ -1731,9 +2805,33 @@
     <value>बैटरी ऑप्टिमाइज़ेशन को अनदेखा करें</value>
     <comment>Call to action</comment>
   </data>
+  <data name="import_extenders" xml:space="preserve">
+    <value>एक्सटेंडर इंपोर्ट करें</value>
+    <comment>Button and screen title: import extenders from a QR code, a photo, or pasted text.</comment>
+  </data>
+  <data name="import_extenders_confirm_settings" xml:space="preserve">
+    <value>इस कोड की एक्सटेंडर सेटिंग इस्तेमाल करें? एक्सटेंडर की खोज {} का इस्तेमाल करेगी।</value>
+    <comment>Confirmation before applying the extender settings from a share code. The argument is the operator host the settings point at.</comment>
+  </data>
   <data name="import_extenders_control_doh_urls" xml:space="preserve">
     <value>यह कोड बूटस्ट्रैप DNS-over-HTTPS सर्वर भी सेट करता है। वे URnetwork के सर्वर लुकअप देख पाएँगे: {}</value>
     <comment>Extender import: shown before the user takes the settings of a share code that also sets bootstrap DNS-over-HTTPS servers. The argument is the list of server URLs, comma separated.</comment>
+  </data>
+  <data name="import_extenders_foreign_host" xml:space="preserve">
+    <value>यह कोड {} के लिए है, इस नेटवर्क के लिए नहीं। नेटवर्क बदलने के लिए एक्सटेंडर सेटिंग इस्तेमाल करें।</value>
+    <comment>Error when a share code belongs to another network. The argument is that network's host.</comment>
+  </data>
+  <data name="import_extenders_imported.one" xml:space="preserve">
+    <value>{} एक्सटेंडर इंपोर्ट किया गया</value>
+    <comment>Confirmation after an import, with the number of extenders added.</comment>
+  </data>
+  <data name="import_extenders_imported.other" xml:space="preserve">
+    <value>{} एक्सटेंडर इंपोर्ट किए गए</value>
+    <comment>Confirmation after an import, with the number of extenders added.</comment>
+  </data>
+  <data name="import_extenders_invalid" xml:space="preserve">
+    <value>यह कोड एक्सटेंडर शेयर नहीं है।</value>
+    <comment>Error when the scanned or pasted text is not an extender share code.</comment>
   </data>
   <data name="in_guest_mode" xml:space="preserve">
     <value>आप गेस्ट मोड में हैं</value>
@@ -1747,6 +2845,10 @@
     <value>केवल शामिल ऐप्स ही टनल का उपयोग करते हैं।</value>
     <comment>transfer stats and split rules</comment>
   </data>
+  <data name="include_extender_settings" xml:space="preserve">
+    <value>एक्सटेंडर सेटिंग शामिल करें</value>
+    <comment>Toggle on the share screen: also include the extender DNS name, gossip URL and root keys in the code.</comment>
+  </data>
   <data name="include_in_vpn" xml:space="preserve">
     <value>VPN में शामिल करें</value>
     <comment>App split rules: rule choice routing the app through the VPN.</comment>
@@ -1754,6 +2856,10 @@
   <data name="included" xml:space="preserve">
     <value>शामिल</value>
     <comment>transfer stats and split rules</comment>
+  </data>
+  <data name="includes_free_trial_days" xml:space="preserve">
+    <value>{} दिन का मुफ़्त ट्रायल शामिल है</value>
+    <comment>Line under the annual plan card. The number of days is the free trial length.</comment>
   </data>
   <data name="instant_account_explainer" xml:space="preserve">
     <value>ईमेल, फ़ोन या पासवर्ड की ज़रूरत नहीं। आपका खाता एक सीड फ़्रेज़ से सुरक्षित है।</value>
@@ -1807,6 +2913,54 @@
     <value>अपर्याप्त धन</value>
     <comment>Circle Wallet Transfer Screen</comment>
   </data>
+  <data name="intro_control_manual_ios" xml:space="preserve">
+    <value>कंट्रोल सेंटर खोलें, + पर टैप करें, फिर कंट्रोल जोड़ें, और URnetwork चुनें।</value>
+    <comment>How to add the quick connect control on iOS (no add-control API).</comment>
+  </data>
+  <data name="intro_control_manual_macos" xml:space="preserve">
+    <value>कंट्रोल सेंटर खोलें, कंट्रोल संपादित करें चुनें, और URnetwork जोड़ें।</value>
+    <comment>How to add the quick connect control on macOS.</comment>
+  </data>
+  <data name="intro_quick_connect_details" xml:space="preserve">
+    <value>क्विक सेटिंग से URnetwork चालू और बंद करें, और होम स्क्रीन से उस पर नज़र रखें।</value>
+    <comment>Detail line of the last onboarding page.</comment>
+  </data>
+  <data name="intro_quick_connect_details_apple" xml:space="preserve">
+    <value>कंट्रोल सेंटर से URnetwork चालू और बंद करें, और होम स्क्रीन से उस पर नज़र रखें।</value>
+    <comment>Detail line of the last onboarding page on iOS/macOS (Control Center instead of Quick Settings).</comment>
+  </data>
+  <data name="intro_quick_connect_title" xml:space="preserve">
+    <value>एक टैप में कनेक्ट करें</value>
+    <comment>Title of the last onboarding page: the quick connect tile and the home screen widgets.</comment>
+  </data>
+  <data name="intro_quick_tile_added" xml:space="preserve">
+    <value>क्विक सेटिंग में जोड़ा गया</value>
+    <comment>Label shown on the last onboarding page once the quick connect tile is in Quick Settings.</comment>
+  </data>
+  <data name="intro_quick_tile_manual" xml:space="preserve">
+    <value>क्विक सेटिंग खोलें, पेंसिल पर टैप करें, और URnetwork को उसकी जगह खींचें।</value>
+    <comment>Manual steps for adding the quick connect tile on Android versions without the system add-tile request (before Android 13).</comment>
+  </data>
+  <data name="intro_verifiable_encryption" xml:space="preserve">
+    <value>रोज़मर्रा के इस्तेमाल के लिए एन्क्रिप्शन।</value>
+    <comment>Tagline under 'Welcome to URnetwork' on the first onboarding page. Replaces 'URnetwork is the most local and most private network on the planet.'</comment>
+  </data>
+  <data name="intro_widgets_manual" xml:space="preserve">
+    <value>होम स्क्रीन को दबाकर रखें, विजेट चुनें, और URnetwork चुनें।</value>
+    <comment>Manual steps for adding widgets on launchers without the pin dialog.</comment>
+  </data>
+  <data name="intro_widgets_manual_ios" xml:space="preserve">
+    <value>होम स्क्रीन को दबाकर रखें, + पर टैप करें, URnetwork खोजें, और एक विजेट जोड़ें।</value>
+    <comment>How to add a Home Screen widget on iOS (no pin-widget API).</comment>
+  </data>
+  <data name="intro_widgets_manual_macos" xml:space="preserve">
+    <value>नोटिफ़िकेशन सेंटर से विजेट गैलरी खोलें, URnetwork खोजें, और एक विजेट को डेस्कटॉप पर खींचें।</value>
+    <comment>How to add a desktop widget on macOS.</comment>
+  </data>
+  <data name="intro_widgets_tap_to_add" xml:space="preserve">
+    <value>किसी विजेट को होम स्क्रीन पर जोड़ने के लिए उस पर टैप करें।</value>
+    <comment>Hint under the widget previews on the last onboarding page: tapping a preview asks the launcher to add that widget.</comment>
+  </data>
   <data name="invalid_balance_code" xml:space="preserve">
     <value>अमान्य बैलेंस कोड</value>
     <comment>Used in Shared/Views/RedeemBalanceCodeSheet/RedeemBalanceCodeSheet.swift.</comment>
@@ -1818,6 +2972,14 @@
   <data name="invalid_referral_code_please_try_again" xml:space="preserve">
     <value>अमान्य रेफ़रल कोड। कृपया पुन: प्रयास करें।</value>
     <comment>Used in Main/Account/Settings/UpdateReferralNetworkSheet/UpdateReferralNetworkSheetViewModel.swift.</comment>
+  </data>
+  <data name="invalid_solana_address" xml:space="preserve">
+    <value>यह मान्य Solana पता नहीं है।</value>
+    <comment>Validation error under the manual address field when the address is not a valid Solana address (parallel to invalid_ss58_address).</comment>
+  </data>
+  <data name="invalid_ss58_address" xml:space="preserve">
+    <value>यह मान्य Bittensor पता नहीं है।</value>
+    <comment>Validation error for a coldkey address.</comment>
   </data>
   <data name="ip_address" xml:space="preserve">
     <value>IP पता</value>
@@ -1831,9 +2993,53 @@
     <value>{} IP</value>
     <comment>A label showing the number of IP addresses in a block action cluster, rendered as a single pill. The argument is the number of IPs.</comment>
   </data>
+  <data name="ip_families" xml:space="preserve">
+    <value>IP संस्करण</value>
+    <comment>IP versions: the tooltip of the address-family tag column in the provider locations sheet (windows, linux). It also titled the connect drawer's IP version histogram before that became the Dualstack / IPv4 / IPv6 status row.</comment>
+  </data>
+  <data name="ip_family_both" xml:space="preserve">
+    <value>दोनों</value>
+    <comment>Row label of the IP version histogram, and the provider row tag, for a provider that carries both IPv4 and IPv6.</comment>
+  </data>
+  <data name="ip_family_connected_count.one" xml:space="preserve">
+    <value>{} कनेक्टेड</value>
+    <comment>Status line of one column of the IP version status row in the connect drawer: how many providers of that family (dualstack, IPv4 or IPv6) are connected. Shown under the family label only when the count is not zero. Lowercase.</comment>
+  </data>
+  <data name="ip_family_connected_count.other" xml:space="preserve">
+    <value>{} कनेक्टेड</value>
+    <comment>Status line of one column of the IP version status row in the connect drawer: how many providers of that family (dualstack, IPv4 or IPv6) are connected. Shown under the family label only when the count is not zero. Lowercase.</comment>
+  </data>
+  <data name="ip_family_connecting_count.one" xml:space="preserve">
+    <value>{} कनेक्ट हो रहा है</value>
+    <comment>Status line of one column of the IP version status row in the connect drawer: how many providers of that family (dualstack, IPv4 or IPv6) are still connecting. Shown under the connected line only when the count is not zero. Lowercase.</comment>
+  </data>
+  <data name="ip_family_connecting_count.other" xml:space="preserve">
+    <value>{} कनेक्ट हो रहे हैं</value>
+    <comment>Status line of one column of the IP version status row in the connect drawer: how many providers of that family (dualstack, IPv4 or IPv6) are still connecting. Shown under the connected line only when the count is not zero. Lowercase.</comment>
+  </data>
+  <data name="ip_family_disconnected" xml:space="preserve">
+    <value>डिस्कनेक्टेड</value>
+    <comment>Status line of one column of the IP version status row in the connect drawer, when no provider of that family (dualstack, IPv4 or IPv6) is connected or connecting. Lowercase, under the family label.</comment>
+  </data>
+  <data name="ip_family_dualstack" xml:space="preserve">
+    <value>ड्यूलस्टैक</value>
+    <comment>Column label of the IP version status row in the connect drawer, for providers that carry both IPv4 and IPv6. Set in the pixel display face beside the IPv4 and IPv6 labels, so keep it short.</comment>
+  </data>
+  <data name="ip_family_v4" xml:space="preserve">
+    <value>v4</value>
+    <comment>Row label of the IP version histogram, and the provider row tag, for a provider that carries only IPv4.</comment>
+  </data>
+  <data name="ip_family_v6" xml:space="preserve">
+    <value>v6</value>
+    <comment>Row label of the IP version histogram, and the provider row tag, for a provider that carries only IPv6.</comment>
+  </data>
   <data name="ipv4" xml:space="preserve">
     <value>IPv4</value>
     <comment>Label for a list of IPv4 addresses.</comment>
+  </data>
+  <data name="ipv4_and_ipv6" xml:space="preserve">
+    <value>IPv4 और IPv6</value>
+    <comment>Accessibility label for a provider that carries both IPv4 and IPv6 traffic.</comment>
   </data>
   <data name="ipv6" xml:space="preserve">
     <value>IPv6</value>
@@ -1874,6 +3080,18 @@
   <data name="kill_switch" xml:space="preserve">
     <value>किल स्विच</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="kill_switch_exception" xml:space="preserve">
+    <value>किल स्विच अपवाद</value>
+    <comment>Title for the disclosure explaining traffic that intentionally bypasses the VPN kill switch.</comment>
+  </data>
+  <data name="kill_switch_exception_smtp_detail" xml:space="preserve">
+    <value>VPN कनेक्ट रहने पर IPv6 को भी IPv4 की तरह URnetwork से रूट किया जाता है। TCP पोर्ट 25 पर आउटबाउंड SMTP, किल स्विच चालू होने पर भी, VPN को बायपास करता है, जिससे आपका स्थानीय सार्वजनिक IP उन मेल सर्वरों के सामने आ सकता है। पोर्ट 465 और 587 पर SMTP VPN में रहता है और उसे TLS स्थापित करना होता है।</value>
+    <comment>Explains the deliberate SMTP port 25 exception to the VPN kill switch, that IPv6 is routed through the tunnel, and the encrypted SMTP behavior.</comment>
+  </data>
+  <data name="kill_switch_exception_unrecognized_encrypted" xml:space="preserve">
+    <value>किल स्विच बंद होने पर, वह ट्रैफ़िक जिसे URnetwork के सुरक्षा नियम नेटवर्क से बाहर रखते हैं, जैसे अपरिचित एन्क्रिप्टेड प्रोटोकॉल, VPN को बायपास करता है और आपके स्थानीय सार्वजनिक IP का इस्तेमाल करता है। किल स्विच चालू होने पर वह ट्रैफ़िक ब्लॉक हो जाता है।</value>
+    <comment>Explains that, with the kill switch off, traffic URnetwork safety rules keep off the network (such as unrecognized encrypted protocols) bypasses the VPN.</comment>
   </data>
   <data name="launch" xml:space="preserve">
     <value>लॉन्च करें</value>
@@ -1938,6 +3156,10 @@
   <data name="link_another_way_to_sign_in_to" xml:space="preserve">
     <value>अपने खाते में साइन इन करने का एक और तरीका लिंक करें।</value>
     <comment>A description of the add auth sheet.</comment>
+  </data>
+  <data name="load_failed" xml:space="preserve">
+    <value>लोड नहीं हो सका। अपना कनेक्शन जाँचें और दोबारा कोशिश करें।</value>
+    <comment>A section (points, wallet, referral code, epoch history, payout wallet) could not be loaded. Shown in place of the loading spinner or the section's data, next to a Try again (Retry on apple) button.</comment>
   </data>
   <data name="loading" xml:space="preserve">
     <value>लोड हो रहा है...</value>
@@ -2187,6 +3409,10 @@
     <value>गुणक</value>
     <comment>Call to action</comment>
   </data>
+  <data name="n_20" xml:space="preserve">
+    <value>{}/20</value>
+    <comment>A progress bar that shows how many friends you've invited. The first argument is the number of friends you've invited. The second argument is the maximum number of friends you can invite.</comment>
+  </data>
   <data name="n_gib_day" xml:space="preserve">
     <value>+{} GiB/दिन</value>
     <comment>A label that shows the daily data usage from referrals. The argument is the number of referrals.</comment>
@@ -2379,6 +3605,10 @@
     <value>कोई अवरुद्ध स्थान नहीं</value>
     <comment>Call to action</comment>
   </data>
+  <data name="no_claims_yet_linux" xml:space="preserve">
+    <value>अभी दावा करने को कुछ नहीं है। Alpha अगले पूर्ण एपोक से जमा होता है।</value>
+    <comment>Empty state of the unclaimed tile once a wallet is connected.</comment>
+  </data>
   <data name="no_compatible_wallet_app_found" xml:space="preserve">
     <value>इस डिवाइस पर कोई संगत वॉलेट ऐप नहीं मिला।</value>
     <comment>Add sign-in method sheet (android): no installed wallet app can sign the challenge.</comment>
@@ -2410,6 +3640,14 @@
   <data name="no_open_contracts" xml:space="preserve">
     <value>कोई खुला कॉन्ट्रैक्ट नहीं</value>
     <comment>A label displayed when there are no open contracts.</comment>
+  </data>
+  <data name="no_points_yet" xml:space="preserve">
+    <value>अभी कोई एपोक नहीं। आपके पहले पूर्ण एपोक के बाद पॉइंट दिखेंगे।</value>
+    <comment>Empty state of the points history.</comment>
+  </data>
+  <data name="no_previous_purchases_were_found" xml:space="preserve">
+    <value>कोई पिछली खरीदारी नहीं मिली।</value>
+    <comment>Restore-purchases outcome: the sync succeeded and there is genuinely nothing to restore (Shared/ViewModels/AppStoreSubscriptionManager.swift).</comment>
   </data>
   <data name="no_providers_found" xml:space="preserve">
     <value>हमें कोई प्रदाता नहीं मिला।</value>
@@ -2515,6 +3753,10 @@
     <value>चालू</value>
     <comment>A label for a DNS setting that is enabled.</comment>
   </data>
+  <data name="onboarding_step_of" xml:space="preserve">
+    <value>{1} में से चरण {0}</value>
+    <comment>Accessibility description of the onboarding step bubbles: the current step and the total.</comment>
+  </data>
   <data name="one_gib_per_day" xml:space="preserve">
     <value>1 GiB/दिन</value>
     <comment>Call to action</comment>
@@ -2547,6 +3789,10 @@
     <value>अन्य</value>
     <comment>Used in Main/Account/Wallets/ConnectWalletSheet/ConnectWalletSheetView.swift.</comment>
   </data>
+  <data name="paid_in_usdc_on_solana" xml:space="preserve">
+    <value>Solana पर USDC में भुगतान।</value>
+    <comment>The one USDC mention: the Solana subscription payment note.</comment>
+  </data>
   <data name="participate" xml:space="preserve">
     <value>भाग लें</value>
     <comment>Call to action</comment>
@@ -2576,6 +3822,10 @@
     <value>पासवर्ड कम से कम 12 वर्णों का होना चाहिए</value>
     <comment>Hint for password input length requirements.</comment>
   </data>
+  <data name="paste_share_text" xml:space="preserve">
+    <value>शेयर टेक्स्ट पेस्ट करें</value>
+    <comment>Button and field label: paste the text form of a share code.</comment>
+  </data>
   <data name="paste_your_24_word_seedphrase_here" xml:space="preserve">
     <value>अपना 24-शब्द वाला सीड फ़्रेज़ यहां पेस्ट करें</value>
     <comment>A placeholder text for the seedphrase field.</comment>
@@ -2588,9 +3838,29 @@
     <value>Stripe के साथ जुड़ें</value>
     <comment>Call to action</comment>
   </data>
+  <data name="payment_confirmation_delayed" xml:space="preserve">
+    <value>पुष्टि में उम्मीद से ज़्यादा समय लग रहा है। पुष्टि होते ही आपका प्लान अपने-आप अपडेट हो जाएगा — दोबारा खरीदने की ज़रूरत नहीं है।</value>
+    <comment>Shown when the post-payment confirmation poll exhausts its budget (2 minutes) without the server confirming the subscription. The payment evidence is real (store or payment sheet reported success), so say that plainly, and head off a second purchase. Android also shows it, without the "Payment received" title, when the 2-minute Solana Pay return-path check ends without the payment landing.</comment>
+  </data>
+  <data name="payment_confirmation_processing" xml:space="preserve">
+    <value>हम अभी आपके भुगतान की पुष्टि कर रहे हैं। आपका प्लान अपने-आप अपडेट हो जाएगा — आपको कुछ करने की ज़रूरत नहीं है।</value>
+    <comment>Body of the post-purchase overlay while the server has not yet confirmed the subscription. Replaces the optimistic 'You're premium.' claim until currentSubscription actually confirms.</comment>
+  </data>
+  <data name="payment_not_completed" xml:space="preserve">
+    <value>आपका भुगतान पूरा नहीं हो सका।</value>
+    <comment>Shown in the payment-problem dialog when the Stripe payment sheet reports a failure. The sheet's own error detail is appended by the caller.</comment>
+  </data>
   <data name="payment_problem" xml:space="preserve">
     <value>भुगतान में समस्या</value>
     <comment>Billing errors. Every one is shown to the user WITH a remedy: a payment error they cannot see is a payment error they will hit again.</comment>
+  </data>
+  <data name="payment_received" xml:space="preserve">
+    <value>भुगतान मिल गया।</value>
+    <comment>Title of the post-purchase screen while the server has not yet confirmed the entitlement (Shared/Views/PurchaseSuccessView.swift). StoreKit took the payment; the confirmation poll is still running — the copy must not claim premium yet.</comment>
+  </data>
+  <data name="payment_received_title" xml:space="preserve">
+    <value>भुगतान मिल गया</value>
+    <comment>Title for the post-purchase overlay and the confirmation-timeout dialog. Deliberately claims only what is known -- the payment was received -- not that the plan is active yet.</comment>
   </data>
   <data name="payout_wallet_updated" xml:space="preserve">
     <value>पेआउट वॉलेट अपडेट किया गया</value>
@@ -2656,6 +3926,14 @@
     <value>≈ {}/माह · साल में एक बार बिल</value>
     <comment>Plan picker: the subordinate line under the yearly price with the per-month equivalent (ceiling-rounded).</comment>
   </data>
+  <data name="plan_price_per_month" xml:space="preserve">
+    <value>{}/महीना</value>
+    <comment>Monthly plan card label: the store-formatted price per month.</comment>
+  </data>
+  <data name="plan_price_per_year" xml:space="preserve">
+    <value>{}/साल</value>
+    <comment>Yearly plan card label: the store-formatted price per year.</comment>
+  </data>
   <data name="plan_save_percent" xml:space="preserve">
     <value>{}% बचाएँ</value>
     <comment>Plan picker: the saving badge on the yearly card; the number is the whole percent saved against twelve monthly payments.</comment>
@@ -2700,6 +3978,10 @@
     <value>पॉइंट</value>
     <comment>Points leaderboard: tab label, stat tile label and sort chip.</comment>
   </data>
+  <data name="points_earned" xml:space="preserve">
+    <value>अर्जित पॉइंट</value>
+    <comment>Headline label of the earnings screen.</comment>
+  </data>
   <data name="points_leaderboard_description" xml:space="preserve">
     <value>अब तक के कुल पॉइंट। एक ब्लॉक एक पूर्ण एपोक है; स्ट्रीक पॉइंट वाले लगातार ब्लॉक गिनती है, जो नवीनतम पर समाप्त होती है।</value>
     <comment>Points leaderboard: the explanation under the list header.</comment>
@@ -2711,6 +3993,10 @@
   <data name="points_leaderboard_private_hint" xml:space="preserve">
     <value>जब तक आप इसे चालू नहीं करते, आपका नेटवर्क अनाम के रूप में दिखता है।</value>
     <comment>Points leaderboard: shown under the own-stats card while the name switch is off. The network is listed either way, as Anonymous until the switch is on.</comment>
+  </data>
+  <data name="points_short" xml:space="preserve">
+    <value>{} पॉइंट</value>
+    <comment>Points count with unit for history rows.</comment>
   </data>
   <data name="post_quantum_encryption" xml:space="preserve">
     <value>पोस्ट-क्वांटम एन्क्रिप्शन</value>
@@ -2735,6 +4021,22 @@
   <data name="private_dns_strict_notice" xml:space="preserve">
     <value>निजी DNS {} पर सेट है. Android, URnetwork के बजाय सीधे वहीं लुकअप भेजता है. अगर साइटें लोड होना बंद हो जाएं, तो निजी DNS को Automatic पर सेट करें.</value>
     <comment>Muted notice on the connect screen shown while connected when Android Private DNS is set to a strict hostname, which sends DoT lookups outside the tunnel. %1$s is the configured DNS provider host.</comment>
+  </data>
+  <data name="private_extender" xml:space="preserve">
+    <value>निजी एक्सटेंडर</value>
+    <comment>Title of the advanced private extender fields: one extender with a secret that replaces discovery.</comment>
+  </data>
+  <data name="private_extender_hint" xml:space="preserve">
+    <value>निजी एक्सटेंडर खोजे गए सभी एक्सटेंडर की जगह लेता है। खोज इस्तेमाल करने के लिए इसे खाली छोड़ें।</value>
+    <comment>Help text under the private extender fields.</comment>
+  </data>
+  <data name="private_extender_ip" xml:space="preserve">
+    <value>IP पता</value>
+    <comment>Label of the private extender IP address field.</comment>
+  </data>
+  <data name="private_extender_secret" xml:space="preserve">
+    <value>सीक्रेट</value>
+    <comment>Label of the private extender secret field.</comment>
   </data>
   <data name="private_network" xml:space="preserve">
     <value>निजी नेटवर्क</value>
@@ -2768,9 +4070,33 @@
     <value>प्रदान करें</value>
     <comment>Label of the switch that turns on providing bandwidth to the network.</comment>
   </data>
+  <data name="provide_intro_bullet_devices" xml:space="preserve">
+    <value>अपने डिवाइस को आपस में इंटरनेट शेयर करने दें</value>
+    <comment>First bullet on the onboarding Contribute bandwidth page.</comment>
+  </data>
+  <data name="provide_intro_bullet_people" xml:space="preserve">
+    <value>अपना इंटरनेट दूसरे लोगों के साथ शेयर करें ❤️</value>
+    <comment>Second bullet on the onboarding Contribute bandwidth page, with a heart.</comment>
+  </data>
+  <data name="provide_intro_lead" xml:space="preserve">
+    <value>आपकी मर्ज़ी, पूरी तरह वैकल्पिक:</value>
+    <comment>Lead line above the two bullets on the onboarding Contribute bandwidth page.</comment>
+  </data>
   <data name="provide_mode" xml:space="preserve">
     <value>प्रदान मोड</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="provide_mode_always_description" xml:space="preserve">
+    <value>जब तक ऐप चल रहा है, सभी को प्रदान करता है।</value>
+    <comment>One-line explanation of the Always provide mode in the onboarding Contribute bandwidth picker.</comment>
+  </data>
+  <data name="provide_mode_auto_description" xml:space="preserve">
+    <value>जब आप कनेक्ट हों तब सभी को प्रदान करता है, वरना सिर्फ़ आपके अपने डिवाइस को।</value>
+    <comment>One-line explanation of the Auto provide mode in the onboarding Contribute bandwidth picker: public providing only while connected, same-network peers otherwise.</comment>
+  </data>
+  <data name="provide_mode_network_description" xml:space="preserve">
+    <value>सिर्फ़ आपके अपने नेटवर्क के डिवाइस को प्रदान करता है।</value>
+    <comment>One-line explanation of the Network provide mode in the onboarding Contribute bandwidth picker: the private provider for the network's own devices.</comment>
   </data>
   <data name="provide_power_mode" xml:space="preserve">
     <value>बैटरी पर चलते समय</value>
@@ -3060,6 +4386,10 @@
     <value>क्यों?</value>
     <comment>Provider card: expandable section title that reveals the numbers the network ranks this device by, with explanations.</comment>
   </data>
+  <data name="provider_transports" xml:space="preserve">
+    <value>प्रदाता ट्रांसपोर्ट</value>
+    <comment>Title of the transport settings editor for the provider transport policy.</comment>
+  </data>
   <data name="providing" xml:space="preserve">
     <value>प्रदान कर रहा है</value>
     <comment>Used in Main/Account/Wallets/WalletsView.swift.</comment>
@@ -3084,6 +4414,18 @@
     <value>हम अभी तक आपकी खरीदारी की पुष्टि नहीं कर सके। यदि आपने चेकआउट पूरा कर लिया है, तो आपकी योजना कुछ ही मिनटों में अपने आप अपडेट हो जाएगी — दोबारा खरीदने की जरूरत नहीं है।</value>
     <comment>Shown when the post-checkout confirmation poll gives up (2 minutes) without the server confirming the subscription. The purchase is still likely to land later; the background poll and the next launch pick it up. On apple: the delayed phase of PurchaseSuccessView and the MainView snackbar.</comment>
   </data>
+  <data name="purchase_could_not_be_verified" xml:space="preserve">
+    <value>इस खरीदारी को Google Play से सत्यापित नहीं किया जा सका, इसलिए इसे आपके खाते पर लागू नहीं किया जा सकता। अगर आपसे शुल्क लिया गया है और आपका प्लान अपडेट नहीं होता, तो कृपया सपोर्ट से संपर्क करें।</value>
+    <comment>Error dialog body when the server's verify answer for a Play purchase is terminal `invalid` — the proof will never verify (unknown token, disallowed product, canceled before completing). The purchase is still acknowledged with Play so a real charge is not auto-refunded; this dialog is how the failure reaches the user instead of a silent nothing (android google/PlanViewModel.kt report path).</comment>
+  </data>
+  <data name="purchase_found_confirming_your_plan" xml:space="preserve">
+    <value>खरीदारी मिल गई। आपके प्लान की पुष्टि हो रही है — यह अपने-आप अपडेट हो जाएगा।</value>
+    <comment>Restore-purchases outcome: an entitlement for the current network was found; the confirmation poll now bridges the gap until the server credits it (Shared/ViewModels/AppStoreSubscriptionManager.swift).</comment>
+  </data>
+  <data name="qr_code_not_found" xml:space="preserve">
+    <value>इमेज में कोई QR कोड नहीं मिला।</value>
+    <comment>Error when a chosen photo or image file holds no QR code.</comment>
+  </data>
   <data name="quit" xml:space="preserve">
     <value>बाहर निकलें</value>
     <comment>Tray menu item that exits the app (tears the tunnel down).</comment>
@@ -3095,6 +4437,10 @@
   <data name="ranked_networks_count" xml:space="preserve">
     <value>{} रैंक वाले नेटवर्क</value>
     <comment>Points leaderboard: how many networks hold a rank. {count} is preformatted with separators.</comment>
+  </data>
+  <data name="reads_per_second" xml:space="preserve">
+    <value>रीड/से.</value>
+    <comment>Unit the extender chart labels its rates with, where the provider chart says pkt/s. The compact count is prepended by the app, as it is for pkt/s.</comment>
   </data>
   <data name="ready_to_connect" xml:space="preserve">
     <value>कनेक्ट करने के लिए तैयार</value>
@@ -3231,6 +4577,18 @@
   <data name="referral_network_updated" xml:space="preserve">
     <value>रेफ़रल नेटवर्क अपडेट किया गया</value>
     <comment>Snackbar on the Referrals screen after the referral network was changed.</comment>
+  </data>
+  <data name="referral_panel_detail" xml:space="preserve">
+    <value>हर सत्यापित रेफ़रल पर आप दोनों को {} GiB/दिन मुफ़्त मिलता है, ज़िंदगी भर के लिए।</value>
+    <comment>Detail line of the gold referral panel. The amount is the daily GiB each side earns per verified referral (pro.yml referral).</comment>
+  </data>
+  <data name="referral_panel_heading" xml:space="preserve">
+    <value>किसी दोस्त को रेफ़र करें और दोनों को मुफ़्त डेटा मिलेगा</value>
+    <comment>Heading of the gold referral panel (the ur.io referral panel) before the network has a referral.</comment>
+  </data>
+  <data name="referral_panel_none" xml:space="preserve">
+    <value>अभी कोई दोस्त नहीं। अपना कोड शेयर करें और ताज को दिखते हुए देखें। 👑</value>
+    <comment>Status line of the gold referral panel while the network has no referral yet.</comment>
   </data>
   <data name="referral_points" xml:space="preserve">
     <value>रेफरल पॉइंट</value>
@@ -3378,9 +4736,17 @@
     <value>रिज़ॉल्वर</value>
     <comment>A section header for the DNS resolvers.</comment>
   </data>
+  <data name="restore_default_transports" xml:space="preserve">
+    <value>डिफ़ॉल्ट ट्रांसपोर्ट बहाल करें</value>
+    <comment>Button that resets the transport settings draft to the SDK default policy.</comment>
+  </data>
   <data name="restore_most_secure_settings" xml:space="preserve">
     <value>सबसे सुरक्षित सेटिंग्स बहाल करें</value>
     <comment>dns settings</comment>
+  </data>
+  <data name="restore_purchases" xml:space="preserve">
+    <value>खरीदारियाँ बहाल करें</value>
+    <comment>Action label that resyncs App Store purchases (AppStore.sync + entitlement scan). Shown in Settings and in the upgrade flow's failure states (Main/Account/Settings/SettingsForm-iOS.swift, SettingsForm-macOS.swift, Shared/Views/UpgradeSubscriptionSheet.swift, Shared/Views/PurchaseSuccessView.swift, Shared/Views/Introduction/IntroductionView.swift).</comment>
   </data>
   <data name="retry" xml:space="preserve">
     <value>पुनः प्रयास करें</value>
@@ -3394,17 +4760,37 @@
     <value>URnetwork की समीक्षा करें</value>
     <comment>Used in Main/Account/AccountRootView.swift.</comment>
   </data>
+  <data name="route_internet" xml:space="preserve">
+    <value>इंटरनेट</value>
+    <comment>Right stop label of the onboarding route line the anonymized member travels along.</comment>
+  </data>
   <data name="route_local" xml:space="preserve">
     <value>डिस्कनेक्ट होने पर स्थानीय ट्रैफ़िक की अनुमति दें</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="route_you" xml:space="preserve">
+    <value>आप</value>
+    <comment>Left stop label of the onboarding route line the anonymized member travels along (you -&gt; URnetwork -&gt; internet).</comment>
   </data>
   <data name="rules" xml:space="preserve">
     <value>नियम</value>
     <comment>A heading for the pinned split rules.</comment>
   </data>
+  <data name="safety_rule" xml:space="preserve">
+    <value>सुरक्षा नियम</value>
+    <comment>A short label on a blocked or locally routed split-rule activity row whose traffic URnetwork safety rules kept off the network.</comment>
+  </data>
+  <data name="safety_rule_detail" xml:space="preserve">
+    <value>URnetwork के सुरक्षा नियम इस ट्रैफ़िक को नेटवर्क से बाहर रखते हैं, जैसे कोई एन्क्रिप्टेड प्रोटोकॉल जिसे वे पहचान नहीं पाते। एक स्थानीय स्प्लिट नियम इसे आपके अपने IP से VPN के बाहर भेजता है।</value>
+    <comment>Explains a split-rule activity row that URnetwork safety rules kept off the network, and how a local split rule can use it outside the VPN.</comment>
+  </data>
   <data name="save" xml:space="preserve">
     <value>सहेजें</value>
     <comment>Profile</comment>
+  </data>
+  <data name="save_33_percent" xml:space="preserve">
+    <value>33% बचाएँ</value>
+    <comment>Line under the yearly plan's price: the saving against paying monthly.</comment>
   </data>
   <data name="save_logs" xml:space="preserve">
     <value>लॉग सहेजें</value>
@@ -3417,6 +4803,10 @@
   <data name="saved_as" xml:space="preserve">
     <value>{} के रूप में सहेजा जाएगा</value>
     <comment>Split rules: note under the host input when the entry will be stored in a normalised form. {value} is that form, for example 10.0.0.0/8 for a typed 10.0.0.5/8.</comment>
+  </data>
+  <data name="scan_qr_code" xml:space="preserve">
+    <value>QR कोड स्कैन करें</value>
+    <comment>Button: open the camera to scan a QR code.</comment>
   </data>
   <data name="search_apps_placeholder" xml:space="preserve">
     <value>ऐप्स खोजें</value>
@@ -3535,6 +4925,10 @@
     <value>भेजें</value>
     <comment>Call to action</comment>
   </data>
+  <data name="send_feedback_contact" xml:space="preserve">
+    <value>हमें सीधे अपना फ़ीडबैक भेजें, {0} पर ईमेल करें, या सीधी सहायता के लिए हमारे {1} से जुड़ें।</value>
+    <comment>Feedback screen: support contacts. The first argument is the support email address, the second is the name of the community chat (Discord); both are links.</comment>
+  </data>
   <data name="send_product_updates" xml:space="preserve">
     <value>मुझे उत्पाद अपडेट भेजें</value>
     <comment>Settings</comment>
@@ -3546,6 +4940,10 @@
   <data name="send_reset_link_2" xml:space="preserve">
     <value>रीसेट लिंक भेजें</value>
     <comment>Used in Authenticate/ResetPassword/ResetPasswordView.swift.</comment>
+  </data>
+  <data name="send_tao_to_mirror" xml:space="preserve">
+    <value>गैस के लिए लगभग {0} TAO {1} पर भेजें।</value>
+    <comment>Instruction to fund the gas key.</comment>
   </data>
   <data name="send_us_your_feedback_directly_or_join_our" xml:space="preserve">
     <value>अपनी प्रतिक्रिया सीधे हमें भेजें या सीधे सहायता के लिए [हमारे Discord से जुड़ें](https://discord.com/invite/RUNZXMwPRK)।</value>
@@ -3571,9 +4969,45 @@
     <value>सेटिंग</value>
     <comment>Account Screen</comment>
   </data>
+  <data name="settings_add_quick_tile" xml:space="preserve">
+    <value>क्विक कनेक्ट टाइल जोड़ें</value>
+    <comment>Settings row that asks the system to add the Quick Settings tile (Android 13+).</comment>
+  </data>
+  <data name="settings_add_quick_tile_description" xml:space="preserve">
+    <value>क्विक सेटिंग पैनल और लॉक स्क्रीन से कनेक्ट और डिस्कनेक्ट करें।</value>
+    <comment>Description under the add-tile settings row.</comment>
+  </data>
+  <data name="settings_add_widgets" xml:space="preserve">
+    <value>होम स्क्रीन पर विजेट जोड़ें</value>
+    <comment>Settings row that opens the widget picker to pin the app's widgets.</comment>
+  </data>
+  <data name="settings_add_widgets_description" xml:space="preserve">
+    <value>क्विक कनेक्ट, डेटा बैलेंस, ग्लोब पर प्रदाता और आपके शीर्ष कॉन्ट्रैक्ट।</value>
+    <comment>Description under the add-widgets settings row.</comment>
+  </data>
   <data name="share" xml:space="preserve">
     <value>शेयर करें</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="share_extenders" xml:space="preserve">
+    <value>एक्सटेंडर शेयर करें</value>
+    <comment>Button and screen title: share the known extenders as a QR code.</comment>
+  </data>
+  <data name="share_extenders_count.one" xml:space="preserve">
+    <value>{} एक्सटेंडर</value>
+    <comment>How many extenders the share code carries.</comment>
+  </data>
+  <data name="share_extenders_count.other" xml:space="preserve">
+    <value>{} एक्सटेंडर</value>
+    <comment>How many extenders the share code carries.</comment>
+  </data>
+  <data name="share_extenders_hint" xml:space="preserve">
+    <value>ये एक्सटेंडर शेयर करने के लिए इस कोड को किसी दूसरे URnetwork ऐप से स्कैन करें।</value>
+    <comment>Help text on the share screen under the QR code.</comment>
+  </data>
+  <data name="share_extenders_too_large" xml:space="preserve">
+    <value>शेयर कोड QR कोड के लिए बहुत बड़ा है। इसके बजाय शेयर टेक्स्ट कॉपी करें।</value>
+    <comment>Shown on the share screen when the share payload exceeds what a QR code can hold; the text form is still offered.</comment>
   </data>
   <data name="share_logs" xml:space="preserve">
     <value>लॉग साझा करें</value>
@@ -3583,9 +5017,21 @@
     <value>लॉग्स साझा करें</value>
     <comment>Used in Shared/Views/ExportLogsButton/ExportLogsButton.swift.</comment>
   </data>
+  <data name="share_text_copied" xml:space="preserve">
+    <value>शेयर टेक्स्ट कॉपी हो गया</value>
+    <comment>Confirmation after the share text of an extender code was copied to the clipboard.</comment>
+  </data>
   <data name="share_urnetwork" xml:space="preserve">
     <value>URnetwork शेयर करें</value>
     <comment>Used in Shared/Views/AccountMenu.swift.</comment>
+  </data>
+  <data name="shortcut_connect_long" xml:space="preserve">
+    <value>URnetwork से कनेक्ट करें</value>
+    <comment>Long label of the launcher shortcut that connects the VPN.</comment>
+  </data>
+  <data name="shortcut_disconnect_long" xml:space="preserve">
+    <value>URnetwork से डिस्कनेक्ट करें</value>
+    <comment>Long label of the launcher shortcut that disconnects the VPN.</comment>
   </data>
   <data name="show" xml:space="preserve">
     <value>दिखाएं</value>
@@ -3594,6 +5040,10 @@
   <data name="show_icon_when_connected" xml:space="preserve">
     <value>कनेक्ट होने पर UR आइकन दिखाएँ</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="show_kill_switch_exception" xml:space="preserve">
+    <value>किल स्विच अपवाद दिखाएँ</value>
+    <comment>Accessibility label for the kill switch exception information button.</comment>
   </data>
   <data name="show_on_points_leaderboard" xml:space="preserve">
     <value>मेरे नेटवर्क का नाम दिखाएँ</value>
@@ -3629,6 +5079,10 @@
   </data>
   <data name="sign_in_methods" xml:space="preserve">
     <value>साइन-इन विधियाँ</value>
+  </data>
+  <data name="sign_in_with_apple" xml:space="preserve">
+    <value>Apple से साइन इन करें</value>
+    <comment>Login stack: full-width Apple sign-in button on platforms that use the ur.io browser bridge</comment>
   </data>
   <data name="sign_in_with_code" xml:space="preserve">
     <value>कोड से साइन इन करें</value>
@@ -3677,6 +5131,14 @@
     <value>लाइव गतिविधि देखने के लिए कनेक्ट करें</value>
     <comment>Disabled stat cards: connect-to-view hint</comment>
   </data>
+  <data name="site_app_contracts" xml:space="preserve">
+    <value>कॉन्ट्रैक्ट</value>
+    <comment>App connect screen: contract details section title</comment>
+  </data>
+  <data name="site_app_copied" xml:space="preserve">
+    <value>कॉपी हो गया</value>
+    <comment>App: copied flash. Also the linux share-dialog toast after copying the identity payload.</comment>
+  </data>
   <data name="site_app_country" xml:space="preserve">
     <value>देश</value>
     <comment>Reliability: country column</comment>
@@ -3721,6 +5183,10 @@
     <value>योजना</value>
     <comment>Connect drawer: plan section label</comment>
   </data>
+  <data name="site_app_providers" xml:space="preserve">
+    <value>प्रदाता</value>
+    <comment>App connect screen: provider grid section title</comment>
+  </data>
   <data name="site_app_proxies" xml:space="preserve">
     <value>प्रॉक्सी</value>
     <comment>App account: proxies row/screen title</comment>
@@ -3740,6 +5206,10 @@
   <data name="site_app_throughput" xml:space="preserve">
     <value>ट्रांसफर</value>
     <comment>Connect drawer: live transfer timeseries section</comment>
+  </data>
+  <data name="site_billing_portal_error" xml:space="preserve">
+    <value>बिलिंग पोर्टल नहीं खुल सका।</value>
+    <comment>Account panel: billing portal failed to open</comment>
   </data>
   <data name="site_connect_code_hint" xml:space="preserve">
     <value>ऐप में साइन अप करते समय यह कोड डालें।</value>
@@ -3925,6 +5395,10 @@
     <value>आपकी Pro सदस्यता Stripe के माध्यम से बिल की जाती है। नीचे कभी भी अपने भुगतान विवरण अपडेट करें या सदस्यता रद्द करें।</value>
     <comment>Subscription: Stripe-billed body</comment>
   </data>
+  <data name="skip" xml:space="preserve">
+    <value>छोड़ें</value>
+    <comment>Small muted button at the top of the post-login onboarding flow that leaves the whole flow.</comment>
+  </data>
   <data name="sn_payout_schedule" xml:space="preserve">
     <value>कमाई हर एपोक में तय होती है और जब आप उस पर दावा करते हैं, तो SN25α में आपके Bittensor coldkey पर भुगतान की जाती है।</value>
     <comment>Earnings card: how providers are paid on the UR subnet (WHITEPAPER §5.2, §8.3). Earnings settle per epoch and are paid in SN25α as stake to the provider's Bittensor coldkey once the provider claims them; nothing is paid automatically. Followed by sn_payout_schedule_times when the epoch schedule is known.</comment>
@@ -3933,9 +5407,33 @@
     <value>यह एपोक {0} को समाप्त होता है। अपने हिस्से का दावा {1} से {2} तक करें।</value>
     <comment>Earnings card, after sn_payout_schedule: when the current epoch ends, when its share can be claimed and when an unclaimed share expires. The three values are local date-times the app fills from the chain's epoch schedule (the coordinator's policy: the claim-open offset and the claim TTL), never fixed durations.</comment>
   </data>
+  <data name="sn_status_claimable" xml:space="preserve">
+    <value>दावा योग्य</value>
+    <comment>Claim status of an epoch whose alpha can be claimed now.</comment>
+  </data>
+  <data name="sn_status_not_finalized" xml:space="preserve">
+    <value>अंतिम नहीं</value>
+    <comment>Claim status of an epoch the vault has not finalized yet.</comment>
+  </data>
+  <data name="sn_status_open" xml:space="preserve">
+    <value>खुला</value>
+    <comment>Claim status of an epoch that is still open (not yet finalized on chain).</comment>
+  </data>
+  <data name="solana_one_time_payment" xml:space="preserve">
+    <value>Solana पर USDC से भुगतान एक बार का सालाना भुगतान है, जिसमें मुफ़्त ट्रायल नहीं है।</value>
+    <comment>Note under the Solana payment button on the plan picker: Solana is a one-time yearly payment, the free trial is Stripe only.</comment>
+  </data>
+  <data name="solana_payment_still_checking" xml:space="preserve">
+    <value>आपके Solana भुगतान की जाँच अभी जारी है। नेटवर्क पर पुष्टि में एक-दो मिनट लग सकते हैं।</value>
+    <comment>Shown once when the check for a Solana Pay payment (started when the app returns from the wallet) has run 20 seconds without the payment landing. The check keeps going for up to two minutes; the app cannot know whether the wallet actually sent anything, so do not say the payment was received.</comment>
+  </data>
   <data name="solana_sign_in" xml:space="preserve">
     <value>Solana से साइन इन करें</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="solana_wallet" xml:space="preserve">
+    <value>Solana वॉलेट</value>
+    <comment>Label of the connected Solana wallet block on the Earnings screen (parallel to bittensor_wallet).</comment>
   </data>
   <data name="something_went_wrong" xml:space="preserve">
     <value>कुछ गलत हो गया।</value>
@@ -4033,6 +5531,10 @@
     <value>कमाई शुरू करने के लिए, नेटवर्क से जुड़ें</value>
     <comment>Guest mode overlay</comment>
   </data>
+  <data name="start_free_trial" xml:space="preserve">
+    <value>मुफ़्त ट्रायल शुरू करें</value>
+    <comment>Primary button of the plan picker (onboarding and upgrade): starts the paid plan's free trial. Replaces 'Join the movement'.</comment>
+  </data>
   <data name="stay" xml:space="preserve">
     <value>यहीं रहें</value>
     <comment>Confirmation button that keeps the user on the seedphrase screen after the warning.</comment>
@@ -4092,6 +5594,14 @@
     <value>मजबूत गुमनामीकरण</value>
     <comment>Connect drawer: strong anonymization toggle — the inverse of allow direct (direct connections expose the real source IP to the provider).</comment>
   </data>
+  <data name="subscribe" xml:space="preserve">
+    <value>सदस्यता लें</value>
+    <comment>Button on the plan picker for the monthly plan, which has no free trial.</comment>
+  </data>
+  <data name="subscription_purchased_under_different_account" xml:space="preserve">
+    <value>आपकी सदस्यता किसी दूसरे खाते से खरीदी गई थी। इसका इस्तेमाल करने के लिए उस खाते में लॉग इन करें।</value>
+    <comment>The store purchase belongs to a different network than the one logged in — crediting must not go to the wrong account, so tell the user which way out exists. Apple: restore-purchases outcome (Shared/ViewModels/AppStoreSubscriptionManager.swift). Android: terminal `wrong_network` answer from the Play purchase report (google/PlanViewModel.kt); the purchase is still acknowledged so Play does not auto-refund it.</comment>
+  </data>
   <data name="successfully_claimed_multiplier" xml:space="preserve">
     <value>गुणक का दावा सफलतापूर्वक किया गया!</value>
     <comment>Snackbar shown when the earnings multiplier is claimed successfully. Used in Main/Account/Settings/SettingsView.swift.</comment>
@@ -4140,6 +5650,10 @@
     <value>क्या आप {} से डिस्कनेक्ट करना और खाते बदलना चाहते हैं?</value>
     <comment>Call to action</comment>
   </data>
+  <data name="symbol_ellipsis" xml:space="preserve">
+    <value>...</value>
+    <comment>An ellipsis character used to indicate ongoing processing.</comment>
+  </data>
   <data name="sync_device_location_with_oldest_provider" xml:space="preserve">
     <value>डिवाइस का स्थान सबसे लंबे समय से कनेक्ट प्रदाता के साथ सिंक करें</value>
     <comment>Toggle that makes the device report the location of the longest-connected provider (Android mock location) instead of the real location.</comment>
@@ -4151,6 +5665,10 @@
   <data name="system" xml:space="preserve">
     <value>सिस्टम</value>
     <comment>Used in Main/Account/Settings/SettingsForm-macOS.swift.</comment>
+  </data>
+  <data name="tao_amount_linux" xml:space="preserve">
+    <value>{} TAO</value>
+    <comment>A TAO amount with its unit (the gas key balance).</comment>
   </data>
   <data name="tap_to_connect" xml:space="preserve">
     <value>कनेक्ट करने के लिए टैप करें</value>
@@ -4176,6 +5694,10 @@
     <value>प्रतिक्रिया के लिए धन्यवाद!</value>
     <comment>Confirmation shown after feedback is sent.</comment>
   </data>
+  <data name="the_purchase_could_not_be_completed" xml:space="preserve">
+    <value>खरीदारी पूरी नहीं हो सकी। कृपया दोबारा कोशिश करें।</value>
+    <comment>Shown inline in the upgrade flow when a StoreKit purchase attempt throws (Shared/ViewModels/AppStoreSubscriptionManager.swift). Every purchase failure is shown to the user — a payment error they cannot see is one they will hit again. User cancellation is not an error and never shows this.</comment>
+  </data>
   <data name="there_was_an_error_checking_the_network_name" xml:space="preserve">
     <value>नेटवर्क का नाम जांचने में त्रुटि हुई</value>
     <comment>Used in Authenticate/CreateNetwork/CreateNetworkViewModel.swift.</comment>
@@ -4192,6 +5714,10 @@
     <value>⚠️ यह आपको सिर्फ़ इसी एक बार दिखाई देगा।</value>
     <comment>A warning message displayed in the seedphrase display view.</comment>
   </data>
+  <data name="this_purchase_couldn_t_be_verified" xml:space="preserve">
+    <value>इस खरीदारी को App Store से सत्यापित नहीं किया जा सका, इसलिए इसे आपके खाते पर लागू नहीं किया जा सकता। अगर आपसे शुल्क लिया गया है और आपका प्लान अपडेट नहीं होता, तो कृपया सपोर्ट से संपर्क करें।</value>
+    <comment>Shown inline in the upgrade flow when the server's verify answer for a purchase's transaction JWS is terminal `invalid` — the proof will never verify. The transaction is still finished so StoreKit stops redelivering it; this message is how the failure reaches the user instead of a silent success (Shared/ViewModels/AppStoreSubscriptionManager.swift). Apple sibling of purchase_could_not_be_verified (android).</comment>
+  </data>
   <data name="this_region" xml:space="preserve">
     <value>इस क्षेत्र</value>
     <comment>dns settings</comment>
@@ -4206,6 +5732,30 @@
   </data>
   <data name="title_login" xml:space="preserve">
     <value>लॉग इन करें</value>
+  </data>
+  <data name="top200" xml:space="preserve">
+    <value>टॉप 200</value>
+    <comment>Badge text for the head mining spot.</comment>
+  </data>
+  <data name="top200_bound_detail" xml:space="preserve">
+    <value>एमिशन का भुगतान सीधे आपकी coldkey पर होता है। बाइंडिंग हर एपोक में नवीनीकृत होती हैं।</value>
+    <comment>Detail under the bound status.</comment>
+  </data>
+  <data name="top200_bound_status" xml:space="preserve">
+    <value>UID {0} · रैंक #{1}</value>
+    <comment>Status row once bound.</comment>
+  </data>
+  <data name="top200_demotion_warning" xml:space="preserve">
+    <value>आपका स्कोर निष्कासन सीमा के करीब है। अपनी जगह बनाए रखने के लिए रूट करने योग्य IP जोड़ें।</value>
+    <comment>Warning when the score nears the floor.</comment>
+  </data>
+  <data name="top200_detail" xml:space="preserve">
+    <value>आपके नेटवर्क के रूट करने योग्य IP का दायरा {1} शीर्ष स्थानों में लगभग #{0} पर है। शीर्ष माइनर हर tempo में सीधे SN25α कमाते हैं।</value>
+    <comment>Detail of the Top 200 tile when eligible.</comment>
+  </data>
+  <data name="top200_you_qualify" xml:space="preserve">
+    <value>आप योग्य हैं</value>
+    <comment>Headline of the Top 200 tile when eligible.</comment>
   </data>
   <data name="top_matches" xml:space="preserve">
     <value>सबसे अच्छे मिलान</value>
@@ -4255,6 +5805,62 @@
     <value>आपका हस्तांतरण शुरू हो गया है और चेन पर लेनदेन संसाधित होने के बाद पूरा हो जाएगा।</value>
     <comment>Transfer Submitted Overlay</comment>
   </data>
+  <data name="transport" xml:space="preserve">
+    <value>ट्रांसपोर्ट</value>
+    <comment>Section header of the transport mode selection (Auto or a single transport).</comment>
+  </data>
+  <data name="transport_auto_degraded" xml:space="preserve">
+    <value>ऑटो सीमित रूप से चल रहा है, क्योंकि सिस्टम की सीमाएँ कुछ चालू ट्रांसपोर्ट को चलने से रोक रही हैं।</value>
+    <comment>Generic warning banner in the transport settings editor when the Auto policy is degraded for a constraint this app version does not recognize (the SDK may report new constraint kinds; "memory" has its own banner).</comment>
+  </data>
+  <data name="transport_auto_degraded_memory" xml:space="preserve">
+    <value>ऑटो सीमित रूप से चल रहा है, क्योंकि सिस्टम मेमोरी की सीमाएँ कुछ चालू ट्रांसपोर्ट को चलने से रोक रही हैं।</value>
+    <comment>Warning banner in the transport settings editor when the Auto policy is degraded because the platform memory budget cannot admit every enabled transport.</comment>
+  </data>
+  <data name="transport_auto_description" xml:space="preserve">
+    <value>सुझाया गया। नीचे चालू ट्रांसपोर्ट का इस्तेमाल करता है।</value>
+    <comment>Subtitle of the Auto transport mode row.</comment>
+  </data>
+  <data name="transport_client_footer" xml:space="preserve">
+    <value>वह ट्रांसपोर्ट जिससे यह डिवाइस प्रदाताओं तक पहुँचता है। ऑटो चालू ट्रांसपोर्ट को पसंद के क्रम में आज़माता है और एक ही स्तर के हर सही ट्रांसपोर्ट को समानांतर रूप से कनेक्ट रखता है।</value>
+    <comment>Footer of the client transport mode section.</comment>
+  </data>
+  <data name="transport_dns_description" xml:space="preserve">
+    <value>DNS ट्रैफ़िक के रूप में छिपा हुआ। उन नेटवर्क के लिए जो सीधे कनेक्शन फ़िल्टर करते हैं।</value>
+    <comment>One line description of the whodis (DNS) transport in the transport settings editor.</comment>
+  </data>
+  <data name="transport_dnspump_description" xml:space="preserve">
+    <value>लगातार जवाब पंप के साथ DNS ट्रैफ़िक के रूप में छिपा हुआ। सबसे कम बैंडविड्थ, सबसे ज़्यादा उपलब्धता।</value>
+    <comment>One line description of the whodis pump (DNS pump) transport in the transport settings editor.</comment>
+  </data>
+  <data name="transport_h1_description" xml:space="preserve">
+    <value>सीधे TLS पर। ज़्यादातर नेटवर्क पर काम करता है।</value>
+    <comment>One line description of the H1 transport in the transport settings editor.</comment>
+  </data>
+  <data name="transport_h3_description" xml:space="preserve">
+    <value>सीधे QUIC पर। जहाँ फ़िल्टर न हो, वहाँ सबसे तेज़।</value>
+    <comment>One line description of the H3 transport in the transport settings editor.</comment>
+  </data>
+  <data name="transport_provider_footer" xml:space="preserve">
+    <value>वह ट्रांसपोर्ट जिसका इस्तेमाल यह डिवाइस दूसरों के लिए प्रदान करते समय करता है। ऑटो चालू ट्रांसपोर्ट को पसंद के क्रम में आज़माता है और एक ही स्तर के हर सही ट्रांसपोर्ट को समानांतर रूप से कनेक्ट रखता है।</value>
+    <comment>Footer of the provider transport mode section.</comment>
+  </data>
+  <data name="transport_queued" xml:space="preserve">
+    <value>कतार में</value>
+    <comment>Transport bar label for traffic admitted for sending but not yet attributed to a physical transport.</comment>
+  </data>
+  <data name="transport_unavailable_system_constraints" xml:space="preserve">
+    <value>सिस्टम की सीमाओं के कारण उपलब्ध नहीं</value>
+    <comment>Accessibility label / tooltip on the warning icon next to a transport that is enabled under Auto but not currently eligible under a system constraint (for example the platform memory budget). A runtime warning, not a settings restriction: the toggle stays editable.</comment>
+  </data>
+  <data name="transport_unused" xml:space="preserve">
+    <value>अप्रयुक्त</value>
+    <comment>Prefix of the transport bar footer listing the enabled transports that carried no traffic in the stats window.</comment>
+  </data>
+  <data name="transports" xml:space="preserve">
+    <value>ट्रांसपोर्ट</value>
+    <comment>Title of the transport distribution bar under the client statistics chart and of the transport settings editor.</comment>
+  </data>
   <data name="trusted_by_over_100_000_private_networks" xml:space="preserve">
     <value>100,000 से अधिक निजी नेटवर्क द्वारा विश्वसनीय</value>
     <comment>Used in Shared/Views/Introduction/IntroductionView.swift.</comment>
@@ -4278,6 +5884,10 @@
   <data name="tunnel_stopped_unexpectedly" xml:space="preserve">
     <value>कनेक्शन रुक गया।</value>
     <comment>Connect: notice that the connection stopped on its own.</comment>
+  </data>
+  <data name="unclaimed" xml:space="preserve">
+    <value>दावा नहीं किया गया</value>
+    <comment>Label of the unclaimed alpha tile.</comment>
   </data>
   <data name="unencrypted_dns" xml:space="preserve">
     <value>अनएन्क्रिप्टेड DNS</value>
@@ -4383,6 +5993,10 @@
     <value>URnetwork VPN शुरू हो गया</value>
     <comment>Used in Shared/Intents/ConnectIntent.swift.</comment>
   </data>
+  <data name="usdc_payouts_until_migration" xml:space="preserve">
+    <value>Bittensor पर माइग्रेशन पूरा होने तक USDC भुगतान इसी वॉलेट में आते रहेंगे।</value>
+    <comment>Second paragraph of the Solana connect sheet/card, and the body line under a connected Solana wallet.</comment>
+  </data>
   <data name="usdc_solana_network_only" xml:space="preserve">
     <value>USDC केवल Solana नेटवर्क पर भेजें। किसी अन्य नेटवर्क पर भेजे गए USDC नहीं पहुंचेंगे।</value>
     <comment>Payment: the chain to send on. Shown wherever a USDC payment is requested, because USDC exists on many chains and a transfer sent on the wrong one is lost.</comment>
@@ -4401,6 +6015,10 @@
   <data name="use_as_proxy_no_vpn_detail" xml:space="preserve">
     <value>URnetwork को VPN के बिना HTTPS प्रॉक्सी के रूप में चलाने के लिए ur.io खोलता है. SOCKS और WireGuard, Pro में उपलब्ध हैं.</value>
     <comment>Subtitle under the cloud-proxy Settings row explaining that it opens ur.io and that SOCKS and WireGuard require Pro.</comment>
+  </data>
+  <data name="use_extender_settings" xml:space="preserve">
+    <value>एक्सटेंडर सेटिंग इस्तेमाल करें</value>
+    <comment>Toggle on the import screen: also apply the extender settings carried by the code.</comment>
   </data>
   <data name="use_most_stable_provider" xml:space="preserve">
     <value>सबसे स्थिर प्रदाता का उपयोग करता है</value>
@@ -4441,6 +6059,9 @@
   <data name="uses_ur_protocol" xml:space="preserve">
     <value>UR Protocol का उपयोग करता है</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="value_string" xml:space="preserve">
+    <value>{}</value>
   </data>
   <data name="value_with_unit" xml:space="preserve">
     <value>{0} {1}</value>
@@ -4488,6 +6109,10 @@
   <data name="verify_input_label" xml:space="preserve">
     <value>सत्यापन कोड</value>
     <comment>Label for the verification code input field</comment>
+  </data>
+  <data name="verify_seeker" xml:space="preserve">
+    <value>Seeker सत्यापित करें</value>
+    <comment>Standalone Seeker verification action (points multiplier only).</comment>
   </data>
   <data name="verify_seeker_token_btn" xml:space="preserve">
     <value>सीकर प्री-ऑर्डर टोकन सत्यापित करें</value>
@@ -4657,17 +6282,41 @@
     <value>वॉलेट</value>
     <comment>Account Screen</comment>
   </data>
+  <data name="wallet_blocked" xml:space="preserve">
+    <value>इस वॉलेट का इस्तेमाल URnetwork के साथ नहीं किया जा सकता।</value>
+    <comment>Error when a wallet address is on the operator's ban list; the user cannot continue.</comment>
+  </data>
   <data name="wallet_connect_failed" xml:space="preserve">
     <value>वॉलेट कनेक्ट करने में विफल।</value>
     <comment>Error shown when connecting an external wallet to the account fails.</comment>
+  </data>
+  <data name="wallet_connect_signed_note_linux" xml:space="preserve">
+    <value>आपका वॉलेट यह साबित करने के लिए एक संदेश पर साइन करता है कि वह आपका है। चेन पर कुछ नहीं भेजा जाता।</value>
+    <comment>Note under the manual address entry: the wallet only signs a proof of ownership.</comment>
   </data>
   <data name="wallet_connected" xml:space="preserve">
     <value>वॉलेट कनेक्ट हो गया।</value>
     <comment>Confirmation shown after an external wallet is connected to the account.</comment>
   </data>
+  <data name="wallet_connected_to_protocol" xml:space="preserve">
+    <value>UR प्रोटोकॉल से कनेक्टेड। दावे यहीं आते हैं। Alpha कनेक्ट करने के बाद वाले एपोक से जमा होता है।</value>
+    <comment>Line under the connected coldkey.</comment>
+  </data>
+  <data name="wallet_looks_new_warning" xml:space="preserve">
+    <value>इस पते पर अभी Bittensor चेन पर कोई गतिविधि नहीं है। यह नया वॉलेट लगता है। आगे बढ़ने से पहले पक्का कर लें कि यह आपका है।</value>
+    <comment>Warning when a wallet address has no activity on the Bittensor chain yet; the user may continue.</comment>
+  </data>
   <data name="wallet_needs_network" xml:space="preserve">
     <value>यह वॉलेट अभी किसी नेटवर्क से जुड़ा नहीं है। नेटवर्क बनाने के लिए एक नेटवर्क नाम चुनें।</value>
     <comment>Shown on the create-network step after a wallet sign-in when the wallet isn't linked to any network yet. The user picks a network name and accepts the terms to create one; the wallet signature carries over.</comment>
+  </data>
+  <data name="wallet_not_retroactive" xml:space="preserve">
+    <value>अगले एपोक से SN25α कमाने के लिए वॉलेट कनेक्ट करें। पिछले एपोक पिछली तारीख से सेटल नहीं होते।</value>
+    <comment>Line on the wallet block before a wallet is connected.</comment>
+  </data>
+  <data name="wallet_options" xml:space="preserve">
+    <value>वॉलेट विकल्प</value>
+    <comment>Accessibility label of the three-dot overflow button next to “Connect Bittensor wallet” and on the connected Bittensor wallet block.</comment>
   </data>
   <data name="wallet_sign_in_failed" xml:space="preserve">
     <value>वॉलेट से साइन इन विफल</value>
@@ -4676,6 +6325,14 @@
   <data name="wallet_sign_in_method_added" xml:space="preserve">
     <value>वॉलेट साइन-इन विधि जोड़ी गई</value>
     <comment>Snackbar message displayed when a wallet sign-in method is successfully added.</comment>
+  </data>
+  <data name="wallet_signature_mismatch_linux" xml:space="preserve">
+    <value>जिस वॉलेट ने साइन किया, वह आपके डाले गए पते का नहीं है।</value>
+    <comment>Error when the bridge signed with a different wallet than the address the user typed.</comment>
+  </data>
+  <data name="we_re_confirming_your_purchase_with_the_app_store" xml:space="preserve">
+    <value>हम App Store से आपकी खरीदारी की पुष्टि कर रहे हैं। आपका प्लान अपने-आप अपडेट हो जाएगा।</value>
+    <comment>Body of the post-purchase screen while the confirmation poll runs (Shared/Views/PurchaseSuccessView.swift). Processing-shaped, not premium-shaped: the server learns of the purchase by webhook and has not confirmed yet.</comment>
   </data>
   <data name="welcome_offer_eyebrow" xml:space="preserve">
     <value>स्वागत ऑफ़र</value>
@@ -4692,6 +6349,126 @@
   <data name="when_you_refer_a_friend" xml:space="preserve">
     <value>जब आप किसी मित्र को रेफ़र करते हैं:</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="widget_client" xml:space="preserve">
+    <value>क्लाइंट</value>
+    <comment>Dashboard widget chart title: this device's own traffic.</comment>
+  </data>
+  <data name="widget_connect_once" xml:space="preserve">
+    <value>अपना ट्रैफ़िक यहाँ देखने के लिए एक बार कनेक्ट करें</value>
+    <comment>Dashboard widget footer before the tunnel has ever written data.</comment>
+  </data>
+  <data name="widget_connect_to_see_contracts" xml:space="preserve">
+    <value>अपने कॉन्ट्रैक्ट देखने के लिए कनेक्ट करें</value>
+    <comment>Contracts widget empty state while the tunnel is down.</comment>
+  </data>
+  <data name="widget_contract_stack_accessibility.one" xml:space="preserve">
+    <value>{0} कॉन्ट्रैक्ट, {1}</value>
+    <comment>Accessibility label for one contract stack in the contracts widget. The arguments are the number of contracts and the bytes moved.</comment>
+  </data>
+  <data name="widget_contract_stack_accessibility.other" xml:space="preserve">
+    <value>{0} कॉन्ट्रैक्ट, {1}</value>
+    <comment>Accessibility label for one contract stack in the contracts widget. The arguments are the number of contracts and the bytes moved.</comment>
+  </data>
+  <data name="widget_contracts_description" xml:space="preserve">
+    <value>आपके शीर्ष क्लाइंट कॉन्ट्रैक्ट, आते-जाते हुए बहते रहते हैं।</value>
+    <comment>Description of the contracts widget in the widget gallery.</comment>
+  </data>
+  <data name="widget_control_description" xml:space="preserve">
+    <value>URnetwork VPN कनेक्ट या डिस्कनेक्ट करें।</value>
+    <comment>Description of the quick connect control in the Control Center gallery.</comment>
+  </data>
+  <data name="widget_dashboard_description" xml:space="preserve">
+    <value>डेटा बैलेंस, कनेक्टेड लोकेशन और ट्रैफ़िक, क्विक कनेक्ट के साथ।</value>
+    <comment>Description of the dashboard widget in the widget gallery.</comment>
+  </data>
+  <data name="widget_globe_description" xml:space="preserve">
+    <value>ग्लोब पर आपके कनेक्टेड प्रदाता।</value>
+    <comment>Description of the provider globe widget in the widget gallery.</comment>
+  </data>
+  <data name="widget_more_providers" xml:space="preserve">
+    <value>+{} और</value>
+    <comment>Provider globe widget: providers not shown in the list. The argument is a count.</comment>
+  </data>
+  <data name="widget_no_contracts" xml:space="preserve">
+    <value>कोई कॉन्ट्रैक्ट नहीं</value>
+    <comment>Contracts widget empty state while connected with no open client contracts.</comment>
+  </data>
+  <data name="widget_no_providers" xml:space="preserve">
+    <value>कोई प्रदाता नहीं</value>
+    <comment>Badge on the small provider globe widget when no providers are connected.</comment>
+  </data>
+  <data name="widget_not_providing" xml:space="preserve">
+    <value>प्रदान नहीं कर रहा</value>
+    <comment>Dashboard widget provider chart label when providing is off.</comment>
+  </data>
+  <data name="widget_not_signed_in" xml:space="preserve">
+    <value>साइन इन नहीं है</value>
+    <comment>Quick connect control / widget value when the app has no tunnel configuration yet (fresh install or logged out).</comment>
+  </data>
+  <data name="widget_open" xml:space="preserve">
+    <value>खोलें</value>
+    <comment>Button on the Home Screen widget that opens the app when the tunnel is not configured yet.</comment>
+  </data>
+  <data name="widget_open_to_set_up" xml:space="preserve">
+    <value>सेट अप करने के लिए URnetwork खोलें</value>
+    <comment>Widget subtitle when the app has no tunnel configuration yet.</comment>
+  </data>
+  <data name="widget_peak_rate" xml:space="preserve">
+    <value>{} पीक</value>
+    <comment>Chart label; the argument is a formatted byte rate such as '1.2 MB/s'.</comment>
+  </data>
+  <data name="widget_peer_count.one" xml:space="preserve">
+    <value>{} पीयर</value>
+    <comment>Contracts widget header: number of peers with open contracts.</comment>
+  </data>
+  <data name="widget_peer_count.other" xml:space="preserve">
+    <value>{} पीयर</value>
+    <comment>Contracts widget header: number of peers with open contracts.</comment>
+  </data>
+  <data name="widget_provider" xml:space="preserve">
+    <value>प्रदाता</value>
+    <comment>Dashboard widget chart title: traffic relayed for others while providing.</comment>
+  </data>
+  <data name="widget_provider_count.one" xml:space="preserve">
+    <value>{} प्रदाता</value>
+    <comment>Widget subtitle: number of connected providers.</comment>
+  </data>
+  <data name="widget_provider_count.other" xml:space="preserve">
+    <value>{} प्रदाता</value>
+    <comment>Widget subtitle: number of connected providers.</comment>
+  </data>
+  <data name="widget_provider_count_providing.one" xml:space="preserve">
+    <value>{} प्रदाता · प्रदान कर रहा है</value>
+    <comment>Widget subtitle: number of connected providers while this device is also providing.</comment>
+  </data>
+  <data name="widget_provider_count_providing.other" xml:space="preserve">
+    <value>{} प्रदाता · प्रदान कर रहा है</value>
+    <comment>Widget subtitle: number of connected providers while this device is also providing.</comment>
+  </data>
+  <data name="widget_provider_mode_title" xml:space="preserve">
+    <value>प्रदाता · {}</value>
+    <comment>Title above the provider traffic chart in the dashboard widget: the chart name with the current provide mode (Auto, Always, Network, Never).</comment>
+  </data>
+  <data name="widget_provider_stats_when_enabled" xml:space="preserve">
+    <value>प्रदाता चालू होने पर प्रदाता के आँकड़े दिखेंगे।</value>
+    <comment>Shown in the dashboard widget in place of the provider traffic chart while providing is off.</comment>
+  </data>
+  <data name="widget_quick_tile_added" xml:space="preserve">
+    <value>क्विक कनेक्ट टाइल जोड़ी गई</value>
+    <comment>Toast after the system added the Quick Settings tile.</comment>
+  </data>
+  <data name="widget_toggle_intent_title" xml:space="preserve">
+    <value>URnetwork VPN चालू/बंद करें</value>
+    <comment>Title of the Set-Value intent behind the quick connect control and widget toggle (shown by the system in Shortcuts/debug UI).</comment>
+  </data>
+  <data name="widget_updated_ago" xml:space="preserve">
+    <value>{} अपडेट किया गया</value>
+    <comment>Dashboard widget footer; the argument is a localized relative time such as '3 min. ago'.</comment>
+  </data>
+  <data name="widget_updated_just_now" xml:space="preserve">
+    <value>अभी-अभी अपडेट किया गया</value>
+    <comment>Dashboard widget footer in the widget gallery preview.</comment>
   </data>
   <data name="widgets" xml:space="preserve">
     <value>विजेट</value>
@@ -4733,6 +6510,10 @@
     <value>आपको जीवनभर 3 GiB/दिन मिलते हैं</value>
     <comment>Text displayed in a scrollable view within a VStack in the body of a view that is displayed when the user is viewing their referral code.</comment>
   </data>
+  <data name="you_get_free_data_every_day" xml:space="preserve">
+    <value>आपको हर दिन मुफ़्त डेटा मिलता है।</value>
+    <comment>Detail line under the onboarding data page title.</comment>
+  </data>
   <data name="you_have_n_other_devices_online.one" xml:space="preserve">
     <value>आपका {} अन्य डिवाइस ऑनलाइन है</value>
   </data>
@@ -4755,6 +6536,10 @@
     <value>आप प्रीमियम हैं।</value>
     <comment>Used in Main/Account/AccountRootView.swift.</comment>
   </data>
+  <data name="your_bandwidth" xml:space="preserve">
+    <value>आपकी बैंडविड्थ</value>
+    <comment>Title of the onboarding data page (was 'Boost your bandwidth').</comment>
+  </data>
   <data name="your_email" xml:space="preserve">
     <value>आपका ईमेल</value>
     <comment>Label for the empty text field.</comment>
@@ -4774,6 +6559,10 @@
   <data name="your_purchase_needs_to_be_approved_before_it_can" xml:space="preserve">
     <value>आपकी खरीद पूरी होने से पहले उसे मंज़ूरी मिलनी ज़रूरी है। मंज़ूरी मिलते ही UR Pro अपने आप चालू हो जाएगा — दोबारा खरीदने की ज़रूरत नहीं।</value>
     <comment>Used in Shared/Views/UpgradeSubscriptionSheet.swift.</comment>
+  </data>
+  <data name="your_referral_code" xml:space="preserve">
+    <value>आपका रेफ़रल कोड</value>
+    <comment>Label above the referral code pill in the gold referral panel.</comment>
   </data>
   <data name="your_referral_link" xml:space="preserve">
     <value>आपका रेफ़रल लिंक</value>

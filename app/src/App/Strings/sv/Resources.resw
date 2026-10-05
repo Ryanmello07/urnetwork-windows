@@ -68,9 +68,17 @@
     <value>{} (verifierad)</value>
     <comment>The account's email or phone, marked as verified. The argument is the email or phone number.</comment>
   </data>
+  <data name="account_isn_t_ready_for_purchases" xml:space="preserve">
+    <value>Ditt konto är inte redo för köp än. Starta om appen och försök igen.</value>
+    <comment>Shown when a purchase is refused before contacting the store because the account is not ready: on apple the networkId is missing or unparseable (Shared/ViewModels/AppStoreSubscriptionManager.swift), on android the active network space has no api yet (the Stripe sheet and pay page purchasers). The purchase could never be credited to anyone. This used to be a silent no-op.</comment>
+  </data>
   <data name="account_needs_verification" xml:space="preserve">
     <value>Det här kontot behöver verifieras. Kolla din e-post.</value>
     <comment>Sign-in error shown when the account exists but has not been verified yet.</comment>
+  </data>
+  <data name="active_extenders" xml:space="preserve">
+    <value>Aktiva extendrar</value>
+    <comment>Accessibility label of the row of rings, one per extender carrying a live connection.</comment>
   </data>
   <data name="activity" xml:space="preserve">
     <value>Aktivitet</value>
@@ -96,6 +104,10 @@
     <value>Lägg till emoji</value>
     <comment>Points leaderboard: button that opens the emoji tag editor when no tag is set yet.</comment>
   </data>
+  <data name="add_local_split_rule" xml:space="preserve">
+    <value>Dirigera lokalt</value>
+    <comment>Call to action on a split-rule activity row blocked by URnetwork safety rules: create a local split rule for its hosts.</comment>
+  </data>
   <data name="add_referral_code" xml:space="preserve">
     <value>Lägg till referenskod</value>
     <comment>Call to action</comment>
@@ -106,6 +118,10 @@
   <data name="add_sign_in_method_2" xml:space="preserve">
     <value>Lägg till inloggningsmetod</value>
     <comment>Button text for adding a sign-in method.</comment>
+  </data>
+  <data name="add_tao_for_gas" xml:space="preserve">
+    <value>Lägg till TAO för gas</value>
+    <comment>State when the gas key has no TAO.</comment>
   </data>
   <data name="adjust_setting_always_fill_data_faster" xml:space="preserve">
     <value>Tillhandahållande är av som standard. Välj nedan när din enhet ska tillhandahålla.</value>
@@ -437,6 +453,10 @@
     <value>Appversion</value>
     <comment>Settings, about: label of the app version row.</comment>
   </data>
+  <data name="apple" xml:space="preserve">
+    <value>Apple</value>
+    <comment>A method of adding a sign-in method.</comment>
+  </data>
   <data name="apple_sign_in_method_added" xml:space="preserve">
     <value>Apple-inloggningsmetod tillagd</value>
     <comment>Snackbar message displayed when an Apple sign-in method is added.</comment>
@@ -566,9 +586,25 @@
     <value>Saldo-kod</value>
     <comment>Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.</comment>
   </data>
+  <data name="balance_code_already_redeemed_message" xml:space="preserve">
+    <value>Den här saldokoden har redan lösts in. Om du löste in den tidigare finns datan redan i ditt saldo.</value>
+    <comment>Redeem balance code: the server answered that this code was already redeemed. Distinct from invalid -- the user may have redeemed it on an earlier attempt that looked like a failure.</comment>
+  </data>
+  <data name="balance_code_data_added" xml:space="preserve">
+    <value>{} data har lagts till i ditt saldo.</value>
+    <comment>Redeem balance code: confirmation of the data a redeemed code added to the network's balance (amount is a formatted byte count, e.g. "5.00 GiB"). A balance code is data only: never a plan or Pro upgrade.</comment>
+  </data>
+  <data name="balance_code_invalid_message" xml:space="preserve">
+    <value>Den saldokoden är inte giltig. Kontrollera koden och försök igen.</value>
+    <comment>Redeem balance code: the server answered and rejected the code as unknown/invalid. Distinct from a transport failure, which must never be reported as a bad code.</comment>
+  </data>
   <data name="balance_code_redeemed" xml:space="preserve">
     <value>Saldokod inlöst.</value>
     <comment>Confirmation shown after a balance code is redeemed.</comment>
+  </data>
+  <data name="balance_code_transport_error" xml:space="preserve">
+    <value>Vi kunde inte nå servern — kontrollera din anslutning. Om du har debiterats kan koden redan vara tillämpad; kontrollera ditt saldo innan du försöker igen.</value>
+    <comment>Redeem balance code: the request never got a server answer (network failure). Must NOT be worded as 'bad code' -- the redeem may have committed server-side, so tell the user to check their balance before retrying.</comment>
   </data>
   <data name="balance_code_where_to_buy" xml:space="preserve">
     <value>Har du ingen kod? Datakoder kan köpas på ur.io och skickas till din e-post.</value>
@@ -577,6 +613,10 @@
   <data name="balance_codes_link" xml:space="preserve">
     <value>Saldo-koder</value>
     <comment>Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.</comment>
+  </data>
+  <data name="balance_codes_load_error" xml:space="preserve">
+    <value>Det gick inte att läsa in dina saldokoder. Kontrollera din anslutning och försök igen.</value>
+    <comment>Linux redeem-code sheet: shown in place of the redeemed-codes history when getNetworkRedeemedBalanceCodes FAILS (transport error, no response, or a server-side error) — distinct from the empty state's "No balance codes found", which is only for a successful fetch with no codes.</comment>
   </data>
   <data name="balance_codes_title" xml:space="preserve">
     <value>Saldo-koder</value>
@@ -594,13 +634,69 @@
     <value>Bästa träffar</value>
     <comment>Label for a list or section showing the best matching results.</comment>
   </data>
+  <data name="best_value" xml:space="preserve">
+    <value>Bäst värde</value>
+    <comment>Gold pill on the recommended (annual) plan card.</comment>
+  </data>
+  <data name="bittensor_choose_wallet" xml:space="preserve">
+    <value>Välj din Bittensor-plånbok</value>
+    <comment>Title of the picker that chooses which Bittensor wallet (Talisman or TAO.com) signs.</comment>
+  </data>
+  <data name="bittensor_continue_in_browser" xml:space="preserve">
+    <value>Fortsätt i webbläsaren och godkänn begäran i tillägget {}.</value>
+    <comment>Desktop: shown while the browser is open on the wallet page. The argument is the wallet product name (Talisman).</comment>
+  </data>
   <data name="bittensor_error_address_not_in_wallet" xml:space="preserve">
     <value>Din {}-plånbok har inte adressen du angav. Lägg till eller anslut det kontot i plånboken, eller ange en adress som finns i den.</value>
     <comment>ur.io Bittensor wallet card and sign-in: the chosen wallet does not offer the account of the address the user typed (Talisman does not hold it or has not connected it to the site; a WalletConnect wallet connected another account), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect).</comment>
   </data>
+  <data name="bittensor_error_challenge_expired" xml:space="preserve">
+    <value>Den här begäran har gått ut. Börja om för att få ett nytt meddelande att signera.</value>
+    <comment>Error: the single-use wallet challenge expired (5 minutes) before it was signed.</comment>
+  </data>
+  <data name="bittensor_error_extension_not_found" xml:space="preserve">
+    <value>Tillägget {} hittades inte i den här webbläsaren. Installera det och försök igen.</value>
+    <comment>Error: the wallet's browser extension is not installed in this browser. The argument is the wallet product name (Talisman).</comment>
+  </data>
+  <data name="bittensor_error_invalid_signature" xml:space="preserve">
+    <value>Det är ingen giltig signatur. Klistra in hela 0x-signaturen från din plånbok.</value>
+    <comment>Error: the pasted or returned Bittensor signature is not a 64-byte hex signature.</comment>
+  </data>
+  <data name="bittensor_error_message_mismatch" xml:space="preserve">
+    <value>Plånboken signerade en annan begäran. Börja om.</value>
+    <comment>Error: the wallet returned a signature over a different challenge than the one issued.</comment>
+  </data>
+  <data name="bittensor_manual_sign_instructions" xml:space="preserve">
+    <value>Signera det här meddelandet med {}-plånboken som innehåller din coldkey och klistra sedan in adressen och signaturen nedan.</value>
+    <comment>Manual Bittensor wallet proof: how to sign the shown challenge message. The argument is the wallet product name (Talisman or TAO.com).</comment>
+  </data>
+  <data name="bittensor_message_to_sign" xml:space="preserve">
+    <value>Meddelande att signera</value>
+    <comment>Label above the challenge message the user signs in their Bittensor wallet.</comment>
+  </data>
   <data name="bittensor_sign_in" xml:space="preserve">
     <value>Logga in med Bittensor</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="bittensor_signature_label" xml:space="preserve">
+    <value>Signatur</value>
+    <comment>Label of the field where the user pastes the Bittensor wallet signature.</comment>
+  </data>
+  <data name="bittensor_signature_placeholder" xml:space="preserve">
+    <value>Klistra in 0x…-signaturen</value>
+    <comment>Placeholder of the Bittensor signature field (a 0x-prefixed hex signature).</comment>
+  </data>
+  <data name="bittensor_wallet" xml:space="preserve">
+    <value>Bittensor-plånbok</value>
+    <comment>Label of the connected wallet block.</comment>
+  </data>
+  <data name="bittensor_walletconnect_continue" xml:space="preserve">
+    <value>Fortsätt i webbläsaren: skanna koden med din plånboksapp eller öppna plånboken på den här enheten.</value>
+    <comment>Shown while the browser is open on the WalletConnect page: the user scans the code or opens their wallet app there.</comment>
+  </data>
+  <data name="bittensor_walletconnect_hint" xml:space="preserve">
+    <value>Nova, Nightly och andra WalletConnect-plånböcker</value>
+    <comment>Subtitle of the WalletConnect option in the Bittensor wallet chooser: which wallets it works with. Nova, Nightly and WalletConnect are product names.</comment>
   </data>
   <data name="block_ads_and_trackers" xml:space="preserve">
     <value>Blockera annonser och spårare</value>
@@ -610,6 +706,10 @@
     <value>Blockerade</value>
     <comment>Label for the blocked traffic relayed for remote clients.</comment>
   </data>
+  <data name="blocked_location_block_failed" xml:space="preserve">
+    <value>Det gick inte att blockera {}. Försök igen.</value>
+    <comment>Blocked locations: blocking a location failed. The argument is the location name.</comment>
+  </data>
   <data name="blocked_location_could_not_be_added_please_try" xml:space="preserve">
     <value>Den blockerade platsen kunde inte läggas till. Försök igen senare.</value>
     <comment>Used in Main/Account/BlockedLocations/BlockedLocationsViewModel.swift.</comment>
@@ -617,6 +717,10 @@
   <data name="blocked_location_could_not_be_removed_please_try" xml:space="preserve">
     <value>Den blockerade platsen kunde inte tas bort. Försök igen senare.</value>
     <comment>Used in Main/Account/BlockedLocations/BlockedLocationsViewModel.swift.</comment>
+  </data>
+  <data name="blocked_location_unblock_failed" xml:space="preserve">
+    <value>Det gick inte att avblockera {}. Försök igen.</value>
+    <comment>Blocked locations: unblocking a location failed, so it is back in the list. The argument is the location name.</comment>
   </data>
   <data name="blocked_locations" xml:space="preserve">
     <value>Blockerade platser</value>
@@ -629,6 +733,10 @@
   <data name="blocked_locations_could_not_be_loaded" xml:space="preserve">
     <value>Blockerade platser kunde inte laddas.</value>
     <comment>Shown on the Blocked locations screen when the list could not be fetched, above a Retry button.</comment>
+  </data>
+  <data name="blocked_locations_load_failed" xml:space="preserve">
+    <value>Det gick inte att läsa in dina blockerade platser. Dra nedåt för att försöka igen.</value>
+    <comment>Blocked locations: the list could not be loaded.</comment>
   </data>
   <data name="blocks" xml:space="preserve">
     <value>Block</value>
@@ -676,9 +784,17 @@ rätt sätt</value>
     <value>Kringgå VPN</value>
     <comment>App split rules: rule choice sending the app around the VPN (local route).</comment>
   </data>
+  <data name="camera_permission_needed" xml:space="preserve">
+    <value>Kameraåtkomst krävs för att skanna en kod.</value>
+    <comment>Shown when the camera permission was denied on the scan screen.</comment>
+  </data>
   <data name="cancel" xml:space="preserve">
     <value>Avbryt</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="chain_rpc_unreachable" xml:space="preserve">
+    <value>Kedjans RPC går inte att nå. Försök igen.</value>
+    <comment>Error when the subnet RPC cannot be reached.</comment>
   </data>
   <data name="change" xml:space="preserve">
     <value>Ändra</value>
@@ -720,9 +836,33 @@ rätt sätt</value>
     <value>Söker efter Solana-transaktioner</value>
     <comment>Call to action</comment>
   </data>
+  <data name="checking_wallet_address" xml:space="preserve">
+    <value>Kontrollerar adressen…</value>
+    <comment>Progress text while the address is validated.</comment>
+  </data>
+  <data name="checkout_browser_launch_failed" xml:space="preserve">
+    <value>Vi kunde inte öppna din webbläsare. Kopiera den här länken till en webbläsare för att slutföra köpet:</value>
+    <comment>Upgrade sheet: the system browser could not be opened for the hosted checkout url. The app appends the url itself on the next line (selectable) so the user can copy it into a browser by hand — never advancing to the waiting page with no payment page open.</comment>
+  </data>
+  <data name="checkout_interrupted_confirming" xml:space="preserve">
+    <value>Betalningsvyn stängdes oväntat. Om din betalning gick igenom uppdateras ditt abonnemang här automatiskt — du behöver inte köpa igen.</value>
+    <comment>Upgrade sheet waiting page: the embedded checkout webview crashed after the payment form had rendered, so a charge may already have gone through with only the redirect lost. Shown while the confirmation poll asks the server for the payment webhook; must never invite buying again.</comment>
+  </data>
   <data name="checkout_opened_in_browser" xml:space="preserve">
     <value>Slutför ditt köp i webbläsaren. Din plan uppdateras här automatiskt när betalningen har bekräftats.</value>
     <comment>Shown after the app hands the user to the Stripe hosted checkout in the system browser. The app polls the server and flips the plan automatically when the payment webhook lands.</comment>
+  </data>
+  <data name="choose_file" xml:space="preserve">
+    <value>Välj fil</value>
+    <comment>Button on desktop: pick a file that contains a QR code image.</comment>
+  </data>
+  <data name="choose_image_file" xml:space="preserve">
+    <value>Välj bildfil</value>
+    <comment>Button on desktop: pick an image file that contains a QR code.</comment>
+  </data>
+  <data name="choose_photo" xml:space="preserve">
+    <value>Välj foto</value>
+    <comment>Button: pick a photo that contains a QR code.</comment>
   </data>
   <data name="cities" xml:space="preserve">
     <value>Städer</value>
@@ -732,6 +872,30 @@ rätt sätt</value>
     <value>Hämta</value>
     <comment>Call to action</comment>
   </data>
+  <data name="claim_across_epochs" xml:space="preserve">
+    <value>Slutförda epoker: {}</value>
+    <comment>Subtitle of the claim dialog.</comment>
+  </data>
+  <data name="claim_alpha_title" xml:space="preserve">
+    <value>Hämta ut SN25α</value>
+    <comment>Title of the claim dialog.</comment>
+  </data>
+  <data name="claim_amount_button" xml:space="preserve">
+    <value>Hämta ut {}</value>
+    <comment>Claim button with the amount.</comment>
+  </data>
+  <data name="claim_confirmed" xml:space="preserve">
+    <value>Uthämtat</value>
+    <comment>Claim state: confirmed on chain.</comment>
+  </data>
+  <data name="claim_expired" xml:space="preserve">
+    <value>Utgånget</value>
+    <comment>Claim state: past the vault's expiry block.</comment>
+  </data>
+  <data name="claim_failed" xml:space="preserve">
+    <value>Misslyckades</value>
+    <comment>Claim state: failed.</comment>
+  </data>
   <data name="claim_multiplier" xml:space="preserve">
     <value>Kravmultiplikator</value>
     <comment>Call to action</comment>
@@ -739,6 +903,34 @@ rätt sätt</value>
   <data name="claim_network_name_hint" xml:space="preserve">
     <value>Skaffa ett eget nätverksnamn som ersätter det automatiskt genererade</value>
     <comment>A description of the benefits of claiming a custom network name.</comment>
+  </data>
+  <data name="claim_sending_linux" xml:space="preserve">
+    <value>Skickar…</value>
+    <comment>Per-epoch status while the claim transaction is being sent.</comment>
+  </data>
+  <data name="claim_sends_from_device" xml:space="preserve">
+    <value>Din enhet skickar uttaget till valvkontraktet. Gas betalas i TAO från din gasnyckel. Alpha hamnar på din coldkey.</value>
+    <comment>Explainer under the claim button.</comment>
+  </data>
+  <data name="claim_sent" xml:space="preserve">
+    <value>Skickat</value>
+    <comment>Claim state: transaction sent.</comment>
+  </data>
+  <data name="claim_to_address_linux" xml:space="preserve">
+    <value>Till {}</value>
+    <comment>Destination line on the claim dialog: the coldkey the alpha lands on.</comment>
+  </data>
+  <data name="claim_unavailable_linux" xml:space="preserve">
+    <value>Uttag är inte tillgängligt på den här enheten än.</value>
+    <comment>Shown when the device cannot send claims (no gas key on this host).</comment>
+  </data>
+  <data name="claim_your_spot" xml:space="preserve">
+    <value>Ta din plats</value>
+    <comment>Button on the Top 200 tile.</comment>
+  </data>
+  <data name="claims_for_epoch_expired" xml:space="preserve">
+    <value>Uttagen för epok {} har gått ut.</value>
+    <comment>Error when an epoch can no longer be claimed.</comment>
   </data>
   <data name="claims_open_after_finalization" xml:space="preserve">
     <value>Uttag för varje epok öppnar när dess utbetalningslista har slutförts och är öppna tills de löper ut.</value>
@@ -832,6 +1024,10 @@ rätt sätt</value>
     <value>Anslut och öppna länk</value>
     <comment>Call to action</comment>
   </data>
+  <data name="connect_bittensor_wallet" xml:space="preserve">
+    <value>Anslut Bittensor-plånbok</value>
+    <comment>Button to connect a Bittensor coldkey.</comment>
+  </data>
   <data name="connect_bittensor_wallet_to_add_sign_in_method" xml:space="preserve">
     <value>Anslut en Bittensor-plånbok för att lägga till den som inloggningsmetod.</value>
     <comment>Add sign-in method sheet: the Bittensor wallet option's explanation (Talisman, WalletConnect, or a pasted signature).</comment>
@@ -843,6 +1039,14 @@ rätt sätt</value>
   <data name="connect_seeker_wallet" xml:space="preserve">
     <value>Anslut en plånbok med Saga Genesis- eller Seeker Pre-Order-token</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="connect_solana_wallet" xml:space="preserve">
+    <value>Anslut Solana-plånbok</value>
+    <comment>Overflow menu item next to “Connect Bittensor wallet” on the Earnings screen, and the title of the Solana connect sheet/card: connect a Solana USDC payout wallet (wallet app, or manual address entry). USDC payouts continue until the migration to Bittensor completes.</comment>
+  </data>
+  <data name="connect_solana_wallet_note" xml:space="preserve">
+    <value>Anslut en Solana-plånboksapp eller ange en Solana-USDC-adress manuellt.</value>
+    <comment>Note at the top of the Solana connect sheet/card, above the wallet-app button and the manual-entry link.</comment>
   </data>
   <data name="connect_solana_wallet_to_add_sign_in_method" xml:space="preserve">
     <value>Anslut en Solana-plånbok för att lägga till den som inloggningsmetod.</value>
@@ -859,6 +1063,10 @@ rätt sätt</value>
   <data name="connect_wallet" xml:space="preserve">
     <value>Anslut plånbok</value>
     <comment>Used in Main/Account/Wallets/ConnectWalletSheet/EnterWalletAddress/EnterWalletAddressView.swift.</comment>
+  </data>
+  <data name="connect_wallet_first" xml:space="preserve">
+    <value>Anslut en Bittensor-plånbok först.</value>
+    <comment>Error when claiming without a wallet.</comment>
   </data>
   <data name="connected" xml:space="preserve">
     <value>Ansluten</value>
@@ -1000,6 +1208,10 @@ rätt sätt</value>
     <value>Kopiera klient-ID</value>
     <comment>A label for a context menu item that copies a client ID to the clipboard.</comment>
   </data>
+  <data name="copy_share_text" xml:space="preserve">
+    <value>Kopiera delningstext</value>
+    <comment>Button on the share screen: copy the text form of the code.</comment>
+  </data>
   <data name="copy_to_clipboard" xml:space="preserve">
     <value>Kopiera till urklipp</value>
     <comment>Button text to copy the seedphrase to the clipboard.</comment>
@@ -1007,6 +1219,14 @@ rätt sätt</value>
   <data name="could_not_get_google_id_token" xml:space="preserve">
     <value>Det gick inte att hämta Google ID-token</value>
     <comment>Add sign-in method sheet (android): Google sign-in returned no identity token.</comment>
+  </data>
+  <data name="couldn_t_load_subscription_options" xml:space="preserve">
+    <value>Det gick inte att läsa in prenumerationsalternativen. Kontrollera din anslutning och försök igen.</value>
+    <comment>Shown in the upgrade sheet and intro funnel when the App Store product fetch failed, with a retry action — replaces the eternal spinner (Shared/Views/UpgradeSubscriptionSheet.swift, Shared/Views/Introduction/IntroductionView.swift).</comment>
+  </data>
+  <data name="couldn_t_restore_purchases" xml:space="preserve">
+    <value>Det gick inte att återställa köpen. Försök igen.</value>
+    <comment>Restore-purchases outcome: the App Store sync failed (e.g. the user cancelled the credentials prompt or the store was unreachable) and no entitlement was found locally (Shared/ViewModels/AppStoreSubscriptionManager.swift).</comment>
   </data>
   <data name="couldnt_open_wallet" xml:space="preserve">
     <value>Kunde inte öppna plånboken. Installera den och försök igen.</value>
@@ -1172,6 +1392,10 @@ rätt sätt</value>
     <value>{} utbetalning</value>
     <comment>Call to action</comment>
   </data>
+  <data name="default_daily_data" xml:space="preserve">
+    <value>Som standard får du {} varje dag.</value>
+    <comment>Onboarding data page: the daily free allowance, formatted from the server's balance (pro.yml free.data per data_period).</comment>
+  </data>
   <data name="default_option" xml:space="preserve">
     <value>Standard</value>
     <comment>Generic default choice label, e.g. the app split rule combo state meaning no rule.</comment>
@@ -1195,6 +1419,630 @@ rätt sätt</value>
   <data name="delete_account_type_network_name" xml:space="preserve">
     <value>Skriv {} för att bekräfta.</value>
     <comment>Delete account dialog: asks the user to type the network name back before the delete button enables. {network} is the account's network name.</comment>
+  </data>
+  <data name="dev_affinity_performance" xml:space="preserve">
+    <value>Prestandabaserad affinitet</value>
+    <comment>Developer tools screen (reliability surface): performance-aware affinity control label.</comment>
+  </data>
+  <data name="dev_affinity_performance_detail" xml:space="preserve">
+    <value>Vikta nya TLS-lopp efter varje leverantörs högsta takt av kvitterade byte i förhållande till dess angivna bandbredd. Med hård affinitet påslagen viker lågt uppmätta givare för loppet. Befintliga anslutningar och uttryckliga fästningar ligger fast</value>
+    <comment>Developer tools screen: explanatory subtext under the performance-aware affinity control.</comment>
+  </data>
+  <data name="dev_affinity_sticky" xml:space="preserve">
+    <value>Fast affinitet per webbplats</value>
+    <comment>Developer tools screen (reliability surface): affinity sticky control label.</comment>
+  </data>
+  <data name="dev_affinity_sticky_detail" xml:space="preserve">
+    <value>En webbplats nya anslutningar stannar på den utgång som de tidigare redan använder, även över flödestaket, så att en upptagen webbplats behåller en egress-IP. Taket begränsar fortfarande vilka utgångar som tar emot nya webbplatser. Av återställer det strikta taket</value>
+    <comment>Developer tools screen: explanatory subtext under the 'affinity sticky' control.</comment>
+  </data>
+  <data name="dev_behaviour" xml:space="preserve">
+    <value>Beteende</value>
+    <comment>Developer tools screen (reliability surface): behaviour control label.</comment>
+  </data>
+  <data name="dev_blackhole_receive" xml:space="preserve">
+    <value>Behåll tysta leverantörer längre</value>
+    <comment>Developer tools screen (reliability surface): blackhole receive control label.</comment>
+  </data>
+  <data name="dev_blackhole_receive_detail" xml:space="preserve">
+    <value>Hur länge en leverantör som fortfarande kvitterar trafik får låta bli att returnera något innan den tas bort. Av behåller dem tills de slutar kvittera</value>
+    <comment>Developer tools screen: explanatory subtext under the 'blackhole receive' control.</comment>
+  </data>
+  <data name="dev_blast_radius" xml:space="preserve">
+    <value>Påverkansradie</value>
+    <comment>Developer tools screen (reliability surface): blast radius control label.</comment>
+  </data>
+  <data name="dev_blast_radius_detail" xml:space="preserve">
+    <value>Förlorade anslutningar per leverantörsfel. Lägre är bättre</value>
+    <comment>Developer tools screen: explanatory subtext under the 'blast radius' control.</comment>
+  </data>
+  <data name="dev_blast_radius_value" xml:space="preserve">
+    <value>{} per fel</value>
+    <comment>Developer tools screen: formatted value readout for 'blast radius'.</comment>
+  </data>
+  <data name="dev_busy_probe" xml:space="preserve">
+    <value>Testa låsta utgångar innan de tas bort</value>
+    <comment>Developer tools screen (reliability surface): busy probe control label.</comment>
+  </data>
+  <data name="dev_busy_probe_budget" xml:space="preserve">
+    <value>Väntetid för upptagetsond</value>
+    <comment>Developer tools screen (reliability surface): busy probe budget control label.</comment>
+  </data>
+  <data name="dev_busy_probe_budget_detail" xml:space="preserve">
+    <value>Hur länge låsningssonden väntar på svar innan den fäller. Av använder halva låsningsgränsen</value>
+    <comment>Developer tools screen: explanatory subtext under the 'busy probe budget' control.</comment>
+  </data>
+  <data name="dev_busy_probe_detail" xml:space="preserve">
+    <value>När en utgång låser sig pingas den en gång innan den fälls. En överbelastad men levande utgång svarar och behåller sina flöden; en död tas bort ändå. Av fäller vid låsningsgränsen</value>
+    <comment>Developer tools screen: explanatory subtext under the 'busy probe' control.</comment>
+  </data>
+  <data name="dev_busy_probes" xml:space="preserve">
+    <value>Upptagetsonder</value>
+    <comment>Developer tools screen (reliability surface): busy probes control label.</comment>
+  </data>
+  <data name="dev_busy_probes_detail" xml:space="preserve">
+    <value>Livstecken-pingar till låsta utgångar; frikända svarade och behölls — de borttagningar som sonden förhindrade</value>
+    <comment>Developer tools screen: explanatory subtext under the 'busy probes' control.</comment>
+  </data>
+  <data name="dev_busy_probes_value" xml:space="preserve">
+    <value>{0} skickade / {1} frikända</value>
+    <comment>Developer tools screen: formatted value readout for 'busy probes'.</comment>
+  </data>
+  <data name="dev_choose_logs" xml:space="preserve">
+    <value>Välj loggar…</value>
+    <comment>Developer tools screen: action for choosing individual log files to export.</comment>
+  </data>
+  <data name="dev_clear_logs" xml:space="preserve">
+    <value>Rensa loggar</value>
+    <comment>Developer tools screen: action that deletes the diagnostics log files without touching local state, preferences or rules.</comment>
+  </data>
+  <data name="dev_clearing_logs" xml:space="preserve">
+    <value>Rensar loggar…</value>
+    <comment>Developer tools screen: the clear-logs action's label while it runs.</comment>
+  </data>
+  <data name="dev_cluster_affinity" xml:space="preserve">
+    <value>Gruppera IP-adresser per webbplats</value>
+    <comment>Developer tools screen (reliability surface): cluster affinity control label.</comment>
+  </data>
+  <data name="dev_cluster_affinity_detail" xml:space="preserve">
+    <value>Håller en webbplats på en utgång när dess värdnamn inte syns</value>
+    <comment>Developer tools screen: explanatory subtext under the 'cluster affinity' control.</comment>
+  </data>
+  <data name="dev_comparative_connect" xml:space="preserve">
+    <value>Avbryt döda anslutningar tidigt</value>
+    <comment>Developer tools screen (reliability surface): comparative connect control label.</comment>
+  </data>
+  <data name="dev_comparative_connect_detail" xml:space="preserve">
+    <value>Ta bort en utgång som inte har upprättat något tidigare när två syskonutgångar tar emot. Av väntar hela anslutningsgränsen på 30 s</value>
+    <comment>Developer tools screen: explanatory subtext under the 'comparative connect' control.</comment>
+  </data>
+  <data name="dev_dial_failure_rerace" xml:space="preserve">
+    <value>Försök nekade anslutningar någon annanstans</value>
+    <comment>Developer tools screen (reliability surface): dial failure rerace control label.</comment>
+  </data>
+  <data name="dev_dial_failure_rerace_detail" xml:space="preserve">
+    <value>När en leverantör inte kan nå en webbplats flyttas anslutningen till en annan utgång i stället för att bli hängande</value>
+    <comment>Developer tools screen: explanatory subtext under the 'dial failure rerace' control.</comment>
+  </data>
+  <data name="dev_dial_failures" xml:space="preserve">
+    <value>Leverantörernas anslutningsfel</value>
+    <comment>Developer tools screen (reliability surface): dial failures control label.</comment>
+  </data>
+  <data name="dev_dial_failures_detail" xml:space="preserve">
+    <value>Antal gånger en leverantör rapporterade att den inte kunde öppna uppströmsanslutningen</value>
+    <comment>Developer tools screen: explanatory subtext under the 'dial failures' control.</comment>
+  </data>
+  <data name="dev_drop_exit" xml:space="preserve">
+    <value>Ta bort</value>
+    <comment>Developer tools screen (reliability surface): drop exit control label.</comment>
+  </data>
+  <data name="dev_effective_tier" xml:space="preserve">
+    <value>Nivåsänkning i realtid</value>
+    <comment>Developer tools screen (reliability surface): effective tier control label.</comment>
+  </data>
+  <data name="dev_effective_tier_detail" xml:space="preserve">
+    <value>Misslyckade anslutningar och överlevda domar trycker ner en leverantör i rankningen inom en sekund; för att klättra tillbaka krävs felfria minuter och en bevisad anslutning</value>
+    <comment>Developer tools screen: explanatory subtext under the 'effective tier' control.</comment>
+  </data>
+  <data name="dev_evaluation_pool" xml:space="preserve">
+    <value>Kandidater som utvärderas per plats</value>
+    <comment>Developer tools screen (reliability surface): evaluation pool control label.</comment>
+  </data>
+  <data name="dev_evaluation_pool_detail" xml:space="preserve">
+    <value>Hur många leverantörer en fönsterutökning pingar och rankar per plats den behöver, och behåller de bästa. 1 utvärderar exakt det som behövs</value>
+    <comment>Developer tools screen: explanatory subtext under the 'evaluation pool' control.</comment>
+  </data>
+  <data name="dev_exit_dial_failures" xml:space="preserve">
+    <value>Misslyckade anslutningar: {}</value>
+    <comment>Developer tools screen (reliability surface): exit dial failures control label.</comment>
+  </data>
+  <data name="dev_exit_flows" xml:space="preserve">
+    <value>Flöden: {}</value>
+    <comment>Developer tools screen (reliability surface): exit flows control label.</comment>
+  </data>
+  <data name="dev_exits" xml:space="preserve">
+    <value>Utgångar</value>
+    <comment>Developer tools screen (reliability surface): exits control label.</comment>
+  </data>
+  <data name="dev_export_all_logs" xml:space="preserve">
+    <value>Exportera alla loggar (råa)</value>
+    <comment>Developer tools screen: action for exporting all diagnostic logs without redaction.</comment>
+  </data>
+  <data name="dev_export_failed" xml:space="preserve">
+    <value>Exporten misslyckades: {}</value>
+    <comment>Developer tools screen: error shown when diagnostic log export fails.</comment>
+  </data>
+  <data name="dev_export_not_included" xml:space="preserve">
+    <value>Ingår inte: {}</value>
+    <comment>Developer tools screen: explanation that a requested diagnostic item was omitted from an export.</comment>
+  </data>
+  <data name="dev_export_redacted_logs" xml:space="preserve">
+    <value>Exportera maskerade loggar</value>
+    <comment>Developer tools screen: action for exporting diagnostic logs with sensitive traffic details redacted.</comment>
+  </data>
+  <data name="dev_export_selected" xml:space="preserve">
+    <value>Exportera markerade</value>
+    <comment>Developer tools screen: action for exporting the selected diagnostic log files.</comment>
+  </data>
+  <data name="dev_export_share" xml:space="preserve">
+    <value>Dela diagnostikpaket</value>
+    <comment>Developer tools screen: action for sharing a diagnostic bundle.</comment>
+  </data>
+  <data name="dev_export_summary.one" xml:space="preserve">
+    <value>Exporterade {0} loggfil ({1})</value>
+    <comment>Developer tools screen: summary of the number and total size of diagnostic log files exported.</comment>
+  </data>
+  <data name="dev_export_summary.other" xml:space="preserve">
+    <value>Exporterade {0} loggfiler ({1})</value>
+    <comment>Developer tools screen: summary of the number and total size of diagnostic log files exported.</comment>
+  </data>
+  <data name="dev_export_unavailable" xml:space="preserve">
+    <value>Inte tillgängligt: {}</value>
+    <comment>Developer tools screen: explanation that a diagnostic export option is unavailable.</comment>
+  </data>
+  <data name="dev_exporting" xml:space="preserve">
+    <value>Exporterar…</value>
+    <comment>Developer tools screen: progress label shown while a diagnostic bundle is being exported.</comment>
+  </data>
+  <data name="dev_flows_opened" xml:space="preserve">
+    <value>Öppnade flöden</value>
+    <comment>Developer tools screen (reliability surface): flows opened control label.</comment>
+  </data>
+  <data name="dev_flows_opened_detail" xml:space="preserve">
+    <value>Totalt sedan återställningen, så att körningar av olika längd kan jämföras</value>
+    <comment>Developer tools screen: explanatory subtext under the 'flows opened' control.</comment>
+  </data>
+  <data name="dev_flows_rebound" xml:space="preserve">
+    <value>Ombundna QUIC-flöden</value>
+    <comment>Developer tools screen (reliability surface): flows rebound control label.</comment>
+  </data>
+  <data name="dev_flows_rebound_detail" xml:space="preserve">
+    <value>Flöden som flyttades till en varm utgång under en borttagning; accepterade betyder att servern tog sökvägsbytet utan ny uppringning</value>
+    <comment>Developer tools screen: explanatory subtext under the 'flows rebound' control.</comment>
+  </data>
+  <data name="dev_flows_rebound_value" xml:space="preserve">
+    <value>{0} ({1} accepterade / {2} återuppringda)</value>
+    <comment>Developer tools screen: formatted value readout for 'flows rebound'.</comment>
+  </data>
+  <data name="dev_flows_reraced" xml:space="preserve">
+    <value>Flyttade till en annan utgång</value>
+    <comment>Developer tools screen (reliability surface): flows reraced control label.</comment>
+  </data>
+  <data name="dev_flows_reraced_detail" xml:space="preserve">
+    <value>Hur många av de felen som tyst flyttades i stället för att bli hängande</value>
+    <comment>Developer tools screen: explanatory subtext under the 'flows reraced' control.</comment>
+  </data>
+  <data name="dev_formation_poll" xml:space="preserve">
+    <value>Snabb avläsning av första utgången</value>
+    <comment>Developer tools screen (reliability surface): formation poll control label.</comment>
+  </data>
+  <data name="dev_formation_poll_detail" xml:space="preserve">
+    <value>Hur ofta ett flöde som ansluter kontrollerar ett tomt fönster igen, så att den första begäran går iväg direkt när den första utgången kommer. Av väntar omförsökstakten på 2 s</value>
+    <comment>Developer tools screen: explanatory subtext under the 'formation poll' control.</comment>
+  </data>
+  <data name="dev_fresh_flow_affinity" xml:space="preserve">
+    <value>Hård affinitet för nya flöden</value>
+    <comment>Developer tools screen (reliability surface): hard fresh-flow affinity control label.</comment>
+  </data>
+  <data name="dev_fresh_flow_affinity_detail" xml:space="preserve">
+    <value>Tilldela varje ny anslutning den utgång som dess IP eller domän redan använder. Av är standard: varje vanlig ny anslutning går till leverantörsloppet. Befintliga anslutningar och uttryckliga fästningar ligger alltid fast</value>
+    <comment>Developer tools screen: explanatory subtext under the hard fresh-flow affinity control.</comment>
+  </data>
+  <data name="dev_group_follow" xml:space="preserve">
+    <value>Följ avbänkade utgångar</value>
+    <comment>Developer tools screen (reliability surface): group follow control label.</comment>
+  </data>
+  <data name="dev_group_follow_detail" xml:space="preserve">
+    <value>En utgång i karantän behåller sina egna webbplatsers nya anslutningar under början av avbänkningen, när domen är minst bevisad, så att avbänkningen inte delar webbplatsens egress-IP. Nya webbplatser undviker den fortfarande. Av sprider dem</value>
+    <comment>Developer tools screen: explanatory subtext under the 'group follow' control.</comment>
+  </data>
+  <data name="dev_group_follow_window" xml:space="preserve">
+    <value>Följfönster</value>
+    <comment>Developer tools screen (reliability surface): group follow window control label.</comment>
+  </data>
+  <data name="dev_group_follow_window_detail" xml:space="preserve">
+    <value>Hur länge in i en avbänkning en webbplats nya anslutningar fortsätter att följa sin utgång — tidiga avbänkningar är oftast falsklarm; en som varar är på väg mot borttagning och slutar ta emot flöden. Av sprider direkt</value>
+    <comment>Developer tools screen: explanatory subtext under the 'group follow window' control.</comment>
+  </data>
+  <data name="dev_heartbeat" xml:space="preserve">
+    <value>Statushjärtslag</value>
+    <comment>Developer tools screen (reliability surface): heartbeat control label.</comment>
+  </data>
+  <data name="dev_heartbeat_detail" xml:space="preserve">
+    <value>Hur ofta en rad som sammanfattar aktuell status skrivs till loggen för senare analys. Av tystar den; kortare fångar en övergång, längre behåller mer buffert</value>
+    <comment>Developer tools screen: explanatory subtext under the 'heartbeat' control.</comment>
+  </data>
+  <data name="dev_load_corroboration" xml:space="preserve">
+    <value>Belastningsbekräftelse</value>
+    <comment>Developer tools screen (reliability surface): load corroboration control label.</comment>
+  </data>
+  <data name="dev_load_corroboration_detail" xml:space="preserve">
+    <value>Extra tysta destinationer som krävs per så här många flöden innan en upptagen utgång kan bänkas på svaga belägg: en utgång med 24 flöden vid 8 kräver 3 tysta webbplatser, inte 2. Av behåller det fasta minimumet</value>
+    <comment>Developer tools screen: explanatory subtext under the 'load corroboration' control.</comment>
+  </data>
+  <data name="dev_log_verbosity" xml:space="preserve">
+    <value>Loggdetalj</value>
+    <comment>Developer tools screen: control label for diagnostic log detail.</comment>
+  </data>
+  <data name="dev_log_verbosity_default" xml:space="preserve">
+    <value>Standard</value>
+    <comment>Developer tools screen: default diagnostic log detail level.</comment>
+  </data>
+  <data name="dev_log_verbosity_default_detail" xml:space="preserve">
+    <value>Anslutningsfel och kontraktspingar</value>
+    <comment>Developer tools screen: explanation of the default diagnostic log detail level.</comment>
+  </data>
+  <data name="dev_log_verbosity_trace" xml:space="preserve">
+    <value>Spårning</value>
+    <comment>Developer tools screen: trace diagnostic log detail level.</comment>
+  </data>
+  <data name="dev_log_verbosity_trace_detail" xml:space="preserve">
+    <value>Transport- och fönsterinternt. Mycket stora loggar</value>
+    <comment>Developer tools screen: explanation of the trace diagnostic log detail level.</comment>
+  </data>
+  <data name="dev_log_verbosity_unavailable" xml:space="preserve">
+    <value>Inte tillgänglig</value>
+    <comment>Developer tools screen: label used when the diagnostic log detail level cannot be read.</comment>
+  </data>
+  <data name="dev_log_verbosity_unavailable_detail" xml:space="preserve">
+    <value>Det finns ingen enhet att läsa loggnivån från än. Logga in först</value>
+    <comment>Developer tools screen: explanation shown when the diagnostic log detail level cannot be read.</comment>
+  </data>
+  <data name="dev_log_verbosity_verbose" xml:space="preserve">
+    <value>Utförlig</value>
+    <comment>Developer tools screen: verbose diagnostic log detail level.</comment>
+  </data>
+  <data name="dev_log_verbosity_verbose_detail" xml:space="preserve">
+    <value>Kontraktsbokföring och blockeringsbeslut per paket. Innehåller destinationernas IP-adresser</value>
+    <comment>Developer tools screen: explanation of the verbose diagnostic log detail level.</comment>
+  </data>
+  <data name="dev_log_verbosity_warning" xml:space="preserve">
+    <value>Från Utförlig och uppåt innehåller loggarna destinationsadresser och portar för trafiken du skickar. Använd ”Exportera maskerade loggar” för att dela dem; det råa paketet bör inte lämna den här enheten.</value>
+    <comment>Developer tools screen: privacy warning shown when detailed traffic logging is enabled.</comment>
+  </data>
+  <data name="dev_log_verbosity_warning_title" xml:space="preserve">
+    <value>Loggarna registrerar din riktiga trafik</value>
+    <comment>Developer tools screen: title for the detailed traffic logging privacy warning.</comment>
+  </data>
+  <data name="dev_max_flows_per_exit" xml:space="preserve">
+    <value>Max anslutningar per utgång</value>
+    <comment>Developer tools screen (reliability surface): max flows per exit control label.</comment>
+  </data>
+  <data name="dev_max_flows_per_exit_detail" xml:space="preserve">
+    <value>Att förlora en utgång dödar varje anslutning på den. Lägre sprider skadan; en webbplats kan då använda mer än en utgångs-IP</value>
+    <comment>Developer tools screen: explanatory subtext under the 'max flows per exit' control.</comment>
+  </data>
+  <data name="dev_measure_none" xml:space="preserve">
+    <value>Inga leverantörsfel än. Lås en utgång nedan för att orsaka ett.</value>
+    <comment>Developer tools screen (reliability surface): measure none control label.</comment>
+  </data>
+  <data name="dev_measurements" xml:space="preserve">
+    <value>Mätningar</value>
+    <comment>Developer tools screen (reliability surface): measurements control label.</comment>
+  </data>
+  <data name="dev_measurements_detail" xml:space="preserve">
+    <value>Vad ett leverantörsfel kostar. Återställ, kör ett test, läs av.</value>
+    <comment>Developer tools screen: explanatory subtext under the 'measurements' control.</comment>
+  </data>
+  <data name="dev_migrate_exit" xml:space="preserve">
+    <value>Migrera</value>
+    <comment>Developer tools screen (reliability surface): migrate exit control label.</comment>
+  </data>
+  <data name="dev_min_blackhole_destinations" xml:space="preserve">
+    <value>Bekräfta tysta utgångar</value>
+    <comment>Developer tools screen (reliability surface): min blackhole destinations control label.</comment>
+  </data>
+  <data name="dev_min_blackhole_destinations_detail" xml:space="preserve">
+    <value>Hur många olika destinationer som måste vara tysta innan en utgång fälls för utebliven mottagning, så att en enda död webbplats inte kan ta bort en fungerande utgång. Av låter en enda destination fälla</value>
+    <comment>Developer tools screen: explanatory subtext under the 'min blackhole destinations' control.</comment>
+  </data>
+  <data name="dev_no_exits" xml:space="preserve">
+    <value>Inga utgångar. Anslut först.</value>
+    <comment>Developer tools screen (reliability surface): no exits control label.</comment>
+  </data>
+  <data name="dev_open_tools" xml:space="preserve">
+    <value>Öppna utvecklarverktyg</value>
+    <comment>Developer tools screen (reliability surface): open tools control label.</comment>
+  </data>
+  <data name="dev_probe_all" xml:space="preserve">
+    <value>Testa alla utgångar nu</value>
+    <comment>Developer tools screen (reliability surface): probe all control label.</comment>
+  </data>
+  <data name="dev_probe_providers" xml:space="preserve">
+    <value>Testa leverantörer</value>
+    <comment>Developer tools screen (reliability surface): probe providers control label.</comment>
+  </data>
+  <data name="dev_probe_providers_detail" xml:space="preserve">
+    <value>Kvalificera utgångar genom att ringa upp riktiga webbplatser genom dem. Ett svar bevisar utgången; tystnad räknas aldrig emot den</value>
+    <comment>Developer tools screen: explanatory subtext under the 'probe providers' control.</comment>
+  </data>
+  <data name="dev_probe_sample_hosts" xml:space="preserve">
+    <value>Testvärdar per omgång</value>
+    <comment>Developer tools screen (reliability surface): probe sample hosts control label.</comment>
+  </data>
+  <data name="dev_probe_sample_hosts_detail" xml:space="preserve">
+    <value>Hur många kontrollwebbplatser en kvalificeringsomgång ringer upp genom en utgång. 0 testar hela den inbyggda listan; ett mindre antal går igenom den i block</value>
+    <comment>Developer tools screen: explanatory subtext under the 'probe sample hosts' control.</comment>
+  </data>
+  <data name="dev_probe_timeout" xml:space="preserve">
+    <value>Väntetid för sond</value>
+    <comment>Developer tools screen (reliability surface): probe timeout control label.</comment>
+  </data>
+  <data name="dev_probe_timeout_detail" xml:space="preserve">
+    <value>Hur länge en kvalificeringssond väntar på svar. Av använder de inbyggda 4 s. Den begränsar bara väntan på bevis, den fäller aldrig</value>
+    <comment>Developer tools screen: explanatory subtext under the 'probe timeout' control.</comment>
+  </data>
+  <data name="dev_probes" xml:space="preserve">
+    <value>Sonder</value>
+    <comment>Developer tools screen (reliability surface): probes control label.</comment>
+  </data>
+  <data name="dev_probes_detail" xml:space="preserve">
+    <value>Kvalificeringssonder den här sessionen</value>
+    <comment>Developer tools screen: explanatory subtext under the 'probes' control.</comment>
+  </data>
+  <data name="dev_probes_value" xml:space="preserve">
+    <value>{0} skickade / {1} besvarade</value>
+    <comment>Developer tools screen: formatted value readout for 'probes'.</comment>
+  </data>
+  <data name="dev_quic_rebind" xml:space="preserve">
+    <value>Bind om QUIC vid förlorad utgång</value>
+    <comment>Developer tools screen (reliability surface): quic rebind control label.</comment>
+  </data>
+  <data name="dev_quic_rebind_detail" xml:space="preserve">
+    <value>Fäst etablerade QUIC-flöden på nytt vid en levande utgång under borttagningen i stället för att riva dem</value>
+    <comment>Developer tools screen: explanatory subtext under the 'quic rebind' control.</comment>
+  </data>
+  <data name="dev_recovery" xml:space="preserve">
+    <value>Återhämtningstid</value>
+    <comment>Developer tools screen (reliability surface): recovery control label.</comment>
+  </data>
+  <data name="dev_recovery_detail" xml:space="preserve">
+    <value>Från att en utgång dör tills den webbplatsen svarar igen</value>
+    <comment>Developer tools screen: explanatory subtext under the 'recovery' control.</comment>
+  </data>
+  <data name="dev_recovery_missed" xml:space="preserve">
+    <value>Kom aldrig tillbaka</value>
+    <comment>Developer tools screen (reliability surface): recovery missed control label.</comment>
+  </data>
+  <data name="dev_recovery_missed_detail" xml:space="preserve">
+    <value>Webbplatser som övergavs i stället för att återhämtas</value>
+    <comment>Developer tools screen: explanatory subtext under the 'recovery missed' control.</comment>
+  </data>
+  <data name="dev_recovery_missed_value" xml:space="preserve">
+    <value>{0} av {1}</value>
+    <comment>Developer tools screen: formatted value readout for 'recovery missed'.</comment>
+  </data>
+  <data name="dev_recovery_value" xml:space="preserve">
+    <value>snitt {0}, sämst {1}</value>
+    <comment>Developer tools screen: formatted value readout for 'recovery'.</comment>
+  </data>
+  <data name="dev_refresh" xml:space="preserve">
+    <value>Uppdatera</value>
+    <comment>Developer tools screen (reliability surface): refresh control label.</comment>
+  </data>
+  <data name="dev_removal_budget_count" xml:space="preserve">
+    <value>Gräns för borttagningsstormar</value>
+    <comment>Developer tools screen (reliability surface): removal budget count control label.</comment>
+  </data>
+  <data name="dev_removal_budget_count_detail" xml:space="preserve">
+    <value>Hur många borttagningar efter dom som tillåts per fönster innan resten skjuts upp; en skur beror troligare på en lokal orsak än på många fel. Av tar bort utan gräns</value>
+    <comment>Developer tools screen: explanatory subtext under the 'removal budget count' control.</comment>
+  </data>
+  <data name="dev_removal_budget_window" xml:space="preserve">
+    <value>Fönster för borttagningsstormar</value>
+    <comment>Developer tools screen (reliability surface): removal budget window control label.</comment>
+  </data>
+  <data name="dev_removal_budget_window_detail" xml:space="preserve">
+    <value>Fönstret som borttagningsgränsen räknas över. Av (som en gräns på 0) stänger av brytaren</value>
+    <comment>Developer tools screen: explanatory subtext under the 'removal budget window' control.</comment>
+  </data>
+  <data name="dev_removals_deferred" xml:space="preserve">
+    <value>Uppskjutna borttagningar</value>
+    <comment>Developer tools screen (reliability surface): removals deferred control label.</comment>
+  </data>
+  <data name="dev_removals_deferred_detail" xml:space="preserve">
+    <value>Borttagningar som stormbrytaren höll tillbaka efter en korrelerad skur</value>
+    <comment>Developer tools screen: explanatory subtext under the 'removals deferred' control.</comment>
+  </data>
+  <data name="dev_reset_defaults" xml:space="preserve">
+    <value>Återställ till leveransstandard</value>
+    <comment>Developer tools screen (reliability surface): reset defaults control label.</comment>
+  </data>
+  <data name="dev_reset_measurements" xml:space="preserve">
+    <value>Återställ mätningar</value>
+    <comment>Developer tools screen (reliability surface): reset measurements control label.</comment>
+  </data>
+  <data name="dev_scheduler_pause_recovery" xml:space="preserve">
+    <value>Återhämtningsfönster efter viloläge</value>
+    <comment>Developer tools screen (reliability surface): scheduler pause recovery control label.</comment>
+  </data>
+  <data name="dev_scheduler_pause_recovery_detail" xml:space="preserve">
+    <value>Hur länge domar hålls kvar efter ett upptäckt viloläge, så att transporterna hinner registrera sig igen. Av använder de inbyggda 5 s</value>
+    <comment>Developer tools screen: explanatory subtext under the 'scheduler pause recovery' control.</comment>
+  </data>
+  <data name="dev_scheduler_pause_tolerance" xml:space="preserve">
+    <value>Vilolägesdetektor</value>
+    <comment>Developer tools screen (reliability surface): scheduler pause tolerance control label.</comment>
+  </data>
+  <data name="dev_scheduler_pause_tolerance_detail" xml:space="preserve">
+    <value>Hur mycket timerfördröjning som tolkas som att telefonen var i viloläge snarare än att en utgång låst sig, så att en väckt telefon inte fäller alla utgångar på en gång. Av stänger av den</value>
+    <comment>Developer tools screen: explanatory subtext under the 'scheduler pause tolerance' control.</comment>
+  </data>
+  <data name="dev_scheduler_pauses" xml:space="preserve">
+    <value>Upptäckta vilolägen</value>
+    <comment>Developer tools screen (reliability surface): scheduler pauses control label.</comment>
+  </data>
+  <data name="dev_scheduler_pauses_detail" xml:space="preserve">
+    <value>Vilolägen på värden som detektorn fångade, vart och ett en omgång domar som hölls kvar i stället för att verkställas på en nyss väckt telefon</value>
+    <comment>Developer tools screen: explanatory subtext under the 'scheduler pauses' control.</comment>
+  </data>
+  <data name="dev_section_detection" xml:space="preserve">
+    <value>Upptäckt</value>
+    <comment>Developer tools screen: section heading for the detection controls.</comment>
+  </data>
+  <data name="dev_section_diagnostics" xml:space="preserve">
+    <value>Diagnostik</value>
+    <comment>Developer tools screen: section heading for diagnostic log controls.</comment>
+  </data>
+  <data name="dev_section_observability" xml:space="preserve">
+    <value>Observerbarhet</value>
+    <comment>Developer tools screen: section heading for the observability controls.</comment>
+  </data>
+  <data name="dev_section_placement" xml:space="preserve">
+    <value>Placering</value>
+    <comment>Developer tools screen: section heading for the placement controls.</comment>
+  </data>
+  <data name="dev_section_probing" xml:space="preserve">
+    <value>Sondering</value>
+    <comment>Developer tools screen: section heading for the probing controls.</comment>
+  </data>
+  <data name="dev_section_recovery" xml:space="preserve">
+    <value>Återhämtning</value>
+    <comment>Developer tools screen: section heading for the recovery controls.</comment>
+  </data>
+  <data name="dev_send_stall" xml:space="preserve">
+    <value>Ta snabbt bort låsta utgångar</value>
+    <comment>Developer tools screen (reliability surface): send stall control label.</comment>
+  </data>
+  <data name="dev_send_stall_detail" xml:space="preserve">
+    <value>Hur länge en utgång får sluta leverera innan den tas bort. Av väntar 30 s</value>
+    <comment>Developer tools screen: explanatory subtext under the 'send stall' control.</comment>
+  </data>
+  <data name="dev_server_name_bridge" xml:space="preserve">
+    <value>Samla sent namngivna flöden</value>
+    <comment>Developer tools screen (reliability surface): server name bridge control label.</comment>
+  </data>
+  <data name="dev_server_name_bridge_detail" xml:space="preserve">
+    <value>Flyttar senare anslutningar till den utgång som den första redan använder</value>
+    <comment>Developer tools screen: explanatory subtext under the 'server name bridge' control.</comment>
+  </data>
+  <data name="dev_shuffle_exits" xml:space="preserve">
+    <value>Blanda alla utgångar</value>
+    <comment>Developer tools screen (reliability surface): shuffle exits control label.</comment>
+  </data>
+  <data name="dev_simulate_network_change" xml:space="preserve">
+    <value>Simulera nätverksbyte</value>
+    <comment>Developer tools screen (reliability surface): simulate network change control label.</comment>
+  </data>
+  <data name="dev_soft_verdict" xml:space="preserve">
+    <value>Degradera före borttagning</value>
+    <comment>Developer tools screen (reliability surface): soft verdict control label.</comment>
+  </data>
+  <data name="dev_soft_verdict_detail" xml:space="preserve">
+    <value>Tvetydiga domar bänkar en utgång i stället för att riva dess flöden; borttagning kräver ihållande belägg eller en tom utgång</value>
+    <comment>Developer tools screen: explanatory subtext under the 'soft verdict' control.</comment>
+  </data>
+  <data name="dev_stall_exit" xml:space="preserve">
+    <value>Lås</value>
+    <comment>Developer tools screen (reliability surface): stall exit control label.</comment>
+  </data>
+  <data name="dev_standing_reserve" xml:space="preserve">
+    <value>Håll en reservutgång varm</value>
+    <comment>Developer tools screen (reliability surface): standing reserve control label.</comment>
+  </data>
+  <data name="dev_standing_reserve_detail" xml:space="preserve">
+    <value>Dimensionera varje fönster en utgång över målet så att en ersättare redan är ansluten. Av väntar på en förlust innan det fylls på</value>
+    <comment>Developer tools screen: explanatory subtext under the 'standing reserve' control.</comment>
+  </data>
+  <data name="dev_tcp_collapse_hold" xml:space="preserve">
+    <value>Släpp fastnade omsändningar</value>
+    <comment>Developer tools screen (reliability surface): tcp collapse hold control label.</comment>
+  </data>
+  <data name="dev_tcp_collapse_hold_detail" xml:space="preserve">
+    <value>Hur länge omsändningar hålls kvar innan en släpps. Av väntar 30 s</value>
+    <comment>Developer tools screen: explanatory subtext under the 'tcp collapse hold' control.</comment>
+  </data>
+  <data name="dev_tcp_idle_timeout" xml:space="preserve">
+    <value>Längre TCP-vilotidsgräns</value>
+    <comment>Developer tools screen (reliability surface): tcp idle timeout control label.</comment>
+  </data>
+  <data name="dev_tcp_idle_timeout_detail" xml:space="preserve">
+    <value>Hur länge en TCP-anslutning får vara inaktiv. Av använder UDP-gränsen</value>
+    <comment>Developer tools screen: explanatory subtext under the 'tcp idle timeout' control.</comment>
+  </data>
+  <data name="dev_timing" xml:space="preserve">
+    <value>Tider</value>
+    <comment>Developer tools screen (reliability surface): timing control label.</comment>
+  </data>
+  <data name="dev_udp_idle_timeout" xml:space="preserve">
+    <value>UDP-vilotidsgräns</value>
+    <comment>Developer tools screen (reliability surface): udp idle timeout control label.</comment>
+  </data>
+  <data name="dev_udp_idle_timeout_detail" xml:space="preserve">
+    <value>Hur länge ett icke-TCP-flöde får vara inaktivt innan det städas bort</value>
+    <comment>Developer tools screen: explanatory subtext under the 'udp idle timeout' control.</comment>
+  </data>
+  <data name="dev_udp_teardown" xml:space="preserve">
+    <value>Signalera UDP-nedkoppling</value>
+    <comment>Developer tools screen (reliability surface): udp teardown control label.</comment>
+  </data>
+  <data name="dev_udp_teardown_detail" xml:space="preserve">
+    <value>Talar om för DNS och QUIC att vägen är borta i stället för att tystna</value>
+    <comment>Developer tools screen: explanatory subtext under the 'udp teardown' control.</comment>
+  </data>
+  <data name="dev_uplink_gate" xml:space="preserve">
+    <value>Tystnadsspärr för upplänk</value>
+    <comment>Developer tools screen (reliability surface): uplink gate control label.</comment>
+  </data>
+  <data name="dev_uplink_gate_detail" xml:space="preserve">
+    <value>Hur länge hela tunneln får vara tyst innan domar om leverantörer hålls kvar som otillåtna. 0 fäller som tidigare</value>
+    <comment>Developer tools screen: explanatory subtext under the 'uplink gate' control.</comment>
+  </data>
+  <data name="dev_verdicts_held" xml:space="preserve">
+    <value>Kvarhållna domar</value>
+    <comment>Developer tools screen (reliability surface): verdicts held control label.</comment>
+  </data>
+  <data name="dev_verdicts_held_detail" xml:space="preserve">
+    <value>Fällningar som hölls tillbaka eftersom telefonens egen upplänk, inte leverantören, var tyst (upplänk / transport)</value>
+    <comment>Developer tools screen: explanatory subtext under the 'verdicts held' control.</comment>
+  </data>
+  <data name="dev_verdicts_held_value" xml:space="preserve">
+    <value>{0} / {1}</value>
+    <comment>Developer tools screen: formatted value readout for 'verdicts held'.</comment>
+  </data>
+  <data name="dev_worst_loss" xml:space="preserve">
+    <value>Värsta enskilda fel</value>
+    <comment>Developer tools screen (reliability surface): worst loss control label.</comment>
+  </data>
+  <data name="dev_worst_loss_detail" xml:space="preserve">
+    <value>Det som användaren faktiskt märker</value>
+    <comment>Developer tools screen: explanatory subtext under the 'worst loss' control.</comment>
+  </data>
+  <data name="dev_worst_loss_value" xml:space="preserve">
+    <value>Anslutningar: {}</value>
+    <comment>Developer tools screen: formatted value readout for 'worst loss'.</comment>
+  </data>
+  <data name="developer" xml:space="preserve">
+    <value>Utvecklare</value>
+    <comment>Developer tools screen: developer.</comment>
+  </data>
+  <data name="developer_description" xml:space="preserve">
+    <value>Verktyg för att felsöka frysta anslutningar. De påverkar den aktiva anslutningen.</value>
+    <comment>Developer tools screen: developer description.</comment>
+  </data>
+  <data name="developer_disconnected" xml:space="preserve">
+    <value>Anslut för att använda de här verktygen.</value>
+    <comment>Developer tools screen: developer disconnected.</comment>
   </data>
   <data name="device" xml:space="preserve">
     <value>Enhet</value>
@@ -1328,6 +2176,62 @@ rätt sätt</value>
     <value>Intäkter</value>
     <comment>Wallet Screen</comment>
   </data>
+  <data name="earnings_address_placeholder" xml:space="preserve">
+    <value>Ange en Bittensor-adress</value>
+    <comment>Placeholder of the manual Bittensor address field on the Earnings page.</comment>
+  </data>
+  <data name="earnings_change_wallet" xml:space="preserve">
+    <value>Byt plånbok</value>
+    <comment>Button on the Earnings page that starts connecting a different Bittensor wallet.</comment>
+  </data>
+  <data name="earnings_claim_sending" xml:space="preserve">
+    <value>Skickar…</value>
+    <comment>Progress text while a claim transaction is being sent.</comment>
+  </data>
+  <data name="earnings_claims_need_session" xml:space="preserve">
+    <value>Uttag läses in från kedjan när appen har en session. Tryck på Anslut först.</value>
+    <comment>Shown in place of the unclaimed figure when the app has no device session to read the chain with.</comment>
+  </data>
+  <data name="earnings_copy_address" xml:space="preserve">
+    <value>Kopiera adress</value>
+    <comment>Button that copies an address to the clipboard.</comment>
+  </data>
+  <data name="earnings_date_column" xml:space="preserve">
+    <value>Datum</value>
+    <comment>Column header of the per-epoch history table: the date the epoch ended.</comment>
+  </data>
+  <data name="earnings_epoch_column" xml:space="preserve">
+    <value>Epok</value>
+    <comment>Column header of the per-epoch history table.</comment>
+  </data>
+  <data name="earnings_gas_balance" xml:space="preserve">
+    <value>Gassaldo</value>
+    <comment>Label of the gas key's TAO balance in the claim dialog.</comment>
+  </data>
+  <data name="earnings_network_pane_title" xml:space="preserve">
+    <value>Ditt nätverk</value>
+    <comment>Title of the Earnings destination's third pane: own rank, multipliers and reliability.</comment>
+  </data>
+  <data name="earnings_points_column" xml:space="preserve">
+    <value>Poäng</value>
+    <comment>Column header of the per-epoch history table: points earned in the epoch.</comment>
+  </data>
+  <data name="earnings_share_column" xml:space="preserve">
+    <value>Andel</value>
+    <comment>Column header of the per-epoch history table: the network's share of the block.</comment>
+  </data>
+  <data name="earnings_status_column" xml:space="preserve">
+    <value>Status</value>
+    <comment>Column header of the per-epoch history table: the claim status of the epoch's alpha.</comment>
+  </data>
+  <data name="earnings_view_transaction" xml:space="preserve">
+    <value>Visa transaktion</value>
+    <comment>Link that opens a claim transaction in the block explorer.</comment>
+  </data>
+  <data name="earnings_wallet_mismatch" xml:space="preserve">
+    <value>Plånboken som signerade är inte adressen du angav.</value>
+    <comment>Error when the wallet that signed the connect challenge is not the address the user entered.</comment>
+  </data>
   <data name="edit_device_name" xml:space="preserve">
     <value>Redigera enhetsnamn</value>
     <comment>device</comment>
@@ -1363,6 +2267,10 @@ rätt sätt</value>
   <data name="email_e4_reason_trust" xml:space="preserve">
     <value>Jag är inte säker på att jag litar på en VPN</value>
     <comment>Onboarding feedback email, not-activated variant: one-tap reason 3.</comment>
+  </data>
+  <data name="email_support_at" xml:space="preserve">
+    <value>Mejla supporten på</value>
+    <comment>Settings: label before the support email address link.</comment>
   </data>
   <data name="emoji_group_activities" xml:space="preserve">
     <value>Aktiviteter</value>
@@ -1420,6 +2328,14 @@ rätt sätt</value>
     <value>Föreslå en annan</value>
     <comment>Points leaderboard: the emoji editor's shuffle button, replaces the draft with a new random suggestion.</comment>
   </data>
+  <data name="enabled_under_auto" xml:space="preserve">
+    <value>Aktiverade under Auto</value>
+    <comment>Section header of the per-transport enable toggles shown when the transport mode is Auto.</comment>
+  </data>
+  <data name="enabled_under_auto_footer" xml:space="preserve">
+    <value>I prioritetsordning: först H3 och H1, sedan whodis, sedan whodis pump. Ordningen är fast. Minst en transport förblir aktiverad.</value>
+    <comment>Footer of the Auto transports section explaining the fixed preference order.</comment>
+  </data>
   <data name="enjoying_urnetwork" xml:space="preserve">
     <value>Gillar du URnetwork?</value>
     <comment>Call to action</comment>
@@ -1443,6 +2359,10 @@ rätt sätt</value>
   <data name="enter_a_solana_usdc_wallet_address" xml:space="preserve">
     <value>Ange en Solana USDC-plånboksadress</value>
   </data>
+  <data name="enter_address_manually" xml:space="preserve">
+    <value>Ange adressen manuellt</value>
+    <comment>Fallback link to paste an ss58 address.</comment>
+  </data>
   <data name="enter_balance_code" xml:space="preserve">
     <value>Ange saldo-kod</value>
     <comment>Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.</comment>
@@ -1458,6 +2378,34 @@ rätt sätt</value>
   <data name="enter_urnetwork" xml:space="preserve">
     <value>Gå in i URnetwork</value>
     <comment>Used in Authenticate/LoginInitial/GuestModeSheet.swift.</comment>
+  </data>
+  <data name="epoch_column_epoch_linux" xml:space="preserve">
+    <value>Epok</value>
+    <comment>History table column: the epoch number.</comment>
+  </data>
+  <data name="epoch_column_points_linux" xml:space="preserve">
+    <value>Poäng</value>
+    <comment>History table column: points earned.</comment>
+  </data>
+  <data name="epoch_column_share_linux" xml:space="preserve">
+    <value>Andel av blocket</value>
+    <comment>History table column: the network's share of the block.</comment>
+  </data>
+  <data name="epoch_column_status_linux" xml:space="preserve">
+    <value>Status</value>
+    <comment>History table column: the claim status of the epoch's alpha.</comment>
+  </data>
+  <data name="epoch_history" xml:space="preserve">
+    <value>Historik</value>
+    <comment>Label of the per-epoch history list.</comment>
+  </data>
+  <data name="epoch_row_title" xml:space="preserve">
+    <value>Epok {}</value>
+    <comment>History row title.</comment>
+  </data>
+  <data name="epoch_share_of_block" xml:space="preserve">
+    <value>{} av blocket</value>
+    <comment>History row: the network's share of the block.</comment>
   </data>
   <data name="error_changing_network_name" xml:space="preserve">
     <value>Fel vid ändring av nätverksnamn</value>
@@ -1571,6 +2519,90 @@ rätt sätt</value>
     <value>Exportera loggar</value>
     <comment>Used in Shared/Views/ExportLogsButton/ExportLogsButton.swift.</comment>
   </data>
+  <data name="extender" xml:space="preserve">
+    <value>Extender</value>
+    <comment>Title of the Extender row under the provide mode row in settings, and of the read-only row where the provide mode row is repeated.</comment>
+  </data>
+  <data name="extender_activation_failed" xml:space="preserve">
+    <value>Aktiveringen misslyckades: {}</value>
+    <comment>Extender status when the last activation failed and no family is active. The argument is the error.</comment>
+  </data>
+  <data name="extender_activation_refused" xml:space="preserve">
+    <value>Aktiveringen nekades: {}</value>
+    <comment>Extender status when the operator refused the activation and no family is active. The argument is the operator's reason.</comment>
+  </data>
+  <data name="extender_active" xml:space="preserve">
+    <value>Aktiv · {}</value>
+    <comment>Extender status when at least one address family is activated. The argument is the family or families, from the IPv4, IPv6 and IPv4 and IPv6 labels.</comment>
+  </data>
+  <data name="extender_default_value" xml:space="preserve">
+    <value>Standard: {}</value>
+    <comment>Placeholder shown in an empty extender settings field, naming the default value that applies.</comment>
+  </data>
+  <data name="extender_dns_name" xml:space="preserve">
+    <value>Extenderns DNS-namn</value>
+    <comment>Label of the extender DNS name field. Empty means the network space default.</comment>
+  </data>
+  <data name="extender_hosts" xml:space="preserve">
+    <value>Extendervärdar</value>
+    <comment>Label of the manual extender list field: hostnames or IP addresses, one per line.</comment>
+  </data>
+  <data name="extender_hosts_hint" xml:space="preserve">
+    <value>Ett värdnamn eller en IP-adress per rad. De läggs till de upptäckta extendrarna.</value>
+    <comment>Help text under the manual extender list field.</comment>
+  </data>
+  <data name="extender_listen_failed" xml:space="preserve">
+    <value>Kunde inte lyssna: {}</value>
+    <comment>Extender status when no carrier could bind. The argument is the carrier errors.</comment>
+  </data>
+  <data name="extender_not_providing" xml:space="preserve">
+    <value>Tillhandahåller inte</value>
+    <comment>Extender status when the setting is on but this device is not providing. Apple is not listed because its catalog is keyed by the English text, which widget_not_providing already carries.</comment>
+  </data>
+  <data name="extender_revoked" xml:space="preserve">
+    <value>Återkallad av operatören</value>
+    <comment>Extender status when the operator revoked this device's extender key.</comment>
+  </data>
+  <data name="extender_setting_description" xml:space="preserve">
+    <value>Medan du tillhandahåller vidarebefordrar den här enheten också åt personer vars åtkomst till nätverket är blockerad, på TCP och UDP 443 och UDP 4053.</value>
+    <comment>Secondary text under the Extender setting: what turning it on does, and the ports the extender listens on.</comment>
+  </data>
+  <data name="extender_setting_up" xml:space="preserve">
+    <value>Konfigurerar</value>
+    <comment>Extender status while the role is starting and there is no outcome yet: the carriers are binding, or the first activation is in flight.</comment>
+  </data>
+  <data name="extender_settings" xml:space="preserve">
+    <value>Extenderinställningar</value>
+    <comment>Title of the extender settings form under account &gt; Extenders.</comment>
+  </data>
+  <data name="extender_settings_next_connect" xml:space="preserve">
+    <value>Tunneln använder de nya extenderinställningarna nästa gång den ansluter.</value>
+    <comment>Note on iOS after saving extender settings: the packet tunnel extension reads them at its next start.</comment>
+  </data>
+  <data name="extender_settings_saved" xml:space="preserve">
+    <value>Extenderinställningarna har sparats</value>
+    <comment>Confirmation after the extender settings are saved.</comment>
+  </data>
+  <data name="extender_start_failed" xml:space="preserve">
+    <value>Kunde inte starta: {}</value>
+    <comment>Extender status when the setting is on and the device is providing, but the role could not start in this network space: no extender directory or no identity. The argument is the reason.</comment>
+  </data>
+  <data name="extender_statistics" xml:space="preserve">
+    <value>Extenderstatistik</value>
+    <comment>Title of the section that shows statistics about the extender, directly above the provider statistics section.</comment>
+  </data>
+  <data name="extenders" xml:space="preserve">
+    <value>Extendrar</value>
+    <comment>Title of the extenders panel in the connect drawer and of the Extenders section under account.</comment>
+  </data>
+  <data name="extenders_active_of_reserve" xml:space="preserve">
+    <value>{0} av {1}</value>
+    <comment>The extender panel count: extenders carrying a live connection now, of every usable extender the app knows.</comment>
+  </data>
+  <data name="extenders_no_session" xml:space="preserve">
+    <value>Logga in och anslut för att hantera extendrar.</value>
+    <comment>Shown in the account Extenders section when there is no signed-in device to manage extenders with.</comment>
+  </data>
   <data name="failed_to_connect" xml:space="preserve">
     <value>Kunde inte ansluta</value>
     <comment>Used in Shared/Intents/ConnectIntent.swift.</comment>
@@ -1615,6 +2647,10 @@ rätt sätt</value>
     <value>Berätta hur du verkligen känner</value>
     <comment>Feedback Screen</comment>
   </data>
+  <data name="feedback_send_failed" xml:space="preserve">
+    <value>Din feedback skickades inte. Kontrollera din anslutning och försök igen.</value>
+    <comment>Feedback screen: the feedback could not be sent. The text stays in the field so the user can send it again.</comment>
+  </data>
   <data name="feedback_sending" xml:space="preserve">
     <value>Skickar…</value>
     <comment>Feedback screen: label of the Send button while the feedback is being sent.</comment>
@@ -1642,6 +2678,10 @@ rätt sätt</value>
   <data name="friends_save_too" xml:space="preserve">
     <value>Dina vänner sparar också – alla vinner.</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="gas_key" xml:space="preserve">
+    <value>Gasnyckel</value>
+    <comment>Label of the gas key row.</comment>
   </data>
   <data name="general" xml:space="preserve">
     <value>Allmänt</value>
@@ -1676,6 +2716,10 @@ rätt sätt</value>
     <value>Gå tillbaka</value>
     <comment>Confirmation button that leaves the seedphrase screen after the warning.</comment>
   </data>
+  <data name="google" xml:space="preserve">
+    <value>Google</value>
+    <comment>A label for Google sign-in.</comment>
+  </data>
   <data name="google_auth_btn_text" xml:space="preserve">
     <value>Logga in med Google</value>
     <comment>Login initial</comment>
@@ -1684,6 +2728,26 @@ rätt sätt</value>
     <value>Google-inloggningsmetod tillagd</value>
     <comment>Snackbar message displayed when a Google sign-in method is successfully added.</comment>
   </data>
+  <data name="gossip_connecting" xml:space="preserve">
+    <value>Ansluter</value>
+    <comment>Gossip network status: a dial or reconnect is in progress (yellow).</comment>
+  </data>
+  <data name="gossip_events_per_minute.one" xml:space="preserve">
+    <value>{} händelse/min</value>
+    <comment>The count of extender records and revocations applied from the gossip network or the feed in the last minute.</comment>
+  </data>
+  <data name="gossip_events_per_minute.other" xml:space="preserve">
+    <value>{} händelser/min</value>
+    <comment>The count of extender records and revocations applied from the gossip network or the feed in the last minute.</comment>
+  </data>
+  <data name="gossip_network" xml:space="preserve">
+    <value>Gossip-nätverk</value>
+    <comment>Label of the gossip network status dot in the extender panel.</comment>
+  </data>
+  <data name="gossip_url" xml:space="preserve">
+    <value>Gossip-URL</value>
+    <comment>Label of the gossip URL field. Empty means the network space default.</comment>
+  </data>
   <data name="got_it" xml:space="preserve">
     <value>Uppfattat</value>
     <comment>Used in Shared/Views/UpgradeSubscriptionSheet.swift.</comment>
@@ -1691,6 +2755,16 @@ rätt sätt</value>
   <data name="guest" xml:space="preserve">
     <value>Gäst</value>
     <comment>Account Screen</comment>
+  </data>
+  <data name="guest_convert_explanation" xml:space="preserve">
+    <value>Lägg till en e-postadress och ett lösenord för att logga in på det här nätverket. Dess abonnemang och saldo följer med det.</value>
+    <comment>Desktop: the first step of "Create an account" on a legacy guest network. The user adds an email and a password to the network they are on now, so they can sign in to it again; its plan and balance stay with it (nothing moves to a new account).</comment>
+  </data>
+  <data name="hash_count" xml:space="preserve">
+    <value>#{}</value>
+  </data>
+  <data name="hash_value" xml:space="preserve">
+    <value>#{}</value>
   </data>
   <data name="hide_provider_list" xml:space="preserve">
     <value>Dölj leverantörslista</value>
@@ -1732,9 +2806,33 @@ rätt sätt</value>
     <value>Ignorera batterioptimeringar</value>
     <comment>Call to action</comment>
   </data>
+  <data name="import_extenders" xml:space="preserve">
+    <value>Importera extendrar</value>
+    <comment>Button and screen title: import extenders from a QR code, a photo, or pasted text.</comment>
+  </data>
+  <data name="import_extenders_confirm_settings" xml:space="preserve">
+    <value>Vill du använda extenderinställningarna från den här koden? Extendrar söks då upp via {}.</value>
+    <comment>Confirmation before applying the extender settings from a share code. The argument is the operator host the settings point at.</comment>
+  </data>
   <data name="import_extenders_control_doh_urls" xml:space="preserve">
     <value>Den här koden anger även bootstrap-servrar för DNS-over-HTTPS. De ser URnetworks serveruppslagningar: {}</value>
     <comment>Extender import: shown before the user takes the settings of a share code that also sets bootstrap DNS-over-HTTPS servers. The argument is the list of server URLs, comma separated.</comment>
+  </data>
+  <data name="import_extenders_foreign_host" xml:space="preserve">
+    <value>Den här koden är för {}, inte för det här nätverket. Använd extenderinställningarna för att byta nätverk.</value>
+    <comment>Error when a share code belongs to another network. The argument is that network's host.</comment>
+  </data>
+  <data name="import_extenders_imported.one" xml:space="preserve">
+    <value>Importerade {} extender</value>
+    <comment>Confirmation after an import, with the number of extenders added.</comment>
+  </data>
+  <data name="import_extenders_imported.other" xml:space="preserve">
+    <value>Importerade {} extendrar</value>
+    <comment>Confirmation after an import, with the number of extenders added.</comment>
+  </data>
+  <data name="import_extenders_invalid" xml:space="preserve">
+    <value>Den här koden är ingen delningskod för extendrar.</value>
+    <comment>Error when the scanned or pasted text is not an extender share code.</comment>
   </data>
   <data name="in_guest_mode" xml:space="preserve">
     <value>Du är i gästläge</value>
@@ -1748,6 +2846,10 @@ rätt sätt</value>
     <value>Endast inkluderade appar använder tunneln.</value>
     <comment>transfer stats and split rules</comment>
   </data>
+  <data name="include_extender_settings" xml:space="preserve">
+    <value>Inkludera extenderinställningar</value>
+    <comment>Toggle on the share screen: also include the extender DNS name, gossip URL and root keys in the code.</comment>
+  </data>
   <data name="include_in_vpn" xml:space="preserve">
     <value>Inkludera i VPN</value>
     <comment>App split rules: rule choice routing the app through the VPN.</comment>
@@ -1755,6 +2857,10 @@ rätt sätt</value>
   <data name="included" xml:space="preserve">
     <value>Inkluderad</value>
     <comment>transfer stats and split rules</comment>
+  </data>
+  <data name="includes_free_trial_days" xml:space="preserve">
+    <value>Inkluderar {} dagars gratis provperiod</value>
+    <comment>Line under the annual plan card. The number of days is the free trial length.</comment>
   </data>
   <data name="instant_account_explainer" xml:space="preserve">
     <value>Ingen e-post, telefon eller lösenord behövs. Ditt konto skyddas av en seedfras.</value>
@@ -1808,6 +2914,54 @@ rätt sätt</value>
     <value>Otillräckliga medel</value>
     <comment>Circle Wallet Transfer Screen</comment>
   </data>
+  <data name="intro_control_manual_ios" xml:space="preserve">
+    <value>Öppna Kontrollcenter, tryck på +, sedan Lägg till en kontroll, och välj URnetwork.</value>
+    <comment>How to add the quick connect control on iOS (no add-control API).</comment>
+  </data>
+  <data name="intro_control_manual_macos" xml:space="preserve">
+    <value>Öppna Kontrollcenter, välj Redigera kontroller och lägg till URnetwork.</value>
+    <comment>How to add the quick connect control on macOS.</comment>
+  </data>
+  <data name="intro_quick_connect_details" xml:space="preserve">
+    <value>Slå på och av URnetwork från snabbinställningarna och håll koll på det från hemskärmen.</value>
+    <comment>Detail line of the last onboarding page.</comment>
+  </data>
+  <data name="intro_quick_connect_details_apple" xml:space="preserve">
+    <value>Slå på och av URnetwork från Kontrollcenter och håll koll på det från hemskärmen.</value>
+    <comment>Detail line of the last onboarding page on iOS/macOS (Control Center instead of Quick Settings).</comment>
+  </data>
+  <data name="intro_quick_connect_title" xml:space="preserve">
+    <value>Anslut med ett tryck</value>
+    <comment>Title of the last onboarding page: the quick connect tile and the home screen widgets.</comment>
+  </data>
+  <data name="intro_quick_tile_added" xml:space="preserve">
+    <value>Har lagts till i snabbinställningarna</value>
+    <comment>Label shown on the last onboarding page once the quick connect tile is in Quick Settings.</comment>
+  </data>
+  <data name="intro_quick_tile_manual" xml:space="preserve">
+    <value>Öppna snabbinställningarna, tryck på pennan och dra URnetwork på plats.</value>
+    <comment>Manual steps for adding the quick connect tile on Android versions without the system add-tile request (before Android 13).</comment>
+  </data>
+  <data name="intro_verifiable_encryption" xml:space="preserve">
+    <value>Kryptering för vardagen.</value>
+    <comment>Tagline under 'Welcome to URnetwork' on the first onboarding page. Replaces 'URnetwork is the most local and most private network on the planet.'</comment>
+  </data>
+  <data name="intro_widgets_manual" xml:space="preserve">
+    <value>Tryck länge på hemskärmen, välj Widgetar och välj URnetwork.</value>
+    <comment>Manual steps for adding widgets on launchers without the pin dialog.</comment>
+  </data>
+  <data name="intro_widgets_manual_ios" xml:space="preserve">
+    <value>Tryck länge på hemskärmen, tryck på +, sök efter URnetwork och lägg till en widget.</value>
+    <comment>How to add a Home Screen widget on iOS (no pin-widget API).</comment>
+  </data>
+  <data name="intro_widgets_manual_macos" xml:space="preserve">
+    <value>Öppna widgetgalleriet från Notiscenter, sök efter URnetwork och dra en widget till skrivbordet.</value>
+    <comment>How to add a desktop widget on macOS.</comment>
+  </data>
+  <data name="intro_widgets_tap_to_add" xml:space="preserve">
+    <value>Tryck på en widget för att lägga till den på hemskärmen.</value>
+    <comment>Hint under the widget previews on the last onboarding page: tapping a preview asks the launcher to add that widget.</comment>
+  </data>
   <data name="invalid_balance_code" xml:space="preserve">
     <value>Ogiltig saldo-kod</value>
     <comment>Used in Shared/Views/RedeemBalanceCodeSheet/RedeemBalanceCodeSheet.swift.</comment>
@@ -1819,6 +2973,14 @@ rätt sätt</value>
   <data name="invalid_referral_code_please_try_again" xml:space="preserve">
     <value>Ogiltig referenskod. Försök igen.</value>
     <comment>Used in Main/Account/Settings/UpdateReferralNetworkSheet/UpdateReferralNetworkSheetViewModel.swift.</comment>
+  </data>
+  <data name="invalid_solana_address" xml:space="preserve">
+    <value>Det är ingen giltig Solana-adress.</value>
+    <comment>Validation error under the manual address field when the address is not a valid Solana address (parallel to invalid_ss58_address).</comment>
+  </data>
+  <data name="invalid_ss58_address" xml:space="preserve">
+    <value>Det är ingen giltig Bittensor-adress.</value>
+    <comment>Validation error for a coldkey address.</comment>
   </data>
   <data name="ip_address" xml:space="preserve">
     <value>IP-adress</value>
@@ -1832,9 +2994,53 @@ rätt sätt</value>
     <value>{} IP:er</value>
     <comment>A label showing the number of IP addresses in a block action cluster, rendered as a single pill. The argument is the number of IPs.</comment>
   </data>
+  <data name="ip_families" xml:space="preserve">
+    <value>IP-versioner</value>
+    <comment>IP versions: the tooltip of the address-family tag column in the provider locations sheet (windows, linux). It also titled the connect drawer's IP version histogram before that became the Dualstack / IPv4 / IPv6 status row.</comment>
+  </data>
+  <data name="ip_family_both" xml:space="preserve">
+    <value>Båda</value>
+    <comment>Row label of the IP version histogram, and the provider row tag, for a provider that carries both IPv4 and IPv6.</comment>
+  </data>
+  <data name="ip_family_connected_count.one" xml:space="preserve">
+    <value>{} ansluten</value>
+    <comment>Status line of one column of the IP version status row in the connect drawer: how many providers of that family (dualstack, IPv4 or IPv6) are connected. Shown under the family label only when the count is not zero. Lowercase.</comment>
+  </data>
+  <data name="ip_family_connected_count.other" xml:space="preserve">
+    <value>{} anslutna</value>
+    <comment>Status line of one column of the IP version status row in the connect drawer: how many providers of that family (dualstack, IPv4 or IPv6) are connected. Shown under the family label only when the count is not zero. Lowercase.</comment>
+  </data>
+  <data name="ip_family_connecting_count.one" xml:space="preserve">
+    <value>{} ansluter</value>
+    <comment>Status line of one column of the IP version status row in the connect drawer: how many providers of that family (dualstack, IPv4 or IPv6) are still connecting. Shown under the connected line only when the count is not zero. Lowercase.</comment>
+  </data>
+  <data name="ip_family_connecting_count.other" xml:space="preserve">
+    <value>{} ansluter</value>
+    <comment>Status line of one column of the IP version status row in the connect drawer: how many providers of that family (dualstack, IPv4 or IPv6) are still connecting. Shown under the connected line only when the count is not zero. Lowercase.</comment>
+  </data>
+  <data name="ip_family_disconnected" xml:space="preserve">
+    <value>frånkopplad</value>
+    <comment>Status line of one column of the IP version status row in the connect drawer, when no provider of that family (dualstack, IPv4 or IPv6) is connected or connecting. Lowercase, under the family label.</comment>
+  </data>
+  <data name="ip_family_dualstack" xml:space="preserve">
+    <value>Dual stack</value>
+    <comment>Column label of the IP version status row in the connect drawer, for providers that carry both IPv4 and IPv6. Set in the pixel display face beside the IPv4 and IPv6 labels, so keep it short.</comment>
+  </data>
+  <data name="ip_family_v4" xml:space="preserve">
+    <value>v4</value>
+    <comment>Row label of the IP version histogram, and the provider row tag, for a provider that carries only IPv4.</comment>
+  </data>
+  <data name="ip_family_v6" xml:space="preserve">
+    <value>v6</value>
+    <comment>Row label of the IP version histogram, and the provider row tag, for a provider that carries only IPv6.</comment>
+  </data>
   <data name="ipv4" xml:space="preserve">
     <value>IPv4</value>
     <comment>Label for a list of IPv4 addresses.</comment>
+  </data>
+  <data name="ipv4_and_ipv6" xml:space="preserve">
+    <value>IPv4 och IPv6</value>
+    <comment>Accessibility label for a provider that carries both IPv4 and IPv6 traffic.</comment>
   </data>
   <data name="ipv6" xml:space="preserve">
     <value>IPv6</value>
@@ -1875,6 +3081,18 @@ rätt sätt</value>
   <data name="kill_switch" xml:space="preserve">
     <value>Kill switch</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="kill_switch_exception" xml:space="preserve">
+    <value>Undantag från Kill switch</value>
+    <comment>Title for the disclosure explaining traffic that intentionally bypasses the VPN kill switch.</comment>
+  </data>
+  <data name="kill_switch_exception_smtp_detail" xml:space="preserve">
+    <value>När VPN:en är ansluten dirigeras IPv6 genom URnetwork precis som IPv4. Utgående SMTP på TCP-port 25 går förbi VPN:en, även när Kill switch är på, vilket kan avslöja din lokala offentliga IP för de e-postservrarna. SMTP på portarna 465 och 587 stannar i VPN:en och måste upprätta TLS.</value>
+    <comment>Explains the deliberate SMTP port 25 exception to the VPN kill switch, that IPv6 is routed through the tunnel, and the encrypted SMTP behavior.</comment>
+  </data>
+  <data name="kill_switch_exception_unrecognized_encrypted" xml:space="preserve">
+    <value>När Kill switch är av går trafik som URnetworks säkerhetsregler håller borta från nätverket, som okända krypterade protokoll, förbi VPN:en och använder din lokala offentliga IP. Med Kill switch på blockeras den trafiken.</value>
+    <comment>Explains that, with the kill switch off, traffic URnetwork safety rules keep off the network (such as unrecognized encrypted protocols) bypasses the VPN.</comment>
   </data>
   <data name="launch" xml:space="preserve">
     <value>Starta</value>
@@ -1939,6 +3157,10 @@ rätt sätt</value>
   <data name="link_another_way_to_sign_in_to" xml:space="preserve">
     <value>Koppla ett annat sätt att logga in på ditt konto.</value>
     <comment>A description of the add auth sheet.</comment>
+  </data>
+  <data name="load_failed" xml:space="preserve">
+    <value>Det gick inte att läsa in. Kontrollera din anslutning och försök igen.</value>
+    <comment>A section (points, wallet, referral code, epoch history, payout wallet) could not be loaded. Shown in place of the loading spinner or the section's data, next to a Try again (Retry on apple) button.</comment>
   </data>
   <data name="loading" xml:space="preserve">
     <value>Laddar...</value>
@@ -2189,6 +3411,10 @@ skickade till dig för att verifiera din identitet.</value>
     <value>Multiplikator</value>
     <comment>Call to action</comment>
   </data>
+  <data name="n_20" xml:space="preserve">
+    <value>{}/20</value>
+    <comment>A progress bar that shows how many friends you've invited. The first argument is the number of friends you've invited. The second argument is the maximum number of friends you can invite.</comment>
+  </data>
   <data name="n_gib_day" xml:space="preserve">
     <value>+{} GiB/dag</value>
     <comment>A label that shows the daily data usage from referrals. The argument is the number of referrals.</comment>
@@ -2382,6 +3608,10 @@ Hämta din bonus genom att skapa ett nätverk!</value>
     <value>Inga blockerade platser</value>
     <comment>Call to action</comment>
   </data>
+  <data name="no_claims_yet_linux" xml:space="preserve">
+    <value>Inget att hämta ut än. Alpha samlas från nästa slutförda epok.</value>
+    <comment>Empty state of the unclaimed tile once a wallet is connected.</comment>
+  </data>
   <data name="no_compatible_wallet_app_found" xml:space="preserve">
     <value>Ingen kompatibel plånboksapp hittades på den här enheten.</value>
     <comment>Add sign-in method sheet (android): no installed wallet app can sign the challenge.</comment>
@@ -2413,6 +3643,14 @@ Hämta din bonus genom att skapa ett nätverk!</value>
   <data name="no_open_contracts" xml:space="preserve">
     <value>Inga öppna kontrakt</value>
     <comment>A label displayed when there are no open contracts.</comment>
+  </data>
+  <data name="no_points_yet" xml:space="preserve">
+    <value>Inga epoker än. Poäng visas efter din första slutförda epok.</value>
+    <comment>Empty state of the points history.</comment>
+  </data>
+  <data name="no_previous_purchases_were_found" xml:space="preserve">
+    <value>Inga tidigare köp hittades.</value>
+    <comment>Restore-purchases outcome: the sync succeeded and there is genuinely nothing to restore (Shared/ViewModels/AppStoreSubscriptionManager.swift).</comment>
   </data>
   <data name="no_providers_found" xml:space="preserve">
     <value>Vi kunde inte hitta några leverantörer.</value>
@@ -2518,6 +3756,10 @@ Hämta din bonus genom att skapa ett nätverk!</value>
     <value>På</value>
     <comment>A label for a DNS setting that is enabled.</comment>
   </data>
+  <data name="onboarding_step_of" xml:space="preserve">
+    <value>Steg {0} av {1}</value>
+    <comment>Accessibility description of the onboarding step bubbles: the current step and the total.</comment>
+  </data>
   <data name="one_gib_per_day" xml:space="preserve">
     <value>1 GiB/dag</value>
     <comment>Call to action</comment>
@@ -2550,6 +3792,10 @@ Hämta din bonus genom att skapa ett nätverk!</value>
     <value>Annat</value>
     <comment>Used in Main/Account/Wallets/ConnectWalletSheet/ConnectWalletSheetView.swift.</comment>
   </data>
+  <data name="paid_in_usdc_on_solana" xml:space="preserve">
+    <value>Betalas i USDC på Solana.</value>
+    <comment>The one USDC mention: the Solana subscription payment note.</comment>
+  </data>
   <data name="participate" xml:space="preserve">
     <value>Delta</value>
     <comment>Call to action</comment>
@@ -2579,6 +3825,10 @@ och mest decentraliserade in- och utgångsprotokoll.</value>
     <value>Lösenordet måste vara minst 12 tecken</value>
     <comment>Hint for password input length requirements.</comment>
   </data>
+  <data name="paste_share_text" xml:space="preserve">
+    <value>Klistra in delningstext</value>
+    <comment>Button and field label: paste the text form of a share code.</comment>
+  </data>
   <data name="paste_your_24_word_seedphrase_here" xml:space="preserve">
     <value>Klistra in din seedfras på 24 ord här</value>
     <comment>A placeholder text for the seedphrase field.</comment>
@@ -2591,9 +3841,29 @@ och mest decentraliserade in- och utgångsprotokoll.</value>
     <value>Gå med via Stripe</value>
     <comment>Call to action</comment>
   </data>
+  <data name="payment_confirmation_delayed" xml:space="preserve">
+    <value>Bekräftelsen tar längre tid än väntat. Ditt abonnemang uppdateras automatiskt när den är klar — du behöver inte köpa igen.</value>
+    <comment>Shown when the post-payment confirmation poll exhausts its budget (2 minutes) without the server confirming the subscription. The payment evidence is real (store or payment sheet reported success), so say that plainly, and head off a second purchase. Android also shows it, without the "Payment received" title, when the 2-minute Solana Pay return-path check ends without the payment landing.</comment>
+  </data>
+  <data name="payment_confirmation_processing" xml:space="preserve">
+    <value>Vi bekräftar din betalning nu. Ditt abonnemang uppdateras automatiskt — du behöver inte göra något.</value>
+    <comment>Body of the post-purchase overlay while the server has not yet confirmed the subscription. Replaces the optimistic 'You're premium.' claim until currentSubscription actually confirms.</comment>
+  </data>
+  <data name="payment_not_completed" xml:space="preserve">
+    <value>Din betalning kunde inte slutföras.</value>
+    <comment>Shown in the payment-problem dialog when the Stripe payment sheet reports a failure. The sheet's own error detail is appended by the caller.</comment>
+  </data>
   <data name="payment_problem" xml:space="preserve">
     <value>Betalningsproblem</value>
     <comment>Billing errors. Every one is shown to the user WITH a remedy: a payment error they cannot see is a payment error they will hit again.</comment>
+  </data>
+  <data name="payment_received" xml:space="preserve">
+    <value>Betalningen har tagits emot.</value>
+    <comment>Title of the post-purchase screen while the server has not yet confirmed the entitlement (Shared/Views/PurchaseSuccessView.swift). StoreKit took the payment; the confirmation poll is still running — the copy must not claim premium yet.</comment>
+  </data>
+  <data name="payment_received_title" xml:space="preserve">
+    <value>Betalning mottagen</value>
+    <comment>Title for the post-purchase overlay and the confirmation-timeout dialog. Deliberately claims only what is known -- the payment was received -- not that the plan is active yet.</comment>
   </data>
   <data name="payout_wallet_updated" xml:space="preserve">
     <value>Utbetalningsplånbok uppdaterad</value>
@@ -2659,6 +3929,14 @@ och mest decentraliserade in- och utgångsprotokoll.</value>
     <value>≈ {}/månad · debiteras en gång per år</value>
     <comment>Plan picker: the subordinate line under the yearly price with the per-month equivalent (ceiling-rounded).</comment>
   </data>
+  <data name="plan_price_per_month" xml:space="preserve">
+    <value>{}/månad</value>
+    <comment>Monthly plan card label: the store-formatted price per month.</comment>
+  </data>
+  <data name="plan_price_per_year" xml:space="preserve">
+    <value>{}/år</value>
+    <comment>Yearly plan card label: the store-formatted price per year.</comment>
+  </data>
   <data name="plan_save_percent" xml:space="preserve">
     <value>Spara {} %</value>
     <comment>Plan picker: the saving badge on the yearly card; the number is the whole percent saved against twelve monthly payments.</comment>
@@ -2703,6 +3981,10 @@ och mest decentraliserade in- och utgångsprotokoll.</value>
     <value>Poäng</value>
     <comment>Points leaderboard: tab label, stat tile label and sort chip.</comment>
   </data>
+  <data name="points_earned" xml:space="preserve">
+    <value>Intjänade poäng</value>
+    <comment>Headline label of the earnings screen.</comment>
+  </data>
   <data name="points_leaderboard_description" xml:space="preserve">
     <value>Poäng genom tiderna. Ett block är en slutförd epok; sviten räknar på varandra följande block med poäng fram till det senaste.</value>
     <comment>Points leaderboard: the explanation under the list header.</comment>
@@ -2714,6 +3996,10 @@ och mest decentraliserade in- och utgångsprotokoll.</value>
   <data name="points_leaderboard_private_hint" xml:space="preserve">
     <value>Ditt nätverk visas som Anonym tills du slår på detta.</value>
     <comment>Points leaderboard: shown under the own-stats card while the name switch is off. The network is listed either way, as Anonymous until the switch is on.</comment>
+  </data>
+  <data name="points_short" xml:space="preserve">
+    <value>{} p</value>
+    <comment>Points count with unit for history rows.</comment>
   </data>
   <data name="post_quantum_encryption" xml:space="preserve">
     <value>Postkvantkryptering</value>
@@ -2738,6 +4024,22 @@ och mest decentraliserade in- och utgångsprotokoll.</value>
   <data name="private_dns_strict_notice" xml:space="preserve">
     <value>Privat DNS är inställt på {}. Android skickar uppslagningar direkt dit i stället för via URnetwork. Om webbplatser slutar laddas, ställ in Privat DNS på Automatiskt.</value>
     <comment>Muted notice on the connect screen shown while connected when Android Private DNS is set to a strict hostname, which sends DoT lookups outside the tunnel. %1$s is the configured DNS provider host.</comment>
+  </data>
+  <data name="private_extender" xml:space="preserve">
+    <value>Privat extender</value>
+    <comment>Title of the advanced private extender fields: one extender with a secret that replaces discovery.</comment>
+  </data>
+  <data name="private_extender_hint" xml:space="preserve">
+    <value>En privat extender ersätter alla upptäckta extendrar. Lämna tomt för att använda upptäckt.</value>
+    <comment>Help text under the private extender fields.</comment>
+  </data>
+  <data name="private_extender_ip" xml:space="preserve">
+    <value>IP-adress</value>
+    <comment>Label of the private extender IP address field.</comment>
+  </data>
+  <data name="private_extender_secret" xml:space="preserve">
+    <value>Hemlighet</value>
+    <comment>Label of the private extender secret field.</comment>
   </data>
   <data name="private_network" xml:space="preserve">
     <value>Privat nätverk</value>
@@ -2771,9 +4073,33 @@ och mest decentraliserade in- och utgångsprotokoll.</value>
     <value>Tillhandahåll</value>
     <comment>Label of the switch that turns on providing bandwidth to the network.</comment>
   </data>
+  <data name="provide_intro_bullet_devices" xml:space="preserve">
+    <value>Låt dina enheter dela internet med varandra</value>
+    <comment>First bullet on the onboarding Contribute bandwidth page.</comment>
+  </data>
+  <data name="provide_intro_bullet_people" xml:space="preserve">
+    <value>Dela ditt internet med andra människor ❤️</value>
+    <comment>Second bullet on the onboarding Contribute bandwidth page, with a heart.</comment>
+  </data>
+  <data name="provide_intro_lead" xml:space="preserve">
+    <value>Ditt val, helt frivilligt:</value>
+    <comment>Lead line above the two bullets on the onboarding Contribute bandwidth page.</comment>
+  </data>
   <data name="provide_mode" xml:space="preserve">
     <value>Tillhandahållandeläge</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="provide_mode_always_description" xml:space="preserve">
+    <value>Tillhandahåller åt alla när appen är igång.</value>
+    <comment>One-line explanation of the Always provide mode in the onboarding Contribute bandwidth picker.</comment>
+  </data>
+  <data name="provide_mode_auto_description" xml:space="preserve">
+    <value>Tillhandahåller åt alla medan du är ansluten, annars bara åt dina egna enheter.</value>
+    <comment>One-line explanation of the Auto provide mode in the onboarding Contribute bandwidth picker: public providing only while connected, same-network peers otherwise.</comment>
+  </data>
+  <data name="provide_mode_network_description" xml:space="preserve">
+    <value>Tillhandahåller bara åt enheterna i ditt eget nätverk.</value>
+    <comment>One-line explanation of the Network provide mode in the onboarding Contribute bandwidth picker: the private provider for the network's own devices.</comment>
   </data>
   <data name="provide_power_mode" xml:space="preserve">
     <value>Vid batteridrift</value>
@@ -3063,6 +4389,10 @@ och mest decentraliserade in- och utgångsprotokoll.</value>
     <value>Varför?</value>
     <comment>Provider card: expandable section title that reveals the numbers the network ranks this device by, with explanations.</comment>
   </data>
+  <data name="provider_transports" xml:space="preserve">
+    <value>Leverantörstransporter</value>
+    <comment>Title of the transport settings editor for the provider transport policy.</comment>
+  </data>
   <data name="providing" xml:space="preserve">
     <value>Tillhandahåller</value>
     <comment>Used in Main/Account/Wallets/WalletsView.swift.</comment>
@@ -3087,6 +4417,18 @@ och mest decentraliserade in- och utgångsprotokoll.</value>
     <value>Vi kunde inte bekräfta ditt köp ännu. Om du slutförde betalningen uppdateras din plan automatiskt inom några minuter — du behöver inte köpa igen.</value>
     <comment>Shown when the post-checkout confirmation poll gives up (2 minutes) without the server confirming the subscription. The purchase is still likely to land later; the background poll and the next launch pick it up. On apple: the delayed phase of PurchaseSuccessView and the MainView snackbar.</comment>
   </data>
+  <data name="purchase_could_not_be_verified" xml:space="preserve">
+    <value>Det här köpet kunde inte verifieras med Google Play, så det kan inte tillämpas på ditt konto. Om du har debiterats och ditt abonnemang inte uppdateras, kontakta supporten.</value>
+    <comment>Error dialog body when the server's verify answer for a Play purchase is terminal `invalid` — the proof will never verify (unknown token, disallowed product, canceled before completing). The purchase is still acknowledged with Play so a real charge is not auto-refunded; this dialog is how the failure reaches the user instead of a silent nothing (android google/PlanViewModel.kt report path).</comment>
+  </data>
+  <data name="purchase_found_confirming_your_plan" xml:space="preserve">
+    <value>Köp hittat. Bekräftar ditt abonnemang — det uppdateras automatiskt.</value>
+    <comment>Restore-purchases outcome: an entitlement for the current network was found; the confirmation poll now bridges the gap until the server credits it (Shared/ViewModels/AppStoreSubscriptionManager.swift).</comment>
+  </data>
+  <data name="qr_code_not_found" xml:space="preserve">
+    <value>Ingen QR-kod hittades i bilden.</value>
+    <comment>Error when a chosen photo or image file holds no QR code.</comment>
+  </data>
   <data name="quit" xml:space="preserve">
     <value>Avsluta</value>
     <comment>Tray menu item that exits the app (tears the tunnel down).</comment>
@@ -3098,6 +4440,10 @@ och mest decentraliserade in- och utgångsprotokoll.</value>
   <data name="ranked_networks_count" xml:space="preserve">
     <value>{} rankade nätverk</value>
     <comment>Points leaderboard: how many networks hold a rank. {count} is preformatted with separators.</comment>
+  </data>
+  <data name="reads_per_second" xml:space="preserve">
+    <value>läsningar/s</value>
+    <comment>Unit the extender chart labels its rates with, where the provider chart says pkt/s. The compact count is prepended by the app, as it is for pkt/s.</comment>
   </data>
   <data name="ready_to_connect" xml:space="preserve">
     <value>Redo att ansluta</value>
@@ -3234,6 +4580,18 @@ och mest decentraliserade in- och utgångsprotokoll.</value>
   <data name="referral_network_updated" xml:space="preserve">
     <value>Referensnätverk uppdaterat</value>
     <comment>Snackbar on the Referrals screen after the referral network was changed.</comment>
+  </data>
+  <data name="referral_panel_detail" xml:space="preserve">
+    <value>Varje verifierad värvning ger er båda {} GiB/dag gratis, för alltid.</value>
+    <comment>Detail line of the gold referral panel. The amount is the daily GiB each side earns per verified referral (pro.yml referral).</comment>
+  </data>
+  <data name="referral_panel_heading" xml:space="preserve">
+    <value>Tipsa en vän så får ni båda gratis data</value>
+    <comment>Heading of the gold referral panel (the ur.io referral panel) before the network has a referral.</comment>
+  </data>
+  <data name="referral_panel_none" xml:space="preserve">
+    <value>Inga vänner än. Dela din kod och se kronan dyka upp. 👑</value>
+    <comment>Status line of the gold referral panel while the network has no referral yet.</comment>
   </data>
   <data name="referral_points" xml:space="preserve">
     <value>Hänvisningspoäng</value>
@@ -3381,9 +4739,17 @@ och mest decentraliserade in- och utgångsprotokoll.</value>
     <value>Resolvrar</value>
     <comment>A section header for the DNS resolvers.</comment>
   </data>
+  <data name="restore_default_transports" xml:space="preserve">
+    <value>Återställ standardtransporter</value>
+    <comment>Button that resets the transport settings draft to the SDK default policy.</comment>
+  </data>
   <data name="restore_most_secure_settings" xml:space="preserve">
     <value>Återställ till säkraste inställningarna</value>
     <comment>dns settings</comment>
+  </data>
+  <data name="restore_purchases" xml:space="preserve">
+    <value>Återställ köp</value>
+    <comment>Action label that resyncs App Store purchases (AppStore.sync + entitlement scan). Shown in Settings and in the upgrade flow's failure states (Main/Account/Settings/SettingsForm-iOS.swift, SettingsForm-macOS.swift, Shared/Views/UpgradeSubscriptionSheet.swift, Shared/Views/PurchaseSuccessView.swift, Shared/Views/Introduction/IntroductionView.swift).</comment>
   </data>
   <data name="retry" xml:space="preserve">
     <value>Försök igen</value>
@@ -3397,17 +4763,37 @@ och mest decentraliserade in- och utgångsprotokoll.</value>
     <value>Recensera URnetwork</value>
     <comment>Used in Main/Account/AccountRootView.swift.</comment>
   </data>
+  <data name="route_internet" xml:space="preserve">
+    <value>Internet</value>
+    <comment>Right stop label of the onboarding route line the anonymized member travels along.</comment>
+  </data>
   <data name="route_local" xml:space="preserve">
     <value>Tillåt lokal trafik vid frånkoppling</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="route_you" xml:space="preserve">
+    <value>Du</value>
+    <comment>Left stop label of the onboarding route line the anonymized member travels along (you -&gt; URnetwork -&gt; internet).</comment>
   </data>
   <data name="rules" xml:space="preserve">
     <value>Regler</value>
     <comment>A heading for the pinned split rules.</comment>
   </data>
+  <data name="safety_rule" xml:space="preserve">
+    <value>Säkerhetsregel</value>
+    <comment>A short label on a blocked or locally routed split-rule activity row whose traffic URnetwork safety rules kept off the network.</comment>
+  </data>
+  <data name="safety_rule_detail" xml:space="preserve">
+    <value>URnetworks säkerhetsregler håller den här trafiken borta från nätverket, till exempel ett krypterat protokoll som de inte känner igen. En lokal delningsregel skickar den utanför VPN:en från din egen IP.</value>
+    <comment>Explains a split-rule activity row that URnetwork safety rules kept off the network, and how a local split rule can use it outside the VPN.</comment>
+  </data>
   <data name="save" xml:space="preserve">
     <value>Spara</value>
     <comment>Profile</comment>
+  </data>
+  <data name="save_33_percent" xml:space="preserve">
+    <value>Spara 33 %</value>
+    <comment>Line under the yearly plan's price: the saving against paying monthly.</comment>
   </data>
   <data name="save_logs" xml:space="preserve">
     <value>Spara loggar</value>
@@ -3420,6 +4806,10 @@ och mest decentraliserade in- och utgångsprotokoll.</value>
   <data name="saved_as" xml:space="preserve">
     <value>Sparad som {}</value>
     <comment>Split rules: note under the host input when the entry will be stored in a normalised form. {value} is that form, for example 10.0.0.0/8 for a typed 10.0.0.5/8.</comment>
+  </data>
+  <data name="scan_qr_code" xml:space="preserve">
+    <value>Skanna QR-kod</value>
+    <comment>Button: open the camera to scan a QR code.</comment>
   </data>
   <data name="search_apps_placeholder" xml:space="preserve">
     <value>Sök appar</value>
@@ -3538,6 +4928,10 @@ innehåll i världen</value>
     <value>Skicka</value>
     <comment>Call to action</comment>
   </data>
+  <data name="send_feedback_contact" xml:space="preserve">
+    <value>Skicka din feedback direkt till oss, mejla oss på {0} eller gå med i vår {1} för direkt support.</value>
+    <comment>Feedback screen: support contacts. The first argument is the support email address, the second is the name of the community chat (Discord); both are links.</comment>
+  </data>
   <data name="send_product_updates" xml:space="preserve">
     <value>Skicka produktuppdateringar</value>
     <comment>Settings</comment>
@@ -3549,6 +4943,10 @@ innehåll i världen</value>
   <data name="send_reset_link_2" xml:space="preserve">
     <value>Skicka återställningslänk</value>
     <comment>Used in Authenticate/ResetPassword/ResetPasswordView.swift.</comment>
+  </data>
+  <data name="send_tao_to_mirror" xml:space="preserve">
+    <value>Skicka ungefär {0} TAO till {1} för att täcka gasen.</value>
+    <comment>Instruction to fund the gas key.</comment>
   </data>
   <data name="send_us_your_feedback_directly_or_join_our" xml:space="preserve">
     <value>Skicka din feedback direkt till oss eller [gå med i vår Discord](https://discord.com/invite/RUNZXMwPRK) för direkt support.</value>
@@ -3574,9 +4972,45 @@ innehåll i världen</value>
     <value>Inställningar</value>
     <comment>Account Screen</comment>
   </data>
+  <data name="settings_add_quick_tile" xml:space="preserve">
+    <value>Lägg till snabbanslutningsruta</value>
+    <comment>Settings row that asks the system to add the Quick Settings tile (Android 13+).</comment>
+  </data>
+  <data name="settings_add_quick_tile_description" xml:space="preserve">
+    <value>Anslut och koppla från via snabbinställningspanelen och låsskärmen.</value>
+    <comment>Description under the add-tile settings row.</comment>
+  </data>
+  <data name="settings_add_widgets" xml:space="preserve">
+    <value>Lägg till widgetar på hemskärmen</value>
+    <comment>Settings row that opens the widget picker to pin the app's widgets.</comment>
+  </data>
+  <data name="settings_add_widgets_description" xml:space="preserve">
+    <value>Snabbanslutning, datasaldo, leverantörer på jordklotet och dina främsta kontrakt.</value>
+    <comment>Description under the add-widgets settings row.</comment>
+  </data>
   <data name="share" xml:space="preserve">
     <value>Dela</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="share_extenders" xml:space="preserve">
+    <value>Dela extendrar</value>
+    <comment>Button and screen title: share the known extenders as a QR code.</comment>
+  </data>
+  <data name="share_extenders_count.one" xml:space="preserve">
+    <value>{} extender</value>
+    <comment>How many extenders the share code carries.</comment>
+  </data>
+  <data name="share_extenders_count.other" xml:space="preserve">
+    <value>{} extendrar</value>
+    <comment>How many extenders the share code carries.</comment>
+  </data>
+  <data name="share_extenders_hint" xml:space="preserve">
+    <value>Skanna den här koden med en annan URnetwork-app för att dela de här extendrarna.</value>
+    <comment>Help text on the share screen under the QR code.</comment>
+  </data>
+  <data name="share_extenders_too_large" xml:space="preserve">
+    <value>Delningskoden är för stor för en QR-kod. Kopiera delningstexten i stället.</value>
+    <comment>Shown on the share screen when the share payload exceeds what a QR code can hold; the text form is still offered.</comment>
   </data>
   <data name="share_logs" xml:space="preserve">
     <value>Dela loggar</value>
@@ -3586,9 +5020,21 @@ innehåll i världen</value>
     <value>Dela loggar</value>
     <comment>Used in Shared/Views/ExportLogsButton/ExportLogsButton.swift.</comment>
   </data>
+  <data name="share_text_copied" xml:space="preserve">
+    <value>Delningstexten har kopierats</value>
+    <comment>Confirmation after the share text of an extender code was copied to the clipboard.</comment>
+  </data>
   <data name="share_urnetwork" xml:space="preserve">
     <value>Dela URnetwork</value>
     <comment>Used in Shared/Views/AccountMenu.swift.</comment>
+  </data>
+  <data name="shortcut_connect_long" xml:space="preserve">
+    <value>Anslut till URnetwork</value>
+    <comment>Long label of the launcher shortcut that connects the VPN.</comment>
+  </data>
+  <data name="shortcut_disconnect_long" xml:space="preserve">
+    <value>Koppla från URnetwork</value>
+    <comment>Long label of the launcher shortcut that disconnects the VPN.</comment>
   </data>
   <data name="show" xml:space="preserve">
     <value>Visa</value>
@@ -3597,6 +5043,10 @@ innehåll i världen</value>
   <data name="show_icon_when_connected" xml:space="preserve">
     <value>Visa UR-ikonen när ansluten</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="show_kill_switch_exception" xml:space="preserve">
+    <value>Visa undantag från Kill switch</value>
+    <comment>Accessibility label for the kill switch exception information button.</comment>
   </data>
   <data name="show_on_points_leaderboard" xml:space="preserve">
     <value>Visa mitt nätverksnamn</value>
@@ -3632,6 +5082,10 @@ innehåll i världen</value>
   </data>
   <data name="sign_in_methods" xml:space="preserve">
     <value>Inloggningsmetoder</value>
+  </data>
+  <data name="sign_in_with_apple" xml:space="preserve">
+    <value>Logga in med Apple</value>
+    <comment>Login stack: full-width Apple sign-in button on platforms that use the ur.io browser bridge</comment>
   </data>
   <data name="sign_in_with_code" xml:space="preserve">
     <value>Logga in med kod</value>
@@ -3680,6 +5134,14 @@ innehåll i världen</value>
     <value>Anslut för att se aktivitet i realtid</value>
     <comment>Disabled stat cards: connect-to-view hint</comment>
   </data>
+  <data name="site_app_contracts" xml:space="preserve">
+    <value>Kontrakt</value>
+    <comment>App connect screen: contract details section title</comment>
+  </data>
+  <data name="site_app_copied" xml:space="preserve">
+    <value>Kopierat</value>
+    <comment>App: copied flash. Also the linux share-dialog toast after copying the identity payload.</comment>
+  </data>
   <data name="site_app_country" xml:space="preserve">
     <value>Land</value>
     <comment>Reliability: country column</comment>
@@ -3724,6 +5186,10 @@ innehåll i världen</value>
     <value>Plan</value>
     <comment>Connect drawer: plan section label</comment>
   </data>
+  <data name="site_app_providers" xml:space="preserve">
+    <value>Leverantörer</value>
+    <comment>App connect screen: provider grid section title</comment>
+  </data>
   <data name="site_app_proxies" xml:space="preserve">
     <value>Proxyservrar</value>
     <comment>App account: proxies row/screen title</comment>
@@ -3743,6 +5209,10 @@ innehåll i världen</value>
   <data name="site_app_throughput" xml:space="preserve">
     <value>Överföring</value>
     <comment>Connect drawer: live transfer timeseries section</comment>
+  </data>
+  <data name="site_billing_portal_error" xml:space="preserve">
+    <value>Det gick inte att öppna faktureringsportalen.</value>
+    <comment>Account panel: billing portal failed to open</comment>
   </data>
   <data name="site_connect_code_hint" xml:space="preserve">
     <value>Ange den här koden när du registrerar dig i appen.</value>
@@ -3928,6 +5398,10 @@ innehåll i världen</value>
     <value>Din Pro-prenumeration faktureras via Stripe. Uppdatera dina betaluppgifter eller avsluta när som helst nedan.</value>
     <comment>Subscription: Stripe-billed body</comment>
   </data>
+  <data name="skip" xml:space="preserve">
+    <value>Hoppa över</value>
+    <comment>Small muted button at the top of the post-login onboarding flow that leaves the whole flow.</comment>
+  </data>
   <data name="sn_payout_schedule" xml:space="preserve">
     <value>Intäkter avräknas varje epok och betalas ut i SN25α till din Bittensor-coldkey när du hämtar dem.</value>
     <comment>Earnings card: how providers are paid on the UR subnet (WHITEPAPER §5.2, §8.3). Earnings settle per epoch and are paid in SN25α as stake to the provider's Bittensor coldkey once the provider claims them; nothing is paid automatically. Followed by sn_payout_schedule_times when the epoch schedule is known.</comment>
@@ -3936,9 +5410,33 @@ innehåll i världen</value>
     <value>Den här epoken slutar {0}. Hämta din andel från {1} till {2}.</value>
     <comment>Earnings card, after sn_payout_schedule: when the current epoch ends, when its share can be claimed and when an unclaimed share expires. The three values are local date-times the app fills from the chain's epoch schedule (the coordinator's policy: the claim-open offset and the claim TTL), never fixed durations.</comment>
   </data>
+  <data name="sn_status_claimable" xml:space="preserve">
+    <value>Kan hämtas ut</value>
+    <comment>Claim status of an epoch whose alpha can be claimed now.</comment>
+  </data>
+  <data name="sn_status_not_finalized" xml:space="preserve">
+    <value>Inte slutförd</value>
+    <comment>Claim status of an epoch the vault has not finalized yet.</comment>
+  </data>
+  <data name="sn_status_open" xml:space="preserve">
+    <value>Öppen</value>
+    <comment>Claim status of an epoch that is still open (not yet finalized on chain).</comment>
+  </data>
+  <data name="solana_one_time_payment" xml:space="preserve">
+    <value>Att betala med USDC på Solana är en engångsbetalning per år, utan gratis provperiod.</value>
+    <comment>Note under the Solana payment button on the plan picker: Solana is a one-time yearly payment, the free trial is Stripe only.</comment>
+  </data>
+  <data name="solana_payment_still_checking" xml:space="preserve">
+    <value>Vi kontrollerar fortfarande din Solana-betalning. Bekräftelse på nätverket kan ta en minut eller två.</value>
+    <comment>Shown once when the check for a Solana Pay payment (started when the app returns from the wallet) has run 20 seconds without the payment landing. The check keeps going for up to two minutes; the app cannot know whether the wallet actually sent anything, so do not say the payment was received.</comment>
+  </data>
   <data name="solana_sign_in" xml:space="preserve">
     <value>Logga in med Solana</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="solana_wallet" xml:space="preserve">
+    <value>Solana-plånbok</value>
+    <comment>Label of the connected Solana wallet block on the Earnings screen (parallel to bittensor_wallet).</comment>
   </data>
   <data name="something_went_wrong" xml:space="preserve">
     <value>Något gick fel.</value>
@@ -4036,6 +5534,10 @@ innehåll i världen</value>
     <value>För att börja tjäna, gå med i nätverket</value>
     <comment>Guest mode overlay</comment>
   </data>
+  <data name="start_free_trial" xml:space="preserve">
+    <value>Starta gratis provperiod</value>
+    <comment>Primary button of the plan picker (onboarding and upgrade): starts the paid plan's free trial. Replaces 'Join the movement'.</comment>
+  </data>
   <data name="stay" xml:space="preserve">
     <value>Stanna</value>
     <comment>Confirmation button that keeps the user on the seedphrase screen after the warning.</comment>
@@ -4096,6 +5598,14 @@ som det borde vara.</value>
     <value>Stark anonymisering</value>
     <comment>Connect drawer: strong anonymization toggle — the inverse of allow direct (direct connections expose the real source IP to the provider).</comment>
   </data>
+  <data name="subscribe" xml:space="preserve">
+    <value>Prenumerera</value>
+    <comment>Button on the plan picker for the monthly plan, which has no free trial.</comment>
+  </data>
+  <data name="subscription_purchased_under_different_account" xml:space="preserve">
+    <value>Din prenumeration köptes med ett annat konto. Logga in på det kontot för att använda den.</value>
+    <comment>The store purchase belongs to a different network than the one logged in — crediting must not go to the wrong account, so tell the user which way out exists. Apple: restore-purchases outcome (Shared/ViewModels/AppStoreSubscriptionManager.swift). Android: terminal `wrong_network` answer from the Play purchase report (google/PlanViewModel.kt); the purchase is still acknowledged so Play does not auto-refund it.</comment>
+  </data>
   <data name="successfully_claimed_multiplier" xml:space="preserve">
     <value>Multiplikatorn har hämtats!</value>
     <comment>Snackbar shown when the earnings multiplier is claimed successfully. Used in Main/Account/Settings/SettingsView.swift.</comment>
@@ -4144,6 +5654,10 @@ som det borde vara.</value>
     <value>Vill du koppla från {} och byta konto?</value>
     <comment>Call to action</comment>
   </data>
+  <data name="symbol_ellipsis" xml:space="preserve">
+    <value>...</value>
+    <comment>An ellipsis character used to indicate ongoing processing.</comment>
+  </data>
   <data name="sync_device_location_with_oldest_provider" xml:space="preserve">
     <value>Synkronisera enhetens plats med den längst anslutna leverantören</value>
     <comment>Toggle that makes the device report the location of the longest-connected provider (Android mock location) instead of the real location.</comment>
@@ -4155,6 +5669,10 @@ som det borde vara.</value>
   <data name="system" xml:space="preserve">
     <value>System</value>
     <comment>Used in Main/Account/Settings/SettingsForm-macOS.swift.</comment>
+  </data>
+  <data name="tao_amount_linux" xml:space="preserve">
+    <value>{} TAO</value>
+    <comment>A TAO amount with its unit (the gas key balance).</comment>
   </data>
   <data name="tap_to_connect" xml:space="preserve">
     <value>Tryck för att ansluta</value>
@@ -4180,6 +5698,10 @@ som det borde vara.</value>
     <value>Tack för din feedback!</value>
     <comment>Confirmation shown after feedback is sent.</comment>
   </data>
+  <data name="the_purchase_could_not_be_completed" xml:space="preserve">
+    <value>Köpet kunde inte slutföras. Försök igen.</value>
+    <comment>Shown inline in the upgrade flow when a StoreKit purchase attempt throws (Shared/ViewModels/AppStoreSubscriptionManager.swift). Every purchase failure is shown to the user — a payment error they cannot see is one they will hit again. User cancellation is not an error and never shows this.</comment>
+  </data>
   <data name="there_was_an_error_checking_the_network_name" xml:space="preserve">
     <value>Det uppstod ett fel vid kontroll av nätverksnamnet</value>
     <comment>Used in Authenticate/CreateNetwork/CreateNetworkViewModel.swift.</comment>
@@ -4196,6 +5718,10 @@ som det borde vara.</value>
     <value>⚠️ Det här är enda gången du ser den.</value>
     <comment>A warning message displayed in the seedphrase display view.</comment>
   </data>
+  <data name="this_purchase_couldn_t_be_verified" xml:space="preserve">
+    <value>Det här köpet kunde inte verifieras med App Store, så det kan inte tillämpas på ditt konto. Om du har debiterats och ditt abonnemang inte uppdateras, kontakta supporten.</value>
+    <comment>Shown inline in the upgrade flow when the server's verify answer for a purchase's transaction JWS is terminal `invalid` — the proof will never verify. The transaction is still finished so StoreKit stops redelivering it; this message is how the failure reaches the user instead of a silent success (Shared/ViewModels/AppStoreSubscriptionManager.swift). Apple sibling of purchase_could_not_be_verified (android).</comment>
+  </data>
   <data name="this_region" xml:space="preserve">
     <value>denna region</value>
     <comment>dns settings</comment>
@@ -4210,6 +5736,30 @@ som det borde vara.</value>
   </data>
   <data name="title_login" xml:space="preserve">
     <value>Logga in</value>
+  </data>
+  <data name="top200" xml:space="preserve">
+    <value>Topp 200</value>
+    <comment>Badge text for the head mining spot.</comment>
+  </data>
+  <data name="top200_bound_detail" xml:space="preserve">
+    <value>Emissionen betalas direkt till din coldkey. Bindningar förnyas varje epok.</value>
+    <comment>Detail under the bound status.</comment>
+  </data>
+  <data name="top200_bound_status" xml:space="preserve">
+    <value>UID {0} · plats #{1}</value>
+    <comment>Status row once bound.</comment>
+  </data>
+  <data name="top200_demotion_warning" xml:space="preserve">
+    <value>Din poäng ligger nära utslagningsgränsen. Lägg till routbara IP-adresser för att behålla platsen.</value>
+    <comment>Warning when the score nears the floor.</comment>
+  </data>
+  <data name="top200_detail" xml:space="preserve">
+    <value>Ditt nätverks bredd av routbara IP-adresser placerar sig runt #{0} av {1} toppplatser. Toppminers tjänar SN25α direkt, varje tempo.</value>
+    <comment>Detail of the Top 200 tile when eligible.</comment>
+  </data>
+  <data name="top200_you_qualify" xml:space="preserve">
+    <value>Du kvalificerar dig</value>
+    <comment>Headline of the Top 200 tile when eligible.</comment>
   </data>
   <data name="top_matches" xml:space="preserve">
     <value>Bästa träffar</value>
@@ -4259,6 +5809,62 @@ som det borde vara.</value>
     <value>Din överföring har initierats och slutförs när transaktionen har behandlats på kedjan.</value>
     <comment>Transfer Submitted Overlay</comment>
   </data>
+  <data name="transport" xml:space="preserve">
+    <value>Transport</value>
+    <comment>Section header of the transport mode selection (Auto or a single transport).</comment>
+  </data>
+  <data name="transport_auto_degraded" xml:space="preserve">
+    <value>Auto är försämrat eftersom systembegränsningar hindrar vissa aktiverade transporter från att köras.</value>
+    <comment>Generic warning banner in the transport settings editor when the Auto policy is degraded for a constraint this app version does not recognize (the SDK may report new constraint kinds; "memory" has its own banner).</comment>
+  </data>
+  <data name="transport_auto_degraded_memory" xml:space="preserve">
+    <value>Auto är försämrat eftersom systemets minnesgränser hindrar vissa aktiverade transporter från att köras.</value>
+    <comment>Warning banner in the transport settings editor when the Auto policy is degraded because the platform memory budget cannot admit every enabled transport.</comment>
+  </data>
+  <data name="transport_auto_description" xml:space="preserve">
+    <value>Rekommenderas. Använder de aktiverade transporterna nedan.</value>
+    <comment>Subtitle of the Auto transport mode row.</comment>
+  </data>
+  <data name="transport_client_footer" xml:space="preserve">
+    <value>Den transport som den här enheten använder för att nå leverantörer. Auto provar de aktiverade transporterna i prioritetsordning och håller alla fungerande transporter på samma nivå anslutna parallellt.</value>
+    <comment>Footer of the client transport mode section.</comment>
+  </data>
+  <data name="transport_dns_description" xml:space="preserve">
+    <value>Förklädd till DNS-trafik. För nätverk som filtrerar direkta anslutningar.</value>
+    <comment>One line description of the whodis (DNS) transport in the transport settings editor.</comment>
+  </data>
+  <data name="transport_dnspump_description" xml:space="preserve">
+    <value>Förklädd till DNS-trafik med en konstant svarspump. Lägst bandbredd, högst tillgänglighet.</value>
+    <comment>One line description of the whodis pump (DNS pump) transport in the transport settings editor.</comment>
+  </data>
+  <data name="transport_h1_description" xml:space="preserve">
+    <value>Direkt över TLS. Fungerar på de flesta nätverk.</value>
+    <comment>One line description of the H1 transport in the transport settings editor.</comment>
+  </data>
+  <data name="transport_h3_description" xml:space="preserve">
+    <value>Direkt över QUIC. Snabbast där den inte filtreras.</value>
+    <comment>One line description of the H3 transport in the transport settings editor.</comment>
+  </data>
+  <data name="transport_provider_footer" xml:space="preserve">
+    <value>Den transport som den här enheten använder när den tillhandahåller åt andra. Auto provar de aktiverade transporterna i prioritetsordning och håller alla fungerande transporter på samma nivå anslutna parallellt.</value>
+    <comment>Footer of the provider transport mode section.</comment>
+  </data>
+  <data name="transport_queued" xml:space="preserve">
+    <value>i kö</value>
+    <comment>Transport bar label for traffic admitted for sending but not yet attributed to a physical transport.</comment>
+  </data>
+  <data name="transport_unavailable_system_constraints" xml:space="preserve">
+    <value>Inte tillgänglig på grund av systembegränsningar</value>
+    <comment>Accessibility label / tooltip on the warning icon next to a transport that is enabled under Auto but not currently eligible under a system constraint (for example the platform memory budget). A runtime warning, not a settings restriction: the toggle stays editable.</comment>
+  </data>
+  <data name="transport_unused" xml:space="preserve">
+    <value>oanvända</value>
+    <comment>Prefix of the transport bar footer listing the enabled transports that carried no traffic in the stats window.</comment>
+  </data>
+  <data name="transports" xml:space="preserve">
+    <value>Transporter</value>
+    <comment>Title of the transport distribution bar under the client statistics chart and of the transport settings editor.</comment>
+  </data>
   <data name="trusted_by_over_100_000_private_networks" xml:space="preserve">
     <value>Betrodd av över 100 000 privata nätverk</value>
     <comment>Used in Shared/Views/Introduction/IntroductionView.swift.</comment>
@@ -4282,6 +5888,10 @@ som det borde vara.</value>
   <data name="tunnel_stopped_unexpectedly" xml:space="preserve">
     <value>Anslutningen avbröts.</value>
     <comment>Connect: notice that the connection stopped on its own.</comment>
+  </data>
+  <data name="unclaimed" xml:space="preserve">
+    <value>Ej uthämtat</value>
+    <comment>Label of the unclaimed alpha tile.</comment>
   </data>
   <data name="unencrypted_dns" xml:space="preserve">
     <value>Okrypterad DNS</value>
@@ -4387,6 +5997,10 @@ som det borde vara.</value>
     <value>URnetwork VPN startad</value>
     <comment>Used in Shared/Intents/ConnectIntent.swift.</comment>
   </data>
+  <data name="usdc_payouts_until_migration" xml:space="preserve">
+    <value>USDC-utbetalningar fortsätter till den här plånboken tills migreringen till Bittensor är klar.</value>
+    <comment>Second paragraph of the Solana connect sheet/card, and the body line under a connected Solana wallet.</comment>
+  </data>
   <data name="usdc_solana_network_only" xml:space="preserve">
     <value>Skicka USDC endast på Solana-nätverket. USDC som skickas på ett annat nätverk kommer inte fram.</value>
     <comment>Payment: the chain to send on. Shown wherever a USDC payment is requested, because USDC exists on many chains and a transfer sent on the wrong one is lost.</comment>
@@ -4405,6 +6019,10 @@ som det borde vara.</value>
   <data name="use_as_proxy_no_vpn_detail" xml:space="preserve">
     <value>Öppnar ur.io för att köra URnetwork som en HTTPS-proxy utan VPN. SOCKS och WireGuard är tillgängliga med Pro.</value>
     <comment>Subtitle under the cloud-proxy Settings row explaining that it opens ur.io and that SOCKS and WireGuard require Pro.</comment>
+  </data>
+  <data name="use_extender_settings" xml:space="preserve">
+    <value>Använd extenderinställningar</value>
+    <comment>Toggle on the import screen: also apply the extender settings carried by the code.</comment>
   </data>
   <data name="use_most_stable_provider" xml:space="preserve">
     <value>Använder den stabilaste leverantören</value>
@@ -4445,6 +6063,9 @@ som det borde vara.</value>
   <data name="uses_ur_protocol" xml:space="preserve">
     <value>Använder UR Protocol</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="value_string" xml:space="preserve">
+    <value>{}</value>
   </data>
   <data name="value_with_unit" xml:space="preserve">
     <value>{0} {1}</value>
@@ -4492,6 +6113,10 @@ som det borde vara.</value>
   <data name="verify_input_label" xml:space="preserve">
     <value>Verifieringskod</value>
     <comment>Label for the verification code input field</comment>
+  </data>
+  <data name="verify_seeker" xml:space="preserve">
+    <value>Verifiera Seeker</value>
+    <comment>Standalone Seeker verification action (points multiplier only).</comment>
   </data>
   <data name="verify_seeker_token_btn" xml:space="preserve">
     <value>Verifiera Seeker Pre-Order-token</value>
@@ -4661,17 +6286,41 @@ som det borde vara.</value>
     <value>Plånbok</value>
     <comment>Account Screen</comment>
   </data>
+  <data name="wallet_blocked" xml:space="preserve">
+    <value>Den här plånboken kan inte användas med URnetwork.</value>
+    <comment>Error when a wallet address is on the operator's ban list; the user cannot continue.</comment>
+  </data>
   <data name="wallet_connect_failed" xml:space="preserve">
     <value>Det gick inte att ansluta plånboken.</value>
     <comment>Error shown when connecting an external wallet to the account fails.</comment>
+  </data>
+  <data name="wallet_connect_signed_note_linux" xml:space="preserve">
+    <value>Din plånbok signerar ett meddelande för att bevisa att den är din. Inget skickas på kedjan.</value>
+    <comment>Note under the manual address entry: the wallet only signs a proof of ownership.</comment>
   </data>
   <data name="wallet_connected" xml:space="preserve">
     <value>Plånbok ansluten.</value>
     <comment>Confirmation shown after an external wallet is connected to the account.</comment>
   </data>
+  <data name="wallet_connected_to_protocol" xml:space="preserve">
+    <value>Ansluten till UR-protokollet. Uttag hamnar här. Alpha samlas från epoken efter anslutningen.</value>
+    <comment>Line under the connected coldkey.</comment>
+  </data>
+  <data name="wallet_looks_new_warning" xml:space="preserve">
+    <value>Den här adressen har ingen aktivitet på Bittensor-kedjan än. Den ser ut som en ny plånbok. Kontrollera att den är din innan du fortsätter.</value>
+    <comment>Warning when a wallet address has no activity on the Bittensor chain yet; the user may continue.</comment>
+  </data>
   <data name="wallet_needs_network" xml:space="preserve">
     <value>Den här plånboken är inte kopplad till något nätverk ännu. Välj ett nätverksnamn för att skapa ett.</value>
     <comment>Shown on the create-network step after a wallet sign-in when the wallet isn't linked to any network yet. The user picks a network name and accepts the terms to create one; the wallet signature carries over.</comment>
+  </data>
+  <data name="wallet_not_retroactive" xml:space="preserve">
+    <value>Anslut en plånbok för att tjäna SN25α från nästa epok. Tidigare epoker regleras inte i efterhand.</value>
+    <comment>Line on the wallet block before a wallet is connected.</comment>
+  </data>
+  <data name="wallet_options" xml:space="preserve">
+    <value>Plånboksalternativ</value>
+    <comment>Accessibility label of the three-dot overflow button next to “Connect Bittensor wallet” and on the connected Bittensor wallet block.</comment>
   </data>
   <data name="wallet_sign_in_failed" xml:space="preserve">
     <value>Inloggning med plånbok misslyckades</value>
@@ -4680,6 +6329,14 @@ som det borde vara.</value>
   <data name="wallet_sign_in_method_added" xml:space="preserve">
     <value>Inloggningsmetod med plånbok tillagd</value>
     <comment>Snackbar message displayed when a wallet sign-in method is successfully added.</comment>
+  </data>
+  <data name="wallet_signature_mismatch_linux" xml:space="preserve">
+    <value>Plånboken som signerade är inte adressen du angav.</value>
+    <comment>Error when the bridge signed with a different wallet than the address the user typed.</comment>
+  </data>
+  <data name="we_re_confirming_your_purchase_with_the_app_store" xml:space="preserve">
+    <value>Vi bekräftar ditt köp med App Store. Ditt abonnemang uppdateras automatiskt.</value>
+    <comment>Body of the post-purchase screen while the confirmation poll runs (Shared/Views/PurchaseSuccessView.swift). Processing-shaped, not premium-shaped: the server learns of the purchase by webhook and has not confirmed yet.</comment>
   </data>
   <data name="welcome_offer_eyebrow" xml:space="preserve">
     <value>Välkomsterbjudande</value>
@@ -4696,6 +6353,126 @@ som det borde vara.</value>
   <data name="when_you_refer_a_friend" xml:space="preserve">
     <value>När du tipsar en vän:</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="widget_client" xml:space="preserve">
+    <value>Klient</value>
+    <comment>Dashboard widget chart title: this device's own traffic.</comment>
+  </data>
+  <data name="widget_connect_once" xml:space="preserve">
+    <value>Anslut en gång för att se din trafik här</value>
+    <comment>Dashboard widget footer before the tunnel has ever written data.</comment>
+  </data>
+  <data name="widget_connect_to_see_contracts" xml:space="preserve">
+    <value>Anslut för att se dina kontrakt</value>
+    <comment>Contracts widget empty state while the tunnel is down.</comment>
+  </data>
+  <data name="widget_contract_stack_accessibility.one" xml:space="preserve">
+    <value>{0} kontrakt, {1}</value>
+    <comment>Accessibility label for one contract stack in the contracts widget. The arguments are the number of contracts and the bytes moved.</comment>
+  </data>
+  <data name="widget_contract_stack_accessibility.other" xml:space="preserve">
+    <value>{0} kontrakt, {1}</value>
+    <comment>Accessibility label for one contract stack in the contracts widget. The arguments are the number of contracts and the bytes moved.</comment>
+  </data>
+  <data name="widget_contracts_description" xml:space="preserve">
+    <value>Dina främsta klientkontrakt, i flöde medan de kommer och går.</value>
+    <comment>Description of the contracts widget in the widget gallery.</comment>
+  </data>
+  <data name="widget_control_description" xml:space="preserve">
+    <value>Anslut eller koppla från URnetwork-VPN:en.</value>
+    <comment>Description of the quick connect control in the Control Center gallery.</comment>
+  </data>
+  <data name="widget_dashboard_description" xml:space="preserve">
+    <value>Datasaldo, ansluten plats och trafik, med snabbanslutning.</value>
+    <comment>Description of the dashboard widget in the widget gallery.</comment>
+  </data>
+  <data name="widget_globe_description" xml:space="preserve">
+    <value>Dina anslutna leverantörer på jordklotet.</value>
+    <comment>Description of the provider globe widget in the widget gallery.</comment>
+  </data>
+  <data name="widget_more_providers" xml:space="preserve">
+    <value>+{} till</value>
+    <comment>Provider globe widget: providers not shown in the list. The argument is a count.</comment>
+  </data>
+  <data name="widget_no_contracts" xml:space="preserve">
+    <value>Inga kontrakt</value>
+    <comment>Contracts widget empty state while connected with no open client contracts.</comment>
+  </data>
+  <data name="widget_no_providers" xml:space="preserve">
+    <value>Inga leverantörer</value>
+    <comment>Badge on the small provider globe widget when no providers are connected.</comment>
+  </data>
+  <data name="widget_not_providing" xml:space="preserve">
+    <value>Tillhandahåller inte</value>
+    <comment>Dashboard widget provider chart label when providing is off.</comment>
+  </data>
+  <data name="widget_not_signed_in" xml:space="preserve">
+    <value>Inte inloggad</value>
+    <comment>Quick connect control / widget value when the app has no tunnel configuration yet (fresh install or logged out).</comment>
+  </data>
+  <data name="widget_open" xml:space="preserve">
+    <value>Öppna</value>
+    <comment>Button on the Home Screen widget that opens the app when the tunnel is not configured yet.</comment>
+  </data>
+  <data name="widget_open_to_set_up" xml:space="preserve">
+    <value>Öppna URnetwork för att konfigurera</value>
+    <comment>Widget subtitle when the app has no tunnel configuration yet.</comment>
+  </data>
+  <data name="widget_peak_rate" xml:space="preserve">
+    <value>{} topp</value>
+    <comment>Chart label; the argument is a formatted byte rate such as '1.2 MB/s'.</comment>
+  </data>
+  <data name="widget_peer_count.one" xml:space="preserve">
+    <value>{} peer</value>
+    <comment>Contracts widget header: number of peers with open contracts.</comment>
+  </data>
+  <data name="widget_peer_count.other" xml:space="preserve">
+    <value>{} peers</value>
+    <comment>Contracts widget header: number of peers with open contracts.</comment>
+  </data>
+  <data name="widget_provider" xml:space="preserve">
+    <value>Leverantör</value>
+    <comment>Dashboard widget chart title: traffic relayed for others while providing.</comment>
+  </data>
+  <data name="widget_provider_count.one" xml:space="preserve">
+    <value>{} leverantör</value>
+    <comment>Widget subtitle: number of connected providers.</comment>
+  </data>
+  <data name="widget_provider_count.other" xml:space="preserve">
+    <value>{} leverantörer</value>
+    <comment>Widget subtitle: number of connected providers.</comment>
+  </data>
+  <data name="widget_provider_count_providing.one" xml:space="preserve">
+    <value>{} leverantör · tillhandahåller</value>
+    <comment>Widget subtitle: number of connected providers while this device is also providing.</comment>
+  </data>
+  <data name="widget_provider_count_providing.other" xml:space="preserve">
+    <value>{} leverantörer · tillhandahåller</value>
+    <comment>Widget subtitle: number of connected providers while this device is also providing.</comment>
+  </data>
+  <data name="widget_provider_mode_title" xml:space="preserve">
+    <value>Leverantör · {}</value>
+    <comment>Title above the provider traffic chart in the dashboard widget: the chart name with the current provide mode (Auto, Always, Network, Never).</comment>
+  </data>
+  <data name="widget_provider_stats_when_enabled" xml:space="preserve">
+    <value>Leverantörsstatistik visas när leverantören är aktiverad.</value>
+    <comment>Shown in the dashboard widget in place of the provider traffic chart while providing is off.</comment>
+  </data>
+  <data name="widget_quick_tile_added" xml:space="preserve">
+    <value>Snabbanslutningsrutan har lagts till</value>
+    <comment>Toast after the system added the Quick Settings tile.</comment>
+  </data>
+  <data name="widget_toggle_intent_title" xml:space="preserve">
+    <value>Slå på/av URnetwork-VPN</value>
+    <comment>Title of the Set-Value intent behind the quick connect control and widget toggle (shown by the system in Shortcuts/debug UI).</comment>
+  </data>
+  <data name="widget_updated_ago" xml:space="preserve">
+    <value>Uppdaterad {}</value>
+    <comment>Dashboard widget footer; the argument is a localized relative time such as '3 min. ago'.</comment>
+  </data>
+  <data name="widget_updated_just_now" xml:space="preserve">
+    <value>Uppdaterad nyss</value>
+    <comment>Dashboard widget footer in the widget gallery preview.</comment>
   </data>
   <data name="widgets" xml:space="preserve">
     <value>Widgetar</value>
@@ -4737,6 +6514,10 @@ som det borde vara.</value>
     <value>Du får 3 GiB/dag på livstid</value>
     <comment>Text displayed in a scrollable view within a VStack in the body of a view that is displayed when the user is viewing their referral code.</comment>
   </data>
+  <data name="you_get_free_data_every_day" xml:space="preserve">
+    <value>Du får gratis data varje dag.</value>
+    <comment>Detail line under the onboarding data page title.</comment>
+  </data>
   <data name="you_have_n_other_devices_online.one" xml:space="preserve">
     <value>Du har {} annan enhet online</value>
   </data>
@@ -4759,6 +6540,10 @@ som det borde vara.</value>
     <value>Du är premium.</value>
     <comment>Used in Main/Account/AccountRootView.swift.</comment>
   </data>
+  <data name="your_bandwidth" xml:space="preserve">
+    <value>Din bandbredd</value>
+    <comment>Title of the onboarding data page (was 'Boost your bandwidth').</comment>
+  </data>
   <data name="your_email" xml:space="preserve">
     <value>Din e-post</value>
     <comment>Label for the empty text field.</comment>
@@ -4778,6 +6563,10 @@ som det borde vara.</value>
   <data name="your_purchase_needs_to_be_approved_before_it_can" xml:space="preserve">
     <value>Ditt köp måste godkännas innan det kan slutföras. UR Pro aktiveras automatiskt när det går igenom — du behöver inte köpa igen.</value>
     <comment>Used in Shared/Views/UpgradeSubscriptionSheet.swift.</comment>
+  </data>
+  <data name="your_referral_code" xml:space="preserve">
+    <value>Din referenskod</value>
+    <comment>Label above the referral code pill in the gold referral panel.</comment>
   </data>
   <data name="your_referral_link" xml:space="preserve">
     <value>Din rekommendationslänk</value>

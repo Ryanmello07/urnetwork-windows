@@ -68,9 +68,17 @@
     <value>{} (ověřeno)</value>
     <comment>The account's email or phone, marked as verified. The argument is the email or phone number.</comment>
   </data>
+  <data name="account_isn_t_ready_for_purchases" xml:space="preserve">
+    <value>Váš účet zatím není připraven na nákupy. Restartujte aplikaci a zkuste to znovu.</value>
+    <comment>Shown when a purchase is refused before contacting the store because the account is not ready: on apple the networkId is missing or unparseable (Shared/ViewModels/AppStoreSubscriptionManager.swift), on android the active network space has no api yet (the Stripe sheet and pay page purchasers). The purchase could never be credited to anyone. This used to be a silent no-op.</comment>
+  </data>
   <data name="account_needs_verification" xml:space="preserve">
     <value>Tento účet vyžaduje ověření. Zkontrolujte svůj e-mail.</value>
     <comment>Sign-in error shown when the account exists but has not been verified yet.</comment>
+  </data>
+  <data name="active_extenders" xml:space="preserve">
+    <value>Aktivní extendery</value>
+    <comment>Accessibility label of the row of rings, one per extender carrying a live connection.</comment>
   </data>
   <data name="activity" xml:space="preserve">
     <value>Aktivita</value>
@@ -96,6 +104,10 @@
     <value>Přidat emoji</value>
     <comment>Points leaderboard: button that opens the emoji tag editor when no tag is set yet.</comment>
   </data>
+  <data name="add_local_split_rule" xml:space="preserve">
+    <value>Směrovat lokálně</value>
+    <comment>Call to action on a split-rule activity row blocked by URnetwork safety rules: create a local split rule for its hosts.</comment>
+  </data>
   <data name="add_referral_code" xml:space="preserve">
     <value>Přidání doporučujícího kódu</value>
     <comment>Call to action</comment>
@@ -106,6 +118,10 @@
   <data name="add_sign_in_method_2" xml:space="preserve">
     <value>Přidat způsob přihlášení</value>
     <comment>Button text for adding a sign-in method.</comment>
+  </data>
+  <data name="add_tao_for_gas" xml:space="preserve">
+    <value>Přidejte TAO na gas</value>
+    <comment>State when the gas key has no TAO.</comment>
   </data>
   <data name="adjust_setting_always_fill_data_faster" xml:space="preserve">
     <value>Nastavením na „Vždy“ můžete rychleji získat bezplatná data.</value>
@@ -437,6 +453,10 @@
     <value>Verze aplikace</value>
     <comment>Settings, about: label of the app version row.</comment>
   </data>
+  <data name="apple" xml:space="preserve">
+    <value>Apple</value>
+    <comment>A method of adding a sign-in method.</comment>
+  </data>
   <data name="apple_sign_in_method_added" xml:space="preserve">
     <value>Způsob přihlášení Apple byl přidán</value>
     <comment>Snackbar message displayed when an Apple sign-in method is added.</comment>
@@ -582,9 +602,25 @@
     <value>Kód zůstatku</value>
     <comment>Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.</comment>
   </data>
+  <data name="balance_code_already_redeemed_message" xml:space="preserve">
+    <value>Tento kód zůstatku už byl uplatněn. Pokud jste ho uplatnili dříve, data už máte na zůstatku.</value>
+    <comment>Redeem balance code: the server answered that this code was already redeemed. Distinct from invalid -- the user may have redeemed it on an earlier attempt that looked like a failure.</comment>
+  </data>
+  <data name="balance_code_data_added" xml:space="preserve">
+    <value>Na váš zůstatek bylo přidáno {} dat.</value>
+    <comment>Redeem balance code: confirmation of the data a redeemed code added to the network's balance (amount is a formatted byte count, e.g. "5.00 GiB"). A balance code is data only: never a plan or Pro upgrade.</comment>
+  </data>
+  <data name="balance_code_invalid_message" xml:space="preserve">
+    <value>Tento kód zůstatku není platný. Zkontrolujte kód a zkuste to znovu.</value>
+    <comment>Redeem balance code: the server answered and rejected the code as unknown/invalid. Distinct from a transport failure, which must never be reported as a bad code.</comment>
+  </data>
   <data name="balance_code_redeemed" xml:space="preserve">
     <value>Kód zůstatku uplatněn.</value>
     <comment>Confirmation shown after a balance code is redeemed.</comment>
+  </data>
+  <data name="balance_code_transport_error" xml:space="preserve">
+    <value>Nepodařilo se spojit se serverem — zkontrolujte připojení. Pokud vám byla stržena platba, kód už možná byl uplatněn; než to zkusíte znovu, zkontrolujte zůstatek.</value>
+    <comment>Redeem balance code: the request never got a server answer (network failure). Must NOT be worded as 'bad code' -- the redeem may have committed server-side, so tell the user to check their balance before retrying.</comment>
   </data>
   <data name="balance_code_where_to_buy" xml:space="preserve">
     <value>Nemáte kód? Datové kódy si můžete koupit na ur.io a přijdou vám e-mailem.</value>
@@ -593,6 +629,10 @@
   <data name="balance_codes_link" xml:space="preserve">
     <value>Kódy zůstatku</value>
     <comment>Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.</comment>
+  </data>
+  <data name="balance_codes_load_error" xml:space="preserve">
+    <value>Kódy zůstatku se nepodařilo načíst. Zkontrolujte připojení a zkuste to znovu.</value>
+    <comment>Linux redeem-code sheet: shown in place of the redeemed-codes history when getNetworkRedeemedBalanceCodes FAILS (transport error, no response, or a server-side error) — distinct from the empty state's "No balance codes found", which is only for a successful fetch with no codes.</comment>
   </data>
   <data name="balance_codes_title" xml:space="preserve">
     <value>Kódy zůstatku</value>
@@ -610,13 +650,69 @@
     <value>Nejlepší shody</value>
     <comment>Label for a list or section showing the best matching results.</comment>
   </data>
+  <data name="best_value" xml:space="preserve">
+    <value>Nejvýhodnější</value>
+    <comment>Gold pill on the recommended (annual) plan card.</comment>
+  </data>
+  <data name="bittensor_choose_wallet" xml:space="preserve">
+    <value>Vyberte svou peněženku Bittensor</value>
+    <comment>Title of the picker that chooses which Bittensor wallet (Talisman or TAO.com) signs.</comment>
+  </data>
+  <data name="bittensor_continue_in_browser" xml:space="preserve">
+    <value>Pokračujte v prohlížeči a schvalte požadavek v rozšíření {}.</value>
+    <comment>Desktop: shown while the browser is open on the wallet page. The argument is the wallet product name (Talisman).</comment>
+  </data>
   <data name="bittensor_error_address_not_in_wallet" xml:space="preserve">
     <value>Vaše peněženka {} neobsahuje adresu, kterou jste zadali. Přidejte nebo připojte tento účet v peněžence, nebo zadejte adresu, kterou obsahuje.</value>
     <comment>ur.io Bittensor wallet card and sign-in: the chosen wallet does not offer the account of the address the user typed (Talisman does not hold it or has not connected it to the site; a WalletConnect wallet connected another account), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect).</comment>
   </data>
+  <data name="bittensor_error_challenge_expired" xml:space="preserve">
+    <value>Platnost tohoto požadavku vypršela. Začněte znovu a získejte novou zprávu k podpisu.</value>
+    <comment>Error: the single-use wallet challenge expired (5 minutes) before it was signed.</comment>
+  </data>
+  <data name="bittensor_error_extension_not_found" xml:space="preserve">
+    <value>Rozšíření {} se v tomto prohlížeči nenašlo. Nainstalujte ho a zkuste to znovu.</value>
+    <comment>Error: the wallet's browser extension is not installed in this browser. The argument is the wallet product name (Talisman).</comment>
+  </data>
+  <data name="bittensor_error_invalid_signature" xml:space="preserve">
+    <value>To není platný podpis. Vložte celý podpis 0x ze své peněženky.</value>
+    <comment>Error: the pasted or returned Bittensor signature is not a 64-byte hex signature.</comment>
+  </data>
+  <data name="bittensor_error_message_mismatch" xml:space="preserve">
+    <value>Peněženka podepsala jiný požadavek. Začněte znovu.</value>
+    <comment>Error: the wallet returned a signature over a different challenge than the one issued.</comment>
+  </data>
+  <data name="bittensor_manual_sign_instructions" xml:space="preserve">
+    <value>Podepište tuto zprávu peněženkou {}, ve které máte svůj coldkey, a pak níže vložte adresu a podpis.</value>
+    <comment>Manual Bittensor wallet proof: how to sign the shown challenge message. The argument is the wallet product name (Talisman or TAO.com).</comment>
+  </data>
+  <data name="bittensor_message_to_sign" xml:space="preserve">
+    <value>Zpráva k podpisu</value>
+    <comment>Label above the challenge message the user signs in their Bittensor wallet.</comment>
+  </data>
   <data name="bittensor_sign_in" xml:space="preserve">
     <value>Přihlásit se přes Bittensor</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="bittensor_signature_label" xml:space="preserve">
+    <value>Podpis</value>
+    <comment>Label of the field where the user pastes the Bittensor wallet signature.</comment>
+  </data>
+  <data name="bittensor_signature_placeholder" xml:space="preserve">
+    <value>Vložte podpis 0x…</value>
+    <comment>Placeholder of the Bittensor signature field (a 0x-prefixed hex signature).</comment>
+  </data>
+  <data name="bittensor_wallet" xml:space="preserve">
+    <value>Peněženka Bittensor</value>
+    <comment>Label of the connected wallet block.</comment>
+  </data>
+  <data name="bittensor_walletconnect_continue" xml:space="preserve">
+    <value>Pokračujte v prohlížeči: naskenujte kód aplikací své peněženky, nebo peněženku otevřete na tomto zařízení.</value>
+    <comment>Shown while the browser is open on the WalletConnect page: the user scans the code or opens their wallet app there.</comment>
+  </data>
+  <data name="bittensor_walletconnect_hint" xml:space="preserve">
+    <value>Nova, Nightly a další peněženky WalletConnect</value>
+    <comment>Subtitle of the WalletConnect option in the Bittensor wallet chooser: which wallets it works with. Nova, Nightly and WalletConnect are product names.</comment>
   </data>
   <data name="block_ads_and_trackers" xml:space="preserve">
     <value>Blokovat reklamy a trackery</value>
@@ -626,6 +722,10 @@
     <value>Blokováno</value>
     <comment>Label for the blocked traffic relayed for remote clients.</comment>
   </data>
+  <data name="blocked_location_block_failed" xml:space="preserve">
+    <value>{} se nepodařilo zablokovat. Zkuste to znovu.</value>
+    <comment>Blocked locations: blocking a location failed. The argument is the location name.</comment>
+  </data>
   <data name="blocked_location_could_not_be_added_please_try" xml:space="preserve">
     <value>Blokovanou lokalitu se nepodařilo přidat. Zkuste to prosím později.</value>
     <comment>Used in Main/Account/BlockedLocations/BlockedLocationsViewModel.swift.</comment>
@@ -633,6 +733,10 @@
   <data name="blocked_location_could_not_be_removed_please_try" xml:space="preserve">
     <value>Blokovanou lokalitu se nepodařilo odstranit. Zkuste to prosím později.</value>
     <comment>Used in Main/Account/BlockedLocations/BlockedLocationsViewModel.swift.</comment>
+  </data>
+  <data name="blocked_location_unblock_failed" xml:space="preserve">
+    <value>{} se nepodařilo odblokovat. Zkuste to znovu.</value>
+    <comment>Blocked locations: unblocking a location failed, so it is back in the list. The argument is the location name.</comment>
   </data>
   <data name="blocked_locations" xml:space="preserve">
     <value>Blokované lokality</value>
@@ -645,6 +749,10 @@
   <data name="blocked_locations_could_not_be_loaded" xml:space="preserve">
     <value>Blokované lokality se nepodařilo načíst.</value>
     <comment>Shown on the Blocked locations screen when the list could not be fetched, above a Retry button.</comment>
+  </data>
+  <data name="blocked_locations_load_failed" xml:space="preserve">
+    <value>Vaše blokovaná místa se nepodařilo načíst. Stáhněte dolů a zkuste to znovu.</value>
+    <comment>Blocked locations: the list could not be loaded.</comment>
   </data>
   <data name="blocks" xml:space="preserve">
     <value>Bloky</value>
@@ -691,9 +799,17 @@ správným způsobem</value>
     <value>Obejít VPN</value>
     <comment>App split rules: rule choice sending the app around the VPN (local route).</comment>
   </data>
+  <data name="camera_permission_needed" xml:space="preserve">
+    <value>Ke skenování kódu je potřeba přístup ke kameře.</value>
+    <comment>Shown when the camera permission was denied on the scan screen.</comment>
+  </data>
   <data name="cancel" xml:space="preserve">
     <value>Zrušit</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="chain_rpc_unreachable" xml:space="preserve">
+    <value>RPC řetězce je nedostupné. Zkuste to znovu.</value>
+    <comment>Error when the subnet RPC cannot be reached.</comment>
   </data>
   <data name="change" xml:space="preserve">
     <value>Změnit</value>
@@ -735,9 +851,33 @@ správným způsobem</value>
     <value>Kontrola transakcí Solana</value>
     <comment>Call to action</comment>
   </data>
+  <data name="checking_wallet_address" xml:space="preserve">
+    <value>Kontrola adresy…</value>
+    <comment>Progress text while the address is validated.</comment>
+  </data>
+  <data name="checkout_browser_launch_failed" xml:space="preserve">
+    <value>Nepodařilo se otevřít prohlížeč. Zkopírujte tento odkaz do prohlížeče a dokončete platbu:</value>
+    <comment>Upgrade sheet: the system browser could not be opened for the hosted checkout url. The app appends the url itself on the next line (selectable) so the user can copy it into a browser by hand — never advancing to the waiting page with no payment page open.</comment>
+  </data>
+  <data name="checkout_interrupted_confirming" xml:space="preserve">
+    <value>Okno platby se nečekaně zavřelo. Pokud platba proběhla, váš tarif se tu aktualizuje automaticky — není třeba kupovat znovu.</value>
+    <comment>Upgrade sheet waiting page: the embedded checkout webview crashed after the payment form had rendered, so a charge may already have gone through with only the redirect lost. Shown while the confirmation poll asks the server for the payment webhook; must never invite buying again.</comment>
+  </data>
   <data name="checkout_opened_in_browser" xml:space="preserve">
     <value>Dokončete nákup v prohlížeči. Jakmile bude platba potvrzena, váš tarif se zde automaticky aktualizuje.</value>
     <comment>Shown after the app hands the user to the Stripe hosted checkout in the system browser. The app polls the server and flips the plan automatically when the payment webhook lands.</comment>
+  </data>
+  <data name="choose_file" xml:space="preserve">
+    <value>Vybrat soubor</value>
+    <comment>Button on desktop: pick a file that contains a QR code image.</comment>
+  </data>
+  <data name="choose_image_file" xml:space="preserve">
+    <value>Vybrat obrázek</value>
+    <comment>Button on desktop: pick an image file that contains a QR code.</comment>
+  </data>
+  <data name="choose_photo" xml:space="preserve">
+    <value>Vybrat fotku</value>
+    <comment>Button: pick a photo that contains a QR code.</comment>
   </data>
   <data name="cities" xml:space="preserve">
     <value>Města</value>
@@ -747,6 +887,30 @@ správným způsobem</value>
     <value>Vyzvědněte</value>
     <comment>Call to action</comment>
   </data>
+  <data name="claim_across_epochs" xml:space="preserve">
+    <value>Dokončené epochy: {}</value>
+    <comment>Subtitle of the claim dialog.</comment>
+  </data>
+  <data name="claim_alpha_title" xml:space="preserve">
+    <value>Vyzvednout SN25α</value>
+    <comment>Title of the claim dialog.</comment>
+  </data>
+  <data name="claim_amount_button" xml:space="preserve">
+    <value>Vyzvednout {}</value>
+    <comment>Claim button with the amount.</comment>
+  </data>
+  <data name="claim_confirmed" xml:space="preserve">
+    <value>Vyzvednuto</value>
+    <comment>Claim state: confirmed on chain.</comment>
+  </data>
+  <data name="claim_expired" xml:space="preserve">
+    <value>Vypršelo</value>
+    <comment>Claim state: past the vault's expiry block.</comment>
+  </data>
+  <data name="claim_failed" xml:space="preserve">
+    <value>Selhalo</value>
+    <comment>Claim state: failed.</comment>
+  </data>
   <data name="claim_multiplier" xml:space="preserve">
     <value>Nárokujte si násobej</value>
     <comment>Call to action</comment>
@@ -754,6 +918,34 @@ správným způsobem</value>
   <data name="claim_network_name_hint" xml:space="preserve">
     <value>Získejte vlastní název sítě, který nahradí automaticky vygenerovaný</value>
     <comment>A description of the benefits of claiming a custom network name.</comment>
+  </data>
+  <data name="claim_sending_linux" xml:space="preserve">
+    <value>Odesílání…</value>
+    <comment>Per-epoch status while the claim transaction is being sent.</comment>
+  </data>
+  <data name="claim_sends_from_device" xml:space="preserve">
+    <value>Vaše zařízení odešle nárok do kontraktu trezoru. Gas se platí v TAO z vašeho klíče pro gas. Alpha přijde na váš coldkey.</value>
+    <comment>Explainer under the claim button.</comment>
+  </data>
+  <data name="claim_sent" xml:space="preserve">
+    <value>Odesláno</value>
+    <comment>Claim state: transaction sent.</comment>
+  </data>
+  <data name="claim_to_address_linux" xml:space="preserve">
+    <value>Na {}</value>
+    <comment>Destination line on the claim dialog: the coldkey the alpha lands on.</comment>
+  </data>
+  <data name="claim_unavailable_linux" xml:space="preserve">
+    <value>Vyzvedávání zatím na tomto zařízení není k dispozici.</value>
+    <comment>Shown when the device cannot send claims (no gas key on this host).</comment>
+  </data>
+  <data name="claim_your_spot" xml:space="preserve">
+    <value>Zajistěte si místo</value>
+    <comment>Button on the Top 200 tile.</comment>
+  </data>
+  <data name="claims_for_epoch_expired" xml:space="preserve">
+    <value>Nároky za epochu {} vypršely.</value>
+    <comment>Error when an epoch can no longer be claimed.</comment>
   </data>
   <data name="claims_open_after_finalization" xml:space="preserve">
     <value>Nároky za každou epochu se otevřou po finalizaci jejího seznamu výplat a zůstanou otevřené až do vypršení.</value>
@@ -847,6 +1039,10 @@ správným způsobem</value>
     <value>Připojení a otevření odkazu</value>
     <comment>Call to action</comment>
   </data>
+  <data name="connect_bittensor_wallet" xml:space="preserve">
+    <value>Připojit peněženku Bittensor</value>
+    <comment>Button to connect a Bittensor coldkey.</comment>
+  </data>
   <data name="connect_bittensor_wallet_to_add_sign_in_method" xml:space="preserve">
     <value>Připojte peněženku Bittensor a přidejte ji jako způsob přihlášení.</value>
     <comment>Add sign-in method sheet: the Bittensor wallet option's explanation (Talisman, WalletConnect, or a pasted signature).</comment>
@@ -858,6 +1054,14 @@ správným způsobem</value>
   <data name="connect_seeker_wallet" xml:space="preserve">
     <value>Připojení peněženky s žetonem předobjednávky Saga Genesis nebo Seeker</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="connect_solana_wallet" xml:space="preserve">
+    <value>Připojit peněženku Solana</value>
+    <comment>Overflow menu item next to “Connect Bittensor wallet” on the Earnings screen, and the title of the Solana connect sheet/card: connect a Solana USDC payout wallet (wallet app, or manual address entry). USDC payouts continue until the migration to Bittensor completes.</comment>
+  </data>
+  <data name="connect_solana_wallet_note" xml:space="preserve">
+    <value>Připojte aplikaci peněženky Solana, nebo ručně zadejte adresu USDC na síti Solana.</value>
+    <comment>Note at the top of the Solana connect sheet/card, above the wallet-app button and the manual-entry link.</comment>
   </data>
   <data name="connect_solana_wallet_to_add_sign_in_method" xml:space="preserve">
     <value>Připojte peněženku Solana a přidejte ji jako způsob přihlášení.</value>
@@ -874,6 +1078,10 @@ správným způsobem</value>
   <data name="connect_wallet" xml:space="preserve">
     <value>Připojit peněženku</value>
     <comment>Used in Main/Account/Wallets/ConnectWalletSheet/EnterWalletAddress/EnterWalletAddressView.swift.</comment>
+  </data>
+  <data name="connect_wallet_first" xml:space="preserve">
+    <value>Nejprve připojte peněženku Bittensor.</value>
+    <comment>Error when claiming without a wallet.</comment>
   </data>
   <data name="connected" xml:space="preserve">
     <value>Připojeno</value>
@@ -1031,6 +1239,10 @@ správným způsobem</value>
     <value>Kopírovat ID klienta</value>
     <comment>A label for a context menu item that copies a client ID to the clipboard.</comment>
   </data>
+  <data name="copy_share_text" xml:space="preserve">
+    <value>Kopírovat text ke sdílení</value>
+    <comment>Button on the share screen: copy the text form of the code.</comment>
+  </data>
   <data name="copy_to_clipboard" xml:space="preserve">
     <value>Kopírovat do schránky</value>
     <comment>Button text to copy the seedphrase to the clipboard.</comment>
@@ -1038,6 +1250,14 @@ správným způsobem</value>
   <data name="could_not_get_google_id_token" xml:space="preserve">
     <value>Nepodařilo se získat token Google ID</value>
     <comment>Add sign-in method sheet (android): Google sign-in returned no identity token.</comment>
+  </data>
+  <data name="couldn_t_load_subscription_options" xml:space="preserve">
+    <value>Možnosti předplatného se nepodařilo načíst. Zkontrolujte připojení a zkuste to znovu.</value>
+    <comment>Shown in the upgrade sheet and intro funnel when the App Store product fetch failed, with a retry action — replaces the eternal spinner (Shared/Views/UpgradeSubscriptionSheet.swift, Shared/Views/Introduction/IntroductionView.swift).</comment>
+  </data>
+  <data name="couldn_t_restore_purchases" xml:space="preserve">
+    <value>Nákupy se nepodařilo obnovit. Zkuste to znovu.</value>
+    <comment>Restore-purchases outcome: the App Store sync failed (e.g. the user cancelled the credentials prompt or the store was unreachable) and no entitlement was found locally (Shared/ViewModels/AppStoreSubscriptionManager.swift).</comment>
   </data>
   <data name="couldnt_open_wallet" xml:space="preserve">
     <value>Peněženku se nepodařilo otevřít. Nainstalujte ji prosím a zkuste to znovu.</value>
@@ -1203,6 +1423,10 @@ správným způsobem</value>
     <value>Výplata ze dne {}</value>
     <comment>Call to action</comment>
   </data>
+  <data name="default_daily_data" xml:space="preserve">
+    <value>Ve výchozím nastavení dostáváte každý den {}.</value>
+    <comment>Onboarding data page: the daily free allowance, formatted from the server's balance (pro.yml free.data per data_period).</comment>
+  </data>
   <data name="default_option" xml:space="preserve">
     <value>Výchozí</value>
     <comment>Generic default choice label, e.g. the app split rule combo state meaning no rule.</comment>
@@ -1226,6 +1450,638 @@ správným způsobem</value>
   <data name="delete_account_type_network_name" xml:space="preserve">
     <value>Pro potvrzení napište {}.</value>
     <comment>Delete account dialog: asks the user to type the network name back before the delete button enables. {network} is the account's network name.</comment>
+  </data>
+  <data name="dev_affinity_performance" xml:space="preserve">
+    <value>Afinita podle výkonu</value>
+    <comment>Developer tools screen (reliability surface): performance-aware affinity control label.</comment>
+  </data>
+  <data name="dev_affinity_performance_detail" xml:space="preserve">
+    <value>Váží nové závody TLS podle špičkové rychlosti potvrzených bajtů každého poskytovatele vzhledem k jeho inzerované šířce pásma. Se zapnutou pevnou afinitou ustupují poskytovatelé s nízkým naměřeným výkonem závodu. Stávající připojení a explicitní připnutí zůstávají beze změny</value>
+    <comment>Developer tools screen: explanatory subtext under the performance-aware affinity control.</comment>
+  </data>
+  <data name="dev_affinity_sticky" xml:space="preserve">
+    <value>Trvalá afinita webu</value>
+    <comment>Developer tools screen (reliability surface): affinity sticky control label.</comment>
+  </data>
+  <data name="dev_affinity_sticky_detail" xml:space="preserve">
+    <value>Nová připojení webu zůstávají na výstupu, který už používají ta předchozí, i nad limit toků, takže vytížený web si ponechá jednu výstupní IP. Limit dál určuje, které výstupy přijímají nové weby. Vypnuto obnoví přísný limit</value>
+    <comment>Developer tools screen: explanatory subtext under the 'affinity sticky' control.</comment>
+  </data>
+  <data name="dev_behaviour" xml:space="preserve">
+    <value>Chování</value>
+    <comment>Developer tools screen (reliability surface): behaviour control label.</comment>
+  </data>
+  <data name="dev_blackhole_receive" xml:space="preserve">
+    <value>Držet tiché poskytovatele déle</value>
+    <comment>Developer tools screen (reliability surface): blackhole receive control label.</comment>
+  </data>
+  <data name="dev_blackhole_receive_detail" xml:space="preserve">
+    <value>Jak dlouho smí poskytovatel, který ještě potvrzuje provoz, nic nevracet, než bude vyřazen. Vypnuto je drží, dokud nepřestanou potvrzovat</value>
+    <comment>Developer tools screen: explanatory subtext under the 'blackhole receive' control.</comment>
+  </data>
+  <data name="dev_blast_radius" xml:space="preserve">
+    <value>Rozsah dopadu</value>
+    <comment>Developer tools screen (reliability surface): blast radius control label.</comment>
+  </data>
+  <data name="dev_blast_radius_detail" xml:space="preserve">
+    <value>Ztracená připojení na jedno selhání poskytovatele. Méně je lépe</value>
+    <comment>Developer tools screen: explanatory subtext under the 'blast radius' control.</comment>
+  </data>
+  <data name="dev_blast_radius_value" xml:space="preserve">
+    <value>Na selhání: {}</value>
+    <comment>Developer tools screen: formatted value readout for 'blast radius'.</comment>
+  </data>
+  <data name="dev_busy_probe" xml:space="preserve">
+    <value>Ověřit zaseknuté výstupy před vyřazením</value>
+    <comment>Developer tools screen (reliability surface): busy probe control label.</comment>
+  </data>
+  <data name="dev_busy_probe_budget" xml:space="preserve">
+    <value>Čekání sondy obsazenosti</value>
+    <comment>Developer tools screen (reliability surface): busy probe budget control label.</comment>
+  </data>
+  <data name="dev_busy_probe_budget_detail" xml:space="preserve">
+    <value>Jak dlouho sonda zaseknutí čeká na odpověď, než odsoudí. Vypnuto použije polovinu prahu zaseknutí</value>
+    <comment>Developer tools screen: explanatory subtext under the 'busy probe budget' control.</comment>
+  </data>
+  <data name="dev_busy_probe_detail" xml:space="preserve">
+    <value>Když se výstup zasekne, dostane před odsouzením jeden ping. Přetížený, ale živý výstup odpoví a své toky si ponechá; mrtvý je vyřazen tak jako tak. Vypnuto odsuzuje podle prahu zaseknutí</value>
+    <comment>Developer tools screen: explanatory subtext under the 'busy probe' control.</comment>
+  </data>
+  <data name="dev_busy_probes" xml:space="preserve">
+    <value>Sondy obsazenosti</value>
+    <comment>Developer tools screen (reliability surface): busy probes control label.</comment>
+  </data>
+  <data name="dev_busy_probes_detail" xml:space="preserve">
+    <value>Pingy živosti odeslané zaseknutým výstupům; zproštěné odpověděly a zůstaly — odstranění, kterým sonda zabránila</value>
+    <comment>Developer tools screen: explanatory subtext under the 'busy probes' control.</comment>
+  </data>
+  <data name="dev_busy_probes_value" xml:space="preserve">
+    <value>Odesláno {0} / zproštěno {1}</value>
+    <comment>Developer tools screen: formatted value readout for 'busy probes'.</comment>
+  </data>
+  <data name="dev_choose_logs" xml:space="preserve">
+    <value>Vybrat logy…</value>
+    <comment>Developer tools screen: action for choosing individual log files to export.</comment>
+  </data>
+  <data name="dev_clear_logs" xml:space="preserve">
+    <value>Smazat logy</value>
+    <comment>Developer tools screen: action that deletes the diagnostics log files without touching local state, preferences or rules.</comment>
+  </data>
+  <data name="dev_clearing_logs" xml:space="preserve">
+    <value>Mazání logů…</value>
+    <comment>Developer tools screen: the clear-logs action's label while it runs.</comment>
+  </data>
+  <data name="dev_cluster_affinity" xml:space="preserve">
+    <value>Seskupit IP podle webu</value>
+    <comment>Developer tools screen (reliability surface): cluster affinity control label.</comment>
+  </data>
+  <data name="dev_cluster_affinity_detail" xml:space="preserve">
+    <value>Drží web na jednom výstupu, když není vidět jeho název hostitele</value>
+    <comment>Developer tools screen: explanatory subtext under the 'cluster affinity' control.</comment>
+  </data>
+  <data name="dev_comparative_connect" xml:space="preserve">
+    <value>Ukončit mrtvá připojení brzy</value>
+    <comment>Developer tools screen (reliability surface): comparative connect control label.</comment>
+  </data>
+  <data name="dev_comparative_connect_detail" xml:space="preserve">
+    <value>Vyřadí dříve výstup, který nic nenavázal, když dva sesterské výstupy přijímají. Vypnuto čeká celý 30s práh připojení</value>
+    <comment>Developer tools screen: explanatory subtext under the 'comparative connect' control.</comment>
+  </data>
+  <data name="dev_dial_failure_rerace" xml:space="preserve">
+    <value>Zkusit odmítnutá připojení jinde</value>
+    <comment>Developer tools screen (reliability surface): dial failure rerace control label.</comment>
+  </data>
+  <data name="dev_dial_failure_rerace_detail" xml:space="preserve">
+    <value>Když poskytovatel nedosáhne na web, přesune připojení na jiný výstup, místo aby zůstalo viset</value>
+    <comment>Developer tools screen: explanatory subtext under the 'dial failure rerace' control.</comment>
+  </data>
+  <data name="dev_dial_failures" xml:space="preserve">
+    <value>Selhání připojení poskytovatelů</value>
+    <comment>Developer tools screen (reliability surface): dial failures control label.</comment>
+  </data>
+  <data name="dev_dial_failures_detail" xml:space="preserve">
+    <value>Kolikrát poskytovatel nahlásil, že nemohl otevřít připojení k cíli</value>
+    <comment>Developer tools screen: explanatory subtext under the 'dial failures' control.</comment>
+  </data>
+  <data name="dev_drop_exit" xml:space="preserve">
+    <value>Vyřadit</value>
+    <comment>Developer tools screen (reliability surface): drop exit control label.</comment>
+  </data>
+  <data name="dev_effective_tier" xml:space="preserve">
+    <value>Živé snížení úrovně</value>
+    <comment>Developer tools screen (reliability surface): effective tier control label.</comment>
+  </data>
+  <data name="dev_effective_tier_detail" xml:space="preserve">
+    <value>Neúspěšná připojení a přežité verdikty posunou poskytovatele v pořadí dolů během sekundy; návrat vyžaduje minuty bez chyb a prokázané připojení</value>
+    <comment>Developer tools screen: explanatory subtext under the 'effective tier' control.</comment>
+  </data>
+  <data name="dev_evaluation_pool" xml:space="preserve">
+    <value>Kandidáti hodnocení na pozici</value>
+    <comment>Developer tools screen (reliability surface): evaluation pool control label.</comment>
+  </data>
+  <data name="dev_evaluation_pool_detail" xml:space="preserve">
+    <value>Kolik poskytovatelů rozšíření okna otestuje pingem a seřadí na každou potřebnou pozici, přičemž si ponechá ty nejlepší. 1 hodnotí přesně tolik, kolik je potřeba</value>
+    <comment>Developer tools screen: explanatory subtext under the 'evaluation pool' control.</comment>
+  </data>
+  <data name="dev_exit_dial_failures" xml:space="preserve">
+    <value>Neúspěšná připojení: {}</value>
+    <comment>Developer tools screen (reliability surface): exit dial failures control label.</comment>
+  </data>
+  <data name="dev_exit_flows" xml:space="preserve">
+    <value>Toky: {}</value>
+    <comment>Developer tools screen (reliability surface): exit flows control label.</comment>
+  </data>
+  <data name="dev_exits" xml:space="preserve">
+    <value>Výstupy</value>
+    <comment>Developer tools screen (reliability surface): exits control label.</comment>
+  </data>
+  <data name="dev_export_all_logs" xml:space="preserve">
+    <value>Exportovat všechny logy (nezpracované)</value>
+    <comment>Developer tools screen: action for exporting all diagnostic logs without redaction.</comment>
+  </data>
+  <data name="dev_export_failed" xml:space="preserve">
+    <value>Export selhal: {}</value>
+    <comment>Developer tools screen: error shown when diagnostic log export fails.</comment>
+  </data>
+  <data name="dev_export_not_included" xml:space="preserve">
+    <value>Nezahrnuto: {}</value>
+    <comment>Developer tools screen: explanation that a requested diagnostic item was omitted from an export.</comment>
+  </data>
+  <data name="dev_export_redacted_logs" xml:space="preserve">
+    <value>Exportovat anonymizované logy</value>
+    <comment>Developer tools screen: action for exporting diagnostic logs with sensitive traffic details redacted.</comment>
+  </data>
+  <data name="dev_export_selected" xml:space="preserve">
+    <value>Exportovat vybrané</value>
+    <comment>Developer tools screen: action for exporting the selected diagnostic log files.</comment>
+  </data>
+  <data name="dev_export_share" xml:space="preserve">
+    <value>Sdílet diagnostický balíček</value>
+    <comment>Developer tools screen: action for sharing a diagnostic bundle.</comment>
+  </data>
+  <data name="dev_export_summary.one" xml:space="preserve">
+    <value>Exportován {0} soubor logu ({1})</value>
+    <comment>Developer tools screen: summary of the number and total size of diagnostic log files exported.</comment>
+  </data>
+  <data name="dev_export_summary.few" xml:space="preserve">
+    <value>Exportovány {0} soubory logů ({1})</value>
+    <comment>Developer tools screen: summary of the number and total size of diagnostic log files exported.</comment>
+  </data>
+  <data name="dev_export_summary.many" xml:space="preserve">
+    <value>Exportováno {0} souboru logů ({1})</value>
+    <comment>Developer tools screen: summary of the number and total size of diagnostic log files exported.</comment>
+  </data>
+  <data name="dev_export_summary.other" xml:space="preserve">
+    <value>Exportováno {0} souborů logů ({1})</value>
+    <comment>Developer tools screen: summary of the number and total size of diagnostic log files exported.</comment>
+  </data>
+  <data name="dev_export_unavailable" xml:space="preserve">
+    <value>Nedostupné: {}</value>
+    <comment>Developer tools screen: explanation that a diagnostic export option is unavailable.</comment>
+  </data>
+  <data name="dev_exporting" xml:space="preserve">
+    <value>Exportování…</value>
+    <comment>Developer tools screen: progress label shown while a diagnostic bundle is being exported.</comment>
+  </data>
+  <data name="dev_flows_opened" xml:space="preserve">
+    <value>Otevřené toky</value>
+    <comment>Developer tools screen (reliability surface): flows opened control label.</comment>
+  </data>
+  <data name="dev_flows_opened_detail" xml:space="preserve">
+    <value>Celkem od resetu, aby šlo porovnat běhy různé délky</value>
+    <comment>Developer tools screen: explanatory subtext under the 'flows opened' control.</comment>
+  </data>
+  <data name="dev_flows_rebound" xml:space="preserve">
+    <value>Znovu navázané toky QUIC</value>
+    <comment>Developer tools screen (reliability surface): flows rebound control label.</comment>
+  </data>
+  <data name="dev_flows_rebound_detail" xml:space="preserve">
+    <value>Toky přesunuté během odstranění na teplý výstup; přijaté znamená, že server změnu cesty přijal bez nového připojení</value>
+    <comment>Developer tools screen: explanatory subtext under the 'flows rebound' control.</comment>
+  </data>
+  <data name="dev_flows_rebound_value" xml:space="preserve">
+    <value>{0} (přijato {1} / znovu připojeno {2})</value>
+    <comment>Developer tools screen: formatted value readout for 'flows rebound'.</comment>
+  </data>
+  <data name="dev_flows_reraced" xml:space="preserve">
+    <value>Přesunuto na jiný výstup</value>
+    <comment>Developer tools screen (reliability surface): flows reraced control label.</comment>
+  </data>
+  <data name="dev_flows_reraced_detail" xml:space="preserve">
+    <value>Kolik z těch selhání bylo potichu přesunuto, místo aby zůstala viset</value>
+    <comment>Developer tools screen: explanatory subtext under the 'flows reraced' control.</comment>
+  </data>
+  <data name="dev_formation_poll" xml:space="preserve">
+    <value>Rychlá kontrola prvního výstupu</value>
+    <comment>Developer tools screen (reliability surface): formation poll control label.</comment>
+  </data>
+  <data name="dev_formation_poll_detail" xml:space="preserve">
+    <value>Jak často připojující se tok znovu zkontroluje prázdné okno, aby první požadavek odešel hned, jak dorazí první výstup. Vypnuto čeká 2s tempo opakování</value>
+    <comment>Developer tools screen: explanatory subtext under the 'formation poll' control.</comment>
+  </data>
+  <data name="dev_fresh_flow_affinity" xml:space="preserve">
+    <value>Pevná afinita nových toků</value>
+    <comment>Developer tools screen (reliability surface): hard fresh-flow affinity control label.</comment>
+  </data>
+  <data name="dev_fresh_flow_affinity_detail" xml:space="preserve">
+    <value>Přiřadí každé nové připojení výstupu, který už používá jeho IP nebo doména. Výchozí je vypnuto: každé běžné nové připojení se dostane do závodu poskytovatelů. Stávající připojení a explicitní připnutí zůstávají vždy beze změny</value>
+    <comment>Developer tools screen: explanatory subtext under the hard fresh-flow affinity control.</comment>
+  </data>
+  <data name="dev_group_follow" xml:space="preserve">
+    <value>Sledovat výstupy na lavičce</value>
+    <comment>Developer tools screen (reliability surface): group follow control label.</comment>
+  </data>
+  <data name="dev_group_follow_detail" xml:space="preserve">
+    <value>Výstup v karanténě si ponechá nová připojení svých vlastních webů během začátku pobytu na lavičce, kdy je verdikt nejméně prokázaný, aby lavička nerozdělila výstupní IP webu. Nové weby se mu dál vyhýbají. Vypnuto je rozptýlí</value>
+    <comment>Developer tools screen: explanatory subtext under the 'group follow' control.</comment>
+  </data>
+  <data name="dev_group_follow_window" xml:space="preserve">
+    <value>Okno sledování</value>
+    <comment>Developer tools screen (reliability surface): group follow window control label.</comment>
+  </data>
+  <data name="dev_group_follow_window_detail" xml:space="preserve">
+    <value>Jak dlouho od začátku pobytu na lavičce nová připojení webu dál sledují svůj výstup — rané lavičky bývají plané poplachy; ta, která trvá, směřuje k odstranění a přestane přijímat toky. Vypnuto rozptýlí okamžitě</value>
+    <comment>Developer tools screen: explanatory subtext under the 'group follow window' control.</comment>
+  </data>
+  <data name="dev_heartbeat" xml:space="preserve">
+    <value>Tep stavu</value>
+    <comment>Developer tools screen (reliability surface): heartbeat control label.</comment>
+  </data>
+  <data name="dev_heartbeat_detail" xml:space="preserve">
+    <value>Jak často se do logu zapíše jeden řádek se shrnutím aktuálního stavu pro pozdější analýzu. Vypnuto ho ztiší; kratší zachytí přechod, delší drží víc vyrovnávací paměti</value>
+    <comment>Developer tools screen: explanatory subtext under the 'heartbeat' control.</comment>
+  </data>
+  <data name="dev_load_corroboration" xml:space="preserve">
+    <value>Potvrzení podle zátěže</value>
+    <comment>Developer tools screen (reliability surface): load corroboration control label.</comment>
+  </data>
+  <data name="dev_load_corroboration_detail" xml:space="preserve">
+    <value>Další tiché cíle vyžadované na každý tento počet toků, než může být vytížený výstup na základě slabých důkazů poslán na lavičku: výstup s 24 toky při 8 potřebuje 3 tiché weby, ne 2. Vypnuto drží pevné minimum</value>
+    <comment>Developer tools screen: explanatory subtext under the 'load corroboration' control.</comment>
+  </data>
+  <data name="dev_log_verbosity" xml:space="preserve">
+    <value>Podrobnost logu</value>
+    <comment>Developer tools screen: control label for diagnostic log detail.</comment>
+  </data>
+  <data name="dev_log_verbosity_default" xml:space="preserve">
+    <value>Výchozí</value>
+    <comment>Developer tools screen: default diagnostic log detail level.</comment>
+  </data>
+  <data name="dev_log_verbosity_default_detail" xml:space="preserve">
+    <value>Chyby připojení a pingy kontraktů</value>
+    <comment>Developer tools screen: explanation of the default diagnostic log detail level.</comment>
+  </data>
+  <data name="dev_log_verbosity_trace" xml:space="preserve">
+    <value>Trasování</value>
+    <comment>Developer tools screen: trace diagnostic log detail level.</comment>
+  </data>
+  <data name="dev_log_verbosity_trace_detail" xml:space="preserve">
+    <value>Vnitřní údaje transportu a okna. Velmi velké logy</value>
+    <comment>Developer tools screen: explanation of the trace diagnostic log detail level.</comment>
+  </data>
+  <data name="dev_log_verbosity_unavailable" xml:space="preserve">
+    <value>Nedostupné</value>
+    <comment>Developer tools screen: label used when the diagnostic log detail level cannot be read.</comment>
+  </data>
+  <data name="dev_log_verbosity_unavailable_detail" xml:space="preserve">
+    <value>Zatím není žádné zařízení, ze kterého by šla úroveň logu načíst. Nejprve se přihlaste</value>
+    <comment>Developer tools screen: explanation shown when the diagnostic log detail level cannot be read.</comment>
+  </data>
+  <data name="dev_log_verbosity_verbose" xml:space="preserve">
+    <value>Podrobné</value>
+    <comment>Developer tools screen: verbose diagnostic log detail level.</comment>
+  </data>
+  <data name="dev_log_verbosity_verbose_detail" xml:space="preserve">
+    <value>Účtování kontraktů a rozhodnutí o blokování po paketech. Obsahuje cílové IP adresy</value>
+    <comment>Developer tools screen: explanation of the verbose diagnostic log detail level.</comment>
+  </data>
+  <data name="dev_log_verbosity_warning" xml:space="preserve">
+    <value>Od úrovně Podrobné výš obsahují logy cílové IP adresy a porty provozu, který odesíláte. Ke sdílení použijte „Exportovat anonymizované logy“; nezpracovaný balíček by neměl opustit toto zařízení.</value>
+    <comment>Developer tools screen: privacy warning shown when detailed traffic logging is enabled.</comment>
+  </data>
+  <data name="dev_log_verbosity_warning_title" xml:space="preserve">
+    <value>Logy zaznamenávají váš skutečný provoz</value>
+    <comment>Developer tools screen: title for the detailed traffic logging privacy warning.</comment>
+  </data>
+  <data name="dev_max_flows_per_exit" xml:space="preserve">
+    <value>Max. připojení na výstup</value>
+    <comment>Developer tools screen (reliability surface): max flows per exit control label.</comment>
+  </data>
+  <data name="dev_max_flows_per_exit_detail" xml:space="preserve">
+    <value>Ztráta výstupu ukončí každé připojení na něm. Nižší hodnota rozloží škody; web pak může použít víc než jednu výstupní IP</value>
+    <comment>Developer tools screen: explanatory subtext under the 'max flows per exit' control.</comment>
+  </data>
+  <data name="dev_measure_none" xml:space="preserve">
+    <value>Zatím žádná selhání poskytovatelů. Jedno vyvoláte zaseknutím výstupu níže.</value>
+    <comment>Developer tools screen (reliability surface): measure none control label.</comment>
+  </data>
+  <data name="dev_measurements" xml:space="preserve">
+    <value>Měření</value>
+    <comment>Developer tools screen (reliability surface): measurements control label.</comment>
+  </data>
+  <data name="dev_measurements_detail" xml:space="preserve">
+    <value>Co stojí selhání poskytovatele. Resetujte, spusťte test, přečtěte výsledek.</value>
+    <comment>Developer tools screen: explanatory subtext under the 'measurements' control.</comment>
+  </data>
+  <data name="dev_migrate_exit" xml:space="preserve">
+    <value>Přesunout</value>
+    <comment>Developer tools screen (reliability surface): migrate exit control label.</comment>
+  </data>
+  <data name="dev_min_blackhole_destinations" xml:space="preserve">
+    <value>Potvrdit tiché výstupy</value>
+    <comment>Developer tools screen (reliability surface): min blackhole destinations control label.</comment>
+  </data>
+  <data name="dev_min_blackhole_destinations_detail" xml:space="preserve">
+    <value>Kolik různých cílů musí být tichých, než je výstup odsouzen za nepříjem, aby jediný mrtvý web nemohl odstranit fungující výstup. Vypnuto nechá odsoudit i jediný cíl</value>
+    <comment>Developer tools screen: explanatory subtext under the 'min blackhole destinations' control.</comment>
+  </data>
+  <data name="dev_no_exits" xml:space="preserve">
+    <value>Žádné výstupy. Nejprve se připojte.</value>
+    <comment>Developer tools screen (reliability surface): no exits control label.</comment>
+  </data>
+  <data name="dev_open_tools" xml:space="preserve">
+    <value>Otevřít vývojářské nástroje</value>
+    <comment>Developer tools screen (reliability surface): open tools control label.</comment>
+  </data>
+  <data name="dev_probe_all" xml:space="preserve">
+    <value>Otestovat teď všechny výstupy</value>
+    <comment>Developer tools screen (reliability surface): probe all control label.</comment>
+  </data>
+  <data name="dev_probe_providers" xml:space="preserve">
+    <value>Testovat poskytovatele</value>
+    <comment>Developer tools screen (reliability surface): probe providers control label.</comment>
+  </data>
+  <data name="dev_probe_providers_detail" xml:space="preserve">
+    <value>Kvalifikuje výstupy připojováním ke skutečným webům přes ně. Odpověď výstup prokáže; ticho se proti němu nikdy nepočítá</value>
+    <comment>Developer tools screen: explanatory subtext under the 'probe providers' control.</comment>
+  </data>
+  <data name="dev_probe_sample_hosts" xml:space="preserve">
+    <value>Testované hostitele na průchod</value>
+    <comment>Developer tools screen (reliability surface): probe sample hosts control label.</comment>
+  </data>
+  <data name="dev_probe_sample_hosts_detail" xml:space="preserve">
+    <value>Kolik kontrolních webů jeden kvalifikační průchod osloví přes výstup. 0 otestuje celý vestavěný seznam; menší číslo jím prochází po blocích</value>
+    <comment>Developer tools screen: explanatory subtext under the 'probe sample hosts' control.</comment>
+  </data>
+  <data name="dev_probe_timeout" xml:space="preserve">
+    <value>Čekání sondy</value>
+    <comment>Developer tools screen (reliability surface): probe timeout control label.</comment>
+  </data>
+  <data name="dev_probe_timeout_detail" xml:space="preserve">
+    <value>Jak dlouho kvalifikační sonda čeká na odpověď. Vypnuto použije vestavěné 4 s. Omezuje jen čekání na důkaz, nikdy neodsuzuje</value>
+    <comment>Developer tools screen: explanatory subtext under the 'probe timeout' control.</comment>
+  </data>
+  <data name="dev_probes" xml:space="preserve">
+    <value>Sondy</value>
+    <comment>Developer tools screen (reliability surface): probes control label.</comment>
+  </data>
+  <data name="dev_probes_detail" xml:space="preserve">
+    <value>Kvalifikační sondy v této relaci</value>
+    <comment>Developer tools screen: explanatory subtext under the 'probes' control.</comment>
+  </data>
+  <data name="dev_probes_value" xml:space="preserve">
+    <value>Odesláno {0} / zodpovězeno {1}</value>
+    <comment>Developer tools screen: formatted value readout for 'probes'.</comment>
+  </data>
+  <data name="dev_quic_rebind" xml:space="preserve">
+    <value>Znovu navázat QUIC při ztrátě výstupu</value>
+    <comment>Developer tools screen (reliability surface): quic rebind control label.</comment>
+  </data>
+  <data name="dev_quic_rebind_detail" xml:space="preserve">
+    <value>Během odstranění znovu připne navázané toky QUIC k živému výstupu, místo aby je ukončil</value>
+    <comment>Developer tools screen: explanatory subtext under the 'quic rebind' control.</comment>
+  </data>
+  <data name="dev_recovery" xml:space="preserve">
+    <value>Doba obnovy</value>
+    <comment>Developer tools screen (reliability surface): recovery control label.</comment>
+  </data>
+  <data name="dev_recovery_detail" xml:space="preserve">
+    <value>Od pádu výstupu po to, kdy web znovu odpoví</value>
+    <comment>Developer tools screen: explanatory subtext under the 'recovery' control.</comment>
+  </data>
+  <data name="dev_recovery_missed" xml:space="preserve">
+    <value>Nikdy se nevrátily</value>
+    <comment>Developer tools screen (reliability surface): recovery missed control label.</comment>
+  </data>
+  <data name="dev_recovery_missed_detail" xml:space="preserve">
+    <value>Weby opuštěné místo obnovení</value>
+    <comment>Developer tools screen: explanatory subtext under the 'recovery missed' control.</comment>
+  </data>
+  <data name="dev_recovery_missed_value" xml:space="preserve">
+    <value>{0} z {1}</value>
+    <comment>Developer tools screen: formatted value readout for 'recovery missed'.</comment>
+  </data>
+  <data name="dev_recovery_value" xml:space="preserve">
+    <value>prům. {0}, nejhorší {1}</value>
+    <comment>Developer tools screen: formatted value readout for 'recovery'.</comment>
+  </data>
+  <data name="dev_refresh" xml:space="preserve">
+    <value>Obnovit</value>
+    <comment>Developer tools screen (reliability surface): refresh control label.</comment>
+  </data>
+  <data name="dev_removal_budget_count" xml:space="preserve">
+    <value>Limit bouře odstranění</value>
+    <comment>Developer tools screen (reliability surface): removal budget count control label.</comment>
+  </data>
+  <data name="dev_removal_budget_count_detail" xml:space="preserve">
+    <value>Kolik odstranění na základě verdiktu je povoleno za okno, než se zbytek odloží; nával má spíš jednu místní příčinu než mnoho selhání. Vypnuto odstraňuje bez omezení</value>
+    <comment>Developer tools screen: explanatory subtext under the 'removal budget count' control.</comment>
+  </data>
+  <data name="dev_removal_budget_window" xml:space="preserve">
+    <value>Okno bouře odstranění</value>
+    <comment>Developer tools screen (reliability surface): removal budget window control label.</comment>
+  </data>
+  <data name="dev_removal_budget_window_detail" xml:space="preserve">
+    <value>Okno, za které se limit odstranění počítá. Vypnuto (stejně jako limit 0) vypne jistič</value>
+    <comment>Developer tools screen: explanatory subtext under the 'removal budget window' control.</comment>
+  </data>
+  <data name="dev_removals_deferred" xml:space="preserve">
+    <value>Odložená odstranění</value>
+    <comment>Developer tools screen (reliability surface): removals deferred control label.</comment>
+  </data>
+  <data name="dev_removals_deferred_detail" xml:space="preserve">
+    <value>Odstranění, která jistič bouře zadržel po souvisejícím návalu</value>
+    <comment>Developer tools screen: explanatory subtext under the 'removals deferred' control.</comment>
+  </data>
+  <data name="dev_reset_defaults" xml:space="preserve">
+    <value>Obnovit výchozí hodnoty</value>
+    <comment>Developer tools screen (reliability surface): reset defaults control label.</comment>
+  </data>
+  <data name="dev_reset_measurements" xml:space="preserve">
+    <value>Resetovat měření</value>
+    <comment>Developer tools screen (reliability surface): reset measurements control label.</comment>
+  </data>
+  <data name="dev_scheduler_pause_recovery" xml:space="preserve">
+    <value>Okno obnovy po uspání</value>
+    <comment>Developer tools screen (reliability surface): scheduler pause recovery control label.</comment>
+  </data>
+  <data name="dev_scheduler_pause_recovery_detail" xml:space="preserve">
+    <value>Jak dlouho zůstávají verdikty zadržené po zjištěném uspání, aby se transporty stihly znovu zaregistrovat. Vypnuto použije vestavěných 5 s</value>
+    <comment>Developer tools screen: explanatory subtext under the 'scheduler pause recovery' control.</comment>
+  </data>
+  <data name="dev_scheduler_pause_tolerance" xml:space="preserve">
+    <value>Detektor uspání</value>
+    <comment>Developer tools screen (reliability surface): scheduler pause tolerance control label.</comment>
+  </data>
+  <data name="dev_scheduler_pause_tolerance_detail" xml:space="preserve">
+    <value>Jak velké zpoždění časovače se vyloží jako uspaný telefon, a ne zaseknutý výstup, aby probuzený telefon neodsoudil všechny výstupy najednou. Vypnuto ho vypne</value>
+    <comment>Developer tools screen: explanatory subtext under the 'scheduler pause tolerance' control.</comment>
+  </data>
+  <data name="dev_scheduler_pauses" xml:space="preserve">
+    <value>Zachycená uspání</value>
+    <comment>Developer tools screen (reliability surface): scheduler pauses control label.</comment>
+  </data>
+  <data name="dev_scheduler_pauses_detail" xml:space="preserve">
+    <value>Uspání hostitele, která detektor zachytil; každé je dávka verdiktů zadržených místo provedení na právě probuzeném telefonu</value>
+    <comment>Developer tools screen: explanatory subtext under the 'scheduler pauses' control.</comment>
+  </data>
+  <data name="dev_section_detection" xml:space="preserve">
+    <value>Detekce</value>
+    <comment>Developer tools screen: section heading for the detection controls.</comment>
+  </data>
+  <data name="dev_section_diagnostics" xml:space="preserve">
+    <value>Diagnostika</value>
+    <comment>Developer tools screen: section heading for diagnostic log controls.</comment>
+  </data>
+  <data name="dev_section_observability" xml:space="preserve">
+    <value>Pozorovatelnost</value>
+    <comment>Developer tools screen: section heading for the observability controls.</comment>
+  </data>
+  <data name="dev_section_placement" xml:space="preserve">
+    <value>Umístění</value>
+    <comment>Developer tools screen: section heading for the placement controls.</comment>
+  </data>
+  <data name="dev_section_probing" xml:space="preserve">
+    <value>Testování</value>
+    <comment>Developer tools screen: section heading for the probing controls.</comment>
+  </data>
+  <data name="dev_section_recovery" xml:space="preserve">
+    <value>Obnova</value>
+    <comment>Developer tools screen: section heading for the recovery controls.</comment>
+  </data>
+  <data name="dev_send_stall" xml:space="preserve">
+    <value>Rychle vyřadit zaseknuté výstupy</value>
+    <comment>Developer tools screen (reliability surface): send stall control label.</comment>
+  </data>
+  <data name="dev_send_stall_detail" xml:space="preserve">
+    <value>Jak dlouho smí výstup přestat doručovat, než bude vyřazen. Vypnuto čeká 30 s</value>
+    <comment>Developer tools screen: explanatory subtext under the 'send stall' control.</comment>
+  </data>
+  <data name="dev_server_name_bridge" xml:space="preserve">
+    <value>Sloučit pozdě pojmenované toky</value>
+    <comment>Developer tools screen (reliability surface): server name bridge control label.</comment>
+  </data>
+  <data name="dev_server_name_bridge_detail" xml:space="preserve">
+    <value>Přesune pozdější připojení na výstup, který už používá to první</value>
+    <comment>Developer tools screen: explanatory subtext under the 'server name bridge' control.</comment>
+  </data>
+  <data name="dev_shuffle_exits" xml:space="preserve">
+    <value>Zamíchat všechny výstupy</value>
+    <comment>Developer tools screen (reliability surface): shuffle exits control label.</comment>
+  </data>
+  <data name="dev_simulate_network_change" xml:space="preserve">
+    <value>Simulovat změnu sítě</value>
+    <comment>Developer tools screen (reliability surface): simulate network change control label.</comment>
+  </data>
+  <data name="dev_soft_verdict" xml:space="preserve">
+    <value>Snížit úroveň před odstraněním</value>
+    <comment>Developer tools screen (reliability surface): soft verdict control label.</comment>
+  </data>
+  <data name="dev_soft_verdict_detail" xml:space="preserve">
+    <value>Nejednoznačné verdikty pošlou výstup na lavičku, místo aby ukončily jeho toky; odstranění vyžaduje trvalé důkazy nebo prázdný výstup</value>
+    <comment>Developer tools screen: explanatory subtext under the 'soft verdict' control.</comment>
+  </data>
+  <data name="dev_stall_exit" xml:space="preserve">
+    <value>Zaseknout</value>
+    <comment>Developer tools screen (reliability surface): stall exit control label.</comment>
+  </data>
+  <data name="dev_standing_reserve" xml:space="preserve">
+    <value>Držet záložní výstup připravený</value>
+    <comment>Developer tools screen (reliability surface): standing reserve control label.</comment>
+  </data>
+  <data name="dev_standing_reserve_detail" xml:space="preserve">
+    <value>Každé okno má o jeden výstup víc, než je cíl, takže náhrada je už připojená. Vypnuto čeká s doplněním na ztrátu</value>
+    <comment>Developer tools screen: explanatory subtext under the 'standing reserve' control.</comment>
+  </data>
+  <data name="dev_tcp_collapse_hold" xml:space="preserve">
+    <value>Uvolnit uvízlá opakovaná odeslání</value>
+    <comment>Developer tools screen (reliability surface): tcp collapse hold control label.</comment>
+  </data>
+  <data name="dev_tcp_collapse_hold_detail" xml:space="preserve">
+    <value>Jak dlouho se opakovaná odeslání zadržují, než se jedno uvolní. Vypnuto čeká 30 s</value>
+    <comment>Developer tools screen: explanatory subtext under the 'tcp collapse hold' control.</comment>
+  </data>
+  <data name="dev_tcp_idle_timeout" xml:space="preserve">
+    <value>Delší časový limit nečinnosti TCP</value>
+    <comment>Developer tools screen (reliability surface): tcp idle timeout control label.</comment>
+  </data>
+  <data name="dev_tcp_idle_timeout_detail" xml:space="preserve">
+    <value>Jak dlouho může být připojení TCP nečinné. Vypnuto použije limit UDP</value>
+    <comment>Developer tools screen: explanatory subtext under the 'tcp idle timeout' control.</comment>
+  </data>
+  <data name="dev_timing" xml:space="preserve">
+    <value>Časování</value>
+    <comment>Developer tools screen (reliability surface): timing control label.</comment>
+  </data>
+  <data name="dev_udp_idle_timeout" xml:space="preserve">
+    <value>Časový limit nečinnosti UDP</value>
+    <comment>Developer tools screen (reliability surface): udp idle timeout control label.</comment>
+  </data>
+  <data name="dev_udp_idle_timeout_detail" xml:space="preserve">
+    <value>Jak dlouho může být tok, který není TCP, nečinný, než bude uklizen</value>
+    <comment>Developer tools screen: explanatory subtext under the 'udp idle timeout' control.</comment>
+  </data>
+  <data name="dev_udp_teardown" xml:space="preserve">
+    <value>Signalizovat ukončení UDP</value>
+    <comment>Developer tools screen (reliability surface): udp teardown control label.</comment>
+  </data>
+  <data name="dev_udp_teardown_detail" xml:space="preserve">
+    <value>Oznámí DNS a QUIC, že cesta zmizela, místo aby zmlkl</value>
+    <comment>Developer tools screen: explanatory subtext under the 'udp teardown' control.</comment>
+  </data>
+  <data name="dev_uplink_gate" xml:space="preserve">
+    <value>Brána ticha uplinku</value>
+    <comment>Developer tools screen (reliability surface): uplink gate control label.</comment>
+  </data>
+  <data name="dev_uplink_gate_detail" xml:space="preserve">
+    <value>Jak dlouho smí být celý tunel tichý, než se verdikty o poskytovatelích zadrží jako nepřípustné. 0 odsuzuje jako dřív</value>
+    <comment>Developer tools screen: explanatory subtext under the 'uplink gate' control.</comment>
+  </data>
+  <data name="dev_verdicts_held" xml:space="preserve">
+    <value>Zadržené verdikty</value>
+    <comment>Developer tools screen (reliability surface): verdicts held control label.</comment>
+  </data>
+  <data name="dev_verdicts_held_detail" xml:space="preserve">
+    <value>Odsouzení zadržená, protože ztichl vlastní uplink telefonu, ne poskytovatel (uplink / transport)</value>
+    <comment>Developer tools screen: explanatory subtext under the 'verdicts held' control.</comment>
+  </data>
+  <data name="dev_verdicts_held_value" xml:space="preserve">
+    <value>{0} / {1}</value>
+    <comment>Developer tools screen: formatted value readout for 'verdicts held'.</comment>
+  </data>
+  <data name="dev_worst_loss" xml:space="preserve">
+    <value>Nejhorší jednotlivé selhání</value>
+    <comment>Developer tools screen (reliability surface): worst loss control label.</comment>
+  </data>
+  <data name="dev_worst_loss_detail" xml:space="preserve">
+    <value>To, které uživatel opravdu pocítí</value>
+    <comment>Developer tools screen: explanatory subtext under the 'worst loss' control.</comment>
+  </data>
+  <data name="dev_worst_loss_value" xml:space="preserve">
+    <value>Připojení: {}</value>
+    <comment>Developer tools screen: formatted value readout for 'worst loss'.</comment>
+  </data>
+  <data name="developer" xml:space="preserve">
+    <value>Vývojář</value>
+    <comment>Developer tools screen: developer.</comment>
+  </data>
+  <data name="developer_description" xml:space="preserve">
+    <value>Nástroje pro diagnostiku zamrzání připojení. Působí na aktivní připojení.</value>
+    <comment>Developer tools screen: developer description.</comment>
+  </data>
+  <data name="developer_disconnected" xml:space="preserve">
+    <value>Pro použití těchto nástrojů se připojte.</value>
+    <comment>Developer tools screen: developer disconnected.</comment>
   </data>
   <data name="device" xml:space="preserve">
     <value>Zařízení</value>
@@ -1359,6 +2215,62 @@ správným způsobem</value>
     <value>Výdělky</value>
     <comment>Wallet Screen</comment>
   </data>
+  <data name="earnings_address_placeholder" xml:space="preserve">
+    <value>Zadejte adresu Bittensor</value>
+    <comment>Placeholder of the manual Bittensor address field on the Earnings page.</comment>
+  </data>
+  <data name="earnings_change_wallet" xml:space="preserve">
+    <value>Změnit peněženku</value>
+    <comment>Button on the Earnings page that starts connecting a different Bittensor wallet.</comment>
+  </data>
+  <data name="earnings_claim_sending" xml:space="preserve">
+    <value>Odesílání…</value>
+    <comment>Progress text while a claim transaction is being sent.</comment>
+  </data>
+  <data name="earnings_claims_need_session" xml:space="preserve">
+    <value>Nároky se načtou z řetězce, jakmile bude mít aplikace relaci. Nejprve stiskněte Připojit.</value>
+    <comment>Shown in place of the unclaimed figure when the app has no device session to read the chain with.</comment>
+  </data>
+  <data name="earnings_copy_address" xml:space="preserve">
+    <value>Kopírovat adresu</value>
+    <comment>Button that copies an address to the clipboard.</comment>
+  </data>
+  <data name="earnings_date_column" xml:space="preserve">
+    <value>Datum</value>
+    <comment>Column header of the per-epoch history table: the date the epoch ended.</comment>
+  </data>
+  <data name="earnings_epoch_column" xml:space="preserve">
+    <value>Epocha</value>
+    <comment>Column header of the per-epoch history table.</comment>
+  </data>
+  <data name="earnings_gas_balance" xml:space="preserve">
+    <value>Zůstatek na gas</value>
+    <comment>Label of the gas key's TAO balance in the claim dialog.</comment>
+  </data>
+  <data name="earnings_network_pane_title" xml:space="preserve">
+    <value>Vaše síť</value>
+    <comment>Title of the Earnings destination's third pane: own rank, multipliers and reliability.</comment>
+  </data>
+  <data name="earnings_points_column" xml:space="preserve">
+    <value>Body</value>
+    <comment>Column header of the per-epoch history table: points earned in the epoch.</comment>
+  </data>
+  <data name="earnings_share_column" xml:space="preserve">
+    <value>Podíl</value>
+    <comment>Column header of the per-epoch history table: the network's share of the block.</comment>
+  </data>
+  <data name="earnings_status_column" xml:space="preserve">
+    <value>Stav</value>
+    <comment>Column header of the per-epoch history table: the claim status of the epoch's alpha.</comment>
+  </data>
+  <data name="earnings_view_transaction" xml:space="preserve">
+    <value>Zobrazit transakci</value>
+    <comment>Link that opens a claim transaction in the block explorer.</comment>
+  </data>
+  <data name="earnings_wallet_mismatch" xml:space="preserve">
+    <value>Peněženka, která podepsala, neodpovídá zadané adrese.</value>
+    <comment>Error when the wallet that signed the connect challenge is not the address the user entered.</comment>
+  </data>
   <data name="edit_device_name" xml:space="preserve">
     <value>Upravit název zařízení</value>
     <comment>device</comment>
@@ -1394,6 +2306,10 @@ správným způsobem</value>
   <data name="email_e4_reason_trust" xml:space="preserve">
     <value>Nejsem si jistý, že VPN důvěřuji</value>
     <comment>Onboarding feedback email, not-activated variant: one-tap reason 3.</comment>
+  </data>
+  <data name="email_support_at" xml:space="preserve">
+    <value>Napište podpoře na</value>
+    <comment>Settings: label before the support email address link.</comment>
   </data>
   <data name="emoji_group_activities" xml:space="preserve">
     <value>Aktivity</value>
@@ -1451,6 +2367,14 @@ správným způsobem</value>
     <value>Navrhnout jiné</value>
     <comment>Points leaderboard: the emoji editor's shuffle button, replaces the draft with a new random suggestion.</comment>
   </data>
+  <data name="enabled_under_auto" xml:space="preserve">
+    <value>Zapnuté v režimu Auto</value>
+    <comment>Section header of the per-transport enable toggles shown when the transport mode is Auto.</comment>
+  </data>
+  <data name="enabled_under_auto_footer" xml:space="preserve">
+    <value>Seřazeno podle priority: nejprve H3 a H1, potom whodis, potom whodis pump. Pořadí je pevné. Alespoň jeden transport zůstává zapnutý.</value>
+    <comment>Footer of the Auto transports section explaining the fixed preference order.</comment>
+  </data>
   <data name="enjoying_urnetwork" xml:space="preserve">
     <value>Užíváte si URnetwork?</value>
     <comment>Call to action</comment>
@@ -1474,6 +2398,10 @@ správným způsobem</value>
   <data name="enter_a_solana_usdc_wallet_address" xml:space="preserve">
     <value>Zadejte adresu peněženky USDC v síti Solana</value>
   </data>
+  <data name="enter_address_manually" xml:space="preserve">
+    <value>Zadat adresu ručně</value>
+    <comment>Fallback link to paste an ss58 address.</comment>
+  </data>
   <data name="enter_balance_code" xml:space="preserve">
     <value>Zadejte kód zůstatku</value>
     <comment>Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.</comment>
@@ -1489,6 +2417,34 @@ správným způsobem</value>
   <data name="enter_urnetwork" xml:space="preserve">
     <value>Vkročte do URnetwork</value>
     <comment>Used in Authenticate/LoginInitial/GuestModeSheet.swift.</comment>
+  </data>
+  <data name="epoch_column_epoch_linux" xml:space="preserve">
+    <value>Epocha</value>
+    <comment>History table column: the epoch number.</comment>
+  </data>
+  <data name="epoch_column_points_linux" xml:space="preserve">
+    <value>Body</value>
+    <comment>History table column: points earned.</comment>
+  </data>
+  <data name="epoch_column_share_linux" xml:space="preserve">
+    <value>Podíl na bloku</value>
+    <comment>History table column: the network's share of the block.</comment>
+  </data>
+  <data name="epoch_column_status_linux" xml:space="preserve">
+    <value>Stav</value>
+    <comment>History table column: the claim status of the epoch's alpha.</comment>
+  </data>
+  <data name="epoch_history" xml:space="preserve">
+    <value>Historie</value>
+    <comment>Label of the per-epoch history list.</comment>
+  </data>
+  <data name="epoch_row_title" xml:space="preserve">
+    <value>Epocha {}</value>
+    <comment>History row title.</comment>
+  </data>
+  <data name="epoch_share_of_block" xml:space="preserve">
+    <value>{} bloku</value>
+    <comment>History row: the network's share of the block.</comment>
   </data>
   <data name="error_changing_network_name" xml:space="preserve">
     <value>Chyba při změně názvu sítě</value>
@@ -1602,6 +2558,90 @@ správným způsobem</value>
     <value>Exportovat logy</value>
     <comment>Used in Shared/Views/ExportLogsButton/ExportLogsButton.swift.</comment>
   </data>
+  <data name="extender" xml:space="preserve">
+    <value>Extender</value>
+    <comment>Title of the Extender row under the provide mode row in settings, and of the read-only row where the provide mode row is repeated.</comment>
+  </data>
+  <data name="extender_activation_failed" xml:space="preserve">
+    <value>Aktivace selhala: {}</value>
+    <comment>Extender status when the last activation failed and no family is active. The argument is the error.</comment>
+  </data>
+  <data name="extender_activation_refused" xml:space="preserve">
+    <value>Aktivace odmítnuta: {}</value>
+    <comment>Extender status when the operator refused the activation and no family is active. The argument is the operator's reason.</comment>
+  </data>
+  <data name="extender_active" xml:space="preserve">
+    <value>Aktivní · {}</value>
+    <comment>Extender status when at least one address family is activated. The argument is the family or families, from the IPv4, IPv6 and IPv4 and IPv6 labels.</comment>
+  </data>
+  <data name="extender_default_value" xml:space="preserve">
+    <value>Výchozí: {}</value>
+    <comment>Placeholder shown in an empty extender settings field, naming the default value that applies.</comment>
+  </data>
+  <data name="extender_dns_name" xml:space="preserve">
+    <value>DNS název extenderu</value>
+    <comment>Label of the extender DNS name field. Empty means the network space default.</comment>
+  </data>
+  <data name="extender_hosts" xml:space="preserve">
+    <value>Hostitelé extenderů</value>
+    <comment>Label of the manual extender list field: hostnames or IP addresses, one per line.</comment>
+  </data>
+  <data name="extender_hosts_hint" xml:space="preserve">
+    <value>Jeden název hostitele nebo IP adresa na řádek. Přidají se k nalezeným extenderům.</value>
+    <comment>Help text under the manual extender list field.</comment>
+  </data>
+  <data name="extender_listen_failed" xml:space="preserve">
+    <value>Nelze naslouchat: {}</value>
+    <comment>Extender status when no carrier could bind. The argument is the carrier errors.</comment>
+  </data>
+  <data name="extender_not_providing" xml:space="preserve">
+    <value>Neposkytuje</value>
+    <comment>Extender status when the setting is on but this device is not providing. Apple is not listed because its catalog is keyed by the English text, which widget_not_providing already carries.</comment>
+  </data>
+  <data name="extender_revoked" xml:space="preserve">
+    <value>Odvoláno operátorem</value>
+    <comment>Extender status when the operator revoked this device's extender key.</comment>
+  </data>
+  <data name="extender_setting_description" xml:space="preserve">
+    <value>Když poskytujete, toto zařízení také přenáší provoz pro lidi, jejichž přístup k síti je blokovaný, na TCP a UDP 443 a UDP 4053.</value>
+    <comment>Secondary text under the Extender setting: what turning it on does, and the ports the extender listens on.</comment>
+  </data>
+  <data name="extender_setting_up" xml:space="preserve">
+    <value>Nastavování</value>
+    <comment>Extender status while the role is starting and there is no outcome yet: the carriers are binding, or the first activation is in flight.</comment>
+  </data>
+  <data name="extender_settings" xml:space="preserve">
+    <value>Nastavení extenderu</value>
+    <comment>Title of the extender settings form under account &gt; Extenders.</comment>
+  </data>
+  <data name="extender_settings_next_connect" xml:space="preserve">
+    <value>Tunel použije nové nastavení extenderu při příštím připojení.</value>
+    <comment>Note on iOS after saving extender settings: the packet tunnel extension reads them at its next start.</comment>
+  </data>
+  <data name="extender_settings_saved" xml:space="preserve">
+    <value>Nastavení extenderu uloženo</value>
+    <comment>Confirmation after the extender settings are saved.</comment>
+  </data>
+  <data name="extender_start_failed" xml:space="preserve">
+    <value>Nelze spustit: {}</value>
+    <comment>Extender status when the setting is on and the device is providing, but the role could not start in this network space: no extender directory or no identity. The argument is the reason.</comment>
+  </data>
+  <data name="extender_statistics" xml:space="preserve">
+    <value>Statistiky extenderu</value>
+    <comment>Title of the section that shows statistics about the extender, directly above the provider statistics section.</comment>
+  </data>
+  <data name="extenders" xml:space="preserve">
+    <value>Extendery</value>
+    <comment>Title of the extenders panel in the connect drawer and of the Extenders section under account.</comment>
+  </data>
+  <data name="extenders_active_of_reserve" xml:space="preserve">
+    <value>{0} z {1}</value>
+    <comment>The extender panel count: extenders carrying a live connection now, of every usable extender the app knows.</comment>
+  </data>
+  <data name="extenders_no_session" xml:space="preserve">
+    <value>Pro správu extenderů se přihlaste a připojte.</value>
+    <comment>Shown in the account Extenders section when there is no signed-in device to manage extenders with.</comment>
+  </data>
   <data name="failed_to_connect" xml:space="preserve">
     <value>Nepodařilo se připojit</value>
     <comment>Used in Shared/Intents/ConnectIntent.swift.</comment>
@@ -1646,6 +2686,10 @@ správným způsobem</value>
     <value>Řekněte nám, jak se skutečně cítíte</value>
     <comment>Feedback Screen</comment>
   </data>
+  <data name="feedback_send_failed" xml:space="preserve">
+    <value>Vaše zpětná vazba nebyla odeslána. Zkontrolujte připojení a zkuste to znovu.</value>
+    <comment>Feedback screen: the feedback could not be sent. The text stays in the field so the user can send it again.</comment>
+  </data>
   <data name="feedback_sending" xml:space="preserve">
     <value>Odesílání…</value>
     <comment>Feedback screen: label of the Send button while the feedback is being sent.</comment>
@@ -1673,6 +2717,10 @@ správným způsobem</value>
   <data name="friends_save_too" xml:space="preserve">
     <value>Vaši přátelé také ušetří – každý vyhrává.</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="gas_key" xml:space="preserve">
+    <value>Klíč pro gas</value>
+    <comment>Label of the gas key row.</comment>
   </data>
   <data name="general" xml:space="preserve">
     <value>Obecné</value>
@@ -1707,6 +2755,10 @@ správným způsobem</value>
     <value>Zpět</value>
     <comment>Confirmation button that leaves the seedphrase screen after the warning.</comment>
   </data>
+  <data name="google" xml:space="preserve">
+    <value>Google</value>
+    <comment>A label for Google sign-in.</comment>
+  </data>
   <data name="google_auth_btn_text" xml:space="preserve">
     <value>Přihlásit se přes Google</value>
     <comment>Login initial</comment>
@@ -1715,6 +2767,34 @@ správným způsobem</value>
     <value>Způsob přihlášení Google byl přidán</value>
     <comment>Snackbar message displayed when a Google sign-in method is successfully added.</comment>
   </data>
+  <data name="gossip_connecting" xml:space="preserve">
+    <value>Připojování</value>
+    <comment>Gossip network status: a dial or reconnect is in progress (yellow).</comment>
+  </data>
+  <data name="gossip_events_per_minute.one" xml:space="preserve">
+    <value>{} událost/min</value>
+    <comment>The count of extender records and revocations applied from the gossip network or the feed in the last minute.</comment>
+  </data>
+  <data name="gossip_events_per_minute.few" xml:space="preserve">
+    <value>{} události/min</value>
+    <comment>The count of extender records and revocations applied from the gossip network or the feed in the last minute.</comment>
+  </data>
+  <data name="gossip_events_per_minute.many" xml:space="preserve">
+    <value>{} události/min</value>
+    <comment>The count of extender records and revocations applied from the gossip network or the feed in the last minute.</comment>
+  </data>
+  <data name="gossip_events_per_minute.other" xml:space="preserve">
+    <value>{} událostí/min</value>
+    <comment>The count of extender records and revocations applied from the gossip network or the feed in the last minute.</comment>
+  </data>
+  <data name="gossip_network" xml:space="preserve">
+    <value>Síť gossip</value>
+    <comment>Label of the gossip network status dot in the extender panel.</comment>
+  </data>
+  <data name="gossip_url" xml:space="preserve">
+    <value>URL gossip</value>
+    <comment>Label of the gossip URL field. Empty means the network space default.</comment>
+  </data>
   <data name="got_it" xml:space="preserve">
     <value>Rozumím</value>
     <comment>Used in Shared/Views/UpgradeSubscriptionSheet.swift.</comment>
@@ -1722,6 +2802,16 @@ správným způsobem</value>
   <data name="guest" xml:space="preserve">
     <value>Host</value>
     <comment>Account Screen</comment>
+  </data>
+  <data name="guest_convert_explanation" xml:space="preserve">
+    <value>Přidejte e-mail a heslo, abyste se mohli k této síti přihlásit. Její tarif a zůstatek zůstanou u ní.</value>
+    <comment>Desktop: the first step of "Create an account" on a legacy guest network. The user adds an email and a password to the network they are on now, so they can sign in to it again; its plan and balance stay with it (nothing moves to a new account).</comment>
+  </data>
+  <data name="hash_count" xml:space="preserve">
+    <value>#{}</value>
+  </data>
+  <data name="hash_value" xml:space="preserve">
+    <value>#{}</value>
   </data>
   <data name="hide_provider_list" xml:space="preserve">
     <value>Skrýt seznam poskytovatelů</value>
@@ -1771,9 +2861,41 @@ správným způsobem</value>
     <value>Ignorovat optimalizace baterie</value>
     <comment>Call to action</comment>
   </data>
+  <data name="import_extenders" xml:space="preserve">
+    <value>Importovat extendery</value>
+    <comment>Button and screen title: import extenders from a QR code, a photo, or pasted text.</comment>
+  </data>
+  <data name="import_extenders_confirm_settings" xml:space="preserve">
+    <value>Použít nastavení extenderu z tohoto kódu? Vyhledávání extenderů pak použije {}.</value>
+    <comment>Confirmation before applying the extender settings from a share code. The argument is the operator host the settings point at.</comment>
+  </data>
   <data name="import_extenders_control_doh_urls" xml:space="preserve">
     <value>Tento kód také nastaví zaváděcí servery DNS-over-HTTPS. Uvidí vyhledávání serverů URnetwork: {}</value>
     <comment>Extender import: shown before the user takes the settings of a share code that also sets bootstrap DNS-over-HTTPS servers. The argument is the list of server URLs, comma separated.</comment>
+  </data>
+  <data name="import_extenders_foreign_host" xml:space="preserve">
+    <value>Tento kód je pro {}, ne pro tuto síť. Ke změně sítě použijte nastavení extenderu.</value>
+    <comment>Error when a share code belongs to another network. The argument is that network's host.</comment>
+  </data>
+  <data name="import_extenders_imported.one" xml:space="preserve">
+    <value>Importován {} extender</value>
+    <comment>Confirmation after an import, with the number of extenders added.</comment>
+  </data>
+  <data name="import_extenders_imported.few" xml:space="preserve">
+    <value>Importovány {} extendery</value>
+    <comment>Confirmation after an import, with the number of extenders added.</comment>
+  </data>
+  <data name="import_extenders_imported.many" xml:space="preserve">
+    <value>Importováno {} extenderu</value>
+    <comment>Confirmation after an import, with the number of extenders added.</comment>
+  </data>
+  <data name="import_extenders_imported.other" xml:space="preserve">
+    <value>Importováno {} extenderů</value>
+    <comment>Confirmation after an import, with the number of extenders added.</comment>
+  </data>
+  <data name="import_extenders_invalid" xml:space="preserve">
+    <value>Tento kód není sdílení extenderů.</value>
+    <comment>Error when the scanned or pasted text is not an extender share code.</comment>
   </data>
   <data name="in_guest_mode" xml:space="preserve">
     <value>Jste v režimu pro hosty</value>
@@ -1787,6 +2909,10 @@ správným způsobem</value>
     <value>Tunel používají jen zahrnuté aplikace.</value>
     <comment>transfer stats and split rules</comment>
   </data>
+  <data name="include_extender_settings" xml:space="preserve">
+    <value>Zahrnout nastavení extenderu</value>
+    <comment>Toggle on the share screen: also include the extender DNS name, gossip URL and root keys in the code.</comment>
+  </data>
   <data name="include_in_vpn" xml:space="preserve">
     <value>Zahrnout do VPN</value>
     <comment>App split rules: rule choice routing the app through the VPN.</comment>
@@ -1794,6 +2920,10 @@ správným způsobem</value>
   <data name="included" xml:space="preserve">
     <value>Zahrnuto</value>
     <comment>transfer stats and split rules</comment>
+  </data>
+  <data name="includes_free_trial_days" xml:space="preserve">
+    <value>Zahrnuje {}denní zkušební období zdarma</value>
+    <comment>Line under the annual plan card. The number of days is the free trial length.</comment>
   </data>
   <data name="instant_account_explainer" xml:space="preserve">
     <value>Není potřeba e-mail, telefon ani heslo. Váš účet je zabezpečen seed frází.</value>
@@ -1847,6 +2977,54 @@ správným způsobem</value>
     <value>Nedostatek financí</value>
     <comment>Circle Wallet Transfer Screen</comment>
   </data>
+  <data name="intro_control_manual_ios" xml:space="preserve">
+    <value>Otevřete Ovládací centrum, klepněte na +, potom na Přidat ovládací prvek a vyberte URnetwork.</value>
+    <comment>How to add the quick connect control on iOS (no add-control API).</comment>
+  </data>
+  <data name="intro_control_manual_macos" xml:space="preserve">
+    <value>Otevřete Ovládací centrum, vyberte Upravit ovládací prvky a přidejte URnetwork.</value>
+    <comment>How to add the quick connect control on macOS.</comment>
+  </data>
+  <data name="intro_quick_connect_details" xml:space="preserve">
+    <value>Zapínejte a vypínejte URnetwork z Rychlého nastavení a sledujte ho z domovské obrazovky.</value>
+    <comment>Detail line of the last onboarding page.</comment>
+  </data>
+  <data name="intro_quick_connect_details_apple" xml:space="preserve">
+    <value>Zapínejte a vypínejte URnetwork z Ovládacího centra a sledujte ho z plochy.</value>
+    <comment>Detail line of the last onboarding page on iOS/macOS (Control Center instead of Quick Settings).</comment>
+  </data>
+  <data name="intro_quick_connect_title" xml:space="preserve">
+    <value>Připojení jedním klepnutím</value>
+    <comment>Title of the last onboarding page: the quick connect tile and the home screen widgets.</comment>
+  </data>
+  <data name="intro_quick_tile_added" xml:space="preserve">
+    <value>Přidáno do Rychlého nastavení</value>
+    <comment>Label shown on the last onboarding page once the quick connect tile is in Quick Settings.</comment>
+  </data>
+  <data name="intro_quick_tile_manual" xml:space="preserve">
+    <value>Otevřete Rychlé nastavení, klepněte na tužku a přetáhněte URnetwork na místo.</value>
+    <comment>Manual steps for adding the quick connect tile on Android versions without the system add-tile request (before Android 13).</comment>
+  </data>
+  <data name="intro_verifiable_encryption" xml:space="preserve">
+    <value>Šifrování pro každý den.</value>
+    <comment>Tagline under 'Welcome to URnetwork' on the first onboarding page. Replaces 'URnetwork is the most local and most private network on the planet.'</comment>
+  </data>
+  <data name="intro_widgets_manual" xml:space="preserve">
+    <value>Podržte prst na domovské obrazovce, vyberte Widgety a zvolte URnetwork.</value>
+    <comment>Manual steps for adding widgets on launchers without the pin dialog.</comment>
+  </data>
+  <data name="intro_widgets_manual_ios" xml:space="preserve">
+    <value>Podržte prst na ploše, klepněte na +, vyhledejte URnetwork a přidejte widget.</value>
+    <comment>How to add a Home Screen widget on iOS (no pin-widget API).</comment>
+  </data>
+  <data name="intro_widgets_manual_macos" xml:space="preserve">
+    <value>Otevřete galerii widgetů z Oznamovacího centra, vyhledejte URnetwork a přetáhněte widget na plochu.</value>
+    <comment>How to add a desktop widget on macOS.</comment>
+  </data>
+  <data name="intro_widgets_tap_to_add" xml:space="preserve">
+    <value>Klepnutím na widget ho přidáte na domovskou obrazovku.</value>
+    <comment>Hint under the widget previews on the last onboarding page: tapping a preview asks the launcher to add that widget.</comment>
+  </data>
   <data name="invalid_balance_code" xml:space="preserve">
     <value>Neplatný kód na zůstatek</value>
     <comment>Used in Shared/Views/RedeemBalanceCodeSheet/RedeemBalanceCodeSheet.swift.</comment>
@@ -1858,6 +3036,14 @@ správným způsobem</value>
   <data name="invalid_referral_code_please_try_again" xml:space="preserve">
     <value>Neplatný referální kód. Prosím, zkuste to znovu.</value>
     <comment>Used in Main/Account/Settings/UpdateReferralNetworkSheet/UpdateReferralNetworkSheetViewModel.swift.</comment>
+  </data>
+  <data name="invalid_solana_address" xml:space="preserve">
+    <value>To není platná adresa Solana.</value>
+    <comment>Validation error under the manual address field when the address is not a valid Solana address (parallel to invalid_ss58_address).</comment>
+  </data>
+  <data name="invalid_ss58_address" xml:space="preserve">
+    <value>To není platná adresa Bittensor.</value>
+    <comment>Validation error for a coldkey address.</comment>
   </data>
   <data name="ip_address" xml:space="preserve">
     <value>IP adresa</value>
@@ -1879,9 +3065,69 @@ správným způsobem</value>
     <value>{} IP adres</value>
     <comment>A label showing the number of IP addresses in a block action cluster, rendered as a single pill. The argument is the number of IPs.</comment>
   </data>
+  <data name="ip_families" xml:space="preserve">
+    <value>Verze IP</value>
+    <comment>IP versions: the tooltip of the address-family tag column in the provider locations sheet (windows, linux). It also titled the connect drawer's IP version histogram before that became the Dualstack / IPv4 / IPv6 status row.</comment>
+  </data>
+  <data name="ip_family_both" xml:space="preserve">
+    <value>Obě</value>
+    <comment>Row label of the IP version histogram, and the provider row tag, for a provider that carries both IPv4 and IPv6.</comment>
+  </data>
+  <data name="ip_family_connected_count.one" xml:space="preserve">
+    <value>Připojeno: {}</value>
+    <comment>Status line of one column of the IP version status row in the connect drawer: how many providers of that family (dualstack, IPv4 or IPv6) are connected. Shown under the family label only when the count is not zero. Lowercase.</comment>
+  </data>
+  <data name="ip_family_connected_count.few" xml:space="preserve">
+    <value>Připojeno: {}</value>
+    <comment>Status line of one column of the IP version status row in the connect drawer: how many providers of that family (dualstack, IPv4 or IPv6) are connected. Shown under the family label only when the count is not zero. Lowercase.</comment>
+  </data>
+  <data name="ip_family_connected_count.many" xml:space="preserve">
+    <value>Připojeno: {}</value>
+    <comment>Status line of one column of the IP version status row in the connect drawer: how many providers of that family (dualstack, IPv4 or IPv6) are connected. Shown under the family label only when the count is not zero. Lowercase.</comment>
+  </data>
+  <data name="ip_family_connected_count.other" xml:space="preserve">
+    <value>Připojeno: {}</value>
+    <comment>Status line of one column of the IP version status row in the connect drawer: how many providers of that family (dualstack, IPv4 or IPv6) are connected. Shown under the family label only when the count is not zero. Lowercase.</comment>
+  </data>
+  <data name="ip_family_connecting_count.one" xml:space="preserve">
+    <value>Připojuje se: {}</value>
+    <comment>Status line of one column of the IP version status row in the connect drawer: how many providers of that family (dualstack, IPv4 or IPv6) are still connecting. Shown under the connected line only when the count is not zero. Lowercase.</comment>
+  </data>
+  <data name="ip_family_connecting_count.few" xml:space="preserve">
+    <value>Připojuje se: {}</value>
+    <comment>Status line of one column of the IP version status row in the connect drawer: how many providers of that family (dualstack, IPv4 or IPv6) are still connecting. Shown under the connected line only when the count is not zero. Lowercase.</comment>
+  </data>
+  <data name="ip_family_connecting_count.many" xml:space="preserve">
+    <value>Připojuje se: {}</value>
+    <comment>Status line of one column of the IP version status row in the connect drawer: how many providers of that family (dualstack, IPv4 or IPv6) are still connecting. Shown under the connected line only when the count is not zero. Lowercase.</comment>
+  </data>
+  <data name="ip_family_connecting_count.other" xml:space="preserve">
+    <value>Připojuje se: {}</value>
+    <comment>Status line of one column of the IP version status row in the connect drawer: how many providers of that family (dualstack, IPv4 or IPv6) are still connecting. Shown under the connected line only when the count is not zero. Lowercase.</comment>
+  </data>
+  <data name="ip_family_disconnected" xml:space="preserve">
+    <value>odpojeno</value>
+    <comment>Status line of one column of the IP version status row in the connect drawer, when no provider of that family (dualstack, IPv4 or IPv6) is connected or connecting. Lowercase, under the family label.</comment>
+  </data>
+  <data name="ip_family_dualstack" xml:space="preserve">
+    <value>Dual stack</value>
+    <comment>Column label of the IP version status row in the connect drawer, for providers that carry both IPv4 and IPv6. Set in the pixel display face beside the IPv4 and IPv6 labels, so keep it short.</comment>
+  </data>
+  <data name="ip_family_v4" xml:space="preserve">
+    <value>v4</value>
+    <comment>Row label of the IP version histogram, and the provider row tag, for a provider that carries only IPv4.</comment>
+  </data>
+  <data name="ip_family_v6" xml:space="preserve">
+    <value>v6</value>
+    <comment>Row label of the IP version histogram, and the provider row tag, for a provider that carries only IPv6.</comment>
+  </data>
   <data name="ipv4" xml:space="preserve">
     <value>IPv4</value>
     <comment>Label for a list of IPv4 addresses.</comment>
+  </data>
+  <data name="ipv4_and_ipv6" xml:space="preserve">
+    <value>IPv4 a IPv6</value>
+    <comment>Accessibility label for a provider that carries both IPv4 and IPv6 traffic.</comment>
   </data>
   <data name="ipv6" xml:space="preserve">
     <value>IPv6</value>
@@ -1922,6 +3168,18 @@ správným způsobem</value>
   <data name="kill_switch" xml:space="preserve">
     <value>Kill switch</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="kill_switch_exception" xml:space="preserve">
+    <value>Výjimka z kill switche</value>
+    <comment>Title for the disclosure explaining traffic that intentionally bypasses the VPN kill switch.</comment>
+  </data>
+  <data name="kill_switch_exception_smtp_detail" xml:space="preserve">
+    <value>Když je VPN připojená, IPv6 se směruje přes URnetwork stejně jako IPv4. Odchozí SMTP na portu TCP 25 obchází VPN, i když je kill switch zapnutý, což může odhalit vaši místní veřejnou IP těmto poštovním serverům. SMTP na portech 465 a 587 zůstává ve VPN a musí navázat TLS.</value>
+    <comment>Explains the deliberate SMTP port 25 exception to the VPN kill switch, that IPv6 is routed through the tunnel, and the encrypted SMTP behavior.</comment>
+  </data>
+  <data name="kill_switch_exception_unrecognized_encrypted" xml:space="preserve">
+    <value>Když je kill switch vypnutý, provoz, který bezpečnostní pravidla URnetwork drží mimo síť, například nerozpoznané šifrované protokoly, obchází VPN a používá vaši místní veřejnou IP. Se zapnutým kill switchem je tento provoz blokován.</value>
+    <comment>Explains that, with the kill switch off, traffic URnetwork safety rules keep off the network (such as unrecognized encrypted protocols) bypasses the VPN.</comment>
   </data>
   <data name="launch" xml:space="preserve">
     <value>Spustit</value>
@@ -1986,6 +3244,10 @@ správným způsobem</value>
   <data name="link_another_way_to_sign_in_to" xml:space="preserve">
     <value>Propojte další způsob přihlášení k vašemu účtu.</value>
     <comment>A description of the add auth sheet.</comment>
+  </data>
+  <data name="load_failed" xml:space="preserve">
+    <value>Nepodařilo se načíst. Zkontrolujte připojení a zkuste to znovu.</value>
+    <comment>A section (points, wallet, referral code, epoch history, payout wallet) could not be loaded. Shown in place of the loading spinner or the section's data, next to a Try again (Retry on apple) button.</comment>
   </data>
   <data name="loading" xml:space="preserve">
     <value>Načítání...</value>
@@ -2235,6 +3497,10 @@ správným způsobem</value>
     <value>Násobitel</value>
     <comment>Call to action</comment>
   </data>
+  <data name="n_20" xml:space="preserve">
+    <value>{}/20</value>
+    <comment>A progress bar that shows how many friends you've invited. The first argument is the number of friends you've invited. The second argument is the maximum number of friends you can invite.</comment>
+  </data>
   <data name="n_gib_day" xml:space="preserve">
     <value>+{} GiB/den</value>
     <comment>A label that shows the daily data usage from referrals. The argument is the number of referrals.</comment>
@@ -2444,6 +3710,10 @@ Získejte svůj bonus vytvořením sítě!</value>
     <value>Žádné blokované lokality</value>
     <comment>Call to action</comment>
   </data>
+  <data name="no_claims_yet_linux" xml:space="preserve">
+    <value>Zatím není co vyzvednout. Alpha se začne připisovat od příští dokončené epochy.</value>
+    <comment>Empty state of the unclaimed tile once a wallet is connected.</comment>
+  </data>
   <data name="no_compatible_wallet_app_found" xml:space="preserve">
     <value>Na tomto zařízení nebyla nalezena žádná kompatibilní aplikace peněženky.</value>
     <comment>Add sign-in method sheet (android): no installed wallet app can sign the challenge.</comment>
@@ -2475,6 +3745,14 @@ Získejte svůj bonus vytvořením sítě!</value>
   <data name="no_open_contracts" xml:space="preserve">
     <value>Žádné otevřené kontrakty</value>
     <comment>A label displayed when there are no open contracts.</comment>
+  </data>
+  <data name="no_points_yet" xml:space="preserve">
+    <value>Zatím žádné epochy. Body se objeví po vaší první dokončené epoše.</value>
+    <comment>Empty state of the points history.</comment>
+  </data>
+  <data name="no_previous_purchases_were_found" xml:space="preserve">
+    <value>Nebyly nalezeny žádné předchozí nákupy.</value>
+    <comment>Restore-purchases outcome: the sync succeeded and there is genuinely nothing to restore (Shared/ViewModels/AppStoreSubscriptionManager.swift).</comment>
   </data>
   <data name="no_providers_found" xml:space="preserve">
     <value>Nenalezen žádní poskytovatelé.</value>
@@ -2604,6 +3882,10 @@ Získejte svůj bonus vytvořením sítě!</value>
     <value>Zapnuto</value>
     <comment>A label for a DNS setting that is enabled.</comment>
   </data>
+  <data name="onboarding_step_of" xml:space="preserve">
+    <value>Krok {0} z {1}</value>
+    <comment>Accessibility description of the onboarding step bubbles: the current step and the total.</comment>
+  </data>
   <data name="one_gib_per_day" xml:space="preserve">
     <value>1 GiB/den</value>
     <comment>Call to action</comment>
@@ -2636,6 +3918,10 @@ Získejte svůj bonus vytvořením sítě!</value>
     <value>Jiné</value>
     <comment>Used in Main/Account/Wallets/ConnectWalletSheet/ConnectWalletSheetView.swift.</comment>
   </data>
+  <data name="paid_in_usdc_on_solana" xml:space="preserve">
+    <value>Platba v USDC na síti Solana.</value>
+    <comment>The one USDC mention: the Solana subscription payment note.</comment>
+  </data>
   <data name="participate" xml:space="preserve">
     <value>Zapojit se</value>
     <comment>Call to action</comment>
@@ -2665,6 +3951,10 @@ decentralizovaném protokolu na světě pro příchozí a odchozí provoz.</valu
     <value>Heslo musí mít alespoň 12 znaků</value>
     <comment>Hint for password input length requirements.</comment>
   </data>
+  <data name="paste_share_text" xml:space="preserve">
+    <value>Vložit text ke sdílení</value>
+    <comment>Button and field label: paste the text form of a share code.</comment>
+  </data>
   <data name="paste_your_24_word_seedphrase_here" xml:space="preserve">
     <value>Sem vložte svou 24slovnou seed frázi</value>
     <comment>A placeholder text for the seedphrase field.</comment>
@@ -2677,9 +3967,29 @@ decentralizovaném protokolu na světě pro příchozí a odchozí provoz.</valu
     <value>Připojit se pomocí Stripe</value>
     <comment>Call to action</comment>
   </data>
+  <data name="payment_confirmation_delayed" xml:space="preserve">
+    <value>Potvrzení trvá déle, než se čekalo. Váš tarif se aktualizuje automaticky, jakmile bude potvrzen — není třeba kupovat znovu.</value>
+    <comment>Shown when the post-payment confirmation poll exhausts its budget (2 minutes) without the server confirming the subscription. The payment evidence is real (store or payment sheet reported success), so say that plainly, and head off a second purchase. Android also shows it, without the "Payment received" title, when the 2-minute Solana Pay return-path check ends without the payment landing.</comment>
+  </data>
+  <data name="payment_confirmation_processing" xml:space="preserve">
+    <value>Právě potvrzujeme vaši platbu. Váš tarif se aktualizuje automaticky — nemusíte nic dělat.</value>
+    <comment>Body of the post-purchase overlay while the server has not yet confirmed the subscription. Replaces the optimistic 'You're premium.' claim until currentSubscription actually confirms.</comment>
+  </data>
+  <data name="payment_not_completed" xml:space="preserve">
+    <value>Platbu se nepodařilo dokončit.</value>
+    <comment>Shown in the payment-problem dialog when the Stripe payment sheet reports a failure. The sheet's own error detail is appended by the caller.</comment>
+  </data>
   <data name="payment_problem" xml:space="preserve">
     <value>Problém s platbou</value>
     <comment>Billing errors. Every one is shown to the user WITH a remedy: a payment error they cannot see is a payment error they will hit again.</comment>
+  </data>
+  <data name="payment_received" xml:space="preserve">
+    <value>Platba přijata.</value>
+    <comment>Title of the post-purchase screen while the server has not yet confirmed the entitlement (Shared/Views/PurchaseSuccessView.swift). StoreKit took the payment; the confirmation poll is still running — the copy must not claim premium yet.</comment>
+  </data>
+  <data name="payment_received_title" xml:space="preserve">
+    <value>Platba přijata</value>
+    <comment>Title for the post-purchase overlay and the confirmation-timeout dialog. Deliberately claims only what is known -- the payment was received -- not that the plan is active yet.</comment>
   </data>
   <data name="payout_wallet_updated" xml:space="preserve">
     <value>Výplatní peněženka byla aktualizována</value>
@@ -2745,6 +4055,14 @@ decentralizovaném protokolu na světě pro příchozí a odchozí provoz.</valu
     <value>≈ {}/měsíc · účtováno jednou ročně</value>
     <comment>Plan picker: the subordinate line under the yearly price with the per-month equivalent (ceiling-rounded).</comment>
   </data>
+  <data name="plan_price_per_month" xml:space="preserve">
+    <value>{}/měsíc</value>
+    <comment>Monthly plan card label: the store-formatted price per month.</comment>
+  </data>
+  <data name="plan_price_per_year" xml:space="preserve">
+    <value>{}/rok</value>
+    <comment>Yearly plan card label: the store-formatted price per year.</comment>
+  </data>
   <data name="plan_save_percent" xml:space="preserve">
     <value>Ušetřete {} %</value>
     <comment>Plan picker: the saving badge on the yearly card; the number is the whole percent saved against twelve monthly payments.</comment>
@@ -2805,6 +4123,10 @@ decentralizovaném protokolu na světě pro příchozí a odchozí provoz.</valu
     <value>Body</value>
     <comment>Points leaderboard: tab label, stat tile label and sort chip.</comment>
   </data>
+  <data name="points_earned" xml:space="preserve">
+    <value>Získané body</value>
+    <comment>Headline label of the earnings screen.</comment>
+  </data>
   <data name="points_leaderboard_description" xml:space="preserve">
     <value>Body za celou dobu. Blok je jedna dokončená epocha; série počítá po sobě jdoucí bloky s body končící tím posledním.</value>
     <comment>Points leaderboard: the explanation under the list header.</comment>
@@ -2816,6 +4138,10 @@ decentralizovaném protokolu na světě pro příchozí a odchozí provoz.</valu
   <data name="points_leaderboard_private_hint" xml:space="preserve">
     <value>Vaše síť se zobrazuje jako Anonymní, dokud to nezapnete.</value>
     <comment>Points leaderboard: shown under the own-stats card while the name switch is off. The network is listed either way, as Anonymous until the switch is on.</comment>
+  </data>
+  <data name="points_short" xml:space="preserve">
+    <value>{} b.</value>
+    <comment>Points count with unit for history rows.</comment>
   </data>
   <data name="post_quantum_encryption" xml:space="preserve">
     <value>Postkvantové šifrování</value>
@@ -2840,6 +4166,22 @@ decentralizovaném protokolu na světě pro příchozí a odchozí provoz.</valu
   <data name="private_dns_strict_notice" xml:space="preserve">
     <value>Soukromé DNS je nastaveno na {}. Android posílá dotazy přímo tam místo přes URnetwork. Pokud se weby přestanou načítat, nastavte Soukromé DNS na Automaticky.</value>
     <comment>Muted notice on the connect screen shown while connected when Android Private DNS is set to a strict hostname, which sends DoT lookups outside the tunnel. %1$s is the configured DNS provider host.</comment>
+  </data>
+  <data name="private_extender" xml:space="preserve">
+    <value>Soukromý extender</value>
+    <comment>Title of the advanced private extender fields: one extender with a secret that replaces discovery.</comment>
+  </data>
+  <data name="private_extender_hint" xml:space="preserve">
+    <value>Soukromý extender nahradí všechny nalezené extendery. Ponechte prázdné, chcete-li používat vyhledávání.</value>
+    <comment>Help text under the private extender fields.</comment>
+  </data>
+  <data name="private_extender_ip" xml:space="preserve">
+    <value>IP adresa</value>
+    <comment>Label of the private extender IP address field.</comment>
+  </data>
+  <data name="private_extender_secret" xml:space="preserve">
+    <value>Tajný klíč</value>
+    <comment>Label of the private extender secret field.</comment>
   </data>
   <data name="private_network" xml:space="preserve">
     <value>Soukromá síť</value>
@@ -2873,9 +4215,33 @@ decentralizovaném protokolu na světě pro příchozí a odchozí provoz.</valu
     <value>Poskytovat</value>
     <comment>Label of the switch that turns on providing bandwidth to the network.</comment>
   </data>
+  <data name="provide_intro_bullet_devices" xml:space="preserve">
+    <value>Dovolte svým zařízením sdílet internet mezi sebou</value>
+    <comment>First bullet on the onboarding Contribute bandwidth page.</comment>
+  </data>
+  <data name="provide_intro_bullet_people" xml:space="preserve">
+    <value>Sdílejte svůj internet s dalšími lidmi ❤️</value>
+    <comment>Second bullet on the onboarding Contribute bandwidth page, with a heart.</comment>
+  </data>
+  <data name="provide_intro_lead" xml:space="preserve">
+    <value>Je to na vás, zcela dobrovolné:</value>
+    <comment>Lead line above the two bullets on the onboarding Contribute bandwidth page.</comment>
+  </data>
   <data name="provide_mode" xml:space="preserve">
     <value>Režim poskytování</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="provide_mode_always_description" xml:space="preserve">
+    <value>Poskytuje všem, kdykoli aplikace běží.</value>
+    <comment>One-line explanation of the Always provide mode in the onboarding Contribute bandwidth picker.</comment>
+  </data>
+  <data name="provide_mode_auto_description" xml:space="preserve">
+    <value>Poskytuje všem, když jste připojeni, jinak jen vašim vlastním zařízením.</value>
+    <comment>One-line explanation of the Auto provide mode in the onboarding Contribute bandwidth picker: public providing only while connected, same-network peers otherwise.</comment>
+  </data>
+  <data name="provide_mode_network_description" xml:space="preserve">
+    <value>Poskytuje jen zařízením vaší vlastní sítě.</value>
+    <comment>One-line explanation of the Network provide mode in the onboarding Contribute bandwidth picker: the private provider for the network's own devices.</comment>
   </data>
   <data name="provide_power_mode" xml:space="preserve">
     <value>Při napájení z baterie</value>
@@ -3181,6 +4547,10 @@ decentralizovaném protokolu na světě pro příchozí a odchozí provoz.</valu
     <value>Proč?</value>
     <comment>Provider card: expandable section title that reveals the numbers the network ranks this device by, with explanations.</comment>
   </data>
+  <data name="provider_transports" xml:space="preserve">
+    <value>Transporty poskytovatele</value>
+    <comment>Title of the transport settings editor for the provider transport policy.</comment>
+  </data>
   <data name="providing" xml:space="preserve">
     <value>Poskytování</value>
     <comment>Used in Main/Account/Wallets/WalletsView.swift.</comment>
@@ -3213,6 +4583,18 @@ decentralizovaném protokolu na světě pro příchozí a odchozí provoz.</valu
     <value>Zatím se nám nepodařilo potvrdit váš nákup. Pokud jste platbu dokončili, váš tarif se během několika minut aktualizuje automaticky — není třeba nakupovat znovu.</value>
     <comment>Shown when the post-checkout confirmation poll gives up (2 minutes) without the server confirming the subscription. The purchase is still likely to land later; the background poll and the next launch pick it up. On apple: the delayed phase of PurchaseSuccessView and the MainView snackbar.</comment>
   </data>
+  <data name="purchase_could_not_be_verified" xml:space="preserve">
+    <value>Tento nákup se nepodařilo ověřit přes Google Play, takže ho nelze použít na váš účet. Pokud vám byla stržena platba a váš tarif se neaktualizuje, kontaktujte podporu.</value>
+    <comment>Error dialog body when the server's verify answer for a Play purchase is terminal `invalid` — the proof will never verify (unknown token, disallowed product, canceled before completing). The purchase is still acknowledged with Play so a real charge is not auto-refunded; this dialog is how the failure reaches the user instead of a silent nothing (android google/PlanViewModel.kt report path).</comment>
+  </data>
+  <data name="purchase_found_confirming_your_plan" xml:space="preserve">
+    <value>Nákup nalezen. Potvrzujeme váš tarif — aktualizuje se automaticky.</value>
+    <comment>Restore-purchases outcome: an entitlement for the current network was found; the confirmation poll now bridges the gap until the server credits it (Shared/ViewModels/AppStoreSubscriptionManager.swift).</comment>
+  </data>
+  <data name="qr_code_not_found" xml:space="preserve">
+    <value>V obrázku nebyl nalezen žádný QR kód.</value>
+    <comment>Error when a chosen photo or image file holds no QR code.</comment>
+  </data>
   <data name="quit" xml:space="preserve">
     <value>Ukončit</value>
     <comment>Tray menu item that exits the app (tears the tunnel down).</comment>
@@ -3224,6 +4606,10 @@ decentralizovaném protokolu na světě pro příchozí a odchozí provoz.</valu
   <data name="ranked_networks_count" xml:space="preserve">
     <value>{} hodnocených sítí</value>
     <comment>Points leaderboard: how many networks hold a rank. {count} is preformatted with separators.</comment>
+  </data>
+  <data name="reads_per_second" xml:space="preserve">
+    <value>čtení/s</value>
+    <comment>Unit the extender chart labels its rates with, where the provider chart says pkt/s. The compact count is prepended by the app, as it is for pkt/s.</comment>
   </data>
   <data name="ready_to_connect" xml:space="preserve">
     <value>Připraveno k připojení</value>
@@ -3376,6 +4762,18 @@ decentralizovaném protokolu na světě pro příchozí a odchozí provoz.</valu
   <data name="referral_network_updated" xml:space="preserve">
     <value>Síť doporučení byla aktualizována</value>
     <comment>Snackbar on the Referrals screen after the referral network was changed.</comment>
+  </data>
+  <data name="referral_panel_detail" xml:space="preserve">
+    <value>Každé ověřené doporučení dá každému z vás {} GiB/den zdarma, napořád.</value>
+    <comment>Detail line of the gold referral panel. The amount is the daily GiB each side earns per verified referral (pro.yml referral).</comment>
+  </data>
+  <data name="referral_panel_heading" xml:space="preserve">
+    <value>Doporučte přítele a oba získáte data zdarma</value>
+    <comment>Heading of the gold referral panel (the ur.io referral panel) before the network has a referral.</comment>
+  </data>
+  <data name="referral_panel_none" xml:space="preserve">
+    <value>Zatím žádní přátelé. Sdílejte svůj kód a sledujte, jak se objeví koruna. 👑</value>
+    <comment>Status line of the gold referral panel while the network has no referral yet.</comment>
   </data>
   <data name="referral_points" xml:space="preserve">
     <value>Body za doporučení</value>
@@ -3539,9 +4937,17 @@ decentralizovaném protokolu na světě pro příchozí a odchozí provoz.</valu
     <value>Resolvery</value>
     <comment>A section header for the DNS resolvers.</comment>
   </data>
+  <data name="restore_default_transports" xml:space="preserve">
+    <value>Obnovit výchozí transporty</value>
+    <comment>Button that resets the transport settings draft to the SDK default policy.</comment>
+  </data>
   <data name="restore_most_secure_settings" xml:space="preserve">
     <value>Obnovit nejbezpečnější nastavení</value>
     <comment>dns settings</comment>
+  </data>
+  <data name="restore_purchases" xml:space="preserve">
+    <value>Obnovit nákupy</value>
+    <comment>Action label that resyncs App Store purchases (AppStore.sync + entitlement scan). Shown in Settings and in the upgrade flow's failure states (Main/Account/Settings/SettingsForm-iOS.swift, SettingsForm-macOS.swift, Shared/Views/UpgradeSubscriptionSheet.swift, Shared/Views/PurchaseSuccessView.swift, Shared/Views/Introduction/IntroductionView.swift).</comment>
   </data>
   <data name="retry" xml:space="preserve">
     <value>Zkusit znovu</value>
@@ -3555,17 +4961,37 @@ decentralizovaném protokolu na světě pro příchozí a odchozí provoz.</valu
     <value>Ohodnoďte URnetwork</value>
     <comment>Used in Main/Account/AccountRootView.swift.</comment>
   </data>
+  <data name="route_internet" xml:space="preserve">
+    <value>Internet</value>
+    <comment>Right stop label of the onboarding route line the anonymized member travels along.</comment>
+  </data>
   <data name="route_local" xml:space="preserve">
     <value>Povolení místní sítě při odpojení</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="route_you" xml:space="preserve">
+    <value>Vy</value>
+    <comment>Left stop label of the onboarding route line the anonymized member travels along (you -&gt; URnetwork -&gt; internet).</comment>
   </data>
   <data name="rules" xml:space="preserve">
     <value>Pravidla</value>
     <comment>A heading for the pinned split rules.</comment>
   </data>
+  <data name="safety_rule" xml:space="preserve">
+    <value>Bezpečnostní pravidlo</value>
+    <comment>A short label on a blocked or locally routed split-rule activity row whose traffic URnetwork safety rules kept off the network.</comment>
+  </data>
+  <data name="safety_rule_detail" xml:space="preserve">
+    <value>Bezpečnostní pravidla URnetwork drží tento provoz mimo síť, například šifrovaný protokol, který nedokážou rozpoznat. Místní pravidlo rozdělení ho pošle mimo VPN z vaší vlastní IP.</value>
+    <comment>Explains a split-rule activity row that URnetwork safety rules kept off the network, and how a local split rule can use it outside the VPN.</comment>
+  </data>
   <data name="save" xml:space="preserve">
     <value>Uložit</value>
     <comment>Profile</comment>
+  </data>
+  <data name="save_33_percent" xml:space="preserve">
+    <value>Ušetříte 33 %</value>
+    <comment>Line under the yearly plan's price: the saving against paying monthly.</comment>
   </data>
   <data name="save_logs" xml:space="preserve">
     <value>Uložit protokoly</value>
@@ -3578,6 +5004,10 @@ decentralizovaném protokolu na světě pro příchozí a odchozí provoz.</valu
   <data name="saved_as" xml:space="preserve">
     <value>Uloženo jako {}</value>
     <comment>Split rules: note under the host input when the entry will be stored in a normalised form. {value} is that form, for example 10.0.0.0/8 for a typed 10.0.0.5/8.</comment>
+  </data>
+  <data name="scan_qr_code" xml:space="preserve">
+    <value>Naskenovat QR kód</value>
+    <comment>Button: open the camera to scan a QR code.</comment>
   </data>
   <data name="search_apps_placeholder" xml:space="preserve">
     <value>Hledat aplikace</value>
@@ -3704,6 +5134,10 @@ kontent světa</value>
     <value>Odeslat</value>
     <comment>Call to action</comment>
   </data>
+  <data name="send_feedback_contact" xml:space="preserve">
+    <value>Pošlete nám zpětnou vazbu přímo, napište nám na {0} nebo se pro přímou podporu připojte k našemu {1}.</value>
+    <comment>Feedback screen: support contacts. The first argument is the support email address, the second is the name of the community chat (Discord); both are links.</comment>
+  </data>
   <data name="send_product_updates" xml:space="preserve">
     <value>Zasílání aktualizací produktů</value>
     <comment>Settings</comment>
@@ -3715,6 +5149,10 @@ kontent světa</value>
   <data name="send_reset_link_2" xml:space="preserve">
     <value>Odeslat odkaz na obnovení</value>
     <comment>Used in Authenticate/ResetPassword/ResetPasswordView.swift.</comment>
+  </data>
+  <data name="send_tao_to_mirror" xml:space="preserve">
+    <value>Pošlete asi {0} TAO na {1} na pokrytí gasu.</value>
+    <comment>Instruction to fund the gas key.</comment>
   </data>
   <data name="send_us_your_feedback_directly_or_join_our" xml:space="preserve">
     <value>Pošlete nám svou zpětnou vazbu přímo nebo [se připojte k našemu Discordu](https://discord.com/invite/RUNZXMwPRK) pro přímou podporu.</value>
@@ -3740,9 +5178,53 @@ kontent světa</value>
     <value>Nastavení</value>
     <comment>Account Screen</comment>
   </data>
+  <data name="settings_add_quick_tile" xml:space="preserve">
+    <value>Přidat dlaždici rychlého připojení</value>
+    <comment>Settings row that asks the system to add the Quick Settings tile (Android 13+).</comment>
+  </data>
+  <data name="settings_add_quick_tile_description" xml:space="preserve">
+    <value>Připojujte se a odpojujte z panelu Rychlého nastavení a ze zamykací obrazovky.</value>
+    <comment>Description under the add-tile settings row.</comment>
+  </data>
+  <data name="settings_add_widgets" xml:space="preserve">
+    <value>Přidat widgety na domovskou obrazovku</value>
+    <comment>Settings row that opens the widget picker to pin the app's widgets.</comment>
+  </data>
+  <data name="settings_add_widgets_description" xml:space="preserve">
+    <value>Rychlé připojení, zůstatek dat, poskytovatelé na glóbu a vaše hlavní kontrakty.</value>
+    <comment>Description under the add-widgets settings row.</comment>
+  </data>
   <data name="share" xml:space="preserve">
     <value>Sdílet</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="share_extenders" xml:space="preserve">
+    <value>Sdílet extendery</value>
+    <comment>Button and screen title: share the known extenders as a QR code.</comment>
+  </data>
+  <data name="share_extenders_count.one" xml:space="preserve">
+    <value>{} extender</value>
+    <comment>How many extenders the share code carries.</comment>
+  </data>
+  <data name="share_extenders_count.few" xml:space="preserve">
+    <value>{} extendery</value>
+    <comment>How many extenders the share code carries.</comment>
+  </data>
+  <data name="share_extenders_count.many" xml:space="preserve">
+    <value>{} extenderu</value>
+    <comment>How many extenders the share code carries.</comment>
+  </data>
+  <data name="share_extenders_count.other" xml:space="preserve">
+    <value>{} extenderů</value>
+    <comment>How many extenders the share code carries.</comment>
+  </data>
+  <data name="share_extenders_hint" xml:space="preserve">
+    <value>Naskenujte tento kód jinou aplikací URnetwork a sdílejte tyto extendery.</value>
+    <comment>Help text on the share screen under the QR code.</comment>
+  </data>
+  <data name="share_extenders_too_large" xml:space="preserve">
+    <value>Kód ke sdílení je na QR kód příliš velký. Místo toho zkopírujte text ke sdílení.</value>
+    <comment>Shown on the share screen when the share payload exceeds what a QR code can hold; the text form is still offered.</comment>
   </data>
   <data name="share_logs" xml:space="preserve">
     <value>Sdílet protokoly</value>
@@ -3752,9 +5234,21 @@ kontent světa</value>
     <value>Sdílet logy</value>
     <comment>Used in Shared/Views/ExportLogsButton/ExportLogsButton.swift.</comment>
   </data>
+  <data name="share_text_copied" xml:space="preserve">
+    <value>Text ke sdílení zkopírován</value>
+    <comment>Confirmation after the share text of an extender code was copied to the clipboard.</comment>
+  </data>
   <data name="share_urnetwork" xml:space="preserve">
     <value>Sdílet URnetwork</value>
     <comment>Used in Shared/Views/AccountMenu.swift.</comment>
+  </data>
+  <data name="shortcut_connect_long" xml:space="preserve">
+    <value>Připojit k URnetwork</value>
+    <comment>Long label of the launcher shortcut that connects the VPN.</comment>
+  </data>
+  <data name="shortcut_disconnect_long" xml:space="preserve">
+    <value>Odpojit od URnetwork</value>
+    <comment>Long label of the launcher shortcut that disconnects the VPN.</comment>
   </data>
   <data name="show" xml:space="preserve">
     <value>Ukázat</value>
@@ -3763,6 +5257,10 @@ kontent světa</value>
   <data name="show_icon_when_connected" xml:space="preserve">
     <value>Zobrazit ikonu UR po připojení</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="show_kill_switch_exception" xml:space="preserve">
+    <value>Zobrazit výjimku z kill switche</value>
+    <comment>Accessibility label for the kill switch exception information button.</comment>
   </data>
   <data name="show_on_points_leaderboard" xml:space="preserve">
     <value>Zobrazit název mé sítě</value>
@@ -3798,6 +5296,10 @@ kontent světa</value>
   </data>
   <data name="sign_in_methods" xml:space="preserve">
     <value>Způsoby přihlášení</value>
+  </data>
+  <data name="sign_in_with_apple" xml:space="preserve">
+    <value>Přihlásit se přes Apple</value>
+    <comment>Login stack: full-width Apple sign-in button on platforms that use the ur.io browser bridge</comment>
   </data>
   <data name="sign_in_with_code" xml:space="preserve">
     <value>Přihlásit se pomocí kódu</value>
@@ -3846,6 +5348,14 @@ kontent světa</value>
     <value>Připojte se a zobrazte živou aktivitu</value>
     <comment>Disabled stat cards: connect-to-view hint</comment>
   </data>
+  <data name="site_app_contracts" xml:space="preserve">
+    <value>Kontrakty</value>
+    <comment>App connect screen: contract details section title</comment>
+  </data>
+  <data name="site_app_copied" xml:space="preserve">
+    <value>Zkopírováno</value>
+    <comment>App: copied flash. Also the linux share-dialog toast after copying the identity payload.</comment>
+  </data>
   <data name="site_app_country" xml:space="preserve">
     <value>Země</value>
     <comment>Reliability: country column</comment>
@@ -3890,6 +5400,10 @@ kontent světa</value>
     <value>Plán</value>
     <comment>Connect drawer: plan section label</comment>
   </data>
+  <data name="site_app_providers" xml:space="preserve">
+    <value>Poskytovatelé</value>
+    <comment>App connect screen: provider grid section title</comment>
+  </data>
   <data name="site_app_proxies" xml:space="preserve">
     <value>Proxy servery</value>
     <comment>App account: proxies row/screen title</comment>
@@ -3909,6 +5423,10 @@ kontent světa</value>
   <data name="site_app_throughput" xml:space="preserve">
     <value>Přenos</value>
     <comment>Connect drawer: live transfer timeseries section</comment>
+  </data>
+  <data name="site_billing_portal_error" xml:space="preserve">
+    <value>Portál fakturace se nepodařilo otevřít.</value>
+    <comment>Account panel: billing portal failed to open</comment>
   </data>
   <data name="site_connect_code_hint" xml:space="preserve">
     <value>Tento kód zadejte při registraci v aplikaci.</value>
@@ -4094,6 +5612,10 @@ kontent světa</value>
     <value>Vaše předplatné Pro je účtováno přes Stripe. Níže můžete kdykoli aktualizovat platební údaje nebo předplatné zrušit.</value>
     <comment>Subscription: Stripe-billed body</comment>
   </data>
+  <data name="skip" xml:space="preserve">
+    <value>Přeskočit</value>
+    <comment>Small muted button at the top of the post-login onboarding flow that leaves the whole flow.</comment>
+  </data>
   <data name="sn_payout_schedule" xml:space="preserve">
     <value>Výdělky se vypořádávají každou epochu a vyplácejí se v SN25α na váš Bittensor coldkey, když si je vyzvednete.</value>
     <comment>Earnings card: how providers are paid on the UR subnet (WHITEPAPER §5.2, §8.3). Earnings settle per epoch and are paid in SN25α as stake to the provider's Bittensor coldkey once the provider claims them; nothing is paid automatically. Followed by sn_payout_schedule_times when the epoch schedule is known.</comment>
@@ -4102,9 +5624,33 @@ kontent světa</value>
     <value>Tato epocha končí {0}. Svůj podíl si vyzvedněte od {1} do {2}.</value>
     <comment>Earnings card, after sn_payout_schedule: when the current epoch ends, when its share can be claimed and when an unclaimed share expires. The three values are local date-times the app fills from the chain's epoch schedule (the coordinator's policy: the claim-open offset and the claim TTL), never fixed durations.</comment>
   </data>
+  <data name="sn_status_claimable" xml:space="preserve">
+    <value>K vyzvednutí</value>
+    <comment>Claim status of an epoch whose alpha can be claimed now.</comment>
+  </data>
+  <data name="sn_status_not_finalized" xml:space="preserve">
+    <value>Nedokončeno</value>
+    <comment>Claim status of an epoch the vault has not finalized yet.</comment>
+  </data>
+  <data name="sn_status_open" xml:space="preserve">
+    <value>Otevřeno</value>
+    <comment>Claim status of an epoch that is still open (not yet finalized on chain).</comment>
+  </data>
+  <data name="solana_one_time_payment" xml:space="preserve">
+    <value>Platba v USDC na síti Solana je jednorázová roční platba bez zkušebního období zdarma.</value>
+    <comment>Note under the Solana payment button on the plan picker: Solana is a one-time yearly payment, the free trial is Stripe only.</comment>
+  </data>
+  <data name="solana_payment_still_checking" xml:space="preserve">
+    <value>Vaši platbu na síti Solana stále ověřujeme. Potvrzení v síti může trvat minutu nebo dvě.</value>
+    <comment>Shown once when the check for a Solana Pay payment (started when the app returns from the wallet) has run 20 seconds without the payment landing. The check keeps going for up to two minutes; the app cannot know whether the wallet actually sent anything, so do not say the payment was received.</comment>
+  </data>
   <data name="solana_sign_in" xml:space="preserve">
     <value>Přihlaste se pomocí Solana</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="solana_wallet" xml:space="preserve">
+    <value>Peněženka Solana</value>
+    <comment>Label of the connected Solana wallet block on the Earnings screen (parallel to bittensor_wallet).</comment>
   </data>
   <data name="something_went_wrong" xml:space="preserve">
     <value>Něco se pokazilo.</value>
@@ -4210,6 +5756,10 @@ kontent světa</value>
     <value>Chcete-li začít vydělávat, připojte se k síti</value>
     <comment>Guest mode overlay</comment>
   </data>
+  <data name="start_free_trial" xml:space="preserve">
+    <value>Zahájit zkušební období zdarma</value>
+    <comment>Primary button of the plan picker (onboarding and upgrade): starts the paid plan's free trial. Replaces 'Join the movement'.</comment>
+  </data>
   <data name="stay" xml:space="preserve">
     <value>Zůstat</value>
     <comment>Confirmation button that keeps the user on the seedphrase screen after the warning.</comment>
@@ -4270,6 +5820,14 @@ jaký by měl být.</value>
     <value>Silná anonymizace</value>
     <comment>Connect drawer: strong anonymization toggle — the inverse of allow direct (direct connections expose the real source IP to the provider).</comment>
   </data>
+  <data name="subscribe" xml:space="preserve">
+    <value>Předplatit</value>
+    <comment>Button on the plan picker for the monthly plan, which has no free trial.</comment>
+  </data>
+  <data name="subscription_purchased_under_different_account" xml:space="preserve">
+    <value>Vaše předplatné bylo zakoupeno pod jiným účtem. Chcete-li ho používat, přihlaste se k tomuto účtu.</value>
+    <comment>The store purchase belongs to a different network than the one logged in — crediting must not go to the wrong account, so tell the user which way out exists. Apple: restore-purchases outcome (Shared/ViewModels/AppStoreSubscriptionManager.swift). Android: terminal `wrong_network` answer from the Play purchase report (google/PlanViewModel.kt); the purchase is still acknowledged so Play does not auto-refund it.</comment>
+  </data>
   <data name="successfully_claimed_multiplier" xml:space="preserve">
     <value>Násobitel byl úspěšně nárokován!</value>
     <comment>Snackbar shown when the earnings multiplier is claimed successfully. Used in Main/Account/Settings/SettingsView.swift.</comment>
@@ -4318,6 +5876,10 @@ jaký by měl být.</value>
     <value>Chcete se odpojit od {} a změnit účet?</value>
     <comment>Call to action</comment>
   </data>
+  <data name="symbol_ellipsis" xml:space="preserve">
+    <value>...</value>
+    <comment>An ellipsis character used to indicate ongoing processing.</comment>
+  </data>
   <data name="sync_device_location_with_oldest_provider" xml:space="preserve">
     <value>Synchronizovat polohu zařízení s nejdéle připojeným poskytovatelem</value>
     <comment>Toggle that makes the device report the location of the longest-connected provider (Android mock location) instead of the real location.</comment>
@@ -4329,6 +5891,10 @@ jaký by měl být.</value>
   <data name="system" xml:space="preserve">
     <value>Systém</value>
     <comment>Used in Main/Account/Settings/SettingsForm-macOS.swift.</comment>
+  </data>
+  <data name="tao_amount_linux" xml:space="preserve">
+    <value>{} TAO</value>
+    <comment>A TAO amount with its unit (the gas key balance).</comment>
   </data>
   <data name="tap_to_connect" xml:space="preserve">
     <value>Klepnout pro připojení</value>
@@ -4354,6 +5920,10 @@ jaký by měl být.</value>
     <value>Děkujeme za zpětnou vazbu!</value>
     <comment>Confirmation shown after feedback is sent.</comment>
   </data>
+  <data name="the_purchase_could_not_be_completed" xml:space="preserve">
+    <value>Nákup se nepodařilo dokončit. Zkuste to znovu.</value>
+    <comment>Shown inline in the upgrade flow when a StoreKit purchase attempt throws (Shared/ViewModels/AppStoreSubscriptionManager.swift). Every purchase failure is shown to the user — a payment error they cannot see is one they will hit again. User cancellation is not an error and never shows this.</comment>
+  </data>
   <data name="there_was_an_error_checking_the_network_name" xml:space="preserve">
     <value>Při kontrole názvu sítě došlo k chybě</value>
     <comment>Used in Authenticate/CreateNetwork/CreateNetworkViewModel.swift.</comment>
@@ -4370,6 +5940,10 @@ jaký by měl být.</value>
     <value>⚠️ Toto je jediná chvíle, kdy ji uvidíte.</value>
     <comment>A warning message displayed in the seedphrase display view.</comment>
   </data>
+  <data name="this_purchase_couldn_t_be_verified" xml:space="preserve">
+    <value>Tento nákup se nepodařilo ověřit přes App Store, takže ho nelze použít na váš účet. Pokud vám byla stržena platba a váš tarif se neaktualizuje, kontaktujte podporu.</value>
+    <comment>Shown inline in the upgrade flow when the server's verify answer for a purchase's transaction JWS is terminal `invalid` — the proof will never verify. The transaction is still finished so StoreKit stops redelivering it; this message is how the failure reaches the user instead of a silent success (Shared/ViewModels/AppStoreSubscriptionManager.swift). Apple sibling of purchase_could_not_be_verified (android).</comment>
+  </data>
   <data name="this_region" xml:space="preserve">
     <value>tomto regionu</value>
     <comment>dns settings</comment>
@@ -4384,6 +5958,30 @@ jaký by měl být.</value>
   </data>
   <data name="title_login" xml:space="preserve">
     <value>Přihlásit se</value>
+  </data>
+  <data name="top200" xml:space="preserve">
+    <value>Top 200</value>
+    <comment>Badge text for the head mining spot.</comment>
+  </data>
+  <data name="top200_bound_detail" xml:space="preserve">
+    <value>Emise se vyplácí přímo na váš coldkey. Vazby se obnovují každou epochu.</value>
+    <comment>Detail under the bound status.</comment>
+  </data>
+  <data name="top200_bound_status" xml:space="preserve">
+    <value>UID {0} · pořadí #{1}</value>
+    <comment>Status row once bound.</comment>
+  </data>
+  <data name="top200_demotion_warning" xml:space="preserve">
+    <value>Vaše skóre je blízko hranice vyřazení. Přidejte směrovatelné IP adresy, abyste si místo udrželi.</value>
+    <comment>Warning when the score nears the floor.</comment>
+  </data>
+  <data name="top200_detail" xml:space="preserve">
+    <value>Rozsah směrovatelných IP adres vaší sítě je zhruba na #{0}. místě z {1} předních míst. Přední těžaři získávají SN25α nativně, v každém tempu.</value>
+    <comment>Detail of the Top 200 tile when eligible.</comment>
+  </data>
+  <data name="top200_you_qualify" xml:space="preserve">
+    <value>Splňujete podmínky</value>
+    <comment>Headline of the Top 200 tile when eligible.</comment>
   </data>
   <data name="top_matches" xml:space="preserve">
     <value>Nejlepší shody</value>
@@ -4441,6 +6039,62 @@ jaký by měl být.</value>
     <value>Váš převod byl zahájen a bude dokončen, jakmile bude transakce zpracována na řetězci.</value>
     <comment>Transfer Submitted Overlay</comment>
   </data>
+  <data name="transport" xml:space="preserve">
+    <value>Transport</value>
+    <comment>Section header of the transport mode selection (Auto or a single transport).</comment>
+  </data>
+  <data name="transport_auto_degraded" xml:space="preserve">
+    <value>Režim Auto je omezený, protože systémová omezení brání spuštění některých zapnutých transportů.</value>
+    <comment>Generic warning banner in the transport settings editor when the Auto policy is degraded for a constraint this app version does not recognize (the SDK may report new constraint kinds; "memory" has its own banner).</comment>
+  </data>
+  <data name="transport_auto_degraded_memory" xml:space="preserve">
+    <value>Režim Auto je omezený, protože limity systémové paměti brání spuštění některých zapnutých transportů.</value>
+    <comment>Warning banner in the transport settings editor when the Auto policy is degraded because the platform memory budget cannot admit every enabled transport.</comment>
+  </data>
+  <data name="transport_auto_description" xml:space="preserve">
+    <value>Doporučeno. Používá zapnuté transporty níže.</value>
+    <comment>Subtitle of the Auto transport mode row.</comment>
+  </data>
+  <data name="transport_client_footer" xml:space="preserve">
+    <value>Transport, kterým se toto zařízení dostává k poskytovatelům. Auto zkouší zapnuté transporty podle priority a drží paralelně připojené všechny funkční transporty stejné úrovně.</value>
+    <comment>Footer of the client transport mode section.</comment>
+  </data>
+  <data name="transport_dns_description" xml:space="preserve">
+    <value>Maskováno jako provoz DNS. Pro sítě, které filtrují přímá připojení.</value>
+    <comment>One line description of the whodis (DNS) transport in the transport settings editor.</comment>
+  </data>
+  <data name="transport_dnspump_description" xml:space="preserve">
+    <value>Maskováno jako provoz DNS se stálou pumpou odpovědí. Nejnižší šířka pásma, nejvyšší dostupnost.</value>
+    <comment>One line description of the whodis pump (DNS pump) transport in the transport settings editor.</comment>
+  </data>
+  <data name="transport_h1_description" xml:space="preserve">
+    <value>Přímo přes TLS. Funguje ve většině sítí.</value>
+    <comment>One line description of the H1 transport in the transport settings editor.</comment>
+  </data>
+  <data name="transport_h3_description" xml:space="preserve">
+    <value>Přímo přes QUIC. Nejrychlejší tam, kde není filtrováno.</value>
+    <comment>One line description of the H3 transport in the transport settings editor.</comment>
+  </data>
+  <data name="transport_provider_footer" xml:space="preserve">
+    <value>Transport, který toto zařízení používá, když poskytuje ostatním. Auto zkouší zapnuté transporty podle priority a drží paralelně připojené všechny funkční transporty stejné úrovně.</value>
+    <comment>Footer of the provider transport mode section.</comment>
+  </data>
+  <data name="transport_queued" xml:space="preserve">
+    <value>ve frontě</value>
+    <comment>Transport bar label for traffic admitted for sending but not yet attributed to a physical transport.</comment>
+  </data>
+  <data name="transport_unavailable_system_constraints" xml:space="preserve">
+    <value>Nedostupné kvůli systémovým omezením</value>
+    <comment>Accessibility label / tooltip on the warning icon next to a transport that is enabled under Auto but not currently eligible under a system constraint (for example the platform memory budget). A runtime warning, not a settings restriction: the toggle stays editable.</comment>
+  </data>
+  <data name="transport_unused" xml:space="preserve">
+    <value>nepoužito</value>
+    <comment>Prefix of the transport bar footer listing the enabled transports that carried no traffic in the stats window.</comment>
+  </data>
+  <data name="transports" xml:space="preserve">
+    <value>Transporty</value>
+    <comment>Title of the transport distribution bar under the client statistics chart and of the transport settings editor.</comment>
+  </data>
   <data name="trusted_by_over_100_000_private_networks" xml:space="preserve">
     <value>Důvěřuje mu více než 100 000 soukromých sítí</value>
     <comment>Used in Shared/Views/Introduction/IntroductionView.swift.</comment>
@@ -4464,6 +6118,10 @@ jaký by měl být.</value>
   <data name="tunnel_stopped_unexpectedly" xml:space="preserve">
     <value>Připojení se zastavilo.</value>
     <comment>Connect: notice that the connection stopped on its own.</comment>
+  </data>
+  <data name="unclaimed" xml:space="preserve">
+    <value>Nevyzvednuto</value>
+    <comment>Label of the unclaimed alpha tile.</comment>
   </data>
   <data name="unencrypted_dns" xml:space="preserve">
     <value>Nešifrovaný DNS</value>
@@ -4569,6 +6227,10 @@ jaký by měl být.</value>
     <value>URnetwork VPN zapnutá</value>
     <comment>Used in Shared/Intents/ConnectIntent.swift.</comment>
   </data>
+  <data name="usdc_payouts_until_migration" xml:space="preserve">
+    <value>Výplaty v USDC budou chodit do této peněženky, dokud se nedokončí přechod na Bittensor.</value>
+    <comment>Second paragraph of the Solana connect sheet/card, and the body line under a connected Solana wallet.</comment>
+  </data>
   <data name="usdc_solana_network_only" xml:space="preserve">
     <value>USDC posílejte pouze v síti Solana. USDC odeslané v jiné síti nedorazí.</value>
     <comment>Payment: the chain to send on. Shown wherever a USDC payment is requested, because USDC exists on many chains and a transfer sent on the wrong one is lost.</comment>
@@ -4587,6 +6249,10 @@ jaký by měl být.</value>
   <data name="use_as_proxy_no_vpn_detail" xml:space="preserve">
     <value>Otevře ur.io pro provoz URnetwork jako proxy HTTPS bez VPN. SOCKS a WireGuard jsou dostupné s Pro.</value>
     <comment>Subtitle under the cloud-proxy Settings row explaining that it opens ur.io and that SOCKS and WireGuard require Pro.</comment>
+  </data>
+  <data name="use_extender_settings" xml:space="preserve">
+    <value>Použít nastavení extenderu</value>
+    <comment>Toggle on the import screen: also apply the extender settings carried by the code.</comment>
   </data>
   <data name="use_most_stable_provider" xml:space="preserve">
     <value>Používá nejstabilnějšího poskytovatele</value>
@@ -4627,6 +6293,9 @@ jaký by měl být.</value>
   <data name="uses_ur_protocol" xml:space="preserve">
     <value>Používá UR Protocol</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="value_string" xml:space="preserve">
+    <value>{}</value>
   </data>
   <data name="value_with_unit" xml:space="preserve">
     <value>{0} {1}</value>
@@ -4682,6 +6351,10 @@ jaký by měl být.</value>
   <data name="verify_input_label" xml:space="preserve">
     <value>Ověřovací kód</value>
     <comment>Label for the verification code input field</comment>
+  </data>
+  <data name="verify_seeker" xml:space="preserve">
+    <value>Ověřit Seeker</value>
+    <comment>Standalone Seeker verification action (points multiplier only).</comment>
   </data>
   <data name="verify_seeker_token_btn" xml:space="preserve">
     <value>Ověřte si žeton předběžné objednávky Seeker</value>
@@ -4851,17 +6524,41 @@ jaký by měl být.</value>
     <value>Peněženka</value>
     <comment>Account Screen</comment>
   </data>
+  <data name="wallet_blocked" xml:space="preserve">
+    <value>Tuto peněženku nelze s URnetwork používat.</value>
+    <comment>Error when a wallet address is on the operator's ban list; the user cannot continue.</comment>
+  </data>
   <data name="wallet_connect_failed" xml:space="preserve">
     <value>Nepodařilo se připojit peněženku.</value>
     <comment>Error shown when connecting an external wallet to the account fails.</comment>
+  </data>
+  <data name="wallet_connect_signed_note_linux" xml:space="preserve">
+    <value>Vaše peněženka podepíše zprávu, aby prokázala, že je vaše. Na řetězec se nic neodesílá.</value>
+    <comment>Note under the manual address entry: the wallet only signs a proof of ownership.</comment>
   </data>
   <data name="wallet_connected" xml:space="preserve">
     <value>Peněženka připojena.</value>
     <comment>Confirmation shown after an external wallet is connected to the account.</comment>
   </data>
+  <data name="wallet_connected_to_protocol" xml:space="preserve">
+    <value>Připojeno k protokolu UR. Vyzvednuté nároky přicházejí sem. Alpha se připisuje od epochy následující po připojení.</value>
+    <comment>Line under the connected coldkey.</comment>
+  </data>
+  <data name="wallet_looks_new_warning" xml:space="preserve">
+    <value>Tato adresa zatím nemá na řetězci Bittensor žádnou aktivitu. Vypadá jako nová peněženka. Než budete pokračovat, ověřte, že je vaše.</value>
+    <comment>Warning when a wallet address has no activity on the Bittensor chain yet; the user may continue.</comment>
+  </data>
   <data name="wallet_needs_network" xml:space="preserve">
     <value>Tato peněženka zatím není propojena s žádnou sítí. Zvolte název sítě a vytvořte ji.</value>
     <comment>Shown on the create-network step after a wallet sign-in when the wallet isn't linked to any network yet. The user picks a network name and accepts the terms to create one; the wallet signature carries over.</comment>
+  </data>
+  <data name="wallet_not_retroactive" xml:space="preserve">
+    <value>Připojte peněženku a vydělávejte SN25α od příští epochy. Předchozí epochy se zpětně nevypořádávají.</value>
+    <comment>Line on the wallet block before a wallet is connected.</comment>
+  </data>
+  <data name="wallet_options" xml:space="preserve">
+    <value>Možnosti peněženky</value>
+    <comment>Accessibility label of the three-dot overflow button next to “Connect Bittensor wallet” and on the connected Bittensor wallet block.</comment>
   </data>
   <data name="wallet_sign_in_failed" xml:space="preserve">
     <value>Přihlášení peněženkou se nezdařilo</value>
@@ -4870,6 +6567,14 @@ jaký by měl být.</value>
   <data name="wallet_sign_in_method_added" xml:space="preserve">
     <value>Způsob přihlášení peněženkou byl přidán</value>
     <comment>Snackbar message displayed when a wallet sign-in method is successfully added.</comment>
+  </data>
+  <data name="wallet_signature_mismatch_linux" xml:space="preserve">
+    <value>Peněženka, která podepsala, neodpovídá zadané adrese.</value>
+    <comment>Error when the bridge signed with a different wallet than the address the user typed.</comment>
+  </data>
+  <data name="we_re_confirming_your_purchase_with_the_app_store" xml:space="preserve">
+    <value>Potvrzujeme váš nákup u App Storu. Váš tarif se aktualizuje automaticky.</value>
+    <comment>Body of the post-purchase screen while the confirmation poll runs (Shared/Views/PurchaseSuccessView.swift). Processing-shaped, not premium-shaped: the server learns of the purchase by webhook and has not confirmed yet.</comment>
   </data>
   <data name="welcome_offer_eyebrow" xml:space="preserve">
     <value>Uvítací nabídka</value>
@@ -4886,6 +6591,158 @@ jaký by měl být.</value>
   <data name="when_you_refer_a_friend" xml:space="preserve">
     <value>Když doporučíte přítele:</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="widget_client" xml:space="preserve">
+    <value>Klient</value>
+    <comment>Dashboard widget chart title: this device's own traffic.</comment>
+  </data>
+  <data name="widget_connect_once" xml:space="preserve">
+    <value>Připojte se jednou a uvidíte tu svůj provoz</value>
+    <comment>Dashboard widget footer before the tunnel has ever written data.</comment>
+  </data>
+  <data name="widget_connect_to_see_contracts" xml:space="preserve">
+    <value>Připojte se a uvidíte své kontrakty</value>
+    <comment>Contracts widget empty state while the tunnel is down.</comment>
+  </data>
+  <data name="widget_contract_stack_accessibility.one" xml:space="preserve">
+    <value>{0} kontrakt, {1}</value>
+    <comment>Accessibility label for one contract stack in the contracts widget. The arguments are the number of contracts and the bytes moved.</comment>
+  </data>
+  <data name="widget_contract_stack_accessibility.few" xml:space="preserve">
+    <value>{0} kontrakty, {1}</value>
+    <comment>Accessibility label for one contract stack in the contracts widget. The arguments are the number of contracts and the bytes moved.</comment>
+  </data>
+  <data name="widget_contract_stack_accessibility.many" xml:space="preserve">
+    <value>{0} kontraktu, {1}</value>
+    <comment>Accessibility label for one contract stack in the contracts widget. The arguments are the number of contracts and the bytes moved.</comment>
+  </data>
+  <data name="widget_contract_stack_accessibility.other" xml:space="preserve">
+    <value>{0} kontraktů, {1}</value>
+    <comment>Accessibility label for one contract stack in the contracts widget. The arguments are the number of contracts and the bytes moved.</comment>
+  </data>
+  <data name="widget_contracts_description" xml:space="preserve">
+    <value>Vaše hlavní klientské kontrakty v pohybu, jak přicházejí a odcházejí.</value>
+    <comment>Description of the contracts widget in the widget gallery.</comment>
+  </data>
+  <data name="widget_control_description" xml:space="preserve">
+    <value>Připojit nebo odpojit VPN URnetwork.</value>
+    <comment>Description of the quick connect control in the Control Center gallery.</comment>
+  </data>
+  <data name="widget_dashboard_description" xml:space="preserve">
+    <value>Zůstatek dat, připojené místo a provoz, s rychlým připojením.</value>
+    <comment>Description of the dashboard widget in the widget gallery.</comment>
+  </data>
+  <data name="widget_globe_description" xml:space="preserve">
+    <value>Vaši připojení poskytovatelé na glóbu.</value>
+    <comment>Description of the provider globe widget in the widget gallery.</comment>
+  </data>
+  <data name="widget_more_providers" xml:space="preserve">
+    <value>+{} další</value>
+    <comment>Provider globe widget: providers not shown in the list. The argument is a count.</comment>
+  </data>
+  <data name="widget_no_contracts" xml:space="preserve">
+    <value>Žádné kontrakty</value>
+    <comment>Contracts widget empty state while connected with no open client contracts.</comment>
+  </data>
+  <data name="widget_no_providers" xml:space="preserve">
+    <value>Žádní poskytovatelé</value>
+    <comment>Badge on the small provider globe widget when no providers are connected.</comment>
+  </data>
+  <data name="widget_not_providing" xml:space="preserve">
+    <value>Neposkytuje</value>
+    <comment>Dashboard widget provider chart label when providing is off.</comment>
+  </data>
+  <data name="widget_not_signed_in" xml:space="preserve">
+    <value>Nepřihlášeno</value>
+    <comment>Quick connect control / widget value when the app has no tunnel configuration yet (fresh install or logged out).</comment>
+  </data>
+  <data name="widget_open" xml:space="preserve">
+    <value>Otevřít</value>
+    <comment>Button on the Home Screen widget that opens the app when the tunnel is not configured yet.</comment>
+  </data>
+  <data name="widget_open_to_set_up" xml:space="preserve">
+    <value>Otevřete URnetwork a nastavte ji</value>
+    <comment>Widget subtitle when the app has no tunnel configuration yet.</comment>
+  </data>
+  <data name="widget_peak_rate" xml:space="preserve">
+    <value>Špička {}</value>
+    <comment>Chart label; the argument is a formatted byte rate such as '1.2 MB/s'.</comment>
+  </data>
+  <data name="widget_peer_count.one" xml:space="preserve">
+    <value>{} peer</value>
+    <comment>Contracts widget header: number of peers with open contracts.</comment>
+  </data>
+  <data name="widget_peer_count.few" xml:space="preserve">
+    <value>{} peery</value>
+    <comment>Contracts widget header: number of peers with open contracts.</comment>
+  </data>
+  <data name="widget_peer_count.many" xml:space="preserve">
+    <value>{} peeru</value>
+    <comment>Contracts widget header: number of peers with open contracts.</comment>
+  </data>
+  <data name="widget_peer_count.other" xml:space="preserve">
+    <value>{} peerů</value>
+    <comment>Contracts widget header: number of peers with open contracts.</comment>
+  </data>
+  <data name="widget_provider" xml:space="preserve">
+    <value>Poskytovatel</value>
+    <comment>Dashboard widget chart title: traffic relayed for others while providing.</comment>
+  </data>
+  <data name="widget_provider_count.one" xml:space="preserve">
+    <value>{} poskytovatel</value>
+    <comment>Widget subtitle: number of connected providers.</comment>
+  </data>
+  <data name="widget_provider_count.few" xml:space="preserve">
+    <value>{} poskytovatelé</value>
+    <comment>Widget subtitle: number of connected providers.</comment>
+  </data>
+  <data name="widget_provider_count.many" xml:space="preserve">
+    <value>{} poskytovatele</value>
+    <comment>Widget subtitle: number of connected providers.</comment>
+  </data>
+  <data name="widget_provider_count.other" xml:space="preserve">
+    <value>{} poskytovatelů</value>
+    <comment>Widget subtitle: number of connected providers.</comment>
+  </data>
+  <data name="widget_provider_count_providing.one" xml:space="preserve">
+    <value>{} poskytovatel · poskytuje</value>
+    <comment>Widget subtitle: number of connected providers while this device is also providing.</comment>
+  </data>
+  <data name="widget_provider_count_providing.few" xml:space="preserve">
+    <value>{} poskytovatelé · poskytuje</value>
+    <comment>Widget subtitle: number of connected providers while this device is also providing.</comment>
+  </data>
+  <data name="widget_provider_count_providing.many" xml:space="preserve">
+    <value>{} poskytovatele · poskytuje</value>
+    <comment>Widget subtitle: number of connected providers while this device is also providing.</comment>
+  </data>
+  <data name="widget_provider_count_providing.other" xml:space="preserve">
+    <value>{} poskytovatelů · poskytuje</value>
+    <comment>Widget subtitle: number of connected providers while this device is also providing.</comment>
+  </data>
+  <data name="widget_provider_mode_title" xml:space="preserve">
+    <value>Poskytovatel · {}</value>
+    <comment>Title above the provider traffic chart in the dashboard widget: the chart name with the current provide mode (Auto, Always, Network, Never).</comment>
+  </data>
+  <data name="widget_provider_stats_when_enabled" xml:space="preserve">
+    <value>Statistiky poskytovatele se zobrazí, jakmile bude poskytovatel zapnutý.</value>
+    <comment>Shown in the dashboard widget in place of the provider traffic chart while providing is off.</comment>
+  </data>
+  <data name="widget_quick_tile_added" xml:space="preserve">
+    <value>Dlaždice rychlého připojení přidána</value>
+    <comment>Toast after the system added the Quick Settings tile.</comment>
+  </data>
+  <data name="widget_toggle_intent_title" xml:space="preserve">
+    <value>Zapnout/vypnout VPN URnetwork</value>
+    <comment>Title of the Set-Value intent behind the quick connect control and widget toggle (shown by the system in Shortcuts/debug UI).</comment>
+  </data>
+  <data name="widget_updated_ago" xml:space="preserve">
+    <value>Aktualizováno {}</value>
+    <comment>Dashboard widget footer; the argument is a localized relative time such as '3 min. ago'.</comment>
+  </data>
+  <data name="widget_updated_just_now" xml:space="preserve">
+    <value>Aktualizováno právě teď</value>
+    <comment>Dashboard widget footer in the widget gallery preview.</comment>
   </data>
   <data name="widgets" xml:space="preserve">
     <value>Widgety</value>
@@ -4927,6 +6784,10 @@ jaký by měl být.</value>
     <value>Získáte 3 GiB/den navždy</value>
     <comment>Text displayed in a scrollable view within a VStack in the body of a view that is displayed when the user is viewing their referral code.</comment>
   </data>
+  <data name="you_get_free_data_every_day" xml:space="preserve">
+    <value>Každý den dostáváte data zdarma.</value>
+    <comment>Detail line under the onboarding data page title.</comment>
+  </data>
   <data name="you_have_n_other_devices_online.one" xml:space="preserve">
     <value>Máte {} další zařízení online</value>
   </data>
@@ -4955,6 +6816,10 @@ jaký by měl být.</value>
     <value>Jste prémium.</value>
     <comment>Used in Main/Account/AccountRootView.swift.</comment>
   </data>
+  <data name="your_bandwidth" xml:space="preserve">
+    <value>Vaše šířka pásma</value>
+    <comment>Title of the onboarding data page (was 'Boost your bandwidth').</comment>
+  </data>
   <data name="your_email" xml:space="preserve">
     <value>Váš e-mail</value>
     <comment>Label for the empty text field.</comment>
@@ -4974,6 +6839,10 @@ jaký by měl být.</value>
   <data name="your_purchase_needs_to_be_approved_before_it_can" xml:space="preserve">
     <value>Váš nákup musí být před dokončením schválen. UR Pro se zapne automaticky, jakmile schválení projde — není potřeba kupovat znovu.</value>
     <comment>Used in Shared/Views/UpgradeSubscriptionSheet.swift.</comment>
+  </data>
+  <data name="your_referral_code" xml:space="preserve">
+    <value>Váš doporučující kód</value>
+    <comment>Label above the referral code pill in the gold referral panel.</comment>
   </data>
   <data name="your_referral_link" xml:space="preserve">
     <value>Váš doporučovací odkaz</value>

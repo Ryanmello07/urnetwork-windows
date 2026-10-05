@@ -698,6 +698,10 @@
     <value>已拦截</value>
     <comment>Label for the blocked traffic relayed for remote clients.</comment>
   </data>
+  <data name="blocked_location_block_failed" xml:space="preserve">
+    <value>无法屏蔽 {}。请重试。</value>
+    <comment>Blocked locations: blocking a location failed. The argument is the location name.</comment>
+  </data>
   <data name="blocked_location_could_not_be_added_please_try" xml:space="preserve">
     <value>无法添加屏蔽位置。请稍后再试。</value>
     <comment>Used in Main/Account/BlockedLocations/BlockedLocationsViewModel.swift.</comment>
@@ -705,6 +709,10 @@
   <data name="blocked_location_could_not_be_removed_please_try" xml:space="preserve">
     <value>无法移除屏蔽位置。请稍后再试。</value>
     <comment>Used in Main/Account/BlockedLocations/BlockedLocationsViewModel.swift.</comment>
+  </data>
+  <data name="blocked_location_unblock_failed" xml:space="preserve">
+    <value>无法取消屏蔽 {}。请重试。</value>
+    <comment>Blocked locations: unblocking a location failed, so it is back in the list. The argument is the location name.</comment>
   </data>
   <data name="blocked_locations" xml:space="preserve">
     <value>被屏蔽的位置</value>
@@ -717,6 +725,10 @@
   <data name="blocked_locations_could_not_be_loaded" xml:space="preserve">
     <value>无法加载已屏蔽的位置。</value>
     <comment>Shown on the Blocked locations screen when the list could not be fetched, above a Retry button.</comment>
+  </data>
+  <data name="blocked_locations_load_failed" xml:space="preserve">
+    <value>无法加载您已屏蔽的位置。下拉即可重试。</value>
+    <comment>Blocked locations: the list could not be loaded.</comment>
   </data>
   <data name="blocks" xml:space="preserve">
     <value>区块</value>
@@ -2236,6 +2248,10 @@
     <value>不确定能不能信任 VPN</value>
     <comment>Onboarding feedback email, not-activated variant: one-tap reason 3.</comment>
   </data>
+  <data name="email_support_at" xml:space="preserve">
+    <value>发送电子邮件给支持团队：</value>
+    <comment>Settings: label before the support email address link.</comment>
+  </data>
   <data name="emoji_group_activities" xml:space="preserve">
     <value>活动</value>
     <comment>Emoji keyboard group: sports, games and activities.</comment>
@@ -2610,6 +2626,10 @@
   <data name="feedback_placeholder" xml:space="preserve">
     <value>告诉我们您的真实感受</value>
     <comment>Feedback Screen</comment>
+  </data>
+  <data name="feedback_send_failed" xml:space="preserve">
+    <value>您的反馈未发送。请检查网络连接后重试。</value>
+    <comment>Feedback screen: the feedback could not be sent. The text stays in the field so the user can send it again.</comment>
   </data>
   <data name="feedback_sending" xml:space="preserve">
     <value>正在发送…</value>
@@ -4803,6 +4823,10 @@
   <data name="send" xml:space="preserve">
     <value>发送</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="send_feedback_contact" xml:space="preserve">
+    <value>直接向我们发送反馈，发送电子邮件至 {0}，或加入我们的 {1} 获取直接支持。</value>
+    <comment>Feedback screen: support contacts. The first argument is the support email address, the second is the name of the community chat (Discord); both are links.</comment>
   </data>
   <data name="send_product_updates" xml:space="preserve">
     <value>向我发送产品更新</value>
