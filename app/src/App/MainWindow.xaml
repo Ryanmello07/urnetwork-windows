@@ -1700,8 +1700,24 @@
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock x:Name="AccountDailyLabel"
-                                                   Style="{StaticResource UrKeyTextStyle}" />
+                                        <StackPanel Orientation="Horizontal" Spacing="4"
+                                                    VerticalAlignment="Center">
+                                            <TextBlock x:Name="AccountDailyLabel"
+                                                       VerticalAlignment="Center"
+                                                       Style="{StaticResource UrKeyTextStyle}" />
+                                            <!-- "About your data" (DataInfoSheet): what Used,
+                                                 Pending and Available mean and when the free
+                                                 data refreshes; named in AccountPage -->
+                                            <Button x:Name="AccountDataInfoButton"
+                                                    Click="OnOpenDataInfo"
+                                                    Width="28" Height="28" Padding="0"
+                                                    Background="Transparent" BorderThickness="0"
+                                                    AutomationProperties.AutomationId="acceptance.account.data-info">
+                                                <FontIcon FontFamily="{StaticResource UrIconFontFamily}"
+                                                          Glyph="&#xE946;" FontSize="14"
+                                                          Foreground="{StaticResource UrTextMutedBrush}" />
+                                            </Button>
+                                        </StackPanel>
                                         <TextBlock x:Name="AccountDailyValue" Grid.Column="1"
                                                    Style="{StaticResource UrValueTextStyle}" />
                                     </Grid>

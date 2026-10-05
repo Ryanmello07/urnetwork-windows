@@ -257,6 +257,13 @@ struct MainWindow : MainWindowT<MainWindow> {
                      winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnOpenRedeem(winrt::Windows::Foundation::IInspectable const&,
                     winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
+  // "About your data" (DataInfoSheet), from the Account usage card's info button
+  void OnOpenDataInfo(winrt::Windows::Foundation::IInspectable const&,
+                      winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
+  // The upgrade path of a start connect refused for the balance
+  // (AppController::ShowUpgradeForBlockedConnect): OnOpenUpgrade, with the
+  // sheet it opens saying when the free data refreshes.
+  void OpenUpgradeForBlockedConnect();
   // the account pane's referral rows after a failed read
   void OnRetryReferralTotals(winrt::Windows::Foundation::IInspectable const&,
                              winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
@@ -428,6 +435,7 @@ struct MainWindow : MainWindowT<MainWindow> {
   void DivertGuestToConversion(std::function<void()> checkout);
   urnw::GuestUpgradeContinuation guestUpgrade_;
   winrt::fire_and_forget ShowRedeemSheet();
+  winrt::fire_and_forget ShowDataInfoSheet();
 
   // ---- the in-app service manager (beta spec §3) ----
   // The window owns the ONE snapshot every service-setup surface reads —
@@ -471,6 +479,10 @@ struct MainWindow : MainWindowT<MainWindow> {
   bool insufficientBalance_ = false;  // last ContractStatus push
   std::shared_ptr<urnw::UpgradeSheet> upgradeSheet_;
   std::shared_ptr<urnw::RedeemCodeSheet> redeemSheet_;
+  std::shared_ptr<urnw::DataInfoSheet> dataInfoSheet_;
+  // set only while OpenUpgradeForBlockedConnect runs: ShowUpgradeSheet reads it
+  // before its first suspension
+  bool upgradeForBlockedConnect_ = false;
 
   // The Pro celebration (ProCelebration.h): the confetti canvas and the
   // mosaic host at the bottom of MainWindow.xaml. Plays once at the free -> Pro flip, and

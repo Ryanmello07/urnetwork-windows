@@ -17,6 +17,7 @@
 
 #include "AppController.h"
 #include "ClientEvents.h"
+#include "DataInfo.h"
 #include "GuestConversion.h"
 #include "Log.h"
 #include "OnboardingRouting.h"
@@ -174,6 +175,17 @@ MainWindow::MainWindow() {
       }
     });
     BalanceWarning().ActionButton(getPro);
+
+    // the banner leads with when the free data refreshes (ConnectPage); Why?
+    // explains the balance in the "About your data" sheet
+    HyperlinkButton why;
+    why.Content(LocBox("data_info_why"));
+    Automation::AutomationProperties::SetAutomationId(why,
+                                                      L"acceptance.insufficient-balance.why");
+    why.Click([weak = get_weak()](auto const&, auto const&) {
+      if (auto self = weak.get()) self->ShowDataInfoSheet();
+    });
+    BalanceWarning().Content(why);
   }
 
   // The service-setup banner's one click (beta spec §3): a single elevated
@@ -1832,6 +1844,18 @@ void MainWindow::OnOpenRedeem(IInspectable const&, RoutedEventArgs const&) {
   ShowRedeemSheet();
 }
 
+void MainWindow::OnOpenDataInfo(IInspectable const&, RoutedEventArgs const&) {
+  ShowDataInfoSheet();
+}
+
+void MainWindow::OpenUpgradeForBlockedConnect() {
+  // ShowUpgradeSheet runs synchronously up to its ShowAsync, so the mark
+  // reaches exactly this opening and no later one
+  upgradeForBlockedConnect_ = true;
+  OnOpenUpgrade(nullptr, nullptr);
+  upgradeForBlockedConnect_ = false;
+}
+
 void MainWindow::OnRetryReferralTotals(IInspectable const&, RoutedEventArgs const&) {
   if (account_) account_->RetryReferralInfo();
 }
@@ -1849,11 +1873,28 @@ winrt::fire_and_forget MainWindow::ShowUpgradeSheet() {
   auto self = get_strong();
   self->sheetOpen_ = true;
   try {
-    self->upgradeSheet_ = urnw::UpgradeSheet::Create(Content().XamlRoot(), Sdk(), Balance());
+    // a blocked connect's sheet says when the free data refreshes
+    const bool freeRefresh =
+        urnw::datainfo::UpgradeShowsFreeRefresh(upgradeForBlockedConnect_, balance_.isPro);
+    self->upgradeSheet_ =
+        urnw::UpgradeSheet::Create(Content().XamlRoot(), Sdk(), Balance(), freeRefresh);
     co_await self->upgradeSheet_->Dialog().ShowAsync();
   } catch (...) {
   }
   self->upgradeSheet_.reset();
+  self->sheetOpen_ = false;
+}
+
+winrt::fire_and_forget MainWindow::ShowDataInfoSheet() {
+  if (sheetOpen_) co_return;  // only one ContentDialog can show at a time
+  auto self = get_strong();
+  self->sheetOpen_ = true;
+  try {
+    self->dataInfoSheet_ = urnw::DataInfoSheet::Create(Content().XamlRoot(), balance_);
+    co_await self->dataInfoSheet_->Dialog().ShowAsync();
+  } catch (...) {
+  }
+  self->dataInfoSheet_.reset();
   self->sheetOpen_ = false;
 }
 

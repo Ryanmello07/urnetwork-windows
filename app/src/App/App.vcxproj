@@ -279,6 +279,7 @@
     <ClCompile Include="AuthSheets.cpp" />
     <ClCompile Include="LoginCarousel.cpp" />
     <ClCompile Include="BalanceSheets.cpp" />
+    <ClCompile Include="FreeRefreshTicker.cpp" />
     <ClCompile Include="BittensorWalletDialogs.cpp" />
     <ClCompile Include="Localization.cpp" />
     <ClCompile Include="LocationSheets.cpp" />
@@ -369,6 +370,9 @@
     <ClInclude Include="AppController.h" />
     <ClInclude Include="AuthSheets.h" />
     <ClInclude Include="BalanceSheets.h" />
+    <!-- header-only and WinRT-free: tools/data-info-tests.cpp runs it -->
+    <ClInclude Include="DataInfo.h" />
+    <ClInclude Include="FreeRefreshTicker.h" />
     <ClInclude Include="AddSignIn.h" />
     <ClInclude Include="BittensorWalletDialogs.h" />
     <ClInclude Include="BittensorWalletFlow.h" />

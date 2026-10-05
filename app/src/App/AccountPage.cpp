@@ -221,6 +221,8 @@ void AccountPage::ApplyStrings() {
   w_.AccountUpgradeButton().Content(LocBox("upgrade"));
   w_.AccountUsageGroupLabel().Text(Loc("data_usage"));
   w_.AccountDailyLabel().Text(Loc("daily_data_balance_label"));
+  Automation::AutomationProperties::SetName(w_.AccountDataInfoButton(), Loc("data_info_title"));
+  ToolTipService::SetToolTip(w_.AccountDataInfoButton(), winrt::box_value(Loc("data_info_title")));
   w_.RedeemRowText().Text(Loc("redeem_balance_code"));
   Automation::AutomationProperties::SetName(w_.RedeemRowButton(), Loc("redeem_balance_code"));
 
