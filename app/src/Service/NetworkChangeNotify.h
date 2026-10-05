@@ -10,7 +10,8 @@
 //
 // Pure C++ with no Windows or SDK header, so tools/network-change-notify-tests.cpp
 // runs it on any host with a C++20 compiler, as CaptureReadiness.h's harness
-// does.
+// does. The notifier reads and sleeps on an injectable clock (NotifyClock), so
+// that harness moves time by hand instead of waiting out the real window.
 //
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
@@ -79,6 +80,42 @@ class NotifyCoalescer {
 };
 
 // ---------------------------------------------------------------------------
+// the notifier's clock
+// ---------------------------------------------------------------------------
+//
+// The time NetworkChangeNotifier's thread reads, the sleep it takes until the
+// soonest window closes, and a hook told whenever something wakes it. The
+// defaults are the service's: the steady clock, a sleep that ends when the
+// window closes or an event or the cancel arrives, and no hook. The harness
+// passes a clock that moves only when a test moves it, a sleep that only a wake
+// ends, and a hook that counts the wakes, so a test waits for the thread to have
+// looked at the time it set instead of sleeping past a window.
+struct NotifyClock {
+  // Milliseconds on a monotonic clock. Read under the notifier's lock.
+  std::function<int64_t()> nowMillis = [] {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+               std::chrono::steady_clock::now().time_since_epoch())
+        .count();
+  };
+  // Sleep on `wake` until it is notified or `waitMillis` have passed (-1: until
+  // notified). `lock` is held on entry and on return, as for
+  // std::condition_variable::wait. Nothing was due at `nowMillis`.
+  std::function<void(std::unique_lock<std::mutex>& lock, std::condition_variable& wake,
+                     int64_t nowMillis, int64_t waitMillis)>
+      sleep = [](std::unique_lock<std::mutex>& lock, std::condition_variable& wake, int64_t,
+                 int64_t waitMillis) {
+        if (waitMillis < 0) {
+          wake.wait(lock);
+        } else {
+          wake.wait_for(lock, std::chrono::milliseconds(waitMillis));
+        }
+      };
+  // Told after an event, the cancel or NetworkChangeNotifier::Wake woke the
+  // thread, outside the notifier's lock.
+  std::function<void()> woken;
+};
+
+// ---------------------------------------------------------------------------
 // the notification half, for a device with no watchdog
 // ---------------------------------------------------------------------------
 //
@@ -105,10 +142,13 @@ class NetworkChangeNotifier {
  public:
   using Call = std::function<void()>;
 
-  NetworkChangeNotifier(Call networkChanged, Call networkQualityChanged)
+  // The service passes no clock and gets the steady one (NotifyClock).
+  NetworkChangeNotifier(Call networkChanged, Call networkQualityChanged,
+                        NotifyClock clock = {})
       : channel_(std::make_shared<Channel>()) {
     channel_->networkChanged = std::move(networkChanged);
     channel_->networkQualityChanged = std::move(networkQualityChanged);
+    channel_->clock = std::move(clock);
     thread_ = std::thread([channel = channel_] { Run(channel); });
   }
 
@@ -117,7 +157,7 @@ class NetworkChangeNotifier {
       std::scoped_lock lock(channel_->mutex);
       channel_->cancelled = true;
     }
-    channel_->wake.notify_all();
+    WakeThread(*channel_);
     if (thread_.joinable()) thread_.join();
   }
 
@@ -132,6 +172,18 @@ class NetworkChangeNotifier {
     return [channel = channel_] { Observe(*channel, &Channel::quality); };
   }
 
+  // Have the thread read the clock again. The steady clock needs no such call:
+  // the thread's sleep ends when the soonest window closes. A clock that moves
+  // only when told (the harness's) is followed by one after each move.
+  void Wake() {
+    // Taken and released first: a thread between its reading and its sleep
+    // holds the lock, so it is asleep before the wake is sent.
+    {
+      std::scoped_lock lock(channel_->mutex);
+    }
+    WakeThread(*channel_);
+  }
+
  private:
   struct Channel {
     std::mutex mutex;
@@ -141,21 +193,22 @@ class NetworkChangeNotifier {
     NotifyCoalescer quality;
     Call networkChanged;
     Call networkQualityChanged;
+    NotifyClock clock;
   };
 
-  static int64_t NowMillis() {
-    return std::chrono::duration_cast<std::chrono::milliseconds>(
-               std::chrono::steady_clock::now().time_since_epoch())
-        .count();
+  // End the thread's sleep, and tell the clock's hook.
+  static void WakeThread(Channel& channel) {
+    channel.wake.notify_all();
+    if (channel.clock.woken) channel.clock.woken();
   }
 
   static void Observe(Channel& channel, NotifyCoalescer Channel::*coalescer) {
     {
       std::scoped_lock lock(channel.mutex);
       if (channel.cancelled) return;
-      (channel.*coalescer).Observe(NowMillis());
+      (channel.*coalescer).Observe(channel.clock.nowMillis());
     }
-    channel.wake.notify_all();
+    WakeThread(channel);
   }
 
   static void Run(const std::shared_ptr<Channel>& channel) {
@@ -166,7 +219,7 @@ class NetworkChangeNotifier {
         std::unique_lock lock(channel->mutex);
         for (;;) {
           if (channel->cancelled) return;
-          const int64_t now = NowMillis();
+          const int64_t now = channel->clock.nowMillis();
           networkDue = channel->network.TakeDue(now);
           qualityDue = channel->quality.TakeDue(now);
           if (networkDue || qualityDue) break;
@@ -178,11 +231,7 @@ class NetworkChangeNotifier {
             const int64_t untilQuality = channel->quality.deadlineMillis() - now;
             if (waitMillis < 0 || untilQuality < waitMillis) waitMillis = untilQuality;
           }
-          if (waitMillis < 0) {
-            channel->wake.wait(lock);
-          } else {
-            channel->wake.wait_for(lock, std::chrono::milliseconds(waitMillis));
-          }
+          channel->clock.sleep(lock, channel->wake, now, waitMillis);
         }
       }
       // Outside the lock: a call into the device can block, and a sink must

@@ -53,7 +53,9 @@ func networkChangeTestProgram(t *testing.T, mutate func(string) string) string {
 
 // Execute the spec: one call per burst, quality dropped inside a network pass,
 // a window a flapping link cannot starve, nothing after destruction, a
-// destructor that waits out a call already running, a call that throws.
+// destructor that waits out a call already running, a call that throws. The
+// spec moves the notifier's clock by hand and waits on the thread, never on
+// the real window, so a loaded host cannot change a verdict.
 func TestNetworkChangeNotifier(t *testing.T) {
 	program := networkChangeTestProgram(t, nil)
 	if output, err := exec.Command(program).CombinedOutput(); err != nil {
@@ -63,12 +65,12 @@ func TestNetworkChangeNotifier(t *testing.T) {
 	}
 }
 
-// Run the spec against a rewritten copy of the header and require that it
-// fails, naming want.
-func requireNetworkChangeFailure(t *testing.T, mutate func(string) string, want string) {
+// Run the spec with args against a rewritten copy of the header and require
+// that it fails, naming want.
+func requireNetworkChangeFailure(t *testing.T, mutate func(string) string, want string, args ...string) {
 	t.Helper()
 	program := networkChangeTestProgram(t, mutate)
-	output, err := exec.Command(program).CombinedOutput()
+	output, err := exec.Command(program, args...).CombinedOutput()
 	if err == nil || !strings.Contains(string(output), want) {
 		t.Fatalf("negative control was not detected (want %q): %v\n%s", want, err, output)
 	}
@@ -92,12 +94,17 @@ func TestNetworkChangeNotifierRejectsReextendingWindow(t *testing.T) {
 }
 
 // A destructor that returns while a call into the device still runs: the
-// retire would close the device under it.
+// retire would close the device under it. The spec's own case lets the held
+// call go as soon as the destructor has cancelled, when such a destructor may
+// not have returned yet; with --hold-call-until-destroyed the spec holds the
+// call until the destructor returns, which only such a destructor does, so it
+// fails every time.
 func TestNetworkChangeNotifierRejectsDetachedDestruction(t *testing.T) {
 	requireNetworkChangeFailure(t, func(source string) string {
 		return strings.Replace(source, "if (thread_.joinable()) thread_.join();",
 			"if (thread_.joinable()) thread_.detach();", 1)
-	}, "join: destruction returns only after the call into the device has returned")
+	}, "join: destruction returns only after the call into the device has returned",
+		"--hold-call-until-destroyed")
 }
 
 // A quality change told beside the network change it already rides on.
