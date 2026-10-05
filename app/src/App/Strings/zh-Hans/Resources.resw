@@ -267,6 +267,14 @@
     <value>匹配</value>
     <comment>Connection inspector: label of the matched rule row.</comment>
   </data>
+  <data name="adv_mode_rpc_only" xml:space="preserve">
+    <value>仅 RPC</value>
+    <comment>Windows status strip (Advanced Mode), Session value: a session that talks to the service over RPC without a tunnel. Lowercase, a short status value.</comment>
+  </data>
+  <data name="adv_mode_tunnel" xml:space="preserve">
+    <value>隧道</value>
+    <comment>Windows status strip (Advanced Mode), Session value: a full tunnel session. Lowercase, a short status value.</comment>
+  </data>
   <data name="adv_na" xml:space="preserve">
     <value>—</value>
     <comment>Connection inspector: placeholder dash for a value that is not available.</comment>
@@ -301,7 +309,7 @@
   </data>
   <data name="adv_raw_status" xml:space="preserve">
     <value>原始状态</value>
-    <comment>Connection inspector: label of the raw status row.</comment>
+    <comment>Connection inspector (Linux) and Advanced Mode status strip (Windows): label of the raw status field.</comment>
   </data>
   <data name="adv_reason" xml:space="preserve">
     <value>原因</value>
@@ -323,6 +331,26 @@
     <value>路由覆盖</value>
     <comment>Connection inspector: decision reason, a route override applied.</comment>
   </data>
+  <data name="adv_routes" xml:space="preserve">
+    <value>路由</value>
+    <comment>Windows status strip (Advanced Mode): label of the field that shows whether the tunnel's routes are installed.</comment>
+  </data>
+  <data name="adv_routes_dns_degraded" xml:space="preserve">
+    <value>开启，DNS 未生效</value>
+    <comment>Windows status strip (Advanced Mode), Routes value: routes are installed but the tunnel's DNS is not. Lowercase, a short status value.</comment>
+  </data>
+  <data name="adv_routes_kill_switch_armed" xml:space="preserve">
+    <value>关闭，断网保护已就绪</value>
+    <comment>Windows status strip (Advanced Mode), Routes value: no routes are installed and the kill switch is blocking traffic. Lowercase, a short status value.</comment>
+  </data>
+  <data name="adv_routes_no_firewall" xml:space="preserve">
+    <value>开启，无防泄漏保护</value>
+    <comment>Windows status strip (Advanced Mode), Routes value: routes are installed but no leak-prevention firewall policy is in force. Lowercase, a short status value.</comment>
+  </data>
+  <data name="adv_rpc" xml:space="preserve">
+    <value>RPC</value>
+    <comment>Windows status strip (Advanced Mode): label of the field that shows the service's RPC endpoint (host:port). RPC is a technical term.</comment>
+  </data>
   <data name="adv_select_a_row" xml:space="preserve">
     <value>在“活动”中选择一行以检查</value>
     <comment>Connection inspector: hint to select a row in the Activity list.</comment>
@@ -338,6 +366,10 @@
   <data name="adv_session_exit_country" xml:space="preserve">
     <value>会话出口国家</value>
     <comment>Connection inspector: label of the session exit country row.</comment>
+  </data>
+  <data name="adv_session_mode" xml:space="preserve">
+    <value>会话</value>
+    <comment>Windows status strip (Advanced Mode): label of the field that shows which kind of session the service granted (tunnel or rpc-only).</comment>
   </data>
   <data name="adv_unknown_exit" xml:space="preserve">
     <value>不在路由表中</value>
@@ -718,6 +750,10 @@
     <value>无法加载已屏蔽的位置。</value>
     <comment>Shown on the Blocked locations screen when the list could not be fetched, above a Retry button.</comment>
   </data>
+  <data name="blocked_locations_search_placeholder" xml:space="preserve">
+    <value>搜索国家/地区</value>
+    <comment>macOS Blocked locations screen: placeholder of the country search field.</comment>
+  </data>
   <data name="blocks" xml:space="preserve">
     <value>区块</value>
     <comment>Points leaderboard: stat tile label and sort chip. A block is one finalized payout epoch.</comment>
@@ -824,6 +860,14 @@
     <value>无法打开您的浏览器。请将此链接复制到浏览器中以完成结账：</value>
     <comment>Upgrade sheet: the system browser could not be opened for the hosted checkout url. The app appends the url itself on the next line (selectable) so the user can copy it into a browser by hand — never advancing to the waiting page with no payment page open.</comment>
   </data>
+  <data name="checkout_confirming_purchase" xml:space="preserve">
+    <value>我们正在确认你的购买。你的套餐会自动更新。</value>
+    <comment>Purchase confirmation message while the app waits for the payment to be confirmed.</comment>
+  </data>
+  <data name="checkout_finish_in_browser" xml:space="preserve">
+    <value>请在浏览器中完成。</value>
+    <comment>Purchase confirmation title after the app opened Stripe's checkout page in the browser.</comment>
+  </data>
   <data name="checkout_interrupted_confirming" xml:space="preserve">
     <value>结账页面意外关闭。如果您的付款已完成，您的方案会在此处自动更新，无需再次购买。</value>
     <comment>Upgrade sheet waiting page: the embedded checkout webview crashed after the payment form had rendered, so a charge may already have gone through with only the redirect lost. Shown while the confirmation poll asks the server for the payment webhook; must never invite buying again.</comment>
@@ -831,6 +875,10 @@
   <data name="checkout_opened_in_browser" xml:space="preserve">
     <value>请在浏览器中完成购买。付款确认后，您的计划将在此处自动更新。</value>
     <comment>Shown after the app hands the user to the Stripe hosted checkout in the system browser. The app polls the server and flips the plan automatically when the payment webhook lands.</comment>
+  </data>
+  <data name="checkout_restore_checking" xml:space="preserve">
+    <value>正在重新检查你的套餐。</value>
+    <comment>Message after Restore purchases in the Stripe-paid app: nothing to restore locally, the app re-reads the plan from the server.</comment>
   </data>
   <data name="choose_file" xml:space="preserve">
     <value>选择文件</value>
@@ -972,6 +1020,10 @@
     <value>对端</value>
     <comment>A label displayed next to a companion contract.</comment>
   </data>
+  <data name="conn_blocked_kill_switch" xml:space="preserve">
+    <value>已阻断 — 断网保护已开启</value>
+    <comment>Windows Connect page status when the connection is down and the kill switch is deliberately blocking this computer's traffic.</comment>
+  </data>
   <data name="conn_connect_on_launch" xml:space="preserve">
     <value>应用启动时自动连接</value>
     <comment>Settings: switch that connects automatically when the app starts.</comment>
@@ -980,13 +1032,93 @@
     <value>默认关闭。开启后，URnetwork 会在你打开应用时立即连接到所选提供者。这会影响下次启动 - 现在不会连接。</value>
     <comment>Settings: explanation under the connect-on-launch switch.</comment>
   </data>
+  <data name="conn_degraded" xml:space="preserve">
+    <value>连接质量下降 — 正在重新连接</value>
+    <comment>Windows connection status (Connect page headline and tray tooltip) when a working connection dropped and the app is reconnecting on its own.</comment>
+  </data>
+  <data name="conn_disconnecting" xml:space="preserve">
+    <value>正在断开连接 — 你的流量仍在通过隧道</value>
+    <comment>Windows Connect page status while the tunnel is being stopped but its routes are still installed.</comment>
+  </data>
   <data name="conn_failed" xml:space="preserve">
     <value>无法连接</value>
     <comment>Connect screen status when the connect attempt failed: no provider could be reached (the sdk's CONNECT_FAILED). The connection keeps trying, and the app offers Retry.</comment>
   </data>
+  <data name="conn_failed_detail" xml:space="preserve">
+    <value>无法连接到任何提供商。重试会从头重建连接。</value>
+    <comment>Windows Connect page reason line when connecting failed.</comment>
+  </data>
+  <data name="conn_failsafe_armed" xml:space="preserve">
+    <value>如果很快仍没有任何流量通过，URnetwork 会自动关闭隧道，让你保持联网。</value>
+    <comment>Windows Connect page: sentence appended to the line above when the service will stop a tunnel that carries nothing.</comment>
+  </data>
+  <data name="conn_failsafe_blocked" xml:space="preserve">
+    <value>隧道无法传输流量，因此 URnetwork 已将其关闭。断网保护已开启，因此在你重新连接或关闭断网保护之前，任何流量都不会离开这台电脑 — 没有发生任何泄漏。</value>
+    <comment>Windows Connect page line after the service stopped a tunnel that carried nothing, while the kill switch keeps this computer blocked.</comment>
+  </data>
+  <data name="conn_failsafe_restored" xml:space="preserve">
+    <value>为了让你保持在线，URnetwork 已断开你的连接：隧道处于开启状态，但没有任何流量通过。你的流量现在正常发出，并且不受保护。按“连接”重试。</value>
+    <comment>Windows Connect page line and tray notification after the service stopped a tunnel that carried nothing, with the kill switch off. Keep the emphasis on NOT.</comment>
+  </data>
+  <data name="conn_finding_providers" xml:space="preserve">
+    <value>正在查找提供商…</value>
+    <comment>Connection status while the app has providers but none is proven to work yet (Linux and Windows Connect page headline, Windows tray tooltip).</comment>
+  </data>
   <data name="conn_not_protected" xml:space="preserve">
     <value>你的互联网流量未受保护。</value>
     <comment>Connect page: warning that the internet traffic is not protected.</comment>
+  </data>
+  <data name="conn_reason_auth" xml:space="preserve">
+    <value>登录平台一直失败…</value>
+    <comment>Windows Connect page reason line while the app's sign-in to the URnetwork platform keeps failing.</comment>
+  </data>
+  <data name="conn_reason_platform" xml:space="preserve">
+    <value>正在联系平台…</value>
+    <comment>Windows Connect page reason line while the app cannot reach the URnetwork platform (the API servers).</comment>
+  </data>
+  <data name="conn_reason_providers" xml:space="preserve">
+    <value>提供商无响应 — 正在重试…</value>
+    <comment>Windows Connect page reason line while the selected providers do not answer.</comment>
+  </data>
+  <data name="conn_reason_rate_limited" xml:space="preserve">
+    <value>请求受限 — 正在等待…</value>
+    <comment>Windows Connect page reason line while the platform asks the app to slow down.</comment>
+  </data>
+  <data name="conn_traffic_blocked" xml:space="preserve">
+    <value>目前没有可用的提供商 — 你的流量已被阻断，而不是暴露。断开连接即可恢复正常网络。</value>
+    <comment>Windows Connect page line while connected but no provider carries traffic, with leak protection in force.</comment>
+  </data>
+  <data name="conn_traffic_blocked_unprotected" xml:space="preserve">
+    <value>目前没有可用的提供商 — 发送到隧道的流量无处可去，而且防泄漏保护已关闭，因此部分流量可能会绕过它。断开连接即可恢复正常网络。</value>
+    <comment>Windows Connect page line while connected but no provider carries traffic, and leak protection (the firewall policy) is not in force.</comment>
+  </data>
+  <data name="conn_tray_blocked_kill_switch" xml:space="preserve">
+    <value>已阻断（断网保护已开启）</value>
+    <comment>Windows tray tooltip when the kill switch is deliberately blocking this computer's traffic.</comment>
+  </data>
+  <data name="conn_tray_blocked_no_tunnel" xml:space="preserve">
+    <value>已阻断 — 没有开启隧道，但防泄漏保护仍在生效</value>
+    <comment>Windows tray tooltip when leak protection blocks traffic while no tunnel is up.</comment>
+  </data>
+  <data name="conn_tray_disconnecting" xml:space="preserve">
+    <value>正在断开连接 — 流量仍在通过隧道</value>
+    <comment>Windows tray tooltip while the tunnel is being stopped but its routes are still installed.</comment>
+  </data>
+  <data name="conn_tray_failsafe_blocked" xml:space="preserve">
+    <value>隧道无法传输流量，因此 URnetwork 已将其关闭。断网保护已开启，因此这台电脑仍处于阻断状态，没有发生任何泄漏。请重新连接，或在此菜单中关闭断网保护。</value>
+    <comment>Windows tray notification after the service stopped a tunnel that carried nothing, while the kill switch keeps this computer blocked. "This menu" is the tray icon's menu.</comment>
+  </data>
+  <data name="conn_tray_failsafe_stopped" xml:space="preserve">
+    <value>已断开（隧道故障）</value>
+    <comment>Windows tray tooltip after the service stopped a tunnel that carried nothing.</comment>
+  </data>
+  <data name="conn_tray_force_tunnel_off" xml:space="preserve">
+    <value>强制关闭隧道（恢复）</value>
+    <comment>Windows tray menu item that stops the tunnel directly when the normal Disconnect is stuck.</comment>
+  </data>
+  <data name="conn_tray_lift_kill_switch" xml:space="preserve">
+    <value>关闭断网保护（解除这台电脑的阻断）</value>
+    <comment>Windows tray menu item that lifts the kill switch's block on this computer.</comment>
   </data>
   <data name="connect" xml:space="preserve">
     <value>连接</value>
@@ -1114,7 +1246,7 @@
   </data>
   <data name="contribute_bandwidth" xml:space="preserve">
     <value>贡献带宽</value>
-    <comment>Used in Shared/Views/Introduction/IntroductionParticipateSettingsView.swift.</comment>
+    <comment>Onboarding: title of the step that asks whether this device may share bandwidth with the network (provide).</comment>
   </data>
   <data name="control_doh_error_https_required" xml:space="preserve">
     <value>URL 必须以 https:// 开头。</value>
@@ -1296,13 +1428,25 @@
     <value>此设备没有 polkit 授权服务，因此 URnetwork 系统服务改用 'urnetwork' 用户组。将你的用户加入该组，然后注销并重新登录。</value>
     <comment>Connect error: no polkit service, the daemon falls back to the urnetwork group.</comment>
   </data>
+  <data name="daemon_legacy_group_auth" xml:space="preserve">
+    <value>此设备上的 URnetwork 系统服务是旧版本，仍要求加入用户组。请更新该服务，或将你的用户加入 'urnetwork' 组，然后注销并重新登录。</value>
+    <comment>Linux notice when an older system service refuses the app's user. 'urnetwork' is the literal Linux group name; keep it as is.</comment>
+  </data>
   <data name="daemon_no_answer" xml:space="preserve">
     <value>URnetwork 系统服务没有响应。</value>
     <comment>Error: the system service did not answer.</comment>
   </data>
+  <data name="daemon_not_reachable" xml:space="preserve">
+    <value>无法连接到 URnetwork 系统服务。</value>
+    <comment>Linux notice when the app cannot reach the URnetwork system service for an unexpected reason.</comment>
+  </data>
   <data name="daemon_sdk_mismatch" xml:space="preserve">
     <value>应用与 URnetwork 系统服务的构建版本不同。请将两者更新到同一版本。</value>
     <comment>Shown on the linux home screen when the app and the urnetworkd system service carry different URnetwork SDK builds (they update on independent schedules and must match exactly). The fix is updating both to the same release.</comment>
+  </data>
+  <data name="daemon_stale_sandbox_mount" xml:space="preserve">
+    <value>此应用打开期间，URnetwork 系统服务已重新启动。请关闭应用并重新打开，以重新连接到该服务。</value>
+    <comment>Linux notice when the app cannot reach the URnetwork system service because the service restarted under a sandboxed (Flatpak) app.</comment>
   </data>
   <data name="daemon_too_old" xml:space="preserve">
     <value>URnetwork 系统服务版本过旧。请更新后再连接。</value>
@@ -2048,6 +2192,98 @@
     <value>设备</value>
     <comment>Provider list group title for devices</comment>
   </data>
+  <data name="direct_update_allow" xml:space="preserve">
+    <value>允许</value>
+    <comment>macOS folder-access panel button that grants the app access to the Applications folder for the update.</comment>
+  </data>
+  <data name="direct_update_allow_applications" xml:space="preserve">
+    <value>要安装更新，请允许 URnetwork 在“应用程序”文件夹中替换自身。选择“应用程序”，然后点按“允许”。</value>
+    <comment>macOS folder-access panel message when installing an update: the user selects the Applications folder to grant access. Keep "Allow" consistent with the panel's button.</comment>
+  </data>
+  <data name="direct_update_available" xml:space="preserve">
+    <value>有可用更新：{}</value>
+    <comment>macOS Settings &gt; Software update status when a newer release exists. {version} is its version.</comment>
+  </data>
+  <data name="direct_update_check" xml:space="preserve">
+    <value>检查更新</value>
+    <comment>macOS Settings &gt; Software update button that checks now.</comment>
+  </data>
+  <data name="direct_update_check_failed" xml:space="preserve">
+    <value>无法检查更新：{}</value>
+    <comment>macOS Settings &gt; Software update error. {detail} is a short technical reason (often English, from the system).</comment>
+  </data>
+  <data name="direct_update_checking" xml:space="preserve">
+    <value>正在检查更新…</value>
+    <comment>macOS Settings &gt; Software update status while checking.</comment>
+  </data>
+  <data name="direct_update_checksum_failed" xml:space="preserve">
+    <value>下载的文件与该版本的校验和不符，已被丢弃。</value>
+    <comment>macOS Settings &gt; Software update error: the downloaded file failed its integrity check and was deleted.</comment>
+  </data>
+  <data name="direct_update_development_build" xml:space="preserve">
+    <value>开发版本；最新版本为 {}。</value>
+    <comment>macOS Settings &gt; Software update status on a development build, which never updates itself. {version} is the newest release version.</comment>
+  </data>
+  <data name="direct_update_download_failed" xml:space="preserve">
+    <value>下载失败：{}</value>
+    <comment>macOS Settings &gt; Software update error. {detail} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_downloading_version" xml:space="preserve">
+    <value>正在下载 {}…</value>
+    <comment>macOS Settings &gt; Software update status while the release downloads. {version} is its version.</comment>
+  </data>
+  <data name="direct_update_install" xml:space="preserve">
+    <value>安装更新</value>
+    <comment>macOS Settings &gt; Software update button that downloads, verifies and installs the update.</comment>
+  </data>
+  <data name="direct_update_install_failed" xml:space="preserve">
+    <value>无法安装更新：{}</value>
+    <comment>macOS Settings &gt; Software update error. {detail} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_installing" xml:space="preserve">
+    <value>正在安装更新…</value>
+    <comment>macOS Settings &gt; Software update status while the verified update is installed.</comment>
+  </data>
+  <data name="direct_update_last_checked" xml:space="preserve">
+    <value>上次检查：{}</value>
+    <comment>macOS Settings &gt; Software update: when updates were last checked. {when} is a relative date, for example "5 minutes ago" or "yesterday".</comment>
+  </data>
+  <data name="direct_update_manual_install" xml:space="preserve">
+    <value>{} 已下载并验证。请将新的 URnetwork 拖到“应用程序”文件夹，然后从那里打开。</value>
+    <comment>macOS Settings &gt; Software update status when the app could not replace itself. {version} is the downloaded release's version.</comment>
+  </data>
+  <data name="direct_update_not_checked" xml:space="preserve">
+    <value>尚未检查更新。</value>
+    <comment>macOS Settings &gt; Software update status before the first check.</comment>
+  </data>
+  <data name="direct_update_relaunching" xml:space="preserve">
+    <value>正在重新启动 URnetwork…</value>
+    <comment>macOS Settings &gt; Software update status while the app restarts on the new version.</comment>
+  </data>
+  <data name="direct_update_section_title" xml:space="preserve">
+    <value>软件更新</value>
+    <comment>macOS Settings: title of the section that checks for and installs app updates (direct-download app).</comment>
+  </data>
+  <data name="direct_update_show_in_finder" xml:space="preserve">
+    <value>在“访达”中显示</value>
+    <comment>macOS Settings &gt; Software update button that reveals the downloaded update in Finder (the macOS file manager).</comment>
+  </data>
+  <data name="direct_update_signature_rejected" xml:space="preserve">
+    <value>更新被拒绝：{}</value>
+    <comment>macOS Settings &gt; Software update error when the downloaded app's code signature did not check out. {detail} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_unpack_failed" xml:space="preserve">
+    <value>无法解压下载的文件：{}</value>
+    <comment>macOS Settings &gt; Software update error. {detail} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_unusable_release" xml:space="preserve">
+    <value>应用无法安装版本 {0}（{1}）。</value>
+    <comment>macOS Settings &gt; Software update error when the newest release has no file this app can install. {version} is the release version; {reason} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_up_to_date" xml:space="preserve">
+    <value>URnetwork 已是最新版本。</value>
+    <comment>macOS Settings &gt; Software update status when no newer release exists.</comment>
+  </data>
   <data name="disable_ignore_battery_hint" xml:space="preserve">
     <value>若要禁用，请前往系统设置中的应用电池使用情况</value>
     <comment>Call to action</comment>
@@ -2297,7 +2533,7 @@
     <comment>Section header of the per-transport enable toggles shown when the transport mode is Auto.</comment>
   </data>
   <data name="enabled_under_auto_footer" xml:space="preserve">
-    <value>按优先顺序列出：先是 H3 和 H1，然后是 whodis，最后是 whodis pump。顺序固定。至少会有一种传输方式保持启用。</value>
+    <value>按优先顺序列出：先是 H1，然后是 H3、whodis 和 whodis pump。顺序固定。至少会有一种传输方式保持启用。</value>
     <comment>Footer of the Auto transports section explaining the fixed preference order.</comment>
   </data>
   <data name="enjoying_urnetwork" xml:space="preserve">
@@ -2342,6 +2578,10 @@
   <data name="enter_urnetwork" xml:space="preserve">
     <value>进入 URnetwork</value>
     <comment>Used in Authenticate/LoginInitial/GuestModeSheet.swift.</comment>
+  </data>
+  <data name="enter_wallet_address" xml:space="preserve">
+    <value>输入钱包地址</value>
+    <comment>Used in Main/Account/Wallets/ConnectWalletSheet/EnterWalletAddress/EnterWalletAddressView.swift.</comment>
   </data>
   <data name="epoch_column_epoch_linux" xml:space="preserve">
     <value>周期</value>
@@ -3367,6 +3607,10 @@
     <value>需要更多数据，更快吗？</value>
     <comment>Call to action</comment>
   </data>
+  <data name="net_points_earned" xml:space="preserve">
+    <value>净赚积分</value>
+    <comment>Earnings page: lowercase caption under the net points total.</comment>
+  </data>
   <data name="net_provided" xml:space="preserve">
     <value>已提供网络量</value>
     <comment>Call to action</comment>
@@ -3443,6 +3687,10 @@
     <value>有人邀请你加入 🥳 
 创建网络即可领取你的奖励！</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="network_earnings" xml:space="preserve">
+    <value>网络收益</value>
+    <comment>Used in Main/Account/AccountRootView.swift.</comment>
   </data>
   <data name="network_name_changed_to_n" xml:space="preserve">
     <value>网络名称已更改为 {}</value>
@@ -3603,6 +3851,10 @@
   <data name="none" xml:space="preserve">
     <value>无</value>
     <comment>Empty value: the VLESS settings show it for no security and no flow (all apps), and the Referrals section shows it on windows and linux when no referral network is linked.</comment>
+  </data>
+  <data name="not_now" xml:space="preserve">
+    <value>以后再说</value>
+    <comment>macOS button that dismisses the prompt to enable the VPN system extension for now.</comment>
   </data>
   <data name="notifications_label" xml:space="preserve">
     <value>通知</value>
@@ -3857,9 +4109,17 @@
     <value>省 {}%</value>
     <comment>Plan picker: the saving badge on the yearly card; the number is the whole percent saved against twelve monthly payments.</comment>
   </data>
+  <data name="plan_terms_first_year_price" xml:space="preserve">
+    <value>首年 {0}，之后 {1}/年。可随时取消。</value>
+    <comment>Plan picker terms line for the yearly plan with a first-year offer and no free trial. {first_year_price} and {yearly_price} are formatted prices, for example $39.99.</comment>
+  </data>
   <data name="plan_terms_yearly.other" xml:space="preserve">
     <value>免费 {0} 天，之后 {1}/年。可随时取消。</value>
     <comment>Plan picker: the terms line under the button for the yearly plan with its trial.</comment>
+  </data>
+  <data name="plan_terms_yearly_billed_today" xml:space="preserve">
+    <value>今天收取 {}，之后每年收取。可随时取消。</value>
+    <comment>Plan picker terms line for the yearly plan without a trial or offer. {yearly_price} is a formatted price, for example $59.99.</comment>
   </data>
   <data name="please_install_phantom_or_solflare_to_use_this" xml:space="preserve">
     <value>请安装 Phantom 或 Solflare 以使用此功能</value>
@@ -4750,7 +5010,7 @@
   </data>
   <data name="seedphrase_paste_hint" xml:space="preserve">
     <value>在此粘贴你的 12 或 24 个单词的助记词</value>
-    <comment>Seed sign-in sheet: placeholder of the seedphrase field (android accepts 12 or 24 words).</comment>
+    <comment>Seed sign-in sheet: placeholder of the seedphrase field (android and windows accept 12 or 24 words).</comment>
   </data>
   <data name="seedphrase_required" xml:space="preserve">
     <value>请输入助记词</value>
@@ -6274,6 +6534,22 @@
     <value>请使用名称的 ASCII 形式。</value>
     <comment>Split rules: validation error for a host name with non-ASCII characters; the rule wants the punycode form.</comment>
   </data>
+  <data name="split_rule_mode_excluded_description" xml:space="preserve">
+    <value>所选主机绕过隧道。</value>
+    <comment>Split rule editor: description of the Route locally mode.</comment>
+  </data>
+  <data name="split_rule_mode_included_description" xml:space="preserve">
+    <value>默认：所选主机使用隧道，不固定提供商。</value>
+    <comment>Split rule editor: description of the Route through VPN mode (the default). A pin is the Keep on one provider mode.</comment>
+  </data>
+  <data name="split_rule_mode_pinned_description" xml:space="preserve">
+    <value>所选主机会更长时间保留其提供商，而不是一出现问题迹象就被迁移，因此网站在会话中更换 IP 地址的频率更低。</value>
+    <comment>Split rule editor: description of the Keep on one provider mode.</comment>
+  </data>
+  <data name="split_rule_mode_pinned_title" xml:space="preserve">
+    <value>保持在一个提供商</value>
+    <comment>Split rule editor: title of the mode that keeps the selected hosts on the same VPN provider longer.</comment>
+  </data>
   <data name="split_rule_preset_google_meet_calls" xml:space="preserve">
     <value>Google Meet 通话</value>
     <comment>Split rules preset: Google Meet call media, from the address ranges Google publishes for routing it outside a VPN. Keep the product name Google Meet unchanged.</comment>
@@ -6290,6 +6566,10 @@
     <value>连接后，路由活动会显示在这里。</value>
     <comment>A description of the content of the "Activity" section of the split rules view.</comment>
   </data>
+  <data name="split_rules_connect_to_load" xml:space="preserve">
+    <value>请连接一次，以加载你已有的规则。</value>
+    <comment>Split rules screen: note under the disabled Add a rule button before the app has connected once and loaded the saved rules.</comment>
+  </data>
   <data name="split_rules_hint" xml:space="preserve">
     <value>点击下方流量，将其改走本地路由，绕过隧道。</value>
     <comment>A description of how to route traffic locally.</comment>
@@ -6298,9 +6578,17 @@
     <value>在上方添加主机，或点击下方流量，将其改走本地路由，绕过隧道。</value>
     <comment>Split rules on android, which has a host input above the traffic list: how to add to the rule. The apple/linux screens without the input keep split_rules_hint.</comment>
   </data>
+  <data name="split_rules_host_hint_modes" xml:space="preserve">
+    <value>在上方添加主机，或点按下方的流量，将其改走本地路由或固定到一个提供商。</value>
+    <comment>Split rules screen: hint shown while there are no rules yet. Routing locally sends traffic outside the VPN; holding to one provider keeps a site on the same VPN exit.</comment>
+  </data>
   <data name="split_rules_info_note" xml:space="preserve">
     <value>排除会应用到整个关联网络集群，因此相关流量会被一并排除。</value>
     <comment>transfer stats and split rules</comment>
+  </data>
+  <data name="split_rules_info_note_modes" xml:space="preserve">
+    <value>规则会应用到整个关联网络集群，因此相关流量会被一并处理。</value>
+    <comment>Split rules screen: note that a rule matches every host in the same network cluster (related hosts of one site or service), whatever the rule's mode.</comment>
   </data>
   <data name="split_rules_match_sites_not_apps" xml:space="preserve">
     <value>分流规则针对的是网站和地址，而不是应用：Apple 仅允许在由组织管理的设备（MDM）上使用按应用 VPN。要让某个应用不走 VPN，请将它使用的网站设为本地路由，或从预设开始。本地网络地址本来就不经过 VPN。</value>
@@ -6313,6 +6601,14 @@
   <data name="split_rules_start_from_preset" xml:space="preserve">
     <value>从预设开始</value>
     <comment>Split rules screen: the menu that starts a route-locally rule from a preset, the address ranges a service publishes for use outside a VPN.</comment>
+  </data>
+  <data name="sso_browser_open_failed" xml:space="preserve">
+    <value>无法打开浏览器。请重试。</value>
+    <comment>macOS error when adding a sign-in method could not open the browser for the provider's sign-in page.</comment>
+  </data>
+  <data name="sso_sign_in_timed_out" xml:space="preserve">
+    <value>登录超时。请重试。</value>
+    <comment>Error when a browser sign-in (Google or Apple through the browser) took too long and expired.</comment>
   </data>
   <data name="start_earning_join" xml:space="preserve">
     <value>要开始赚取收入，请加入网络</value>
@@ -6386,6 +6682,10 @@
     <value>订阅</value>
     <comment>Button on the plan picker for the monthly plan, which has no free trial.</comment>
   </data>
+  <data name="subscription_portal_open_failed" xml:space="preserve">
+    <value>无法打开订阅门户。请重试。</value>
+    <comment>Snackbar error when the Stripe subscription management page (Manage subscription) could not be opened.</comment>
+  </data>
   <data name="subscription_purchased_under_different_account" xml:space="preserve">
     <value>您的订阅是通过另一个账户购买的。请登录该账户以使用订阅。</value>
     <comment>The store purchase belongs to a different network than the one logged in — crediting must not go to the wrong account, so tell the user which way out exists. Apple: restore-purchases outcome (Shared/ViewModels/AppStoreSubscriptionManager.swift). Android: terminal `wrong_network` answer from the Play purchase report (google/PlanViewModel.kt); the purchase is still acknowledged so Play does not auto-refund it.</comment>
@@ -6414,9 +6714,41 @@
     <value>Pro</value>
     <comment>Display name for the paid plan. The WIRE value stays "supporter" (subscription_type / current_subscription.plan) because already-shipped app versions parse that string; only what the user reads changes.</comment>
   </data>
+  <data name="svc_action_failed" xml:space="preserve">
+    <value>操作未完成 — 服务未发生变化。详细信息见应用日志。</value>
+    <comment>Windows banner text when installing, starting or updating the VPN service failed.</comment>
+  </data>
   <data name="svc_service_label" xml:space="preserve">
     <value>VPN 服务</value>
     <comment>Settings: label of the VPN service row.</comment>
+  </data>
+  <data name="svc_setup_action" xml:space="preserve">
+    <value>设置</value>
+    <comment>Windows banner button that installs the VPN service (Windows asks for administrator permission).</comment>
+  </data>
+  <data name="svc_setup_message" xml:space="preserve">
+    <value>URnetwork 使用一个 Windows 服务来传输流量。只需点击一下 — Windows 会请求管理员权限。</value>
+    <comment>Windows banner text under 'Set up the VPN service'.</comment>
+  </data>
+  <data name="svc_setup_title" xml:space="preserve">
+    <value>设置 VPN 服务</value>
+    <comment>Windows banner title when the URnetwork Windows service that carries traffic is not installed yet.</comment>
+  </data>
+  <data name="svc_start_action" xml:space="preserve">
+    <value>启动</value>
+    <comment>Windows banner button that starts the stopped VPN service.</comment>
+  </data>
+  <data name="svc_start_message" xml:space="preserve">
+    <value>该服务已安装，但没有运行。</value>
+    <comment>Windows banner text under 'Start the VPN service'.</comment>
+  </data>
+  <data name="svc_start_title" xml:space="preserve">
+    <value>启动 VPN 服务</value>
+    <comment>Windows banner title when the VPN service is installed but stopped.</comment>
+  </data>
+  <data name="svc_uac_declined" xml:space="preserve">
+    <value>Windows 请求了权限，但提示已被关闭。准备好后请再次点击。</value>
+    <comment>Windows banner text after the user closed the administrator permission (UAC) prompt without approving.</comment>
   </data>
   <data name="svc_uninstall_action" xml:space="preserve">
     <value>卸载</value>
@@ -6426,9 +6758,25 @@
     <value>这会停止 URnetwork 服务并移除其 systemd 单元。在重新设置之前应用无法连接。系统将请求管理员权限。</value>
     <comment>Settings: confirmation text before uninstalling the VPN service.</comment>
   </data>
+  <data name="svc_uninstall_confirm_windows" xml:space="preserve">
+    <value>这会停止 URnetwork 服务并将其从 Windows 中移除。在重新设置之前应用无法连接。Windows 会请求管理员权限。</value>
+    <comment>Windows Settings: confirmation dialog before uninstalling the VPN service.</comment>
+  </data>
   <data name="svc_uninstall_note" xml:space="preserve">
     <value>移除 URnetwork 用于传输流量的 systemd 服务。</value>
     <comment>Settings: explanation under the uninstall service button.</comment>
+  </data>
+  <data name="svc_uninstall_note_windows" xml:space="preserve">
+    <value>移除 URnetwork 用于传输流量的 Windows 服务。</value>
+    <comment>Windows Settings &gt; VPN service row: what the Uninstall button removes.</comment>
+  </data>
+  <data name="svc_update_message" xml:space="preserve">
+    <value>已安装服务的版本与此应用不同。</value>
+    <comment>Windows banner text under 'Update the VPN service'. The two version numbers follow it in parentheses.</comment>
+  </data>
+  <data name="svc_update_title" xml:space="preserve">
+    <value>更新 VPN 服务</value>
+    <comment>Windows banner title when the installed VPN service is a different version than the app.</comment>
   </data>
   <data name="switch_account" xml:space="preserve">
     <value>切换帐户</value>
@@ -6712,6 +7060,82 @@
   <data name="upd_auto_check_note" xml:space="preserve">
     <value>启动后不久及每六小时查找新版本。未经点击绝不会安装任何内容。</value>
     <comment>Settings: explanation under the automatic update check switch.</comment>
+  </data>
+  <data name="upd_available_appimage_message" xml:space="preserve">
+    <value>点击一下即可下载该版本，用该版本的校验和进行验证，并替换此 AppImage。VPN 服务会单独更新。</value>
+    <comment>Linux Settings update notice, AppImage installs: what the Install button does. The AppImage is the single-file Linux app; the VPN service is the separate system service package.</comment>
+  </data>
+  <data name="upd_available_msi_message" xml:space="preserve">
+    <value>点击一下即可下载并验证该版本，然后运行其安装程序，更新应用和 VPN 服务。安装期间应用会关闭。</value>
+    <comment>Windows update banner: what the Update button does (downloads the MSI installer, checks it, runs it).</comment>
+  </data>
+  <data name="upd_available_package_message" xml:space="preserve">
+    <value>从版本页面下载 {}，然后运行下面的命令。</value>
+    <comment>Linux Settings update notice, package installs (.deb, .rpm, tarball) that the app does not replace itself. {file} is the release file name, for example urnetwork_2026.10.5_amd64.deb. The shell command is shown in the row below.</comment>
+  </data>
+  <data name="upd_available_title_version" xml:space="preserve">
+    <value>有可用更新：v{}</value>
+    <comment>Update notice title (Linux Settings, Windows update banner): a newer release is available. {version} is the release version, for example 2026.10.5-1024555910; keep the "v" before it.</comment>
+  </data>
+  <data name="upd_downloaded_message" xml:space="preserve">
+    <value>此 AppImage 所在的文件夹不可写，因此已将验证过的下载文件保存在下方。请手动用它替换 AppImage。</value>
+    <comment>Linux Settings update notice when the app cannot replace itself: the verified file's path is shown in the row below.</comment>
+  </data>
+  <data name="upd_failed_checksum" xml:space="preserve">
+    <value>下载的文件与该版本的校验和不符，已被丢弃。点击重试。</value>
+    <comment>Update notice error (Linux Settings, Windows update banner): the downloaded file failed its integrity check and was deleted.</comment>
+  </data>
+  <data name="upd_failed_download" xml:space="preserve">
+    <value>下载未完成。请检查网络连接，然后点击重试。</value>
+    <comment>Update notice error (Linux Settings, Windows update banner): the release download failed.</comment>
+  </data>
+  <data name="upd_failed_install" xml:space="preserve">
+    <value>无法替换 AppImage。请检查文件夹权限，然后点击重试。</value>
+    <comment>Linux Settings update notice error: the verified download could not be swapped in for the running AppImage.</comment>
+  </data>
+  <data name="upd_install" xml:space="preserve">
+    <value>安装</value>
+    <comment>Linux Settings update notice: button that downloads, verifies and installs the update.</comment>
+  </data>
+  <data name="upd_manual_install_message" xml:space="preserve">
+    <value>安装程序未能启动（需要管理员批准）。已在文件资源管理器中显示验证过的下载文件 — 请退出应用后运行它。</value>
+    <comment>Windows update banner when the installer could not be started: the user runs it by hand. Explorer is the Windows file manager.</comment>
+  </data>
+  <data name="upd_ready_message" xml:space="preserve">
+    <value>新的 AppImage 已就位并通过验证。重新启动即可开始使用；在此之前，旧文件会保留在旁边。</value>
+    <comment>Linux Settings update notice once the update is installed and waiting for a relaunch.</comment>
+  </data>
+  <data name="upd_ready_title" xml:space="preserve">
+    <value>可以重新启动：v{}</value>
+    <comment>Linux Settings update notice title once the new AppImage is installed. {version} is the release version; keep the "v" before it.</comment>
+  </data>
+  <data name="upd_relaunch" xml:space="preserve">
+    <value>重新启动</value>
+    <comment>Linux Settings update notice: button that restarts the app on the newly installed version.</comment>
+  </data>
+  <data name="upd_release_page" xml:space="preserve">
+    <value>版本页面</value>
+    <comment>Linux Settings update notice: button that opens the release's download page in the browser.</comment>
+  </data>
+  <data name="upd_show_file" xml:space="preserve">
+    <value>显示文件</value>
+    <comment>Update notice button (Linux Settings, Windows update banner) that opens the folder holding the verified download.</comment>
+  </data>
+  <data name="upd_stage_downloading" xml:space="preserve">
+    <value>正在下载更新…</value>
+    <comment>Update notice progress line (Linux Settings, Windows update banner) while the release downloads.</comment>
+  </data>
+  <data name="upd_stage_installing" xml:space="preserve">
+    <value>正在启动安装程序…</value>
+    <comment>Windows update banner progress line while the verified installer is being launched.</comment>
+  </data>
+  <data name="upd_stage_replacing" xml:space="preserve">
+    <value>正在替换 AppImage…</value>
+    <comment>Linux Settings update notice progress line while the verified download replaces the running AppImage file.</comment>
+  </data>
+  <data name="upd_stage_verifying" xml:space="preserve">
+    <value>正在验证下载…</value>
+    <comment>Update progress line (Linux Settings, Windows update banner, macOS Settings &gt; Software update) while the downloaded release is checked against its published checksum.</comment>
   </data>
   <data name="update" xml:space="preserve">
     <value>更新</value>
@@ -7130,6 +7554,10 @@
     <value>当你推荐朋友时：</value>
     <comment>Call to action</comment>
   </data>
+  <data name="widget_chart_peak" xml:space="preserve">
+    <value>峰值</value>
+    <comment>Throughput widget: lowercase word after the peak packet-rate figure, as in "1.2k pkt/s peak".</comment>
+  </data>
   <data name="widget_client" xml:space="preserve">
     <value>客户端</value>
     <comment>Dashboard widget chart title: this device's own traffic.</comment>
@@ -7161,6 +7589,10 @@
   <data name="widget_globe_description" xml:space="preserve">
     <value>在地球上显示您已连接的提供商。</value>
     <comment>Description of the provider globe widget in the widget gallery.</comment>
+  </data>
+  <data name="widget_intent_source_parameter" xml:space="preserve">
+    <value>来源</value>
+    <comment>Title of a hidden parameter of the Connect/Disconnect control: which surface (widget, control, shortcut) made the request.</comment>
   </data>
   <data name="widget_more_providers" xml:space="preserve">
     <value>另有 {} 个</value>
@@ -7221,6 +7653,10 @@
   <data name="widget_quick_tile_added" xml:space="preserve">
     <value>已添加快速连接图块</value>
     <comment>Toast after the system added the Quick Settings tile.</comment>
+  </data>
+  <data name="widget_refresh_intent_title" xml:space="preserve">
+    <value>刷新 URnetwork 小组件</value>
+    <comment>Title of the action that refreshes the app's Home Screen widgets.</comment>
   </data>
   <data name="widget_toggle_intent_title" xml:space="preserve">
     <value>切换 URnetwork VPN</value>

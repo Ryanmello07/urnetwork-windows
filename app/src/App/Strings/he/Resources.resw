@@ -251,6 +251,14 @@
     <value>התאמה</value>
     <comment>Connection inspector: label of the matched rule row.</comment>
   </data>
+  <data name="adv_mode_rpc_only" xml:space="preserve">
+    <value>RPC בלבד</value>
+    <comment>Windows status strip (Advanced Mode), Session value: a session that talks to the service over RPC without a tunnel. Lowercase, a short status value.</comment>
+  </data>
+  <data name="adv_mode_tunnel" xml:space="preserve">
+    <value>מנהרה</value>
+    <comment>Windows status strip (Advanced Mode), Session value: a full tunnel session. Lowercase, a short status value.</comment>
+  </data>
   <data name="adv_na" xml:space="preserve">
     <value>—</value>
     <comment>Connection inspector: placeholder dash for a value that is not available.</comment>
@@ -285,7 +293,7 @@
   </data>
   <data name="adv_raw_status" xml:space="preserve">
     <value>מצב גולמי</value>
-    <comment>Connection inspector: label of the raw status row.</comment>
+    <comment>Connection inspector (Linux) and Advanced Mode status strip (Windows): label of the raw status field.</comment>
   </data>
   <data name="adv_reason" xml:space="preserve">
     <value>סיבה</value>
@@ -307,6 +315,26 @@
     <value>עקיפת ניתוב</value>
     <comment>Connection inspector: decision reason, a route override applied.</comment>
   </data>
+  <data name="adv_routes" xml:space="preserve">
+    <value>ניתובים</value>
+    <comment>Windows status strip (Advanced Mode): label of the field that shows whether the tunnel's routes are installed.</comment>
+  </data>
+  <data name="adv_routes_dns_degraded" xml:space="preserve">
+    <value>פעילים, DNS לא הוחל</value>
+    <comment>Windows status strip (Advanced Mode), Routes value: routes are installed but the tunnel's DNS is not. Lowercase, a short status value.</comment>
+  </data>
+  <data name="adv_routes_kill_switch_armed" xml:space="preserve">
+    <value>כבויים, קיל סוויץ' דרוך</value>
+    <comment>Windows status strip (Advanced Mode), Routes value: no routes are installed and the kill switch is blocking traffic. Lowercase, a short status value.</comment>
+  </data>
+  <data name="adv_routes_no_firewall" xml:space="preserve">
+    <value>פעילים, ללא הגנה מפני דליפות</value>
+    <comment>Windows status strip (Advanced Mode), Routes value: routes are installed but no leak-prevention firewall policy is in force. Lowercase, a short status value.</comment>
+  </data>
+  <data name="adv_rpc" xml:space="preserve">
+    <value>RPC</value>
+    <comment>Windows status strip (Advanced Mode): label of the field that shows the service's RPC endpoint (host:port). RPC is a technical term.</comment>
+  </data>
   <data name="adv_select_a_row" xml:space="preserve">
     <value>בחרו שורה בפעילות כדי לבדוק אותה</value>
     <comment>Connection inspector: hint to select a row in the Activity list.</comment>
@@ -322,6 +350,10 @@
   <data name="adv_session_exit_country" xml:space="preserve">
     <value>מדינת היציאה של ההפעלה</value>
     <comment>Connection inspector: label of the session exit country row.</comment>
+  </data>
+  <data name="adv_session_mode" xml:space="preserve">
+    <value>הפעלה</value>
+    <comment>Windows status strip (Advanced Mode): label of the field that shows which kind of session the service granted (tunnel or rpc-only).</comment>
   </data>
   <data name="adv_unknown_exit" xml:space="preserve">
     <value>לא בטבלת הניתוב</value>
@@ -646,6 +678,10 @@
     <value>לא ניתן היה לטעון את המיקומים החסומים.</value>
     <comment>Shown on the Blocked locations screen when the list could not be fetched, above a Retry button.</comment>
   </data>
+  <data name="blocked_locations_search_placeholder" xml:space="preserve">
+    <value>חיפוש מדינות</value>
+    <comment>macOS Blocked locations screen: placeholder of the country search field.</comment>
+  </data>
   <data name="blocks" xml:space="preserve">
     <value>בלוקים</value>
     <comment>Points leaderboard: stat tile label and sort chip. A block is one finalized payout epoch.</comment>
@@ -736,9 +772,21 @@
     <value>בודק עסקאות Solana</value>
     <comment>Call to action</comment>
   </data>
+  <data name="checkout_confirming_purchase" xml:space="preserve">
+    <value>אנחנו מאשרים את הרכישה שלכם. התוכנית שלכם תתעדכן אוטומטית.</value>
+    <comment>Purchase confirmation message while the app waits for the payment to be confirmed.</comment>
+  </data>
+  <data name="checkout_finish_in_browser" xml:space="preserve">
+    <value>השלימו בדפדפן.</value>
+    <comment>Purchase confirmation title after the app opened Stripe's checkout page in the browser.</comment>
+  </data>
   <data name="checkout_opened_in_browser" xml:space="preserve">
     <value>השלימו את הרכישה בדפדפן. התוכנית שלכם תתעדכן כאן אוטומטית ברגע שהתשלום יאושר.</value>
     <comment>Shown after the app hands the user to the Stripe hosted checkout in the system browser. The app polls the server and flips the plan automatically when the payment webhook lands.</comment>
+  </data>
+  <data name="checkout_restore_checking" xml:space="preserve">
+    <value>בודקים שוב את התוכנית שלכם.</value>
+    <comment>Message after Restore purchases in the Stripe-paid app: nothing to restore locally, the app re-reads the plan from the server.</comment>
   </data>
   <data name="cities" xml:space="preserve">
     <value>ערים</value>
@@ -816,6 +864,10 @@
     <value>הצד השני</value>
     <comment>A label displayed next to a companion contract.</comment>
   </data>
+  <data name="conn_blocked_kill_switch" xml:space="preserve">
+    <value>חסום — קיל סוויץ' פעיל</value>
+    <comment>Windows Connect page status when the connection is down and the kill switch is deliberately blocking this computer's traffic.</comment>
+  </data>
   <data name="conn_connect_on_launch" xml:space="preserve">
     <value>התחבר אוטומטית כשהאפליקציה נפתחת</value>
     <comment>Settings: switch that connects automatically when the app starts.</comment>
@@ -824,13 +876,93 @@
     <value>כבוי כברירת מחדל. כשמופעל, URnetwork מתחבר לספק שבחרתם ברגע שתפתחו את האפליקציה. זה משנה את ההפעלה הבאה - לא מתחבר עכשיו.</value>
     <comment>Settings: explanation under the connect-on-launch switch.</comment>
   </data>
+  <data name="conn_degraded" xml:space="preserve">
+    <value>החיבור נפגע — מתחבר מחדש</value>
+    <comment>Windows connection status (Connect page headline and tray tooltip) when a working connection dropped and the app is reconnecting on its own.</comment>
+  </data>
+  <data name="conn_disconnecting" xml:space="preserve">
+    <value>מתנתק — התעבורה שלכם עדיין עוברת דרך המנהרה</value>
+    <comment>Windows Connect page status while the tunnel is being stopped but its routes are still installed.</comment>
+  </data>
   <data name="conn_failed" xml:space="preserve">
     <value>לא ניתן להתחבר</value>
     <comment>Connect screen status when the connect attempt failed: no provider could be reached (the sdk's CONNECT_FAILED). The connection keeps trying, and the app offers Retry.</comment>
   </data>
+  <data name="conn_failed_detail" xml:space="preserve">
+    <value>לא ניתן היה להגיע לאף ספק. ניסיון חוזר בונה את החיבור מחדש מאפס.</value>
+    <comment>Windows Connect page reason line when connecting failed.</comment>
+  </data>
+  <data name="conn_failsafe_armed" xml:space="preserve">
+    <value>אם שום דבר לא יעבור בקרוב, URnetwork יכבה את המנהרה אוטומטית כדי שהאינטרנט שלכם ימשיך לעבוד.</value>
+    <comment>Windows Connect page: sentence appended to the line above when the service will stop a tunnel that carries nothing.</comment>
+  </data>
+  <data name="conn_failsafe_blocked" xml:space="preserve">
+    <value>המנהרה לא הצליחה להעביר תעבורה, ולכן URnetwork סגר אותה. הקיל סוויץ' פעיל, ולכן שום דבר לא יוצא מהמחשב הזה עד שתתחברו שוב או תכבו את הקיל סוויץ' — שום דבר לא דולף.</value>
+    <comment>Windows Connect page line after the service stopped a tunnel that carried nothing, while the kill switch keeps this computer blocked.</comment>
+  </data>
+  <data name="conn_failsafe_restored" xml:space="preserve">
+    <value>URnetwork ניתק אתכם כדי שתישארו מחוברים לאינטרנט: המנהרה פעלה, אבל שום דבר לא עבר דרכה. התעבורה שלכם יוצאת עכשיו כרגיל והיא אינה מוגנת. לחצו על התחבר כדי לנסות שוב.</value>
+    <comment>Windows Connect page line and tray notification after the service stopped a tunnel that carried nothing, with the kill switch off. Keep the emphasis on NOT.</comment>
+  </data>
+  <data name="conn_finding_providers" xml:space="preserve">
+    <value>מחפש ספקים…</value>
+    <comment>Connection status while the app has providers but none is proven to work yet (Linux and Windows Connect page headline, Windows tray tooltip).</comment>
+  </data>
   <data name="conn_not_protected" xml:space="preserve">
     <value>תעבורת האינטרנט שלכם אינה מוגנת.</value>
     <comment>Connect page: warning that the internet traffic is not protected.</comment>
+  </data>
+  <data name="conn_reason_auth" xml:space="preserve">
+    <value>ההתחברות לפלטפורמה נכשלת…</value>
+    <comment>Windows Connect page reason line while the app's sign-in to the URnetwork platform keeps failing.</comment>
+  </data>
+  <data name="conn_reason_platform" xml:space="preserve">
+    <value>יוצר קשר עם הפלטפורמה…</value>
+    <comment>Windows Connect page reason line while the app cannot reach the URnetwork platform (the API servers).</comment>
+  </data>
+  <data name="conn_reason_providers" xml:space="preserve">
+    <value>הספקים לא מגיבים — מנסה שוב…</value>
+    <comment>Windows Connect page reason line while the selected providers do not answer.</comment>
+  </data>
+  <data name="conn_reason_rate_limited" xml:space="preserve">
+    <value>הגבלת קצב — ממתין…</value>
+    <comment>Windows Connect page reason line while the platform asks the app to slow down.</comment>
+  </data>
+  <data name="conn_traffic_blocked" xml:space="preserve">
+    <value>אין כרגע ספק שעובד — התעבורה שלכם חסומה, לא חשופה. התנתקו כדי לחזור לחיבור הרגיל שלכם.</value>
+    <comment>Windows Connect page line while connected but no provider carries traffic, with leak protection in force.</comment>
+  </data>
+  <data name="conn_traffic_blocked_unprotected" xml:space="preserve">
+    <value>אין כרגע ספק שעובד — תעבורה שנשלחת למנהרה לא מגיעה לשום מקום, וההגנה מפני דליפות כבויה, כך שחלק מהתעבורה עלול לעקוף אותה. התנתקו כדי לחזור לחיבור הרגיל שלכם.</value>
+    <comment>Windows Connect page line while connected but no provider carries traffic, and leak protection (the firewall policy) is not in force.</comment>
+  </data>
+  <data name="conn_tray_blocked_kill_switch" xml:space="preserve">
+    <value>חסום (קיל סוויץ' פעיל)</value>
+    <comment>Windows tray tooltip when the kill switch is deliberately blocking this computer's traffic.</comment>
+  </data>
+  <data name="conn_tray_blocked_no_tunnel" xml:space="preserve">
+    <value>חסום — ההגנה מפני דליפות עדיין בתוקף בלי מנהרה פעילה</value>
+    <comment>Windows tray tooltip when leak protection blocks traffic while no tunnel is up.</comment>
+  </data>
+  <data name="conn_tray_disconnecting" xml:space="preserve">
+    <value>מתנתק — התעבורה עדיין עוברת דרך המנהרה</value>
+    <comment>Windows tray tooltip while the tunnel is being stopped but its routes are still installed.</comment>
+  </data>
+  <data name="conn_tray_failsafe_blocked" xml:space="preserve">
+    <value>המנהרה לא הצליחה להעביר תעבורה, ולכן URnetwork סגר אותה. הקיל סוויץ' פעיל, ולכן המחשב הזה נשאר חסום ושום דבר לא דולף. התחברו מחדש, או כבו את הקיל סוויץ' מהתפריט הזה.</value>
+    <comment>Windows tray notification after the service stopped a tunnel that carried nothing, while the kill switch keeps this computer blocked. "This menu" is the tray icon's menu.</comment>
+  </data>
+  <data name="conn_tray_failsafe_stopped" xml:space="preserve">
+    <value>מנותק (המנהרה נכשלה)</value>
+    <comment>Windows tray tooltip after the service stopped a tunnel that carried nothing.</comment>
+  </data>
+  <data name="conn_tray_force_tunnel_off" xml:space="preserve">
+    <value>כיבוי כפוי של המנהרה (שחזור)</value>
+    <comment>Windows tray menu item that stops the tunnel directly when the normal Disconnect is stuck.</comment>
+  </data>
+  <data name="conn_tray_lift_kill_switch" xml:space="preserve">
+    <value>כיבוי הקיל סוויץ' (ביטול החסימה של המחשב הזה)</value>
+    <comment>Windows tray menu item that lifts the kill switch's block on this computer.</comment>
   </data>
   <data name="connect" xml:space="preserve">
     <value>התחבר</value>
@@ -966,7 +1098,7 @@
   </data>
   <data name="contribute_bandwidth" xml:space="preserve">
     <value>תרום רוחב פס</value>
-    <comment>Used in Shared/Views/Introduction/IntroductionParticipateSettingsView.swift.</comment>
+    <comment>Onboarding: title of the step that asks whether this device may share bandwidth with the network (provide).</comment>
   </data>
   <data name="control_doh_error_https_required" xml:space="preserve">
     <value>כתובת ה-URL חייבת להתחיל ב-https://.</value>
@@ -1136,13 +1268,25 @@
     <value>למכשיר הזה אין שירות הרשאות polkit, ולכן שירות המערכת של URnetwork משתמש בקבוצה 'urnetwork'. הוסיפו אליה את המשתמש שלכם, התנתקו והתחברו מחדש.</value>
     <comment>Connect error: no polkit service, the daemon falls back to the urnetwork group.</comment>
   </data>
+  <data name="daemon_legacy_group_auth" xml:space="preserve">
+    <value>שירות המערכת של URnetwork במכשיר הזה הוא גרסה ישנה שעדיין דורשת חברות בקבוצה. עדכנו את השירות, או הוסיפו את המשתמש שלכם לקבוצה 'urnetwork' והתנתקו והתחברו שוב.</value>
+    <comment>Linux notice when an older system service refuses the app's user. 'urnetwork' is the literal Linux group name; keep it as is.</comment>
+  </data>
   <data name="daemon_no_answer" xml:space="preserve">
     <value>שירות המערכת של URnetwork לא הגיב.</value>
     <comment>Error: the system service did not answer.</comment>
   </data>
+  <data name="daemon_not_reachable" xml:space="preserve">
+    <value>לא ניתן היה להגיע לשירות המערכת של URnetwork.</value>
+    <comment>Linux notice when the app cannot reach the URnetwork system service for an unexpected reason.</comment>
+  </data>
   <data name="daemon_sdk_mismatch" xml:space="preserve">
     <value>האפליקציה ושירות המערכת של URnetwork הם גרסאות בנייה שונות. עדכן את שניהם לאותה גרסה.</value>
     <comment>Shown on the linux home screen when the app and the urnetworkd system service carry different URnetwork SDK builds (they update on independent schedules and must match exactly). The fix is updating both to the same release.</comment>
+  </data>
+  <data name="daemon_stale_sandbox_mount" xml:space="preserve">
+    <value>שירות המערכת של URnetwork הופעל מחדש בזמן שהאפליקציה הזו הייתה פתוחה. סגרו את האפליקציה ופתחו אותה שוב כדי להתחבר אליו מחדש.</value>
+    <comment>Linux notice when the app cannot reach the URnetwork system service because the service restarted under a sandboxed (Flatpak) app.</comment>
   </data>
   <data name="daemon_too_old" xml:space="preserve">
     <value>שירות המערכת של URnetwork אינו מעודכן. עדכן אותו כדי להתחבר.</value>
@@ -1263,6 +1407,98 @@
   <data name="devices" xml:space="preserve">
     <value>מכשירים</value>
     <comment>Provider list group title for devices</comment>
+  </data>
+  <data name="direct_update_allow" xml:space="preserve">
+    <value>אפשר</value>
+    <comment>macOS folder-access panel button that grants the app access to the Applications folder for the update.</comment>
+  </data>
+  <data name="direct_update_allow_applications" xml:space="preserve">
+    <value>כדי להתקין את העדכון, אפשרו ל-URnetwork להחליף את עצמו בתיקייה ״יישומים״. בחרו ״יישומים״ ולחצו על ״אפשר״.</value>
+    <comment>macOS folder-access panel message when installing an update: the user selects the Applications folder to grant access. Keep "Allow" consistent with the panel's button.</comment>
+  </data>
+  <data name="direct_update_available" xml:space="preserve">
+    <value>יש עדכון זמין: {}</value>
+    <comment>macOS Settings &gt; Software update status when a newer release exists. {version} is its version.</comment>
+  </data>
+  <data name="direct_update_check" xml:space="preserve">
+    <value>בדיקת עדכונים</value>
+    <comment>macOS Settings &gt; Software update button that checks now.</comment>
+  </data>
+  <data name="direct_update_check_failed" xml:space="preserve">
+    <value>לא ניתן היה לבדוק עדכונים: {}</value>
+    <comment>macOS Settings &gt; Software update error. {detail} is a short technical reason (often English, from the system).</comment>
+  </data>
+  <data name="direct_update_checking" xml:space="preserve">
+    <value>בודק עדכונים…</value>
+    <comment>macOS Settings &gt; Software update status while checking.</comment>
+  </data>
+  <data name="direct_update_checksum_failed" xml:space="preserve">
+    <value>ההורדה לא תאמה לסכום הביקורת של הגרסה ולכן נמחקה.</value>
+    <comment>macOS Settings &gt; Software update error: the downloaded file failed its integrity check and was deleted.</comment>
+  </data>
+  <data name="direct_update_development_build" xml:space="preserve">
+    <value>גרסת פיתוח; הגרסה החדשה ביותר היא {}.</value>
+    <comment>macOS Settings &gt; Software update status on a development build, which never updates itself. {version} is the newest release version.</comment>
+  </data>
+  <data name="direct_update_download_failed" xml:space="preserve">
+    <value>ההורדה נכשלה: {}</value>
+    <comment>macOS Settings &gt; Software update error. {detail} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_downloading_version" xml:space="preserve">
+    <value>מוריד את {}…</value>
+    <comment>macOS Settings &gt; Software update status while the release downloads. {version} is its version.</comment>
+  </data>
+  <data name="direct_update_install" xml:space="preserve">
+    <value>התקנת העדכון</value>
+    <comment>macOS Settings &gt; Software update button that downloads, verifies and installs the update.</comment>
+  </data>
+  <data name="direct_update_install_failed" xml:space="preserve">
+    <value>לא ניתן היה להתקין את העדכון: {}</value>
+    <comment>macOS Settings &gt; Software update error. {detail} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_installing" xml:space="preserve">
+    <value>מתקין את העדכון…</value>
+    <comment>macOS Settings &gt; Software update status while the verified update is installed.</comment>
+  </data>
+  <data name="direct_update_last_checked" xml:space="preserve">
+    <value>בדיקה אחרונה: {}</value>
+    <comment>macOS Settings &gt; Software update: when updates were last checked. {when} is a relative date, for example "5 minutes ago" or "yesterday".</comment>
+  </data>
+  <data name="direct_update_manual_install" xml:space="preserve">
+    <value>{} הורדה ואומתה. גררו את URnetwork החדש לתיקייה ״יישומים״ ופתחו אותו משם.</value>
+    <comment>macOS Settings &gt; Software update status when the app could not replace itself. {version} is the downloaded release's version.</comment>
+  </data>
+  <data name="direct_update_not_checked" xml:space="preserve">
+    <value>עדיין לא נבדקו עדכונים.</value>
+    <comment>macOS Settings &gt; Software update status before the first check.</comment>
+  </data>
+  <data name="direct_update_relaunching" xml:space="preserve">
+    <value>מפעיל מחדש את URnetwork…</value>
+    <comment>macOS Settings &gt; Software update status while the app restarts on the new version.</comment>
+  </data>
+  <data name="direct_update_section_title" xml:space="preserve">
+    <value>עדכון תוכנה</value>
+    <comment>macOS Settings: title of the section that checks for and installs app updates (direct-download app).</comment>
+  </data>
+  <data name="direct_update_show_in_finder" xml:space="preserve">
+    <value>הצגה ב-Finder</value>
+    <comment>macOS Settings &gt; Software update button that reveals the downloaded update in Finder (the macOS file manager).</comment>
+  </data>
+  <data name="direct_update_signature_rejected" xml:space="preserve">
+    <value>העדכון נדחה: {}</value>
+    <comment>macOS Settings &gt; Software update error when the downloaded app's code signature did not check out. {detail} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_unpack_failed" xml:space="preserve">
+    <value>לא ניתן היה לחלץ את ההורדה: {}</value>
+    <comment>macOS Settings &gt; Software update error. {detail} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_unusable_release" xml:space="preserve">
+    <value>האפליקציה לא יכולה להתקין את הגרסה {0} ({1}).</value>
+    <comment>macOS Settings &gt; Software update error when the newest release has no file this app can install. {version} is the release version; {reason} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_up_to_date" xml:space="preserve">
+    <value>URnetwork מעודכן.</value>
+    <comment>macOS Settings &gt; Software update status when no newer release exists.</comment>
   </data>
   <data name="disable_ignore_battery_hint" xml:space="preserve">
     <value>לביטול, עבור אל שימוש בסוללה של האפליקציה בהגדרות המערכת</value>
@@ -1452,6 +1688,10 @@
     <value>הצע אחר</value>
     <comment>Points leaderboard: the emoji editor's shuffle button, replaces the draft with a new random suggestion.</comment>
   </data>
+  <data name="enabled_under_auto_footer" xml:space="preserve">
+    <value>לפי סדר עדיפות: קודם H1, אחר כך H3, whodis ו-whodis pump. הסדר קבוע. לפחות פרוטוקול העברה אחד נשאר מופעל.</value>
+    <comment>Footer of the Auto transports section explaining the fixed preference order.</comment>
+  </data>
   <data name="enjoying_urnetwork" xml:space="preserve">
     <value>נהנה מ-URnetwork?</value>
     <comment>Call to action</comment>
@@ -1490,6 +1730,10 @@
   <data name="enter_urnetwork" xml:space="preserve">
     <value>היכנס ל-URnetwork</value>
     <comment>Used in Authenticate/LoginInitial/GuestModeSheet.swift.</comment>
+  </data>
+  <data name="enter_wallet_address" xml:space="preserve">
+    <value>הזן כתובת ארנק</value>
+    <comment>Used in Main/Account/Wallets/ConnectWalletSheet/EnterWalletAddress/EnterWalletAddressView.swift.</comment>
   </data>
   <data name="error_changing_network_name" xml:space="preserve">
     <value>שגיאה בשינוי שם הרשת</value>
@@ -2253,6 +2497,10 @@
     <value>צריך יותר נתונים, מהר יותר?</value>
     <comment>Call to action</comment>
   </data>
+  <data name="net_points_earned" xml:space="preserve">
+    <value>נקודות נטו שהושגו</value>
+    <comment>Earnings page: lowercase caption under the net points total.</comment>
+  </data>
   <data name="net_provided" xml:space="preserve">
     <value>סופק נטו</value>
     <comment>Call to action</comment>
@@ -2329,6 +2577,10 @@
     <value>מישהו הזמין אותך להצטרף 🥳 
 ממש את הבונוס שלך על ידי יצירת רשת!</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="network_earnings" xml:space="preserve">
+    <value>רווחי רשת</value>
+    <comment>Used in Main/Account/AccountRootView.swift.</comment>
   </data>
   <data name="network_name_changed_to_n" xml:space="preserve">
     <value>שם הרשת שונה ל-{}</value>
@@ -2501,6 +2753,10 @@
   <data name="none" xml:space="preserve">
     <value>ללא</value>
     <comment>Empty value: the VLESS settings show it for no security and no flow (all apps), and the Referrals section shows it on windows and linux when no referral network is linked.</comment>
+  </data>
+  <data name="not_now" xml:space="preserve">
+    <value>לא עכשיו</value>
+    <comment>macOS button that dismisses the prompt to enable the VPN system extension for now.</comment>
   </data>
   <data name="notifications_label" xml:space="preserve">
     <value>התראות</value>
@@ -2751,6 +3007,10 @@
     <value>חיסכון של {}%</value>
     <comment>Plan picker: the saving badge on the yearly card; the number is the whole percent saved against twelve monthly payments.</comment>
   </data>
+  <data name="plan_terms_first_year_price" xml:space="preserve">
+    <value>{0} לשנה הראשונה, ואחר כך {1} לשנה. אפשר לבטל בכל עת.</value>
+    <comment>Plan picker terms line for the yearly plan with a first-year offer and no free trial. {first_year_price} and {yearly_price} are formatted prices, for example $39.99.</comment>
+  </data>
   <data name="plan_terms_yearly.one" xml:space="preserve">
     <value>יום אחד בחינם, לאחר מכן {1}/שנה. אפשר לבטל בכל עת.</value>
     <comment>Plan picker: the terms line under the button for the yearly plan with its trial.</comment>
@@ -2766,6 +3026,10 @@
   <data name="plan_terms_yearly.other" xml:space="preserve">
     <value>{0} ימים בחינם, לאחר מכן {1}/שנה. אפשר לבטל בכל עת.</value>
     <comment>Plan picker: the terms line under the button for the yearly plan with its trial.</comment>
+  </data>
+  <data name="plan_terms_yearly_billed_today" xml:space="preserve">
+    <value>{} מחויב היום, ואחר כך מדי שנה. אפשר לבטל בכל עת.</value>
+    <comment>Plan picker terms line for the yearly plan without a trial or offer. {yearly_price} is a formatted price, for example $59.99.</comment>
   </data>
   <data name="please_install_phantom_or_solflare_to_use_this" xml:space="preserve">
     <value>אנא התקן את Phantom או Solflare כדי להשתמש בתכונה זו</value>
@@ -3640,7 +3904,7 @@
   </data>
   <data name="seedphrase_paste_hint" xml:space="preserve">
     <value>הדביקו כאן את ביטוי הסיד בן 12 או 24 המילים</value>
-    <comment>Seed sign-in sheet: placeholder of the seedphrase field (android accepts 12 or 24 words).</comment>
+    <comment>Seed sign-in sheet: placeholder of the seedphrase field (android and windows accept 12 or 24 words).</comment>
   </data>
   <data name="seedphrase_required" xml:space="preserve">
     <value>יש להזין ביטוי סיד</value>
@@ -4168,6 +4432,22 @@
     <value>השתמש בצורת ה-ASCII של השם.</value>
     <comment>Split rules: validation error for a host name with non-ASCII characters; the rule wants the punycode form.</comment>
   </data>
+  <data name="split_rule_mode_excluded_description" xml:space="preserve">
+    <value>המארחים שנבחרו עוקפים את המנהרה.</value>
+    <comment>Split rule editor: description of the Route locally mode.</comment>
+  </data>
+  <data name="split_rule_mode_included_description" xml:space="preserve">
+    <value>ברירת המחדל: המארחים שנבחרו משתמשים במנהרה בלי הצמדה.</value>
+    <comment>Split rule editor: description of the Route through VPN mode (the default). A pin is the Keep on one provider mode.</comment>
+  </data>
+  <data name="split_rule_mode_pinned_description" xml:space="preserve">
+    <value>המארחים שנבחרו נשארים אצל הספק שלהם זמן רב יותר במקום לעבור בסימן הראשון לבעיה, כך שהאתר מחליף כתובת IP לעיתים רחוקות יותר במהלך ההפעלה.</value>
+    <comment>Split rule editor: description of the Keep on one provider mode.</comment>
+  </data>
+  <data name="split_rule_mode_pinned_title" xml:space="preserve">
+    <value>שמירה על ספק אחד</value>
+    <comment>Split rule editor: title of the mode that keeps the selected hosts on the same VPN provider longer.</comment>
+  </data>
   <data name="split_rule_preset_google_meet_calls" xml:space="preserve">
     <value>שיחות Google Meet</value>
     <comment>Split rules preset: Google Meet call media, from the address ranges Google publishes for routing it outside a VPN. Keep the product name Google Meet unchanged.</comment>
@@ -4184,6 +4464,10 @@
     <value>פעילות הניתוב מופיעה כאן בזמן החיבור.</value>
     <comment>A description of the content of the "Activity" section of the split rules view.</comment>
   </data>
+  <data name="split_rules_connect_to_load" xml:space="preserve">
+    <value>התחברו פעם אחת כדי לטעון את הכללים שכבר יש לכם.</value>
+    <comment>Split rules screen: note under the disabled Add a rule button before the app has connected once and loaded the saved rules.</comment>
+  </data>
   <data name="split_rules_hint" xml:space="preserve">
     <value>הקש על התעבורה שלמטה כדי לנתב אותה מקומית ולעקוף את המנהרה.</value>
     <comment>A description of how to route traffic locally.</comment>
@@ -4192,9 +4476,17 @@
     <value>הוסף מארח למעלה, או הקש על התעבורה שלמטה כדי לנתב אותה מקומית ולעקוף את המנהרה.</value>
     <comment>Split rules on android, which has a host input above the traffic list: how to add to the rule. The apple/linux screens without the input keep split_rules_hint.</comment>
   </data>
+  <data name="split_rules_host_hint_modes" xml:space="preserve">
+    <value>הוסיפו מארח למעלה, או הקישו על התעבורה שלמטה כדי לנתב אותה מקומית או להשאיר אותה אצל ספק אחד.</value>
+    <comment>Split rules screen: hint shown while there are no rules yet. Routing locally sends traffic outside the VPN; holding to one provider keeps a site on the same VPN exit.</comment>
+  </data>
   <data name="split_rules_info_note" xml:space="preserve">
     <value>ההחרגות חלות על כל אשכול הרשת המשויך, כך שתעבורה קשורה נתפסת יחד.</value>
     <comment>transfer stats and split rules</comment>
+  </data>
+  <data name="split_rules_info_note_modes" xml:space="preserve">
+    <value>הכללים חלים על כל אשכול הרשת המשויך, כך שתעבורה קשורה נתפסת יחד.</value>
+    <comment>Split rules screen: note that a rule matches every host in the same network cluster (related hosts of one site or service), whatever the rule's mode.</comment>
   </data>
   <data name="split_rules_match_sites_not_apps" xml:space="preserve">
     <value>כללי פיצול חלים על אתרים וכתובות, לא על אפליקציות: Apple מאפשרת VPN לפי אפליקציה רק במכשירים שמנוהלים על ידי ארגון (MDM). כדי להשאיר אפליקציה מחוץ ל-VPN, נתב מקומית את האתרים שהיא משתמשת בהם, או התחל מתבנית. כתובות ברשת המקומית כבר עוקפות את ה-VPN.</value>
@@ -4207,6 +4499,14 @@
   <data name="split_rules_start_from_preset" xml:space="preserve">
     <value>התחל מתבנית</value>
     <comment>Split rules screen: the menu that starts a route-locally rule from a preset, the address ranges a service publishes for use outside a VPN.</comment>
+  </data>
+  <data name="sso_browser_open_failed" xml:space="preserve">
+    <value>לא ניתן היה לפתוח את הדפדפן. נסו שוב.</value>
+    <comment>macOS error when adding a sign-in method could not open the browser for the provider's sign-in page.</comment>
+  </data>
+  <data name="sso_sign_in_timed_out" xml:space="preserve">
+    <value>הזמן להתחברות הסתיים. נסו שוב.</value>
+    <comment>Error when a browser sign-in (Google or Apple through the browser) took too long and expired.</comment>
   </data>
   <data name="start_earning_join" xml:space="preserve">
     <value>כדי להתחיל להרוויח, הצטרף לרשת</value>
@@ -4272,6 +4572,10 @@
     <value>אנונימיזציה חזקה</value>
     <comment>Connect drawer: strong anonymization toggle — the inverse of allow direct (direct connections expose the real source IP to the provider).</comment>
   </data>
+  <data name="subscription_portal_open_failed" xml:space="preserve">
+    <value>לא ניתן היה לפתוח את פורטל המינוי. נסו שוב.</value>
+    <comment>Snackbar error when the Stripe subscription management page (Manage subscription) could not be opened.</comment>
+  </data>
   <data name="successfully_claimed_multiplier" xml:space="preserve">
     <value>המכפיל נתבע בהצלחה!</value>
     <comment>Snackbar shown when the earnings multiplier is claimed successfully. Used in Main/Account/Settings/SettingsView.swift.</comment>
@@ -4296,9 +4600,41 @@
     <value>Pro</value>
     <comment>Display name for the paid plan. The WIRE value stays "supporter" (subscription_type / current_subscription.plan) because already-shipped app versions parse that string; only what the user reads changes.</comment>
   </data>
+  <data name="svc_action_failed" xml:space="preserve">
+    <value>הפעולה לא הושלמה — השירות לא השתנה. הפרטים נמצאים בלוג של האפליקציה.</value>
+    <comment>Windows banner text when installing, starting or updating the VPN service failed.</comment>
+  </data>
   <data name="svc_service_label" xml:space="preserve">
     <value>שירות VPN</value>
     <comment>Settings: label of the VPN service row.</comment>
+  </data>
+  <data name="svc_setup_action" xml:space="preserve">
+    <value>הגדרה</value>
+    <comment>Windows banner button that installs the VPN service (Windows asks for administrator permission).</comment>
+  </data>
+  <data name="svc_setup_message" xml:space="preserve">
+    <value>URnetwork משתמש בשירות של Windows כדי להעביר תעבורה. לחיצה אחת — Windows יבקש הרשאת מנהל.</value>
+    <comment>Windows banner text under 'Set up the VPN service'.</comment>
+  </data>
+  <data name="svc_setup_title" xml:space="preserve">
+    <value>הגדרת שירות ה-VPN</value>
+    <comment>Windows banner title when the URnetwork Windows service that carries traffic is not installed yet.</comment>
+  </data>
+  <data name="svc_start_action" xml:space="preserve">
+    <value>הפעלה</value>
+    <comment>Windows banner button that starts the stopped VPN service.</comment>
+  </data>
+  <data name="svc_start_message" xml:space="preserve">
+    <value>השירות מותקן אבל לא פועל.</value>
+    <comment>Windows banner text under 'Start the VPN service'.</comment>
+  </data>
+  <data name="svc_start_title" xml:space="preserve">
+    <value>הפעלת שירות ה-VPN</value>
+    <comment>Windows banner title when the VPN service is installed but stopped.</comment>
+  </data>
+  <data name="svc_uac_declined" xml:space="preserve">
+    <value>Windows ביקש הרשאה וחלון הבקשה נסגר. לחצו שוב כשתהיו מוכנים.</value>
+    <comment>Windows banner text after the user closed the administrator permission (UAC) prompt without approving.</comment>
   </data>
   <data name="svc_uninstall_action" xml:space="preserve">
     <value>הסר התקנה</value>
@@ -4308,9 +4644,25 @@
     <value>פעולה זו עוצרת את שירות URnetwork ומסירה את יחידת ה-systemd שלו. האפליקציה לא תוכל להתחבר עד שהוא יוגדר מחדש. תתבקשו לתת הרשאת מנהל.</value>
     <comment>Settings: confirmation text before uninstalling the VPN service.</comment>
   </data>
+  <data name="svc_uninstall_confirm_windows" xml:space="preserve">
+    <value>פעולה זו עוצרת את שירות URnetwork ומסירה אותו מ-Windows. האפליקציה לא תוכל להתחבר עד שהוא יוגדר מחדש. Windows יבקש הרשאת מנהל.</value>
+    <comment>Windows Settings: confirmation dialog before uninstalling the VPN service.</comment>
+  </data>
   <data name="svc_uninstall_note" xml:space="preserve">
     <value>הסרת שירות ה-systemd שבו URnetwork משתמש להעברת תעבורה.</value>
     <comment>Settings: explanation under the uninstall service button.</comment>
+  </data>
+  <data name="svc_uninstall_note_windows" xml:space="preserve">
+    <value>הסרת שירות ה-Windows שבו URnetwork משתמש להעברת תעבורה.</value>
+    <comment>Windows Settings &gt; VPN service row: what the Uninstall button removes.</comment>
+  </data>
+  <data name="svc_update_message" xml:space="preserve">
+    <value>לשירות המותקן יש גרסה שונה מזו של האפליקציה.</value>
+    <comment>Windows banner text under 'Update the VPN service'. The two version numbers follow it in parentheses.</comment>
+  </data>
+  <data name="svc_update_title" xml:space="preserve">
+    <value>עדכון שירות ה-VPN</value>
+    <comment>Windows banner title when the installed VPN service is a different version than the app.</comment>
   </data>
   <data name="switch_account" xml:space="preserve">
     <value>החלף חשבון</value>
@@ -4506,6 +4858,82 @@
   <data name="upd_auto_check_note" xml:space="preserve">
     <value>חיפוש גרסאות חדשות זמן קצר אחרי ההפעלה ובכל שש שעות. שום דבר לא מותקן בלי לחיצה.</value>
     <comment>Settings: explanation under the automatic update check switch.</comment>
+  </data>
+  <data name="upd_available_appimage_message" xml:space="preserve">
+    <value>בלחיצה אחת הגרסה מורדת, נבדקת מול סכום הביקורת של הגרסה ומחליפה את ה-AppImage הזה. שירות ה-VPN מתעדכן בנפרד.</value>
+    <comment>Linux Settings update notice, AppImage installs: what the Install button does. The AppImage is the single-file Linux app; the VPN service is the separate system service package.</comment>
+  </data>
+  <data name="upd_available_msi_message" xml:space="preserve">
+    <value>בלחיצה אחת הגרסה מורדת, נבדקת ותוכנית ההתקנה שלה מופעלת ומעדכנת את האפליקציה ואת שירות ה-VPN. האפליקציה נסגרת בזמן ההתקנה.</value>
+    <comment>Windows update banner: what the Update button does (downloads the MSI installer, checks it, runs it).</comment>
+  </data>
+  <data name="upd_available_package_message" xml:space="preserve">
+    <value>הורידו את {} מדף הגרסה, ואז הריצו את הפקודה שלמטה.</value>
+    <comment>Linux Settings update notice, package installs (.deb, .rpm, tarball) that the app does not replace itself. {file} is the release file name, for example urnetwork_2026.10.5_amd64.deb. The shell command is shown in the row below.</comment>
+  </data>
+  <data name="upd_available_title_version" xml:space="preserve">
+    <value>יש עדכון זמין: v{}</value>
+    <comment>Update notice title (Linux Settings, Windows update banner): a newer release is available. {version} is the release version, for example 2026.10.5-1024555910; keep the "v" before it.</comment>
+  </data>
+  <data name="upd_downloaded_message" xml:space="preserve">
+    <value>אין הרשאת כתיבה לתיקייה של ה-AppImage הזה, ולכן ההורדה שאומתה נשמרה למטה. החליפו בה את ה-AppImage ידנית.</value>
+    <comment>Linux Settings update notice when the app cannot replace itself: the verified file's path is shown in the row below.</comment>
+  </data>
+  <data name="upd_failed_checksum" xml:space="preserve">
+    <value>ההורדה לא תאמה לסכומי הביקורת של הגרסה ולכן נמחקה. לחצו כדי לנסות שוב.</value>
+    <comment>Update notice error (Linux Settings, Windows update banner): the downloaded file failed its integrity check and was deleted.</comment>
+  </data>
+  <data name="upd_failed_download" xml:space="preserve">
+    <value>ההורדה לא הושלמה. בדקו את החיבור ולחצו כדי לנסות שוב.</value>
+    <comment>Update notice error (Linux Settings, Windows update banner): the release download failed.</comment>
+  </data>
+  <data name="upd_failed_install" xml:space="preserve">
+    <value>לא ניתן היה להחליף את ה-AppImage. בדקו את ההרשאות של התיקייה ולחצו כדי לנסות שוב.</value>
+    <comment>Linux Settings update notice error: the verified download could not be swapped in for the running AppImage.</comment>
+  </data>
+  <data name="upd_install" xml:space="preserve">
+    <value>התקנה</value>
+    <comment>Linux Settings update notice: button that downloads, verifies and installs the update.</comment>
+  </data>
+  <data name="upd_manual_install_message" xml:space="preserve">
+    <value>תוכנית ההתקנה לא הופעלה (היא צריכה אישור של מנהל). ההורדה שאומתה הוצגה בסייר הקבצים — צאו מהאפליקציה והריצו אותה.</value>
+    <comment>Windows update banner when the installer could not be started: the user runs it by hand. Explorer is the Windows file manager.</comment>
+  </data>
+  <data name="upd_ready_message" xml:space="preserve">
+    <value>ה-AppImage החדש במקומו ואומת. הפעילו מחדש כדי להתחיל להשתמש בו; הקובץ הקודם נשמר לידו עד אז.</value>
+    <comment>Linux Settings update notice once the update is installed and waiting for a relaunch.</comment>
+  </data>
+  <data name="upd_ready_title" xml:space="preserve">
+    <value>מוכן להפעלה מחדש: v{}</value>
+    <comment>Linux Settings update notice title once the new AppImage is installed. {version} is the release version; keep the "v" before it.</comment>
+  </data>
+  <data name="upd_relaunch" xml:space="preserve">
+    <value>הפעלה מחדש</value>
+    <comment>Linux Settings update notice: button that restarts the app on the newly installed version.</comment>
+  </data>
+  <data name="upd_release_page" xml:space="preserve">
+    <value>דף הגרסה</value>
+    <comment>Linux Settings update notice: button that opens the release's download page in the browser.</comment>
+  </data>
+  <data name="upd_show_file" xml:space="preserve">
+    <value>הצגת הקובץ</value>
+    <comment>Update notice button (Linux Settings, Windows update banner) that opens the folder holding the verified download.</comment>
+  </data>
+  <data name="upd_stage_downloading" xml:space="preserve">
+    <value>מוריד את העדכון…</value>
+    <comment>Update notice progress line (Linux Settings, Windows update banner) while the release downloads.</comment>
+  </data>
+  <data name="upd_stage_installing" xml:space="preserve">
+    <value>מפעיל את תוכנית ההתקנה…</value>
+    <comment>Windows update banner progress line while the verified installer is being launched.</comment>
+  </data>
+  <data name="upd_stage_replacing" xml:space="preserve">
+    <value>מחליף את ה-AppImage…</value>
+    <comment>Linux Settings update notice progress line while the verified download replaces the running AppImage file.</comment>
+  </data>
+  <data name="upd_stage_verifying" xml:space="preserve">
+    <value>מאמת את ההורדה…</value>
+    <comment>Update progress line (Linux Settings, Windows update banner, macOS Settings &gt; Software update) while the downloaded release is checked against its published checksum.</comment>
   </data>
   <data name="update" xml:space="preserve">
     <value>עדכן</value>
@@ -4888,6 +5316,18 @@
   <data name="when_you_refer_a_friend" xml:space="preserve">
     <value>כשאתה ממליץ על חבר:</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="widget_chart_peak" xml:space="preserve">
+    <value>שיא</value>
+    <comment>Throughput widget: lowercase word after the peak packet-rate figure, as in "1.2k pkt/s peak".</comment>
+  </data>
+  <data name="widget_intent_source_parameter" xml:space="preserve">
+    <value>מקור</value>
+    <comment>Title of a hidden parameter of the Connect/Disconnect control: which surface (widget, control, shortcut) made the request.</comment>
+  </data>
+  <data name="widget_refresh_intent_title" xml:space="preserve">
+    <value>רענון הווידג'טים של URnetwork</value>
+    <comment>Title of the action that refreshes the app's Home Screen widgets.</comment>
   </data>
   <data name="widgets" xml:space="preserve">
     <value>ווידג'טים</value>

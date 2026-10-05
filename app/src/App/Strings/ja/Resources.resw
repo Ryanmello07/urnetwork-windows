@@ -251,6 +251,14 @@
     <value>一致</value>
     <comment>Connection inspector: label of the matched rule row.</comment>
   </data>
+  <data name="adv_mode_rpc_only" xml:space="preserve">
+    <value>RPC のみ</value>
+    <comment>Windows status strip (Advanced Mode), Session value: a session that talks to the service over RPC without a tunnel. Lowercase, a short status value.</comment>
+  </data>
+  <data name="adv_mode_tunnel" xml:space="preserve">
+    <value>トンネル</value>
+    <comment>Windows status strip (Advanced Mode), Session value: a full tunnel session. Lowercase, a short status value.</comment>
+  </data>
   <data name="adv_na" xml:space="preserve">
     <value>—</value>
     <comment>Connection inspector: placeholder dash for a value that is not available.</comment>
@@ -285,7 +293,7 @@
   </data>
   <data name="adv_raw_status" xml:space="preserve">
     <value>生ステータス</value>
-    <comment>Connection inspector: label of the raw status row.</comment>
+    <comment>Connection inspector (Linux) and Advanced Mode status strip (Windows): label of the raw status field.</comment>
   </data>
   <data name="adv_reason" xml:space="preserve">
     <value>理由</value>
@@ -307,6 +315,26 @@
     <value>ルートのオーバーライド</value>
     <comment>Connection inspector: decision reason, a route override applied.</comment>
   </data>
+  <data name="adv_routes" xml:space="preserve">
+    <value>ルート</value>
+    <comment>Windows status strip (Advanced Mode): label of the field that shows whether the tunnel's routes are installed.</comment>
+  </data>
+  <data name="adv_routes_dns_degraded" xml:space="preserve">
+    <value>オン、DNS 未適用</value>
+    <comment>Windows status strip (Advanced Mode), Routes value: routes are installed but the tunnel's DNS is not. Lowercase, a short status value.</comment>
+  </data>
+  <data name="adv_routes_kill_switch_armed" xml:space="preserve">
+    <value>オフ、キルスイッチ待機中</value>
+    <comment>Windows status strip (Advanced Mode), Routes value: no routes are installed and the kill switch is blocking traffic. Lowercase, a short status value.</comment>
+  </data>
+  <data name="adv_routes_no_firewall" xml:space="preserve">
+    <value>オン、漏洩防止なし</value>
+    <comment>Windows status strip (Advanced Mode), Routes value: routes are installed but no leak-prevention firewall policy is in force. Lowercase, a short status value.</comment>
+  </data>
+  <data name="adv_rpc" xml:space="preserve">
+    <value>RPC</value>
+    <comment>Windows status strip (Advanced Mode): label of the field that shows the service's RPC endpoint (host:port). RPC is a technical term.</comment>
+  </data>
   <data name="adv_select_a_row" xml:space="preserve">
     <value>アクティビティの行を選択して詳細を確認</value>
     <comment>Connection inspector: hint to select a row in the Activity list.</comment>
@@ -322,6 +350,10 @@
   <data name="adv_session_exit_country" xml:space="preserve">
     <value>セッションの出口国</value>
     <comment>Connection inspector: label of the session exit country row.</comment>
+  </data>
+  <data name="adv_session_mode" xml:space="preserve">
+    <value>セッション</value>
+    <comment>Windows status strip (Advanced Mode): label of the field that shows which kind of session the service granted (tunnel or rpc-only).</comment>
   </data>
   <data name="adv_unknown_exit" xml:space="preserve">
     <value>ルーティングテーブルにありません</value>
@@ -622,6 +654,10 @@
     <value>ブロックした地域を読み込めませんでした。</value>
     <comment>Shown on the Blocked locations screen when the list could not be fetched, above a Retry button.</comment>
   </data>
+  <data name="blocked_locations_search_placeholder" xml:space="preserve">
+    <value>国を検索</value>
+    <comment>macOS Blocked locations screen: placeholder of the country search field.</comment>
+  </data>
   <data name="blocks" xml:space="preserve">
     <value>ブロック</value>
     <comment>Points leaderboard: stat tile label and sort chip. A block is one finalized payout epoch.</comment>
@@ -712,9 +748,21 @@
     <value>Solanaのトランザクションを確認中</value>
     <comment>Call to action</comment>
   </data>
+  <data name="checkout_confirming_purchase" xml:space="preserve">
+    <value>購入を確認しています。プランは自動的に更新されます。</value>
+    <comment>Purchase confirmation message while the app waits for the payment to be confirmed.</comment>
+  </data>
+  <data name="checkout_finish_in_browser" xml:space="preserve">
+    <value>ブラウザで完了してください。</value>
+    <comment>Purchase confirmation title after the app opened Stripe's checkout page in the browser.</comment>
+  </data>
   <data name="checkout_opened_in_browser" xml:space="preserve">
     <value>ブラウザで購入を完了してください。支払いが確認されると、プランはここで自動的に更新されます。</value>
     <comment>Shown after the app hands the user to the Stripe hosted checkout in the system browser. The app polls the server and flips the plan automatically when the payment webhook lands.</comment>
+  </data>
+  <data name="checkout_restore_checking" xml:space="preserve">
+    <value>プランをもう一度確認しています。</value>
+    <comment>Message after Restore purchases in the Stripe-paid app: nothing to restore locally, the app re-reads the plan from the server.</comment>
   </data>
   <data name="cities" xml:space="preserve">
     <value>都市</value>
@@ -792,6 +840,10 @@
     <value>相手</value>
     <comment>A label displayed next to a companion contract.</comment>
   </data>
+  <data name="conn_blocked_kill_switch" xml:space="preserve">
+    <value>ブロック中 — キルスイッチがオン</value>
+    <comment>Windows Connect page status when the connection is down and the kill switch is deliberately blocking this computer's traffic.</comment>
+  </data>
   <data name="conn_connect_on_launch" xml:space="preserve">
     <value>アプリ起動時に自動的に接続</value>
     <comment>Settings: switch that connects automatically when the app starts.</comment>
@@ -800,13 +852,93 @@
     <value>デフォルトはオフ。オンにすると、アプリを開くとすぐに URnetwork が選択したプロバイダーに接続します。次回の起動から適用され、今は接続しません。</value>
     <comment>Settings: explanation under the connect-on-launch switch.</comment>
   </data>
+  <data name="conn_degraded" xml:space="preserve">
+    <value>接続が低下しています — 再接続中</value>
+    <comment>Windows connection status (Connect page headline and tray tooltip) when a working connection dropped and the app is reconnecting on its own.</comment>
+  </data>
+  <data name="conn_disconnecting" xml:space="preserve">
+    <value>切断中 — 通信はまだトンネルを通っています</value>
+    <comment>Windows Connect page status while the tunnel is being stopped but its routes are still installed.</comment>
+  </data>
   <data name="conn_failed" xml:space="preserve">
     <value>接続できませんでした</value>
     <comment>Connect screen status when the connect attempt failed: no provider could be reached (the sdk's CONNECT_FAILED). The connection keeps trying, and the app offers Retry.</comment>
   </data>
+  <data name="conn_failed_detail" xml:space="preserve">
+    <value>どのプロバイダーにも接続できませんでした。再試行すると接続を最初から作り直します。</value>
+    <comment>Windows Connect page reason line when connecting failed.</comment>
+  </data>
+  <data name="conn_failsafe_armed" xml:space="preserve">
+    <value>まもなく何も通らない場合、インターネットを使い続けられるよう URnetwork が自動的にトンネルをオフにします。</value>
+    <comment>Windows Connect page: sentence appended to the line above when the service will stop a tunnel that carries nothing.</comment>
+  </data>
+  <data name="conn_failsafe_blocked" xml:space="preserve">
+    <value>トンネルが通信を運べなかったため、URnetwork がトンネルを終了しました。キルスイッチがオンのため、再接続するかキルスイッチをオフにするまで、このコンピューターからは何も出ていきません — 漏洩はありません。</value>
+    <comment>Windows Connect page line after the service stopped a tunnel that carried nothing, while the kill switch keeps this computer blocked.</comment>
+  </data>
+  <data name="conn_failsafe_restored" xml:space="preserve">
+    <value>オンラインを保つため、URnetwork が接続を切断しました: トンネルは動作していましたが、何も通っていませんでした。現在、通信は通常どおり外に出ており、保護されていません。もう一度試すには「接続」を押してください。</value>
+    <comment>Windows Connect page line and tray notification after the service stopped a tunnel that carried nothing, with the kill switch off. Keep the emphasis on NOT.</comment>
+  </data>
+  <data name="conn_finding_providers" xml:space="preserve">
+    <value>プロバイダーを探しています…</value>
+    <comment>Connection status while the app has providers but none is proven to work yet (Linux and Windows Connect page headline, Windows tray tooltip).</comment>
+  </data>
   <data name="conn_not_protected" xml:space="preserve">
     <value>インターネット通信は保護されていません。</value>
     <comment>Connect page: warning that the internet traffic is not protected.</comment>
+  </data>
+  <data name="conn_reason_auth" xml:space="preserve">
+    <value>プラットフォームへのサインインに失敗しています…</value>
+    <comment>Windows Connect page reason line while the app's sign-in to the URnetwork platform keeps failing.</comment>
+  </data>
+  <data name="conn_reason_platform" xml:space="preserve">
+    <value>プラットフォームに接続しています…</value>
+    <comment>Windows Connect page reason line while the app cannot reach the URnetwork platform (the API servers).</comment>
+  </data>
+  <data name="conn_reason_providers" xml:space="preserve">
+    <value>プロバイダーが応答しません — 再試行中…</value>
+    <comment>Windows Connect page reason line while the selected providers do not answer.</comment>
+  </data>
+  <data name="conn_reason_rate_limited" xml:space="preserve">
+    <value>リクエスト制限中 — 待機しています…</value>
+    <comment>Windows Connect page reason line while the platform asks the app to slow down.</comment>
+  </data>
+  <data name="conn_traffic_blocked" xml:space="preserve">
+    <value>現在、機能しているプロバイダーがありません — 通信はブロックされており、露出していません。通常の接続に戻るには切断してください。</value>
+    <comment>Windows Connect page line while connected but no provider carries traffic, with leak protection in force.</comment>
+  </data>
+  <data name="conn_traffic_blocked_unprotected" xml:space="preserve">
+    <value>現在、機能しているプロバイダーがありません — トンネルに送られた通信はどこにも届かず、漏洩防止もオフのため、一部の通信がトンネルを迂回する可能性があります。通常の接続に戻るには切断してください。</value>
+    <comment>Windows Connect page line while connected but no provider carries traffic, and leak protection (the firewall policy) is not in force.</comment>
+  </data>
+  <data name="conn_tray_blocked_kill_switch" xml:space="preserve">
+    <value>ブロック中(キルスイッチがオン)</value>
+    <comment>Windows tray tooltip when the kill switch is deliberately blocking this computer's traffic.</comment>
+  </data>
+  <data name="conn_tray_blocked_no_tunnel" xml:space="preserve">
+    <value>ブロック中 — トンネルがないまま漏洩防止が有効です</value>
+    <comment>Windows tray tooltip when leak protection blocks traffic while no tunnel is up.</comment>
+  </data>
+  <data name="conn_tray_disconnecting" xml:space="preserve">
+    <value>切断中 — 通信はまだトンネルを通っています</value>
+    <comment>Windows tray tooltip while the tunnel is being stopped but its routes are still installed.</comment>
+  </data>
+  <data name="conn_tray_failsafe_blocked" xml:space="preserve">
+    <value>トンネルが通信を運べなかったため、URnetwork がトンネルを終了しました。キルスイッチがオンのため、このコンピューターはブロックされたままで、漏洩はありません。再接続するか、このメニューからキルスイッチをオフにしてください。</value>
+    <comment>Windows tray notification after the service stopped a tunnel that carried nothing, while the kill switch keeps this computer blocked. "This menu" is the tray icon's menu.</comment>
+  </data>
+  <data name="conn_tray_failsafe_stopped" xml:space="preserve">
+    <value>切断済み(トンネルが失敗しました)</value>
+    <comment>Windows tray tooltip after the service stopped a tunnel that carried nothing.</comment>
+  </data>
+  <data name="conn_tray_force_tunnel_off" xml:space="preserve">
+    <value>トンネルを強制的にオフにする(復旧)</value>
+    <comment>Windows tray menu item that stops the tunnel directly when the normal Disconnect is stuck.</comment>
+  </data>
+  <data name="conn_tray_lift_kill_switch" xml:space="preserve">
+    <value>キルスイッチをオフにする(このコンピューターのブロックを解除)</value>
+    <comment>Windows tray menu item that lifts the kill switch's block on this computer.</comment>
   </data>
   <data name="connect" xml:space="preserve">
     <value>接続</value>
@@ -918,7 +1050,7 @@
   </data>
   <data name="contribute_bandwidth" xml:space="preserve">
     <value>帯域幅の提供</value>
-    <comment>Used in Shared/Views/Introduction/IntroductionParticipateSettingsView.swift.</comment>
+    <comment>Onboarding: title of the step that asks whether this device may share bandwidth with the network (provide).</comment>
   </data>
   <data name="control_doh_error_https_required" xml:space="preserve">
     <value>URL は https:// で始める必要があります。</value>
@@ -1088,13 +1220,25 @@
     <value>このデバイスには polkit 認可サービスがないため、URnetwork のシステムサービスは 'urnetwork' グループにフォールバックします。自分のユーザーをそのグループに追加し、サインアウトして再度サインインしてください。</value>
     <comment>Connect error: no polkit service, the daemon falls back to the urnetwork group.</comment>
   </data>
+  <data name="daemon_legacy_group_auth" xml:space="preserve">
+    <value>このデバイスの URnetwork システムサービスは、まだグループのメンバーシップを必要とする古いバージョンです。サービスを更新するか、ユーザーを 'urnetwork' グループに追加してから、サインアウトして再度サインインしてください。</value>
+    <comment>Linux notice when an older system service refuses the app's user. 'urnetwork' is the literal Linux group name; keep it as is.</comment>
+  </data>
   <data name="daemon_no_answer" xml:space="preserve">
     <value>URnetwork のシステムサービスが応答しませんでした。</value>
     <comment>Error: the system service did not answer.</comment>
   </data>
+  <data name="daemon_not_reachable" xml:space="preserve">
+    <value>URnetwork システムサービスに接続できませんでした。</value>
+    <comment>Linux notice when the app cannot reach the URnetwork system service for an unexpected reason.</comment>
+  </data>
   <data name="daemon_sdk_mismatch" xml:space="preserve">
     <value>アプリと URnetwork システムサービスのビルドが異なります。両方を同じバージョンに更新してください。</value>
     <comment>Shown on the linux home screen when the app and the urnetworkd system service carry different URnetwork SDK builds (they update on independent schedules and must match exactly). The fix is updating both to the same release.</comment>
+  </data>
+  <data name="daemon_stale_sandbox_mount" xml:space="preserve">
+    <value>このアプリを開いている間に URnetwork システムサービスが再起動しました。サービスに再接続するには、アプリを閉じてもう一度開いてください。</value>
+    <comment>Linux notice when the app cannot reach the URnetwork system service because the service restarted under a sandboxed (Flatpak) app.</comment>
   </data>
   <data name="daemon_too_old" xml:space="preserve">
     <value>URnetwork システムサービスが古くなっています。接続するには更新してください。</value>
@@ -1215,6 +1359,98 @@
   <data name="devices" xml:space="preserve">
     <value>デバイス</value>
     <comment>Provider list group title for devices</comment>
+  </data>
+  <data name="direct_update_allow" xml:space="preserve">
+    <value>許可</value>
+    <comment>macOS folder-access panel button that grants the app access to the Applications folder for the update.</comment>
+  </data>
+  <data name="direct_update_allow_applications" xml:space="preserve">
+    <value>アップデートをインストールするには、URnetwork が「アプリケーション」フォルダ内で自身を置き換えることを許可してください。「アプリケーション」を選択して「許可」をクリックします。</value>
+    <comment>macOS folder-access panel message when installing an update: the user selects the Applications folder to grant access. Keep "Allow" consistent with the panel's button.</comment>
+  </data>
+  <data name="direct_update_available" xml:space="preserve">
+    <value>アップデートがあります: {}</value>
+    <comment>macOS Settings &gt; Software update status when a newer release exists. {version} is its version.</comment>
+  </data>
+  <data name="direct_update_check" xml:space="preserve">
+    <value>アップデートを確認</value>
+    <comment>macOS Settings &gt; Software update button that checks now.</comment>
+  </data>
+  <data name="direct_update_check_failed" xml:space="preserve">
+    <value>アップデートを確認できませんでした: {}</value>
+    <comment>macOS Settings &gt; Software update error. {detail} is a short technical reason (often English, from the system).</comment>
+  </data>
+  <data name="direct_update_checking" xml:space="preserve">
+    <value>アップデートを確認しています…</value>
+    <comment>macOS Settings &gt; Software update status while checking.</comment>
+  </data>
+  <data name="direct_update_checksum_failed" xml:space="preserve">
+    <value>ダウンロードがリリースのチェックサムと一致しなかったため、破棄されました。</value>
+    <comment>macOS Settings &gt; Software update error: the downloaded file failed its integrity check and was deleted.</comment>
+  </data>
+  <data name="direct_update_development_build" xml:space="preserve">
+    <value>開発ビルドです。最新のリリースは {} です。</value>
+    <comment>macOS Settings &gt; Software update status on a development build, which never updates itself. {version} is the newest release version.</comment>
+  </data>
+  <data name="direct_update_download_failed" xml:space="preserve">
+    <value>ダウンロードに失敗しました: {}</value>
+    <comment>macOS Settings &gt; Software update error. {detail} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_downloading_version" xml:space="preserve">
+    <value>{} をダウンロードしています…</value>
+    <comment>macOS Settings &gt; Software update status while the release downloads. {version} is its version.</comment>
+  </data>
+  <data name="direct_update_install" xml:space="preserve">
+    <value>アップデートをインストール</value>
+    <comment>macOS Settings &gt; Software update button that downloads, verifies and installs the update.</comment>
+  </data>
+  <data name="direct_update_install_failed" xml:space="preserve">
+    <value>アップデートをインストールできませんでした: {}</value>
+    <comment>macOS Settings &gt; Software update error. {detail} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_installing" xml:space="preserve">
+    <value>アップデートをインストールしています…</value>
+    <comment>macOS Settings &gt; Software update status while the verified update is installed.</comment>
+  </data>
+  <data name="direct_update_last_checked" xml:space="preserve">
+    <value>最終確認: {}</value>
+    <comment>macOS Settings &gt; Software update: when updates were last checked. {when} is a relative date, for example "5 minutes ago" or "yesterday".</comment>
+  </data>
+  <data name="direct_update_manual_install" xml:space="preserve">
+    <value>{} をダウンロードして検証しました。新しい URnetwork を「アプリケーション」フォルダにドラッグし、そこから開いてください。</value>
+    <comment>macOS Settings &gt; Software update status when the app could not replace itself. {version} is the downloaded release's version.</comment>
+  </data>
+  <data name="direct_update_not_checked" xml:space="preserve">
+    <value>アップデートはまだ確認されていません。</value>
+    <comment>macOS Settings &gt; Software update status before the first check.</comment>
+  </data>
+  <data name="direct_update_relaunching" xml:space="preserve">
+    <value>URnetwork を再起動しています…</value>
+    <comment>macOS Settings &gt; Software update status while the app restarts on the new version.</comment>
+  </data>
+  <data name="direct_update_section_title" xml:space="preserve">
+    <value>ソフトウェアアップデート</value>
+    <comment>macOS Settings: title of the section that checks for and installs app updates (direct-download app).</comment>
+  </data>
+  <data name="direct_update_show_in_finder" xml:space="preserve">
+    <value>Finder に表示</value>
+    <comment>macOS Settings &gt; Software update button that reveals the downloaded update in Finder (the macOS file manager).</comment>
+  </data>
+  <data name="direct_update_signature_rejected" xml:space="preserve">
+    <value>アップデートは拒否されました: {}</value>
+    <comment>macOS Settings &gt; Software update error when the downloaded app's code signature did not check out. {detail} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_unpack_failed" xml:space="preserve">
+    <value>ダウンロードを展開できませんでした: {}</value>
+    <comment>macOS Settings &gt; Software update error. {detail} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_unusable_release" xml:space="preserve">
+    <value>リリース {0} はアプリでインストールできません({1})。</value>
+    <comment>macOS Settings &gt; Software update error when the newest release has no file this app can install. {version} is the release version; {reason} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_up_to_date" xml:space="preserve">
+    <value>URnetwork は最新です。</value>
+    <comment>macOS Settings &gt; Software update status when no newer release exists.</comment>
   </data>
   <data name="disable_ignore_battery_hint" xml:space="preserve">
     <value>無効にするには、システム設定のアプリのバッテリー使用状況に移動してください</value>
@@ -1404,6 +1640,10 @@
     <value>別の候補</value>
     <comment>Points leaderboard: the emoji editor's shuffle button, replaces the draft with a new random suggestion.</comment>
   </data>
+  <data name="enabled_under_auto_footer" xml:space="preserve">
+    <value>優先順に表示: まず H1、次に H3、whodis、whodis pump。順序は固定です。少なくとも 1 つのトランスポートは常に有効です。</value>
+    <comment>Footer of the Auto transports section explaining the fixed preference order.</comment>
+  </data>
   <data name="enjoying_urnetwork" xml:space="preserve">
     <value>URnetworkを楽しんでいますか？</value>
     <comment>Call to action</comment>
@@ -1442,6 +1682,10 @@
   <data name="enter_urnetwork" xml:space="preserve">
     <value>URnetworkに入る</value>
     <comment>Used in Authenticate/LoginInitial/GuestModeSheet.swift.</comment>
+  </data>
+  <data name="enter_wallet_address" xml:space="preserve">
+    <value>ウォレットアドレスを入力</value>
+    <comment>Used in Main/Account/Wallets/ConnectWalletSheet/EnterWalletAddress/EnterWalletAddressView.swift.</comment>
   </data>
   <data name="error_changing_network_name" xml:space="preserve">
     <value>ネットワーク名の変更中にエラーが発生しました</value>
@@ -2179,6 +2423,10 @@
     <value>より多くのデータをより速く必要ですか？</value>
     <comment>Call to action</comment>
   </data>
+  <data name="net_points_earned" xml:space="preserve">
+    <value>純獲得ポイント</value>
+    <comment>Earnings page: lowercase caption under the net points total.</comment>
+  </data>
   <data name="net_provided" xml:space="preserve">
     <value>提供済みネット</value>
     <comment>Call to action</comment>
@@ -2254,6 +2502,10 @@
   <data name="network_create_bonus_message" xml:space="preserve">
     <value>誰かがあなたを招待しています 🥳\nネットワークを作成してボーナスを獲得しましょう！</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="network_earnings" xml:space="preserve">
+    <value>ネットワーク収益</value>
+    <comment>Used in Main/Account/AccountRootView.swift.</comment>
   </data>
   <data name="network_name_changed_to_n" xml:space="preserve">
     <value>ネットワーク名を {} に変更しました</value>
@@ -2402,6 +2654,10 @@
   <data name="none" xml:space="preserve">
     <value>なし</value>
     <comment>Empty value: the VLESS settings show it for no security and no flow (all apps), and the Referrals section shows it on windows and linux when no referral network is linked.</comment>
+  </data>
+  <data name="not_now" xml:space="preserve">
+    <value>今はしない</value>
+    <comment>macOS button that dismisses the prompt to enable the VPN system extension for now.</comment>
   </data>
   <data name="notifications_label" xml:space="preserve">
     <value>通知</value>
@@ -2616,9 +2872,17 @@
     <value>{}%お得</value>
     <comment>Plan picker: the saving badge on the yearly card; the number is the whole percent saved against twelve monthly payments.</comment>
   </data>
+  <data name="plan_terms_first_year_price" xml:space="preserve">
+    <value>最初の 1 年は {0}、その後は {1}/年。いつでもキャンセルできます。</value>
+    <comment>Plan picker terms line for the yearly plan with a first-year offer and no free trial. {first_year_price} and {yearly_price} are formatted prices, for example $39.99.</comment>
+  </data>
   <data name="plan_terms_yearly.other" xml:space="preserve">
     <value>{0}日間無料、その後 {1}/年。いつでもキャンセル可。</value>
     <comment>Plan picker: the terms line under the button for the yearly plan with its trial.</comment>
+  </data>
+  <data name="plan_terms_yearly_billed_today" xml:space="preserve">
+    <value>本日 {} を請求し、以降は毎年請求します。いつでもキャンセルできます。</value>
+    <comment>Plan picker terms line for the yearly plan without a trial or offer. {yearly_price} is a formatted price, for example $59.99.</comment>
   </data>
   <data name="please_install_phantom_or_solflare_to_use_this" xml:space="preserve">
     <value>この機能を使用するにはPhantomまたはSolflareをインストールしてください</value>
@@ -3397,7 +3661,7 @@
   </data>
   <data name="seedphrase_paste_hint" xml:space="preserve">
     <value>12語または24語のシードフレーズをここに貼り付けてください</value>
-    <comment>Seed sign-in sheet: placeholder of the seedphrase field (android accepts 12 or 24 words).</comment>
+    <comment>Seed sign-in sheet: placeholder of the seedphrase field (android and windows accept 12 or 24 words).</comment>
   </data>
   <data name="seedphrase_required" xml:space="preserve">
     <value>シードフレーズを入力してください</value>
@@ -3901,6 +4165,22 @@
     <value>名前は ASCII 形式で入力してください。</value>
     <comment>Split rules: validation error for a host name with non-ASCII characters; the rule wants the punycode form.</comment>
   </data>
+  <data name="split_rule_mode_excluded_description" xml:space="preserve">
+    <value>選択したホストはトンネルを迂回します。</value>
+    <comment>Split rule editor: description of the Route locally mode.</comment>
+  </data>
+  <data name="split_rule_mode_included_description" xml:space="preserve">
+    <value>デフォルト: 選択したホストは固定せずにトンネルを使います。</value>
+    <comment>Split rule editor: description of the Route through VPN mode (the default). A pin is the Keep on one provider mode.</comment>
+  </data>
+  <data name="split_rule_mode_pinned_description" xml:space="preserve">
+    <value>選択したホストは、問題の兆候が出た時点ですぐに移されるのではなく、同じプロバイダーをより長く使い続けるため、セッション中にサイトの IP アドレスが変わる頻度が下がります。</value>
+    <comment>Split rule editor: description of the Keep on one provider mode.</comment>
+  </data>
+  <data name="split_rule_mode_pinned_title" xml:space="preserve">
+    <value>1 つのプロバイダーを使い続ける</value>
+    <comment>Split rule editor: title of the mode that keeps the selected hosts on the same VPN provider longer.</comment>
+  </data>
   <data name="split_rule_preset_google_meet_calls" xml:space="preserve">
     <value>Google Meetの通話</value>
     <comment>Split rules preset: Google Meet call media, from the address ranges Google publishes for routing it outside a VPN. Keep the product name Google Meet unchanged.</comment>
@@ -3917,6 +4197,10 @@
     <value>接続中にルーティングのアクティビティがここに表示されます。</value>
     <comment>A description of the content of the "Activity" section of the split rules view.</comment>
   </data>
+  <data name="split_rules_connect_to_load" xml:space="preserve">
+    <value>既存のルールを読み込むには、一度接続してください。</value>
+    <comment>Split rules screen: note under the disabled Add a rule button before the app has connected once and loaded the saved rules.</comment>
+  </data>
   <data name="split_rules_hint" xml:space="preserve">
     <value>下のトラフィックをタップすると、トンネルを迂回してローカルにルーティングされます。</value>
     <comment>A description of how to route traffic locally.</comment>
@@ -3925,9 +4209,17 @@
     <value>上でホストを追加するか、下のトラフィックをタップすると、トンネルを迂回してローカルにルーティングされます。</value>
     <comment>Split rules on android, which has a host input above the traffic list: how to add to the rule. The apple/linux screens without the input keep split_rules_hint.</comment>
   </data>
+  <data name="split_rules_host_hint_modes" xml:space="preserve">
+    <value>上でホストを追加するか、下のトラフィックをタップして、ローカルにルーティングするか 1 つのプロバイダーに固定します。</value>
+    <comment>Split rules screen: hint shown while there are no rules yet. Routing locally sends traffic outside the VPN; holding to one provider keeps a site on the same VPN exit.</comment>
+  </data>
   <data name="split_rules_info_note" xml:space="preserve">
     <value>除外は関連するネットワーククラスタ全体に適用されるため、関連するトラフィックもまとめて対象になります。</value>
     <comment>transfer stats and split rules</comment>
+  </data>
+  <data name="split_rules_info_note_modes" xml:space="preserve">
+    <value>ルールは関連するネットワーククラスタ全体に適用されるため、関連するトラフィックもまとめて対象になります。</value>
+    <comment>Split rules screen: note that a rule matches every host in the same network cluster (related hosts of one site or service), whatever the rule's mode.</comment>
   </data>
   <data name="split_rules_match_sites_not_apps" xml:space="preserve">
     <value>分割ルールが対象にするのはアプリではなく、サイトとアドレスです。Appleはアプリ単位のVPNを、組織が管理するデバイス（MDM）でのみ許可しています。アプリをVPNの対象外にするには、そのアプリが使うサイトをローカルにルーティングするか、プリセットから始めてください。ローカルネットワークのアドレスは、すでにVPNを経由しません。</value>
@@ -3940,6 +4232,14 @@
   <data name="split_rules_start_from_preset" xml:space="preserve">
     <value>プリセットから始める</value>
     <comment>Split rules screen: the menu that starts a route-locally rule from a preset, the address ranges a service publishes for use outside a VPN.</comment>
+  </data>
+  <data name="sso_browser_open_failed" xml:space="preserve">
+    <value>ブラウザを開けませんでした。もう一度お試しください。</value>
+    <comment>macOS error when adding a sign-in method could not open the browser for the provider's sign-in page.</comment>
+  </data>
+  <data name="sso_sign_in_timed_out" xml:space="preserve">
+    <value>サインインがタイムアウトしました。もう一度お試しください。</value>
+    <comment>Error when a browser sign-in (Google or Apple through the browser) took too long and expired.</comment>
   </data>
   <data name="start_earning_join" xml:space="preserve">
     <value>収益を得始めるには、ネットワークに参加してください</value>
@@ -4005,6 +4305,10 @@
     <value>強力な匿名化</value>
     <comment>Connect drawer: strong anonymization toggle — the inverse of allow direct (direct connections expose the real source IP to the provider).</comment>
   </data>
+  <data name="subscription_portal_open_failed" xml:space="preserve">
+    <value>サブスクリプションのポータルを開けませんでした。もう一度お試しください。</value>
+    <comment>Snackbar error when the Stripe subscription management page (Manage subscription) could not be opened.</comment>
+  </data>
   <data name="successfully_claimed_multiplier" xml:space="preserve">
     <value>乗数を受け取りました！</value>
     <comment>Snackbar shown when the earnings multiplier is claimed successfully. Used in Main/Account/Settings/SettingsView.swift.</comment>
@@ -4029,9 +4333,41 @@
     <value>Pro</value>
     <comment>Display name for the paid plan. The WIRE value stays "supporter" (subscription_type / current_subscription.plan) because already-shipped app versions parse that string; only what the user reads changes.</comment>
   </data>
+  <data name="svc_action_failed" xml:space="preserve">
+    <value>完了しませんでした — サービスは変更されていません。詳細はアプリのログにあります。</value>
+    <comment>Windows banner text when installing, starting or updating the VPN service failed.</comment>
+  </data>
   <data name="svc_service_label" xml:space="preserve">
     <value>VPN サービス</value>
     <comment>Settings: label of the VPN service row.</comment>
+  </data>
+  <data name="svc_setup_action" xml:space="preserve">
+    <value>設定</value>
+    <comment>Windows banner button that installs the VPN service (Windows asks for administrator permission).</comment>
+  </data>
+  <data name="svc_setup_message" xml:space="preserve">
+    <value>URnetwork は Windows サービスを使って通信を運びます。ワンクリック — Windows が管理者の許可を求めます。</value>
+    <comment>Windows banner text under 'Set up the VPN service'.</comment>
+  </data>
+  <data name="svc_setup_title" xml:space="preserve">
+    <value>VPN サービスを設定</value>
+    <comment>Windows banner title when the URnetwork Windows service that carries traffic is not installed yet.</comment>
+  </data>
+  <data name="svc_start_action" xml:space="preserve">
+    <value>開始</value>
+    <comment>Windows banner button that starts the stopped VPN service.</comment>
+  </data>
+  <data name="svc_start_message" xml:space="preserve">
+    <value>サービスはインストールされていますが、実行されていません。</value>
+    <comment>Windows banner text under 'Start the VPN service'.</comment>
+  </data>
+  <data name="svc_start_title" xml:space="preserve">
+    <value>VPN サービスを開始</value>
+    <comment>Windows banner title when the VPN service is installed but stopped.</comment>
+  </data>
+  <data name="svc_uac_declined" xml:space="preserve">
+    <value>Windows が許可を求めましたが、確認画面が閉じられました。準備ができたらもう一度クリックしてください。</value>
+    <comment>Windows banner text after the user closed the administrator permission (UAC) prompt without approving.</comment>
   </data>
   <data name="svc_uninstall_action" xml:space="preserve">
     <value>アンインストール</value>
@@ -4041,9 +4377,25 @@
     <value>URnetwork サービスを停止し、その systemd ユニットを削除します。再設定するまでアプリは接続できません。管理者の許可を求められます。</value>
     <comment>Settings: confirmation text before uninstalling the VPN service.</comment>
   </data>
+  <data name="svc_uninstall_confirm_windows" xml:space="preserve">
+    <value>URnetwork サービスを停止し、Windows から削除します。再設定するまでアプリは接続できません。Windows が管理者の許可を求めます。</value>
+    <comment>Windows Settings: confirmation dialog before uninstalling the VPN service.</comment>
+  </data>
   <data name="svc_uninstall_note" xml:space="preserve">
     <value>URnetwork が通信の転送に使う systemd サービスを削除します。</value>
     <comment>Settings: explanation under the uninstall service button.</comment>
+  </data>
+  <data name="svc_uninstall_note_windows" xml:space="preserve">
+    <value>URnetwork が通信の転送に使う Windows サービスを削除します。</value>
+    <comment>Windows Settings &gt; VPN service row: what the Uninstall button removes.</comment>
+  </data>
+  <data name="svc_update_message" xml:space="preserve">
+    <value>インストールされているサービスのバージョンがこのアプリと異なります。</value>
+    <comment>Windows banner text under 'Update the VPN service'. The two version numbers follow it in parentheses.</comment>
+  </data>
+  <data name="svc_update_title" xml:space="preserve">
+    <value>VPN サービスを更新</value>
+    <comment>Windows banner title when the installed VPN service is a different version than the app.</comment>
   </data>
   <data name="switch_account" xml:space="preserve">
     <value>アカウントを切り替える</value>
@@ -4227,6 +4579,82 @@
   <data name="upd_auto_check_note" xml:space="preserve">
     <value>起動直後と6時間ごとに新しいリリースを確認します。クリックなしにインストールされることはありません。</value>
     <comment>Settings: explanation under the automatic update check switch.</comment>
+  </data>
+  <data name="upd_available_appimage_message" xml:space="preserve">
+    <value>ワンクリックでリリースをダウンロードし、リリースのチェックサムで検証して、この AppImage を置き換えます。VPN サービスは別途更新されます。</value>
+    <comment>Linux Settings update notice, AppImage installs: what the Install button does. The AppImage is the single-file Linux app; the VPN service is the separate system service package.</comment>
+  </data>
+  <data name="upd_available_msi_message" xml:space="preserve">
+    <value>ワンクリックでリリースをダウンロードして検証し、そのインストーラーを実行してアプリと VPN サービスを更新します。インストール中はアプリが閉じます。</value>
+    <comment>Windows update banner: what the Update button does (downloads the MSI installer, checks it, runs it).</comment>
+  </data>
+  <data name="upd_available_package_message" xml:space="preserve">
+    <value>リリースページから {} をダウンロードし、下のコマンドを実行してください。</value>
+    <comment>Linux Settings update notice, package installs (.deb, .rpm, tarball) that the app does not replace itself. {file} is the release file name, for example urnetwork_2026.10.5_amd64.deb. The shell command is shown in the row below.</comment>
+  </data>
+  <data name="upd_available_title_version" xml:space="preserve">
+    <value>アップデートがあります: v{}</value>
+    <comment>Update notice title (Linux Settings, Windows update banner): a newer release is available. {version} is the release version, for example 2026.10.5-1024555910; keep the "v" before it.</comment>
+  </data>
+  <data name="upd_downloaded_message" xml:space="preserve">
+    <value>この AppImage のフォルダに書き込めないため、検証済みのダウンロードを下に保存しました。手動で AppImage を置き換えてください。</value>
+    <comment>Linux Settings update notice when the app cannot replace itself: the verified file's path is shown in the row below.</comment>
+  </data>
+  <data name="upd_failed_checksum" xml:space="preserve">
+    <value>ダウンロードがリリースのチェックサムと一致しなかったため、破棄されました。クリックして再試行してください。</value>
+    <comment>Update notice error (Linux Settings, Windows update banner): the downloaded file failed its integrity check and was deleted.</comment>
+  </data>
+  <data name="upd_failed_download" xml:space="preserve">
+    <value>ダウンロードが完了しませんでした。接続を確認し、クリックして再試行してください。</value>
+    <comment>Update notice error (Linux Settings, Windows update banner): the release download failed.</comment>
+  </data>
+  <data name="upd_failed_install" xml:space="preserve">
+    <value>AppImage を置き換えられませんでした。フォルダのアクセス許可を確認し、クリックして再試行してください。</value>
+    <comment>Linux Settings update notice error: the verified download could not be swapped in for the running AppImage.</comment>
+  </data>
+  <data name="upd_install" xml:space="preserve">
+    <value>インストール</value>
+    <comment>Linux Settings update notice: button that downloads, verifies and installs the update.</comment>
+  </data>
+  <data name="upd_manual_install_message" xml:space="preserve">
+    <value>インストーラーが起動しませんでした(管理者の承認が必要です)。検証済みのダウンロードをエクスプローラーで表示しました — アプリを終了してから実行してください。</value>
+    <comment>Windows update banner when the installer could not be started: the user runs it by hand. Explorer is the Windows file manager.</comment>
+  </data>
+  <data name="upd_ready_message" xml:space="preserve">
+    <value>新しい AppImage は配置され、検証済みです。使い始めるには再起動してください。それまでは以前のファイルが隣に残ります。</value>
+    <comment>Linux Settings update notice once the update is installed and waiting for a relaunch.</comment>
+  </data>
+  <data name="upd_ready_title" xml:space="preserve">
+    <value>再起動の準備完了: v{}</value>
+    <comment>Linux Settings update notice title once the new AppImage is installed. {version} is the release version; keep the "v" before it.</comment>
+  </data>
+  <data name="upd_relaunch" xml:space="preserve">
+    <value>再起動</value>
+    <comment>Linux Settings update notice: button that restarts the app on the newly installed version.</comment>
+  </data>
+  <data name="upd_release_page" xml:space="preserve">
+    <value>リリースページ</value>
+    <comment>Linux Settings update notice: button that opens the release's download page in the browser.</comment>
+  </data>
+  <data name="upd_show_file" xml:space="preserve">
+    <value>ファイルを表示</value>
+    <comment>Update notice button (Linux Settings, Windows update banner) that opens the folder holding the verified download.</comment>
+  </data>
+  <data name="upd_stage_downloading" xml:space="preserve">
+    <value>アップデートをダウンロードしています…</value>
+    <comment>Update notice progress line (Linux Settings, Windows update banner) while the release downloads.</comment>
+  </data>
+  <data name="upd_stage_installing" xml:space="preserve">
+    <value>インストーラーを起動しています…</value>
+    <comment>Windows update banner progress line while the verified installer is being launched.</comment>
+  </data>
+  <data name="upd_stage_replacing" xml:space="preserve">
+    <value>AppImage を置き換えています…</value>
+    <comment>Linux Settings update notice progress line while the verified download replaces the running AppImage file.</comment>
+  </data>
+  <data name="upd_stage_verifying" xml:space="preserve">
+    <value>ダウンロードを検証しています…</value>
+    <comment>Update progress line (Linux Settings, Windows update banner, macOS Settings &gt; Software update) while the downloaded release is checked against its published checksum.</comment>
   </data>
   <data name="update" xml:space="preserve">
     <value>更新</value>
@@ -4597,6 +5025,18 @@
   <data name="when_you_refer_a_friend" xml:space="preserve">
     <value>友達を紹介するとき：</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="widget_chart_peak" xml:space="preserve">
+    <value>ピーク</value>
+    <comment>Throughput widget: lowercase word after the peak packet-rate figure, as in "1.2k pkt/s peak".</comment>
+  </data>
+  <data name="widget_intent_source_parameter" xml:space="preserve">
+    <value>ソース</value>
+    <comment>Title of a hidden parameter of the Connect/Disconnect control: which surface (widget, control, shortcut) made the request.</comment>
+  </data>
+  <data name="widget_refresh_intent_title" xml:space="preserve">
+    <value>URnetwork ウィジェットを更新</value>
+    <comment>Title of the action that refreshes the app's Home Screen widgets.</comment>
   </data>
   <data name="widgets" xml:space="preserve">
     <value>ウィジェット</value>

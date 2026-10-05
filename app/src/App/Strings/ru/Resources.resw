@@ -267,6 +267,14 @@
     <value>Совпадение</value>
     <comment>Connection inspector: label of the matched rule row.</comment>
   </data>
+  <data name="adv_mode_rpc_only" xml:space="preserve">
+    <value>только RPC</value>
+    <comment>Windows status strip (Advanced Mode), Session value: a session that talks to the service over RPC without a tunnel. Lowercase, a short status value.</comment>
+  </data>
+  <data name="adv_mode_tunnel" xml:space="preserve">
+    <value>туннель</value>
+    <comment>Windows status strip (Advanced Mode), Session value: a full tunnel session. Lowercase, a short status value.</comment>
+  </data>
   <data name="adv_na" xml:space="preserve">
     <value>—</value>
     <comment>Connection inspector: placeholder dash for a value that is not available.</comment>
@@ -301,7 +309,7 @@
   </data>
   <data name="adv_raw_status" xml:space="preserve">
     <value>Сырой статус</value>
-    <comment>Connection inspector: label of the raw status row.</comment>
+    <comment>Connection inspector (Linux) and Advanced Mode status strip (Windows): label of the raw status field.</comment>
   </data>
   <data name="adv_reason" xml:space="preserve">
     <value>Причина</value>
@@ -323,6 +331,26 @@
     <value>Переопределение маршрута</value>
     <comment>Connection inspector: decision reason, a route override applied.</comment>
   </data>
+  <data name="adv_routes" xml:space="preserve">
+    <value>Маршруты</value>
+    <comment>Windows status strip (Advanced Mode): label of the field that shows whether the tunnel's routes are installed.</comment>
+  </data>
+  <data name="adv_routes_dns_degraded" xml:space="preserve">
+    <value>вкл., DNS не применён</value>
+    <comment>Windows status strip (Advanced Mode), Routes value: routes are installed but the tunnel's DNS is not. Lowercase, a short status value.</comment>
+  </data>
+  <data name="adv_routes_kill_switch_armed" xml:space="preserve">
+    <value>выкл., Kill switch взведён</value>
+    <comment>Windows status strip (Advanced Mode), Routes value: no routes are installed and the kill switch is blocking traffic. Lowercase, a short status value.</comment>
+  </data>
+  <data name="adv_routes_no_firewall" xml:space="preserve">
+    <value>вкл., без защиты от утечек</value>
+    <comment>Windows status strip (Advanced Mode), Routes value: routes are installed but no leak-prevention firewall policy is in force. Lowercase, a short status value.</comment>
+  </data>
+  <data name="adv_rpc" xml:space="preserve">
+    <value>RPC</value>
+    <comment>Windows status strip (Advanced Mode): label of the field that shows the service's RPC endpoint (host:port). RPC is a technical term.</comment>
+  </data>
   <data name="adv_select_a_row" xml:space="preserve">
     <value>Выберите строку в разделе «Активность», чтобы изучить её</value>
     <comment>Connection inspector: hint to select a row in the Activity list.</comment>
@@ -338,6 +366,10 @@
   <data name="adv_session_exit_country" xml:space="preserve">
     <value>Страна выхода сессии</value>
     <comment>Connection inspector: label of the session exit country row.</comment>
+  </data>
+  <data name="adv_session_mode" xml:space="preserve">
+    <value>Сессия</value>
+    <comment>Windows status strip (Advanced Mode): label of the field that shows which kind of session the service granted (tunnel or rpc-only).</comment>
   </data>
   <data name="adv_unknown_exit" xml:space="preserve">
     <value>Нет в таблице маршрутизации</value>
@@ -742,6 +774,10 @@
     <value>Не удалось загрузить заблокированные местоположения.</value>
     <comment>Shown on the Blocked locations screen when the list could not be fetched, above a Retry button.</comment>
   </data>
+  <data name="blocked_locations_search_placeholder" xml:space="preserve">
+    <value>Поиск стран</value>
+    <comment>macOS Blocked locations screen: placeholder of the country search field.</comment>
+  </data>
   <data name="blocks" xml:space="preserve">
     <value>Блоки</value>
     <comment>Points leaderboard: stat tile label and sort chip. A block is one finalized payout epoch.</comment>
@@ -848,6 +884,14 @@
     <value>Не удалось открыть браузер. Скопируйте эту ссылку в браузер, чтобы завершить оплату:</value>
     <comment>Upgrade sheet: the system browser could not be opened for the hosted checkout url. The app appends the url itself on the next line (selectable) so the user can copy it into a browser by hand — never advancing to the waiting page with no payment page open.</comment>
   </data>
+  <data name="checkout_confirming_purchase" xml:space="preserve">
+    <value>Мы подтверждаем вашу покупку. Ваш тариф обновится автоматически.</value>
+    <comment>Purchase confirmation message while the app waits for the payment to be confirmed.</comment>
+  </data>
+  <data name="checkout_finish_in_browser" xml:space="preserve">
+    <value>Завершите в браузере.</value>
+    <comment>Purchase confirmation title after the app opened Stripe's checkout page in the browser.</comment>
+  </data>
   <data name="checkout_interrupted_confirming" xml:space="preserve">
     <value>Окно оплаты неожиданно закрылось. Если платёж прошёл, ваш тариф обновится здесь автоматически — покупать повторно не нужно.</value>
     <comment>Upgrade sheet waiting page: the embedded checkout webview crashed after the payment form had rendered, so a charge may already have gone through with only the redirect lost. Shown while the confirmation poll asks the server for the payment webhook; must never invite buying again.</comment>
@@ -855,6 +899,10 @@
   <data name="checkout_opened_in_browser" xml:space="preserve">
     <value>Завершите покупку в браузере. Ваш тариф обновится здесь автоматически, как только платеж будет подтвержден.</value>
     <comment>Shown after the app hands the user to the Stripe hosted checkout in the system browser. The app polls the server and flips the plan automatically when the payment webhook lands.</comment>
+  </data>
+  <data name="checkout_restore_checking" xml:space="preserve">
+    <value>Проверяем ваш тариф ещё раз.</value>
+    <comment>Message after Restore purchases in the Stripe-paid app: nothing to restore locally, the app re-reads the plan from the server.</comment>
   </data>
   <data name="choose_file" xml:space="preserve">
     <value>Выбрать файл</value>
@@ -996,6 +1044,10 @@
     <value>Партнёр</value>
     <comment>A label displayed next to a companion contract.</comment>
   </data>
+  <data name="conn_blocked_kill_switch" xml:space="preserve">
+    <value>Заблокировано — Kill switch включён</value>
+    <comment>Windows Connect page status when the connection is down and the kill switch is deliberately blocking this computer's traffic.</comment>
+  </data>
   <data name="conn_connect_on_launch" xml:space="preserve">
     <value>Подключаться автоматически при запуске приложения</value>
     <comment>Settings: switch that connects automatically when the app starts.</comment>
@@ -1004,13 +1056,93 @@
     <value>По умолчанию выключено. Когда включено, URnetwork подключается к выбранному провайдеру сразу после открытия приложения. Это действует со следующего запуска - сейчас подключения не будет.</value>
     <comment>Settings: explanation under the connect-on-launch switch.</comment>
   </data>
+  <data name="conn_degraded" xml:space="preserve">
+    <value>Соединение ухудшилось — переподключение</value>
+    <comment>Windows connection status (Connect page headline and tray tooltip) when a working connection dropped and the app is reconnecting on its own.</comment>
+  </data>
+  <data name="conn_disconnecting" xml:space="preserve">
+    <value>Отключение — ваш трафик всё ещё идёт через туннель</value>
+    <comment>Windows Connect page status while the tunnel is being stopped but its routes are still installed.</comment>
+  </data>
   <data name="conn_failed" xml:space="preserve">
     <value>Не удалось подключиться</value>
     <comment>Connect screen status when the connect attempt failed: no provider could be reached (the sdk's CONNECT_FAILED). The connection keeps trying, and the app offers Retry.</comment>
   </data>
+  <data name="conn_failed_detail" xml:space="preserve">
+    <value>Не удалось связаться ни с одним провайдером. Повторная попытка заново выстраивает соединение с нуля.</value>
+    <comment>Windows Connect page reason line when connecting failed.</comment>
+  </data>
+  <data name="conn_failsafe_armed" xml:space="preserve">
+    <value>Если в ближайшее время ничего не пройдёт, URnetwork автоматически отключит туннель, чтобы вы не остались без интернета.</value>
+    <comment>Windows Connect page: sentence appended to the line above when the service will stop a tunnel that carries nothing.</comment>
+  </data>
+  <data name="conn_failsafe_blocked" xml:space="preserve">
+    <value>Туннель не мог передавать трафик, поэтому URnetwork его отключил. Kill switch включён, поэтому ничто не покидает этот компьютер, пока вы снова не подключитесь или не выключите Kill switch, — утечек нет.</value>
+    <comment>Windows Connect page line after the service stopped a tunnel that carried nothing, while the kill switch keeps this computer blocked.</comment>
+  </data>
+  <data name="conn_failsafe_restored" xml:space="preserve">
+    <value>URnetwork отключил вас, чтобы вы оставались в сети: туннель работал, но через него ничего не проходило. Сейчас ваш трафик идёт напрямую и НЕ защищён. Нажмите «Подключить», чтобы попробовать снова.</value>
+    <comment>Windows Connect page line and tray notification after the service stopped a tunnel that carried nothing, with the kill switch off. Keep the emphasis on NOT.</comment>
+  </data>
+  <data name="conn_finding_providers" xml:space="preserve">
+    <value>Поиск провайдеров…</value>
+    <comment>Connection status while the app has providers but none is proven to work yet (Linux and Windows Connect page headline, Windows tray tooltip).</comment>
+  </data>
   <data name="conn_not_protected" xml:space="preserve">
     <value>Ваш интернет-трафик не защищён.</value>
     <comment>Connect page: warning that the internet traffic is not protected.</comment>
+  </data>
+  <data name="conn_reason_auth" xml:space="preserve">
+    <value>Не удаётся войти на платформу…</value>
+    <comment>Windows Connect page reason line while the app's sign-in to the URnetwork platform keeps failing.</comment>
+  </data>
+  <data name="conn_reason_platform" xml:space="preserve">
+    <value>Связь с платформой…</value>
+    <comment>Windows Connect page reason line while the app cannot reach the URnetwork platform (the API servers).</comment>
+  </data>
+  <data name="conn_reason_providers" xml:space="preserve">
+    <value>Провайдеры не отвечают — повторная попытка…</value>
+    <comment>Windows Connect page reason line while the selected providers do not answer.</comment>
+  </data>
+  <data name="conn_reason_rate_limited" xml:space="preserve">
+    <value>Превышен лимит запросов — ожидание…</value>
+    <comment>Windows Connect page reason line while the platform asks the app to slow down.</comment>
+  </data>
+  <data name="conn_traffic_blocked" xml:space="preserve">
+    <value>Сейчас нет работающего провайдера — ваш трафик заблокирован, а не открыт. Отключитесь, чтобы вернуться к обычному подключению.</value>
+    <comment>Windows Connect page line while connected but no provider carries traffic, with leak protection in force.</comment>
+  </data>
+  <data name="conn_traffic_blocked_unprotected" xml:space="preserve">
+    <value>Сейчас нет работающего провайдера — трафик, отправленный в туннель, никуда не уходит, а защита от утечек выключена, поэтому часть трафика может идти в обход. Отключитесь, чтобы вернуться к обычному подключению.</value>
+    <comment>Windows Connect page line while connected but no provider carries traffic, and leak protection (the firewall policy) is not in force.</comment>
+  </data>
+  <data name="conn_tray_blocked_kill_switch" xml:space="preserve">
+    <value>Заблокировано (Kill switch включён)</value>
+    <comment>Windows tray tooltip when the kill switch is deliberately blocking this computer's traffic.</comment>
+  </data>
+  <data name="conn_tray_blocked_no_tunnel" xml:space="preserve">
+    <value>Заблокировано — защита от утечек всё ещё действует, хотя туннель не поднят</value>
+    <comment>Windows tray tooltip when leak protection blocks traffic while no tunnel is up.</comment>
+  </data>
+  <data name="conn_tray_disconnecting" xml:space="preserve">
+    <value>Отключение — трафик всё ещё идёт через туннель</value>
+    <comment>Windows tray tooltip while the tunnel is being stopped but its routes are still installed.</comment>
+  </data>
+  <data name="conn_tray_failsafe_blocked" xml:space="preserve">
+    <value>Туннель не мог передавать трафик, поэтому URnetwork его отключил. Kill switch включён, поэтому этот компьютер остаётся заблокированным и утечек нет. Подключитесь снова или выключите Kill switch в этом меню.</value>
+    <comment>Windows tray notification after the service stopped a tunnel that carried nothing, while the kill switch keeps this computer blocked. "This menu" is the tray icon's menu.</comment>
+  </data>
+  <data name="conn_tray_failsafe_stopped" xml:space="preserve">
+    <value>Отключено (сбой туннеля)</value>
+    <comment>Windows tray tooltip after the service stopped a tunnel that carried nothing.</comment>
+  </data>
+  <data name="conn_tray_force_tunnel_off" xml:space="preserve">
+    <value>Принудительно выключить туннель (восстановление)</value>
+    <comment>Windows tray menu item that stops the tunnel directly when the normal Disconnect is stuck.</comment>
+  </data>
+  <data name="conn_tray_lift_kill_switch" xml:space="preserve">
+    <value>Выключить Kill switch (разблокировать этот компьютер)</value>
+    <comment>Windows tray menu item that lifts the kill switch's block on this computer.</comment>
   </data>
   <data name="connect" xml:space="preserve">
     <value>Подключить</value>
@@ -1162,7 +1294,7 @@
   </data>
   <data name="contribute_bandwidth" xml:space="preserve">
     <value>Делитесь пропускной способностью</value>
-    <comment>Used in Shared/Views/Introduction/IntroductionParticipateSettingsView.swift.</comment>
+    <comment>Onboarding: title of the step that asks whether this device may share bandwidth with the network (provide).</comment>
   </data>
   <data name="control_doh_error_https_required" xml:space="preserve">
     <value>URL должен начинаться с https://.</value>
@@ -1344,13 +1476,25 @@
     <value>На этом устройстве нет службы авторизации polkit, поэтому системная служба URnetwork использует группу 'urnetwork'. Добавьте в неё своего пользователя, затем выйдите из системы и войдите снова.</value>
     <comment>Connect error: no polkit service, the daemon falls back to the urnetwork group.</comment>
   </data>
+  <data name="daemon_legacy_group_auth" xml:space="preserve">
+    <value>Системная служба URnetwork на этом устройстве — старая версия, которой всё ещё нужно членство в группе. Обновите службу или добавьте своего пользователя в группу 'urnetwork', затем выйдите из системы и войдите снова.</value>
+    <comment>Linux notice when an older system service refuses the app's user. 'urnetwork' is the literal Linux group name; keep it as is.</comment>
+  </data>
   <data name="daemon_no_answer" xml:space="preserve">
     <value>Системная служба URnetwork не ответила.</value>
     <comment>Error: the system service did not answer.</comment>
   </data>
+  <data name="daemon_not_reachable" xml:space="preserve">
+    <value>Не удалось связаться с системной службой URnetwork.</value>
+    <comment>Linux notice when the app cannot reach the URnetwork system service for an unexpected reason.</comment>
+  </data>
   <data name="daemon_sdk_mismatch" xml:space="preserve">
     <value>Сборки приложения и системной службы URnetwork не совпадают. Обновите оба компонента до одной версии.</value>
     <comment>Shown on the linux home screen when the app and the urnetworkd system service carry different URnetwork SDK builds (they update on independent schedules and must match exactly). The fix is updating both to the same release.</comment>
+  </data>
+  <data name="daemon_stale_sandbox_mount" xml:space="preserve">
+    <value>Системная служба URnetwork перезапустилась, пока это приложение было открыто. Закройте приложение и откройте его снова, чтобы заново подключиться к службе.</value>
+    <comment>Linux notice when the app cannot reach the URnetwork system service because the service restarted under a sandboxed (Flatpak) app.</comment>
   </data>
   <data name="daemon_too_old" xml:space="preserve">
     <value>Системная служба URnetwork устарела. Обновите её, чтобы подключиться.</value>
@@ -2108,6 +2252,98 @@
     <value>Устройства</value>
     <comment>Provider list group title for devices</comment>
   </data>
+  <data name="direct_update_allow" xml:space="preserve">
+    <value>Разрешить</value>
+    <comment>macOS folder-access panel button that grants the app access to the Applications folder for the update.</comment>
+  </data>
+  <data name="direct_update_allow_applications" xml:space="preserve">
+    <value>Чтобы установить обновление, разрешите URnetwork заменить себя в папке «Программы». Выберите «Программы» и нажмите «Разрешить».</value>
+    <comment>macOS folder-access panel message when installing an update: the user selects the Applications folder to grant access. Keep "Allow" consistent with the panel's button.</comment>
+  </data>
+  <data name="direct_update_available" xml:space="preserve">
+    <value>Доступно обновление: {}</value>
+    <comment>macOS Settings &gt; Software update status when a newer release exists. {version} is its version.</comment>
+  </data>
+  <data name="direct_update_check" xml:space="preserve">
+    <value>Проверить обновления</value>
+    <comment>macOS Settings &gt; Software update button that checks now.</comment>
+  </data>
+  <data name="direct_update_check_failed" xml:space="preserve">
+    <value>Не удалось проверить обновления: {}</value>
+    <comment>macOS Settings &gt; Software update error. {detail} is a short technical reason (often English, from the system).</comment>
+  </data>
+  <data name="direct_update_checking" xml:space="preserve">
+    <value>Проверка обновлений…</value>
+    <comment>macOS Settings &gt; Software update status while checking.</comment>
+  </data>
+  <data name="direct_update_checksum_failed" xml:space="preserve">
+    <value>Загруженный файл не совпал с контрольной суммой выпуска и был удалён.</value>
+    <comment>macOS Settings &gt; Software update error: the downloaded file failed its integrity check and was deleted.</comment>
+  </data>
+  <data name="direct_update_development_build" xml:space="preserve">
+    <value>Сборка для разработки; новейший выпуск — {}.</value>
+    <comment>macOS Settings &gt; Software update status on a development build, which never updates itself. {version} is the newest release version.</comment>
+  </data>
+  <data name="direct_update_download_failed" xml:space="preserve">
+    <value>Загрузка не удалась: {}</value>
+    <comment>macOS Settings &gt; Software update error. {detail} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_downloading_version" xml:space="preserve">
+    <value>Загрузка {}…</value>
+    <comment>macOS Settings &gt; Software update status while the release downloads. {version} is its version.</comment>
+  </data>
+  <data name="direct_update_install" xml:space="preserve">
+    <value>Установить обновление</value>
+    <comment>macOS Settings &gt; Software update button that downloads, verifies and installs the update.</comment>
+  </data>
+  <data name="direct_update_install_failed" xml:space="preserve">
+    <value>Не удалось установить обновление: {}</value>
+    <comment>macOS Settings &gt; Software update error. {detail} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_installing" xml:space="preserve">
+    <value>Установка обновления…</value>
+    <comment>macOS Settings &gt; Software update status while the verified update is installed.</comment>
+  </data>
+  <data name="direct_update_last_checked" xml:space="preserve">
+    <value>Последняя проверка: {}</value>
+    <comment>macOS Settings &gt; Software update: when updates were last checked. {when} is a relative date, for example "5 minutes ago" or "yesterday".</comment>
+  </data>
+  <data name="direct_update_manual_install" xml:space="preserve">
+    <value>Версия {} загружена и проверена. Перетащите новый URnetwork в папку «Программы» и откройте его оттуда.</value>
+    <comment>macOS Settings &gt; Software update status when the app could not replace itself. {version} is the downloaded release's version.</comment>
+  </data>
+  <data name="direct_update_not_checked" xml:space="preserve">
+    <value>Обновления ещё не проверялись.</value>
+    <comment>macOS Settings &gt; Software update status before the first check.</comment>
+  </data>
+  <data name="direct_update_relaunching" xml:space="preserve">
+    <value>Перезапуск URnetwork…</value>
+    <comment>macOS Settings &gt; Software update status while the app restarts on the new version.</comment>
+  </data>
+  <data name="direct_update_section_title" xml:space="preserve">
+    <value>Обновление ПО</value>
+    <comment>macOS Settings: title of the section that checks for and installs app updates (direct-download app).</comment>
+  </data>
+  <data name="direct_update_show_in_finder" xml:space="preserve">
+    <value>Показать в Finder</value>
+    <comment>macOS Settings &gt; Software update button that reveals the downloaded update in Finder (the macOS file manager).</comment>
+  </data>
+  <data name="direct_update_signature_rejected" xml:space="preserve">
+    <value>Обновление отклонено: {}</value>
+    <comment>macOS Settings &gt; Software update error when the downloaded app's code signature did not check out. {detail} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_unpack_failed" xml:space="preserve">
+    <value>Не удалось распаковать загруженный файл: {}</value>
+    <comment>macOS Settings &gt; Software update error. {detail} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_unusable_release" xml:space="preserve">
+    <value>Выпуск {0} не может быть установлен приложением ({1}).</value>
+    <comment>macOS Settings &gt; Software update error when the newest release has no file this app can install. {version} is the release version; {reason} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_up_to_date" xml:space="preserve">
+    <value>У вас последняя версия URnetwork.</value>
+    <comment>macOS Settings &gt; Software update status when no newer release exists.</comment>
+  </data>
   <data name="disable_ignore_battery_hint" xml:space="preserve">
     <value>Чтобы отключить, перейдите в Использование батареи приложением в системных настройках</value>
     <comment>Call to action</comment>
@@ -2357,7 +2593,7 @@
     <comment>Section header of the per-transport enable toggles shown when the transport mode is Auto.</comment>
   </data>
   <data name="enabled_under_auto_footer" xml:space="preserve">
-    <value>Указаны в порядке предпочтения: сначала H3 и H1, затем whodis, затем whodis pump. Порядок фиксирован. Хотя бы один транспорт всегда остаётся включённым.</value>
+    <value>Указаны в порядке предпочтения: сначала H1, затем H3, whodis и whodis pump. Порядок фиксирован. Хотя бы один транспорт всегда остаётся включённым.</value>
     <comment>Footer of the Auto transports section explaining the fixed preference order.</comment>
   </data>
   <data name="enjoying_urnetwork" xml:space="preserve">
@@ -2402,6 +2638,10 @@
   <data name="enter_urnetwork" xml:space="preserve">
     <value>Войти в URnetwork</value>
     <comment>Used in Authenticate/LoginInitial/GuestModeSheet.swift.</comment>
+  </data>
+  <data name="enter_wallet_address" xml:space="preserve">
+    <value>Введите адрес кошелька</value>
+    <comment>Used in Main/Account/Wallets/ConnectWalletSheet/EnterWalletAddress/EnterWalletAddressView.swift.</comment>
   </data>
   <data name="epoch_column_epoch_linux" xml:space="preserve">
     <value>Эпоха</value>
@@ -3499,6 +3739,10 @@
     <value>Нужно больше данных и выше скорость?</value>
     <comment>Call to action</comment>
   </data>
+  <data name="net_points_earned" xml:space="preserve">
+    <value>заработано очков (нетто)</value>
+    <comment>Earnings page: lowercase caption under the net points total.</comment>
+  </data>
   <data name="net_provided" xml:space="preserve">
     <value>Предоставлено (нетто)</value>
     <comment>Call to action</comment>
@@ -3575,6 +3819,10 @@
     <value>Кто-то пригласил вас присоединиться 🥳 
 Получите свой бонус, создав сеть!</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="network_earnings" xml:space="preserve">
+    <value>Доход сети</value>
+    <comment>Used in Main/Account/AccountRootView.swift.</comment>
   </data>
   <data name="network_name_changed_to_n" xml:space="preserve">
     <value>Имя сети изменено на {}</value>
@@ -3759,6 +4007,10 @@
   <data name="none" xml:space="preserve">
     <value>Нет</value>
     <comment>Empty value: the VLESS settings show it for no security and no flow (all apps), and the Referrals section shows it on windows and linux when no referral network is linked.</comment>
+  </data>
+  <data name="not_now" xml:space="preserve">
+    <value>Не сейчас</value>
+    <comment>macOS button that dismisses the prompt to enable the VPN system extension for now.</comment>
   </data>
   <data name="notifications_label" xml:space="preserve">
     <value>Уведомления</value>
@@ -4049,6 +4301,10 @@
     <value>Экономия {}%</value>
     <comment>Plan picker: the saving badge on the yearly card; the number is the whole percent saved against twelve monthly payments.</comment>
   </data>
+  <data name="plan_terms_first_year_price" xml:space="preserve">
+    <value>{0} за первый год, затем {1}/год. Отменить можно в любой момент.</value>
+    <comment>Plan picker terms line for the yearly plan with a first-year offer and no free trial. {first_year_price} and {yearly_price} are formatted prices, for example $39.99.</comment>
+  </data>
   <data name="plan_terms_yearly.one" xml:space="preserve">
     <value>{0} день бесплатно, далее {1}/год. Отмена в любой момент.</value>
     <comment>Plan picker: the terms line under the button for the yearly plan with its trial.</comment>
@@ -4064,6 +4320,10 @@
   <data name="plan_terms_yearly.other" xml:space="preserve">
     <value>{0} дней бесплатно, далее {1}/год. Отмена в любой момент.</value>
     <comment>Plan picker: the terms line under the button for the yearly plan with its trial.</comment>
+  </data>
+  <data name="plan_terms_yearly_billed_today" xml:space="preserve">
+    <value>{} списывается сегодня, затем каждый год. Отменить можно в любой момент.</value>
+    <comment>Plan picker terms line for the yearly plan without a trial or offer. {yearly_price} is a formatted price, for example $59.99.</comment>
   </data>
   <data name="please_install_phantom_or_solflare_to_use_this" xml:space="preserve">
     <value>Пожалуйста, установите Phantom или Solflare, чтобы использовать эту функцию</value>
@@ -5050,7 +5310,7 @@
   </data>
   <data name="seedphrase_paste_hint" xml:space="preserve">
     <value>Вставьте сюда сид-фразу из 12 или 24 слов</value>
-    <comment>Seed sign-in sheet: placeholder of the seedphrase field (android accepts 12 or 24 words).</comment>
+    <comment>Seed sign-in sheet: placeholder of the seedphrase field (android and windows accept 12 or 24 words).</comment>
   </data>
   <data name="seedphrase_required" xml:space="preserve">
     <value>Введите сид-фразу</value>
@@ -6646,6 +6906,22 @@
     <value>Используйте ASCII-форму имени.</value>
     <comment>Split rules: validation error for a host name with non-ASCII characters; the rule wants the punycode form.</comment>
   </data>
+  <data name="split_rule_mode_excluded_description" xml:space="preserve">
+    <value>Выбранные хосты обходят туннель.</value>
+    <comment>Split rule editor: description of the Route locally mode.</comment>
+  </data>
+  <data name="split_rule_mode_included_description" xml:space="preserve">
+    <value>По умолчанию: выбранные хосты используют туннель без закрепления.</value>
+    <comment>Split rule editor: description of the Route through VPN mode (the default). A pin is the Keep on one provider mode.</comment>
+  </data>
+  <data name="split_rule_mode_pinned_description" xml:space="preserve">
+    <value>Выбранные хосты дольше остаются у своего провайдера, а не переносятся при первых признаках проблем, поэтому сайт реже меняет IP-адрес во время сессии.</value>
+    <comment>Split rule editor: description of the Keep on one provider mode.</comment>
+  </data>
+  <data name="split_rule_mode_pinned_title" xml:space="preserve">
+    <value>Держать у одного провайдера</value>
+    <comment>Split rule editor: title of the mode that keeps the selected hosts on the same VPN provider longer.</comment>
+  </data>
   <data name="split_rule_preset_google_meet_calls" xml:space="preserve">
     <value>Звонки Google Meet</value>
     <comment>Split rules preset: Google Meet call media, from the address ranges Google publishes for routing it outside a VPN. Keep the product name Google Meet unchanged.</comment>
@@ -6662,6 +6938,10 @@
     <value>Активность маршрутизации появится здесь при подключении.</value>
     <comment>A description of the content of the "Activity" section of the split rules view.</comment>
   </data>
+  <data name="split_rules_connect_to_load" xml:space="preserve">
+    <value>Подключитесь один раз, чтобы загрузить уже созданные правила.</value>
+    <comment>Split rules screen: note under the disabled Add a rule button before the app has connected once and loaded the saved rules.</comment>
+  </data>
   <data name="split_rules_hint" xml:space="preserve">
     <value>Нажмите на трафик ниже, чтобы направить его локально, в обход туннеля.</value>
     <comment>A description of how to route traffic locally.</comment>
@@ -6670,9 +6950,17 @@
     <value>Добавьте хост выше или нажмите на трафик ниже, чтобы направить его локально, в обход туннеля.</value>
     <comment>Split rules on android, which has a host input above the traffic list: how to add to the rule. The apple/linux screens without the input keep split_rules_hint.</comment>
   </data>
+  <data name="split_rules_host_hint_modes" xml:space="preserve">
+    <value>Добавьте хост выше или нажмите на трафик ниже, чтобы направить его локально или закрепить за одним провайдером.</value>
+    <comment>Split rules screen: hint shown while there are no rules yet. Routing locally sends traffic outside the VPN; holding to one provider keeps a site on the same VPN exit.</comment>
+  </data>
   <data name="split_rules_info_note" xml:space="preserve">
     <value>Исключения применяются ко всему связанному сетевому кластеру, поэтому сопутствующий трафик исключается вместе.</value>
     <comment>transfer stats and split rules</comment>
+  </data>
+  <data name="split_rules_info_note_modes" xml:space="preserve">
+    <value>Правила применяются ко всему связанному сетевому кластеру, поэтому сопутствующий трафик учитывается вместе.</value>
+    <comment>Split rules screen: note that a rule matches every host in the same network cluster (related hosts of one site or service), whatever the rule's mode.</comment>
   </data>
   <data name="split_rules_match_sites_not_apps" xml:space="preserve">
     <value>Правила разделения применяются к сайтам и адресам, а не к приложениям: Apple разрешает VPN для отдельных приложений только на устройствах, которыми управляет организация (MDM). Чтобы приложение работало вне VPN, направьте сайты, которые оно использует, локально или начните с шаблона. Адреса локальной сети уже идут в обход VPN.</value>
@@ -6685,6 +6973,14 @@
   <data name="split_rules_start_from_preset" xml:space="preserve">
     <value>Начать с шаблона</value>
     <comment>Split rules screen: the menu that starts a route-locally rule from a preset, the address ranges a service publishes for use outside a VPN.</comment>
+  </data>
+  <data name="sso_browser_open_failed" xml:space="preserve">
+    <value>Не удалось открыть браузер. Попробуйте снова.</value>
+    <comment>macOS error when adding a sign-in method could not open the browser for the provider's sign-in page.</comment>
+  </data>
+  <data name="sso_sign_in_timed_out" xml:space="preserve">
+    <value>Время на вход истекло. Попробуйте снова.</value>
+    <comment>Error when a browser sign-in (Google or Apple through the browser) took too long and expired.</comment>
   </data>
   <data name="start_earning_join" xml:space="preserve">
     <value>Чтобы начать зарабатывать, присоединяйтесь к сети</value>
@@ -6758,6 +7054,10 @@
     <value>Подписаться</value>
     <comment>Button on the plan picker for the monthly plan, which has no free trial.</comment>
   </data>
+  <data name="subscription_portal_open_failed" xml:space="preserve">
+    <value>Не удалось открыть портал подписки. Попробуйте снова.</value>
+    <comment>Snackbar error when the Stripe subscription management page (Manage subscription) could not be opened.</comment>
+  </data>
   <data name="subscription_purchased_under_different_account" xml:space="preserve">
     <value>Ваша подписка была оформлена в другом аккаунте. Войдите в этот аккаунт, чтобы пользоваться ею.</value>
     <comment>The store purchase belongs to a different network than the one logged in — crediting must not go to the wrong account, so tell the user which way out exists. Apple: restore-purchases outcome (Shared/ViewModels/AppStoreSubscriptionManager.swift). Android: terminal `wrong_network` answer from the Play purchase report (google/PlanViewModel.kt); the purchase is still acknowledged so Play does not auto-refund it.</comment>
@@ -6786,9 +7086,41 @@
     <value>Pro</value>
     <comment>Display name for the paid plan. The WIRE value stays "supporter" (subscription_type / current_subscription.plan) because already-shipped app versions parse that string; only what the user reads changes.</comment>
   </data>
+  <data name="svc_action_failed" xml:space="preserve">
+    <value>Действие не завершилось — служба не изменилась. Подробности — в логах приложения.</value>
+    <comment>Windows banner text when installing, starting or updating the VPN service failed.</comment>
+  </data>
   <data name="svc_service_label" xml:space="preserve">
     <value>Служба VPN</value>
     <comment>Settings: label of the VPN service row.</comment>
+  </data>
+  <data name="svc_setup_action" xml:space="preserve">
+    <value>Настроить</value>
+    <comment>Windows banner button that installs the VPN service (Windows asks for administrator permission).</comment>
+  </data>
+  <data name="svc_setup_message" xml:space="preserve">
+    <value>URnetwork использует службу Windows для передачи трафика. Один щелчок — Windows запросит разрешение администратора.</value>
+    <comment>Windows banner text under 'Set up the VPN service'.</comment>
+  </data>
+  <data name="svc_setup_title" xml:space="preserve">
+    <value>Настройте службу VPN</value>
+    <comment>Windows banner title when the URnetwork Windows service that carries traffic is not installed yet.</comment>
+  </data>
+  <data name="svc_start_action" xml:space="preserve">
+    <value>Запустить</value>
+    <comment>Windows banner button that starts the stopped VPN service.</comment>
+  </data>
+  <data name="svc_start_message" xml:space="preserve">
+    <value>Служба установлена, но не запущена.</value>
+    <comment>Windows banner text under 'Start the VPN service'.</comment>
+  </data>
+  <data name="svc_start_title" xml:space="preserve">
+    <value>Запустите службу VPN</value>
+    <comment>Windows banner title when the VPN service is installed but stopped.</comment>
+  </data>
+  <data name="svc_uac_declined" xml:space="preserve">
+    <value>Windows запросила разрешение, и окно запроса было закрыто. Нажмите ещё раз, когда будете готовы.</value>
+    <comment>Windows banner text after the user closed the administrator permission (UAC) prompt without approving.</comment>
   </data>
   <data name="svc_uninstall_action" xml:space="preserve">
     <value>Удалить</value>
@@ -6798,9 +7130,25 @@
     <value>Это остановит службу URnetwork и удалит её юнит systemd. Приложение не сможет подключаться, пока служба не будет настроена заново. Потребуется разрешение администратора.</value>
     <comment>Settings: confirmation text before uninstalling the VPN service.</comment>
   </data>
+  <data name="svc_uninstall_confirm_windows" xml:space="preserve">
+    <value>Это остановит службу URnetwork и удалит её из Windows. Приложение не сможет подключаться, пока служба не будет настроена заново. Windows запросит разрешение администратора.</value>
+    <comment>Windows Settings: confirmation dialog before uninstalling the VPN service.</comment>
+  </data>
   <data name="svc_uninstall_note" xml:space="preserve">
     <value>Удалить службу systemd, через которую URnetwork передаёт трафик.</value>
     <comment>Settings: explanation under the uninstall service button.</comment>
+  </data>
+  <data name="svc_uninstall_note_windows" xml:space="preserve">
+    <value>Удалить службу Windows, через которую URnetwork передаёт трафик.</value>
+    <comment>Windows Settings &gt; VPN service row: what the Uninstall button removes.</comment>
+  </data>
+  <data name="svc_update_message" xml:space="preserve">
+    <value>Версия установленной службы отличается от версии этого приложения.</value>
+    <comment>Windows banner text under 'Update the VPN service'. The two version numbers follow it in parentheses.</comment>
+  </data>
+  <data name="svc_update_title" xml:space="preserve">
+    <value>Обновите службу VPN</value>
+    <comment>Windows banner title when the installed VPN service is a different version than the app.</comment>
   </data>
   <data name="switch_account" xml:space="preserve">
     <value>Сменить аккаунт</value>
@@ -7096,6 +7444,82 @@
   <data name="upd_auto_check_note" xml:space="preserve">
     <value>Искать новые выпуски вскоре после запуска и каждые шесть часов. Без нажатия ничего не устанавливается.</value>
     <comment>Settings: explanation under the automatic update check switch.</comment>
+  </data>
+  <data name="upd_available_appimage_message" xml:space="preserve">
+    <value>Одним щелчком выпуск загружается, проверяется по контрольной сумме выпуска и заменяет этот AppImage. Служба VPN обновляется отдельно.</value>
+    <comment>Linux Settings update notice, AppImage installs: what the Install button does. The AppImage is the single-file Linux app; the VPN service is the separate system service package.</comment>
+  </data>
+  <data name="upd_available_msi_message" xml:space="preserve">
+    <value>Одним щелчком выпуск загружается, проверяется и запускается его установщик, который обновляет приложение и службу VPN. На время установки приложение закроется.</value>
+    <comment>Windows update banner: what the Update button does (downloads the MSI installer, checks it, runs it).</comment>
+  </data>
+  <data name="upd_available_package_message" xml:space="preserve">
+    <value>Загрузите {} со страницы выпуска, затем выполните команду ниже.</value>
+    <comment>Linux Settings update notice, package installs (.deb, .rpm, tarball) that the app does not replace itself. {file} is the release file name, for example urnetwork_2026.10.5_amd64.deb. The shell command is shown in the row below.</comment>
+  </data>
+  <data name="upd_available_title_version" xml:space="preserve">
+    <value>Доступно обновление: v{}</value>
+    <comment>Update notice title (Linux Settings, Windows update banner): a newer release is available. {version} is the release version, for example 2026.10.5-1024555910; keep the "v" before it.</comment>
+  </data>
+  <data name="upd_downloaded_message" xml:space="preserve">
+    <value>Папка этого AppImage недоступна для записи, поэтому проверенный файл сохранён ниже. Замените им AppImage вручную.</value>
+    <comment>Linux Settings update notice when the app cannot replace itself: the verified file's path is shown in the row below.</comment>
+  </data>
+  <data name="upd_failed_checksum" xml:space="preserve">
+    <value>Загруженный файл не совпал с контрольными суммами выпуска и был удалён. Нажмите, чтобы попробовать снова.</value>
+    <comment>Update notice error (Linux Settings, Windows update banner): the downloaded file failed its integrity check and was deleted.</comment>
+  </data>
+  <data name="upd_failed_download" xml:space="preserve">
+    <value>Загрузка не завершилась. Проверьте подключение и нажмите, чтобы попробовать снова.</value>
+    <comment>Update notice error (Linux Settings, Windows update banner): the release download failed.</comment>
+  </data>
+  <data name="upd_failed_install" xml:space="preserve">
+    <value>Не удалось заменить AppImage. Проверьте права доступа к папке и нажмите, чтобы попробовать снова.</value>
+    <comment>Linux Settings update notice error: the verified download could not be swapped in for the running AppImage.</comment>
+  </data>
+  <data name="upd_install" xml:space="preserve">
+    <value>Установить</value>
+    <comment>Linux Settings update notice: button that downloads, verifies and installs the update.</comment>
+  </data>
+  <data name="upd_manual_install_message" xml:space="preserve">
+    <value>Установщик не запустился (нужно одобрение администратора). Проверенный файл показан в Проводнике — закройте приложение и запустите его.</value>
+    <comment>Windows update banner when the installer could not be started: the user runs it by hand. Explorer is the Windows file manager.</comment>
+  </data>
+  <data name="upd_ready_message" xml:space="preserve">
+    <value>Новый AppImage на месте и проверен. Перезапустите приложение, чтобы начать им пользоваться; до тех пор предыдущий файл хранится рядом.</value>
+    <comment>Linux Settings update notice once the update is installed and waiting for a relaunch.</comment>
+  </data>
+  <data name="upd_ready_title" xml:space="preserve">
+    <value>Готово к перезапуску: v{}</value>
+    <comment>Linux Settings update notice title once the new AppImage is installed. {version} is the release version; keep the "v" before it.</comment>
+  </data>
+  <data name="upd_relaunch" xml:space="preserve">
+    <value>Перезапустить</value>
+    <comment>Linux Settings update notice: button that restarts the app on the newly installed version.</comment>
+  </data>
+  <data name="upd_release_page" xml:space="preserve">
+    <value>Страница выпуска</value>
+    <comment>Linux Settings update notice: button that opens the release's download page in the browser.</comment>
+  </data>
+  <data name="upd_show_file" xml:space="preserve">
+    <value>Показать файл</value>
+    <comment>Update notice button (Linux Settings, Windows update banner) that opens the folder holding the verified download.</comment>
+  </data>
+  <data name="upd_stage_downloading" xml:space="preserve">
+    <value>Загрузка обновления…</value>
+    <comment>Update notice progress line (Linux Settings, Windows update banner) while the release downloads.</comment>
+  </data>
+  <data name="upd_stage_installing" xml:space="preserve">
+    <value>Запуск установщика…</value>
+    <comment>Windows update banner progress line while the verified installer is being launched.</comment>
+  </data>
+  <data name="upd_stage_replacing" xml:space="preserve">
+    <value>Замена AppImage…</value>
+    <comment>Linux Settings update notice progress line while the verified download replaces the running AppImage file.</comment>
+  </data>
+  <data name="upd_stage_verifying" xml:space="preserve">
+    <value>Проверка загруженного файла…</value>
+    <comment>Update progress line (Linux Settings, Windows update banner, macOS Settings &gt; Software update) while the downloaded release is checked against its published checksum.</comment>
   </data>
   <data name="update" xml:space="preserve">
     <value>Обновить</value>
@@ -7526,6 +7950,10 @@
     <value>Когда вы приглашаете друга:</value>
     <comment>Call to action</comment>
   </data>
+  <data name="widget_chart_peak" xml:space="preserve">
+    <value>пик</value>
+    <comment>Throughput widget: lowercase word after the peak packet-rate figure, as in "1.2k pkt/s peak".</comment>
+  </data>
   <data name="widget_client" xml:space="preserve">
     <value>Клиент</value>
     <comment>Dashboard widget chart title: this device's own traffic.</comment>
@@ -7569,6 +7997,10 @@
   <data name="widget_globe_description" xml:space="preserve">
     <value>Ваши подключённые провайдеры на глобусе.</value>
     <comment>Description of the provider globe widget in the widget gallery.</comment>
+  </data>
+  <data name="widget_intent_source_parameter" xml:space="preserve">
+    <value>Источник</value>
+    <comment>Title of a hidden parameter of the Connect/Disconnect control: which surface (widget, control, shortcut) made the request.</comment>
   </data>
   <data name="widget_more_providers" xml:space="preserve">
     <value>+ ещё {}</value>
@@ -7665,6 +8097,10 @@
   <data name="widget_quick_tile_added" xml:space="preserve">
     <value>Плитка быстрого подключения добавлена</value>
     <comment>Toast after the system added the Quick Settings tile.</comment>
+  </data>
+  <data name="widget_refresh_intent_title" xml:space="preserve">
+    <value>Обновить виджеты URnetwork</value>
+    <comment>Title of the action that refreshes the app's Home Screen widgets.</comment>
   </data>
   <data name="widget_toggle_intent_title" xml:space="preserve">
     <value>Переключить VPN URnetwork</value>

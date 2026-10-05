@@ -267,6 +267,14 @@
     <value>Übereinstimmung</value>
     <comment>Connection inspector: label of the matched rule row.</comment>
   </data>
+  <data name="adv_mode_rpc_only" xml:space="preserve">
+    <value>nur RPC</value>
+    <comment>Windows status strip (Advanced Mode), Session value: a session that talks to the service over RPC without a tunnel. Lowercase, a short status value.</comment>
+  </data>
+  <data name="adv_mode_tunnel" xml:space="preserve">
+    <value>Tunnel</value>
+    <comment>Windows status strip (Advanced Mode), Session value: a full tunnel session. Lowercase, a short status value.</comment>
+  </data>
   <data name="adv_na" xml:space="preserve">
     <value>—</value>
     <comment>Connection inspector: placeholder dash for a value that is not available.</comment>
@@ -301,7 +309,7 @@
   </data>
   <data name="adv_raw_status" xml:space="preserve">
     <value>Rohstatus</value>
-    <comment>Connection inspector: label of the raw status row.</comment>
+    <comment>Connection inspector (Linux) and Advanced Mode status strip (Windows): label of the raw status field.</comment>
   </data>
   <data name="adv_reason" xml:space="preserve">
     <value>Grund</value>
@@ -323,6 +331,26 @@
     <value>Routen-Override</value>
     <comment>Connection inspector: decision reason, a route override applied.</comment>
   </data>
+  <data name="adv_routes" xml:space="preserve">
+    <value>Routen</value>
+    <comment>Windows status strip (Advanced Mode): label of the field that shows whether the tunnel's routes are installed.</comment>
+  </data>
+  <data name="adv_routes_dns_degraded" xml:space="preserve">
+    <value>an, DNS nicht angewendet</value>
+    <comment>Windows status strip (Advanced Mode), Routes value: routes are installed but the tunnel's DNS is not. Lowercase, a short status value.</comment>
+  </data>
+  <data name="adv_routes_kill_switch_armed" xml:space="preserve">
+    <value>aus, Kill switch aktiv</value>
+    <comment>Windows status strip (Advanced Mode), Routes value: no routes are installed and the kill switch is blocking traffic. Lowercase, a short status value.</comment>
+  </data>
+  <data name="adv_routes_no_firewall" xml:space="preserve">
+    <value>an, kein Leckschutz</value>
+    <comment>Windows status strip (Advanced Mode), Routes value: routes are installed but no leak-prevention firewall policy is in force. Lowercase, a short status value.</comment>
+  </data>
+  <data name="adv_rpc" xml:space="preserve">
+    <value>RPC</value>
+    <comment>Windows status strip (Advanced Mode): label of the field that shows the service's RPC endpoint (host:port). RPC is a technical term.</comment>
+  </data>
   <data name="adv_select_a_row" xml:space="preserve">
     <value>Wähle in der Aktivität eine Zeile zum Untersuchen aus</value>
     <comment>Connection inspector: hint to select a row in the Activity list.</comment>
@@ -338,6 +366,10 @@
   <data name="adv_session_exit_country" xml:space="preserve">
     <value>Exit-Land der Sitzung</value>
     <comment>Connection inspector: label of the session exit country row.</comment>
+  </data>
+  <data name="adv_session_mode" xml:space="preserve">
+    <value>Sitzung</value>
+    <comment>Windows status strip (Advanced Mode): label of the field that shows which kind of session the service granted (tunnel or rpc-only).</comment>
   </data>
   <data name="adv_unknown_exit" xml:space="preserve">
     <value>Nicht in der Routing-Tabelle</value>
@@ -726,6 +758,10 @@
     <value>Blockierte Standorte konnten nicht geladen werden.</value>
     <comment>Shown on the Blocked locations screen when the list could not be fetched, above a Retry button.</comment>
   </data>
+  <data name="blocked_locations_search_placeholder" xml:space="preserve">
+    <value>Länder suchen</value>
+    <comment>macOS Blocked locations screen: placeholder of the country search field.</comment>
+  </data>
   <data name="blocks" xml:space="preserve">
     <value>Blöcke</value>
     <comment>Points leaderboard: stat tile label and sort chip. A block is one finalized payout epoch.</comment>
@@ -832,6 +868,14 @@ richtig auf</value>
     <value>Wir konnten deinen Browser nicht öffnen. Kopiere diesen Link in einen Browser, um den Kauf abzuschließen:</value>
     <comment>Upgrade sheet: the system browser could not be opened for the hosted checkout url. The app appends the url itself on the next line (selectable) so the user can copy it into a browser by hand — never advancing to the waiting page with no payment page open.</comment>
   </data>
+  <data name="checkout_confirming_purchase" xml:space="preserve">
+    <value>Wir bestätigen deinen Kauf. Dein Plan wird automatisch aktualisiert.</value>
+    <comment>Purchase confirmation message while the app waits for the payment to be confirmed.</comment>
+  </data>
+  <data name="checkout_finish_in_browser" xml:space="preserve">
+    <value>Schließe den Kauf im Browser ab.</value>
+    <comment>Purchase confirmation title after the app opened Stripe's checkout page in the browser.</comment>
+  </data>
   <data name="checkout_interrupted_confirming" xml:space="preserve">
     <value>Die Kaufansicht wurde unerwartet geschlossen. Falls deine Zahlung durchgegangen ist, wird dein Plan hier automatisch aktualisiert — du musst nicht noch einmal kaufen.</value>
     <comment>Upgrade sheet waiting page: the embedded checkout webview crashed after the payment form had rendered, so a charge may already have gone through with only the redirect lost. Shown while the confirmation poll asks the server for the payment webhook; must never invite buying again.</comment>
@@ -839,6 +883,10 @@ richtig auf</value>
   <data name="checkout_opened_in_browser" xml:space="preserve">
     <value>Schließe den Kauf im Browser ab. Dein Plan wird hier automatisch aktualisiert, sobald die Zahlung bestätigt ist.</value>
     <comment>Shown after the app hands the user to the Stripe hosted checkout in the system browser. The app polls the server and flips the plan automatically when the payment webhook lands.</comment>
+  </data>
+  <data name="checkout_restore_checking" xml:space="preserve">
+    <value>Dein Plan wird erneut geprüft.</value>
+    <comment>Message after Restore purchases in the Stripe-paid app: nothing to restore locally, the app re-reads the plan from the server.</comment>
   </data>
   <data name="choose_file" xml:space="preserve">
     <value>Datei auswählen</value>
@@ -980,6 +1028,10 @@ richtig auf</value>
     <value>Gegenstelle</value>
     <comment>A label displayed next to a companion contract.</comment>
   </data>
+  <data name="conn_blocked_kill_switch" xml:space="preserve">
+    <value>Blockiert – Kill switch an</value>
+    <comment>Windows Connect page status when the connection is down and the kill switch is deliberately blocking this computer's traffic.</comment>
+  </data>
   <data name="conn_connect_on_launch" xml:space="preserve">
     <value>Beim Start der App automatisch verbinden</value>
     <comment>Settings: switch that connects automatically when the app starts.</comment>
@@ -988,13 +1040,93 @@ richtig auf</value>
     <value>Standardmäßig aus. Wenn aktiv, verbindet sich URnetwork mit dem gewählten Anbieter, sobald du die App öffnest. Das gilt ab dem nächsten Start - jetzt wird nicht verbunden.</value>
     <comment>Settings: explanation under the connect-on-launch switch.</comment>
   </data>
+  <data name="conn_degraded" xml:space="preserve">
+    <value>Verbindung beeinträchtigt – wird neu verbunden</value>
+    <comment>Windows connection status (Connect page headline and tray tooltip) when a working connection dropped and the app is reconnecting on its own.</comment>
+  </data>
+  <data name="conn_disconnecting" xml:space="preserve">
+    <value>Verbindung wird getrennt – dein Datenverkehr läuft noch durch den Tunnel</value>
+    <comment>Windows Connect page status while the tunnel is being stopped but its routes are still installed.</comment>
+  </data>
   <data name="conn_failed" xml:space="preserve">
     <value>Verbindung fehlgeschlagen</value>
     <comment>Connect screen status when the connect attempt failed: no provider could be reached (the sdk's CONNECT_FAILED). The connection keeps trying, and the app offers Retry.</comment>
   </data>
+  <data name="conn_failed_detail" xml:space="preserve">
+    <value>Kein Anbieter war erreichbar. Ein neuer Versuch baut die Verbindung von Grund auf neu auf.</value>
+    <comment>Windows Connect page reason line when connecting failed.</comment>
+  </data>
+  <data name="conn_failsafe_armed" xml:space="preserve">
+    <value>Wenn in Kürze nichts durchkommt, schaltet URnetwork den Tunnel automatisch ab, damit deine Internetverbindung erhalten bleibt.</value>
+    <comment>Windows Connect page: sentence appended to the line above when the service will stop a tunnel that carries nothing.</comment>
+  </data>
+  <data name="conn_failsafe_blocked" xml:space="preserve">
+    <value>Der Tunnel konnte keinen Datenverkehr übertragen, deshalb hat URnetwork ihn beendet. Der Kill switch ist an, daher verlässt nichts diesen Computer, bis du dich wieder verbindest oder den Kill switch ausschaltest – es dringt nichts nach außen.</value>
+    <comment>Windows Connect page line after the service stopped a tunnel that carried nothing, while the kill switch keeps this computer blocked.</comment>
+  </data>
+  <data name="conn_failsafe_restored" xml:space="preserve">
+    <value>URnetwork hat die Verbindung getrennt, damit du online bleibst: Der Tunnel war aktiv, aber nichts kam durch. Dein Datenverkehr läuft jetzt wieder normal und ist NICHT geschützt. Drücke auf Verbinden, um es erneut zu versuchen.</value>
+    <comment>Windows Connect page line and tray notification after the service stopped a tunnel that carried nothing, with the kill switch off. Keep the emphasis on NOT.</comment>
+  </data>
+  <data name="conn_finding_providers" xml:space="preserve">
+    <value>Anbieter werden gesucht…</value>
+    <comment>Connection status while the app has providers but none is proven to work yet (Linux and Windows Connect page headline, Windows tray tooltip).</comment>
+  </data>
   <data name="conn_not_protected" xml:space="preserve">
     <value>Dein Internetverkehr ist nicht geschützt.</value>
     <comment>Connect page: warning that the internet traffic is not protected.</comment>
+  </data>
+  <data name="conn_reason_auth" xml:space="preserve">
+    <value>Die Anmeldung bei der Plattform schlägt fehl…</value>
+    <comment>Windows Connect page reason line while the app's sign-in to the URnetwork platform keeps failing.</comment>
+  </data>
+  <data name="conn_reason_platform" xml:space="preserve">
+    <value>Plattform wird kontaktiert…</value>
+    <comment>Windows Connect page reason line while the app cannot reach the URnetwork platform (the API servers).</comment>
+  </data>
+  <data name="conn_reason_providers" xml:space="preserve">
+    <value>Anbieter antworten nicht – neuer Versuch…</value>
+    <comment>Windows Connect page reason line while the selected providers do not answer.</comment>
+  </data>
+  <data name="conn_reason_rate_limited" xml:space="preserve">
+    <value>Anfragelimit erreicht – warten…</value>
+    <comment>Windows Connect page reason line while the platform asks the app to slow down.</comment>
+  </data>
+  <data name="conn_traffic_blocked" xml:space="preserve">
+    <value>Gerade kein funktionierender Anbieter – dein Datenverkehr ist blockiert, nicht offengelegt. Trenne die Verbindung, um zu deiner normalen Verbindung zurückzukehren.</value>
+    <comment>Windows Connect page line while connected but no provider carries traffic, with leak protection in force.</comment>
+  </data>
+  <data name="conn_traffic_blocked_unprotected" xml:space="preserve">
+    <value>Gerade kein funktionierender Anbieter – Datenverkehr, der in den Tunnel geht, kommt nirgends an, und der Leckschutz ist aus, sodass ein Teil des Datenverkehrs ihn umgehen kann. Trenne die Verbindung, um zu deiner normalen Verbindung zurückzukehren.</value>
+    <comment>Windows Connect page line while connected but no provider carries traffic, and leak protection (the firewall policy) is not in force.</comment>
+  </data>
+  <data name="conn_tray_blocked_kill_switch" xml:space="preserve">
+    <value>Blockiert (Kill switch an)</value>
+    <comment>Windows tray tooltip when the kill switch is deliberately blocking this computer's traffic.</comment>
+  </data>
+  <data name="conn_tray_blocked_no_tunnel" xml:space="preserve">
+    <value>Blockiert – der Leckschutz ist noch aktiv, obwohl kein Tunnel besteht</value>
+    <comment>Windows tray tooltip when leak protection blocks traffic while no tunnel is up.</comment>
+  </data>
+  <data name="conn_tray_disconnecting" xml:space="preserve">
+    <value>Verbindung wird getrennt – Datenverkehr läuft noch durch den Tunnel</value>
+    <comment>Windows tray tooltip while the tunnel is being stopped but its routes are still installed.</comment>
+  </data>
+  <data name="conn_tray_failsafe_blocked" xml:space="preserve">
+    <value>Der Tunnel konnte keinen Datenverkehr übertragen, deshalb hat URnetwork ihn beendet. Der Kill switch ist an, daher bleibt dieser Computer blockiert und es dringt nichts nach außen. Verbinde dich erneut oder schalte den Kill switch über dieses Menü aus.</value>
+    <comment>Windows tray notification after the service stopped a tunnel that carried nothing, while the kill switch keeps this computer blocked. "This menu" is the tray icon's menu.</comment>
+  </data>
+  <data name="conn_tray_failsafe_stopped" xml:space="preserve">
+    <value>Getrennt (der Tunnel ist ausgefallen)</value>
+    <comment>Windows tray tooltip after the service stopped a tunnel that carried nothing.</comment>
+  </data>
+  <data name="conn_tray_force_tunnel_off" xml:space="preserve">
+    <value>Tunnel zwangsweise ausschalten (Wiederherstellung)</value>
+    <comment>Windows tray menu item that stops the tunnel directly when the normal Disconnect is stuck.</comment>
+  </data>
+  <data name="conn_tray_lift_kill_switch" xml:space="preserve">
+    <value>Kill switch ausschalten (diesen Computer entsperren)</value>
+    <comment>Windows tray menu item that lifts the kill switch's block on this computer.</comment>
   </data>
   <data name="connect" xml:space="preserve">
     <value>Verbinde</value>
@@ -1130,7 +1262,7 @@ richtig auf</value>
   </data>
   <data name="contribute_bandwidth" xml:space="preserve">
     <value>Bandbreite bereitstellen</value>
-    <comment>Used in Shared/Views/Introduction/IntroductionParticipateSettingsView.swift.</comment>
+    <comment>Onboarding: title of the step that asks whether this device may share bandwidth with the network (provide).</comment>
   </data>
   <data name="control_doh_error_https_required" xml:space="preserve">
     <value>Die URL muss mit https:// beginnen.</value>
@@ -1312,13 +1444,25 @@ richtig auf</value>
     <value>Dieses Gerät hat keinen polkit-Autorisierungsdienst, deshalb greift der URnetwork-Systemdienst auf die Gruppe 'urnetwork' zurück. Füge deinen Benutzer hinzu und melde dich ab und wieder an.</value>
     <comment>Connect error: no polkit service, the daemon falls back to the urnetwork group.</comment>
   </data>
+  <data name="daemon_legacy_group_auth" xml:space="preserve">
+    <value>Der URnetwork-Systemdienst auf diesem Gerät ist eine ältere Version, die noch eine Gruppenmitgliedschaft verlangt. Aktualisiere den Dienst oder füge deinen Benutzer zur Gruppe 'urnetwork' hinzu und melde dich ab und wieder an.</value>
+    <comment>Linux notice when an older system service refuses the app's user. 'urnetwork' is the literal Linux group name; keep it as is.</comment>
+  </data>
   <data name="daemon_no_answer" xml:space="preserve">
     <value>Der URnetwork-Systemdienst hat nicht geantwortet.</value>
     <comment>Error: the system service did not answer.</comment>
   </data>
+  <data name="daemon_not_reachable" xml:space="preserve">
+    <value>Der URnetwork-Systemdienst war nicht erreichbar.</value>
+    <comment>Linux notice when the app cannot reach the URnetwork system service for an unexpected reason.</comment>
+  </data>
   <data name="daemon_sdk_mismatch" xml:space="preserve">
     <value>Die App und der URnetwork-Systemdienst sind unterschiedliche Builds. Aktualisiere beide auf dieselbe Version.</value>
     <comment>Shown on the linux home screen when the app and the urnetworkd system service carry different URnetwork SDK builds (they update on independent schedules and must match exactly). The fix is updating both to the same release.</comment>
+  </data>
+  <data name="daemon_stale_sandbox_mount" xml:space="preserve">
+    <value>Der URnetwork-Systemdienst wurde neu gestartet, während diese App geöffnet war. Schließe die App und öffne sie erneut, um wieder eine Verbindung zu ihm herzustellen.</value>
+    <comment>Linux notice when the app cannot reach the URnetwork system service because the service restarted under a sandboxed (Flatpak) app.</comment>
   </data>
   <data name="daemon_too_old" xml:space="preserve">
     <value>Der URnetwork-Systemdienst ist veraltet. Aktualisiere ihn, um dich zu verbinden.</value>
@@ -2068,6 +2212,98 @@ richtig auf</value>
     <value>Geräte</value>
     <comment>Provider list group title for devices</comment>
   </data>
+  <data name="direct_update_allow" xml:space="preserve">
+    <value>Erlauben</value>
+    <comment>macOS folder-access panel button that grants the app access to the Applications folder for the update.</comment>
+  </data>
+  <data name="direct_update_allow_applications" xml:space="preserve">
+    <value>Um das Update zu installieren, erlaube URnetwork, sich im Ordner „Programme“ zu ersetzen. Wähle „Programme“ aus und klicke auf „Erlauben“.</value>
+    <comment>macOS folder-access panel message when installing an update: the user selects the Applications folder to grant access. Keep "Allow" consistent with the panel's button.</comment>
+  </data>
+  <data name="direct_update_available" xml:space="preserve">
+    <value>Update verfügbar: {}</value>
+    <comment>macOS Settings &gt; Software update status when a newer release exists. {version} is its version.</comment>
+  </data>
+  <data name="direct_update_check" xml:space="preserve">
+    <value>Nach Updates suchen</value>
+    <comment>macOS Settings &gt; Software update button that checks now.</comment>
+  </data>
+  <data name="direct_update_check_failed" xml:space="preserve">
+    <value>Suche nach Updates fehlgeschlagen: {}</value>
+    <comment>macOS Settings &gt; Software update error. {detail} is a short technical reason (often English, from the system).</comment>
+  </data>
+  <data name="direct_update_checking" xml:space="preserve">
+    <value>Suche nach Updates…</value>
+    <comment>macOS Settings &gt; Software update status while checking.</comment>
+  </data>
+  <data name="direct_update_checksum_failed" xml:space="preserve">
+    <value>Der Download stimmte nicht mit der Prüfsumme der Version überein und wurde verworfen.</value>
+    <comment>macOS Settings &gt; Software update error: the downloaded file failed its integrity check and was deleted.</comment>
+  </data>
+  <data name="direct_update_development_build" xml:space="preserve">
+    <value>Entwicklungs-Build; die neueste Version ist {}.</value>
+    <comment>macOS Settings &gt; Software update status on a development build, which never updates itself. {version} is the newest release version.</comment>
+  </data>
+  <data name="direct_update_download_failed" xml:space="preserve">
+    <value>Der Download ist fehlgeschlagen: {}</value>
+    <comment>macOS Settings &gt; Software update error. {detail} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_downloading_version" xml:space="preserve">
+    <value>{} wird heruntergeladen…</value>
+    <comment>macOS Settings &gt; Software update status while the release downloads. {version} is its version.</comment>
+  </data>
+  <data name="direct_update_install" xml:space="preserve">
+    <value>Update installieren</value>
+    <comment>macOS Settings &gt; Software update button that downloads, verifies and installs the update.</comment>
+  </data>
+  <data name="direct_update_install_failed" xml:space="preserve">
+    <value>Das Update konnte nicht installiert werden: {}</value>
+    <comment>macOS Settings &gt; Software update error. {detail} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_installing" xml:space="preserve">
+    <value>Update wird installiert…</value>
+    <comment>macOS Settings &gt; Software update status while the verified update is installed.</comment>
+  </data>
+  <data name="direct_update_last_checked" xml:space="preserve">
+    <value>Zuletzt geprüft: {}</value>
+    <comment>macOS Settings &gt; Software update: when updates were last checked. {when} is a relative date, for example "5 minutes ago" or "yesterday".</comment>
+  </data>
+  <data name="direct_update_manual_install" xml:space="preserve">
+    <value>{} wurde heruntergeladen und geprüft. Ziehe das neue URnetwork in den Ordner „Programme“ und öffne es dann von dort.</value>
+    <comment>macOS Settings &gt; Software update status when the app could not replace itself. {version} is the downloaded release's version.</comment>
+  </data>
+  <data name="direct_update_not_checked" xml:space="preserve">
+    <value>Es wurde noch nicht nach Updates gesucht.</value>
+    <comment>macOS Settings &gt; Software update status before the first check.</comment>
+  </data>
+  <data name="direct_update_relaunching" xml:space="preserve">
+    <value>URnetwork wird neu gestartet…</value>
+    <comment>macOS Settings &gt; Software update status while the app restarts on the new version.</comment>
+  </data>
+  <data name="direct_update_section_title" xml:space="preserve">
+    <value>Softwareupdate</value>
+    <comment>macOS Settings: title of the section that checks for and installs app updates (direct-download app).</comment>
+  </data>
+  <data name="direct_update_show_in_finder" xml:space="preserve">
+    <value>Im Finder zeigen</value>
+    <comment>macOS Settings &gt; Software update button that reveals the downloaded update in Finder (the macOS file manager).</comment>
+  </data>
+  <data name="direct_update_signature_rejected" xml:space="preserve">
+    <value>Das Update wurde abgelehnt: {}</value>
+    <comment>macOS Settings &gt; Software update error when the downloaded app's code signature did not check out. {detail} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_unpack_failed" xml:space="preserve">
+    <value>Der Download konnte nicht entpackt werden: {}</value>
+    <comment>macOS Settings &gt; Software update error. {detail} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_unusable_release" xml:space="preserve">
+    <value>Version {0} kann von der App nicht installiert werden ({1}).</value>
+    <comment>macOS Settings &gt; Software update error when the newest release has no file this app can install. {version} is the release version; {reason} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_up_to_date" xml:space="preserve">
+    <value>URnetwork ist auf dem neuesten Stand.</value>
+    <comment>macOS Settings &gt; Software update status when no newer release exists.</comment>
+  </data>
   <data name="disable_ignore_battery_hint" xml:space="preserve">
     <value>Zum Deaktivieren gehe bitte zu App-Akkuverbrauch in den Systemeinstellungen</value>
     <comment>Call to action</comment>
@@ -2317,7 +2553,7 @@ richtig auf</value>
     <comment>Section header of the per-transport enable toggles shown when the transport mode is Auto.</comment>
   </data>
   <data name="enabled_under_auto_footer" xml:space="preserve">
-    <value>In der Reihenfolge der Präferenz aufgeführt: zuerst H3 und H1, dann whodis, dann whodis pump. Die Reihenfolge ist fest. Mindestens ein Transport bleibt aktiviert.</value>
+    <value>In der Reihenfolge der Präferenz aufgeführt: zuerst H1, dann H3, whodis und whodis pump. Die Reihenfolge ist fest. Mindestens ein Transport bleibt aktiviert.</value>
     <comment>Footer of the Auto transports section explaining the fixed preference order.</comment>
   </data>
   <data name="enjoying_urnetwork" xml:space="preserve">
@@ -2362,6 +2598,10 @@ richtig auf</value>
   <data name="enter_urnetwork" xml:space="preserve">
     <value>URnetwork betreten</value>
     <comment>Used in Authenticate/LoginInitial/GuestModeSheet.swift.</comment>
+  </data>
+  <data name="enter_wallet_address" xml:space="preserve">
+    <value>Gib die Wallet-Adresse ein</value>
+    <comment>Used in Main/Account/Wallets/ConnectWalletSheet/EnterWalletAddress/EnterWalletAddressView.swift.</comment>
   </data>
   <data name="epoch_column_epoch_linux" xml:space="preserve">
     <value>Epoche</value>
@@ -3411,6 +3651,10 @@ gesendet haben, um deine Identität zu überprüfen.</value>
     <value>Benötigst du mehr Daten, schneller?</value>
     <comment>Call to action</comment>
   </data>
+  <data name="net_points_earned" xml:space="preserve">
+    <value>Netto-Punkte verdient</value>
+    <comment>Earnings page: lowercase caption under the net points total.</comment>
+  </data>
   <data name="net_provided" xml:space="preserve">
     <value>Bereitgestelltes Netz</value>
     <comment>Call to action</comment>
@@ -3486,6 +3730,10 @@ gesendet haben, um deine Identität zu überprüfen.</value>
   <data name="network_create_bonus_message" xml:space="preserve">
     <value>Jemand hat dich zum Mitmachen eingeladen 🥳\nSichere dir deinen Bonus durch die Erstellung eines Netzwerks!</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="network_earnings" xml:space="preserve">
+    <value>Netzwerk-Einnahmen</value>
+    <comment>Used in Main/Account/AccountRootView.swift.</comment>
   </data>
   <data name="network_name_changed_to_n" xml:space="preserve">
     <value>Netzwerkname geändert in {}</value>
@@ -3654,6 +3902,10 @@ gesendet haben, um deine Identität zu überprüfen.</value>
   <data name="none" xml:space="preserve">
     <value>Keine</value>
     <comment>Empty value: the VLESS settings show it for no security and no flow (all apps), and the Referrals section shows it on windows and linux when no referral network is linked.</comment>
+  </data>
+  <data name="not_now" xml:space="preserve">
+    <value>Nicht jetzt</value>
+    <comment>macOS button that dismisses the prompt to enable the VPN system extension for now.</comment>
   </data>
   <data name="notifications_label" xml:space="preserve">
     <value>Benachrichtigungen</value>
@@ -3920,6 +4172,10 @@ und am stärksten dezentralisierten Ingress- und Egress-Protokoll.</value>
     <value>{} % sparen</value>
     <comment>Plan picker: the saving badge on the yearly card; the number is the whole percent saved against twelve monthly payments.</comment>
   </data>
+  <data name="plan_terms_first_year_price" xml:space="preserve">
+    <value>{0} im ersten Jahr, danach {1}/Jahr. Jederzeit kündbar.</value>
+    <comment>Plan picker terms line for the yearly plan with a first-year offer and no free trial. {first_year_price} and {yearly_price} are formatted prices, for example $39.99.</comment>
+  </data>
   <data name="plan_terms_yearly.one" xml:space="preserve">
     <value>{0} Tag gratis, danach {1}/Jahr. Jederzeit kündbar.</value>
     <comment>Plan picker: the terms line under the button for the yearly plan with its trial.</comment>
@@ -3927,6 +4183,10 @@ und am stärksten dezentralisierten Ingress- und Egress-Protokoll.</value>
   <data name="plan_terms_yearly.other" xml:space="preserve">
     <value>{0} Tage gratis, danach {1}/Jahr. Jederzeit kündbar.</value>
     <comment>Plan picker: the terms line under the button for the yearly plan with its trial.</comment>
+  </data>
+  <data name="plan_terms_yearly_billed_today" xml:space="preserve">
+    <value>{} wird heute abgerechnet, danach jedes Jahr. Jederzeit kündbar.</value>
+    <comment>Plan picker terms line for the yearly plan without a trial or offer. {yearly_price} is a formatted price, for example $59.99.</comment>
   </data>
   <data name="please_install_phantom_or_solflare_to_use_this" xml:space="preserve">
     <value>Bitte installiere Phantom oder Solflare, um diese Funktion zu nutzen</value>
@@ -4850,7 +5110,7 @@ der Welt</value>
   </data>
   <data name="seedphrase_paste_hint" xml:space="preserve">
     <value>Füge hier deine Seedphrase mit 12 oder 24 Wörtern ein</value>
-    <comment>Seed sign-in sheet: placeholder of the seedphrase field (android accepts 12 or 24 words).</comment>
+    <comment>Seed sign-in sheet: placeholder of the seedphrase field (android and windows accept 12 or 24 words).</comment>
   </data>
   <data name="seedphrase_required" xml:space="preserve">
     <value>Bitte gib eine Seedphrase ein</value>
@@ -6398,6 +6658,22 @@ der Welt</value>
     <value>Verwende die ASCII-Form des Namens.</value>
     <comment>Split rules: validation error for a host name with non-ASCII characters; the rule wants the punycode form.</comment>
   </data>
+  <data name="split_rule_mode_excluded_description" xml:space="preserve">
+    <value>Ausgewählte Hosts umgehen den Tunnel.</value>
+    <comment>Split rule editor: description of the Route locally mode.</comment>
+  </data>
+  <data name="split_rule_mode_included_description" xml:space="preserve">
+    <value>Der Standard: Ausgewählte Hosts nutzen den Tunnel ohne Anheften.</value>
+    <comment>Split rule editor: description of the Route through VPN mode (the default). A pin is the Keep on one provider mode.</comment>
+  </data>
+  <data name="split_rule_mode_pinned_description" xml:space="preserve">
+    <value>Ausgewählte Hosts behalten ihren Anbieter länger, statt beim ersten Anzeichen von Problemen verschoben zu werden, sodass die Website während einer Sitzung seltener die IP-Adresse wechselt.</value>
+    <comment>Split rule editor: description of the Keep on one provider mode.</comment>
+  </data>
+  <data name="split_rule_mode_pinned_title" xml:space="preserve">
+    <value>Bei einem Anbieter halten</value>
+    <comment>Split rule editor: title of the mode that keeps the selected hosts on the same VPN provider longer.</comment>
+  </data>
   <data name="split_rule_preset_google_meet_calls" xml:space="preserve">
     <value>Google Meet-Anrufe</value>
     <comment>Split rules preset: Google Meet call media, from the address ranges Google publishes for routing it outside a VPN. Keep the product name Google Meet unchanged.</comment>
@@ -6414,6 +6690,10 @@ der Welt</value>
     <value>Routing-Aktivität erscheint hier, während du verbunden bist.</value>
     <comment>A description of the content of the "Activity" section of the split rules view.</comment>
   </data>
+  <data name="split_rules_connect_to_load" xml:space="preserve">
+    <value>Verbinde dich einmal, um deine vorhandenen Regeln zu laden.</value>
+    <comment>Split rules screen: note under the disabled Add a rule button before the app has connected once and loaded the saved rules.</comment>
+  </data>
   <data name="split_rules_hint" xml:space="preserve">
     <value>Tippe unten auf Datenverkehr, um ihn lokal zu leiten und den Tunnel zu umgehen.</value>
     <comment>A description of how to route traffic locally.</comment>
@@ -6422,9 +6702,17 @@ der Welt</value>
     <value>Füge oben einen Host hinzu oder tippe unten auf Datenverkehr, um ihn lokal zu leiten und den Tunnel zu umgehen.</value>
     <comment>Split rules on android, which has a host input above the traffic list: how to add to the rule. The apple/linux screens without the input keep split_rules_hint.</comment>
   </data>
+  <data name="split_rules_host_hint_modes" xml:space="preserve">
+    <value>Füge oben einen Host hinzu oder tippe unten auf Datenverkehr, um ihn lokal zu leiten oder bei einem Anbieter zu halten.</value>
+    <comment>Split rules screen: hint shown while there are no rules yet. Routing locally sends traffic outside the VPN; holding to one provider keeps a site on the same VPN exit.</comment>
+  </data>
   <data name="split_rules_info_note" xml:space="preserve">
     <value>Ausschlüsse gelten für den gesamten zusammengehörigen Netzwerk-Cluster, sodass verwandter Datenverkehr gemeinsam erfasst wird.</value>
     <comment>transfer stats and split rules</comment>
+  </data>
+  <data name="split_rules_info_note_modes" xml:space="preserve">
+    <value>Regeln gelten für den gesamten zusammengehörigen Netzwerk-Cluster, sodass verwandter Datenverkehr gemeinsam erfasst wird.</value>
+    <comment>Split rules screen: note that a rule matches every host in the same network cluster (related hosts of one site or service), whatever the rule's mode.</comment>
   </data>
   <data name="split_rules_match_sites_not_apps" xml:space="preserve">
     <value>Split-Regeln gelten für Websites und Adressen, nicht für Apps: Apple erlaubt VPN pro App nur auf Geräten, die von einer Organisation verwaltet werden (MDM). Um eine App vom VPN auszunehmen, leite die Websites, die sie nutzt, lokal oder beginne mit einer Vorlage. Adressen im lokalen Netzwerk umgehen das VPN bereits.</value>
@@ -6437,6 +6725,14 @@ der Welt</value>
   <data name="split_rules_start_from_preset" xml:space="preserve">
     <value>Mit einer Vorlage beginnen</value>
     <comment>Split rules screen: the menu that starts a route-locally rule from a preset, the address ranges a service publishes for use outside a VPN.</comment>
+  </data>
+  <data name="sso_browser_open_failed" xml:space="preserve">
+    <value>Der Browser konnte nicht geöffnet werden. Bitte versuche es erneut.</value>
+    <comment>macOS error when adding a sign-in method could not open the browser for the provider's sign-in page.</comment>
+  </data>
+  <data name="sso_sign_in_timed_out" xml:space="preserve">
+    <value>Zeitüberschreitung bei der Anmeldung. Bitte versuche es erneut.</value>
+    <comment>Error when a browser sign-in (Google or Apple through the browser) took too long and expired.</comment>
   </data>
   <data name="start_earning_join" xml:space="preserve">
     <value>Um mit dem Verdienen zu beginnen, trete dem Netzwerk bei</value>
@@ -6510,6 +6806,10 @@ wie es sein sollte.</value>
     <value>Abonnieren</value>
     <comment>Button on the plan picker for the monthly plan, which has no free trial.</comment>
   </data>
+  <data name="subscription_portal_open_failed" xml:space="preserve">
+    <value>Das Abonnementportal konnte nicht geöffnet werden. Bitte versuche es erneut.</value>
+    <comment>Snackbar error when the Stripe subscription management page (Manage subscription) could not be opened.</comment>
+  </data>
   <data name="subscription_purchased_under_different_account" xml:space="preserve">
     <value>Dein Abo wurde mit einem anderen Konto gekauft. Melde dich bei diesem Konto an, um es zu nutzen.</value>
     <comment>The store purchase belongs to a different network than the one logged in — crediting must not go to the wrong account, so tell the user which way out exists. Apple: restore-purchases outcome (Shared/ViewModels/AppStoreSubscriptionManager.swift). Android: terminal `wrong_network` answer from the Play purchase report (google/PlanViewModel.kt); the purchase is still acknowledged so Play does not auto-refund it.</comment>
@@ -6538,9 +6838,41 @@ wie es sein sollte.</value>
     <value>Pro</value>
     <comment>Display name for the paid plan. The WIRE value stays "supporter" (subscription_type / current_subscription.plan) because already-shipped app versions parse that string; only what the user reads changes.</comment>
   </data>
+  <data name="svc_action_failed" xml:space="preserve">
+    <value>Das wurde nicht abgeschlossen – der Dienst ist unverändert. Details stehen im App-Protokoll.</value>
+    <comment>Windows banner text when installing, starting or updating the VPN service failed.</comment>
+  </data>
   <data name="svc_service_label" xml:space="preserve">
     <value>VPN-Dienst</value>
     <comment>Settings: label of the VPN service row.</comment>
+  </data>
+  <data name="svc_setup_action" xml:space="preserve">
+    <value>Einrichten</value>
+    <comment>Windows banner button that installs the VPN service (Windows asks for administrator permission).</comment>
+  </data>
+  <data name="svc_setup_message" xml:space="preserve">
+    <value>URnetwork nutzt einen Windows-Dienst, um den Datenverkehr zu übertragen. Ein Klick – Windows fragt nach einer Administratorberechtigung.</value>
+    <comment>Windows banner text under 'Set up the VPN service'.</comment>
+  </data>
+  <data name="svc_setup_title" xml:space="preserve">
+    <value>VPN-Dienst einrichten</value>
+    <comment>Windows banner title when the URnetwork Windows service that carries traffic is not installed yet.</comment>
+  </data>
+  <data name="svc_start_action" xml:space="preserve">
+    <value>Starten</value>
+    <comment>Windows banner button that starts the stopped VPN service.</comment>
+  </data>
+  <data name="svc_start_message" xml:space="preserve">
+    <value>Der Dienst ist installiert, läuft aber nicht.</value>
+    <comment>Windows banner text under 'Start the VPN service'.</comment>
+  </data>
+  <data name="svc_start_title" xml:space="preserve">
+    <value>VPN-Dienst starten</value>
+    <comment>Windows banner title when the VPN service is installed but stopped.</comment>
+  </data>
+  <data name="svc_uac_declined" xml:space="preserve">
+    <value>Windows hat nach einer Berechtigung gefragt und die Abfrage wurde geschlossen. Klicke erneut, sobald du bereit bist.</value>
+    <comment>Windows banner text after the user closed the administrator permission (UAC) prompt without approving.</comment>
   </data>
   <data name="svc_uninstall_action" xml:space="preserve">
     <value>Deinstallieren</value>
@@ -6550,9 +6882,25 @@ wie es sein sollte.</value>
     <value>Das stoppt den URnetwork-Dienst und entfernt seine systemd-Unit. Die App kann sich erst wieder verbinden, wenn er neu eingerichtet ist. Du wirst nach einer Administratorberechtigung gefragt.</value>
     <comment>Settings: confirmation text before uninstalling the VPN service.</comment>
   </data>
+  <data name="svc_uninstall_confirm_windows" xml:space="preserve">
+    <value>Das stoppt den URnetwork-Dienst und entfernt ihn aus Windows. Die App kann sich erst wieder verbinden, wenn er neu eingerichtet ist. Windows fragt nach einer Administratorberechtigung.</value>
+    <comment>Windows Settings: confirmation dialog before uninstalling the VPN service.</comment>
+  </data>
   <data name="svc_uninstall_note" xml:space="preserve">
     <value>Den systemd-Dienst entfernen, über den URnetwork den Datenverkehr leitet.</value>
     <comment>Settings: explanation under the uninstall service button.</comment>
+  </data>
+  <data name="svc_uninstall_note_windows" xml:space="preserve">
+    <value>Den Windows-Dienst entfernen, über den URnetwork den Datenverkehr leitet.</value>
+    <comment>Windows Settings &gt; VPN service row: what the Uninstall button removes.</comment>
+  </data>
+  <data name="svc_update_message" xml:space="preserve">
+    <value>Der installierte Dienst hat eine andere Version als diese App.</value>
+    <comment>Windows banner text under 'Update the VPN service'. The two version numbers follow it in parentheses.</comment>
+  </data>
+  <data name="svc_update_title" xml:space="preserve">
+    <value>VPN-Dienst aktualisieren</value>
+    <comment>Windows banner title when the installed VPN service is a different version than the app.</comment>
   </data>
   <data name="switch_account" xml:space="preserve">
     <value>Konto wechseln</value>
@@ -6840,6 +7188,82 @@ wie es sein sollte.</value>
   <data name="upd_auto_check_note" xml:space="preserve">
     <value>Kurz nach dem Start und alle sechs Stunden nach neuen Versionen suchen. Ohne Klick wird nie etwas installiert.</value>
     <comment>Settings: explanation under the automatic update check switch.</comment>
+  </data>
+  <data name="upd_available_appimage_message" xml:space="preserve">
+    <value>Ein Klick lädt die Version herunter, prüft sie anhand ihrer Prüfsumme und ersetzt dieses AppImage. Der VPN-Dienst wird separat aktualisiert.</value>
+    <comment>Linux Settings update notice, AppImage installs: what the Install button does. The AppImage is the single-file Linux app; the VPN service is the separate system service package.</comment>
+  </data>
+  <data name="upd_available_msi_message" xml:space="preserve">
+    <value>Ein Klick lädt die Version herunter, prüft sie und startet ihr Installationsprogramm, das die App und den VPN-Dienst aktualisiert. Die App wird während der Installation geschlossen.</value>
+    <comment>Windows update banner: what the Update button does (downloads the MSI installer, checks it, runs it).</comment>
+  </data>
+  <data name="upd_available_package_message" xml:space="preserve">
+    <value>Lade {} von der Release-Seite herunter und führe dann den Befehl unten aus.</value>
+    <comment>Linux Settings update notice, package installs (.deb, .rpm, tarball) that the app does not replace itself. {file} is the release file name, for example urnetwork_2026.10.5_amd64.deb. The shell command is shown in the row below.</comment>
+  </data>
+  <data name="upd_available_title_version" xml:space="preserve">
+    <value>Update verfügbar: v{}</value>
+    <comment>Update notice title (Linux Settings, Windows update banner): a newer release is available. {version} is the release version, for example 2026.10.5-1024555910; keep the "v" before it.</comment>
+  </data>
+  <data name="upd_downloaded_message" xml:space="preserve">
+    <value>Der Ordner dieses AppImages ist nicht beschreibbar, daher wurde der geprüfte Download unten gespeichert. Ersetze das AppImage manuell damit.</value>
+    <comment>Linux Settings update notice when the app cannot replace itself: the verified file's path is shown in the row below.</comment>
+  </data>
+  <data name="upd_failed_checksum" xml:space="preserve">
+    <value>Der Download stimmte nicht mit den Prüfsummen der Version überein und wurde verworfen. Klicke, um es erneut zu versuchen.</value>
+    <comment>Update notice error (Linux Settings, Windows update banner): the downloaded file failed its integrity check and was deleted.</comment>
+  </data>
+  <data name="upd_failed_download" xml:space="preserve">
+    <value>Der Download wurde nicht abgeschlossen. Prüfe die Verbindung und klicke, um es erneut zu versuchen.</value>
+    <comment>Update notice error (Linux Settings, Windows update banner): the release download failed.</comment>
+  </data>
+  <data name="upd_failed_install" xml:space="preserve">
+    <value>Das AppImage konnte nicht ersetzt werden. Prüfe die Berechtigungen des Ordners und klicke, um es erneut zu versuchen.</value>
+    <comment>Linux Settings update notice error: the verified download could not be swapped in for the running AppImage.</comment>
+  </data>
+  <data name="upd_install" xml:space="preserve">
+    <value>Installieren</value>
+    <comment>Linux Settings update notice: button that downloads, verifies and installs the update.</comment>
+  </data>
+  <data name="upd_manual_install_message" xml:space="preserve">
+    <value>Das Installationsprogramm wurde nicht gestartet (es braucht eine Administratorfreigabe). Der geprüfte Download wurde im Explorer angezeigt – beende die App und führe es aus.</value>
+    <comment>Windows update banner when the installer could not be started: the user runs it by hand. Explorer is the Windows file manager.</comment>
+  </data>
+  <data name="upd_ready_message" xml:space="preserve">
+    <value>Das neue AppImage ist installiert und geprüft. Starte neu, um es zu verwenden; die vorherige Datei bleibt bis dahin daneben liegen.</value>
+    <comment>Linux Settings update notice once the update is installed and waiting for a relaunch.</comment>
+  </data>
+  <data name="upd_ready_title" xml:space="preserve">
+    <value>Bereit zum Neustart: v{}</value>
+    <comment>Linux Settings update notice title once the new AppImage is installed. {version} is the release version; keep the "v" before it.</comment>
+  </data>
+  <data name="upd_relaunch" xml:space="preserve">
+    <value>Neu starten</value>
+    <comment>Linux Settings update notice: button that restarts the app on the newly installed version.</comment>
+  </data>
+  <data name="upd_release_page" xml:space="preserve">
+    <value>Release-Seite</value>
+    <comment>Linux Settings update notice: button that opens the release's download page in the browser.</comment>
+  </data>
+  <data name="upd_show_file" xml:space="preserve">
+    <value>Datei zeigen</value>
+    <comment>Update notice button (Linux Settings, Windows update banner) that opens the folder holding the verified download.</comment>
+  </data>
+  <data name="upd_stage_downloading" xml:space="preserve">
+    <value>Update wird heruntergeladen…</value>
+    <comment>Update notice progress line (Linux Settings, Windows update banner) while the release downloads.</comment>
+  </data>
+  <data name="upd_stage_installing" xml:space="preserve">
+    <value>Installationsprogramm wird gestartet…</value>
+    <comment>Windows update banner progress line while the verified installer is being launched.</comment>
+  </data>
+  <data name="upd_stage_replacing" xml:space="preserve">
+    <value>AppImage wird ersetzt…</value>
+    <comment>Linux Settings update notice progress line while the verified download replaces the running AppImage file.</comment>
+  </data>
+  <data name="upd_stage_verifying" xml:space="preserve">
+    <value>Download wird geprüft…</value>
+    <comment>Update progress line (Linux Settings, Windows update banner, macOS Settings &gt; Software update) while the downloaded release is checked against its published checksum.</comment>
   </data>
   <data name="update" xml:space="preserve">
     <value>Aktualisieren</value>
@@ -7262,6 +7686,10 @@ wie es sein sollte.</value>
     <value>Wenn du einen Freund empfiehlst:</value>
     <comment>Call to action</comment>
   </data>
+  <data name="widget_chart_peak" xml:space="preserve">
+    <value>Spitze</value>
+    <comment>Throughput widget: lowercase word after the peak packet-rate figure, as in "1.2k pkt/s peak".</comment>
+  </data>
   <data name="widget_client" xml:space="preserve">
     <value>Client</value>
     <comment>Dashboard widget chart title: this device's own traffic.</comment>
@@ -7297,6 +7725,10 @@ wie es sein sollte.</value>
   <data name="widget_globe_description" xml:space="preserve">
     <value>Deine verbundenen Anbieter auf dem Globus.</value>
     <comment>Description of the provider globe widget in the widget gallery.</comment>
+  </data>
+  <data name="widget_intent_source_parameter" xml:space="preserve">
+    <value>Quelle</value>
+    <comment>Title of a hidden parameter of the Connect/Disconnect control: which surface (widget, control, shortcut) made the request.</comment>
   </data>
   <data name="widget_more_providers" xml:space="preserve">
     <value>+{} weitere</value>
@@ -7369,6 +7801,10 @@ wie es sein sollte.</value>
   <data name="widget_quick_tile_added" xml:space="preserve">
     <value>Schnellverbindungs-Kachel hinzugefügt</value>
     <comment>Toast after the system added the Quick Settings tile.</comment>
+  </data>
+  <data name="widget_refresh_intent_title" xml:space="preserve">
+    <value>URnetwork-Widgets aktualisieren</value>
+    <comment>Title of the action that refreshes the app's Home Screen widgets.</comment>
   </data>
   <data name="widget_toggle_intent_title" xml:space="preserve">
     <value>URnetwork-VPN umschalten</value>

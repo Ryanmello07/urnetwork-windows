@@ -267,6 +267,14 @@
     <value>مطابق</value>
     <comment>Connection inspector: label of the matched rule row.</comment>
   </data>
+  <data name="adv_mode_rpc_only" xml:space="preserve">
+    <value>RPC فقط</value>
+    <comment>Windows status strip (Advanced Mode), Session value: a session that talks to the service over RPC without a tunnel. Lowercase, a short status value.</comment>
+  </data>
+  <data name="adv_mode_tunnel" xml:space="preserve">
+    <value>نفق</value>
+    <comment>Windows status strip (Advanced Mode), Session value: a full tunnel session. Lowercase, a short status value.</comment>
+  </data>
   <data name="adv_na" xml:space="preserve">
     <value>—</value>
     <comment>Connection inspector: placeholder dash for a value that is not available.</comment>
@@ -301,7 +309,7 @@
   </data>
   <data name="adv_raw_status" xml:space="preserve">
     <value>الحالة الخام</value>
-    <comment>Connection inspector: label of the raw status row.</comment>
+    <comment>Connection inspector (Linux) and Advanced Mode status strip (Windows): label of the raw status field.</comment>
   </data>
   <data name="adv_reason" xml:space="preserve">
     <value>السبب</value>
@@ -323,6 +331,26 @@
     <value>تجاوز المسار</value>
     <comment>Connection inspector: decision reason, a route override applied.</comment>
   </data>
+  <data name="adv_routes" xml:space="preserve">
+    <value>المسارات</value>
+    <comment>Windows status strip (Advanced Mode): label of the field that shows whether the tunnel's routes are installed.</comment>
+  </data>
+  <data name="adv_routes_dns_degraded" xml:space="preserve">
+    <value>مفعّلة، DNS غير مطبّق</value>
+    <comment>Windows status strip (Advanced Mode), Routes value: routes are installed but the tunnel's DNS is not. Lowercase, a short status value.</comment>
+  </data>
+  <data name="adv_routes_kill_switch_armed" xml:space="preserve">
+    <value>معطّلة، مفتاح القتل مسلّح</value>
+    <comment>Windows status strip (Advanced Mode), Routes value: no routes are installed and the kill switch is blocking traffic. Lowercase, a short status value.</comment>
+  </data>
+  <data name="adv_routes_no_firewall" xml:space="preserve">
+    <value>مفعّلة، دون حماية من التسرب</value>
+    <comment>Windows status strip (Advanced Mode), Routes value: routes are installed but no leak-prevention firewall policy is in force. Lowercase, a short status value.</comment>
+  </data>
+  <data name="adv_rpc" xml:space="preserve">
+    <value>RPC</value>
+    <comment>Windows status strip (Advanced Mode): label of the field that shows the service's RPC endpoint (host:port). RPC is a technical term.</comment>
+  </data>
   <data name="adv_select_a_row" xml:space="preserve">
     <value>حدد صفًا في النشاط لفحصه</value>
     <comment>Connection inspector: hint to select a row in the Activity list.</comment>
@@ -338,6 +366,10 @@
   <data name="adv_session_exit_country" xml:space="preserve">
     <value>بلد مخرج الجلسة</value>
     <comment>Connection inspector: label of the session exit country row.</comment>
+  </data>
+  <data name="adv_session_mode" xml:space="preserve">
+    <value>الجلسة</value>
+    <comment>Windows status strip (Advanced Mode): label of the field that shows which kind of session the service granted (tunnel or rpc-only).</comment>
   </data>
   <data name="adv_unknown_exit" xml:space="preserve">
     <value>غير موجود في جدول التوجيه</value>
@@ -758,6 +790,10 @@
     <value>تعذّر تحميل المواقع المحظورة.</value>
     <comment>Shown on the Blocked locations screen when the list could not be fetched, above a Retry button.</comment>
   </data>
+  <data name="blocked_locations_search_placeholder" xml:space="preserve">
+    <value>ابحث عن الدول</value>
+    <comment>macOS Blocked locations screen: placeholder of the country search field.</comment>
+  </data>
   <data name="blocks" xml:space="preserve">
     <value>الكتل</value>
     <comment>Points leaderboard: stat tile label and sort chip. A block is one finalized payout epoch.</comment>
@@ -864,6 +900,14 @@
     <value>تعذّر فتح المتصفح. انسخ هذا الرابط في متصفح لإتمام عملية الدفع:</value>
     <comment>Upgrade sheet: the system browser could not be opened for the hosted checkout url. The app appends the url itself on the next line (selectable) so the user can copy it into a browser by hand — never advancing to the waiting page with no payment page open.</comment>
   </data>
+  <data name="checkout_confirming_purchase" xml:space="preserve">
+    <value>نؤكد عملية الشراء الآن. ستُحدَّث خطتك تلقائيًا.</value>
+    <comment>Purchase confirmation message while the app waits for the payment to be confirmed.</comment>
+  </data>
+  <data name="checkout_finish_in_browser" xml:space="preserve">
+    <value>أكمل العملية في المتصفح.</value>
+    <comment>Purchase confirmation title after the app opened Stripe's checkout page in the browser.</comment>
+  </data>
   <data name="checkout_interrupted_confirming" xml:space="preserve">
     <value>أُغلقت نافذة الدفع بشكل غير متوقع. إذا تمت عملية الدفع، فسيتم تحديث خطتك هنا تلقائيًا — لا داعي للشراء مرة أخرى.</value>
     <comment>Upgrade sheet waiting page: the embedded checkout webview crashed after the payment form had rendered, so a charge may already have gone through with only the redirect lost. Shown while the confirmation poll asks the server for the payment webhook; must never invite buying again.</comment>
@@ -871,6 +915,10 @@
   <data name="checkout_opened_in_browser" xml:space="preserve">
     <value>أكمل عملية الشراء في المتصفح. سيتم تحديث خطتك هنا تلقائيًا بمجرد تأكيد الدفع.</value>
     <comment>Shown after the app hands the user to the Stripe hosted checkout in the system browser. The app polls the server and flips the plan automatically when the payment webhook lands.</comment>
+  </data>
+  <data name="checkout_restore_checking" xml:space="preserve">
+    <value>نتحقق من خطتك مرة أخرى.</value>
+    <comment>Message after Restore purchases in the Stripe-paid app: nothing to restore locally, the app re-reads the plan from the server.</comment>
   </data>
   <data name="choose_file" xml:space="preserve">
     <value>اختيار ملف</value>
@@ -1012,6 +1060,10 @@
     <value>الطرف المقابل</value>
     <comment>A label displayed next to a companion contract.</comment>
   </data>
+  <data name="conn_blocked_kill_switch" xml:space="preserve">
+    <value>محجوب — مفتاح القتل مفعّل</value>
+    <comment>Windows Connect page status when the connection is down and the kill switch is deliberately blocking this computer's traffic.</comment>
+  </data>
   <data name="conn_connect_on_launch" xml:space="preserve">
     <value>الاتصال تلقائيًا عند بدء التطبيق</value>
     <comment>Settings: switch that connects automatically when the app starts.</comment>
@@ -1020,13 +1072,93 @@
     <value>متوقف افتراضيًا. عند التفعيل، يتصل URnetwork بالمزوّد الذي اخترته بمجرد فتح التطبيق. هذا يغيّر التشغيل التالي - ولا يتصل الآن.</value>
     <comment>Settings: explanation under the connect-on-launch switch.</comment>
   </data>
+  <data name="conn_degraded" xml:space="preserve">
+    <value>الاتصال متدهور — جارٍ إعادة الاتصال</value>
+    <comment>Windows connection status (Connect page headline and tray tooltip) when a working connection dropped and the app is reconnecting on its own.</comment>
+  </data>
+  <data name="conn_disconnecting" xml:space="preserve">
+    <value>جارٍ قطع الاتصال — ما زالت حركة بياناتك تمر عبر النفق</value>
+    <comment>Windows Connect page status while the tunnel is being stopped but its routes are still installed.</comment>
+  </data>
   <data name="conn_failed" xml:space="preserve">
     <value>تعذّر الاتصال</value>
     <comment>Connect screen status when the connect attempt failed: no provider could be reached (the sdk's CONNECT_FAILED). The connection keeps trying, and the app offers Retry.</comment>
   </data>
+  <data name="conn_failed_detail" xml:space="preserve">
+    <value>تعذّر الوصول إلى أي مزود. تعيد المحاولة بناء الاتصال من البداية.</value>
+    <comment>Windows Connect page reason line when connecting failed.</comment>
+  </data>
+  <data name="conn_failsafe_armed" xml:space="preserve">
+    <value>إذا لم يمر أي شيء قريبًا، فسيوقف URnetwork النفق تلقائيًا كي يبقى اتصالك بالإنترنت قائمًا.</value>
+    <comment>Windows Connect page: sentence appended to the line above when the service will stop a tunnel that carries nothing.</comment>
+  </data>
+  <data name="conn_failsafe_blocked" xml:space="preserve">
+    <value>لم يتمكن النفق من نقل حركة البيانات، لذا أوقفه URnetwork. مفتاح القتل مفعّل، لذا لا يغادر أي شيء هذا الكمبيوتر حتى تتصل مجددًا أو توقف مفتاح القتل — لا يوجد أي تسرب.</value>
+    <comment>Windows Connect page line after the service stopped a tunnel that carried nothing, while the kill switch keeps this computer blocked.</comment>
+  </data>
+  <data name="conn_failsafe_restored" xml:space="preserve">
+    <value>قطع URnetwork اتصالك ليبقيك متصلًا بالإنترنت: كان النفق قائمًا لكن لم يكن يمر عبره أي شيء. حركة بياناتك تخرج الآن بشكل عادي وهي غير محمية. اضغط اتصال لإعادة المحاولة.</value>
+    <comment>Windows Connect page line and tray notification after the service stopped a tunnel that carried nothing, with the kill switch off. Keep the emphasis on NOT.</comment>
+  </data>
+  <data name="conn_finding_providers" xml:space="preserve">
+    <value>جارٍ البحث عن مزودين…</value>
+    <comment>Connection status while the app has providers but none is proven to work yet (Linux and Windows Connect page headline, Windows tray tooltip).</comment>
+  </data>
   <data name="conn_not_protected" xml:space="preserve">
     <value>حركة الإنترنت لديك غير محمية.</value>
     <comment>Connect page: warning that the internet traffic is not protected.</comment>
+  </data>
+  <data name="conn_reason_auth" xml:space="preserve">
+    <value>تسجيل الدخول إلى المنصة يفشل…</value>
+    <comment>Windows Connect page reason line while the app's sign-in to the URnetwork platform keeps failing.</comment>
+  </data>
+  <data name="conn_reason_platform" xml:space="preserve">
+    <value>جارٍ التواصل مع المنصة…</value>
+    <comment>Windows Connect page reason line while the app cannot reach the URnetwork platform (the API servers).</comment>
+  </data>
+  <data name="conn_reason_providers" xml:space="preserve">
+    <value>المزودون لا يستجيبون — جارٍ إعادة المحاولة…</value>
+    <comment>Windows Connect page reason line while the selected providers do not answer.</comment>
+  </data>
+  <data name="conn_reason_rate_limited" xml:space="preserve">
+    <value>تم بلوغ حد الطلبات — جارٍ الانتظار…</value>
+    <comment>Windows Connect page reason line while the platform asks the app to slow down.</comment>
+  </data>
+  <data name="conn_traffic_blocked" xml:space="preserve">
+    <value>لا يوجد مزود يعمل الآن — حركة بياناتك محجوبة وليست مكشوفة. اقطع الاتصال للعودة إلى اتصالك العادي.</value>
+    <comment>Windows Connect page line while connected but no provider carries traffic, with leak protection in force.</comment>
+  </data>
+  <data name="conn_traffic_blocked_unprotected" xml:space="preserve">
+    <value>لا يوجد مزود يعمل الآن — حركة البيانات المرسلة إلى النفق لا تصل إلى أي مكان، والحماية من التسرب معطّلة، لذا قد يتجاوزها جزء من حركة البيانات. اقطع الاتصال للعودة إلى اتصالك العادي.</value>
+    <comment>Windows Connect page line while connected but no provider carries traffic, and leak protection (the firewall policy) is not in force.</comment>
+  </data>
+  <data name="conn_tray_blocked_kill_switch" xml:space="preserve">
+    <value>محجوب (مفتاح القتل مفعّل)</value>
+    <comment>Windows tray tooltip when the kill switch is deliberately blocking this computer's traffic.</comment>
+  </data>
+  <data name="conn_tray_blocked_no_tunnel" xml:space="preserve">
+    <value>محجوب — ما زالت الحماية من التسرب سارية دون نفق قائم</value>
+    <comment>Windows tray tooltip when leak protection blocks traffic while no tunnel is up.</comment>
+  </data>
+  <data name="conn_tray_disconnecting" xml:space="preserve">
+    <value>جارٍ قطع الاتصال — ما زالت حركة البيانات تمر عبر النفق</value>
+    <comment>Windows tray tooltip while the tunnel is being stopped but its routes are still installed.</comment>
+  </data>
+  <data name="conn_tray_failsafe_blocked" xml:space="preserve">
+    <value>لم يتمكن النفق من نقل حركة البيانات، لذا أوقفه URnetwork. مفتاح القتل مفعّل، لذا يبقى هذا الكمبيوتر محجوبًا ولا يوجد أي تسرب. أعد الاتصال، أو أوقف مفتاح القتل من هذه القائمة.</value>
+    <comment>Windows tray notification after the service stopped a tunnel that carried nothing, while the kill switch keeps this computer blocked. "This menu" is the tray icon's menu.</comment>
+  </data>
+  <data name="conn_tray_failsafe_stopped" xml:space="preserve">
+    <value>غير متصل (فشل النفق)</value>
+    <comment>Windows tray tooltip after the service stopped a tunnel that carried nothing.</comment>
+  </data>
+  <data name="conn_tray_force_tunnel_off" xml:space="preserve">
+    <value>فرض إيقاف النفق (استرداد)</value>
+    <comment>Windows tray menu item that stops the tunnel directly when the normal Disconnect is stuck.</comment>
+  </data>
+  <data name="conn_tray_lift_kill_switch" xml:space="preserve">
+    <value>إيقاف مفتاح القتل (إلغاء حجب هذا الكمبيوتر)</value>
+    <comment>Windows tray menu item that lifts the kill switch's block on this computer.</comment>
   </data>
   <data name="connect" xml:space="preserve">
     <value>اربط</value>
@@ -1194,7 +1326,7 @@
   </data>
   <data name="contribute_bandwidth" xml:space="preserve">
     <value>ساهم بعرض النطاق الترددي</value>
-    <comment>Used in Shared/Views/Introduction/IntroductionParticipateSettingsView.swift.</comment>
+    <comment>Onboarding: title of the step that asks whether this device may share bandwidth with the network (provide).</comment>
   </data>
   <data name="control_doh_error_https_required" xml:space="preserve">
     <value>يجب أن يبدأ عنوان URL بـ https://.</value>
@@ -1376,13 +1508,25 @@
     <value>لا توجد خدمة تفويض polkit على هذا الجهاز، لذا تعود خدمة نظام URnetwork إلى مجموعة 'urnetwork'. أضف مستخدمك إليها ثم سجّل الخروج وعُد للدخول.</value>
     <comment>Connect error: no polkit service, the daemon falls back to the urnetwork group.</comment>
   </data>
+  <data name="daemon_legacy_group_auth" xml:space="preserve">
+    <value>خدمة نظام URnetwork على هذا الجهاز إصدار أقدم ما زال يتطلب العضوية في مجموعة. حدّث الخدمة، أو أضف مستخدمك إلى المجموعة 'urnetwork' ثم سجّل الخروج وسجّل الدخول مجددًا.</value>
+    <comment>Linux notice when an older system service refuses the app's user. 'urnetwork' is the literal Linux group name; keep it as is.</comment>
+  </data>
   <data name="daemon_no_answer" xml:space="preserve">
     <value>خدمة نظام URnetwork لم تستجب.</value>
     <comment>Error: the system service did not answer.</comment>
   </data>
+  <data name="daemon_not_reachable" xml:space="preserve">
+    <value>تعذّر الوصول إلى خدمة نظام URnetwork.</value>
+    <comment>Linux notice when the app cannot reach the URnetwork system service for an unexpected reason.</comment>
+  </data>
   <data name="daemon_sdk_mismatch" xml:space="preserve">
     <value>التطبيق وخدمة نظام URnetwork من إصدارَي بناء مختلفين. حدّث كليهما إلى الإصدار نفسه.</value>
     <comment>Shown on the linux home screen when the app and the urnetworkd system service carry different URnetwork SDK builds (they update on independent schedules and must match exactly). The fix is updating both to the same release.</comment>
+  </data>
+  <data name="daemon_stale_sandbox_mount" xml:space="preserve">
+    <value>أُعيد تشغيل خدمة نظام URnetwork أثناء فتح هذا التطبيق. أغلق التطبيق وافتحه مجددًا لإعادة الاتصال بها.</value>
+    <comment>Linux notice when the app cannot reach the URnetwork system service because the service restarted under a sandboxed (Flatpak) app.</comment>
   </data>
   <data name="daemon_too_old" xml:space="preserve">
     <value>خدمة نظام URnetwork قديمة. حدّثها للاتصال.</value>
@@ -2148,6 +2292,98 @@
     <value>الأجهزة</value>
     <comment>Provider list group title for devices</comment>
   </data>
+  <data name="direct_update_allow" xml:space="preserve">
+    <value>سماح</value>
+    <comment>macOS folder-access panel button that grants the app access to the Applications folder for the update.</comment>
+  </data>
+  <data name="direct_update_allow_applications" xml:space="preserve">
+    <value>لتثبيت التحديث، اسمح لـ URnetwork باستبدال نفسه في مجلد التطبيقات. حدد التطبيقات وانقر على سماح.</value>
+    <comment>macOS folder-access panel message when installing an update: the user selects the Applications folder to grant access. Keep "Allow" consistent with the panel's button.</comment>
+  </data>
+  <data name="direct_update_available" xml:space="preserve">
+    <value>يتوفر تحديث: {}</value>
+    <comment>macOS Settings &gt; Software update status when a newer release exists. {version} is its version.</comment>
+  </data>
+  <data name="direct_update_check" xml:space="preserve">
+    <value>التحقق من التحديثات</value>
+    <comment>macOS Settings &gt; Software update button that checks now.</comment>
+  </data>
+  <data name="direct_update_check_failed" xml:space="preserve">
+    <value>تعذّر التحقق من التحديثات: {}</value>
+    <comment>macOS Settings &gt; Software update error. {detail} is a short technical reason (often English, from the system).</comment>
+  </data>
+  <data name="direct_update_checking" xml:space="preserve">
+    <value>جارٍ التحقق من التحديثات…</value>
+    <comment>macOS Settings &gt; Software update status while checking.</comment>
+  </data>
+  <data name="direct_update_checksum_failed" xml:space="preserve">
+    <value>لم يطابق الملف الذي تم تنزيله المجموع الاختباري للإصدار فتم تجاهله.</value>
+    <comment>macOS Settings &gt; Software update error: the downloaded file failed its integrity check and was deleted.</comment>
+  </data>
+  <data name="direct_update_development_build" xml:space="preserve">
+    <value>إصدار تطوير؛ أحدث إصدار هو {}.</value>
+    <comment>macOS Settings &gt; Software update status on a development build, which never updates itself. {version} is the newest release version.</comment>
+  </data>
+  <data name="direct_update_download_failed" xml:space="preserve">
+    <value>فشل التنزيل: {}</value>
+    <comment>macOS Settings &gt; Software update error. {detail} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_downloading_version" xml:space="preserve">
+    <value>جارٍ تنزيل {}…</value>
+    <comment>macOS Settings &gt; Software update status while the release downloads. {version} is its version.</comment>
+  </data>
+  <data name="direct_update_install" xml:space="preserve">
+    <value>تثبيت التحديث</value>
+    <comment>macOS Settings &gt; Software update button that downloads, verifies and installs the update.</comment>
+  </data>
+  <data name="direct_update_install_failed" xml:space="preserve">
+    <value>تعذّر تثبيت التحديث: {}</value>
+    <comment>macOS Settings &gt; Software update error. {detail} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_installing" xml:space="preserve">
+    <value>جارٍ تثبيت التحديث…</value>
+    <comment>macOS Settings &gt; Software update status while the verified update is installed.</comment>
+  </data>
+  <data name="direct_update_last_checked" xml:space="preserve">
+    <value>آخر تحقق: {}</value>
+    <comment>macOS Settings &gt; Software update: when updates were last checked. {when} is a relative date, for example "5 minutes ago" or "yesterday".</comment>
+  </data>
+  <data name="direct_update_manual_install" xml:space="preserve">
+    <value>تم تنزيل {} والتحقق منه. اسحب URnetwork الجديد إلى مجلد التطبيقات، ثم افتحه من هناك.</value>
+    <comment>macOS Settings &gt; Software update status when the app could not replace itself. {version} is the downloaded release's version.</comment>
+  </data>
+  <data name="direct_update_not_checked" xml:space="preserve">
+    <value>لم يتم التحقق من التحديثات بعد.</value>
+    <comment>macOS Settings &gt; Software update status before the first check.</comment>
+  </data>
+  <data name="direct_update_relaunching" xml:space="preserve">
+    <value>جارٍ إعادة تشغيل URnetwork…</value>
+    <comment>macOS Settings &gt; Software update status while the app restarts on the new version.</comment>
+  </data>
+  <data name="direct_update_section_title" xml:space="preserve">
+    <value>تحديث البرنامج</value>
+    <comment>macOS Settings: title of the section that checks for and installs app updates (direct-download app).</comment>
+  </data>
+  <data name="direct_update_show_in_finder" xml:space="preserve">
+    <value>إظهار في Finder</value>
+    <comment>macOS Settings &gt; Software update button that reveals the downloaded update in Finder (the macOS file manager).</comment>
+  </data>
+  <data name="direct_update_signature_rejected" xml:space="preserve">
+    <value>تم رفض التحديث: {}</value>
+    <comment>macOS Settings &gt; Software update error when the downloaded app's code signature did not check out. {detail} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_unpack_failed" xml:space="preserve">
+    <value>تعذّر فك ضغط الملف الذي تم تنزيله: {}</value>
+    <comment>macOS Settings &gt; Software update error. {detail} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_unusable_release" xml:space="preserve">
+    <value>لا يمكن للتطبيق تثبيت الإصدار {0} ({1}).</value>
+    <comment>macOS Settings &gt; Software update error when the newest release has no file this app can install. {version} is the release version; {reason} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_up_to_date" xml:space="preserve">
+    <value>URnetwork محدَّث.</value>
+    <comment>macOS Settings &gt; Software update status when no newer release exists.</comment>
+  </data>
   <data name="disable_ignore_battery_hint" xml:space="preserve">
     <value>لتعطيل ذلك، يرجى الانتقال إلى استخدام بطارية التطبيق في إعدادات النظام</value>
     <comment>Call to action</comment>
@@ -2397,7 +2633,7 @@
     <comment>Section header of the per-transport enable toggles shown when the transport mode is Auto.</comment>
   </data>
   <data name="enabled_under_auto_footer" xml:space="preserve">
-    <value>مرتبة حسب الأفضلية: H3 و H1 أولًا، ثم whodis، ثم whodis pump. الترتيب ثابت. يبقى بروتوكول نقل واحد على الأقل مفعّلًا.</value>
+    <value>مرتبة حسب الأفضلية: H1 أولًا، ثم H3 وwhodis وwhodis pump. الترتيب ثابت. يبقى بروتوكول نقل واحد على الأقل مفعّلًا.</value>
     <comment>Footer of the Auto transports section explaining the fixed preference order.</comment>
   </data>
   <data name="enjoying_urnetwork" xml:space="preserve">
@@ -2442,6 +2678,10 @@
   <data name="enter_urnetwork" xml:space="preserve">
     <value>أدخل URnetwork</value>
     <comment>Used in Authenticate/LoginInitial/GuestModeSheet.swift.</comment>
+  </data>
+  <data name="enter_wallet_address" xml:space="preserve">
+    <value>أدخل عنوان المحفظة</value>
+    <comment>Used in Main/Account/Wallets/ConnectWalletSheet/EnterWalletAddress/EnterWalletAddressView.swift.</comment>
   </data>
   <data name="epoch_column_epoch_linux" xml:space="preserve">
     <value>الفترة</value>
@@ -3586,6 +3826,10 @@
     <value>هل تحتاج إلى المزيد من البيانات وبشكل أسرع؟</value>
     <comment>Call to action</comment>
   </data>
+  <data name="net_points_earned" xml:space="preserve">
+    <value>صافي النقاط المكتسبة</value>
+    <comment>Earnings page: lowercase caption under the net points total.</comment>
+  </data>
   <data name="net_provided" xml:space="preserve">
     <value>البيانات المقدمة</value>
     <comment>Call to action</comment>
@@ -3661,6 +3905,10 @@
   <data name="network_create_bonus_message" xml:space="preserve">
     <value>شخص ما دعاك للانضمام 🥳\nاحصل على مكافأتك عن طريق إنشاء شبكة!</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="network_earnings" xml:space="preserve">
+    <value>أرباح الشبكة</value>
+    <comment>Used in Main/Account/AccountRootView.swift.</comment>
   </data>
   <data name="network_name_changed_to_n" xml:space="preserve">
     <value>تم تغيير اسم الشبكة إلى {}</value>
@@ -3861,6 +4109,10 @@
   <data name="none" xml:space="preserve">
     <value>لا يوجد</value>
     <comment>Empty value: the VLESS settings show it for no security and no flow (all apps), and the Referrals section shows it on windows and linux when no referral network is linked.</comment>
+  </data>
+  <data name="not_now" xml:space="preserve">
+    <value>ليس الآن</value>
+    <comment>macOS button that dismisses the prompt to enable the VPN system extension for now.</comment>
   </data>
   <data name="notifications_label" xml:space="preserve">
     <value>الإشعارات</value>
@@ -4175,6 +4427,10 @@
     <value>وفّر {}%</value>
     <comment>Plan picker: the saving badge on the yearly card; the number is the whole percent saved against twelve monthly payments.</comment>
   </data>
+  <data name="plan_terms_first_year_price" xml:space="preserve">
+    <value>{0} للسنة الأولى، ثم {1}/سنة. ألغِ في أي وقت.</value>
+    <comment>Plan picker terms line for the yearly plan with a first-year offer and no free trial. {first_year_price} and {yearly_price} are formatted prices, for example $39.99.</comment>
+  </data>
   <data name="plan_terms_yearly.zero" xml:space="preserve">
     <value>{0} يوم مجانًا، ثم {1}/سنة. يمكنك الإلغاء في أي وقت.</value>
     <comment>Plan picker: the terms line under the button for the yearly plan with its trial.</comment>
@@ -4198,6 +4454,10 @@
   <data name="plan_terms_yearly.other" xml:space="preserve">
     <value>{0} يوم مجانًا، ثم {1}/سنة. يمكنك الإلغاء في أي وقت.</value>
     <comment>Plan picker: the terms line under the button for the yearly plan with its trial.</comment>
+  </data>
+  <data name="plan_terms_yearly_billed_today" xml:space="preserve">
+    <value>{} يُحصَّل اليوم، ثم كل عام. ألغِ في أي وقت.</value>
+    <comment>Plan picker terms line for the yearly plan without a trial or offer. {yearly_price} is a formatted price, for example $59.99.</comment>
   </data>
   <data name="please_install_phantom_or_solflare_to_use_this" xml:space="preserve">
     <value>يرجى تثبيت Phantom أو Solflare لاستخدام هذه الميزة</value>
@@ -5249,7 +5509,7 @@
   </data>
   <data name="seedphrase_paste_hint" xml:space="preserve">
     <value>الصق عبارة الاسترداد المكونة من 12 أو 24 كلمة هنا</value>
-    <comment>Seed sign-in sheet: placeholder of the seedphrase field (android accepts 12 or 24 words).</comment>
+    <comment>Seed sign-in sheet: placeholder of the seedphrase field (android and windows accept 12 or 24 words).</comment>
   </data>
   <data name="seedphrase_required" xml:space="preserve">
     <value>يرجى إدخال عبارة الاسترداد</value>
@@ -6893,6 +7153,22 @@
     <value>استخدم صيغة ASCII للاسم.</value>
     <comment>Split rules: validation error for a host name with non-ASCII characters; the rule wants the punycode form.</comment>
   </data>
+  <data name="split_rule_mode_excluded_description" xml:space="preserve">
+    <value>يتجاوز المضيفون المحددون النفق.</value>
+    <comment>Split rule editor: description of the Route locally mode.</comment>
+  </data>
+  <data name="split_rule_mode_included_description" xml:space="preserve">
+    <value>الافتراضي: يستخدم المضيفون المحددون النفق دون تثبيت.</value>
+    <comment>Split rule editor: description of the Route through VPN mode (the default). A pin is the Keep on one provider mode.</comment>
+  </data>
+  <data name="split_rule_mode_pinned_description" xml:space="preserve">
+    <value>يحتفظ المضيفون المحددون بمزودهم مدة أطول بدلًا من نقلهم عند أول بادرة مشكلة، فيقل تغيّر عنوان IP للموقع أثناء الجلسة.</value>
+    <comment>Split rule editor: description of the Keep on one provider mode.</comment>
+  </data>
+  <data name="split_rule_mode_pinned_title" xml:space="preserve">
+    <value>الإبقاء على مزود واحد</value>
+    <comment>Split rule editor: title of the mode that keeps the selected hosts on the same VPN provider longer.</comment>
+  </data>
   <data name="split_rule_preset_google_meet_calls" xml:space="preserve">
     <value>مكالمات Google Meet</value>
     <comment>Split rules preset: Google Meet call media, from the address ranges Google publishes for routing it outside a VPN. Keep the product name Google Meet unchanged.</comment>
@@ -6909,6 +7185,10 @@
     <value>يظهر نشاط التوجيه هنا أثناء الاتصال.</value>
     <comment>A description of the content of the "Activity" section of the split rules view.</comment>
   </data>
+  <data name="split_rules_connect_to_load" xml:space="preserve">
+    <value>اتصل مرة واحدة لتحميل القواعد الموجودة لديك.</value>
+    <comment>Split rules screen: note under the disabled Add a rule button before the app has connected once and loaded the saved rules.</comment>
+  </data>
   <data name="split_rules_hint" xml:space="preserve">
     <value>انقر على حركة المرور أدناه لتوجيهها محليًا وتجاوز النفق.</value>
     <comment>A description of how to route traffic locally.</comment>
@@ -6917,9 +7197,17 @@
     <value>أضف مضيفًا أعلاه، أو انقر على حركة المرور أدناه لتوجيهها محليًا وتجاوز النفق.</value>
     <comment>Split rules on android, which has a host input above the traffic list: how to add to the rule. The apple/linux screens without the input keep split_rules_hint.</comment>
   </data>
+  <data name="split_rules_host_hint_modes" xml:space="preserve">
+    <value>أضف مضيفًا أعلاه، أو انقر على حركة المرور أدناه لتوجيهها محليًا أو إبقائها على مزود واحد.</value>
+    <comment>Split rules screen: hint shown while there are no rules yet. Routing locally sends traffic outside the VPN; holding to one provider keeps a site on the same VPN exit.</comment>
+  </data>
   <data name="split_rules_info_note" xml:space="preserve">
     <value>تنطبق الاستثناءات على مجموعة الشبكة المرتبطة بالكامل، لذا يتم استثناء حركة المرور ذات الصلة معًا.</value>
     <comment>transfer stats and split rules</comment>
+  </data>
+  <data name="split_rules_info_note_modes" xml:space="preserve">
+    <value>تنطبق القواعد على مجموعة الشبكة المرتبطة بالكامل، لذا تُشمل حركة المرور ذات الصلة معًا.</value>
+    <comment>Split rules screen: note that a rule matches every host in the same network cluster (related hosts of one site or service), whatever the rule's mode.</comment>
   </data>
   <data name="split_rules_match_sites_not_apps" xml:space="preserve">
     <value>تطابق قواعد التقسيم المواقع والعناوين، وليس التطبيقات: تسمح Apple بشبكة VPN لكل تطبيق فقط على الأجهزة التي تديرها مؤسسة (MDM). لإبقاء تطبيق خارج VPN، وجّه المواقع التي يستخدمها محليًا، أو ابدأ من إعداد مسبق. عناوين الشبكة المحلية تتجاوز VPN بالفعل.</value>
@@ -6932,6 +7220,14 @@
   <data name="split_rules_start_from_preset" xml:space="preserve">
     <value>ابدأ من إعداد مسبق</value>
     <comment>Split rules screen: the menu that starts a route-locally rule from a preset, the address ranges a service publishes for use outside a VPN.</comment>
+  </data>
+  <data name="sso_browser_open_failed" xml:space="preserve">
+    <value>تعذّر فتح المتصفح. يُرجى المحاولة مرة أخرى.</value>
+    <comment>macOS error when adding a sign-in method could not open the browser for the provider's sign-in page.</comment>
+  </data>
+  <data name="sso_sign_in_timed_out" xml:space="preserve">
+    <value>انتهت مهلة تسجيل الدخول. يُرجى المحاولة مرة أخرى.</value>
+    <comment>Error when a browser sign-in (Google or Apple through the browser) took too long and expired.</comment>
   </data>
   <data name="start_earning_join" xml:space="preserve">
     <value>للبدء في الربح، انضم إلى الشبكة</value>
@@ -7005,6 +7301,10 @@
     <value>اشتراك</value>
     <comment>Button on the plan picker for the monthly plan, which has no free trial.</comment>
   </data>
+  <data name="subscription_portal_open_failed" xml:space="preserve">
+    <value>تعذّر فتح بوابة الاشتراك. يُرجى المحاولة مرة أخرى.</value>
+    <comment>Snackbar error when the Stripe subscription management page (Manage subscription) could not be opened.</comment>
+  </data>
   <data name="subscription_purchased_under_different_account" xml:space="preserve">
     <value>تم شراء اشتراكك باستخدام حساب مختلف. سجّل الدخول إلى ذلك الحساب لاستخدامه.</value>
     <comment>The store purchase belongs to a different network than the one logged in — crediting must not go to the wrong account, so tell the user which way out exists. Apple: restore-purchases outcome (Shared/ViewModels/AppStoreSubscriptionManager.swift). Android: terminal `wrong_network` answer from the Play purchase report (google/PlanViewModel.kt); the purchase is still acknowledged so Play does not auto-refund it.</comment>
@@ -7033,9 +7333,41 @@
     <value>Pro</value>
     <comment>Display name for the paid plan. The WIRE value stays "supporter" (subscription_type / current_subscription.plan) because already-shipped app versions parse that string; only what the user reads changes.</comment>
   </data>
+  <data name="svc_action_failed" xml:space="preserve">
+    <value>لم تكتمل العملية — لم تتغير الخدمة. التفاصيل في سجلات التطبيق.</value>
+    <comment>Windows banner text when installing, starting or updating the VPN service failed.</comment>
+  </data>
   <data name="svc_service_label" xml:space="preserve">
     <value>خدمة VPN</value>
     <comment>Settings: label of the VPN service row.</comment>
+  </data>
+  <data name="svc_setup_action" xml:space="preserve">
+    <value>إعداد</value>
+    <comment>Windows banner button that installs the VPN service (Windows asks for administrator permission).</comment>
+  </data>
+  <data name="svc_setup_message" xml:space="preserve">
+    <value>يستخدم URnetwork خدمة Windows لنقل حركة البيانات. نقرة واحدة — سيطلب Windows إذن المسؤول.</value>
+    <comment>Windows banner text under 'Set up the VPN service'.</comment>
+  </data>
+  <data name="svc_setup_title" xml:space="preserve">
+    <value>إعداد خدمة VPN</value>
+    <comment>Windows banner title when the URnetwork Windows service that carries traffic is not installed yet.</comment>
+  </data>
+  <data name="svc_start_action" xml:space="preserve">
+    <value>تشغيل</value>
+    <comment>Windows banner button that starts the stopped VPN service.</comment>
+  </data>
+  <data name="svc_start_message" xml:space="preserve">
+    <value>الخدمة مثبتة لكنها لا تعمل.</value>
+    <comment>Windows banner text under 'Start the VPN service'.</comment>
+  </data>
+  <data name="svc_start_title" xml:space="preserve">
+    <value>تشغيل خدمة VPN</value>
+    <comment>Windows banner title when the VPN service is installed but stopped.</comment>
+  </data>
+  <data name="svc_uac_declined" xml:space="preserve">
+    <value>طلب Windows الإذن وتم إغلاق النافذة. انقر مجددًا عندما تكون جاهزًا.</value>
+    <comment>Windows banner text after the user closed the administrator permission (UAC) prompt without approving.</comment>
   </data>
   <data name="svc_uninstall_action" xml:space="preserve">
     <value>إلغاء التثبيت</value>
@@ -7045,9 +7377,25 @@
     <value>هذا يوقف خدمة URnetwork ويزيل وحدة systemd الخاصة بها. لن يتمكن التطبيق من الاتصال حتى تُعدّ الخدمة مجددًا. سيُطلب منك إذن المسؤول.</value>
     <comment>Settings: confirmation text before uninstalling the VPN service.</comment>
   </data>
+  <data name="svc_uninstall_confirm_windows" xml:space="preserve">
+    <value>هذا يوقف خدمة URnetwork ويزيلها من Windows. لن يتمكن التطبيق من الاتصال حتى تُعدّ الخدمة مجددًا. سيطلب Windows إذن المسؤول.</value>
+    <comment>Windows Settings: confirmation dialog before uninstalling the VPN service.</comment>
+  </data>
   <data name="svc_uninstall_note" xml:space="preserve">
     <value>إزالة خدمة systemd التي يستخدمها URnetwork لنقل حركة البيانات.</value>
     <comment>Settings: explanation under the uninstall service button.</comment>
+  </data>
+  <data name="svc_uninstall_note_windows" xml:space="preserve">
+    <value>إزالة خدمة Windows التي يستخدمها URnetwork لنقل حركة البيانات.</value>
+    <comment>Windows Settings &gt; VPN service row: what the Uninstall button removes.</comment>
+  </data>
+  <data name="svc_update_message" xml:space="preserve">
+    <value>إصدار الخدمة المثبتة يختلف عن إصدار هذا التطبيق.</value>
+    <comment>Windows banner text under 'Update the VPN service'. The two version numbers follow it in parentheses.</comment>
+  </data>
+  <data name="svc_update_title" xml:space="preserve">
+    <value>تحديث خدمة VPN</value>
+    <comment>Windows banner title when the installed VPN service is a different version than the app.</comment>
   </data>
   <data name="switch_account" xml:space="preserve">
     <value>تبديل الحساب</value>
@@ -7351,6 +7699,82 @@
   <data name="upd_auto_check_note" xml:space="preserve">
     <value>البحث عن إصدارات جديدة بعد التشغيل بقليل وكل ست ساعات. لا يُثبّت أي شيء أبدًا دون نقرة.</value>
     <comment>Settings: explanation under the automatic update check switch.</comment>
+  </data>
+  <data name="upd_available_appimage_message" xml:space="preserve">
+    <value>بنقرة واحدة يُنزَّل الإصدار ويُتحقق منه باستخدام المجموع الاختباري للإصدار ويحل محل ملف AppImage هذا. تُحدَّث خدمة VPN بشكل منفصل.</value>
+    <comment>Linux Settings update notice, AppImage installs: what the Install button does. The AppImage is the single-file Linux app; the VPN service is the separate system service package.</comment>
+  </data>
+  <data name="upd_available_msi_message" xml:space="preserve">
+    <value>بنقرة واحدة يُنزَّل الإصدار ويُتحقق منه ويُشغَّل مثبّته، الذي يحدّث التطبيق وخدمة VPN. يُغلق التطبيق أثناء التثبيت.</value>
+    <comment>Windows update banner: what the Update button does (downloads the MSI installer, checks it, runs it).</comment>
+  </data>
+  <data name="upd_available_package_message" xml:space="preserve">
+    <value>نزّل {} من صفحة الإصدار، ثم شغّل الأمر أدناه.</value>
+    <comment>Linux Settings update notice, package installs (.deb, .rpm, tarball) that the app does not replace itself. {file} is the release file name, for example urnetwork_2026.10.5_amd64.deb. The shell command is shown in the row below.</comment>
+  </data>
+  <data name="upd_available_title_version" xml:space="preserve">
+    <value>يتوفر تحديث: v{}</value>
+    <comment>Update notice title (Linux Settings, Windows update banner): a newer release is available. {version} is the release version, for example 2026.10.5-1024555910; keep the "v" before it.</comment>
+  </data>
+  <data name="upd_downloaded_message" xml:space="preserve">
+    <value>مجلد ملف AppImage هذا غير قابل للكتابة، لذا حُفظ الملف الذي تم التحقق منه أدناه. استبدل به ملف AppImage يدويًا.</value>
+    <comment>Linux Settings update notice when the app cannot replace itself: the verified file's path is shown in the row below.</comment>
+  </data>
+  <data name="upd_failed_checksum" xml:space="preserve">
+    <value>لم يطابق الملف الذي تم تنزيله المجاميع الاختبارية للإصدار فتم تجاهله. انقر لإعادة المحاولة.</value>
+    <comment>Update notice error (Linux Settings, Windows update banner): the downloaded file failed its integrity check and was deleted.</comment>
+  </data>
+  <data name="upd_failed_download" xml:space="preserve">
+    <value>لم يكتمل التنزيل. تحقق من الاتصال وانقر لإعادة المحاولة.</value>
+    <comment>Update notice error (Linux Settings, Windows update banner): the release download failed.</comment>
+  </data>
+  <data name="upd_failed_install" xml:space="preserve">
+    <value>تعذّر استبدال ملف AppImage. تحقق من أذونات المجلد وانقر لإعادة المحاولة.</value>
+    <comment>Linux Settings update notice error: the verified download could not be swapped in for the running AppImage.</comment>
+  </data>
+  <data name="upd_install" xml:space="preserve">
+    <value>تثبيت</value>
+    <comment>Linux Settings update notice: button that downloads, verifies and installs the update.</comment>
+  </data>
+  <data name="upd_manual_install_message" xml:space="preserve">
+    <value>لم يبدأ المثبّت (يحتاج إلى موافقة المسؤول). عُرض الملف الذي تم التحقق منه في مستكشف الملفات — أغلق التطبيق وشغّله.</value>
+    <comment>Windows update banner when the installer could not be started: the user runs it by hand. Explorer is the Windows file manager.</comment>
+  </data>
+  <data name="upd_ready_message" xml:space="preserve">
+    <value>ملف AppImage الجديد في مكانه وتم التحقق منه. أعد التشغيل لبدء استخدامه؛ يبقى الملف السابق بجانبه حتى ذلك الحين.</value>
+    <comment>Linux Settings update notice once the update is installed and waiting for a relaunch.</comment>
+  </data>
+  <data name="upd_ready_title" xml:space="preserve">
+    <value>جاهز لإعادة التشغيل: v{}</value>
+    <comment>Linux Settings update notice title once the new AppImage is installed. {version} is the release version; keep the "v" before it.</comment>
+  </data>
+  <data name="upd_relaunch" xml:space="preserve">
+    <value>إعادة التشغيل</value>
+    <comment>Linux Settings update notice: button that restarts the app on the newly installed version.</comment>
+  </data>
+  <data name="upd_release_page" xml:space="preserve">
+    <value>صفحة الإصدار</value>
+    <comment>Linux Settings update notice: button that opens the release's download page in the browser.</comment>
+  </data>
+  <data name="upd_show_file" xml:space="preserve">
+    <value>إظهار الملف</value>
+    <comment>Update notice button (Linux Settings, Windows update banner) that opens the folder holding the verified download.</comment>
+  </data>
+  <data name="upd_stage_downloading" xml:space="preserve">
+    <value>جارٍ تنزيل التحديث…</value>
+    <comment>Update notice progress line (Linux Settings, Windows update banner) while the release downloads.</comment>
+  </data>
+  <data name="upd_stage_installing" xml:space="preserve">
+    <value>جارٍ تشغيل المثبّت…</value>
+    <comment>Windows update banner progress line while the verified installer is being launched.</comment>
+  </data>
+  <data name="upd_stage_replacing" xml:space="preserve">
+    <value>جارٍ استبدال ملف AppImage…</value>
+    <comment>Linux Settings update notice progress line while the verified download replaces the running AppImage file.</comment>
+  </data>
+  <data name="upd_stage_verifying" xml:space="preserve">
+    <value>جارٍ التحقق من الملف الذي تم تنزيله…</value>
+    <comment>Update progress line (Linux Settings, Windows update banner, macOS Settings &gt; Software update) while the downloaded release is checked against its published checksum.</comment>
   </data>
   <data name="update" xml:space="preserve">
     <value>تحديث</value>
@@ -7789,6 +8213,10 @@
     <value>عندما تقوم بإحالة صديق:</value>
     <comment>Call to action</comment>
   </data>
+  <data name="widget_chart_peak" xml:space="preserve">
+    <value>الذروة</value>
+    <comment>Throughput widget: lowercase word after the peak packet-rate figure, as in "1.2k pkt/s peak".</comment>
+  </data>
   <data name="widget_client" xml:space="preserve">
     <value>العميل</value>
     <comment>Dashboard widget chart title: this device's own traffic.</comment>
@@ -7840,6 +8268,10 @@
   <data name="widget_globe_description" xml:space="preserve">
     <value>المزودون المتصلون بك على الكرة الأرضية.</value>
     <comment>Description of the provider globe widget in the widget gallery.</comment>
+  </data>
+  <data name="widget_intent_source_parameter" xml:space="preserve">
+    <value>المصدر</value>
+    <comment>Title of a hidden parameter of the Connect/Disconnect control: which surface (widget, control, shortcut) made the request.</comment>
   </data>
   <data name="widget_more_providers" xml:space="preserve">
     <value>+{} أخرى</value>
@@ -7960,6 +8392,10 @@
   <data name="widget_quick_tile_added" xml:space="preserve">
     <value>تمت إضافة مربع الاتصال السريع</value>
     <comment>Toast after the system added the Quick Settings tile.</comment>
+  </data>
+  <data name="widget_refresh_intent_title" xml:space="preserve">
+    <value>تحديث أدوات URnetwork</value>
+    <comment>Title of the action that refreshes the app's Home Screen widgets.</comment>
   </data>
   <data name="widget_toggle_intent_title" xml:space="preserve">
     <value>تبديل URnetwork VPN</value>

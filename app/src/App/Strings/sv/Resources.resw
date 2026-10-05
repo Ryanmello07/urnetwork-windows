@@ -251,6 +251,14 @@
     <value>Träff</value>
     <comment>Connection inspector: label of the matched rule row.</comment>
   </data>
+  <data name="adv_mode_rpc_only" xml:space="preserve">
+    <value>endast RPC</value>
+    <comment>Windows status strip (Advanced Mode), Session value: a session that talks to the service over RPC without a tunnel. Lowercase, a short status value.</comment>
+  </data>
+  <data name="adv_mode_tunnel" xml:space="preserve">
+    <value>tunnel</value>
+    <comment>Windows status strip (Advanced Mode), Session value: a full tunnel session. Lowercase, a short status value.</comment>
+  </data>
   <data name="adv_na" xml:space="preserve">
     <value>—</value>
     <comment>Connection inspector: placeholder dash for a value that is not available.</comment>
@@ -285,7 +293,7 @@
   </data>
   <data name="adv_raw_status" xml:space="preserve">
     <value>Råstatus</value>
-    <comment>Connection inspector: label of the raw status row.</comment>
+    <comment>Connection inspector (Linux) and Advanced Mode status strip (Windows): label of the raw status field.</comment>
   </data>
   <data name="adv_reason" xml:space="preserve">
     <value>Orsak</value>
@@ -307,6 +315,26 @@
     <value>Ruttåsidosättning</value>
     <comment>Connection inspector: decision reason, a route override applied.</comment>
   </data>
+  <data name="adv_routes" xml:space="preserve">
+    <value>Rutter</value>
+    <comment>Windows status strip (Advanced Mode): label of the field that shows whether the tunnel's routes are installed.</comment>
+  </data>
+  <data name="adv_routes_dns_degraded" xml:space="preserve">
+    <value>på, DNS inte tillämpad</value>
+    <comment>Windows status strip (Advanced Mode), Routes value: routes are installed but the tunnel's DNS is not. Lowercase, a short status value.</comment>
+  </data>
+  <data name="adv_routes_kill_switch_armed" xml:space="preserve">
+    <value>av, Kill switch aktiv</value>
+    <comment>Windows status strip (Advanced Mode), Routes value: no routes are installed and the kill switch is blocking traffic. Lowercase, a short status value.</comment>
+  </data>
+  <data name="adv_routes_no_firewall" xml:space="preserve">
+    <value>på, inget läckskydd</value>
+    <comment>Windows status strip (Advanced Mode), Routes value: routes are installed but no leak-prevention firewall policy is in force. Lowercase, a short status value.</comment>
+  </data>
+  <data name="adv_rpc" xml:space="preserve">
+    <value>RPC</value>
+    <comment>Windows status strip (Advanced Mode): label of the field that shows the service's RPC endpoint (host:port). RPC is a technical term.</comment>
+  </data>
   <data name="adv_select_a_row" xml:space="preserve">
     <value>Välj en rad i Aktivitet för att inspektera den</value>
     <comment>Connection inspector: hint to select a row in the Activity list.</comment>
@@ -322,6 +350,10 @@
   <data name="adv_session_exit_country" xml:space="preserve">
     <value>Sessionens utgångsland</value>
     <comment>Connection inspector: label of the session exit country row.</comment>
+  </data>
+  <data name="adv_session_mode" xml:space="preserve">
+    <value>Session</value>
+    <comment>Windows status strip (Advanced Mode): label of the field that shows which kind of session the service granted (tunnel or rpc-only).</comment>
   </data>
   <data name="adv_unknown_exit" xml:space="preserve">
     <value>Finns inte i routingtabellen</value>
@@ -630,6 +662,10 @@
     <value>Blockerade platser kunde inte laddas.</value>
     <comment>Shown on the Blocked locations screen when the list could not be fetched, above a Retry button.</comment>
   </data>
+  <data name="blocked_locations_search_placeholder" xml:space="preserve">
+    <value>Sök länder</value>
+    <comment>macOS Blocked locations screen: placeholder of the country search field.</comment>
+  </data>
   <data name="blocks" xml:space="preserve">
     <value>Block</value>
     <comment>Points leaderboard: stat tile label and sort chip. A block is one finalized payout epoch.</comment>
@@ -720,9 +756,21 @@ rätt sätt</value>
     <value>Söker efter Solana-transaktioner</value>
     <comment>Call to action</comment>
   </data>
+  <data name="checkout_confirming_purchase" xml:space="preserve">
+    <value>Vi bekräftar ditt köp. Din plan uppdateras automatiskt.</value>
+    <comment>Purchase confirmation message while the app waits for the payment to be confirmed.</comment>
+  </data>
+  <data name="checkout_finish_in_browser" xml:space="preserve">
+    <value>Slutför i webbläsaren.</value>
+    <comment>Purchase confirmation title after the app opened Stripe's checkout page in the browser.</comment>
+  </data>
   <data name="checkout_opened_in_browser" xml:space="preserve">
     <value>Slutför ditt köp i webbläsaren. Din plan uppdateras här automatiskt när betalningen har bekräftats.</value>
     <comment>Shown after the app hands the user to the Stripe hosted checkout in the system browser. The app polls the server and flips the plan automatically when the payment webhook lands.</comment>
+  </data>
+  <data name="checkout_restore_checking" xml:space="preserve">
+    <value>Kontrollerar din plan igen.</value>
+    <comment>Message after Restore purchases in the Stripe-paid app: nothing to restore locally, the app re-reads the plan from the server.</comment>
   </data>
   <data name="cities" xml:space="preserve">
     <value>Städer</value>
@@ -800,6 +848,10 @@ rätt sätt</value>
     <value>Motpart</value>
     <comment>A label displayed next to a companion contract.</comment>
   </data>
+  <data name="conn_blocked_kill_switch" xml:space="preserve">
+    <value>Blockerad – Kill switch på</value>
+    <comment>Windows Connect page status when the connection is down and the kill switch is deliberately blocking this computer's traffic.</comment>
+  </data>
   <data name="conn_connect_on_launch" xml:space="preserve">
     <value>Anslut automatiskt när appen startar</value>
     <comment>Settings: switch that connects automatically when the app starts.</comment>
@@ -808,13 +860,93 @@ rätt sätt</value>
     <value>Av som standard. När det är på ansluter URnetwork till din valda leverantör så fort du öppnar appen. Det gäller nästa start - det ansluter inte nu.</value>
     <comment>Settings: explanation under the connect-on-launch switch.</comment>
   </data>
+  <data name="conn_degraded" xml:space="preserve">
+    <value>Anslutningen försämrad – ansluter igen</value>
+    <comment>Windows connection status (Connect page headline and tray tooltip) when a working connection dropped and the app is reconnecting on its own.</comment>
+  </data>
+  <data name="conn_disconnecting" xml:space="preserve">
+    <value>Kopplar från – din trafik går fortfarande genom tunneln</value>
+    <comment>Windows Connect page status while the tunnel is being stopped but its routes are still installed.</comment>
+  </data>
   <data name="conn_failed" xml:space="preserve">
     <value>Det gick inte att ansluta</value>
     <comment>Connect screen status when the connect attempt failed: no provider could be reached (the sdk's CONNECT_FAILED). The connection keeps trying, and the app offers Retry.</comment>
   </data>
+  <data name="conn_failed_detail" xml:space="preserve">
+    <value>Inga leverantörer gick att nå. Ett nytt försök bygger upp anslutningen från början.</value>
+    <comment>Windows Connect page reason line when connecting failed.</comment>
+  </data>
+  <data name="conn_failsafe_armed" xml:space="preserve">
+    <value>Om inget kommer igenom inom kort stänger URnetwork av tunneln automatiskt så att du behåller ditt internet.</value>
+    <comment>Windows Connect page: sentence appended to the line above when the service will stop a tunnel that carries nothing.</comment>
+  </data>
+  <data name="conn_failsafe_blocked" xml:space="preserve">
+    <value>Tunneln kunde inte föra trafik, så URnetwork stängde av den. Kill switch är på, så inget lämnar den här datorn förrän du ansluter igen eller stänger av Kill switch – inget läcker.</value>
+    <comment>Windows Connect page line after the service stopped a tunnel that carried nothing, while the kill switch keeps this computer blocked.</comment>
+  </data>
+  <data name="conn_failsafe_restored" xml:space="preserve">
+    <value>URnetwork kopplade från dig för att hålla dig online: tunneln var uppe men inget kom igenom. Din trafik går nu ut som vanligt och är INTE skyddad. Tryck på Anslut för att försöka igen.</value>
+    <comment>Windows Connect page line and tray notification after the service stopped a tunnel that carried nothing, with the kill switch off. Keep the emphasis on NOT.</comment>
+  </data>
+  <data name="conn_finding_providers" xml:space="preserve">
+    <value>Letar efter leverantörer…</value>
+    <comment>Connection status while the app has providers but none is proven to work yet (Linux and Windows Connect page headline, Windows tray tooltip).</comment>
+  </data>
   <data name="conn_not_protected" xml:space="preserve">
     <value>Din internettrafik är inte skyddad.</value>
     <comment>Connect page: warning that the internet traffic is not protected.</comment>
+  </data>
+  <data name="conn_reason_auth" xml:space="preserve">
+    <value>Inloggningen till plattformen misslyckas…</value>
+    <comment>Windows Connect page reason line while the app's sign-in to the URnetwork platform keeps failing.</comment>
+  </data>
+  <data name="conn_reason_platform" xml:space="preserve">
+    <value>Kontaktar plattformen…</value>
+    <comment>Windows Connect page reason line while the app cannot reach the URnetwork platform (the API servers).</comment>
+  </data>
+  <data name="conn_reason_providers" xml:space="preserve">
+    <value>Leverantörerna svarar inte – försöker igen…</value>
+    <comment>Windows Connect page reason line while the selected providers do not answer.</comment>
+  </data>
+  <data name="conn_reason_rate_limited" xml:space="preserve">
+    <value>Begränsad – väntar…</value>
+    <comment>Windows Connect page reason line while the platform asks the app to slow down.</comment>
+  </data>
+  <data name="conn_traffic_blocked" xml:space="preserve">
+    <value>Ingen fungerande leverantör just nu – din trafik är blockerad, inte exponerad. Koppla från för att gå tillbaka till din vanliga anslutning.</value>
+    <comment>Windows Connect page line while connected but no provider carries traffic, with leak protection in force.</comment>
+  </data>
+  <data name="conn_traffic_blocked_unprotected" xml:space="preserve">
+    <value>Ingen fungerande leverantör just nu – trafik som skickas in i tunneln kommer ingenstans, och läckskyddet är av, så viss trafik kan gå förbi den. Koppla från för att gå tillbaka till din vanliga anslutning.</value>
+    <comment>Windows Connect page line while connected but no provider carries traffic, and leak protection (the firewall policy) is not in force.</comment>
+  </data>
+  <data name="conn_tray_blocked_kill_switch" xml:space="preserve">
+    <value>Blockerad (Kill switch på)</value>
+    <comment>Windows tray tooltip when the kill switch is deliberately blocking this computer's traffic.</comment>
+  </data>
+  <data name="conn_tray_blocked_no_tunnel" xml:space="preserve">
+    <value>Blockerad – läckskyddet gäller fortfarande utan någon tunnel uppe</value>
+    <comment>Windows tray tooltip when leak protection blocks traffic while no tunnel is up.</comment>
+  </data>
+  <data name="conn_tray_disconnecting" xml:space="preserve">
+    <value>Kopplar från – trafiken går fortfarande genom tunneln</value>
+    <comment>Windows tray tooltip while the tunnel is being stopped but its routes are still installed.</comment>
+  </data>
+  <data name="conn_tray_failsafe_blocked" xml:space="preserve">
+    <value>Tunneln kunde inte föra trafik, så URnetwork stängde av den. Kill switch är på, så den här datorn förblir blockerad och inget läcker. Anslut igen, eller stäng av Kill switch i den här menyn.</value>
+    <comment>Windows tray notification after the service stopped a tunnel that carried nothing, while the kill switch keeps this computer blocked. "This menu" is the tray icon's menu.</comment>
+  </data>
+  <data name="conn_tray_failsafe_stopped" xml:space="preserve">
+    <value>Frånkopplad (tunneln misslyckades)</value>
+    <comment>Windows tray tooltip after the service stopped a tunnel that carried nothing.</comment>
+  </data>
+  <data name="conn_tray_force_tunnel_off" xml:space="preserve">
+    <value>Tvinga av tunneln (återställning)</value>
+    <comment>Windows tray menu item that stops the tunnel directly when the normal Disconnect is stuck.</comment>
+  </data>
+  <data name="conn_tray_lift_kill_switch" xml:space="preserve">
+    <value>Stäng av Kill switch (avblockera den här datorn)</value>
+    <comment>Windows tray menu item that lifts the kill switch's block on this computer.</comment>
   </data>
   <data name="connect" xml:space="preserve">
     <value>Anslut</value>
@@ -934,7 +1066,7 @@ rätt sätt</value>
   </data>
   <data name="contribute_bandwidth" xml:space="preserve">
     <value>Bidra med bandbredd</value>
-    <comment>Used in Shared/Views/Introduction/IntroductionParticipateSettingsView.swift.</comment>
+    <comment>Onboarding: title of the step that asks whether this device may share bandwidth with the network (provide).</comment>
   </data>
   <data name="control_doh_error_https_required" xml:space="preserve">
     <value>URL:en måste börja med https://.</value>
@@ -1104,13 +1236,25 @@ rätt sätt</value>
     <value>Den här enheten saknar polkit-auktoriseringstjänst, så URnetworks systemtjänst faller tillbaka på gruppen 'urnetwork'. Lägg till din användare i den och logga ut och in igen.</value>
     <comment>Connect error: no polkit service, the daemon falls back to the urnetwork group.</comment>
   </data>
+  <data name="daemon_legacy_group_auth" xml:space="preserve">
+    <value>Systemtjänsten URnetwork på den här enheten är en äldre version som fortfarande kräver gruppmedlemskap. Uppdatera tjänsten, eller lägg till din användare i gruppen 'urnetwork' och logga ut och in igen.</value>
+    <comment>Linux notice when an older system service refuses the app's user. 'urnetwork' is the literal Linux group name; keep it as is.</comment>
+  </data>
   <data name="daemon_no_answer" xml:space="preserve">
     <value>URnetworks systemtjänst svarade inte.</value>
     <comment>Error: the system service did not answer.</comment>
   </data>
+  <data name="daemon_not_reachable" xml:space="preserve">
+    <value>Systemtjänsten URnetwork gick inte att nå.</value>
+    <comment>Linux notice when the app cannot reach the URnetwork system service for an unexpected reason.</comment>
+  </data>
   <data name="daemon_sdk_mismatch" xml:space="preserve">
     <value>Appen och systemtjänsten URnetwork är olika byggen. Uppdatera båda till samma version.</value>
     <comment>Shown on the linux home screen when the app and the urnetworkd system service carry different URnetwork SDK builds (they update on independent schedules and must match exactly). The fix is updating both to the same release.</comment>
+  </data>
+  <data name="daemon_stale_sandbox_mount" xml:space="preserve">
+    <value>Systemtjänsten URnetwork startades om medan den här appen var öppen. Stäng appen och öppna den igen för att ansluta till tjänsten på nytt.</value>
+    <comment>Linux notice when the app cannot reach the URnetwork system service because the service restarted under a sandboxed (Flatpak) app.</comment>
   </data>
   <data name="daemon_too_old" xml:space="preserve">
     <value>Systemtjänsten URnetwork är inaktuell. Uppdatera den för att ansluta.</value>
@@ -1231,6 +1375,98 @@ rätt sätt</value>
   <data name="devices" xml:space="preserve">
     <value>Enheter</value>
     <comment>Provider list group title for devices</comment>
+  </data>
+  <data name="direct_update_allow" xml:space="preserve">
+    <value>Tillåt</value>
+    <comment>macOS folder-access panel button that grants the app access to the Applications folder for the update.</comment>
+  </data>
+  <data name="direct_update_allow_applications" xml:space="preserve">
+    <value>För att installera uppdateringen, tillåt URnetwork att ersätta sig själv i mappen Program. Välj Program och klicka på Tillåt.</value>
+    <comment>macOS folder-access panel message when installing an update: the user selects the Applications folder to grant access. Keep "Allow" consistent with the panel's button.</comment>
+  </data>
+  <data name="direct_update_available" xml:space="preserve">
+    <value>Uppdatering tillgänglig: {}</value>
+    <comment>macOS Settings &gt; Software update status when a newer release exists. {version} is its version.</comment>
+  </data>
+  <data name="direct_update_check" xml:space="preserve">
+    <value>Sök efter uppdateringar</value>
+    <comment>macOS Settings &gt; Software update button that checks now.</comment>
+  </data>
+  <data name="direct_update_check_failed" xml:space="preserve">
+    <value>Det gick inte att söka efter uppdateringar: {}</value>
+    <comment>macOS Settings &gt; Software update error. {detail} is a short technical reason (often English, from the system).</comment>
+  </data>
+  <data name="direct_update_checking" xml:space="preserve">
+    <value>Söker efter uppdateringar…</value>
+    <comment>macOS Settings &gt; Software update status while checking.</comment>
+  </data>
+  <data name="direct_update_checksum_failed" xml:space="preserve">
+    <value>Nedladdningen stämde inte med versionens kontrollsumma och kasserades.</value>
+    <comment>macOS Settings &gt; Software update error: the downloaded file failed its integrity check and was deleted.</comment>
+  </data>
+  <data name="direct_update_development_build" xml:space="preserve">
+    <value>Utvecklingsversion; den senaste versionen är {}.</value>
+    <comment>macOS Settings &gt; Software update status on a development build, which never updates itself. {version} is the newest release version.</comment>
+  </data>
+  <data name="direct_update_download_failed" xml:space="preserve">
+    <value>Nedladdningen misslyckades: {}</value>
+    <comment>macOS Settings &gt; Software update error. {detail} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_downloading_version" xml:space="preserve">
+    <value>Hämtar {}…</value>
+    <comment>macOS Settings &gt; Software update status while the release downloads. {version} is its version.</comment>
+  </data>
+  <data name="direct_update_install" xml:space="preserve">
+    <value>Installera uppdatering</value>
+    <comment>macOS Settings &gt; Software update button that downloads, verifies and installs the update.</comment>
+  </data>
+  <data name="direct_update_install_failed" xml:space="preserve">
+    <value>Uppdateringen kunde inte installeras: {}</value>
+    <comment>macOS Settings &gt; Software update error. {detail} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_installing" xml:space="preserve">
+    <value>Installerar uppdateringen…</value>
+    <comment>macOS Settings &gt; Software update status while the verified update is installed.</comment>
+  </data>
+  <data name="direct_update_last_checked" xml:space="preserve">
+    <value>Senast kontrollerad {}</value>
+    <comment>macOS Settings &gt; Software update: when updates were last checked. {when} is a relative date, for example "5 minutes ago" or "yesterday".</comment>
+  </data>
+  <data name="direct_update_manual_install" xml:space="preserve">
+    <value>{} har hämtats och verifierats. Dra den nya URnetwork till mappen Program och öppna den sedan därifrån.</value>
+    <comment>macOS Settings &gt; Software update status when the app could not replace itself. {version} is the downloaded release's version.</comment>
+  </data>
+  <data name="direct_update_not_checked" xml:space="preserve">
+    <value>Ingen sökning efter uppdateringar har gjorts än.</value>
+    <comment>macOS Settings &gt; Software update status before the first check.</comment>
+  </data>
+  <data name="direct_update_relaunching" xml:space="preserve">
+    <value>Startar om URnetwork…</value>
+    <comment>macOS Settings &gt; Software update status while the app restarts on the new version.</comment>
+  </data>
+  <data name="direct_update_section_title" xml:space="preserve">
+    <value>Programuppdatering</value>
+    <comment>macOS Settings: title of the section that checks for and installs app updates (direct-download app).</comment>
+  </data>
+  <data name="direct_update_show_in_finder" xml:space="preserve">
+    <value>Visa i Finder</value>
+    <comment>macOS Settings &gt; Software update button that reveals the downloaded update in Finder (the macOS file manager).</comment>
+  </data>
+  <data name="direct_update_signature_rejected" xml:space="preserve">
+    <value>Uppdateringen avvisades: {}</value>
+    <comment>macOS Settings &gt; Software update error when the downloaded app's code signature did not check out. {detail} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_unpack_failed" xml:space="preserve">
+    <value>Nedladdningen kunde inte packas upp: {}</value>
+    <comment>macOS Settings &gt; Software update error. {detail} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_unusable_release" xml:space="preserve">
+    <value>Version {0} kan inte installeras av appen ({1}).</value>
+    <comment>macOS Settings &gt; Software update error when the newest release has no file this app can install. {version} is the release version; {reason} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_up_to_date" xml:space="preserve">
+    <value>URnetwork är uppdaterad.</value>
+    <comment>macOS Settings &gt; Software update status when no newer release exists.</comment>
   </data>
   <data name="disable_ignore_battery_hint" xml:space="preserve">
     <value>För att inaktivera, gå till appens batterianvändning i systeminställningarna</value>
@@ -1420,6 +1656,10 @@ rätt sätt</value>
     <value>Föreslå en annan</value>
     <comment>Points leaderboard: the emoji editor's shuffle button, replaces the draft with a new random suggestion.</comment>
   </data>
+  <data name="enabled_under_auto_footer" xml:space="preserve">
+    <value>Listade i prioritetsordning: H1 först, sedan H3, whodis och whodis pump. Ordningen är fast. Minst en transport förblir aktiverad.</value>
+    <comment>Footer of the Auto transports section explaining the fixed preference order.</comment>
+  </data>
   <data name="enjoying_urnetwork" xml:space="preserve">
     <value>Gillar du URnetwork?</value>
     <comment>Call to action</comment>
@@ -1458,6 +1698,10 @@ rätt sätt</value>
   <data name="enter_urnetwork" xml:space="preserve">
     <value>Gå in i URnetwork</value>
     <comment>Used in Authenticate/LoginInitial/GuestModeSheet.swift.</comment>
+  </data>
+  <data name="enter_wallet_address" xml:space="preserve">
+    <value>Ange plånboksadress</value>
+    <comment>Used in Main/Account/Wallets/ConnectWalletSheet/EnterWalletAddress/EnterWalletAddressView.swift.</comment>
   </data>
   <data name="error_changing_network_name" xml:space="preserve">
     <value>Fel vid ändring av nätverksnamn</value>
@@ -2205,6 +2449,10 @@ skickade till dig för att verifiera din identitet.</value>
     <value>Behöver du mer data, snabbare?</value>
     <comment>Call to action</comment>
   </data>
+  <data name="net_points_earned" xml:space="preserve">
+    <value>nettopoäng intjänade</value>
+    <comment>Earnings page: lowercase caption under the net points total.</comment>
+  </data>
   <data name="net_provided" xml:space="preserve">
     <value>Nettotillhandahållen</value>
     <comment>Call to action</comment>
@@ -2281,6 +2529,10 @@ skickade till dig för att verifiera din identitet.</value>
     <value>Någon har bjudit in dig 🥳 
 Hämta din bonus genom att skapa ett nätverk!</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="network_earnings" xml:space="preserve">
+    <value>Nätverksintäkter</value>
+    <comment>Used in Main/Account/AccountRootView.swift.</comment>
   </data>
   <data name="network_name_changed_to_n" xml:space="preserve">
     <value>Nätverksnamnet ändrades till {}</value>
@@ -2437,6 +2689,10 @@ Hämta din bonus genom att skapa ett nätverk!</value>
   <data name="none" xml:space="preserve">
     <value>Ingen</value>
     <comment>Empty value: the VLESS settings show it for no security and no flow (all apps), and the Referrals section shows it on windows and linux when no referral network is linked.</comment>
+  </data>
+  <data name="not_now" xml:space="preserve">
+    <value>Inte nu</value>
+    <comment>macOS button that dismisses the prompt to enable the VPN system extension for now.</comment>
   </data>
   <data name="notifications_label" xml:space="preserve">
     <value>Aviseringar</value>
@@ -2663,6 +2919,10 @@ och mest decentraliserade in- och utgångsprotokoll.</value>
     <value>Spara {} %</value>
     <comment>Plan picker: the saving badge on the yearly card; the number is the whole percent saved against twelve monthly payments.</comment>
   </data>
+  <data name="plan_terms_first_year_price" xml:space="preserve">
+    <value>{0} för ditt första år, sedan {1}/år. Avsluta när som helst.</value>
+    <comment>Plan picker terms line for the yearly plan with a first-year offer and no free trial. {first_year_price} and {yearly_price} are formatted prices, for example $39.99.</comment>
+  </data>
   <data name="plan_terms_yearly.one" xml:space="preserve">
     <value>{0} dag gratis, därefter {1}/år. Avbryt när som helst.</value>
     <comment>Plan picker: the terms line under the button for the yearly plan with its trial.</comment>
@@ -2670,6 +2930,10 @@ och mest decentraliserade in- och utgångsprotokoll.</value>
   <data name="plan_terms_yearly.other" xml:space="preserve">
     <value>{0} dagar gratis, därefter {1}/år. Avbryt när som helst.</value>
     <comment>Plan picker: the terms line under the button for the yearly plan with its trial.</comment>
+  </data>
+  <data name="plan_terms_yearly_billed_today" xml:space="preserve">
+    <value>{} debiteras i dag, sedan varje år. Avsluta när som helst.</value>
+    <comment>Plan picker terms line for the yearly plan without a trial or offer. {yearly_price} is a formatted price, for example $59.99.</comment>
   </data>
   <data name="please_install_phantom_or_solflare_to_use_this" xml:space="preserve">
     <value>Vänligen installera Phantom eller Solflare för att använda denna funktion</value>
@@ -3480,7 +3744,7 @@ innehåll i världen</value>
   </data>
   <data name="seedphrase_paste_hint" xml:space="preserve">
     <value>Klistra in din seedfras på 12 eller 24 ord här</value>
-    <comment>Seed sign-in sheet: placeholder of the seedphrase field (android accepts 12 or 24 words).</comment>
+    <comment>Seed sign-in sheet: placeholder of the seedphrase field (android and windows accept 12 or 24 words).</comment>
   </data>
   <data name="seedphrase_required" xml:space="preserve">
     <value>Ange en seedfras</value>
@@ -3992,6 +4256,22 @@ innehåll i världen</value>
     <value>Använd namnets ASCII-form.</value>
     <comment>Split rules: validation error for a host name with non-ASCII characters; the rule wants the punycode form.</comment>
   </data>
+  <data name="split_rule_mode_excluded_description" xml:space="preserve">
+    <value>Valda värdar går förbi tunneln.</value>
+    <comment>Split rule editor: description of the Route locally mode.</comment>
+  </data>
+  <data name="split_rule_mode_included_description" xml:space="preserve">
+    <value>Standard: valda värdar använder tunneln utan fästning.</value>
+    <comment>Split rule editor: description of the Route through VPN mode (the default). A pin is the Keep on one provider mode.</comment>
+  </data>
+  <data name="split_rule_mode_pinned_description" xml:space="preserve">
+    <value>Valda värdar behåller sin leverantör längre i stället för att flyttas vid första tecken på problem, så att webbplatsen byter IP-adress mer sällan under en session.</value>
+    <comment>Split rule editor: description of the Keep on one provider mode.</comment>
+  </data>
+  <data name="split_rule_mode_pinned_title" xml:space="preserve">
+    <value>Behåll en leverantör</value>
+    <comment>Split rule editor: title of the mode that keeps the selected hosts on the same VPN provider longer.</comment>
+  </data>
   <data name="split_rule_preset_google_meet_calls" xml:space="preserve">
     <value>Google Meet-samtal</value>
     <comment>Split rules preset: Google Meet call media, from the address ranges Google publishes for routing it outside a VPN. Keep the product name Google Meet unchanged.</comment>
@@ -4008,6 +4288,10 @@ innehåll i världen</value>
     <value>Dirigeringsaktivitet visas här när du är ansluten.</value>
     <comment>A description of the content of the "Activity" section of the split rules view.</comment>
   </data>
+  <data name="split_rules_connect_to_load" xml:space="preserve">
+    <value>Anslut en gång för att läsa in de regler du redan har.</value>
+    <comment>Split rules screen: note under the disabled Add a rule button before the app has connected once and loaded the saved rules.</comment>
+  </data>
   <data name="split_rules_hint" xml:space="preserve">
     <value>Tryck på trafik nedan för att dirigera den lokalt, förbi tunneln.</value>
     <comment>A description of how to route traffic locally.</comment>
@@ -4016,9 +4300,17 @@ innehåll i världen</value>
     <value>Lägg till en värd ovan, eller tryck på trafik nedan för att dirigera den lokalt, förbi tunneln.</value>
     <comment>Split rules on android, which has a host input above the traffic list: how to add to the rule. The apple/linux screens without the input keep split_rules_hint.</comment>
   </data>
+  <data name="split_rules_host_hint_modes" xml:space="preserve">
+    <value>Lägg till en värd ovan, eller tryck på trafik nedan för att dirigera den lokalt eller hålla den till en leverantör.</value>
+    <comment>Split rules screen: hint shown while there are no rules yet. Routing locally sends traffic outside the VPN; holding to one provider keeps a site on the same VPN exit.</comment>
+  </data>
   <data name="split_rules_info_note" xml:space="preserve">
     <value>Undantag gäller hela det sammankopplade nätverksklustret, så relaterad trafik fångas upp tillsammans.</value>
     <comment>transfer stats and split rules</comment>
+  </data>
+  <data name="split_rules_info_note_modes" xml:space="preserve">
+    <value>Regler gäller hela det sammankopplade nätverksklustret, så relaterad trafik fångas upp tillsammans.</value>
+    <comment>Split rules screen: note that a rule matches every host in the same network cluster (related hosts of one site or service), whatever the rule's mode.</comment>
   </data>
   <data name="split_rules_match_sites_not_apps" xml:space="preserve">
     <value>Delningsregler gäller webbplatser och adresser, inte appar: Apple tillåter VPN per app bara på enheter som hanteras av en organisation (MDM). Om du vill hålla en app utanför VPN:et dirigerar du de webbplatser den använder lokalt, eller börjar från en förinställning. Adresser i det lokala nätverket kringgår redan VPN:et.</value>
@@ -4031,6 +4323,14 @@ innehåll i världen</value>
   <data name="split_rules_start_from_preset" xml:space="preserve">
     <value>Börja från en förinställning</value>
     <comment>Split rules screen: the menu that starts a route-locally rule from a preset, the address ranges a service publishes for use outside a VPN.</comment>
+  </data>
+  <data name="sso_browser_open_failed" xml:space="preserve">
+    <value>Det gick inte att öppna webbläsaren. Försök igen.</value>
+    <comment>macOS error when adding a sign-in method could not open the browser for the provider's sign-in page.</comment>
+  </data>
+  <data name="sso_sign_in_timed_out" xml:space="preserve">
+    <value>Inloggningen tog för lång tid. Försök igen.</value>
+    <comment>Error when a browser sign-in (Google or Apple through the browser) took too long and expired.</comment>
   </data>
   <data name="start_earning_join" xml:space="preserve">
     <value>För att börja tjäna, gå med i nätverket</value>
@@ -4096,6 +4396,10 @@ som det borde vara.</value>
     <value>Stark anonymisering</value>
     <comment>Connect drawer: strong anonymization toggle — the inverse of allow direct (direct connections expose the real source IP to the provider).</comment>
   </data>
+  <data name="subscription_portal_open_failed" xml:space="preserve">
+    <value>Det gick inte att öppna prenumerationsportalen. Försök igen.</value>
+    <comment>Snackbar error when the Stripe subscription management page (Manage subscription) could not be opened.</comment>
+  </data>
   <data name="successfully_claimed_multiplier" xml:space="preserve">
     <value>Multiplikatorn har hämtats!</value>
     <comment>Snackbar shown when the earnings multiplier is claimed successfully. Used in Main/Account/Settings/SettingsView.swift.</comment>
@@ -4120,9 +4424,41 @@ som det borde vara.</value>
     <value>Pro</value>
     <comment>Display name for the paid plan. The WIRE value stays "supporter" (subscription_type / current_subscription.plan) because already-shipped app versions parse that string; only what the user reads changes.</comment>
   </data>
+  <data name="svc_action_failed" xml:space="preserve">
+    <value>Det slutfördes inte – tjänsten är oförändrad. Detaljer finns i appens logg.</value>
+    <comment>Windows banner text when installing, starting or updating the VPN service failed.</comment>
+  </data>
   <data name="svc_service_label" xml:space="preserve">
     <value>VPN-tjänst</value>
     <comment>Settings: label of the VPN service row.</comment>
+  </data>
+  <data name="svc_setup_action" xml:space="preserve">
+    <value>Konfigurera</value>
+    <comment>Windows banner button that installs the VPN service (Windows asks for administrator permission).</comment>
+  </data>
+  <data name="svc_setup_message" xml:space="preserve">
+    <value>URnetwork använder en Windows-tjänst för att transportera trafik. Ett klick – Windows ber om administratörsbehörighet.</value>
+    <comment>Windows banner text under 'Set up the VPN service'.</comment>
+  </data>
+  <data name="svc_setup_title" xml:space="preserve">
+    <value>Konfigurera VPN-tjänsten</value>
+    <comment>Windows banner title when the URnetwork Windows service that carries traffic is not installed yet.</comment>
+  </data>
+  <data name="svc_start_action" xml:space="preserve">
+    <value>Starta</value>
+    <comment>Windows banner button that starts the stopped VPN service.</comment>
+  </data>
+  <data name="svc_start_message" xml:space="preserve">
+    <value>Tjänsten är installerad men körs inte.</value>
+    <comment>Windows banner text under 'Start the VPN service'.</comment>
+  </data>
+  <data name="svc_start_title" xml:space="preserve">
+    <value>Starta VPN-tjänsten</value>
+    <comment>Windows banner title when the VPN service is installed but stopped.</comment>
+  </data>
+  <data name="svc_uac_declined" xml:space="preserve">
+    <value>Windows bad om behörighet och frågan stängdes. Klicka igen när du är redo.</value>
+    <comment>Windows banner text after the user closed the administrator permission (UAC) prompt without approving.</comment>
   </data>
   <data name="svc_uninstall_action" xml:space="preserve">
     <value>Avinstallera</value>
@@ -4132,9 +4468,25 @@ som det borde vara.</value>
     <value>Det här stoppar URnetwork-tjänsten och tar bort dess systemd-enhet. Appen kan inte ansluta förrän den har konfigurerats igen. Du kommer att bli ombedd om administratörsbehörighet.</value>
     <comment>Settings: confirmation text before uninstalling the VPN service.</comment>
   </data>
+  <data name="svc_uninstall_confirm_windows" xml:space="preserve">
+    <value>Det här stoppar URnetwork-tjänsten och tar bort den från Windows. Appen kan inte ansluta förrän den har konfigurerats igen. Windows ber om administratörsbehörighet.</value>
+    <comment>Windows Settings: confirmation dialog before uninstalling the VPN service.</comment>
+  </data>
   <data name="svc_uninstall_note" xml:space="preserve">
     <value>Ta bort systemd-tjänsten som URnetwork använder för att transportera trafik.</value>
     <comment>Settings: explanation under the uninstall service button.</comment>
+  </data>
+  <data name="svc_uninstall_note_windows" xml:space="preserve">
+    <value>Ta bort Windows-tjänsten som URnetwork använder för att transportera trafik.</value>
+    <comment>Windows Settings &gt; VPN service row: what the Uninstall button removes.</comment>
+  </data>
+  <data name="svc_update_message" xml:space="preserve">
+    <value>Den installerade tjänsten har en annan version än den här appen.</value>
+    <comment>Windows banner text under 'Update the VPN service'. The two version numbers follow it in parentheses.</comment>
+  </data>
+  <data name="svc_update_title" xml:space="preserve">
+    <value>Uppdatera VPN-tjänsten</value>
+    <comment>Windows banner title when the installed VPN service is a different version than the app.</comment>
   </data>
   <data name="switch_account" xml:space="preserve">
     <value>Byt konto</value>
@@ -4322,6 +4674,82 @@ som det borde vara.</value>
   <data name="upd_auto_check_note" xml:space="preserve">
     <value>Sök efter nya versioner strax efter start och var sjätte timme. Inget installeras någonsin utan ett klick.</value>
     <comment>Settings: explanation under the automatic update check switch.</comment>
+  </data>
+  <data name="upd_available_appimage_message" xml:space="preserve">
+    <value>Ett klick hämtar versionen, verifierar den mot versionens kontrollsumma och ersätter den här AppImage-filen. VPN-tjänsten uppdateras separat.</value>
+    <comment>Linux Settings update notice, AppImage installs: what the Install button does. The AppImage is the single-file Linux app; the VPN service is the separate system service package.</comment>
+  </data>
+  <data name="upd_available_msi_message" xml:space="preserve">
+    <value>Ett klick hämtar versionen, verifierar den och kör dess installationsprogram, som uppdaterar appen och VPN-tjänsten. Appen stängs medan installationen pågår.</value>
+    <comment>Windows update banner: what the Update button does (downloads the MSI installer, checks it, runs it).</comment>
+  </data>
+  <data name="upd_available_package_message" xml:space="preserve">
+    <value>Hämta {} från versionssidan och kör sedan kommandot nedan.</value>
+    <comment>Linux Settings update notice, package installs (.deb, .rpm, tarball) that the app does not replace itself. {file} is the release file name, for example urnetwork_2026.10.5_amd64.deb. The shell command is shown in the row below.</comment>
+  </data>
+  <data name="upd_available_title_version" xml:space="preserve">
+    <value>Uppdatering tillgänglig: v{}</value>
+    <comment>Update notice title (Linux Settings, Windows update banner): a newer release is available. {version} is the release version, for example 2026.10.5-1024555910; keep the "v" before it.</comment>
+  </data>
+  <data name="upd_downloaded_message" xml:space="preserve">
+    <value>Den här AppImage-filens mapp är inte skrivbar, så den verifierade nedladdningen sparades nedan. Ersätt AppImage-filen med den manuellt.</value>
+    <comment>Linux Settings update notice when the app cannot replace itself: the verified file's path is shown in the row below.</comment>
+  </data>
+  <data name="upd_failed_checksum" xml:space="preserve">
+    <value>Nedladdningen stämde inte med versionens kontrollsummor och kasserades. Klicka för att försöka igen.</value>
+    <comment>Update notice error (Linux Settings, Windows update banner): the downloaded file failed its integrity check and was deleted.</comment>
+  </data>
+  <data name="upd_failed_download" xml:space="preserve">
+    <value>Nedladdningen slutfördes inte. Kontrollera anslutningen och klicka för att försöka igen.</value>
+    <comment>Update notice error (Linux Settings, Windows update banner): the release download failed.</comment>
+  </data>
+  <data name="upd_failed_install" xml:space="preserve">
+    <value>AppImage-filen kunde inte ersättas. Kontrollera mappens behörigheter och klicka för att försöka igen.</value>
+    <comment>Linux Settings update notice error: the verified download could not be swapped in for the running AppImage.</comment>
+  </data>
+  <data name="upd_install" xml:space="preserve">
+    <value>Installera</value>
+    <comment>Linux Settings update notice: button that downloads, verifies and installs the update.</comment>
+  </data>
+  <data name="upd_manual_install_message" xml:space="preserve">
+    <value>Installationsprogrammet startade inte (det kräver administratörsgodkännande). Den verifierade nedladdningen visades i Utforskaren – avsluta appen och kör den.</value>
+    <comment>Windows update banner when the installer could not be started: the user runs it by hand. Explorer is the Windows file manager.</comment>
+  </data>
+  <data name="upd_ready_message" xml:space="preserve">
+    <value>Den nya AppImage-filen är på plats och verifierad. Starta om för att börja använda den; den tidigare filen ligger kvar bredvid tills dess.</value>
+    <comment>Linux Settings update notice once the update is installed and waiting for a relaunch.</comment>
+  </data>
+  <data name="upd_ready_title" xml:space="preserve">
+    <value>Redo att starta om: v{}</value>
+    <comment>Linux Settings update notice title once the new AppImage is installed. {version} is the release version; keep the "v" before it.</comment>
+  </data>
+  <data name="upd_relaunch" xml:space="preserve">
+    <value>Starta om</value>
+    <comment>Linux Settings update notice: button that restarts the app on the newly installed version.</comment>
+  </data>
+  <data name="upd_release_page" xml:space="preserve">
+    <value>Versionssida</value>
+    <comment>Linux Settings update notice: button that opens the release's download page in the browser.</comment>
+  </data>
+  <data name="upd_show_file" xml:space="preserve">
+    <value>Visa fil</value>
+    <comment>Update notice button (Linux Settings, Windows update banner) that opens the folder holding the verified download.</comment>
+  </data>
+  <data name="upd_stage_downloading" xml:space="preserve">
+    <value>Hämtar uppdateringen…</value>
+    <comment>Update notice progress line (Linux Settings, Windows update banner) while the release downloads.</comment>
+  </data>
+  <data name="upd_stage_installing" xml:space="preserve">
+    <value>Startar installationsprogrammet…</value>
+    <comment>Windows update banner progress line while the verified installer is being launched.</comment>
+  </data>
+  <data name="upd_stage_replacing" xml:space="preserve">
+    <value>Ersätter AppImage-filen…</value>
+    <comment>Linux Settings update notice progress line while the verified download replaces the running AppImage file.</comment>
+  </data>
+  <data name="upd_stage_verifying" xml:space="preserve">
+    <value>Verifierar nedladdningen…</value>
+    <comment>Update progress line (Linux Settings, Windows update banner, macOS Settings &gt; Software update) while the downloaded release is checked against its published checksum.</comment>
   </data>
   <data name="update" xml:space="preserve">
     <value>Uppdatera</value>
@@ -4696,6 +5124,18 @@ som det borde vara.</value>
   <data name="when_you_refer_a_friend" xml:space="preserve">
     <value>När du tipsar en vän:</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="widget_chart_peak" xml:space="preserve">
+    <value>topp</value>
+    <comment>Throughput widget: lowercase word after the peak packet-rate figure, as in "1.2k pkt/s peak".</comment>
+  </data>
+  <data name="widget_intent_source_parameter" xml:space="preserve">
+    <value>Källa</value>
+    <comment>Title of a hidden parameter of the Connect/Disconnect control: which surface (widget, control, shortcut) made the request.</comment>
+  </data>
+  <data name="widget_refresh_intent_title" xml:space="preserve">
+    <value>Uppdatera URnetwork-widgetar</value>
+    <comment>Title of the action that refreshes the app's Home Screen widgets.</comment>
   </data>
   <data name="widgets" xml:space="preserve">
     <value>Widgetar</value>

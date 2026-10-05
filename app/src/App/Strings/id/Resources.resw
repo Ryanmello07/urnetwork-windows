@@ -251,6 +251,14 @@
     <value>Cocok</value>
     <comment>Connection inspector: label of the matched rule row.</comment>
   </data>
+  <data name="adv_mode_rpc_only" xml:space="preserve">
+    <value>hanya RPC</value>
+    <comment>Windows status strip (Advanced Mode), Session value: a session that talks to the service over RPC without a tunnel. Lowercase, a short status value.</comment>
+  </data>
+  <data name="adv_mode_tunnel" xml:space="preserve">
+    <value>terowongan</value>
+    <comment>Windows status strip (Advanced Mode), Session value: a full tunnel session. Lowercase, a short status value.</comment>
+  </data>
   <data name="adv_na" xml:space="preserve">
     <value>—</value>
     <comment>Connection inspector: placeholder dash for a value that is not available.</comment>
@@ -285,7 +293,7 @@
   </data>
   <data name="adv_raw_status" xml:space="preserve">
     <value>Status mentah</value>
-    <comment>Connection inspector: label of the raw status row.</comment>
+    <comment>Connection inspector (Linux) and Advanced Mode status strip (Windows): label of the raw status field.</comment>
   </data>
   <data name="adv_reason" xml:space="preserve">
     <value>Alasan</value>
@@ -307,6 +315,26 @@
     <value>Penggantian rute</value>
     <comment>Connection inspector: decision reason, a route override applied.</comment>
   </data>
+  <data name="adv_routes" xml:space="preserve">
+    <value>Rute</value>
+    <comment>Windows status strip (Advanced Mode): label of the field that shows whether the tunnel's routes are installed.</comment>
+  </data>
+  <data name="adv_routes_dns_degraded" xml:space="preserve">
+    <value>aktif, DNS tidak diterapkan</value>
+    <comment>Windows status strip (Advanced Mode), Routes value: routes are installed but the tunnel's DNS is not. Lowercase, a short status value.</comment>
+  </data>
+  <data name="adv_routes_kill_switch_armed" xml:space="preserve">
+    <value>nonaktif, Kill switch siaga</value>
+    <comment>Windows status strip (Advanced Mode), Routes value: no routes are installed and the kill switch is blocking traffic. Lowercase, a short status value.</comment>
+  </data>
+  <data name="adv_routes_no_firewall" xml:space="preserve">
+    <value>aktif, tanpa perlindungan kebocoran</value>
+    <comment>Windows status strip (Advanced Mode), Routes value: routes are installed but no leak-prevention firewall policy is in force. Lowercase, a short status value.</comment>
+  </data>
+  <data name="adv_rpc" xml:space="preserve">
+    <value>RPC</value>
+    <comment>Windows status strip (Advanced Mode): label of the field that shows the service's RPC endpoint (host:port). RPC is a technical term.</comment>
+  </data>
   <data name="adv_select_a_row" xml:space="preserve">
     <value>Pilih baris di Aktivitas untuk memeriksanya</value>
     <comment>Connection inspector: hint to select a row in the Activity list.</comment>
@@ -322,6 +350,10 @@
   <data name="adv_session_exit_country" xml:space="preserve">
     <value>Negara keluar sesi</value>
     <comment>Connection inspector: label of the session exit country row.</comment>
+  </data>
+  <data name="adv_session_mode" xml:space="preserve">
+    <value>Sesi</value>
+    <comment>Windows status strip (Advanced Mode): label of the field that shows which kind of session the service granted (tunnel or rpc-only).</comment>
   </data>
   <data name="adv_unknown_exit" xml:space="preserve">
     <value>Tidak ada di tabel perutean</value>
@@ -622,6 +654,10 @@
     <value>Lokasi yang diblokir tidak dapat dimuat.</value>
     <comment>Shown on the Blocked locations screen when the list could not be fetched, above a Retry button.</comment>
   </data>
+  <data name="blocked_locations_search_placeholder" xml:space="preserve">
+    <value>Cari negara</value>
+    <comment>macOS Blocked locations screen: placeholder of the country search field.</comment>
+  </data>
   <data name="blocks" xml:space="preserve">
     <value>Blok</value>
     <comment>Points leaderboard: stat tile label and sort chip. A block is one finalized payout epoch.</comment>
@@ -712,9 +748,21 @@ cara yang benar</value>
     <value>Memeriksa Transaksi Solana</value>
     <comment>Call to action</comment>
   </data>
+  <data name="checkout_confirming_purchase" xml:space="preserve">
+    <value>Kami sedang mengonfirmasi pembelian Anda. Paket Anda akan diperbarui secara otomatis.</value>
+    <comment>Purchase confirmation message while the app waits for the payment to be confirmed.</comment>
+  </data>
+  <data name="checkout_finish_in_browser" xml:space="preserve">
+    <value>Selesaikan di browser Anda.</value>
+    <comment>Purchase confirmation title after the app opened Stripe's checkout page in the browser.</comment>
+  </data>
   <data name="checkout_opened_in_browser" xml:space="preserve">
     <value>Selesaikan pembelian Anda di browser. Paket Anda akan diperbarui di sini secara otomatis setelah pembayaran dikonfirmasi.</value>
     <comment>Shown after the app hands the user to the Stripe hosted checkout in the system browser. The app polls the server and flips the plan automatically when the payment webhook lands.</comment>
+  </data>
+  <data name="checkout_restore_checking" xml:space="preserve">
+    <value>Memeriksa paket Anda lagi.</value>
+    <comment>Message after Restore purchases in the Stripe-paid app: nothing to restore locally, the app re-reads the plan from the server.</comment>
   </data>
   <data name="cities" xml:space="preserve">
     <value>Kota</value>
@@ -792,6 +840,10 @@ cara yang benar</value>
     <value>Rekan</value>
     <comment>A label displayed next to a companion contract.</comment>
   </data>
+  <data name="conn_blocked_kill_switch" xml:space="preserve">
+    <value>Diblokir — Kill switch aktif</value>
+    <comment>Windows Connect page status when the connection is down and the kill switch is deliberately blocking this computer's traffic.</comment>
+  </data>
   <data name="conn_connect_on_launch" xml:space="preserve">
     <value>Hubungkan otomatis saat aplikasi dimulai</value>
     <comment>Settings: switch that connects automatically when the app starts.</comment>
@@ -800,13 +852,93 @@ cara yang benar</value>
     <value>Mati secara default. Saat aktif, URnetwork tersambung ke penyedia pilihan Anda begitu aplikasi dibuka. Ini berlaku pada peluncuran berikutnya - tidak menghubungkan sekarang.</value>
     <comment>Settings: explanation under the connect-on-launch switch.</comment>
   </data>
+  <data name="conn_degraded" xml:space="preserve">
+    <value>Koneksi menurun — menyambungkan ulang</value>
+    <comment>Windows connection status (Connect page headline and tray tooltip) when a working connection dropped and the app is reconnecting on its own.</comment>
+  </data>
+  <data name="conn_disconnecting" xml:space="preserve">
+    <value>Memutuskan koneksi — lalu lintas Anda masih melewati terowongan</value>
+    <comment>Windows Connect page status while the tunnel is being stopped but its routes are still installed.</comment>
+  </data>
   <data name="conn_failed" xml:space="preserve">
     <value>Tidak dapat terhubung</value>
     <comment>Connect screen status when the connect attempt failed: no provider could be reached (the sdk's CONNECT_FAILED). The connection keeps trying, and the app offers Retry.</comment>
   </data>
+  <data name="conn_failed_detail" xml:space="preserve">
+    <value>Tidak ada penyedia yang dapat dijangkau. Mencoba lagi akan membangun koneksi dari awal.</value>
+    <comment>Windows Connect page reason line when connecting failed.</comment>
+  </data>
+  <data name="conn_failsafe_armed" xml:space="preserve">
+    <value>Jika tidak ada yang tembus dalam waktu dekat, URnetwork akan mematikan terowongan secara otomatis agar internet Anda tetap berjalan.</value>
+    <comment>Windows Connect page: sentence appended to the line above when the service will stop a tunnel that carries nothing.</comment>
+  </data>
+  <data name="conn_failsafe_blocked" xml:space="preserve">
+    <value>Terowongan tidak dapat membawa lalu lintas, jadi URnetwork menghentikannya. Kill switch aktif, jadi tidak ada yang keluar dari komputer ini sampai Anda terhubung lagi atau mematikan Kill switch — tidak ada yang bocor.</value>
+    <comment>Windows Connect page line after the service stopped a tunnel that carried nothing, while the kill switch keeps this computer blocked.</comment>
+  </data>
+  <data name="conn_failsafe_restored" xml:space="preserve">
+    <value>URnetwork memutuskan koneksi Anda agar Anda tetap online: terowongan aktif tetapi tidak ada yang tembus. Lalu lintas Anda sekarang keluar seperti biasa dan TIDAK terlindungi. Tekan Hubungkan untuk mencoba lagi.</value>
+    <comment>Windows Connect page line and tray notification after the service stopped a tunnel that carried nothing, with the kill switch off. Keep the emphasis on NOT.</comment>
+  </data>
+  <data name="conn_finding_providers" xml:space="preserve">
+    <value>Mencari penyedia…</value>
+    <comment>Connection status while the app has providers but none is proven to work yet (Linux and Windows Connect page headline, Windows tray tooltip).</comment>
+  </data>
   <data name="conn_not_protected" xml:space="preserve">
     <value>Lalu lintas internet Anda tidak terlindungi.</value>
     <comment>Connect page: warning that the internet traffic is not protected.</comment>
+  </data>
+  <data name="conn_reason_auth" xml:space="preserve">
+    <value>Masuk ke platform terus gagal…</value>
+    <comment>Windows Connect page reason line while the app's sign-in to the URnetwork platform keeps failing.</comment>
+  </data>
+  <data name="conn_reason_platform" xml:space="preserve">
+    <value>Menghubungi platform…</value>
+    <comment>Windows Connect page reason line while the app cannot reach the URnetwork platform (the API servers).</comment>
+  </data>
+  <data name="conn_reason_providers" xml:space="preserve">
+    <value>Penyedia tidak merespons — mencoba lagi…</value>
+    <comment>Windows Connect page reason line while the selected providers do not answer.</comment>
+  </data>
+  <data name="conn_reason_rate_limited" xml:space="preserve">
+    <value>Batas permintaan tercapai — menunggu…</value>
+    <comment>Windows Connect page reason line while the platform asks the app to slow down.</comment>
+  </data>
+  <data name="conn_traffic_blocked" xml:space="preserve">
+    <value>Tidak ada penyedia yang berfungsi saat ini — lalu lintas Anda diblokir, bukan terbuka. Putuskan koneksi untuk kembali ke koneksi normal Anda.</value>
+    <comment>Windows Connect page line while connected but no provider carries traffic, with leak protection in force.</comment>
+  </data>
+  <data name="conn_traffic_blocked_unprotected" xml:space="preserve">
+    <value>Tidak ada penyedia yang berfungsi saat ini — lalu lintas yang dikirim ke terowongan tidak sampai ke mana pun, dan perlindungan kebocoran nonaktif, sehingga sebagian lalu lintas dapat melewatinya. Putuskan koneksi untuk kembali ke koneksi normal Anda.</value>
+    <comment>Windows Connect page line while connected but no provider carries traffic, and leak protection (the firewall policy) is not in force.</comment>
+  </data>
+  <data name="conn_tray_blocked_kill_switch" xml:space="preserve">
+    <value>Diblokir (Kill switch aktif)</value>
+    <comment>Windows tray tooltip when the kill switch is deliberately blocking this computer's traffic.</comment>
+  </data>
+  <data name="conn_tray_blocked_no_tunnel" xml:space="preserve">
+    <value>Diblokir — perlindungan kebocoran masih berlaku tanpa terowongan yang aktif</value>
+    <comment>Windows tray tooltip when leak protection blocks traffic while no tunnel is up.</comment>
+  </data>
+  <data name="conn_tray_disconnecting" xml:space="preserve">
+    <value>Memutuskan koneksi — lalu lintas masih melewati terowongan</value>
+    <comment>Windows tray tooltip while the tunnel is being stopped but its routes are still installed.</comment>
+  </data>
+  <data name="conn_tray_failsafe_blocked" xml:space="preserve">
+    <value>Terowongan tidak dapat membawa lalu lintas, jadi URnetwork menghentikannya. Kill switch aktif, jadi komputer ini tetap diblokir dan tidak ada yang bocor. Hubungkan lagi, atau matikan Kill switch dari menu ini.</value>
+    <comment>Windows tray notification after the service stopped a tunnel that carried nothing, while the kill switch keeps this computer blocked. "This menu" is the tray icon's menu.</comment>
+  </data>
+  <data name="conn_tray_failsafe_stopped" xml:space="preserve">
+    <value>Terputus (terowongan gagal)</value>
+    <comment>Windows tray tooltip after the service stopped a tunnel that carried nothing.</comment>
+  </data>
+  <data name="conn_tray_force_tunnel_off" xml:space="preserve">
+    <value>Paksa matikan terowongan (pemulihan)</value>
+    <comment>Windows tray menu item that stops the tunnel directly when the normal Disconnect is stuck.</comment>
+  </data>
+  <data name="conn_tray_lift_kill_switch" xml:space="preserve">
+    <value>Matikan Kill switch (buka blokir komputer ini)</value>
+    <comment>Windows tray menu item that lifts the kill switch's block on this computer.</comment>
   </data>
   <data name="connect" xml:space="preserve">
     <value>Hubungkan</value>
@@ -917,8 +1049,8 @@ cara yang benar</value>
     <comment>A description of the contract details view.</comment>
   </data>
   <data name="contribute_bandwidth" xml:space="preserve">
-    <value>Sumbangkan Bandwidth</value>
-    <comment>Used in Shared/Views/Introduction/IntroductionParticipateSettingsView.swift.</comment>
+    <value>Sumbangkan bandwidth</value>
+    <comment>Onboarding: title of the step that asks whether this device may share bandwidth with the network (provide).</comment>
   </data>
   <data name="control_doh_error_https_required" xml:space="preserve">
     <value>URL harus diawali dengan https://.</value>
@@ -1088,13 +1220,25 @@ cara yang benar</value>
     <value>Perangkat ini tidak memiliki layanan otorisasi polkit, jadi layanan sistem URnetwork kembali ke grup 'urnetwork'. Tambahkan pengguna Anda ke grup itu, lalu keluar dan masuk lagi.</value>
     <comment>Connect error: no polkit service, the daemon falls back to the urnetwork group.</comment>
   </data>
+  <data name="daemon_legacy_group_auth" xml:space="preserve">
+    <value>Layanan sistem URnetwork di perangkat ini adalah versi lama yang masih mewajibkan keanggotaan grup. Perbarui layanan, atau tambahkan pengguna Anda ke grup 'urnetwork' lalu keluar dan masuk lagi.</value>
+    <comment>Linux notice when an older system service refuses the app's user. 'urnetwork' is the literal Linux group name; keep it as is.</comment>
+  </data>
   <data name="daemon_no_answer" xml:space="preserve">
     <value>Layanan sistem URnetwork tidak menjawab.</value>
     <comment>Error: the system service did not answer.</comment>
   </data>
+  <data name="daemon_not_reachable" xml:space="preserve">
+    <value>Layanan sistem URnetwork tidak dapat dijangkau.</value>
+    <comment>Linux notice when the app cannot reach the URnetwork system service for an unexpected reason.</comment>
+  </data>
   <data name="daemon_sdk_mismatch" xml:space="preserve">
     <value>Aplikasi dan layanan sistem URnetwork adalah build yang berbeda. Perbarui keduanya ke versi yang sama.</value>
     <comment>Shown on the linux home screen when the app and the urnetworkd system service carry different URnetwork SDK builds (they update on independent schedules and must match exactly). The fix is updating both to the same release.</comment>
+  </data>
+  <data name="daemon_stale_sandbox_mount" xml:space="preserve">
+    <value>Layanan sistem URnetwork dimulai ulang saat aplikasi ini terbuka. Tutup aplikasi dan buka lagi untuk terhubung kembali ke layanan tersebut.</value>
+    <comment>Linux notice when the app cannot reach the URnetwork system service because the service restarted under a sandboxed (Flatpak) app.</comment>
   </data>
   <data name="daemon_too_old" xml:space="preserve">
     <value>Layanan sistem URnetwork sudah usang. Perbarui layanan tersebut untuk terhubung.</value>
@@ -1215,6 +1359,98 @@ cara yang benar</value>
   <data name="devices" xml:space="preserve">
     <value>Perangkat</value>
     <comment>Provider list group title for devices</comment>
+  </data>
+  <data name="direct_update_allow" xml:space="preserve">
+    <value>Izinkan</value>
+    <comment>macOS folder-access panel button that grants the app access to the Applications folder for the update.</comment>
+  </data>
+  <data name="direct_update_allow_applications" xml:space="preserve">
+    <value>Untuk memasang pembaruan, izinkan URnetwork mengganti dirinya di folder Aplikasi. Pilih Aplikasi dan klik Izinkan.</value>
+    <comment>macOS folder-access panel message when installing an update: the user selects the Applications folder to grant access. Keep "Allow" consistent with the panel's button.</comment>
+  </data>
+  <data name="direct_update_available" xml:space="preserve">
+    <value>Pembaruan tersedia: {}</value>
+    <comment>macOS Settings &gt; Software update status when a newer release exists. {version} is its version.</comment>
+  </data>
+  <data name="direct_update_check" xml:space="preserve">
+    <value>Periksa pembaruan</value>
+    <comment>macOS Settings &gt; Software update button that checks now.</comment>
+  </data>
+  <data name="direct_update_check_failed" xml:space="preserve">
+    <value>Tidak dapat memeriksa pembaruan: {}</value>
+    <comment>macOS Settings &gt; Software update error. {detail} is a short technical reason (often English, from the system).</comment>
+  </data>
+  <data name="direct_update_checking" xml:space="preserve">
+    <value>Memeriksa pembaruan…</value>
+    <comment>macOS Settings &gt; Software update status while checking.</comment>
+  </data>
+  <data name="direct_update_checksum_failed" xml:space="preserve">
+    <value>Unduhan tidak cocok dengan checksum rilis dan telah dibuang.</value>
+    <comment>macOS Settings &gt; Software update error: the downloaded file failed its integrity check and was deleted.</comment>
+  </data>
+  <data name="direct_update_development_build" xml:space="preserve">
+    <value>Build pengembangan; rilis terbaru adalah {}.</value>
+    <comment>macOS Settings &gt; Software update status on a development build, which never updates itself. {version} is the newest release version.</comment>
+  </data>
+  <data name="direct_update_download_failed" xml:space="preserve">
+    <value>Unduhan gagal: {}</value>
+    <comment>macOS Settings &gt; Software update error. {detail} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_downloading_version" xml:space="preserve">
+    <value>Mengunduh {}…</value>
+    <comment>macOS Settings &gt; Software update status while the release downloads. {version} is its version.</comment>
+  </data>
+  <data name="direct_update_install" xml:space="preserve">
+    <value>Pasang pembaruan</value>
+    <comment>macOS Settings &gt; Software update button that downloads, verifies and installs the update.</comment>
+  </data>
+  <data name="direct_update_install_failed" xml:space="preserve">
+    <value>Pembaruan tidak dapat dipasang: {}</value>
+    <comment>macOS Settings &gt; Software update error. {detail} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_installing" xml:space="preserve">
+    <value>Memasang pembaruan…</value>
+    <comment>macOS Settings &gt; Software update status while the verified update is installed.</comment>
+  </data>
+  <data name="direct_update_last_checked" xml:space="preserve">
+    <value>Terakhir diperiksa {}</value>
+    <comment>macOS Settings &gt; Software update: when updates were last checked. {when} is a relative date, for example "5 minutes ago" or "yesterday".</comment>
+  </data>
+  <data name="direct_update_manual_install" xml:space="preserve">
+    <value>{} sudah diunduh dan diverifikasi. Seret URnetwork yang baru ke folder Aplikasi, lalu buka dari sana.</value>
+    <comment>macOS Settings &gt; Software update status when the app could not replace itself. {version} is the downloaded release's version.</comment>
+  </data>
+  <data name="direct_update_not_checked" xml:space="preserve">
+    <value>Pembaruan belum diperiksa.</value>
+    <comment>macOS Settings &gt; Software update status before the first check.</comment>
+  </data>
+  <data name="direct_update_relaunching" xml:space="preserve">
+    <value>Memulai ulang URnetwork…</value>
+    <comment>macOS Settings &gt; Software update status while the app restarts on the new version.</comment>
+  </data>
+  <data name="direct_update_section_title" xml:space="preserve">
+    <value>Pembaruan perangkat lunak</value>
+    <comment>macOS Settings: title of the section that checks for and installs app updates (direct-download app).</comment>
+  </data>
+  <data name="direct_update_show_in_finder" xml:space="preserve">
+    <value>Tampilkan di Finder</value>
+    <comment>macOS Settings &gt; Software update button that reveals the downloaded update in Finder (the macOS file manager).</comment>
+  </data>
+  <data name="direct_update_signature_rejected" xml:space="preserve">
+    <value>Pembaruan ditolak: {}</value>
+    <comment>macOS Settings &gt; Software update error when the downloaded app's code signature did not check out. {detail} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_unpack_failed" xml:space="preserve">
+    <value>Unduhan tidak dapat diekstrak: {}</value>
+    <comment>macOS Settings &gt; Software update error. {detail} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_unusable_release" xml:space="preserve">
+    <value>Rilis {0} tidak dapat dipasang oleh aplikasi ({1}).</value>
+    <comment>macOS Settings &gt; Software update error when the newest release has no file this app can install. {version} is the release version; {reason} is a short technical reason.</comment>
+  </data>
+  <data name="direct_update_up_to_date" xml:space="preserve">
+    <value>URnetwork sudah versi terbaru.</value>
+    <comment>macOS Settings &gt; Software update status when no newer release exists.</comment>
   </data>
   <data name="disable_ignore_battery_hint" xml:space="preserve">
     <value>Untuk menonaktifkan, buka Penggunaan Baterai Aplikasi di Pengaturan Sistem</value>
@@ -1404,6 +1640,10 @@ cara yang benar</value>
     <value>Sarankan yang lain</value>
     <comment>Points leaderboard: the emoji editor's shuffle button, replaces the draft with a new random suggestion.</comment>
   </data>
+  <data name="enabled_under_auto_footer" xml:space="preserve">
+    <value>Diurutkan berdasarkan preferensi: H1 lebih dulu, lalu H3, whodis, dan whodis pump. Urutannya tetap. Setidaknya satu transport tetap aktif.</value>
+    <comment>Footer of the Auto transports section explaining the fixed preference order.</comment>
+  </data>
   <data name="enjoying_urnetwork" xml:space="preserve">
     <value>Menikmati URnetwork?</value>
     <comment>Call to action</comment>
@@ -1442,6 +1682,10 @@ cara yang benar</value>
   <data name="enter_urnetwork" xml:space="preserve">
     <value>Masuk URnetwork</value>
     <comment>Used in Authenticate/LoginInitial/GuestModeSheet.swift.</comment>
+  </data>
+  <data name="enter_wallet_address" xml:space="preserve">
+    <value>Masukkan alamat dompet</value>
+    <comment>Used in Main/Account/Wallets/ConnectWalletSheet/EnterWalletAddress/EnterWalletAddressView.swift.</comment>
   </data>
   <data name="error_changing_network_name" xml:space="preserve">
     <value>Kesalahan saat mengubah nama jaringan</value>
@@ -2181,6 +2425,10 @@ kami kirimkan untuk memverifikasi identitas Anda.</value>
     <value>Butuh lebih banyak data, lebih cepat?</value>
     <comment>Call to action</comment>
   </data>
+  <data name="net_points_earned" xml:space="preserve">
+    <value>poin bersih yang diperoleh</value>
+    <comment>Earnings page: lowercase caption under the net points total.</comment>
+  </data>
   <data name="net_provided" xml:space="preserve">
     <value>Bersih Disediakan</value>
     <comment>Call to action</comment>
@@ -2257,6 +2505,10 @@ kami kirimkan untuk memverifikasi identitas Anda.</value>
     <value>Seseorang mengundang Anda untuk bergabung 🥳 
 Klaim bonus Anda dengan membuat jaringan!</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="network_earnings" xml:space="preserve">
+    <value>Penghasilan Jaringan</value>
+    <comment>Used in Main/Account/AccountRootView.swift.</comment>
   </data>
   <data name="network_name_changed_to_n" xml:space="preserve">
     <value>Nama jaringan diubah menjadi {}</value>
@@ -2405,6 +2657,10 @@ Klaim bonus Anda dengan membuat jaringan!</value>
   <data name="none" xml:space="preserve">
     <value>Tidak ada</value>
     <comment>Empty value: the VLESS settings show it for no security and no flow (all apps), and the Referrals section shows it on windows and linux when no referral network is linked.</comment>
+  </data>
+  <data name="not_now" xml:space="preserve">
+    <value>Jangan sekarang</value>
+    <comment>macOS button that dismisses the prompt to enable the VPN system extension for now.</comment>
   </data>
   <data name="notifications_label" xml:space="preserve">
     <value>Notifikasi</value>
@@ -2619,9 +2875,17 @@ terbesar, teraman, dan paling terdesentralisasi di dunia.</value>
     <value>Hemat {}%</value>
     <comment>Plan picker: the saving badge on the yearly card; the number is the whole percent saved against twelve monthly payments.</comment>
   </data>
+  <data name="plan_terms_first_year_price" xml:space="preserve">
+    <value>{0} untuk tahun pertama Anda, lalu {1}/tahun. Batalkan kapan saja.</value>
+    <comment>Plan picker terms line for the yearly plan with a first-year offer and no free trial. {first_year_price} and {yearly_price} are formatted prices, for example $39.99.</comment>
+  </data>
   <data name="plan_terms_yearly.other" xml:space="preserve">
     <value>{0} hari gratis, lalu {1}/tahun. Batalkan kapan saja.</value>
     <comment>Plan picker: the terms line under the button for the yearly plan with its trial.</comment>
+  </data>
+  <data name="plan_terms_yearly_billed_today" xml:space="preserve">
+    <value>{} ditagih hari ini, lalu setiap tahun. Batalkan kapan saja.</value>
+    <comment>Plan picker terms line for the yearly plan without a trial or offer. {yearly_price} is a formatted price, for example $59.99.</comment>
   </data>
   <data name="please_install_phantom_or_solflare_to_use_this" xml:space="preserve">
     <value>Silakan instal Phantom atau Solflare untuk menggunakan fitur ini</value>
@@ -3400,7 +3664,7 @@ konten dunia</value>
   </data>
   <data name="seedphrase_paste_hint" xml:space="preserve">
     <value>Tempel frasa pemulihan 12 atau 24 kata Anda di sini</value>
-    <comment>Seed sign-in sheet: placeholder of the seedphrase field (android accepts 12 or 24 words).</comment>
+    <comment>Seed sign-in sheet: placeholder of the seedphrase field (android and windows accept 12 or 24 words).</comment>
   </data>
   <data name="seedphrase_required" xml:space="preserve">
     <value>Masukkan frasa pemulihan</value>
@@ -3904,6 +4168,22 @@ konten dunia</value>
     <value>Gunakan bentuk ASCII dari nama tersebut.</value>
     <comment>Split rules: validation error for a host name with non-ASCII characters; the rule wants the punycode form.</comment>
   </data>
+  <data name="split_rule_mode_excluded_description" xml:space="preserve">
+    <value>Host yang dipilih melewati terowongan.</value>
+    <comment>Split rule editor: description of the Route locally mode.</comment>
+  </data>
+  <data name="split_rule_mode_included_description" xml:space="preserve">
+    <value>Default: host yang dipilih menggunakan terowongan tanpa sematan.</value>
+    <comment>Split rule editor: description of the Route through VPN mode (the default). A pin is the Keep on one provider mode.</comment>
+  </data>
+  <data name="split_rule_mode_pinned_description" xml:space="preserve">
+    <value>Host yang dipilih mempertahankan penyedianya lebih lama alih-alih dipindahkan saat muncul tanda masalah pertama, sehingga situs lebih jarang berganti alamat IP selama sesi.</value>
+    <comment>Split rule editor: description of the Keep on one provider mode.</comment>
+  </data>
+  <data name="split_rule_mode_pinned_title" xml:space="preserve">
+    <value>Tetap di satu penyedia</value>
+    <comment>Split rule editor: title of the mode that keeps the selected hosts on the same VPN provider longer.</comment>
+  </data>
   <data name="split_rule_preset_google_meet_calls" xml:space="preserve">
     <value>Panggilan Google Meet</value>
     <comment>Split rules preset: Google Meet call media, from the address ranges Google publishes for routing it outside a VPN. Keep the product name Google Meet unchanged.</comment>
@@ -3920,6 +4200,10 @@ konten dunia</value>
     <value>Aktivitas perutean muncul di sini saat terhubung.</value>
     <comment>A description of the content of the "Activity" section of the split rules view.</comment>
   </data>
+  <data name="split_rules_connect_to_load" xml:space="preserve">
+    <value>Hubungkan sekali untuk memuat aturan yang sudah Anda miliki.</value>
+    <comment>Split rules screen: note under the disabled Add a rule button before the app has connected once and loaded the saved rules.</comment>
+  </data>
   <data name="split_rules_hint" xml:space="preserve">
     <value>Ketuk lalu lintas di bawah untuk merutekannya secara lokal, melewati terowongan.</value>
     <comment>A description of how to route traffic locally.</comment>
@@ -3928,9 +4212,17 @@ konten dunia</value>
     <value>Tambahkan host di atas, atau ketuk lalu lintas di bawah untuk merutekannya secara lokal, melewati terowongan.</value>
     <comment>Split rules on android, which has a host input above the traffic list: how to add to the rule. The apple/linux screens without the input keep split_rules_hint.</comment>
   </data>
+  <data name="split_rules_host_hint_modes" xml:space="preserve">
+    <value>Tambahkan host di atas, atau ketuk lalu lintas di bawah untuk merutekannya secara lokal atau menahannya di satu penyedia.</value>
+    <comment>Split rules screen: hint shown while there are no rules yet. Routing locally sends traffic outside the VPN; holding to one provider keeps a site on the same VPN exit.</comment>
+  </data>
   <data name="split_rules_info_note" xml:space="preserve">
     <value>Pengecualian berlaku untuk seluruh klaster jaringan terkait, sehingga lalu lintas yang berhubungan tercakup bersama.</value>
     <comment>transfer stats and split rules</comment>
+  </data>
+  <data name="split_rules_info_note_modes" xml:space="preserve">
+    <value>Aturan berlaku untuk seluruh klaster jaringan terkait, sehingga lalu lintas yang berhubungan tercakup bersama.</value>
+    <comment>Split rules screen: note that a rule matches every host in the same network cluster (related hosts of one site or service), whatever the rule's mode.</comment>
   </data>
   <data name="split_rules_match_sites_not_apps" xml:space="preserve">
     <value>Aturan pemisahan berlaku untuk situs dan alamat, bukan aplikasi: Apple hanya mengizinkan VPN per aplikasi di perangkat yang dikelola organisasi (MDM). Agar aplikasi tidak melalui VPN, rutekan situs yang digunakannya secara lokal, atau mulai dari preset. Alamat jaringan lokal sudah tidak melalui VPN.</value>
@@ -3943,6 +4235,14 @@ konten dunia</value>
   <data name="split_rules_start_from_preset" xml:space="preserve">
     <value>Mulai dari preset</value>
     <comment>Split rules screen: the menu that starts a route-locally rule from a preset, the address ranges a service publishes for use outside a VPN.</comment>
+  </data>
+  <data name="sso_browser_open_failed" xml:space="preserve">
+    <value>Tidak dapat membuka browser. Silakan coba lagi.</value>
+    <comment>macOS error when adding a sign-in method could not open the browser for the provider's sign-in page.</comment>
+  </data>
+  <data name="sso_sign_in_timed_out" xml:space="preserve">
+    <value>Waktu masuk habis. Silakan coba lagi.</value>
+    <comment>Error when a browser sign-in (Google or Apple through the browser) took too long and expired.</comment>
   </data>
   <data name="start_earning_join" xml:space="preserve">
     <value>Untuk mulai menghasilkan, bergabunglah dengan jaringan</value>
@@ -4008,6 +4308,10 @@ sebagaimana mestinya.</value>
     <value>Anonimisasi kuat</value>
     <comment>Connect drawer: strong anonymization toggle — the inverse of allow direct (direct connections expose the real source IP to the provider).</comment>
   </data>
+  <data name="subscription_portal_open_failed" xml:space="preserve">
+    <value>Tidak dapat membuka portal langganan. Silakan coba lagi.</value>
+    <comment>Snackbar error when the Stripe subscription management page (Manage subscription) could not be opened.</comment>
+  </data>
   <data name="successfully_claimed_multiplier" xml:space="preserve">
     <value>Pengganda berhasil diklaim!</value>
     <comment>Snackbar shown when the earnings multiplier is claimed successfully. Used in Main/Account/Settings/SettingsView.swift.</comment>
@@ -4032,9 +4336,41 @@ sebagaimana mestinya.</value>
     <value>Pro</value>
     <comment>Display name for the paid plan. The WIRE value stays "supporter" (subscription_type / current_subscription.plan) because already-shipped app versions parse that string; only what the user reads changes.</comment>
   </data>
+  <data name="svc_action_failed" xml:space="preserve">
+    <value>Itu tidak selesai — layanan tidak berubah. Detailnya ada di log aplikasi.</value>
+    <comment>Windows banner text when installing, starting or updating the VPN service failed.</comment>
+  </data>
   <data name="svc_service_label" xml:space="preserve">
     <value>Layanan VPN</value>
     <comment>Settings: label of the VPN service row.</comment>
+  </data>
+  <data name="svc_setup_action" xml:space="preserve">
+    <value>Siapkan</value>
+    <comment>Windows banner button that installs the VPN service (Windows asks for administrator permission).</comment>
+  </data>
+  <data name="svc_setup_message" xml:space="preserve">
+    <value>URnetwork menggunakan layanan Windows untuk membawa lalu lintas. Satu klik — Windows akan meminta izin administrator.</value>
+    <comment>Windows banner text under 'Set up the VPN service'.</comment>
+  </data>
+  <data name="svc_setup_title" xml:space="preserve">
+    <value>Siapkan layanan VPN</value>
+    <comment>Windows banner title when the URnetwork Windows service that carries traffic is not installed yet.</comment>
+  </data>
+  <data name="svc_start_action" xml:space="preserve">
+    <value>Mulai</value>
+    <comment>Windows banner button that starts the stopped VPN service.</comment>
+  </data>
+  <data name="svc_start_message" xml:space="preserve">
+    <value>Layanan sudah terpasang tetapi tidak berjalan.</value>
+    <comment>Windows banner text under 'Start the VPN service'.</comment>
+  </data>
+  <data name="svc_start_title" xml:space="preserve">
+    <value>Mulai layanan VPN</value>
+    <comment>Windows banner title when the VPN service is installed but stopped.</comment>
+  </data>
+  <data name="svc_uac_declined" xml:space="preserve">
+    <value>Windows meminta izin dan permintaan itu ditutup. Klik lagi kapan pun Anda siap.</value>
+    <comment>Windows banner text after the user closed the administrator permission (UAC) prompt without approving.</comment>
   </data>
   <data name="svc_uninstall_action" xml:space="preserve">
     <value>Copot pemasangan</value>
@@ -4044,9 +4380,25 @@ sebagaimana mestinya.</value>
     <value>Ini menghentikan layanan URnetwork dan menghapus unit systemd-nya. Aplikasi tidak dapat terhubung sampai layanan disiapkan lagi. Anda akan diminta izin administrator.</value>
     <comment>Settings: confirmation text before uninstalling the VPN service.</comment>
   </data>
+  <data name="svc_uninstall_confirm_windows" xml:space="preserve">
+    <value>Ini menghentikan layanan URnetwork dan menghapusnya dari Windows. Aplikasi tidak dapat terhubung sampai layanan disiapkan lagi. Windows akan meminta izin administrator.</value>
+    <comment>Windows Settings: confirmation dialog before uninstalling the VPN service.</comment>
+  </data>
   <data name="svc_uninstall_note" xml:space="preserve">
     <value>Hapus layanan systemd yang digunakan URnetwork untuk membawa lalu lintas.</value>
     <comment>Settings: explanation under the uninstall service button.</comment>
+  </data>
+  <data name="svc_uninstall_note_windows" xml:space="preserve">
+    <value>Hapus layanan Windows yang digunakan URnetwork untuk membawa lalu lintas.</value>
+    <comment>Windows Settings &gt; VPN service row: what the Uninstall button removes.</comment>
+  </data>
+  <data name="svc_update_message" xml:space="preserve">
+    <value>Layanan yang terpasang memiliki versi yang berbeda dari aplikasi ini.</value>
+    <comment>Windows banner text under 'Update the VPN service'. The two version numbers follow it in parentheses.</comment>
+  </data>
+  <data name="svc_update_title" xml:space="preserve">
+    <value>Perbarui layanan VPN</value>
+    <comment>Windows banner title when the installed VPN service is a different version than the app.</comment>
   </data>
   <data name="switch_account" xml:space="preserve">
     <value>Ganti Akun</value>
@@ -4230,6 +4582,82 @@ sebagaimana mestinya.</value>
   <data name="upd_auto_check_note" xml:space="preserve">
     <value>Cari rilis baru sesaat setelah peluncuran dan setiap enam jam. Tidak ada yang pernah dipasang tanpa klik.</value>
     <comment>Settings: explanation under the automatic update check switch.</comment>
+  </data>
+  <data name="upd_available_appimage_message" xml:space="preserve">
+    <value>Satu klik mengunduh rilis, memverifikasinya dengan checksum rilis, dan mengganti AppImage ini. Layanan VPN diperbarui secara terpisah.</value>
+    <comment>Linux Settings update notice, AppImage installs: what the Install button does. The AppImage is the single-file Linux app; the VPN service is the separate system service package.</comment>
+  </data>
+  <data name="upd_available_msi_message" xml:space="preserve">
+    <value>Satu klik mengunduh rilis, memverifikasinya, dan menjalankan penginstalnya, yang memperbarui aplikasi dan layanan VPN. Aplikasi ditutup selama pemasangan.</value>
+    <comment>Windows update banner: what the Update button does (downloads the MSI installer, checks it, runs it).</comment>
+  </data>
+  <data name="upd_available_package_message" xml:space="preserve">
+    <value>Unduh {} dari halaman rilis, lalu jalankan perintah di bawah.</value>
+    <comment>Linux Settings update notice, package installs (.deb, .rpm, tarball) that the app does not replace itself. {file} is the release file name, for example urnetwork_2026.10.5_amd64.deb. The shell command is shown in the row below.</comment>
+  </data>
+  <data name="upd_available_title_version" xml:space="preserve">
+    <value>Pembaruan tersedia: v{}</value>
+    <comment>Update notice title (Linux Settings, Windows update banner): a newer release is available. {version} is the release version, for example 2026.10.5-1024555910; keep the "v" before it.</comment>
+  </data>
+  <data name="upd_downloaded_message" xml:space="preserve">
+    <value>Folder AppImage ini tidak dapat ditulisi, jadi unduhan yang sudah diverifikasi disimpan di bawah. Ganti AppImage dengannya secara manual.</value>
+    <comment>Linux Settings update notice when the app cannot replace itself: the verified file's path is shown in the row below.</comment>
+  </data>
+  <data name="upd_failed_checksum" xml:space="preserve">
+    <value>Unduhan tidak cocok dengan checksum rilis dan telah dibuang. Klik untuk mencoba lagi.</value>
+    <comment>Update notice error (Linux Settings, Windows update banner): the downloaded file failed its integrity check and was deleted.</comment>
+  </data>
+  <data name="upd_failed_download" xml:space="preserve">
+    <value>Unduhan tidak selesai. Periksa koneksi dan klik untuk mencoba lagi.</value>
+    <comment>Update notice error (Linux Settings, Windows update banner): the release download failed.</comment>
+  </data>
+  <data name="upd_failed_install" xml:space="preserve">
+    <value>AppImage tidak dapat diganti. Periksa izin folder dan klik untuk mencoba lagi.</value>
+    <comment>Linux Settings update notice error: the verified download could not be swapped in for the running AppImage.</comment>
+  </data>
+  <data name="upd_install" xml:space="preserve">
+    <value>Pasang</value>
+    <comment>Linux Settings update notice: button that downloads, verifies and installs the update.</comment>
+  </data>
+  <data name="upd_manual_install_message" xml:space="preserve">
+    <value>Penginstal tidak berjalan (perlu persetujuan administrator). Unduhan yang sudah diverifikasi ditampilkan di File Explorer — tutup aplikasi dan jalankan penginstal itu.</value>
+    <comment>Windows update banner when the installer could not be started: the user runs it by hand. Explorer is the Windows file manager.</comment>
+  </data>
+  <data name="upd_ready_message" xml:space="preserve">
+    <value>AppImage baru sudah terpasang dan diverifikasi. Mulai ulang untuk mulai menggunakannya; file sebelumnya disimpan di sebelahnya sampai saat itu.</value>
+    <comment>Linux Settings update notice once the update is installed and waiting for a relaunch.</comment>
+  </data>
+  <data name="upd_ready_title" xml:space="preserve">
+    <value>Siap dimulai ulang: v{}</value>
+    <comment>Linux Settings update notice title once the new AppImage is installed. {version} is the release version; keep the "v" before it.</comment>
+  </data>
+  <data name="upd_relaunch" xml:space="preserve">
+    <value>Mulai ulang</value>
+    <comment>Linux Settings update notice: button that restarts the app on the newly installed version.</comment>
+  </data>
+  <data name="upd_release_page" xml:space="preserve">
+    <value>Halaman rilis</value>
+    <comment>Linux Settings update notice: button that opens the release's download page in the browser.</comment>
+  </data>
+  <data name="upd_show_file" xml:space="preserve">
+    <value>Tampilkan file</value>
+    <comment>Update notice button (Linux Settings, Windows update banner) that opens the folder holding the verified download.</comment>
+  </data>
+  <data name="upd_stage_downloading" xml:space="preserve">
+    <value>Mengunduh pembaruan…</value>
+    <comment>Update notice progress line (Linux Settings, Windows update banner) while the release downloads.</comment>
+  </data>
+  <data name="upd_stage_installing" xml:space="preserve">
+    <value>Menjalankan penginstal…</value>
+    <comment>Windows update banner progress line while the verified installer is being launched.</comment>
+  </data>
+  <data name="upd_stage_replacing" xml:space="preserve">
+    <value>Mengganti AppImage…</value>
+    <comment>Linux Settings update notice progress line while the verified download replaces the running AppImage file.</comment>
+  </data>
+  <data name="upd_stage_verifying" xml:space="preserve">
+    <value>Memverifikasi unduhan…</value>
+    <comment>Update progress line (Linux Settings, Windows update banner, macOS Settings &gt; Software update) while the downloaded release is checked against its published checksum.</comment>
   </data>
   <data name="update" xml:space="preserve">
     <value>Perbarui</value>
@@ -4600,6 +5028,18 @@ sebagaimana mestinya.</value>
   <data name="when_you_refer_a_friend" xml:space="preserve">
     <value>Saat Anda mereferensikan teman:</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="widget_chart_peak" xml:space="preserve">
+    <value>puncak</value>
+    <comment>Throughput widget: lowercase word after the peak packet-rate figure, as in "1.2k pkt/s peak".</comment>
+  </data>
+  <data name="widget_intent_source_parameter" xml:space="preserve">
+    <value>Sumber</value>
+    <comment>Title of a hidden parameter of the Connect/Disconnect control: which surface (widget, control, shortcut) made the request.</comment>
+  </data>
+  <data name="widget_refresh_intent_title" xml:space="preserve">
+    <value>Segarkan widget URnetwork</value>
+    <comment>Title of the action that refreshes the app's Home Screen widgets.</comment>
   </data>
   <data name="widgets" xml:space="preserve">
     <value>Widget</value>
