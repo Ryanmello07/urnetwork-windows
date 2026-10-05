@@ -13,13 +13,20 @@
 // nothing a line says writes nothing, and the volume follows the user's
 // actions, not a clock. The DNS settings and the network country are written
 // once for each session that comes up, and again when they change in it.
+// NoteLogUpload runs for every upload_logs the service carries, once it has
+// chosen the device and before the sdk zips the log, so that line is in the
+// upload it describes.
 //
 // Where it may run: it calls into the sdk (urnet::logAppInfo is a cgo call),
 // so only at the RPC boundary, where ControlServer::PushState already flushes
 // glog: never on the teardown path ahead of the route revert, never in an
 // EgressMonitor callback, never under the session lock. What it reads is the
 // lock-free status (TunnelController::Status), the interface table and the
-// registry, none of which can wedge on a session.
+// registry, none of which can wedge on a session. NoteLogUpload is the one
+// call made under the session lock (TunnelController::UploadLogs, through the
+// hook ControlServer passes): the zip it must precede runs on a device only
+// that lock keeps alive, and beside the zip's own calls into the sdk it adds
+// one line.
 //
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
@@ -49,6 +56,9 @@ class ServiceDiagnostics {
   void NoteStart(const proto::StartTunnel& request);
   // [app][network-country] when it changed, live session or not.
   void NoteNetworkCountry(const std::optional<netcountry::Reading>& networkCountry);
+  // [app][log-upload]: the device that carries a feedback's log upload
+  // (logupload::ToString), for every upload, changed or not.
+  void NoteLogUpload(std::string_view carrier);
 
  private:
   // The line under `tag` unless it equals `last`, which then becomes it. Caller

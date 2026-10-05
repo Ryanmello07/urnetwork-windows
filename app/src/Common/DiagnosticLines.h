@@ -2,12 +2,14 @@
 // the app-log path; open bugs P021 and P052).
 //
 // "Send feedback with logs" uploads the service's glog files, and only them:
-// the app's DeviceRemote asks the service's DeviceLocal to upload
-// (DeviceLocalRpc.UploadLogs), which zips its own process's log directory.
-// The app's logs and the service's own log stay on the machine. So a fact
-// support needs from an uploaded log is written by the service, through the
-// sdk (urnet::logAppInfo: one "[app][<tag>] <message>" line per call, which
-// the sdk bounds and sanitizes again), when it becomes true
+// the app asks the service to upload them on whichever device runs, connected
+// or not (upload_logs, Common/LogUpload.h), and a service too old for that is
+// reached through the app's DeviceRemote (DeviceLocalRpc.UploadLogs); either
+// way the sdk zips the service process's own log directory. The app's logs
+// and the service's own log stay on the machine. So a fact support needs from
+// an uploaded log is written by the service, through the sdk
+// (urnet::logAppInfo: one "[app][<tag>] <message>" line per call, which the
+// sdk bounds and sanitizes again), when it becomes true
 // (Service/ServiceDiagnostics.h):
 //
 //   [app][service]          the state the service pushes to the app: the
@@ -23,6 +25,10 @@
 //                           asked for the tunnel
 //   [app][network-country]  the network country and its source
 //                           (Common/NetworkCountry.h)
+//   [app][log-upload]       the device that carries a feedback's log upload
+//                           (Common/LogUpload.h): the session's, the
+//                           provider-only one, or one built for the upload
+//                           alone, so the upload says whether a tunnel was up
 //
 // Every value is a token from a closed set or a small number. No address, host
 // name, interface or adapter name, URL, path, GUID or identifier, and no text
@@ -54,6 +60,7 @@ inline constexpr std::string_view kTagAdapter = "adapter";
 inline constexpr std::string_view kTagDns = "dns";
 inline constexpr std::string_view kTagProxy = "proxy";
 inline constexpr std::string_view kTagNetworkCountry = "network-country";
+inline constexpr std::string_view kTagLogUpload = "log-upload";
 
 // `value` when it is one of `known`, else `fallback`: the one way a string
 // becomes part of a line.
@@ -422,6 +429,14 @@ inline std::string NetworkCountryLine(std::string_view code, std::string_view so
   const netcountry::Reading reading = netcountry::Normalized(code, source);
   return "country=" + (reading.code.empty() ? std::string("none") : reading.code) +
          " source=" + reading.source;
+}
+
+// ---- [app][log-upload] ----------------------------------------------------------
+
+// The [app][log-upload] line: the device that carries this upload, by
+// logupload::ToString's words.
+inline std::string LogUploadLine(std::string_view carrier) {
+  return "carrier=" + std::string(OneOf(carrier, {"tunnel", "provider", "standalone"}, "other"));
 }
 
 }  // namespace urnw::diag

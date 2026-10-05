@@ -14,6 +14,7 @@
 #include "Heartbeat.h"    // the lock-free state mirror the heartbeat reads
 #include "Ids.h"
 #include "Log.h"
+#include "LogUpload.h"   // the log upload's device and its refusals
 #include "Paths.h"
 #include "ProvideLifecycle.h"  // the provider-only device's refusals
 #include "StopBudget.h"   // the shutdown budgets and the abandonable teardown
@@ -1327,6 +1328,9 @@ void TunnelController::StopLocked(bool finalDisarm) {
   // so it comes after the machine is given back, and it is a no-op whenever a
   // tunnel session was running, because the two never coexist.
   RetireProviderDeviceLocked();
+  // The standalone device a log upload ran on, for the same reason. Its upload
+  // goes on: the POST runs on the network space's API, not on the device.
+  RetireLogUploadDeviceLocked();
 
   const bool tornDown = TearDownSessionLocked();
 
@@ -1865,6 +1869,9 @@ bool TunnelController::StartProvider(const proto::StartProvider& request,
   }
 
   RetireProviderDeviceLocked();
+  // A standalone log upload device runs under the same identity; its upload
+  // goes on without it (StopLocked says why).
+  RetireLogUploadDeviceLocked();
   const char* step = "network space";
   try {
     providerSpace_ = ImportNetworkSpaceLocked(request.network_space_json);
@@ -2161,6 +2168,161 @@ void TunnelController::SetNetworkCountry(const std::string& code, const std::str
 std::optional<netcountry::Reading> TunnelController::NetworkCountry() {
   std::scoped_lock lock(networkCountryMutex_);
   return networkCountry_;
+}
+
+// ---- the log upload (upload_logs) -------------------------------------------
+//
+// "Send feedback with logs" uploads this service's glog files, which is where
+// everything support reads about the tunnel, the provider and the network is.
+// It used to reach them only through the app's DeviceRemote, i.e. only while a
+// session ran. Now the app asks here, connected or not.
+
+bool TunnelController::UploadLogs(const proto::UploadLogs& request, std::string& error,
+                                  std::string& carrier,
+                                  const std::function<void(std::string_view)>& noteCarrier) {
+  // Timed, like StartProvider: a connect attempt wedged inside the SDK holds
+  // mutex_, and an upload that waited behind it would hold the control pipe.
+  std::unique_lock<std::timed_mutex> lock(mutex_, std::defer_lock);
+  if (!lock.try_lock_for(kStopLockBudget)) {
+    error = "a tunnel operation is in progress";
+    LogWarn("logs: upload_logs refused: the session lock was not free within {}ms",
+            kStopLockBudget.count());
+    return false;
+  }
+  const logupload::Carrier which =
+      logupload::CarrierFor(device_.has_value(), providerDevice_ != nullptr);
+  const char* carrierName = logupload::ToString(which);
+  std::shared_ptr<LogUploadDevice> slot;
+  urnet::DeviceLocal* device = nullptr;
+  const char* step = "upload";
+  try {
+    if (which == logupload::Carrier::Tunnel) {
+      device = &*device_;
+    } else if (which == logupload::Carrier::Provider) {
+      device = providerDevice_.get();
+    } else {
+      const AbandonedTeardownSweep abandoned = SweepAbandonedTeardowns();
+      const logupload::StandaloneRefusal refusal =
+          logupload::StandaloneRefusalFor(abandoned.outstanding > 0, SelfRestartPending());
+      if (refusal != logupload::StandaloneRefusal::None) {
+        error = logupload::RefusalReason(refusal);
+        LogInfo("logs: upload_logs refused: {}", error);
+        return false;
+      }
+      // Neither runs: a device for the upload alone, built as StartProvider
+      // builds the provider-only device (the persisted identity, the request's
+      // credentials and network space) and nothing after that: no adapter,
+      // route, DNS entry, firewall policy, marker or rpc listener. It provides
+      // to nobody. One at a time, under the one identity.
+      RetireLogUploadDeviceLocked();
+      slot = std::make_shared<LogUploadDevice>();
+      step = "network space";
+      slot->space = ImportNetworkSpaceLocked(request.network_space_json);
+      step = "device";
+      slot->device = std::make_unique<urnet::DeviceLocal>(
+          NewDeviceLocked(*slot->space, request.by_jwt, request.device_description,
+                          request.device_spec, request.app_version, request.instance_id,
+                          "logs:"));
+      step = "provide mode";
+      slot->device->setProvideControlMode("never");
+      logUpload_ = slot;
+      device = slot->device.get();
+      step = "upload";
+    }
+    // Into the files being uploaded, before the sdk zips them: which device
+    // carried the upload tells support whether a tunnel was up when it was sent.
+    if (noteCarrier) noteCarrier(carrierName);
+    // The sdk flushes glog, zips this process's log files and posts them to
+    // POST /log/{feedback_id}/upload with the device's client credentials. The
+    // callback runs on an SDK thread: it logs and tells the waiter, and touches
+    // nothing of this object.
+    device->uploadLogs(
+        request.feedback_id,
+        [slot, carrierName](std::optional<urnet::UploadLogsResult> uploaded,
+                            std::optional<std::string> err) {
+          if (err) {
+            LogWarn("logs: the log upload ({} device) failed: {}", carrierName, *err);
+          } else if (uploaded && uploaded->error) {
+            LogWarn("logs: the log upload ({} device) was refused: {}", carrierName,
+                    uploaded->error->message);
+          } else {
+            LogInfo("logs: the log upload ({} device) finished", carrierName);
+          }
+          if (!slot) return;
+          {
+            std::scoped_lock slotLock(slot->mutex);
+            slot->uploadReported = true;
+          }
+          slot->reported.notify_all();
+        });
+  } catch (const std::exception&) {
+    // The stage names the failure, as StartProvider's does, without copying an
+    // SDK message that can carry endpoints or identifiers into the reply.
+    error = std::string("the logs could not be uploaded at the ") + step + " step";
+    LogError("logs: stage=upload outcome=failed component={}", step);
+    // a standalone device built before the failure is closed, not just released
+    if (slot) {
+      CloseLogUploadDevice(slot);
+      logUpload_.reset();
+    }
+    return false;
+  }
+  if (slot) {
+    // The waiter retires the standalone device once its upload reports, or at
+    // the bound if it never does. It owns a share of the slot and nothing else,
+    // so it may outlive this controller; whoever takes the device first closes
+    // it (CloseLogUploadDevice).
+    std::thread([slot] {
+      RunGuarded("log-upload-retire", [&] {
+        {
+          std::unique_lock<std::mutex> slotLock(slot->mutex);
+          slot->reported.wait_for(slotLock, logupload::kStandaloneDeviceMaxLifetime,
+                                  [&] { return slot->uploadReported || !slot->device; });
+        }
+        CloseLogUploadDevice(slot);
+      });
+    }).detach();
+  }
+  carrier = carrierName;
+  LogInfo("logs: uploading this service's logs for a feedback ({} device)", carrierName);
+  return true;
+}
+
+void TunnelController::CloseLogUploadDevice(const std::shared_ptr<LogUploadDevice>& slot) {
+  std::unique_ptr<urnet::DeviceLocal> device;
+  std::optional<urnet::NetworkSpace> space;
+  {
+    std::scoped_lock slotLock(slot->mutex);
+    device = std::move(slot->device);
+    slot->device.reset();
+    space = std::move(slot->space);
+    slot->space.reset();
+  }
+  // a waiter still waiting finds the slot empty and leaves
+  slot->reported.notify_all();
+  if (!device) return;
+  LogInfo("logs: retiring the device that carried a log upload");
+  const bool finished = RunBounded(
+      kSdkTeardownBudget,
+      [device = std::move(device), space = std::move(space)]() mutable {
+        device->close();
+        device.reset();
+        space.reset();
+      },
+      // A DeviceLocal under this device's identity, like the provider-only
+      // device's retire: abandoned, it refuses a start until it finishes.
+      AbandonHazard::HoldsSessionDevice);
+  if (!finished) {
+    LogError("logs: the log upload device did not close inside its {}ms budget and is "
+             "left closing on its own thread; a start is refused until it finishes",
+             kSdkTeardownBudget.count());
+  }
+}
+
+void TunnelController::RetireLogUploadDeviceLocked() {
+  if (!logUpload_) return;
+  CloseLogUploadDevice(logUpload_);
+  logUpload_.reset();
 }
 
 // See the contract in the header. NO SESSION LOCK: a copy of the snapshot that

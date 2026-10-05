@@ -31,6 +31,7 @@
 #include "Ids.h"
 #include "Localization.h"
 #include "Log.h"
+#include "LogUpload.h"
 #include "NetworkSpaceStartup.h"
 #include "Paths.h"
 #include "PeerLocation.h"
@@ -6304,6 +6305,71 @@ void SdkHost::ReconcileProviderLocked(const char* reason) {
   } else {
     LogWarn("sdkhost: provide: the service did not run the provider-only device ({}): {}",
             reason, error.empty() ? "no detail" : error);
+  }
+}
+
+// ---- send feedback with logs ------------------------------------------------
+//
+// See the contract in the header and Common/LogUpload.h.
+
+void SdkHost::UploadFeedbackLogs(const std::string& feedbackId) {
+  if (feedbackId.empty()) {
+    LogWarn("sdkhost: log attach skipped (no feedback id)");
+    return;
+  }
+  // The request start_provider sends, so a service with no device builds the
+  // same one. Read under the lock; the pipe call is made without it.
+  proto::UploadLogs request;
+  request.feedback_id = feedbackId;
+  bool haveRequest = false;
+  {
+    std::scoped_lock lock(mutex_);
+    try {
+      if (localState_ && networkSpace_) {
+        request.by_jwt = localState_->getByClientJwt();
+        request.instance_id = localState_->getInstanceId();
+        request.device_description = DeviceDescription();
+        request.device_spec = DeviceSpec();
+        request.app_version = appVersion_;
+        request.network_space_json = networkSpace_->toJson();
+        haveRequest = true;
+      }
+    } catch (const std::exception& e) {
+      LogWarn("sdkhost: building the log upload request failed: {}", e.what());
+    }
+  }
+  bool serviceAccepted = false;
+  if (haveRequest && service_.IsConnected()) {
+    std::string carrier;
+    std::string error;
+    serviceAccepted = service_.UploadLogs(request, &carrier, &error);
+    if (serviceAccepted) {
+      LogInfo("sdkhost: the service is uploading its logs ({} device)", carrier);
+    } else {
+      // "unknown request type" from a service that predates the verb
+      LogWarn("sdkhost: the service did not upload its logs: {}",
+              error.empty() ? "no detail" : error);
+    }
+  }
+  std::scoped_lock lock(mutex_);
+  const logupload::AppStep step =
+      logupload::AppStepAfterService(serviceAccepted, device_.has_value());
+  if (step == logupload::AppStep::Done) return;
+  if (step == logupload::AppStep::Skip) {
+    LogWarn("sdkhost: log attach skipped (the service did not take it and no device is bound)");
+    return;
+  }
+  try {
+    device_->uploadLogs(feedbackId, [](std::optional<urnet::UploadLogsResult> result,
+                                       std::optional<std::string> err) {
+      std::string error;
+      if (result && result->error) error = result->error->message;
+      else if (err) error = *err;
+      if (!error.empty()) LogWarn("sdkhost: log attach failed: {}", error);
+    });
+  } catch (const std::exception& e) {
+    // Device::uploadLogs throws synchronously when the C call fails.
+    LogWarn("sdkhost: log attach threw: {}", e.what());
   }
 }
 

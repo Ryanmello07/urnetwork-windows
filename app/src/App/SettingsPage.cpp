@@ -1245,38 +1245,28 @@ winrt::fire_and_forget SettingsPage::SaveLogsToFile() {
   }
 }
 
-// Attach the SDK's log directory to a feedback report the server has already
-// accepted, identified by ITS id. Called only from OnSendFeedback, only when
+// Attach the service's logs to a feedback report the server has already
+// accepted, identified by its id. Called only from OnSendFeedback, only when
 // the user ticked the box - apple's FeedbackView contract. Never a standalone
 // affordance: an upload the user did not ask for, correlated with nothing, is
 // exfiltration with a friendly label.
 //
-// Failure is silent BY DESIGN here and only here: the feedback itself was
+// SdkHost asks the service first, which uploads its own logs whether or not a
+// tunnel runs, and falls back to the DeviceRemote, the only path before the
+// service could be asked. The one blocks on the control pipe and the other on
+// the device rpc, so this leaves the UI thread first.
+//
+// Failure is silent by design here and only here: the feedback itself was
 // accepted, so telling the user their report failed would be false, and the
 // attachment is an extra. It is logged.
-void SettingsPage::UploadLogs(std::string const& feedbackId) {
-  if (feedbackId.empty() || !Sdk().hasDevice()) {
-    LogWarn("settings: log attach skipped (feedbackId={} device={})",
-            feedbackId.empty() ? "none" : "present", Sdk().hasDevice());
-    return;
+winrt::fire_and_forget SettingsPage::UploadLogs(std::string feedbackId) {
+  if (feedbackId.empty()) {
+    LogWarn("settings: log attach skipped (no feedback id)");
+    co_return;
   }
-  auto queue = w_.DispatcherQueue();
-  auto weak = w_.get_weak();
-  try {
-    Sdk().device().uploadLogs(feedbackId,
-                              [queue, weak](std::optional<urnet::UploadLogsResult> result,
-                                            std::optional<std::string> err) {
-                                std::string error;
-                                if (result && result->error) error = result->error->message;
-                                else if (err) error = *err;
-                                if (!error.empty()) {
-                                  LogWarn("settings: log attach failed: {}", error);
-                                }
-                              });
-  } catch (const std::exception& e) {
-    // Device::uploadLogs throws synchronously when the C call fails.
-    LogWarn("settings: log attach threw: {}", e.what());
-  }
+  SdkHost* const sdk = &Sdk();
+  co_await winrt::resume_background();
+  sdk->UploadFeedbackLogs(feedbackId);
 }
 
 // ---- sheets ----------------------------------------------------------------

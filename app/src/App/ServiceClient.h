@@ -71,6 +71,13 @@ class ServiceClient {
   // took it; false for a transport failure or for a service too old to know
   // the verb, which then holds no network country, as before the verb existed.
   bool SetNetworkCountry(const proto::SetNetworkCountry& country);
+  // upload_logs (Protocol.h): the service uploads its own logs for a feedback
+  // the server accepted, whether or not a tunnel runs. True once the upload has
+  // started, with `carrier` naming the device; false for a transport failure, a
+  // refusal or a service too old to know the verb ("unknown request type"),
+  // with `error` saying which. The app then falls back to its DeviceRemote.
+  bool UploadLogs(const proto::UploadLogs& request, std::string* carrier = nullptr,
+                  std::string* error = nullptr);
 
  private:
   proto::TunnelStatus CallStatus(const nlohmann::json& request,

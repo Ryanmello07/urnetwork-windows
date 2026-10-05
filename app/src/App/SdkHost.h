@@ -1449,6 +1449,18 @@ class SdkHost {
   }
   bool hasDevice() { return device_.has_value(); }
   urnet::DeviceRemote& device() { return *device_; }
+  // "Send feedback with logs" whether or not a tunnel runs (support inbox
+  // 2090), after the server accepted the feedback with the box ticked. The logs
+  // that matter are the service's, and the DeviceRemote reaches them only while
+  // a session runs, so this asks the service first (Protocol.h upload_logs)
+  // with this session's client credentials as start_provider carries them, and
+  // falls back to the DeviceRemote's UploadLogs only when the service did not
+  // take it (logupload::AppStepAfterService). Failure is logged, never shown:
+  // the feedback itself was accepted. Blocking (the control pipe, or the
+  // device rpc on the fallback), so call it off the UI thread. mutex_ is not
+  // held across the pipe call; it is held to read the session and across the
+  // fallback's DeviceRemote call, as for every DeviceRemote call here.
+  void UploadFeedbackLogs(const std::string& feedbackId);
   // Account page opens billing/upgrade in the browser at this host.
   std::string linkHostName() const { return "ur.io"; }
   // The version this app reports to the SDK/server. Settings shows it because

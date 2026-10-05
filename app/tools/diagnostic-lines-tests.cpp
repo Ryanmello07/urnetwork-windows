@@ -1,11 +1,11 @@
 // Executable spec for the service's diagnostic lines (Common/DiagnosticLines.h):
-// the [app][service], [app][adapter], [app][dns], [app][proxy] and
-// [app][network-country] lines that "send feedback with logs" uploads. Every
-// value in them is a token from a closed set or a small number, so the checks
-// feed each formatter what a peer, the OS or a hand-edited setting could put
-// in front of it -- line breaks, forged prefixes, paths, addresses, host
-// names -- and require that none of it comes out, and that every line stays
-// short.
+// the [app][service], [app][adapter], [app][dns], [app][proxy],
+// [app][network-country] and [app][log-upload] lines that "send feedback with
+// logs" uploads. Every value in them is a token from a closed set or a small
+// number, so the checks feed each formatter what a peer, the OS or a
+// hand-edited setting could put in front of it -- line breaks, forged
+// prefixes, paths, addresses, host names -- and require that none of it comes
+// out, and that every line stays short.
 //
 //   c++ -std=c++20 -I ../src/Common diagnostic-lines-tests.cpp -o /tmp/diagnostic-lines-tests && /tmp/diagnostic-lines-tests
 //
@@ -229,10 +229,25 @@ void TestNetworkCountryLine() {
             "network country: a peer's garbage");
 }
 
+// The [app][log-upload] line: the three devices by their words, and nothing
+// else a caller hands it.
+void TestLogUploadLine() {
+  CheckLine(diag::LogUploadLine("tunnel"), "carrier=tunnel", "log upload: the session's device");
+  CheckLine(diag::LogUploadLine("provider"), "carrier=provider", "log upload: the provider-only device");
+  CheckLine(diag::LogUploadLine("standalone"), "carrier=standalone",
+            "log upload: a device built for the upload");
+  for (const std::string& bad : kHostile) {
+    const std::string line = diag::LogUploadLine(bad);
+    CheckLine(line, "carrier=other", "log upload: a carrier the service cannot choose is other");
+    CheckBounded(line, "log upload");
+  }
+  CheckLine(diag::LogUploadLine(""), "carrier=other", "log upload: no carrier is other");
+}
+
 // Every tag survives the sdk's tag rule unchanged.
 void TestTags() {
   for (const std::string_view tag : {diag::kTagService, diag::kTagAdapter, diag::kTagDns, diag::kTagProxy,
-                                     diag::kTagNetworkCountry}) {
+                                     diag::kTagNetworkCountry, diag::kTagLogUpload}) {
     // the sdk keeps [A-Za-z0-9._-], at most 32 of them (sdk app_log.go)
     bool kept = !tag.empty() && tag.size() <= 32;
     for (const char c : tag) {
@@ -251,6 +266,7 @@ int main() {
   TestDnsLine();
   TestProxy();
   TestNetworkCountryLine();
+  TestLogUploadLine();
   TestTags();
   std::cout << (gCases - gFailures) << "/" << gCases << " diagnostic line checks passed" << std::endl;
   return gFailures == 0 ? 0 : 1;

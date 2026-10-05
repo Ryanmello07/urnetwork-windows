@@ -137,6 +137,13 @@ void ServiceDiagnostics::NoteNetworkCountry(
   WriteNetworkCountryLocked(networkCountry);
 }
 
+void ServiceDiagnostics::NoteLogUpload(std::string_view carrier) {
+  // Every upload says it, unchanged or not: each is the user's own send, and
+  // the line has to be in the zip that follows.
+  std::scoped_lock lock(mutex_);
+  urnet::logAppInfo(std::string(diag::kTagLogUpload), diag::LogUploadLine(carrier));
+}
+
 void ServiceDiagnostics::WriteNetworkCountryLocked(
     const std::optional<netcountry::Reading>& networkCountry) {
   // None before the app first sends one: nothing is known, so nothing is said.

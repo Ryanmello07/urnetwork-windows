@@ -140,6 +140,21 @@ bool ServiceClient::SetNetworkCountry(const proto::SetNetworkCountry& country) {
   }
 }
 
+bool ServiceClient::UploadLogs(const proto::UploadLogs& request, std::string* carrier,
+                               std::string* error) {
+  nlohmann::json body = request;
+  try {
+    proto::Reply r = pipe_.Call(proto::Request(proto::msg::kUploadLogs, body)).get<proto::Reply>();
+    if (error) *error = r.error;
+    if (carrier) *carrier = r.log_upload_carrier;
+    return r.ok;
+  } catch (const std::exception& e) {
+    LogError("service: upload logs failed: {}", e.what());
+    if (error) *error = e.what();
+    return false;
+  }
+}
+
 bool ServiceClient::CallProvider(const nlohmann::json& request,
                                  std::optional<proto::TunnelStatus>* status,
                                  std::string* error) {

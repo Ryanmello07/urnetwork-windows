@@ -132,6 +132,30 @@ nlohmann::json ControlServer::Handle(const nlohmann::json& request) {
       diagnostics_.NoteNetworkCountry(tunnel_.NetworkCountry());
       reply.ok = true;
       reply.status = tunnel_.Status();
+    } else if (type == proto::msg::kUploadLogs) {
+      // "Send feedback with logs" whether or not a tunnel runs
+      // (TunnelController::UploadLogs). The feedback id becomes part of the url
+      // the device posts to, and a standalone device registers under this
+      // machine's persisted identity with these credentials, so both are
+      // validated before anything is touched, like start_provider's above.
+      proto::UploadLogs req = request.get<proto::UploadLogs>();
+      if (!proto::LooksLikeFeedbackId(req.feedback_id) ||
+          !rpcsession::IsPairableInstanceId(req.instance_id) || req.by_jwt.empty() ||
+          req.network_space_json.empty()) {
+        throw std::runtime_error(
+            "upload_logs requires the server's feedback id, the device's client "
+            "jwt, its exact instance id, and the network space");
+      }
+      std::string error;
+      std::string carrier;
+      // The carrier's line goes into the upload itself, so it is written from
+      // inside, once the device is chosen (ServiceDiagnostics.h).
+      reply.ok = tunnel_.UploadLogs(req, error, carrier, [this](std::string_view chosen) {
+        diagnostics_.NoteLogUpload(chosen);
+      });
+      reply.error = error;
+      reply.log_upload_carrier = carrier;
+      // nothing the status reports changed, so nothing is pushed
     } else if (type == proto::msg::kGetProviderStats) {
       // The provider-only device's statistics (TunnelController::ProviderStats),
       // answered like get_state: no session lock, no device call, and nothing

@@ -12,10 +12,12 @@
 
 #include <atomic>
 #include <condition_variable>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <thread>
 
 #include "EgressMonitor.h"
@@ -216,6 +218,26 @@ class TunnelController {
   // reports does not say it, and "on" over a firewall that is off is the
   // difference between a guarantee and a hope. Lock-free, like killSwitch_.
   bool KillSwitchPreference() const { return killSwitch_.load(); }
+
+  // upload_logs (Protocol.h; Common/LogUpload.h carries the lifecycle): "send
+  // feedback with logs" uploads this service's glog files whether or not a
+  // tunnel runs. The sdk's UploadLogs runs on the session's device, else on the
+  // provider-only device, else on a standalone device built from the request's
+  // credentials exactly as the provider-only device is (provide mode never,
+  // and no adapter, route, DNS entry, firewall policy or listener). That one is
+  // retired once its upload reports or after
+  // logupload::kStandaloneDeviceMaxLifetime (a waiter thread that owns only
+  // the device's slot), and before any other device under this identity is
+  // built (every teardown, start_provider, the next upload). Refused (false,
+  // `error` set) when the session lock is not free in budget, and for a
+  // standalone device while a held device or a restart is pending; the app
+  // then falls back to its DeviceRemote. True once the upload has started, with
+  // `carrier` naming the device (logupload::ToString). `noteCarrier` gets that
+  // name once the device is chosen and before the sdk zips the log, under the
+  // session lock, so the line it writes is in this upload (ControlServer
+  // passes ServiceDiagnostics::NoteLogUpload).
+  bool UploadLogs(const proto::UploadLogs& request, std::string& error, std::string& carrier,
+                  const std::function<void(std::string_view)>& noteCarrier);
 
   // THE STATUS THE APP DECIDES ON, and it must never block.
   //
@@ -436,6 +458,26 @@ class TunnelController {
   // for a Wi-Fi signal change. Best effort, like the statistics. Caller holds
   // mutex_.
   void WatchProviderNetworkLocked();
+  // The standalone device a log upload runs on while neither the session's nor
+  // the provider-only device exists (UploadLogs). Shared by this controller and
+  // the waiter thread that retires it, so either may take the device and the
+  // waiter needs nothing of this object: it owns a share of the slot, never
+  // `this`. The slot's mutex is innermost and never held across a call into
+  // the device; the upload callback only sets uploadReported under it.
+  struct LogUploadDevice {
+    std::mutex mutex;
+    std::condition_variable reported;
+    bool uploadReported = false;
+    std::unique_ptr<urnet::DeviceLocal> device;
+    std::optional<urnet::NetworkSpace> space;
+  };
+  // Takes the device out of `slot` and closes it on a bounded worker, as the
+  // provider-only device's retire does (AbandonHazard::HoldsSessionDevice). A
+  // no-op once taken. Static: the waiter calls it after this object may be
+  // gone.
+  static void CloseLogUploadDevice(const std::shared_ptr<LogUploadDevice>& slot);
+  // Retires the standalone log upload device, if any. Caller holds mutex_.
+  void RetireLogUploadDeviceLocked();
   void PushExcludedToDriver(const std::vector<std::string>& paths, bool allowlist);
   // Re-point the driver at a new physical interface. Runs from the egress
   // monitor's change callback, on a system worker thread.
@@ -539,6 +581,11 @@ class TunnelController {
   urnet::Sub providerPeersSub_;
   std::shared_ptr<std::atomic<int64_t>> providerClients_;
   std::string providerClientId_;
+  // The standalone log upload device's slot (LogUploadDevice), empty while
+  // none was built. A third device slot, never engaged beside device_ or
+  // providerDevice_: both are built only after RetireLogUploadDeviceLocked.
+  // Guarded by mutex_.
+  std::shared_ptr<LogUploadDevice> logUpload_;
 
   // The network country last applied to this process's sdk
   // (SetNetworkCountry), empty until the app first sends one. Guarded by
