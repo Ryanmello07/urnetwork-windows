@@ -1326,8 +1326,12 @@ class SdkHost {
   // The provider extender setting (EXTENDER.md N4): written through the device,
   // which persists it in its own space and applies it at once; while the device
   // process is out of contact the DeviceRemote queues it and replays it at the
-  // next sync. There is no app-side mirror to keep, unlike the provide mode: the
-  // row is hidden with no device, so nothing is written without one. Callers
+  // next sync. With no session the switch shows over the provider-only
+  // device's status only when the service takes its write, and the write goes
+  // to the service (set_provide_extender), which persists it in the same space
+  // a session's device reads, from ProviderOnlyStatsLoop's thread
+  // (ExtenderProvideWriteRouteFor). There is no app-side mirror to keep,
+  // unlike the provide mode: the service owns the setting either way. Callers
   // never write while the row is hidden (N1).
   void SetProvideExtender(bool on);
   void ApplyDnsSettings(const urnet::DnsResolverSettings& settings);
@@ -1721,13 +1725,16 @@ class SdkHost {
   // provider-only device, the control channel is up and the window presents.
   // An answer feeds what a session's DeviceRemote feeds — the Earnings provider
   // plots, their gate and the "no traffic yet" line (the drawer caches and
-  // onProviderThroughput_), the Earnings extender row and extender plot (the
-  // extender points and onExtenderProvideStatus_, as the provider-only
-  // device's status, whose setting no switch can write), the Connect page's
-  // client count (serviceProviderClients_) — and names the client whose
-  // provider status the api read above keeps. Off the UI thread because the
-  // pipe serializes calls: a poll can wait behind a start_tunnel for as long as
-  // that takes. Started by Initialize, joined by the destructor.
+  // onProviderThroughput_), the Earnings extender row and extender plot and
+  // the Connect page's Extender switch (the extender points and
+  // onExtenderProvideStatus_, as the provider-only device's status, with
+  // whether the service takes the switch's write), the Connect page's client
+  // count (serviceProviderClients_) — and names the client whose provider
+  // status the api read above keeps. It also sends that switch's write
+  // (set_provide_extender), first in its pass, so the answer after it already
+  // carries it. Off the UI thread because the pipe serializes calls: a poll
+  // can wait behind a start_tunnel for as long as that takes. Started by
+  // Initialize, joined by the destructor.
   static constexpr std::chrono::seconds kProviderOnlyStatsInterval{2};
   // the sdk's ProviderStatusViewController poll interval
   static constexpr std::chrono::seconds kProviderOnlyStatusInterval{60};
@@ -1750,6 +1757,11 @@ class SdkHost {
   // unavailable (the service reports no statistics), publishing a change.
   void ResetProviderOnlyStatus();
   void ProviderOnlyStatusUnavailable();
+  // The Extender switch's write with no session: queued by SetProvideExtender
+  // (the UI thread) and sent by ProviderOnlyStatsLoop, outside mutex_. Written
+  // or refused, the next published status replaces the switch's guess.
+  void QueueProviderOnlyExtenderWrite(bool on);
+  void WriteProviderOnlyExtender(bool on);
 
   std::thread providerOnlyThread_;
   std::mutex providerOnlyMutex_;
@@ -1757,6 +1769,8 @@ class SdkHost {
   bool providerOnlyStop_ = false;
   bool providerOnlyKick_ = false;
   bool providerOnlyStatusWanted_ = false;
+  // The switch's last write not yet sent; a newer flip replaces it.
+  std::optional<bool> providerOnlyExtenderWrite_;
   // Bumped whenever the readings stop belonging to the polls in flight (an
   // unwant, a reset), so a late answer is dropped, the controller's rule.
   uint64_t providerOnlyStatusGeneration_ = 0;
@@ -2128,9 +2142,10 @@ class SdkHost {
   TransportDistributionSnapshot lastTransportDistribution_;
   ExtenderStatusView lastExtenderStatus_;
   ExtenderProvideStatusView lastExtenderProvideStatus_;
-  // Set by SetProvideExtender: the next status publishes even when it equals the
-  // last one. The row painted a local guess after the write (N7), and only a
-  // pushed status replaces it.
+  // Set by SetProvideExtender, and for the provider-only device's status by
+  // WriteProviderOnlyExtender once the service answered: the next status
+  // publishes even when it equals the last one. The row painted a local guess
+  // after the write (N7), and only a pushed status replaces it.
   bool extenderProvideRepublish_ = false;
   // the statistics feed's caches (O8), refreshed by PublishThroughput
   std::vector<urnet::ThroughputPoint> lastProviderPoints_;

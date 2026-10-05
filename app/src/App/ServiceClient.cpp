@@ -128,6 +128,13 @@ bool ServiceClient::GetProviderStats(proto::ProviderStats& stats) {
   }
 }
 
+bool ServiceClient::SetProvideExtender(bool on, std::string* error) {
+  proto::SetProvideExtender s;
+  s.provide_extender = on;
+  nlohmann::json body = s;
+  return CallProvider(proto::Request(proto::msg::kSetProvideExtender, body), nullptr, error);
+}
+
 bool ServiceClient::CallProvider(const nlohmann::json& request,
                                  std::optional<proto::TunnelStatus>* status,
                                  std::string* error) {

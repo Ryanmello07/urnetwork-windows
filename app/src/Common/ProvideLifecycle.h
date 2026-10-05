@@ -36,8 +36,10 @@
 //
 // Pure and header-only, constexpr, no Windows headers and no allocation, like
 // ConnectAction.h: tools/provide-lifecycle-tests.cpp runs it on any host,
-// TunnelController::StartProvider refuses with ProviderStartRefusal, and
-// SdkHost::ReconcileProviderLocked asks DisconnectedProviderStep what to send.
+// TunnelController::StartProvider refuses with ProviderStartRefusal,
+// TunnelController::SetProvideExtender writes where ExtenderSettingTargetFor
+// says, and SdkHost::ReconcileProviderLocked asks DisconnectedProviderStep
+// what to send.
 //
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
@@ -158,6 +160,40 @@ constexpr const char* RefusalReason(ProviderRefusal refusal) {
       break;
   }
   return "";
+}
+
+// ---- the service's half: where the extender switch's write goes -------------
+
+// set_provide_extender writes the provider extender setting, which belongs to
+// the network space (`.provide_extender`): every device reads it from its
+// space, a session's when it starts as much as the provider-only device's. So
+// the write goes through the device that runs, which persists it and applies
+// it at once, and with none into the space the last device ran in, which the
+// next start of either imports. The two devices never run side by side.
+enum class ExtenderSettingTarget {
+  ProviderDevice,  // the provider-only device: the switch's own case
+  SessionDevice,   // a session's device that came up after the app asked
+  NetworkSpace,    // no device: the space the last device ran in
+  None,            // no device has run in this process: refused
+};
+
+constexpr ExtenderSettingTarget ExtenderSettingTargetFor(bool providerDevice, bool sessionDevice,
+                                                         bool lastSpace) {
+  if (providerDevice) return ExtenderSettingTarget::ProviderDevice;
+  if (sessionDevice) return ExtenderSettingTarget::SessionDevice;
+  if (lastSpace) return ExtenderSettingTarget::NetworkSpace;
+  return ExtenderSettingTarget::None;
+}
+
+// For logs.
+constexpr const char* ToString(ExtenderSettingTarget target) {
+  switch (target) {
+    case ExtenderSettingTarget::ProviderDevice: return "the provider-only device";
+    case ExtenderSettingTarget::SessionDevice: return "the session's device";
+    case ExtenderSettingTarget::NetworkSpace: return "the last device's network space";
+    case ExtenderSettingTarget::None: break;
+  }
+  return "nothing";
 }
 
 // ---- the app's half: what to ask the service while there is no session -----

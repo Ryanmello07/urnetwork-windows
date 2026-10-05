@@ -321,9 +321,9 @@ const char* ExtenderProvideErrorKey(std::string_view errorCase) {
 ExtenderProvideRowModel ExtenderProvideRowModelFor(const ExtenderProvideStatusView& view) {
   ExtenderProvideRowModel model;
   model.visible = view.supported;
-  // the switch writes through a session's device; the provider-only device's
-  // status has none to write through
-  model.switchVisible = view.supported && !view.providerOnly;
+  // the switch writes through a session's device, or for the provider-only
+  // device's status through the service, when it takes the write
+  model.switchVisible = view.supported && (!view.providerOnly || view.serviceWritable);
   model.on = view.provideExtender;
   const std::string_view state = view.state;
   if (state == kExtenderProvideStateOff) {
@@ -370,6 +370,8 @@ ExtenderProvideStatusView ExtenderProvideGuessFor(const ExtenderProvideStatusVie
   ExtenderProvideStatusView guess;
   guess.supported = current.supported;
   guess.providerOnly = current.providerOnly;
+  // the switch that was just flipped stays shown over its own guess
+  guess.serviceWritable = current.serviceWritable;
   guess.state = !on        ? kExtenderProvideStateOff
                 : providing ? kExtenderProvideStateSettingUp
                             : kExtenderProvideStateNotProviding;
@@ -377,6 +379,16 @@ ExtenderProvideStatusView ExtenderProvideGuessFor(const ExtenderProvideStatusVie
   guess.enabled = on && providing;
   guess.provideExtender = on;
   return guess;
+}
+
+ExtenderProvideWriteRoute ExtenderProvideWriteRouteFor(bool sessionDevice,
+                                                       const ExtenderProvideStatusView& shown) {
+  if (sessionDevice) return ExtenderProvideWriteRoute::Device;
+  // exactly the status the switch shows over with no session
+  if (shown.supported && shown.providerOnly && shown.serviceWritable) {
+    return ExtenderProvideWriteRoute::Service;
+  }
+  return ExtenderProvideWriteRoute::None;
 }
 
 // ---- the statistics sections ----------------------------------------------------

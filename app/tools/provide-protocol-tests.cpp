@@ -7,7 +7,9 @@
 // the ProviderStats payload in a reply and an older service's silence, its
 // extender fields and a service too old to send them, and the readers that
 // turn its sdk documents back into the app's types (ProviderPointsOf,
-// ProviderDistributionOf, ExtenderPointsOf, ExtenderProvideStatusOf). Run
+// ProviderDistributionOf, ExtenderPointsOf, ExtenderProvideStatusOf). And the
+// Extender switch while disconnected: set_provide_extender, its strict
+// request, and provide_extender_writable with an older service's silence. Run
 // against the SAME header the service and the app compile; it needs
 // nlohmann/json, like the app.
 //
@@ -498,6 +500,61 @@ void TestExtenderReaders() {
         "readers: an extender status the type cannot read is none");
 }
 
+// (j) the Extender switch while disconnected: the set_provide_extender verb and
+// its request, and the provide_extender_writable field that tells the app the
+// service takes it, with an older service's silence read as no writer
+void TestSetProvideExtender() {
+  Check(std::string(msg::kSetProvideExtender) == "set_provide_extender",
+        "switch: the set_provide_extender tag");
+  for (const bool on : {false, true}) {
+    SetProvideExtender sent;
+    sent.provide_extender = on;
+    const nlohmann::json request = Request(msg::kSetProvideExtender, nlohmann::json(sent));
+    const nlohmann::json wire = nlohmann::json::parse(DumpForWire(request));
+    Check(TypeOf(wire) == "set_provide_extender", "switch: the request carries its type");
+    Check(wire.get<SetProvideExtender>().provide_extender == on,
+          std::string("switch: provide_extender round-trips ") + (on ? "on" : "off"));
+  }
+  // a write whose value did not arrive writes nothing, not a default
+  for (const char* malformed : {R"({})", R"({"provide_extender":null})",
+                                R"({"provide_extender":"false"})", R"({"provide_extender":0})"}) {
+    bool threw = false;
+    try {
+      (void)nlohmann::json::parse(malformed).get<SetProvideExtender>();
+    } catch (const std::exception&) {
+      threw = true;
+    }
+    Check(threw, std::string("switch: a request without a boolean value is refused: ") + malformed);
+  }
+
+  ProviderStats sent;
+  sent.available = true;
+  sent.extender_provide_status = nlohmann::json::parse(
+      R"({"Supported":true,"State":"off","Reason":"","Enabled":false,"ActivatedV4":false})");
+  sent.provide_extender = false;
+  sent.provide_extender_writable = true;
+  Reply reply;
+  reply.ok = true;
+  reply.in_reply_to = msg::kGetProviderStats;
+  reply.provider_stats = sent;
+  const Reply back = nlohmann::json::parse(DumpForWire(nlohmann::json(reply))).get<Reply>();
+  Check(back.provider_stats && back.provider_stats->provide_extender_writable,
+        "provider stats: provide_extender_writable round-trips");
+  Check(back.provider_stats && !back.provider_stats->provide_extender,
+        "switch: the setting beside it stays its own");
+  // a service from before the verb sends the role without the writer: the
+  // switch must stay hidden over it
+  const ProviderStats older = nlohmann::json::parse(
+      R"({"available":true,"client_count":1,"provide_extender":true,"extender_provide_status":{"Supported":true,"State":"active","Reason":"","Enabled":true,"ActivatedV4":true}})")
+                                  .get<ProviderStats>();
+  Check(older.provide_extender && !older.provide_extender_writable,
+        "switch: a service without the field reads as no writer");
+  const ProviderStats none =
+      nlohmann::json::parse(DumpForWire(nlohmann::json(ProviderStats{}))).get<ProviderStats>();
+  Check(!none.provide_extender_writable, "switch: no provider-only device has no writer");
+  Check(kProtocolVersion == 4, "switch: no protocol bump for the verb and its field");
+}
+
 }  // namespace
 
 int main() {
@@ -510,6 +567,7 @@ int main() {
   TestProviderStatsReaders();
   TestProviderStatsExtender();
   TestExtenderReaders();
+  TestSetProvideExtender();
   std::cout << (gCases - gFailures) << "/" << gCases << " provide protocol checks passed"
 #if defined(URNW_PROVIDE_PROTOCOL_TESTS_SDK)
             << " (against urnetwork_sdk.hpp)"

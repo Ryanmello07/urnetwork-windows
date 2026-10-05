@@ -386,9 +386,13 @@ inline constexpr const char* kExtenderProvideErrorActivationRefused = "activatio
 //                    restart.
 //   providerOnly     the status is the service's provider-only device's, the
 //                    provider while there is no session (get_provider_stats),
-//                    not a session's device's. The app reads that device but
-//                    cannot write its setting: SdkHost::SetProvideExtender
-//                    writes through a session's device only.
+//                    not a session's device's. The app has no device rpc to
+//                    that device: SdkHost::SetProvideExtender writes its
+//                    setting through the service instead (set_provide_extender).
+//   serviceWritable  providerOnly only: the service said it takes that write
+//                    (get_provider_stats' provide_extender_writable). A service
+//                    from before the verb does not, and the switch stays
+//                    hidden over its status, never a dead switch (N1).
 //
 // A default-constructed view is "no session": unsupported, so both rows hide.
 struct ExtenderProvideStatusView {
@@ -402,18 +406,21 @@ struct ExtenderProvideStatusView {
   bool enabled = false;
   bool provideExtender = false;
   bool providerOnly = false;
+  bool serviceWritable = false;
 
   // The device pushes a status after any change of the setting, the provide
   // state or the role, coalesced to one status per epoch and never on
   // registration. SdkHost keeps a push equal to the last one off the UI thread
   // on this comparison, so it covers every field the row and the sections read,
-  // and which device the status is of: a session that takes over from the
-  // provider-only device with the same reading still brings its switch back.
+  // and which device the status is of and whether its switch can write it: a
+  // session that takes over from the provider-only device with the same
+  // reading still republishes.
   bool operator==(const ExtenderProvideStatusView& o) const {
     return supported == o.supported && state == o.state && errorCase == o.errorCase &&
            reason == o.reason && activatedV4 == o.activatedV4 &&
            activatedV6 == o.activatedV6 && refused == o.refused && enabled == o.enabled &&
-           provideExtender == o.provideExtender && providerOnly == o.providerOnly;
+           provideExtender == o.provideExtender && providerOnly == o.providerOnly &&
+           serviceWritable == o.serviceWritable;
   }
   bool operator!=(const ExtenderProvideStatusView& o) const { return !(*this == o); }
 };
@@ -458,10 +465,12 @@ struct ExtenderProvideRowModel {
   // `supported`. Hidden, never disabled (N1).
   bool visible = false;
   // The Connect page's row, the one with the switch, shows: `visible`, and the
-  // status is a session's device's, which takes the switch's write. The
-  // provider-only device's status (no session) has no writer, so that row
-  // stays hidden for it, never a dead switch (N1), while the Earnings row,
-  // which has no switch, reads `visible` and shows it.
+  // switch's write has a taker — a session's device, over its device rpc, or
+  // with no session the service, for the provider-only device's status
+  // (`serviceWritable`). Over a provider-only status a service from before
+  // set_provide_extender cannot take, that row stays hidden, never a dead
+  // switch (N1), while the Earnings row, which has no switch, reads `visible`
+  // and shows it.
   bool switchVisible = false;
   ExtenderProvideTone tone = ExtenderProvideTone::Grey;
   // The state key. Empty when `argument` renders bare: an error case this
@@ -507,11 +516,25 @@ ExtenderProvideRowModel ExtenderProvideRowModelFor(const ExtenderProvideStatusVi
 // answers (N7): off is grey Off; on is yellow Setting up while the device is
 // providing and grey Not providing while it is not. The view comes back with
 // the state and the setting guessed and the rest of the SDK's reading cleared,
-// still of the device it was read from, so it draws through
-// ExtenderProvideRowModelFor like any status; the next pushed status replaces
-// it.
+// still of the device it was read from and with the same writer, so it draws
+// through ExtenderProvideRowModelFor like any status; the next pushed status
+// replaces it.
 ExtenderProvideStatusView ExtenderProvideGuessFor(const ExtenderProvideStatusView& current,
                                                   bool on, bool providing);
+
+// Where the switch's write goes (SdkHost::SetProvideExtender): through a
+// session's device whenever one is bound; with none, through the service for
+// the provider-only device's status the switch was shown over, when the service
+// said it takes it; otherwise nowhere — the row is hidden then (N1), so a
+// write that arrives anyway is dropped.
+enum class ExtenderProvideWriteRoute {
+  Device,   // the session's DeviceRemote, over the device rpc
+  Service,  // set_provide_extender, off the UI thread
+  None,
+};
+
+ExtenderProvideWriteRoute ExtenderProvideWriteRouteFor(bool sessionDevice,
+                                                       const ExtenderProvideStatusView& shown);
 
 // The one line of state text a model reads as. `localized(key)` answers the
 // store's text for a key and `formatted(key, text)` the store's text with its
