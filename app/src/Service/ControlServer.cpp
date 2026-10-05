@@ -120,6 +120,12 @@ nlohmann::json ControlServer::Handle(const nlohmann::json& request) {
       reply.ok = tunnel_.StopProvider();
       reply.status = tunnel_.Status();
       PushState();
+    } else if (type == proto::msg::kGetProviderStats) {
+      // The provider-only device's statistics (TunnelController::ProviderStats),
+      // answered like get_state: no session lock, no device call, and nothing
+      // changed, so nothing is pushed.
+      reply.ok = true;
+      reply.provider_stats = tunnel_.ProviderStats();
     } else {
       reply.ok = false;
       reply.error = "unknown request type: " + type;

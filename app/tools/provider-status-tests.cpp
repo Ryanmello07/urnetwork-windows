@@ -3,7 +3,9 @@
 // histogram's bars, total and empty state; the states table (loading,
 // unavailable, hidden, empty, bars, and when Why? and the server's reason
 // join); the line under the provide mode row, local reason first; every Why?
-// row's label, value, help and tint; and the locale percent.
+// row's label, value, help and tint; the locale percent; and the readings a
+// status read on the api keeps for the provider-only device (Readings), which
+// apply each answer as the sdk's controller applies a poll.
 //
 //   c++ -std=c++20 -I ../src/App provider-status-tests.cpp \
 //       -o /tmp/provider-status-tests && /tmp/provider-status-tests
@@ -101,6 +103,15 @@ struct Status {
   std::optional<Country> country;
   std::optional<std::string> evaluate_time;
   std::optional<Appearances> appearances;
+};
+#endif
+
+#if defined(URNW_PROVIDER_STATUS_TESTS_SDK)
+using Result = urnet::GetProviderStatusResult;
+#else
+struct Result {
+  std::optional<std::vector<Status>> providers;
+  std::optional<bool> truncated;
 };
 #endif
 
@@ -500,6 +511,71 @@ int main() {
     Check(ps::WhyRowsFor(MakeStatus("none", ""), EnglishText()).empty(), "no numbers, no rows");
   }
 
+  // ---- a status read on the api (no session: the provider-only device) ----
+  {
+    const std::string self = "018f2b1e-0000-7000-8000-00000000c0de";
+    const auto rowFor = [](const std::string& id, const std::string& reason) {
+      Status status = MakeStatus(reason, "");
+      status.client_id = id;
+      return status;
+    };
+    const auto viewOf = [](const ps::Readings<Status>& readings) {
+      return ps::ViewFor(readings.loaded, !readings.error.empty(), readings.status);
+    };
+    std::vector<int64_t> counts = Sixty(0);
+    counts[59] = 3;
+    Result result;
+    result.providers = std::vector<Status>{
+        rowFor("018f2b1e-0000-7000-8000-000000000001", "slow"),
+        WithCounts(rowFor(self, "none"), counts),
+        rowFor(self, "egress_failing"),
+    };
+
+    ps::Readings<Status> readings;
+    CheckSections({ps::DemandArea::Loading, false, false}, viewOf(readings).sections,
+                  "api: before any answer");
+    readings.Answered(result, self);
+    Check(readings.loaded && readings.error.empty(), "api: an answer loads and clears the error");
+    Check(readings.status && readings.status->reason == "none",
+          "api: the first row whose client id is this device's");
+    CheckSections({ps::DemandArea::Bars, true, true}, viewOf(readings).sections,
+                  "api: this device's histogram");
+
+    readings.Failed("404 Not Found");
+    Check(readings.loaded && readings.status && readings.status->reason == "none" &&
+              readings.error == "404 Not Found",
+          "api: a failed poll keeps the last snapshot and records the error");
+    CheckSections({ps::DemandArea::Bars, true, true}, viewOf(readings).sections,
+                  "api: the area keeps the snapshot after a failed poll");
+
+    readings.Answered(result, "018f2b1e-0000-7000-8000-00000000ffff");
+    Check(readings.loaded && !readings.status, "api: no row for this device is no status");
+    CheckSections({ps::DemandArea::Hidden, false, false}, viewOf(readings).sections,
+                  "api: no row for this device");
+    readings.Answered(Result{}, self);
+    Check(readings.loaded && !readings.status, "api: an answer with no list is no status");
+    readings.Answered(result, "");
+    Check(!readings.status, "api: an unknown client id matches no row");
+
+    ps::Readings<Status> failed;
+    failed.Failed("");
+    Check(!failed.loaded && failed.error == "no provider status",
+          "api: a failure with no message still reads as one");
+    CheckSections({ps::DemandArea::Unavailable, false, false}, viewOf(failed).sections,
+                  "api: a failure before any answer is unavailable, never loading for good");
+
+    ps::Readings<Status> fetched;
+    fetched.Fetched(std::optional<Result>{}, std::optional<std::string>{"timeout"}, self);
+    Check(!fetched.loaded && fetched.error == "timeout", "api: a callback error is a failed poll");
+    fetched.Fetched(std::optional<Result>{}, std::optional<std::string>{}, self);
+    Check(!fetched.loaded && fetched.error == "no provider status",
+          "api: a callback with no result is a failed poll");
+    fetched.Fetched(std::optional<Result>{result}, std::optional<std::string>{}, self);
+    Check(fetched.loaded && fetched.error.empty() && fetched.status &&
+              fetched.status->reason == "none",
+          "api: a callback with a result applies it");
+  }
+
   // ---- the locale percent ----
   {
     CheckText("82%", ps::FormatPercent(0.82, 1, "%"), "pattern 1 (en)");
@@ -567,6 +643,27 @@ int main() {
     const std::optional<urnet::ProviderStatus> without = document.get<urnet::ProviderStatus>();
     CheckSections({ps::DemandArea::Unavailable, true, true}, ps::ViewFor(true, false, without).sections,
                   "sdk: no appearances");
+  }
+  {
+    // GET /network/provider-status as the api hands it over, read for the
+    // provider-only device through the header's own GetProviderStatusResult
+    const urnet::GetProviderStatusResult result = nlohmann::json::parse(R"({
+      "providers": [
+        {"client_id": "018f2b1e-0000-7000-8000-000000000001", "reason": "slow", "reason_text": ""},
+        {"client_id": "018f2b1e-0000-7000-8000-00000000c0de", "reason": "egress_unprobed",
+         "reason_text": "Not checked yet.",
+         "appearances": {"start_minute": 29313600, "bucket_seconds": 60}}
+      ],
+      "truncated": false
+    })").get<urnet::GetProviderStatusResult>();
+    ps::Readings<urnet::ProviderStatus> readings;
+    readings.Fetched(std::optional<urnet::GetProviderStatusResult>{result}, std::nullopt,
+                     "018f2b1e-0000-7000-8000-00000000c0de");
+    Check(readings.loaded && readings.status && readings.status->reason == "egress_unprobed",
+          "sdk: the provider-only device's row from the api's answer");
+    CheckSections({ps::DemandArea::Empty, true, true},
+                  ps::ViewFor(readings.loaded, !readings.error.empty(), readings.status).sections,
+                  "sdk: a row with an empty histogram");
   }
   {
     // the sdk's constants are the codes and names the presentation knows

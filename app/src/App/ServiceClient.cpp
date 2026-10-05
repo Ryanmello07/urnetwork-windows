@@ -114,6 +114,20 @@ bool ServiceClient::StopProvider(std::optional<proto::TunnelStatus>* status,
   return CallProvider(proto::Request(proto::msg::kStopProvider), status, error);
 }
 
+bool ServiceClient::GetProviderStats(proto::ProviderStats& stats) {
+  try {
+    proto::Reply r = pipe_.Call(proto::Request(proto::msg::kGetProviderStats)).get<proto::Reply>();
+    // An older service's "unknown request type" is a reply too: not ok, and no
+    // statistics in it.
+    if (!r.ok || !r.provider_stats) return false;
+    stats = std::move(*r.provider_stats);
+    return true;
+  } catch (const std::exception& e) {
+    LogError("service: get provider stats failed: {}", e.what());
+    return false;
+  }
+}
+
 bool ServiceClient::CallProvider(const nlohmann::json& request,
                                  std::optional<proto::TunnelStatus>* status,
                                  std::string* error) {

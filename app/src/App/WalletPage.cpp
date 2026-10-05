@@ -537,6 +537,7 @@ WalletPage::~WalletPage() {
   }
   try {
     CloseProviderStatus(/*deviceAlive=*/true);
+    Sdk().SetProviderOnlyStatusWanted(false);
   } catch (...) {
     // likewise
   }
@@ -613,6 +614,13 @@ void WalletPage::Initialize() {
   Sdk().SetProviderThroughputHandler([queue, weak](urnw::ProviderThroughputSnapshot snapshot) {
     queue.TryEnqueue([weak, snapshot = std::move(snapshot)] {
       if (auto self = weak.get()) self->wallet().ApplyProviderThroughput(snapshot);
+    });
+  });
+  // the provider-only device's provider status (P008, no session), read on the
+  // api by SdkHost; applied on the UI thread like the controller's
+  Sdk().SetProviderOnlyStatusHandler([queue, weak](urnw::ProviderOnlyStatus status) {
+    queue.TryEnqueue([weak, status = std::move(status)] {
+      if (auto self = weak.get()) self->wallet().ApplyProviderOnlyStatus(status);
     });
   });
   // ConnectPage's ~10 fps chart clock, started and stopped with the window's
@@ -4069,6 +4077,18 @@ void WalletPage::ReconcileProviderStatus() {
     CloseProviderStatus(/*deviceAlive=*/true);
     changed = true;
   }
+  // No session, so no device: the provider is the service's provider-only
+  // device, and SdkHost reads its status on the api. Entering or leaving that
+  // source starts the readings over, from SdkHost's snapshot on the way in.
+  const bool providerOnly = !device && CanCallApi() && provideStateKnown_ && providingEnabled_;
+  if (providerOnly != providerOnlySource_) {
+    providerOnlySource_ = providerOnly;
+    providerStatusLoaded_ = false;
+    providerStatusError_.clear();
+    providerStatus_.reset();
+    if (providerOnly) TakeProviderOnlyReadings(Sdk().CurrentProviderOnlyStatus());
+    changed = true;
+  }
   // opened once the destination shows with providing enabled, as a live
   // reading says; one that failed to open is not retried on the same device
   if (providerStatusVcDevice_ == 0 && provideStateKnown_ && providingEnabled_ && selected_ &&
@@ -4087,6 +4107,8 @@ void WalletPage::ReconcileProviderStatus() {
       providerStatusVc_->stop();
     }
   }
+  // the provider-only source polls on the same terms
+  Sdk().SetProviderOnlyStatusWanted(providerOnly && selected_ && presentationActive_);
   if (changed) ApplyProviderStatus();
 }
 
@@ -4152,11 +4174,30 @@ void WalletPage::ReadProviderStatus() {
   ApplyProviderStatus();
 }
 
+void WalletPage::ApplyProviderOnlyStatus(urnw::ProviderOnlyStatus const& status) {
+  // a session's controller, or no source at all, owns the readings now
+  if (!providerOnlySource_) return;
+  TakeProviderOnlyReadings(status);
+  ApplyProviderStatus();
+}
+
+void WalletPage::TakeProviderOnlyReadings(urnw::ProviderOnlyStatus const& status) {
+  // once per new error, as ReadProviderStatus logs the controller's
+  if (!status.error.empty() && status.error != providerStatusError_) {
+    urnw::LogWarn("provider status: no status for the provider-only device: {}", status.error);
+  }
+  providerStatusLoaded_ = status.loaded;
+  providerStatusError_ = status.error;
+  providerStatus_ = status.status;
+}
+
 providerstatus::View WalletPage::ProviderStatusView() const {
-  // no controller (no session, no device, --preview-ui) reads as a failed
-  // poll: the status is unavailable, never loading for good
+  // neither a controller nor the provider-only source (signed out, providing
+  // off, --preview-ui) reads as a failed poll: the status is unavailable,
+  // never loading for good
   return providerstatus::ViewFor(providerStatusLoaded_,
-                                 !providerStatusVc_ || !providerStatusError_.empty(),
+                                 (!providerStatusVc_ && !providerOnlySource_) ||
+                                     !providerStatusError_.empty(),
                                  providerStatus_);
 }
 

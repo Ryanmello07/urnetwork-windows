@@ -1030,11 +1030,12 @@ void ConnectPage::ApplyStats(urnw::LiveStats const& stats) {
   // (BalanceGate.h), which the banner body says while a session is up.
   w_.SetInsufficientBalance(stats.insufficientBalance);
 
-  // Provide stats. Not while the provider-only device provides (no session):
-  // the service reports its tier and key but not its peers, so a count here
-  // would be a guess. The indicator below still shows that it provides.
+  // Provide stats. Not while the count is unknown: the provider-only device (no
+  // session) reports its peers only through get_provider_stats, which an older
+  // service does not answer, so a count there would be a guess. The indicator
+  // below still shows that it provides.
   hstring provide{L""};
-  if (stats.provideEnabled && !stats.provideWithoutTunnel) {
+  if (stats.provideEnabled && !stats.provideClientsUnknown) {
     provide = stats.providePaused
                   ? Loc("providing_paused")
                   : hstring{urnw::Plural("providing_client_count", stats.provideClients)};

@@ -1862,9 +1862,10 @@ bool TunnelController::StartProvider(const proto::StartProvider& request,
   try {
     providerSpace_ = ImportNetworkSpaceLocked(request.network_space_json);
     step = "device";
-    providerDevice_ = NewDeviceLocked(*providerSpace_, request.by_jwt,
-                                      request.device_description, request.device_spec,
-                                      request.app_version, request.instance_id, "provide:");
+    providerDevice_ = std::make_unique<urnet::DeviceLocal>(
+        NewDeviceLocked(*providerSpace_, request.by_jwt, request.device_description,
+                        request.device_spec, request.app_version, request.instance_id,
+                        "provide:"));
     step = "provider transport policy";
     if (!request.provider_transport_settings_json.empty()) {
       providerDevice_->setProviderTransportSettings(
@@ -1875,6 +1876,10 @@ bool TunnelController::StartProvider(const proto::StartProvider& request,
     providerDevice_->setProvideControlMode(request.provide_mode);
     providerRequest_ = request;
     ReadProviderFactsLocked();
+    // What the app shows for it while disconnected, and the network changes it
+    // is told about: both best effort, neither a reason to stop providing.
+    OpenProviderStatsLocked();
+    WatchProviderNetworkLocked();
     PublishStatusLocked();
     LogInfo("provide: PROVIDING WITHOUT A TUNNEL (mode={} tier={} network_key={} "
             "client_id={}). No wintun adapter, route, dns entry, firewall policy or "
@@ -1908,8 +1913,31 @@ bool TunnelController::StopProvider() {
 
 void TunnelController::RetireProviderDeviceLocked() {
   if (!providerDevice_ && !providerSpace_) return;
+  // The statistics first, under their own lock, so a get_provider_stats served
+  // from here on says that nothing runs.
+  std::optional<urnet::ContractViewController> statsVc;
+  urnet::Sub peersSub;
+  {
+    std::scoped_lock lock(providerStatsMutex_);
+    statsVc = std::move(providerStatsVc_);
+    providerStatsVc_.reset();
+    peersSub = std::move(providerPeersSub_);
+    providerClients_.reset();
+    providerClientId_.clear();
+  }
+  // The network watch's handlers are dropped on THIS thread, as
+  // TearDownSessionLocked drops the session monitor's, so the monitor the
+  // worker inherits can only unregister itself.
+  if (providerEgress_) {
+    providerEgress_->SetOnNetworkEvent(nullptr);
+    providerEgress_->SetOnNetworkQualityEvent(nullptr);
+  }
   // Moved into locals and then RESET, for the reason TearDownSessionLocked
   // spells out: a moved-from engaged optional still tests true.
+  auto egress = std::move(providerEgress_);
+  providerEgress_.reset();
+  auto network = std::move(providerNetwork_);
+  providerNetwork_.reset();
   auto device = std::move(providerDevice_);
   providerDevice_.reset();
   auto space = std::move(providerSpace_);
@@ -1925,7 +1953,21 @@ void TunnelController::RetireProviderDeviceLocked() {
   const auto started = std::chrono::steady_clock::now();
   const bool finished = RunBounded(
       kSdkTeardownBudget,
-      [device = std::move(device), space = std::move(space)]() mutable {
+      [egress = std::move(egress), network = std::move(network), peersSub = std::move(peersSub),
+       statsVc = std::move(statsVc), device = std::move(device),
+       space = std::move(space)]() mutable {
+        // After this returns no further OS observation reaches the notifier.
+        if (egress) egress->Stop();
+        egress.reset();
+        // Ends the notifier's thread, waiting out a call into the device that is
+        // already running: the device has to outlive it, so it goes first.
+        network.reset();
+        // Assigned, never reset(): Sub::reset() releases the handle without
+        // unsubscribing (PacketPump.cpp).
+        peersSub = urnet::Sub{};
+        // The typed close, which releases the controller from the device.
+        if (device && statsVc) device->closeContractViewController(*statsVc);
+        statsVc.reset();
         if (device) device->close();
         device.reset();
         space.reset();
@@ -1966,6 +2008,128 @@ void TunnelController::ReadProviderFactsLocked() {
     // A status must still be publishable; it then claims less (tier 0).
     LogWarn("provide: reading the provider-only device's tier failed");
   }
+}
+
+namespace {
+// The DeviceRemote path's client count (SdkHost::ReadStats): the connected
+// network peers, none when the device reports no peers at all.
+int64_t ConnectedPeerCount(const std::optional<urnet::NetworkPeers>& peers) {
+  return peers && peers->Connected ? static_cast<int64_t>(peers->Connected->size()) : 0;
+}
+}  // namespace
+
+void TunnelController::OpenProviderStatsLocked() {
+  if (!providerDevice_) return;
+  std::string clientId;
+  std::optional<urnet::ContractViewController> vc;
+  urnet::Sub peersSub;
+  auto clients = std::make_shared<std::atomic<int64_t>>(0);
+  try {
+    clientId = providerDevice_->getClientId();
+    vc.emplace(providerDevice_->openContractViewController());
+    // Subscribed BEFORE the first read, so a change in between is either in
+    // that read or delivered after it. The listener holds a share of the count,
+    // never this object: a callback already running when the retire
+    // unsubscribes still finds it.
+    peersSub = providerDevice_->addNetworkPeersChangeListener(
+        [clients](std::optional<urnet::NetworkPeers> peers) {
+          clients->store(ConnectedPeerCount(peers));
+        });
+    clients->store(ConnectedPeerCount(providerDevice_->getNetworkPeers()));
+  } catch (const std::exception&) {
+    LogWarn("provide: the provider-only device's statistics could not be opened; the "
+            "app shows no client count or provider plots while disconnected");
+    peersSub = urnet::Sub{};
+    try {
+      if (vc) providerDevice_->closeContractViewController(*vc);
+    } catch (const std::exception&) {
+    }
+    return;
+  }
+  std::scoped_lock lock(providerStatsMutex_);
+  providerStatsVc_ = std::move(vc);
+  providerPeersSub_ = std::move(peersSub);
+  providerClients_ = std::move(clients);
+  providerClientId_ = std::move(clientId);
+}
+
+void TunnelController::WatchProviderNetworkLocked() {
+  if (!providerDevice_) return;
+  // Stable for the device's whole life (see providerDevice_), and the notifier
+  // ends before the device is closed (RetireProviderDeviceLocked).
+  urnet::DeviceLocal* device = providerDevice_.get();
+  try {
+    // networkChanged() alone: notifyNetworkChange() is the same seam in this
+    // sdk (reliability_controls.go), and a device with no multi client — no
+    // tunnel — gets the process-wide transport kick and the DoH recovery from
+    // it, which is what a provider-only device needs.
+    providerNetwork_ = std::make_unique<NetworkChangeNotifier>(
+        [device] {
+          LogInfo("provide: the os reported an ip/route change — telling the "
+                  "provider-only device the network moved, so its transports re-dial "
+                  "now instead of timing out against the old path");
+          try {
+            device->networkChanged();
+          } catch (const std::exception& e) {
+            LogWarn("provide: the sdk network-change notification failed: {}", e.what());
+          }
+        },
+        [device] {
+          try {
+            device->networkQualityChanged();
+          } catch (const std::exception& e) {
+            LogWarn("provide: the sdk network-quality notification failed: {}", e.what());
+          }
+        });
+    // A zero LUID: no tun exists to exclude, as in rpc-only mode.
+    providerEgress_ =
+        std::make_unique<EgressMonitor>(NET_LUID{}, EgressMonitor::Binding::ObserveOnly);
+    providerEgress_->SetOnNetworkEvent(providerNetwork_->NetworkEventSink());
+    providerEgress_->SetOnNetworkQualityEvent(providerNetwork_->NetworkQualitySink());
+    providerEgress_->Start();
+  } catch (const std::exception&) {
+    // What did start is retired with the device.
+    LogWarn("provide: network changes will not reach the provider-only device; it "
+            "recovers through its transports' timeouts");
+  }
+}
+
+// See the contract in the header. NO SESSION LOCK AND NO DEVICE CALL: the copy
+// the build and the peers listener left, and the controller's sampled state.
+proto::ProviderStats TunnelController::ProviderStats() {
+  proto::ProviderStats stats;
+  std::scoped_lock lock(providerStatsMutex_);
+  if (!providerStatsVc_) return stats;
+  stats.available = true;
+  stats.client_id = providerClientId_;
+  stats.client_count = providerClients_ ? providerClients_->load() : 0;
+  // Each read on its own, as SdkHost's ReadSdkList reads them: a document one
+  // getter cannot decode costs that field, never the reply. Logged once.
+  static std::atomic<bool> logged{false};
+  const auto read = [&](const char* what, const auto& get) {
+    try {
+      get();
+    } catch (const std::exception& e) {
+      if (!logged.exchange(true))
+        LogWarn("provide: reading the provider-only device's {} failed: {}", what, e.what());
+    }
+  };
+  read("window", [&] {
+    if (const int64_t window = providerStatsVc_->getWindowDurationSeconds(); window > 0)
+      stats.window_seconds = window;
+  });
+  read("throughput", [&] {
+    if (auto points = providerStatsVc_->getProviderThroughputPoints())
+      stats.provider_points = *points;
+  });
+  read("transport distribution", [&] {
+    if (auto distribution = providerStatsVc_->getProviderTransportDistribution())
+      stats.provider_distribution = *distribution;
+  });
+  read("packet stats", [&] {
+    stats.has_provider_stats = providerStatsVc_->getProviderPacketStats().has_value();
+  });
+  return stats;
 }
 
 // See the contract in the header. NO SESSION LOCK: a copy of the snapshot that
@@ -2066,7 +2230,7 @@ proto::TunnelStatus TunnelController::ComposeStatusLocked() {
   // The provider-only device, from the members that own it: the request it was
   // built from and the tier and key ReadProviderFactsLocked read off it. No SDK
   // call here, for the reason service_version above is the cached copy.
-  s.provider_running = providerDevice_.has_value();
+  s.provider_running = providerDevice_ != nullptr;
   if (providerDevice_) {
     s.provider_control_mode = providerRequest_.provide_mode;
     s.provider_mode = providerTier_;

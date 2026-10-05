@@ -61,6 +61,11 @@ namespace urnw::proto {
 //    type" and runs nothing, which is the behaviour before they existed, and a
 //    peer that drops the provider_* fields reads as "no provider-only device",
 //    which claims less than the truth rather than more.
+//
+//    Nor for get_provider_stats: a service that does not know it answers
+//    "unknown request type", which the app reads as "no statistics" and
+//    renders as it did before the verb existed (no client count and no
+//    provider plots while disconnected).
 inline constexpr int kProtocolVersion = 4;
 
 // The first version that understands StartTunnel::mode. Below this, an absent
@@ -81,6 +86,7 @@ inline constexpr const char* kSetKillSwitch = "set_kill_switch"; // app -> servi
 inline constexpr const char* kLogout = "logout";                 // app -> service
 inline constexpr const char* kStartProvider = "start_provider";  // app -> service
 inline constexpr const char* kStopProvider = "stop_provider";    // app -> service
+inline constexpr const char* kGetProviderStats = "get_provider_stats";  // app -> service
 inline constexpr const char* kReply = "reply";                   // service -> app
 inline constexpr const char* kEvent = "event";                   // service -> app (unsolicited)
 }  // namespace msg
@@ -352,11 +358,42 @@ struct TunnelStatus {
   bool provider_network_key = false;
 };
 
+// get_provider_stats: what the provider-only device carries, for the screens a
+// tunnel session's DeviceRemote feeds while connected — the Connect page's
+// client count, the Earnings provider plots with their gate and their "no
+// traffic yet" line, and the client id whose GET /network/provider-status row
+// is this device's. The service reads them off the device's own
+// ContractViewController (the controller the app opens on the DeviceRemote)
+// and its network peers listener, never with the session lock or a device call
+// on the way (TunnelController::ProviderStats), so asking cannot wedge the
+// control pipe. `available` is false while no provider-only device runs, or
+// while its statistics could not be opened; every other field is then empty.
+//
+// The points and the distribution are the sdk's own json
+// (urnet::ThroughputPoint, urnet::TransportDistribution), carried as they are:
+// the service writes them with the header's to_json and the app reads them
+// back with its from_json (ProviderPointsOf, ProviderDistributionOf), so this
+// file needs no sdk header and the field names keep one owner.
+struct ProviderStats {
+  bool available = false;
+  std::string client_id;
+  // the device's connected network peers (Device::getNetworkPeers' Connected),
+  // which the Connect page shows as "Providing to N clients"
+  int64_t client_count = 0;
+  int64_t window_seconds = 60;
+  // the provider section's gate (ContractViewController::getProviderPacketStats)
+  bool has_provider_stats = false;
+  nlohmann::json provider_points = nlohmann::json::array();
+  nlohmann::json provider_distribution;  // null when there is none
+};
+
 struct Reply {
   bool ok = false;
   std::string error;             // set when !ok
   std::optional<TunnelStatus> status;
   std::string in_reply_to;       // request type tag this answers
+  // get_provider_stats' answer; a service too old to know the verb sends none
+  std::optional<ProviderStats> provider_stats;
 };
 
 // ---- JSON (de)serialization ----------------------------------------------
@@ -538,6 +575,60 @@ inline provide::ServiceProviderFacts ProviderFactsFrom(const TunnelStatus& s, bo
   return facts;
 }
 
+inline void to_json(nlohmann::json& j, const ProviderStats& v) {
+  j = {
+      {"available", v.available},
+      {"client_id", v.client_id},
+      {"client_count", v.client_count},
+      {"window_seconds", v.window_seconds},
+      {"has_provider_stats", v.has_provider_stats},
+      {"provider_points", v.provider_points},
+      {"provider_distribution", v.provider_distribution},
+  };
+}
+
+inline void from_json(const nlohmann::json& j, ProviderStats& v) {
+  auto get = [&](const char* k, auto& out) {
+    if (auto it = j.find(k); it != j.end() && !it->is_null()) it->get_to(out);
+  };
+  get("available", v.available);
+  get("client_id", v.client_id);
+  get("client_count", v.client_count);
+  get("window_seconds", v.window_seconds);
+  get("has_provider_stats", v.has_provider_stats);
+  // The sdk's documents are kept only in the shape they have to have: anything
+  // else reads as none, never as a throw that loses the counts above.
+  if (auto it = j.find("provider_points"); it != j.end() && it->is_array())
+    v.provider_points = *it;
+  if (auto it = j.find("provider_distribution"); it != j.end() && it->is_object())
+    v.provider_distribution = *it;
+}
+
+// The provider points as the reader's type (urnet::ThroughputPoint in the app),
+// oldest first. Empty for a reply that carries none, or carries something the
+// type cannot read: the plots then draw an empty window, never a partial one.
+template <typename Point>
+std::vector<Point> ProviderPointsOf(const ProviderStats& stats) {
+  if (!stats.provider_points.is_array()) return {};
+  try {
+    return stats.provider_points.get<std::vector<Point>>();
+  } catch (const std::exception&) {
+    return {};
+  }
+}
+
+// The provider transport distribution as the reader's type
+// (urnet::TransportDistribution); nullopt for none or an unreadable one.
+template <typename Distribution>
+std::optional<Distribution> ProviderDistributionOf(const ProviderStats& stats) {
+  if (!stats.provider_distribution.is_object()) return std::nullopt;
+  try {
+    return stats.provider_distribution.get<Distribution>();
+  } catch (const std::exception&) {
+    return std::nullopt;
+  }
+}
+
 // "The service stopped this tunnel BY ITSELF because it could not carry
 // traffic." One predicate, in the header both sides already share, so the tray,
 // the connect page and the status strip cannot disagree about what counts as a
@@ -551,6 +642,7 @@ inline void to_json(nlohmann::json& j, const Reply& v) {
   j = {{"type", msg::kReply}, {"ok", v.ok}, {"error", v.error},
        {"in_reply_to", v.in_reply_to}};
   if (v.status) j["status"] = *v.status;
+  if (v.provider_stats) j["provider_stats"] = *v.provider_stats;
 }
 
 inline void from_json(const nlohmann::json& j, Reply& v) {
@@ -564,6 +656,11 @@ inline void from_json(const nlohmann::json& j, Reply& v) {
     TunnelStatus s;
     it->get_to(s);
     v.status = s;
+  }
+  if (auto it = j.find("provider_stats"); it != j.end() && it->is_object()) {
+    ProviderStats s;
+    it->get_to(s);
+    v.provider_stats = std::move(s);
   }
 }
 

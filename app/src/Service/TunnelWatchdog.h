@@ -61,6 +61,7 @@
 
 #include "PacketPump.h"  // PacketCounters
 #include "CaptureReadiness.h"
+#include "NetworkChangeNotify.h"  // NotifyCoalescer, kNetworkNotifyDebounceMillis
 #include "Sdk.h"
 
 namespace urnw {
@@ -172,12 +173,9 @@ inline constexpr int64_t StampInSession(int64_t stampMillis,
   return stampMillis >= sessionStartMillis ? stampMillis : -1;
 }
 
-// One SDK network-change notification per this many milliseconds.
-//
-// A roam produces dozens of OS notifications in a second. Below this two
-// notifications never describe different states; above it the burst of a single
-// roam would be split into several kicks.
-inline constexpr int64_t kNetworkNotifyDebounceMillis = 750;
+// One SDK network-change notification per kNetworkNotifyDebounceMillis, which
+// lives with the coalescer in NetworkChangeNotify.h: the provider-only device's
+// notifications follow the same rule.
 
 // How long TunnelWatchdog::Stop() waits for the SDK sampler before abandoning
 // it. Same discipline, and the same reasoning, as kSdkTeardownBudget: a healthy
@@ -541,52 +539,6 @@ class ConnectionEpochTracker {
   bool initialized_ = false;
   bool forming_ = false;
   int64_t connectionGeneration_ = 0;
-};
-
-// ---------------------------------------------------------------------------
-// the network-change coalescer (pure)
-// ---------------------------------------------------------------------------
-//
-// A roam produces dozens of OS notifications inside a second, and each one
-// would otherwise become a cgo call into the SDK that kicks every transport in
-// the process. This folds a burst into exactly one notification.
-//
-// TRAILING FIRE ON A FIXED WINDOW, not a re-extending debounce: the deadline is
-// set by the FIRST observation of a burst and never pushed out. A re-extending
-// debounce can be starved indefinitely by a link that keeps flapping, which is
-// precisely the condition in which the SDK most needs to be told.
-class NotifyCoalescer {
- public:
-  // An observation arrived. Never notifies anything; it only records.
-  void Observe(int64_t nowMillis) {
-    ++coalesced_;
-    if (pending_) return;
-    pending_ = true;
-    deadlineMillis_ = nowMillis + kNetworkNotifyDebounceMillis;
-  }
-
-  // Is a notification due? Consumes the pending burst when it says yes, so a
-  // caller that fires on true cannot fire twice for one burst.
-  bool TakeDue(int64_t nowMillis) {
-    if (!pending_ || nowMillis < deadlineMillis_) return false;
-    pending_ = false;
-    lastBurstSize_ = coalesced_;
-    coalesced_ = 0;
-    return true;
-  }
-
-  bool pending() const { return pending_; }
-  int64_t deadlineMillis() const { return deadlineMillis_; }
-  // How many observations the notification just taken folded together. For the
-  // log line, so a roam reads as one kick over N events rather than as a
-  // suspiciously quiet single event.
-  int64_t lastBurstSize() const { return lastBurstSize_; }
-
- private:
-  bool pending_ = false;
-  int64_t deadlineMillis_ = 0;
-  int64_t coalesced_ = 0;
-  int64_t lastBurstSize_ = 0;
 };
 
 // ---------------------------------------------------------------------------
