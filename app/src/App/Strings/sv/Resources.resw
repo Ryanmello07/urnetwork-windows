@@ -4061,6 +4061,138 @@ som det borde vara.</value>
     <value>via {}</value>
     <comment>Android app string: via exit.</comment>
   </data>
+  <data name="vless_allow_insecure" xml:space="preserve">
+    <value>Tillåt ett osäkert certifikat</value>
+    <comment>VLESS settings: the switch that skips the VLESS server's certificate check (TLS only). The app's own traffic stays encrypted.</comment>
+  </data>
+  <data name="vless_copy_link" xml:space="preserve">
+    <value>Kopiera länk</value>
+    <comment>VLESS settings: the button that copies the settings as a vless:// share link.</comment>
+  </data>
+  <data name="vless_enabled" xml:space="preserve">
+    <value>Använd VLESS</value>
+    <comment>VLESS settings: the switch that turns the VLESS server on or off.</comment>
+  </data>
+  <data name="vless_error_address_invalid" xml:space="preserve">
+    <value>Ange serveradressen.</value>
+    <comment>VLESS settings error: the server address is missing or malformed.</comment>
+  </data>
+  <data name="vless_error_fingerprint_unsupported" xml:space="preserve">
+    <value>Det här TLS-fingeravtrycket stöds inte.</value>
+    <comment>VLESS settings error: the TLS fingerprint name is not one this app knows.</comment>
+  </data>
+  <data name="vless_error_flow_invalid" xml:space="preserve">
+    <value>Vision-flödet fungerar bara med TCP-transport och TLS- eller REALITY-säkerhet.</value>
+    <comment>VLESS settings error: the Vision flow needs the TCP transport and TLS or REALITY security, or the flow is unknown. Vision, TCP, TLS and REALITY are protocol names.</comment>
+  </data>
+  <data name="vless_error_id_invalid" xml:space="preserve">
+    <value>Ange användar-ID:t (ett UUID).</value>
+    <comment>VLESS settings error: the user ID is missing or is not a UUID (or a custom ID of up to 30 bytes).</comment>
+  </data>
+  <data name="vless_error_link_invalid" xml:space="preserve">
+    <value>Det här är ingen giltig VLESS-länk.</value>
+    <comment>VLESS settings error: the pasted text is not a vless:// share link.</comment>
+  </data>
+  <data name="vless_error_link_unsupported" xml:space="preserve">
+    <value>Den här länken använder en VLESS-funktion som appen inte stöder.</value>
+    <comment>VLESS settings error: the link asks for a VLESS feature this app does not implement (for example VLESS encryption).</comment>
+  </data>
+  <data name="vless_error_network_unsupported" xml:space="preserve">
+    <value>Den här transporten stöds inte. Använd TCP, WebSocket eller HTTPUpgrade.</value>
+    <comment>VLESS settings error: the transport is one this app does not implement (for example gRPC or XHTTP). TCP, WebSocket and HTTPUpgrade are protocol names.</comment>
+  </data>
+  <data name="vless_error_port_invalid" xml:space="preserve">
+    <value>Ange en port från 1 till 65535.</value>
+    <comment>VLESS settings error: the port is missing or outside 1 to 65535.</comment>
+  </data>
+  <data name="vless_error_public_key_invalid" xml:space="preserve">
+    <value>Ange den offentliga REALITY-nyckeln.</value>
+    <comment>VLESS settings error: the REALITY public key is missing or is not 32 bytes of base64. REALITY is a protocol name.</comment>
+  </data>
+  <data name="vless_error_security_unsupported" xml:space="preserve">
+    <value>Den här säkerhetstypen stöds inte. Använd TLS, REALITY eller ingen.</value>
+    <comment>VLESS settings error: the security type is one this app does not implement. TLS and REALITY are protocol names.</comment>
+  </data>
+  <data name="vless_error_server_name_required" xml:space="preserve">
+    <value>Ange servernamnet (SNI) för REALITY.</value>
+    <comment>VLESS settings error: REALITY needs the server name (SNI) of the site it borrows. REALITY and SNI are protocol names.</comment>
+  </data>
+  <data name="vless_error_short_id_invalid" xml:space="preserve">
+    <value>REALITY-kort-ID:t får ha högst 16 hexadecimala tecken.</value>
+    <comment>VLESS settings error: the REALITY short ID is longer than 16 hexadecimal characters or is not hexadecimal. REALITY is a protocol name.</comment>
+  </data>
+  <data name="vless_fingerprint" xml:space="preserve">
+    <value>TLS-fingeravtryck</value>
+    <comment>VLESS settings: the picker of the browser TLS hello the connection imitates (chrome, firefox, ...).</comment>
+  </data>
+  <data name="vless_flow" xml:space="preserve">
+    <value>Flöde</value>
+    <comment>VLESS settings: the flow picker label (none or Vision). A VLESS protocol term.</comment>
+  </data>
+  <data name="vless_host_header" xml:space="preserve">
+    <value>Host-huvud</value>
+    <comment>VLESS settings: the HTTP Host header field label of the WebSocket and HTTPUpgrade transports. Host is a protocol term.</comment>
+  </data>
+  <data name="vless_link" xml:space="preserve">
+    <value>VLESS-länk</value>
+    <comment>VLESS settings: the label of the share link field (a vless:// link).</comment>
+  </data>
+  <data name="vless_link_copied" xml:space="preserve">
+    <value>VLESS-länken har kopierats</value>
+    <comment>VLESS settings: confirmation after copying the share link.</comment>
+  </data>
+  <data name="vless_link_hint" xml:space="preserve">
+    <value>Klistra in en vless://-länk för att fylla i inställningarna.</value>
+    <comment>VLESS settings: the hint under the share link field. vless:// is literal and must not be translated.</comment>
+  </data>
+  <data name="vless_paste_link" xml:space="preserve">
+    <value>Klistra in länk</value>
+    <comment>VLESS settings: the button that reads a vless:// link from the clipboard or the link field.</comment>
+  </data>
+  <data name="vless_path" xml:space="preserve">
+    <value>Sökväg</value>
+    <comment>VLESS settings: the HTTP path field label of the WebSocket and HTTPUpgrade transports.</comment>
+  </data>
+  <data name="vless_port" xml:space="preserve">
+    <value>Port</value>
+    <comment>VLESS settings: the server port field label.</comment>
+  </data>
+  <data name="vless_public_key" xml:space="preserve">
+    <value>Offentlig nyckel</value>
+    <comment>VLESS settings: the REALITY public key field label.</comment>
+  </data>
+  <data name="vless_security" xml:space="preserve">
+    <value>Säkerhet</value>
+    <comment>VLESS settings: the security picker label (none, TLS or REALITY).</comment>
+  </data>
+  <data name="vless_server_address" xml:space="preserve">
+    <value>Serveradress</value>
+    <comment>VLESS settings: the server host name or IP address field label.</comment>
+  </data>
+  <data name="vless_server_name" xml:space="preserve">
+    <value>Servernamn (SNI)</value>
+    <comment>VLESS settings: the TLS server name field label. SNI is a protocol term.</comment>
+  </data>
+  <data name="vless_settings_description" xml:space="preserve">
+    <value>Anslut till URnetwork via din egen VLESS-server när direkta anslutningar är blockerade. Din trafik till URnetwork förblir krypterad hela vägen.</value>
+    <comment>VLESS settings: the explanation at the top of the screen. VLESS is a proxy protocol; the user's own server carries the app's connections to URnetwork when direct connections are blocked.</comment>
+  </data>
+  <data name="vless_settings_next_connect" xml:space="preserve">
+    <value>VPN:en använder de nya VLESS-inställningarna nästa gång den ansluter.</value>
+    <comment>VLESS settings: note after saving where the VPN service runs separately from the app (the iOS tunnel extension, the desktop service). It reads the settings at its next start.</comment>
+  </data>
+  <data name="vless_settings_saved" xml:space="preserve">
+    <value>VLESS-inställningarna har sparats</value>
+    <comment>VLESS settings: confirmation after saving.</comment>
+  </data>
+  <data name="vless_short_id" xml:space="preserve">
+    <value>Kort-ID</value>
+    <comment>VLESS settings: the REALITY short ID field label.</comment>
+  </data>
+  <data name="vless_user_id" xml:space="preserve">
+    <value>Användar-ID (UUID)</value>
+    <comment>VLESS settings: the user ID field label. The ID is a UUID the server issued.</comment>
+  </data>
   <data name="waiting_for_approval" xml:space="preserve">
     <value>Väntar på godkännande</value>
     <comment>Used in Shared/Views/UpgradeSubscriptionSheet.swift.</comment>
