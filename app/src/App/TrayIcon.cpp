@@ -330,15 +330,27 @@ LRESULT CALLBACK TrayIcon::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
         if (lParam && wcscmp(reinterpret_cast<const wchar_t*>(lParam), L"ImmersiveColorSet") == 0)
           self->OnThemeChanged();
         return 0;
+      case WM_SYSCOMMAND:
+        // Alt+F4 while this hidden window still holds the foreground after the
+        // tray menu closes. DefWindowProc turns it into the WM_CLOSE below,
+        // which exits the app. Closing hides to the tray (owner decision,
+        // 2026-10-05), and this window is never shown, so there is nothing to
+        // hide: the gesture does nothing. Quit is in the menu.
+        if ((wParam & 0xFFF0) == SC_CLOSE) {
+          LogInfo("tray: Alt+F4 on the tray window ignored: closing hides to the "
+                  "tray, and Quit is in its menu");
+          return 0;
+        }
+        return ::DefWindowProcW(hwnd, msg, wParam, lParam);
       case WM_CLOSE:
-        // A WM_CLOSE from outside the app: Alt+F4 while this hidden window is
-        // still in the foreground after the tray menu closes, or
-        // `taskkill /im URnetwork.exe` without /f. DefWindowProc would destroy
-        // this window and leave the app running with no tray icon and no way
-        // to quit it, so take the tray menu's Quit path instead. That also
-        // lets a later installer close the app with WM_CLOSE.
-        LogInfo("tray: WM_CLOSE received, quitting");
-        if (self->cb_.onQuit) self->cb_.onQuit();
+        // A WM_CLOSE from outside the app: `taskkill /im URnetwork.exe` without
+        // /f, or an installer closing the app. DefWindowProc would destroy this
+        // window and leave the app running with no tray icon and no way to
+        // quit it, so the app exits instead. Not the menu's Quit: nobody chose
+        // to stop the tunnel or the provider, so the service keeps them
+        // (AppLifetime.h, CloseRequest).
+        LogInfo("tray: WM_CLOSE received, exiting");
+        if (self->cb_.onCloseRequest) self->cb_.onCloseRequest();
         return 0;
       default:
         return ::DefWindowProcW(hwnd, msg, wParam, lParam);

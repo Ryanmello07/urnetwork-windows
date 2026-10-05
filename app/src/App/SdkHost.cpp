@@ -5997,6 +5997,13 @@ void SdkHost::RequestSession(SessionRequest request) {
   // waited on that is a frozen window, which is the failure this app has
   // already paid for twice (see IsLoggedIn's comment).
   std::scoped_lock lock(pendingMutex_);
+  // The tray's Quit closed the slot (Quit). What it stopped in the service
+  // must not be started again by a request that lands after it: the failsafe
+  // edge, a pipe drop's recovery, a setting saved on the way out.
+  if (quitting_.load()) {
+    LogInfo("sdkhost: '{}' dropped: the app is quitting", request.reason);
+    return;
+  }
   // LAST REQUEST WINS. Two presses in a row, or a press while a bootstrap is
   // running, must not queue two start_tunnels — they must land on one session
   // and the destination the user chose most recently.
@@ -6348,6 +6355,9 @@ void SdkHost::ReconcileProviderLocked(const char* reason) {
   // a DeviceRemote whose session the service no longer runs is the next
   // gesture's to drop (gesture::Decide), not this function's.
   if (device_ || !localState_) return;
+  // Quitting: Quit stops the provider-only device next, under this same lock,
+  // and a pass that was already running when it began must not start one first.
+  if (quitting_.load()) return;
   std::string clientJwt;
   std::string instanceId;
   // Signed out, nothing provides: a provider an earlier run left for another
@@ -7194,6 +7204,98 @@ void SdkHost::Logout() {
   } catch (const std::exception& e) {
     LogError("sdkhost: logout failed: {}", e.what());
   }
+}
+
+// See the contract in the header.
+void SdkHost::Quit() {
+  // 1. Nothing new, and nothing queued. A worker sleeping out a row click's
+  // settle wakes to the empty slot and exits; one in the middle of a pass
+  // finds nothing after it.
+  {
+    std::scoped_lock lock(pendingMutex_);
+    quitting_.store(true);
+    pending_ = SessionRequest{};
+    pendingRequested_ = false;
+  }
+  pendingCv_.notify_all();
+  // 2. The threads that act on their own, joined outside mutex_ because each
+  // of them takes it (the destructor's rule; its own calls then find them
+  // stopped). The watchdog first: its recovery pass is the one that dials the
+  // service and ends in a provider reconcile.
+  StopServiceWatchdog();
+  StopPresentationWorker();
+  StopSyncWatchdog();
+  StopProviderOnlyStats();
+  // 3. The service, under mutex_: after any pass in flight (a Connect's
+  // bootstrap, a reconcile), and with none able to follow it.
+  std::scoped_lock lock(mutex_);
+  try {
+    // A dropped channel is not a stopped service, and one that is still
+    // running still runs what it ran. Dialling a service that is not running
+    // fails at once, and then nothing runs: the session, its firewall policy
+    // and the provider-only device all ended with its process.
+    if (!service_.IsConnected()) service_.Connect();
+    if (service_.IsConnected()) {
+      // The machine first, as in every teardown here. stop_tunnel ends the
+      // session whatever its mode (Disconnect keeps an rpc-only one; a quit
+      // keeps nothing), lifts any firewall policy, the armed floor included
+      // (StopLocked, finalDisarm), and retires the provider-only device with
+      // it. stop_provider then asks for that by name: it costs one round trip
+      // and ends a provider-only device whatever the stop above did with it.
+      const proto::TunnelStatus stopped = service_.StopTunnel();
+      AdoptServiceFacts(stopped);
+      if (stopped.state == proto::TunnelState::Error && !stopped.error.empty()) {
+        LogError("sdkhost: quit: stop_tunnel failed: {}", stopped.error);
+      }
+      std::optional<proto::TunnelStatus> after;
+      std::string error;
+      if (!service_.StopProvider(&after, &error)) {
+        LogWarn("sdkhost: quit: stop_provider failed: {}",
+                error.empty() ? "no detail" : error);
+      }
+      if (after) AdoptServiceFacts(*after);
+      const proto::TunnelStatus& last = after ? *after : stopped;
+      LogInfo("sdkhost: quit: the service is stopped (state={} routes={} wfp={} "
+              "provider={}); nothing here starts either again",
+              proto::ToString(last.state),
+              last.routes_installed ? "STILL INSTALLED" : "reverted", last.wfp_state,
+              last.provider_running ? "STILL RUNNING" : "retired");
+      if (!last.wfp_state.empty() && last.wfp_state != "off") {
+        LogError("sdkhost: quit: a firewall policy is STILL IN FORCE after the "
+                 "stop (wfp={}), so this machine may stay blocked with the app "
+                 "gone. The service log says why; restarting the urnetworkd "
+                 "service lifts it (the policy dies with its process).",
+                 last.wfp_state);
+      }
+    } else {
+      LogInfo("sdkhost: quit: no URnetwork service is running, so it runs no "
+              "session and no provider");
+    }
+    // This side of the session: the DeviceRemote, its feeds, and the saved
+    // rpc session, which names a listener the stop just destroyed, so the
+    // next launch does not try to adopt it. stopTunnel=false: sent above.
+    //
+    // The device is closed first, as TeardownSessionLocked closes it for a
+    // dead control channel: the DeviceLocal it talks to is gone, so its close
+    // cancels the rpc transport and turns the courtesy unsubscribes that follow
+    // into local no-ops, instead of rpcs to a listener that no longer exists
+    // holding the exit up. close() is once-guarded on the Go side.
+    if (device_) {
+      try {
+        device_->close();
+      } catch (const std::exception& e) {
+        LogWarn("sdkhost: quit: closing the DeviceRemote failed: {}", e.what());
+      }
+    }
+    TeardownSessionLocked(/*stopTunnel=*/false);
+  } catch (const std::exception& e) {
+    LogError("sdkhost: quit: stopping the service failed: {}", e.what());
+  }
+  // As Logout leaves them: nothing provides now.
+  serviceProviderRunning_.store(false);
+  serviceProviderMode_.store(0);
+  serviceProviderNetworkKey_.store(false);
+  serviceProviderClients_.store(-1);
 }
 
 }  // namespace urnw

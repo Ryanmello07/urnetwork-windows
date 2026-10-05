@@ -306,7 +306,14 @@ Product — DECIDED 2026-07-09:
   push updates for EXE/MSI listings (only MSIX auto-updates). We ship our own
   **service-assisted updater** (`urnetworkd` downloads + swaps binaries, no UAC
   prompt) and upload new installers to the Store per release. See STORE.md.
-- **Tunnel persistence after tray quit**: tunnel keeps running (service-owned).
+- **Tunnel persistence after tray quit**: ~~tunnel keeps running (service-owned)~~
+  **CHANGED 2026-10-05 (owner decision)** — closing the window hides it to the tray
+  and the tunnel and the provider keep running; the tray's **Quit** stops the tunnel
+  session and the provider-only device in the service (as Linux does) and lifts any
+  firewall policy, as Disconnect does, then exits. An app that is killed or closed by
+  a WM_CLOSE from outside leaves the service as it is (the next launch adopts what it
+  runs); the updater's handoff leaves it to the MSI, which stops the service itself.
+  See `app/src/Common/AppLifetime.h`.
 - **Provide defaults**: ethernet maps as unmetered/provide-eligible via NetworkCostType.
 - **Per-app split tunneling: IN SCOPE for v1** (M3.5) via a clean-room, MPL-2.0,
   attestation-signed WFP callout driver implemented from first principles (Microsoft docs +

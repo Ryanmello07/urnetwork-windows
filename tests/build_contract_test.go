@@ -1623,14 +1623,17 @@ func sortedNames(files map[string]string) []string {
 	return names
 }
 
-// A WM_CLOSE sent to the tray's hidden window (Alt+F4 on it, `taskkill /im`
-// without /f, an installer closing the app) quits the app the way the tray
-// menu's Quit does. DefWindowProc would destroy the window and leave the app
-// running with no icon and no way to quit it. The contract reads the code with
-// every comment blanked, and the case may only log and then call the Quit
-// callback, so a commented-out call, a call behind a constant condition or a
-// preprocessor block, an early return and DefWindowProc all fail it.
-func TestTrayWindowQuitsOnClose(t *testing.T) {
+// A WM_CLOSE sent to the tray's hidden window from outside the app (`taskkill
+// /im` without /f, an installer closing the app) exits the app through the
+// close-request callback. DefWindowProc would destroy the window and leave the
+// app running with no icon and no way to quit it. It is not the menu's Quit,
+// which also stops the tunnel and the provider (AppLifetime.h), and Alt+F4 no
+// longer reaches it (quit_tray_wiring_test.go). The contract reads the code
+// with every comment blanked, and the case may only log and then call the
+// close-request callback, so a commented-out call, a call behind a constant
+// condition or a preprocessor block, an early return and DefWindowProc all
+// fail it.
+func TestTrayWindowExitsOnCloseRequest(t *testing.T) {
 	source := stripComments(readAppSource(t, "TrayIcon.cpp"))
 	wndProc := definitionBody(t, "TrayIcon.cpp", source, "LRESULT CALLBACK TrayIcon::WndProc(")
 	const label = "case WM_CLOSE:"
@@ -1642,19 +1645,19 @@ func TestTrayWindowQuitsOnClose(t *testing.T) {
 	if end < 0 {
 		t.Fatal("TrayIcon::WndProc's WM_CLOSE case never returns 0")
 	}
-	quits := 0
+	exits := 0
 	for _, line := range strings.Split(body[:end], "\n") {
 		switch statement := strings.TrimSpace(line); {
 		case statement == "":
-		case statement == "if (self->cb_.onQuit) self->cb_.onQuit();":
-			quits++
+		case statement == "if (self->cb_.onCloseRequest) self->cb_.onCloseRequest();":
+			exits++
 		case strings.HasPrefix(statement, "Log"):
 		default:
-			t.Errorf("TrayIcon::WndProc's WM_CLOSE case runs %q; it should only log and quit", statement)
+			t.Errorf("TrayIcon::WndProc's WM_CLOSE case runs %q; it should only log and exit", statement)
 		}
 	}
-	if quits != 1 {
-		t.Errorf("TrayIcon::WndProc's WM_CLOSE case calls the tray menu's Quit callback %d times, want once", quits)
+	if exits != 1 {
+		t.Errorf("TrayIcon::WndProc's WM_CLOSE case calls the close-request callback %d times, want once", exits)
 	}
 }
 
