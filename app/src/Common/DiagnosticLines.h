@@ -17,7 +17,9 @@
 //                           kill switch preference, the failsafe, and the
 //                           provider-only device
 //   [app][adapter]          whether the tunnel's routes are on the tun, and the
-//                           kind of physical interface its traffic leaves by
+//                           kind of physical interface its traffic leaves by:
+//                           the one a session pins, or with none pinned the
+//                           one the default route takes now, labelled observed
 //   [app][dns]              the Windows DNS client settings that decide where a
 //                           tunnel's queries can go: the DNS-over-HTTPS policy
 //                           and the Name Resolution Policy Table
@@ -191,14 +193,26 @@ inline std::string InterfaceName(const InterfaceFacts& f) {
   return name;
 }
 
+// Where an [app][adapter] line's interfaces come from: the ones a session
+// pins the service's sdk to (TunnelStatus::egress_index4/6), or, with none
+// pinned, the ones that carry the default routes now, as the service observes
+// them (NetworkConfig::DiscoverEgress). Nothing is pinned in every state
+// without a session, a start that failed early among them, which is the case a
+// report about a connection that will not come up needs the interface for.
+enum class EgressSource { Pinned, Observed };
+
+// The source as a line writes it.
+constexpr std::string_view EgressSourceName(EgressSource source) {
+  return source == EgressSource::Pinned ? "pinned" : "observed";
+}
+
 // `tunnel`: the tun carries the capture routes (TunnelStatus::routes_installed).
-// The egress is the physical interface the service's sdk is pinned to for each
-// family (TunnelStatus::egress_index4/6); none while nothing is pinned, which
-// is every state without a tunnel session.
-inline std::string AdapterLine(bool tunnel, const InterfaceFacts& egress4,
+// `egress4` and `egress6` are each family's interface, from `source`.
+inline std::string AdapterLine(bool tunnel, EgressSource source, const InterfaceFacts& egress4,
                                const InterfaceFacts& egress6) {
-  return std::string("tunnel=") + (tunnel ? "up" : "none") + " egress_v4=" +
-         InterfaceName(egress4) + " egress_v6=" + InterfaceName(egress6);
+  return std::string("tunnel=") + (tunnel ? "up" : "none") + " egress=" +
+         std::string(EgressSourceName(source)) + " egress_v4=" + InterfaceName(egress4) +
+         " egress_v6=" + InterfaceName(egress6);
 }
 
 // ---- [app][dns] -----------------------------------------------------------------

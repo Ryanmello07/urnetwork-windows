@@ -21,8 +21,9 @@
 // so only at the RPC boundary, where ControlServer::PushState already flushes
 // glog: never on the teardown path ahead of the route revert, never in an
 // EgressMonitor callback, never under the session lock. What it reads is the
-// lock-free status (TunnelController::Status), the interface table and the
-// registry, none of which can wedge on a session. NoteLogUpload is the one
+// lock-free status (TunnelController::Status), the interface table, the
+// forward table while no session pins an egress (NetworkConfig::DiscoverEgress)
+// and the registry, none of which can wedge on a session. NoteLogUpload is the one
 // call made under the session lock (TunnelController::UploadLogs, through the
 // hook ControlServer passes): the zip it must precede runs on a device only
 // that lock keeps alive, and beside the zip's own calls into the sdk it adds
@@ -45,8 +46,10 @@ namespace urnw {
 // from any thread: one lock serializes every line.
 class ServiceDiagnostics {
  public:
-  // [app][service] and [app][adapter] for every status, and [app][dns] and
-  // [app][network-country] while a session is live, each when it changed.
+  // [app][service] and [app][adapter] for every status (the adapter's egress
+  // pinned by a session, or observed on the default route without one), and
+  // [app][dns] and [app][network-country] while a session is live, each when
+  // it changed.
   // `killSwitch` is the preference the app last sent
   // (TunnelController::KillSwitchPreference); `networkCountry` the country in
   // force (TunnelController::NetworkCountry), none before the app sent one.

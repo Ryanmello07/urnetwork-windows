@@ -118,6 +118,12 @@ func TestDiagnosticLinesRejectsLeaks(t *testing.T) {
 			want: "adapter: a link that is down says so",
 		},
 		{
+			name: "an observed egress written as pinned",
+			old:  `return source == EgressSource::Pinned ? "pinned" : "observed";`,
+			new:  `return source == EgressSource::Pinned ? "pinned" : "pinned";`,
+			want: "adapter: with nothing pinned, the egress is labelled observed",
+		},
+		{
 			name: "a log upload's carrier written as handed over",
 			old:  `return "carrier=" + std::string(OneOf(carrier, {"tunnel", "provider", "standalone"}, "other"));`,
 			new:  `return "carrier=" + std::string(carrier);`,
@@ -189,8 +195,11 @@ func TestDiagnosticLinesServiceWiring(t *testing.T) {
 	note := definitionBody(t, "ServiceDiagnostics.cpp", writer, "void ServiceDiagnostics::NoteStatus(")
 	provideRequire(t, "NoteStatus", note,
 		"diag::ServiceLine(facts)",
-		"diag::AdapterLine(status.routes_installed, InterfaceFactsFor(status.egress_index4)",
-		"InterfaceFactsFor(status.egress_index6)",
+		"const bool pinned = status.egress_index4 > 0 || status.egress_index6 > 0;",
+		"if (!pinned) observed = NetworkConfig::DiscoverEgress(NET_LUID{});",
+		"pinned ? diag::EgressSource::Pinned : diag::EgressSource::Observed,",
+		"InterfaceFactsFor(pinned ? status.egress_index4 : observed.index4)",
+		"InterfaceFactsFor(pinned ? status.egress_index6 : observed.index6)",
 		"diag::DohPolicyFor(ReadPolicyDword(kDnsClientPolicyKey, L\"DoHPolicy\"))",
 		"CountNrptRules()",
 		"std::scoped_lock lock(mutex_);")

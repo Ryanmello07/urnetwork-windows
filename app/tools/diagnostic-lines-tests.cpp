@@ -136,14 +136,27 @@ void TestAdapterLine() {
   Check(diag::InterfaceKindFor(6, 14) == diag::InterfaceKind::Ethernet, "adapter: Ethernet");
   Check(diag::InterfaceKindFor(243, 8) == diag::InterfaceKind::MobileBroadband, "adapter: mobile broadband");
   Check(diag::InterfaceKindFor(53, 0) == diag::InterfaceKind::Other, "adapter: a virtual interface is other");
-  CheckLine(diag::AdapterLine(true, {.kind = diag::InterfaceKind::Wifi, .connected = true},
+  CheckLine(diag::AdapterLine(true, diag::EgressSource::Pinned,
+                              {.kind = diag::InterfaceKind::Wifi, .connected = true},
                               {.kind = diag::InterfaceKind::None, .connected = true}),
-            "tunnel=up egress_v4=wifi egress_v6=none", "adapter: a tunnel over Wi-Fi");
-  CheckLine(diag::AdapterLine(false, {.kind = diag::InterfaceKind::Ethernet, .connected = false},
+            "tunnel=up egress=pinned egress_v4=wifi egress_v6=none", "adapter: a tunnel over Wi-Fi");
+  CheckLine(diag::AdapterLine(false, diag::EgressSource::Pinned,
+                              {.kind = diag::InterfaceKind::Ethernet, .connected = false},
                               {.kind = diag::InterfaceKind::MobileBroadband, .connected = true}),
-            "tunnel=none egress_v4=ethernet-down egress_v6=mobile-broadband",
+            "tunnel=none egress=pinned egress_v4=ethernet-down egress_v6=mobile-broadband",
             "adapter: a link that is down says so");
-  CheckBounded(diag::AdapterLine(true, {.kind = diag::InterfaceKind::MobileBroadband, .connected = false},
+  // no session pins one (a start that failed early): the interface the default
+  // route takes now, and the line says it was observed, not pinned
+  CheckLine(diag::AdapterLine(false, diag::EgressSource::Observed,
+                              {.kind = diag::InterfaceKind::Wifi, .connected = true},
+                              {.kind = diag::InterfaceKind::None, .connected = true}),
+            "tunnel=none egress=observed egress_v4=wifi egress_v6=none",
+            "adapter: with nothing pinned, the egress is labelled observed");
+  Check(diag::EgressSourceName(diag::EgressSource::Pinned) !=
+            diag::EgressSourceName(diag::EgressSource::Observed),
+        "adapter: pinned and observed read apart");
+  CheckBounded(diag::AdapterLine(true, diag::EgressSource::Observed,
+                                 {.kind = diag::InterfaceKind::MobileBroadband, .connected = false},
                                  {.kind = diag::InterfaceKind::MobileBroadband, .connected = false}),
                "adapter");
 }
