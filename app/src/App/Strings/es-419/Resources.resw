@@ -536,6 +536,10 @@ de la manera correcta</value>
     <value>Compañero</value>
     <comment>A label displayed next to a companion contract.</comment>
   </data>
+  <data name="conn_failed" xml:space="preserve">
+    <value>No se pudo conectar</value>
+    <comment>Connect screen status when the connect attempt failed: no provider could be reached (the sdk's CONNECT_FAILED). The connection keeps trying, and the app offers Retry.</comment>
+  </data>
   <data name="connect" xml:space="preserve">
     <value>Conectar</value>
     <comment>Button text to connect to URnetwork VPN</comment>
@@ -1186,6 +1190,26 @@ de la manera correcta</value>
   <data name="exclude_app_description" xml:space="preserve">
     <value>Esta app evita el túnel.</value>
     <comment>transfer stats and split rules</comment>
+  </data>
+  <data name="exclude_app_launcher_failed" xml:space="preserve">
+    <value>No se pudo cambiar el lanzador. Verifica que se pueda escribir en tu carpeta de aplicaciones.</value>
+    <comment>Exclude apps from the VPN sheet: error when a launcher copy could not be written or removed in the user's applications folder.</comment>
+  </data>
+  <data name="exclude_app_launcher_name" xml:space="preserve">
+    <value>{} (fuera de la VPN)</value>
+    <comment>Exclude apps from the VPN: the name of an app's launcher copy in the user's app menu. {app} is the app's own name.</comment>
+  </data>
+  <data name="exclude_apps_from_vpn" xml:space="preserve">
+    <value>Excluir apps de la VPN</value>
+    <comment>Settings, Connections: row and sheet title for the apps that get a launcher copy that starts them outside the VPN tunnel (urnetwork-exclude).</comment>
+  </data>
+  <data name="exclude_apps_from_vpn_note" xml:space="preserve">
+    <value>Agrega a tu menú de apps un lanzador que abre la app fuera de la VPN.</value>
+    <comment>Settings, Connections: note under the Exclude apps from the VPN row.</comment>
+  </data>
+  <data name="exclude_apps_launcher_note" xml:space="preserve">
+    <value>Cada app que actives tendrá un segundo lanzador en tu menú de apps, con (fuera de la VPN) después de su nombre. Una app abierta desde ese lanzador evita la VPN y el kill switch. Una app que ya se esté ejecutando sigue en la VPN hasta que la cierres, y las apps de Flatpak y Snap no aparecen.</value>
+    <comment>Exclude apps from the VPN sheet: how the launcher copies work and what stays in the VPN. The suffix in parentheses must match exclude_app_launcher_name.</comment>
   </data>
   <data name="excluded" xml:space="preserve">
     <value>Excluidas</value>
@@ -2354,6 +2378,26 @@ más grande, seguro y descentralizado del mundo.</value>
     <value>Modo de provisión</value>
     <comment>Call to action</comment>
   </data>
+  <data name="provide_power_mode" xml:space="preserve">
+    <value>Al usar la batería</value>
+    <comment>Settings, under the cellular provide toggle: the label of the choice of what providing does while the device runs on battery.</comment>
+  </data>
+  <data name="provide_power_mode_always" xml:space="preserve">
+    <value>Seguir proveyendo</value>
+    <comment>Settings, provide power choice under "When on battery": keep providing on battery, also in Battery Saver.</comment>
+  </data>
+  <data name="provide_power_mode_charging_only" xml:space="preserve">
+    <value>Pausar hasta que se cargue</value>
+    <comment>Settings, provide power choice under "When on battery": provide only while the device is charging, and pause on battery.</comment>
+  </data>
+  <data name="provide_power_mode_pause_in_battery_saver" xml:space="preserve">
+    <value>Pausar con Ahorro de batería</value>
+    <comment>Settings, provide power choice under "When on battery" (the default): pause providing while Battery Saver is on.</comment>
+  </data>
+  <data name="provide_power_mode_pause_in_low_power" xml:space="preserve">
+    <value>Pausar en el modo de bajo consumo</value>
+    <comment>Settings, provide power choice under "When on battery" on iOS and macOS (the default): pause providing while Low Power Mode is on. Use the system's own name for Low Power Mode.</comment>
+  </data>
   <data name="provider_connected_duration_hours" xml:space="preserve">
     <value>{0} h {1} min</value>
     <comment>Compact duration a provider has been connected, as hours and minutes (e.g. 3h 24m). {hours} is the whole hours, {minutes} the remaining minutes.</comment>
@@ -2394,9 +2438,21 @@ más grande, seguro y descentralizado del mundo.</value>
     <value>Los nuevos proveedores necesitan varias horas de funcionamiento estable y una prueba de velocidad antes de recibir clientes. El tráfico también depende de la demanda en tu región.</value>
     <comment>Provider card, under the provide mode row: the device provides to everyone but has carried no traffic yet.</comment>
   </data>
+  <data name="provider_idle_paused_battery_saver" xml:space="preserve">
+    <value>En pausa: el Ahorro de batería está activado.</value>
+    <comment>Provider card, under the provide mode row: providing is paused because Battery Saver is on and the provide power setting pauses in Battery Saver (the default).</comment>
+  </data>
+  <data name="provider_idle_paused_low_power" xml:space="preserve">
+    <value>En pausa: el modo de bajo consumo está activado.</value>
+    <comment>Provider card on iOS and macOS, under the provide mode row: providing is paused because Low Power Mode is on and the provide power setting pauses in Low Power Mode (the default). Use the system's own name for Low Power Mode.</comment>
+  </data>
   <data name="provider_idle_paused_no_network" xml:space="preserve">
     <value>En pausa: este dispositivo no puede compartir su conexión en la red actual.</value>
     <comment>Provider card, under the provide mode row: providing is paused because the current network can't be used for providing (no network, or a constrained or metered one).</comment>
+  </data>
+  <data name="provider_idle_paused_not_charging" xml:space="preserve">
+    <value>En pausa: este dispositivo no se está cargando.</value>
+    <comment>Provider card, under the provide mode row: providing is paused because the provide power setting provides only while charging and the device is on battery.</comment>
   </data>
   <data name="provider_idle_paused_wifi_only" xml:space="preserve">
     <value>En pausa: la provisión está configurada solo para Wi-Fi y este dispositivo no está en Wi-Fi.</value>

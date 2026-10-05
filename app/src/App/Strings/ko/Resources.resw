@@ -796,6 +796,10 @@
     <value>기본값은 꺼짐입니다. 켜면 앱을 열자마자 URnetwork가 선택한 제공자에 연결합니다. 다음 실행부터 적용되며 지금 연결하지는 않습니다.</value>
     <comment>Settings: explanation under the connect-on-launch switch.</comment>
   </data>
+  <data name="conn_failed" xml:space="preserve">
+    <value>연결할 수 없습니다</value>
+    <comment>Connect screen status when the connect attempt failed: no provider could be reached (the sdk's CONNECT_FAILED). The connection keeps trying, and the app offers Retry.</comment>
+  </data>
   <data name="conn_not_protected" xml:space="preserve">
     <value>인터넷 트래픽이 보호되지 않습니다.</value>
     <comment>Connect page: warning that the internet traffic is not protected.</comment>
@@ -1510,6 +1514,26 @@
   <data name="exclude_app_description" xml:space="preserve">
     <value>이 앱은 터널을 우회합니다.</value>
     <comment>transfer stats and split rules</comment>
+  </data>
+  <data name="exclude_app_launcher_failed" xml:space="preserve">
+    <value>실행기를 변경할 수 없습니다. 애플리케이션 폴더에 쓸 수 있는지 확인하세요.</value>
+    <comment>Exclude apps from the VPN sheet: error when a launcher copy could not be written or removed in the user's applications folder.</comment>
+  </data>
+  <data name="exclude_app_launcher_name" xml:space="preserve">
+    <value>{} (VPN 외부)</value>
+    <comment>Exclude apps from the VPN: the name of an app's launcher copy in the user's app menu. {app} is the app's own name.</comment>
+  </data>
+  <data name="exclude_apps_from_vpn" xml:space="preserve">
+    <value>VPN에서 앱 제외</value>
+    <comment>Settings, Connections: row and sheet title for the apps that get a launcher copy that starts them outside the VPN tunnel (urnetwork-exclude).</comment>
+  </data>
+  <data name="exclude_apps_from_vpn_note" xml:space="preserve">
+    <value>앱을 VPN 밖에서 여는 실행기를 앱 메뉴에 추가합니다.</value>
+    <comment>Settings, Connections: note under the Exclude apps from the VPN row.</comment>
+  </data>
+  <data name="exclude_apps_launcher_note" xml:space="preserve">
+    <value>켜는 앱마다 이름 뒤에 (VPN 외부)가 붙은 두 번째 실행기가 앱 메뉴에 추가됩니다. 그 실행기로 연 앱은 VPN과 킬 스위치를 우회합니다. 이미 실행 중인 앱은 종료할 때까지 VPN에 남아 있으며, Flatpak 및 Snap 앱은 목록에 표시되지 않습니다.</value>
+    <comment>Exclude apps from the VPN sheet: how the launcher copies work and what stays in the VPN. The suffix in parentheses must match exclude_app_launcher_name.</comment>
   </data>
   <data name="excluded" xml:space="preserve">
     <value>제외</value>
@@ -2694,6 +2718,26 @@
     <value>제공 모드</value>
     <comment>Call to action</comment>
   </data>
+  <data name="provide_power_mode" xml:space="preserve">
+    <value>배터리 사용 시</value>
+    <comment>Settings, under the cellular provide toggle: the label of the choice of what providing does while the device runs on battery.</comment>
+  </data>
+  <data name="provide_power_mode_always" xml:space="preserve">
+    <value>계속 제공</value>
+    <comment>Settings, provide power choice under "When on battery": keep providing on battery, also in Battery Saver.</comment>
+  </data>
+  <data name="provide_power_mode_charging_only" xml:space="preserve">
+    <value>충전할 때까지 일시 중지</value>
+    <comment>Settings, provide power choice under "When on battery": provide only while the device is charging, and pause on battery.</comment>
+  </data>
+  <data name="provide_power_mode_pause_in_battery_saver" xml:space="preserve">
+    <value>절전 모드에서 일시 중지</value>
+    <comment>Settings, provide power choice under "When on battery" (the default): pause providing while Battery Saver is on.</comment>
+  </data>
+  <data name="provide_power_mode_pause_in_low_power" xml:space="preserve">
+    <value>저전력 모드에서 일시 중지</value>
+    <comment>Settings, provide power choice under "When on battery" on iOS and macOS (the default): pause providing while Low Power Mode is on. Use the system's own name for Low Power Mode.</comment>
+  </data>
   <data name="provider_connected_duration_hours" xml:space="preserve">
     <value>{0}시간 {1}분</value>
     <comment>Compact duration a provider has been connected, as hours and minutes (e.g. 3h 24m). {hours} is the whole hours, {minutes} the remaining minutes.</comment>
@@ -2730,9 +2774,21 @@
     <value>새 제공업체는 클라이언트가 배정되기 전에 몇 시간 동안 안정적으로 가동되고 속도 테스트를 마쳐야 합니다. 트래픽은 해당 지역의 수요에 따라서도 달라집니다.</value>
     <comment>Provider card, under the provide mode row: the device provides to everyone but has carried no traffic yet.</comment>
   </data>
+  <data name="provider_idle_paused_battery_saver" xml:space="preserve">
+    <value>일시 중지됨: 절전 모드가 켜져 있습니다.</value>
+    <comment>Provider card, under the provide mode row: providing is paused because Battery Saver is on and the provide power setting pauses in Battery Saver (the default).</comment>
+  </data>
+  <data name="provider_idle_paused_low_power" xml:space="preserve">
+    <value>일시 중지됨: 저전력 모드가 켜져 있습니다.</value>
+    <comment>Provider card on iOS and macOS, under the provide mode row: providing is paused because Low Power Mode is on and the provide power setting pauses in Low Power Mode (the default). Use the system's own name for Low Power Mode.</comment>
+  </data>
   <data name="provider_idle_paused_no_network" xml:space="preserve">
     <value>일시 중지됨: 이 기기는 현재 네트워크에서 제공할 수 없습니다.</value>
     <comment>Provider card, under the provide mode row: providing is paused because the current network can't be used for providing (no network, or a constrained or metered one).</comment>
+  </data>
+  <data name="provider_idle_paused_not_charging" xml:space="preserve">
+    <value>일시 중지됨: 이 기기는 충전 중이 아닙니다.</value>
+    <comment>Provider card, under the provide mode row: providing is paused because the provide power setting provides only while charging and the device is on battery.</comment>
   </data>
   <data name="provider_idle_paused_wifi_only" xml:space="preserve">
     <value>일시 중지됨: 제공이 Wi-Fi 전용으로 설정되어 있는데 이 기기가 Wi-Fi에 연결되어 있지 않습니다.</value>
