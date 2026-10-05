@@ -494,7 +494,7 @@ void ConnectPage::ApplyServiceSetup(urnw::ServiceSetup::Snapshot const& snap) {
 // The update banner (beta spec §5). Renders MainWindow's snapshot copy onto
 // UpdateBar, directly under the service bar — same shape, same one-writer
 // rule. Labels go through Adv() with `upd_` store ids, as the service bar's
-// use `svc_`. The version is DATA (release grammar, never translated) and goes
+// use `svc_`. The version is data (release grammar, never translated) and goes
 // in through the title's placeholder; the installer path is appended as data.
 void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) {
   using Phase = urnw::UpdateChecker::Phase;

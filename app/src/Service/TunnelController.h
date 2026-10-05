@@ -495,7 +495,7 @@ class TunnelController {
   // listener's next push. Nothing when the role's reading never opened. SDK
   // calls; caller holds mutex_.
   void RefreshProviderExtenderLocked();
-  // TELL THE PROVIDER-ONLY DEVICE THE NETWORK MOVED, as the tunnel session's
+  // Tell the provider-only device the network moved, as the tunnel session's
   // device is told by TunnelWatchdog's sampler, which EgressMonitor feeds. An
   // observe-only EgressMonitor (it binds nothing, so the device's sockets
   // still follow the route table) feeds a NetworkChangeNotifier, whose own

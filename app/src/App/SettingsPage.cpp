@@ -498,7 +498,7 @@ void SettingsPage::BuildConnectionsSection(Panel const& host) {
   // Uninstall the VPN service (beta spec §3). Last in the group: it is the one
   // machine-level action on a page of preferences. Labels are Adv() ids — the
   // Windows wording of the service row, not linux's systemd one (see the banner
-  // in ConnectPage::ApplyServiceSetup) — and the row starts COLLAPSED until a
+  // in ConnectPage::ApplyServiceSetup) — and the row starts collapsed until a
   // classification proves a service is actually registered; ApplyServiceSetup
   // below is the only writer of that visibility.
   serviceRowHost_ = StackPanel();

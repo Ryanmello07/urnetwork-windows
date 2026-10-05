@@ -520,7 +520,7 @@ struct TunnelStatus {
   std::string provider_control_mode;
   int64_t provider_mode = 0;
   bool provider_network_key = false;
-  // THE LOG UPLOAD (upload_logs): the last upload the app asked the service
+  // The log upload (upload_logs): the last upload the app asked the service
   // for, as logupload::Flight reads it. Its id (the reply's log_upload_id; 0
   // before the first), where it is (logupload::ToString(FlightState):
   // "running", "uploaded", "refused", "failed") and the device that carries

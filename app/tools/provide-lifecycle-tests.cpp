@@ -6,7 +6,7 @@
 // floor, a device still held by an abandoned teardown, a restart in flight, a
 // mode that does not provide), the step the app takes for every service state
 // while it holds no session, and where the Extender switch's write goes while
-// disconnected. Run against the SAME header the service and the app compile,
+// disconnected. Run against the same header the service and the app compile,
 // on any host with a C++20 compiler.
 //
 //   c++ -std=c++20 -I ../src/Common provide-lifecycle-tests.cpp -o /tmp/provide-lifecycle-tests && /tmp/provide-lifecycle-tests

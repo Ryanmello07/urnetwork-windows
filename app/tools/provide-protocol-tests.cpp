@@ -10,7 +10,7 @@
 // ProviderDistributionOf, ExtenderPointsOf, ExtenderProvideStatusOf). And the
 // Extender switch while disconnected: set_provide_extender, its strict
 // request, and provide_extender_writable with an older service's silence. Run
-// against the SAME header the service and the app compile; it needs
+// against the same header the service and the app compile; it needs
 // nlohmann/json, like the app.
 //
 //   c++ -std=c++20 -I ../src/Common -I <dir with nlohmann/json.hpp> provide-protocol-tests.cpp -o /tmp/provide-protocol-tests && /tmp/provide-protocol-tests
