@@ -6517,6 +6517,14 @@
     <value>البقاء على اتصال</value>
     <comment>Settings</comment>
   </data>
+  <data name="stay_on_this_exit" xml:space="preserve">
+    <value>البقاء على هذا المخرج</value>
+    <comment>Button under the selected provider in the Provider Locations sheet. Reconnects to that one provider (the exit), so the connection keeps its IP address.</comment>
+  </data>
+  <data name="stay_on_this_exit_note" xml:space="preserve">
+    <value>يحتفظ بعنوان IP لهذا المزوّد حتى يصبح غير متصل.</value>
+    <comment>Muted line under the Stay on this exit button in the Provider Locations sheet: what staying on one provider does.</comment>
+  </data>
   <data name="stay_private" xml:space="preserve">
     <value>ابق
 خاصًا
@@ -6527,6 +6535,10 @@
   <data name="stay_private_description" xml:space="preserve">
     <value>ابق خاصًا ومجهول الهوية تمامًا مع URnetwork</value>
     <comment>Onboarding Carousel</comment>
+  </data>
+  <data name="staying_on_this_exit" xml:space="preserve">
+    <value>أنت باقٍ على هذا المخرج. إذا أصبح غير متصل، فاختر موقعًا آخر.</value>
+    <comment>Muted line on the provider the connection already stays on (after Stay on this exit), in the Provider Locations sheet. Says how to leave it.</comment>
   </data>
   <data name="step_in" xml:space="preserve">
     <value>انطلق إلى الإنترنت كما ينبغي أن يكون.</value>
@@ -6994,6 +7006,14 @@
   <data name="use_recommended_settings" xml:space="preserve">
     <value>استخدام الإعدادات الموصى بها</value>
     <comment>dns settings</comment>
+  </data>
+  <data name="use_wireguard_socks_https_proxy" xml:space="preserve">
+    <value>استخدام وكيل WireGuard / SOCKS / HTTPS</value>
+    <comment>Settings row that opens the cloud proxies page on ur.io (https://ur.io/app/proxies), where the user can create a WireGuard, SOCKS or HTTPS proxy. The app itself has no protocol switch.</comment>
+  </data>
+  <data name="use_wireguard_socks_https_proxy_note" xml:space="preserve">
+    <value>يفتح ur.io في متصفحك. يتطلب SOCKS وWireGuard اشتراك Pro.</value>
+    <comment>Muted note under the Use WireGuard / SOCKS / HTTPS proxy settings row: the row leaves the app for ur.io, and SOCKS and WireGuard proxies are part of the Pro plan (HTTPS is not).</comment>
   </data>
   <data name="used_data_key" xml:space="preserve">
     <value>مستخدم</value>

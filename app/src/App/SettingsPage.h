@@ -151,6 +151,9 @@ class SettingsPage {
   // Open the portal url in the browser, observing the launch: a failure shows
   // site_billing_portal_error instead of looking like a portal that opened.
   winrt::fire_and_forget LaunchCustomerPortal(std::string url);
+  // Open the ur.io cloud proxies page (CloudProxyLink.h) in the browser, the
+  // same observed launch: a failure shows something_went_wrong.
+  winrt::fire_and_forget OpenCloudProxies();
   winrt::fire_and_forget SaveLogsToFile();
   // Attaches the SDK log directory to an ALREADY-ACCEPTED feedback report,
   // using the server's own feedback id. Only OnSendFeedback calls it, and only

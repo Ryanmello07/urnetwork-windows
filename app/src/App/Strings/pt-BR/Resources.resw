@@ -3627,6 +3627,14 @@ conteúdo do mundo</value>
     <value>Manter contato</value>
     <comment>Settings</comment>
   </data>
+  <data name="stay_on_this_exit" xml:space="preserve">
+    <value>Ficar nesta saída</value>
+    <comment>Button under the selected provider in the Provider Locations sheet. Reconnects to that one provider (the exit), so the connection keeps its IP address.</comment>
+  </data>
+  <data name="stay_on_this_exit_note" xml:space="preserve">
+    <value>Mantém o endereço IP deste provedor até ele ficar offline.</value>
+    <comment>Muted line under the Stay on this exit button in the Provider Locations sheet: what staying on one provider does.</comment>
+  </data>
   <data name="stay_private" xml:space="preserve">
     <value>Permanecer
 completamente
@@ -3637,6 +3645,10 @@ anônimo</value>
   <data name="stay_private_description" xml:space="preserve">
     <value>Permanecer completamente privado e anônimo com a URnetwork</value>
     <comment>Onboarding Carousel</comment>
+  </data>
+  <data name="staying_on_this_exit" xml:space="preserve">
+    <value>Você está ficando nesta saída. Se ela ficar offline, escolha outro local.</value>
+    <comment>Muted line on the provider the connection already stays on (after Stay on this exit), in the Provider Locations sheet. Says how to leave it.</comment>
   </data>
   <data name="step_in" xml:space="preserve">
     <value>Acesse a internet como ela deveria ser.</value>
@@ -3968,6 +3980,14 @@ como ela deveria ser.</value>
   <data name="use_recommended_settings" xml:space="preserve">
     <value>Usar configurações recomendadas</value>
     <comment>dns settings</comment>
+  </data>
+  <data name="use_wireguard_socks_https_proxy" xml:space="preserve">
+    <value>Usar proxy WireGuard / SOCKS / HTTPS</value>
+    <comment>Settings row that opens the cloud proxies page on ur.io (https://ur.io/app/proxies), where the user can create a WireGuard, SOCKS or HTTPS proxy. The app itself has no protocol switch.</comment>
+  </data>
+  <data name="use_wireguard_socks_https_proxy_note" xml:space="preserve">
+    <value>Abre o ur.io no seu navegador. SOCKS e WireGuard exigem Pro.</value>
+    <comment>Muted note under the Use WireGuard / SOCKS / HTTPS proxy settings row: the row leaves the app for ur.io, and SOCKS and WireGuard proxies are part of the Pro plan (HTTPS is not).</comment>
   </data>
   <data name="used_data_key" xml:space="preserve">
     <value>Utilizado</value>
