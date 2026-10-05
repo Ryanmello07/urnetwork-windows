@@ -441,6 +441,8 @@ class WalletPage {
   std::optional<SnWalletInfo> snWallet_;
   Fetch walletState_ = Fetch::Loading;
   bool connectingWallet_ = false;
+  // the wallet the current coldkey connect signs with (its refusal names it)
+  std::string connectWalletId_;
   bool manualPanelOpen_ = false;
   bool manualAddressOk_ = false;
   std::string manualAddress_;

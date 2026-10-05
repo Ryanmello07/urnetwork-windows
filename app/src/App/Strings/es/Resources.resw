@@ -666,6 +666,10 @@
     <value>La billetera firmó una solicitud diferente. Empieza de nuevo.</value>
     <comment>Error: the wallet returned a signature over a different challenge than the one issued.</comment>
   </data>
+  <data name="bittensor_error_signature_mismatch" xml:space="preserve">
+    <value>Esta firma no es de la dirección que introdujiste. En {}, firma el mensaje con esa dirección y vuelve a pegar la firma.</value>
+    <comment>Bittensor wallet connect (Earnings), manual entry (TAO.com, or Talisman on a phone): the server refused the pasted signature because it does not verify for the address the user typed over the shown message (POST /sn/wallet error.code signature_mismatch). Usually the user signed with another account in the wallet. The server cannot tell which account signed. The argument is the wallet product name (TAO.com or Talisman).</comment>
+  </data>
   <data name="bittensor_manual_sign_instructions" xml:space="preserve">
     <value>Firma este mensaje con la billetera {} que contiene tu coldkey y luego pega abajo la dirección y la firma.</value>
     <comment>Manual Bittensor wallet proof: how to sign the shown challenge message. The argument is the wallet product name (Talisman or TAO.com).</comment>

@@ -709,6 +709,10 @@
     <value>The wallet signed a different request. Start again.</value>
     <comment>Error: the wallet returned a signature over a different challenge than the one issued.</comment>
   </data>
+  <data name="bittensor_error_signature_mismatch" xml:space="preserve">
+    <value>This signature isn't from the address you entered. In {}, sign the message with that address, then paste the signature again.</value>
+    <comment>Bittensor wallet connect (Earnings), manual entry (TAO.com, or Talisman on a phone): the server refused the pasted signature because it does not verify for the address the user typed over the shown message (POST /sn/wallet error.code signature_mismatch). Usually the user signed with another account in the wallet. The server cannot tell which account signed. The argument is the wallet product name (TAO.com or Talisman).</comment>
+  </data>
   <data name="bittensor_manual_sign_instructions" xml:space="preserve">
     <value>Sign this message with the {} wallet that holds your coldkey, then paste the address and the signature below.</value>
     <comment>Manual Bittensor wallet proof: how to sign the shown challenge message. The argument is the wallet product name (Talisman or TAO.com).</comment>

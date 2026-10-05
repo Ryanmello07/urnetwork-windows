@@ -658,6 +658,10 @@
     <value>钱包签署了另一个请求。请重新开始。</value>
     <comment>Error: the wallet returned a signature over a different challenge than the one issued.</comment>
   </data>
+  <data name="bittensor_error_signature_mismatch" xml:space="preserve">
+    <value>此签名不是来自您输入的地址。请在 {} 中使用该地址签署消息，然后重新粘贴签名。</value>
+    <comment>Bittensor wallet connect (Earnings), manual entry (TAO.com, or Talisman on a phone): the server refused the pasted signature because it does not verify for the address the user typed over the shown message (POST /sn/wallet error.code signature_mismatch). Usually the user signed with another account in the wallet. The server cannot tell which account signed. The argument is the wallet product name (TAO.com or Talisman).</comment>
+  </data>
   <data name="bittensor_manual_sign_instructions" xml:space="preserve">
     <value>请使用持有您 coldkey 的 {} 钱包签署此消息，然后在下方粘贴地址和签名。</value>
     <comment>Manual Bittensor wallet proof: how to sign the shown challenge message. The argument is the wallet product name (Talisman or TAO.com).</comment>

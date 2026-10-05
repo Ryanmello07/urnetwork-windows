@@ -598,6 +598,10 @@
     <value>Je {}-wallet bevat het ingevoerde adres niet. Voeg dat account in de wallet toe of koppel het, of voer een adres in dat de wallet wel bevat.</value>
     <comment>ur.io Bittensor wallet card and sign-in: the chosen wallet does not offer the account of the address the user typed (Talisman does not hold it or has not connected it to the site; a WalletConnect wallet connected another account), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect).</comment>
   </data>
+  <data name="bittensor_error_signature_mismatch" xml:space="preserve">
+    <value>Deze handtekening is niet van het adres dat je hebt ingevoerd. Onderteken het bericht in {} met dat adres en plak de handtekening daarna opnieuw.</value>
+    <comment>Bittensor wallet connect (Earnings), manual entry (TAO.com, or Talisman on a phone): the server refused the pasted signature because it does not verify for the address the user typed over the shown message (POST /sn/wallet error.code signature_mismatch). Usually the user signed with another account in the wallet. The server cannot tell which account signed. The argument is the wallet product name (TAO.com or Talisman).</comment>
+  </data>
   <data name="bittensor_sign_in" xml:space="preserve">
     <value>Inloggen met Bittensor</value>
     <comment>Call to action</comment>

@@ -614,6 +614,10 @@
     <value>У вашому гаманці {} немає адреси, яку ви ввели. Додайте або підключіть цей обліковий запис у гаманці чи введіть адресу, яка в ньому є.</value>
     <comment>ur.io Bittensor wallet card and sign-in: the chosen wallet does not offer the account of the address the user typed (Talisman does not hold it or has not connected it to the site; a WalletConnect wallet connected another account), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect).</comment>
   </data>
+  <data name="bittensor_error_signature_mismatch" xml:space="preserve">
+    <value>Цей підпис зроблено не з адреси, яку ви ввели. У гаманці {} підпишіть повідомлення з цієї адреси, а потім знову вставте підпис.</value>
+    <comment>Bittensor wallet connect (Earnings), manual entry (TAO.com, or Talisman on a phone): the server refused the pasted signature because it does not verify for the address the user typed over the shown message (POST /sn/wallet error.code signature_mismatch). Usually the user signed with another account in the wallet. The server cannot tell which account signed. The argument is the wallet product name (TAO.com or Talisman).</comment>
+  </data>
   <data name="bittensor_sign_in" xml:space="preserve">
     <value>Увійти через Bittensor</value>
     <comment>Call to action</comment>

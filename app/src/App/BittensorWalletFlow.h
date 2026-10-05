@@ -94,6 +94,24 @@ inline NextStep NextStepFor(std::string_view transport) {
   return NextStep::Unsupported;
 }
 
+// POST /sn/wallet refuses a well-formed signature that does not verify for the
+// entered address with this code, which the sdk keeps in SnError.code
+// (urnet::SnErrorCodeSignatureMismatch): the wallet signed with another account
+// (or other text), and the server cannot say which.
+inline constexpr std::string_view kSnErrorSignatureMismatch = "signature_mismatch";
+
+// The localization key for a refused coldkey connect when the page has its own
+// words for it, else "" (the SDK's error text, as before). Only a manual entry
+// pastes a signature, so only then does the page say to sign again in that
+// wallet (bittensor_error_signature_mismatch, with the wallet's name). A
+// browser-bridge wallet signed with the account it returned.
+inline std::string ConnectErrorKey(std::string_view snErrorCode, std::string_view transport) {
+  if (snErrorCode == kSnErrorSignatureMismatch && transport == kTransportManual) {
+    return "bittensor_error_signature_mismatch";
+  }
+  return std::string();
+}
+
 // A refusal that is not this flow's answer: a hand-back for another purpose
 // (another flow's tab), a link that is not a Bittensor hand-back, or one that
 // arrives when nothing waits (the bridge page's "Return to URnetwork" after
