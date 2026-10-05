@@ -315,6 +315,13 @@
     <ClCompile Include="ExtenderPresentation.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
     <ClCompile Include="ExtenderPanel.cpp" />
     <ClCompile Include="ExtenderSheets.cpp" />
+    <!-- The VLESS settings sheet's decisions (field visibility, the form <->
+         settings mapping, error keys, picker options, the carry-over of a
+         space's server) are WinRT-free (no pch) so
+         tools/vless-presentation-tests.cpp runs them on any host; the sheet
+         that draws them uses the pch. -->
+    <ClCompile Include="VlessPresentation.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <ClCompile Include="VlessSheet.cpp" />
     <!-- The vendored QR ENCODER (third_party/qrcodegen, MIT). Two dependency-free
          files compiled straight into the app: no pch (it is plain C++17 with no
          WinRT), and it is also compiled by tools/extender-tests.cpp, which is
@@ -405,6 +412,8 @@
     <ClInclude Include="ExtenderPresentation.h" />
     <ClInclude Include="ExtenderPanel.h" />
     <ClInclude Include="ExtenderSheets.h" />
+    <ClInclude Include="VlessPresentation.h" />
+    <ClInclude Include="VlessSheet.h" />
     <ClInclude Include="ConnectorGlyph.h" />
     <ClInclude Include="UrlQuery.h" />
     <ClInclude Include="TransportStatusPresentation.h" />

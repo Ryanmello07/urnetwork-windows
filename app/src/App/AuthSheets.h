@@ -71,12 +71,19 @@ class SeedphraseDisplaySheet : public std::enable_shared_from_this<SeedphraseDis
 // Offered from the SIGNED-OUT screen only, as on iOS: switching servers swaps
 // the LocalState and therefore the stored jwt, so it cannot be done underneath
 // a live session.
+//
+// Its VLESS button edits the ACTIVE space's VLESS server on the VLESS sheet
+// (VlessSheet.h), the one Settings opens. Only one ContentDialog shows at a
+// time, so the button closes this sheet with VlessRequested() set and the
+// caller opens that one in its place (LoginPage::OnChangeNetworkServer).
 class NetworkServerSheet : public std::enable_shared_from_this<NetworkServerSheet> {
  public:
   static std::shared_ptr<NetworkServerSheet> Create(
       winrt::Microsoft::UI::Xaml::XamlRoot const& root, SdkHost& sdk);
 
   winrt::Microsoft::UI::Xaml::Controls::ContentDialog Dialog() const { return dialog_; }
+  // the sheet closed through its VLESS button
+  bool VlessRequested() const { return vlessRequested_; }
 
  private:
   explicit NetworkServerSheet(SdkHost& sdk) : sdk_(sdk) {}
@@ -93,6 +100,7 @@ class NetworkServerSheet : public std::enable_shared_from_this<NetworkServerShee
 
   SdkHost& sdk_;
   SdkHost::NetworkServer current_;
+  bool vlessRequested_ = false;
   winrt::Microsoft::UI::Xaml::Controls::ContentDialog dialog_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::TextBox hostBox_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::TextBox apiBox_{nullptr};

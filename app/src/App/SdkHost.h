@@ -1170,6 +1170,35 @@ class SdkHost {
   // derived from it stay valid. An empty ip clears the override.
   std::optional<urnet::NetExtender> CurrentNetExtender();
   bool SetNetExtender(const std::optional<urnet::NetExtender>& value);
+  // ---- VLESS (Settings > VLESS and the login screen's network sheet) -------
+  // One VLESS server in the ACTIVE network space's values, which the space's
+  // client strategy dials through while it is on and valid (sdk
+  // vless_settings.go). Like the private extender above it needs no session:
+  // the login screen edits it before sign-in. A save applies in place -- the
+  // space, a DeviceRemote bound to it and everything derived from it stay
+  // valid -- and the service imports the space at its next tunnel start
+  // (StartTunnel.network_space_json), which is why the sheet says so.
+  //
+  // The space calls take mutex_, which a session bootstrap holds for its whole
+  // length, and every call crosses the C ABI, so callers run them off the UI
+  // thread (VlessSheet).
+  //
+  // The space's settings, or the sdk's new-form defaults when it has none;
+  // nullopt with no space or when the read failed.
+  std::optional<urnet::VlessSettings> CurrentVlessSettings();
+  // Saves them to the space: "" when saved, a vless_error_* id when the sdk
+  // refused enabled settings that do not validate (nothing is saved then),
+  // nullopt when the call could not run (no space, or it threw).
+  std::optional<std::string> SetVlessSettings(const urnet::VlessSettings& settings);
+  // A vless:// share link read into settings (enabled), or its error id;
+  // nullopt when the call failed.
+  std::optional<urnet::VlessLinkResult> ParseVlessLink(const std::string& link);
+  // The share link of the settings; "" when they do not validate or the call
+  // failed (ValidateVlessSettings tells the two apart).
+  std::string VlessSettingsLink(const urnet::VlessSettings& settings);
+  // "" when the settings can be dialed (enabled or not), else the error id of
+  // the first problem; nullopt when the call failed.
+  std::optional<std::string> ValidateVlessSettings(const urnet::VlessSettings& settings);
   // The client / provider transport policy: the device's when there is a
   // session (offline the DeviceRemote answers with the pending or last known
   // policy), else the app LocalState mirror (see ApplyTransportSettings), else
@@ -1501,6 +1530,14 @@ class SdkHost {
 
  private:
   urnet::NetworkSpace BuildNetworkSpace();
+  // The values the space manager holds for `key`, read out of the space's own
+  // json (the getters return EFFECTIVE values); nullopt when the manager has no
+  // such space or its json could not be read. BuildNetworkSpace and
+  // ApplyNetworkServer write a space's values WHOLE, so they take the space's
+  // VLESS server from here (VlessPresentation.h WithStoredVless). Needs
+  // mutex_, like everything else that touches spaceManager_.
+  std::optional<urnet::NetworkSpaceValues> StoredSpaceValuesLocked(
+      const urnet::NetworkSpaceKey& key);
 
   // ---- the session worker (one bootstrap at a time) -------------------------
   //

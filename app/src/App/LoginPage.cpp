@@ -1461,10 +1461,12 @@ winrt::fire_and_forget LoginPage::OnChangeNetworkServer(IInspectable const&,
   if (w_.sheetOpen()) co_return;  // only one ContentDialog can show at a time
   auto self = w_.get_strong();
   w_.SetSheetOpen(true);
+  bool openVless = false;
   try {
     networkServerSheet_ =
         urnw::NetworkServerSheet::Create(self->Content().XamlRoot(), Sdk());
     co_await networkServerSheet_->Dialog().ShowAsync();
+    openVless = networkServerSheet_->VlessRequested();
   } catch (winrt::hresult_error const& e) {
     urnw::LogError("network server sheet: {} (0x{:08x})",
                    urnw::Narrow(std::wstring{e.message()}),
@@ -1473,6 +1475,21 @@ winrt::fire_and_forget LoginPage::OnChangeNetworkServer(IInspectable const&,
     urnw::LogError("network server sheet: {}", e.what());
   }
   networkServerSheet_.reset();
+  // The sheet's VLESS button: the VLESS sheet in its place, for the space that
+  // is active now, still under the one-sheet gate. A hide to the tray closes
+  // the network sheet without the request, so it never opens one behind it.
+  if (openVless) {
+    try {
+      vlessSheet_ = urnw::VlessSheet::Create(self->Content().XamlRoot(), Sdk());
+      co_await vlessSheet_->Dialog().ShowAsync();
+    } catch (winrt::hresult_error const& e) {
+      urnw::LogError("vless sheet: {} (0x{:08x})", urnw::Narrow(std::wstring{e.message()}),
+                     static_cast<uint32_t>(e.code()));
+    } catch (std::exception const& e) {
+      urnw::LogError("vless sheet: {}", e.what());
+    }
+    vlessSheet_.reset();
+  }
   w_.SetSheetOpen(false);
   // A switch re-derives the Api and the LocalState, so the flow starts over on
   // whatever the new server says about this client. (The sign-in pills do not
