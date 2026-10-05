@@ -25,9 +25,9 @@
 // forward table while no session pins an egress (NetworkConfig::DiscoverEgress)
 // and the registry, none of which can wedge on a session. NoteLogUpload is the one
 // call made under the session lock (TunnelController::UploadLogs, through the
-// hook ControlServer passes): the zip it must precede runs on a device only
-// that lock keeps alive, and beside the zip's own calls into the sdk it adds
-// one line.
+// hook ControlServer passes): its line must be in the log before the upload's
+// thread zips it, and that lock keeps the chosen device alive until the flight
+// has the call on it (logupload::Flight::Run). It adds one line.
 //
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
