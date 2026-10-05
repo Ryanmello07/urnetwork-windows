@@ -157,6 +157,12 @@ void AppController::Start() {
     Shutdown(lifetime::Ending::Quit);
   };
   cb.onCloseRequest = [this] { Shutdown(lifetime::Ending::CloseRequest); };
+  // Signing out of Windows, or a shutdown, stops them as Quit does (owner
+  // decision, 2026-10-05).
+  cb.onSessionEnd = [this] {
+    LogInfo("app: tray -> the Windows session is ending");
+    Shutdown(lifetime::Ending::SessionEnd);
+  };
   // The tray icon is the app's ONLY affordance on launch — no icon means no way
   // in, and from outside that is indistinguishable from a process that died. Say
   // so on screen. The app keeps running: TrayIcon re-adds itself on

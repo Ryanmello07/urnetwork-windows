@@ -50,9 +50,10 @@ func appLifetimeTestProgram(t *testing.T, mutate func(string) string) string {
 	return program
 }
 
-// Execute the spec: the tray's Quit stops the tunnel and the provider in the
-// service, a close request and the installer handoff leave the service as it
-// is, and only the Quit stops anything.
+// Execute the spec: the tray's Quit and the end of the Windows session stop
+// the tunnel and the provider in the service, a close request and the
+// installer handoff leave the service as it is, and nothing else stops
+// anything.
 func TestAppLifetime(t *testing.T) {
 	if !strings.Contains(readCommonSource(t, "Common.vcxproj"), `<ClInclude Include="AppLifetime.h" />`) {
 		t.Error("Common.vcxproj does not list AppLifetime.h")
@@ -84,6 +85,18 @@ func TestAppLifetimeRejectsQuitLeavingTheService(t *testing.T) {
 			"    case Ending::Quit:\n      p.stopService = true;\n",
 			"    case Ending::Quit:\n", 1)
 	}, "quit: the service ends with no session and no provider-only device")
+}
+
+// Windows ending the session (a sign-out of Windows, a shutdown) stops the
+// tunnel and the provider as Quit does (owner decision, 2026-10-05). Put back
+// the old ending, which left them running for a user no longer signed in, and
+// the spec must fail.
+func TestAppLifetimeRejectsASessionEndLeavingTheService(t *testing.T) {
+	requireAppLifetimeFailure(t, func(source string) string {
+		return strings.Replace(source,
+			"    case Ending::SessionEnd:\n      p.stopService = true;\n",
+			"    case Ending::SessionEnd:\n", 1)
+	}, "session end: a sign-out of Windows or a shutdown stops the tunnel and the provider")
 }
 
 // A WM_CLOSE from outside the app (taskkill, an installer) is nobody choosing

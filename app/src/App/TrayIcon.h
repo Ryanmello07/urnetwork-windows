@@ -35,6 +35,11 @@ class TrayIcon {
     // without /f, an installer). The app exits and the service keeps what it
     // runs: nobody chose Quit.
     std::function<void()> onCloseRequest;
+    // Windows is ending the user's session: a sign-out, a shutdown or a
+    // restart (WM_ENDSESSION). It stops the tunnel and the provider as Quit
+    // does (AppLifetime.h), before the handler returns and Windows ends the
+    // process.
+    std::function<void()> onSessionEnd;
 
     // --- the two escapes, shown only when they are the answer to something ---
     //

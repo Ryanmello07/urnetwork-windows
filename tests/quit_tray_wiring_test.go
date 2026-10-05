@@ -337,7 +337,8 @@ func TestQuitTrayOtherEndingsLeaveTheService(t *testing.T) {
 	provideRequire(t, "AppController::Start", controller,
 		"cb.onCloseRequest = [this] { Shutdown(lifetime::Ending::CloseRequest); };",
 		"OnUi([this] { Shutdown(lifetime::Ending::InstallerHandoff); });")
-	if strings.Count(controller, "Shutdown(lifetime::Ending::") != 3 {
+	// the Quit, the session end (session_end_wiring_test.go) and these two
+	if strings.Count(controller, "Shutdown(lifetime::Ending::") != 4 {
 		t.Error("AppController.cpp ends the app from a place this contract does not know")
 	}
 	auth := definitionBody(t, "AppController.cpp", controller,
