@@ -457,6 +457,8 @@
     <ClInclude Include="MobileBroadband.h" />
     <!-- header-only and WinRT-free: tools/network-country-tests.cpp runs it -->
     <ClInclude Include="NetworkCountryWatch.h" />
+    <!-- header-only and WinRT-free: tools/log-upload-tests.cpp runs it -->
+    <ClInclude Include="FeedbackLogUpload.h" />
     <ClInclude Include="SystemProxy.h" />
     <ClInclude Include="ServiceClient.h" />
     <ClInclude Include="ServiceSetup.h" />

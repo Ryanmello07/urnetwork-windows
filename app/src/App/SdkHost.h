@@ -26,6 +26,7 @@
 #include "ConnectionHealth.h"
 #include "ExtenderPresentation.h"
 #include "MobileBroadband.h"
+#include "FeedbackLogUpload.h"
 #include "NetworkCountryWatch.h"
 #include "PostQuantumIdentity.h"
 #include "ProvideLifecycle.h"
@@ -1449,6 +1450,17 @@ class SdkHost {
   }
   bool hasDevice() { return device_.has_value(); }
   urnet::DeviceRemote& device() { return *device_; }
+  // "Send feedback with logs" whether or not a tunnel runs (support inbox
+  // 2090), after the server accepted the feedback with the box ticked. The logs
+  // that matter are the service's, and the DeviceRemote reaches them only while
+  // a session runs, so the app asks the service first (Protocol.h upload_logs)
+  // with this session's client credentials as start_provider carries them, and
+  // falls back to the DeviceRemote's UploadLogs only when the service did not
+  // take it (logupload::AppStepAfterService). Returns at once: the request runs
+  // on FeedbackLogUpload's thread, one at a time, and the outcome of an upload
+  // the service took comes in its status (FollowServiceLogUpload). Failure is
+  // logged, never shown: the feedback itself was accepted. UI thread.
+  void UploadFeedbackLogs(const std::string& feedbackId);
   // Account page opens billing/upgrade in the browser at this host.
   std::string linkHostName() const { return "ur.io"; }
   // The version this app reports to the SDK/server. Settings shows it because
@@ -2328,6 +2340,25 @@ class SdkHost {
   // nothing records into it once it is ending.
   std::unique_ptr<NetworkCountryWatch> networkCountryWatch_;
   std::unique_ptr<DefaultRouteChanges> networkCountryChanges_;
+
+  // ---- send feedback with logs ----------------------------------------------
+  // FeedbackLogUpload's host steps: ask the service (the pipe call, mutex_
+  // held only to read the session), and read the DeviceRemote's handle for
+  // the old path (under mutex_), returning its call, which touches nothing of
+  // this object.
+  logupload::ServiceAnswer AskServiceToUploadLogs(const std::string& feedbackId);
+  std::function<void()> PrepareDeviceRemoteLogUpload(const std::string& feedbackId);
+  // The outcome of the upload the service took, once its status names it
+  // finished (logupload::CompletionFor): logged, and the wait ends. From
+  // AdoptServiceFacts, on whatever thread brought the status.
+  void FollowServiceLogUpload(const proto::TunnelStatus& st);
+  // The service's id of the upload this process waits on, 0 for none.
+  std::atomic<int64_t> pendingLogUploadId_{0};
+  // The request's thread. Stopped first in ~SdkHost: its steps take mutex_
+  // and the pipe, and its old path's call is left past the exit budget.
+  std::unique_ptr<FeedbackLogUpload> feedbackLogUpload_ = std::make_unique<FeedbackLogUpload>(
+      [this](const std::string& feedbackId) { return AskServiceToUploadLogs(feedbackId); },
+      [this](const std::string& feedbackId) { return PrepareDeviceRemoteLogUpload(feedbackId); });
   // The STANDING reason there is no session, in words a user can act on, or
   // empty when there is nothing to report. Distinct from bootstrapError_, which
   // is per-attempt scratch: this survives the attempt so that a view created

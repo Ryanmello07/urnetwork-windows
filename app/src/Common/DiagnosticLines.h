@@ -2,12 +2,14 @@
 // the app-log path; open bugs P021 and P052).
 //
 // "Send feedback with logs" uploads the service's glog files, and only them:
-// the app's DeviceRemote asks the service's DeviceLocal to upload
-// (DeviceLocalRpc.UploadLogs), which zips its own process's log directory.
-// The app's logs and the service's own log stay on the machine. So a fact
-// support needs from an uploaded log is written by the service, through the
-// sdk (urnet::logAppInfo: one "[app][<tag>] <message>" line per call, which
-// the sdk bounds and sanitizes again), when it becomes true
+// the app asks the service to upload them on whichever device runs, connected
+// or not (upload_logs, Common/LogUpload.h), and a service too old for that is
+// reached through the app's DeviceRemote (DeviceLocalRpc.UploadLogs); either
+// way the sdk zips the service process's own log directory. The app's logs
+// and the service's own log stay on the machine. So a fact support needs from
+// an uploaded log is written by the service, through the sdk
+// (urnet::logAppInfo: one "[app][<tag>] <message>" line per call, which the
+// sdk bounds and sanitizes again), when it becomes true
 // (Service/ServiceDiagnostics.h):
 //
 //   [app][service]          the state the service pushes to the app: the
@@ -15,7 +17,9 @@
 //                           kill switch preference, the failsafe, and the
 //                           provider-only device
 //   [app][adapter]          whether the tunnel's routes are on the tun, and the
-//                           kind of physical interface its traffic leaves by
+//                           kind of physical interface its traffic leaves by:
+//                           the one a session pins, or with none pinned the
+//                           one the default route takes now, labelled observed
 //   [app][dns]              the Windows DNS client settings that decide where a
 //                           tunnel's queries can go: the DNS-over-HTTPS policy
 //                           and the Name Resolution Policy Table
@@ -23,6 +27,10 @@
 //                           asked for the tunnel
 //   [app][network-country]  the network country and its source
 //                           (Common/NetworkCountry.h)
+//   [app][log-upload]       the device that carries a feedback's log upload
+//                           (Common/LogUpload.h): the session's, the
+//                           provider-only one, or one built for the upload
+//                           alone, so the upload says whether a tunnel was up
 //
 // Every value is a token from a closed set or a small number. No address, host
 // name, interface or adapter name, URL, path, GUID or identifier, and no text
@@ -54,6 +62,7 @@ inline constexpr std::string_view kTagAdapter = "adapter";
 inline constexpr std::string_view kTagDns = "dns";
 inline constexpr std::string_view kTagProxy = "proxy";
 inline constexpr std::string_view kTagNetworkCountry = "network-country";
+inline constexpr std::string_view kTagLogUpload = "log-upload";
 
 // `value` when it is one of `known`, else `fallback`: the one way a string
 // becomes part of a line.
@@ -184,14 +193,26 @@ inline std::string InterfaceName(const InterfaceFacts& f) {
   return name;
 }
 
+// Where an [app][adapter] line's interfaces come from: the ones a session
+// pins the service's sdk to (TunnelStatus::egress_index4/6), or, with none
+// pinned, the ones that carry the default routes now, as the service observes
+// them (NetworkConfig::DiscoverEgress). Nothing is pinned in every state
+// without a session, a start that failed early among them, which is the case a
+// report about a connection that will not come up needs the interface for.
+enum class EgressSource { Pinned, Observed };
+
+// The source as a line writes it.
+constexpr std::string_view EgressSourceName(EgressSource source) {
+  return source == EgressSource::Pinned ? "pinned" : "observed";
+}
+
 // `tunnel`: the tun carries the capture routes (TunnelStatus::routes_installed).
-// The egress is the physical interface the service's sdk is pinned to for each
-// family (TunnelStatus::egress_index4/6); none while nothing is pinned, which
-// is every state without a tunnel session.
-inline std::string AdapterLine(bool tunnel, const InterfaceFacts& egress4,
+// `egress4` and `egress6` are each family's interface, from `source`.
+inline std::string AdapterLine(bool tunnel, EgressSource source, const InterfaceFacts& egress4,
                                const InterfaceFacts& egress6) {
-  return std::string("tunnel=") + (tunnel ? "up" : "none") + " egress_v4=" +
-         InterfaceName(egress4) + " egress_v6=" + InterfaceName(egress6);
+  return std::string("tunnel=") + (tunnel ? "up" : "none") + " egress=" +
+         std::string(EgressSourceName(source)) + " egress_v4=" + InterfaceName(egress4) +
+         " egress_v6=" + InterfaceName(egress6);
 }
 
 // ---- [app][dns] -----------------------------------------------------------------
@@ -422,6 +443,14 @@ inline std::string NetworkCountryLine(std::string_view code, std::string_view so
   const netcountry::Reading reading = netcountry::Normalized(code, source);
   return "country=" + (reading.code.empty() ? std::string("none") : reading.code) +
          " source=" + reading.source;
+}
+
+// ---- [app][log-upload] ----------------------------------------------------------
+
+// The [app][log-upload] line: the device that carries this upload, by
+// logupload::ToString's words.
+inline std::string LogUploadLine(std::string_view carrier) {
+  return "carrier=" + std::string(OneOf(carrier, {"tunnel", "provider", "standalone"}, "other"));
 }
 
 }  // namespace urnw::diag

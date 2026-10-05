@@ -14,6 +14,7 @@
 #include <netioapi.h>
 
 #include "DiagnosticLines.h"
+#include "NetworkConfig.h"  // NetworkConfig::DiscoverEgress, read when nothing is pinned
 #include "Sdk.h"  // urnet::logAppInfo
 
 namespace urnw {
@@ -100,9 +101,16 @@ void ServiceDiagnostics::NoteStatus(const proto::TunnelStatus& status, bool kill
   facts.providerRunning = status.provider_running;
   facts.providerControlMode = status.provider_control_mode;
   facts.providerTier = status.provider_mode;
-  const std::string adapter =
-      diag::AdapterLine(status.routes_installed, InterfaceFactsFor(status.egress_index4),
-                        InterfaceFactsFor(status.egress_index6));
+  // The interfaces a session pins the sdk to; with none pinned (no session,
+  // or a start that failed before it pinned one), the ones the default routes
+  // take now, labelled observed.
+  const bool pinned = status.egress_index4 > 0 || status.egress_index6 > 0;
+  EgressInterfaces observed;
+  if (!pinned) observed = NetworkConfig::DiscoverEgress(NET_LUID{});
+  const std::string adapter = diag::AdapterLine(
+      status.routes_installed, pinned ? diag::EgressSource::Pinned : diag::EgressSource::Observed,
+      InterfaceFactsFor(pinned ? status.egress_index4 : observed.index4),
+      InterfaceFactsFor(pinned ? status.egress_index6 : observed.index6));
 
   std::scoped_lock lock(mutex_);
   WriteIfChangedLocked(diag::kTagService, diag::ServiceLine(facts), lastService_);
@@ -135,6 +143,13 @@ void ServiceDiagnostics::NoteNetworkCountry(
     const std::optional<netcountry::Reading>& networkCountry) {
   std::scoped_lock lock(mutex_);
   WriteNetworkCountryLocked(networkCountry);
+}
+
+void ServiceDiagnostics::NoteLogUpload(std::string_view carrier) {
+  // Every upload says it, unchanged or not: each is the user's own send, and
+  // the line has to be in the zip that follows.
+  std::scoped_lock lock(mutex_);
+  urnet::logAppInfo(std::string(diag::kTagLogUpload), diag::LogUploadLine(carrier));
 }
 
 void ServiceDiagnostics::WriteNetworkCountryLocked(

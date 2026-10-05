@@ -36,9 +36,9 @@ class ControlServer {
   void PushState();
 
   // The lines "send feedback with logs" uploads, written at the RPC boundary:
-  // every pushed state (PushState) and every start_tunnel. Declared first, so
-  // it is destroyed last: a push from the pipe or the tunnel can reach it until
-  // both are gone.
+  // every pushed state (PushState), every start_tunnel and every upload_logs
+  // the service carries. Declared first, so it is destroyed last: a push from
+  // the pipe or the tunnel can reach it until both are gone.
   ServiceDiagnostics diagnostics_;
   TunnelController tunnel_;
   PipeServer pipe_;

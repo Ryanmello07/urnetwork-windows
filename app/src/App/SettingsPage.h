@@ -156,9 +156,10 @@ class SettingsPage {
   // same observed launch: a failure shows something_went_wrong.
   winrt::fire_and_forget OpenCloudProxies();
   winrt::fire_and_forget SaveLogsToFile();
-  // Attaches the SDK log directory to an ALREADY-ACCEPTED feedback report,
-  // using the server's own feedback id. Only OnSendFeedback calls it, and only
-  // when the user ticked the box.
+  // Attaches the service's logs to an already-accepted feedback report, using
+  // the server's own feedback id (SdkHost::UploadFeedbackLogs: the service
+  // first, connected or not, then the DeviceRemote, on its own thread). Only
+  // OnSendFeedback calls it, and only when the user ticked the box.
   void UploadLogs(std::string const& feedbackId);
   void SetFeedbackSending(bool sending);
   void ApplyFeedbackSendButton();

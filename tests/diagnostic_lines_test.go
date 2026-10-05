@@ -117,6 +117,18 @@ func TestDiagnosticLinesRejectsLeaks(t *testing.T) {
 			new:  "",
 			want: "adapter: a link that is down says so",
 		},
+		{
+			name: "an observed egress written as pinned",
+			old:  `return source == EgressSource::Pinned ? "pinned" : "observed";`,
+			new:  `return source == EgressSource::Pinned ? "pinned" : "pinned";`,
+			want: "adapter: with nothing pinned, the egress is labelled observed",
+		},
+		{
+			name: "a log upload's carrier written as handed over",
+			old:  `return "carrier=" + std::string(OneOf(carrier, {"tunnel", "provider", "standalone"}, "other"));`,
+			new:  `return "carrier=" + std::string(carrier);`,
+			want: "log upload: a carrier the service cannot choose is other",
+		},
 	} {
 		program := diagnosticLinesTestProgram(t, map[string]func(string) string{
 			"DiagnosticLines.h": replaceOnce(control.old, control.new)})
@@ -142,9 +154,10 @@ func TestDiagnosticLinesRejectsDroppedProxyKind(t *testing.T) {
 }
 
 // The service writes at the RPC boundary: the pushed state's lines before the
-// flush that takes them along, the proxy line before a start is served, and
-// the network country in force after set_network_country has applied it.
-// Nothing else in the tree writes into the uploaded log.
+// flush that takes them along, the proxy line before a start is served, the
+// network country in force after set_network_country has applied it, and an
+// upload's carrier through the hook upload_logs passes. Nothing else in the
+// tree writes into the uploaded log.
 func TestDiagnosticLinesServiceWiring(t *testing.T) {
 	server := stripComments(readServiceSource(t, "ControlServer.cpp"))
 	push := definitionBody(t, "ControlServer.cpp", server, "void ControlServer::PushState()")
@@ -166,6 +179,13 @@ func TestDiagnosticLinesServiceWiring(t *testing.T) {
 	provideRequireOrder(t, "the set_network_country branch", handle[at:],
 		"tunnel_.SetNetworkCountry(s.network_country_code, s.network_country_source);",
 		"diagnostics_.NoteNetworkCountry(tunnel_.NetworkCountry());")
+	at = strings.Index(handle, "proto::msg::kUploadLogs")
+	if at < 0 {
+		t.Fatal("ControlServer::Handle does not answer upload_logs")
+	}
+	provideRequireOrder(t, "the upload_logs branch", handle[at:],
+		"tunnel_.UploadLogs(req, [this](std::string_view chosen) {",
+		"diagnostics_.NoteLogUpload(chosen);")
 	header := stripComments(readServiceSource(t, "ControlServer.h"))
 	// declared first, destroyed last: the pipe and the tunnel push into it
 	provideRequireOrder(t, "ControlServer.h", header, "ServiceDiagnostics diagnostics_;", "TunnelController tunnel_;")
@@ -175,8 +195,11 @@ func TestDiagnosticLinesServiceWiring(t *testing.T) {
 	note := definitionBody(t, "ServiceDiagnostics.cpp", writer, "void ServiceDiagnostics::NoteStatus(")
 	provideRequire(t, "NoteStatus", note,
 		"diag::ServiceLine(facts)",
-		"diag::AdapterLine(status.routes_installed, InterfaceFactsFor(status.egress_index4)",
-		"InterfaceFactsFor(status.egress_index6)",
+		"const bool pinned = status.egress_index4 > 0 || status.egress_index6 > 0;",
+		"if (!pinned) observed = NetworkConfig::DiscoverEgress(NET_LUID{});",
+		"pinned ? diag::EgressSource::Pinned : diag::EgressSource::Observed,",
+		"InterfaceFactsFor(pinned ? status.egress_index4 : observed.index4)",
+		"InterfaceFactsFor(pinned ? status.egress_index6 : observed.index6)",
 		"diag::DohPolicyFor(ReadPolicyDword(kDnsClientPolicyKey, L\"DoHPolicy\"))",
 		"CountNrptRules()",
 		"std::scoped_lock lock(mutex_);")
@@ -191,6 +214,9 @@ func TestDiagnosticLinesServiceWiring(t *testing.T) {
 	provideRequire(t, "NoteStatus's ended branch", note[ended:], "lastDns_.clear();", "lastNetworkCountry_.clear();")
 	start := definitionBody(t, "ServiceDiagnostics.cpp", writer, "void ServiceDiagnostics::NoteStart(")
 	provideRequire(t, "NoteStart", start, "diag::ProxyLine(request.system_proxy)")
+	upload := definitionBody(t, "ServiceDiagnostics.cpp", writer, "void ServiceDiagnostics::NoteLogUpload(")
+	provideRequireOrder(t, "NoteLogUpload", upload, "std::scoped_lock lock(mutex_);",
+		"diag::LogUploadLine(carrier)")
 	country := definitionBody(t, "ServiceDiagnostics.cpp", writer, "void ServiceDiagnostics::WriteNetworkCountryLocked(")
 	provideRequireOrder(t, "WriteNetworkCountryLocked", country, "if (!networkCountry) return;",
 		"diag::NetworkCountryLine(networkCountry->code, networkCountry->source)")
@@ -210,7 +236,7 @@ func TestDiagnosticLinesServiceWiring(t *testing.T) {
 		"bool KillSwitchPreference() const { return killSwitch_.load(); }")
 
 	// Every line in the uploaded log comes from ServiceDiagnostics, under one of
-	// the five tags.
+	// the six tags.
 	logAppInfo := regexp.MustCompile(`logAppInfo\(`)
 	for _, dir := range []string{"App", "Service", "Common"} {
 		entries, err := os.ReadDir(filepath.Join(repositoryRoot(t), "app", "src", dir))
@@ -229,7 +255,7 @@ func TestDiagnosticLinesServiceWiring(t *testing.T) {
 			count := len(logAppInfo.FindAllStringIndex(stripComments(string(data)), -1))
 			want := 0
 			if dir+"/"+name == "Service/ServiceDiagnostics.cpp" {
-				want = 2
+				want = 3
 			}
 			if count != want {
 				t.Errorf("%s/%s calls logAppInfo %d times, want %d: the uploaded log takes only "+
@@ -240,6 +266,7 @@ func TestDiagnosticLinesServiceWiring(t *testing.T) {
 	for _, line := range []string{
 		"urnet::logAppInfo(std::string(diag::kTagProxy), diag::ProxyLine(request.system_proxy));",
 		"urnet::logAppInfo(std::string(tag), line);",
+		"urnet::logAppInfo(std::string(diag::kTagLogUpload), diag::LogUploadLine(carrier));",
 	} {
 		provideRequire(t, "ServiceDiagnostics.cpp", writer, line)
 	}

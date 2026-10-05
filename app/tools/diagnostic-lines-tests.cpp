@@ -1,11 +1,11 @@
 // Executable spec for the service's diagnostic lines (Common/DiagnosticLines.h):
-// the [app][service], [app][adapter], [app][dns], [app][proxy] and
-// [app][network-country] lines that "send feedback with logs" uploads. Every
-// value in them is a token from a closed set or a small number, so the checks
-// feed each formatter what a peer, the OS or a hand-edited setting could put
-// in front of it -- line breaks, forged prefixes, paths, addresses, host
-// names -- and require that none of it comes out, and that every line stays
-// short.
+// the [app][service], [app][adapter], [app][dns], [app][proxy],
+// [app][network-country] and [app][log-upload] lines that "send feedback with
+// logs" uploads. Every value in them is a token from a closed set or a small
+// number, so the checks feed each formatter what a peer, the OS or a
+// hand-edited setting could put in front of it -- line breaks, forged
+// prefixes, paths, addresses, host names -- and require that none of it comes
+// out, and that every line stays short.
 //
 //   c++ -std=c++20 -I ../src/Common diagnostic-lines-tests.cpp -o /tmp/diagnostic-lines-tests && /tmp/diagnostic-lines-tests
 //
@@ -136,14 +136,27 @@ void TestAdapterLine() {
   Check(diag::InterfaceKindFor(6, 14) == diag::InterfaceKind::Ethernet, "adapter: Ethernet");
   Check(diag::InterfaceKindFor(243, 8) == diag::InterfaceKind::MobileBroadband, "adapter: mobile broadband");
   Check(diag::InterfaceKindFor(53, 0) == diag::InterfaceKind::Other, "adapter: a virtual interface is other");
-  CheckLine(diag::AdapterLine(true, {.kind = diag::InterfaceKind::Wifi, .connected = true},
+  CheckLine(diag::AdapterLine(true, diag::EgressSource::Pinned,
+                              {.kind = diag::InterfaceKind::Wifi, .connected = true},
                               {.kind = diag::InterfaceKind::None, .connected = true}),
-            "tunnel=up egress_v4=wifi egress_v6=none", "adapter: a tunnel over Wi-Fi");
-  CheckLine(diag::AdapterLine(false, {.kind = diag::InterfaceKind::Ethernet, .connected = false},
+            "tunnel=up egress=pinned egress_v4=wifi egress_v6=none", "adapter: a tunnel over Wi-Fi");
+  CheckLine(diag::AdapterLine(false, diag::EgressSource::Pinned,
+                              {.kind = diag::InterfaceKind::Ethernet, .connected = false},
                               {.kind = diag::InterfaceKind::MobileBroadband, .connected = true}),
-            "tunnel=none egress_v4=ethernet-down egress_v6=mobile-broadband",
+            "tunnel=none egress=pinned egress_v4=ethernet-down egress_v6=mobile-broadband",
             "adapter: a link that is down says so");
-  CheckBounded(diag::AdapterLine(true, {.kind = diag::InterfaceKind::MobileBroadband, .connected = false},
+  // no session pins one (a start that failed early): the interface the default
+  // route takes now, and the line says it was observed, not pinned
+  CheckLine(diag::AdapterLine(false, diag::EgressSource::Observed,
+                              {.kind = diag::InterfaceKind::Wifi, .connected = true},
+                              {.kind = diag::InterfaceKind::None, .connected = true}),
+            "tunnel=none egress=observed egress_v4=wifi egress_v6=none",
+            "adapter: with nothing pinned, the egress is labelled observed");
+  Check(diag::EgressSourceName(diag::EgressSource::Pinned) !=
+            diag::EgressSourceName(diag::EgressSource::Observed),
+        "adapter: pinned and observed read apart");
+  CheckBounded(diag::AdapterLine(true, diag::EgressSource::Observed,
+                                 {.kind = diag::InterfaceKind::MobileBroadband, .connected = false},
                                  {.kind = diag::InterfaceKind::MobileBroadband, .connected = false}),
                "adapter");
 }
@@ -229,10 +242,25 @@ void TestNetworkCountryLine() {
             "network country: a peer's garbage");
 }
 
+// The [app][log-upload] line: the three devices by their words, and nothing
+// else a caller hands it.
+void TestLogUploadLine() {
+  CheckLine(diag::LogUploadLine("tunnel"), "carrier=tunnel", "log upload: the session's device");
+  CheckLine(diag::LogUploadLine("provider"), "carrier=provider", "log upload: the provider-only device");
+  CheckLine(diag::LogUploadLine("standalone"), "carrier=standalone",
+            "log upload: a device built for the upload");
+  for (const std::string& bad : kHostile) {
+    const std::string line = diag::LogUploadLine(bad);
+    CheckLine(line, "carrier=other", "log upload: a carrier the service cannot choose is other");
+    CheckBounded(line, "log upload");
+  }
+  CheckLine(diag::LogUploadLine(""), "carrier=other", "log upload: no carrier is other");
+}
+
 // Every tag survives the sdk's tag rule unchanged.
 void TestTags() {
   for (const std::string_view tag : {diag::kTagService, diag::kTagAdapter, diag::kTagDns, diag::kTagProxy,
-                                     diag::kTagNetworkCountry}) {
+                                     diag::kTagNetworkCountry, diag::kTagLogUpload}) {
     // the sdk keeps [A-Za-z0-9._-], at most 32 of them (sdk app_log.go)
     bool kept = !tag.empty() && tag.size() <= 32;
     for (const char c : tag) {
@@ -251,6 +279,7 @@ int main() {
   TestDnsLine();
   TestProxy();
   TestNetworkCountryLine();
+  TestLogUploadLine();
   TestTags();
   std::cout << (gCases - gFailures) << "/" << gCases << " diagnostic line checks passed" << std::endl;
   return gFailures == 0 ? 0 : 1;
