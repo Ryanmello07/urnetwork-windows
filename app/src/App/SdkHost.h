@@ -1199,6 +1199,27 @@ class SdkHost {
   // "" when the settings can be dialed (enabled or not), else the error id of
   // the first problem; nullopt when the call failed.
   std::optional<std::string> ValidateVlessSettings(const urnet::VlessSettings& settings);
+  // ---- bootstrap DNS-over-HTTPS servers (Account > Extenders and the login
+  //      screen's network sheet; sdk control_doh_ui.go) -----------------------
+  // `https://<ip literal>/<path>` servers in the ACTIVE network space's values,
+  // tried ahead of the built-in DoH servers for the lookups of the space's own
+  // names, for networks that block the built-in ones. Like VLESS above they
+  // need no session -- a fresh install behind such a network cannot sign in
+  // without them -- a save applies in place, and the service takes them with
+  // the space at its next tunnel start. The same lock and C ABI rule: callers
+  // run these off the UI thread (ControlDohBlock).
+  //
+  // The space's servers, v4 then v6, normalized; empty is the built-in servers
+  // alone. nullopt with no space or when the read failed.
+  std::optional<std::vector<std::string>> CurrentControlDohUrls();
+  // Saves them to the space: "" when saved (an empty list clears them), a
+  // control_doh_error_* id when a line does not validate or there are too many
+  // (nothing is saved then), nullopt when the call could not run.
+  std::optional<std::string> SetControlDohUrls(const std::vector<std::string>& urls);
+  // The sdk's preset for a country (ExtenderPresentation.h
+  // kControlDohChinaCountryCode), v4 first; empty when there is none or the
+  // call failed. Touches no host state.
+  std::vector<std::string> RegionalControlDohUrls(const std::string& countryCode);
   // The client / provider transport policy: the device's when there is a
   // session (offline the DeviceRemote answers with the pending or last known
   // policy), else the app LocalState mirror (see ApplyTransportSettings), else

@@ -4248,6 +4248,56 @@ std::optional<std::string> SdkHost::ValidateVlessSettings(const urnet::VlessSett
   return std::nullopt;
 }
 
+// ---- bootstrap DNS-over-HTTPS servers ---------------------------------------
+//
+// Nothing here logs the servers: which resolver a user can reach says where
+// they are.
+
+std::optional<std::vector<std::string>> SdkHost::CurrentControlDohUrls() {
+  std::scoped_lock lock(mutex_);
+  if (!networkSpace_) return std::nullopt;
+  try {
+    return networkSpace_->getControlDohUrls().value_or(urnet::StringList{});
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: get control doh urls failed: {}", e.what());
+  } catch (...) {
+    LogWarn("sdkhost: get control doh urls failed");
+  }
+  return std::nullopt;
+}
+
+std::optional<std::string> SdkHost::SetControlDohUrls(const std::vector<std::string>& urls) {
+  std::scoped_lock lock(mutex_);
+  if (!networkSpace_) return std::nullopt;
+  try {
+    // Through the space's own setter, not SetNetExtender's write of the values
+    // json: the setter validates each line (an https url on an ip literal),
+    // drops repeats, normalizes and answers the error id, which a whole-values
+    // write would skip. It applies in place (network_space.go
+    // updateInPlaceValues): the strategy's DoH cache is swapped and this handle
+    // stays the same space, so there is nothing to re-take.
+    std::string errorId = networkSpace_->setControlDohUrls(urnet::StringList(urls));
+    if (errorId.empty()) LogInfo("sdkhost: bootstrap doh servers saved");
+    return errorId;
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: set control doh urls failed: {}", e.what());
+  } catch (...) {
+    LogWarn("sdkhost: set control doh urls failed");
+  }
+  return std::nullopt;
+}
+
+std::vector<std::string> SdkHost::RegionalControlDohUrls(const std::string& countryCode) {
+  try {
+    return urnet::regionalControlDohUrls(countryCode).value_or(urnet::StringList{});
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: regional control doh urls failed: {}", e.what());
+  } catch (...) {
+    LogWarn("sdkhost: regional control doh urls failed");
+  }
+  return {};
+}
+
 std::optional<urnet::TransportSettings> SdkHost::CurrentTransportSettings(
     TransportSettingsKind kind) {
   try {

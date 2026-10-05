@@ -1268,6 +1268,155 @@ void StatsSectionsTests() {
   }
 }
 
+// ---- ExtenderPresentation.h: the bootstrap DNS-over-HTTPS servers ---------------
+
+// The sdk's China preset (connect RegionalControlDohUrls("cn")), as the box
+// shows it after "Use China resolvers".
+const std::vector<std::string> kChinaServers = {
+    "https://223.5.5.5/dns-query",
+    "https://223.6.6.6/dns-query",
+    "https://1.12.12.12/dns-query",
+    "https://120.53.53.53/dns-query",
+};
+
+void ControlDohTests() {
+  {
+    TEST_CASE("theBoxSplitsOnLineBreaksOnly");
+    const std::string_view typed = "https://223.5.5.5/q\r\n  https://1.12.12.12/q \rhttps://1.2.3.4/a,b\n\n";
+    const auto lines = ParseControlDohLines(typed);
+    CheckEq(3, static_cast<long long>(lines.size()), "three servers");
+    if (lines.size() == 3) {
+      CheckEq("https://223.5.5.5/q", lines[0], "first, past its CRLF");
+      CheckEq("https://1.12.12.12/q", lines[1], "second, trimmed, ended by a bare CR");
+      CheckEq("https://1.2.3.4/a,b", lines[2],
+              "a comma is part of a url, never a separator as in the hosts box");
+    }
+  }
+  {
+    TEST_CASE("theOrderAndTheRepeatsAreTheSdks");
+    const auto lines = ParseControlDohLines(
+        "https://223.6.6.6/dns-query\nhttps://223.5.5.5/dns-query\nhttps://223.6.6.6/dns-query");
+    Check(lines == std::vector<std::string>{"https://223.6.6.6/dns-query",
+                                            "https://223.5.5.5/dns-query",
+                                            "https://223.6.6.6/dns-query"},
+          "in the order typed, with the repeat left for the sdk to drop");
+  }
+  {
+    TEST_CASE("anEmptyBoxIsTheBuiltInServersAlone");
+    Check(ParseControlDohLines("").empty(), "nothing typed");
+    Check(ParseControlDohLines(" \r\n\t\n\r").empty(), "nothing but whitespace and line breaks");
+  }
+  {
+    TEST_CASE("theBoxShowsOneServerPerLine");
+    CheckEq(R"(https://223.5.5.5/dns-query
+https://223.6.6.6/dns-query
+https://1.12.12.12/dns-query
+https://120.53.53.53/dns-query)",
+            ControlDohText(kChinaServers), "the preset, one per line, in the sdk's order");
+    Check(ParseControlDohLines(ControlDohText(kChinaServers)) == kChinaServers,
+          "what the box shows is what a save sends back");
+    CheckEq("", ControlDohText({}), "no servers is an empty box, which means the built-in ones");
+  }
+  {
+    TEST_CASE("everySdkErrorIdIsItsOwnStoreKey");
+    // the sdk's literal ids (sdk control_doh_ui.go ControlDohError*)
+    CheckEq("control_doh_error_url_invalid", kControlDohErrorUrlInvalid, "url invalid");
+    CheckEq("control_doh_error_https_required", kControlDohErrorHttpsRequired, "https required");
+    CheckEq("control_doh_error_ip_required", kControlDohErrorIpRequired, "ip required");
+    CheckEq("control_doh_error_too_many", kControlDohErrorTooMany, "too many");
+    for (const char* id : kControlDohErrorIds) {
+      CheckEq(id, ControlDohErrorKey(id), std::string(id) + " is its own key");
+      Check(EnglishStore().count(id) == 1, std::string("the store carries ") + id);
+    }
+  }
+  {
+    TEST_CASE("anyOtherIdIsSomethingWentWrong");
+    // Loc() of a key the store does not carry shows the key itself, and none
+    // of these is about the url the user typed
+    CheckEq("internal_error", kSdkErrorIdInternal, "the sdk's id for a call that could not run");
+    CheckEq("something_went_wrong", ControlDohErrorKey(kSdkErrorIdInternal),
+            "the call could not run (urnet::ErrorIdInternal)");
+    CheckEq("something_went_wrong", ControlDohErrorKey("control_doh_error_from_a_newer_sdk"),
+            "a newer sdk's id");
+    CheckEq("something_went_wrong", ControlDohErrorKey("vless_error_link_invalid"),
+            "another feature's id");
+    CheckEq("something_went_wrong", ControlDohErrorKey(""), "no id at all");
+    Check(EnglishStore().count("something_went_wrong") == 1,
+          "the store carries something_went_wrong");
+  }
+  {
+    TEST_CASE("onlyAnEmptyAnswerIsASave");
+    const auto saved = ControlDohSaveOutcomeFor("");
+    Check(saved.saved, "\"\" is saved");
+    CheckEq("control_doh_urls_saved", saved.messageKey, "with the saved line");
+    Check(saved.nextConnectNote, "and the next-connect note: the service imports the space later");
+    for (const char* id : {kSdkErrorIdInternal, "control_doh_error_from_a_newer_sdk",
+                           kControlDohErrorIpRequired, kControlDohErrorTooMany}) {
+      const auto refused = ControlDohSaveOutcomeFor(id);
+      Check(!refused.saved, std::string(id) + " is not a save");
+      Check(!refused.nextConnectNote, std::string(id) + " promises nothing for the next connect");
+      CheckEq(ControlDohErrorKey(id), refused.messageKey, std::string(id) + " says its own message");
+    }
+    CheckEq("something_went_wrong", ControlDohSaveOutcomeFor(kSdkErrorIdInternal).messageKey,
+            "a save that could not run is something went wrong, never saved");
+  }
+  {
+    TEST_CASE("theStoreHasEveryKeyTheBlockShows");
+    for (const char* key :
+         {"control_doh_urls", "control_doh_urls_description", "control_doh_urls_hint",
+          "control_doh_use_china", "control_doh_use_china_hint", "control_doh_urls_reset",
+          "control_doh_urls_saved", "control_doh_urls_next_connect", "save"}) {
+      const auto found = EnglishStore().find(key);
+      Check(found != EnglishStore().end(), std::string("the store carries ") + key);
+      if (found == EnglishStore().end()) continue;
+      Check(found->second.find('{') == std::string::npos,
+            std::string(key) + " is whole text, with no placeholder");
+    }
+    const auto line = EnglishStore().find("import_extenders_control_doh_urls");
+    Check(line != EnglishStore().end(), "the store carries import_extenders_control_doh_urls");
+    if (line != EnglishStore().end()) {
+      const std::size_t first = line->second.find("{}");
+      Check(first != std::string::npos && line->second.find("{}", first + 2) == std::string::npos,
+            "import_extenders_control_doh_urls holds exactly one {}");
+    }
+  }
+  {
+    TEST_CASE("aSettingsBlockWithServersNamesThemBeforeTheToggle");
+    auto decoded = GoodDecode();
+    decoded.hasSettings = true;
+    decoded.settingsHost = "bringyour.com";
+    decoded.controlDohUrls = {"https://223.5.5.5/dns-query", "https://1.12.12.12/dns-query"};
+    const std::string servers = "https://223.5.5.5/dns-query, https://1.12.12.12/dns-query";
+    for (const bool useSettings : {false, true}) {
+      const auto decision = DecideExtenderImport(decoded, useSettings);
+      CheckEq(servers, decision.controlDohUrlsArg,
+              std::string("the servers, joined, with the toggle ") + (useSettings ? "on" : "off"));
+      Check(decision.canImport, "and the import itself is unchanged");
+    }
+    const std::string shown = FilledFor("import_extenders_control_doh_urls",
+                                        DecideExtenderImport(decoded, true).controlDohUrlsArg);
+    Check(shown.find("They will see URnetwork's server lookups") != std::string::npos &&
+              servers.size() < shown.size() &&
+              shown.compare(shown.size() - servers.size(), servers.size(), servers) == 0,
+          "the line says who will see the lookups and names them: " + shown);
+  }
+  {
+    TEST_CASE("noServersInTheCodeSaysNothing");
+    auto decoded = GoodDecode();
+    decoded.hasSettings = true;
+    CheckEq("", DecideExtenderImport(decoded, true).controlDohUrlsArg,
+            "a block that names none leaves the importer's own servers alone");
+    auto unsettled = GoodDecode();
+    unsettled.controlDohUrls = kChinaServers;
+    CheckEq("", DecideExtenderImport(unsettled, true).controlDohUrlsArg,
+            "servers ride only in a settings block, and only it can apply them");
+    ExtenderShareDecodeView bad;
+    bad.hasSettings = true;
+    bad.controlDohUrls = kChinaServers;
+    CheckEq("", DecideExtenderImport(bad, true).controlDohUrlsArg, "a failed decode names nothing");
+  }
+}
+
 }  // namespace
 
 int main() {
@@ -1283,6 +1432,8 @@ int main() {
   PanelModelTests();
   std::cout << "extender settings form\n";
   SettingsFormTests();
+  std::cout << "bootstrap DNS-over-HTTPS servers\n";
+  ControlDohTests();
   std::cout << "share payload\n";
   ShareTests();
   std::cout << "share QR layout\n";

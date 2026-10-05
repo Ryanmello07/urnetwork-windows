@@ -20,6 +20,7 @@
 #include <winrt/Microsoft.UI.Xaml.Input.h>
 
 #include "AuthSheets.h"
+#include "ControlDohSettings.h"
 #include "LoginCarousel.h"
 #include "NetworkNameCheck.h"
 #include "SdkHost.h"
@@ -260,6 +261,7 @@ class LoginPage {
   std::shared_ptr<urnw::SeedphraseDisplaySheet> seedphraseSheet_;
   std::shared_ptr<urnw::NetworkServerSheet> networkServerSheet_;
   std::shared_ptr<urnw::VlessSheet> vlessSheet_;
+  std::shared_ptr<urnw::ControlDohSheet> controlDohSheet_;
   std::shared_ptr<urnw::GuestConversionSheet> guestConversionSheet_;
   // "Seedphrase copied" / "Referral link copied" acknowledgements
   std::unique_ptr<urnw::kit::Snackbar> snackbar_;

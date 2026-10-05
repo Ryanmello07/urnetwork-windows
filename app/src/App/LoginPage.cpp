@@ -1462,11 +1462,13 @@ winrt::fire_and_forget LoginPage::OnChangeNetworkServer(IInspectable const&,
   auto self = w_.get_strong();
   w_.SetSheetOpen(true);
   bool openVless = false;
+  bool openControlDoh = false;
   try {
     networkServerSheet_ =
         urnw::NetworkServerSheet::Create(self->Content().XamlRoot(), Sdk());
     co_await networkServerSheet_->Dialog().ShowAsync();
     openVless = networkServerSheet_->VlessRequested();
+    openControlDoh = networkServerSheet_->ControlDohRequested();
   } catch (winrt::hresult_error const& e) {
     urnw::LogError("network server sheet: {} (0x{:08x})",
                    urnw::Narrow(std::wstring{e.message()}),
@@ -1489,6 +1491,20 @@ winrt::fire_and_forget LoginPage::OnChangeNetworkServer(IInspectable const&,
       urnw::LogError("vless sheet: {}", e.what());
     }
     vlessSheet_.reset();
+  }
+  // Its bootstrap DNS-over-HTTPS servers button, the same way: a sign-in on a
+  // network that blocks the built-in servers needs these saved first.
+  if (openControlDoh) {
+    try {
+      controlDohSheet_ = urnw::ControlDohSheet::Create(self->Content().XamlRoot(), Sdk());
+      co_await controlDohSheet_->Dialog().ShowAsync();
+    } catch (winrt::hresult_error const& e) {
+      urnw::LogError("control doh sheet: {} (0x{:08x})", urnw::Narrow(std::wstring{e.message()}),
+                     static_cast<uint32_t>(e.code()));
+    } catch (std::exception const& e) {
+      urnw::LogError("control doh sheet: {}", e.what());
+    }
+    controlDohSheet_.reset();
   }
   w_.SetSheetOpen(false);
   // A switch re-derives the Api and the LocalState, so the flow starts over on

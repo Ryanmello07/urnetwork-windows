@@ -84,6 +84,8 @@ class NetworkServerSheet : public std::enable_shared_from_this<NetworkServerShee
   winrt::Microsoft::UI::Xaml::Controls::ContentDialog Dialog() const { return dialog_; }
   // the sheet closed through its VLESS button
   bool VlessRequested() const { return vlessRequested_; }
+  // the sheet closed through its bootstrap DNS-over-HTTPS servers button
+  bool ControlDohRequested() const { return controlDohRequested_; }
 
  private:
   explicit NetworkServerSheet(SdkHost& sdk) : sdk_(sdk) {}
@@ -101,6 +103,7 @@ class NetworkServerSheet : public std::enable_shared_from_this<NetworkServerShee
   SdkHost& sdk_;
   SdkHost::NetworkServer current_;
   bool vlessRequested_ = false;
+  bool controlDohRequested_ = false;
   winrt::Microsoft::UI::Xaml::Controls::ContentDialog dialog_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::TextBox hostBox_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::TextBox apiBox_{nullptr};

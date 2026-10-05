@@ -573,8 +573,9 @@ void AccountPage::RefreshResetRateLimit() {
 // dns name, the gossip url and the manual host list -- with the derived default
 // as each empty field's placeholder, because an empty field MEANS the default
 // and a box pre-filled with it would turn every save into an explicit override.
-// Then the legacy private extender behind an Advanced row, and the two buttons
-// that open the share and import sheets.
+// Then the bootstrap DNS-over-HTTPS servers (ControlDohSettings.h), the legacy
+// private extender behind an Advanced row, and the two buttons that open the
+// share and import sheets.
 //
 // Everything the form DECIDES is ExtenderPresentation.h, which is pure and
 // tested off-Windows (tools/extender-tests.cpp); what is here is the building
@@ -711,6 +712,14 @@ void AccountPage::BuildExtenderPane() {
     extenderStatus_ = AddNoteRow(host, {}, row);
   }
 
+  // ---- the bootstrap DNS-over-HTTPS servers ----------------------------------
+  // Its own group under the extender settings, with its own Save and verdict:
+  // the block writes the network space through SdkHost, not through the view
+  // controller, so it works with or without a session (ControlDohSettings.h).
+  header("control_doh_urls");
+  controlDoh_ = ControlDohBlock::Create(Sdk());
+  host.Children().Append(controlDoh_->Root());
+
   // ---- advanced: the legacy private extender -------------------------------
   // A disclosure row rather than a WinUI Expander: the pane's vocabulary is
   // rows with a fixed height and a hairline, and an Expander would be the only
@@ -759,10 +768,13 @@ void AccountPage::ApplyExtenderStrings() {
     Automation::AutomationProperties::SetName(button, Loc(key));
   }
   Automation::AutomationProperties::SetName(advancedButton_, Loc("advanced"));
+  if (controlDoh_) controlDoh_->ApplyStrings();
 }
 
 winrt::fire_and_forget AccountPage::LoadExtenderSettings() {
   BuildExtenderPane();
+  // The space's own value: read whether or not there is a controller below.
+  controlDoh_->Load();
   auto self = w_.get_strong();
   auto weak = w_.get_weak();
   auto queue = w_.DispatcherQueue();

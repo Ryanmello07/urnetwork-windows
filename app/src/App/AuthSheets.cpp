@@ -505,6 +505,23 @@ void NetworkServerSheet::Build(XamlRoot const& root) {
   });
   content.Children().Append(vless);
 
+  // The active space's bootstrap DNS-over-HTTPS servers, the block Account >
+  // Extenders shows. On a network that blocks the built-in DoH servers a fresh
+  // install cannot resolve the api to sign in, so it needs this BEFORE sign-in.
+  // Like VLESS it edits the space in force now, in its own sheet once this one
+  // closes.
+  Button controlDoh;
+  controlDoh.Content(LocBox("control_doh_urls"));
+  controlDoh.HorizontalAlignment(HorizontalAlignment::Stretch);
+  controlDoh.IsEnabled(current_.managerAvailable);
+  controlDoh.Click([weak = weak_from_this()](auto const&, auto const&) {
+    if (auto self = weak.lock()) {
+      self->controlDohRequested_ = true;
+      self->dialog_.Hide();
+    }
+  });
+  content.Children().Append(controlDoh);
+
   dialog_.Content(content);
   ApplyDerivedPlaceholders();
   UpdateInsecureWarning();

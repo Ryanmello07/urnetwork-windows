@@ -317,6 +317,9 @@
     <ClCompile Include="ExtenderPresentation.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
     <ClCompile Include="ExtenderPanel.cpp" />
     <ClCompile Include="ExtenderSheets.cpp" />
+    <!-- The bootstrap DNS-over-HTTPS servers block (Account > Extenders and the
+         login screen's network sheet); its decisions are ExtenderPresentation. -->
+    <ClCompile Include="ControlDohSettings.cpp" />
     <!-- The VLESS settings sheet's decisions (field visibility, the form <->
          settings mapping, error keys, picker options, the reading of a space's
          stored values) are WinRT-free (no pch) so
@@ -421,6 +424,7 @@
     <ClInclude Include="ExtenderPresentation.h" />
     <ClInclude Include="ExtenderPanel.h" />
     <ClInclude Include="ExtenderSheets.h" />
+    <ClInclude Include="ControlDohSettings.h" />
     <ClInclude Include="VlessPresentation.h" />
     <ClInclude Include="VlessSheet.h" />
     <ClInclude Include="ConnectorGlyph.h" />

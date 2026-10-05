@@ -1,9 +1,10 @@
 // Everything the extender surfaces decide BEFORE they touch a XAML object
 // (connect/EXTENDER.md K4, K6, K7, N7, O8): the gossip status dot's colour and
 // word, the panel's "N of M" and event rate, the settings form's text and
-// placeholders, the share screen's QR placement, whether an import may
-// proceed, the provider extender row's dot, text and switch, and which of the
-// Earnings page's provider and extender statistics sections show.
+// placeholders, the bootstrap DNS-over-HTTPS servers box and its messages, the
+// share screen's QR placement, whether an import may proceed, the provider
+// extender row's dot, text and switch, and which of the Earnings page's
+// provider and extender statistics sections show.
 //
 // It is all here, and it is all pure, for the reason IpFamilyStatus.h gives:
 // the windows solution has no test project and a WinUI 3 app cannot even be
@@ -153,6 +154,67 @@ ExtenderSettingsForm ExtenderSettingsFormFor(const ExtenderSettingsView& setting
 // policy, this owns only the typing.
 std::vector<std::string> ParseExtenderHostLines(std::string_view text);
 
+// ---- the bootstrap DNS-over-HTTPS servers (sdk control_doh_ui.go) -----------
+//
+// `https://<ip literal>/<path>` servers the space's own names (api, connect,
+// extender) are looked up through ahead of the built-in ones, for networks that
+// block those. They are a network-space value, so they are read and saved
+// through SdkHost against the app's own space, with or without a session.
+
+// The SDK's error ids (urnet::ControlDohError*), mirrored so a build that has
+// not seen the SDK header still agrees with it. Each IS the store key of its
+// message, the vless_error_* pattern.
+inline constexpr const char* kControlDohErrorUrlInvalid = "control_doh_error_url_invalid";
+inline constexpr const char* kControlDohErrorHttpsRequired = "control_doh_error_https_required";
+inline constexpr const char* kControlDohErrorIpRequired = "control_doh_error_ip_required";
+inline constexpr const char* kControlDohErrorTooMany = "control_doh_error_too_many";
+
+inline constexpr const char* kControlDohErrorIds[] = {
+    kControlDohErrorUrlInvalid,
+    kControlDohErrorHttpsRequired,
+    kControlDohErrorIpRequired,
+    kControlDohErrorTooMany,
+};
+
+// The id an sdk error-id function answers when the call could not run at all
+// (urnet::ErrorIdInternal, URNET_ERROR_ID_INTERNAL: a handle that did not
+// resolve, json that did not decode). It is not a store key: it reads as
+// something_went_wrong, like any id this build does not know.
+inline constexpr const char* kSdkErrorIdInternal = "internal_error";
+
+// The country whose preset "Use China resolvers" asks the SDK for
+// (urnet::regionalControlDohUrls), the one source of the preset's servers.
+inline constexpr const char* kControlDohChinaCountryCode = "cn";
+
+// The servers box back into the list setControlDohUrls takes: split on line
+// breaks (\n and \r), trimmed, blank lines dropped, in order. NOT on commas, as
+// the hosts box does: a url may carry one in its path, and every platform
+// splits this box the same way. Repeats are kept; the SDK drops them and
+// normalizes the rest.
+std::vector<std::string> ParseControlDohLines(std::string_view text);
+
+// The servers as the box shows them: one per line.
+std::string ControlDohText(const std::vector<std::string>& urls);
+
+// The store key for an error id from setControlDohUrls: the id itself for the
+// four the sdk names, and something_went_wrong for anything else -- an id this
+// build does not know (a newer SDK) and kSdkErrorIdInternal alike -- never the
+// bare id on screen.
+const char* ControlDohErrorKey(std::string_view errorId);
+
+// What the block says for the sdk's answer to setControlDohUrls. Only "" is
+// saved, with the next-connect note (the service imports the space at its next
+// StartTunnel); any other answer saved nothing, and its message is
+// ControlDohErrorKey's.
+struct ControlDohSaveOutcome {
+  bool saved = false;
+  // a store key, never an sdk id
+  const char* messageKey = "";
+  bool nextConnectNote = false;
+};
+
+ControlDohSaveOutcome ControlDohSaveOutcomeFor(std::string_view errorId);
+
 // ---- share (K7) -------------------------------------------------------------
 
 inline constexpr const char* kExtenderSharePrefix = "ur-ext:1:";
@@ -232,6 +294,9 @@ struct ExtenderShareDecodeView {
   std::int64_t count = 0;
   bool hasSettings = false;
   std::string settingsHost;
+  // the bootstrap DNS-over-HTTPS servers the settings block names, v4 then v6;
+  // empty when it names none
+  std::vector<std::string> controlDohUrls;
 };
 
 // What the import sheet may do with a decoded payload and the current state of
@@ -252,6 +317,12 @@ struct ExtenderImportDecision {
   std::string messageArg;
   // the argument of `import_extenders_confirm_settings`
   std::string confirmArg;
+  // the argument of `import_extenders_control_doh_urls`: the bootstrap
+  // DNS-over-HTTPS servers the settings block names, joined with ", ". Empty,
+  // and the line hidden, when the code carries no settings block or its block
+  // names none. The servers are taken only with the settings, and saying so
+  // before the toggle is the point: they will see URnetwork's lookups.
+  std::string controlDohUrlsArg;
 };
 
 // K7: "An import whose network host differs from the space's is refused unless

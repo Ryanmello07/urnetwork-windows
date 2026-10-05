@@ -497,6 +497,10 @@ void ExtenderImportSheet::Build(XamlRoot const& root) {
   });
   content.Children().Append(settingsToggle_);
 
+  controlDohText_ = MakeText({}, 12, colors::MutedBrush());
+  controlDohText_.Visibility(Visibility::Collapsed);
+  content.Children().Append(controlDohText_);
+
   importButton_ = Button();
   importButton_.Content(winrt::box_value(Loc("import_extenders")));
   importButton_.Style(Lookup(L"UrPrimaryButtonStyle"));
@@ -613,6 +617,7 @@ void ExtenderImportSheet::Decode(std::string const& text) {
       decoded_.count = result->Count;
       decoded_.hasSettings = result->HasSettings;
       decoded_.settingsHost = result->SettingsHost;
+      if (result->ControlDohUrls) decoded_.controlDohUrls = *result->ControlDohUrls;
     }
   } catch (const std::exception& e) {
     LogWarn("extender: decode share failed: {}", e.what());
@@ -636,6 +641,17 @@ void ExtenderImportSheet::ApplyDecision() {
 
   settingsToggle_.Visibility(decision.showSettingsToggle ? Visibility::Visible
                                                          : Visibility::Collapsed);
+
+  // The servers the settings would set see URnetwork's lookups, so they are
+  // named beside the toggle, before it is turned on. A code whose settings
+  // name none leaves this device's own servers alone and says nothing.
+  if (haveText && !decision.controlDohUrlsArg.empty()) {
+    controlDohText_.Text(hstring{urnw::Format("import_extenders_control_doh_urls",
+                                              urnw::Widen(decision.controlDohUrlsArg))});
+    controlDohText_.Visibility(Visibility::Visible);
+  } else {
+    controlDohText_.Visibility(Visibility::Collapsed);
+  }
 
   if (haveText && decision.showForeignHost) {
     foreignText_.Text(hstring{urnw::Format("import_extenders_foreign_host",
