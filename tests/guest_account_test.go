@@ -307,3 +307,64 @@ func TestGuestPurchaseContinuesAfterConversion(t *testing.T) {
 		t.Error("OpenGuestConversion: does not report the close")
 	}
 }
+
+// The server refuses a payment sheet or checkout session for a legacy guest
+// network with error.code guest_sign_in_required (server refuseGuestPurchase)
+// when the app had not read the guest from the balance yet. The upgrade sheet
+// does not fall through to the next checkout stage or show the server's
+// sentence: it closes, and its opener sends the guest to the conversion, then
+// back to the checkout once a sign-in is added.
+func TestGuestRefusedCheckoutOpensTheConversion(t *testing.T) {
+	root := repositoryRoot(t)
+	appDir := filepath.Join(root, "app", "src", "App")
+	read := func(name string) string {
+		source, err := os.ReadFile(filepath.Join(appDir, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(source)
+	}
+
+	sheets := read("BalanceSheets.cpp")
+	for _, signature := range []string{
+		"void UpgradeSheet::RequestPaymentSheet(",
+		"void UpgradeSheet::RequestSession(",
+	} {
+		body := functionBody(sheets, signature)
+		mapped := strings.Index(body, "PurchaseRefusalFor(result->error->code.value_or(std::string()))")
+		refused := strings.Index(body, "self->RefuseForGuest();")
+		if mapped < 0 || refused < 0 {
+			t.Errorf("%s does not map the refusal code to RefuseForGuest", signature)
+			continue
+		}
+		// before the fallback to the next stage and before any error line
+		for _, after := range []string{"self->RequestSession(", "self->ShowCheckoutError(", "self->OpenPaySheet(", "self->OpenEmbedded("} {
+			if at := strings.Index(body, after); at >= 0 && at < refused {
+				t.Errorf("%s: %s runs before the guest refusal", signature, after)
+			}
+		}
+	}
+	refuse := functionBody(sheets, "void UpgradeSheet::RefuseForGuest(")
+	for _, want := range []string{"guestSignInRequired_ = true;", "dialog_.Hide();"} {
+		if !strings.Contains(refuse, want) {
+			t.Errorf("RefuseForGuest: missing %s", want)
+		}
+	}
+	if strings.Contains(refuse, "ShowCheckoutError") {
+		t.Error("RefuseForGuest shows an error line")
+	}
+
+	window := read("MainWindow.xaml.cpp")
+	for _, signature := range []string{
+		"winrt::fire_and_forget MainWindow::ShowUpgradeSheet(",
+		"winrt::fire_and_forget MainWindow::ShowUpgradeCheckout(",
+	} {
+		body := functionBody(window, signature)
+		asked := strings.Index(body, "guestSignInRequired = self->upgradeSheet_->GuestSignInRequired();")
+		diverted := strings.LastIndex(body, "self->DivertGuestToConversion(")
+		closed := strings.Index(body, "self->sheetOpen_ = false;")
+		if asked < 0 || diverted < 0 || closed < 0 || diverted < closed {
+			t.Errorf("%s does not divert to the conversion once the refused sheet is gone", signature)
+		}
+	}
+}

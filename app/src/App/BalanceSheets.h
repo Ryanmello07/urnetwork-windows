@@ -147,6 +147,11 @@ class UpgradeSheet : public std::enable_shared_from_this<UpgradeSheet> {
   // refresh) flips it to success too.
   void OnBalance(BalanceSnapshot const& snapshot, BalancePollState const& poll);
 
+  // The server refused the checkout because the network is a legacy guest
+  // (guest_sign_in_required): the sheet closed itself, and its opener sends
+  // the guest to the conversion once the dialog is gone.
+  bool GuestSignInRequired() const { return guestSignInRequired_; }
+
  private:
   UpgradeSheet(SdkHost& sdk, SubscriptionBalanceStore& balance)
       : sdk_(sdk), balance_(balance) {}
@@ -189,6 +194,9 @@ class UpgradeSheet : public std::enable_shared_from_this<UpgradeSheet> {
   void TeardownWebView();
   void ShowPage(Page page);
   void ShowCheckoutError(winrt::hstring const& message);
+  // The refusal for a guest network (PurchaseRefusalFor): no fallback, no
+  // error line; the sheet hides and GuestSignInRequired() says why.
+  void RefuseForGuest();
 
   SdkHost& sdk_;
   SubscriptionBalanceStore& balance_;
@@ -222,6 +230,7 @@ class UpgradeSheet : public std::enable_shared_from_this<UpgradeSheet> {
   Page page_ = Page::Products;
   bool checkingOut_ = false;
   bool closed_ = false;  // the dialog was dismissed; drop in-flight checkout legs
+  bool guestSignInRequired_ = false;  // RefuseForGuest closed the sheet
   // embedded-checkout attempt state (linux UpgradeSheet parity)
   bool checkoutPageLoaded_ = false;   // the ur.io page rendered at least once
   bool hostedFallbackTried_ = false;  // one embedded→hosted rescue per attempt
