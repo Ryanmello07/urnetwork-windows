@@ -15,6 +15,7 @@
 #include "Ids.h"
 #include "Localization.h"
 #include "PageContext.h"
+#include "ReferralShare.h"
 #include "Log.h"
 #include "Strings.h"
 #include "UrColors.h"
@@ -615,19 +616,22 @@ void ShowAccountMenu(FrameworkElement const& anchor, SdkHost& sdk,
     // it can reach this menu, would have done on every open.
     if (!sdk.IsLoggedIn()) return;
     sdk.api().getNetworkReferralCode(
-        [onShared, queue](std::optional<urnet::GetNetworkReferralCodeResult> result,
-                          std::optional<std::string>) {
+        [onShared, queue, linkHostName = sdk.linkHostName()](
+            std::optional<urnet::GetNetworkReferralCodeResult> result,
+            std::optional<std::string>) {
           // SDK callback thread: build the message here, but touch the
           // clipboard and the snackbar only on the UI thread.
           std::string code;
           if (result && result->referral_code) code = *result->referral_code;
-          queue.TryEnqueue([onShared, code] {
+          queue.TryEnqueue([onShared, code, linkHostName] {
             // The store's message takes the code; with no code yet there is
             // nothing useful to share, so say nothing rather than share a
             // sentence with a hole in it.
             if (code.empty()) return;
             winrt::Windows::ApplicationModel::DataTransfer::DataPackage package;
-            package.SetText(hstring{urnw::Format("referral_share_message", urnw::Widen(code))});
+            package.SetText(hstring{urnw::ReferralShareText(
+                urnw::Format("referral_share_message", urnw::Widen(code)),
+                urnw::Widen(urnw::ReferralLinkUrl(linkHostName, code)))});
             winrt::Windows::ApplicationModel::DataTransfer::Clipboard::SetContent(package);
             if (onShared) onShared();
           });

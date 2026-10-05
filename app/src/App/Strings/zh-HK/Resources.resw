@@ -3288,6 +3288,10 @@
     <value>傳輸</value>
     <comment>Connect drawer: live transfer timeseries section</comment>
   </data>
+  <data name="site_connect_code_hint" xml:space="preserve">
+    <value>在應用程式中註冊時請輸入此推薦碼。</value>
+    <comment>Referral link page (ur.io/c): under the referral code to copy, on iOS and on Android when the app did not open.</comment>
+  </data>
   <data name="site_connect_ext_fix_title" xml:space="preserve">
     <value>設定擴充功能以進行連接</value>
     <comment>Connect: extension fix alert title</comment>

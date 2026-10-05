@@ -3367,6 +3367,10 @@ maudhui ya dunia</value>
     <value>Uhamishaji</value>
     <comment>Connect drawer: live transfer timeseries section</comment>
   </data>
+  <data name="site_connect_code_hint" xml:space="preserve">
+    <value>Weka msimbo huu unapojisajili kwenye programu.</value>
+    <comment>Referral link page (ur.io/c): under the referral code to copy, on iOS and on Android when the app did not open.</comment>
+  </data>
   <data name="site_connect_ext_fix_title" xml:space="preserve">
     <value>Sanidi kiendelezi ili kuunganisha</value>
     <comment>Connect: extension fix alert title</comment>

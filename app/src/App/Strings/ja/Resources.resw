@@ -3285,6 +3285,10 @@
     <value>転送量</value>
     <comment>Connect drawer: live transfer timeseries section</comment>
   </data>
+  <data name="site_connect_code_hint" xml:space="preserve">
+    <value>アプリで登録するときにこのコードを入力してください。</value>
+    <comment>Referral link page (ur.io/c): under the referral code to copy, on iOS and on Android when the app did not open.</comment>
+  </data>
   <data name="site_connect_ext_fix_title" xml:space="preserve">
     <value>接続するには拡張機能をセットアップしてください</value>
     <comment>Connect: extension fix alert title</comment>

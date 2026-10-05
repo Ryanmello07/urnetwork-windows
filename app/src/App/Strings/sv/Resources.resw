@@ -3368,6 +3368,10 @@ innehåll i världen</value>
     <value>Överföring</value>
     <comment>Connect drawer: live transfer timeseries section</comment>
   </data>
+  <data name="site_connect_code_hint" xml:space="preserve">
+    <value>Ange den här koden när du registrerar dig i appen.</value>
+    <comment>Referral link page (ur.io/c): under the referral code to copy, on iOS and on Android when the app did not open.</comment>
+  </data>
   <data name="site_connect_ext_fix_title" xml:space="preserve">
     <value>Konfigurera tillägget för att ansluta</value>
     <comment>Connect: extension fix alert title</comment>

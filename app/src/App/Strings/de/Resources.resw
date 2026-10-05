@@ -5374,6 +5374,10 @@ der Welt</value>
     <value>Dein Tarif hat sein Limit für gleichzeitige Clients erreicht — Pro erhöht es auf 1.000.</value>
     <comment>Account panel: concurrent-client-limit upgrade prompt</comment>
   </data>
+  <data name="site_connect_code_hint" xml:space="preserve">
+    <value>Gib diesen Code bei der Anmeldung in der App ein.</value>
+    <comment>Referral link page (ur.io/c): under the referral code to copy, on iOS and on Android when the app did not open.</comment>
+  </data>
   <data name="site_connect_ext_fix_title" xml:space="preserve">
     <value>Richte die Erweiterung ein, um dich zu verbinden</value>
     <comment>Connect: extension fix alert title</comment>

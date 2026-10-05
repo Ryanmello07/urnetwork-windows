@@ -8,6 +8,7 @@
 
 #include "Localization.h"
 #include "PageContext.h"
+#include "ReferralShare.h"
 #include "SettingsSheets.h"
 #include "Strings.h"
 #include "SubscriptionBalance.h"
@@ -26,6 +27,7 @@ using ShapeRectangle = winrt::Microsoft::UI::Xaml::Shapes::Rectangle;
 using urnw::pages::Balance;
 using urnw::pages::H;
 using urnw::pages::Loc;
+using urnw::pages::Sdk;
 using urnw::pages::Upper;
 
 namespace urnw {
@@ -270,8 +272,9 @@ void ReferralCard::Apply() {
     share.FontWeight(winrt::Windows::UI::Text::FontWeights::Bold());
     share.Margin(Thickness{0, 6, 0, 0});
     share.Click([codeText, share](auto const&, auto const&) {
-      rows::CopyToClipboard(
-          Narrow(Format("referral_share_message", Widen(codeText))));
+      rows::CopyToClipboard(Narrow(ReferralShareText(
+          Format("referral_share_message", Widen(codeText)),
+          Widen(ReferralLinkUrl(Sdk().linkHostName(), codeText)))));
       share.Content(winrt::box_value(Loc("copied")));
     });
     content.Children().Append(share);
