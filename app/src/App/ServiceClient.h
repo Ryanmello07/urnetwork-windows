@@ -83,6 +83,11 @@ class ServiceClient {
                                       std::string* carrier = nullptr,
                                       int64_t* uploadId = nullptr,
                                       std::string* error = nullptr);
+  // The Extender switch's write while there is no session
+  // (set_provide_extender). True when the service wrote it; false with `error`
+  // for a refusal or a transport failure. Sent only to a service whose
+  // get_provider_stats said it takes it (provide_extender_writable).
+  bool SetProvideExtender(bool on, std::string* error = nullptr);
 
  private:
   proto::TunnelStatus CallStatus(const nlohmann::json& request,

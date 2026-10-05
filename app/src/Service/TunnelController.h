@@ -191,6 +191,15 @@ class TunnelController {
   // ContractViewController, whose getters answer from its own sampled state
   // and never call into the device. `available` is false while none runs.
   proto::ProviderStats ProviderStats();
+  // The Connect page's Extender switch while there is no session
+  // (set_provide_extender). Writes the provider extender setting where
+  // provide::ExtenderSettingTargetFor says: through the provider-only device
+  // (persisted in its space, applied at once, and in the next
+  // get_provider_stats), a session's device that came up meanwhile, or with
+  // neither the space the last device ran in, which the next start reads.
+  // Timed like StartProvider: a bring-up holding the session lock refuses it.
+  // False with `error` when nothing took the write.
+  bool SetProvideExtender(bool on, std::string& error);
 
   // The network country the app read (Common/NetworkCountry.h; open bug P052):
   // the country of the mobile broadband network carrying the default route, ""
@@ -468,6 +477,12 @@ class TunnelController {
   // failure of the extender reading alone leaves the role unreported. Caller
   // holds mutex_.
   void OpenProviderStatsLocked();
+  // Read the provider-only device's extender status and setting again after
+  // set_provide_extender wrote it, into the copies get_provider_stats answers,
+  // so the next answer carries the write rather than waiting for the status
+  // listener's next push. Nothing when the role's reading never opened. SDK
+  // calls; caller holds mutex_.
+  void RefreshProviderExtenderLocked();
   // TELL THE PROVIDER-ONLY DEVICE THE NETWORK MOVED, as the tunnel session's
   // device is told by TunnelWatchdog's sampler, which EgressMonitor feeds. An
   // observe-only EgressMonitor (it binds nothing, so the device's sockets
@@ -568,6 +583,11 @@ class TunnelController {
   // SDK objects. NetworkSpaceManager persists across sessions; the rest are
   // per-session.
   std::optional<urnet::NetworkSpaceManager> spaceManager_;
+  // The key of the space ImportNetworkSpaceLocked imported last: the space the
+  // last device ran in, which spaceManager_ keeps after that device is gone and
+  // the next start of either device imports again. set_provide_extender writes
+  // into it when no device runs. Guarded by mutex_.
+  std::optional<urnet::NetworkSpaceKey> lastSpaceKey_;
   std::optional<urnet::NetworkSpace> networkSpace_;
   std::optional<urnet::DeviceLocal> device_;
   // The provider-only device (StartProvider), its space and the request it was
@@ -616,9 +636,10 @@ class TunnelController {
   // across a call into the device. providerClients_ and providerExtender_ are
   // shared with the peers and extender status listeners, which can still be
   // running after the retire has dropped them. providerExtenderSetting_ is the
-  // provide extender setting, read once when the statistics open: only a
-  // session's device writes it (the app's SdkHost::SetProvideExtender), and
-  // none runs beside this one.
+  // provide extender setting, read when the statistics open and again after
+  // set_provide_extender writes it through this device
+  // (RefreshProviderExtenderLocked); a session's device, the only other
+  // writer, never runs beside this one.
   std::mutex providerStatsMutex_;
   std::optional<urnet::ContractViewController> providerStatsVc_;
   urnet::Sub providerPeersSub_;

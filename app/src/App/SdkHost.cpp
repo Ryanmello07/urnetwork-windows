@@ -3845,6 +3845,7 @@ void SdkHost::ProviderOnlyStatsLoop() {
   std::chrono::steady_clock::time_point nextStatus{};
   for (;;) {
     bool wanted = false;
+    std::optional<bool> extenderWrite;
     {
       std::unique_lock lock(providerOnlyMutex_);
       providerOnlyCv_.wait_for(lock, kProviderOnlyStatsInterval,
@@ -3852,8 +3853,12 @@ void SdkHost::ProviderOnlyStatsLoop() {
       if (providerOnlyStop_) return;
       providerOnlyKick_ = false;
       wanted = providerOnlyStatusWanted_;
+      extenderWrite = std::exchange(providerOnlyExtenderWrite_, std::nullopt);
     }
     try {
+      // The Extender switch's write, outside mutex_ like the read below and
+      // before it, so this pass's answer already carries it.
+      if (extenderWrite) WriteProviderOnlyExtender(*extenderWrite);
       bool presenting = false;
       {
         std::scoped_lock lock(presentationMutex_);
@@ -3942,6 +3947,29 @@ void SdkHost::KickProviderOnlyStats() {
   providerOnlyCv_.notify_all();
 }
 
+void SdkHost::QueueProviderOnlyExtenderWrite(bool on) {
+  {
+    std::scoped_lock lock(providerOnlyMutex_);
+    // a flip that has not gone out yet is replaced by the newer one
+    providerOnlyExtenderWrite_ = on;
+    providerOnlyKick_ = true;
+  }
+  providerOnlyCv_.notify_all();
+}
+
+void SdkHost::WriteProviderOnlyExtender(bool on) {
+  std::string error;
+  const bool written = service_.IsConnected() && service_.SetProvideExtender(on, &error);
+  if (!written) {
+    LogWarn("sdkhost: provide: the service did not write the provide extender setting: {}",
+            error.empty() ? "no control channel" : error);
+  }
+  // Written or refused, the next status replaces the switch's guess. Set only
+  // after the answer, so a status read before the write cannot replace it.
+  std::scoped_lock lock(drawerMutex_);
+  extenderProvideRepublish_ = true;
+}
+
 void SdkHost::ShowProviderOnlyStatsLocked(const proto::ProviderStats& stats) {
   // caller holds mutex_, with no session
   serviceProviderClients_.store(stats.client_count);
@@ -3966,14 +3994,16 @@ void SdkHost::ShowProviderOnlyStatsLocked(const proto::ProviderStats& stats) {
     }
   }
   if (onProviderThroughput_) onProviderThroughput_(std::move(provider));
-  // The extender role (EXTENDER.md N7): the row and the extender plot's gate,
-  // read as a session's listener reads its push, from the status and the
-  // setting the service read off the device. No status (an older service, or
-  // a reading that could not be opened) is the role unsupported: both hidden.
+  // The extender role (EXTENDER.md N7): the rows, the switch and the extender
+  // plot's gate, read as a session's listener reads its push, from the status
+  // and the setting the service read off the device. No status (an older
+  // service, or a reading that could not be opened) is the role unsupported:
+  // all hidden.
   ExtenderProvideStatusView extender = ExtenderProvideStatusViewOf(
       proto::ExtenderProvideStatusOf<urnet::ExtenderProvideStatus>(stats),
       [&stats] { return stats.provide_extender; });
   extender.providerOnly = true;
+  extender.serviceWritable = stats.provide_extender_writable;
   PublishExtenderProvideView(std::move(extender));
 }
 
@@ -4947,7 +4977,22 @@ void SdkHost::SetProvideControlMode(const std::string& mode) {
 
 void SdkHost::SetProvideExtender(bool on) {
   std::scoped_lock lock(mutex_);
-  if (!device_) return;
+  ExtenderProvideStatusView shown;
+  {
+    std::scoped_lock drawerLock(drawerMutex_);
+    shown = lastExtenderProvideStatus_;
+  }
+  switch (ExtenderProvideWriteRouteFor(device_.has_value(), shown)) {
+    case ExtenderProvideWriteRoute::Device:
+      break;
+    case ExtenderProvideWriteRoute::Service:
+      // Not on this (UI) thread: the pipe serializes calls, and this one can
+      // wait behind a start_tunnel.
+      QueueProviderOnlyExtenderWrite(on);
+      return;
+    case ExtenderProvideWriteRoute::None:
+      return;
+  }
   // The device persists it in its space and applies it at once (N4); detached,
   // the DeviceRemote queues it for the next sync, and a device process with no
   // setter drops it rather than replaying it on every reconnect.

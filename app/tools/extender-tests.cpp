@@ -901,11 +901,13 @@ void ProvideRowTests() {
     }
   }
   {
-    TEST_CASE("theProviderOnlyDeviceShowsTheRowWithoutTheSwitch");
+    TEST_CASE("theProviderOnlyDeviceShowsTheSwitchItsServiceWrites");
     // While disconnected the provider is the service's provider-only device.
-    // The Earnings row, which has no switch, shows its status; the Connect
-    // page's row is the switch, which writes through a session's device only,
-    // so it stays hidden for that status (N1: never a dead switch).
+    // The Earnings row, which has no switch, shows its status. The Connect
+    // page's row is the switch: a session's device takes its write over the
+    // device rpc, and with no session the service does (set_provide_extender)
+    // when its answer said so. Over a service that did not, the switch stays
+    // hidden (N1: never a dead switch).
     for (const char* state :
          {kExtenderProvideStateOff, kExtenderProvideStateNotProviding,
           kExtenderProvideStateSettingUp, kExtenderProvideStateActive,
@@ -916,11 +918,17 @@ void ProvideRowTests() {
             std::string("a session's ") + state + " shows both rows");
       ExtenderProvideStatusView providerOnly = session;
       providerOnly.providerOnly = true;
-      const auto model = ExtenderProvideRowModelFor(providerOnly);
-      Check(model.visible, std::string("the provider-only device's ") + state +
+      const auto older = ExtenderProvideRowModelFor(providerOnly);
+      Check(older.visible, std::string("the provider-only device's ") + state +
                                " shows the Earnings row");
-      Check(!model.switchVisible, std::string("the provider-only device's ") + state +
+      Check(!older.switchVisible, std::string("an older service's provider-only ") + state +
                                       " keeps the switch's row hidden");
+      providerOnly.serviceWritable = true;
+      const auto model = ExtenderProvideRowModelFor(providerOnly);
+      Check(model.visible && model.switchVisible,
+            std::string("a provider-only ") + state + " the service writes shows both rows");
+      Check(model.on == providerOnly.provideExtender,
+            std::string("and its switch is that device's setting, ") + state);
       CheckEq(RowText(sessionModel), RowText(model),
               std::string("and reads as a session's ") + state + " does");
       CheckTone(sessionModel.tone, model.tone, std::string("in the same colour, ") + state);
@@ -931,6 +939,10 @@ void ProvideRowTests() {
     }
     Check(!ExtenderProvideRowModelFor(ExtenderProvideStatusView{}).switchVisible,
           "no session and no provider-only device hides the switch's row");
+    ExtenderProvideStatusView writerAlone;
+    writerAlone.serviceWritable = true;
+    Check(!ExtenderProvideRowModelFor(writerAlone).switchVisible,
+          "a writer with no status to show shows no switch");
   }
   {
     TEST_CASE("offAndNotProvidingAreGrey");
@@ -1199,6 +1211,12 @@ void ProvideStatusViewTests() {
     providerOnly.providerOnly = true;
     Check(providerOnly != base, "the provider-only device's reading alone is a change");
     Check(!base.providerOnly, "a status read off a device is a session's unless marked");
+    // ...and so is whether the service takes its write: the switch comes or
+    // goes with it
+    ExtenderProvideStatusView writable = providerOnly;
+    writable.serviceWritable = true;
+    Check(writable != providerOnly, "whether the service writes it alone is a change");
+    Check(!providerOnly.serviceWritable, "a status the service did not mark has no writer");
   }
   {
     TEST_CASE("aHiddenRowReadsNoSetting");
@@ -1276,7 +1294,68 @@ void ProvideGuessTests() {
     const auto guess = ExtenderProvideGuessFor(providerOnly, false, true);
     Check(guess.providerOnly, "a guess over the provider-only device's status stays its");
     Check(!ExtenderProvideRowModelFor(guess).switchVisible,
-          "so the switch's row stays hidden over it");
+          "so the switch's row stays hidden over an older service's");
+    providerOnly.serviceWritable = true;
+    const auto written = ExtenderProvideGuessFor(providerOnly, false, true);
+    Check(written.providerOnly && written.serviceWritable,
+          "a guess over a status the service writes keeps its writer");
+    const auto writtenModel = ExtenderProvideRowModelFor(written);
+    Check(writtenModel.switchVisible && !writtenModel.on,
+          "so the switch just flipped stays shown, in its new position");
+  }
+}
+
+// ---- ExtenderPresentation.h: where the switch's write goes ------------------
+
+void ProvideWriteRouteTests() {
+  const ExtenderProvideStatusView session = ProvideStatus(kExtenderProvideStateActive);
+  ExtenderProvideStatusView older = session;
+  older.providerOnly = true;
+  ExtenderProvideStatusView writable = older;
+  writable.serviceWritable = true;
+  {
+    TEST_CASE("aSessionsDeviceTakesEveryWrite");
+    // whatever was last on screen: the bound device is the one that runs
+    for (const ExtenderProvideStatusView& shown :
+         {session, older, writable, ExtenderProvideStatusView{}}) {
+      Check(ExtenderProvideWriteRouteFor(true, shown) == ExtenderProvideWriteRoute::Device,
+            "with a session the write goes through its device");
+    }
+  }
+  {
+    TEST_CASE("withNoSessionTheServiceTakesTheProviderOnlyDevicesWrite");
+    Check(ExtenderProvideWriteRouteFor(false, writable) == ExtenderProvideWriteRoute::Service,
+          "with no session the provider-only device's write goes to the service");
+  }
+  {
+    TEST_CASE("withNoSessionNothingElseIsWritten");
+    Check(ExtenderProvideWriteRouteFor(false, older) == ExtenderProvideWriteRoute::None,
+          "an older service's provider-only status is never written");
+    Check(ExtenderProvideWriteRouteFor(false, session) == ExtenderProvideWriteRoute::None,
+          "a session's status left over with no session is never written");
+    Check(ExtenderProvideWriteRouteFor(false, ExtenderProvideStatusView{}) ==
+              ExtenderProvideWriteRoute::None,
+          "no status is never written");
+    ExtenderProvideStatusView unsupported = writable;
+    unsupported.supported = false;
+    Check(ExtenderProvideWriteRouteFor(false, unsupported) == ExtenderProvideWriteRoute::None,
+          "an unsupported role is never written");
+  }
+  {
+    TEST_CASE("theServiceIsWrittenExactlyWhereTheSwitchShows");
+    // the switch's visibility and the write's route are one rule: no switch
+    // the user can flip goes unwritten, and nothing hidden is written
+    for (const ExtenderProvideStatusView& shown :
+         {session, older, writable, ExtenderProvideStatusView{}}) {
+      for (bool supported : {false, true}) {
+        ExtenderProvideStatusView view = shown;
+        view.supported = supported;
+        if (!view.providerOnly) continue;
+        Check(ExtenderProvideRowModelFor(view).switchVisible ==
+                  (ExtenderProvideWriteRouteFor(false, view) == ExtenderProvideWriteRoute::Service),
+              "the provider-only switch shows exactly when its write goes to the service");
+      }
+    }
   }
 }
 
@@ -1503,6 +1582,8 @@ int main() {
   ProvideStatusViewTests();
   std::cout << "provider extender switch guess\n";
   ProvideGuessTests();
+  std::cout << "provider extender switch write\n";
+  ProvideWriteRouteTests();
   std::cout << "statistics sections\n";
   StatsSectionsTests();
 

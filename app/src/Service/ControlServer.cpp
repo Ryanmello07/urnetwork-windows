@@ -165,6 +165,16 @@ nlohmann::json ControlServer::Handle(const nlohmann::json& request) {
       // changed, so nothing is pushed.
       reply.ok = true;
       reply.provider_stats = tunnel_.ProviderStats();
+    } else if (type == proto::msg::kSetProvideExtender) {
+      // The Extender switch while disconnected (TunnelController::
+      // SetProvideExtender), on this pipe under its access rule (kPipeSddl)
+      // like every other request. A request without the value throws out of
+      // the get<> as a failed reply. The tunnel status does not change, so
+      // nothing is pushed; the next get_provider_stats carries the setting.
+      proto::SetProvideExtender req = request.get<proto::SetProvideExtender>();
+      std::string error;
+      reply.ok = tunnel_.SetProvideExtender(req.provide_extender, error);
+      reply.error = error;
     } else {
       reply.ok = false;
       reply.error = "unknown request type: " + type;

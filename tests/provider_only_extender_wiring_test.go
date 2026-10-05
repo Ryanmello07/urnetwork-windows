@@ -157,9 +157,9 @@ func TestProviderOnlyExtenderAppWiring(t *testing.T) {
 			"only %d of them", resets, forgets)
 	}
 
-	// The Connect page's row is the switch, which writes through a session's
-	// device only: hidden for the provider-only device's status, and never
-	// written while hidden. The Earnings row has no switch and shows it.
+	// The Connect page's row is the switch: hidden over a provider-only status
+	// the service did not say it writes, and never written while hidden. The
+	// Earnings row has no switch and shows it.
 	connect := stripComments(readAppSource(t, "ConnectPage.cpp"))
 	row := definitionBody(t, "ConnectPage.cpp", connect, "void ConnectPage::ApplyExtenderProvideRow()")
 	provideRequire(t, "ConnectPage::ApplyExtenderProvideRow", row,
@@ -251,16 +251,18 @@ func requireExtenderPresentationFailure(t *testing.T, file string, mutate func(s
 	}
 }
 
-// A switch shown over the provider-only device's status would be a dead switch
-// (N1), and a feed that cannot tell the two devices apart would keep a
-// session's switch hidden after it takes over with the same reading.
-func TestExtenderPresentationRejectsASwitchOverTheProviderOnlyDevice(t *testing.T) {
+// A switch shown over the provider-only device's status from a service that
+// cannot take its write would be a dead switch (N1), and a feed that cannot
+// tell the two devices apart would not republish a session's reading that
+// takes over with the same values.
+func TestExtenderPresentationRejectsASwitchNoServiceWrites(t *testing.T) {
 	requireExtenderPresentationFailure(t, "ExtenderPresentation.cpp", func(source string) string {
-		return strings.Replace(source, "model.switchVisible = view.supported && !view.providerOnly;",
+		return strings.Replace(source,
+			"model.switchVisible = view.supported && (!view.providerOnly || view.serviceWritable);",
 			"model.switchVisible = view.supported;", 1)
 	}, "keeps the switch's row hidden")
 	requireExtenderPresentationFailure(t, "ExtenderPresentation.h", func(source string) string {
-		return strings.Replace(source, " && providerOnly == o.providerOnly;", ";", 1)
+		return strings.Replace(source, " && providerOnly == o.providerOnly &&", " &&", 1)
 	}, "the provider-only device's reading alone is a change")
 	requireExtenderPresentationFailure(t, "ExtenderPresentation.cpp", func(source string) string {
 		return strings.Replace(source, "  guess.providerOnly = current.providerOnly;\n", "", 1)

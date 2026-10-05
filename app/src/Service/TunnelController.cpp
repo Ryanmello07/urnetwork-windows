@@ -195,7 +195,15 @@ urnet::NetworkSpace TunnelController::ImportNetworkSpaceLocked(
     spaceManager_ =
         urnet::newNetworkSpaceManager(Narrow(SdkStorageDir(true).wstring()));
   }
-  return spaceManager_->importNetworkSpaceFromJson(networkSpaceJson);
+  urnet::NetworkSpace space = spaceManager_->importNetworkSpaceFromJson(networkSpaceJson);
+  // Where set_provide_extender writes with no device running. Its own best
+  // effort: a key that cannot be read costs that write, never this start.
+  try {
+    lastSpaceKey_ = space.getKey();
+  } catch (const std::exception&) {
+    lastSpaceKey_.reset();
+  }
+  return space;
 }
 
 urnet::DeviceLocal TunnelController::NewDeviceLocked(const urnet::NetworkSpace& space,
@@ -2024,6 +2032,62 @@ bool TunnelController::StopProvider() {
   return true;
 }
 
+bool TunnelController::SetProvideExtender(bool on, std::string& error) {
+  // Timed, for StartProvider's reason: a wedged bring-up must not hold the
+  // control pipe. The app then shows the setting as it stands.
+  std::unique_lock<std::timed_mutex> lock(mutex_, std::defer_lock);
+  if (!lock.try_lock_for(kStopLockBudget)) {
+    error = "a tunnel operation is in progress";
+    LogWarn("provide: set_provide_extender refused: the session lock was not free "
+            "within {}ms",
+            kStopLockBudget.count());
+    return false;
+  }
+  const provide::ExtenderSettingTarget target = provide::ExtenderSettingTargetFor(
+      providerDevice_ != nullptr, device_.has_value(), spaceManager_ && lastSpaceKey_);
+  try {
+    switch (target) {
+      case provide::ExtenderSettingTarget::ProviderDevice:
+        // Persisted in its space and applied at once: the role starts or stops.
+        providerDevice_->setProvideExtender(on);
+        RefreshProviderExtenderLocked();
+        break;
+      case provide::ExtenderSettingTarget::SessionDevice:
+        // The session's DeviceRemote hears it through its status listener.
+        device_->setProvideExtender(on);
+        break;
+      case provide::ExtenderSettingTarget::NetworkSpace: {
+        // The space spaceManager_ keeps for the last device's key: the next
+        // import of that key reuses it, or replaces it with one that reads the
+        // file this writes.
+        urnet::NetworkSpace space = spaceManager_->getNetworkSpace(lastSpaceKey_);
+        if (!space) {
+          error = "the last device's network space is gone";
+          LogWarn("provide: set_provide_extender refused: {}", error);
+          return false;
+        }
+        space.getAsyncLocalState().getLocalState().setProvideExtender(on);
+        break;
+      }
+      case provide::ExtenderSettingTarget::None:
+        error = "no device has run in this service yet, so there is no network space to keep the "
+                "setting in";
+        LogWarn("provide: set_provide_extender refused: {}", error);
+        return false;
+    }
+  } catch (const std::exception&) {
+    // Named by its target, as StartProvider names its step, without copying an
+    // SDK message into the reply.
+    error = std::string("the provide extender setting could not be written to ") +
+            provide::ToString(target);
+    LogError("provide: stage=set-provide-extender outcome=failed target={}",
+             provide::ToString(target));
+    return false;
+  }
+  LogInfo("provide: provide extender {} ({})", on ? "on" : "off", provide::ToString(target));
+  return true;
+}
+
 void TunnelController::RetireProviderDeviceLocked() {
   if (!providerDevice_ && !providerSpace_) return;
   // The statistics first, under their own lock, so a get_provider_stats served
@@ -2175,9 +2239,11 @@ void TunnelController::OpenProviderStatsLocked() {
   // DeviceRemote reports it: a status listener, subscribed before the first
   // read for the peers listener's reason and holding a share of the reading,
   // never this object, and the setting read beside it. The setting is read
-  // once: only a session's device writes it, and none runs beside this one.
-  // Its own best effort: a failure costs the extender row and plot, which then
-  // read as the role unsupported, and nothing else.
+  // here and again after set_provide_extender writes it through this device
+  // (RefreshProviderExtenderLocked); a session's device, the only other
+  // writer, never runs beside this one. Its own best effort: a failure costs
+  // the extender row, plot and switch, which then read as the role
+  // unsupported, and nothing else.
   auto extender = std::make_shared<LatestExtenderProvideStatus>();
   urnet::Sub extenderSub;
   bool extenderSetting = false;
@@ -2202,6 +2268,28 @@ void TunnelController::OpenProviderStatsLocked() {
   providerExtenderSub_ = std::move(extenderSub);
   providerExtender_ = std::move(extender);
   providerExtenderSetting_ = extenderSetting;
+}
+
+void TunnelController::RefreshProviderExtenderLocked() {
+  // The device derives the status from the setting it now holds (off, or
+  // setting up while it provides), so this reading already shows the write; a
+  // listener push that was in flight is replaced by the next one within its
+  // epoch.
+  std::optional<urnet::ExtenderProvideStatus> status;
+  bool setting = false;
+  try {
+    status = providerDevice_->getExtenderProvideStatus();
+    setting = providerDevice_->getProvideExtender();
+  } catch (const std::exception&) {
+    LogWarn("provide: re-reading the provider-only device's extender role failed; its next "
+            "status push reports it");
+    return;
+  }
+  std::scoped_lock lock(providerStatsMutex_);
+  // a role whose reading never opened is not reported, and stays so
+  if (!providerExtender_) return;
+  providerExtender_->Store(std::move(status));
+  providerExtenderSetting_ = setting;
 }
 
 void TunnelController::WatchProviderNetworkLocked() {
@@ -2285,10 +2373,12 @@ proto::ProviderStats TunnelController::ProviderStats() {
       stats.extender_points = *points;
   });
   // The extender role, as its listener last said: none when its reading could
-  // not be opened, which the app reads as the role unsupported.
+  // not be opened, which the app reads as the role unsupported. Beside it, that
+  // this service takes the switch's write (SetProvideExtender).
   if (providerExtender_) {
     if (auto status = providerExtender_->Load()) stats.extender_provide_status = *status;
     stats.provide_extender = providerExtenderSetting_;
+    stats.provide_extender_writable = true;
   }
   return stats;
 }

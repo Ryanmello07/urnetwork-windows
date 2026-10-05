@@ -85,6 +85,12 @@ namespace urnw::proto {
 //    existed (the DeviceRemote's UploadLogs while a session is bound). Its
 //    Reply::log_upload_* and TunnelStatus::log_upload_* fields read as no
 //    upload from a peer too old to send them.
+//
+//    Nor for set_provide_extender and ProviderStats::provide_extender_writable:
+//    the app sends the verb only to a service whose get_provider_stats said it
+//    takes it, and a service that does not say so reads as no writer, which
+//    keeps the Connect page's Extender switch hidden while disconnected, as
+//    before.
 inline constexpr int kProtocolVersion = 4;
 
 // The first version that understands StartTunnel::mode. Below this, an absent
@@ -108,6 +114,7 @@ inline constexpr const char* kStopProvider = "stop_provider";    // app -> servi
 inline constexpr const char* kGetProviderStats = "get_provider_stats";  // app -> service
 inline constexpr const char* kSetNetworkCountry = "set_network_country";  // app -> service
 inline constexpr const char* kUploadLogs = "upload_logs";        // app -> service
+inline constexpr const char* kSetProvideExtender = "set_provide_extender";  // app -> service
 inline constexpr const char* kReply = "reply";                   // service -> app
 inline constexpr const char* kEvent = "event";                   // service -> app (unsolicited)
 }  // namespace msg
@@ -386,6 +393,19 @@ inline bool LooksLikeFeedbackId(std::string_view id) {
   return true;
 }
 
+// set_provide_extender: the Extender switch while disconnected (EXTENDER.md F3,
+// N7). The setting belongs to the network space (`.provide_extender` in the
+// service's storage), and every device reads it from its space when it starts.
+// A session's DeviceRemote writes it over the device rpc; with no session the
+// service writes it through the device it runs, or with none into the space
+// the last device ran in (provide::ExtenderSettingTargetFor). So a Connect
+// after the change reads it, and so does a provider-only device after a change
+// made while connected. Sent only over a status whose
+// ProviderStats::provide_extender_writable said the service takes it.
+struct SetProvideExtender {
+  bool provide_extender = true;
+};
+
 // ---- reply / state payload ------------------------------------------------
 
 struct TunnelStatus {
@@ -522,7 +542,9 @@ struct TunnelStatus {
 // The extender fields came after the verb, with no protocol bump, by the test
 // kProtocolVersion uses: a service that does not send them leaves no status,
 // which the app reads as the role unsupported and hides the extender row and
-// plot (EXTENDER.md N1), exactly as before they existed.
+// plot (EXTENDER.md N1), exactly as before they existed. So did
+// provide_extender_writable: a service that does not send it reads as one that
+// cannot take the switch's write, and the switch stays hidden over its status.
 struct ProviderStats {
   bool available = false;
   std::string client_id;
@@ -542,6 +564,11 @@ struct ProviderStats {
   // (Device::getProvideExtender).
   nlohmann::json extender_provide_status;
   bool provide_extender = false;
+  // The service takes set_provide_extender for that setting, sent with the
+  // role's reading: the Connect page's Extender switch may show over it. A
+  // service from before the verb never sends it, which the app reads as no
+  // writer and keeps the switch hidden while disconnected (N1), as before.
+  bool provide_extender_writable = false;
 };
 
 struct Reply {
@@ -679,6 +706,21 @@ inline void from_json(const nlohmann::json& j, SetNetworkCountry& v) {
   get("network_country_source", v.network_country_source);
 }
 
+inline void to_json(nlohmann::json& j, const SetProvideExtender& v) {
+  j = {{"provide_extender", v.provide_extender}};
+}
+
+// Strict, unlike the reports: a write whose value did not arrive must not
+// write a default the user never chose. The ControlServer answers the throw
+// as a failed reply.
+inline void from_json(const nlohmann::json& j, SetProvideExtender& v) {
+  auto it = j.find("provide_extender");
+  if (it == j.end() || !it->is_boolean()) {
+    throw std::runtime_error("set_provide_extender requires provide_extender (a boolean)");
+  }
+  v.provide_extender = it->get<bool>();
+}
+
 // "A device built from `a` can keep running for `b`." Everything that goes into
 // constructing the device must match — credentials, identity, space and the
 // provider transport policy; only the provide mode may differ, because the
@@ -781,6 +823,7 @@ inline void to_json(nlohmann::json& j, const ProviderStats& v) {
       {"extender_points", v.extender_points},
       {"extender_provide_status", v.extender_provide_status},
       {"provide_extender", v.provide_extender},
+      {"provide_extender_writable", v.provide_extender_writable},
   };
 }
 
@@ -794,6 +837,7 @@ inline void from_json(const nlohmann::json& j, ProviderStats& v) {
   get("window_seconds", v.window_seconds);
   get("has_provider_stats", v.has_provider_stats);
   get("provide_extender", v.provide_extender);
+  get("provide_extender_writable", v.provide_extender_writable);
   // The sdk's documents are kept only in the shape they have to have: anything
   // else reads as none, never as a throw that loses the counts above.
   if (auto it = j.find("provider_points"); it != j.end() && it->is_array())

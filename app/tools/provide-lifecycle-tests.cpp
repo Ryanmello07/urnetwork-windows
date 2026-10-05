@@ -4,9 +4,10 @@
 // disconnected, Never and unknown modes not at all), the service's refusals
 // for the provider-only device (a tunnel session, the kill switch's armed
 // floor, a device still held by an abandoned teardown, a restart in flight, a
-// mode that does not provide), and the step the app takes for every service
-// state while it holds no session. Run against the SAME header the service and
-// the app compile, on any host with a C++20 compiler.
+// mode that does not provide), the step the app takes for every service state
+// while it holds no session, and where the Extender switch's write goes while
+// disconnected. Run against the SAME header the service and the app compile,
+// on any host with a C++20 compiler.
 //
 //   c++ -std=c++20 -I ../src/Common provide-lifecycle-tests.cpp -o /tmp/provide-lifecycle-tests && /tmp/provide-lifecycle-tests
 //
@@ -232,6 +233,45 @@ void TestDisconnectedStep() {
             "step: a provider running under the armed floor");
 }
 
+// (f) where set_provide_extender writes the setting, for every state the
+// service can be in when it arrives
+void TestExtenderSettingTarget() {
+  struct Row {
+    bool providerDevice, sessionDevice, lastSpace;
+    ExtenderSettingTarget want;
+    const char* what;
+  };
+  const Row rows[] = {
+      {true, false, true, ExtenderSettingTarget::ProviderDevice,
+       "the provider-only device takes the write, applied at once"},
+      {true, false, false, ExtenderSettingTarget::ProviderDevice,
+       "the provider-only device takes it whatever was imported before"},
+      {false, true, true, ExtenderSettingTarget::SessionDevice,
+       "a session's device that came up meanwhile takes it"},
+      {false, true, false, ExtenderSettingTarget::SessionDevice,
+       "a session's device takes it whatever was imported before"},
+      {false, false, true, ExtenderSettingTarget::NetworkSpace,
+       "with no device it goes into the space the next start reads"},
+      {false, false, false, ExtenderSettingTarget::None,
+       "with no device and no space it is refused, never dropped as written"},
+      // never both at once in the service; the provider-only device wins the tie
+      {true, true, true, ExtenderSettingTarget::ProviderDevice,
+       "the provider-only device first"},
+  };
+  for (const Row& row : rows) {
+    const ExtenderSettingTarget got =
+        ExtenderSettingTargetFor(row.providerDevice, row.sessionDevice, row.lastSpace);
+    Check(got == row.want, std::string("extender setting: ") + row.what + ": got " +
+                               ToString(got) + ", want " + ToString(row.want));
+  }
+  for (const ExtenderSettingTarget target :
+       {ExtenderSettingTarget::ProviderDevice, ExtenderSettingTarget::SessionDevice,
+        ExtenderSettingTarget::NetworkSpace, ExtenderSettingTarget::None}) {
+    Check(std::string(ToString(target)).size() > 5,
+          "extender setting: every target names itself for the log");
+  }
+}
+
 }  // namespace
 
 int main() {
@@ -240,6 +280,7 @@ int main() {
   TestProvidesWhileDisconnected();
   TestServiceRefusals();
   TestDisconnectedStep();
+  TestExtenderSettingTarget();
   std::cout << (gCases - gFailures) << "/" << gCases << " provide lifecycle checks passed\n";
   return gFailures == 0 ? 0 : 1;
 }

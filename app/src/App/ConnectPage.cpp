@@ -1618,8 +1618,8 @@ void ConnectPage::ApplyExtenderProvideState(urnw::ExtenderProvideStatusView cons
 void ConnectPage::OnExtenderToggled(IInspectable const&, RoutedEventArgs const&) {
   if (updatingControls_) return;
   // Never written while the row is hidden (N1): a device that reports the role
-  // unsupported may be a daemon that cannot take the setting at all, and the
-  // provider-only device's status has no device to write through.
+  // unsupported may be a daemon that cannot take the setting at all, and an
+  // older service cannot take the provider-only device's.
   if (!urnw::ExtenderProvideRowModelFor(extenderProvideView_).switchVisible) return;
   const bool on = w_.ExtenderToggle().IsOn();
   Sdk().SetProvideExtender(on);
@@ -1634,9 +1634,8 @@ void ConnectPage::ApplyExtenderProvideRow() {
   const urnw::ExtenderProvideRowModel model =
       urnw::ExtenderProvideRowModelFor(extenderProvideView_);
   // Hidden, never disabled (N1): a device without the role shows the provide
-  // group exactly as before, and the description goes with the row. So does
-  // the provider-only device while disconnected, whose setting this switch
-  // cannot write; the Earnings row shows its status.
+  // group exactly as before, and the description goes with the row. So does an
+  // older service's provider-only device, whose status the Earnings row shows.
   const Visibility shown = model.switchVisible ? Visibility::Visible : Visibility::Collapsed;
   w_.ExtenderRow().Visibility(shown);
   w_.ExtenderDescriptionRow().Visibility(shown);
