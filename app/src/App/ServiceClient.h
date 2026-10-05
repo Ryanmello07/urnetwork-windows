@@ -48,10 +48,26 @@ class ServiceClient {
   // and its persistence; the service owns the WFP policy the setting now drives.
   bool SetKillSwitch(bool on);
   bool Logout();
+  // Keep providing while there is no tunnel session (Protocol.h start_provider).
+  // True when the service runs the provider-only device, or kept the one it was
+  // running for an identical request. `status` receives the status the reply
+  // carries, a refusal's included, and stays empty when no status came back;
+  // `error` receives the refusal's reason. Unlike the tunnel calls this never
+  // folds a refusal into status.state: a refused provider says nothing about
+  // the tunnel.
+  bool StartProvider(const proto::StartProvider& request,
+                     std::optional<proto::TunnelStatus>* status = nullptr,
+                     std::string* error = nullptr);
+  // stop_provider: the service retires the provider-only device and touches
+  // nothing else. Same out-params as StartProvider.
+  bool StopProvider(std::optional<proto::TunnelStatus>* status = nullptr,
+                    std::string* error = nullptr);
 
  private:
   proto::TunnelStatus CallStatus(const nlohmann::json& request,
                                  bool* answered = nullptr);
+  bool CallProvider(const nlohmann::json& request, std::optional<proto::TunnelStatus>* status,
+                    std::string* error);
 
   PipeClient pipe_;
   StateHandler onState_;

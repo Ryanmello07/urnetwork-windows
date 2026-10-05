@@ -95,6 +95,31 @@ nlohmann::json ControlServer::Handle(const nlohmann::json& request) {
       reply.ok = true;
       reply.status = tunnel_.Status();
       PushState();
+    } else if (type == proto::msg::kStartProvider) {
+      // KEEP PROVIDING WHILE DISCONNECTED (TunnelController::StartProvider). The
+      // device registers under this machine's persisted identity with the
+      // request's credentials, so the request must name the device exactly —
+      // validated before anything is retired or built, like start_tunnel's
+      // identity above. The mode and the machine's state are the controller's
+      // to judge (provide::ProviderStartRefusal).
+      proto::StartProvider req = request.get<proto::StartProvider>();
+      if (!rpcsession::IsPairableInstanceId(req.instance_id) || req.by_jwt.empty() ||
+          req.network_space_json.empty()) {
+        throw std::runtime_error(
+            "start_provider requires the device's client jwt, its exact instance "
+            "id, and the network space");
+      }
+      std::string error;
+      reply.ok = tunnel_.StartProvider(req, error);
+      reply.error = error;
+      // The status rides on a refusal too, so the app sees what IS running (a
+      // tunnel session, an armed floor) beside the reason.
+      reply.status = tunnel_.Status();
+      PushState();
+    } else if (type == proto::msg::kStopProvider) {
+      reply.ok = tunnel_.StopProvider();
+      reply.status = tunnel_.Status();
+      PushState();
     } else {
       reply.ok = false;
       reply.error = "unknown request type: " + type;

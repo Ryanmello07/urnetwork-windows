@@ -15,6 +15,7 @@
 #include "Ids.h"
 #include "Log.h"
 #include "Paths.h"
+#include "ProvideLifecycle.h"  // the provider-only device's refusals
 #include "StopBudget.h"   // the shutdown budgets and the abandonable teardown
 #include "Strings.h"
 #include "ThreadGuard.h"
@@ -90,6 +91,43 @@ void TunnelController::PersistKeyMaterial(const urnet::DeviceLocalKeyMaterial& k
   WriteFileBytes(storageDir_ / L"client_key_seed.bin", km.getClientKeySeed());
   WriteFileBytes(storageDir_ / L"provide_cert.pem", km.getProvideTlsCertificatePem());
   WriteFileBytes(storageDir_ / L"provide_key.pem", km.getProvideTlsPrivateKeyPem());
+}
+
+urnet::NetworkSpace TunnelController::ImportNetworkSpaceLocked(
+    const std::string& networkSpaceJson) {
+  if (!spaceManager_) {
+    spaceManager_ =
+        urnet::newNetworkSpaceManager(Narrow(SdkStorageDir(true).wstring()));
+  }
+  return spaceManager_->importNetworkSpaceFromJson(networkSpaceJson);
+}
+
+urnet::DeviceLocal TunnelController::NewDeviceLocked(const urnet::NetworkSpace& space,
+                                                     const std::string& byJwt,
+                                                     const std::string& deviceDescription,
+                                                     const std::string& deviceSpec,
+                                                     const std::string& appVersion,
+                                                     const std::string& instanceId,
+                                                     const char* who) {
+  auto km = LoadKeyMaterial();
+  // The device target comes from the measured host's memory tier, and the
+  // SAME cached measurement chose the process budget at startup, so the
+  // target and the budget backing it are always one tier.
+  const int64_t memoryTargetByteCount = DeviceMemoryTargetByteCount();
+  LogInfo("{} constructing DeviceLocal ({} identity, {} MiB memory target)", who,
+          km ? "persisted" : "new", memoryTargetByteCount / (1024 * 1024));
+  if (km) {
+    return urnet::newDeviceLocalWithMemoryTarget(space, byJwt, deviceDescription, deviceSpec,
+                                                 appVersion, instanceId,
+                                                 /*enable_rpc=*/false, *km,
+                                                 memoryTargetByteCount);
+  }
+  // An empty key material (handle 0) is nil in the SDK: new identity.
+  urnet::DeviceLocal device = urnet::newDeviceLocalWithMemoryTarget(
+      space, byJwt, deviceDescription, deviceSpec, appVersion, instanceId,
+      /*enable_rpc=*/false, urnet::DeviceLocalKeyMaterial{}, memoryTargetByteCount);
+  PersistKeyMaterial(device.getKeyMaterial());
+  return device;
 }
 
 void TunnelController::ClampToRpcOnly() {
@@ -744,11 +782,7 @@ proto::TunnelStatus TunnelController::StartLocked(const proto::StartTunnel& conf
     step = "3/8 network space";
     LogInfo("tunnel: [3/8] opening the network space in {}",
             SdkStorageDir(true).string());
-    if (!spaceManager_) {
-      spaceManager_ =
-          urnet::newNetworkSpaceManager(Narrow(SdkStorageDir(true).wstring()));
-    }
-    networkSpace_ = spaceManager_->importNetworkSpaceFromJson(config.network_space_json);
+    networkSpace_ = ImportNetworkSpaceLocked(config.network_space_json);
     if (HaltAfterStepLocked(
             3, "an open network space under the service's own storage root — "
                "files, and nothing else"))
@@ -756,27 +790,11 @@ proto::TunnelStatus TunnelController::StartLocked(const proto::StartTunnel& conf
 
     // --- 4/8 DeviceLocal (stable provider identity via persisted key material) ---
     step = "4/8 device";
-    auto km = LoadKeyMaterial();
-    // The device target comes from the measured host's memory tier, and the
-    // SAME cached measurement chose the process budget at startup, so the
-    // target and the budget backing it are always one tier.
-    const int64_t memoryTargetByteCount = DeviceMemoryTargetByteCount();
-    LogInfo("tunnel: [4/8] constructing DeviceLocal ({} identity, {} MiB memory target)",
-            km ? "persisted" : "new", memoryTargetByteCount / (1024 * 1024));
-    if (km) {
-      device_ = urnet::newDeviceLocalWithMemoryTarget(
-          *networkSpace_, config.by_jwt, config.device_description,
-          config.device_spec, config.app_version, config.instance_id,
-          /*enable_rpc=*/false, *km, memoryTargetByteCount);
-    } else {
-      // An empty key material (handle 0) is nil in the SDK: new identity.
-      device_ = urnet::newDeviceLocalWithMemoryTarget(
-          *networkSpace_, config.by_jwt, config.device_description,
-          config.device_spec, config.app_version, config.instance_id,
-          /*enable_rpc=*/false, urnet::DeviceLocalKeyMaterial{},
-          memoryTargetByteCount);
-      PersistKeyMaterial(device_->getKeyMaterial());
-    }
+    // The same construction the provider-only device uses (NewDeviceLocked):
+    // one copy of the identity rules for both.
+    device_ = NewDeviceLocked(*networkSpace_, config.by_jwt, config.device_description,
+                              config.device_spec, config.app_version, config.instance_id,
+                              "tunnel: [4/8]");
     LogInfo("tunnel: [4/8] device client_id={}", device_->getClientId());
 
     // Per-flow app attribution — "which program owns this connection" — fed to
@@ -1298,6 +1316,15 @@ void TunnelController::StopLocked(bool finalDisarm) {
   // order — it is simply reached sooner, which is the entire point.
   RevertMachineStateLocked(finalDisarm, hadRoutes);
 
+  // THE PROVIDER-ONLY DEVICE, in EVERY teardown, and so at the head of every
+  // bring-up: StartLocked opens with StopLocked, so a Connect retires the
+  // provider before the new session's DeviceLocal — the same persisted
+  // identity — the adapter or a single route exists, and the two devices never
+  // run together. It is phase 2 work (closing a device can block on the SDK),
+  // so it comes after the machine is given back, and it is a no-op whenever a
+  // tunnel session was running, because the two never coexist.
+  RetireProviderDeviceLocked();
+
   const bool tornDown = TearDownSessionLocked();
 
   rpcHostPort_.clear();
@@ -1750,7 +1777,8 @@ void TunnelController::Logout() {
   lastStopReason_.store(kStopReasonUser);
   // finalDisarm: signing out is as deliberate as disconnecting, and there is no
   // session left to protect. Leaving a signed-out machine blocked would be
-  // unexplainable from any surface the user still has.
+  // unexplainable from any surface the user still has. It retires the
+  // provider-only device too: a signed-out machine provides nothing.
   StopLocked(/*finalDisarm=*/true);
   // Clear persisted device identity so the next login starts clean (mirrors the
   // macOS logout provider message clearing LocalState).
@@ -1759,6 +1787,185 @@ void TunnelController::Logout() {
   std::filesystem::remove(storageDir_ / L"provide_cert.pem", ec);
   std::filesystem::remove(storageDir_ / L"provide_key.pem", ec);
   LogInfo("tunnel: logged out (cleared device identity)");
+}
+
+// --- the provider-only device (start_provider) ------------------------------
+//
+// See the contract in the header and Common/ProvideLifecycle.h. This is steps 3
+// and 4 of a bring-up and nothing after them: no wintun adapter (step 1), no
+// egress binding (step 2 — with no tun there is nothing to loop into, so the
+// device's sockets follow the route table like any other process's), no rpc
+// listener (step 5), no firewall policy, no route, no DNS entry, no active
+// marker, no packet pump, no split tunnel and no flow-owner lookup.
+
+bool TunnelController::StartProvider(const proto::StartProvider& request,
+                                     std::string& error) {
+  // TIMED, like Stop(): a connect attempt wedged inside the SDK holds mutex_ for
+  // as long as the process lives, and a start_provider that waited behind it
+  // would hold the control pipe with it. There is nothing to provide beside a
+  // bring-up in any case — its own device will.
+  std::unique_lock<std::timed_mutex> lock(mutex_, std::defer_lock);
+  if (!lock.try_lock_for(kStopLockBudget)) {
+    error = "a tunnel operation is in progress";
+    LogWarn("provide: start_provider refused: the session lock was not free "
+            "within {}ms",
+            kStopLockBudget.count());
+    return false;
+  }
+  const provide::ControlMode mode = provide::ControlModeFrom(request.provide_mode);
+  provide::ServiceProviderState state;
+  // Any trace of a tunnel session counts, not only the reported state: a
+  // session's DeviceLocal runs under the same identity.
+  state.tunnelSession = state_ == proto::TunnelState::Starting ||
+                        proto::IsSessionLive(state_) ||
+                        state_ == proto::TunnelState::Stopping || device_.has_value() ||
+                        adapter_ != nullptr || netConfig_ != nullptr || pump_ != nullptr ||
+                        egress_ != nullptr;
+  state.firewallInForce = wfp_.State() != WfpState::Off;
+  const AbandonedTeardownSweep abandoned = SweepAbandonedTeardowns();
+  if (abandoned.completed_late > 0)
+    LogWarn("provide: {} previously ABANDONED sdk teardown(s) have since FINISHED "
+            "and released the device they were holding",
+            abandoned.completed_late);
+  state.deviceStillHeld = abandoned.outstanding > 0;
+  state.restartPending = SelfRestartPending();
+  if (const provide::ProviderRefusal refusal = provide::ProviderStartRefusal(mode, state);
+      refusal != provide::ProviderRefusal::None) {
+    error = provide::RefusalReason(refusal);
+    LogInfo("provide: start_provider refused (mode={}): {}", provide::ToString(mode),
+            error);
+    return false;
+  }
+
+  // The same request again — a relaunched app adopting the provider an earlier
+  // run left, or a reconcile after a mode change: keep the device and apply the
+  // mode in place.
+  if (providerDevice_ && proto::SameProviderDevice(providerRequest_, request)) {
+    try {
+      providerDevice_->setProvideControlMode(request.provide_mode);
+    } catch (const std::exception&) {
+      error = "the provide mode could not be applied";
+      LogError("provide: applying mode {} to the running provider-only device failed",
+               provide::ToString(mode));
+      return false;
+    }
+    providerRequest_.provide_mode = request.provide_mode;
+    ReadProviderFactsLocked();
+    PublishStatusLocked();
+    LogInfo("provide: the provider-only device keeps running (mode={} tier={})",
+            provide::ToString(mode), providerTier_);
+    return true;
+  }
+
+  RetireProviderDeviceLocked();
+  const char* step = "network space";
+  try {
+    providerSpace_ = ImportNetworkSpaceLocked(request.network_space_json);
+    step = "device";
+    providerDevice_ = NewDeviceLocked(*providerSpace_, request.by_jwt,
+                                      request.device_description, request.device_spec,
+                                      request.app_version, request.instance_id, "provide:");
+    step = "provider transport policy";
+    if (!request.provider_transport_settings_json.empty()) {
+      providerDevice_->setProviderTransportSettings(
+          nlohmann::json::parse(request.provider_transport_settings_json)
+              .get<urnet::TransportSettings>());
+    }
+    step = "provide mode";
+    providerDevice_->setProvideControlMode(request.provide_mode);
+    providerRequest_ = request;
+    ReadProviderFactsLocked();
+    PublishStatusLocked();
+    LogInfo("provide: PROVIDING WITHOUT A TUNNEL (mode={} tier={} network_key={} "
+            "client_id={}). No wintun adapter, route, dns entry, firewall policy or "
+            "device rpc listener exists for it: this machine's own traffic is routed "
+            "exactly as it would be without URnetwork.",
+            provide::ToString(mode), providerTier_, providerNetworkKey_,
+            providerDevice_->getClientId());
+    return true;
+  } catch (const std::exception&) {
+    // The stage names the failure, as ActivateCapture's does, without copying an
+    // SDK message that can carry endpoints or identifiers into the reply.
+    error = std::string("the provider could not be started at the ") + step + " step";
+    LogError("provide: stage=provider-only outcome=failed component={}", step);
+    RetireProviderDeviceLocked();
+    return false;
+  }
+}
+
+bool TunnelController::StopProvider() {
+  // A wedged lock means a bring-up is holding it, and every bring-up opens by
+  // retiring the provider-only device itself.
+  std::unique_lock<std::timed_mutex> lock(mutex_, std::defer_lock);
+  if (!lock.try_lock_for(kStopLockBudget)) {
+    LogWarn("provide: stop_provider could not take the session lock within {}ms",
+            kStopLockBudget.count());
+    return false;
+  }
+  RetireProviderDeviceLocked();
+  return true;
+}
+
+void TunnelController::RetireProviderDeviceLocked() {
+  if (!providerDevice_ && !providerSpace_) return;
+  // Moved into locals and then RESET, for the reason TearDownSessionLocked
+  // spells out: a moved-from engaged optional still tests true.
+  auto device = std::move(providerDevice_);
+  providerDevice_.reset();
+  auto space = std::move(providerSpace_);
+  providerSpace_.reset();
+  const provide::ControlMode mode = provide::ControlModeFrom(providerRequest_.provide_mode);
+  providerRequest_ = proto::StartProvider{};
+  providerTier_ = 0;
+  providerNetworkKey_ = false;
+  // Published BEFORE the bounded close, as RevertMachineStateLocked publishes
+  // released ownership: the app must not keep showing a provider that is going.
+  PublishStatusLocked();
+  LogInfo("provide: retiring the provider-only device (mode={})", provide::ToString(mode));
+  const auto started = std::chrono::steady_clock::now();
+  const bool finished = RunBounded(
+      kSdkTeardownBudget,
+      [device = std::move(device), space = std::move(space)]() mutable {
+        if (device) device->close();
+        device.reset();
+        space.reset();
+      },
+      // The worker owns a DeviceLocal under this device's identity. While it is
+      // outstanding a second device — a Connect's — would run beside it, so its
+      // abandonment refuses a start exactly as the session teardown's does, and
+      // the next start restarts the service clean instead.
+      AbandonHazard::HoldsSessionDevice);
+  const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                      std::chrono::steady_clock::now() - started)
+                      .count();
+  if (!finished) {
+    LogError("provide: the provider-only device did not close inside its {}ms "
+             "budget and is LEFT closing on its own thread; a start is refused "
+             "until it finishes",
+             kSdkTeardownBudget.count());
+  } else if (ms > 500) {
+    LogWarn("provide: closing the provider-only device took {}ms", ms);
+  }
+}
+
+void TunnelController::ReadProviderFactsLocked() {
+  providerTier_ = 0;
+  providerNetworkKey_ = false;
+  if (!providerDevice_) return;
+  try {
+    providerTier_ = providerDevice_->getProvideMode();
+    if (auto keys = providerDevice_->getProvideSecretKeys()) {
+      for (const auto& key : *keys) {
+        if (key.provide_mode == urnet::ProvideModeNetwork) {
+          providerNetworkKey_ = true;
+          break;
+        }
+      }
+    }
+  } catch (const std::exception&) {
+    // A status must still be publishable; it then claims less (tier 0).
+    LogWarn("provide: reading the provider-only device's tier failed");
+  }
 }
 
 // See the contract in the header. NO SESSION LOCK: a copy of the snapshot that
@@ -1855,6 +2062,15 @@ proto::TunnelStatus TunnelController::ComposeStatusLocked() {
     const EgressInterfaces bound = egress_->Current();
     s.egress_index4 = static_cast<int64_t>(bound.index4);
     s.egress_index6 = static_cast<int64_t>(bound.index6);
+  }
+  // The provider-only device, from the members that own it: the request it was
+  // built from and the tier and key ReadProviderFactsLocked read off it. No SDK
+  // call here, for the reason service_version above is the cached copy.
+  s.provider_running = providerDevice_.has_value();
+  if (providerDevice_) {
+    s.provider_control_mode = providerRequest_.provide_mode;
+    s.provider_mode = providerTier_;
+    s.provider_network_key = providerNetworkKey_;
   }
   // stop_reason and failsafe_armed are deliberately NOT composed here: Status()
   // overlays them from their own lock-free publishers, so a status served

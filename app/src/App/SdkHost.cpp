@@ -567,6 +567,7 @@ bool SdkHost::Initialize() {
     SetupWalletCallbacks();
 
     service_.SetStateHandler([this](const proto::TunnelStatus& st) {
+      const proto::TunnelState before = lastServiceState_.load();
       // Remember the two facts only the SERVICE can know, so the statuses this
       // process synthesises (SessionStatus) do not overwrite them with their
       // defaults and render a healthy tunnel as degraded.
@@ -578,8 +579,23 @@ bool SdkHost::Initialize() {
       if (st.state != proto::TunnelState::Up && onStats_) {
         LiveStats stats;
         stats.rpcOnly = st.mode == proto::StartMode::RpcOnly;
+        // With no session the provider-only device is what provides, and this
+        // very status says how (adopted just above) — not a default "off".
+        if (!HasSession()) FillProviderOnlyStats(stats);
         ClampCaptureStats(stats);
         onStats_(stats);
+      }
+      // AN UNEXPECTED DROP: the service tore a live session down by itself (the
+      // dead-tunnel failsafe), on the edge. The DeviceRemote this side holds now
+      // points at a listener that is gone, and with it went the provider. Ask
+      // for a session the D8 way — the table drops the stale device, the
+      // attach-only bootstrap finds nothing and starts nothing, which keeps the
+      // failsafe's "it never reconnects" — and the pass ends with the provider
+      // reconcile: providing resumes without a tunnel unless the kill switch's
+      // armed floor holds the machine, which the reconcile respects.
+      if (proto::IsFailsafeStop(st.stop_reason) && proto::IsSessionLive(before) &&
+          !proto::IsSessionLive(st.state) && st.state != proto::TunnelState::Starting) {
+        EnsureSession("unexpected drop", /*automaticRecovery=*/true);
       }
     });
     service_.SetDisconnectHandler([this] { OnServiceDisconnected(); });
@@ -640,6 +656,11 @@ bool SdkHost::Initialize() {
       // flow, unchanged) and a launch that finds none starts nothing — the
       // forensics have app-launch resumes installing capture routes on
       // machines nobody touched, and the owner's decision is click-only.
+      //
+      // A launch that finds none still PROVIDES when the stored mode says so:
+      // the pass ends with the provider reconcile, and the provider-only
+      // device installs nothing on this machine (ProvideLifecycle.h), so D8 is
+      // untouched by it.
       EnsureSession("resume");
     } else {
       SetAuthState(AuthState::LoggedOut);
@@ -650,6 +671,9 @@ bool SdkHost::Initialize() {
       LogInfo("sdkhost: no stored device credentials in network space '{}' — "
               "starting signed out",
               networkSpace_->getHostName());
+      // A provider-only device an earlier run left for another space's account
+      // outlives the app with the service; signed out, nothing provides.
+      RequestProviderReconcile("launch, signed out");
     }
     return true;
   } catch (const std::exception& e) {
@@ -1320,7 +1344,16 @@ bool SdkHost::ApplyNetworkServer(const std::string& hostName, const std::string&
   // because this function's only two callers of BootstrapSession were the resume
   // thread and a fresh sign-in, and this is neither. Sign in, look connected-
   // capable, press Connect, nothing happens, no reason given.
-  if (loggedIn) EnsureSession("network server change");
+  //
+  // Either way the provider-only device follows the space: that pass ends with
+  // the provider reconcile, whose request now carries the new space and jwt
+  // (so the service builds a new device), and a space with no stored
+  // credentials stops the one the old account was running.
+  if (loggedIn) {
+    EnsureSession("network server change");
+  } else {
+    RequestProviderReconcile("network server change, signed out");
+  }
   return true;
 }
 
@@ -1446,6 +1479,12 @@ void SdkHost::RegisterNetworkClient(const std::string& byJwt,
       LogInfo("sdkhost: signed in; no session started — the tunnel starts "
               "only on a Connect gesture");
       SetAuthState(AuthState::LoggedIn);
+      // ...but a stored provide mode that provides while disconnected starts
+      // the provider-only device, under the new client jwt (the service
+      // replaces one built from an older jwt: the request differs). It installs
+      // nothing on this machine, so this is not the session start D8 forbids
+      // here.
+      RequestProviderReconcile("signed in");
       AuthResult r{true, false, ""};
       if (done) done(r);
     } else {
@@ -2421,6 +2460,12 @@ void SdkHost::AdoptServiceFacts(const proto::TunnelStatus& st) {
   // two: this process cannot observe it, and inferring it from a mode flag is
   // what let the app report a captured machine as disconnected.
   lastServiceRoutesInstalled_.store(st.routes_installed);
+  // ...and the provider-only device, which only the service holds: what the
+  // provide indicator shows while there is no session (FillProviderOnlyStats).
+  serviceProviderRunning_.store(st.provider_running);
+  serviceProviderMode_.store(st.provider_running ? st.provider_mode : 0);
+  serviceProviderNetworkKey_.store(st.provider_running && st.provider_network_key);
+  serviceProviderKnown_.store(true);
   // Bind this process's SDK during bootstrap, before the service installs
   // routes. The connected route flag keeps that binding through activation.
   const bool bindEgress = st.routes_installed ||
@@ -2482,6 +2527,13 @@ void SdkHost::OnServiceDisconnected() {
   lastServiceDnsApplied_.store(false);
   lastServiceRoutesInstalled_.store(false);
   lastServiceState_.store(proto::TunnelState::Stopped);
+  // The provider-only device lived in that process too, so nothing provides
+  // now. The service-reconnect watchdog's recovery pass re-reads the service
+  // (hello) and ends with the provider reconcile, which starts it again on the
+  // service that comes back.
+  serviceProviderRunning_.store(false);
+  serviceProviderMode_.store(0);
+  serviceProviderNetworkKey_.store(false);
   // ...and the tun went with it, so nothing must stay pinned to the interface
   // that existed to avoid it. A binding retained across the service's death
   // would outlive the reason for it and pin this process to one NIC for the rest
@@ -3204,6 +3256,12 @@ LiveStats SdkHost::ReadStats() {
       s.windowStallReason = ws->StallReason;
       s.windowFailed = ws->Failed;
     }
+  } else if (!device_) {
+    // No session, so no DeviceRemote: what provides now, if anything, is the
+    // service's provider-only device, as its last status said. The provide
+    // dot, its ring and the discoverable line read these; without them they
+    // said "not providing" over a device that is.
+    FillProviderOnlyStats(s);
   }
 
   // ---- rpc-only: clamp the RENDERED connection state ----------------------
@@ -3350,6 +3408,16 @@ void SdkHost::ClampCaptureStats(LiveStats& stats) const {
         : stats.health == health::State::Failed ? "CONNECT_FAILED"
         : capture.preparing ? "CONNECTING" : "DISCONNECTED";
   }
+}
+
+void SdkHost::FillProviderOnlyStats(LiveStats& stats) const {
+  if (!serviceProviderRunning_.load()) return;
+  stats.provideMode = serviceProviderMode_.load();
+  // The sdk's own definition (DeviceLocal.GetProvideEnabled): a provider
+  // exists exactly when the tier is not none.
+  stats.provideEnabled = stats.provideMode != 0;
+  stats.provideHasNetworkKey = serviceProviderNetworkKey_.load();
+  stats.provideWithoutTunnel = stats.provideEnabled;
 }
 
 void SdkHost::PublishStats() {
@@ -4422,6 +4490,9 @@ bool SdkHost::SetKillSwitch(bool on) {
             "firewall policy may not match the setting");
     ok = false;
   }
+  // Turning it off with no session lifts the armed floor, the one state that
+  // holds the provider-only device off (ProvideLifecycle.h): providing resumes.
+  if (!on && !device_) RequestProviderReconcile("kill switch turned off");
   return ok;
 }
 
@@ -4447,6 +4518,10 @@ void SdkHost::SetProvideControlMode(const std::string& mode) {
   } catch (const std::exception& e) {
     LogWarn("sdkhost: set provide control mode failed: {}", e.what());
   }
+  // No session: the provider-only device follows the new mode — started for a
+  // mode that provides while disconnected, stopped for one that does not. Off
+  // this (UI) thread: starting one builds a DeviceLocal in the service.
+  if (!device_) RequestProviderReconcile("provide mode changed");
 }
 
 void SdkHost::SetProvideExtender(bool on) {
@@ -4508,6 +4583,10 @@ void SdkHost::ApplyTransportSettings(TransportSettingsKind kind,
               provider ? "provider" : "client", e.what());
     }
   }
+  // No session: a provider-only device runs on the policy it was built with.
+  // The reconcile's request now carries the new one, so the service builds a
+  // new device for it.
+  if (provider && !device_) RequestProviderReconcile("provider transport policy changed");
   if (onTransportSettings_) onTransportSettings_(kind, CurrentTransportSettings(kind));
 }
 
@@ -5438,8 +5517,16 @@ void SdkHost::RequestSession(SessionRequest request) {
   // choice away for a request that wanted strictly less. Before the settle
   // window this race was microseconds wide; at 1.2s of deliberate delay it
   // would be a click the watchdog eats.
-  const bool covered = pendingRequested_ && request.kind == ConnectKind::None &&
-                       pending_.kind != ConnectKind::None;
+  //
+  // A provider reconcile (kind Provider) wants less still, and is covered by
+  // ANY pending request: every pass that leaves no session ends with the same
+  // reconcile, and a pass that builds one hands providing to its device. It
+  // never covers anything itself — an ensure replaces it.
+  const bool covered =
+      pendingRequested_ &&
+      ((request.kind == ConnectKind::None && pending_.kind != ConnectKind::None &&
+        pending_.kind != ConnectKind::Provider) ||
+       (request.kind == ConnectKind::Provider && pending_.kind != ConnectKind::Provider));
   if (covered) {
     LogInfo("sdkhost: '{}' is covered by the pending '{}'", request.reason,
             pending_.reason);
@@ -5487,6 +5574,17 @@ void SdkHost::SessionWorkerLoop() {
       req = std::move(pending_);
       pending_ = SessionRequest{};
       pendingRequested_ = false;
+    }
+
+    // NOT A SESSION REQUEST: keep the provider-only device in step and nothing
+    // else — no gesture, no bootstrap, no attach (ReconcileProviderLocked).
+    if (req.kind == ConnectKind::Provider) {
+      {
+        std::scoped_lock lock(mutex_);
+        ReconcileProviderLocked(req.reason);
+      }
+      PublishStats();
+      continue;
     }
 
     bool ok = false;
@@ -5698,6 +5796,14 @@ void SdkHost::SessionWorkerLoop() {
           watchdogCv_.notify_all();
         }
       }
+
+      // KEEP PROVIDING WHILE DISCONNECTED. A pass that leaves no session — a
+      // Disconnect (whose stop_tunnel took the provider down with the tunnel),
+      // a launch, network-server change or service recovery that found nothing
+      // to reattach to, a Connect that failed — hands providing to the
+      // service's provider-only device, which installs nothing on this machine
+      // (ReconcileProviderLocked). With a session, its own device provides.
+      if (!device_) ReconcileProviderLocked(req.reason);
     }
     // OUTSIDE the lock. On failure this is what takes the connect button off
     // "Connecting": with no session there is no listener to push a correcting
@@ -5730,6 +5836,101 @@ proto::TunnelStatus SdkHost::CurrentServiceStatusLocked(bool& answered) {
             st.error.empty() ? "no error reported" : st.error);
   }
   return st;
+}
+
+// ---- keep providing while disconnected --------------------------------------
+//
+// See the contract in the header and Common/ProvideLifecycle.h.
+
+void SdkHost::RequestProviderReconcile(const char* reason) {
+  SessionRequest r;
+  r.kind = ConnectKind::Provider;
+  r.reason = reason;
+  RequestSession(std::move(r));
+}
+
+void SdkHost::ReconcileProviderLocked(const char* reason) {
+  // caller holds mutex_
+  //
+  // A session's own device provides — the tunnel's, or an rpc-only one's — and
+  // a DeviceRemote whose session the service no longer runs is the next
+  // gesture's to drop (gesture::Decide), not this function's.
+  if (device_ || !localState_) return;
+  std::string clientJwt;
+  std::string instanceId;
+  // Signed out, nothing provides: a provider an earlier run left for another
+  // space's account is stopped like any mode that does not provide.
+  std::string mode = "never";
+  try {
+    clientJwt = localState_->getByClientJwt();
+    instanceId = localState_->getInstanceId();
+    if (!clientJwt.empty() && !instanceId.empty()) mode = localState_->getProvideControlMode();
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: provide: reading the stored provide mode failed: {}", e.what());
+    return;
+  }
+  const provide::ControlMode controlMode = provide::ControlModeFrom(mode);
+  // Nothing runs and nothing should: ask the service nothing.
+  if (!provide::ProviderRuns(controlMode, /*connected=*/false) &&
+      serviceProviderKnown_.load() && !serviceProviderRunning_.load()) {
+    return;
+  }
+  // No service, no provider: it died with the process, and the watchdog's
+  // recovery pass comes back through here.
+  if (!service_.IsConnected()) return;
+  bool answered = false;
+  const proto::TunnelStatus st = CurrentServiceStatusLocked(answered);
+  if (!answered) return;
+  AdoptServiceFacts(st);
+  const provide::DisconnectedStep step =
+      provide::DisconnectedProviderStep(mode, proto::ProviderFactsFrom(st, answered));
+  if (step == provide::DisconnectedStep::None) return;
+
+  std::optional<proto::TunnelStatus> after;
+  std::string error;
+  if (step == provide::DisconnectedStep::Stop) {
+    const bool stopped = service_.StopProvider(&after, &error);
+    if (after) AdoptServiceFacts(*after);
+    if (stopped) {
+      LogInfo("sdkhost: provide: stopped the provider-only device ({}, mode {})", reason,
+              provide::ToString(controlMode));
+    } else {
+      LogWarn("sdkhost: provide: stop_provider failed ({}): {}", reason,
+              error.empty() ? "no detail" : error);
+    }
+    return;
+  }
+
+  // Start, with the whole request every time: the service keeps the device it
+  // runs for an identical request and only applies the mode, and builds a new
+  // one for a changed jwt, space or provider transport policy.
+  proto::StartProvider request;
+  request.by_jwt = clientJwt;
+  request.instance_id = instanceId;
+  request.device_description = DeviceDescription();
+  request.device_spec = DeviceSpec();
+  request.app_version = appVersion_;
+  request.provide_mode = mode;
+  try {
+    request.network_space_json = networkSpace_->toJson();
+    // The mirror BootstrapSession seeds a tunnel session's device from, sent
+    // only when there is one, for the same reason.
+    if (auto settings = localState_->getProviderTransportSettings()) {
+      request.provider_transport_settings_json = nlohmann::json(*settings).dump();
+    }
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: provide: building the provider request failed: {}", e.what());
+    return;
+  }
+  const bool started = service_.StartProvider(request, &after, &error);
+  if (after) AdoptServiceFacts(*after);
+  if (started) {
+    LogInfo("sdkhost: provide: providing without a tunnel ({}, mode {}, tier {})", reason,
+            provide::ToString(controlMode), serviceProviderMode_.load());
+  } else {
+    LogWarn("sdkhost: provide: the service did not run the provider-only device ({}): {}",
+            reason, error.empty() ? "no detail" : error);
+  }
 }
 
 void SdkHost::ConnectLocked(const SessionRequest& request) {
@@ -6356,6 +6557,11 @@ void SdkHost::Logout() {
     loggedIn_.store(false, std::memory_order_release);
     serviceRecoveryNeeded_.store(false, std::memory_order_release);
     watchdogCv_.notify_all();
+    // The stop_tunnel and the logout above retired the provider-only device:
+    // nothing provides for a signed-out app.
+    serviceProviderRunning_.store(false);
+    serviceProviderMode_.store(0);
+    serviceProviderNetworkKey_.store(false);
     sessionFailure_.clear();  // belongs to the session that just ended
     SetAuthState(AuthState::LoggedOut);
     LogInfo("sdkhost: logged out");

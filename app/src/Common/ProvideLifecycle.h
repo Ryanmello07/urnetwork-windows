@@ -1,0 +1,208 @@
+// Whether this device provides while there is no tunnel session, for each
+// provide control mode: the one lifecycle decision the app and the service
+// both apply to the PROVIDER-ONLY device (support inbox 1521: a provider that
+// earns nothing and is told nothing).
+//
+// THE DEFECT THIS ANSWERS. The provider is the service's DeviceLocal, and that
+// device existed only inside a tunnel session. Disconnect sends stop_tunnel
+// (it has to: the capture routes and the firewall policy would otherwise stay
+// on the machine, ConnectAction.h bug A), TunnelController::StopLocked
+// destroys the DeviceLocal with the tunnel, and the launch path never starts a
+// session without a Connect gesture (SdkHost::BootstrapSession, D8). So on
+// Windows the provider stopped in EVERY mode the moment the user disconnected
+// and never started after a launch that did not connect. A user who picked
+// Always ("provides to everyone whenever the app is running") earned only
+// while connected, and Auto never served the user's own devices while idle.
+//
+// WHAT THE OTHER PLATFORMS DO. Android and Apple keep their packet tunnel, and
+// with it the DeviceLocal, running whenever providing is enabled, and the sdk
+// decides the tier. Windows keeps the DeviceLocal without the tunnel instead:
+// while there is no tunnel session the service runs a provider-only device
+// with no wintun adapter, no route, no DNS entry, no firewall (WFP) policy and
+// no device RPC listener, so providing never changes how this machine's own
+// traffic is routed, and no client can drive the device.
+//
+// THE SDK SEMANTICS, mirrored and never reinterpreted
+// (DeviceLocal.applyProvideControlModeWithLock, sdk/device_local.go):
+//   never   -> no providing
+//   always  -> public
+//   network -> network (the user's own devices), connected or not
+//   auto    -> public while connected, network while not
+//   anything else -> no providing (the sdk's conservative default)
+// "manual" defers to an explicitly set provide mode that lives in the device,
+// which does not exist while disconnected. This app never offers it (the
+// Connect page and onboarding offer auto, always, network and never), so it is
+// treated like any other unknown mode and gets no provider-only device.
+//
+// Pure and header-only, constexpr, no Windows headers and no allocation, like
+// ConnectAction.h: tools/provide-lifecycle-tests.cpp runs it on any host,
+// TunnelController::StartProvider refuses with ProviderStartRefusal, and
+// SdkHost::ReconcileProviderLocked asks DisconnectedProviderStep what to send.
+//
+// SPDX-License-Identifier: MPL-2.0
+#pragma once
+
+#include <cstdint>
+#include <string_view>
+
+namespace urnw::provide {
+
+enum class ControlMode { Never, Always, Network, Auto, Unknown };
+
+constexpr ControlMode ControlModeFrom(std::string_view mode) {
+  if (mode == "never") return ControlMode::Never;
+  if (mode == "always") return ControlMode::Always;
+  if (mode == "network") return ControlMode::Network;
+  if (mode == "auto") return ControlMode::Auto;
+  return ControlMode::Unknown;
+}
+
+// For logs: the mode's own name, never the raw string a request carried.
+constexpr const char* ToString(ControlMode mode) {
+  switch (mode) {
+    case ControlMode::Never: return "never";
+    case ControlMode::Always: return "always";
+    case ControlMode::Network: return "network";
+    case ControlMode::Auto: return "auto";
+    case ControlMode::Unknown: break;
+  }
+  return "unknown";
+}
+
+// The live provide tier, with the sdk's values (urnet::ProvideModeNone,
+// ProvideModeNetwork, ProvideModePublic), so a tier and a status field compare
+// directly.
+enum class Tier : int64_t { None = 0, Network = 1, Public = 3 };
+
+// The tier the sdk applies for `mode`. `connected` is the sdk's own test: a
+// destination is set on a tunnel session's device.
+constexpr Tier SdkTierFor(ControlMode mode, bool connected) {
+  switch (mode) {
+    case ControlMode::Always:
+      return Tier::Public;
+    case ControlMode::Network:
+      return Tier::Network;
+    case ControlMode::Auto:
+      return connected ? Tier::Public : Tier::Network;
+    case ControlMode::Never:
+    case ControlMode::Unknown:
+      break;
+  }
+  return Tier::None;
+}
+
+// THE LIFECYCLE DECISION: does this device provide? Connected, the tunnel
+// session's DeviceLocal is the provider. Disconnected, a provider-only device
+// runs exactly when the answer is true.
+constexpr bool ProviderRuns(ControlMode mode, bool connected) {
+  return SdkTierFor(mode, connected) != Tier::None;
+}
+
+// ---- the service's half: may a provider-only device start now? -------------
+
+// What TunnelController holds at the moment a start_provider is served.
+struct ServiceProviderState {
+  // A tunnel or rpc-only session exists, is starting or is stopping. Its own
+  // DeviceLocal is the provider, under the same identity.
+  bool tunnelSession = false;
+  // A firewall policy is in force with no tunnel session: the kill switch's
+  // armed floor after an unexpected drop. Armed permits this service's own
+  // image so a reconnect can resolve and dial, and a provider would leave
+  // through that permit; the floor stays the only thing in force until the
+  // user reconnects or lifts it.
+  bool firewallInForce = false;
+  // An abandoned teardown still holds a DeviceLocal under this identity
+  // (StopBudget.h SweepAbandonedTeardowns).
+  bool deviceStillHeld = false;
+  // This process has committed to ending itself so the SCM restarts it.
+  bool restartPending = false;
+};
+
+enum class ProviderRefusal {
+  None,
+  ModeDoesNotProvide,
+  TunnelSession,
+  KillSwitchArmed,
+  DeviceStillHeld,
+  RestartPending,
+};
+
+// Why the service refuses a provider-only device, or None. Every refusal is
+// decided before anything is built.
+constexpr ProviderRefusal ProviderStartRefusal(ControlMode mode,
+                                               const ServiceProviderState& state) {
+  if (!ProviderRuns(mode, /*connected=*/false)) return ProviderRefusal::ModeDoesNotProvide;
+  if (state.tunnelSession) return ProviderRefusal::TunnelSession;
+  if (state.firewallInForce) return ProviderRefusal::KillSwitchArmed;
+  if (state.deviceStillHeld) return ProviderRefusal::DeviceStillHeld;
+  if (state.restartPending) return ProviderRefusal::RestartPending;
+  return ProviderRefusal::None;
+}
+
+// The refusal as the control reply's error. English, for the log and the
+// developer surfaces; the app acts on the reply's `ok`, never on this text.
+constexpr const char* RefusalReason(ProviderRefusal refusal) {
+  switch (refusal) {
+    case ProviderRefusal::ModeDoesNotProvide:
+      return "the provide mode does not provide while disconnected";
+    case ProviderRefusal::TunnelSession:
+      return "a tunnel session exists, and its device is already the provider";
+    case ProviderRefusal::KillSwitchArmed:
+      return "the kill switch is holding this machine blocked; providing resumes "
+             "after you reconnect or turn the kill switch off";
+    case ProviderRefusal::DeviceStillHeld:
+      return "a previous teardown is still holding this device's identity";
+    case ProviderRefusal::RestartPending:
+      return "this service is restarting itself";
+    case ProviderRefusal::None:
+      break;
+  }
+  return "";
+}
+
+// ---- the app's half: what to ask the service while there is no session -----
+
+// What one service status says, as the app's reconcile reads it
+// (proto::ProviderFactsFrom fills it from a TunnelStatus).
+struct ServiceProviderFacts {
+  // A status was answered at all. Without one nothing changes: a failed read is
+  // not evidence that nothing runs.
+  bool answered = false;
+  // A tunnel or rpc-only session is starting, live or stopping.
+  bool tunnelSession = false;
+  // Some firewall policy is in force (wfp_state not "off").
+  bool killSwitchArmed = false;
+  bool providerRunning = false;
+};
+
+enum class DisconnectedStep {
+  None,
+  // start_provider. Idempotent by design: the service keeps the device it runs
+  // for an identical request and only applies the mode, so this one verb starts
+  // a provider, follows a mode change, picks up a new provider transport policy
+  // or network space (a different request builds a new device), and adopts a
+  // provider an earlier run of this app left running.
+  Start,
+  // stop_provider: retire the provider-only device, and nothing else.
+  Stop,
+};
+
+// The step the app takes while it holds no session. `controlMode` is the
+// stored provide control mode ("never" for a signed-out app).
+constexpr DisconnectedStep DisconnectedProviderStep(std::string_view controlMode,
+                                                    const ServiceProviderFacts& facts) {
+  if (!facts.answered || facts.tunnelSession) return DisconnectedStep::None;
+  if (!ProviderRuns(ControlModeFrom(controlMode), /*connected=*/false)) {
+    return facts.providerRunning ? DisconnectedStep::Stop : DisconnectedStep::None;
+  }
+  // The armed floor stays the only thing in force until the user reconnects or
+  // lifts it (the service refuses a start there as well). A provider found
+  // running under it is stopped rather than left to leave through the
+  // service's own permit.
+  if (facts.killSwitchArmed) {
+    return facts.providerRunning ? DisconnectedStep::Stop : DisconnectedStep::None;
+  }
+  return DisconnectedStep::Start;
+}
+
+}  // namespace urnw::provide
