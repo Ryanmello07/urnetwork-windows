@@ -176,12 +176,6 @@ inline constexpr const char* kControlDohErrorIds[] = {
     kControlDohErrorTooMany,
 };
 
-// The id an sdk error-id function answers when the call could not run at all
-// (urnet::ErrorIdInternal, URNET_ERROR_ID_INTERNAL: a handle that did not
-// resolve, json that did not decode). It is not a store key: it reads as
-// something_went_wrong, like any id this build does not know.
-inline constexpr const char* kSdkErrorIdInternal = "internal_error";
-
 // The country whose preset "Use China resolvers" asks the SDK for
 // (urnet::regionalControlDohUrls), the one source of the preset's servers.
 inline constexpr const char* kControlDohChinaCountryCode = "cn";
@@ -198,8 +192,9 @@ std::string ControlDohText(const std::vector<std::string>& urls);
 
 // The store key for an error id from setControlDohUrls: the id itself for the
 // four the sdk names, and something_went_wrong for anything else -- an id this
-// build does not know (a newer SDK) and kSdkErrorIdInternal alike -- never the
-// bare id on screen.
+// build does not know (a newer SDK) and the sdk's answer for a call that could
+// not run (kSdkErrorIdInternal, SdkErrorId.h) alike -- never the bare id on
+// screen.
 const char* ControlDohErrorKey(std::string_view errorId);
 
 // What the block says for the sdk's answer to setControlDohUrls. Only "" is
