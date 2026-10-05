@@ -1917,13 +1917,17 @@ void TunnelController::RetireProviderDeviceLocked() {
   // from here on says that nothing runs.
   std::optional<urnet::ContractViewController> statsVc;
   urnet::Sub peersSub;
+  urnet::Sub extenderSub;
   {
     std::scoped_lock lock(providerStatsMutex_);
     statsVc = std::move(providerStatsVc_);
     providerStatsVc_.reset();
     peersSub = std::move(providerPeersSub_);
+    extenderSub = std::move(providerExtenderSub_);
     providerClients_.reset();
     providerClientId_.clear();
+    providerExtender_.reset();
+    providerExtenderSetting_ = false;
   }
   // The network watch's handlers are dropped on THIS thread, as
   // TearDownSessionLocked drops the session monitor's, so the monitor the
@@ -1954,8 +1958,8 @@ void TunnelController::RetireProviderDeviceLocked() {
   const bool finished = RunBounded(
       kSdkTeardownBudget,
       [egress = std::move(egress), network = std::move(network), peersSub = std::move(peersSub),
-       statsVc = std::move(statsVc), device = std::move(device),
-       space = std::move(space)]() mutable {
+       extenderSub = std::move(extenderSub), statsVc = std::move(statsVc),
+       device = std::move(device), space = std::move(space)]() mutable {
         // After this returns no further OS observation reaches the notifier.
         if (egress) egress->Stop();
         egress.reset();
@@ -1965,6 +1969,7 @@ void TunnelController::RetireProviderDeviceLocked() {
         // Assigned, never reset(): Sub::reset() releases the handle without
         // unsubscribing (PacketPump.cpp).
         peersSub = urnet::Sub{};
+        extenderSub = urnet::Sub{};
         // The typed close, which releases the controller from the device.
         if (device && statsVc) device->closeContractViewController(*statsVc);
         statsVc.reset();
@@ -2046,11 +2051,37 @@ void TunnelController::OpenProviderStatsLocked() {
     }
     return;
   }
+  // The provider extender role (EXTENDER.md N2, N7), as a session's
+  // DeviceRemote reports it: a status listener, subscribed before the first
+  // read for the peers listener's reason and holding a share of the reading,
+  // never this object, and the setting read beside it. The setting is read
+  // once: only a session's device writes it, and none runs beside this one.
+  // Its own best effort: a failure costs the extender row and plot, which then
+  // read as the role unsupported, and nothing else.
+  auto extender = std::make_shared<LatestExtenderProvideStatus>();
+  urnet::Sub extenderSub;
+  bool extenderSetting = false;
+  try {
+    extenderSub = providerDevice_->addExtenderProvideStatusChangeListener(
+        [extender](std::optional<urnet::ExtenderProvideStatus> status) {
+          extender->Store(std::move(status));
+        });
+    extender->Store(providerDevice_->getExtenderProvideStatus());
+    extenderSetting = providerDevice_->getProvideExtender();
+  } catch (const std::exception&) {
+    LogWarn("provide: the provider-only device's extender status could not be read; the "
+            "app shows no extender row or plot while disconnected");
+    extenderSub = urnet::Sub{};
+    extender.reset();
+  }
   std::scoped_lock lock(providerStatsMutex_);
   providerStatsVc_ = std::move(vc);
   providerPeersSub_ = std::move(peersSub);
   providerClients_ = std::move(clients);
   providerClientId_ = std::move(clientId);
+  providerExtenderSub_ = std::move(extenderSub);
+  providerExtender_ = std::move(extender);
+  providerExtenderSetting_ = extenderSetting;
 }
 
 void TunnelController::WatchProviderNetworkLocked() {
@@ -2095,7 +2126,7 @@ void TunnelController::WatchProviderNetworkLocked() {
 }
 
 // See the contract in the header. NO SESSION LOCK AND NO DEVICE CALL: the copy
-// the build and the peers listener left, and the controller's sampled state.
+// the build and the listeners left, and the controller's sampled state.
 proto::ProviderStats TunnelController::ProviderStats() {
   proto::ProviderStats stats;
   std::scoped_lock lock(providerStatsMutex_);
@@ -2129,6 +2160,16 @@ proto::ProviderStats TunnelController::ProviderStats() {
   read("packet stats", [&] {
     stats.has_provider_stats = providerStatsVc_->getProviderPacketStats().has_value();
   });
+  read("extender throughput", [&] {
+    if (auto points = providerStatsVc_->getExtenderThroughputPoints())
+      stats.extender_points = *points;
+  });
+  // The extender role, as its listener last said: none when its reading could
+  // not be opened, which the app reads as the role unsupported.
+  if (providerExtender_) {
+    if (auto status = providerExtender_->Load()) stats.extender_provide_status = *status;
+    stats.provide_extender = providerExtenderSetting_;
+  }
   return stats;
 }
 

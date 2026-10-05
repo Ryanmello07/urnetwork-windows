@@ -65,7 +65,9 @@ namespace urnw::proto {
 //    Nor for get_provider_stats: a service that does not know it answers
 //    "unknown request type", which the app reads as "no statistics" and
 //    renders as it did before the verb existed (no client count and no
-//    provider plots while disconnected).
+//    provider plots while disconnected). Nor for its later extender fields: a
+//    service that does not send them reads as the role unsupported, which
+//    hides the extender row and plot while disconnected, as before.
 inline constexpr int kProtocolVersion = 4;
 
 // The first version that understands StartTunnel::mode. Below this, an absent
@@ -361,19 +363,27 @@ struct TunnelStatus {
 // get_provider_stats: what the provider-only device carries, for the screens a
 // tunnel session's DeviceRemote feeds while connected — the Connect page's
 // client count, the Earnings provider plots with their gate and their "no
-// traffic yet" line, and the client id whose GET /network/provider-status row
-// is this device's. The service reads them off the device's own
-// ContractViewController (the controller the app opens on the DeviceRemote)
-// and its network peers listener, never with the session lock or a device call
-// on the way (TunnelController::ProviderStats), so asking cannot wedge the
+// traffic yet" line, the Earnings extender row and extender plot, and the
+// client id whose GET /network/provider-status row is this device's. The
+// service reads them off the device's own ContractViewController (the
+// controller the app opens on the DeviceRemote) and its network peers and
+// extender status listeners, never with the session lock or a device call on
+// the way (TunnelController::ProviderStats), so asking cannot wedge the
 // control pipe. `available` is false while no provider-only device runs, or
 // while its statistics could not be opened; every other field is then empty.
 //
-// The points and the distribution are the sdk's own json
-// (urnet::ThroughputPoint, urnet::TransportDistribution), carried as they are:
-// the service writes them with the header's to_json and the app reads them
-// back with its from_json (ProviderPointsOf, ProviderDistributionOf), so this
-// file needs no sdk header and the field names keep one owner.
+// The points, the distribution and the extender status are the sdk's own json
+// (urnet::ThroughputPoint, urnet::TransportDistribution,
+// urnet::ExtenderProvideStatus), carried as they are: the service writes them
+// with the header's to_json and the app reads them back with its from_json
+// (ProviderPointsOf, ProviderDistributionOf, ExtenderPointsOf,
+// ExtenderProvideStatusOf), so this file needs no sdk header and the field
+// names keep one owner.
+//
+// The extender fields came after the verb, with NO PROTOCOL BUMP, by the test
+// kProtocolVersion uses: a service that does not send them leaves no status,
+// which the app reads as the role unsupported and hides the extender row and
+// plot (EXTENDER.md N1), exactly as before they existed.
 struct ProviderStats {
   bool available = false;
   std::string client_id;
@@ -385,6 +395,14 @@ struct ProviderStats {
   bool has_provider_stats = false;
   nlohmann::json provider_points = nlohmann::json::array();
   nlohmann::json provider_distribution;  // null when there is none
+  // the extender series (ContractViewController::getExtenderThroughputPoints)
+  nlohmann::json extender_points = nlohmann::json::array();
+  // The provider extender role on the device (EXTENDER.md N2, N7): the status
+  // its listener pushed last (Device::getExtenderProvideStatus before the
+  // first), null when none was read, and the setting read beside it
+  // (Device::getProvideExtender).
+  nlohmann::json extender_provide_status;
+  bool provide_extender = false;
 };
 
 struct Reply {
@@ -584,6 +602,9 @@ inline void to_json(nlohmann::json& j, const ProviderStats& v) {
       {"has_provider_stats", v.has_provider_stats},
       {"provider_points", v.provider_points},
       {"provider_distribution", v.provider_distribution},
+      {"extender_points", v.extender_points},
+      {"extender_provide_status", v.extender_provide_status},
+      {"provide_extender", v.provide_extender},
   };
 }
 
@@ -596,24 +617,58 @@ inline void from_json(const nlohmann::json& j, ProviderStats& v) {
   get("client_count", v.client_count);
   get("window_seconds", v.window_seconds);
   get("has_provider_stats", v.has_provider_stats);
+  get("provide_extender", v.provide_extender);
   // The sdk's documents are kept only in the shape they have to have: anything
   // else reads as none, never as a throw that loses the counts above.
   if (auto it = j.find("provider_points"); it != j.end() && it->is_array())
     v.provider_points = *it;
   if (auto it = j.find("provider_distribution"); it != j.end() && it->is_object())
     v.provider_distribution = *it;
+  if (auto it = j.find("extender_points"); it != j.end() && it->is_array())
+    v.extender_points = *it;
+  if (auto it = j.find("extender_provide_status"); it != j.end() && it->is_object())
+    v.extender_provide_status = *it;
 }
+
+namespace detail {
+// One series of the sdk's points as the reader's type, oldest first; empty for
+// none, or for something the type cannot read.
+template <typename Point>
+std::vector<Point> PointsOf(const nlohmann::json& points) {
+  if (!points.is_array()) return {};
+  try {
+    return points.get<std::vector<Point>>();
+  } catch (const std::exception&) {
+    return {};
+  }
+}
+}  // namespace detail
 
 // The provider points as the reader's type (urnet::ThroughputPoint in the app),
 // oldest first. Empty for a reply that carries none, or carries something the
 // type cannot read: the plots then draw an empty window, never a partial one.
 template <typename Point>
 std::vector<Point> ProviderPointsOf(const ProviderStats& stats) {
-  if (!stats.provider_points.is_array()) return {};
+  return detail::PointsOf<Point>(stats.provider_points);
+}
+
+// The extender points, by the same rule: the extender chart's series.
+template <typename Point>
+std::vector<Point> ExtenderPointsOf(const ProviderStats& stats) {
+  return detail::PointsOf<Point>(stats.extender_points);
+}
+
+// The provider extender status as the reader's type
+// (urnet::ExtenderProvideStatus); nullopt for none, from an older service too,
+// or for one the type cannot read. The app reads nullopt as the role
+// unsupported, which hides the extender row and plot (EXTENDER.md N1).
+template <typename Status>
+std::optional<Status> ExtenderProvideStatusOf(const ProviderStats& stats) {
+  if (!stats.extender_provide_status.is_object()) return std::nullopt;
   try {
-    return stats.provider_points.get<std::vector<Point>>();
+    return stats.extender_provide_status.get<Status>();
   } catch (const std::exception&) {
-    return {};
+    return std::nullopt;
   }
 }
 

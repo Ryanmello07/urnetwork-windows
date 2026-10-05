@@ -901,6 +901,38 @@ void ProvideRowTests() {
     }
   }
   {
+    TEST_CASE("theProviderOnlyDeviceShowsTheRowWithoutTheSwitch");
+    // While disconnected the provider is the service's provider-only device.
+    // The Earnings row, which has no switch, shows its status; the Connect
+    // page's row is the switch, which writes through a session's device only,
+    // so it stays hidden for that status (N1: never a dead switch).
+    for (const char* state :
+         {kExtenderProvideStateOff, kExtenderProvideStateNotProviding,
+          kExtenderProvideStateSettingUp, kExtenderProvideStateActive,
+          kExtenderProvideStateError}) {
+      const ExtenderProvideStatusView session = ProvideStatus(state);
+      const auto sessionModel = ExtenderProvideRowModelFor(session);
+      Check(sessionModel.visible && sessionModel.switchVisible,
+            std::string("a session's ") + state + " shows both rows");
+      ExtenderProvideStatusView providerOnly = session;
+      providerOnly.providerOnly = true;
+      const auto model = ExtenderProvideRowModelFor(providerOnly);
+      Check(model.visible, std::string("the provider-only device's ") + state +
+                               " shows the Earnings row");
+      Check(!model.switchVisible, std::string("the provider-only device's ") + state +
+                                      " keeps the switch's row hidden");
+      CheckEq(RowText(sessionModel), RowText(model),
+              std::string("and reads as a session's ") + state + " does");
+      CheckTone(sessionModel.tone, model.tone, std::string("in the same colour, ") + state);
+      providerOnly.supported = false;
+      const auto hidden = ExtenderProvideRowModelFor(providerOnly);
+      Check(!hidden.visible && !hidden.switchVisible,
+            std::string("an unsupported provider-only ") + state + " hides both rows");
+    }
+    Check(!ExtenderProvideRowModelFor(ExtenderProvideStatusView{}).switchVisible,
+          "no session and no provider-only device hides the switch's row");
+  }
+  {
     TEST_CASE("offAndNotProvidingAreGrey");
     const auto off = ExtenderProvideRowModelFor(ProvideStatus(kExtenderProvideStateOff));
     CheckTone(ExtenderProvideTone::Grey, off.tone, "off");
@@ -1159,6 +1191,16 @@ void ProvideStatusViewTests() {
     Check(base.enabled && !ViewOf(stopped).enabled, "enabled follows Enabled");
   }
   {
+    TEST_CASE("theDeviceItIsOfIsAChange");
+    // A session that takes over from the provider-only device can bring the
+    // very same reading; the feed must still publish it, or the Connect page's
+    // switch would stay hidden for the whole session.
+    ExtenderProvideStatusView providerOnly = base;
+    providerOnly.providerOnly = true;
+    Check(providerOnly != base, "the provider-only device's reading alone is a change");
+    Check(!base.providerOnly, "a status read off a device is a session's unless marked");
+  }
+  {
     TEST_CASE("aHiddenRowReadsNoSetting");
     int reads = 0;
     const auto counting = [&reads] {
@@ -1224,6 +1266,17 @@ void ProvideGuessTests() {
     CheckEq("", guess.reason, "no reason");
     Check(!guess.activatedV4 && !guess.activatedV6 && !guess.refused, "no families, no refusal");
     Check(guess.supported, "and the device is still the one that supports the role");
+  }
+  {
+    TEST_CASE("theGuessStaysOfItsDevice");
+    Check(!ExtenderProvideGuessFor(listening, true, true).providerOnly,
+          "a guess over a session's status stays a session's");
+    ExtenderProvideStatusView providerOnly = listening;
+    providerOnly.providerOnly = true;
+    const auto guess = ExtenderProvideGuessFor(providerOnly, false, true);
+    Check(guess.providerOnly, "a guess over the provider-only device's status stays its");
+    Check(!ExtenderProvideRowModelFor(guess).switchVisible,
+          "so the switch's row stays hidden over it");
   }
 }
 

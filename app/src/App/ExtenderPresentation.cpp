@@ -321,6 +321,9 @@ const char* ExtenderProvideErrorKey(std::string_view errorCase) {
 ExtenderProvideRowModel ExtenderProvideRowModelFor(const ExtenderProvideStatusView& view) {
   ExtenderProvideRowModel model;
   model.visible = view.supported;
+  // the switch writes through a session's device; the provider-only device's
+  // status has none to write through
+  model.switchVisible = view.supported && !view.providerOnly;
   model.on = view.provideExtender;
   const std::string_view state = view.state;
   if (state == kExtenderProvideStateOff) {
@@ -366,6 +369,7 @@ ExtenderProvideStatusView ExtenderProvideGuessFor(const ExtenderProvideStatusVie
                                                   bool on, bool providing) {
   ExtenderProvideStatusView guess;
   guess.supported = current.supported;
+  guess.providerOnly = current.providerOnly;
   guess.state = !on        ? kExtenderProvideStateOff
                 : providing ? kExtenderProvideStateSettingUp
                             : kExtenderProvideStateNotProviding;

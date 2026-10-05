@@ -3756,9 +3756,11 @@ void SdkHost::ProviderOnlyStatsLoop() {
       wasWanted = wanted;
       if (!answered && !shown && !wanted) {
         // Nothing on screen and nothing asked for, which is most passes: no
-        // session lock, only a snapshot whose source went to forget.
+        // session lock, only a snapshot and an extender status whose source
+        // went to forget. A hide kept the status (ClearDrawer's rule).
         if (HasSession() || !serviceProviderRunning_.load() || !service_.IsConnected()) {
           ResetProviderOnlyStatus();
+          ForgetProviderOnlyExtenderStatus();
         }
       } else {
         std::scoped_lock lock(mutex_);
@@ -3769,6 +3771,7 @@ void SdkHost::ProviderOnlyStatsLoop() {
           serviceProviderClients_.store(-1);
           lastClients = -1;
           ResetProviderOnlyStatus();
+          ForgetProviderOnlyExtenderStatus();
           continue;
         }
         const bool providerGone = !serviceProviderRunning_.load() || !service_.IsConnected();
@@ -3784,7 +3787,10 @@ void SdkHost::ProviderOnlyStatsLoop() {
           ClearProviderOnlyStatsLocked(providerGone);
           shown = false;
         }
-        if (providerGone) ResetProviderOnlyStatus();
+        if (providerGone) {
+          ResetProviderOnlyStatus();
+          ForgetProviderOnlyExtenderStatus();
+        }
         // Wanted, and the service cannot say (an older service, no
         // provider-only device, no channel): unavailable, never loading for
         // good.
@@ -3829,12 +3835,14 @@ void SdkHost::ShowProviderOnlyStatsLocked(const proto::ProviderStats& stats) {
   ProviderThroughputSnapshot provider;
   provider.windowSeconds = stats.window_seconds > 0 ? stats.window_seconds : 60;
   provider.providerPoints = proto::ProviderPointsOf<urnet::ThroughputPoint>(stats);
+  provider.extenderPoints = proto::ExtenderPointsOf<urnet::ThroughputPoint>(stats);
   provider.hasProviderStats = stats.has_provider_stats;
   TransportDistributionSnapshot distribution = MapTransportDistribution(
       proto::ProviderDistributionOf<urnet::TransportDistribution>(stats));
   {
     std::scoped_lock lock(drawerMutex_);
     lastProviderPoints_ = provider.providerPoints;
+    lastExtenderPoints_ = provider.extenderPoints;
     lastHasProviderStats_ = stats.has_provider_stats;
     // published only when it changed, as PublishThroughput does
     if (distribution != lastProviderDistribution_) {
@@ -3843,6 +3851,15 @@ void SdkHost::ShowProviderOnlyStatsLocked(const proto::ProviderStats& stats) {
     }
   }
   if (onProviderThroughput_) onProviderThroughput_(std::move(provider));
+  // The extender role (EXTENDER.md N7): the row and the extender plot's gate,
+  // read as a session's listener reads its push, from the status and the
+  // setting the service read off the device. No status (an older service, or
+  // a reading that could not be opened) is the role unsupported: both hidden.
+  ExtenderProvideStatusView extender = ExtenderProvideStatusViewOf(
+      proto::ExtenderProvideStatusOf<urnet::ExtenderProvideStatus>(stats),
+      [&stats] { return stats.provide_extender; });
+  extender.providerOnly = true;
+  PublishExtenderProvideView(std::move(extender));
 }
 
 void SdkHost::ClearProviderOnlyStatsLocked(bool providerGone) {
@@ -3851,6 +3868,7 @@ void SdkHost::ClearProviderOnlyStatsLocked(bool providerGone) {
   {
     std::scoped_lock lock(drawerMutex_);
     lastProviderPoints_.clear();
+    lastExtenderPoints_.clear();
     lastProviderDistribution_ = {};
     if (providerGone) lastHasProviderStats_ = false;
   }
@@ -4396,6 +4414,10 @@ void SdkHost::PublishExtenderProvideStatus(std::optional<urnet::ExtenderProvideS
     std::scoped_lock lock(drawerMutex_);
     return lastExtenderProvideStatus_.provideExtender;
   });
+  PublishExtenderProvideView(std::move(view));
+}
+
+void SdkHost::PublishExtenderProvideView(ExtenderProvideStatusView view) {
   {
     std::scoped_lock lock(drawerMutex_);
     // The device pushes after any change of the setting, the provide state or
@@ -4407,6 +4429,16 @@ void SdkHost::PublishExtenderProvideStatus(std::optional<urnet::ExtenderProvideS
     extenderProvideRepublish_ = false;
   }
   if (onExtenderProvideStatus_) onExtenderProvideStatus_(std::move(view));
+}
+
+void SdkHost::ForgetProviderOnlyExtenderStatus() {
+  {
+    std::scoped_lock lock(drawerMutex_);
+    // a session's own status, or none, is not this one to take off
+    if (!lastExtenderProvideStatus_.providerOnly) return;
+    lastExtenderProvideStatus_ = {};
+  }
+  if (onExtenderProvideStatus_) onExtenderProvideStatus_({});
 }
 
 ExtenderProvideStatusView SdkHost::CurrentExtenderProvideStatus() {
