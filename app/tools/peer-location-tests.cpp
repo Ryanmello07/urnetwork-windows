@@ -12,17 +12,14 @@
 // fields of urnet::NetworkPeer, urnet::ConnectLocationId and
 // urnet::ConnectLocation under the generated wrapper's names and types:
 //
-//   c++ -std=c++20 -Wall -Wextra -Werror -I ../src/App peer-location-tests.cpp \
-//       -o /tmp/peer-location-tests && /tmp/peer-location-tests ..
+//   c++ -std=c++20 -Wall -Wextra -Werror -I ../src/App peer-location-tests.cpp -o /tmp/peer-location-tests && /tmp/peer-location-tests ..
 //
 // With URNW_PEER_LOCATION_TESTS_SDK it is built against the generated header
 // itself, and the location is also checked as the json the SDK receives (the
 // header needs nlohmann/json; both are system includes because the generated
 // code does not build with -Wextra -Werror):
 //
-//   c++ -std=c++20 -Wall -Wextra -Werror -DURNW_PEER_LOCATION_TESTS_SDK \
-//       -I ../src/App -isystem <dir of urnetwork_sdk.hpp> -isystem <dir of nlohmann/> \
-//       peer-location-tests.cpp -o /tmp/peer-location-tests && /tmp/peer-location-tests ..
+//   c++ -std=c++20 -Wall -Wextra -Werror -DURNW_PEER_LOCATION_TESTS_SDK -I ../src/App -isystem <dir of urnetwork_sdk.hpp> -isystem <dir of nlohmann/> peer-location-tests.cpp -o /tmp/peer-location-tests && /tmp/peer-location-tests ..
 //
 // The argument is the app directory (default ".."): the wiring cases read
 // src/App/LocationSheets.cpp and src/App/SdkHost.cpp.

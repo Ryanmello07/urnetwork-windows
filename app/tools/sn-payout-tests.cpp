@@ -10,9 +10,7 @@
 // be built off Windows at all; what is verified here is every decision it makes
 // before it touches a XAML object.
 //
-//   c++ -std=c++20 -I ../src/App sn-payout-tests.cpp \
-//       ../src/App/SnPayoutPresentation.cpp ../src/App/SolanaWalletPresentation.cpp \
-//       -o /tmp/sn-payout-tests && /tmp/sn-payout-tests
+//   c++ -std=c++20 -I ../src/App sn-payout-tests.cpp ../src/App/SnPayoutPresentation.cpp ../src/App/SolanaWalletPresentation.cpp -o /tmp/sn-payout-tests && /tmp/sn-payout-tests
 //
 // SPDX-License-Identifier: MPL-2.0
 

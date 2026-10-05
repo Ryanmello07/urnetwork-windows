@@ -4,8 +4,7 @@
 // daily amount from the server's start_balance_byte_count, and when the
 // banner's refresh line and the upgrade sheet's Wait for refresh show.
 //
-//   c++ -std=c++20 -I ../src/App data-info-tests.cpp \
-//       -o /tmp/data-info-tests && /tmp/data-info-tests
+//   c++ -std=c++20 -I ../src/App data-info-tests.cpp -o /tmp/data-info-tests && /tmp/data-info-tests
 //
 // SPDX-License-Identifier: MPL-2.0
 

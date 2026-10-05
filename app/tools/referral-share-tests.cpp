@@ -4,8 +4,7 @@
 // with the install referrer) and web signup - run against the SAME header the
 // app compiles, on any host with a C++20 compiler.
 //
-//   c++ -std=c++20 -I ../src/App referral-share-tests.cpp \
-//       -o /tmp/referral-share-tests && /tmp/referral-share-tests
+//   c++ -std=c++20 -I ../src/App referral-share-tests.cpp -o /tmp/referral-share-tests && /tmp/referral-share-tests
 //
 // SPDX-License-Identifier: MPL-2.0
 

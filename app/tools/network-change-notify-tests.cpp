@@ -9,13 +9,13 @@
 // waits with generous margins rather than asserting exact times, and runs the
 // independent cases side by side.
 //
-//   c++ -std=c++20 -pthread -I ../src/Service network-change-notify-tests.cpp \
-//       -o /tmp/network-change-notify-tests && /tmp/network-change-notify-tests
+//   c++ -std=c++20 -pthread -I ../src/Service network-change-notify-tests.cpp -o /tmp/network-change-notify-tests && /tmp/network-change-notify-tests
 //
 // SPDX-License-Identifier: MPL-2.0
 
 #include <atomic>
 #include <chrono>
+#include <future>
 #include <iostream>
 #include <mutex>
 #include <stdexcept>
@@ -105,14 +105,30 @@ void TestQuality() {
 }
 
 void TestQualityInsideNetworkPass() {
+  // Both windows must have closed when the thread looks. Two bursts observed
+  // back to back close a millisecond apart when the observations straddle a
+  // millisecond (a slow or loaded host makes that likely), and a thread that
+  // wakes on time then takes them in two passes. So both are observed while the
+  // thread is inside an earlier call, and it is let go once both have closed.
   std::atomic<int> network{0};
   std::atomic<int> quality{0};
-  NetworkChangeNotifier notifier([&] { ++network; }, [&] { ++quality; });
+  std::promise<void> release;
+  const std::shared_future<void> released = release.get_future().share();
+  NetworkChangeNotifier notifier(
+      [&] {
+        ++network;
+        released.wait();
+      },
+      [&] { ++quality; });
+  notifier.NetworkEventSink()();
+  Check(WaitFor(network, 1), "quality in a network pass: an earlier network change is told");
   notifier.NetworkEventSink()();
   notifier.NetworkQualitySink()();
-  Check(WaitFor(network, 1), "quality in a network pass: the network change is told");
   std::this_thread::sleep_for(kSettle);
-  Check(network.load() == 1 && quality.load() == 0,
+  release.set_value();
+  Check(WaitFor(network, 2), "quality in a network pass: the network change is told");
+  std::this_thread::sleep_for(kSettle);
+  Check(network.load() == 2 && quality.load() == 0,
         "quality in a network pass: dropped, the network change already remeasures (got " +
             std::to_string(quality.load()) + ")");
 }

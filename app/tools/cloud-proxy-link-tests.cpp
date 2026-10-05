@@ -4,8 +4,7 @@
 // carries no credential, and the Connections section opens it - run against
 // the SAME header the app compiles, on any host with a C++20 compiler.
 //
-//   c++ -std=c++20 -I ../src/App cloud-proxy-link-tests.cpp \
-//       -o /tmp/cloud-proxy-link-tests && /tmp/cloud-proxy-link-tests
+//   c++ -std=c++20 -I ../src/App cloud-proxy-link-tests.cpp -o /tmp/cloud-proxy-link-tests && /tmp/cloud-proxy-link-tests
 //
 // Run from tools/: the wiring case reads ../src/App/SettingsPage.cpp (or the
 // path given as the first argument).
