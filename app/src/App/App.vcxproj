@@ -429,6 +429,8 @@
     <ClInclude Include="ProvideModeVisual.h" />
     <!-- header-only and WinRT-free: tools/provider-idle-tests.cpp runs it -->
     <ClInclude Include="ProviderIdleReason.h" />
+    <!-- header-only and WinRT-free: tools/provider-status-tests.cpp runs it -->
+    <ClInclude Include="ProviderStatusPresentation.h" />
     <ClInclude Include="UrComponents.h" />
     <ClInclude Include="WalletConnect.h" />
     <!-- header-only and WinRT-free: tools/feedback-send-tests.cpp runs it -->

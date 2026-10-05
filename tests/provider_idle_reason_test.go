@@ -36,10 +36,11 @@ func TestProviderIdleReason(t *testing.T) {
 
 // The line under the Earnings provide mode row, which cannot be built off
 // Windows: WalletPage paints it from ProviderIdleReasonFor on every live update
-// (ahead of the gate's early return, which skips unchanged gates) and on every
-// provider distribution, with the desktop's any-network mode; the row sits
-// right under the provide mode row with Change opening the Connect page as the
-// row does; and the strings it shows are in the catalog.
+// (ahead of the gate, which acts only when it changes) and on every provider
+// distribution, with the desktop's any-network mode, merged with the server's
+// reason (providerstatus::LineFor); the row sits right under the provide mode
+// row with Change opening the Connect page as the row does; and the strings it
+// shows are in the catalog.
 func TestProviderIdleReasonWiring(t *testing.T) {
 	root := repositoryRoot(t)
 	wallet := stripLineComments(readAppSource(t, "WalletPage.cpp"))
@@ -47,12 +48,12 @@ func TestProviderIdleReasonWiring(t *testing.T) {
 	apply := definitionBody(t, "WalletPage.cpp", wallet, "void WalletPage::ApplyProvideState(urnw::LiveStats const& stats) {")
 	read := strings.Index(apply, "Sdk().CurrentProvideControlMode()")
 	reason := strings.Index(apply, "ApplyProvideReason();")
-	gate := strings.Index(apply, "if (enabled == providingEnabled_) return;")
+	gate := regexp.MustCompile(`if \(enabled [!=]= providingEnabled_\)`).FindStringIndex(apply)
 	switch {
-	case read < 0 || reason < 0 || gate < 0:
+	case read < 0 || reason < 0 || gate == nil:
 		t.Error("WalletPage::ApplyProvideState no longer reads the control mode, paints the idle reason and gates the plots")
-	case reason > gate:
-		t.Error("WalletPage::ApplyProvideState paints the idle reason after the gate's early return, so it would stop following the live stats")
+	case reason > gate[0]:
+		t.Error("WalletPage::ApplyProvideState paints the idle reason behind the gate, so it would stop following the live stats")
 	}
 	if count := strings.Count(apply, "Sdk().CurrentProvideControlMode()"); count != 1 {
 		t.Errorf("WalletPage::ApplyProvideState reads the control mode %d times; it is an rpc into the service, read it once", count)
@@ -72,7 +73,7 @@ func TestProviderIdleReasonWiring(t *testing.T) {
 		"provideridle::ProviderIdleReasonFor(",
 		"provideControlMode_, liveProvideMode_, providePaused_",
 		"provideridle::ProvideNetworkMode::All, providerWindowBytes_",
-		"provideridle::ProviderIdleReasonKey(",
+		"providerstatus::LineFor(",
 		"w_.WalletProvideReasonText().Text(",
 		"w_.WalletProvideReasonRow().Visibility(",
 	} {

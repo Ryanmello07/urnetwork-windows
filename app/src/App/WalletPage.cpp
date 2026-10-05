@@ -458,6 +458,62 @@ urnet::LeaderboardEarnersList SampleEarners() {
   };
 }
 
+// ---- the provider status (P008) ----------------------------------------------
+
+// The Demand bars stand in the Blocked chart's 66 px, over a 1 px baseline.
+constexpr double kDemandBarsHeight = 65;
+
+// The percent pattern and sign of the language the app's strings are in
+// (LOCALE_IPOSITIVEPERCENT, LOCALE_SPERCENT), read once; "#%" when Windows
+// cannot say.
+struct PercentStyle {
+  int pattern = 1;
+  std::string sign = "%";
+};
+
+PercentStyle const& LocalePercentStyle() {
+  static const PercentStyle style = [] {
+    PercentStyle read;
+    const std::wstring language = urnw::Widen(urnw::PrimaryLanguage());
+    DWORD pattern = 0;
+    if (::GetLocaleInfoEx(language.c_str(), LOCALE_IPOSITIVEPERCENT | LOCALE_RETURN_NUMBER,
+                          reinterpret_cast<LPWSTR>(&pattern),
+                          sizeof(pattern) / sizeof(wchar_t)) != 0) {
+      read.pattern = static_cast<int>(pattern);
+    }
+    wchar_t sign[8]{};
+    if (::GetLocaleInfoEx(language.c_str(), LOCALE_SPERCENT, sign,
+                          static_cast<int>(std::size(sign))) != 0 &&
+        sign[0] != L'\0') {
+      read.sign = urnw::Narrow(sign);
+    }
+    return read;
+  }();
+  return style;
+}
+
+// Why?'s values in the store's words and the reader's numbers: the locale's
+// percent, and the byte rate the provider charts label theirs with.
+providerstatus::ValueText<std::wstring> ProviderStatusText() {
+  providerstatus::ValueText<std::wstring> text;
+  text.localized = [](std::string_view key) { return urnw::Localized(key); };
+  text.format = [](std::string_view key, std::wstring const& value, std::wstring const& bound) {
+    return urnw::Format(key, value, bound);
+  };
+  text.formatCounts = [](std::string_view key, int64_t count, int64_t total) {
+    return urnw::Format(key, count, total);
+  };
+  text.percent = [](double ratio) {
+    PercentStyle const& style = LocalePercentStyle();
+    return urnw::Widen(providerstatus::FormatPercent(ratio, style.pattern, style.sign));
+  };
+  text.rate = [](double bytesPerSecond) {
+    return urnw::Widen(urnw::FormatByteRate(static_cast<int64_t>(std::llround(bytesPerSecond))));
+  };
+  text.plain = [](std::string const& utf8) { return urnw::Widen(utf8); };
+  return text;
+}
+
 }  // namespace
 
 WalletPage::WalletPage(winrt::URnetwork::implementation::MainWindow& window)
@@ -478,6 +534,11 @@ WalletPage::~WalletPage() {
     ClosePointsBoard(/*deviceAlive=*/true);
   } catch (...) {
     // the host may already be gone at teardown; nothing left to close on
+  }
+  try {
+    CloseProviderStatus(/*deviceAlive=*/true);
+  } catch (...) {
+    // likewise
   }
 }
 
@@ -561,6 +622,10 @@ void WalletPage::Initialize() {
   chartTimer_.Tick([weak](auto const&, auto const&) {
     if (auto self = weak.get()) self->wallet().OnChartTick();
   });
+  // the provider status's Why? (P008), a disclosure row that starts collapsed
+  w_.WalletProviderWhyButton().Click([weak](auto const&, auto const&) {
+    if (auto self = weak.get()) self->wallet().ToggleProviderWhy();
+  });
   // Seed the read-only row, the running role and the provider gate from
   // SdkHost's caches, so a window built long after the session bootstrapped
   // paints what is known on its first frame. Cache reads only: no rpc, no mutex_.
@@ -569,12 +634,21 @@ void WalletPage::Initialize() {
 }
 
 void WalletPage::SetPresentationActive(bool active) {
+  // the provider status polls only while the window presents (P008)
+  presentationActive_ = active;
+  ReconcileProviderStatus();
   if (!chartTimer_) return;
   if (active) {
     if (!chartTimer_.IsRunning()) chartTimer_.Start();
   } else {
     chartTimer_.Stop();
   }
+}
+
+void WalletPage::SetSelected(bool selected) {
+  if (selected_ == selected) return;
+  selected_ = selected;
+  ReconcileProviderStatus();
 }
 
 void WalletPage::OpenUrl(std::string const& url) {
@@ -647,6 +721,16 @@ void WalletPage::ApplyStrings() {
   w_.WalletProviderStatsHeading().Text(Loc("provider_statistics"));
   w_.WalletExtenderLabel().Text(Loc("extender"));
   ApplyExtenderProvideRow();
+  // the Demand chart beside the provider plots and its Why? (P008); the
+  // caption is also what a screen reader reads for the bars, which have no
+  // automation peer
+  w_.WalletProviderDemandTitle().Text(Loc("provider_status_demand"));
+  w_.WalletProviderDemandCaption().Text(Loc("provider_status_histogram_title"));
+  w_.WalletProviderDemandStart().Text(Loc("provider_status_histogram_start"));
+  w_.WalletProviderDemandEnd().Text(Loc("provider_status_histogram_end"));
+  w_.WalletProviderWhyLabel().Text(Loc("provider_status_why"));
+  automation::AutomationProperties::SetName(w_.WalletProviderWhyButton(),
+                                            Loc("provider_status_why"));
   ApplyStatsSections(/*force=*/true);
   w_.LeaderboardRankLabel().Text(Loc("current_ranking"));
   w_.LeaderboardNetProvidedLabel().Text(Loc("net_provided"));
@@ -3763,15 +3847,21 @@ void WalletPage::ApplyProvideState(urnw::LiveStats const& stats) {
   // picked. Never hides every provider plot behind the disabled message,
   // whatever the device's live provide state says.
   const bool enabled = controlMode != "never";
-  if (enabled == providingEnabled_) return;
-  providingEnabled_ = enabled;
-  // the provider statistics share this gate (O8)
-  ApplyStatsSections(/*force=*/false);
-  if (enabled) {
-    LoadReliability();  // repaint the chart the gate was hiding
-  } else {
-    ApplyReliability(std::nullopt, Fetch::Ready);  // the gate paints the message
+  provideStateKnown_ = true;
+  if (enabled != providingEnabled_) {
+    providingEnabled_ = enabled;
+    // the provider statistics share this gate (O8)
+    ApplyStatsSections(/*force=*/false);
+    if (enabled) {
+      LoadReliability();  // repaint the chart the gate was hiding
+    } else {
+      ApplyReliability(std::nullopt, Fetch::Ready);  // the gate paints the message
+    }
   }
+  // The provider status controller (P008) follows the gate and the session's
+  // device on every update: a session that comes up, or a new one, brings
+  // another device.
+  ReconcileProviderStatus();
 }
 
 // ---- the statistics groups (connect/EXTENDER.md O5, O8) ------------------------
@@ -3800,6 +3890,23 @@ void WalletPage::BuildCharts() {
   urnw::kit::ClipToBounds(w_.WalletExtenderChartHost());
   urnw::kit::ClipToBounds(w_.WalletProviderLocalChartHost());
   urnw::kit::ClipToBounds(w_.WalletProviderBlockedChartHost());
+  // The Demand chart (P008): 60 bars, the oldest minute at the left, standing
+  // on the baseline the markup draws, in the Local chart's provider green; the
+  // last, the current and partial minute, is drawn lighter.
+  // ApplyProviderStatus sets their heights.
+  auto bars = w_.WalletProviderDemandBars();
+  for (size_t i = 0; i < providerstatus::kBarCount; ++i) {
+    bars.ColumnDefinitions().Append(StarColumn());
+    winrt::Microsoft::UI::Xaml::Shapes::Rectangle bar{};
+    bar.Fill(colors::MakeBrush(colors::kUrGreen));
+    bar.VerticalAlignment(VerticalAlignment::Bottom);
+    bar.Margin(ThicknessHelper::FromLengths(0.5, 0, 0.5, 0));
+    bar.Height(0);
+    if (i + 1 == providerstatus::kBarCount) bar.Opacity(0.5);
+    Grid::SetColumn(bar, static_cast<int32_t>(i));
+    bars.Children().Append(bar);
+    demandBars_.push_back(bar);
+  }
 }
 
 void WalletPage::OnChartTick() {
@@ -3827,15 +3934,25 @@ void WalletPage::ApplyExtenderProvideState(urnw::ExtenderProvideStatusView const
 }
 
 void WalletPage::ApplyProvideReason() {
-  const provideridle::ProviderIdleReason reason = provideridle::ProviderIdleReasonFor(
+  const provideridle::ProviderIdleReason idle = provideridle::ProviderIdleReasonFor(
       provideControlMode_, liveProvideMode_, providePaused_,
       // the desktop provides on any network, so it is never paused for Wi-Fi
       provideridle::ProvideNetworkMode::All, providerWindowBytes_);
-  const char* key = provideridle::ProviderIdleReasonKey(reason);
+  // the server's reason joins once a status for this device has loaded
+  const bool server = ProviderStatusView().sections.serverReason && providerStatus_;
+  const providerstatus::Line line = providerstatus::LineFor(
+      idle, server ? std::string_view{providerStatus_->reason} : std::string_view{},
+      server ? std::string_view{providerStatus_->reason_text} : std::string_view{});
+  // never while providing is off, where "Providing is disabled" says it
+  const bool shown =
+      line.shown() && provideControlMode_ != provideridle::ProvideControlMode::Never;
   // Change opens the Connect page's provide group, as the row above does
-  // (OnWalletProvideMode in the markup); it never changes the mode itself
-  w_.WalletProvideReasonText().Text(*key ? Loc(key) : hstring{});
-  w_.WalletProvideReasonRow().Visibility(*key ? Visibility::Visible : Visibility::Collapsed);
+  // (OnWalletProvideMode in the markup); it never changes the mode itself.
+  // A reason this build does not know reads as the server's English.
+  hstring text;
+  if (shown) text = line.key.empty() ? hstring{urnw::Widen(line.text)} : Loc(line.key);
+  w_.WalletProvideReasonText().Text(text);
+  w_.WalletProvideReasonRow().Visibility(shown ? Visibility::Visible : Visibility::Collapsed);
 }
 
 void WalletPage::ApplyExtenderProvideRow() {
@@ -3904,6 +4021,8 @@ void WalletPage::ApplyStatsSections(bool force) {
   w_.WalletProviderLocalChartRow().Visibility(shown(sections.providerVisible));
   w_.WalletProviderTransportBarRow().Visibility(shown(sections.providerVisible));
   w_.WalletProviderBlockedChartRow().Visibility(shown(sections.providerVisible));
+  // the Demand chart and its Why? sit with the plots, under the same gate (P008)
+  ApplyProviderStatus();
   if (!providerTransportBar_) return;
   if (!sections.providerVisible) {
     providerTransportBar_->SettleEmpty();
@@ -3912,6 +4031,189 @@ void WalletPage::ApplyStatsSections(bool force) {
     // the first distribution lands, which settles it
     providerTransportBar_->BeginLoading();
   }
+}
+
+// ---- the provider status (P008) ----------------------------------------------
+
+void WalletPage::ReconcileProviderStatus() {
+  // the controller lives on the device: no session, no device, no controller
+  const bool device = CanCallApi() && Sdk().hasDevice();
+  const uint64_t handle = device ? Sdk().device().handle() : 0;
+  bool changed = false;
+  // closed while providing is off, and once the device it was opened on goes
+  if (providerStatusVcDevice_ != 0 && (!providingEnabled_ || handle != providerStatusVcDevice_)) {
+    CloseProviderStatus(/*deviceAlive=*/true);
+    changed = true;
+  }
+  // opened once the destination shows with providing enabled, as a live
+  // reading says; one that failed to open is not retried on the same device
+  if (providerStatusVcDevice_ == 0 && provideStateKnown_ && providingEnabled_ && selected_ &&
+      device) {
+    OpenProviderStatus(handle);
+    changed = true;
+  }
+  // polling while the destination shows and the window presents; a stop keeps
+  // the last snapshot, so coming back shows it while the next poll runs
+  const bool run = providerStatusVc_.has_value() && selected_ && presentationActive_;
+  if (run != providerStatusStarted_) {
+    providerStatusStarted_ = run;
+    if (run) {
+      providerStatusVc_->start();
+    } else if (providerStatusVc_) {
+      providerStatusVc_->stop();
+    }
+  }
+  if (changed) ApplyProviderStatus();
+}
+
+void WalletPage::OpenProviderStatus(uint64_t device) {
+  providerStatusVcDevice_ = device;
+  try {
+    providerStatusVc_.emplace(Sdk().device().openProviderStatusViewController());
+  } catch (std::exception const& e) {
+    urnw::LogError("provider status: could not open the controller: {}", e.what());
+    providerStatusVc_.reset();
+    return;
+  }
+  auto queue = w_.DispatcherQueue();
+  auto weak = w_.get_weak();
+  auto alive = alive_;
+  // the SDK calls from its own thread, after every poll and after a stop that
+  // dropped one; the state is read on the UI thread
+  providerStatusSub_.emplace(providerStatusVc_->addProviderStatusListener([queue, weak, alive] {
+    queue.TryEnqueue([weak, alive] {
+      if (!*alive) return;
+      if (auto self = weak.get()) self->wallet().ReadProviderStatus();
+    });
+  }));
+}
+
+void WalletPage::CloseProviderStatus(bool deviceAlive) {
+  providerStatusSub_.reset();  // unsubscribes, before the controller closes
+  if (providerStatusVc_) {
+    // The typed close, on the device that opened it: the generic close stops
+    // the controller but cannot release it from the device. A device that is
+    // gone took its controllers with it.
+    if (deviceAlive && Sdk().hasDevice() && Sdk().device().handle() == providerStatusVcDevice_) {
+      Sdk().device().closeProviderStatusViewController(*providerStatusVc_);
+    }
+    providerStatusVc_.reset();
+  }
+  providerStatusVcDevice_ = 0;
+  providerStatusStarted_ = false;
+  providerStatusLoaded_ = false;
+  providerStatusError_.clear();
+  providerStatus_.reset();
+}
+
+void WalletPage::ReadProviderStatus() {
+  if (!providerStatusVc_) return;  // closed while this read was queued
+  try {
+    providerStatusLoaded_ = providerStatusVc_->getIsLoaded();
+    std::string error = providerStatusVc_->getLastFetchError();
+    // once per new error: until the route is deployed every poll answers 404
+    if (!error.empty() && error != providerStatusError_) {
+      urnw::LogWarn("provider status: a poll failed: {}", error);
+    }
+    providerStatusError_ = std::move(error);
+    providerStatus_ = providerStatusVc_->getProviderStatus();
+  } catch (std::exception const& e) {
+    // a malformed document must never take the page down
+    urnw::LogError("provider status: reading the controller failed: {}", e.what());
+    return;
+  } catch (...) {
+    urnw::LogError("provider status: reading the controller failed");
+    return;
+  }
+  ApplyProviderStatus();
+}
+
+providerstatus::View WalletPage::ProviderStatusView() const {
+  // no controller (no session, no device, --preview-ui) reads as a failed
+  // poll: the status is unavailable, never loading for good
+  return providerstatus::ViewFor(providerStatusLoaded_,
+                                 !providerStatusVc_ || !providerStatusError_.empty(),
+                                 providerStatus_);
+}
+
+void WalletPage::ApplyProviderStatus() {
+  using providerstatus::DemandArea;
+  const providerstatus::View view = ProviderStatusView();
+  const providerstatus::Sections& sections = view.sections;
+  const auto shown = [](bool visible) {
+    return visible ? Visibility::Visible : Visibility::Collapsed;
+  };
+  // Demand and Why? sit with the provider plots, under their gate (the owner's
+  // placement); while providing is disabled the plots' message covers them
+  const bool plots = statsSections_ && statsSections_->providerVisible;
+  w_.WalletProviderDemandRow().Visibility(shown(plots && sections.area != DemandArea::Hidden));
+  w_.WalletProviderWhyRow().Visibility(shown(plots && sections.why));
+  // loading or unavailable in place of the chart; the chart, its baseline and
+  // its axis for the empty hour and the counted one
+  hstring status;
+  if (sections.area == DemandArea::Loading) status = Loc("loading");
+  if (sections.area == DemandArea::Unavailable) status = Loc("provider_status_unavailable");
+  kit::SetTextOrCollapse(w_.WalletProviderDemandStatus(), status);
+  const bool chart = sections.area == DemandArea::Empty || sections.area == DemandArea::Bars;
+  w_.WalletProviderDemandChart().Visibility(shown(chart));
+  w_.WalletProviderDemandAxis().Visibility(shown(chart));
+  kit::SetTextOrCollapse(w_.WalletProviderDemandEmpty(),
+                         sections.area == DemandArea::Empty ? Loc("provider_status_histogram_empty")
+                                                            : hstring{});
+  kit::SetTextOrCollapse(
+      w_.WalletProviderDemandTotal(),
+      sections.area == DemandArea::Bars
+          ? hstring{urnw::Plural("provider_status_histogram_total", view.histogram.total)}
+          : hstring{});
+  for (size_t i = 0; i < demandBars_.size() && i < view.histogram.fractions.size(); ++i) {
+    demandBars_[i].Height(view.histogram.fractions[i] * kDemandBarsHeight);
+  }
+  if (providerWhyOpen_) RebuildProviderWhy();
+  ApplyProvideReason();
+}
+
+void WalletPage::RebuildProviderWhy() {
+  namespace automation = winrt::Microsoft::UI::Xaml::Automation;
+  auto panel = w_.WalletProviderWhyPanel();
+  panel.Children().Clear();
+  if (!providerStatus_) return;
+  // one row per ranking number in the server's order, then the country: the
+  // label, the value (amber while it holds the device back) and the help line
+  for (auto const& row : providerstatus::WhyRowsFor(*providerStatus_, ProviderStatusText())) {
+    const hstring label = Loc(row.labelKey);
+    StackPanel entry;
+    entry.Spacing(2);
+    Grid line;
+    line.ColumnSpacing(12);
+    line.ColumnDefinitions().Append(StarColumn());
+    line.ColumnDefinitions().Append(AutoColumn());
+    TextBlock labelText = MakeText(label, 13, colors::MutedBrush(), /*wrap=*/true);
+    TextBlock valueText = MakeText(hstring{row.value}, 13,
+                                   row.passes ? colors::TextBrush()
+                                              : colors::MakeBrush(colors::kUrAmber));
+    valueText.HorizontalAlignment(HorizontalAlignment::Right);
+    valueText.TextAlignment(TextAlignment::Right);
+    Grid::SetColumn(valueText, 1);
+    line.Children().Append(labelText);
+    line.Children().Append(valueText);
+    // one fact, read once: "Reliability, last hour, 98% (needs 95%)"
+    automation::AutomationProperties::SetAccessibilityView(
+        labelText, automation::Peers::AccessibilityView::Raw);
+    automation::AutomationProperties::SetName(valueText,
+                                              hstring{std::wstring{label} + L", " + row.value});
+    entry.Children().Append(line);
+    entry.Children().Append(MakeText(Loc(row.helpKey), 11, colors::MutedBrush(), /*wrap=*/true));
+    panel.Children().Append(entry);
+  }
+}
+
+void WalletPage::ToggleProviderWhy() {
+  providerWhyOpen_ = !providerWhyOpen_;
+  w_.WalletProviderWhyPanel().Visibility(providerWhyOpen_ ? Visibility::Visible
+                                                          : Visibility::Collapsed);
+  // ChevronDown while collapsed, ChevronUp while open
+  w_.WalletProviderWhyChevron().Glyph(providerWhyOpen_ ? L"\uE70E" : L"\uE70D");
+  if (providerWhyOpen_) RebuildProviderWhy();
 }
 
 winrt::fire_and_forget WalletPage::ShowProviderTransportSettingsSheet() {
