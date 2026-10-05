@@ -3,8 +3,7 @@
 // precedences between them, the control mode strings SdkHost returns, and the
 // store key of each reason.
 //
-//   c++ -std=c++20 -I ../src/App provider-idle-tests.cpp \
-//       -o /tmp/provider-idle-tests && /tmp/provider-idle-tests
+//   c++ -std=c++20 -I ../src/App provider-idle-tests.cpp -o /tmp/provider-idle-tests && /tmp/provider-idle-tests
 //
 // SPDX-License-Identifier: MPL-2.0
 

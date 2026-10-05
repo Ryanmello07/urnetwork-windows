@@ -15,9 +15,7 @@
 // wrapper's names and types, so the spec needs neither the SDK nor a json
 // library:
 //
-//   c++ -std=c++20 -Wall -Wextra -Werror -I ../src/App \
-//       vless-presentation-tests.cpp ../src/App/VlessPresentation.cpp \
-//       -o /tmp/vless-presentation-tests && /tmp/vless-presentation-tests ..
+//   c++ -std=c++20 -Wall -Wextra -Werror -I ../src/App vless-presentation-tests.cpp ../src/App/VlessPresentation.cpp -o /tmp/vless-presentation-tests && /tmp/vless-presentation-tests ..
 //
 // With URNW_VLESS_TESTS_SDK it is built against the generated header itself,
 // so the mapping compiles against the SDK's own types and a space export's
@@ -25,9 +23,7 @@
 // (the header needs nlohmann/json; it is a system include because the
 // generated code does not build with -Wextra -Werror):
 //
-//   c++ -std=c++20 -Wall -Wextra -Werror -DURNW_VLESS_TESTS_SDK -I ../src/App \
-//       -isystem <dir of urnetwork_sdk.hpp> -isystem <dir of nlohmann/> \
-//       vless-presentation-tests.cpp ../src/App/VlessPresentation.cpp ...
+//   c++ -std=c++20 -Wall -Wextra -Werror -DURNW_VLESS_TESTS_SDK -I ../src/App -isystem <dir of urnetwork_sdk.hpp> -isystem <dir of nlohmann/> vless-presentation-tests.cpp ../src/App/VlessPresentation.cpp ...
 //
 // The argument is the app directory (default ".."): the label keys are checked
 // against the generated English strings.

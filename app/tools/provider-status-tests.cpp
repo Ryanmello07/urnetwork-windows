@@ -7,8 +7,7 @@
 // status read on the api keeps for the provider-only device (Readings), which
 // apply each answer as the sdk's controller applies a poll.
 //
-//   c++ -std=c++20 -I ../src/App provider-status-tests.cpp \
-//       -o /tmp/provider-status-tests && /tmp/provider-status-tests
+//   c++ -std=c++20 -I ../src/App provider-status-tests.cpp -o /tmp/provider-status-tests && /tmp/provider-status-tests
 //
 // With URNW_PROVIDER_STATUS_TESTS_SDK the same cases run on the generated
 // header's own structs (urnet::ProviderStatus, ProviderRankingNumber,
@@ -18,9 +17,7 @@
 // needs nlohmann/json; both are system includes because the generated code
 // does not build with -Wextra -Werror:
 //
-//   c++ -std=c++20 -Wall -Wextra -Werror -DURNW_PROVIDER_STATUS_TESTS_SDK \
-//       -I ../src/App -isystem <dir of urnetwork_sdk.hpp> \
-//       -isystem <dir of nlohmann/> provider-status-tests.cpp -o ...
+//   c++ -std=c++20 -Wall -Wextra -Werror -DURNW_PROVIDER_STATUS_TESTS_SDK -I ../src/App -isystem <dir of urnetwork_sdk.hpp> -isystem <dir of nlohmann/> provider-status-tests.cpp -o ...
 //
 // SPDX-License-Identifier: MPL-2.0
 

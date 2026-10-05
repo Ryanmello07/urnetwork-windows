@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 #include "SnPayoutPresentation.h"
 
-#include <cstdio>
+#include <format>
 
 namespace urnw::snpayout {
 
@@ -45,11 +45,11 @@ std::string FormatScheduleTime(int64_t millis, int32_t utcOffsetMinutes) {
   const int64_t month = mp < 10 ? mp + 3 : mp - 9;
   const int64_t year = yoe + era * 400 + (month <= 2 ? 1 : 0);
   const int64_t minutes = rest / 60'000;
-  char buf[32];
-  std::snprintf(buf, sizeof(buf), "%04lld-%02lld-%02lld %02lld:%02lld", static_cast<long long>(year),
-                static_cast<long long>(month), static_cast<long long>(day),
-                static_cast<long long>(minutes / 60), static_cast<long long>(minutes % 60));
-  return buf;
+  // std::format sizes its own output: GCC cannot bound these fields from the
+  // arithmetic above, so an snprintf into a fixed buffer fails the Linux
+  // harness build with -Werror=format-truncation
+  return std::format("{:04}-{:02}-{:02} {:02}:{:02}", year, month, day, minutes / 60,
+                     minutes % 60);
 }
 
 }  // namespace urnw::snpayout
