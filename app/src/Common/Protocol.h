@@ -55,7 +55,7 @@ namespace urnw::proto {
 // 4: start_tunnel returns Preparing once RPC is usable. Capture is deferred
 //    until the selected destination has a usable proven provider.
 //
-//    NOT bumped for start_provider / stop_provider or the TunnelStatus
+//    Not bumped for start_provider / stop_provider or the TunnelStatus
 //    provider_* fields, by the same test: does silence mean the wrong thing? It
 //    does not. A service that does not know the verbs answers "unknown request
 //    type" and runs nothing, which is the behaviour before they existed, and a
@@ -228,7 +228,7 @@ struct SetKillSwitch {
   bool on = false;
 };
 
-// start_provider: KEEP PROVIDING WHILE DISCONNECTED (ProvideLifecycle.h). The
+// start_provider: keep providing while disconnected (ProvideLifecycle.h). The
 // service runs a provider-only DeviceLocal built from the persisted device
 // identity and these credentials, in this network space, with this provide
 // mode — and nothing else: no wintun adapter, no route, no DNS entry, no
@@ -343,14 +343,14 @@ struct TunnelStatus {
   // an automatic teardown is never a surprise. Defaults false — a peer that
   // cannot say simply never warns, which is today's behaviour.
   bool failsafe_armed = false;
-  // THE PROVIDER-ONLY DEVICE (start_provider), which provides while there is
+  // The provider-only device (start_provider), which provides while there is
   // no tunnel session. Its running bit, the control mode it was asked for, its
   // live tier as the sdk applied it (0 none, 1 network, 3 public) and whether
   // it holds a Network-mode provide key, read off the device when it was built
   // or re-moded. All false/empty while a tunnel session runs: that session's
   // own device is the provider, and the app reads it over the device RPC.
   //
-  // NO PROTOCOL BUMP (see kProtocolVersion): a peer too old to send these reads
+  // No protocol bump (see kProtocolVersion): a peer too old to send these reads
   // as "no provider-only device", which claims less than the truth.
   bool provider_running = false;
   std::string provider_control_mode;

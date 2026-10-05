@@ -11,6 +11,9 @@ import (
 	"testing"
 )
 
+// The SN payout line (App/SnPayoutPresentation.h): the C++ spec, the page's
+// wiring and the en strings.
+
 // Compile and execute the SN payout line spec (App/SnPayoutPresentation.h):
 // provider payouts moved to the UR subnet, and Earnings says how and when a
 // provider is paid under the points figure, with the current epoch's times

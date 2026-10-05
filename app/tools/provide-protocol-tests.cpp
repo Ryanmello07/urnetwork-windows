@@ -93,8 +93,8 @@ void Check(bool condition, const std::string& what) {
 StartProvider SampleRequest() {
   StartProvider r;
   r.by_jwt = "client.jwt.value";
-  r.network_space_json = R"({"key":{"host_name":"bringyour.com","env_name":"main"}})";
-  r.instance_id = "0193e520-acfa-9c76-fb85-6e1f862d1d9b";
+  r.network_space_json = R"({"key":{"host_name":"network.example","env_name":"main"}})";
+  r.instance_id = "0193e520-0000-7000-8000-000000000001";
   r.device_description = "DESKTOP-1";
   r.device_spec = "windows amd64";
   r.app_version = "2026.10.5-1";
@@ -195,7 +195,7 @@ void TestSameProviderDevice() {
       {"by_jwt", [](StartProvider& r) { r.by_jwt = "refreshed.jwt"; }},
       {"network_space_json", [](StartProvider& r) { r.network_space_json = "{}"; }},
       {"instance_id",
-       [](StartProvider& r) { r.instance_id = "0193e520-acfa-9c76-fb85-000000000001"; }},
+       [](StartProvider& r) { r.instance_id = "0193e520-0000-7000-8000-000000000002"; }},
       {"device_description", [](StartProvider& r) { r.device_description = "DESKTOP-2"; }},
       {"device_spec", [](StartProvider& r) { r.device_spec = "windows arm64"; }},
       {"app_version", [](StartProvider& r) { r.app_version = "2026.10.6-1"; }},

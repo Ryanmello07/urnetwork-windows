@@ -162,7 +162,7 @@ std::vector<std::string> ParseExtenderHostLines(std::string_view text);
 // through SdkHost against the app's own space, with or without a session.
 
 // The SDK's error ids (urnet::ControlDohError*), mirrored so a build that has
-// not seen the SDK header still agrees with it. Each IS the store key of its
+// not seen the SDK header still agrees with it. Each is the store key of its
 // message, the vless_error_* pattern.
 inline constexpr const char* kControlDohErrorUrlInvalid = "control_doh_error_url_invalid";
 inline constexpr const char* kControlDohErrorHttpsRequired = "control_doh_error_https_required";
@@ -187,7 +187,7 @@ inline constexpr const char* kSdkErrorIdInternal = "internal_error";
 inline constexpr const char* kControlDohChinaCountryCode = "cn";
 
 // The servers box back into the list setControlDohUrls takes: split on line
-// breaks (\n and \r), trimmed, blank lines dropped, in order. NOT on commas, as
+// breaks (\n and \r), trimmed, blank lines dropped, in order. Not on commas, as
 // the hosts box does: a url may carry one in its path, and every platform
 // splits this box the same way. Repeats are kept; the SDK drops them and
 // normalizes the rest.

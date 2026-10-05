@@ -8,9 +8,11 @@ import (
 	"testing"
 )
 
-// buildPeerLocationTests compiles the network peer location spec
-// (app/tools/peer-location-tests.cpp). extra adds compiler arguments ahead of
-// the source.
+// The network peer location (App/PeerLocation.h) as a C++ spec, alone and
+// against the generated sdk header.
+
+// Compile the network peer location spec (app/tools/peer-location-tests.cpp).
+// extra adds compiler arguments ahead of the source.
 func buildPeerLocationTests(t *testing.T, extra ...string) string {
 	t.Helper()
 	compiler, err := exec.LookPath("c++")
@@ -30,6 +32,7 @@ func buildPeerLocationTests(t *testing.T, extra ...string) string {
 	return program
 }
 
+// Run a built spec on the app directory and log what it printed.
 func runPeerLocationTests(t *testing.T, program string) {
 	t.Helper()
 	appDir := filepath.Join(repositoryRoot(t), "app")

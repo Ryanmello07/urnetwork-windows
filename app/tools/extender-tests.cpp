@@ -1270,35 +1270,35 @@ void StatsSectionsTests() {
 
 // ---- ExtenderPresentation.h: the bootstrap DNS-over-HTTPS servers ---------------
 
-// The sdk's China preset (connect RegionalControlDohUrls("cn")), as the box
-// shows it after "Use China resolvers".
-const std::vector<std::string> kChinaServers = {
-    "https://223.5.5.5/dns-query",
-    "https://223.6.6.6/dns-query",
-    "https://1.12.12.12/dns-query",
-    "https://120.53.53.53/dns-query",
+// A regional preset in the shape of the sdk's (connect RegionalControlDohUrls),
+// as the box shows it after "Use China resolvers", on documentation addresses.
+const std::vector<std::string> kPresetServers = {
+    "https://192.0.2.53/dns-query",
+    "https://192.0.2.54/dns-query",
+    "https://198.51.100.53/dns-query",
+    "https://203.0.113.53/dns-query",
 };
 
 void ControlDohTests() {
   {
     TEST_CASE("theBoxSplitsOnLineBreaksOnly");
-    const std::string_view typed = "https://223.5.5.5/q\r\n  https://1.12.12.12/q \rhttps://1.2.3.4/a,b\n\n";
+    const std::string_view typed = "https://192.0.2.53/q\r\n  https://198.51.100.53/q \rhttps://203.0.113.4/a,b\n\n";
     const auto lines = ParseControlDohLines(typed);
     CheckEq(3, static_cast<long long>(lines.size()), "three servers");
     if (lines.size() == 3) {
-      CheckEq("https://223.5.5.5/q", lines[0], "first, past its CRLF");
-      CheckEq("https://1.12.12.12/q", lines[1], "second, trimmed, ended by a bare CR");
-      CheckEq("https://1.2.3.4/a,b", lines[2],
+      CheckEq("https://192.0.2.53/q", lines[0], "first, past its CRLF");
+      CheckEq("https://198.51.100.53/q", lines[1], "second, trimmed, ended by a bare CR");
+      CheckEq("https://203.0.113.4/a,b", lines[2],
               "a comma is part of a url, never a separator as in the hosts box");
     }
   }
   {
     TEST_CASE("theOrderAndTheRepeatsAreTheSdks");
     const auto lines = ParseControlDohLines(
-        "https://223.6.6.6/dns-query\nhttps://223.5.5.5/dns-query\nhttps://223.6.6.6/dns-query");
-    Check(lines == std::vector<std::string>{"https://223.6.6.6/dns-query",
-                                            "https://223.5.5.5/dns-query",
-                                            "https://223.6.6.6/dns-query"},
+        "https://192.0.2.54/dns-query\nhttps://192.0.2.53/dns-query\nhttps://192.0.2.54/dns-query");
+    Check(lines == std::vector<std::string>{"https://192.0.2.54/dns-query",
+                                            "https://192.0.2.53/dns-query",
+                                            "https://192.0.2.54/dns-query"},
           "in the order typed, with the repeat left for the sdk to drop");
   }
   {
@@ -1308,12 +1308,12 @@ void ControlDohTests() {
   }
   {
     TEST_CASE("theBoxShowsOneServerPerLine");
-    CheckEq(R"(https://223.5.5.5/dns-query
-https://223.6.6.6/dns-query
-https://1.12.12.12/dns-query
-https://120.53.53.53/dns-query)",
-            ControlDohText(kChinaServers), "the preset, one per line, in the sdk's order");
-    Check(ParseControlDohLines(ControlDohText(kChinaServers)) == kChinaServers,
+    CheckEq(R"(https://192.0.2.53/dns-query
+https://192.0.2.54/dns-query
+https://198.51.100.53/dns-query
+https://203.0.113.53/dns-query)",
+            ControlDohText(kPresetServers), "the preset, one per line, in the sdk's order");
+    Check(ParseControlDohLines(ControlDohText(kPresetServers)) == kPresetServers,
           "what the box shows is what a save sends back");
     CheckEq("", ControlDohText({}), "no servers is an empty box, which means the built-in ones");
   }
@@ -1385,8 +1385,8 @@ https://120.53.53.53/dns-query)",
     auto decoded = GoodDecode();
     decoded.hasSettings = true;
     decoded.settingsHost = "bringyour.com";
-    decoded.controlDohUrls = {"https://223.5.5.5/dns-query", "https://1.12.12.12/dns-query"};
-    const std::string servers = "https://223.5.5.5/dns-query, https://1.12.12.12/dns-query";
+    decoded.controlDohUrls = {"https://192.0.2.53/dns-query", "https://198.51.100.53/dns-query"};
+    const std::string servers = "https://192.0.2.53/dns-query, https://198.51.100.53/dns-query";
     for (const bool useSettings : {false, true}) {
       const auto decision = DecideExtenderImport(decoded, useSettings);
       CheckEq(servers, decision.controlDohUrlsArg,
@@ -1407,12 +1407,12 @@ https://120.53.53.53/dns-query)",
     CheckEq("", DecideExtenderImport(decoded, true).controlDohUrlsArg,
             "a block that names none leaves the importer's own servers alone");
     auto unsettled = GoodDecode();
-    unsettled.controlDohUrls = kChinaServers;
+    unsettled.controlDohUrls = kPresetServers;
     CheckEq("", DecideExtenderImport(unsettled, true).controlDohUrlsArg,
             "servers ride only in a settings block, and only it can apply them");
     ExtenderShareDecodeView bad;
     bad.hasSettings = true;
-    bad.controlDohUrls = kChinaServers;
+    bad.controlDohUrls = kPresetServers;
     CheckEq("", DecideExtenderImport(bad, true).controlDohUrlsArg, "a failed decode names nothing");
   }
 }

@@ -8,6 +8,9 @@ import (
 	"testing"
 )
 
+// The Settings link to the ur.io cloud proxies page (App/CloudProxyLink.h),
+// run as its C++ spec.
+
 // Compile and execute the cloud proxy link spec (App/CloudProxyLink.h): the app
 // has no protocol switch, so Settings links to the ur.io cloud proxies page for
 // WireGuard, SOCKS and HTTPS proxies. The link must be the official page, carry

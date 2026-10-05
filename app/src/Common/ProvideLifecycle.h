@@ -1,20 +1,20 @@
 // Whether this device provides while there is no tunnel session, for each
 // provide control mode: the one lifecycle decision the app and the service
-// both apply to the PROVIDER-ONLY device (support inbox 1521: a provider that
+// both apply to the provider-only device (support inbox 1521: a provider that
 // earns nothing and is told nothing).
 //
-// THE DEFECT THIS ANSWERS. The provider is the service's DeviceLocal, and that
+// The defect this answers. The provider is the service's DeviceLocal, and that
 // device existed only inside a tunnel session. Disconnect sends stop_tunnel
 // (it has to: the capture routes and the firewall policy would otherwise stay
 // on the machine, ConnectAction.h bug A), TunnelController::StopLocked
 // destroys the DeviceLocal with the tunnel, and the launch path never starts a
 // session without a Connect gesture (SdkHost::BootstrapSession, D8). So on
-// Windows the provider stopped in EVERY mode the moment the user disconnected
+// Windows the provider stopped in every mode the moment the user disconnected
 // and never started after a launch that did not connect. A user who picked
 // Always ("provides to everyone whenever the app is running") earned only
 // while connected, and Auto never served the user's own devices while idle.
 //
-// WHAT THE OTHER PLATFORMS DO. Android and Apple keep their packet tunnel, and
+// What the other platforms do. Android and Apple keep their packet tunnel, and
 // with it the DeviceLocal, running whenever providing is enabled, and the sdk
 // decides the tier. Windows keeps the DeviceLocal without the tunnel instead:
 // while there is no tunnel session the service runs a provider-only device
@@ -22,7 +22,7 @@
 // no device RPC listener, so providing never changes how this machine's own
 // traffic is routed, and no client can drive the device.
 //
-// THE SDK SEMANTICS, mirrored and never reinterpreted
+// The SDK semantics, mirrored and never reinterpreted
 // (DeviceLocal.applyProvideControlModeWithLock, sdk/device_local.go):
 //   never   -> no providing
 //   always  -> public
@@ -91,7 +91,7 @@ constexpr Tier SdkTierFor(ControlMode mode, bool connected) {
   return Tier::None;
 }
 
-// THE LIFECYCLE DECISION: does this device provide? Connected, the tunnel
+// The lifecycle decision: does this device provide? Connected, the tunnel
 // session's DeviceLocal is the provider. Disconnected, a provider-only device
 // runs exactly when the answer is true.
 constexpr bool ProviderRuns(ControlMode mode, bool connected) {

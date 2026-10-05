@@ -17,6 +17,7 @@ import (
 // which need Windows and WinRT, with comments stripped so prose cannot satisfy
 // a contract.
 
+// Each needle must be absent from text.
 func requireNone(t *testing.T, where, text string, needles ...string) {
 	t.Helper()
 	for _, needle := range needles {
@@ -321,12 +322,12 @@ func TestProviderOnlyStatusWiring(t *testing.T) {
 func TestProviderOnlyRebuiltOnNetworkSpaceSave(t *testing.T) {
 	source := sdkHostSource(t)
 	for _, writer := range []struct{ signature, write, reason string }{
-		{"std::optional<std::string> SdkHost::SetControlDohUrls(", "networkSpace_->setControlDohUrls(",
-			`if (!device_) RequestProviderReconcile("bootstrap doh servers saved");`},
-		{"std::optional<std::string> SdkHost::SetVlessSettings(", "networkSpace_->setVlessSettings(",
-			`if (!device_) RequestProviderReconcile("vless settings saved");`},
-		{"bool SdkHost::SetNetExtender(", "spaceManager_->updateNetworkSpaceValues(key, values);",
-			`if (!device_) RequestProviderReconcile("private extender saved");`},
+		{signature: "std::optional<std::string> SdkHost::SetControlDohUrls(", write: "networkSpace_->setControlDohUrls(",
+			reason: `if (!device_) RequestProviderReconcile("bootstrap doh servers saved");`},
+		{signature: "std::optional<std::string> SdkHost::SetVlessSettings(", write: "networkSpace_->setVlessSettings(",
+			reason: `if (!device_) RequestProviderReconcile("vless settings saved");`},
+		{signature: "bool SdkHost::SetNetExtender(", write: "spaceManager_->updateNetworkSpaceValues(key, values);",
+			reason: `if (!device_) RequestProviderReconcile("private extender saved");`},
 	} {
 		body := definitionBody(t, "SdkHost.cpp", source, writer.signature)
 		provideRequireOrder(t, writer.signature, body, writer.write, writer.reason)

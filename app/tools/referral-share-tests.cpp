@@ -1,7 +1,7 @@
 // Executable spec for the referral invitation the share actions copy
 // (App/ReferralShare.h, support inbox 1698): the localized message, then the
 // code's ur.io/c link on its own line, which opens the Android app (or Play
-// with the install referrer) and web signup - run against the SAME header the
+// with the install referrer) and web signup - run against the same header the
 // app compiles, on any host with a C++20 compiler.
 //
 //   c++ -std=c++20 -I ../src/App referral-share-tests.cpp -o /tmp/referral-share-tests && /tmp/referral-share-tests

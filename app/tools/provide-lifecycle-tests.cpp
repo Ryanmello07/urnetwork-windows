@@ -113,7 +113,7 @@ void TestSdkTiers() {
         "tiers: the sdk's ProvideMode values");
 }
 
-// (c) THE DEFECT: on Windows every mode stopped providing on Disconnect
+// (c) the defect: on Windows every mode stopped providing on Disconnect
 void TestProvidesWhileDisconnected() {
   Check(ProviderRuns(ControlMode::Always, false), "always provides while disconnected");
   Check(SdkTierFor(ControlMode::Always, false) == Tier::Public,

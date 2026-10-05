@@ -3,7 +3,7 @@
 // claimable, claimable), the current epoch's end, claim-open and expiry times
 // formatted from the SDK's epoch schedule, and - with the Solana panel's
 // decision (App/SolanaWalletPresentation.h) - that the final USDC payout line
-// shows only while USDC is pending. Run against the SAME sources the app
+// shows only while USDC is pending. Run against the same sources the app
 // compiles, on any host with a C++20 compiler.
 //
 // The WinUI half (WalletPage's line, its Claim and Set coldkey actions) cannot

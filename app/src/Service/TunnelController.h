@@ -156,7 +156,7 @@ class TunnelController {
   // Clear persisted auth/session state (mirrors the macOS logout message).
   void Logout();
 
-  // THE PROVIDER-ONLY DEVICE (start_provider; Common/ProvideLifecycle.h). Keeps
+  // The provider-only device (start_provider; Common/ProvideLifecycle.h). Keeps
   // providing while there is no tunnel session: a DeviceLocal built from the
   // persisted identity and the request's credentials, network space, provider
   // transport policy and provide mode — and nothing else. No wintun adapter, no
@@ -179,7 +179,7 @@ class TunnelController {
   // taken in budget.
   bool StopProvider();
   // get_provider_stats (Protocol.h ProviderStats): the provider-only device's
-  // statistics, for the screens a session's DeviceRemote feeds. NEVER BLOCKS on
+  // statistics, for the screens a session's DeviceRemote feeds. Never blocks on
   // the session lock or the device, for Status()'s reason: it is served on the
   // control pipe, and every later get_state would queue behind it. It copies
   // the client id and peer count the build and the peers listener left, and
@@ -367,7 +367,7 @@ class TunnelController {
   std::optional<urnet::DeviceLocalKeyMaterial> LoadKeyMaterial();
   void PersistKeyMaterial(const urnet::DeviceLocalKeyMaterial& km);
   // Steps 3 and 4 of a bring-up, shared by the tunnel session and the
-  // provider-only device so both come from ONE copy of the identity rules:
+  // provider-only device so both come from one copy of the identity rules:
   // the space imported into the service's own storage, and a DeviceLocal with
   // the persisted key material (a new identity persisted only when none was
   // stored), sized at the host's memory tier, with enable_rpc=false — a device
@@ -480,7 +480,7 @@ class TunnelController {
   std::optional<urnet::NetworkSpace> networkSpace_;
   std::optional<urnet::DeviceLocal> device_;
   // The provider-only device (StartProvider), its space and the request it was
-  // built from. SEPARATE slots from networkSpace_ and device_, which keep their
+  // built from. Separate slots from networkSpace_ and device_, which keep their
   // one meaning — the tunnel session's — for every check that reads them (the
   // capture precondition, the teardown, the published identity). Never engaged
   // together with a tunnel session. providerTier_ and providerNetworkKey_ are

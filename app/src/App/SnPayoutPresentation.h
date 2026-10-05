@@ -1,4 +1,4 @@
-// Everything the SN payout line decides BEFORE it touches a XAML object: which
+// Everything the SN payout line decides before it touches a XAML object: which
 // line shows under the points figure on Earnings, the current epoch's times it
 // names and whether it carries Claim.
 //

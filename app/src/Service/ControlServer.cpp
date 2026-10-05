@@ -96,7 +96,7 @@ nlohmann::json ControlServer::Handle(const nlohmann::json& request) {
       reply.status = tunnel_.Status();
       PushState();
     } else if (type == proto::msg::kStartProvider) {
-      // KEEP PROVIDING WHILE DISCONNECTED (TunnelController::StartProvider). The
+      // Keep providing while disconnected (TunnelController::StartProvider). The
       // device registers under this machine's persisted identity with the
       // request's credentials, so the request must name the device exactly —
       // validated before anything is retired or built, like start_tunnel's
@@ -112,7 +112,7 @@ nlohmann::json ControlServer::Handle(const nlohmann::json& request) {
       std::string error;
       reply.ok = tunnel_.StartProvider(req, error);
       reply.error = error;
-      // The status rides on a refusal too, so the app sees what IS running (a
+      // The status rides on a refusal too, so the app sees what is running (a
       // tunnel session, an armed floor) beside the reason.
       reply.status = tunnel_.Status();
       PushState();

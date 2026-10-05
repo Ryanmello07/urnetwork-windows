@@ -11,6 +11,10 @@ import (
 	"testing"
 )
 
+// The bootstrap DNS-over-HTTPS servers: the extender UI spec that covers their
+// box, the settings block's wiring read from the app sources, and the
+// mirrored error ids against the generated sdk header.
+
 // Compile and execute the extender UI spec (app/tools/extender-tests.cpp) with
 // the app's own ExtenderPresentation.cpp and the vendored QR encoder: the ring
 // geometry, the status mapping, the settings form, the bootstrap
@@ -242,7 +246,7 @@ func TestControlDohSettingsWiring(t *testing.T) {
 // before the bootstrap DoH servers.
 func TestControlDohMatchesTheSdkHeader(t *testing.T) {
 	root := repositoryRoot(t)
-	dir := controlDohSdkHeaderDir(t, root)
+	dir := sdkHeaderDirWith(t, root, "setControlDohUrls(")
 	if dir == "" {
 		t.Skip("no urnetwork_sdk.hpp with the bootstrap DoH servers (set URNETWORK_SDK_INCLUDE)")
 	}
@@ -278,35 +282,4 @@ func TestControlDohMatchesTheSdkHeader(t *testing.T) {
 		}
 	}
 	t.Logf("against %s", filepath.Join(dir, "urnetwork_sdk.hpp"))
-}
-
-// The directory of a urnetwork_sdk.hpp that has the bootstrap DoH servers, or "".
-func controlDohSdkHeaderDir(t *testing.T, root string) string {
-	t.Helper()
-	explicit := os.Getenv("URNETWORK_SDK_INCLUDE")
-	candidates := []string{}
-	if explicit != "" {
-		candidates = append(candidates, explicit)
-	}
-	for _, arch := range []string{"amd64", "arm64"} {
-		candidates = append(candidates, filepath.Join(root, "app", "third_party", "urnetwork-sdk", arch))
-	}
-	for _, dir := range candidates {
-		header, err := os.ReadFile(filepath.Join(dir, "urnetwork_sdk.hpp"))
-		if err != nil {
-			if dir == explicit {
-				t.Fatalf("URNETWORK_SDK_INCLUDE=%s: %v", explicit, err)
-			}
-			continue
-		}
-		if !strings.Contains(string(header), "setControlDohUrls(") {
-			if dir == explicit {
-				t.Fatalf("URNETWORK_SDK_INCLUDE=%s: urnetwork_sdk.hpp has no bootstrap DoH servers", explicit)
-			}
-			t.Logf("%s: urnetwork_sdk.hpp predates the bootstrap DoH servers", dir)
-			continue
-		}
-		return dir
-	}
-	return ""
 }

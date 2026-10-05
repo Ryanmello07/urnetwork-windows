@@ -175,7 +175,7 @@ class WalletPage {
  private:
   // THE ONE GATE for every server call this destination makes. --preview-ui
   // deliberately has no session, and a guarded LOAD path is not enough: every
-  // ACTION here (connect, claim, the leaderboard switch) has to pass
+  // action here (connect, claim, the leaderboard switch) has to pass
   // through this too, or a preview build puts authenticated-looking requests
   // on the wire with no token.
   bool CanCallApi() const;

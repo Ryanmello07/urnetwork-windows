@@ -1,9 +1,9 @@
-// "THE NETWORK MOVED", TOLD TO A DEVICE AT MOST ONCE PER BURST.
+// "The network moved", told to a device at most once per burst.
 //
 // The tunnel session's DeviceLocal hears about an IP, route or Wi-Fi quality
 // change from TunnelWatchdog's sampler thread, which EgressMonitor feeds. The
 // coalescing rule both use is here, and so is the notification half on its own
-// (NetworkChangeNotifier) for the PROVIDER-ONLY DEVICE, which has no watchdog
+// (NetworkChangeNotifier) for the provider-only device, which has no watchdog
 // because there is no tunnel to judge (TunnelController::
 // WatchProviderNetworkLocked). Without it that device was never told about a
 // Wi-Fi or Ethernet change and recovered only through its transports' timeouts.
@@ -40,8 +40,8 @@ inline constexpr int64_t kNetworkNotifyDebounceMillis = 750;
 // would otherwise become a cgo call into the SDK that kicks every transport in
 // the process. This folds a burst into exactly one notification.
 //
-// TRAILING FIRE ON A FIXED WINDOW, not a re-extending debounce: the deadline is
-// set by the FIRST observation of a burst and never pushed out. A re-extending
+// Trailing fire on a fixed window, not a re-extending debounce: the deadline is
+// set by the first observation of a burst and never pushed out. A re-extending
 // debounce can be starved indefinitely by a link that keeps flapping, which is
 // precisely the condition in which the SDK most needs to be told.
 class NotifyCoalescer {
@@ -84,15 +84,15 @@ class NotifyCoalescer {
 //
 // TunnelWatchdog::RunSampler's notification rules, on a thread of its own:
 //
-//   * THE SINKS ONLY RECORD. EgressMonitor invokes them on system worker
+//   * The sinks only record. EgressMonitor invokes them on system worker
 //     threads that its Stop() waits for, so a sink that could block would wedge
 //     the teardown (EgressMonitor.h). They take a short lock, note the event in
 //     a coalescer and wake the thread.
-//   * ONE THREAD CALLS THE DEVICE, once per burst: `networkChanged` when a
+//   * One thread calls the device, once per burst: `networkChanged` when a
 //     network burst's window closes, and `networkQualityChanged` for a Wi-Fi
 //     signal change — unless a network change fires in the same pass, which
 //     already makes every transport remeasure.
-//   * DESTRUCTION CANCELS AND JOINS. It waits out a call into the device that is
+//   * Destruction cancels and joins. It waits out a call into the device that is
 //     already running, and makes no call after it returns. So the owner keeps
 //     the device alive until then and destroys this where waiting is bounded:
 //     TunnelController hands it, with the device, to the bounded teardown

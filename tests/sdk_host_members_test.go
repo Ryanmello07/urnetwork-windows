@@ -8,6 +8,8 @@ import (
 	"testing"
 )
 
+// A guard over SdkHost.h's data members, which only a Windows build compiles.
+
 // SdkHost.h cannot be compiled off Windows, and it is where most changes add
 // state, so two of them can each add a data member under one name and merge
 // cleanly into a class that does not compile: the balance recovery's

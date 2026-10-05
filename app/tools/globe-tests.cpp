@@ -1,7 +1,7 @@
 // Executable spec for the provider-locations pure logic: a port of the android
 // JVM tests GlobeGeometryTest.kt (25 cases) and WorldTopologyTest.kt (7 cases),
 // plus the row-label and "Stay on this exit" cases (StayOnExitTest.kt), run
-// against the SAME C++ sources the app compiles.
+// against the same C++ sources the app compiles.
 //
 // The windows app has no test project (the solution is Common/Service/App/
 // SplitTunnel/Installer), and a WinUI 3 app cannot be built or run on a

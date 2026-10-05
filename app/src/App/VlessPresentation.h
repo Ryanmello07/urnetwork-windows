@@ -5,7 +5,7 @@
 // mapping, the store key of an sdk error id, and the picker options.
 //
 // And the reading of what a space stores. SdkHost writes a space's values
-// WHOLE in two places, BuildNetworkSpace at every launch and
+// whole in two places, BuildNetworkSpace at every launch and
 // ApplyNetworkServer when the login sheet applies a network, and
 // updateNetworkSpaceValues replaces the stored set with them. Both write their
 // own values over the space's stored ones (NetworkSpaceStartup.h), read out of

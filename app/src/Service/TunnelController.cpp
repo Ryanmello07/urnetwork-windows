@@ -111,7 +111,7 @@ urnet::DeviceLocal TunnelController::NewDeviceLocked(const urnet::NetworkSpace& 
                                                      const char* who) {
   auto km = LoadKeyMaterial();
   // The device target comes from the measured host's memory tier, and the
-  // SAME cached measurement chose the process budget at startup, so the
+  // same cached measurement chose the process budget at startup, so the
   // target and the budget backing it are always one tier.
   const int64_t memoryTargetByteCount = DeviceMemoryTargetByteCount();
   LogInfo("{} constructing DeviceLocal ({} identity, {} MiB memory target)", who,
@@ -1316,7 +1316,7 @@ void TunnelController::StopLocked(bool finalDisarm) {
   // order — it is simply reached sooner, which is the entire point.
   RevertMachineStateLocked(finalDisarm, hadRoutes);
 
-  // THE PROVIDER-ONLY DEVICE, in EVERY teardown, and so at the head of every
+  // The provider-only device, in every teardown, and so at the head of every
   // bring-up: StartLocked opens with StopLocked, so a Connect retires the
   // provider before the new session's DeviceLocal — the same persisted
   // identity — the adapter or a single route exists, and the two devices never
@@ -1800,7 +1800,7 @@ void TunnelController::Logout() {
 
 bool TunnelController::StartProvider(const proto::StartProvider& request,
                                      std::string& error) {
-  // TIMED, like Stop(): a connect attempt wedged inside the SDK holds mutex_ for
+  // Timed, like Stop(): a connect attempt wedged inside the SDK holds mutex_ for
   // as long as the process lives, and a start_provider that waited behind it
   // would hold the control pipe with it. There is nothing to provide beside a
   // bring-up in any case — its own device will.
@@ -1925,14 +1925,14 @@ void TunnelController::RetireProviderDeviceLocked() {
     providerClients_.reset();
     providerClientId_.clear();
   }
-  // The network watch's handlers are dropped on THIS thread, as
+  // The network watch's handlers are dropped on this thread, as
   // TearDownSessionLocked drops the session monitor's, so the monitor the
   // worker inherits can only unregister itself.
   if (providerEgress_) {
     providerEgress_->SetOnNetworkEvent(nullptr);
     providerEgress_->SetOnNetworkQualityEvent(nullptr);
   }
-  // Moved into locals and then RESET, for the reason TearDownSessionLocked
+  // Moved into locals and then reset, for the reason TearDownSessionLocked
   // spells out: a moved-from engaged optional still tests true.
   auto egress = std::move(providerEgress_);
   providerEgress_.reset();
@@ -1946,7 +1946,7 @@ void TunnelController::RetireProviderDeviceLocked() {
   providerRequest_ = proto::StartProvider{};
   providerTier_ = 0;
   providerNetworkKey_ = false;
-  // Published BEFORE the bounded close, as RevertMachineStateLocked publishes
+  // Published before the bounded close, as RevertMachineStateLocked publishes
   // released ownership: the app must not keep showing a provider that is going.
   PublishStatusLocked();
   LogInfo("provide: retiring the provider-only device (mode={})", provide::ToString(mode));
@@ -2027,7 +2027,7 @@ void TunnelController::OpenProviderStatsLocked() {
   try {
     clientId = providerDevice_->getClientId();
     vc.emplace(providerDevice_->openContractViewController());
-    // Subscribed BEFORE the first read, so a change in between is either in
+    // Subscribed before the first read, so a change in between is either in
     // that read or delivered after it. The listener holds a share of the count,
     // never this object: a callback already running when the retire
     // unsubscribes still finds it.

@@ -10,6 +10,9 @@ import (
 	"testing"
 )
 
+// The Solana payout wallet (App/SolanaWalletPresentation.h): the C++ spec, and
+// what the Earnings pane says when removing the payout wallet.
+
 // Compile and execute the Solana payout wallet spec
 // (App/SolanaWalletPresentation.h): the address check, the short form, which
 // account wallet is the payout wallet, the USDC waiting, how the three reads
