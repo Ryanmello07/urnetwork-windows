@@ -66,6 +66,12 @@ namespace urnw::proto {
 //    "unknown request type", which the app reads as "no statistics" and
 //    renders as it did before the verb existed (no client count and no
 //    provider plots while disconnected).
+//
+//    Nor for the network country (StartTunnel and StartProvider
+//    network_country_*, set_network_country): a service that drops the fields
+//    or does not know the verb sets no network country, which is the
+//    behaviour before they existed, and an app too old to send them leaves a
+//    new service with none.
 inline constexpr int kProtocolVersion = 4;
 
 // The first version that understands StartTunnel::mode. Below this, an absent
@@ -87,6 +93,7 @@ inline constexpr const char* kLogout = "logout";                 // app -> servi
 inline constexpr const char* kStartProvider = "start_provider";  // app -> service
 inline constexpr const char* kStopProvider = "stop_provider";    // app -> service
 inline constexpr const char* kGetProviderStats = "get_provider_stats";  // app -> service
+inline constexpr const char* kSetNetworkCountry = "set_network_country";  // app -> service
 inline constexpr const char* kReply = "reply";                   // service -> app
 inline constexpr const char* kEvent = "event";                   // service -> app (unsolicited)
 }  // namespace msg
@@ -217,6 +224,15 @@ struct StartTunnel {
   // one" when no state exists. Getting this backwards would have an old client
   // silently arm a kill switch nobody asked for.
   bool kill_switch = false;
+  // The network country the app read (Common/NetworkCountry.h): the country of
+  // the mobile broadband network carrying the default route, "" for none, and
+  // the source token that says why. The service applies it to its own sdk
+  // before it imports the network space (TunnelController::SetNetworkCountry),
+  // so this session's first extender dials already front with that country's
+  // list while the extender hint cannot be fetched. Absent parses as no
+  // country, which is what a service did before the field existed.
+  std::string network_country_code;
+  std::string network_country_source;
 };
 
 struct SetSplitTunnel {
@@ -252,6 +268,21 @@ struct StartProvider {
   // policy the service's DeviceLocal persisted (or its default) stands, exactly
   // as BootstrapSession seeds a tunnel session's device only when one exists.
   std::string provider_transport_settings_json;
+  // The network country, as StartTunnel carries it. Applied in place, process
+  // wide, so it is not part of SameProviderDevice: a new country never
+  // rebuilds the running device.
+  std::string network_country_code;
+  std::string network_country_source;
+};
+
+// set_network_country: the network country the app reads changed (it follows
+// the default route, App/NetworkCountryWatch.h), or the app has just greeted a
+// service whose running devices may hold an older one. The service applies it
+// to its sdk, process-wide and in place, from each device's next extender
+// dial; nothing a status reports moves. The fields are StartTunnel's.
+struct SetNetworkCountry {
+  std::string network_country_code;
+  std::string network_country_source;
 };
 
 // ---- reply / state payload ------------------------------------------------
@@ -416,6 +447,8 @@ inline void to_json(nlohmann::json& j, const StartTunnel& v) {
       {"allowlist_mode", v.allowlist_mode},
       {"mode", ToString(v.mode)},
       {"kill_switch", v.kill_switch},
+      {"network_country_code", v.network_country_code},
+      {"network_country_source", v.network_country_source},
   };
 }
 
@@ -444,6 +477,8 @@ inline void from_json(const nlohmann::json& j, StartTunnel& v) {
   get("excluded_app_paths", v.excluded_app_paths);
   get("allowlist_mode", v.allowlist_mode);
   get("kill_switch", v.kill_switch);
+  get("network_country_code", v.network_country_code);
+  get("network_country_source", v.network_country_source);
 }
 
 inline void to_json(nlohmann::json& j, const SetSplitTunnel& v) {
@@ -475,6 +510,8 @@ inline void to_json(nlohmann::json& j, const StartProvider& v) {
       {"app_version", v.app_version},
       {"provide_mode", v.provide_mode},
       {"provider_transport_settings_json", v.provider_transport_settings_json},
+      {"network_country_code", v.network_country_code},
+      {"network_country_source", v.network_country_source},
   };
 }
 
@@ -490,13 +527,28 @@ inline void from_json(const nlohmann::json& j, StartProvider& v) {
   get("app_version", v.app_version);
   get("provide_mode", v.provide_mode);
   get("provider_transport_settings_json", v.provider_transport_settings_json);
+  get("network_country_code", v.network_country_code);
+  get("network_country_source", v.network_country_source);
+}
+
+inline void to_json(nlohmann::json& j, const SetNetworkCountry& v) {
+  j = {{"network_country_code", v.network_country_code},
+       {"network_country_source", v.network_country_source}};
+}
+inline void from_json(const nlohmann::json& j, SetNetworkCountry& v) {
+  auto get = [&](const char* k, auto& out) {
+    if (auto it = j.find(k); it != j.end() && !it->is_null()) it->get_to(out);
+  };
+  get("network_country_code", v.network_country_code);
+  get("network_country_source", v.network_country_source);
 }
 
 // "A device built from `a` can keep running for `b`." Everything that goes into
 // constructing the device must match — credentials, identity, space and the
 // provider transport policy; only the provide mode may differ, because the
-// running device takes a new mode in place. Shared by the service, which keeps
-// its device for such a request, and the tests.
+// running device takes a new mode in place, and the network country, which
+// the service applies in place for every device. Shared by the service, which
+// keeps its device for such a request, and the tests.
 inline bool SameProviderDevice(const StartProvider& a, const StartProvider& b) {
   return a.by_jwt == b.by_jwt && a.network_space_json == b.network_space_json &&
          a.instance_id == b.instance_id && a.device_description == b.device_description &&

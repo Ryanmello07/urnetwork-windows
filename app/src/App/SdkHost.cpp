@@ -326,6 +326,14 @@ void ClearRpcSession() {
 }  // namespace
 
 SdkHost::~SdkHost() {
+  // The network country's notifications, then its thread, ended above the
+  // lock like the loops below. A report it is running is waited out: it pushes
+  // over the pipe and must not run against a host being destroyed. A read the
+  // WWAN service never answers is not, past a short budget, so that service
+  // cannot hold up the exit (NetworkCountryWatch.h); the read uses nothing of
+  // this host.
+  networkCountryChanges_.reset();
+  networkCountryWatch_.reset();
   // BEFORE mutex_, and joined rather than detached: the watchdog takes mutex_
   // (through the session worker it wakes), so stopping it from inside the lock
   // would deadlock, and letting it outlive this object would leave a thread
@@ -530,6 +538,10 @@ bool SdkHost::Initialize() {
             "connect state will never report 'up'.");
   }
   try {
+    // The network country before the space manager: the spaces it builds dial
+    // at once, and an extender dial under a name the network refuses holds
+    // that extender's address for minutes.
+    StartNetworkCountryWatch();
     spaceManager_ =
         urnet::newNetworkSpaceManager(Narrow(SdkStorageDir(false).wstring()));
     // The legacy official space is re-keyed BEFORE the bundled space is
@@ -2503,6 +2515,71 @@ void SdkHost::ApplySdkEgressBind(int64_t index4, int64_t index6, const char* why
   }
 }
 
+// ---- the network country (P052) ---------------------------------------------
+//
+// See the contract in the header and Common/NetworkCountry.h.
+
+namespace {
+// How long a launch waits for the first reading. Microseconds on a PC whose
+// default route is not a mobile broadband adapter (two IP helper reads), tens
+// of milliseconds when it is (a COM call into the WWAN service); this bounds
+// the case where that service does not answer.
+constexpr std::chrono::milliseconds kNetworkCountryFirstReadWait{1000};
+}  // namespace
+
+void SdkHost::StartNetworkCountryWatch() {
+  if (networkCountryWatch_) return;
+  networkCountryWatch_ = std::make_unique<NetworkCountryWatch>(
+      [] { return ReadNetworkCountry(); },
+      [this](const netcountry::Reading& reading) { ApplyNetworkCountry(reading); });
+  networkCountryChanges_ =
+      std::make_unique<DefaultRouteChanges>(networkCountryWatch_->NetworkEventSink());
+  if (!networkCountryWatch_->WaitFirstReport(kNetworkCountryFirstReadWait)) {
+    LogWarn("sdkhost: the network country was not read within {}ms; the network "
+            "spaces are built without it, and it applies in place when the read "
+            "lands",
+            kNetworkCountryFirstReadWait.count());
+  }
+}
+
+void SdkHost::ApplyNetworkCountry(const netcountry::Reading& reading) {
+  {
+    std::scoped_lock lock(networkCountryMutex_);
+    networkCountry_ = reading;
+  }
+  // This process's own dials (sign-in, the api) first: they need no service.
+  urnet::setNetworkCountryCode(reading.code);
+  LogInfo("sdkhost: network country \"{}\" ({})", reading.code, reading.source);
+  PushNetworkCountry("the network country changed");
+}
+
+void SdkHost::PushNetworkCountry(const char* why) {
+  std::scoped_lock pushLock(networkCountryPushMutex_);
+  if (!service_.IsConnected()) return;
+  const netcountry::Reading reading = CurrentNetworkCountry();
+  proto::SetNetworkCountry country;
+  country.network_country_code = reading.code;
+  country.network_country_source = reading.source;
+  if (!service_.SetNetworkCountry(country)) {
+    LogInfo("sdkhost: the service did not take the network country \"{}\" ({}); one "
+            "older than set_network_country keeps none",
+            reading.code, why);
+  }
+}
+
+void SdkHost::PushNetworkCountryIfMoved(const netcountry::Reading& sent, const char* why) {
+  if (CurrentNetworkCountry() == sent) return;
+  LogInfo("sdkhost: the network country moved while a request carried \"{}\" ({}); "
+          "pushing the current one",
+          sent.code, why);
+  PushNetworkCountry(why);
+}
+
+netcountry::Reading SdkHost::CurrentNetworkCountry() const {
+  std::scoped_lock lock(networkCountryMutex_);
+  return networkCountry_;
+}
+
 // The control channel dropped and nobody asked it to. Runs on the pipe reader
 // thread; both handlers it invokes marshal to the UI thread themselves
 // (AppController::OnUi), and neither reconnects — see PipeClient.h.
@@ -2657,6 +2734,10 @@ bool SdkHost::BootstrapSession(const char* reason, bool attachOnly) {
     // may be perfectly healthy, until some unrelated start/stop happened to
     // correct it.
     AdoptServiceFacts(hello);
+    // The service's running devices may hold an older network country than
+    // this process reads — a reattach after a relaunch, or a service that
+    // restarted — and a hello is the first word with it either way.
+    PushNetworkCountry("the service answered hello");
 
     if (requestedMode_ == proto::StartMode::Tunnel &&
         hello.protocol_version < proto::kFirstDeferredCaptureVersion) {
@@ -2840,6 +2921,11 @@ bool SdkHost::BootstrapSession(const char* reason, bool attachOnly) {
       // reads LocalState when there is no device yet, which is exactly the
       // state we are in here.
       cfg.kill_switch = CurrentKillSwitch();
+      // The network country, which the service applies before it builds the
+      // device.
+      const netcountry::Reading networkCountry = CurrentNetworkCountry();
+      cfg.network_country_code = networkCountry.code;
+      cfg.network_country_source = networkCountry.source;
       // Seed split tunneling from the persisted per-app overrides so the driver is
       // correct at tunnel-up (device_ isn't connected yet - read the app LocalState).
       // PushLocalOverrideAppsToDriver re-applies it live once the device is up.
@@ -2874,6 +2960,10 @@ bool SdkHost::BootstrapSession(const char* reason, bool attachOnly) {
       // waiting for it would leave the app's sockets in the tun for the gap.
       // Adopting it is idempotent with whatever arrives next.
       AdoptServiceFacts(st);
+      // Whatever the outcome, the service may have applied the request's
+      // network country (it does so partway through the start), and a newer
+      // one the watch pushed meanwhile may have reached it first.
+      PushNetworkCountryIfMoved(networkCountry, "start_tunnel");
       // Live, not "up": an rpc-only session reports state rpc_only and that is
       // success for this call. What the app must never do is treat it as a
       // tunnel, which is why sessionMode_ is taken from the SERVICE's answer
@@ -6211,6 +6301,11 @@ void SdkHost::ReconcileProviderLocked(const char* reason) {
   request.device_spec = DeviceSpec();
   request.app_version = appVersion_;
   request.provide_mode = mode;
+  // Applied by the service in place for a device it keeps, and before one it
+  // builds.
+  const netcountry::Reading networkCountry = CurrentNetworkCountry();
+  request.network_country_code = networkCountry.code;
+  request.network_country_source = networkCountry.source;
   try {
     request.network_space_json = networkSpace_->toJson();
     // The mirror BootstrapSession seeds a tunnel session's device from, sent
@@ -6224,6 +6319,9 @@ void SdkHost::ReconcileProviderLocked(const char* reason) {
   }
   const bool started = service_.StartProvider(request, &after, &error);
   if (after) AdoptServiceFacts(*after);
+  // As after start_tunnel: the request's country may be older than one the
+  // watch pushed while it was built.
+  PushNetworkCountryIfMoved(networkCountry, "start_provider");
   if (started) {
     LogInfo("sdkhost: provide: providing without a tunnel ({}, mode {}, tier {})", reason,
             provide::ToString(controlMode), serviceProviderMode_.load());

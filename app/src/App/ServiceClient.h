@@ -67,6 +67,10 @@ class ServiceClient {
   // to know the verb ("unknown request type"), which the app reads as "no
   // statistics" and renders as it did before they existed.
   bool GetProviderStats(proto::ProviderStats& stats);
+  // set_network_country (Protocol.h SetNetworkCountry). True when the service
+  // took it; false for a transport failure or for a service too old to know
+  // the verb, which then holds no network country, as before the verb existed.
+  bool SetNetworkCountry(const proto::SetNetworkCountry& country);
 
  private:
   proto::TunnelStatus CallStatus(const nlohmann::json& request,
