@@ -103,11 +103,16 @@
                           Start="auto" ErrorControl="normal"
                           Description="Runs the URnetwork VPN tunnel."
                           Account="LocalSystem">
-            <!-- restart on crash (plan M4) -->
+            <!-- restart on crash (plan M4). Every slot restarts: the SCM
+                 repeats the last action for each crash past the third in a
+                 day, so "none" there left the machine with no service until
+                 a reboot. util:ServiceConfig has a single delay; ServiceMain
+                 re-applies install::kFailureActions (5, 10, 60 s) at every
+                 start (Service/main.cpp). -->
             <util:ServiceConfig xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util"
                                 FirstFailureActionType="restart"
                                 SecondFailureActionType="restart"
-                                ThirdFailureActionType="none"
+                                ThirdFailureActionType="restart"
                                 RestartServiceDelayInSeconds="5" ResetPeriodInDays="1" />
           </ServiceInstall>
           <ServiceControl Id="UrnetworkdControl" Name="urnetworkd"

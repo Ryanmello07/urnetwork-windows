@@ -469,12 +469,17 @@ bool ApplyRestartOnFailure(SC_HANDLE svc) {
 // asks for a manual restart, because a process that is still running can at least
 // still turn the tunnel off.
 //
-// These are RPCs to services.exe, made on a thread holding TunnelController's
-// mutex_, which is a thing worth saying out loud rather than discovering. It is
-// acceptable for exactly one reason: the only path that reaches here is a start
-// already being refused, and the operation the operator cannot be denied — Stop()
-// — takes that lock with a timed acquire and reverts the machine without it if it
-// cannot have it (kStopLockBudget). Nothing here can cost anyone their network.
+// ServiceMain also calls it once at every start, before the session exists, so
+// a registration this build did not write converges without waiting for a
+// self-restart (see there).
+//
+// On the self-restart path these are RPCs to services.exe, made on a thread
+// holding TunnelController's mutex_, which is a thing worth saying out loud
+// rather than discovering. It is acceptable for exactly one reason: that path
+// is only reached by a start already being refused, and the operation the
+// operator cannot be denied — Stop() — takes that lock with a timed acquire and
+// reverts the machine without it if it cannot have it (kStopLockBudget).
+// Nothing here can cost anyone their network.
 bool EnsureRestartOnFailure() {
   SC_HANDLE scm = ::OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CONNECT);
   if (!scm) {
@@ -851,6 +856,15 @@ void WINAPI ServiceMain(DWORD, LPWSTR*) {
   }
   g_status.dwServiceType = SERVICE_WIN32_OWN_PROCESS;
   SetState(SERVICE_START_PENDING, NO_ERROR, 5000);
+  // THE FAILURE POLICY IS RE-APPLIED ON EVERY START, not only by the install
+  // verb and the self-restart. An MSI install (the Microsoft Store channel too)
+  // is registered by Package.wxs's util:ServiceConfig, which has one delay for
+  // every slot and used to end in "none"; an older build or an administrator
+  // may have left something else. Nobody re-runs `urnetworkd install` or
+  // repairs the MSI, so the start is where every registration converges to
+  // install::kFailureActions. Best effort: EnsureRestartOnFailure logs its own
+  // failure, and the service starts either way.
+  EnsureRestartOnFailure();
   g_stopEvent = ::CreateEventW(nullptr, TRUE, FALSE, nullptr);
   if (!g_stopEvent) {
     LogError("service: CreateEvent failed: {}", ::GetLastError());
