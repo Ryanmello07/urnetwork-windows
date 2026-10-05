@@ -22,9 +22,17 @@
 //     notifier uses (Service/NetworkChangeNotify.h NotifyCoalescer): a roam is
 //     dozens of notifications in a second, and a read in the middle of one
 //     sees a half-built route table.
-//   * Cancel, then join. Destruction cancels and waits out a read or a report
-//     that is already running; a read that finishes after the cancel is not
-//     reported, and nothing is read or reported once it returns.
+//   * Cancel, then join within a bound. Destruction cancels and waits out a
+//     report that is already running, which is the owner's and must not run
+//     against an owner being destroyed. A read that is already running is
+//     waited for up to the read join budget only: it is a COM call into the
+//     WWAN service, and one that service never answers must not hold up the
+//     app's exit. Past the budget the thread is left to finish that read on
+//     its own, sharing nothing but the channel, and to drop what it read; so
+//     the read must touch nothing of the owner (SdkHost's is
+//     ReadNetworkCountry and nothing else). A read that finishes after the
+//     cancel is not reported, and nothing is reported once destruction
+//     returns.
 //
 // Pure C++ with no Windows or SDK header: the read and the report are
 // functions, so tools/network-country-tests.cpp runs it on any host, and
@@ -48,36 +56,62 @@
 
 namespace urnw {
 
+// How long destruction waits for a read that is already running (see the
+// header). A read answers in microseconds on a PC whose default route is not a
+// mobile broadband adapter, and in tens of milliseconds on one whose is.
+inline constexpr std::chrono::milliseconds kNetworkCountryReadJoinBudget{2000};
+
 // One per app, owned by SdkHost; the rules are the header's.
 class NetworkCountryWatch {
  public:
   using Read = std::function<netcountry::Reading()>;
   using Report = std::function<void(const netcountry::Reading&)>;
 
-  // Starts the thread, which reads at once.
-  NetworkCountryWatch(Read read, Report report) : channel_(std::make_shared<Channel>()) {
+  // Starts the thread, which reads at once. `read` must touch nothing of the
+  // owner, and `readJoinBudget` bounds how long destruction waits for it (see
+  // the header).
+  NetworkCountryWatch(Read read, Report report,
+                      std::chrono::milliseconds readJoinBudget = kNetworkCountryReadJoinBudget)
+      : channel_(std::make_shared<Channel>()), readJoinBudget_(readJoinBudget) {
     channel_->read = std::move(read);
     channel_->report = std::move(report);
-    thread_ = std::thread([channel = channel_] { Run(channel); });
+    thread_ = std::thread([channel = channel_] {
+      Run(channel);
+      {
+        std::scoped_lock lock(channel->mutex);
+        channel->finished = true;
+      }
+      channel->wake.notify_all();
+    });
   }
 
-  // Cancels, then joins: see the header.
+  // Cancels, then joins the thread, or leaves a read that is still running
+  // past the budget to finish on its own: see the header.
   ~NetworkCountryWatch() {
     Cancel();
-    if (thread_.joinable()) thread_.join();
+    if (!thread_.joinable()) return;
+    const bool finished = [this] {
+      std::unique_lock lock(channel_->mutex);
+      return channel_->wake.wait_for(lock, readJoinBudget_, [this] { return channel_->finished; });
+    }();
+    if (finished) {
+      thread_.join();
+    } else {
+      thread_.detach();
+    }
   }
 
   NetworkCountryWatch(const NetworkCountryWatch&) = delete;
   NetworkCountryWatch& operator=(const NetworkCountryWatch&) = delete;
 
-  // Nothing is read or reported from here on. A read already running finishes
-  // and is dropped; the destructor still joins the thread.
+  // Nothing is read or reported from here on, and a report that is already
+  // running has returned when this does. A read already running finishes and
+  // is dropped. Never from the report, which it would wait for.
   void Cancel() {
-    {
-      std::scoped_lock lock(channel_->mutex);
-      channel_->cancelled = true;
-    }
+    std::unique_lock lock(channel_->mutex);
+    channel_->cancelled = true;
     channel_->wake.notify_all();
+    channel_->wake.wait(lock, [this] { return !channel_->reporting; });
   }
 
   // True once the first reading has been read and reported, waiting up to
@@ -123,6 +157,10 @@ class NetworkCountryWatch {
     bool firstReported = false;
     // the thread waits for a change with nothing pending (WaitSettled)
     bool parked = false;
+    // the thread is in the report (Cancel waits it out)
+    bool reporting = false;
+    // the thread has returned (destruction joins it)
+    bool finished = false;
     NotifyCoalescer network;
     Read read;
     Report report;
@@ -175,9 +213,12 @@ class NetworkCountryWatch {
         reading = netcountry::Reading{.code = {},
                                       .source = std::string(netcountry::kSourceUnreadable)};
       }
+      // A cancel that came first drops the reading; one that comes later waits
+      // for the report to return.
       {
         std::scoped_lock lock(channel->mutex);
         if (channel->cancelled) return;
+        channel->reporting = true;
       }
       if (!reported || *reported != reading) {
         try {
@@ -186,17 +227,17 @@ class NetworkCountryWatch {
         }
         reported = reading;
       }
-      if (first) {
-        {
-          std::scoped_lock lock(channel->mutex);
-          channel->firstReported = true;
-        }
-        channel->wake.notify_all();
+      {
+        std::scoped_lock lock(channel->mutex);
+        channel->reporting = false;
+        if (first) channel->firstReported = true;
       }
+      channel->wake.notify_all();
     }
   }
 
   std::shared_ptr<Channel> channel_;
+  std::chrono::milliseconds readJoinBudget_;
   std::thread thread_;
 };
 

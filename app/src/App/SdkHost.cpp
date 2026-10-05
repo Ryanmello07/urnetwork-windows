@@ -327,9 +327,12 @@ void ClearRpcSession() {
 }  // namespace
 
 SdkHost::~SdkHost() {
-  // The network country's notifications, then its thread, joined above the
-  // lock like the loops below: its report pushes over the pipe and must not run
-  // against a host being destroyed.
+  // The network country's notifications, then its thread, ended above the
+  // lock like the loops below. A report it is running is waited out: it pushes
+  // over the pipe and must not run against a host being destroyed. A read the
+  // WWAN service never answers is not, past a short budget, so that service
+  // cannot hold up the exit (NetworkCountryWatch.h); the read uses nothing of
+  // this host.
   networkCountryChanges_.reset();
   networkCountryWatch_.reset();
   // BEFORE mutex_, and joined rather than detached: the watchdog takes mutex_
