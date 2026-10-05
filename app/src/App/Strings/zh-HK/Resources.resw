@@ -586,6 +586,10 @@
     <value>最佳匹配</value>
     <comment>Label for a list or section showing the best matching results.</comment>
   </data>
+  <data name="bittensor_error_address_not_in_wallet" xml:space="preserve">
+    <value>你的 {} 錢包中沒有你輸入的地址。請在錢包中新增或連接該帳戶，或輸入錢包中已有的地址。</value>
+    <comment>ur.io Bittensor wallet card and sign-in: the chosen wallet does not offer the account of the address the user typed (Talisman does not hold it or has not connected it to the site; a WalletConnect wallet connected another account), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect).</comment>
+  </data>
   <data name="bittensor_sign_in" xml:space="preserve">
     <value>使用 Bittensor 登入</value>
     <comment>Call to action</comment>

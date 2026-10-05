@@ -594,6 +594,10 @@
     <value>Migliori corrispondenze</value>
     <comment>Label for a list or section showing the best matching results.</comment>
   </data>
+  <data name="bittensor_error_address_not_in_wallet" xml:space="preserve">
+    <value>Il tuo portafoglio {} non contiene l'indirizzo che hai inserito. Aggiungi o collega quell'account nel portafoglio, oppure inserisci un indirizzo che contiene.</value>
+    <comment>ur.io Bittensor wallet card and sign-in: the chosen wallet does not offer the account of the address the user typed (Talisman does not hold it or has not connected it to the site; a WalletConnect wallet connected another account), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect).</comment>
+  </data>
   <data name="bittensor_sign_in" xml:space="preserve">
     <value>Accedi con Bittensor</value>
     <comment>Call to action</comment>

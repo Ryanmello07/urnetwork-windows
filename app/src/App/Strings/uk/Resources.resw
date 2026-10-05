@@ -610,6 +610,10 @@
     <value>Найкращі збіги</value>
     <comment>Label for a list or section showing the best matching results.</comment>
   </data>
+  <data name="bittensor_error_address_not_in_wallet" xml:space="preserve">
+    <value>У вашому гаманці {} немає адреси, яку ви ввели. Додайте або підключіть цей обліковий запис у гаманці чи введіть адресу, яка в ньому є.</value>
+    <comment>ur.io Bittensor wallet card and sign-in: the chosen wallet does not offer the account of the address the user typed (Talisman does not hold it or has not connected it to the site; a WalletConnect wallet connected another account), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect).</comment>
+  </data>
   <data name="bittensor_sign_in" xml:space="preserve">
     <value>Увійти через Bittensor</value>
     <comment>Call to action</comment>

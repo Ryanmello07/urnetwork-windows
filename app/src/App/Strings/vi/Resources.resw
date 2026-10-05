@@ -586,6 +586,10 @@
     <value>Kết quả phù hợp nhất</value>
     <comment>Label for a list or section showing the best matching results.</comment>
   </data>
+  <data name="bittensor_error_address_not_in_wallet" xml:space="preserve">
+    <value>Ví {} của bạn không có địa chỉ bạn đã nhập. Hãy thêm hoặc kết nối tài khoản đó trong ví, hoặc nhập một địa chỉ có trong ví.</value>
+    <comment>ur.io Bittensor wallet card and sign-in: the chosen wallet does not offer the account of the address the user typed (Talisman does not hold it or has not connected it to the site; a WalletConnect wallet connected another account), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect).</comment>
+  </data>
   <data name="bittensor_sign_in" xml:space="preserve">
     <value>Đăng nhập bằng Bittensor</value>
     <comment>Call to action</comment>

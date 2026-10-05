@@ -689,6 +689,10 @@
     <value>Continue in your browser and approve the request in the {} extension.</value>
     <comment>Desktop: shown while the browser is open on the wallet page. The argument is the wallet product name (Talisman).</comment>
   </data>
+  <data name="bittensor_error_address_not_in_wallet" xml:space="preserve">
+    <value>Your {} wallet doesn't have the address you entered. Add or connect that account in the wallet, or enter an address it has.</value>
+    <comment>ur.io Bittensor wallet card and sign-in: the chosen wallet does not offer the account of the address the user typed (Talisman does not hold it or has not connected it to the site; a WalletConnect wallet connected another account), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect).</comment>
+  </data>
   <data name="bittensor_error_challenge_expired" xml:space="preserve">
     <value>This request expired. Start again to get a new message to sign.</value>
     <comment>Error: the single-use wallet challenge expired (5 minutes) before it was signed.</comment>

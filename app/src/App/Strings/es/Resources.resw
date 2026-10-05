@@ -646,6 +646,10 @@
     <value>Continúa en tu navegador y aprueba la solicitud en la extensión de {}.</value>
     <comment>Desktop: shown while the browser is open on the wallet page. The argument is the wallet product name (Talisman).</comment>
   </data>
+  <data name="bittensor_error_address_not_in_wallet" xml:space="preserve">
+    <value>Tu billetera {} no tiene la dirección que introdujiste. Añade o conecta esa cuenta en la billetera, o introduce una dirección que tenga.</value>
+    <comment>ur.io Bittensor wallet card and sign-in: the chosen wallet does not offer the account of the address the user typed (Talisman does not hold it or has not connected it to the site; a WalletConnect wallet connected another account), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect).</comment>
+  </data>
   <data name="bittensor_error_challenge_expired" xml:space="preserve">
     <value>Esta solicitud caducó. Empieza de nuevo para obtener un mensaje nuevo para firmar.</value>
     <comment>Error: the single-use wallet challenge expired (5 minutes) before it was signed.</comment>

@@ -586,6 +586,10 @@
     <value>最適な一致</value>
     <comment>Label for a list or section showing the best matching results.</comment>
   </data>
+  <data name="bittensor_error_address_not_in_wallet" xml:space="preserve">
+    <value>お使いの{}ウォレットに、入力したアドレスがありません。ウォレットでそのアカウントを追加または接続するか、ウォレットにあるアドレスを入力してください。</value>
+    <comment>ur.io Bittensor wallet card and sign-in: the chosen wallet does not offer the account of the address the user typed (Talisman does not hold it or has not connected it to the site; a WalletConnect wallet connected another account), so nothing was signed. The argument is the wallet product name (Talisman or WalletConnect).</comment>
+  </data>
   <data name="bittensor_sign_in" xml:space="preserve">
     <value>Bittensorでサインイン</value>
     <comment>Call to action</comment>
