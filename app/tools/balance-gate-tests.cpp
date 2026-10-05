@@ -11,7 +11,7 @@
 // fetch never blocks. Out of balance the banner says whether the data is
 // reserved or used up, and a connect the balance blocked is retried by itself
 // once data is back (BalanceRecovery): once per recovery, at most three in a
-// row, never for a user who did not ask. Run against the SAME header the app
+// row, never for a user who did not ask. Run against the same header the app
 // compiles, on any host with a C++20 compiler. No clocks: the time is an
 // explicit input.
 //

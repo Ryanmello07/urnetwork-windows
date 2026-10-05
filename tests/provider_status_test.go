@@ -11,9 +11,12 @@ import (
 	"testing"
 )
 
-// buildProviderStatusTests compiles the provider status spec
-// (app/tools/provider-status-tests.cpp, header-only). extra adds compiler
-// arguments ahead of the source.
+// The Earnings provider status (App/ProviderStatusPresentation.h): the C++
+// spec, alone and against the generated sdk header, the page's wiring read
+// from the app sources, and negative controls on the readings.
+
+// Compile the provider status spec (app/tools/provider-status-tests.cpp,
+// header-only). extra adds compiler arguments ahead of the source.
 func buildProviderStatusTests(t *testing.T, extra ...string) string {
 	t.Helper()
 	compiler, err := exec.LookPath("c++")
@@ -32,6 +35,7 @@ func buildProviderStatusTests(t *testing.T, extra ...string) string {
 	return program
 }
 
+// Run a built spec and log what it printed.
 func runProviderStatusTests(t *testing.T, program string) {
 	t.Helper()
 	if output, err := exec.Command(program).CombinedOutput(); err != nil {
@@ -316,43 +320,43 @@ func TestProviderStatusWiring(t *testing.T) {
 	}
 }
 
-// Run the provider status spec against a rewritten copy of
-// ProviderStatusPresentation.h and require that it fails, naming want. The
-// rest of the header's includes still come from the app.
-func requireProviderStatusFailure(t *testing.T, mutate func(string) string, want string) {
-	t.Helper()
-	root := repositoryRoot(t)
-	source, err := os.ReadFile(filepath.Join(root, "app", "src", "App", "ProviderStatusPresentation.h"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	changed := mutate(string(source))
-	if changed == string(source) {
-		t.Fatal("negative control did not change the production ProviderStatusPresentation.h")
-	}
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "ProviderStatusPresentation.h"), []byte(changed), 0600); err != nil {
-		t.Fatal(err)
-	}
-	// -iquote: searched for the harness's quoted include ahead of the app's -I
-	program := buildProviderStatusTests(t, "-iquote", dir)
-	output, err := exec.Command(program).CombinedOutput()
-	if err == nil || !strings.Contains(string(output), want) {
-		t.Fatalf("negative control was not detected (want %q): %v\n%s", want, err, output)
-	}
-}
-
 // The provider-only device's status read on the api applies an answer as the
 // controller applies a poll: a failed poll that dropped the snapshot would
 // blank Demand on every 404 or timeout, and a reading that took the network's
 // first provider row would show another device's demand as this one's.
 func TestProviderStatusReadingsRejectBrokenApply(t *testing.T) {
-	requireProviderStatusFailure(t, func(source string) string {
+	// Run the spec against a rewritten copy of ProviderStatusPresentation.h and
+	// require that it fails, naming want. The rest of the header's includes
+	// still come from the app.
+	requireProviderStatusFailure := func(mutate func(string) string, want string) {
+		t.Helper()
+		root := repositoryRoot(t)
+		source, err := os.ReadFile(filepath.Join(root, "app", "src", "App", "ProviderStatusPresentation.h"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		changed := mutate(string(source))
+		if changed == string(source) {
+			t.Fatal("negative control did not change the production ProviderStatusPresentation.h")
+		}
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, "ProviderStatusPresentation.h"), []byte(changed), 0600); err != nil {
+			t.Fatal(err)
+		}
+		// -iquote: searched for the harness's quoted include ahead of the app's -I
+		program := buildProviderStatusTests(t, "-iquote", dir)
+		output, err := exec.Command(program).CombinedOutput()
+		if err == nil || !strings.Contains(string(output), want) {
+			t.Fatalf("negative control was not detected (want %q): %v\n%s", want, err, output)
+		}
+	}
+
+	requireProviderStatusFailure(func(source string) string {
 		return strings.Replace(source,
 			"    error = message.empty() ? std::string(\"no provider status\") : std::string(message);\n",
 			"    error = message.empty() ? std::string(\"no provider status\") : std::string(message);\n    status.reset();\n", 1)
 	}, "api: a failed poll keeps the last snapshot")
-	requireProviderStatusFailure(t, func(source string) string {
+	requireProviderStatusFailure(func(source string) string {
 		return strings.Replace(source, "if (candidate.client_id && *candidate.client_id == clientId) {",
 			"if (candidate.client_id) {", 1)
 	}, "api: the first row whose client id is this device's")

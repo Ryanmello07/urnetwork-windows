@@ -8,6 +8,8 @@ import (
 	"testing"
 )
 
+// The referral invitation text (App/ReferralShare.h) as a C++ spec.
+
 // Compile and execute the referral invitation spec (App/ReferralShare.h): the
 // copied invitation must carry the code's ur.io/c link after the message, so a
 // friend on Android opens the app (or Play with the install referrer) with the

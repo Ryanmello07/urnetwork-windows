@@ -1,7 +1,7 @@
 // Executable spec for the bundled network space identity
 // (Common/Ids.h, Common/NetworkSpaceStartup.h): which host the official space
 // is keyed by, which legacy key is re-keyed to it, how the env overrides
-// resolve, that the re-key runs BEFORE the space is written and bound, and the
+// resolve, that the re-key runs before the space is written and bound, and the
 // values SdkHost's two whole-values writers put over what a space stores -
 // run against the SAME headers the app compiles, on any host with a C++20
 // compiler (Ids.h needs a `GUID`, so point -I at a dir with a guiddef.h stub
@@ -175,7 +175,7 @@ SpaceValues Saved() {
   values.extender_root_public_keys = std::vector<std::string>{"root-key-1"};
   values.extender_hosts = std::vector<std::string>{"ext1.example.test", "203.0.113.9"};
   values.vless = "vless.example.test";
-  values.control_doh_urls_ipv4 = std::vector<std::string>{"https://223.5.5.5/dns-query"};
+  values.control_doh_urls_ipv4 = std::vector<std::string>{"https://192.0.2.53/dns-query"};
   values.control_doh_urls_ipv6 = std::vector<std::string>{"https://[2001:db8::53]/dns-query"};
   return values;
 }
@@ -277,7 +277,7 @@ void SpaceValuesThroughTheSdkJson() {
     "extender_root_public_keys": ["root-key-1"],
     "extender_hosts": ["ext1.example.test", "203.0.113.9"],
     "vless": {"enabled": true, "address": "vless.example.test", "port": 443},
-    "control_doh_urls_ipv4": ["https://223.5.5.5/dns-query"],
+    "control_doh_urls_ipv4": ["https://192.0.2.53/dns-query"],
     "control_doh_urls_ipv6": ["https://[2001:db8::53]/dns-query"]
   })");
   nlohmann::json storedJson = saved;

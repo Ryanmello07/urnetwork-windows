@@ -428,8 +428,8 @@ urnet::NetworkSpace SdkHost::BuildNetworkSpace() {
             bundled.key.hostName, bundled.key.envName);
   }
 
-  // These values replace the stored ones WHOLE, at every launch, so the
-  // bundled space's own values go OVER what the space stores: the extender
+  // These values replace the stored ones whole, at every launch, so the
+  // bundled space's own values go over what the space stores: the extender
   // settings, the private extender, the bootstrap DNS-over-HTTPS servers and
   // the VLESS server the user saved in it are not among them, and a write from
   // nothing dropped them all on every launch. No migration host and no url
@@ -572,7 +572,7 @@ bool SdkHost::Initialize() {
         ClampCaptureStats(stats);
         onStats_(stats);
       }
-      // AN UNEXPECTED DROP: the service tore a live session down by itself (the
+      // An unexpected drop: the service tore a live session down by itself (the
       // dead-tunnel failsafe), on the edge. The DeviceRemote this side holds now
       // points at a listener that is gone, and with it went the provider. Ask
       // for a session the D8 way — the table drops the stale device, the
@@ -649,7 +649,7 @@ bool SdkHost::Initialize() {
       // forensics have app-launch resumes installing capture routes on
       // machines nobody touched, and the owner's decision is click-only.
       //
-      // A launch that finds none still PROVIDES when the stored mode says so:
+      // A launch that finds none still provides when the stored mode says so:
       // the pass ends with the provider reconcile, and the provider-only
       // device installs nothing on this machine (ProvideLifecycle.h), so D8 is
       // untouched by it.
@@ -1272,8 +1272,8 @@ bool SdkHost::ApplyNetworkServer(const std::string& hostName, const std::string&
 
       // The same value set BuildNetworkSpace writes, with the host-dependent
       // parts varied (iOS DeviceManager.applyNetworkSpace parity), and written
-      // OVER what the space stores under this key, because these values
-      // replace the stored ones WHOLE: what the user saved in that space -- its
+      // over what the space stores under this key, because these values
+      // replace the stored ones whole: what the user saved in that space -- its
       // extender settings, private extender, bootstrap DNS-over-HTTPS servers
       // and VLESS server, each edited on its own screen -- survives applying
       // the domain or its urls again. A host never applied before has none.
@@ -3755,7 +3755,7 @@ void SdkHost::ProviderOnlyStatsLoop() {
         std::scoped_lock lock(presentationMutex_);
         presenting = presentationDesired_;
       }
-      // OUTSIDE mutex_, which a bootstrap holds for seconds. Nothing is asked
+      // Outside mutex_, which a bootstrap holds for seconds. Nothing is asked
       // of a service that runs no provider-only device, nor while nothing
       // presents.
       const bool asking = presenting && !HasSession() && serviceProviderRunning_.load() &&
@@ -5819,7 +5819,7 @@ void SdkHost::RequestSession(SessionRequest request) {
   // would be a click the watchdog eats.
   //
   // A provider reconcile (kind Provider) wants less still, and is covered by
-  // ANY pending request: every pass that leaves no session ends with the same
+  // any pending request: every pass that leaves no session ends with the same
   // reconcile, and a pass that builds one hands providing to its device. It
   // never covers anything itself — an ensure replaces it.
   const bool covered =
@@ -5876,7 +5876,7 @@ void SdkHost::SessionWorkerLoop() {
       pendingRequested_ = false;
     }
 
-    // NOT A SESSION REQUEST: keep the provider-only device in step and nothing
+    // Not a session request: keep the provider-only device in step and nothing
     // else — no gesture, no bootstrap, no attach (ReconcileProviderLocked).
     if (req.kind == ConnectKind::Provider) {
       {
@@ -6097,7 +6097,7 @@ void SdkHost::SessionWorkerLoop() {
         }
       }
 
-      // KEEP PROVIDING WHILE DISCONNECTED. A pass that leaves no session — a
+      // Keep providing while disconnected. A pass that leaves no session — a
       // Disconnect (whose stop_tunnel took the provider down with the tunnel),
       // a launch, network-server change or service recovery that found nothing
       // to reattach to, a Connect that failed — hands providing to the

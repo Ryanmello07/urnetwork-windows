@@ -10,13 +10,17 @@ import (
 	"testing"
 )
 
+// The provide-while-disconnected specs: the lifecycle
+// (Common/ProvideLifecycle.h) and the wire spec (Common/Protocol.h), each with
+// negative controls that rewrite a copy of a header.
+
 // Compile one of the provide-while-disconnected harnesses against the shared
 // headers (Common/ProvideLifecycle.h, and Common/Protocol.h for the wire
-// spec). The headers are copied into an isolated include dir, so `mutate`,
-// when set, can rewrite one of them for a negative control and the copy of the
-// other picks the rewritten one up. `extra` adds compiler flags (the json
-// include for the protocol spec).
-func provideTestProgram(t *testing.T, harness string, mutate map[string]func(string) string,
+// spec). The headers are copied into an isolated include dir, so
+// `headerMutations`, when set, can rewrite one of them by name for a negative
+// control and the copy of the other picks the rewritten one up. `extra` adds
+// compiler flags (the json include for the protocol spec).
+func provideTestProgram(t *testing.T, harness string, headerMutations map[string]func(string) string,
 	extra ...string) string {
 	t.Helper()
 	compiler, err := exec.LookPath("c++")
@@ -32,7 +36,7 @@ func provideTestProgram(t *testing.T, harness string, mutate map[string]func(str
 			t.Fatal(err)
 		}
 		content := string(source)
-		if change := mutate[name]; change != nil {
+		if change := headerMutations[name]; change != nil {
 			content = change(content)
 			if content == string(source) {
 				t.Fatalf("negative control did not change the production %s", name)
@@ -64,17 +68,17 @@ func TestProvideLifecycle(t *testing.T) {
 }
 
 // Run a mutated copy of the lifecycle and require that it fails, naming `want`.
-func requireProvideFailure(t *testing.T, harness string, mutate map[string]func(string) string,
+func requireProvideFailure(t *testing.T, harness string, headerMutations map[string]func(string) string,
 	want string, extra ...string) {
 	t.Helper()
-	program := provideTestProgram(t, harness, mutate, extra...)
+	program := provideTestProgram(t, harness, headerMutations, extra...)
 	output, err := exec.Command(program).CombinedOutput()
 	if err == nil || !strings.Contains(string(output), want) {
 		t.Fatalf("negative control was not detected (want %q): %v\n%s", want, err, output)
 	}
 }
 
-// THE DEFECT: on Windows every mode provided only while connected. Put that
+// The defect: on Windows every mode provided only while connected. Put that
 // rule back and Always, Auto and Network must fail while disconnected.
 func TestProvideLifecycleRejectsProvidingOnlyWhileConnected(t *testing.T) {
 	requireProvideFailure(t, "provide-lifecycle-tests.cpp", map[string]func(string) string{

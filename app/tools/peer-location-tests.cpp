@@ -4,7 +4,7 @@
 // SDK reaches the device as a trusted same-network peer (the Network provide
 // mode) and not as a public exit, as android and apple do; and a re-tap of a
 // device the user picked before the flag was set is not swallowed as "already
-// selected". Run against the SAME header the app compiles, on any host with a
+// selected". Run against the same header the app compiles, on any host with a
 // C++20 compiler. The rows and SdkHost cannot be built off Windows, so the
 // wiring cases read their source.
 //

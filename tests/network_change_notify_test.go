@@ -10,6 +10,9 @@ import (
 	"testing"
 )
 
+// The network-change notifier (Service/NetworkChangeNotify.h) as a C++ spec,
+// with negative controls that rewrite a copy of the header.
+
 // Compile the network-change spec (app/tools/network-change-notify-tests.cpp)
 // against Service/NetworkChangeNotify.h, which is portable on purpose: the
 // provider-only device is told about Wi-Fi and Ethernet changes through it,
@@ -60,6 +63,8 @@ func TestNetworkChangeNotifier(t *testing.T) {
 	}
 }
 
+// Run the spec against a rewritten copy of the header and require that it
+// fails, naming want.
 func requireNetworkChangeFailure(t *testing.T, mutate func(string) string, want string) {
 	t.Helper()
 	program := networkChangeTestProgram(t, mutate)

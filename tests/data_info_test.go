@@ -10,6 +10,9 @@ import (
 	"testing"
 )
 
+// The "About your data" sheet: its pure logic (App/DataInfo.h) as a C++ spec,
+// and its entry points read from the app sources.
+
 // Compile and execute the "About your data" sheet logic (App/DataInfo.h): the
 // next 00:00 UTC free refresh and the countdown to it, the Used, Pending and
 // Available split from a balance, the daily amount from the server's

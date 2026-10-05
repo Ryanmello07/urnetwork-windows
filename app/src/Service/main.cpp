@@ -856,7 +856,7 @@ void WINAPI ServiceMain(DWORD, LPWSTR*) {
   }
   g_status.dwServiceType = SERVICE_WIN32_OWN_PROCESS;
   SetState(SERVICE_START_PENDING, NO_ERROR, 5000);
-  // THE FAILURE POLICY IS RE-APPLIED ON EVERY START, not only by the install
+  // The failure policy is re-applied on every start, not only by the install
   // verb and the self-restart. An MSI install (the Microsoft Store channel too)
   // is registered by Package.wxs's util:ServiceConfig, which has one delay for
   // every slot and used to end in "none"; an older build or an administrator

@@ -72,9 +72,9 @@ func TestEnsureRestartOnFailureOpensWithStartAccess(t *testing.T) {
 // restart, with the reset period and first delay of install::kFailureActions.
 func TestInstallerServiceRestartsAfterEveryFailure(t *testing.T) {
 	root := repositoryRoot(t)
-	packageXML := parseXML(t, filepath.Join(root, "app", "installer", "Package.wxs"))
+	packageXml := parseXML(t, filepath.Join(root, "app", "installer", "Package.wxs"))
 	var service *xmlNode
-	for _, node := range packageXML.descendants(wixNamespace, "ServiceInstall") {
+	for _, node := range packageXml.descendants(wixNamespace, "ServiceInstall") {
 		if name, _ := node.attribute("Name"); name == "urnetworkd" {
 			service = node
 		}

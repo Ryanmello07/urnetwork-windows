@@ -131,7 +131,7 @@ void EgressMonitor::SetOnNetworkQualityEvent(NetworkQualityEventHandler handler)
 }
 
 void EgressMonitor::Refresh() {
-  // OBSERVE ONLY: report the observation and stop. No discovery, no binding and
+  // Observe only: report the observation and stop. No discovery, no binding and
   // no R1 log line — none of it applies to a device that binds nothing.
   if (binding_ == Binding::ObserveOnly) {
     NetworkEventHandler observed;

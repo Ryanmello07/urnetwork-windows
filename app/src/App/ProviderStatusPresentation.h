@@ -1,4 +1,4 @@
-// Everything the Earnings provider status decides BEFORE it touches a XAML
+// Everything the Earnings provider status decides before it touches a XAML
 // object (support part P008, phase 2): the Demand histogram's 60 bars, its
 // total and whether it is empty; which of loading, unavailable, empty and bars
 // the demand area shows and whether Why? does; the line under the provide mode

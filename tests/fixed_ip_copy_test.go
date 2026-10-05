@@ -16,6 +16,8 @@ import (
 
 const fixedIpSubtitleKey = "fixed_ip_subtitle"
 
+// The English subtitle is the store's, and every other locale has a
+// translation of its own.
 func TestFixedIpSubtitleCopy(t *testing.T) {
 	root := repositoryRoot(t)
 	english := reswValue(t, root, "en", fixedIpSubtitleKey)
@@ -39,6 +41,8 @@ func TestFixedIpSubtitleCopy(t *testing.T) {
 	}
 }
 
+// The connect options' Fixed IP row sets the note from the store key, and the
+// note sits between the row's title and its switch.
 func TestFixedIpRowShowsTheSubtitle(t *testing.T) {
 	root := repositoryRoot(t)
 	appDir := filepath.Join(root, "app", "src", "App")

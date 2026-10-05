@@ -10,6 +10,9 @@ import (
 	"testing"
 )
 
+// Why providing is enabled but idle (App/ProviderIdleReason.h): the C++ spec,
+// and the Earnings line's wiring read from the app sources.
+
 // Compile and execute the idle reason spec (App/ProviderIdleReason.h, support
 // part P008): why providing is enabled but idle, in its rule order (Never and
 // unknown modes, Network, Auto while disconnected, paused for Wi-Fi, paused,

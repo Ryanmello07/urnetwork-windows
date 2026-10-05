@@ -507,7 +507,7 @@ void NetworkServerSheet::Build(XamlRoot const& root) {
 
   // The active space's bootstrap DNS-over-HTTPS servers, the block Account >
   // Extenders shows. On a network that blocks the built-in DoH servers a fresh
-  // install cannot resolve the api to sign in, so it needs this BEFORE sign-in.
+  // install cannot resolve the api to sign in, so it needs this before sign-in.
   // Like VLESS it edits the space in force now, in its own sheet once this one
   // closes.
   Button controlDoh;

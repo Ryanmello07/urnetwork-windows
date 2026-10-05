@@ -9,6 +9,9 @@ import (
 	"testing"
 )
 
+// A guard over the app's C++ sources for a line comment that GCC splices into
+// the next line.
+
 // A // comment whose line ends in a backslash takes the next line with it: the
 // backslash splices the two lines before comments are removed. GCC reports it
 // as -Wcomment, an error under the harnesses' -Werror, so `go test ./tests` on

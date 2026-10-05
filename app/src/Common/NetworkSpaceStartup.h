@@ -83,14 +83,14 @@ auto StartBundledSpace(Migrate&& migrate, BindBundledSpace&& bindBundledSpace) {
 
 // ---- the values written over what a space stores ----------------------------
 //
-// updateNetworkSpaceValues REPLACES a space's whole value set. SdkHost writes a
+// updateNetworkSpaceValues replaces a space's whole value set. SdkHost writes a
 // space's values in two places, BuildNetworkSpace at every launch and
 // ApplyNetworkServer when the login screen's network sheet applies a server,
-// and both used to write a FRESH set, carrying only the VLESS server across.
+// and both used to write a fresh set, carrying only the VLESS server across.
 // So every launch dropped what the user had saved in the space: the extender
 // dns name, gossip url and manual hosts (Account > Extenders), the root keys an
 // import took, the private extender, the bootstrap DNS-over-HTTPS servers. Both
-// now write the values they own OVER what the space stores -- the space's own
+// now write the values they own over what the space stores -- the space's own
 // json (SdkHost::StoredSpaceValuesLocked; nothing for a space never written),
 // never the getters, which answer derived defaults -- as the Linux client's
 // writers do (linux StoredNetworkSpace.hpp). Every value they do not name is
@@ -103,9 +103,9 @@ inline constexpr char kOfficialLinkHostName[] = "ur.io";
 // The bundled space's values over `values`, what it stores: BuildNetworkSpace's
 // write, for the official key or a URNETWORK_NETWORK_HOST override alike.
 //
-// NO migration host name, official or overridden. sdk/network_space.go's
+// No migration host name, official or overridden. sdk/network_space.go's
 // ServiceUrl prefers MigrationHostName over the key's HostName, so one here
-// would silently redirect every api/connect url: the official key IS the
+// would silently redirect every api/connect url: the official key is the
 // operator host (ids::kNetworkSpaceHostName), and an override must talk to the
 // host it names. A stored one -- an earlier build bundled the space under
 // ur.network with bringyour.com as its migration host -- is cleared, left unset

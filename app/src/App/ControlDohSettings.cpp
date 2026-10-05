@@ -16,7 +16,7 @@ using namespace winrt::Microsoft::UI::Xaml::Controls;
 using namespace winrt::Windows::Foundation;
 using namespace urnw::rows;
 
-// NOTE on captures, as in VlessSheet.cpp: control handlers capture the block
+// Note on captures, as in VlessSheet.cpp: control handlers capture the block
 // weakly; the coroutines take the root's DispatcherQueue, a weak reference and
 // a pointer to the host (which outlives every page and sheet) before they leave
 // the UI thread, never touch `this` off it, and come back through the queue.
@@ -71,7 +71,7 @@ void ControlDohBlock::Build() {
   // not only on focus.
   description_ = MakeProse(root_, Loc("control_doh_urls_description"), 12);
 
-  // One server per line. No placeholder: an empty box MEANS the built-in
+  // One server per line. No placeholder: an empty box means the built-in
   // servers alone, and the hint under it already shows the shape of a line.
   urlsBox_ = TextBox();
   urlsBox_.Style(Lookup(L"UrTextInputStyle"));
@@ -207,7 +207,7 @@ winrt::fire_and_forget ControlDohBlock::Save(std::vector<std::string> urls) {
       self->ShowStatus(Loc(outcome.messageKey), kit::ValidationState::Invalid);
       return;
     }
-    // Read back FIRST, as the VLESS sheet does: the box then shows the list the
+    // Read back first, as the VLESS sheet does: the box then shows the list the
     // sdk stored, and the read-back only fills the box, so the verdict written
     // after it stands.
     self->Load();

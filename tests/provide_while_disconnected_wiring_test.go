@@ -15,13 +15,7 @@ import (
 // stripped so prose cannot satisfy a contract: a decision with no caller is the
 // defect this repo keeps relearning.
 
-// first occurs in text, and before second (which must occur too).
-func provideBefore(text, first, second string) bool {
-	a := strings.Index(text, first)
-	b := strings.Index(text, second)
-	return a >= 0 && b >= 0 && a < b
-}
-
+// Each needle must occur in text.
 func provideRequire(t *testing.T, where, text string, needles ...string) {
 	t.Helper()
 	for _, needle := range needles {
@@ -31,17 +25,22 @@ func provideRequire(t *testing.T, where, text string, needles ...string) {
 	}
 }
 
+// first must occur in text, and before second, which must occur too.
 func provideRequireOrder(t *testing.T, where, text, first, second string) {
 	t.Helper()
-	if !provideBefore(text, first, second) {
+	a := strings.Index(text, first)
+	b := strings.Index(text, second)
+	if a < 0 || b < 0 || a >= b {
 		t.Errorf("%s must have %q before %q", where, first, second)
 	}
 }
 
+// The service's TunnelController.cpp, comments stripped.
 func tunnelControllerSource(t *testing.T) string {
 	return stripComments(readServiceSource(t, "TunnelController.cpp"))
 }
 
+// The app's SdkHost.cpp, comments stripped.
 func sdkHostSource(t *testing.T) string {
 	return stripComments(readAppSource(t, "SdkHost.cpp"))
 }

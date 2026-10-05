@@ -123,8 +123,8 @@ struct LiveStats {
   // the provider holds a Network-mode provide key: with provideEnabled this
   // means the device is discoverable/connectable as a same-network peer
   bool provideHasNetworkKey = false;
-  // provideClients is UNKNOWN, not zero, and nothing may render it as a count.
-  // Only while the SERVICE's provider-only device provides (no session, so no
+  // provideClients is unknown, not zero, and nothing may render it as a count.
+  // Only while the service's provider-only device provides (no session, so no
   // DeviceRemote: SdkHost::ReconcileProviderLocked): its status says its tier
   // and key, and its peers come only from get_provider_stats, which an older
   // service does not answer and which is read while the window presents
@@ -739,7 +739,7 @@ class SdkHost {
   void CancelBittensorProof();
 
   // Sign `message` with a Solana wallet through the same browser bridge and hand
-  // the address and signature back WITHOUT authenticating. Adding a Solana
+  // the address and signature back without authenticating. Adding a Solana
   // sign-in method is the caller (SignSolanaForAdd): it hands the signed pair to
   // addAuth rather than logging in with it.
   //
@@ -1261,7 +1261,7 @@ class SdkHost {
   std::optional<std::string> ValidateVlessSettings(const urnet::VlessSettings& settings);
   // ---- bootstrap DNS-over-HTTPS servers (Account > Extenders and the login
   //      screen's network sheet; sdk control_doh_ui.go) -----------------------
-  // `https://<ip literal>/<path>` servers in the ACTIVE network space's values,
+  // `https://<ip literal>/<path>` servers in the active network space's values,
   // tried ahead of the built-in DoH servers for the lookups of the space's own
   // names, for networks that block the built-in ones. Like VLESS above they
   // need no session -- a fresh install behind such a network cannot sign in
@@ -1614,7 +1614,7 @@ class SdkHost {
   // The values the space manager holds for `key`, read out of the space's own
   // json (the getters return EFFECTIVE values); nullopt when the manager has no
   // such space or its json could not be read. BuildNetworkSpace and
-  // ApplyNetworkServer write a space's values WHOLE, so they write their own
+  // ApplyNetworkServer write a space's values whole, so they write their own
   // values over these (NetworkSpaceStartup.h BundledSpaceValuesOver,
   // ServerSpaceValuesOver). Needs mutex_, like everything else that touches
   // spaceManager_.
