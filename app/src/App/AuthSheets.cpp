@@ -82,7 +82,7 @@ void SeedphraseDisplaySheet::Build(XamlRoot const& root) {
   // seedphrase on screen was the only way back into it and had not been
   // written down. The Closing handler below is the actual guard; macOS's
   // .interactiveDismissDisabled(true) is the same idea expressed as a modifier.
-  dialog_.PrimaryButtonText(Loc("seedphrase_saved_confirm"));
+  dialog_.PrimaryButtonText(Loc("i_ve_saved_my_seedphrase"));
   dialog_.DefaultButton(ContentDialogButton::Primary);
 
   StackPanel content;

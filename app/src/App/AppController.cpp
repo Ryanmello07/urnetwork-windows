@@ -374,7 +374,7 @@ void AppController::OnTunnelState(const proto::TunnelStatus& status) {
             // that rather than apologising: nothing is leaking, and the escape
             // is named because it is one click away in this very menu.
             ? pages::AdvW(
-                  "conn_failsafe_blocked",
+                  "conn_tray_failsafe_blocked",
                   L"The tunnel could not carry traffic, so URnetwork shut it "
                   L"down. The kill switch is on, so this machine stays blocked "
                   L"and nothing is leaking. Reconnect, or turn off the kill "
