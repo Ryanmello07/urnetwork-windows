@@ -2325,7 +2325,7 @@ class SdkHost {
   // taken, never the other way round.
   std::mutex networkCountryPushMutex_;
   // The watch's notifications are torn down before the watch (~SdkHost), so
-  // nothing records into it once it is joining.
+  // nothing records into it once it is ending.
   std::unique_ptr<NetworkCountryWatch> networkCountryWatch_;
   std::unique_ptr<DefaultRouteChanges> networkCountryChanges_;
   // The STANDING reason there is no session, in words a user can act on, or

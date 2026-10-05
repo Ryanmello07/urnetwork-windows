@@ -3,8 +3,9 @@
 // default-route election, the mobile broadband adapter, the registration and
 // 3GPP rules, and what the service makes of what the pipe brings) and
 // App/NetworkCountryWatch.h's thread (the first report, one read per burst, a
-// reading reported only when it changes, a read that throws or blocks, and
-// cancel and destruction). The wire is network-country-protocol-tests.cpp.
+// reading reported only when it changes, a read that throws or blocks, cancel,
+// and destruction, which waits out a report but not a read past its budget).
+// The wire is network-country-protocol-tests.cpp.
 // The watch runs on real threads and the real 750 ms window; every ordering a
 // case asserts is forced by a barrier (a held read, WaitSettled, a shared
 // counter), never by a sleep, and the independent cases run side by side.
@@ -341,6 +342,109 @@ struct Reports {
 // The generous budget a barrier gets; only a broken watch runs it out.
 constexpr auto kBarrier = 10s;
 
+// The read budget of the cases that expect destruction to join: far beyond
+// how long any of them holds a read, so only a broken watch leaves one behind.
+constexpr auto kJoinBudget = 60s;
+
+// A report the cases hold: how often it was entered and returned, a gate that
+// holds it until released, and when it returned by a counter shared with the
+// case.
+struct HeldReport {
+  std::mutex mutex;
+  std::condition_variable changed;
+  bool hold = false;
+  int entered = 0;
+  int returned = 0;
+  std::atomic<int>* clock = nullptr;
+  int returnedAt = 0;
+
+  void operator()(const netcountry::Reading&) {
+    std::unique_lock lock(mutex);
+    ++entered;
+    changed.notify_all();
+    changed.wait(lock, [this] { return !hold; });
+    ++returned;
+    if (clock) returnedAt = ++*clock;
+    changed.notify_all();
+  }
+  void Hold(bool on) {
+    {
+      std::scoped_lock lock(mutex);
+      hold = on;
+    }
+    changed.notify_all();
+  }
+  // Barrier: the report has been entered `count` times.
+  bool WaitEntered(int count) {
+    std::unique_lock lock(mutex);
+    return changed.wait_for(lock, kBarrier, [&] { return entered >= count; });
+  }
+  // Barrier: the report has returned `count` times; the time it last did.
+  int WaitReturnedAt(int count) {
+    std::unique_lock lock(mutex);
+    changed.wait_for(lock, kBarrier, [&] { return returned >= count; });
+    return returned >= count ? returnedAt : 0;
+  }
+};
+
+// Ended when the last holder of its End lets go: a barrier on a lifetime, not
+// on a clock.
+struct Lifetime {
+  std::mutex mutex;
+  std::condition_variable changed;
+  bool ended = false;
+
+  // Ends the lifetime when destroyed; shared, so the last holder ends it.
+  class End {
+   public:
+    explicit End(std::shared_ptr<Lifetime> lifetime) : lifetime_(std::move(lifetime)) {}
+    ~End() {
+      {
+        std::scoped_lock lock(lifetime_->mutex);
+        lifetime_->ended = true;
+      }
+      lifetime_->changed.notify_all();
+    }
+    End(const End&) = delete;
+    End& operator=(const End&) = delete;
+
+   private:
+    std::shared_ptr<Lifetime> lifetime_;
+  };
+
+  // Barrier: the last holder has let go.
+  bool WaitEnded() {
+    std::unique_lock lock(mutex);
+    return changed.wait_for(lock, kBarrier, [this] { return ended; });
+  }
+};
+
+// When a case's watch was destroyed, by the counter its read or report
+// returned by, and a release that waits for it.
+struct Destroyed {
+  std::mutex mutex;
+  std::condition_variable changed;
+  int at = 0;
+
+  void Note(std::atomic<int>& clock) {
+    {
+      std::scoped_lock lock(mutex);
+      at = ++clock;
+    }
+    changed.notify_all();
+  }
+  // Waits until the watch is gone, or `budget` when destruction is waiting for
+  // what the caller holds.
+  void WaitOrAfter(std::chrono::milliseconds budget) {
+    std::unique_lock lock(mutex);
+    changed.wait_for(lock, budget, [this] { return at != 0; });
+  }
+  int At() {
+    std::scoped_lock lock(mutex);
+    return at;
+  }
+};
+
 const netcountry::Reading kRu{.code = "ru", .source = std::string(netcountry::kSourceMobileBroadband)};
 
 // The first reading is read and reported before WaitFirstReport returns, and
@@ -348,7 +452,7 @@ const netcountry::Reading kRu{.code = "ru", .source = std::string(netcountry::kS
 void TestWatchFirstReport() {
   ScriptedRead read;
   Reports reports;
-  NetworkCountryWatch watch([&] { return read(); }, [&](const auto& r) { reports.Add(r); });
+  NetworkCountryWatch watch([&] { return read(); }, [&](const auto& r) { reports.Add(r); }, kJoinBudget);
   Check(watch.WaitFirstReport(kBarrier), "watch: the first reading is read and reported");
   Check(reports.Count() == 1, "watch: the first report comes before WaitFirstReport returns");
   CheckReading(reports.Last(), "", netcountry::kSourceNotMobileBroadband,
@@ -364,7 +468,7 @@ void TestWatchBurst() {
   ScriptedRead read;
   Reports reports;
   read.Hold(true);
-  NetworkCountryWatch watch([&] { return read(); }, [&](const auto& r) { reports.Add(r); });
+  NetworkCountryWatch watch([&] { return read(); }, [&](const auto& r) { reports.Add(r); }, kJoinBudget);
   Check(read.WaitEntered(1), "burst: the first read runs");
   // a roam: twenty observations while the thread is held in its read, so none
   // of them can be taken before the last is recorded
@@ -387,7 +491,7 @@ void TestWatchReadThrows() {
   ScriptedRead read;
   Reports reports;
   read.Set(kRu);
-  NetworkCountryWatch watch([&] { return read(); }, [&](const auto& r) { reports.Add(r); });
+  NetworkCountryWatch watch([&] { return read(); }, [&](const auto& r) { reports.Add(r); }, kJoinBudget);
   Check(watch.WaitSettled(kBarrier), "throw: first report");
   {
     std::scoped_lock lock(read.mutex);
@@ -408,7 +512,7 @@ void TestWatchReportThrows() {
   NetworkCountryWatch watch([&] { return read(); }, [&](const auto&) {
     ++reports;
     throw std::runtime_error("the owner's report failed");
-  });
+  }, kJoinBudget);
   Check(watch.WaitSettled(kBarrier) && reports.load() == 1, "report throws: reported");
   read.Set(kRu);
   watch.NetworkEventSink()();
@@ -422,7 +526,7 @@ void TestWatchBlockedFirstRead() {
   ScriptedRead read;
   Reports reports;
   read.Hold(true);
-  NetworkCountryWatch watch([&] { return read(); }, [&](const auto& r) { reports.Add(r); });
+  NetworkCountryWatch watch([&] { return read(); }, [&](const auto& r) { reports.Add(r); }, kJoinBudget);
   Check(read.WaitEntered(1), "blocked: the first read runs");
   Check(!watch.WaitFirstReport(200ms), "blocked: a read that does not answer is not waited out");
   Check(reports.Count() == 0, "blocked: nothing reported while the read hangs");
@@ -436,7 +540,7 @@ void TestWatchCancel() {
   ScriptedRead read;
   Reports reports;
   {
-    NetworkCountryWatch watch([&] { return read(); }, [&](const auto& r) { reports.Add(r); });
+    NetworkCountryWatch watch([&] { return read(); }, [&](const auto& r) { reports.Add(r); }, kJoinBudget);
     Check(watch.WaitSettled(kBarrier), "cancel: first report");
     read.Hold(true);
     read.Set(kRu);
@@ -450,8 +554,9 @@ void TestWatchCancel() {
   Check(reports.Count() == 1, "cancel: a read that finishes after the cancel is not reported");
 }
 
-// Destruction joins: it returns only after the read already running has
-// returned. The order is read off a shared counter, so no clock decides it.
+// Destruction joins a read already running that returns within the read
+// budget: it returns only after that read has returned. The order is read off
+// a shared counter, so no clock decides it.
 void TestWatchDestruction() {
   ScriptedRead read;
   Reports reports;
@@ -462,7 +567,7 @@ void TestWatchDestruction() {
   std::condition_variable destroyedChanged;
   int destroyedAt = 0;
   auto watch = std::make_unique<NetworkCountryWatch>([&] { return read(); },
-                                                     [&](const auto& r) { reports.Add(r); });
+                                                     [&](const auto& r) { reports.Add(r); }, kJoinBudget);
   Check(watch->WaitSettled(kBarrier), "destruction: first report");
   sink = watch->NetworkEventSink();
   read.Hold(true);
@@ -493,6 +598,71 @@ void TestWatchDestruction() {
   Check(read.Returned() == 2, "destruction: nothing is read once the watch is gone");
 }
 
+// A report that is running when the watch is destroyed is waited out, past
+// the read budget: the report is the owner's, and must not run against an
+// owner being destroyed. What the thread can touch is shared with it, so a
+// broken watch that leaves it running fails the check rather than the process.
+void TestWatchDestructionWaitsOutAReport() {
+  auto clock = std::make_shared<std::atomic<int>>(0);
+  auto report = std::make_shared<HeldReport>();
+  report->clock = clock.get();
+  report->Hold(true);
+  Destroyed destroyed;
+  auto watch = std::make_unique<NetworkCountryWatch>(
+      [] { return kRu; }, [report, clock](const auto& r) { (*report)(r); }, 100ms);
+  Check(report->WaitEntered(1), "report: the first report runs");
+  // released once destruction has returned, or after two seconds when it waits
+  // for the report, as it must
+  std::thread release([&destroyed, report] {
+    destroyed.WaitOrAfter(2s);
+    report->Hold(false);
+  });
+  watch.reset();
+  destroyed.Note(*clock);
+  release.join();
+  const int returnedAt = report->WaitReturnedAt(1);
+  Check(returnedAt != 0 && returnedAt < destroyed.At(),
+        "report: destruction returns only after the report already running has returned, past the read budget");
+}
+
+// A read that is still running past the read budget does not hold up
+// destruction (a WWAN service that never answers must not hold up the app's
+// exit): the watch is gone while the read is held, and the thread left to
+// finish it reports nothing and then lets go of the channel. Everything that
+// thread can touch is shared with it, as the owner's read must be.
+void TestWatchAbandonsAHungRead() {
+  auto clock = std::make_shared<std::atomic<int>>(0);
+  auto read = std::make_shared<ScriptedRead>();
+  read->clock = clock.get();
+  auto reports = std::make_shared<Reports>();
+  auto channelGone = std::make_shared<Lifetime>();
+  auto end = std::make_shared<Lifetime::End>(channelGone);
+  Destroyed destroyed;
+  auto watch = std::make_unique<NetworkCountryWatch>(
+      [read, clock] { return (*read)(); }, [reports, end](const auto& r) { reports->Add(r); }, 100ms);
+  // the channel's report holds the only End from here on
+  end.reset();
+  Check(watch->WaitSettled(kBarrier), "hung read: first report");
+  read->Hold(true);
+  read->Set(kRu);
+  watch->NetworkEventSink()();
+  Check(read->WaitEntered(2), "hung read: the burst's read runs");
+  // released once destruction has returned, or after the barrier's budget when
+  // it waits for the read without a bound
+  std::thread release([&destroyed, read] {
+    destroyed.WaitOrAfter(kBarrier);
+    read->Hold(false);
+  });
+  watch.reset();
+  destroyed.Note(*clock);
+  release.join();
+  Check(read->WaitReturned(2), "hung read: the read returns once it is answered");
+  Check(destroyed.At() != 0 && destroyed.At() < read->returnedAt,
+        "hung read: destruction returns while a read past the budget is still running");
+  Check(channelGone->WaitEnded(), "hung read: the thread left to finish the read lets go of the channel");
+  Check(reports->Count() == 1, "hung read: a read that finishes after destruction is not reported");
+}
+
 }  // namespace
 
 int main() {
@@ -506,7 +676,8 @@ int main() {
   // The watch's cases are independent and each waits out windows: side by side.
   std::vector<std::thread> cases;
   for (const auto test : {TestWatchFirstReport, TestWatchBurst, TestWatchReadThrows, TestWatchReportThrows,
-                          TestWatchBlockedFirstRead, TestWatchCancel, TestWatchDestruction}) {
+                          TestWatchBlockedFirstRead, TestWatchCancel, TestWatchDestruction,
+                          TestWatchDestructionWaitsOutAReport, TestWatchAbandonsAHungRead}) {
     cases.emplace_back(test);
   }
   for (auto& thread : cases) thread.join();

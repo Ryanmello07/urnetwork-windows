@@ -192,8 +192,10 @@ func TestNetworkCountryRejectsWireRegressions(t *testing.T) {
 	})
 }
 
-// The watch: a report for every read, a destructor that does not wait, a read
-// reported after the cancel, and a first wait that returns at once.
+// The watch: a report for every read, a destructor that does not wait for the
+// thread, one that waits for a read without a bound, a cancel that does not
+// wait out a running report, a read reported after the cancel, and a first
+// wait that returns at once.
 func TestNetworkCountryRejectsWatchRegressions(t *testing.T) {
 	watch := func(old, new string) map[string]func(string) string {
 		return map[string]func(string) string{"NetworkCountryWatch.h": replaceOnce(old, new)}
@@ -205,15 +207,29 @@ func TestNetworkCountryRejectsWatchRegressions(t *testing.T) {
 			want:   "burst: an unchanged reading is not reported again",
 		},
 		{
-			name:   "destruction detaches",
-			mutate: watch("if (thread_.joinable()) thread_.join();", "if (thread_.joinable()) thread_.detach();"),
-			want:   "join: destruction returns only after the read already running has returned",
+			name: "destruction does not wait for the thread",
+			mutate: watch(
+				"return channel_->wake.wait_for(lock, readJoinBudget_, [this] { return channel_->finished; });",
+				"return channel_->finished && readJoinBudget_.count() >= 0;"),
+			want: "join: destruction returns only after the read already running has returned",
+		},
+		{
+			name: "destruction waits for a read without a bound",
+			mutate: watch(
+				"return channel_->wake.wait_for(lock, readJoinBudget_, [this] { return channel_->finished; });",
+				"channel_->wake.wait(lock, [this] { return channel_->finished; });\n      return readJoinBudget_.count() >= 0;"),
+			want: "hung read: destruction returns while a read past the budget is still running",
+		},
+		{
+			name:   "a running report not waited out",
+			mutate: watch("    channel_->wake.wait(lock, [this] { return !channel_->reporting; });\n", ""),
+			want:   "report: destruction returns only after the report already running has returned",
 		},
 		{
 			name: "a read after the cancel reported",
 			mutate: watch(
-				"      {\n        std::scoped_lock lock(channel->mutex);\n        if (channel->cancelled) return;\n      }\n      if (!reported",
-				"      if (!reported"),
+				"        if (channel->cancelled) return;\n        channel->reporting = true;\n",
+				"        channel->reporting = true;\n"),
 			want: "cancel: a read that finishes after the cancel is not reported",
 		},
 		{
@@ -236,7 +252,8 @@ func TestNetworkCountryAppWiring(t *testing.T) {
 	start := definitionBody(t, "SdkHost.cpp", host, "void SdkHost::StartNetworkCountryWatch()")
 	provideRequire(t, "StartNetworkCountryWatch", start,
 		"std::make_unique<NetworkCountryWatch>(",
-		"ReadNetworkCountry()",
+		// the read may be left running past destruction: it captures nothing
+		"[] { return ReadNetworkCountry(); }",
 		"ApplyNetworkCountry(reading);",
 		"std::make_unique<DefaultRouteChanges>(networkCountryWatch_->NetworkEventSink())",
 		"networkCountryWatch_->WaitFirstReport(kNetworkCountryFirstReadWait)")
