@@ -449,6 +449,11 @@ urnet::NetworkSpace SdkHost::BuildNetworkSpace() {
   // screen's network sheet) is not among them, so it comes from the space's
   // stored values; without this every launch would drop it.
   values = vless::WithStoredVless(std::move(values), StoredSpaceValuesLocked(key));
+  // ...and so do the bootstrap DNS-over-HTTPS servers (Account > Extenders, or
+  // the login screen's network sheet), which no value above names either. On a
+  // network that blocks the built-in servers, dropping them would leave every
+  // launch unable to resolve the api.
+  values = WithStoredControlDohUrls(std::move(values), StoredSpaceValuesLocked(key));
 
   urnet::NetworkSpace space = spaceManager_->updateNetworkSpaceValues(key, values);
 
@@ -1276,6 +1281,8 @@ bool SdkHost::ApplyNetworkServer(const std::string& hostName, const std::string&
       // it from the values stored under this key, so applying a domain or its
       // urls again never drops it. A host never applied before has none.
       values = vless::WithStoredVless(std::move(values), StoredSpaceValuesLocked(key));
+      // The space's bootstrap DNS-over-HTTPS servers, for the same reason.
+      values = WithStoredControlDohUrls(std::move(values), StoredSpaceValuesLocked(key));
 
       networkSpace_ = spaceManager_->updateNetworkSpaceValues(key, values);
       spaceManager_->setActiveNetworkSpace(*networkSpace_);
@@ -4271,6 +4278,56 @@ std::optional<std::string> SdkHost::ValidateVlessSettings(const urnet::VlessSett
     LogWarn("sdkhost: validate vless settings failed");
   }
   return std::nullopt;
+}
+
+// ---- bootstrap DNS-over-HTTPS servers ---------------------------------------
+//
+// Nothing here logs the servers: which resolver a user can reach says where
+// they are.
+
+std::optional<std::vector<std::string>> SdkHost::CurrentControlDohUrls() {
+  std::scoped_lock lock(mutex_);
+  if (!networkSpace_) return std::nullopt;
+  try {
+    return networkSpace_->getControlDohUrls().value_or(urnet::StringList{});
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: get control doh urls failed: {}", e.what());
+  } catch (...) {
+    LogWarn("sdkhost: get control doh urls failed");
+  }
+  return std::nullopt;
+}
+
+std::optional<std::string> SdkHost::SetControlDohUrls(const std::vector<std::string>& urls) {
+  std::scoped_lock lock(mutex_);
+  if (!networkSpace_) return std::nullopt;
+  try {
+    // Through the space's own setter, not SetNetExtender's write of the values
+    // json: the setter validates each line (an https url on an ip literal),
+    // drops repeats, normalizes and answers the error id, which a whole-values
+    // write would skip. It applies in place (network_space.go
+    // updateInPlaceValues): the strategy's DoH cache is swapped and this handle
+    // stays the same space, so there is nothing to re-take.
+    std::string errorId = networkSpace_->setControlDohUrls(urnet::StringList(urls));
+    if (errorId.empty()) LogInfo("sdkhost: bootstrap doh servers saved");
+    return errorId;
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: set control doh urls failed: {}", e.what());
+  } catch (...) {
+    LogWarn("sdkhost: set control doh urls failed");
+  }
+  return std::nullopt;
+}
+
+std::vector<std::string> SdkHost::RegionalControlDohUrls(const std::string& countryCode) {
+  try {
+    return urnet::regionalControlDohUrls(countryCode).value_or(urnet::StringList{});
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: regional control doh urls failed: {}", e.what());
+  } catch (...) {
+    LogWarn("sdkhost: regional control doh urls failed");
+  }
+  return {};
 }
 
 std::optional<urnet::TransportSettings> SdkHost::CurrentTransportSettings(

@@ -18,6 +18,7 @@
 #include <winrt/Microsoft.UI.Xaml.h>
 #include <winrt/Microsoft.UI.Xaml.Controls.h>
 
+#include "ControlDohSettings.h"  // the bootstrap DNS-over-HTTPS servers block
 #include "ExtenderSheets.h"   // the share + import sheets (EXTENDER.md K7)
 #include "ReferralTotalsState.h"
 #include "SettingsSheets.h"  // rows::FieldState + the row kit
@@ -44,7 +45,8 @@ class AccountPage {
   // ExtenderViewController and the legacy private extender off the network
   // space -- BOTH off the UI thread, because the controller lives on the
   // DeviceRemote and its read is an rpc to the service. Safe to call with no
-  // session: it renders the NoDevice state.
+  // session: it renders the NoDevice state. The bootstrap DNS-over-HTTPS
+  // servers are read too, session or not (ControlDohSettings.h).
   winrt::fire_and_forget LoadExtenderSettings();
 
   // read by MainWindow::ApplyBalance for the "Total Referrals" / bonus rows on
@@ -184,6 +186,12 @@ class AccountPage {
   // held for as long as its dialog is showing, like every other sheet here
   std::shared_ptr<urnw::ExtenderShareSheet> extenderShareSheet_;
   std::shared_ptr<urnw::ExtenderImportSheet> extenderImportSheet_;
+  // The bootstrap DNS-over-HTTPS servers, under the extender settings. Not
+  // gated on the view controller like the rows above it: the servers are a
+  // value of the app's own space, read and saved through SdkHost, and a user
+  // whose network blocks the built-in servers needs them before the app can
+  // reach its own servers, let alone hold a session.
+  std::shared_ptr<urnw::ControlDohBlock> controlDoh_;
 };
 
 }  // namespace urnw

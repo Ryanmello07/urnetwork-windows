@@ -132,6 +132,9 @@ class ExtenderImportSheet : public std::enable_shared_from_this<ExtenderImportSh
   winrt::Microsoft::UI::Xaml::Controls::TextBox pasteBox_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::TextBlock countText_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::ToggleSwitch settingsToggle_{nullptr};
+  // the bootstrap DNS-over-HTTPS servers the code's settings would set, named
+  // under the toggle that takes them
+  winrt::Microsoft::UI::Xaml::Controls::TextBlock controlDohText_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::TextBlock foreignText_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::TextBlock statusText_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::Button importButton_{nullptr};
