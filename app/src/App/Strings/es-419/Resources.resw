@@ -488,6 +488,10 @@ de la manera correcta</value>
     <value>Reclama un nombre de red personalizado para reemplazar el generado automáticamente</value>
     <comment>A description of the benefits of claiming a custom network name.</comment>
   </data>
+  <data name="claims_open_after_finalization" xml:space="preserve">
+    <value>Las reclamaciones de cada época se abren cuando se finaliza su lista de pagos y siguen abiertas hasta que vencen.</value>
+    <comment>Explainer in the claim dialog and on the unclaimed tile. No durations: the claim-open time and the expiry come from the chain's epoch schedule (sn_payout_schedule_times), so the copy never fixes the 48-hour finalize offset or the nine-epoch claim window.</comment>
+  </data>
   <data name="client_contracts" xml:space="preserve">
     <value>Contratos de cliente</value>
     <comment>transfer stats and split rules</comment>
@@ -2758,6 +2762,14 @@ del mundo</value>
     <value>¡Enviado! Gracias por tus comentarios.</value>
     <comment>Snackbar shown after feedback is sent successfully. Used in Main/Feedback/FeedbackView.swift.</comment>
   </data>
+  <data name="set_coldkey" xml:space="preserve">
+    <value>Configurar coldkey</value>
+    <comment>Earnings card: the action next to set_coldkey_to_get_paid. Opens the existing coldkey setting (the connect Bittensor wallet flow).</comment>
+  </data>
+  <data name="set_coldkey_to_get_paid" xml:space="preserve">
+    <value>Configura tu coldkey de Bittensor para cobrar</value>
+    <comment>Earnings card: shown in place of sn_payout_schedule while no Bittensor coldkey is set. SN payouts go only to a coldkey; the set_coldkey action next to it opens the coldkey (connect wallet) flow.</comment>
+  </data>
   <data name="settings" xml:space="preserve">
     <value>Configuración</value>
     <comment>Account Screen</comment>
@@ -3103,6 +3115,14 @@ del mundo</value>
   <data name="site_sub_stripe_body" xml:space="preserve">
     <value>Tu suscripción Pro se factura a través de Stripe. Actualiza los datos de pago o cancela cuando quieras más abajo.</value>
     <comment>Subscription: Stripe-billed body</comment>
+  </data>
+  <data name="sn_payout_schedule" xml:space="preserve">
+    <value>Las ganancias se liquidan cada época y se pagan en SN25α a tu coldkey de Bittensor cuando las reclamas.</value>
+    <comment>Earnings card: how providers are paid on the UR subnet (WHITEPAPER §5.2, §8.3). Earnings settle per epoch and are paid in SN25α as stake to the provider's Bittensor coldkey once the provider claims them; nothing is paid automatically. Followed by sn_payout_schedule_times when the epoch schedule is known.</comment>
+  </data>
+  <data name="sn_payout_schedule_times" xml:space="preserve">
+    <value>Esta época termina el {0}. Reclama tu parte desde el {1} hasta el {2}.</value>
+    <comment>Earnings card, after sn_payout_schedule: when the current epoch ends, when its share can be claimed and when an unclaimed share expires. The three values are local date-times the app fills from the chain's epoch schedule (the coordinator's policy: the claim-open offset and the claim TTL), never fixed durations.</comment>
   </data>
   <data name="solana_sign_in" xml:space="preserve">
     <value>Iniciar sesión con Solana</value>
@@ -3494,6 +3514,10 @@ como debería ser.</value>
   <data name="usdc_solana_network_only" xml:space="preserve">
     <value>Envía USDC solo por la red Solana. Los USDC enviados por cualquier otra red no llegarán.</value>
     <comment>Payment: the chain to send on. Shown wherever a USDC payment is requested, because USDC exists on many chains and a transfer sent on the wrong one is lost.</comment>
+  </data>
+  <data name="usdc_waiting" xml:space="preserve">
+    <value>Último pago en USDC: {} USDC pendientes</value>
+    <comment>The last USDC payout still pending since provider payouts moved to the UR subnet; shown on the Solana wallet block and, while no Solana wallet is connected, next to the wallet actions, only while a USDC amount is pending. Mirrors the email headline.</comment>
   </data>
   <data name="usdc_wallet_address" xml:space="preserve">
     <value>Dirección de la billetera USDC</value>

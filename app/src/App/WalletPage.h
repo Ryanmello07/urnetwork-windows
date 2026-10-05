@@ -40,6 +40,7 @@
 #include <winrt/Microsoft.UI.Xaml.Shapes.h>
 
 #include "EarningsSheets.h"
+#include "SnPayoutPresentation.h"
 #include "SolanaWalletPresentation.h"
 
 namespace urnw {
@@ -285,9 +286,15 @@ class WalletPage {
   void ApplyEpochs(std::vector<EpochRow> const& epochs, Fetch state);
   void RebuildHistory();
   // `error` is the SDK's SnError (or one built from a transport error) when
-  // the fetch failed; its stable code picks the store's sentence.
+  // the fetch failed; its stable code picks the store's sentence. `schedule` is
+  // the current epoch's, read with the claims (absent when the SDK could not
+  // read the coordinator's policy).
   void ApplyClaims(std::vector<EpochClaim> const& claims, int64_t totalClaimableRao,
-                   Fetch state, std::optional<urnet::SnError> const& error);
+                   Fetch state, std::optional<urnet::SnError> const& error,
+                   std::optional<snpayout::EpochSchedule> const& schedule = std::nullopt);
+  // How and when SN payouts happen, under the points figure
+  // (snpayout::PayoutLineFor), from the coldkey, the claims and the schedule.
+  void RebuildPayoutLine();
   // The default chain settings ship without the vault, coordinator and
   // operator id, so the first vault read waits for one GET /sn/epoch through
   // the device, which stores them. `then` runs on the UI thread either way.
@@ -376,6 +383,7 @@ class WalletPage {
   std::vector<EpochClaim> claims_;
   int64_t totalClaimableRao_ = 0;
   Fetch claimsState_ = Fetch::Loading;
+  std::optional<snpayout::EpochSchedule> schedule_;
   std::optional<GasKeyInfo> gas_;
   std::optional<HeadInfo> head_;
   bool chainSynced_ = false;

@@ -744,6 +744,10 @@
     <value>Αποκτήστε ένα προσαρμοσμένο όνομα δικτύου που θα αντικαταστήσει το αυτόματα δημιουργημένο</value>
     <comment>A description of the benefits of claiming a custom network name.</comment>
   </data>
+  <data name="claims_open_after_finalization" xml:space="preserve">
+    <value>Οι διεκδικήσεις κάθε εποχής ανοίγουν μόλις οριστικοποιηθεί η λίστα πληρωμών της και μένουν ανοιχτές μέχρι να λήξουν.</value>
+    <comment>Explainer in the claim dialog and on the unclaimed tile. No durations: the claim-open time and the expiry come from the chain's epoch schedule (sn_payout_schedule_times), so the copy never fixes the 48-hour finalize offset or the nine-epoch claim window.</comment>
+  </data>
   <data name="clear" xml:space="preserve">
     <value>Καθαρισμός</value>
     <comment>General UI string: a button that clears a field or setting.</comment>
@@ -3186,6 +3190,14 @@
     <value>Στάλθηκε! Ευχαριστούμε για τα σχόλιά σας.</value>
     <comment>Snackbar shown after feedback is sent successfully. Used in Main/Feedback/FeedbackView.swift.</comment>
   </data>
+  <data name="set_coldkey" xml:space="preserve">
+    <value>Ορισμός coldkey</value>
+    <comment>Earnings card: the action next to set_coldkey_to_get_paid. Opens the existing coldkey setting (the connect Bittensor wallet flow).</comment>
+  </data>
+  <data name="set_coldkey_to_get_paid" xml:space="preserve">
+    <value>Ορίστε το Bittensor coldkey σας για να πληρώνεστε</value>
+    <comment>Earnings card: shown in place of sn_payout_schedule while no Bittensor coldkey is set. SN payouts go only to a coldkey; the set_coldkey action next to it opens the coldkey (connect wallet) flow.</comment>
+  </data>
   <data name="settings" xml:space="preserve">
     <value>Ρυθμίσεις</value>
     <comment>Account Screen</comment>
@@ -3535,6 +3547,14 @@
   <data name="site_sub_stripe_body" xml:space="preserve">
     <value>Η συνδρομή σας Pro χρεώνεται μέσω Stripe. Ενημερώστε τα στοιχεία πληρωμής ή ακυρώστε ανά πάσα στιγμή παρακάτω.</value>
     <comment>Subscription: Stripe-billed body</comment>
+  </data>
+  <data name="sn_payout_schedule" xml:space="preserve">
+    <value>Τα κέρδη εκκαθαρίζονται σε κάθε εποχή και πληρώνονται σε SN25α στο Bittensor coldkey σας όταν τα διεκδικήσετε.</value>
+    <comment>Earnings card: how providers are paid on the UR subnet (WHITEPAPER §5.2, §8.3). Earnings settle per epoch and are paid in SN25α as stake to the provider's Bittensor coldkey once the provider claims them; nothing is paid automatically. Followed by sn_payout_schedule_times when the epoch schedule is known.</comment>
+  </data>
+  <data name="sn_payout_schedule_times" xml:space="preserve">
+    <value>Αυτή η εποχή λήγει στις {0}. Διεκδικήστε το μερίδιό σας από {1} έως {2}.</value>
+    <comment>Earnings card, after sn_payout_schedule: when the current epoch ends, when its share can be claimed and when an unclaimed share expires. The three values are local date-times the app fills from the chain's epoch schedule (the coordinator's policy: the claim-open offset and the claim TTL), never fixed durations.</comment>
   </data>
   <data name="solana_sign_in" xml:space="preserve">
     <value>Είσοδος με Solana</value>
@@ -3958,6 +3978,10 @@
   <data name="usdc_solana_network_only" xml:space="preserve">
     <value>Στείλτε USDC μόνο στο δίκτυο Solana. Τα USDC που στέλνονται σε άλλο δίκτυο δεν θα φτάσουν.</value>
     <comment>Payment: the chain to send on. Shown wherever a USDC payment is requested, because USDC exists on many chains and a transfer sent on the wrong one is lost.</comment>
+  </data>
+  <data name="usdc_waiting" xml:space="preserve">
+    <value>Τελική πληρωμή USDC: {} USDC σε αναμονή</value>
+    <comment>The last USDC payout still pending since provider payouts moved to the UR subnet; shown on the Solana wallet block and, while no Solana wallet is connected, next to the wallet actions, only while a USDC amount is pending. Mirrors the email headline.</comment>
   </data>
   <data name="usdc_wallet_address" xml:space="preserve">
     <value>Διεύθυνση πορτοφολιού USDC</value>

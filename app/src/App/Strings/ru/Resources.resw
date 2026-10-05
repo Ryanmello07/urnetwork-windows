@@ -941,8 +941,8 @@
     <comment>Error when an epoch can no longer be claimed.</comment>
   </data>
   <data name="claims_open_after_finalization" xml:space="preserve">
-    <value>Получение открывается через 48 часов после завершения эпохи и остаётся доступным в течение срока действия хранилища.</value>
-    <comment>Explainer in the claim dialog.</comment>
+    <value>Получение за каждую эпоху открывается после утверждения её списка выплат и остаётся открытым до истечения срока.</value>
+    <comment>Explainer in the claim dialog and on the unclaimed tile. No durations: the claim-open time and the expiry come from the chain's epoch schedule (sn_payout_schedule_times), so the copy never fixes the 48-hour finalize offset or the nine-epoch claim window.</comment>
   </data>
   <data name="clear" xml:space="preserve">
     <value>Очистить</value>
@@ -4772,6 +4772,14 @@
     <value>Отправлено! Спасибо за отзыв.</value>
     <comment>Snackbar shown after feedback is sent successfully. Used in Main/Feedback/FeedbackView.swift.</comment>
   </data>
+  <data name="set_coldkey" xml:space="preserve">
+    <value>Указать coldkey</value>
+    <comment>Earnings card: the action next to set_coldkey_to_get_paid. Opens the existing coldkey setting (the connect Bittensor wallet flow).</comment>
+  </data>
+  <data name="set_coldkey_to_get_paid" xml:space="preserve">
+    <value>Укажите свой coldkey Bittensor, чтобы получать выплаты</value>
+    <comment>Earnings card: shown in place of sn_payout_schedule while no Bittensor coldkey is set. SN payouts go only to a coldkey; the set_coldkey action next to it opens the coldkey (connect wallet) flow.</comment>
+  </data>
   <data name="settings" xml:space="preserve">
     <value>Настройки</value>
     <comment>Account Screen</comment>
@@ -6150,6 +6158,14 @@
     <value>Пропустить</value>
     <comment>Small muted button at the top of the post-login onboarding flow that leaves the whole flow.</comment>
   </data>
+  <data name="sn_payout_schedule" xml:space="preserve">
+    <value>Заработок рассчитывается каждую эпоху и выплачивается в SN25α на ваш coldkey Bittensor, когда вы его получаете.</value>
+    <comment>Earnings card: how providers are paid on the UR subnet (WHITEPAPER §5.2, §8.3). Earnings settle per epoch and are paid in SN25α as stake to the provider's Bittensor coldkey once the provider claims them; nothing is paid automatically. Followed by sn_payout_schedule_times when the epoch schedule is known.</comment>
+  </data>
+  <data name="sn_payout_schedule_times" xml:space="preserve">
+    <value>Эта эпоха заканчивается {0}. Получите свою долю с {1} до {2}.</value>
+    <comment>Earnings card, after sn_payout_schedule: when the current epoch ends, when its share can be claimed and when an unclaimed share expires. The three values are local date-times the app fills from the chain's epoch schedule (the coordinator's policy: the claim-open offset and the claim TTL), never fixed durations.</comment>
+  </data>
   <data name="sn_status_claimable" xml:space="preserve">
     <value>Доступно к получению</value>
     <comment>Claim status of an epoch whose alpha can be claimed now.</comment>
@@ -6730,8 +6746,8 @@
     <comment>Payment: the chain to send on. Shown wherever a USDC payment is requested, because USDC exists on many chains and a transfer sent on the wrong one is lost.</comment>
   </data>
   <data name="usdc_waiting" xml:space="preserve">
-    <value>{} USDC ожидают выплаты</value>
-    <comment>The pending USDC payout total waiting to be sent to the Solana payout wallet; shown on the Solana wallet block and, while no Solana wallet is connected, next to the wallet actions. Mirrors the email headline.</comment>
+    <value>Последняя выплата в USDC: {} USDC ожидают выплаты</value>
+    <comment>The last USDC payout still pending since provider payouts moved to the UR subnet; shown on the Solana wallet block and, while no Solana wallet is connected, next to the wallet actions, only while a USDC amount is pending. Mirrors the email headline.</comment>
   </data>
   <data name="usdc_wallet_address" xml:space="preserve">
     <value>Адрес кошелька USDC</value>
