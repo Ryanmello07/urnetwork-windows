@@ -217,8 +217,10 @@ class AddSignInSession {
   // (phantom / solflare, or a Bittensor chooser id)
   virtual void SignWallet(WalletChain chain, std::string_view walletId,
                           std::function<void(WalletSignature signature, std::string error)> done) = 0;
-  // Api addAuth on the current network; "" on success, else the message.
-  virtual void AddAuth(AddAuthBody const& body, std::function<void(std::string error)> done) = 0;
+  // Api addAuth on the current network; "" on success, else the message and
+  // the server's code for it ("" for none).
+  virtual void AddAuth(AddAuthBody const& body,
+                       std::function<void(std::string error, std::string code)> done) = 0;
   // abandon the provider or wallet step in flight
   virtual void Cancel() = 0;
 };
@@ -255,6 +257,11 @@ class AddSignInFlow {
   std::string const& Error() const { return error_; }
   // a store key to show when there is no message ("" for none)
   std::string const& ErrorKey() const { return errorKey_; }
+  // the server's code for the refusal shown ("" for none), and the Bittensor
+  // wallet whose signature it refused ("" for any other method): a pasted
+  // signature from another account has its own words (WalletProofRefusalText)
+  std::string const& ErrorCode() const { return errorCode_; }
+  std::string const& ErrorWalletId() const { return errorWalletId_; }
   // the method that was added (set once addAuth succeeded)
   std::optional<Method> Added() const { return added_; }
 
@@ -276,6 +283,7 @@ class AddSignInFlow {
   void StartWallet(WalletChain chain, std::string_view walletId) {
     if (busy_ || added_ || walletId.empty()) return;
     Begin();
+    if (chain == WalletChain::Bittensor) bittensorWalletId_ = std::string(walletId);
     session_.SignWallet(chain, walletId, Guard([this, chain](WalletSignature signature,
                                                              std::string error) {
       if (!error.empty() || signature.address.empty() || signature.signature.empty()) {
@@ -303,6 +311,9 @@ class AddSignInFlow {
     busy_ = true;
     error_.clear();
     errorKey_.clear();
+    errorCode_.clear();
+    errorWalletId_.clear();
+    bittensorWalletId_.clear();
     Changed();
   }
 
@@ -311,9 +322,9 @@ class AddSignInFlow {
       Fail(std::string());
       return;
     }
-    session_.AddAuth(body, Guard([this, method](std::string error) {
+    session_.AddAuth(body, Guard([this, method](std::string error, std::string code) {
       if (!error.empty()) {
-        Fail(error);
+        Fail(error, std::move(code));
         return;
       }
       busy_ = false;
@@ -322,11 +333,14 @@ class AddSignInFlow {
     }));
   }
 
-  // A quiet cancel shows nothing; an empty error shows the generic line.
-  void Fail(std::string const& error) {
+  // A quiet cancel shows nothing; an empty error shows the generic line. `code`
+  // is the server's code for an addAuth refusal.
+  void Fail(std::string const& error, std::string code = std::string()) {
     busy_ = false;
     error_.clear();
     errorKey_.clear();
+    errorCode_ = std::move(code);
+    errorWalletId_ = bittensorWalletId_;
     if (!IsQuietCancel(error)) {
       if (error.empty()) {
         errorKey_ = kGenericErrorKey;
@@ -347,6 +361,10 @@ class AddSignInFlow {
   bool busy_ = false;
   std::string error_;
   std::string errorKey_;
+  std::string errorCode_;
+  std::string errorWalletId_;
+  // the Bittensor wallet signing the current attempt ("" for any other method)
+  std::string bittensorWalletId_;
   std::optional<Method> added_;
 
  public:

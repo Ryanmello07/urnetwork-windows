@@ -97,12 +97,15 @@ inline NextStep NextStepFor(std::string_view transport) {
 // POST /sn/wallet refuses a well-formed signature that does not verify for the
 // entered address with this code, which the sdk keeps in SnError.code
 // (urnet::SnErrorCodeSignatureMismatch): the wallet signed with another account
-// (or other text), and the server cannot say which.
+// (or other text), and the server cannot say which. Sign-in, network create and
+// add-auth refuse it with the same error.code (urnet::
+// WalletAuthErrorCodeSignatureMismatch; sign-in and create with result_errors).
 inline constexpr std::string_view kSnErrorSignatureMismatch = "signature_mismatch";
 
-// The localization key for a refused coldkey connect when the page has its own
-// words for it, else "" (the SDK's error text, as before). Only a manual entry
-// pastes a signature, so only then does the page say to sign again in that
+// The localization key for a refused wallet proof (the coldkey connect, a
+// sign-in, a network create or an added sign-in method) when the app has its
+// own words for it, else "" (the error text, as before). Only a manual entry
+// pastes a signature, so only then does the app say to sign again in that
 // wallet (bittensor_error_signature_mismatch, with the wallet's name). A
 // browser-bridge wallet signed with the account it returned.
 inline std::string ConnectErrorKey(std::string_view snErrorCode, std::string_view transport) {

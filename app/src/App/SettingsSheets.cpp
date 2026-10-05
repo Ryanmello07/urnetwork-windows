@@ -828,7 +828,7 @@ class SdkAddSignInSession : public add_sign_in::AddSignInSession {
   }
 
   void AddAuth(add_sign_in::AddAuthBody const& body,
-               std::function<void(std::string)> done) override {
+               std::function<void(std::string, std::string)> done) override {
     urnet::AddAuthArgs args;
     args.user_auth = body.user_auth;
     args.password = body.password;
@@ -847,8 +847,11 @@ class SdkAddSignInSession : public add_sign_in::AddSignInSession {
                                  std::optional<urnet::AddAuthResult> result,
                                  std::optional<std::string> err) {
       std::string error = ServerError(result, err);
-      queue.TryEnqueue([alive, done, error] {
-        if (*alive) done(error);
+      // signature_mismatch: a pasted signature from another account
+      std::string code = result && result->error ? result->error->code.value_or(std::string())
+                                                 : std::string();
+      queue.TryEnqueue([alive, done, error, code] {
+        if (*alive) done(error, code);
       });
     });
   }
@@ -1300,7 +1303,7 @@ void AddAuthSheet::Render() {
     if (email || !signIn) {
       error = H(conversion_->Error());
     } else if (!add_->Error().empty()) {
-      error = H(add_->Error());
+      error = H(WalletProofRefusalText(add_->ErrorCode(), add_->Error(), add_->ErrorWalletId()));
     } else if (!add_->ErrorKey().empty()) {
       error = Loc(add_->ErrorKey());
     }
