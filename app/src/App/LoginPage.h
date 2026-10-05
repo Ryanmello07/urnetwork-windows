@@ -25,6 +25,7 @@
 #include "SdkHost.h"
 #include "SettingsSheets.h"
 #include "UrComponents.h"
+#include "VlessSheet.h"
 
 namespace winrt::URnetwork::implementation {
 struct MainWindow;
@@ -143,7 +144,8 @@ class LoginPage {
                              winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnCreateInstantSubmit(winrt::Windows::Foundation::IInspectable const&,
                              winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
-  // the bottom-left "Change Network API" affordance
+  // the bottom-left "Change Network API" affordance, and the VLESS sheet its
+  // VLESS button opens in its place
   winrt::fire_and_forget OnChangeNetworkServer(
       winrt::Windows::Foundation::IInspectable const&,
       winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
@@ -257,6 +259,7 @@ class LoginPage {
   bool presentationActive_ = false;
   std::shared_ptr<urnw::SeedphraseDisplaySheet> seedphraseSheet_;
   std::shared_ptr<urnw::NetworkServerSheet> networkServerSheet_;
+  std::shared_ptr<urnw::VlessSheet> vlessSheet_;
   std::shared_ptr<urnw::GuestConversionSheet> guestConversionSheet_;
   // "Seedphrase copied" / "Referral link copied" acknowledgements
   std::unique_ptr<urnw::kit::Snackbar> snackbar_;

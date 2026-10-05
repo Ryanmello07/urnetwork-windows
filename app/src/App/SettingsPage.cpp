@@ -472,6 +472,13 @@ void SettingsPage::BuildConnectionsSection(Panel const& host) {
   auto blockedButton = NavRow(card, Loc("blocked_locations_2"), unused);
   blockedButton.Click([this](auto const&, auto const&) { ShowBlockedLocationsSheet(); });
 
+  // VLESS: a server of the user's own that the client strategy also dials
+  // through, for networks that block direct connections. A value of the
+  // network space rather than of the session, so it needs no device; the login
+  // screen's network sheet opens the same sheet before sign-in.
+  auto vlessButton = NavRow(card, Loc("vless"), unused);
+  vlessButton.Click([this](auto const&, auto const&) { ShowVlessSheet(); });
+
   // App split rules, in from the loose heading-plus-card-plus-button that used
   // to sit under both settings columns. It is a VPN-and-privacy preference like
   // the two above it, so it is a row like them.
@@ -1343,6 +1350,19 @@ winrt::fire_and_forget SettingsPage::ShowIdentitySheet() {
   } catch (...) {
   }
   identitySheet_.reset();
+  w_.SetSheetOpen(false);
+}
+
+winrt::fire_and_forget SettingsPage::ShowVlessSheet() {
+  if (w_.sheetOpen()) co_return;
+  auto self = w_.get_strong();
+  w_.SetSheetOpen(true);
+  try {
+    vlessSheet_ = urnw::VlessSheet::Create(self->Content().XamlRoot(), Sdk());
+    co_await vlessSheet_->Dialog().ShowAsync();
+  } catch (...) {
+  }
+  vlessSheet_.reset();
   w_.SetSheetOpen(false);
 }
 

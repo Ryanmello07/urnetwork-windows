@@ -487,6 +487,23 @@ void NetworkServerSheet::Build(XamlRoot const& root) {
   });
   content.Children().Append(apply);
 
+  // The active space's VLESS server, on the sheet Settings opens too. It edits
+  // the space in force now, not the domain typed above: VLESS settings belong
+  // to a space, and Apply is what changes which space that is. This sheet
+  // closes first (one ContentDialog at a time) and LoginPage opens the VLESS
+  // sheet in its place.
+  Button vless;
+  vless.Content(LocBox("vless"));
+  vless.HorizontalAlignment(HorizontalAlignment::Stretch);
+  vless.IsEnabled(current_.managerAvailable);
+  vless.Click([weak = weak_from_this()](auto const&, auto const&) {
+    if (auto self = weak.lock()) {
+      self->vlessRequested_ = true;
+      self->dialog_.Hide();
+    }
+  });
+  content.Children().Append(vless);
+
   dialog_.Content(content);
   ApplyDerivedPlaceholders();
   UpdateInsecureWarning();

@@ -35,6 +35,7 @@
 #include "Paths.h"
 #include "RpcSessionBlob.h"
 #include "Strings.h"
+#include "VlessPresentation.h"
 #include "WalletBridgeRoute.h"
 
 namespace urnw {
@@ -443,6 +444,12 @@ urnet::NetworkSpace SdkHost::BuildNetworkSpace() {
             bundled.key.hostName, bundled.key.envName);
   }
 
+  // These values replace the stored ones WHOLE, at every launch. The VLESS
+  // server the user saved in this space (Settings > VLESS, or the login
+  // screen's network sheet) is not among them, so it comes from the space's
+  // stored values; without this every launch would drop it.
+  values = vless::WithStoredVless(std::move(values), StoredSpaceValuesLocked(key));
+
   urnet::NetworkSpace space = spaceManager_->updateNetworkSpaceValues(key, values);
 
   // ---- THE SPACE THE USER LAST CHOSE, NOT THE ONE THIS BUILD DEFAULTS TO ----
@@ -495,6 +502,27 @@ urnet::NetworkSpace SdkHost::BuildNetworkSpace() {
     }
   }
   return space;
+}
+
+std::optional<urnet::NetworkSpaceValues> SdkHost::StoredSpaceValuesLocked(
+    const urnet::NetworkSpaceKey& key) {
+  if (!spaceManager_) return std::nullopt;
+  try {
+    // A handle of 0 is the sdk's nil: the manager has no space under this key.
+    const urnet::NetworkSpace stored = spaceManager_->getNetworkSpace(key);
+    if (!stored) return std::nullopt;
+    // The space's own json is the only reading of its stored values the C ABI
+    // offers (the getters return EFFECTIVE values), as SetNetExtender found.
+    return vless::StoredValuesFor<urnet::NetworkSpaceKey, urnet::NetworkSpaceValues>(
+        key, nlohmann::json::parse(stored.toJson()));
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: read the stored values of network space '{}' failed: {}",
+            key.host_name.value_or(std::string()), e.what());
+  } catch (...) {
+    LogWarn("sdkhost: read the stored values of network space '{}' failed",
+            key.host_name.value_or(std::string()));
+  }
+  return std::nullopt;
 }
 
 bool SdkHost::Initialize() {
@@ -1243,6 +1271,11 @@ bool SdkHost::ApplyNetworkServer(const std::string& hostName, const std::string&
       values.env_secret = "";
       values.api_url = apiUrl;
       values.platform_url = connectUrl;
+      // A space's VLESS server belongs to that space and is edited on its own
+      // sheet, not here, but these values replace the stored ones WHOLE: carry
+      // it from the values stored under this key, so applying a domain or its
+      // urls again never drops it. A host never applied before has none.
+      values = vless::WithStoredVless(std::move(values), StoredSpaceValuesLocked(key));
 
       networkSpace_ = spaceManager_->updateNetworkSpaceValues(key, values);
       spaceManager_->setActiveNetworkSpace(*networkSpace_);
@@ -4166,6 +4199,78 @@ bool SdkHost::SetNetExtender(const std::optional<urnet::NetExtender>& value) {
     LogWarn("sdkhost: set net extender failed");
     return false;
   }
+}
+
+// ---- VLESS ------------------------------------------------------------------
+//
+// Nothing here logs a link or a field of the settings: the user id IS the
+// credential of the user's server.
+
+std::optional<urnet::VlessSettings> SdkHost::CurrentVlessSettings() {
+  std::scoped_lock lock(mutex_);
+  if (!networkSpace_) return std::nullopt;
+  try {
+    return networkSpace_->getVlessSettings();
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: get vless settings failed: {}", e.what());
+  } catch (...) {
+    LogWarn("sdkhost: get vless settings failed");
+  }
+  return std::nullopt;
+}
+
+std::optional<std::string> SdkHost::SetVlessSettings(const urnet::VlessSettings& settings) {
+  std::scoped_lock lock(mutex_);
+  if (!networkSpace_) return std::nullopt;
+  try {
+    // The sdk persists the change through the space's manager and applies it
+    // in place (network_space.go updateInPlaceValues): the client strategy's
+    // VLESS dialer is replaced and this handle stays the same space, so unlike
+    // SetNetExtender there is nothing to re-take.
+    std::string errorId = networkSpace_->setVlessSettings(settings);
+    if (errorId.empty()) {
+      LogInfo("sdkhost: vless settings saved (enabled={})", settings.enabled.value_or(false));
+    }
+    return errorId;
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: set vless settings failed: {}", e.what());
+  } catch (...) {
+    LogWarn("sdkhost: set vless settings failed");
+  }
+  return std::nullopt;
+}
+
+std::optional<urnet::VlessLinkResult> SdkHost::ParseVlessLink(const std::string& link) {
+  try {
+    return urnet::parseVlessLink(link);
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: parse vless link failed: {}", e.what());
+  } catch (...) {
+    LogWarn("sdkhost: parse vless link failed");
+  }
+  return std::nullopt;
+}
+
+std::string SdkHost::VlessSettingsLink(const urnet::VlessSettings& settings) {
+  try {
+    return urnet::vlessSettingsLink(settings);
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: vless settings link failed: {}", e.what());
+  } catch (...) {
+    LogWarn("sdkhost: vless settings link failed");
+  }
+  return {};
+}
+
+std::optional<std::string> SdkHost::ValidateVlessSettings(const urnet::VlessSettings& settings) {
+  try {
+    return urnet::validateVlessSettings(settings);
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: validate vless settings failed: {}", e.what());
+  } catch (...) {
+    LogWarn("sdkhost: validate vless settings failed");
+  }
+  return std::nullopt;
 }
 
 std::optional<urnet::TransportSettings> SdkHost::CurrentTransportSettings(

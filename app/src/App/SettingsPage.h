@@ -3,7 +3,7 @@
 //
 // Settings is macOS SettingsForm parity: account (client id, referral code,
 // referral network, auth codes, sign-in methods), device (name, spec),
-// connections (kill switch, blocked locations), post-quantum identity,
+// connections (kill switch, blocked locations, VLESS), post-quantum identity,
 // preferences (product updates), subscription, logs, community links, version,
 // licenses (LicensesPage),
 // and — below sign out — delete account.
@@ -27,6 +27,7 @@
 #include "SettingsSheets.h"
 #include "StatsSheets.h"
 #include "UrComponents.h"
+#include "VlessSheet.h"
 
 namespace winrt::URnetwork::implementation {
 struct MainWindow;
@@ -166,6 +167,9 @@ class SettingsPage {
   winrt::fire_and_forget ShowReferralNetworkSheet();
   winrt::fire_and_forget ShowIdentitySheet();
   winrt::fire_and_forget ShowDeleteAccountSheet();
+  // Connections > VLESS: the active space's VLESS server (VlessSheet.h). The
+  // login screen's network sheet opens the same sheet before sign-in.
+  winrt::fire_and_forget ShowVlessSheet();
 
   winrt::URnetwork::implementation::MainWindow& w_;
   // "Thanks for the feedback": a transient acknowledgement (iOS UrSnackBar)
@@ -233,6 +237,7 @@ class SettingsPage {
   std::shared_ptr<urnw::BlockedLocationsSheet> blockedSheet_;
   std::shared_ptr<urnw::PostQuantumIdentitySheet> identitySheet_;
   std::shared_ptr<urnw::DeleteAccountSheet> deleteSheet_;
+  std::shared_ptr<urnw::VlessSheet> vlessSheet_;
 };
 
 }  // namespace urnw
