@@ -16,6 +16,7 @@
 
 #include "AppLifetime.h"
 #include "BalanceGate.h"
+#include "InstanceHandover.h"
 #include "SdkHost.h"
 #include "SubscriptionBalance.h"
 #include "TrayIcon.h"
@@ -51,6 +52,11 @@ class AppController {
   // Route a urnetwork:// URI (the wallet-connect callback) into the SdkHost and
   // bring the app forward so the sign-in result is visible. UI thread only.
   void HandleDeepLink(const std::string& url);
+
+  // Act on a launch, this instance's own or one redirected to it: route its
+  // deep link, open the window for the user's launch, or leave an autostart in
+  // the tray (instance::ActionFor). UI thread only.
+  void ServeLaunch(const instance::LaunchRequest& request);
 
   // Show/position the main window; anchor != nullptr positions it near the tray
   // (left-click flyout behavior), otherwise it centers. Reached from the tray's
@@ -204,7 +210,9 @@ void SetApp(std::unique_ptr<AppController> app);
 // The MSI registers the scheme (installer/Package.wxs) as
 // `"URnetwork.exe" "%1"`, so the shell hands the callback uri to the app as a
 // launch argument. Launches while the app is already running are redirected to
-// it by AppInstance (see main.cpp) and arrive on AppInstance::Activated.
+// it by AppInstance (see main.cpp), arrive on AppInstance::Activated and go
+// through the activation gate (SingleInstance.h), which App::OnLaunched opens.
+// Each is served as its LaunchRequest says (AppController::ServeLaunch).
 
 // The urnetwork:// uri carried by an activation, or empty when it carries none.
 // Handles both shapes: a typed Protocol activation (if the scheme is ever
@@ -216,5 +224,15 @@ std::string DeepLinkFromActivation(
 // The urnetwork:// uri this process was launched with, or empty. Cold-launch
 // fallback for the Launch case, read straight from our own command line.
 std::string LaunchDeepLink();
+
+// What a launch redirected to this instance asks: its deep link, and whether
+// its command line (the one the other process was started with) carries
+// instance::kAutostartArgument.
+instance::LaunchRequest LaunchRequestFromActivation(
+    winrt::Microsoft::Windows::AppLifecycle::AppActivationArguments const& args);
+
+// What this instance's own launch asks: its activation's deep link, or one on
+// its command line, and whether an autostart started it.
+instance::LaunchRequest OwnLaunchRequest();
 
 }  // namespace urnw

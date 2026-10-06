@@ -34,6 +34,11 @@ std::filesystem::path RpcSessionFile();
 // lost write here would be a service never told.
 std::filesystem::path SignOutOwedFile();
 
+// Present while the in-app updater's installer may still run (app side only;
+// Common/UpdateMarker.h): it names that installer, and a launch refuses to
+// start the app while it runs.
+std::filesystem::path UpdateInProgressFile();
+
 // The APP's own preferences (app side only).
 //
 // Distinct from the SDK LocalState, and it has to be: LocalState is a fixed set

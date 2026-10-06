@@ -105,9 +105,10 @@ bool WantsDiagnose();
 // item tags in MainWindow.xaml; an unknown one falls back to connect and says so
 // in the log.
 //
-// The window still only appears on a tray click, exactly as in a normal run, so
-// drive it the way the verification protocol describes: post WM_APP+1 with
-// NIN_SELECT in LOWORD(lParam) to the hidden URnetworkTrayWindow, then capture.
+// The window opens at launch, as for any launch the user starts (with
+// --autostart it would not); a later tray click brings it back the way the
+// verification protocol describes: post WM_APP+1 with NIN_SELECT in
+// LOWORD(lParam) to the hidden URnetworkTrayWindow, then capture.
 //
 // WHAT THIS CANNOT SHOW YOU. Read this part too: a gap you know about is one
 // you can work around; a gap you assume is covered is how something ships

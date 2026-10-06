@@ -11,10 +11,12 @@
 //   downloads the own-arch MSI to %LOCALAPPDATA%\URnetwork\updates\<tag>\,
 //   verifies it against the asset's own SHA-256 digest, stamped by GitHub in
 //     the same releases JSON the check parsed (CNG SHA-256 locally),
-//   starts it with msiexec (elevated: the package is per-machine), and quits
-//     the app so none of its files are held open. The MSI's MajorUpgrade
-//     replaces the install and its ServiceControl stops and restarts the
-//     service, so there is no second click for the service.
+//   starts it with msiexec (elevated: the package is per-machine), records
+//     that installer so no launch starts the app while it runs
+//     (Common/UpdateMarker.h), and quits the app so none of its files are held
+//     open. The MSI's MajorUpgrade replaces the install and its ServiceControl
+//     stops and restarts the service, so there is no second click for the
+//     service. Nothing relaunches the app afterwards.
 //
 // If the installer cannot be started (the elevation prompt was declined, or
 // the launch failed), the verified MSI is shown in Explorer for the user to run.

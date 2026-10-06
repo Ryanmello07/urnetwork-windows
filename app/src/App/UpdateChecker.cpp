@@ -18,6 +18,7 @@
 #include "Log.h"
 #include "Paths.h"
 #include "ReleaseSelection.h"
+#include "SingleInstance.h"
 #include "Strings.h"
 #include "UpdateFormats.h"
 #include "Version.h"
@@ -290,7 +291,10 @@ std::string Sha256File(fs::path const& file) {
 // "runas" verb: the package is per-machine, and asking here makes a declined
 // prompt an observable ERROR_CANCELLED instead of an installer that fails
 // later out of sight. /passive shows progress without questions; /norestart
-// because an update must never reboot the machine on its own.
+// because an update must never reboot the machine on its own. The installer's
+// process is recorded before this returns, and so before the app quits: until
+// it ends, a launch exits with a notice instead of starting the app over the
+// files it replaces (UpdateMarker.h).
 bool LaunchInstaller(fs::path const& msi, std::string& error) {
   wchar_t sys[MAX_PATH];
   const UINT n = ::GetSystemDirectoryW(sys, MAX_PATH);
@@ -303,7 +307,7 @@ bool LaunchInstaller(fs::path const& msi, std::string& error) {
       L"/i \"" + msi.wstring() + L"\" /passive /norestart";
   SHELLEXECUTEINFOW sei{};
   sei.cbSize = sizeof(sei);
-  sei.fMask = SEE_MASK_NOASYNC;
+  sei.fMask = SEE_MASK_NOASYNC | SEE_MASK_NOCLOSEPROCESS;
   sei.lpVerb = L"runas";
   sei.lpFile = msiexec.c_str();
   sei.lpParameters = params.c_str();
@@ -314,6 +318,13 @@ bool LaunchInstaller(fs::path const& msi, std::string& error) {
                 ? std::string("the elevation prompt was declined")
                 : std::format("ShellExecuteEx(msiexec) failed: {}", code);
     return false;
+  }
+  if (sei.hProcess) {
+    RecordUpdateInProgress(sei.hProcess);
+    ::CloseHandle(sei.hProcess);
+  } else {
+    LogWarn("update: the installer's process was not returned; launches during the update "
+            "are not refused");
   }
   return true;
 }
