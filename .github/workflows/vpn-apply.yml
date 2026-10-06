@@ -1,0 +1,507 @@
+# Runner test for urnetwork/windows A2s, "verify and install on the elevated
+# side", against GitHub itself. It builds real MSIs, publishes ONE throwaway
+# prerelease on this fork, and installs and updates URnetwork on a disposable
+# windows-2022 runner. The cleanup job deletes the prerelease and its tag
+# whatever happens. The legs that need no release (a failed install, a 3010,
+# a re-run, an uninstall, the installs by hand and leg f) are in
+# vpn-apply-local.yml, which runs the official binaries against a local
+# stand-in for GitHub.
+#
+# Setup: on a throwaway branch of the fork that contains A2s, add
+#   .github/workflows/vpn-apply.yml        (this file)
+#   .github/vpn-upgrade-lib.ps1             (runner-tests/vpn-upgrade-lib.ps1)
+#   .github/vpn-apply-lib.ps1               (runner-tests/vpn-apply-lib.ps1)
+#   .github/vpn-apply-tamper-server.ps1     (runner-tests/vpn-apply-tamper-server.ps1)
+#   .github/vpn-apply-fake-github.ps1       (runner-tests/vpn-apply-fake-github.ps1)
+# and push it as ci/a2s-runner-<anything>. The push runs this workflow.
+#
+# This file is the only place the runner feed is compiled in: vN's
+# URnetworkUpdate.exe is rebuilt with the four /p:UrnUpdateRunnerTest*
+# properties, so it polls this fork by its repository id, for tags that start
+# "a2s-runner-test-", and takes prereleases, and its FileDescription says so.
+# No build input of the repository passes them (update_apply_wiring_test.go),
+# app\build.ps1 refuses to package such a helper, and this file must never
+# reach a branch that merges.
+#
+# The packages (x64, app\build.ps1 under Windows PowerShell 5.1):
+#   vN     a release code from yesterday 09:00 UTC, its update helper rebuilt
+#          with the runner feed and its MSI repackaged around it.
+#   vNext  a release code from yesterday 15:00 UTC, as build.ps1 makes it:
+#          the asset of the prerelease a2s-runner-test-v<vNext>.
+#
+# Job apply (one runner):
+#   0. Install vN; its URnetworkUpdate.exe is the runner feed's.
+#   1. A tampered download. release-assets.githubusercontent.com and
+#      objects.githubusercontent.com resolve to this runner (hosts file), where
+#      an HTTPS server with a certificate from a test CA in LocalMachine\Root
+#      serves vNext's MSI with one byte flipped. URnetworkUpdate.exe
+#      --apply-update <tag> must refuse with Refusal::Digest (0x20000009),
+#      say so in last-result.json, delete the download, never start msiexec,
+#      and leave vN installed. The hosts entries, the server, the
+#      certificates and the test CA are removed after it.
+#   2. The update, from GitHub. With vN's tray app running, and the update
+#      marker written the moment that app exits while the helper runs (as the
+#      app writes it), URnetworkUpdate.exe --apply-update <tag> fetches the
+#      list from GitHub's API, follows the asset's redirect to GitHub's
+#      storage, checks the MSI and installs it: exit 0; last-result.json {tag,
+#      code, exitCode 0}; one product at vNext's ProductVersion with every file
+#      and urnetworkd running; the MSI kept under updates\<tag>\ as the repair
+#      source, with install.log, and every file the helper wrote there
+#      admin-only (owned by Administrators, nothing inherited, no write for
+#      anyone else); the helper's own image out of the install folder while
+#      msiexec ran; vN's app closed by CloseApplication's WM_CLOSE inside
+#      Wix4CloseApplications with nothing left for the Restart Manager in
+#      InstallValidate; the relaunch (URnetwork.exe --after-update, which
+#      waits for the marker's helper to end) waited and started. The official
+#      tray does not show this report: its tag has the runner feed's prefix,
+#      which the official grammar refuses.
+#
+# SPDX-License-Identifier: MPL-2.0
+
+name: VPN update helper test (A2s)
+
+# Only ci/a2s-runner-* branches run it: every run publishes a release.
+on:
+  push:
+    branches:
+      - 'ci/a2s-runner-*'
+
+permissions:
+  contents: read
+  actions: read
+
+# One run at a time: every run's prerelease has the same tag on the same day.
+concurrency:
+  group: vpn-apply-runner-test
+  cancel-in-progress: false
+
+env:
+  # A green build of the restored CI on the merged tree: its
+  # urnetwork-sdk-windows artifact matches this tree's SDK headers.
+  SDK_RUN_ID: '37461880306'
+  # The runner feed, compiled into vN's helper. Not UrnUpdateRunnerTest*
+  # names: msbuild reads environment variables as properties, and
+  # Updater.vcxproj refuses the feed from the environment.
+  RUNNER_FEED_REPO_ID: '1324127805'
+  RUNNER_FEED_OWNER: Ryanmello07
+  RUNNER_FEED_REPO: urnetwork-windows
+  RUNNER_FEED_TAG_PREFIX: a2s-runner-test-
+
+jobs:
+  plan:
+    name: Plan the release codes and the tag
+    runs-on: ubuntu-latest
+    outputs:
+      vn: ${{ steps.plan.outputs.vn }}
+      vnext: ${{ steps.plan.outputs.vnext }}
+      tag: ${{ steps.plan.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Choose the versions
+        id: plan
+        run: |
+          founded=$(date -u -d 2023-05-23 +%s)
+          mk() {
+            local s
+            s=$(date -u -d "$1" +%s)
+            echo "$(date -u -d "$1" '+%Y.%-m.%-d')-$(( (s - founded) * 10 ))"
+          }
+          d1=$(date -u -d '1 day ago' +%Y-%m-%d)
+          vn=$(mk "$d1 09:00:00Z")
+          vnext=$(mk "$d1 15:00:00Z")
+          {
+            echo "vn=$vn"
+            echo "vnext=$vnext"
+            echo "tag=${RUNNER_FEED_TAG_PREFIX}v$vnext"
+          } | tee -a "$GITHUB_OUTPUT"
+
+      - name: Check the plan
+        shell: pwsh
+        env:
+          VN: ${{ steps.plan.outputs.vn }}
+          VNEXT: ${{ steps.plan.outputs.vnext }}
+          TAG: ${{ steps.plan.outputs.tag }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $vn = & ./app/tools/UrVersion.ps1 -Version $env:VN
+          $vnext = & ./app/tools/UrVersion.ps1 -Version $env:VNEXT
+          foreach ($v in $vn, $vnext) {
+            "{0}: code {1} msi {2} file {3}.{4}.{5}.{6}" -f $v.UrVersion, $v.UrVersionCode, $v.UrMsiVersion,
+              $v.UrVersionMajor, $v.UrVersionMinor, $v.UrVersionPatch, $v.UrVersionBuild
+          }
+          if ([uint64]$vn.UrVersionCode -ge [uint64]$vnext.UrVersionCode) { throw "vN must be the older code" }
+          if ([version]$vn.UrMsiVersion -ge [version]$vnext.UrMsiVersion) { throw "vN must have the lower ProductVersion" }
+          $vnFile = [version]('{0}.{1}.{2}.{3}' -f $vn.UrVersionMajor, $vn.UrVersionMinor, $vn.UrVersionPatch, $vn.UrVersionBuild)
+          if ($vnFile -le [version]'2026.10.5.1') { throw "vN's FILEVERSION $vnFile is not above the CloseApplication gate 2026.10.5.1" }
+          if (-not $env:TAG.StartsWith('a2s-runner-test-')) { throw "tag $env:TAG does not start a2s-runner-test-" }
+          if ($env:TAG.Contains('-beta')) { throw "tag $env:TAG contains -beta" }
+          if ($env:GITHUB_REPOSITORY -ne "$env:RUNNER_FEED_OWNER/$env:RUNNER_FEED_REPO") {
+            throw "this runs in $env:GITHUB_REPOSITORY, but the runner feed is $env:RUNNER_FEED_OWNER/$env:RUNNER_FEED_REPO"
+          }
+          $id = gh api "repos/$env:GITHUB_REPOSITORY" --jq .id
+          if ($id -ne $env:RUNNER_FEED_REPO_ID) { throw "repository id $id, want $env:RUNNER_FEED_REPO_ID" }
+          gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/$env:TAG" 2>$null | Out-Null
+          if ($LASTEXITCODE -eq 0) { throw "a release $env:TAG already exists; delete it before this test" }
+          "OK: tag $env:TAG, repository $env:GITHUB_REPOSITORY ($id)"
+          exit 0
+
+  build:
+    name: Build ${{ matrix.key }} with build.ps1 under Windows PowerShell 5.1
+    needs: plan
+    runs-on: windows-2022
+    strategy:
+      fail-fast: true
+      matrix:
+        key: [vn, vnext]
+    env:
+      VERSION: ${{ needs.plan.outputs[matrix.key] }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download the SDK zip from run ${{ env.SDK_RUN_ID }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          gh run download $env:SDK_RUN_ID -R $env:GITHUB_REPOSITORY -n urnetwork-sdk-windows -D sdk-zip
+          if ($LASTEXITCODE -ne 0) { throw "could not download the SDK zip" }
+          Get-ChildItem sdk-zip
+
+      - name: app\build.ps1 -Version ${{ env.VERSION }}
+        shell: cmd
+        run: >-
+          powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass
+          -File app\build.ps1 -Version %VERSION%
+          -SdkZip "%GITHUB_WORKSPACE%\sdk-zip\URnetworkSdkWindows.zip" -Platforms x64
+
+      - name: Check the build's update helper and stage the MSI
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-apply-lib.ps1"
+          $ur = & .\app\tools\UrVersion.ps1 -Version $env:VERSION
+          $fileVersion = '{0}.{1}.{2}.{3}' -f $ur.UrVersionMajor, $ur.UrVersionMinor, $ur.UrVersionPatch, $ur.UrVersionBuild
+          $bin = Join-Path $env:GITHUB_WORKSPACE 'app\build\x64\Release'
+          foreach ($exe in 'URnetwork.exe', 'urnetworkd.exe', 'URnetworkUpdate.exe') {
+            $actual = Get-UrFileVersion (Join-Path $bin $exe)
+            if ($actual -ne $fileVersion) { throw "$exe file version $actual, want $fileVersion" }
+          }
+          # build.ps1 never compiles the runner feed in
+          $feed = Get-UrHelperFeed (Join-Path $bin 'URnetworkUpdate.exe')
+          if ($feed -ne 'official') { throw "build.ps1 built a URnetworkUpdate.exe with the $feed feed" }
+          "OK: build.ps1's URnetworkUpdate.exe polls the official feed"
+          $out = New-Item -ItemType Directory -Force (Join-Path $env:GITHUB_WORKSPACE 'staged')
+          $msi = Join-Path $env:GITHUB_WORKSPACE "app\build\out\URnetwork-$($env:VERSION)-x64.msi"
+          if ('${{ matrix.key }}' -eq 'vnext') {
+            Copy-Item $msi (Join-Path $out 'vnext.msi')
+          }
+          [pscustomobject]@{ key = '${{ matrix.key }}'; version = $env:VERSION; code = [string]$ur.UrVersionCode;
+            msi_version = $ur.UrMsiVersion; file_version = $fileVersion } |
+            ConvertTo-Json | Set-Content -Encoding ascii (Join-Path $out '${{ matrix.key }}.json')
+
+      # vN only: the helper again, with the runner feed, and the MSI around it.
+      - name: Rebuild vN's URnetworkUpdate.exe with the runner feed and repackage the MSI
+        if: matrix.key == 'vn'
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-apply-lib.ps1"
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsPath = & $vswhere -latest -products '*' -requires Microsoft.Component.MSBuild -property installationPath
+          $msbuild = & $vswhere -latest -products '*' -requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\amd64\MSBuild.exe' | Select-Object -First 1
+          Import-Module (Join-Path $vsPath 'Common7\Tools\Microsoft.VisualStudio.DevShell.dll')
+          Enter-VsDevShell -VsInstallPath $vsPath -SkipAutomaticLocation -DevCmdArguments '-arch=amd64 -host_arch=amd64' | Out-Null
+          $ur = & .\app\tools\UrVersion.ps1 -Version $env:VERSION
+          $fileVersion = '{0}.{1}.{2}.{3}' -f $ur.UrVersionMajor, $ur.UrVersionMinor, $ur.UrVersionPatch, $ur.UrVersionBuild
+          $bin = Join-Path $env:GITHUB_WORKSPACE 'app\build\x64\Release'
+          $helper = Join-Path $bin 'URnetworkUpdate.exe'
+          $msbuildArgs = @('app\URnetwork.sln', '/t:URnetworkUpdate:Rebuild', '/p:Configuration=Release', '/p:Platform=x64') +
+            @($ur.MsbuildArgs) + @("/p:Version=$($env:VERSION)",
+              "/p:UrnUpdateRunnerTestRepoId=$($env:RUNNER_FEED_REPO_ID)",
+              "/p:UrnUpdateRunnerTestOwner=$($env:RUNNER_FEED_OWNER)",
+              "/p:UrnUpdateRunnerTestRepo=$($env:RUNNER_FEED_REPO)",
+              "/p:UrnUpdateRunnerTestTagPrefix=$($env:RUNNER_FEED_TAG_PREFIX)", '/m', '/nologo', '/v:minimal')
+          & $msbuild @msbuildArgs
+          if ($LASTEXITCODE -ne 0) { throw "the runner-feed helper build failed" }
+          if ((Get-UrHelperFeed $helper) -ne 'runner') { throw "the rebuilt URnetworkUpdate.exe does not carry the runner feed" }
+          $actual = Get-UrFileVersion $helper
+          if ($actual -ne $fileVersion) { throw "the rebuilt URnetworkUpdate.exe is file version $actual, want $fileVersion" }
+          "OK: URnetworkUpdate.exe carries the runner feed at $actual"
+
+          $wixOut = Join-Path $env:RUNNER_TEMP 'wix-vn\'
+          $wixArgs = @('build', 'app\installer\Installer.wixproj', '--no-incremental', '-c', 'Release',
+            '-p:Platform=x64', "-p:BinDir=$bin", "-p:OutputPath=$wixOut", "-p:Version=$($env:VERSION)") + @($ur.WixArgs)
+          dotnet @wixArgs | Out-Host
+          if ($LASTEXITCODE -ne 0) { throw "the vN MSI build failed" }
+          $built = @(Get-ChildItem $wixOut -Recurse -Filter *.msi)
+          if ($built.Count -ne 1) { throw "want one MSI under $wixOut, found $($built.Count)" }
+          $staged = Join-Path $env:GITHUB_WORKSPACE 'staged\vn.msi'
+          Copy-Item $built[0].FullName $staged
+          $productVersion = Get-UrMsiProductVersion $staged
+          if ($productVersion -ne $ur.UrMsiVersion) { throw "vN MSI ProductVersion $productVersion, want $($ur.UrMsiVersion)" }
+          $helperRow = Get-UrMsiFileVersion $staged 'URnetworkUpdate.exe'
+          if ($helperRow -ne $fileVersion) { throw "vN MSI records URnetworkUpdate.exe at $helperRow, want $fileVersion" }
+          "staged vN: ProductVersion $productVersion, URnetworkUpdate.exe $helperRow (runner feed)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: msi-${{ matrix.key }}
+          path: staged/
+          if-no-files-found: error
+
+  publish:
+    name: Publish the throwaway prerelease
+    needs: [plan, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ needs.plan.outputs.tag }}
+      VNEXT: ${{ needs.plan.outputs.vnext }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: msi-vnext
+          path: msis
+
+      - name: Create ${{ env.TAG }} (a prerelease, never latest)
+        run: |
+          case "$TAG" in a2s-runner-test-*) ;; *) echo "tag $TAG does not start a2s-runner-test-"; exit 1 ;; esac
+          case "$TAG" in *-beta*) echo "tag $TAG contains -beta"; exit 1 ;; esac
+          asset="URnetwork-$VNEXT-x64.msi"
+          cp msis/vnext.msi "$asset"
+          gh release create "$TAG" "$asset" -R "$GITHUB_REPOSITORY" --prerelease --latest=false \
+            --target "$GITHUB_SHA" --title "$TAG (runner test; deleted when it ends)" \
+            --notes "A throwaway prerelease for the A2s runner test, run $GITHUB_RUN_ID. The test deletes it and its tag when it ends."
+
+      - name: Check the release as the helper will read it
+        run: |
+          asset="URnetwork-$VNEXT-x64.msi"
+          want_url="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/$asset"
+          want_digest="sha256:$(sha256sum msis/vnext.msi | cut -d' ' -f1)"
+          release=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG")
+          echo "$release" | jq '{tag_name, prerelease, draft, immutable, assets: [.assets[] | {name, size, digest, browser_download_url}]}'
+          [ "$(echo "$release" | jq -r .prerelease)" = true ] || { echo "not a prerelease"; exit 1; }
+          [ "$(echo "$release" | jq -r .draft)" = false ] || { echo "a draft"; exit 1; }
+          [ "$(echo "$release" | jq '.assets | length')" = 1 ] || { echo "want one asset"; exit 1; }
+          [ "$(echo "$release" | jq -r '.assets[0].name')" = "$asset" ] || { echo "asset name"; exit 1; }
+          [ "$(echo "$release" | jq -r '.assets[0].browser_download_url')" = "$want_url" ] || { echo "asset URL is not $want_url"; exit 1; }
+          [ "$(echo "$release" | jq -r '.assets[0].digest')" = "$want_digest" ] || { echo "asset digest is not $want_digest"; exit 1; }
+          latest=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name 2>/dev/null || true)
+          [ "$latest" != "$TAG" ] || { echo "$TAG is the latest release"; exit 1; }
+          # the list the helper fetches: by the repository's id, the newest 15
+          gh api "repositories/$RUNNER_FEED_REPO_ID/releases?per_page=15" --jq '.[] | [.tag_name, .prerelease, .immutable] | @tsv'
+          gh api "repositories/$RUNNER_FEED_REPO_ID/releases?per_page=15" --jq '.[].tag_name' | grep -qx "$TAG" \
+            || { echo "$TAG is not in the newest 15 releases"; exit 1; }
+          echo "OK: $TAG is a prerelease, not latest, with $asset at $want_url and $want_digest"
+
+  apply:
+    name: Install vN, refuse a tampered download, update to vNext
+    needs: [plan, build, publish]
+    runs-on: windows-2022
+    env:
+      TAG: ${{ needs.plan.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: msi-v*
+          merge-multiple: true
+          path: ${{ runner.temp }}/msis
+
+      - name: Inventory and the session
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-apply-lib.ps1"
+          Get-ChildItem $UrMsiDir | Format-Table Name, Length -AutoSize | Out-String | Write-Host
+          foreach ($key in 'vn', 'vnext') { Get-UrMsiPath $key | Out-Null }
+          if ((Get-UrProducts).Count -ne 0) { throw "a URnetwork product is already installed on this runner" }
+          if (Get-UrServiceInfo) { throw "a urnetworkd service already exists on this runner" }
+          whoami
+          whoami /groups | Select-String 'Mandatory Label' | ForEach-Object { "session: $_" }
+          $lua = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System').EnableLUA
+          "session: EnableLUA = $lua"
+          $explorer = @(Get-CimInstance Win32_Process -Filter "Name='explorer.exe'")
+          "session: $($explorer.Count) explorer.exe; this process is in session $((Get-Process -Id $PID).SessionId)"
+          $explorer | ForEach-Object { "session: explorer pid $($_.ProcessId) in session $($_.SessionId)" }
+
+      - name: 0. Install vN (its update helper polls the runner feed)
+        timeout-minutes: 10
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-apply-lib.ps1"
+          $code = Invoke-UrMsiexec '/i' (Get-UrMsiPath 'vn') '/qn' 'vn-install.log'
+          if ($code -ne 0) { throw "vN install exit code $code" }
+          $product = Assert-UrInstalled (Get-UrExpect 'vn') 'vn-install.log'
+          Set-Content -Encoding ascii (Join-Path $env:RUNNER_TEMP 'vn.productcode') $product.ProductCode
+          $feed = Get-UrHelperFeed $UrHelperPath
+          if ($feed -ne 'runner') { throw "the installed URnetworkUpdate.exe polls the $feed feed" }
+          "OK: $UrHelperPath polls the runner feed"
+
+      - name: 1. A tampered download is refused and nothing is installed
+        timeout-minutes: 15
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-apply-lib.ps1"
+          $vn = Get-UrExpect 'vn'
+          $vnext = Get-UrExpect 'vnext'
+          $before = Get-Content (Join-Path $env:RUNNER_TEMP 'vn.productcode')
+          $state = $null
+          try {
+            $state = Set-UrTamperedDownload (Get-UrMsiPath 'vnext')
+            $run = Invoke-UrHelper $env:TAG -timeoutSeconds 600
+            Show-UrUpdates
+            if ($run.ExitCode -ne $UrRefusalDigest) {
+              throw ("the helper exited {0} (0x{0:X8}), want Refusal::Digest 0x{1:X8}" -f $run.ExitCode, $UrRefusalDigest)
+            }
+            Assert-UrResult (Read-UrResult) $env:TAG $vnext.code $UrRefusalDigest
+            $served = @(Get-Content $state.Log | Where-Object { $_ -match '^served ' })
+            if ($served.Count -eq 0) { throw "the tamper server served nothing: the helper did not fetch the asset from it" }
+            $tagDir = Join-Path $UrUpdatesDir $env:TAG
+            $left = @(Get-ChildItem -LiteralPath $tagDir -Filter '*.msi' -ErrorAction SilentlyContinue)
+            if ($left.Count -ne 0) { throw "the refused download is still on disk: $($left.FullName -join ', ')" }
+            if (Test-Path (Join-Path $tagDir 'install.log')) { throw "msiexec ran: $tagDir\install.log exists" }
+            if (-not (Test-Path $UrHelperPath)) { throw "URnetworkUpdate.exe is no longer in the install folder" }
+            if ((Get-UrHelperFeed $UrHelperPath) -ne 'runner') { throw "URnetworkUpdate.exe is no longer vN's" }
+            $product = Assert-UrInstalled $vn
+            if ($product.ProductCode -ne $before) { throw "a different product is registered" }
+            "OK: refused with Refusal::Digest; vN is still the one product, and the download is gone"
+          } finally {
+            Remove-UrTamperedDownload $state
+          }
+
+      - name: 2. The update from GitHub, with vN's tray app running
+        timeout-minutes: 20
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-apply-lib.ps1"
+          $vnext = Get-UrExpect 'vnext'
+          $before = Get-Content (Join-Path $env:RUNNER_TEMP 'vn.productcode')
+          $from = Get-UrAppLogLength
+          $app = Start-UrTrayApp
+          $run = Invoke-UrHelper $env:TAG 900 $app
+          $helperEnded = Get-Date
+          Show-UrUpdates
+          if ($run.ExitCode -ne 0) { throw ("the helper exited {0} (0x{0:X8}), want 0" -f $run.ExitCode) }
+          Assert-UrResult (Read-UrResult) $env:TAG $vnext.code 0
+
+          # msiexec's log, under the admin-only install folder
+          $tagDir = Join-Path $UrUpdatesDir $env:TAG
+          $msiLog = Join-Path $tagDir 'install.log'
+          if (-not (Test-Path $msiLog)) { throw "no install.log in $tagDir" }
+          Copy-Item $msiLog (Join-Path $UrLogDir 'vnext-apply.log')
+          $product = Assert-UrInstalled $vnext 'vnext-apply.log'
+          if ($product.ProductCode -eq $before) { throw "vN's product is still registered" }
+          # updates\ is the uninstall's to remove: WixRemoveFoldersEx skips
+          # it in both installs without failing a row
+          foreach ($log in (Join-Path $UrLogDir 'vn-install.log'), $msiLog) {
+            $failed = Get-UrMsiLogLines $log 'WixRemoveFoldersEx:\s+Error'
+            if ($failed.Count -ne 0) { throw "WixRemoveFoldersEx failed a row in $log`: $($failed -join ' | ')" }
+          }
+
+          # the repair source: the checked MSI, kept, and everything the helper
+          # wrote there admin-only by its own ACL
+          $kept = Join-Path $tagDir "URnetwork-$($vnext.version)-x64.msi"
+          if (-not (Test-Path $kept)) { throw "the MSI is not kept at $kept" }
+          if ((Get-FileHash -Algorithm SHA256 $kept).Hash -ne (Get-FileHash -Algorithm SHA256 (Get-UrMsiPath 'vnext')).Hash) {
+            throw "the kept MSI is not the release's"
+          }
+          foreach ($path in $UrUpdatesDir, $tagDir, $kept, $msiLog, (Join-Path $tagDir 'update-helper.log'), $UrResultPath) {
+            Assert-UrAdminOnly $path
+          }
+          "OK: the repair source $kept is the release's MSI"
+
+          # requirement d: the helper's image was not in the install folder while msiexec ran
+          $moved = Join-Path $tagDir "URnetworkUpdate.$($run.Process.Id).running"
+          if (-not (Test-Path $moved)) { throw "the helper's image is not at $moved" }
+          if ((Get-UrHelperFeed $moved) -ne 'runner') { throw "$moved is not vN's helper" }
+          if ((Get-UrHelperFeed $UrHelperPath) -ne 'official') { throw "the installed URnetworkUpdate.exe is not vNext's" }
+          "OK: vN's helper ran msiexec from $moved; vNext's helper is installed"
+
+          # the close: CloseApplication's WM_CLOSE inside its own action, and
+          # nothing left in use for the Restart Manager
+          if ($null -eq $run.Marked) { throw "vN's app did not exit while the helper ran: the installer did not close it" }
+          if ((Get-UrMsiLogLines $msiLog 'Property\(S\): URNETWORK_APP_CLOSABLE = ').Count -eq 0) {
+            throw "URNETWORK_APP_CLOSABLE was not set: the installer did not consider vN's app closable"
+          }
+          $evidence = Get-UrCloseEvidence $msiLog
+          $closed = Get-UrAppLogLines 'tray: WM_CLOSE received, exiting' $from
+          if ($closed.Count -ne 1) { throw "the app logged $($closed.Count) WM_CLOSE lines, want one" }
+          $closedAt = Get-UrAppLogTime $closed[0]
+          "Wix4CloseApplications_X64 $($evidence.CloseStart) - $($evidence.CloseEnd); WM_CLOSE received $closedAt"
+          if ($null -eq $evidence.CloseStart -or $null -eq $evidence.CloseEnd) { throw "no Wix4CloseApplications_X64 in the log" }
+          if ($closedAt -lt $evidence.CloseStart -or $closedAt -gt $evidence.CloseEnd) { throw "the app's WM_CLOSE came outside Wix4CloseApplications_X64" }
+          if ($evidence.ShutDownInValidate.Count -ne 0) { throw "the Restart Manager shut something down in InstallValidate: $($evidence.ShutDownInValidate -join ' | ')" }
+          if ((Get-UrAppLogLines 'the Restart Manager is closing the app' $from).Count -ne 0) { throw "the Restart Manager closed the app, not CloseApplication" }
+          if ((Get-UrMsiLogLines $msiLog 'Action start \d{1,2}:\d{2}:\d{2}: RelaunchAfterUpdate\.').Count -eq 0) { throw "RelaunchAfterUpdate did not run" }
+          "OK: CloseApplication closed vN's app at $closedAt, inside its own action, and nothing was left in use"
+
+          # The relaunch: URnetwork.exe --after-update, through the helper and the
+          # signed-in user's shell. It waits while the update marker's helper
+          # runs, then starts as any launch does.
+          $seen = Wait-UrRelaunch $from 150
+          if ($seen.Processes.Count -eq 0) { throw "no URnetwork.exe --after-update was started" }
+          Assert-UrRelaunchWaited $seen $helperEnded
+          # The official tray reads only reports whose tag is the official
+          # grammar (UpdateResult.h IsWellFormed), and this report's tag has
+          # the runner feed's prefix, so it is not shown here.
+          "OBSERVED: the relaunched official tray showed the runner tag's report: $($seen.Report.Count -gt 0)"
+          Stop-UrAppProcesses
+
+      - name: Collect logs
+        if: always()
+        shell: powershell
+        run: |
+          # msiexec's own logs are already here (vpn-upgrade-lib.ps1 $UrLogDir)
+          $dest = Join-Path $env:RUNNER_TEMP 'upgrade-logs'
+          New-Item -ItemType Directory -Force $dest | Out-Null
+          if (Test-Path "$env:LOCALAPPDATA\URnetwork\app\logs") {
+            Copy-Item "$env:LOCALAPPDATA\URnetwork\app\logs" (Join-Path $dest 'app-logs') -Recurse -Force
+          }
+          if (Test-Path "$env:ProgramData\URnetwork\service\logs") {
+            Copy-Item "$env:ProgramData\URnetwork\service\logs" (Join-Path $dest 'service-logs') -Recurse -Force
+          }
+          $updates = 'C:\Program Files\URnetwork\updates'
+          if (Test-Path $updates) {
+            Get-ChildItem -Recurse -Force $updates | ForEach-Object { "$($_.FullName) $($_.Length)" } |
+              Out-File (Join-Path $dest 'updates-listing.txt')
+            Get-ChildItem -Recurse -File $updates -Include '*.log', '*.json' | ForEach-Object {
+              $name = 'updates_' + ($_.FullName.Substring($updates.Length).TrimStart('\') -replace '\\', '_')
+              Copy-Item -LiteralPath $_.FullName (Join-Path $dest $name)
+            }
+          }
+          Get-CimInstance Win32_Service | Where-Object { $_.PathName -like '*urnetwork*' } |
+            Format-List Name, State, PathName | Out-File (Join-Path $dest 'services.txt')
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: apply-logs
+          path: ${{ runner.temp }}/upgrade-logs/
+          if-no-files-found: warn
+
+  cleanup:
+    name: Delete the throwaway prerelease and its tag
+    needs: [plan, publish, apply]
+    if: always() && needs.plan.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ needs.plan.outputs.tag }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Delete ${{ env.TAG }} and its tag
+        run: |
+          case "$TAG" in a2s-runner-test-*) ;; *) echo "refusing to delete $TAG"; exit 1 ;; esac
+          if gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release delete "$TAG" -R "$GITHUB_REPOSITORY" --yes --cleanup-tag
+          fi
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" >/dev/null 2>&1; then
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/$TAG"
+          fi
+          sleep 5
+          if gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" >/dev/null 2>&1; then echo "the release $TAG still exists"; exit 1; fi
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" >/dev/null 2>&1; then echo "the tag $TAG still exists"; exit 1; fi
+          echo "OK: no release and no tag $TAG"
