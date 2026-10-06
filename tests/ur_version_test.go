@@ -24,22 +24,20 @@ import (
 // app/tools/UrVersion.ps1 derives every number a Windows build stamps: the
 // VERSIONINFO FILEVERSION, the MSI ProductVersion, and the msbuild and WiX
 // arguments that carry them. It runs under Windows PowerShell 5.1 in the org's
-// release VM and under pwsh in CI. This file is its oracle: the same contract
-// written again in Go with integer arithmetic, pinned by fixed vectors that
-// were computed independently (Python's datetime) and swept, in the oracle,
-// across every day boundary the MSI layout can reach. The script itself is
-// then compared with the oracle vector by vector, under every PowerShell this
-// host has, in both of its output modes: the object build.ps1 reads, and the
-// -GitHubOutput lines CI's derive step writes. Most vectors are judged against
-// this host's clock, as a build runs the script; the dates that have not
-// happened yet, up to the end of the layout in 2255, are judged against a
-// clock the test pins with -NowUtc.
+// release VM. This file is its oracle: the same contract written again in Go
+// with integer arithmetic, pinned by fixed vectors that were computed
+// independently (Python's datetime) and swept, in the oracle, across every day
+// boundary the MSI layout can reach. The script itself is then compared with
+// the oracle vector by vector, under every PowerShell this host has, on the
+// object build.ps1 reads. Most vectors are judged against this host's clock,
+// as a build runs the script; the dates that have not happened yet, up to the
+// end of the layout in 2255, are judged against a clock the test pins with
+// -NowUtc.
 //
 // The suite stays host-portable, since windows/test.sh runs it on the org's
-// macOS builder: without a PowerShell it skips the script comparison loudly,
-// except under GitHub Actions, where it fails instead. UR_VERSION_SHELLS (for
-// example "powershell.exe,pwsh") names shells that must all be present and
-// checked; CI's windows-2022 job sets it.
+// macOS builder: without a PowerShell it skips the script comparison loudly.
+// UR_VERSION_SHELLS (for example "powershell.exe,pwsh") names shells that must
+// all be present and checked.
 
 var urFounded = time.Date(2023, 5, 23, 0, 0, 0, 0, time.UTC)
 
@@ -118,20 +116,6 @@ func deriveUrVersion(input string, now time.Time) (urVersion, error) {
 		fmt.Sprintf("-p:UrFileVersion=%d.%d.%d.%d", version.Major, version.Minor, version.Patch, version.Build),
 	}
 	return version, nil
-}
-
-// The lines -GitHubOutput prints for an accepted version, in order: the
-// outputs CI's derive step hands to every later job.
-func urGitHubOutputLines(version urVersion) []string {
-	return []string{
-		"version=" + version.Version,
-		fmt.Sprintf("version_code=%d", version.Code),
-		fmt.Sprintf("version_major=%d", version.Major),
-		fmt.Sprintf("version_minor=%d", version.Minor),
-		fmt.Sprintf("version_patch=%d", version.Patch),
-		fmt.Sprintf("version_build=%d", version.Build),
-		"msi_version=" + version.Msi,
-	}
 }
 
 // deriveUrNumbers holds every numeric rule; the sweeps call it directly.
@@ -442,14 +426,13 @@ func TestUrVersionScriptIsASCII(t *testing.T) {
 	}
 }
 
-// One PowerShell process runs every vector through UrVersion.ps1 twice: once
-// for the object build.ps1 reads, and once with -GitHubOutput for the lines
-// CI's derive step appends to $GITHUB_OUTPUT. It prints one JSON line per
-// vector, in order. Each input line holds the hex of the vector's UTF-8 bytes,
-// so a vector can carry a newline or a non-ASCII digit and the file stays
-// ASCII, with no JSON parser in between (pwsh 7's ConvertFrom-Json turns
-// date-like strings into DateTime), then the -NowUtc to judge it against, or
-// "-" for this host's clock.
+// One PowerShell process runs every vector through UrVersion.ps1 for the
+// object build.ps1 reads. It prints one JSON line per vector, in order. Each
+// input line holds the hex of the vector's UTF-8 bytes, so a vector can carry
+// a newline or a non-ASCII digit and the file stays ASCII, with no JSON parser
+// in between (pwsh 7's ConvertFrom-Json turns date-like strings into
+// DateTime), then the -NowUtc to judge it against, or "-" for this host's
+// clock.
 const urVersionDriver = `param(
   [Parameter(Mandatory = $true)][string]$Script,
   [Parameter(Mandatory = $true)][string]$Vectors
@@ -469,8 +452,7 @@ foreach ($line in [IO.File]::ReadAllLines($Vectors)) {
   $row = [ordered]@{ index = $index; ok = $false; count = 0; error = '';
     UrVersion = ''; UrVersionCode = 0; UrVersionMajor = 0; UrVersionMinor = 0;
     UrVersionPatch = 0; UrVersionBuild = 0; UrMsiVersion = '';
-    MsbuildArgs = @(); WixArgs = @();
-    githubOk = $false; githubError = ''; githubLines = @() }
+    MsbuildArgs = @(); WixArgs = @() }
   try {
     $result = @(& $Script -Version $vector @clock)
     $row.count = $result.Count
@@ -487,12 +469,6 @@ foreach ($line in [IO.File]::ReadAllLines($Vectors)) {
     $row.ok = $true
   } catch {
     $row.error = [string]$_.Exception.Message
-  }
-  try {
-    $row.githubLines = @(& $Script -Version $vector -GitHubOutput @clock | ForEach-Object { [string]$_ })
-    $row.githubOk = $true
-  } catch {
-    $row.githubError = [string]$_.Exception.Message
   }
   [Console]::Out.WriteLine(($row | ConvertTo-Json -Compress -Depth 3))
   $index++
@@ -513,9 +489,6 @@ type urScriptRow struct {
 	UrMsiVersion   string   `json:"UrMsiVersion"`
 	MsbuildArgs    []string `json:"MsbuildArgs"`
 	WixArgs        []string `json:"WixArgs"`
-	GitHubOK       bool     `json:"githubOk"`
-	GitHubError    string   `json:"githubError"`
-	GitHubLines    []string `json:"githubLines"`
 }
 
 type urShell struct{ name, path string }
@@ -523,7 +496,7 @@ type urShell struct{ name, path string }
 // The PowerShells to run the script under: every one named in
 // UR_VERSION_SHELLS (all required), else whichever of pwsh and powershell.exe
 // this host has. Subtests are named as requested ("pwsh", not the "pwsh.exe"
-// it resolves to on Windows), so CI can assert each leg ran by name.
+// it resolves to on Windows).
 func urVersionShells(t *testing.T) []urShell {
 	t.Helper()
 	names := []string{"pwsh", "powershell.exe"}
@@ -653,11 +626,8 @@ func urScriptVectors(now time.Time) ([]urScriptVector, map[string]int) {
 func TestUrVersionScriptMatchesOracle(t *testing.T) {
 	shells := urVersionShells(t)
 	if len(shells) == 0 {
-		if os.Getenv("GITHUB_ACTIONS") == "true" {
-			t.Fatal("no pwsh or powershell.exe on PATH: app/tools/UrVersion.ps1 cannot be checked, and CI must check it")
-		}
 		t.Skipf("SKIPPING, NOT PASSING: no pwsh or powershell.exe on PATH, so app/tools/UrVersion.ps1 " +
-			"was NOT checked against the oracle on this host (CI checks it under both shells)")
+			"was NOT checked against the oracle on this host")
 	}
 	root := repositoryRoot(t)
 	script := filepath.Join(root, "app", "tools", "UrVersion.ps1")
@@ -736,9 +706,6 @@ func TestUrVersionScriptMatchesOracle(t *testing.T) {
 					if row.OK || !strings.Contains(row.Error, class) {
 						t.Errorf("%s: the oracle refuses it (%s); the script said ok=%v %q", label, class, row.OK, row.Error)
 					}
-					if row.GitHubOK || !strings.Contains(row.GitHubError, class) {
-						t.Errorf("%s: the oracle refuses it (%s); -GitHubOutput said ok=%v %q", label, class, row.GitHubOK, row.GitHubError)
-					}
 					refused[class]++
 					continue
 				}
@@ -754,9 +721,6 @@ func TestUrVersionScriptMatchesOracle(t *testing.T) {
 				have.MsiFields, want.MsiFields = [3]int{}, [3]int{}
 				if row.Count != 1 || !reflect.DeepEqual(have, want) {
 					t.Errorf("%s:\n script %d object(s) %+v\n oracle %+v", label, row.Count, have, want)
-				}
-				if lines := urGitHubOutputLines(want); !row.GitHubOK || !reflect.DeepEqual(row.GitHubLines, lines) {
-					t.Errorf("%s: -GitHubOutput printed %q (%s), want %q", label, row.GitHubLines, row.GitHubError, lines)
 				}
 				if vector.clock.IsZero() {
 					accepted++

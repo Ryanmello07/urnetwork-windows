@@ -4,10 +4,6 @@ Native Windows 10 21H2+ / Windows 11 client for x64 and ARM64. A WinUI 3 tray
 app drives a privileged Windows service that owns the VPN tunnel; both embed
 the URnetwork SDK (the cgo C ABI + C++ wrapper from `sdk/cgo`).
 
-Both architectures build in CI on every push and pull request — see
-`.github/workflows/build-and-test.yml`, which builds the SDK DLLs from
-`urnetwork/sdk` and then the app, the service, and the MSI.
-
 ## Download
 
 Release MSIs (`URnetwork-<version>-x64.msi`, `URnetwork-<version>-arm64.msi`)
@@ -58,7 +54,8 @@ why `MigrateExit` and `ProbeAllExits` return counts rather than void.
   (10.0.22621). The WDK is needed only for the driver.
 - vcpkg (manifest mode; `app/vcpkg.json` pulls nlohmann-json + wil).
 - WiX Toolset v5 (`dotnet tool install --global wix`) for the installer.
-- The SDK Windows DLLs — take the artifact from a CI run, or build them.
+- The SDK Windows DLLs — build them (`build-sdk.ps1` writes
+  `URnetworkSdkWindows.zip`).
 
 ### A note on the SDK bindings
 
@@ -135,8 +132,8 @@ handle:
 
 ## Status and known gaps
 
-CI builds both architectures green and the client has been run and exercised on
-real hardware. Still open, and worth knowing before relying on this:
+The client builds for both architectures and has been run and exercised on real
+hardware. Still open, and worth knowing before relying on this:
 
 - Store submission itself (needs Partner Center) and attestation signing for
   the driver — `app/SIGNING.md`, `app/STORE.md`.
