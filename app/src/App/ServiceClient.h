@@ -7,6 +7,7 @@
 #include <functional>
 
 #include "PipeClient.h"
+#include "ExtenderReset.h"
 #include "LogUpload.h"
 #include "Protocol.h"
 
@@ -93,6 +94,19 @@ class ServiceClient {
   // for a refusal or a transport failure. Sent only to a service whose
   // get_provider_stats said it takes it (provide_extender_writable).
   bool SetProvideExtender(bool on, std::string* error = nullptr);
+  // reset_extenders (Protocol.h ResetExtenders): the service applies a reset
+  // the app made in its own space to the space it holds under the same key,
+  // which its session's device and its provider-only device run in. Taken when
+  // the service answered it, with `reset` saying whether it held that space
+  // and the reset was new to it; Busy when a tunnel or provider operation held
+  // its session lock (Reply::reset_busy), which the app answers by sending the
+  // reset again once that operation ends (Common/ExtenderReset.h); NotTaken
+  // for any other refusal, a transport failure or a service too old to know
+  // the verb ("unknown request type"), with `error` saying which. The next
+  // import of the space carries the reset to the service whatever it answers.
+  extenderreset::ServiceAnswer ResetExtenders(const proto::ResetExtenders& request,
+                                              bool* reset = nullptr,
+                                              std::string* error = nullptr);
 
  private:
   proto::TunnelStatus CallStatus(const nlohmann::json& request,

@@ -369,6 +369,32 @@
       </Component>
     </StandardDirectory>
 
+    <!-- "Launch URnetwork on system startup" (src/Common/StartupRegistration.h)
+         is the user's own Run value, written by the app and never by this
+         package. Uninstalling deletes it, and Task Manager's StartupApproved
+         record of it, for the user who uninstalls: each action is deferred and
+         impersonated, so HKCU is that user's hive. reg.exe exits 1 when a value
+         is not there, and Return="ignore" keeps that, or any failure, from
+         stopping the uninstall. Not during an upgrade (UPGRADINGPRODUCTCODE):
+         the new version keeps the user's choice, and its first launch points
+         the value at itself. Other users' values stay: their hives are not
+         loaded during an uninstall, so it cannot reach them, and Windows starts
+         nothing for a Run value whose program is gone. -->
+    <SetProperty Id="RemoveStartupRunValue" Sequence="execute" Before="RemoveStartupRunValue"
+                 Value="&quot;[System64Folder]reg.exe&quot; delete &quot;HKCU\Software\Microsoft\Windows\CurrentVersion\Run&quot; /v URnetwork /f" />
+    <CustomAction Id="RemoveStartupRunValue" BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)"
+                  DllEntry="WixQuietExec" Execute="deferred" Impersonate="yes" Return="ignore" />
+    <SetProperty Id="RemoveStartupApprovedValue" Sequence="execute" Before="RemoveStartupApprovedValue"
+                 Value="&quot;[System64Folder]reg.exe&quot; delete &quot;HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run&quot; /v URnetwork /f" />
+    <CustomAction Id="RemoveStartupApprovedValue" BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)"
+                  DllEntry="WixQuietExec" Execute="deferred" Impersonate="yes" Return="ignore" />
+    <InstallExecuteSequence>
+      <Custom Action="RemoveStartupRunValue" Before="InstallFinalize"
+              Condition="REMOVE~=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
+      <Custom Action="RemoveStartupApprovedValue" After="RemoveStartupRunValue"
+              Condition="REMOVE~=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
+    </InstallExecuteSequence>
+
     <Feature Id="Main" Title="URnetwork" Level="1">
       <ComponentRef Id="AppExe" />
       <ComponentRef Id="PrivateFonts" />

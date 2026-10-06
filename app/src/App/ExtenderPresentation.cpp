@@ -106,6 +106,10 @@ std::vector<std::string> ParseExtenderHostLines(std::string_view text) {
   return hosts;
 }
 
+// ---- reset (E7) -------------------------------------------------------------
+
+bool ExtenderResetEnabled(bool signedIn, bool writing) { return signedIn && !writing; }
+
 // ---- the bootstrap DNS-over-HTTPS servers -------------------------------------
 
 std::vector<std::string> ParseControlDohLines(std::string_view text) {

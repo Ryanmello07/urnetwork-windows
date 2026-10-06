@@ -89,6 +89,10 @@ var catalogLookupFunctionKinds = map[string]catalogLookupKind{
 	"value":         catalogLookupPlain,
 	"count":         catalogLookupPlain,
 	"refresh":       catalogLookupPlural,
+
+	// a refusal's line, with the screen's own line as the fallback
+	// (PaymentRefusal.h)
+	"PaymentRefusalTextFor": catalogLookupPlain,
 }
 
 // The lookups whose argument after the key is the English they render when the

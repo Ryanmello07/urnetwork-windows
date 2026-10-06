@@ -3,9 +3,8 @@
 # Input: the release version <YYYY.M.D>-<code>[-beta], which is the release
 # tag without its leading v (2026.10.1-1060587890). Output: every value the
 # build stamps, plus the exact msbuild and WiX arguments that carry them.
-# app/build.ps1 (the org release build) and the CI workflow both call this
-# script, and tests/ur_version_test.go checks it against an independent Go
-# implementation.
+# app/build.ps1 (the org release build) calls this script, and
+# tests/ur_version_test.go checks it against an independent Go implementation.
 #
 # Every number comes from t, the UTC instant the code names: floor(code / 10)
 # seconds after 2023-05-23T00:00:00Z. (warpctl mints the code as the seconds
@@ -36,7 +35,7 @@
 #   - a code whose instant is more than 24 h ahead of this host's UTC clock.
 #     A mistyped code would otherwise outrank every real release for good.
 #     -NowUtc stands in for that clock in tests only, so they can check dates
-#     that have not happened yet; build.ps1 and CI never pass it.
+#     that have not happened yet; build.ps1 never passes it.
 #
 # Pure ASCII on purpose: Windows PowerShell 5.1 reads a BOM-less UTF-8 script
 # as ANSI, and the release VM runs this under 5.1. Every integer step goes
@@ -46,7 +45,6 @@
 #   $v = & app\tools\UrVersion.ps1 -Version 2026.10.1-1060587890
 #   & $msbuild URnetwork.sln @($v.MsbuildArgs)
 #   dotnet build installer\Installer.wixproj @($v.WixArgs)
-#   pwsh -File app/tools/UrVersion.ps1 -Version <v> -GitHubOutput >> "$GITHUB_OUTPUT"
 #
 # SPDX-License-Identifier: MPL-2.0
 [CmdletBinding()]
@@ -54,8 +52,6 @@ param(
   # AllowEmptyString: an empty version is refused below, with the same
   # message as any other malformed one, not by parameter binding.
   [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Version,
-  # Print name=value lines for $GITHUB_OUTPUT instead of returning an object.
-  [switch]$GitHubOutput,
   # Tests only (tests/ur_version_test.go): the UTC instant, as
   # yyyy-MM-ddTHH:mm:ssZ, that the future-code check measures against instead
   # of this host's clock. Release builds never pass it.
@@ -124,17 +120,6 @@ if ($msiMajor -lt 0 -or $msiMajor -gt 255 -or $msiBuild -gt 65535) {
   throw "UrVersion: outside the MSI ProductVersion range: code $code is $($t.ToString('u', $invariant)), which has no 255.255.65535 form"
 }
 $msiVersion = "$msiMajor.$month.$msiBuild"
-
-if ($GitHubOutput) {
-  "version=$Version"
-  "version_code=$code"
-  "version_major=$year"
-  "version_minor=$month"
-  "version_patch=$day"
-  "version_build=$build"
-  "msi_version=$msiVersion"
-  return
-}
 
 [pscustomobject]@{
   UrVersion      = $Version

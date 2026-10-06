@@ -48,6 +48,7 @@
     <ClInclude Include="CrashDumps.h" />
     <ClInclude Include="DeleteAccountOutcome.h" />
     <ClInclude Include="DiagnosticLines.h" />
+    <ClInclude Include="ExtenderReset.h" />
     <ClInclude Include="Heartbeat.h" />
     <ClInclude Include="Ids.h" />
     <ClInclude Include="InstallLocation.h" />
@@ -68,6 +69,7 @@
     <ClInclude Include="RpcSessionBlob.h" />
     <ClInclude Include="Sdk.h" />
     <ClInclude Include="SignOut.h" />
+    <ClInclude Include="StartupRegistration.h" />
     <ClInclude Include="Strings.h" />
     <ClInclude Include="ThreadGuard.h" />
     <ClInclude Include="UpdateFormats.h" />

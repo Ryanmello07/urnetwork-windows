@@ -475,6 +475,7 @@ extender_statistics
 extenders
 extenders_active_of_reserve
 extenders_no_session
+extenders_reset_done
 fast_dns_on_connect
 fast_dns_on_connect_description
 feedback
@@ -548,6 +549,7 @@ kill_switch
 kill_switch_exception
 kill_switch_exception_smtp_detail
 kill_switch_exception_unrecognized_encrypted
+launch_urnetwork_on_system_startup
 leaderboard
 leaderboard_description
 leaderboard_position_indicator
@@ -790,6 +792,8 @@ remove_rule
 remove_wallet
 remove_wallet_moves_or_holds_payouts
 resend_verify_code
+reset_extenders
+reset_extenders_confirm
 reset_it
 reset_link_rate_limited
 reset_link_sent_to
@@ -862,6 +866,10 @@ site_app_no_traffic
 site_app_support_intro
 site_billing_portal_error
 site_ext_setting_up
+site_payment_error_already_subscribed
+site_payment_error_plan_unavailable
+site_subscription_error_no_customer
+site_subscription_error_store_unavailable
 skip
 sn_alpha_symbol
 sn_payout_schedule

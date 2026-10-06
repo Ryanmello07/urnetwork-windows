@@ -6,6 +6,7 @@
 #include "BalanceCodeRedeem.h"
 #include "CheckoutBridgeError.h"
 #include "CheckoutSessionMode.h"
+#include "PaymentRefusal.h"
 
 #include <winrt/Microsoft.UI.Xaml.Automation.h>
 #include <winrt/Microsoft.UI.Xaml.Documents.h>
@@ -1083,17 +1084,20 @@ void UpgradeSheet::RequestSession(bool embedded) {
                 std::optional<urnet::StripeCreateCheckoutSessionResult> result,
                 std::optional<std::string> err) {
         // the api callback runs on an sdk thread; decide on the ui thread
-        const std::string serverError =
-            result && result->error ? result->error->message : std::string();
+        const bool refused = result && result->error;
+        // the server's refusal in this app's words (PaymentRefusal.h)
+        const PaymentRefusalText refusalText =
+            refused ? PaymentRefusalTextFor(*result->error, "something_went_wrong")
+                    : PaymentRefusalText{};
         const PurchaseRefusal refusal =
-            result && result->error ? PurchaseRefusalFor(result->error->code.value_or(std::string()))
-                                    : PurchaseRefusal::PaymentError;
+            refused ? PurchaseRefusalFor(result->error->code.value_or(std::string()))
+                    : PurchaseRefusal::PaymentError;
         const std::string url =
             result && result->checkout_url ? *result->checkout_url : std::string();
         const std::string clientSecret =
             result && result->client_secret ? *result->client_secret : std::string();
         const std::string transportError = err ? *err : std::string();
-        queue.TryEnqueue([weak, embedded, serverError, url, clientSecret,
+        queue.TryEnqueue([weak, embedded, refused, refusalText, url, clientSecret,
                           transportError, refusal] {
           auto self = weak.lock();
           if (!self || self->closed_) return;
@@ -1108,15 +1112,16 @@ void UpgradeSheet::RequestSession(bool embedded) {
             // been shown yet, so no payment can be lost by switching. The
             // hosted retry is a SEPARATE session (never created up front);
             // the embedded one just expires server-side.
-            if (serverError.empty() && transportError.empty() && !clientSecret.empty()) {
+            if (!refused && transportError.empty() && !clientSecret.empty()) {
               self->OpenEmbedded(clientSecret);
             } else {
               self->RequestSession(/*embedded=*/false);
             }
             return;
           }
-          if (!serverError.empty()) {
-            self->ShowCheckoutError(H(serverError));
+          if (refused) {
+            self->ShowCheckoutError(hstring{
+                PaymentRefusalMessage(Localized(refusalText.key), Widen(refusalText.detail))});
             return;
           }
           if (url.empty()) {

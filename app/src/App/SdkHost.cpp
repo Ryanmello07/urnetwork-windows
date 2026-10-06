@@ -592,6 +592,12 @@ bool SdkHost::Initialize() {
       // process synthesises (SessionStatus) do not overwrite them with their
       // defaults and render a healthy tunnel as degraded.
       AdoptServiceFacts(st);
+      // A reset_extenders the service refused as busy goes again once a status
+      // ends the operation that held its lock (Common/ExtenderReset.h). Not
+      // from here: this reader thread must stay free to read the answer.
+      if (auto due = owedExtenderReset_.TakeDue(st.state)) {
+        QueueExtenderResetResend(std::move(*due));
+      }
       if (onTunnel_) onTunnel_(st);
       // Terminal activation failure may close the SDK feed before another
       // stats event arrives. Publish the service truth without an SDK getter
@@ -3904,6 +3910,7 @@ void SdkHost::ProviderOnlyStatsLoop() {
   for (;;) {
     bool wanted = false;
     std::optional<bool> extenderWrite;
+    std::optional<proto::ResetExtenders> extenderReset;
     {
       std::unique_lock lock(providerOnlyMutex_);
       providerOnlyCv_.wait_for(lock, kProviderOnlyStatsInterval,
@@ -3912,11 +3919,14 @@ void SdkHost::ProviderOnlyStatsLoop() {
       providerOnlyKick_ = false;
       wanted = providerOnlyStatusWanted_;
       extenderWrite = std::exchange(providerOnlyExtenderWrite_, std::nullopt);
+      extenderReset = std::exchange(extenderResetResend_, std::nullopt);
     }
     try {
       // The Extender switch's write, outside mutex_ like the read below and
       // before it, so this pass's answer already carries it.
       if (extenderWrite) WriteProviderOnlyExtender(*extenderWrite);
+      // An owed extender reset, sent once more, outside mutex_ too.
+      if (extenderReset) ResendExtenderReset(*extenderReset);
       bool presenting = false;
       {
         std::scoped_lock lock(presentationMutex_);
@@ -4026,6 +4036,32 @@ void SdkHost::WriteProviderOnlyExtender(bool on) {
   // after the answer, so a status read before the write cannot replace it.
   std::scoped_lock lock(drawerMutex_);
   extenderProvideRepublish_ = true;
+}
+
+void SdkHost::QueueExtenderResetResend(proto::ResetExtenders request) {
+  {
+    std::scoped_lock lock(providerOnlyMutex_);
+    extenderResetResend_ = std::move(request);
+    providerOnlyKick_ = true;
+  }
+  providerOnlyCv_.notify_all();
+}
+
+void SdkHost::ResendExtenderReset(const proto::ResetExtenders& request) {
+  // Once (Common/ExtenderReset.h): the answer is only logged, never owed again,
+  // and what this does not deliver the service's next import of the space does.
+  if (!service_.IsConnected()) {
+    LogInfo("sdkhost: the owed extender reset was dropped: no control channel; the service's "
+            "next import applies it");
+    return;
+  }
+  bool reset = false;
+  std::string error;
+  const extenderreset::ServiceAnswer answer = service_.ResetExtenders(request, &reset, &error);
+  LogInfo("sdkhost: the owed extender reset went again: {}{}", extenderreset::ToString(answer),
+          answer == extenderreset::ServiceAnswer::Taken
+              ? (reset ? " (applied)" : " (no such space, or applied already)")
+              : "; the service's next import applies it");
 }
 
 void SdkHost::ShowProviderOnlyStatsLocked(const proto::ProviderStats& stats) {
@@ -4716,6 +4752,66 @@ bool SdkHost::SetNetExtender(const std::optional<urnet::NetExtender>& value) {
     LogWarn("sdkhost: set net extender failed");
     return false;
   }
+}
+
+bool SdkHost::ResetExtenders() {
+  std::optional<proto::ResetExtenders> request;
+  {
+    std::scoped_lock lock(mutex_);
+    if (!networkSpace_) return false;
+    try {
+      // In place, through the space's manager: this handle, the DeviceRemote
+      // bound to it and the view controller opened on that stay valid.
+      const std::string resetId = networkSpace_->resetExtenders();
+      request = proto::ResetExtendersRequestFor(networkSpace_->getKey(), resetId);
+    } catch (const std::exception& e) {
+      LogWarn("sdkhost: reset extenders failed: {}", e.what());
+      return false;
+    } catch (...) {
+      LogWarn("sdkhost: reset extenders failed");
+      return false;
+    }
+  }
+  LogInfo("sdkhost: extenders reset in the app's network space");
+  // No provider reconcile, unlike SetNetExtender and the other space saves:
+  // the verb resets the space the provider-only device runs in where it runs,
+  // so there is nothing to rebuild it for now. The next reconcile's request
+  // carries the reset space, and an applied reset is a no-op there.
+  if (!request) {
+    LogWarn("sdkhost: the space names no key for the service's extender reset; its next "
+            "import applies it");
+    return true;
+  }
+  // Outside mutex_: the pipe serializes calls, and this one can wait behind a
+  // start_tunnel.
+  if (!service_.IsConnected()) {
+    owedExtenderReset_.Answered(*request, extenderreset::ServiceAnswer::NotTaken);
+    LogInfo("sdkhost: no control channel; the service applies the extender reset at its "
+            "next import");
+    return true;
+  }
+  bool reset = false;
+  std::string error;
+  const extenderreset::ServiceAnswer answer = service_.ResetExtenders(*request, &reset, &error);
+  // A busy refusal is owed until a pushed status ends the operation that held
+  // the service's lock (the state handler); any other answer owes nothing.
+  owedExtenderReset_.Answered(*request, answer);
+  switch (answer) {
+    case extenderreset::ServiceAnswer::Taken:
+      LogInfo("sdkhost: the service {} the extender reset",
+              reset ? "applied" : "held no such space or had already applied");
+      break;
+    case extenderreset::ServiceAnswer::Busy:
+      LogInfo("sdkhost: the service is busy with a tunnel operation; the extender reset goes "
+              "again once it ends");
+      break;
+    case extenderreset::ServiceAnswer::NotTaken:
+      LogWarn("sdkhost: the service did not take the extender reset ({}); its next import "
+              "applies it",
+              error.empty() ? "no detail" : error);
+      break;
+  }
+  return true;
 }
 
 // ---- VLESS ------------------------------------------------------------------
@@ -7257,6 +7353,12 @@ void SdkHost::TeardownSessionLocked(bool stopTunnel) {
 
 // See the contract in the header.
 void SdkHost::Logout() {
+  // 0. A browser or wallet flow the account started is answered and forgotten
+  // (each network starts fresh, owner decision 2026-10-05): an add-sign-in
+  // attempt's late return would otherwise add that sign-in method to the next
+  // account signed in. On the UI thread, as every caller of it, and before
+  // mutex_: it answers the flows' callbacks.
+  CancelPendingWalletFlows("superseded by signing out");
   // 1. The signed-out account's queued work goes: a connect, a row click still
   // settling, a reconcile. A worker sleeping out a settle wakes to the empty
   // slot and exits.
@@ -7285,6 +7387,9 @@ void SdkHost::Logout() {
     // is signed out on disk even if it is ended while the service half below
     // waits on the pipe.
     if (asyncLocalState_) asyncLocalState_->logout([](bool) {});
+    // and the credential the api attaches to its calls, which the next
+    // sign-in's own calls would otherwise carry until it installs its own
+    if (api_) api_->setByJwt("");
     // 3. The service, as Quit stops it, then the logout, which severs the
     // device identity and clears what the service's sdk stored for the
     // account. Owed until all three succeed (SignOut.h).

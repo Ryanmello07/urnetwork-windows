@@ -910,7 +910,7 @@ rätt sätt</value>
   </data>
   <data name="checkout_error_unavailable" xml:space="preserve">
     <value>Betalningen är inte tillgänglig just nu. Försök igen senare.</value>
-    <comment>Checkout error in the desktop apps (the macOS direct download, Windows and Linux) when the ur.io checkout page hands back checkout_unavailable: the site cannot open Stripe's checkout right now (it has no Stripe key), so no payment form was shown and nothing was charged. The user cannot fix it; it may work later.</comment>
+    <comment>Checkout error in the desktop apps (the macOS direct download, Windows and Linux) when the ur.io checkout page hands back checkout_unavailable, or the server refuses to start a checkout with error.code checkout_unavailable: the site or the server cannot open Stripe's checkout right now (it has no Stripe key), so no payment form was shown and nothing was charged. The user cannot fix it; it may work later.</comment>
   </data>
   <data name="checkout_finish_in_browser" xml:space="preserve">
     <value>Slutför i webbläsaren.</value>
@@ -1051,6 +1051,10 @@ rätt sätt</value>
   <data name="code_sign_in_failed" xml:space="preserve">
     <value>Inloggning med kod misslyckades</value>
     <comment>Error shown when signing in with an auth code fails.</comment>
+  </data>
+  <data name="collapsed" xml:space="preserve">
+    <value>Komprimerad</value>
+    <comment>Screen reader state of a row that shows or hides a section below it (Advanced, Why?): the section is hidden. The counterpart of expanded.</comment>
   </data>
   <data name="commitment_issues" xml:space="preserve">
     <value>Svårt att bestämma dig?</value>
@@ -2960,14 +2964,6 @@ rätt sätt</value>
     <value>De säkra standardinställningarna är inte tillämpade</value>
     <comment>dns settings</comment>
   </data>
-  <data name="dns_not_on_tunnel" xml:space="preserve">
-    <value>DNS går INTE genom tunneln — namnen du slår upp löses upp utanför den.</value>
-    <comment>Connect drawer: warning that DNS is resolving outside the tunnel.</comment>
-  </data>
-  <data name="dns_on_tunnel" xml:space="preserve">
-    <value>DNS går genom tunneln</value>
-    <comment>Connect drawer: status that DNS goes through the tunnel.</comment>
-  </data>
   <data name="dns_over_https" xml:space="preserve">
     <value>DNS över HTTPS</value>
     <comment>A label displayed in a row of a custom dns settings.</comment>
@@ -3363,6 +3359,10 @@ rätt sätt</value>
     <value>Exkluderad</value>
     <comment>transfer stats and split rules</comment>
   </data>
+  <data name="expanded" xml:space="preserve">
+    <value>Utökad</value>
+    <comment>Screen reader state of a row that shows or hides a section below it (Advanced, Why?): the section is shown. The counterpart of collapsed.</comment>
+  </data>
   <data name="expires" xml:space="preserve">
     <value>Utgår</value>
     <comment>Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.</comment>
@@ -3459,6 +3459,10 @@ rätt sätt</value>
     <value>Logga in och anslut för att hantera extendrar.</value>
     <comment>Shown in the account Extenders section when there is no signed-in device to manage extenders with.</comment>
   </data>
+  <data name="extenders_reset_done" xml:space="preserve">
+    <value>Extendrarna har återställts</value>
+    <comment>Confirmation after the extenders were reset (Extenders section under account).</comment>
+  </data>
   <data name="failed_to_connect" xml:space="preserve">
     <value>Kunde inte ansluta</value>
     <comment>Used in Shared/Intents/ConnectIntent.swift.</comment>
@@ -3510,6 +3514,18 @@ rätt sätt</value>
   <data name="feedback_sending" xml:space="preserve">
     <value>Skickar…</value>
     <comment>Feedback screen: label of the Send button while the feedback is being sent.</comment>
+  </data>
+  <data name="feedback_star_count.one" xml:space="preserve">
+    <value>{} stjärna</value>
+    <comment>Feedback screen: screen reader name of one of the five rating stars, the number of stars a tap on it gives (1 to 5).</comment>
+  </data>
+  <data name="feedback_star_count.other" xml:space="preserve">
+    <value>{} stjärnor</value>
+    <comment>Feedback screen: screen reader name of one of the five rating stars, the number of stars a tap on it gives (1 to 5).</comment>
+  </data>
+  <data name="feedback_submitted" xml:space="preserve">
+    <value>Feedback skickad.</value>
+    <comment>Feedback screen: the heading of the overlay shown after feedback is sent.</comment>
   </data>
   <data name="fixed_ip" xml:space="preserve">
     <value>Fast IP</value>
@@ -3615,6 +3631,10 @@ rätt sätt</value>
   <data name="guest_convert_explanation" xml:space="preserve">
     <value>Lägg till en e-postadress och ett lösenord för att logga in på det här nätverket. Dess abonnemang och saldo följer med det.</value>
     <comment>Desktop: the first step of "Create an account" on a legacy guest network. The user adds an email and a password to the network they are on now, so they can sign in to it again; its plan and balance stay with it (nothing moves to a new account).</comment>
+  </data>
+  <data name="guest_mode" xml:space="preserve">
+    <value>Gästläge</value>
+    <comment>Account switcher: the row of the guest account, checked while the app runs in guest mode.</comment>
   </data>
   <data name="hash_count" xml:space="preserve">
     <value>#{}</value>
@@ -3821,6 +3841,10 @@ rätt sätt</value>
   <data name="invalid_balance_code" xml:space="preserve">
     <value>Ogiltig saldo-kod</value>
     <comment>Used in Shared/Views/RedeemBalanceCodeSheet/RedeemBalanceCodeSheet.swift.</comment>
+  </data>
+  <data name="invalid_input" xml:space="preserve">
+    <value>Ogiltig inmatning</value>
+    <comment>Text fields: screen reader name of the warning icon shown next to a field whose text is not valid.</comment>
   </data>
   <data name="invalid_referral_code" xml:space="preserve">
     <value>Den här koden är inte giltig</value>
@@ -5305,6 +5329,14 @@ och mest decentraliserade in- och utgångsprotokoll.</value>
     <value>Köp hittat. Bekräftar ditt abonnemang — det uppdateras automatiskt.</value>
     <comment>Restore-purchases outcome: an entitlement for the current network was found; the confirmation poll now bridges the gap until the server credits it (Shared/ViewModels/AppStoreSubscriptionManager.swift).</comment>
   </data>
+  <data name="purchase_pending_body" xml:space="preserve">
+    <value>Ditt köp väntar på godkännande. UR Pro aktiveras av sig självt när det har gått igenom – du behöver inte köpa igen.</value>
+    <comment>Upgrade: the overlay shown while a store purchase waits for approval. Keep UR Pro (the plan's name) unchanged.</comment>
+  </data>
+  <data name="purchase_pending_title" xml:space="preserve">
+    <value>Nästan klart.</value>
+    <comment>Upgrade: the heading of the overlay shown while a store purchase waits for approval (for example a parent's).</comment>
+  </data>
   <data name="qr_code_not_found" xml:space="preserve">
     <value>Ingen QR-kod hittades i bilden.</value>
     <comment>Error when a chosen photo or image file holds no QR code.</comment>
@@ -5513,8 +5545,20 @@ och mest decentraliserade in- och utgångsprotokoll.</value>
     <value>Uppdatera</value>
     <comment>Generic refresh action (a button that reloads the current list or view), e.g. the points leaderboard tab.</comment>
   </data>
+  <data name="regenerate" xml:space="preserve">
+    <value>Generera ny</value>
+    <comment>Settings: the button that makes a new seedphrase in place of the current one.</comment>
+  </data>
   <data name="regenerate_seedphrase" xml:space="preserve">
     <value>Generera ny seedfras</value>
+  </data>
+  <data name="regenerate_seedphrase_body" xml:space="preserve">
+    <value>Din nuvarande seedfras slutar fungera. Du får se en ny som du ska spara.</value>
+    <comment>Settings: the confirmation before a new seedphrase replaces the current one; the new one is shown once, to be saved.</comment>
+  </data>
+  <data name="regenerate_seedphrase_title" xml:space="preserve">
+    <value>Generera en ny seedfras?</value>
+    <comment>Settings: the title of the confirmation before a new seedphrase replaces the current one.</comment>
   </data>
   <data name="regions" xml:space="preserve">
     <value>Regioner</value>
@@ -5586,6 +5630,14 @@ och mest decentraliserade in- och utgångsprotokoll.</value>
   <data name="resend_verify_code" xml:space="preserve">
     <value>Skicka kod igen</value>
     <comment>Button text to resend the verification code</comment>
+  </data>
+  <data name="reset_extenders" xml:space="preserve">
+    <value>Återställ extendrar</value>
+    <comment>Button in the Extenders section under account, the title of its confirmation, and the confirmation's action: removes the extenders the user added and clears everything learned about extenders.</comment>
+  </data>
+  <data name="reset_extenders_confirm" xml:space="preserve">
+    <value>Detta tar bort de extendrar du har lagt till och rensar allt som är känt om extendrar. Sedan söks extendrar upp igen från början.</value>
+    <comment>Body of the confirmation before resetting extenders (Extenders section under account): what the reset removes and clears.</comment>
   </data>
   <data name="reset_it" xml:space="preserve">
     <value>Återställ</value>
@@ -6094,6 +6146,10 @@ innehåll i världen</value>
     <value>Ingen trafik ännu</value>
     <comment>Connect drawer: throughput empty state</comment>
   </data>
+  <data name="site_app_phone" xml:space="preserve">
+    <value>Telefon</value>
+    <comment>ur.io account profile: the label of a phone number sign-in method in the sign-in methods list.</comment>
+  </data>
   <data name="site_app_plan" xml:space="preserve">
     <value>Plan</value>
     <comment>Connect drawer: plan section label</comment>
@@ -6206,6 +6262,14 @@ innehåll i världen</value>
     <value>Se ditt förnyelsedatum, automatisk förnyelse och avbokningsalternativ.</value>
     <comment>Account panel: hint under the plan card for Pro members, next to the Manage button that opens Manage Subscription.</comment>
   </data>
+  <data name="site_payment_error_already_subscribed" xml:space="preserve">
+    <value>Du har redan Pro, så inget har debiterats. Hantera din prenumeration från ditt konto.</value>
+    <comment>Checkout (ur.io's payment screens; the plan purchase in the F-Droid and dapp Android builds; the upgrade sheet in the macOS direct download, Windows and Linux): the server refused a new subscription because the network already has an active Pro subscription (error.code already_subscribed). Nothing was charged.</comment>
+  </data>
+  <data name="site_payment_error_plan_unavailable" xml:space="preserve">
+    <value>Den här planen är inte tillgänglig just nu. Försök igen senare.</value>
+    <comment>Checkout (ur.io's payment screens; the plan purchase in the F-Droid and dapp Android builds; the upgrade sheet in the macOS direct download, Windows and Linux): the server cannot sell this Pro plan right now (error.code plan_unavailable: no price or product is configured for it). Nothing was charged.</comment>
+  </data>
   <data name="site_save_your_seedphrase" xml:space="preserve">
     <value>Spara din seedfras</value>
     <comment>Instant account creation: heading of the view that shows the new seedphrase once.</comment>
@@ -6317,6 +6381,14 @@ innehåll i världen</value>
   <data name="site_sub_stripe_body" xml:space="preserve">
     <value>Din Pro-prenumeration faktureras via Stripe. Uppdatera dina betaluppgifter eller avsluta när som helst nedan.</value>
     <comment>Subscription: Stripe-billed body</comment>
+  </data>
+  <data name="site_subscription_error_no_customer" xml:space="preserve">
+    <value>Det här nätverket har inga faktureringsuppgifter hos Stripe.</value>
+    <comment>Manage subscription (ur.io's screen; Settings in the Windows app, Account in the Linux app), opening the billing details: the network has no Stripe customer, so there is no billing portal (error.code no_customer).</comment>
+  </data>
+  <data name="site_subscription_error_store_unavailable" xml:space="preserve">
+    <value>Det gick inte att nå Stripe just nu. Försök igen om en stund.</value>
+    <comment>Manage subscription (ur.io's screen; Settings in the Windows app, Account in the Linux app): Stripe did not answer or refused the change, or the billing portal could not be opened; trying again usually works (error.code store_unavailable).</comment>
   </data>
   <data name="skip" xml:space="preserve">
     <value>Hoppa över</value>
@@ -6570,6 +6642,10 @@ som det borde vara.</value>
     <value>Stark anonymisering</value>
     <comment>Connect drawer: strong anonymization toggle — the inverse of allow direct (direct connections expose the real source IP to the provider).</comment>
   </data>
+  <data name="strong_privacy_laws" xml:space="preserve">
+    <value>Starka integritetslagar</value>
+    <comment>Locations list: screen reader name of the icon on a location whose country has strong privacy laws.</comment>
+  </data>
   <data name="subscribe" xml:space="preserve">
     <value>Prenumerera</value>
     <comment>Button on the plan picker for the monthly plan, which has no free trial.</comment>
@@ -6596,7 +6672,7 @@ som det borde vara.</value>
   </data>
   <data name="support" xml:space="preserve">
     <value>Support</value>
-    <comment>Used in Shared/ViewModels/SubscriptionBalanceViewModel.swift.</comment>
+    <comment>Navigation: the Support tab, page or section, where users send feedback and contact the URnetwork support team. Customer support, not backing; use the word the language uses for a support team.</comment>
   </data>
   <data name="support_us" xml:space="preserve">
     <value>Stöd oss i att bygga ett nytt slags nätverk som ger istället för att ta.</value>
@@ -6933,6 +7009,10 @@ som det borde vara.</value>
     <value>När du kopplar bort ditt referensnätverk kommer du inte längre att kunna tjäna poäng från {}</value>
     <comment>Call to action</comment>
   </data>
+  <data name="unlink_alert_description_unnamed" xml:space="preserve">
+    <value>När du kopplar bort ditt referensnätverk kommer du inte längre att kunna tjäna poäng från det nätverket</value>
+    <comment>Referral network: the unlink confirmation when the network's name is not known. The counterpart of unlink_alert_description.</comment>
+  </data>
   <data name="unlink_referral_network" xml:space="preserve">
     <value>Koppla från referensnätverk</value>
     <comment>Call to action</comment>
@@ -6944,6 +7024,10 @@ som det borde vara.</value>
   <data name="unlock_supporter_tooltip" xml:space="preserve">
     <value>Lås upp ännu snabbare hastigheter och få först tillgång till nya funktioner.</value>
     <comment>Settings</comment>
+  </data>
+  <data name="unstable_connection" xml:space="preserve">
+    <value>Instabil anslutning</value>
+    <comment>Locations list: screen reader name of the warning icon on a location whose providers may be unstable.</comment>
   </data>
   <data name="unstable_providers_warning" xml:space="preserve">
     <value>* (kan vara instabil)</value>

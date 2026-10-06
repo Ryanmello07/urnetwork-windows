@@ -166,6 +166,28 @@ bool ServiceClient::SetProvideExtender(bool on, std::string* error) {
   return CallProvider(proto::Request(proto::msg::kSetProvideExtender, body), nullptr, error);
 }
 
+extenderreset::ServiceAnswer ServiceClient::ResetExtenders(const proto::ResetExtenders& request,
+                                                           bool* reset, std::string* error) {
+  if (reset) *reset = false;
+  nlohmann::json body = request;
+  try {
+    // An older service's "unknown request type" is a reply too: not ok.
+    proto::Reply r =
+        pipe_.Call(proto::Request(proto::msg::kResetExtenders, body)).get<proto::Reply>();
+    if (error) *error = r.error;
+    if (r.ok) {
+      if (reset) *reset = r.reset;
+      return extenderreset::ServiceAnswer::Taken;
+    }
+    return r.reset_busy ? extenderreset::ServiceAnswer::Busy
+                        : extenderreset::ServiceAnswer::NotTaken;
+  } catch (const std::exception& e) {
+    LogError("service: reset extenders failed: {}", e.what());
+    if (error) *error = e.what();
+    return extenderreset::ServiceAnswer::NotTaken;
+  }
+}
+
 bool ServiceClient::CallProvider(const nlohmann::json& request,
                                  std::optional<proto::TunnelStatus>* status,
                                  std::string* error) {

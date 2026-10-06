@@ -12,6 +12,7 @@
 #include <winrt/Windows.ApplicationModel.Activation.h>
 
 #include "Ids.h"
+#include "LaunchAtStartup.h"
 #include "Localization.h"
 #include "Log.h"
 #include "MainWindow.xaml.h"
@@ -255,6 +256,11 @@ void AppController::Start() {
   // replaces its files (WM_CLOSE, a close request, through CloseApplication)
   // and stops the service itself.
   updates_.Start();
+
+  // "Launch URnetwork on system startup": a registration the user turned on
+  // follows this install (its path, and --autostart), and none is made here
+  // (StartupRegistration.h).
+  RefreshLaunchAtStartup();
 
   LogInfo("app: initializing the sdk host");
   if (!sdk_.Initialize()) {

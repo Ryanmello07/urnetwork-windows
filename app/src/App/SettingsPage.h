@@ -136,6 +136,9 @@ class SettingsPage {
   // renders rows, and every other state renders the line that names it.
   void RenderAuthMethods(rows::FieldState state);
   void ApplyLocalDeviceState();  // client id + kill switch, straight off the SDK
+  // "Launch URnetwork on system startup", read from Windows (LaunchAtStartup.h)
+  void ApplyLaunchAtStartup();
+  void OnLaunchAtStartupToggled();
 
   // ---- actions ----
   void OnKillSwitchToggled();
@@ -148,6 +151,9 @@ class SettingsPage {
   // `urnetworkd uninstall`). Same dialog shape as ConfirmRemoveAuth: defaults
   // to Cancel, commits only on the explicit destructive button.
   winrt::fire_and_forget ConfirmUninstallService();
+  // Manage subscription: ask the server for the Stripe billing portal and open
+  // it (LaunchCustomerPortal); the server's refusal reads in this app's words
+  // (PaymentRefusal.h).
   winrt::fire_and_forget OpenCustomerPortal();
   // Open the portal url in the browser, observing the launch: a failure shows
   // site_billing_portal_error instead of looking like a portal that opened.
@@ -210,6 +216,8 @@ class SettingsPage {
   // its neighbours: nothing ever writes IsOn back — the pref has one writer
   // (this toggle) and one reader path (the checker), so there is no echo.
   winrt::Microsoft::UI::Xaml::Controls::ToggleSwitch autoUpdateCheck_{nullptr};
+  // "Launch URnetwork on system startup" (StartupRegistration.h)
+  winrt::Microsoft::UI::Xaml::Controls::ToggleSwitch launchAtStartup_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::Button manageSubscription_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::TextBlock versionValue_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::Button deleteAccountButton_{nullptr};
@@ -233,6 +241,8 @@ class SettingsPage {
   bool preferencesLoaded_ = false;
   // same echo guard for the kill switch, whose value is written by the load
   bool applyingKillSwitch_ = false;
+  // and for the launch-on-startup toggle, written whenever Windows is read
+  bool applyingLaunchAtStartup_ = false;
 
   std::shared_ptr<urnw::DeviceNameSheet> deviceNameSheet_;
   std::shared_ptr<urnw::AuthCodeSheet> authCodeSheet_;

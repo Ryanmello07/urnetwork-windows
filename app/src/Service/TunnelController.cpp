@@ -2120,6 +2120,50 @@ bool TunnelController::SetProvideExtender(bool on, std::string& error) {
   return true;
 }
 
+TunnelController::ExtenderResetResult TunnelController::ResetExtenders(
+    const proto::ResetExtenders& request) {
+  ExtenderResetResult result;
+  const auto key = proto::SpaceKeyOf<urnet::NetworkSpaceKey>(request);
+  urnet::NetworkSpace space;
+  {
+    // Timed, for StartProvider's reason: a wedged bring-up must not hold the
+    // control pipe. Busy, so the app sends the reset again once the operation
+    // holding the lock ends; the next import of the space carries it anyway.
+    std::unique_lock<std::timed_mutex> lock(mutex_, std::defer_lock);
+    if (!lock.try_lock_for(kStopLockBudget)) {
+      result.busy = true;
+      result.error = "a tunnel operation is in progress";
+      LogWarn("tunnel: reset_extenders refused: the session lock was not free within {}ms",
+              kStopLockBudget.count());
+      return result;
+    }
+    // A handle of 0 is the sdk's nil: the manager holds no space under the key.
+    try {
+      if (spaceManager_) space = spaceManager_->getNetworkSpace(key);
+    } catch (const std::exception&) {
+      result.error = "the network space could not be read";
+      LogError("tunnel: stage=reset-extenders outcome=failed step=lookup");
+      return result;
+    }
+  }
+  if (space) {
+    // With the session lock released: the reset stops and joins the space's
+    // extender network client and node before it starts their replacements.
+    try {
+      result.reset = space.applyExtenderReset(request.extender_reset_id);
+    } catch (const std::exception&) {
+      result.error = "the extender reset could not be applied";
+      LogError("tunnel: stage=reset-extenders outcome=failed step=apply");
+      return result;
+    }
+  }
+  LogInfo("tunnel: extenders reset space={}/{} outcome={}", request.host_name,
+          request.env_name,
+          !space ? "not-held" : (result.reset ? "reset" : "already-applied"));
+  result.ok = true;
+  return result;
+}
+
 void TunnelController::RetireProviderDeviceLocked() {
   if (!providerDevice_ && !providerSpace_) return;
   // The statistics first, under their own lock, so a get_provider_stats served

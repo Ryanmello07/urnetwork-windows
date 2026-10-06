@@ -1,10 +1,10 @@
 // Everything the extender surfaces decide BEFORE they touch a XAML object
-// (connect/EXTENDER.md K4, K6, K7, N7, O8): the gossip status dot's colour and
-// word, the panel's "N of M" and event rate, the settings form's text and
-// placeholders, the bootstrap DNS-over-HTTPS servers box and its messages, the
-// share screen's QR placement, whether an import may proceed, the provider
-// extender row's dot, text and switch, and which of the Earnings page's
-// provider and extender statistics sections show.
+// (connect/EXTENDER.md E7, K4, K6, K7, N7, O8): the gossip status dot's colour
+// and word, the panel's "N of M" and event rate, the settings form's text and
+// placeholders, whether the form's reset is live, the bootstrap DNS-over-HTTPS
+// servers box and its messages, the share screen's QR placement, whether an
+// import may proceed, the provider extender row's dot, text and switch, and
+// which of the Earnings page's provider and extender statistics sections show.
 //
 // It is all here, and it is all pure, for the reason IpFamilyStatus.h gives:
 // the windows solution has no test project and a WinUI 3 app cannot even be
@@ -148,11 +148,45 @@ struct ExtenderSettingsForm {
 
 ExtenderSettingsForm ExtenderSettingsFormFor(const ExtenderSettingsView& settings);
 
+// The view of the SDK's ExtenderSettings, copied across by the generated
+// wrapper's field names (urnet::ExtenderSettings) so this header still needs
+// no SDK header: what the form's load reads, and its reload after a reset.
+template <class Settings>
+ExtenderSettingsView ExtenderSettingsViewOf(const Settings& settings) {
+  ExtenderSettingsView view;
+  view.dnsName = settings.DnsName;
+  view.dnsNameDefault = settings.DnsNameDefault;
+  view.gossipUrl = settings.GossipUrl;
+  view.gossipUrlDefault = settings.GossipUrlDefault;
+  view.networkHost = settings.NetworkHost;
+  if (settings.Hosts) view.hosts = *settings.Hosts;
+  if (settings.RootPublicKeys) view.rootPublicKeys = *settings.RootPublicKeys;
+  view.rootPublicKeysDefault = settings.RootPublicKeysDefault;
+  return view;
+}
+
 // The hosts box back into the list SetSettings takes: split on newlines (and
 // commas, because a user who has a comma-separated list in hand will paste
 // it), trimmed, empties dropped, duplicates kept in order -- the SDK owns the
 // policy, this owns only the typing.
 std::vector<std::string> ParseExtenderHostLines(std::string_view text);
+
+// ---- reset (E7) -------------------------------------------------------------
+//
+// "Reset extenders" returns this installation's extender state to a fresh
+// install's: what was learned is cleared and the extenders a user added are
+// removed, in the app's own space and then in the service's
+// (SdkHost::ResetExtenders). The pane confirms first and reloads the form
+// after, which then shows every setting at its default. The reset's spec,
+// ExtenderSettingsViewOf's with it, runs in tools/reset-extenders-tests.cpp
+// beside the control verb's.
+
+// Whether the pane's Reset extenders button is live. Unlike share and import
+// it needs no session: the reset is of the app's own space, and the service
+// takes it by its control verb or at its next import of the space. It does
+// need a signed-in account (the pane is the account's), and it waits while
+// another write of the pane is running, so a save and a reset never cross.
+bool ExtenderResetEnabled(bool signedIn, bool writing);
 
 // ---- the bootstrap DNS-over-HTTPS servers (sdk control_doh_ui.go) -----------
 //

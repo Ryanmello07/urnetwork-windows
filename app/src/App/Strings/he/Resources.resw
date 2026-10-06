@@ -926,7 +926,7 @@
   </data>
   <data name="checkout_error_unavailable" xml:space="preserve">
     <value>התשלום אינו זמין כרגע. נסו שוב מאוחר יותר.</value>
-    <comment>Checkout error in the desktop apps (the macOS direct download, Windows and Linux) when the ur.io checkout page hands back checkout_unavailable: the site cannot open Stripe's checkout right now (it has no Stripe key), so no payment form was shown and nothing was charged. The user cannot fix it; it may work later.</comment>
+    <comment>Checkout error in the desktop apps (the macOS direct download, Windows and Linux) when the ur.io checkout page hands back checkout_unavailable, or the server refuses to start a checkout with error.code checkout_unavailable: the site or the server cannot open Stripe's checkout right now (it has no Stripe key), so no payment form was shown and nothing was charged. The user cannot fix it; it may work later.</comment>
   </data>
   <data name="checkout_finish_in_browser" xml:space="preserve">
     <value>השלימו בדפדפן.</value>
@@ -1067,6 +1067,10 @@
   <data name="code_sign_in_failed" xml:space="preserve">
     <value>ההתחברות עם קוד נכשלה</value>
     <comment>Error shown when signing in with an auth code fails.</comment>
+  </data>
+  <data name="collapsed" xml:space="preserve">
+    <value>מכווץ</value>
+    <comment>Screen reader state of a row that shows or hides a section below it (Advanced, Why?): the section is hidden. The counterpart of expanded.</comment>
   </data>
   <data name="commitment_issues" xml:space="preserve">
     <value>חושש להתחייב?</value>
@@ -3000,14 +3004,6 @@
     <value>הגדרות ברירת המחדל הבטוחות אינן מוחלות</value>
     <comment>dns settings</comment>
   </data>
-  <data name="dns_not_on_tunnel" xml:space="preserve">
-    <value>ה-DNS לא עובר במנהרה — השמות שאתם מחפשים נפתרים מחוץ לה.</value>
-    <comment>Connect drawer: warning that DNS is resolving outside the tunnel.</comment>
-  </data>
-  <data name="dns_on_tunnel" xml:space="preserve">
-    <value>ה-DNS עובר במנהרה</value>
-    <comment>Connect drawer: status that DNS goes through the tunnel.</comment>
-  </data>
   <data name="dns_over_https" xml:space="preserve">
     <value>DNS דרך HTTPS</value>
     <comment>A label displayed in a row of a custom dns settings.</comment>
@@ -3403,6 +3399,10 @@
     <value>מוחרג</value>
     <comment>transfer stats and split rules</comment>
   </data>
+  <data name="expanded" xml:space="preserve">
+    <value>מורחב</value>
+    <comment>Screen reader state of a row that shows or hides a section below it (Advanced, Why?): the section is shown. The counterpart of collapsed.</comment>
+  </data>
   <data name="expires" xml:space="preserve">
     <value>פג תוקף</value>
     <comment>Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.</comment>
@@ -3499,6 +3499,10 @@
     <value>התחברו לחשבון ולרשת כדי לנהל מרחיבים.</value>
     <comment>Shown in the account Extenders section when there is no signed-in device to manage extenders with.</comment>
   </data>
+  <data name="extenders_reset_done" xml:space="preserve">
+    <value>המרחיבים אופסו</value>
+    <comment>Confirmation after the extenders were reset (Extenders section under account).</comment>
+  </data>
   <data name="failed_to_connect" xml:space="preserve">
     <value>החיבור נכשל</value>
     <comment>Used in Shared/Intents/ConnectIntent.swift.</comment>
@@ -3550,6 +3554,26 @@
   <data name="feedback_sending" xml:space="preserve">
     <value>שולח…</value>
     <comment>Feedback screen: label of the Send button while the feedback is being sent.</comment>
+  </data>
+  <data name="feedback_star_count.one" xml:space="preserve">
+    <value>כוכב אחד</value>
+    <comment>Feedback screen: screen reader name of one of the five rating stars, the number of stars a tap on it gives (1 to 5).</comment>
+  </data>
+  <data name="feedback_star_count.two" xml:space="preserve">
+    <value>שני כוכבים</value>
+    <comment>Feedback screen: screen reader name of one of the five rating stars, the number of stars a tap on it gives (1 to 5).</comment>
+  </data>
+  <data name="feedback_star_count.many" xml:space="preserve">
+    <value>{} כוכבים</value>
+    <comment>Feedback screen: screen reader name of one of the five rating stars, the number of stars a tap on it gives (1 to 5).</comment>
+  </data>
+  <data name="feedback_star_count.other" xml:space="preserve">
+    <value>{} כוכבים</value>
+    <comment>Feedback screen: screen reader name of one of the five rating stars, the number of stars a tap on it gives (1 to 5).</comment>
+  </data>
+  <data name="feedback_submitted" xml:space="preserve">
+    <value>המשוב נשלח.</value>
+    <comment>Feedback screen: the heading of the overlay shown after feedback is sent.</comment>
   </data>
   <data name="fixed_ip" xml:space="preserve">
     <value>IP קבוע</value>
@@ -3663,6 +3687,10 @@
   <data name="guest_convert_explanation" xml:space="preserve">
     <value>הוסיפו אימייל וסיסמה כדי להתחבר לרשת הזו. התוכנית והיתרה שלה נשארות איתה.</value>
     <comment>Desktop: the first step of "Create an account" on a legacy guest network. The user adds an email and a password to the network they are on now, so they can sign in to it again; its plan and balance stay with it (nothing moves to a new account).</comment>
+  </data>
+  <data name="guest_mode" xml:space="preserve">
+    <value>מצב אורח</value>
+    <comment>Account switcher: the row of the guest account, checked while the app runs in guest mode.</comment>
   </data>
   <data name="hash_count" xml:space="preserve">
     <value>#{}</value>
@@ -3885,6 +3913,10 @@
   <data name="invalid_balance_code" xml:space="preserve">
     <value>קוד יתרה לא חוקי</value>
     <comment>Used in Shared/Views/RedeemBalanceCodeSheet/RedeemBalanceCodeSheet.swift.</comment>
+  </data>
+  <data name="invalid_input" xml:space="preserve">
+    <value>קלט לא תקין</value>
+    <comment>Text fields: screen reader name of the warning icon shown next to a field whose text is not valid.</comment>
   </data>
   <data name="invalid_referral_code" xml:space="preserve">
     <value>קוד זה אינו תקף</value>
@@ -5473,6 +5505,14 @@
     <value>הרכישה נמצאה. מאשרים את התוכנית שלכם — היא תתעדכן אוטומטית.</value>
     <comment>Restore-purchases outcome: an entitlement for the current network was found; the confirmation poll now bridges the gap until the server credits it (Shared/ViewModels/AppStoreSubscriptionManager.swift).</comment>
   </data>
+  <data name="purchase_pending_body" xml:space="preserve">
+    <value>הרכישה שלך ממתינה לאישור. UR Pro יופעל מעצמו ברגע שהיא תושלם — אין צורך לקנות שוב.</value>
+    <comment>Upgrade: the overlay shown while a store purchase waits for approval. Keep UR Pro (the plan's name) unchanged.</comment>
+  </data>
+  <data name="purchase_pending_title" xml:space="preserve">
+    <value>כמעט סיימנו.</value>
+    <comment>Upgrade: the heading of the overlay shown while a store purchase waits for approval (for example a parent's).</comment>
+  </data>
   <data name="qr_code_not_found" xml:space="preserve">
     <value>לא נמצא קוד QR בתמונה.</value>
     <comment>Error when a chosen photo or image file holds no QR code.</comment>
@@ -5705,8 +5745,20 @@
     <value>רענן</value>
     <comment>Generic refresh action (a button that reloads the current list or view), e.g. the points leaderboard tab.</comment>
   </data>
+  <data name="regenerate" xml:space="preserve">
+    <value>צור מחדש</value>
+    <comment>Settings: the button that makes a new seedphrase in place of the current one.</comment>
+  </data>
   <data name="regenerate_seedphrase" xml:space="preserve">
     <value>צור ביטוי סיד מחדש</value>
+  </data>
+  <data name="regenerate_seedphrase_body" xml:space="preserve">
+    <value>ביטוי הסיד הנוכחי שלך יפסיק לעבוד. יוצג לך ביטוי חדש לשמירה.</value>
+    <comment>Settings: the confirmation before a new seedphrase replaces the current one; the new one is shown once, to be saved.</comment>
+  </data>
+  <data name="regenerate_seedphrase_title" xml:space="preserve">
+    <value>ליצור ביטוי סיד חדש?</value>
+    <comment>Settings: the title of the confirmation before a new seedphrase replaces the current one.</comment>
   </data>
   <data name="regions" xml:space="preserve">
     <value>אזורים</value>
@@ -5778,6 +5830,14 @@
   <data name="resend_verify_code" xml:space="preserve">
     <value>שלח קוד מחדש</value>
     <comment>Button text to resend the verification code</comment>
+  </data>
+  <data name="reset_extenders" xml:space="preserve">
+    <value>איפוס מרחיבים</value>
+    <comment>Button in the Extenders section under account, the title of its confirmation, and the confirmation's action: removes the extenders the user added and clears everything learned about extenders.</comment>
+  </data>
+  <data name="reset_extenders_confirm" xml:space="preserve">
+    <value>פעולה זו מסירה את המרחיבים שהוספת ומוחקת את כל מה שידוע על מרחיבים. לאחר מכן המרחיבים יאותרו מחדש מההתחלה.</value>
+    <comment>Body of the confirmation before resetting extenders (Extenders section under account): what the reset removes and clears.</comment>
   </data>
   <data name="reset_it" xml:space="preserve">
     <value>אפס את זה</value>
@@ -6310,6 +6370,10 @@
     <value>אין עדיין תעבורה</value>
     <comment>Connect drawer: throughput empty state</comment>
   </data>
+  <data name="site_app_phone" xml:space="preserve">
+    <value>טלפון</value>
+    <comment>ur.io account profile: the label of a phone number sign-in method in the sign-in methods list.</comment>
+  </data>
   <data name="site_app_plan" xml:space="preserve">
     <value>תוכנית</value>
     <comment>Connect drawer: plan section label</comment>
@@ -6422,6 +6486,14 @@
     <value>צפו בתאריך החידוש, במצב החידוש האוטומטי ובאפשרויות הביטול.</value>
     <comment>Account panel: hint under the plan card for Pro members, next to the Manage button that opens Manage Subscription.</comment>
   </data>
+  <data name="site_payment_error_already_subscribed" xml:space="preserve">
+    <value>כבר יש לכם Pro, ולכן לא בוצע חיוב. נהלו את המינוי מהחשבון שלכם.</value>
+    <comment>Checkout (ur.io's payment screens; the plan purchase in the F-Droid and dapp Android builds; the upgrade sheet in the macOS direct download, Windows and Linux): the server refused a new subscription because the network already has an active Pro subscription (error.code already_subscribed). Nothing was charged.</comment>
+  </data>
+  <data name="site_payment_error_plan_unavailable" xml:space="preserve">
+    <value>התוכנית הזו אינה זמינה כרגע. נסו שוב מאוחר יותר.</value>
+    <comment>Checkout (ur.io's payment screens; the plan purchase in the F-Droid and dapp Android builds; the upgrade sheet in the macOS direct download, Windows and Linux): the server cannot sell this Pro plan right now (error.code plan_unavailable: no price or product is configured for it). Nothing was charged.</comment>
+  </data>
   <data name="site_save_your_seedphrase" xml:space="preserve">
     <value>שמרו את ביטוי הסיד שלכם</value>
     <comment>Instant account creation: heading of the view that shows the new seedphrase once.</comment>
@@ -6533,6 +6605,14 @@
   <data name="site_sub_stripe_body" xml:space="preserve">
     <value>המנוי Pro שלך מחויב דרך Stripe. עדכן את פרטי התשלום או בטל בכל עת למטה.</value>
     <comment>Subscription: Stripe-billed body</comment>
+  </data>
+  <data name="site_subscription_error_no_customer" xml:space="preserve">
+    <value>לרשת הזו אין פרטי חיוב ב-Stripe.</value>
+    <comment>Manage subscription (ur.io's screen; Settings in the Windows app, Account in the Linux app), opening the billing details: the network has no Stripe customer, so there is no billing portal (error.code no_customer).</comment>
+  </data>
+  <data name="site_subscription_error_store_unavailable" xml:space="preserve">
+    <value>לא ניתן היה להתחבר ל-Stripe כרגע. נסו שוב בעוד רגע.</value>
+    <comment>Manage subscription (ur.io's screen; Settings in the Windows app, Account in the Linux app): Stripe did not answer or refused the change, or the billing portal could not be opened; trying again usually works (error.code store_unavailable).</comment>
   </data>
   <data name="skip" xml:space="preserve">
     <value>דילוג</value>
@@ -6794,6 +6874,10 @@
     <value>אנונימיזציה חזקה</value>
     <comment>Connect drawer: strong anonymization toggle — the inverse of allow direct (direct connections expose the real source IP to the provider).</comment>
   </data>
+  <data name="strong_privacy_laws" xml:space="preserve">
+    <value>חוקי פרטיות מחמירים</value>
+    <comment>Locations list: screen reader name of the icon on a location whose country has strong privacy laws.</comment>
+  </data>
   <data name="subscribe" xml:space="preserve">
     <value>הרשמה למינוי</value>
     <comment>Button on the plan picker for the monthly plan, which has no free trial.</comment>
@@ -6820,7 +6904,7 @@
   </data>
   <data name="support" xml:space="preserve">
     <value>תמיכה</value>
-    <comment>Used in Shared/ViewModels/SubscriptionBalanceViewModel.swift.</comment>
+    <comment>Navigation: the Support tab, page or section, where users send feedback and contact the URnetwork support team. Customer support, not backing; use the word the language uses for a support team.</comment>
   </data>
   <data name="support_us" xml:space="preserve">
     <value>תמכו בנו בבניית רשת מסוג חדש שנותנת במקום לקחת.</value>
@@ -7165,6 +7249,10 @@
     <value>בעת ניתוק רשת ההפניות שלך, לא תוכל עוד להרוויח נקודות מ-{}</value>
     <comment>Call to action</comment>
   </data>
+  <data name="unlink_alert_description_unnamed" xml:space="preserve">
+    <value>בעת ניתוק רשת ההפניות שלך, לא תוכל עוד להרוויח נקודות מהרשת הזו</value>
+    <comment>Referral network: the unlink confirmation when the network's name is not known. The counterpart of unlink_alert_description.</comment>
+  </data>
   <data name="unlink_referral_network" xml:space="preserve">
     <value>נתק רשת הפניות</value>
     <comment>Call to action</comment>
@@ -7176,6 +7264,10 @@
   <data name="unlock_supporter_tooltip" xml:space="preserve">
     <value>פתח מהירויות גבוהות עוד יותר וגישה ראשונה לתכונות חדשות.</value>
     <comment>Settings</comment>
+  </data>
+  <data name="unstable_connection" xml:space="preserve">
+    <value>חיבור לא יציב</value>
+    <comment>Locations list: screen reader name of the warning icon on a location whose providers may be unstable.</comment>
   </data>
   <data name="unstable_providers_warning" xml:space="preserve">
     <value>* (עשוי להיות לא יציב)</value>
