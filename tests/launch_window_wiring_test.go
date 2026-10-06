@@ -84,10 +84,11 @@ func TestLaunchWindowEveryLaunchIsServedAsItAsks(t *testing.T) {
 	}
 }
 
-// Nothing registers an autostart today: the installer has no Run key, Startup
-// shortcut or scheduled task, and the app writes none (launch-at-login is an
-// open M5 item). A registration added later must pass the autostart argument,
-// or every sign-in would open the window, so this fails one that does not.
+// Every autostart registration passes the autostart argument, or every sign-in
+// would open the window: the installer's (it has none: no Run key, Startup
+// shortcut or scheduled task) and the app's ("Launch URnetwork on system
+// startup", LaunchAtStartup.cpp, which writes the Run value with
+// instance::kAutostartArgument).
 func TestLaunchWindowAutostartRegistrationsPassTheAutostartArgument(t *testing.T) {
 	if !strings.Contains(stripComments(readCommonSource(t, "InstanceHandover.h")),
 		`inline constexpr std::wstring_view kAutostartArgument = L"--autostart";`) {
@@ -114,7 +115,9 @@ func TestLaunchWindowAutostartRegistrationsPassTheAutostartArgument(t *testing.T
 	}
 	for name, source := range appSourceFiles(t, ".cpp", ".h") {
 		code := stripComments(source)
-		for _, marker := range []string{`CurrentVersion\\Run`, "FOLDERID_Startup", "StartupTask", "schtasks"} {
+		// a registration through Ids.h's names counts too (LaunchAtStartup.cpp)
+		for _, marker := range []string{`CurrentVersion\\Run`, "FOLDERID_Startup", "StartupTask", "schtasks",
+			"ids::kStartupRunKey"} {
 			if strings.Contains(code, marker) && !strings.Contains(code, "kAutostartArgument") {
 				t.Errorf("%s registers an autostart (%s) without instance::kAutostartArgument", name, marker)
 			}

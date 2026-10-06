@@ -40,6 +40,14 @@ inline constexpr wchar_t kSingleInstanceKey[] = L"URnetwork.Desktop";
 // the instance holding kSingleInstanceKey opens it, so both read this name.
 inline constexpr wchar_t kExitingSignalPrefix[] = L"Local\\URnetwork.Desktop.Exiting.";
 
+// "Launch URnetwork on system startup" (Common/StartupRegistration.h): the
+// user's Run value of this name, and Task Manager's StartupApproved record of
+// it. The installer's uninstall deletes both by this name (Package.wxs).
+inline constexpr wchar_t kStartupRunKey[] = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+inline constexpr wchar_t kStartupApprovedKey[] =
+    L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run";
+inline constexpr wchar_t kStartupRunValue[] = L"URnetwork";
+
 // Deep-link / OAuth callback scheme (matches macOS `urnetwork://`).
 inline constexpr wchar_t kUriScheme[] = L"urnetwork";
 

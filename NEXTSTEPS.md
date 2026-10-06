@@ -306,10 +306,11 @@ DeviceRemote → service):
   generated (`npm run gen`) and indexed into `resources.pri` by MakePri; the UI
   goes through `Localization.h` (`Localized` / `Format` / `Plural`). No string
   lives in the app: add or change one in `localizations/keys/*.yaml`.
-- Toast notifications, launch-at-login (HKCU Run, registered as
-  `"URnetwork.exe" --autostart` so sign-in shows only the tray icon; a contract
-  test fails a registration without it), kill-switch (`vpnInterfaceWhileOffline`
-  via WFP).
+- Toast notifications, kill-switch (`vpnInterfaceWhileOffline` via WFP).
+  ~~Launch-at-login~~ **done**: Settings' "Launch URnetwork on system startup"
+  (off by default, as on macOS) writes the user's HKCU Run value as
+  `"URnetwork.exe" --autostart`, so a sign-in shows only the tray icon; a contract
+  test fails a registration without the argument.
 - Not localized yet, and the store has no keys for them: `StatsFormat.cpp` (byte
   and bit-rate units, `"unknown"`, and the compact relative times `now` / `5s
   ago` / `3m ago` / `2h ago`) and the leaderboard row (`"%d.  %s  —  %.1f MiB"`).

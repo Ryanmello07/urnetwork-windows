@@ -16,6 +16,7 @@
 #include "CloudProxyLink.h"
 #include "FeedbackSendState.h"
 #include "Ids.h"
+#include "LaunchAtStartup.h"
 #include "Localization.h"
 #include "Log.h"
 #include "MainWindow.xaml.h"
@@ -325,6 +326,15 @@ void SettingsPage::BuildGeneralSection(Panel const& host) {
   autoUpdateCheck_.Toggled([this](auto const&, auto const&) {
     urnw::pages::Updates().SetAutoCheckEnabled(autoUpdateCheck_.IsOn());
   });
+
+  // Launch URnetwork on system startup, as on macOS (owner decision,
+  // 2026-10-05): this installation's own registration with Windows, so it
+  // needs no session. Off until the user turns it on; a sign-in then starts
+  // the app in the tray (StartupRegistration.h). The value is Windows's, read
+  // again whenever the page loads, since Task Manager can switch it off too.
+  launchAtStartup_ = ToggleRow(card, Loc("launch_urnetwork_on_system_startup"), hstring{});
+  ApplyLaunchAtStartup();
+  launchAtStartup_.Toggled([this](auto const&, auto const&) { OnLaunchAtStartupToggled(); });
 }
 
 // ADVANCED. The home the Advanced Mode toggle drops into, and export logs.
@@ -744,6 +754,14 @@ void SettingsPage::ApplyLocalDeviceState() {
   applyingKillSwitch_ = true;
   killSwitch_.IsOn(Sdk().CurrentKillSwitch());
   applyingKillSwitch_ = false;
+  ApplyLaunchAtStartup();
+}
+
+void SettingsPage::ApplyLaunchAtStartup() {
+  if (!launchAtStartup_) return;  // the section is not built yet
+  applyingLaunchAtStartup_ = true;
+  launchAtStartup_.IsOn(urnw::LaunchAtStartupEnabled());
+  applyingLaunchAtStartup_ = false;
 }
 
 void SettingsPage::LoadNetworkUser() {
@@ -1078,6 +1096,15 @@ void SettingsPage::OnKillSwitchToggled() {
   applyingKillSwitch_ = true;
   killSwitch_.IsOn(actual);
   applyingKillSwitch_ = false;
+  snackbar_.Show(Loc("something_went_wrong"), InfoBarSeverity::Error);
+}
+
+void SettingsPage::OnLaunchAtStartupToggled() {
+  if (applyingLaunchAtStartup_) return;  // the read wrote it; do not echo it back
+  const bool wanted = launchAtStartup_.IsOn();
+  if (urnw::SetLaunchAtStartup(wanted)) return;
+  // As macOS does when SMAppService refuses: back to what Windows actually has.
+  ApplyLaunchAtStartup();
   snackbar_.Show(Loc("something_went_wrong"), InfoBarSeverity::Error);
 }
 
