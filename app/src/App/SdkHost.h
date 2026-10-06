@@ -62,6 +62,14 @@ struct AuthResult {
   VerifySendNotice verify_send;
 };
 
+// The text for a refused wallet sign-in, network create or added sign-in
+// method: a pasted signature from another account than the entered address
+// (the server's signature_mismatch after a manual Bittensor wallet,
+// bittensor::ConnectErrorKey) says so with the wallet's name; anything else is
+// the server's `message`. `bittensorWalletId` is "" for a Solana wallet.
+std::string WalletProofRefusalText(const std::string& code, const std::string& message,
+                                   const std::string& bittensorWalletId);
+
 // Outcome of the authLogin account discovery (macOS LoginInitialViewModel
 // routing): an existing password account goes to the password step, an unknown
 // user auth goes to sign-up, an unverified account goes to the verify step.
@@ -1994,13 +2002,18 @@ class SdkHost {
   void RequestWalletChallenge(
       const std::string& blockchain, const std::string& walletAddress,
       std::function<void(std::optional<std::string> message, std::string error)> done);
+  // `bittensorWalletId` is the Bittensor wallet that signed `walletAuth` ("" for
+  // none), for the words of a refusal.
   void SubmitCreateNetwork(const CreateNetworkParams& params,
                            std::optional<urnet::WalletAuthArgs> walletAuth,
-                           std::function<void(AuthResult)> done);
+                           std::function<void(AuthResult)> done,
+                           const std::string& bittensorWalletId = std::string());
   // The wallet signed the challenge: authLogin{wallet_auth}. `signature` is what
   // the chain's verifier expects (base64 for SOL, hex for TAO).
+  // `bittensorWalletId` is the Bittensor wallet that signed ("" for Solana).
   void AuthLoginWithWallet(const std::string& address, const std::string& signature,
-                           const std::string& message, WalletConnect::Provider provider);
+                           const std::string& message, WalletConnect::Provider provider,
+                           const std::string& bittensorWalletId = std::string());
   // The bridge returned an identity token: authLogin{auth_jwt_type:provider}.
   // An identity with no network yet is retained in pendingAuthJwt_ (with its
   // provider in pendingAuthJwtType_) and the UI routes to the create-network

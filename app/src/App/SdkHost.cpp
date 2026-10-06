@@ -891,7 +891,7 @@ void SdkHost::CreateNetwork(const CreateNetworkParams& params,
                                        : pendingBittensorWalletId_;
       BeginBittensorProof(
           flow, walletId, std::string(bittensor::kPurposeCreate), expectedAddress,
-          [this, params, identity = *identity, flow,
+          [this, params, identity = *identity, flow, walletId,
            done = std::move(done)](BittensorProofOutcome outcome) mutable {
             if (!outcome.ok) {
               if (!walletFlows_.IsCurrent(flow)) {
@@ -908,7 +908,7 @@ void SdkHost::CreateNetwork(const CreateNetworkParams& params,
             createAuth.wallet_address = outcome.proof.Address;
             createAuth.wallet_message = outcome.proof.Message;
             createAuth.wallet_signature = outcome.proof.Signature;
-            SubmitCreateNetwork(params, std::move(createAuth), std::move(done));
+            SubmitCreateNetwork(params, std::move(createAuth), std::move(done), walletId);
           });
       return;
     }
@@ -971,7 +971,8 @@ void SdkHost::CreateNetwork(const CreateNetworkParams& params,
 
 void SdkHost::SubmitCreateNetwork(const CreateNetworkParams& params,
                                   std::optional<urnet::WalletAuthArgs> walletAuth,
-                                  std::function<void(AuthResult)> done) {
+                                  std::function<void(AuthResult)> done,
+                                  const std::string& bittensorWalletId) {
   urnet::NetworkCreateArgs args;
   ApplySignupPreferences(args);
   args.user_name = std::string();
@@ -986,6 +987,9 @@ void SdkHost::SubmitCreateNetwork(const CreateNetworkParams& params,
       return;
     }
     args.wallet_auth = std::move(walletAuth);
+    // a signature from another account than the address comes back as
+    // result.error.code (a 401 error otherwise)
+    args.result_errors = true;
   } else if (params.useAuthJwt) {
     std::scoped_lock lock(mutex_);
     if (!pendingAuthJwt_) {
@@ -1002,8 +1006,9 @@ void SdkHost::SubmitCreateNetwork(const CreateNetworkParams& params,
   }
   if (!params.referralCode.empty()) args.referral_code = params.referralCode;
 
-  api_->networkCreate(args, [this, done](std::optional<urnet::NetworkCreateResult> result,
-                                         std::optional<std::string> err) {
+  api_->networkCreate(args, [this, done, bittensorWalletId](
+                                std::optional<urnet::NetworkCreateResult> result,
+                                std::optional<std::string> err) {
     if (err || !result) {
       AuthResult r{false, false, err ? *err : "no result"};
       SetAuthState(AuthState::Error, r.error);
@@ -1011,7 +1016,9 @@ void SdkHost::SubmitCreateNetwork(const CreateNetworkParams& params,
       return;
     }
     if (result->error && !result->error->message.empty()) {
-      AuthResult r{false, false, result->error->message};
+      AuthResult r{false, false,
+                   WalletProofRefusalText(result->error->code.value_or(std::string()),
+                                          result->error->message, bittensorWalletId)};
       SetAuthState(AuthState::LoggedOut);  // a form error, not a session error
       if (done) done(r);
       return;
@@ -1740,7 +1747,7 @@ void SdkHost::SignInWithBittensor(const std::string& walletId,
   pendingBittensorWalletId_ = walletId;
   BeginBittensorProof(
       flow, walletId, std::string(bittensor::kPurposeLogin), std::string(),
-      [this, flow](BittensorProofOutcome outcome) {
+      [this, flow, walletId](BittensorProofOutcome outcome) {
         // A newer flow superseded this sign-in and has answered it already.
         if (!walletFlows_.IsCurrent(flow)) return;
         if (!outcome.ok) {
@@ -1757,7 +1764,7 @@ void SdkHost::SignInWithBittensor(const std::string& walletId,
           return;
         }
         AuthLoginWithWallet(outcome.proof.Address, outcome.proof.Signature,
-                            outcome.proof.Message, WalletConnect::Provider::Bittensor);
+                            outcome.proof.Message, WalletConnect::Provider::Bittensor, walletId);
       });
 }
 
@@ -1788,6 +1795,15 @@ std::string BittensorErrorText(std::string const& code, std::string const& walle
 }
 
 }  // namespace
+
+std::string WalletProofRefusalText(const std::string& code, const std::string& message,
+                                   const std::string& bittensorWalletId) {
+  if (bittensorWalletId.empty()) return message;
+  const std::string key = bittensor::ConnectErrorKey(
+      code, urnet::bittensorWalletTransportFor(bittensorWalletId, std::string(bittensor::kPlatform)));
+  if (key.empty()) return message;
+  return Narrow(Format(key, Widen(urnet::bittensorWalletDisplayName(bittensorWalletId))));
+}
 
 void SdkHost::BeginBittensorProof(uint64_t flow, const std::string& walletId,
                                   const std::string& purpose, const std::string& expectedAddress,
@@ -2240,7 +2256,8 @@ void SdkHost::AuthLoginWithSso(const std::string& provider, const std::string& i
 
 void SdkHost::AuthLoginWithWallet(const std::string& address, const std::string& signature,
                                   const std::string& message,
-                                  WalletConnect::Provider provider) {
+                                  WalletConnect::Provider provider,
+                                  const std::string& bittensorWalletId) {
   urnet::WalletAuthArgs w;
   w.wallet_address = address;
   w.wallet_signature = signature;
@@ -2249,8 +2266,11 @@ void SdkHost::AuthLoginWithWallet(const std::string& address, const std::string&
   w.blockchain = provider == WalletConnect::Provider::Bittensor ? urnet::TAO : urnet::SOL;
   urnet::AuthLoginArgs args;
   args.wallet_auth = w;
-  api_->authLogin(args, [this, w](std::optional<urnet::AuthLoginResult> result,
-                                  std::optional<std::string> err) {
+  // a signature from another account than the address comes back as
+  // result.error.code (a 401 error otherwise)
+  args.result_errors = true;
+  api_->authLogin(args, [this, w, bittensorWalletId](std::optional<urnet::AuthLoginResult> result,
+                                                     std::optional<std::string> err) {
     auto done = walletAuthDone_;
     walletAuthDone_ = nullptr;
     if (err || !result) {
@@ -2260,7 +2280,9 @@ void SdkHost::AuthLoginWithWallet(const std::string& address, const std::string&
       return;
     }
     if (result->error && !result->error->message.empty()) {
-      AuthResult r{false, false, result->error->message};
+      AuthResult r{false, false,
+                   WalletProofRefusalText(result->error->code.value_or(std::string()),
+                                          result->error->message, bittensorWalletId)};
       SetAuthState(AuthState::Error, r.error);
       if (done) done(r);
       return;
