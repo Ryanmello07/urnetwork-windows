@@ -7257,6 +7257,12 @@ void SdkHost::TeardownSessionLocked(bool stopTunnel) {
 
 // See the contract in the header.
 void SdkHost::Logout() {
+  // 0. A browser or wallet flow the account started is answered and forgotten
+  // (each network starts fresh, owner decision 2026-10-05): an add-sign-in
+  // attempt's late return would otherwise add that sign-in method to the next
+  // account signed in. On the UI thread, as every caller of it, and before
+  // mutex_: it answers the flows' callbacks.
+  CancelPendingWalletFlows("superseded by signing out");
   // 1. The signed-out account's queued work goes: a connect, a row click still
   // settling, a reconcile. A worker sleeping out a settle wakes to the empty
   // slot and exits.
@@ -7285,6 +7291,9 @@ void SdkHost::Logout() {
     // is signed out on disk even if it is ended while the service half below
     // waits on the pipe.
     if (asyncLocalState_) asyncLocalState_->logout([](bool) {});
+    // and the credential the api attaches to its calls, which the next
+    // sign-in's own calls would otherwise carry until it installs its own
+    if (api_) api_->setByJwt("");
     // 3. The service, as Quit stops it, then the logout, which severs the
     // device identity and clears what the service's sdk stored for the
     // account. Owed until all three succeed (SignOut.h).
