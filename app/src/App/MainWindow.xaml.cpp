@@ -1811,8 +1811,12 @@ void MainWindow::OnUpdateBannerAction() {
       // The update helper's report, read: it is not shown again.
       urnw::pages::Updates().DismissResult();
       break;
+    case Phase::None:
+      // The only banner None shows: checks have not worked for 72 hours.
+      if (updateSnapshot_.checkStale) urnw::pages::Updates().CheckNow();
+      break;
     default:
-      break;  // Applying: the button is disabled; None: no banner to click
+      break;  // Applying: the button is disabled
   }
 }
 

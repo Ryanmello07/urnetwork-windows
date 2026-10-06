@@ -35,7 +35,7 @@ func TestUpdateRefusalTheHandoffRecordsTheInstaller(t *testing.T) {
 		regexp.QuoteMeta("RecordUpdateInProgress(sei.hProcess);"),
 		regexp.QuoteMeta("*helper = sei.hProcess;"),
 		regexp.QuoteMeta("return true;"))
-	apply := definitionBody(t, "UpdateChecker.cpp", checker, "void UpdateChecker::RunApply() {")
+	apply := definitionBody(t, "UpdateChecker.cpp", checker, "void UpdateChecker::RunApply(std::uint64_t generation) {")
 	signOutRequireInOrder(t, "UpdateChecker::RunApply", apply,
 		regexp.QuoteMeta("LaunchUpdateHelper(installFolder_ / kHelperName, offer.tag, &helper, launchError)"),
 		regexp.QuoteMeta("::WaitForSingleObject(helper, 250)"),
@@ -163,7 +163,7 @@ func TestUpdateRefusalTheOnlyRelaunchWaitsForTheUpdate(t *testing.T) {
 		regexp.QuoteMeta("if (urnw::LaunchedAfterUpdate()) urnw::AwaitUpdateEnd();"),
 		regexp.QuoteMeta("urnw::instance::Launch(launcher);"))
 	checker := stripComments(readAppSource(t, "UpdateChecker.cpp"))
-	apply := definitionBody(t, "UpdateChecker.cpp", checker, "void UpdateChecker::RunApply() {")
+	apply := definitionBody(t, "UpdateChecker.cpp", checker, "void UpdateChecker::RunApply(std::uint64_t generation) {")
 	afterStart := apply[strings.Index(apply, "LaunchUpdateHelper(installFolder_ / kHelperName, offer.tag, &helper, launchError)"):]
 	quitForbid(t, "UpdateChecker::RunApply after the installer starts", afterStart,
 		"the updater relaunches nothing while the installer runs", "CreateProcess", "URnetwork.exe")

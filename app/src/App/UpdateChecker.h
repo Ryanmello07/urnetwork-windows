@@ -31,6 +31,16 @@
 // still runs, and at its next launch, and the banner says how the update went
 // until the user dismisses it.
 //
+// Requests are anonymous, and GitHub's answer to too many is honoured: no
+// request goes before its Retry-After or X-RateLimit-Reset (at most a day
+// out, Common/UpdateSchedule.h). When no check has succeeded for 72 hours,
+// the banner and the developer line say since when.
+//
+// The feed can change under a check or an apply in flight (the opt-in
+// developer channel switches it): each carries the feed generation it started
+// under, a check's result from an older one is dropped, and an apply stops
+// before it starts the helper.
+//
 // A dev build (urnw::version::kCode == 0) never self-updates: every release
 // would outrank it forever. The periodic checker is fully disabled there; the
 // developer screen's manual trigger still RUNS a check and reports what it
@@ -121,6 +131,12 @@ class UpdateChecker {
     bool installed = false;
     // Meaningful while phase == Result.
     Result result;
+    // When a check last succeeded, in Unix seconds, or, before any has, when
+    // this install first tried; 0 before either.
+    std::int64_t lastSuccessUnix = 0;
+    // No check has succeeded for 72 hours while automatic checks are on: the
+    // app says so, with lastSuccessUnix.
+    bool checkStale = false;
     CheckOutcome lastCheck = CheckOutcome::NeverRan;
     // The newest release tag the last completed check parsed, whether or not
     // it outranks this build — the developer line names it either way.
@@ -160,6 +176,11 @@ class UpdateChecker {
   // The Result banner's dismissal: the report is not shown again, and the
   // banner closes. Safe from the UI thread.
   void DismissResult();
+  // The update channel changed (the opt-in developer channel calls this): a
+  // check or an apply still running under the old feed is abandoned, the
+  // offer and its banner are dropped (the helper's report stays), and a check
+  // is queued.
+  void ChannelChanged();
 
   // The "Check for updates automatically" preference (Settings): persisted in
   // app_prefs.json beside Advanced Mode, default ON. The static read exists so
@@ -172,6 +193,9 @@ class UpdateChecker {
   // Open an Explorer window with `file` selected — the ManualInstall banner's
   // re-reveal action. Safe from the UI thread.
   static void RevealInExplorer(std::wstring const& file);
+  // `unixSeconds` as the user's short local date, for "Couldn't check for
+  // updates since <date>".
+  static std::wstring LocalDate(std::int64_t unixSeconds);
 
  private:
   // The release a check decided to offer: everything the apply needs, captured
@@ -190,8 +214,9 @@ class UpdateChecker {
   };
 
   void WorkerLoop();
-  void RunCheck();
-  void RunApply();
+  // Each runs for the feed generation the worker read when it started it.
+  void RunCheck(std::uint64_t generation);
+  void RunApply(std::uint64_t generation);
   // Best-effort startup hygiene: drop <name>.old / <name>.old-<code> leftovers
   // next to the exe (renamed images from the portable builds' old rename-swap
   // updater) and download dirs whose tag no longer outranks this build.
@@ -204,6 +229,13 @@ class UpdateChecker {
   // Copy the snapshot under the lock, mutate, publish to the handler outside
   // it — the handler is never invoked with mutex_ held.
   void Mutate(std::function<void(Snapshot&)> const& fn);
+  // Mutate, unless the feed generation is no longer `generation`: the work
+  // that asks was started for a feed the user has since left. Says whether it
+  // did, decided under the same lock as the change.
+  bool MutateFor(std::uint64_t generation, std::function<void(Snapshot&)> const& fn);
+  // A check failed: the snapshot says so, and whether checks have been
+  // failing long enough to tell the user.
+  void CheckFailed(std::uint64_t generation);
   Handler HandlerCopy();
 
   // Written by Start before the worker exists, and only read after.
@@ -218,6 +250,10 @@ class UpdateChecker {
   bool applyRequested_ = false;
   bool autoCheck_ = true;
   std::chrono::steady_clock::time_point nextAuto_{};
+  // No request before this: GitHub's Retry-After or rate-limit reset.
+  std::chrono::steady_clock::time_point holdUntil_{};
+  // Bumped by ChannelChanged; see the header comment.
+  std::uint64_t feedGeneration_ = 0;
   Snapshot snapshot_;
   Offer offer_;
 

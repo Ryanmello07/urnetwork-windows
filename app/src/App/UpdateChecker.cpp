@@ -21,9 +21,11 @@
 #include "ReleaseSelection.h"
 #include "SingleInstance.h"
 #include "Strings.h"
+#include "UpdateApply.h"
 #include "UpdateFormats.h"
 #include "UpdateResult.h"
 #include "UpdateResultJson.h"
+#include "UpdateSchedule.h"
 #include "Version.h"
 #include "VersionGrammar.h"
 
@@ -71,6 +73,15 @@ constexpr char kAutoCheckPrefKey[] = "check_updates_automatically";
 // The finishedUtc of the helper's report the user dismissed last: a report is
 // shown until then.
 constexpr char kResultSeenPrefKey[] = "update_result_seen";
+// When a check last succeeded (Unix seconds), or when this install first
+// tried: what "Couldn't check for updates since <date>" names.
+constexpr char kLastSuccessPrefKey[] = "update_last_check_success";
+
+std::int64_t NowUnixSeconds() {
+  return std::chrono::duration_cast<std::chrono::seconds>(
+             std::chrono::system_clock::now().time_since_epoch())
+      .count();
+}
 
 // The update helper, beside this exe in an installed copy (app/src/Updater).
 constexpr wchar_t kHelperName[] = L"URnetworkUpdate.exe";
@@ -157,7 +168,29 @@ std::int64_t ResponseDateUnixSeconds(HINTERNET request) {
 struct FetchHeaders {
   // The Date header in Unix seconds, 0 when it had none.
   std::int64_t serverUnixSeconds = 0;
+  // What a refused request said about asking again (UpdateSchedule.h).
+  std::int64_t retryAfterSeconds = 0;
+  std::int64_t rateLimitResetUnixSeconds = 0;
+  bool rateLimitExhausted = false;
 };
+
+// A response header by name as an integer, or `fallback` when it is absent or
+// is not one.
+std::int64_t NumericHeader(HINTERNET request, const wchar_t* name, std::int64_t fallback) {
+  wchar_t value[32] = {};
+  DWORD size = sizeof(value);
+  if (!::WinHttpQueryHeaders(request, WINHTTP_QUERY_CUSTOM, name, value, &size,
+                             WINHTTP_NO_HEADER_INDEX)) {
+    return fallback;
+  }
+  std::int64_t number = 0;
+  std::size_t digits = 0;
+  for (const wchar_t* c = value; *c; ++c, ++digits) {
+    if (*c < L'0' || *c > L'9' || digits >= 18) return fallback;
+    number = number * 10 + (*c - L'0');
+  }
+  return digits ? number : fallback;
+}
 
 // One GET, streamed into `sink` chunk by chunk. GitHub requires a User-Agent
 // on every request (a bare WinHTTP GET gets 403). With `followRedirects`
@@ -237,6 +270,11 @@ bool FetchUrl(std::wstring const& url, const wchar_t* accept,
                         WINHTTP_NO_HEADER_INDEX);
   headers.serverUnixSeconds = ResponseDateUnixSeconds(request.h);
   if (status != 200) {
+    // GitHub says when to ask again: Retry-After for a secondary limit, the
+    // reset time once the hour's requests are spent.
+    headers.retryAfterSeconds = NumericHeader(request.h, L"Retry-After", 0);
+    headers.rateLimitResetUnixSeconds = NumericHeader(request.h, L"X-RateLimit-Reset", 0);
+    headers.rateLimitExhausted = NumericHeader(request.h, L"X-RateLimit-Remaining", -1) == 0;
     error = std::format("http status {}", status);
     return false;
   }
@@ -405,6 +443,17 @@ void UpdateChecker::Start() {
             Narrow(installFolder_.wstring()), why);
   }
   snapshot_.installed = installed_;
+  // When a check last succeeded; before any has, this first launch is when
+  // checks began, so 72 hours of failures from now are reported too.
+  const nlohmann::json prefs = LoadAppPrefs();
+  const auto lastSuccess = prefs.find(kLastSuccessPrefKey);
+  snapshot_.lastSuccessUnix = lastSuccess != prefs.end() && lastSuccess->is_number_integer()
+                                  ? lastSuccess->get<std::int64_t>()
+                                  : 0;
+  if (snapshot_.lastSuccessUnix <= 0) {
+    snapshot_.lastSuccessUnix = NowUnixSeconds();
+    SaveAppPref(kLastSuccessPrefKey, snapshot_.lastSuccessUnix);
+  }
   if (version::kCode == 0) {
     LogInfo(
         "update: dev build (code 0) — automatic checking disabled; the "
@@ -480,6 +529,44 @@ void UpdateChecker::DismissResult() {
   });
 }
 
+void UpdateChecker::ChannelChanged() {
+  Snapshot copy;
+  {
+    std::lock_guard lock(mutex_);
+    ++feedGeneration_;
+    offer_ = Offer{};
+    // The report of an update the helper ran is true whatever the feed, and
+    // stays until the user dismisses it; every other banner was about the
+    // offer.
+    if (snapshot_.phase != Phase::Result) {
+      snapshot_ = Snapshot{.installed = installed_,
+                           .lastSuccessUnix = snapshot_.lastSuccessUnix,
+                           .checkStale = snapshot_.checkStale};
+    }
+    checkRequested_ = true;
+    copy = snapshot_;
+  }
+  cv_.notify_all();
+  LogInfo("update: the update channel changed; work for the previous feed is abandoned");
+  if (auto handler = HandlerCopy()) handler(copy);
+}
+
+std::wstring UpdateChecker::LocalDate(std::int64_t unixSeconds) {
+  ULARGE_INTEGER ticks{};
+  ticks.QuadPart = static_cast<ULONGLONG>(unixSeconds + 11644473600LL) * 10000000ULL;
+  const FILETIME utcFile{.dwLowDateTime = ticks.LowPart, .dwHighDateTime = ticks.HighPart};
+  SYSTEMTIME utc{};
+  SYSTEMTIME local{};
+  wchar_t date[80] = {};
+  if (!::FileTimeToSystemTime(&utcFile, &utc) ||
+      !::SystemTimeToTzSpecificLocalTime(nullptr, &utc, &local) ||
+      !::GetDateFormatEx(LOCALE_NAME_USER_DEFAULT, DATE_SHORTDATE, &local, nullptr, date, 80,
+                         nullptr)) {
+    return Widen(update::FormatUtcSecond(unixSeconds).substr(0, 10));
+  }
+  return date;
+}
+
 bool UpdateChecker::AutoCheckEnabled() {
   return LoadAppPrefs().value(kAutoCheckPrefKey, true);
 }
@@ -512,6 +599,27 @@ void UpdateChecker::Mutate(std::function<void(Snapshot&)> const& fn) {
   if (auto handler = HandlerCopy()) handler(copy);
 }
 
+bool UpdateChecker::MutateFor(std::uint64_t generation,
+                              std::function<void(Snapshot&)> const& fn) {
+  Snapshot copy;
+  {
+    std::lock_guard lock(mutex_);
+    if (feedGeneration_ != generation) return false;
+    fn(snapshot_);
+    copy = snapshot_;
+  }
+  if (auto handler = HandlerCopy()) handler(copy);
+  return true;
+}
+
+void UpdateChecker::CheckFailed(std::uint64_t generation) {
+  const std::int64_t now = NowUnixSeconds();
+  MutateFor(generation, [this, now](Snapshot& s) {
+    s.lastCheck = CheckOutcome::Failed;
+    s.checkStale = update::CheckIsStale(now, s.lastSuccessUnix, autoCheck_ && version::kCode != 0);
+  });
+}
+
 // ---- the worker --------------------------------------------------------------
 
 void UpdateChecker::WorkerLoop() {
@@ -538,23 +646,23 @@ void UpdateChecker::WorkerLoop() {
     if (stop_) break;
     if (applyRequested_) {
       applyRequested_ = false;
+      const std::uint64_t generation = feedGeneration_;
       lock.unlock();
+      const auto failed = [this, generation] {
+        MutateFor(generation, [](Snapshot& s) {
+          s.phase = Phase::Failed;
+          s.stage = Stage::Idle;
+          s.failure = Failure::Download;
+        });
+      };
       try {
-        RunApply();
+        RunApply(generation);
       } catch (std::exception const& e) {
         LogError("update: apply threw: {}", e.what());
-        Mutate([](Snapshot& s) {
-          s.phase = Phase::Failed;
-          s.stage = Stage::Idle;
-          s.failure = Failure::Download;
-        });
+        failed();
       } catch (...) {
         LogError("update: apply threw (unknown)");
-        Mutate([](Snapshot& s) {
-          s.phase = Phase::Failed;
-          s.stage = Stage::Idle;
-          s.failure = Failure::Download;
-        });
+        failed();
       }
       lock.lock();
       continue;
@@ -563,20 +671,22 @@ void UpdateChecker::WorkerLoop() {
     const bool timed = autoCheck_ && version::kCode != 0;
     if (checkRequested_ || (timed && steady_clock::now() >= nextAuto_)) {
       checkRequested_ = false;
+      const std::uint64_t generation = feedGeneration_;
       lock.unlock();
       try {
-        RunCheck();
+        RunCheck(generation);
       } catch (std::exception const& e) {
         LogError("update: check threw: {}", e.what());
-        Mutate([](Snapshot& s) { s.lastCheck = CheckOutcome::Failed; });
+        CheckFailed(generation);
       } catch (...) {
         LogError("update: check threw (unknown)");
-        Mutate([](Snapshot& s) { s.lastCheck = CheckOutcome::Failed; });
+        CheckFailed(generation);
       }
       lock.lock();
       // Any completed check — manual or automatic — restarts the cadence; two
-      // checks 30 seconds apart cannot say different things.
-      nextAuto_ = steady_clock::now() + kCheckInterval;
+      // checks 30 seconds apart cannot say different things. Never before
+      // GitHub's own Retry-After or rate-limit reset.
+      nextAuto_ = std::max(steady_clock::now() + kCheckInterval, holdUntil_);
       continue;
     }
     if (timed)
@@ -652,8 +762,19 @@ void UpdateChecker::CleanupStaleFiles() {
 
 // ---- the check ---------------------------------------------------------------
 
-void UpdateChecker::RunCheck() {
-  Mutate([](Snapshot& s) { s.lastCheck = CheckOutcome::InFlight; });
+void UpdateChecker::RunCheck(std::uint64_t generation) {
+  bool held = false;
+  {
+    std::lock_guard lock(mutex_);
+    held = steady_clock::now() < holdUntil_;
+  }
+  if (held) {
+    // GitHub asked for no request before then; a manual check waits too.
+    LogWarn("update: GitHub asked for no request yet; the check is not sent");
+    CheckFailed(generation);
+    return;
+  }
+  MutateFor(generation, [](Snapshot& s) { s.lastCheck = CheckOutcome::InFlight; });
 
   // The repository by its id, so no rename and no re-registered owner name
   // can move the feed, and with redirects refused for the same reason.
@@ -676,7 +797,17 @@ void UpdateChecker::RunCheck() {
       headers, error);
   if (!fetched) {
     LogWarn("update: release check failed: {}", error);
-    Mutate([](Snapshot& s) { s.lastCheck = CheckOutcome::Failed; });
+    const update::RateLimit limit{.retryAfterSeconds = headers.retryAfterSeconds,
+                                  .resetUnixSeconds = headers.rateLimitResetUnixSeconds,
+                                  .exhausted = headers.rateLimitExhausted,
+                                  .serverUnixSeconds = headers.serverUnixSeconds};
+    const std::int64_t wait = update::NextCheckDelaySeconds(0, limit);
+    if (wait > 0) {
+      LogWarn("update: GitHub asked for no request for {} s", wait);
+      std::lock_guard lock(mutex_);
+      holdUntil_ = steady_clock::now() + std::chrono::seconds(wait);
+    }
+    CheckFailed(generation);
     return;
   }
 
@@ -691,18 +822,18 @@ void UpdateChecker::RunCheck() {
   const std::optional<std::vector<update::Release>> parsed = update::ParseReleaseList(body);
   if (!parsed) {
     LogWarn("update: release list was not a JSON array");
-    Mutate([](Snapshot& s) { s.lastCheck = CheckOutcome::Failed; });
+    CheckFailed(generation);
     return;
   }
+  const std::int64_t succeeded = NowUnixSeconds();
+  SaveAppPref(kLastSuccessPrefKey, succeeded);
   // Codes are judged against GitHub's clock, not this machine's. A response
   // without a Date header is judged against this machine's: the offer is only
   // what the banner shows, and the helper refuses a list without one.
   std::int64_t serverUnixSeconds = headers.serverUnixSeconds;
   if (serverUnixSeconds == 0) {
     LogWarn("update: the release list had no Date header; judging codes by this clock");
-    serverUnixSeconds = std::chrono::duration_cast<std::chrono::seconds>(
-                            std::chrono::system_clock::now().time_since_epoch())
-                            .count();
+    serverUnixSeconds = succeeded;
   }
   const update::Selection sel = update::SelectRelease(*parsed, kArch, feed, serverUnixSeconds);
   for (auto const& skip : sel.skipped)
@@ -728,6 +859,15 @@ void UpdateChecker::RunCheck() {
   Snapshot copy;
   {
     std::lock_guard lock(mutex_);
+    // Reaching GitHub is what "Couldn't check for updates" is about, whichever
+    // feed was asked (ChannelChanged carries it over too).
+    snapshot_.lastSuccessUnix = succeeded;
+    snapshot_.checkStale = false;
+    // a check of a feed the user has since left says nothing about this one
+    if (feedGeneration_ != generation) {
+      LogInfo("update: a check of the previous feed finished; its result is dropped");
+      return;
+    }
     snapshot_.newestCode = newestCode;
     snapshot_.newestVersion = Widen(newestVersion);
     if (version::kCode == 0) {
@@ -755,6 +895,7 @@ void UpdateChecker::RunCheck() {
       // The helper's report stays until the user dismisses it.
       if (snapshot_.phase != Phase::None && snapshot_.phase != Phase::Result) {
         snapshot_ = Snapshot{.installed = installed_,
+                             .lastSuccessUnix = succeeded,
                              .lastCheck = CheckOutcome::NoUpdate,
                              .newestVersion = Widen(newestVersion),
                              .newestCode = newestCode};
@@ -768,17 +909,25 @@ void UpdateChecker::RunCheck() {
 
 // ---- the apply ---------------------------------------------------------------
 
-void UpdateChecker::RunApply() {
+void UpdateChecker::RunApply(std::uint64_t generation) {
   Offer offer;
   {
     std::lock_guard lock(mutex_);
     const bool actionable = snapshot_.phase == Phase::Available ||
                             snapshot_.phase == Phase::Failed ||
                             snapshot_.phase == Phase::ManualInstall;
-    if (!actionable || offer_.code == 0) return;
+    if (!actionable || offer_.code == 0 || feedGeneration_ != generation) return;
     offer = offer_;
   }
-  Mutate([&offer](Snapshot& s) {
+  // Every stage below starts only if the feed is still the one the offer came
+  // from: a channel change stops the apply at the next stage, and the latest
+  // it can is the hand-off to the helper.
+  const auto abandoned = [&offer](fs::path const& dir) {
+    LogInfo("update: the update channel changed; v{} is not installed", Narrow(offer.version));
+    std::error_code ignored;
+    fs::remove_all(dir, ignored);
+  };
+  MutateFor(generation, [&offer](Snapshot& s) {
     s.phase = Phase::Applying;
     s.stage = Stage::Downloading;
     s.failure = Failure::None;
@@ -786,8 +935,8 @@ void UpdateChecker::RunApply() {
     s.code = offer.code;
     s.installerPath.clear();
   });
-  const auto fail = [this](Failure f) {
-    Mutate([f](Snapshot& s) {
+  const auto fail = [this, generation](Failure f) {
+    MutateFor(generation, [f](Snapshot& s) {
       s.phase = Phase::Failed;
       s.stage = Stage::Idle;
       s.failure = f;
@@ -845,7 +994,10 @@ void UpdateChecker::RunApply() {
   // — so verification is purely local: hash the file, compare. Folded, not
   // bytewise, because hex case is not worth a failure mode; both sides are
   // minted lowercase today.
-  Mutate([](Snapshot& s) { s.stage = Stage::Verifying; });
+  if (!MutateFor(generation, [](Snapshot& s) { s.stage = Stage::Verifying; })) {
+    abandoned(dir);
+    return;
+  }
   const std::string actual = Sha256File(msiPath);
   if (offer.digestHex.empty() || actual.empty() ||
       !update::EqualsAsciiCaseless(offer.digestHex, actual)) {
@@ -866,15 +1018,25 @@ void UpdateChecker::RunApply() {
     // run as an installer, and the banner says what it was checked against.
     LogInfo("update: not an admin-only install; showing the installer for v{} to run",
             Narrow(offer.version));
-    Mutate([&msiW](Snapshot& s) {
-      s.phase = Phase::ManualInstall;
-      s.stage = Stage::Idle;
-      s.installerPath = msiW;
-    });
+    if (!MutateFor(generation, [&msiW](Snapshot& s) {
+          s.phase = Phase::ManualInstall;
+          s.stage = Stage::Idle;
+          s.installerPath = msiW;
+        })) {
+      abandoned(dir);
+      return;
+    }
     RevealInExplorer(msiW);
     return;
   }
-  Mutate([](Snapshot& s) { s.stage = Stage::Installing; });
+  // The hand-off, checked and marked under one lock: a release of a feed the
+  // user has since left is never handed to the helper. (The helper decides
+  // its feed itself, so a change during the elevation prompt cannot make it
+  // install from the old one either.)
+  if (!MutateFor(generation, [](Snapshot& s) { s.stage = Stage::Installing; })) {
+    abandoned(dir);
+    return;
+  }
   HANDLE helper = nullptr;
   std::string launchError;
   if (!LaunchUpdateHelper(installFolder_ / kHelperName, offer.tag, &helper, launchError)) {
@@ -916,6 +1078,8 @@ void UpdateChecker::RunApply() {
     result.logPath = ResultLogPath(installFolder_, *report);
     result.finishedUtc = Widen(report->finishedUtc);
   }
+  // Not generation-gated: the helper ran, and its report is true whatever the
+  // feed is now.
   Mutate([&result](Snapshot& s) {
     s.phase = Phase::Result;
     s.stage = Stage::Idle;

@@ -12,7 +12,9 @@
 //   - which install locations an elevated process may run from
 //     (Common/InstallLocation.h);
 //   - what the update helper's exit code means (Common/UpdateResult.h);
-//   - what the helper decides before msiexec runs (Common/UpdateApply.h).
+//   - what the helper decides before msiexec runs (Common/UpdateApply.h);
+//   - when the tray app asks GitHub again after a refusal, and when it says
+//     its checks have not worked (Common/UpdateSchedule.h).
 //
 //   c++ -std=c++20 -I ../src/Common update-release-tests.cpp -o /tmp/update-release-tests
 //   /tmp/update-release-tests [<file of "code msi-version" lines>]
@@ -31,6 +33,7 @@
 #include "ReleaseSelection.h"
 #include "UpdateApply.h"
 #include "UpdateResult.h"
+#include "UpdateSchedule.h"
 
 using namespace urnw::update;
 
@@ -585,6 +588,60 @@ void HelperDecisions() {
   Check(IsUtcSecond(FormatUtcSecond(kServerUnix)), "what FormatUtcSecond writes, IsUtcSecond reads");
 }
 
+RateLimit Limit(std::int64_t retryAfter, std::int64_t reset, bool exhausted, std::int64_t server) {
+  RateLimit limit;
+  limit.retryAfterSeconds = retryAfter;
+  limit.resetUnixSeconds = reset;
+  limit.exhausted = exhausted;
+  limit.serverUnixSeconds = server;
+  return limit;
+}
+
+void Schedule() {
+  constexpr std::int64_t kCadence = 6 * 60 * 60;
+  constexpr std::int64_t kDay = 24 * 60 * 60;
+
+  // asking again after a refusal
+  Check(NextCheckDelaySeconds(kCadence, RateLimit{}) == kCadence,
+        "a refusal without headers keeps the cadence");
+  Check(NextCheckDelaySeconds(0, RateLimit{}) == 0, "no header holds nothing");
+  Check(NextCheckDelaySeconds(0, Limit(60, 0, false, kServerUnix)) == 60,
+        "Retry-After holds the next request");
+  Check(NextCheckDelaySeconds(kCadence, Limit(60, 0, false, kServerUnix)) == kCadence,
+        "a short Retry-After does not bring the cadence forward");
+  Check(NextCheckDelaySeconds(0, Limit(0, kServerUnix + 1800, true, kServerUnix)) == 1800,
+        "a spent hour holds until GitHub's reset, measured on GitHub's clock");
+  Check(NextCheckDelaySeconds(0, Limit(0, kServerUnix + 1800, false, kServerUnix)) == 0,
+        "a reset time with requests left holds nothing");
+  Check(NextCheckDelaySeconds(0, Limit(0, kServerUnix + 1800, true, 0)) == 0,
+        "a reset without the server's date is not measured against this machine's clock");
+  Check(NextCheckDelaySeconds(0, Limit(60, kServerUnix + 1800, true, kServerUnix)) == 1800,
+        "the later of Retry-After and the reset holds");
+  Check(NextCheckDelaySeconds(0, Limit(7200, kServerUnix + 1800, true, kServerUnix)) == 7200,
+        "the later of the reset and Retry-After holds");
+  Check(NextCheckDelaySeconds(0, Limit(10 * kDay, 0, false, kServerUnix)) == kDay,
+        "no Retry-After holds checks for more than a day");
+  Check(NextCheckDelaySeconds(0, Limit(0, kServerUnix + 10 * kDay, true, kServerUnix)) == kDay,
+        "no reset time holds checks for more than a day");
+  Check(NextCheckDelaySeconds(0, Limit(0, kServerUnix - 600, true, kServerUnix)) == 0,
+        "a reset already past holds nothing");
+  Check(NextCheckDelaySeconds(0, Limit(-5, 0, false, kServerUnix)) == 0,
+        "a negative Retry-After holds nothing");
+  Check(NextCheckDelaySeconds(2 * kDay, RateLimit{}) == 2 * kDay,
+        "a cadence longer than a day is kept");
+
+  // saying the checks have not worked
+  constexpr std::int64_t kStale = 72 * 60 * 60;
+  Check(!CheckIsStale(kServerUnix, kServerUnix - kStale, true), "72 hours exactly is not stale yet");
+  Check(CheckIsStale(kServerUnix, kServerUnix - kStale - 1, true), "a second past 72 hours is stale");
+  Check(!CheckIsStale(kServerUnix, kServerUnix - 3600, true), "an hour is not stale");
+  Check(!CheckIsStale(kServerUnix, kServerUnix - kStale - 1, false),
+        "with automatic checks off nothing is said");
+  Check(!CheckIsStale(kServerUnix, 0, true), "without a baseline nothing is claimed");
+  Check(!CheckIsStale(kServerUnix, kServerUnix + 3600, true),
+        "a success after this clock's now (a clock set back) is not stale");
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -602,6 +659,7 @@ int main(int argc, char** argv) {
   InstallLocations();
   Outcomes();
   HelperDecisions();
+  Schedule();
 
   std::cout << (gFailures == 0 ? "PASS" : "FAIL") << " update-release-tests: " << gCases
             << " checks, " << gFailures << " failures\n";

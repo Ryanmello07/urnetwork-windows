@@ -505,10 +505,26 @@ void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) 
   using Phase = urnw::UpdateChecker::Phase;
   using Stage = urnw::UpdateChecker::Stage;
   using Failure = urnw::UpdateChecker::Failure;
+  using CheckOutcome = urnw::UpdateChecker::CheckOutcome;
   using InfoBarSeverity = winrt::Microsoft::UI::Xaml::Controls::InfoBarSeverity;
   auto bar = w_.UpdateBar();
   if (snap.phase == Phase::None) {
-    bar.IsOpen(false);
+    if (!snap.checkStale) {
+      bar.IsOpen(false);
+      return;
+    }
+    // No check has worked for 72 hours: a release this app cannot see may be
+    // out, and saying nothing would look like being up to date.
+    bar.Severity(InfoBarSeverity::Warning);
+    bar.Title(winrt::hstring{L"Couldn't check for updates since " +
+                             urnw::UpdateChecker::LocalDate(snap.lastSuccessUnix)});
+    bar.Message(winrt::hstring{L"A newer release may be out. The app keeps trying every "
+                               L"six hours, and the button tries now."});
+    if (auto button = bar.ActionButton()) {
+      button.Content(winrt::box_value(Adv("dev_check_updates", L"Check for updates")));
+      button.IsEnabled(snap.lastCheck != CheckOutcome::InFlight);
+    }
+    bar.IsOpen(true);
     return;
   }
 

@@ -105,9 +105,9 @@ class ConnectPage {
   // The update banner (beta spec §5): the one writer of UpdateBar, stacked
   // directly under ServiceSetupBar with the same one-writer discipline —
   // MainWindow owns the snapshot copy and pushes every change through here.
-  // Phase::None closes the bar; everything else renders one of the five
-  // standing states (offer / in-flight / manual finish / failure / the
-  // update helper's report).
+  // Phase::None closes the bar, unless no check has worked for 72 hours, which
+  // it says; everything else renders one of the five standing states (offer /
+  // in-flight / manual finish / failure / the update helper's report).
   void ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap);
   // The report's title, message and severity.
   static winrt::Microsoft::UI::Xaml::Controls::InfoBarSeverity ApplyUpdateResult(

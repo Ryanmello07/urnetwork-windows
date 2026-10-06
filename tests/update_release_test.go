@@ -26,7 +26,7 @@ import (
 // The Common headers the program includes.
 var updateReleaseHeaders = []string{
 	"InstallLocation.h", "ReleaseSelection.h", "UpdateApply.h", "UpdateFormats.h", "UpdateResult.h",
-	"VersionGrammar.h",
+	"UpdateSchedule.h", "VersionGrammar.h",
 }
 
 // The program, built from the repository's headers, or, when `mutate` is set,
@@ -292,6 +292,40 @@ func TestUpdateReleaseRejectsWeakerDecisions(t *testing.T) {
 			"return outcome == Outcome::Installed || outcome == Outcome::RestartRequired;",
 			"return outcome != Outcome::Refused;",
 			"a failed install deletes it"},
+		{"Retry-After ignored", "UpdateSchedule.h",
+			"if (limit.retryAfterSeconds > 0) wait = limit.retryAfterSeconds;",
+			"if (limit.retryAfterSeconds > 0) wait = 0;",
+			"Retry-After holds the next request"},
+		{"a reset with requests left holds", "UpdateSchedule.h",
+			"if (limit.exhausted && limit.resetUnixSeconds > 0 && limit.serverUnixSeconds > 0) {",
+			"if (limit.resetUnixSeconds > 0 && limit.serverUnixSeconds > 0) {",
+			"a reset time with requests left holds nothing"},
+		{"a reset measured without the server's date", "UpdateSchedule.h",
+			"if (limit.exhausted && limit.resetUnixSeconds > 0 && limit.serverUnixSeconds > 0) {",
+			"if (limit.exhausted && limit.resetUnixSeconds > 0) {",
+			"a reset without the server's date"},
+		{"no cap on a hold", "UpdateSchedule.h",
+			"  wait = std::min(wait, kMaxBackoffSeconds);\n", "",
+			"holds checks for more than a day"},
+		{"a hold that brings the cadence forward", "UpdateSchedule.h",
+			"return std::max(cadenceSeconds, wait);", "return wait > 0 ? wait : cadenceSeconds;",
+			"a short Retry-After does not bring the cadence forward"},
+		{"stale after a day", "UpdateSchedule.h",
+			"inline constexpr std::int64_t kStaleAfterSeconds = 72 * 60 * 60;",
+			"inline constexpr std::int64_t kStaleAfterSeconds = 24 * 60 * 60;",
+			"72 hours exactly is not stale yet"},
+		{"stale at 72 hours exactly", "UpdateSchedule.h",
+			"nowUnixSeconds - lastSuccessUnixSeconds > kStaleAfterSeconds;",
+			"nowUnixSeconds - lastSuccessUnixSeconds >= kStaleAfterSeconds;",
+			"72 hours exactly is not stale yet"},
+		{"stale with automatic checks off", "UpdateSchedule.h",
+			"return checking && lastSuccessUnixSeconds > 0 &&",
+			"return (checking || true) && lastSuccessUnixSeconds > 0 &&",
+			"with automatic checks off nothing is said"},
+		{"stale without a baseline", "UpdateSchedule.h",
+			"return checking && lastSuccessUnixSeconds > 0 &&",
+			"return checking &&",
+			"without a baseline nothing is claimed"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			requireUpdateReleaseFailure(t, tc.header, updateReleaseReplace(tc.old, tc.replacement), tc.want)
@@ -304,7 +338,7 @@ func TestUpdateReleaseRejectsWeakerDecisions(t *testing.T) {
 // and judges release codes against the response's Date header.
 func TestUpdateReleaseTheCheckPollsTheFeedById(t *testing.T) {
 	checker := stripComments(readAppSource(t, "UpdateChecker.cpp"))
-	check := definitionBody(t, "UpdateChecker.cpp", checker, "void UpdateChecker::RunCheck() {")
+	check := definitionBody(t, "UpdateChecker.cpp", checker, "void UpdateChecker::RunCheck(std::uint64_t generation) {")
 	signOutRequireInOrder(t, "UpdateChecker::RunCheck", check,
 		regexp.QuoteMeta("const update::Feed& feed = update::kOfficialFeed;"),
 		regexp.QuoteMeta(`L"https://api.github.com/repositories/{}/releases?per_page=15", feed.numericRepoId);`),

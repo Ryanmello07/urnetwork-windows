@@ -75,6 +75,7 @@
     <ClInclude Include="UpdateMarker.h" />
     <ClInclude Include="UpdateResult.h" />
     <ClInclude Include="UpdateResultJson.h" />
+    <ClInclude Include="UpdateSchedule.h" />
     <ClInclude Include="Version.h" />
     <ClInclude Include="VersionGrammar.h" />
   </ItemGroup>
