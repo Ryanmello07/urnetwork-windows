@@ -864,7 +864,8 @@ void ProvideRowTests() {
     Check(!EnglishStore().empty(),
           std::string("the en store opens and parses from app/tools: ") + kEnglishStorePath);
     const char* const kTakesArgument[] = {"extender_active", "extender_start_failed",
-                                          "extender_listen_failed", "extender_activation_refused",
+                                          "extender_tcp_unavailable", "extender_listen_failed",
+                                          "extender_activation_refused",
                                           "extender_activation_failed"};
     const char* const kWholeText[] = {"off", "extender_not_providing", "extender_setting_up",
                                       "ipv4", "ipv6", "ipv4_and_ipv6", "extender_revoked"};
@@ -1021,6 +1022,10 @@ void ProvideRowTests() {
     const ErrorRow rows[] = {
         {kExtenderProvideErrorStart, "no extender directory", "extender_start_failed",
          "Could not start: no extender directory"},
+        {kExtenderProvideErrorTcpUnavailable, "listen tcp :443: bind: address already in use",
+         "extender_tcp_unavailable",
+         "TCP port 443 is in use by another program. Trying again every few minutes: listen tcp "
+         ":443: bind: address already in use"},
         {kExtenderProvideErrorListen,
          "tcp 443: bind: permission denied; udp 443: bind: permission denied",
          "extender_listen_failed",
@@ -1100,8 +1105,8 @@ void ProvideRowTests() {
 // Every field of urnet::ExtenderProvideStatus (urnetwork_sdk.hpp), by the SDK's
 // names and types. ExtenderProvideStatusViewOf reads the same names in SdkHost,
 // so a rename breaks the app build there; here the struct pins which of the
-// eighteen the view reads, and that the ten it leaves to the SDK's state rule
-// change nothing.
+// twenty-six the view reads, and that the eighteen it leaves alone change
+// nothing.
 struct FullStatus {
   bool Supported{};
   std::string State{};
@@ -1109,6 +1114,7 @@ struct FullStatus {
   std::string Reason{};
   bool Enabled{};
   std::string StartError{};
+  std::string TcpUnavailableError{};
   bool Listening{};
   std::string ListenError{};
   bool ActivatedV4{};
@@ -1120,6 +1126,13 @@ struct FullStatus {
   bool LastActivationRefused{};
   int64_t RevokedTime{};
   std::string DnsPorts{};
+  int64_t PeerPingCount{};
+  int64_t PeerPingCosignedCount{};
+  int64_t PeerPingRejectedCount{};
+  int64_t PeerPingUnknownCount{};
+  int64_t LastPeerPingTime{};
+  int64_t LimitedBySubnetsCount{};
+  int64_t LimitedBySourceCount{};
   int64_t ConnectionCount{};
 };
 
@@ -1144,6 +1157,8 @@ void ProvideStatusViewTests() {
     TEST_CASE("readsOnlyTheContractFields");
     FullStatus noisy = BaseStatus();
     noisy.StartError = "no extender directory";
+    // the bind error reaches the row as the Reason of the tcp_unavailable case
+    noisy.TcpUnavailableError = "listen tcp :443: bind: address already in use";
     noisy.Listening = true;
     noisy.ListenError = "udp 4053: bind: address already in use";
     noisy.Ipv4 = "192.0.2.10";
@@ -1152,9 +1167,16 @@ void ProvideStatusViewTests() {
     noisy.LastActivationError = "context deadline exceeded";
     noisy.RevokedTime = 1757800000001;
     noisy.DnsPorts = "53,4053";
+    noisy.PeerPingCount = 9;
+    noisy.PeerPingCosignedCount = 5;
+    noisy.PeerPingRejectedCount = 2;
+    noisy.PeerPingUnknownCount = 2;
+    noisy.LastPeerPingTime = 1757800000002;
+    noisy.LimitedBySubnetsCount = 3;
+    noisy.LimitedBySourceCount = 4;
     noisy.ConnectionCount = 12;
     Check(ViewOf(noisy) == base,
-          "the ten fields the SDK's state rule already read change nothing");
+          "the eighteen fields the view leaves alone change nothing");
   }
   {
     TEST_CASE("eachReadFieldMovesTheView");

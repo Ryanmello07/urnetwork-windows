@@ -314,6 +314,7 @@ const char* ExtenderProvideFamiliesKey(bool activatedV4, bool activatedV6) {
 // does not know.
 const char* ExtenderProvideErrorKey(std::string_view errorCase) {
   if (errorCase == kExtenderProvideErrorStart) return "extender_start_failed";
+  if (errorCase == kExtenderProvideErrorTcpUnavailable) return "extender_tcp_unavailable";
   if (errorCase == kExtenderProvideErrorListen) return "extender_listen_failed";
   if (errorCase == kExtenderProvideErrorActivationRefused) return "extender_activation_refused";
   if (errorCase == kExtenderProvideErrorActivationFailed) return "extender_activation_failed";

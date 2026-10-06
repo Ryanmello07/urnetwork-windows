@@ -395,6 +395,9 @@ inline constexpr const char* kExtenderProvideStateActive = "active";
 inline constexpr const char* kExtenderProvideStateError = "error";
 inline constexpr const char* kExtenderProvideErrorRevoked = "revoked";
 inline constexpr const char* kExtenderProvideErrorStart = "start";
+// tcp 443, the one port the role requires, could not be bound (usually another
+// program holds it): the role stays off and the SDK binds again every few minutes
+inline constexpr const char* kExtenderProvideErrorTcpUnavailable = "tcp_unavailable";
 inline constexpr const char* kExtenderProvideErrorListen = "listen";
 inline constexpr const char* kExtenderProvideErrorActivationFailed = "activation_failed";
 inline constexpr const char* kExtenderProvideErrorActivationRefused = "activation_refused";
@@ -402,7 +405,8 @@ inline constexpr const char* kExtenderProvideErrorActivationRefused = "activatio
 // As much of the SDK's ExtenderProvideStatus as the apps read (N7), with the
 // setting read beside it. The SDK derived `state` and `errorCase` once from the
 // fields this leaves out (RevokedTime, Listening, ListenError, StartError,
-// LastActivationError), so nothing here re-derives that rule.
+// TcpUnavailableError, LastActivationError), so nothing here re-derives that
+// rule.
 //
 //   refused          LastActivationRefused: in the active state, whether
 //                    `reason` (the other family's text) is a refusal
@@ -532,10 +536,10 @@ struct ExtenderProvideRowModel {
 //                          when both hold, else ipv4 or ipv6); with a Reason,
 //                          " · " and extender_activation_refused (refused) or
 //                          extender_activation_failed, filled with the Reason
-//   error          red     revoked: extender_revoked; start, listen,
-//                          activation_refused, activation_failed: their key
-//                          filled with the Reason; any other case: the Reason
-//                          bare
+//   error          red     revoked: extender_revoked; start, tcp_unavailable,
+//                          listen, activation_refused, activation_failed: their
+//                          key filled with the Reason (for tcp_unavailable the
+//                          bind error); any other case: the Reason bare
 //
 // A state this build does not know is grey with the Reason bare: it names no
 // case the SDK did not pick, and claims no error the SDK did not report.
