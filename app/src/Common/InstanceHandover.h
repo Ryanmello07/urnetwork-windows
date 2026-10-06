@@ -36,6 +36,13 @@
 //   exiting and did not take the launch earns one of the "already running"
 //   messages.
 //
+// What a launch shows (owner decision, 2026-10-05: "autostart on system start
+// should launch only the tray icon"). Every launch the user starts opens the
+// window, whether it starts the app or reaches the instance that runs, and so
+// does one that starts the app after waiting out a quitting instance. An
+// autostart (kAutostartArgument) shows only the tray icon, wherever it lands.
+// A deep link is routed, and its handling brings the window forward.
+//
 // Pure, header-only and free of Windows headers, like AppLifetime.h:
 // tools/instance-handover-tests.cpp runs it on any host, App/SingleInstance.cpp
 // binds the exiting signal and main.cpp the App SDK.
@@ -51,6 +58,7 @@
 #include <map>
 #include <mutex>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -86,6 +94,75 @@ inline constexpr std::chrono::milliseconds kExitingHolderBudget{30000};
 // a launch from cycling.
 inline constexpr int kLaunchRounds = 4;
 
+// The argument an autostart at sign-in passes. Nothing registers an autostart
+// yet: the installer has no Run key, Startup shortcut or scheduled task, and
+// the app has no launch-at-login setting (NEXTSTEPS.md, M5). A registration
+// added later must pass it, and build_contract_test.go fails one that does
+// not.
+inline constexpr std::wstring_view kAutostartArgument = L"--autostart";
+
+// Whether `argument` is one of the arguments on a command line, matched whole
+// and unquoted, the program name included (it never equals an argument).
+inline bool HasArgument(std::wstring_view commandLine, std::wstring_view argument) {
+  std::wstring token;
+  bool quoted = false;
+  bool inToken = false;
+  for (const wchar_t c : commandLine) {
+    if (c == L'"') {
+      quoted = !quoted;
+      inToken = true;
+      continue;
+    }
+    if (!quoted && (c == L' ' || c == L'\t')) {
+      if (inToken && token == argument) return true;
+      token.clear();
+      inToken = false;
+      continue;
+    }
+    token.push_back(c);
+    inToken = true;
+  }
+  return inToken && token == argument;
+}
+
+// What a launch asks of the instance that takes it: the instance's own launch
+// (App::OnLaunched) or one redirected to it (the gate).
+struct LaunchRequest {
+  // The urnetwork:// deep link it carries (a wallet callback, a campaign
+  // email's link), or empty.
+  std::string deepLink;
+  // An autostart at sign-in (kAutostartArgument), not the user starting the
+  // app.
+  bool autostart = false;
+};
+
+// What the instance does for a launch.
+enum class LaunchAction {
+  // Route the deep link; handling it brings the window forward.
+  HandleDeepLink,
+  // Open the window.
+  ShowWindow,
+  // Nothing beyond the tray icon.
+  TrayOnly,
+};
+
+// The action for a launch: a deep link is routed, the user's launch opens the
+// window, and an autostart shows only the tray icon.
+inline LaunchAction ActionFor(const LaunchRequest& request) {
+  if (!request.deepLink.empty()) return LaunchAction::HandleDeepLink;
+  return request.autostart ? LaunchAction::TrayOnly : LaunchAction::ShowWindow;
+}
+
+// For logs.
+constexpr const char* ToString(LaunchAction action) {
+  switch (action) {
+    case LaunchAction::HandleDeepLink: return "route the deep link";
+    case LaunchAction::ShowWindow: return "show the window";
+    case LaunchAction::TrayOnly: return "the tray icon only";
+  }
+  return "unknown";
+}
+
 // Takes the launches redirected to this instance (see the file comment).
 // Safe for concurrent use: Take runs on the App SDK's threadpool thread, Open
 // and Close on the UI thread, and Close also on the threadpool thread when the
@@ -105,8 +182,8 @@ class ActivationGate {
 
   // Hands work to the UI thread; false when that thread takes no more.
   using Post = std::function<bool(std::function<void()>)>;
-  // Acts on a launch, on the UI thread. An empty deep link is a plain launch.
-  using Serve = std::function<void(const std::string& deepLink)>;
+  // Acts on a launch, on the UI thread (ActionFor says what it asks).
+  using Serve = std::function<void(const LaunchRequest& request)>;
 
   // `raiseExitingSignal` runs at the start of every Close, before anything is
   // refused, and must be idempotent. `blocking` is a test seam: it runs when
@@ -118,7 +195,7 @@ class ActivationGate {
 
   // A launch that reached this instance. Returns once the instance has served
   // or refused it, or at the deadline with the launch still queued.
-  Outcome Take(std::string deepLink, std::chrono::steady_clock::time_point deadline) {
+  Outcome Take(LaunchRequest request, std::chrono::steady_clock::time_point deadline) {
     std::uint64_t id = 0;
     Post post;
     {
@@ -127,7 +204,7 @@ class ActivationGate {
       id = ++lastId_;
       if (state_ == State::Open) post = post_;
       launches_.emplace(id,
-                        Launch{.deepLink = std::move(deepLink), .posted = static_cast<bool>(post)});
+                        Launch{.request = std::move(request), .posted = static_cast<bool>(post)});
     }
     // Outside the lock: the UI thread's queue is not the gate's to hold up.
     if (post && !post([this, id] { ServePosted(id); })) {
@@ -141,7 +218,7 @@ class ActivationGate {
   // arrived, then posts each later one to the UI thread. Once; nothing after a
   // Close.
   void Open(Post post, Serve serve) {
-    std::vector<std::string> heldDeepLinks;
+    std::vector<LaunchRequest> heldRequests;
     {
       std::scoped_lock lock(stateLock_);
       if (state_ != State::Starting) return;
@@ -149,13 +226,13 @@ class ActivationGate {
       post_ = std::move(post);
       serve_ = serve;
       for (auto it = launches_.begin(); it != launches_.end();) {
-        heldDeepLinks.push_back(it->second.deepLink);
+        heldRequests.push_back(it->second.request);
         it->second.outcome = Outcome::Served;
         it = it->second.abandoned ? launches_.erase(it) : std::next(it);
       }
     }
     decided_.notify_all();
-    for (const std::string& deepLink : heldDeepLinks) serve(deepLink);
+    for (const LaunchRequest& request : heldRequests) serve(request);
   }
 
   // The instance is exiting. Raises the exiting signal first, then refuses
@@ -187,7 +264,7 @@ class ActivationGate {
 
   // One launch that reached this instance.
   struct Launch {
-    std::string deepLink;
+    LaunchRequest request;
     // Handed to the UI thread's queue, which will run ServePosted for it.
     bool posted = false;
     Outcome outcome = Outcome::Undecided;
@@ -198,7 +275,7 @@ class ActivationGate {
 
   // A launch posted to the UI thread, on that thread.
   void ServePosted(std::uint64_t id) {
-    std::string deepLink;
+    LaunchRequest request;
     Serve serve;
     {
       std::scoped_lock lock(stateLock_);
@@ -207,7 +284,7 @@ class ActivationGate {
       const bool refused = it->second.outcome != Outcome::Undecided;
       if (!refused) {
         it->second.outcome = Outcome::Served;
-        deepLink = it->second.deepLink;
+        request = it->second.request;
         serve = serve_;
       }
       if (it->second.abandoned) launches_.erase(it);
@@ -215,7 +292,7 @@ class ActivationGate {
       if (refused) return;
     }
     decided_.notify_all();
-    serve(deepLink);
+    serve(request);
   }
 
   // Waits for the launch's outcome until the deadline.

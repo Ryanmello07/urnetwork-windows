@@ -74,6 +74,10 @@ void BeginExiting() {
   Activations().Close();
 }
 
+bool LaunchedByAutostart() {
+  return instance::HasArgument(::GetCommandLineW(), instance::kAutostartArgument);
+}
+
 HolderWatch::HolderWatch(std::uint32_t processId) {
   process_ = ::OpenProcess(SYNCHRONIZE, FALSE, processId);
   // no process has this id any more: the holder ended after the App SDK found it

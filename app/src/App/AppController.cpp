@@ -957,6 +957,22 @@ void AppController::ReconcileWindowPresentation() {
 
 // ---- urnetwork:// protocol activation --------------------------------------
 
+void AppController::ServeLaunch(const instance::LaunchRequest& request) {
+  const instance::LaunchAction action = instance::ActionFor(request);
+  LogInfo("app: launch{}: {}", request.autostart ? " (autostart)" : "",
+          instance::ToString(action));
+  switch (action) {
+    case instance::LaunchAction::HandleDeepLink:
+      HandleDeepLink(request.deepLink);
+      return;
+    case instance::LaunchAction::ShowWindow:
+      ShowWindow(nullptr);
+      return;
+    case instance::LaunchAction::TrayOnly:
+      return;
+  }
+}
+
 void AppController::HandleDeepLink(const std::string& url) {
   // never log the uri itself: a wallet callback carries the address + signature
   LogInfo("app: deep link received");
@@ -998,5 +1014,28 @@ std::string DeepLinkFromActivation(
 }
 
 std::string LaunchDeepLink() { return Narrow(DeepLinkFromCommandLine(::GetCommandLineW())); }
+
+instance::LaunchRequest LaunchRequestFromActivation(
+    winrt::Microsoft::Windows::AppLifecycle::AppActivationArguments const& args) {
+  namespace lifecycle = winrt::Microsoft::Windows::AppLifecycle;
+  namespace activation = winrt::Windows::ApplicationModel::Activation;
+  instance::LaunchRequest request{.deepLink = DeepLinkFromActivation(args)};
+  if (args && args.Kind() == lifecycle::ExtendedActivationKind::Launch) {
+    if (auto launchArgs = args.Data().try_as<activation::ILaunchActivatedEventArgs>()) {
+      request.autostart =
+          instance::HasArgument(launchArgs.Arguments(), instance::kAutostartArgument);
+    }
+  }
+  return request;
+}
+
+instance::LaunchRequest OwnLaunchRequest() {
+  namespace lifecycle = winrt::Microsoft::Windows::AppLifecycle;
+  const auto activation = lifecycle::AppInstance::GetCurrent().GetActivatedEventArgs();
+  instance::LaunchRequest request{.deepLink = DeepLinkFromActivation(activation),
+                                  .autostart = LaunchedByAutostart()};
+  if (request.deepLink.empty()) request.deepLink = LaunchDeepLink();  // our own command line
+  return request;
+}
 
 }  // namespace urnw

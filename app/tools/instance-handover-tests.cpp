@@ -1,9 +1,10 @@
 // Executable spec for how a launch reaches the one running instance of the tray
-// app, and how that instance takes it while it starts, runs and exits
-// (Common/InstanceHandover.h). The defect it pins: a launch during the moment
-// Quit spends stopping the service was redirected to the quitting instance and
-// lost, or after 15 s was told that URnetwork was already running but did not
-// respond. Run against the same header the app compiles, on any host with a
+// app, how that instance takes it while it starts, runs and exits, and what
+// the launch shows (Common/InstanceHandover.h). The defects it pins: a launch
+// during the moment Quit spends stopping the service was redirected to the
+// quitting instance and lost, or after 15 s was told that URnetwork was already
+// running but did not respond; and the user's first launch showed only the
+// tray icon. Run against the same header the app compiles, on any host with a
 // C++20 compiler.
 //
 //   c++ -std=c++20 -pthread -I ../src/Common instance-handover-tests.cpp -o /tmp/instance-handover-tests && /tmp/instance-handover-tests
@@ -52,6 +53,18 @@ constexpr std::chrono::seconds kBound{5};
 // A wallet callback, synthetic.
 const std::string kDeepLink = "urnetwork://callback.example/wallet?address=example";
 
+// The user's plain launch, an autostart, and a deep link.
+const LaunchRequest kUserLaunch{};
+const LaunchRequest kAutostart{.deepLink = {}, .autostart = true};
+const LaunchRequest kCallback{.deepLink = kDeepLink};
+
+// The deep links of served requests, in order ("" for a plain launch).
+std::vector<std::string> DeepLinks(const std::vector<LaunchRequest>& requests) {
+  std::vector<std::string> deepLinks;
+  for (const LaunchRequest& request : requests) deepLinks.push_back(request.deepLink);
+  return deepLinks;
+}
+
 std::chrono::steady_clock::time_point Later() { return std::chrono::steady_clock::now() + kBound; }
 
 // Counts events another thread reports, and waits, bounded, for a number of
@@ -97,9 +110,9 @@ class FakeUi {
   }
 
   ActivationGate::Serve Serve() {
-    return [this](const std::string& deepLink) {
+    return [this](const LaunchRequest& request) {
       std::scoped_lock lock(stateLock_);
-      served_.push_back(deepLink);
+      served_.push_back(request);
     };
   }
 
@@ -113,7 +126,7 @@ class FakeUi {
     for (const auto& item : work) item();
   }
 
-  std::vector<std::string> Served() {
+  std::vector<LaunchRequest> Served() {
     std::scoped_lock lock(stateLock_);
     return served_;
   }
@@ -132,7 +145,7 @@ class FakeUi {
  private:
   std::mutex stateLock_;
   std::vector<std::function<void()>> queue_;
-  std::vector<std::string> served_;
+  std::vector<LaunchRequest> served_;
   bool takesWork_ = true;
 };
 
@@ -145,22 +158,22 @@ ActivationGate::Post Inline() {
 }
 
 void TestARunningInstanceServesALaunchThroughItsUiThread() {
-  std::vector<std::string> served;
+  std::vector<LaunchRequest> served;
   int raised = 0;
   ActivationGate gate([&raised] { ++raised; });
-  gate.Open(Inline(), [&served](const std::string& deepLink) { served.push_back(deepLink); });
-  const Outcome plain = gate.Take("", Later());
-  const Outcome callback = gate.Take(kDeepLink, Later());
+  gate.Open(Inline(), [&served](const LaunchRequest& request) { served.push_back(request); });
+  const Outcome plain = gate.Take(kUserLaunch, Later());
+  const Outcome callback = gate.Take(kCallback, Later());
   Check(plain == Outcome::Served,
         "running: Take returns once the UI thread has taken a plain launch (served)");
   Check(callback == Outcome::Served, "running: and a deep link (served)");
-  Check(served == std::vector<std::string>{"", kDeepLink},
+  Check(DeepLinks(served) == std::vector<std::string>{"", kDeepLink},
         "running: the UI acts on each launch once, in the order they came");
   Check(raised == 0, "running: nothing raises the exiting signal");
   gate.Close();
   gate.Close();
   Check(served.size() == 2, "running: a later exit undoes nothing that was served");
-  Check(gate.Closed() && gate.Take("", Later()) == Outcome::Refused,
+  Check(gate.Closed() && gate.Take(kUserLaunch, Later()) == Outcome::Refused,
         "running: a second Close changes nothing");
 }
 
@@ -170,14 +183,14 @@ void TestTakeHoldsTheRedirectUntilTheUiThreadTakesTheLaunch() {
   ActivationGate gate([] {}, [&blocked] { blocked.Add(); });
   gate.Open(ui.Post(), ui.Serve());
   Outcome outcome = Outcome::Undecided;
-  std::thread launch([&gate, &outcome] { outcome = gate.Take(kDeepLink, Later()); });
+  std::thread launch([&gate, &outcome] { outcome = gate.Take(kCallback, Later()); });
   Check(blocked.WaitFor(1),
         "running: Take holds the redirect while the launch waits in the UI thread's queue");
   ui.RunQueued();
   launch.join();
   Check(outcome == Outcome::Served,
         "running: the UI thread taking the queued launch ends the wait (served)");
-  Check(ui.Served() == std::vector<std::string>{kDeepLink},
+  Check(DeepLinks(ui.Served()) == std::vector<std::string>{kDeepLink},
         "running: the queued launch is acted on once");
 }
 
@@ -197,7 +210,7 @@ void TestAQuittingInstanceRefusesTheLaunchItHadQueued() {
   gateForSignal = &gate;
   gate.Open(ui.Post(), ui.Serve());
   Outcome outcome = Outcome::Undecided;
-  std::thread launch([&gate, &outcome] { outcome = gate.Take("", Later()); });
+  std::thread launch([&gate, &outcome] { outcome = gate.Take(kUserLaunch, Later()); });
   Check(blocked.WaitFor(1), "quit: the launch is queued for the UI thread when the quit begins");
   // AppController::Shutdown's BeginExiting, on the UI thread that then holds
   // itself in SdkHost::Quit and never runs its queue again
@@ -213,13 +226,13 @@ void TestAQuittingInstanceRefusesTheLaunchItHadQueued() {
 }
 
 void TestALaunchAfterTheExitBeganIsRefusedAtOnce() {
-  std::vector<std::string> served;
+  std::vector<LaunchRequest> served;
   int raised = 0;
   Counter blocked;
   ActivationGate gate([&raised] { ++raised; }, [&blocked] { blocked.Add(); });
-  gate.Open(Inline(), [&served](const std::string& deepLink) { served.push_back(deepLink); });
+  gate.Open(Inline(), [&served](const LaunchRequest& request) { served.push_back(request); });
   gate.Close();
-  const Outcome outcome = gate.Take(kDeepLink, Later());
+  const Outcome outcome = gate.Take(kCallback, Later());
   Check(outcome == Outcome::Refused,
         "exiting: a launch that arrives after the exit began is refused");
   Check(blocked.Count() == 0, "exiting: it is refused at once, without holding the redirect");
@@ -233,16 +246,16 @@ void TestLaunchesHeldWhileStartingAreServedWhenTheUiOpens() {
   ActivationGate gate([] {}, [&blocked] { blocked.Add(); });
   Outcome first = Outcome::Undecided;
   Outcome second = Outcome::Undecided;
-  std::thread a([&gate, &first] { first = gate.Take("", Later()); });
+  std::thread a([&gate, &first] { first = gate.Take(kUserLaunch, Later()); });
   Check(blocked.WaitFor(1), "starting: a launch that arrives before the UI is up is held");
-  std::thread b([&gate, &second] { second = gate.Take(kDeepLink, Later()); });
+  std::thread b([&gate, &second] { second = gate.Take(kCallback, Later()); });
   Check(blocked.WaitFor(2), "starting: and so is the next one");
   gate.Open(ui.Post(), ui.Serve());
   a.join();
   b.join();
   Check(first == Outcome::Served && second == Outcome::Served,
         "starting: a launch held while the instance started is served when the UI opens");
-  Check(ui.Served() == std::vector<std::string>{"", kDeepLink},
+  Check(DeepLinks(ui.Served()) == std::vector<std::string>{"", kDeepLink},
         "starting: held launches are served in the order they came");
   Check(ui.Queued() == 0, "starting: held launches are served as the UI opens, not posted later");
 }
@@ -253,7 +266,7 @@ void TestAnInstanceThatFailsToStartRefusesWhatItHeld() {
   int raised = 0;
   ActivationGate gate([&raised] { ++raised; }, [&blocked] { blocked.Add(); });
   Outcome outcome = Outcome::Undecided;
-  std::thread launch([&gate, &outcome] { outcome = gate.Take("", Later()); });
+  std::thread launch([&gate, &outcome] { outcome = gate.Take(kUserLaunch, Later()); });
   Check(blocked.WaitFor(1), "failed start: the launch is held while the instance starts");
   // App::OnLaunched's failure exit
   gate.Close();
@@ -262,7 +275,7 @@ void TestAnInstanceThatFailsToStartRefusesWhatItHeld() {
         "failed start: a launch held by an instance that fails to start is refused");
   Check(raised >= 1, "failed start: the exiting signal was raised");
   gate.Open(ui.Post(), ui.Serve());
-  Check(ui.Served().empty() && gate.Take("", Later()) == Outcome::Refused,
+  Check(ui.Served().empty() && gate.Take(kUserLaunch, Later()) == Outcome::Refused,
         "failed start: a closed gate never opens");
 }
 
@@ -272,7 +285,7 @@ void TestAUiThreadThatTakesNoMoreWorkEndsTheInstance() {
   ActivationGate gate([&raised] { ++raised; });
   gate.Open(ui.Post(), ui.Serve());
   ui.StopTakingWork();
-  const Outcome outcome = gate.Take("", Later());
+  const Outcome outcome = gate.Take(kUserLaunch, Later());
   Check(outcome == Outcome::Refused, "no ui: a launch the UI thread will not take is refused");
   Check(gate.Closed() && raised >= 1,
         "no ui: the instance counts as exiting from then on, with its signal raised");
@@ -284,16 +297,16 @@ void TestALaunchTheUiHadNotReachedByTheDeadlineIsStillServed() {
   FakeUi ui;
   ActivationGate gate([] {});
   gate.Open(ui.Post(), ui.Serve());
-  Check(gate.Take(kDeepLink, passed) == Outcome::Undecided,
+  Check(gate.Take(kCallback, passed) == Outcome::Undecided,
         "busy ui: past the deadline the handler returns with the launch still queued");
   ui.RunQueued();
-  Check(ui.Served() == std::vector<std::string>{kDeepLink},
+  Check(DeepLinks(ui.Served()) == std::vector<std::string>{kDeepLink},
         "busy ui: a launch the UI had not reached by the deadline is still served");
 
   FakeUi overtaken;
   ActivationGate exiting([] {});
   exiting.Open(overtaken.Post(), overtaken.Serve());
-  Check(exiting.Take("", passed) == Outcome::Undecided,
+  Check(exiting.Take(kUserLaunch, passed) == Outcome::Undecided,
         "busy ui: another launch still queued at its deadline");
   exiting.Close();
   overtaken.RunQueued();
@@ -457,6 +470,82 @@ void TestTheFirstLaunchJustStarts() {
         "first launch: the holder starts without redirecting anything");
 }
 
+void TestArguments() {
+  struct Case {
+    std::wstring_view commandLine;
+    bool autostart;
+  };
+  const Case cases[] = {
+      {.commandLine = LR"("C:\Program Files\URnetwork\URnetwork.exe" --autostart)",
+       .autostart = true},
+      {.commandLine = L"URnetwork.exe --autostart", .autostart = true},
+      {.commandLine = L"URnetwork.exe \"--autostart\"", .autostart = true},
+      {.commandLine = L"URnetwork.exe\t--autostart", .autostart = true},
+      {.commandLine = LR"("C:\Program Files\URnetwork\URnetwork.exe")", .autostart = false},
+      {.commandLine = L"URnetwork.exe", .autostart = false},
+      {.commandLine = L"", .autostart = false},
+      {.commandLine = L"URnetwork.exe --autostarted", .autostart = false},
+      {.commandLine = L"URnetwork.exe ---autostart", .autostart = false},
+      {.commandLine = LR"("C:\--autostart dir\URnetwork.exe")", .autostart = false},
+      {.commandLine = L"URnetwork.exe urnetwork://callback.example/x?--autostart",
+       .autostart = false},
+  };
+  for (const Case& c : cases) {
+    Check(HasArgument(c.commandLine, kAutostartArgument) == c.autostart,
+          std::string("arguments: --autostart is matched whole and unquoted (case ") +
+              std::to_string(&c - cases) + ")");
+  }
+}
+
+void TestActionFor() {
+  Check(ActionFor(kAutostart) == LaunchAction::TrayOnly,
+        "autostart: an autostart shows only the tray icon");
+  Check(ActionFor(kUserLaunch) == LaunchAction::ShowWindow,
+        "user launch: the user's launch opens the window (it used to go to the tray only)");
+  Check(ActionFor(kCallback) == LaunchAction::HandleDeepLink,
+        "deep link: a deep link is routed, as before");
+  Check(ActionFor(LaunchRequest{.deepLink = kDeepLink, .autostart = true}) ==
+            LaunchAction::HandleDeepLink,
+        "deep link: a deep link is routed whoever started it");
+  for (LaunchAction action :
+       {LaunchAction::HandleDeepLink, LaunchAction::ShowWindow, LaunchAction::TrayOnly}) {
+    Check(std::string_view(ToString(action)) != "unknown", "names: every launch action");
+  }
+}
+
+void TestTheFourLaunchesTheOwnerNamed() {
+  // an autostart at sign-in, with the app not running: the tray icon only
+  FakeLauncher autostart({});
+  Check(Launch(autostart) == LaunchResult::Holder &&
+            ActionFor(kAutostart) == LaunchAction::TrayOnly,
+        "autostart: the first launch starts the app with no window");
+  // the user starting the app: the window opens once the controller is up
+  FakeLauncher user({});
+  Check(Launch(user) == LaunchResult::Holder && ActionFor(kUserLaunch) == LaunchAction::ShowWindow,
+        "user launch: the first launch starts the app and opens the window");
+  // the user starting the app while it quits: the new instance opens the window
+  FakeLauncher relaunch({FakeHolder{.redirect = Attempt(RedirectResult::Taken, true)}});
+  Check(Launch(relaunch) == LaunchResult::Holder &&
+            ActionFor(kUserLaunch) == LaunchAction::ShowWindow,
+        "relaunch during quit: the launch starts the app once the quit is over and opens the "
+        "window");
+  // an autostart that meets the quitting instance stays in the tray
+  FakeLauncher lateAutostart({FakeHolder{.redirect = Attempt(RedirectResult::Taken, true)}});
+  Check(Launch(lateAutostart) == LaunchResult::Holder &&
+            ActionFor(kAutostart) == LaunchAction::TrayOnly,
+        "relaunch during quit: an autostart that met the quitting instance stays in the tray");
+  // a relaunch of the healthy instance: it is served, and the user's opens the
+  // window while an autostart's changes nothing
+  std::vector<LaunchRequest> served;
+  ActivationGate gate([] {});
+  gate.Open(Inline(), [&served](const LaunchRequest& request) { served.push_back(request); });
+  Check(gate.Take(kUserLaunch, Later()) == Outcome::Served &&
+            gate.Take(kAutostart, Later()) == Outcome::Served && served.size() == 2 &&
+            ActionFor(served[0]) == LaunchAction::ShowWindow &&
+            ActionFor(served[1]) == LaunchAction::TrayOnly,
+        "healthy relaunch: the user's relaunch shows the window, an autostart's shows nothing");
+}
+
 void TestAfterRedirect() {
   struct Case {
     RedirectResult result;
@@ -527,6 +616,9 @@ int main() {
   TestALaunchGivesUpAfterBoundedRounds();
   TestARegistrationThatThrowsIsReported();
   TestTheFirstLaunchJustStarts();
+  TestArguments();
+  TestActionFor();
+  TestTheFourLaunchesTheOwnerNamed();
   TestAfterRedirect();
   TestNames();
   std::cout << (gCases - gFailures) << "/" << gCases << " instance handover checks passed\n";

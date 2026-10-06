@@ -10,10 +10,10 @@ import (
 	"testing"
 )
 
-// How a launch reaches the one running instance, and how that instance takes
-// it while it starts, runs and exits (Common/InstanceHandover.h), as a C++
-// spec, with negative controls that put each defect back into a copy of the
-// header.
+// How a launch reaches the one running instance, how that instance takes it
+// while it starts, runs and exits, and what the launch shows
+// (Common/InstanceHandover.h), as a C++ spec, with negative controls that put
+// each defect back into a copy of the header.
 
 // Compile the instance hand-over spec (app/tools/instance-handover-tests.cpp)
 // against Common/InstanceHandover.h. `mutate`, when set, rewrites a copy of the
@@ -56,7 +56,8 @@ func instanceHandoverTestProgram(t *testing.T, mutate func(string) string) strin
 // refuses it, with its exiting signal raised first; and a launch refused by an
 // exiting instance, or whose instance ended, starts the app once that instance
 // has gone, while only an instance that still runs and is not exiting earns an
-// "already running" message.
+// "already running" message. The user's launch opens the window and an
+// autostart shows only the tray icon, wherever each lands.
 func TestInstanceHandover(t *testing.T) {
 	if !strings.Contains(readCommonSource(t, "Common.vcxproj"), `<ClInclude Include="InstanceHandover.h" />`) {
 		t.Error("Common.vcxproj does not list InstanceHandover.h")
@@ -169,7 +170,7 @@ func TestInstanceHandoverRejectsATakeThatDoesNotWaitForTheDecision(t *testing.T)
 func TestInstanceHandoverRejectsDroppingALaunch(t *testing.T) {
 	requireInstanceHandoverFailure(t, func(source string) string {
 		return handoverReplace(t, source,
-			"        heldDeepLinks.push_back(it->second.deepLink);\n        it->second.outcome = Outcome::Served;\n", "")
+			"        heldRequests.push_back(it->second.request);\n        it->second.outcome = Outcome::Served;\n", "")
 	}, "starting: a launch held while the instance started is served when the UI opens")
 	requireInstanceHandoverFailure(t, func(source string) string {
 		return handoverReplace(t, source, "      it->second.abandoned = true;\n", "      launches_.erase(it);\n")
@@ -195,4 +196,35 @@ func TestInstanceHandoverRejectsAnUnboundedLaunch(t *testing.T) {
 			"    if (round == kLaunchRounds) return LaunchResult::StillClosing;\n",
 			"    if (round == kLaunchRounds * 1000) return LaunchResult::StillClosing;\n")
 	}, "rounds: a launch gives up after kLaunchRounds rounds")
+}
+
+// The owner's 2026-10-05 decision: every launch the user starts opens the
+// window, and an autostart at sign-in shows only the tray icon. Put back the
+// old first launch, which went to the tray whoever started it, or let an
+// autostart open the window, and the spec must fail.
+func TestInstanceHandoverRejectsTheWrongWindowForALaunch(t *testing.T) {
+	requireInstanceHandoverFailure(t, func(source string) string {
+		return handoverReplace(t, source,
+			"  return request.autostart ? LaunchAction::TrayOnly : LaunchAction::ShowWindow;\n",
+			"  return LaunchAction::TrayOnly;\n")
+	}, "user launch: the user's launch opens the window")
+	requireInstanceHandoverFailure(t, func(source string) string {
+		return handoverReplace(t, source,
+			"  return request.autostart ? LaunchAction::TrayOnly : LaunchAction::ShowWindow;\n",
+			"  return LaunchAction::ShowWindow;\n")
+	}, "autostart: an autostart shows only the tray icon")
+}
+
+// The autostart argument is matched whole: a longer argument, or one inside a
+// path or a deep link, is not an autostart. Match it as a prefix, and the spec
+// must fail.
+func TestInstanceHandoverRejectsAnAutostartArgumentMatchedLoosely(t *testing.T) {
+	requireInstanceHandoverFailure(t, func(source string) string {
+		loose := handoverReplace(t, source,
+			"      if (inToken && token == argument) return true;\n",
+			"      if (inToken && token.starts_with(argument)) return true;\n")
+		return handoverReplace(t, loose,
+			"  return inToken && token == argument;\n",
+			"  return inToken && token.starts_with(argument);\n")
+	}, "arguments: --autostart is matched whole and unquoted")
 }

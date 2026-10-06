@@ -47,7 +47,8 @@ func relaunchRequireExitingBeforeEachBox(t *testing.T, where, text, exit string,
 // App SDK consumes a redirect that arrives with no handler); the handler hands
 // each launch to the gate and holds the redirect for the gate's decision; and
 // App::OnLaunched opens the gate once the controller exists, serving held
-// launches and posting later ones to the UI thread.
+// launches and posting later ones to the UI thread, each as it asks
+// (AppController::ServeLaunch, launch_window_wiring_test.go).
 func TestRelaunchDuringQuitEveryLaunchGoesThroughTheGate(t *testing.T) {
 	main := appMainSource(t)
 	entry := definitionBody(t, "main.cpp", main, "int __stdcall wWinMain(")
@@ -68,7 +69,7 @@ func TestRelaunchDuringQuitEveryLaunchGoesThroughTheGate(t *testing.T) {
 	}
 	take := definitionBody(t, "main.cpp", main, "void TakeRedirectedLaunch(AppActivationArguments const& redirected) {")
 	signOutRequireInOrder(t, "TakeRedirectedLaunch", take,
-		regexp.QuoteMeta("urnw::DeepLinkFromActivation(redirected);"),
+		regexp.QuoteMeta("urnw::LaunchRequestFromActivation(redirected);"),
 		regexp.QuoteMeta("urnw::Activations().Take("),
 		regexp.QuoteMeta("urnw::instance::kServeBudget"))
 
@@ -82,9 +83,7 @@ func TestRelaunchDuringQuitEveryLaunchGoesThroughTheGate(t *testing.T) {
 		regexp.QuoteMeta("urnw::SetApp(std::move(controller));"),
 		regexp.QuoteMeta("urnw::Activations().Open("),
 		regexp.QuoteMeta("queue.TryEnqueue("),
-		regexp.QuoteMeta("if (url.empty()) {"),
-		regexp.QuoteMeta("urnw::App().ShowWindow(nullptr);"),
-		regexp.QuoteMeta("urnw::App().HandleDeepLink(url);"))
+		regexp.QuoteMeta("urnw::App().ServeLaunch(request);"))
 	if strings.Count(launched, "urnw::Activations().Open(") != 1 {
 		t.Error("App::OnLaunched must open the gate exactly once")
 	}
@@ -151,9 +150,10 @@ func TestRelaunchDuringQuitEveryEndingRefusesLaunchesFirst(t *testing.T) {
 		`inline constexpr wchar_t kExitingSignalPrefix[] = L"Local\\URnetwork.Desktop.Exiting.";`)
 }
 
-// A launch that does not hold the key goes through instance::Launch before the
-// app starts: a hand-over exits, every failure shows its box and ends the
-// process, and only the holder goes on to Application::Start. The redirect
+// Every launch goes through instance::Launch before the app starts (the first
+// launch holds the key at once): a hand-over exits, every failure shows its
+// box and ends the process, and only the holder goes on to
+// Application::Start. The redirect
 // watches the holder (its process and its exiting signal, both opened before
 // anything is handed over), so a holder that ends first, or that is exiting,
 // sends the launch to wait and register again rather than to an "already
@@ -162,7 +162,6 @@ func TestRelaunchDuringQuitALaunchWaitsForTheExitingInstance(t *testing.T) {
 	main := appMainSource(t)
 	entry := definitionBody(t, "main.cpp", main, "int __stdcall wWinMain(")
 	signOutRequireInOrder(t, "wWinMain", entry,
-		regexp.QuoteMeta("if (!isPrimary) {"),
 		regexp.QuoteMeta("Launcher launcher(args, primary);"),
 		regexp.QuoteMeta("urnw::instance::Launch(launcher);"),
 		regexp.QuoteMeta("case urnw::instance::LaunchResult::Holder:"),

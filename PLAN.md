@@ -321,6 +321,12 @@ Product — DECIDED 2026-07-09:
   neither lost nor told the app is already running: the exiting instance refuses it
   with its exiting signal raised, and the launch waits (bounded) for that instance to
   end, then starts the app (`app/src/Common/InstanceHandover.h`).
+- **What a launch shows: DECIDED 2026-10-05 (owner)** — "autostart on system start
+  should launch only the tray icon": every launch the user starts opens the window
+  (a first launch, a relaunch of the running app, one that waited out a quit), and an
+  autostart at sign-in (`URnetwork.exe --autostart`) shows only the tray icon. Nothing
+  registers an autostart yet; launch-at-login must pass `--autostart`
+  (`instance::kAutostartArgument`, pinned by a contract test).
 - **Provide defaults**: ethernet maps as unmetered/provide-eligible via NetworkCostType.
 - **Per-app split tunneling: IN SCOPE for v1** (M3.5) via a clean-room, MPL-2.0,
   attestation-signed WFP callout driver implemented from first principles (Microsoft docs +

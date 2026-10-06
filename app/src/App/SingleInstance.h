@@ -1,7 +1,7 @@
 // The Win32 half of the single instance; the decisions are
 // Common/InstanceHandover.h. This instance's exiting signal and the gate that
-// takes launches redirected to it, and a launch's watch over the instance that
-// holds the key.
+// takes launches redirected to it, a launch's watch over the instance that
+// holds the key, and whether this launch is an autostart.
 //
 // The exiting signal is a manual-reset event named for the process id
 // (ids::kExitingSignalPrefix). Every launch creates its own before it
@@ -36,6 +36,10 @@ instance::ActivationGate& Activations();
 // the app once this process has ended. The first step of every ending, and of
 // a launch that fails before its window can exist. Idempotent; UI thread.
 void BeginExiting();
+
+// This process was started by an autostart at sign-in: its command line has
+// instance::kAutostartArgument.
+bool LaunchedByAutostart();
 
 // A launch's watch over the instance that holds the key, opened before the
 // launch redirects to it. Not safe for concurrent use; one launch thread owns

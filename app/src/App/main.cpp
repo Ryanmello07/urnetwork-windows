@@ -1,6 +1,7 @@
 // URnetwork tray app entry point. Single-instance, registers the AppUserModelId
 // (for toasts + tray grouping), then hands off to the WinUI 3 Application, which
-// creates the tray + SDK host in OnLaunched. The window is opened from the tray.
+// creates the tray + SDK host in OnLaunched. The user's launch opens the
+// window; an autostart at sign-in (--autostart) shows only the tray icon.
 //
 // Single-instancing is the Windows App SDK's (AppInstance), not a bare mutex,
 // because a second launch is not always a no-op: the MSI registers the
@@ -108,20 +109,21 @@ void ReportLaunchFailure(urnw::instance::LaunchResult result, const std::wstring
 }
 
 // A launch redirected to this instance, on the App SDK's threadpool thread.
-// Plain launches and deep links alike go through the gate, which holds them
-// until the UI is up, posts them to the UI thread after that, and refuses them
-// once this instance is exiting. Returning only once the instance has decided
-// is what lets the launch tell a served launch from a refused one
+// Plain launches, autostarts and deep links alike go through the gate, which
+// holds them until the UI is up, posts them to the UI thread after that, and
+// refuses them once this instance is exiting. Returning only once the instance
+// has decided is what lets the launch tell a served launch from a refused one
 // (InstanceHandover.h). The deep link itself is never logged: a wallet
 // callback carries the address and its signature.
 void TakeRedirectedLaunch(AppActivationArguments const& redirected) {
   try {
-    const std::string deepLink = urnw::DeepLinkFromActivation(redirected);
+    urnw::instance::LaunchRequest request = urnw::LaunchRequestFromActivation(redirected);
+    const char* kind = !request.deepLink.empty() ? "deep link"
+                       : request.autostart       ? "autostart"
+                                                 : "plain launch";
     const urnw::instance::ActivationGate::Outcome outcome = urnw::Activations().Take(
-        deepLink, std::chrono::steady_clock::now() + urnw::instance::kServeBudget);
-    urnw::LogInfo("app: a {} reached this instance: {}",
-                  deepLink.empty() ? "plain launch" : "deep link",
-                  urnw::instance::ToString(outcome));
+        std::move(request), std::chrono::steady_clock::now() + urnw::instance::kServeBudget);
+    urnw::LogInfo("app: a {} reached this instance: {}", kind, urnw::instance::ToString(outcome));
   } catch (winrt::hresult_error const& e) {
     urnw::LogError("app: a launch that reached this instance could not be taken: {}",
                    urnw::Narrow(HresultDetail(e)));
