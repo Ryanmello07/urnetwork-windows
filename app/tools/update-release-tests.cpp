@@ -11,8 +11,10 @@
 //     to;
 //   - which install locations an elevated process may run from
 //     (Common/InstallLocation.h);
-//   - what the update helper's exit code means (Common/UpdateResult.h);
-//   - what the helper decides before msiexec runs (Common/UpdateApply.h);
+//   - what the update helper's exit code means, and when the tray app shows
+//     a report (Common/UpdateResult.h);
+//   - what the helper decides before msiexec runs, which variables it drops,
+//     and how the tray app's wait on it ends (Common/UpdateApply.h);
 //   - when the tray app asks GitHub again after a refusal, and when it says
 //     its checks have not worked (Common/UpdateSchedule.h).
 //
@@ -475,7 +477,8 @@ void Outcomes() {
   for (const Refusal refusal :
        {Refusal::NotElevated, Refusal::NotInstalled, Refusal::DevBuild, Refusal::BadArguments,
         Refusal::Busy, Refusal::ReleaseList, Refusal::NotOffered, Refusal::Download,
-        Refusal::Digest, Refusal::Package, Refusal::Staging, Refusal::InstallerNotStarted}) {
+        Refusal::Digest, Refusal::Package, Refusal::Staging, Refusal::InstallerNotStarted,
+        Refusal::RateLimited}) {
     const auto code = static_cast<std::int64_t>(refusal);
     Check(IsRefusal(code) && OutcomeOf(code) == Outcome::Refused,
           "helper refusal " + std::to_string(code) + " is a refusal");
@@ -588,6 +591,117 @@ void HelperDecisions() {
   Check(IsUtcSecond(FormatUtcSecond(kServerUnix)), "what FormatUtcSecond writes, IsUtcSecond reads");
 }
 
+// When the tray app shows a report, and whose report it is.
+void Reports() {
+  constexpr std::uint64_t kRelease = 1060587890;
+  const auto report = [](std::int64_t exitCode) {
+    return UpdateResult{.tag = "v2026.10.1-1060587890",
+                        .code = kRelease,
+                        .exitCode = exitCode,
+                        .finishedUtc = "2026-10-01T14:51:17Z"};
+  };
+  const auto view = [&](std::int64_t exitCode, std::uint64_t own, bool live, bool restarted) {
+    return ViewOfReport(report(exitCode), own, live, restarted);
+  };
+  constexpr std::uint64_t kOlder = 1053244730;
+  constexpr std::uint64_t kNewer = 1070000000;
+  // installed
+  Check(view(0, kRelease, false, false) == ReportView::Installed,
+        "an install reads as installed in the release it installed");
+  Check(view(0, kRelease, true, false) == ReportView::Installed, "and so while live");
+  Check(view(0, kOlder, true, false) == ReportView::RestartApp,
+        "an install the old app outlived asks for URnetwork's restart");
+  Check(view(0, kOlder, false, false) == ReportView::Hidden,
+        "an older build launched after an install is told nothing");
+  Check(view(0, kNewer, false, false) == ReportView::Hidden,
+        "a newer build is told nothing about an older install");
+  // installed up to a restart
+  Check(view(3010, kRelease, false, false) == ReportView::RestartWindows,
+        "3010 asks for Windows' restart until there has been one");
+  Check(view(3010, kOlder, false, false) == ReportView::RestartWindows,
+        "and so in the old exe that is still on disk");
+  Check(view(1641, kRelease, false, false) == ReportView::RestartWindows, "1641 is a restart too");
+  Check(view(3010, kRelease, false, true) == ReportView::Installed,
+        "3010 after a restart reads as installed");
+  Check(view(3010, kOlder, false, true) == ReportView::Hidden,
+        "3010 after a restart, in an older build, is told nothing");
+  Check(view(3010, kNewer, false, false) == ReportView::Hidden,
+        "a newer build is told nothing about an older 3010");
+  // not installed
+  for (const std::int64_t code : {std::int64_t{1603}, static_cast<std::int64_t>(Refusal::Digest),
+                                  static_cast<std::int64_t>(Refusal::NotOffered)}) {
+    Check(view(code, kOlder, false, false) == ReportView::NotInstalled,
+          "a failure " + std::to_string(code) + " shows while this build is older");
+    Check(view(code, kOlder, true, false) == ReportView::NotInstalled, "and so while live");
+    Check(view(code, kRelease, false, false) == ReportView::Hidden,
+          "a failure " + std::to_string(code) + " is moot once the release runs");
+    Check(view(code, kNewer, false, false) == ReportView::Hidden,
+          "a failure " + std::to_string(code) + " is moot in a newer build");
+  }
+
+  // the UTC second, both ways
+  for (const std::int64_t second : {std::int64_t{0}, std::int64_t{951868799}, std::int64_t{951868800},
+                                    CodeUnixSeconds(1060587890), kServerUnix, std::int64_t{4102444799}}) {
+    const std::optional<std::int64_t> parsed = ParseUtcSecond(FormatUtcSecond(second));
+    Check(parsed && *parsed == second, "the UTC second of " + std::to_string(second) + " reads back");
+  }
+  Check(ParseUtcSecond("2026-10-01T14:51:17Z") == std::optional<std::int64_t>{1790866277},
+        "2026-10-01T14:51:17Z is 1790866277");
+  for (const char* bad : {"", "2026-10-01 14:51:17Z", "2026-13-01T00:00:00Z", "2026-00-01T00:00:00Z",
+                          "2026-10-00T00:00:00Z", "2026-10-01T24:00:00Z", "2026-10-01T00:60:00Z",
+                          "2026-10-01T00:00:60Z", "2026-10-01T00:00:00"}) {
+    Check(!ParseUtcSecond(bad), std::string("not a UTC second: ") + bad);
+  }
+
+  // whose report
+  const UpdateResult written = report(static_cast<std::int64_t>(Refusal::Digest));
+  constexpr std::int64_t kStarted = 1790866200;  // 77 s before it finished
+  Check(IsReportOfRun(written, "v2026.10.1-1060587890", 0x20000009, kStarted),
+        "the report the helper wrote is this run's");
+  Check(!IsReportOfRun(written, "v2026.10.1-1060587890",
+                       static_cast<std::int64_t>(Refusal::NotInstalled), kStarted),
+        "an earlier report is not the run that refused before writing one");
+  Check(!IsReportOfRun(written, "v2026.10.2-1061000000", 0x20000009, kStarted),
+        "another tag's report is not this run's");
+  Check(!IsReportOfRun(written, "v2026.10.1-1060587890", 0x20000009, kStarted + 3600),
+        "a report written before the helper started is not this run's");
+  Check(IsReportOfRun(written, "v2026.10.1-1060587890", 0x20000009, 1790866277 + 120),
+        "two minutes of clock set back are allowed");
+  Check(!IsReportOfRun(written, "v2026.10.1-1060587890", 0x20000009, 1790866277 + 121),
+        "and no more");
+}
+
+// Which variables the elevated helper drops, and how the tray's wait ends.
+void HelperProcess() {
+  for (const wchar_t* name : {L"URNETWORK_APP_ROOT", L"urnetwork_app_root", L"Urnetwork_Network_Host",
+                              L"URNETWORK_NETWORK_ENV", L"URNETWORK_"}) {
+    Check(IsAppOverrideName(name), "an app override: " + Narrow(name));
+  }
+  for (const wchar_t* name : {L"", L"PATH", L"URNETWORK", L"URNETWORKX_ROOT", L"_URNETWORK_APP_ROOT",
+                              L"XURNETWORK_APP_ROOT", L"URNETWORK-APP-ROOT"}) {
+    Check(!IsAppOverrideName(name), "not an app override: " + Narrow(name));
+  }
+
+  // The helper ends after three slices while the app runs on.
+  int slices = 0;
+  int asked = 0;
+  HelperWait waited = AwaitHelper([&] { return ++slices == 3; }, [&] { ++asked; return false; });
+  Check(waited == HelperWait::Ended && slices == 3 && asked == 2,
+        "the wait ends with the helper, after the slices it took");
+  // The app begins to exit at the fourth slice. (The helper here ends at the
+  // hundredth, so a wait that never looks at the exit ends too, and fails
+  // the check instead of hanging the spec.)
+  slices = 0;
+  asked = 0;
+  waited = AwaitHelper([&] { return ++slices > 100; }, [&] { return ++asked >= 4; });
+  Check(waited == HelperWait::AppExiting && slices == 4,
+        "the wait ends as the app begins to exit, without the helper");
+  // A helper that ends in the slice the app begins to exit is a helper that
+  // ended: its report is the app's to read.
+  waited = AwaitHelper([] { return true; }, [] { return true; });
+  Check(waited == HelperWait::Ended, "an ended helper wins over an exit asked in the same slice");
+}
+
 RateLimit Limit(std::int64_t retryAfter, std::int64_t reset, bool exhausted, std::int64_t server) {
   RateLimit limit;
   limit.retryAfterSeconds = retryAfter;
@@ -659,6 +773,8 @@ int main(int argc, char** argv) {
   InstallLocations();
   Outcomes();
   HelperDecisions();
+  Reports();
+  HelperProcess();
   Schedule();
 
   std::cout << (gFailures == 0 ? "PASS" : "FAIL") << " update-release-tests: " << gCases

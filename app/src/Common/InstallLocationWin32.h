@@ -31,4 +31,10 @@ std::filesystem::path OwnExecutablePath();
 // location. `why` says what failed, or what was judged.
 bool AdminOnlyLocation(const std::filesystem::path& executable, std::string& why);
 
+// Whether the token AdminOnlyLocation judges for, one without admin rights,
+// gets no write, append, delete, attribute or ownership right on `path`, a
+// file or a folder (InstallLocation.h kWriteRights). `why` says what it gets,
+// or what could not be read.
+bool AdminOnlyPath(const std::filesystem::path& path, std::string& why);
+
 }  // namespace urnw::install

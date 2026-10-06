@@ -351,19 +351,25 @@ std::string Sha256File(fs::path const& file) {
 
 // ---- the update helper -------------------------------------------------------
 
+// What the elevation answers when Windows' policy "User Account Control: Only
+// elevate executables that are signed and validated" is on and the program is
+// not signed: "A referral was returned from the server".
+constexpr DWORD kElevationRefusedUnsigned = ERROR_DS_REFERRAL;
+
 // Starts the update helper for `tag`: the installed, admin-owned
 // URnetworkUpdate.exe beside this exe, elevated up front with the "runas"
 // verb, so a declined prompt is an observable ERROR_CANCELLED instead of a
 // helper that fails out of sight. The tag comes from the release grammar, so
 // it holds no quote or space. Nothing else is passed: the helper fetches the
 // release list, the package and its digest itself, and builds msiexec's
-// arguments itself. Its process is recorded before this returns: until it
-// ends, a launch exits with a notice instead of starting the app over the
-// files the installer replaces (UpdateMarker.h). `*helper` is that process,
-// for the caller to wait on and close; null when the shell returned none.
+// arguments itself. `*helper` is its process, for the caller to wait on,
+// record in the update marker should this app exit first, and close; null
+// when the shell returned none. `*refusal` is the Win32 error of a start that
+// failed.
 bool LaunchUpdateHelper(fs::path const& helperPath, std::wstring const& tag, HANDLE* helper,
-                        std::string& error) {
+                        DWORD* refusal, std::string& error) {
   *helper = nullptr;
+  *refusal = ERROR_SUCCESS;
   const std::wstring params = L"--apply-update " + tag;
   const std::wstring folder = helperPath.parent_path().wstring();
   SHELLEXECUTEINFOW sei{};
@@ -375,20 +381,25 @@ bool LaunchUpdateHelper(fs::path const& helperPath, std::wstring const& tag, HAN
   sei.lpDirectory = folder.c_str();
   sei.nShow = SW_HIDE;
   if (!::ShellExecuteExW(&sei)) {
-    const DWORD code = ::GetLastError();
-    error = code == ERROR_CANCELLED
-                ? std::string("the elevation prompt was declined")
-                : std::format("ShellExecuteEx(update helper) failed: {}", code);
+    *refusal = ::GetLastError();
+    error = *refusal == ERROR_CANCELLED ? std::string("the elevation prompt was declined")
+            : *refusal == kElevationRefusedUnsigned
+                ? std::string("Windows elevates only signed programs here, and the helper is not signed")
+                : std::format("ShellExecuteEx(update helper) failed: {}", *refusal);
     return false;
   }
   if (sei.hProcess) {
-    RecordUpdateInProgress(sei.hProcess);
     *helper = sei.hProcess;
   } else {
-    LogWarn("update: the update helper's process was not returned; launches during the update "
-            "are not refused");
+    LogWarn("update: the update helper's process was not returned; this app cannot wait on it, "
+            "and launches during the update are not refused");
   }
   return true;
+}
+
+// When Windows last started, in Unix seconds.
+std::int64_t BootUnixSeconds() {
+  return NowUnixSeconds() - static_cast<std::int64_t>(::GetTickCount64() / 1000);
 }
 
 // The report a last-result.json holds, read whole (it is a few hundred bytes),
@@ -410,6 +421,22 @@ std::wstring ResultLogPath(fs::path const& installFolder, update::UpdateResult c
                         ? L"update-helper.log"
                         : L"install.log"))
       .wstring();
+}
+
+// The release's v-less version, from its tag.
+std::wstring VersionOfTag(std::string tag) {
+  if (!tag.empty() && tag.front() == 'v') tag.erase(0, 1);
+  return Widen(tag);
+}
+
+// A checked download that is still on disk: `msi` is there and its SHA-256
+// is `digestHex`. A failed update keeps the tray's copy, so its installer can
+// be shown without downloading it again.
+bool IsCheckedDownload(fs::path const& msi, std::string const& digestHex) {
+  std::error_code ec;
+  if (digestHex.empty() || !fs::is_regular_file(msi, ec)) return false;
+  const std::string actual = Sha256File(msi);
+  return !actual.empty() && update::EqualsAsciiCaseless(actual, digestHex);
 }
 
 // The dismissed report's finishedUtc, or empty. Type-checked: a value of the
@@ -502,6 +529,22 @@ void UpdateChecker::BeginApply() {
   cv_.notify_all();
 }
 
+void UpdateChecker::ShowInstaller() {
+  {
+    std::lock_guard lock(mutex_);
+    manualRequested_ = true;
+  }
+  cv_.notify_all();
+}
+
+void UpdateChecker::RevealInstaller() {
+  {
+    std::lock_guard lock(mutex_);
+    revealRequested_ = true;
+  }
+  cv_.notify_all();
+}
+
 void UpdateChecker::DismissResult() {
   std::wstring finished;
   {
@@ -509,7 +552,9 @@ void UpdateChecker::DismissResult() {
     if (snapshot_.phase != Phase::Result) return;
     finished = snapshot_.result.finishedUtc;
   }
-  SaveAppPref(kResultSeenPrefKey, Narrow(finished));
+  // A report the helper never wrote (an early refusal) has no time to
+  // remember, and nothing at a later launch shows it again.
+  if (!finished.empty()) SaveAppPref(kResultSeenPrefKey, Narrow(finished));
   // a release still offered (one whose update did not install) is offered
   // again
   Mutate([this](Snapshot& s) {
@@ -541,8 +586,10 @@ void UpdateChecker::ChannelChanged() {
     if (snapshot_.phase != Phase::Result) {
       snapshot_ = Snapshot{.installed = installed_,
                            .lastSuccessUnix = snapshot_.lastSuccessUnix,
-                           .checkStale = snapshot_.checkStale};
+                           .checkStale = snapshot_.checkStale,
+                           .holdUntilUnix = snapshot_.holdUntilUnix};
     }
+    snapshot_.offeredCode = 0;
     checkRequested_ = true;
     copy = snapshot_;
   }
@@ -567,6 +614,21 @@ std::wstring UpdateChecker::LocalDate(std::int64_t unixSeconds) {
   return date;
 }
 
+std::wstring UpdateChecker::LocalDateTime(std::int64_t unixSeconds) {
+  ULARGE_INTEGER ticks{};
+  ticks.QuadPart = static_cast<ULONGLONG>(unixSeconds + 11644473600LL) * 10000000ULL;
+  const FILETIME utcFile{.dwLowDateTime = ticks.LowPart, .dwHighDateTime = ticks.HighPart};
+  SYSTEMTIME utc{};
+  SYSTEMTIME local{};
+  wchar_t time[80] = {};
+  if (!::FileTimeToSystemTime(&utcFile, &utc) ||
+      !::SystemTimeToTzSpecificLocalTime(nullptr, &utc, &local) ||
+      !::GetTimeFormatEx(LOCALE_NAME_USER_DEFAULT, TIME_NOSECONDS, &local, nullptr, time, 80)) {
+    return Widen(update::FormatUtcSecond(unixSeconds));
+  }
+  return LocalDate(unixSeconds) + L" " + time;
+}
+
 bool UpdateChecker::AutoCheckEnabled() {
   return LoadAppPrefs().value(kAutoCheckPrefKey, true);
 }
@@ -579,8 +641,19 @@ void UpdateChecker::SetAutoCheckEnabled(bool on) {
     // The user just asked for updates; answer now, not in six hours.
     if (on) nextAuto_ = steady_clock::now();
   }
+  // "The app keeps trying" is said only while it does.
+  const std::int64_t now = NowUnixSeconds();
+  Mutate([now, on](Snapshot& s) {
+    s.checkStale = update::CheckIsStale(now, s.lastSuccessUnix, on && version::kCode != 0);
+  });
   cv_.notify_all();
   LogInfo("update: automatic checking {}", on ? "enabled" : "disabled");
+}
+
+bool UpdateChecker::OffersInstaller(Snapshot const& snapshot) {
+  return snapshot.phase == Phase::Result &&
+         snapshot.result.view == update::ReportView::NotInstalled && snapshot.offeredCode != 0 &&
+         snapshot.offeredCode == snapshot.code;
 }
 
 void UpdateChecker::RevealInExplorer(std::wstring const& file) {
@@ -644,8 +717,11 @@ void UpdateChecker::WorkerLoop() {
   nextAuto_ = steady_clock::now() + kLaunchDelay;
   for (;;) {
     if (stop_) break;
-    if (applyRequested_) {
+    if (applyRequested_ || manualRequested_) {
+      // the click the user made last wins; both start the same pipeline
+      const bool manual = manualRequested_ && !applyRequested_;
       applyRequested_ = false;
+      manualRequested_ = false;
       const std::uint64_t generation = feedGeneration_;
       lock.unlock();
       const auto failed = [this, generation] {
@@ -656,13 +732,27 @@ void UpdateChecker::WorkerLoop() {
         });
       };
       try {
-        RunApply(generation);
+        RunApply(generation, manual);
       } catch (std::exception const& e) {
         LogError("update: apply threw: {}", e.what());
         failed();
       } catch (...) {
         LogError("update: apply threw (unknown)");
         failed();
+      }
+      lock.lock();
+      continue;
+    }
+    if (revealRequested_) {
+      revealRequested_ = false;
+      const std::uint64_t generation = feedGeneration_;
+      lock.unlock();
+      try {
+        RunReveal(generation);
+      } catch (std::exception const& e) {
+        LogError("update: showing the installer threw: {}", e.what());
+      } catch (...) {
+        LogError("update: showing the installer threw (unknown)");
       }
       lock.lock();
       continue;
@@ -704,21 +794,33 @@ void UpdateChecker::ShowLastResult() {
       ReadResult(installFolder_ / L"updates" / L"last-result.json");
   if (!result) return;
   if (SeenResult() == result->finishedUtc) return;
+  // Shown only while it is still true of this build: Windows has restarted
+  // since a 3010, a newer build runs, or an older one does after a success.
+  const std::optional<std::int64_t> finished = update::ParseUtcSecond(result->finishedUtc);
+  const bool restartedSince = finished && BootUnixSeconds() > *finished;
+  const update::ReportView view =
+      update::ViewOfReport(*result, version::kCode, /*live=*/false, restartedSince);
+  if (view == update::ReportView::Hidden) {
+    LogInfo("update: the update helper's last report ({} ended with {} at {}) is not about this "
+            "build any more; not shown",
+            result->tag, result->exitCode, result->finishedUtc);
+    return;
+  }
   LogInfo("update: the update helper's last report: {} ended with {} at {}", result->tag,
           result->exitCode, result->finishedUtc);
-  std::string version = result->tag;
-  if (!version.empty() && version.front() == 'v') version.erase(0, 1);
+  const std::wstring version = VersionOfTag(result->tag);
   Mutate([&](Snapshot& s) {
     s.phase = Phase::Result;
     s.stage = Stage::Idle;
     s.failure = Failure::None;
-    s.version = Widen(version);
+    s.version = version;
     s.code = result->code;
     s.installerPath.clear();
-    s.result = Result{.version = Widen(version),
+    s.result = Result{.version = version,
                       .exitCode = result->exitCode,
                       .logPath = ResultLogPath(installFolder_, *result),
-                      .finishedUtc = Widen(result->finishedUtc)};
+                      .finishedUtc = Widen(result->finishedUtc),
+                      .view = view};
   });
 }
 
@@ -806,6 +908,8 @@ void UpdateChecker::RunCheck(std::uint64_t generation) {
       LogWarn("update: GitHub asked for no request for {} s", wait);
       std::lock_guard lock(mutex_);
       holdUntil_ = steady_clock::now() + std::chrono::seconds(wait);
+      holdUntilUnix_ = NowUnixSeconds() + wait;
+      snapshot_.holdUntilUnix = holdUntilUnix_;
     }
     CheckFailed(generation);
     return;
@@ -863,6 +967,7 @@ void UpdateChecker::RunCheck(std::uint64_t generation) {
     // feed was asked (ChannelChanged carries it over too).
     snapshot_.lastSuccessUnix = succeeded;
     snapshot_.checkStale = false;
+    snapshot_.holdUntilUnix = 0;
     // a check of a feed the user has since left says nothing about this one
     if (feedGeneration_ != generation) {
       LogInfo("update: a check of the previous feed finished; its result is dropped");
@@ -902,6 +1007,7 @@ void UpdateChecker::RunCheck(std::uint64_t generation) {
       }
       offer_ = Offer{};
     }
+    snapshot_.offeredCode = offer_.code;
     copy = snapshot_;
   }
   if (auto handler = HandlerCopy()) handler(copy);
@@ -909,16 +1015,22 @@ void UpdateChecker::RunCheck(std::uint64_t generation) {
 
 // ---- the apply ---------------------------------------------------------------
 
-void UpdateChecker::RunApply(std::uint64_t generation) {
+void UpdateChecker::RunApply(std::uint64_t generation, bool manual) {
   Offer offer;
   {
     std::lock_guard lock(mutex_);
+    // Update answers what offers the release; ShowInstaller also answers the
+    // report of an update that did not install.
     const bool actionable = snapshot_.phase == Phase::Available ||
                             snapshot_.phase == Phase::Failed ||
-                            snapshot_.phase == Phase::ManualInstall;
+                            snapshot_.phase == Phase::ManualInstall ||
+                            (manual && snapshot_.phase == Phase::Result);
     if (!actionable || offer_.code == 0 || feedGeneration_ != generation) return;
     offer = offer_;
   }
+  // On an installed copy the helper installs; on any other copy, and
+  // whenever the user asked for the installer, the user runs it.
+  const bool viaHelper = installed_ && !manual;
   // Every stage below starts only if the feed is still the one the offer came
   // from: a channel change stops the apply at the next stage, and the latest
   // it can is the hand-off to the helper.
@@ -927,14 +1039,6 @@ void UpdateChecker::RunApply(std::uint64_t generation) {
     std::error_code ignored;
     fs::remove_all(dir, ignored);
   };
-  MutateFor(generation, [&offer](Snapshot& s) {
-    s.phase = Phase::Applying;
-    s.stage = Stage::Downloading;
-    s.failure = Failure::None;
-    s.version = offer.version;
-    s.code = offer.code;
-    s.installerPath.clear();
-  });
   const auto fail = [this, generation](Failure f) {
     MutateFor(generation, [f](Snapshot& s) {
       s.phase = Phase::Failed;
@@ -946,25 +1050,48 @@ void UpdateChecker::RunApply(std::uint64_t generation) {
     std::lock_guard lock(mutex_);
     return stop_;
   };
-  LogInfo("update: applying v{} (code {})", Narrow(offer.version),
-          static_cast<unsigned long long>(offer.code));
-
-  // ---- (a) download the own-arch MSI ----------------------------------------
-  // A fresh per-tag directory per attempt: nothing from a previous failed try
-  // can leak into this one, and a completed try owns everything it verified.
-  std::error_code ec;
-  const fs::path dir = UpdatesDir() / offer.tag;
-  fs::remove_all(dir, ec);
-  ec.clear();
-  fs::create_directories(dir, ec);
-  if (ec) {
-    LogError("update: could not create {}: {}", Narrow(dir.wstring()),
-             ec.message());
-    fail(Failure::Download);
+  // The helper asks GitHub for the release list itself: while GitHub holds
+  // this network's requests, it would only be refused, after the prompt and
+  // the download.
+  bool held = false;
+  {
+    std::lock_guard lock(mutex_);
+    held = viaHelper && steady_clock::now() < holdUntil_;
+  }
+  if (held) {
+    LogWarn("update: GitHub asked for no request yet; the update helper is not started");
+    fail(Failure::Held);
     return;
   }
+  MutateFor(generation, [&offer](Snapshot& s) {
+    s.phase = Phase::Applying;
+    s.stage = Stage::Downloading;
+    s.failure = Failure::None;
+    s.version = offer.version;
+    s.code = offer.code;
+    s.installerPath.clear();
+  });
+  LogInfo("update: applying v{} (code {}){}", Narrow(offer.version),
+          static_cast<unsigned long long>(offer.code), viaHelper ? "" : ", as an installer to run");
+
+  // ---- (a) download the own-arch MSI ----------------------------------------
+  // A checked copy an earlier attempt kept is used again; otherwise a fresh
+  // per-tag directory, so nothing from a failed try can leak into this one.
+  std::error_code ec;
+  const fs::path dir = UpdatesDir() / offer.tag;
   const fs::path msiPath = dir / Widen(offer.msiName);
-  {
+  if (IsCheckedDownload(msiPath, offer.digestHex)) {
+    LogInfo("update: {} is downloaded and checked already", offer.msiName);
+  } else {
+    fs::remove_all(dir, ec);
+    ec.clear();
+    fs::create_directories(dir, ec);
+    if (ec) {
+      LogError("update: could not create {}: {}", Narrow(dir.wstring()),
+               ec.message());
+      fail(Failure::Download);
+      return;
+    }
     std::ofstream out(msiPath, std::ios::binary | std::ios::trunc);
     if (!out) {
       LogError("update: could not open {} for writing", offer.msiName);
@@ -1013,11 +1140,11 @@ void UpdateChecker::RunApply(std::uint64_t generation) {
 
   // ---- (c) the install: the helper on an installed copy, the user elsewhere ---
   const std::wstring msiW = msiPath.wstring();
-  if (!installed_) {
-    // A portable or dev copy elevates nothing. The checked MSI is the user's to
-    // run as an installer, and the banner says what it was checked against.
-    LogInfo("update: not an admin-only install; showing the installer for v{} to run",
-            Narrow(offer.version));
+  if (!viaHelper) {
+    // A portable or dev copy elevates nothing, and neither does a user who
+    // asked for the installer. The checked MSI is the user's to run as an
+    // installer, and the banner says what it was checked against.
+    LogInfo("update: showing the installer for v{} to run", Narrow(offer.version));
     if (!MutateFor(generation, [&msiW](Snapshot& s) {
           s.phase = Phase::ManualInstall;
           s.stage = Stage::Idle;
@@ -1038,55 +1165,114 @@ void UpdateChecker::RunApply(std::uint64_t generation) {
     return;
   }
   HANDLE helper = nullptr;
+  DWORD refusal = ERROR_SUCCESS;
   std::string launchError;
-  if (!LaunchUpdateHelper(installFolder_ / kHelperName, offer.tag, &helper, launchError)) {
+  const std::int64_t started = NowUnixSeconds();
+  if (!LaunchUpdateHelper(installFolder_ / kHelperName, offer.tag, &helper, &refusal,
+                          launchError)) {
     LogWarn("update: the update helper did not start ({}); nothing was installed", launchError);
-    fail(Failure::Elevation);
+    fail(refusal == kElevationRefusedUnsigned ? Failure::Unsigned : Failure::Elevation);
     return;
   }
-  // The helper downloads and checks its own copy; this one has done its job.
-  fs::remove_all(dir, ec);
   LogInfo("update: the update helper is installing v{}; the installer closes this app before "
           "it replaces it",
           Narrow(offer.version));
+  MutateFor(generation, [](Snapshot& s) { s.stage = Stage::Helper; });
   if (!helper) return;
 
   // Wait without quitting: the installer's CloseApplication closes this app
   // (WM_CLOSE, a close request), and the app's teardown stops this worker,
   // which leaves the helper running on its own. A helper that ends while this
   // app still runs refused, failed, or installed only up to a restart.
-  bool ended = false;
-  for (;;) {
-    if (::WaitForSingleObject(helper, 250) == WAIT_OBJECT_0) {
-      ended = true;
-      break;
-    }
-    if (cancelled()) break;
+  const update::HelperWait waited = update::AwaitHelper(
+      [helper] { return ::WaitForSingleObject(helper, 250) == WAIT_OBJECT_0; }, cancelled);
+  if (waited == update::HelperWait::AppExiting) {
+    // This app is exiting while the helper runs, the installer closing it:
+    // from now until the helper ends, a launch is refused rather than started
+    // over the files the installer replaces (UpdateMarker.h). Recorded before
+    // this thread ends, and so before the process does (AppController's
+    // Shutdown joins it); until now every launch reached this app.
+    RecordUpdateInProgress(helper);
+    ::CloseHandle(helper);
+    return;
   }
   DWORD exitCode = 0;
-  const bool read = ended && ::GetExitCodeProcess(helper, &exitCode);
+  const bool read = ::GetExitCodeProcess(helper, &exitCode) != 0;
   ::CloseHandle(helper);
-  if (!ended) return;
   LogInfo("update: the update helper ended with {}", exitCode);
 
-  // Its report, or for a refusal before it could write one, its exit code.
+  // Its report, when it wrote one for this run; after a refusal before it
+  // could, its exit code alone.
+  const std::int64_t ended = read ? static_cast<std::int64_t>(exitCode) : 1603;
+  update::UpdateResult outcome{.tag = Narrow(offer.tag), .code = offer.code, .exitCode = ended};
+  Result result{.version = offer.version, .exitCode = ended};
   const std::optional<update::UpdateResult> report =
       ReadResult(installFolder_ / L"updates" / L"last-result.json");
-  Result result{.version = offer.version, .exitCode = read ? exitCode : 1603};
-  if (report && Widen(report->tag) == offer.tag) {
-    result.exitCode = report->exitCode;
+  if (report && update::IsReportOfRun(*report, outcome.tag, ended, started)) {
+    outcome = *report;
     result.logPath = ResultLogPath(installFolder_, *report);
     result.finishedUtc = Widen(report->finishedUtc);
   }
+  result.view = update::ViewOfReport(outcome, version::kCode, /*live=*/true,
+                                     /*restartedSince=*/false);
+  // The checked copy stays while the release has not installed, for its
+  // installer to be shown; once it has, it has done its job.
+  if (update::KeepsPackage(ended)) fs::remove_all(dir, ec);
+  // The list offers another release now: a check replaces this banner.
+  if (ended == static_cast<std::int64_t>(update::Refusal::NotOffered)) {
+    {
+      std::lock_guard lock(mutex_);
+      checkRequested_ = true;
+    }
+    cv_.notify_all();
+  }
   // Not generation-gated: the helper ran, and its report is true whatever the
   // feed is now.
-  Mutate([&result](Snapshot& s) {
-    s.phase = Phase::Result;
+  Mutate([this, &result](Snapshot& s) {
     s.stage = Stage::Idle;
     s.failure = Failure::None;
+    s.offeredCode = offer_.code;
+    if (result.view == update::ReportView::Hidden) {
+      s.phase = Phase::None;
+      s.result = Result{};
+      return;
+    }
+    s.phase = Phase::Result;
     s.version = result.version;
     s.result = result;
   });
+}
+
+void UpdateChecker::RunReveal(std::uint64_t generation) {
+  std::wstring installer;
+  std::string digest;
+  {
+    std::lock_guard lock(mutex_);
+    if (snapshot_.phase != Phase::ManualInstall || snapshot_.installerPath.empty() ||
+        feedGeneration_ != generation || offer_.code != snapshot_.code) {
+      return;
+    }
+    installer = snapshot_.installerPath;
+    digest = offer_.digestHex;
+  }
+  // The installer sits in the user's folder, where any of the user's
+  // processes can write: it is shown again only while it still is what
+  // GitHub's SHA-256 says, and it is never called verified.
+  const std::string actual = Sha256File(installer);
+  if (digest.empty() || actual.empty() || !update::EqualsAsciiCaseless(actual, digest)) {
+    LogError("update: {} no longer matches GitHub's SHA-256 (got '{}', want '{}'); it is deleted",
+             Narrow(installer), actual, digest);
+    std::error_code ec;
+    fs::remove(installer, ec);
+    MutateFor(generation, [](Snapshot& s) {
+      s.phase = Phase::Failed;
+      s.stage = Stage::Idle;
+      s.failure = Failure::Checksum;
+      s.installerPath.clear();
+    });
+    return;
+  }
+  RevealInExplorer(installer);
 }
 
 }  // namespace urnw

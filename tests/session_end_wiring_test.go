@@ -20,8 +20,9 @@ import (
 // and not the Restart Manager closing the app (ENDSESSION_CLOSEAPP), stops
 // before it returns, and leaves WM_QUERYENDSESSION to DefWindowProc, so the
 // app never holds a sign-out or a shutdown up. The Restart Manager's close is
-// a close request, as an installer's WM_CLOSE is: it reaches the app where
-// WM_CLOSE cannot, so an update's files are not left in use.
+// a close request, as an installer's WM_CLOSE is: Windows Installer asks it,
+// in the installing session, for every install that does not close the app
+// itself (one run by hand), so those installs leave no file in use either.
 func TestSessionEndStopsAsQuit(t *testing.T) {
 	tray := stripComments(readAppSource(t, "TrayIcon.cpp"))
 	wndProc := definitionBody(t, "TrayIcon.cpp", tray, "LRESULT CALLBACK TrayIcon::WndProc(")

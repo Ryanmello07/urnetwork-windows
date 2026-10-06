@@ -583,6 +583,53 @@ void TestALaunchDuringAnUpdateDoesNotStartTheApp() {
         "update: once the installer has ended, launches start the app again");
 }
 
+// The relaunch after an update waits for the update that started it: as long
+// as it runs, up to the budget, and not one poll less; the clock here is
+// fake, so the wait is counted, not slept.
+void TestTheRelaunchWaitsForTheUpdate() {
+  struct Clock {
+    std::chrono::milliseconds now{1000000};
+    int sleeps = 0;
+  };
+  // asks `answers` (true: the update still runs), then says it ended; a
+  // wait that keeps asking past the list sees the update end too, so a wait
+  // with no bound ends instead of hanging the spec
+  const auto run = [](Clock& clock, int updatingFor, int& asked, std::chrono::milliseconds budget) {
+    return AwaitUpdateEnd(
+        [&] { return asked++ < updatingFor; }, [&] { return clock.now; },
+        [&](std::chrono::milliseconds pause) {
+          clock.now += pause;
+          ++clock.sleeps;
+        },
+        budget);
+  };
+  Clock idle;
+  int asked = 0;
+  Check(run(idle, 0, asked, kAfterUpdateBudget) && asked == 1 && idle.sleeps == 0,
+        "after update: with no update running the relaunch goes at once");
+  Clock five;
+  asked = 0;
+  Check(run(five, 5, asked, kAfterUpdateBudget) && asked == 6 && five.sleeps == 5,
+        "after update: the relaunch waits while the update runs, and goes when it ends");
+  Check(five.now - std::chrono::milliseconds{1000000} == 5 * kAfterUpdatePoll,
+        "after update: one poll per sleep");
+  Clock forever;
+  asked = 0;
+  const int polls = static_cast<int>(kAfterUpdateBudget / kAfterUpdatePoll);
+  Check(!run(forever, 100000, asked, kAfterUpdateBudget),
+        "after update: an update that never ends releases the relaunch at the budget");
+  Check(forever.sleeps == polls && asked == polls + 1,
+        "after update: the relaunch waits the whole budget, not a poll less: " +
+            std::to_string(forever.sleeps) + " sleeps");
+  Clock lastPoll;
+  asked = 0;
+  Check(run(lastPoll, polls, asked, kAfterUpdateBudget) && lastPoll.sleeps == polls,
+        "after update: an update that ends at the budget's last poll is waited out");
+  Check(kAfterUpdateBudget == std::chrono::seconds(120) &&
+            kAfterUpdatePoll == std::chrono::milliseconds(500),
+        "after update: the budget is two minutes, polled every half second");
+}
+
 void TestAfterRedirect() {
   struct Case {
     RedirectResult result;
@@ -657,6 +704,7 @@ int main() {
   TestActionFor();
   TestTheFourLaunchesTheOwnerNamed();
   TestALaunchDuringAnUpdateDoesNotStartTheApp();
+  TestTheRelaunchWaitsForTheUpdate();
   TestAfterRedirect();
   TestNames();
   std::cout << (gCases - gFailures) << "/" << gCases << " instance handover checks passed\n";

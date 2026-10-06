@@ -230,6 +230,30 @@ func TestInstanceHandoverRejectsAnAutostartArgumentMatchedLoosely(t *testing.T) 
 	}, "arguments: --autostart is matched whole and unquoted")
 }
 
+// The relaunch after an update waits for the update that started it, for as
+// long as it runs and at most the budget. Make it look once, give up at once,
+// or wait without a bound or a poll short, or shorten the budget, and the spec
+// must fail.
+func TestInstanceHandoverRejectsARelaunchThatDoesNotWaitOutTheUpdate(t *testing.T) {
+	requireInstanceHandoverFailure(t, func(source string) string {
+		return handoverReplace(t, source, "  while (updating()) {\n", "  if (updating()) {\n")
+	}, "after update: the relaunch waits while the update runs, and goes when it ends")
+	requireInstanceHandoverFailure(t, func(source string) string {
+		return handoverReplace(t, source, "    if (now() >= deadline) return false;\n", "    if (true) return false;\n")
+	}, "after update: the relaunch waits while the update runs, and goes when it ends")
+	requireInstanceHandoverFailure(t, func(source string) string {
+		return handoverReplace(t, source, "    if (now() >= deadline) return false;\n",
+			"    if (now() >= deadline + std::chrono::hours(24 * 365)) return false;\n")
+	}, "after update: an update that never ends releases the relaunch at the budget")
+	requireInstanceHandoverFailure(t, func(source string) string {
+		return handoverReplace(t, source, "const std::chrono::milliseconds deadline = now() + budget;",
+			"const std::chrono::milliseconds deadline = now() + budget - kAfterUpdatePoll;")
+	}, "after update: the relaunch waits the whole budget, not a poll less")
+	requireInstanceHandoverFailure(t, func(source string) string {
+		return handoverReplace(t, source, "kAfterUpdateBudget{120000};", "kAfterUpdateBudget{10000};")
+	}, "after update: the budget is two minutes, polled every half second")
+}
+
 // The owner's 2026-10-05 decision: no launch starts the app while an update
 // installs. Drop the check every round makes, or the one before waiting out an
 // instance that quits for the installer, and the spec must fail.
