@@ -1523,14 +1523,21 @@ func TestUpdateApplyWiringRejectsWeakerWorkers(t *testing.T) {
 //     TerminateProcess, ElevatedCloseMessage or ElevatedEndSessionMessage:
 //     scheduled before InstallValidate, each of those would schedule a
 //     deferred action outside the script and fail every install with 2762;
-//   - not on a re-run of the installed package, and only when the installed
+//   - only for the in-app update (UPDATE_RELAUNCH="1") and a repair or removal
+//     of this package, never on a re-run of it, and only when the installed
 //     URnetwork.exe is new enough to quit on WM_CLOSE (an AppSearch above
 //     2026.10.5.1 where INSTALLFOLDER puts it);
 //   - Wix4CloseApplications moved before InstallValidate.
 //
-// After an update the helper ran, it starts the app again through the helper,
+// Every other install leaves the app to Windows Installer's Restart Manager,
+// which ends an app that does not exit when asked (MSIRMSHUTDOWN=1). After an
+// update the helper ran, the package starts the app again through the helper,
 // unelevated, once its files are in place, and never on an uninstall or from
 // the old product an upgrade removes; the helper ships as its own component.
+// Uninstalling removes updates\ beside it, but not the old product's removal
+// during an upgrade, whose new version installs from there; the folder's path
+// is set on every install, since WixRemoveFoldersEx fails a row whose
+// property is empty.
 func checkInstallerCloseAndRelaunch(document xmlNode) []string {
 	var problems []string
 	closes := document.descendants(utilNamespace, "CloseApplication")
@@ -1542,7 +1549,7 @@ func checkInstallerCloseAndRelaunch(document xmlNode) []string {
 		"Target":       "URnetwork.exe",
 		"CloseMessage": "yes",
 		"RebootPrompt": "no",
-		"Condition":    "URNETWORK_APP_CLOSABLE AND (NOT Installed OR REINSTALL OR REMOVE)",
+		"Condition":    `URNETWORK_APP_CLOSABLE AND ((NOT Installed AND UPDATE_RELAUNCH = "1") OR REINSTALL OR REMOVE)`,
 	} {
 		if value, _ := closer.attribute(name); value != want {
 			problems = append(problems, fmt.Sprintf("CloseApplication %s = %q, want %q", name, value, want))
@@ -1584,6 +1591,13 @@ func checkInstallerCloseAndRelaunch(document xmlNode) []string {
 			problems = append(problems, fmt.Sprintf("URNETWORK_APP_CLOSABLE searches %q depth %q for %q above %q, "+
 				"want the installed URnetwork.exe above 2026.10.5.1", path, depth, name, minVersion))
 		}
+	}
+	if shutdown := findByID(document.descendants(wixNamespace, "Property"), "MSIRMSHUTDOWN"); shutdown == nil {
+		problems = append(problems, "MSIRMSHUTDOWN is not set: Windows Installer's Restart Manager leaves an app "+
+			"that does not exit running with no tray icon")
+	} else if value, _ := shutdown.attribute("Value"); value != "1" {
+		problems = append(problems, "MSIRMSHUTDOWN is "+value+", not 1: an app that does not exit when asked "+
+			"keeps running with no tray icon after the install")
 	}
 	sequence := document.descendants(wixNamespace, "InstallExecuteSequence")
 	if len(sequence) != 1 {
@@ -1677,6 +1691,42 @@ func checkInstallerCloseAndRelaunch(document xmlNode) []string {
 	if !referenced {
 		problems = append(problems, "the Main feature does not install the helper")
 	}
+	var removes []*xmlNode
+	if updater != nil {
+		removes = updater.children(utilNamespace, "RemoveFolderEx")
+	}
+	if len(removes) != 1 {
+		problems = append(problems, fmt.Sprintf("the UpdaterExe component has %d util:RemoveFolderEx, want one for updates\\", len(removes)))
+	} else {
+		on, _ := removes[0].attribute("On")
+		property, _ := removes[0].attribute("Property")
+		if on != "uninstall" || property != "URNETWORK_UPDATES_FOLDER" {
+			problems = append(problems, fmt.Sprintf("RemoveFolderEx removes %q on %q, want URNETWORK_UPDATES_FOLDER on uninstall",
+				property, on))
+		}
+		if condition, _ := removes[0].attribute("Condition"); condition != `REMOVE~="ALL" AND NOT UPGRADINGPRODUCTCODE` {
+			problems = append(problems, fmt.Sprintf("RemoveFolderEx's condition is %q, want %q: updates\\ goes on an "+
+				"uninstall of this product, never under the new version an upgrade installs from it",
+				condition, `REMOVE~="ALL" AND NOT UPGRADINGPRODUCTCODE`))
+		}
+	}
+	if folder := findByID(document.descendants(wixNamespace, "SetProperty"), "URNETWORK_UPDATES_FOLDER"); folder == nil {
+		problems = append(problems, "URNETWORK_UPDATES_FOLDER is not set before RemoveFolderEx reads it")
+	} else {
+		for name, want := range map[string]string{
+			"Value":    `[ProgramFiles64Folder]URnetwork\updates`,
+			"Before":   "Wix4RemoveFoldersEx_$(sys.BUILDARCHSHORT)",
+			"Sequence": "execute",
+		} {
+			if value, _ := folder.attribute(name); value != want {
+				problems = append(problems, fmt.Sprintf("URNETWORK_UPDATES_FOLDER's %s = %q, want %q", name, value, want))
+			}
+		}
+		if condition, set := folder.attribute("Condition"); set {
+			problems = append(problems, fmt.Sprintf("URNETWORK_UPDATES_FOLDER is set only when %q: on every other "+
+				"install WixRemoveFoldersEx fails its row for the empty property", condition))
+		}
+	}
 	return problems
 }
 
@@ -1696,11 +1746,30 @@ func TestUpdateApplyInstallerRejectsWeakerPackages(t *testing.T) {
 		{"WiX's default reboot prompt", `CloseMessage="yes" RebootPrompt="no" Timeout="15"`,
 			`CloseMessage="yes" Timeout="15"`},
 		{"a re-run of the installed package closes the app",
-			`Condition="URNETWORK_APP_CLOSABLE AND (NOT Installed OR REINSTALL OR REMOVE)"`,
-			`Condition="URNETWORK_APP_CLOSABLE"`},
+			`Condition='URNETWORK_APP_CLOSABLE AND ((NOT Installed AND UPDATE_RELAUNCH = "1") OR REINSTALL OR REMOVE)'`,
+			`Condition='URNETWORK_APP_CLOSABLE AND (UPDATE_RELAUNCH = "1" OR Installed)'`},
 		{"an app without the WM_CLOSE handler closed",
-			`Condition="URNETWORK_APP_CLOSABLE AND (NOT Installed OR REINSTALL OR REMOVE)"`,
-			`Condition="NOT Installed OR REINSTALL OR REMOVE"`},
+			`Condition='URNETWORK_APP_CLOSABLE AND ((NOT Installed AND UPDATE_RELAUNCH = "1") OR REINSTALL OR REMOVE)'`,
+			`Condition='(NOT Installed AND UPDATE_RELAUNCH = "1") OR REINSTALL OR REMOVE'`},
+		{"the close for any install, by hand or by a tool",
+			`Condition='URNETWORK_APP_CLOSABLE AND ((NOT Installed AND UPDATE_RELAUNCH = "1") OR REINSTALL OR REMOVE)'`,
+			`Condition='URNETWORK_APP_CLOSABLE AND (NOT Installed OR REINSTALL OR REMOVE)'`},
+		{"an app that does not exit left running", `<Property Id="MSIRMSHUTDOWN" Value="1" />`,
+			`<Property Id="MSIRMSHUTDOWN" Value="0" />`},
+		{"updates\\ never removed", "          <util:RemoveFolderEx xmlns:util=\"http://wixtoolset.org/schemas/v4/wxs/util\"\n" +
+			"                               Id=\"RemoveUpdatesFolder\" On=\"uninstall\" Property=\"URNETWORK_UPDATES_FOLDER\"\n" +
+			"                               Condition='REMOVE~=\"ALL\" AND NOT UPGRADINGPRODUCTCODE' />\n", ""},
+		{"updates\\ removed on every install", `On="uninstall" Property="URNETWORK_UPDATES_FOLDER"`,
+			`On="both" Property="URNETWORK_UPDATES_FOLDER"`},
+		{"updates\\ removed under the new version installing from it",
+			`Condition='REMOVE~="ALL" AND NOT UPGRADINGPRODUCTCODE' />`, `Condition='REMOVE~="ALL"' />`},
+		{"updates\\ removed with the component, upgrades included",
+			"Property=\"URNETWORK_UPDATES_FOLDER\"\n                               Condition='REMOVE~=\"ALL\" AND NOT UPGRADINGPRODUCTCODE' />",
+			`Property="URNETWORK_UPDATES_FOLDER" />`},
+		{"the folder's path set only for the removal",
+			"Before=\"Wix4RemoveFoldersEx_$(sys.BUILDARCHSHORT)\" Sequence=\"execute\" />",
+			"Before=\"Wix4RemoveFoldersEx_$(sys.BUILDARCHSHORT)\" Sequence=\"execute\"\n" +
+				"                 Condition='REMOVE~=\"ALL\" AND NOT UPGRADINGPRODUCTCODE' />"},
 		{"the gate on any app", `<FileSearch Name="URnetwork.exe" MinVersion="2026.10.5.1" />`,
 			`<FileSearch Name="URnetwork.exe" />`},
 		{"the close in WiX's slot", `Before="InstallValidate"`, `Before="InstallFiles"`},
