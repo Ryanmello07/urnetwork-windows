@@ -91,6 +91,14 @@ namespace urnw::proto {
 //    takes it, and a service that does not say so reads as no writer, which
 //    keeps the Connect page's Extender switch hidden while disconnected, as
 //    before.
+//
+//    Nor for reset_extenders, Reply::reset and Reply::reset_busy: a service
+//    that does not know the verb answers "unknown request type" and resets
+//    nothing, which is the behaviour before it existed, and the app then leaves
+//    the reset to the next import of the space, whose values carry it
+//    (extender_reset_id). A peer that drops `reset` reads as nothing reset,
+//    which claims less, and one that drops `reset_busy` as a refusal the app
+//    does not send again, which the next import covers as well.
 inline constexpr int kProtocolVersion = 4;
 
 // The first version that understands StartTunnel::mode. Below this, an absent
@@ -115,6 +123,7 @@ inline constexpr const char* kGetProviderStats = "get_provider_stats";  // app -
 inline constexpr const char* kSetNetworkCountry = "set_network_country";  // app -> service
 inline constexpr const char* kUploadLogs = "upload_logs";        // app -> service
 inline constexpr const char* kSetProvideExtender = "set_provide_extender";  // app -> service
+inline constexpr const char* kResetExtenders = "reset_extenders";  // app -> service
 inline constexpr const char* kReply = "reply";                   // service -> app
 inline constexpr const char* kEvent = "event";                   // service -> app (unsolicited)
 }  // namespace msg
@@ -418,6 +427,56 @@ struct SetProvideExtender {
   bool provide_extender = true;
 };
 
+// reset_extenders: "Reset extenders" in the app's Account > Extenders (connect
+// EXTENDER.md E7). The app has reset its own network space -- everything it
+// learned about extenders is cleared and the extenders a user added are
+// removed -- and hands the service the id that reset returned
+// (NetworkSpace::resetExtenders) with the space's key. The service applies it
+// to the space it holds under that key (NetworkSpace::applyExtenderReset),
+// which the session's device and the provider-only device both run in, so one
+// call covers both; a live extender path keeps running, and every new extender
+// dial draws from the fresh directory. A reset the space has applied already,
+// or an older one, changes nothing. A service that holds no such space resets
+// nothing: the next import of the space (start_tunnel, start_provider) carries
+// the id in its values and applies it there. Every field is required.
+struct ResetExtenders {
+  // the space's key
+  std::string host_name;
+  std::string env_name;
+  // what NetworkSpace::resetExtenders returned in the app
+  std::string extender_reset_id;
+};
+
+// The reset_extenders request for the space `key` names, after a reset that
+// returned `resetId`: nullopt when the key or the id is missing, which the
+// service would refuse, so the next import of the space carries the reset
+// instead. A template over urnet::NetworkSpaceKey by the sdk's field names, so
+// this header needs no sdk header.
+template <class Key>
+std::optional<ResetExtenders> ResetExtendersRequestFor(const std::optional<Key>& key,
+                                                       const std::string& resetId) {
+  if (!key || !key->host_name || !key->env_name) return std::nullopt;
+  ResetExtenders request;
+  request.host_name = *key->host_name;
+  request.env_name = *key->env_name;
+  request.extender_reset_id = resetId;
+  if (request.host_name.empty() || request.env_name.empty() ||
+      request.extender_reset_id.empty()) {
+    return std::nullopt;
+  }
+  return request;
+}
+
+// The key of the space a reset_extenders request names, as the service's space
+// manager looks it up (urnet::NetworkSpaceKey).
+template <class Key>
+Key SpaceKeyOf(const ResetExtenders& request) {
+  Key key;
+  key.host_name = request.host_name;
+  key.env_name = request.env_name;
+  return key;
+}
+
 // ---- reply / state payload ------------------------------------------------
 
 struct TunnelStatus {
@@ -598,6 +657,13 @@ struct Reply {
   int64_t log_upload_id = 0;
   // upload_logs refused because an upload is in flight already
   bool log_upload_busy = false;
+  // reset_extenders' answer: the service held the space and the reset was new
+  // to it. False in every other reply, and from a service too old to say.
+  bool reset = false;
+  // reset_extenders refused because a tunnel or provider operation held the
+  // service's session lock: the app sends it again once that operation ends
+  // (Common/ExtenderReset.h). False in every other reply.
+  bool reset_busy = false;
 };
 
 // ---- JSON (de)serialization ----------------------------------------------
@@ -739,6 +805,29 @@ inline void from_json(const nlohmann::json& j, SetProvideExtender& v) {
     throw std::runtime_error("set_provide_extender requires provide_extender (a boolean)");
   }
   v.provide_extender = it->get<bool>();
+}
+
+inline void to_json(nlohmann::json& j, const ResetExtenders& v) {
+  j = {{"host_name", v.host_name},
+       {"env_name", v.env_name},
+       {"extender_reset_id", v.extender_reset_id}};
+}
+
+// Strict, like set_provide_extender's: a request that does not name its space
+// exactly must not reset another, and an id that did not arrive is no reset.
+// The ControlServer answers the throw as a failed reply.
+inline void from_json(const nlohmann::json& j, ResetExtenders& v) {
+  auto required = [&](const char* k, std::string& out) {
+    auto it = j.find(k);
+    if (it == j.end() || !it->is_string() || it->get_ref<const std::string&>().empty()) {
+      throw std::runtime_error(std::string("reset_extenders requires ") + k +
+                               " (a non-empty string)");
+    }
+    out = it->get<std::string>();
+  };
+  required("host_name", v.host_name);
+  required("env_name", v.env_name);
+  required("extender_reset_id", v.extender_reset_id);
 }
 
 // "A device built from `a` can keep running for `b`." Everything that goes into
@@ -941,6 +1030,8 @@ inline void to_json(nlohmann::json& j, const Reply& v) {
   if (!v.log_upload_carrier.empty()) j["log_upload_carrier"] = v.log_upload_carrier;
   if (v.log_upload_id != 0) j["log_upload_id"] = v.log_upload_id;
   if (v.log_upload_busy) j["log_upload_busy"] = true;
+  if (v.reset) j["reset"] = true;
+  if (v.reset_busy) j["reset_busy"] = true;
 }
 
 inline void from_json(const nlohmann::json& j, Reply& v) {
@@ -963,6 +1054,8 @@ inline void from_json(const nlohmann::json& j, Reply& v) {
   get("log_upload_carrier", v.log_upload_carrier);
   get("log_upload_id", v.log_upload_id);
   get("log_upload_busy", v.log_upload_busy);
+  get("reset", v.reset);
+  get("reset_busy", v.reset_busy);
 }
 
 // Envelope helpers: every message on the wire has a top-level "type" tag.

@@ -25,6 +25,7 @@
 #include "ConnectAction.h"
 #include "ConnectionHealth.h"
 #include "ExtenderPresentation.h"
+#include "ExtenderReset.h"
 #include "MobileBroadband.h"
 #include "FeedbackLogUpload.h"
 #include "NetworkCountryWatch.h"
@@ -1293,6 +1294,27 @@ class SdkHost {
   // derived from it stay valid. An empty ip clears the override.
   std::optional<urnet::NetExtender> CurrentNetExtender();
   bool SetNetExtender(const std::optional<urnet::NetExtender>& value);
+  // "Reset extenders" (Account > Extenders; connect EXTENDER.md E7): this
+  // installation's extender state back to a fresh install's. The app's own
+  // space resets first (NetworkSpace::resetExtenders): everything it learned
+  // about extenders is cleared, the extenders a user added go -- the manual
+  // hosts, the private extender above, the dns name, gossip url and root keys
+  // back to their defaults -- and the values are persisted with the reset's
+  // id, which the service imports with the space at its next start. Then the
+  // service is handed the id (reset_extenders), so the space its session's
+  // device and its provider-only device run in resets at once. Like the
+  // private extender it needs no session. A live extender path keeps running;
+  // every new extender dial draws from the fresh directory.
+  //
+  // Synchronous: the space's reset joins its extender network client and the
+  // pipe call can wait behind a start_tunnel, so callers run it off the UI
+  // thread. False when the app's own space could not be reset (no space, or
+  // the call threw). The service's answer is logged rather than returned: a
+  // service busy with a tunnel operation is sent the reset once more when that
+  // operation ends (Common/ExtenderReset.h, QueueExtenderResetResend), and the
+  // next import of the space carries the reset to a service that did not take
+  // it.
+  bool ResetExtenders();
   // ---- VLESS (Settings > VLESS and the login screen's network sheet) -------
   // One VLESS server in the ACTIVE network space's values, which the space's
   // client strategy dials through while it is on and valid (sdk
@@ -1834,6 +1856,14 @@ class SdkHost {
   // or refused, the next published status replaces the switch's guess.
   void QueueProviderOnlyExtenderWrite(bool on);
   void WriteProviderOnlyExtender(bool on);
+  // A reset_extenders the service refused as busy (Common/ExtenderReset.h):
+  // owed by ResetExtenders, made due by the first pushed status that ends the
+  // operation which held the service's lock (the state handler, on the pipe's
+  // reader thread, which must stay free to read the answer), and sent once
+  // more by ProviderOnlyStatsLoop, outside mutex_. Its answer is only logged,
+  // and an app that exits first drops it: the next import carries the reset.
+  void QueueExtenderResetResend(proto::ResetExtenders request);
+  void ResendExtenderReset(const proto::ResetExtenders& request);
 
   std::thread providerOnlyThread_;
   std::mutex providerOnlyMutex_;
@@ -1843,6 +1873,11 @@ class SdkHost {
   bool providerOnlyStatusWanted_ = false;
   // The switch's last write not yet sent; a newer flip replaces it.
   std::optional<bool> providerOnlyExtenderWrite_;
+  // The owed reset made due and not yet sent again.
+  std::optional<proto::ResetExtenders> extenderResetResend_;
+  // The reset the service last refused as busy, until a pushed status ends
+  // the operation that refused it. Its own lock, innermost.
+  extenderreset::Owed owedExtenderReset_;
   // Bumped whenever the readings stop belonging to the polls in flight (an
   // unwant, a reset), so a late answer is dropped, the controller's rule.
   uint64_t providerOnlyStatusGeneration_ = 0;
