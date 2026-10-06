@@ -106,6 +106,12 @@ class AccountPage {
   void ApplyExtenderStrings();
   winrt::fire_and_forget ShowExtenderShareSheet();
   winrt::fire_and_forget ShowExtenderImportSheet();
+  // "Reset extenders" (connect EXTENDER.md E7): the confirmation, then the
+  // reset itself off the UI thread (SdkHost::ResetExtenders: the app's own
+  // space, then the service's by its control verb), which reloads the form it
+  // leaves before it says "Extenders reset". Needs no session.
+  winrt::fire_and_forget ConfirmResetExtenders();
+  winrt::fire_and_forget ResetExtenders();
   void SendPasswordReset();
   // Counts a password reset rate limit down and turns Send back on once the
   // retry time has passed (resetRateLimitTimer_ tick).
@@ -158,6 +164,7 @@ class AccountPage {
 
   // ---- pane D: extenders ---------------------------------------------------
   bool extenderBuilt_ = false;
+  // a save or a reset of pane D is running; the pane's other writes wait
   bool savingExtender_ = false;
   bool advancedOpen_ = false;
   winrt::Microsoft::UI::Xaml::Controls::TextBox extenderDnsBox_{nullptr};
@@ -169,6 +176,7 @@ class AccountPage {
   winrt::Microsoft::UI::Xaml::Controls::Button privateSaveButton_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::Button shareExtendersButton_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::Button importExtendersButton_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::Button resetExtendersButton_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::Button advancedButton_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::StackPanel advancedPanel_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::TextBlock extenderStatus_{nullptr};

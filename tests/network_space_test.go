@@ -96,12 +96,12 @@ func TestNetworkSpaceRejectsLegacyHost(t *testing.T) {
 // in a space kept. The header is git-ignored (fetch-deps unpacks it into
 // app/third_party/urnetwork-sdk/<arch>; URNETWORK_SDK_INCLUDE names another
 // directory) and needs nlohmann/json, so a host without them skips this, and so
-// does a copy from before the bootstrap DoH servers the export carries.
+// does a copy from before the extender reset id the export carries.
 func TestNetworkSpaceValuesAgainstSdkHeader(t *testing.T) {
 	root := repositoryRoot(t)
-	sdkDir := sdkHeaderDirWith(t, root, "control_doh_urls_ipv4")
+	sdkDir := sdkHeaderDirWith(t, root, "extender_reset_id")
 	if sdkDir == "" {
-		t.Skip("no urnetwork_sdk.hpp with the bootstrap DoH servers (set URNETWORK_SDK_INCLUDE)")
+		t.Skip("no urnetwork_sdk.hpp with the extender reset id (set URNETWORK_SDK_INCLUDE)")
 	}
 	jsonDir, found := jsonIncludeDir(root)
 	if !found {

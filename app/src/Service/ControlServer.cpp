@@ -178,6 +178,18 @@ nlohmann::json ControlServer::Handle(const nlohmann::json& request) {
       std::string error;
       reply.ok = tunnel_.SetProvideExtender(req.provide_extender, error);
       reply.error = error;
+    } else if (type == proto::msg::kResetExtenders) {
+      // "Reset extenders" in the app's Account > Extenders (TunnelController::
+      // ResetExtenders), on this pipe under its access rule (kPipeSddl) like
+      // every other request. A request that does not name its space and its
+      // reset throws out of the get<> as a failed reply. The tunnel status does
+      // not change, so nothing is pushed.
+      const proto::ResetExtenders req = request.get<proto::ResetExtenders>();
+      std::string error;
+      bool reset = false;
+      reply.ok = tunnel_.ResetExtenders(req, reset, error);
+      reply.reset = reset;
+      reply.error = error;
     } else {
       reply.ok = false;
       reply.error = "unknown request type: " + type;

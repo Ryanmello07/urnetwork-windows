@@ -4718,6 +4718,54 @@ bool SdkHost::SetNetExtender(const std::optional<urnet::NetExtender>& value) {
   }
 }
 
+bool SdkHost::ResetExtenders() {
+  std::optional<proto::ResetExtenders> request;
+  {
+    std::scoped_lock lock(mutex_);
+    if (!networkSpace_) return false;
+    try {
+      // In place, through the space's manager: this handle, the DeviceRemote
+      // bound to it and the view controller opened on that stay valid.
+      const std::string resetId = networkSpace_->resetExtenders();
+      request = proto::ResetExtendersRequestFor(networkSpace_->getKey(), resetId);
+    } catch (const std::exception& e) {
+      LogWarn("sdkhost: reset extenders failed: {}", e.what());
+      return false;
+    } catch (...) {
+      LogWarn("sdkhost: reset extenders failed");
+      return false;
+    }
+  }
+  LogInfo("sdkhost: extenders reset in the app's network space");
+  // No provider reconcile, unlike SetNetExtender and the other space saves:
+  // the verb resets the space the provider-only device runs in where it runs,
+  // so there is nothing to rebuild it for now. The next reconcile's request
+  // carries the reset space, and an applied reset is a no-op there.
+  if (!request) {
+    LogWarn("sdkhost: the space names no key for the service's extender reset; its next "
+            "import applies it");
+    return true;
+  }
+  // Outside mutex_: the pipe serializes calls, and this one can wait behind a
+  // start_tunnel.
+  if (!service_.IsConnected()) {
+    LogInfo("sdkhost: no control channel; the service applies the extender reset at its "
+            "next import");
+    return true;
+  }
+  bool reset = false;
+  std::string error;
+  if (service_.ResetExtenders(*request, &reset, &error)) {
+    LogInfo("sdkhost: the service {} the extender reset",
+            reset ? "applied" : "held no such space or had already applied");
+  } else {
+    LogWarn("sdkhost: the service did not take the extender reset ({}); its next import "
+            "applies it",
+            error.empty() ? "no detail" : error);
+  }
+  return true;
+}
+
 // ---- VLESS ------------------------------------------------------------------
 //
 // Nothing here logs a link or a field of the settings: the user id IS the

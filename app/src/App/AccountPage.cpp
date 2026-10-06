@@ -574,8 +574,9 @@ void AccountPage::RefreshResetRateLimit() {
 // as each empty field's placeholder, because an empty field MEANS the default
 // and a box pre-filled with it would turn every save into an explicit override.
 // Then the bootstrap DNS-over-HTTPS servers (ControlDohSettings.h), the legacy
-// private extender behind an Advanced row, and the two buttons that open the
-// share and import sheets.
+// private extender behind an Advanced row, the two buttons that open the share
+// and import sheets, and Reset extenders (E7), which returns the extender state
+// to a fresh install's after a confirmation.
 //
 // Everything the form DECIDES is ExtenderPresentation.h, which is pure and
 // tested off-Windows (tools/extender-tests.cpp); what is here is the building
@@ -647,6 +648,42 @@ TextBlock AddNoteRow(Panel const& host, hstring const& text, Border& outRow) {
   host.Children().Append(box);
   outRow = box;
   return note;
+}
+
+// What one read of the view controller and the space gives pane D's form.
+struct ExtenderFormReading {
+  FieldState state = FieldState::Loaded;
+  ExtenderSettingsForm form;
+  std::string networkHost;
+  std::string privateIp;
+  std::string privateSecret;
+};
+
+// The form's three settings off the view controller and the legacy private
+// extender off the space, for a load and for the reload after a reset. Off the
+// UI thread: the controller lives on the DeviceRemote, and the private
+// extender's read takes the host's own lock, which the session worker holds
+// for whole bootstraps.
+ExtenderFormReading ReadExtenderForm(urnet::ExtenderViewController const& controller,
+                                     urnw::SdkHost& sdk) {
+  ExtenderFormReading reading;
+  try {
+    ExtenderSettingsView view;
+    if (const auto settings = controller.getSettings()) view = ExtenderSettingsViewOf(*settings);
+    reading.form = ExtenderSettingsFormFor(view);
+    reading.networkHost = view.networkHost;
+    if (const auto privateExtender = sdk.CurrentNetExtender()) {
+      reading.privateIp = privateExtender->ip;
+      reading.privateSecret = privateExtender->secret;
+    }
+  } catch (const std::exception& e) {
+    LogWarn("account: extender settings read failed: {}", e.what());
+    reading.state = FieldState::Failed;
+  } catch (...) {
+    LogWarn("account: extender settings read failed");
+    reading.state = FieldState::Failed;
+  }
+  return reading;
 }
 
 }  // namespace
@@ -755,6 +792,10 @@ void AccountPage::BuildExtenderPane() {
   shareExtendersButton_.Click([this](auto const&, auto const&) { ShowExtenderShareSheet(); });
   importExtendersButton_ = action(host, "import_extenders", /*primary=*/false);
   importExtendersButton_.Click([this](auto const&, auto const&) { ShowExtenderImportSheet(); });
+  // ---- reset (E7) ----------------------------------------------------------
+  // Beside share and import, the other two actions on the extenders as a whole.
+  resetExtendersButton_ = action(host, "reset_extenders", /*primary=*/false);
+  resetExtendersButton_.Click([this](auto const&, auto const&) { ConfirmResetExtenders(); });
 }
 
 void AccountPage::ApplyExtenderStrings() {
@@ -793,47 +834,16 @@ winrt::fire_and_forget AccountPage::LoadExtenderSettings() {
   }
   urnw::SdkHost* const sdk = &Sdk();
 
-  ExtenderSettingsForm form;
-  std::string networkHost;
-  std::string privateIp;
-  std::string privateSecret;
-  FieldState state = FieldState::Loaded;
-
   co_await winrt::resume_background();
-  try {
-    ExtenderSettingsView view;
-    if (const auto settings = controller->getSettings()) {
-      view.dnsName = settings->DnsName;
-      view.dnsNameDefault = settings->DnsNameDefault;
-      view.gossipUrl = settings->GossipUrl;
-      view.gossipUrlDefault = settings->GossipUrlDefault;
-      view.networkHost = settings->NetworkHost;
-      if (settings->Hosts) view.hosts = *settings->Hosts;
-      if (settings->RootPublicKeys) view.rootPublicKeys = *settings->RootPublicKeys;
-      view.rootPublicKeysDefault = settings->RootPublicKeysDefault;
-    }
-    form = ExtenderSettingsFormFor(view);
-    networkHost = view.networkHost;
-    // A local read, but it takes the host's own lock, which the session worker
-    // holds for whole bootstraps - so it belongs on this side of the hop too.
-    if (const auto privateExtender = sdk->CurrentNetExtender()) {
-      privateIp = privateExtender->ip;
-      privateSecret = privateExtender->secret;
-    }
-  } catch (const std::exception& e) {
-    LogWarn("account: extender settings read failed: {}", e.what());
-    state = FieldState::Failed;
-  } catch (...) {
-    LogWarn("account: extender settings read failed");
-    state = FieldState::Failed;
-  }
+  const ExtenderFormReading reading = ReadExtenderForm(*controller, *sdk);
 
-  queue.TryEnqueue([weak, state, form, networkHost, privateIp, privateSecret] {
+  queue.TryEnqueue([weak, reading] {
     auto window = weak.get();
     if (!window) return;
     auto& page = window->account();
-    kit::SetTextOrCollapse(window->AccountPaneDMeta(), H(networkHost));
-    page.ApplyExtenderForm(state, form, privateIp, privateSecret, /*hasController=*/true);
+    kit::SetTextOrCollapse(window->AccountPaneDMeta(), H(reading.networkHost));
+    page.ApplyExtenderForm(reading.state, reading.form, reading.privateIp, reading.privateSecret,
+                           /*hasController=*/true);
   });
 }
 
@@ -850,6 +860,9 @@ void AccountPage::ApplyExtenderForm(FieldState state, ExtenderSettingsForm const
   privateSaveButton_.IsEnabled(live && !savingExtender_);
   shareExtendersButton_.IsEnabled(hasController);
   importExtendersButton_.IsEnabled(hasController);
+  // the reset is the app's own space's, so with no session it is live too
+  resetExtendersButton_.IsEnabled(
+      ExtenderResetEnabled(state != FieldState::NoSession, savingExtender_));
   extenderNoteRow_.Visibility(hasController ? Visibility::Visible : Visibility::Collapsed);
 
   if (!live) {
@@ -903,6 +916,7 @@ winrt::fire_and_forget AccountPage::SaveExtenderSettings() {
   savingExtender_ = true;
   extenderSaveButton_.IsEnabled(false);
   privateSaveButton_.IsEnabled(false);
+  resetExtendersButton_.IsEnabled(false);
   kit::ApplySupportingText(extenderStatus_, Loc("loading"), kit::ValidationState::Validating);
 
   bool ok = false;
@@ -927,6 +941,7 @@ winrt::fire_and_forget AccountPage::SaveExtenderSettings() {
     page.savingExtender_ = false;
     page.extenderSaveButton_.IsEnabled(true);
     page.privateSaveButton_.IsEnabled(true);
+    page.resetExtendersButton_.IsEnabled(ExtenderResetEnabled(Sdk().IsLoggedIn(), false));
     if (!ok) {
       kit::ApplySupportingText(page.extenderStatus_, Loc("something_went_wrong"),
                                kit::ValidationState::Invalid);
@@ -966,6 +981,7 @@ winrt::fire_and_forget AccountPage::SavePrivateExtender() {
   savingExtender_ = true;
   extenderSaveButton_.IsEnabled(false);
   privateSaveButton_.IsEnabled(false);
+  resetExtendersButton_.IsEnabled(false);
   kit::ApplySupportingText(extenderStatus_, Loc("loading"), kit::ValidationState::Validating);
 
   // No rpc, but it takes the host's own lock and the space manager restarts the
@@ -981,6 +997,7 @@ winrt::fire_and_forget AccountPage::SavePrivateExtender() {
     page.savingExtender_ = false;
     page.extenderSaveButton_.IsEnabled(true);
     page.privateSaveButton_.IsEnabled(true);
+    page.resetExtendersButton_.IsEnabled(ExtenderResetEnabled(Sdk().IsLoggedIn(), false));
     // The standing note under the Save button already says when the tunnel
     // picks this up; this line is only the verdict on the write.
     kit::ApplySupportingText(
@@ -1023,6 +1040,82 @@ winrt::fire_and_forget AccountPage::ShowExtenderImportSheet() {
   }
   extenderImportSheet_.reset();
   w_.SetSheetOpen(false);
+}
+
+// The confirmation, in SettingsPage::ConfirmRemoveAuth's shape: titled with the
+// action, the body saying what goes, the destructive word only on the button
+// that commits, and Cancel the default so Enter does not reset.
+winrt::fire_and_forget AccountPage::ConfirmResetExtenders() {
+  if (savingExtender_ || w_.sheetOpen()) co_return;
+  auto self = w_.get_strong();
+  w_.SetSheetOpen(true);
+  bool confirmed = false;
+  try {
+    auto dialog = rows::MakeSheet(self->Content().XamlRoot(), Loc("reset_extenders"));
+    dialog.PrimaryButtonText(Loc("reset_extenders"));
+    dialog.CloseButtonText(Loc("cancel"));
+    dialog.DefaultButton(ContentDialogButton::Close);  // Enter must not reset
+    TextBlock body;
+    body.Text(Loc("reset_extenders_confirm"));
+    body.FontSize(14);
+    body.TextWrapping(TextWrapping::Wrap);
+    body.MinWidth(320);
+    dialog.Content(body);
+    confirmed = co_await dialog.ShowAsync() == ContentDialogResult::Primary;
+  } catch (...) {
+  }
+  w_.SetSheetOpen(false);
+  if (confirmed) ResetExtenders();
+}
+
+winrt::fire_and_forget AccountPage::ResetExtenders() {
+  if (savingExtender_) co_return;
+  auto self = w_.get_strong();
+  auto weak = w_.get_weak();
+  auto queue = w_.DispatcherQueue();
+  // Taken on the UI thread and held for the read-back, as LoadExtenderSettings
+  // holds it. Null with no session, which the reset does not need; the form
+  // then keeps its NoDevice state.
+  const auto controller = Sdk().ExtenderController();
+  // The host outlives the window; a pointer taken here is what the background
+  // half uses, rather than reading a member through `this` after the hop.
+  urnw::SdkHost* const sdk = &Sdk();
+
+  savingExtender_ = true;
+  extenderSaveButton_.IsEnabled(false);
+  privateSaveButton_.IsEnabled(false);
+  resetExtendersButton_.IsEnabled(false);
+  kit::ApplySupportingText(extenderStatus_, Loc("loading"), kit::ValidationState::Validating);
+
+  // The space's reset joins its extender network client, and the service's
+  // verb can wait behind a start_tunnel on the pipe.
+  co_await winrt::resume_background();
+  const bool reset = sdk->ResetExtenders();
+  // The form the reset leaves, read back as a load reads it: every setting at
+  // its default (empty boxes naming the defaults) and the private extender
+  // cleared.
+  std::optional<ExtenderFormReading> reading;
+  if (controller) reading = ReadExtenderForm(*controller, *sdk);
+
+  queue.TryEnqueue([weak, reset, reading] {
+    auto window = weak.get();
+    if (!window) return;
+    auto& page = window->account();
+    page.savingExtender_ = false;
+    if (reading) {
+      kit::SetTextOrCollapse(window->AccountPaneDMeta(), H(reading->networkHost));
+      page.ApplyExtenderForm(reading->state, reading->form, reading->privateIp,
+                             reading->privateSecret, /*hasController=*/true);
+    } else {
+      page.ApplyExtenderForm(Sdk().IsLoggedIn() ? FieldState::NoDevice : FieldState::NoSession,
+                             {}, {}, {}, /*hasController=*/false);
+    }
+    // After the form, which writes this line itself: the verdict is what stays
+    // on it.
+    kit::ApplySupportingText(page.extenderStatus_,
+                             reset ? Loc("extenders_reset_done") : Loc("something_went_wrong"),
+                             reset ? kit::ValidationState::Valid : kit::ValidationState::Invalid);
+  });
 }
 
 }  // namespace urnw

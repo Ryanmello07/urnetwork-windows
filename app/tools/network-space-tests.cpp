@@ -157,6 +157,7 @@ struct SpaceValues {
   std::optional<std::string> gossip_url;
   std::optional<std::vector<std::string>> extender_root_public_keys;
   std::optional<std::vector<std::string>> extender_hosts;
+  std::optional<std::string> extender_reset_id;
   std::optional<std::string> vless;
   std::optional<std::vector<std::string>> control_doh_urls_ipv4;
   std::optional<std::vector<std::string>> control_doh_urls_ipv6;
@@ -164,8 +165,9 @@ struct SpaceValues {
 
 // What a user saves in a space on its own screens: the extender settings
 // (Account > Extenders), the root keys an extender import took, the private
-// extender, the VLESS server, the bootstrap DNS-over-HTTPS servers -- and an
-// alt url nothing in this app writes.
+// extender, the id of the last extender reset (which the service applies at
+// its next import of the space), the VLESS server, the bootstrap
+// DNS-over-HTTPS servers -- and an alt url nothing in this app writes.
 SpaceValues Saved() {
   SpaceValues values;
   values.alt_url = "https://alt.example.test:8443";
@@ -174,6 +176,7 @@ SpaceValues Saved() {
   values.gossip_url = "wss://gossip.example.test";
   values.extender_root_public_keys = std::vector<std::string>{"root-key-1"};
   values.extender_hosts = std::vector<std::string>{"ext1.example.test", "203.0.113.9"};
+  values.extender_reset_id = "01926f3a-5b7c-7d8e-9f01-23456789abcd";
   values.vless = "vless.example.test";
   values.control_doh_urls_ipv4 = std::vector<std::string>{"https://192.0.2.53/dns-query"};
   values.control_doh_urls_ipv6 = std::vector<std::string>{"https://[2001:db8::53]/dns-query"};
@@ -188,6 +191,8 @@ void CheckKeepsSaved(const SpaceValues& written, const std::string& writer) {
   Check(written.extender_root_public_keys == saved.extender_root_public_keys,
         writer + " keeps the extender root keys");
   Check(written.net_extender == saved.net_extender, writer + " keeps the private extender");
+  Check(written.extender_reset_id == saved.extender_reset_id,
+        writer + " keeps the extender reset id");
   Check(written.vless == saved.vless, writer + " keeps the VLESS server");
   Check(written.control_doh_urls_ipv4 == saved.control_doh_urls_ipv4,
         writer + " keeps the v4 bootstrap DoH servers");
@@ -230,8 +235,8 @@ void BundledSpaceValues() {
   const SpaceValues fresh = netspace::BundledSpaceValuesOver(SpaceValues{});
   Check(fresh.bundled == std::optional<bool>(true) &&
             fresh.link_host_name == std::optional<std::string>("ur.io") &&
-            !fresh.extender_dns_name && !fresh.net_extender && !fresh.vless &&
-            !fresh.control_doh_urls_ipv4,
+            !fresh.extender_dns_name && !fresh.net_extender && !fresh.extender_reset_id &&
+            !fresh.vless && !fresh.control_doh_urls_ipv4,
         "a first launch writes the bundle's values and nothing else");
 }
 
@@ -276,6 +281,7 @@ void SpaceValuesThroughTheSdkJson() {
     "gossip_url": "wss://gossip.example.test",
     "extender_root_public_keys": ["root-key-1"],
     "extender_hosts": ["ext1.example.test", "203.0.113.9"],
+    "extender_reset_id": "01926f3a-5b7c-7d8e-9f01-23456789abcd",
     "vless": {"enabled": true, "address": "vless.example.test", "port": 443},
     "control_doh_urls_ipv4": ["https://192.0.2.53/dns-query"],
     "control_doh_urls_ipv6": ["https://[2001:db8::53]/dns-query"]
