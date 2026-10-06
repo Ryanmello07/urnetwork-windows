@@ -51,6 +51,7 @@
     <ClInclude Include="Heartbeat.h" />
     <ClInclude Include="Ids.h" />
     <ClInclude Include="InstallLocation.h" />
+    <ClInclude Include="InstallLocationWin32.h" />
     <ClInclude Include="InstanceHandover.h" />
     <ClInclude Include="Log.h" />
     <ClInclude Include="LogUpload.h" />
@@ -70,6 +71,7 @@
     <ClInclude Include="Strings.h" />
     <ClInclude Include="ThreadGuard.h" />
     <ClInclude Include="UpdateFormats.h" />
+    <ClInclude Include="UpdateApply.h" />
     <ClInclude Include="UpdateMarker.h" />
     <ClInclude Include="UpdateResult.h" />
     <ClInclude Include="UpdateResultJson.h" />
@@ -79,6 +81,7 @@
   <ItemGroup>
     <ClCompile Include="CrashDumps.cpp" />
     <ClCompile Include="Heartbeat.cpp" />
+    <ClCompile Include="InstallLocationWin32.cpp" />
     <ClCompile Include="Log.cpp" />
     <ClCompile Include="Paths.cpp" />
     <ClCompile Include="PipeClient.cpp" />

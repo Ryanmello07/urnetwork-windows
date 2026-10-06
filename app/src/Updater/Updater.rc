@@ -1,0 +1,38 @@
+// SPDX-License-Identifier: MPL-2.0
+//
+// The update helper's version stamp: the same fields the app and the service
+// carry (Common/Version.h, from the UR_* definitions Directory.Build.props
+// feeds rc.exe), so Windows Installer replaces it by version like them. The
+// FileDescription is what the elevation prompt names.
+#include <winresrc.h>
+#include "..\Common\Version.h"
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION    UR_VER_MAJOR,UR_VER_MINOR,UR_VER_PATCH,UR_VERSION_BUILD
+ PRODUCTVERSION UR_VER_MAJOR,UR_VER_MINOR,UR_VER_PATCH,UR_VERSION_BUILD
+ FILEFLAGSMASK  VS_FFI_FILEFLAGSMASK
+ FILEFLAGS      0x0L
+ FILEOS         VOS_NT_WINDOWS32
+ FILETYPE       VFT_APP
+ FILESUBTYPE    VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        // 040904B0 = en-US, Unicode, as the Translation value below says
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName",      "URnetwork"
+            VALUE "FileDescription",  "URnetwork update"
+            VALUE "FileVersion",      UR_VERSION_STRING
+            VALUE "InternalName",     "URnetworkUpdate"
+            VALUE "LegalCopyright",   "URnetwork. Licensed under MPL-2.0."
+            VALUE "OriginalFilename", "URnetworkUpdate.exe"
+            VALUE "ProductName",      "URnetwork"
+            VALUE "ProductVersion",   UR_VERSION_STRING
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END

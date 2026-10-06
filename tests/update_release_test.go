@@ -25,7 +25,8 @@ import (
 
 // The Common headers the program includes.
 var updateReleaseHeaders = []string{
-	"InstallLocation.h", "ReleaseSelection.h", "UpdateFormats.h", "UpdateResult.h", "VersionGrammar.h",
+	"InstallLocation.h", "ReleaseSelection.h", "UpdateApply.h", "UpdateFormats.h", "UpdateResult.h",
+	"VersionGrammar.h",
 }
 
 // The program, built from the repository's headers, or, when `mutate` is set,
@@ -267,6 +268,26 @@ func TestUpdateReleaseRejectsWeakerDecisions(t *testing.T) {
 		{"3010 as a failure", "UpdateResult.h",
 			"if (exitCode == kRebootRequired || exitCode == kRebootInitiated) return Outcome::RestartRequired;", "",
 			"3010 is restart to finish, not a failure"},
+		{"the UpgradeCode not checked", "UpdateApply.h",
+			"return EqualsAsciiCaseless(upgradeCode, kUpgradeCode) && !want.empty() &&",
+			"return (upgradeCode.empty() || true) && !want.empty() &&",
+			"another product's UpgradeCode is refused"},
+		{"the ProductVersion not checked", "UpdateApply.h",
+			"         productVersion == want;", "         (productVersion.empty() || true);",
+			"an older package re-uploaded under a newer tag is refused"},
+		{"another tag's offer taken", "UpdateApply.h",
+			"return selection.code != 0 && selection.tag == tag && selection.code > ownCode &&",
+			"return selection.code != 0 && (tag.empty() || true) && selection.code > ownCode &&",
+			"a list that offers another tag is no offer of this one"},
+		{"this build's own release taken", "UpdateApply.h",
+			"selection.tag == tag && selection.code > ownCode &&", "selection.tag == tag && selection.code >= ownCode &&",
+			"a release no newer than this build is no offer"},
+		{"msiexec allowed to restart", "UpdateApply.h",
+			`command.append(L"\" /passive /norestart /l*v \"");`, `command.append(L"\" /passive /l*v \"");`,
+			"msiexec installs passively, never restarts"},
+		{"no relaunch asked", "UpdateApply.h",
+			`command.append(L"\" UPDATE_RELAUNCH=1");`, `command.append(L"\"");`,
+			"asks for the relaunch"},
 		{"a failed install keeps its package", "UpdateResult.h",
 			"return outcome == Outcome::Installed || outcome == Outcome::RestartRequired;",
 			"return outcome != Outcome::Refused;",

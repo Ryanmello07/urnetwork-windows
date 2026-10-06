@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- URnetworkUpdate.exe: the elevated update helper, and the installer's
+     relaunch of the app after an update (main.cpp says why it is its own
+     program). The C runtime is linked statically and the imports are System32
+     libraries only, so it loads nothing from the app's folder: a copy of it
+     needs nothing beside it, and it holds none of the files an update
+     replaces.
+     SPDX-License-Identifier: MPL-2.0 -->
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64"><Configuration>Debug</Configuration><Platform>x64</Platform></ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64"><Configuration>Release</Configuration><Platform>x64</Platform></ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|ARM64"><Configuration>Debug</Configuration><Platform>ARM64</Platform></ProjectConfiguration>
+    <ProjectConfiguration Include="Release|ARM64"><Configuration>Release</Configuration><Platform>ARM64</Platform></ProjectConfiguration>
+  </ItemGroup>
+
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <ProjectGuid>{A1B2C3D4-0006-4E5F-8A9B-000000000006}</ProjectGuid>
+    <RootNamespace>URnetworkUpdate</RootNamespace>
+    <TargetName>URnetworkUpdate</TargetName>  <!-- URnetworkUpdate.exe (Package.wxs and the tray app expect it) -->
+    <ConfigurationType>Application</ConfigurationType>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+
+  <PropertyGroup Label="Configuration">
+    <UseDebugLibraries Condition="'$(Configuration)'=='Debug'">true</UseDebugLibraries>
+    <UseDebugLibraries Condition="'$(Configuration)'=='Release'">false</UseDebugLibraries>
+    <WholeProgramOptimization Condition="'$(Configuration)'=='Release'">true</WholeProgramOptimization>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <!-- STATIC CRT (MT), unlike Common.lib and the app's /MD: this program
+           must not load vcruntime140.dll or msvcp140.dll from the app's
+           folder. So it links no Common.lib, and compiles the one Common
+           source it needs (InstallLocationWin32.cpp) itself. -->
+      <RuntimeLibrary Condition="'$(Configuration)'=='Debug'">MultiThreadedDebug</RuntimeLibrary>
+      <RuntimeLibrary Condition="'$(Configuration)'=='Release'">MultiThreaded</RuntimeLibrary>
+      <Optimization Condition="'$(Configuration)'=='Release'">MaxSpeed</Optimization>
+      <SDLCheck>true</SDLCheck>
+      <ControlFlowGuard>Guard</ControlFlowGuard>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <AdditionalDependencies>winhttp.lib;crypt32.lib;bcrypt.lib;msi.lib;advapi32.lib;shell32.lib;ole32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <!-- 0x800 = LOAD_LIBRARY_SEARCH_SYSTEM32: the loader resolves this
+           program's imports from System32 alone, before its entry point runs
+           (Windows 10 1607 and later). main.cpp sets the same search for
+           every later load. -->
+      <AdditionalOptions>/DEPENDENTLOADFLAG:0x800 %(AdditionalOptions)</AdditionalOptions>
+    </Link>
+    <Manifest>
+      <AdditionalManifestFiles>Updater.manifest</AdditionalManifestFiles>
+    </Manifest>
+  </ItemDefinitionGroup>
+
+  <!-- A runner test's feed (ApplyUpdate.cpp kRunnerTestFeed): its repository
+       id, owner, repo and tag prefix, as bare tokens the source stringizes.
+       Only a workflow that tests an apply against a throwaway release passes
+       these, and only as /p: properties: app\build.ps1 and this repository's
+       workflows pass none (update_apply_wiring_test.go), and the check below
+       refuses them from the environment, where a stray variable on a build
+       host would otherwise point an official build at another feed. -->
+  <ItemDefinitionGroup Condition="'$(UrnUpdateRunnerTestRepoId)'!=''">
+    <ClCompile>
+      <PreprocessorDefinitions>URN_UPDATE_RUNNER_TEST_REPO_ID=$(UrnUpdateRunnerTestRepoId);URN_UPDATE_RUNNER_TEST_OWNER=$(UrnUpdateRunnerTestOwner);URN_UPDATE_RUNNER_TEST_REPO=$(UrnUpdateRunnerTestRepo);URN_UPDATE_RUNNER_TEST_TAG_PREFIX=$(UrnUpdateRunnerTestTagPrefix);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <Target Name="UrnCheckRunnerTestFeed" BeforeTargets="ClCompile">
+    <Error Condition="'$([System.Environment]::GetEnvironmentVariable(`UrnUpdateRunnerTestRepoId`))$([System.Environment]::GetEnvironmentVariable(`UrnUpdateRunnerTestOwner`))$([System.Environment]::GetEnvironmentVariable(`UrnUpdateRunnerTestRepo`))$([System.Environment]::GetEnvironmentVariable(`UrnUpdateRunnerTestTagPrefix`))'!=''"
+           Text="UrnUpdateRunnerTest* is set in the environment. A runner test's feed is passed as /p: properties only; unset the variable." />
+    <Error Condition="'$(UrnUpdateRunnerTestRepoId)'!='' and ('$(UrnUpdateRunnerTestOwner)'=='' or '$(UrnUpdateRunnerTestRepo)'=='' or '$(UrnUpdateRunnerTestTagPrefix)'=='')"
+           Text="A runner test's feed needs all of UrnUpdateRunnerTestRepoId, UrnUpdateRunnerTestOwner, UrnUpdateRunnerTestRepo and UrnUpdateRunnerTestTagPrefix." />
+    <Error Condition="'$(UrnUpdateRunnerTestRepoId)'=='' and '$(UrnUpdateRunnerTestOwner)$(UrnUpdateRunnerTestRepo)$(UrnUpdateRunnerTestTagPrefix)'!=''"
+           Text="A runner test's feed needs UrnUpdateRunnerTestRepoId too." />
+  </Target>
+
+  <ItemGroup>
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="ApplyUpdate.cpp" />
+    <ClCompile Include="Http.cpp" />
+    <ClCompile Include="HelperLog.cpp" />
+    <ClCompile Include="..\Common\InstallLocationWin32.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="ApplyUpdate.h" />
+    <ClInclude Include="Http.h" />
+    <ClInclude Include="HelperLog.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="Updater.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Updater.manifest" />
+  </ItemGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

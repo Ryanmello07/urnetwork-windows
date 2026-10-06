@@ -1,0 +1,485 @@
+// SPDX-License-Identifier: MPL-2.0
+
+package tests
+
+import (
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"testing"
+)
+
+// The call sites of the elevated update apply (app/src/Updater, the tray app's
+// UpdateChecker and installer/Package.wxs). What each decision means runs in
+// update_release_test.go; the helper, the tray and the installer need Windows,
+// so these read their sources with every comment blanked. Each check returns
+// the problems it found, so the negative controls below can run the same
+// check on a rewritten source and require it to fail.
+
+func readUpdaterSource(t *testing.T, name string) string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(repositoryRoot(t), "app", "src", "Updater", name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
+
+// The problems of `patterns` not matching in `text` in this order, each after
+// the match of the one before it.
+func applyOrderProblems(where, text string, patterns ...string) []string {
+	from := 0
+	for _, pattern := range patterns {
+		location := regexp.MustCompile(pattern).FindStringIndex(text[from:])
+		if location == nil {
+			return []string{where + " is missing " + pattern + ", in this order after the patterns before it"}
+		}
+		from += location[1]
+	}
+	return nil
+}
+
+// The text from `opener` through the next "\n}\n", or "" when absent.
+func applyDefinition(source, opener string) string {
+	start := strings.Index(source, opener)
+	if start < 0 {
+		return ""
+	}
+	end := strings.Index(source[start:], "\n}\n")
+	if end < 0 {
+		return ""
+	}
+	return source[start : start+end+2]
+}
+
+func reportProblems(t *testing.T, problems []string) {
+	t.Helper()
+	for _, problem := range problems {
+		t.Error(problem)
+	}
+}
+
+// The helper is its own program: the static C runtime, imports resolved from
+// System32 alone, no Common.lib and no SDK, built by the solution.
+func checkUpdaterProject(project, solution, common string) []string {
+	var problems []string
+	for _, want := range []string{
+		"<TargetName>URnetworkUpdate</TargetName>",
+		"<RuntimeLibrary Condition=\"'$(Configuration)'=='Release'\">MultiThreaded</RuntimeLibrary>",
+		"<RuntimeLibrary Condition=\"'$(Configuration)'=='Debug'\">MultiThreadedDebug</RuntimeLibrary>",
+		"<AdditionalOptions>/DEPENDENTLOADFLAG:0x800 %(AdditionalOptions)</AdditionalOptions>",
+		`<ClCompile Include="..\Common\InstallLocationWin32.cpp" />`,
+		"<AdditionalManifestFiles>Updater.manifest</AdditionalManifestFiles>",
+	} {
+		if !strings.Contains(project, want) {
+			problems = append(problems, "Updater.vcxproj is missing "+want)
+		}
+	}
+	settings := regexp.MustCompile(`(?s)<!--.*?-->`).ReplaceAllString(project, "")
+	for _, forbidden := range []string{"MultiThreadedDLL", "MultiThreadedDebugDLL", "Common.vcxproj",
+		"URnetworkSdk", "WindowsAppSDK", "Common.lib"} {
+		if strings.Contains(settings, forbidden) {
+			problems = append(problems, "Updater.vcxproj names "+forbidden+": the helper must load nothing from the app's folder")
+		}
+	}
+	for _, config := range []string{"Release|x64", "Release|ARM64"} {
+		if !strings.Contains(solution, "{A1B2C3D4-0006-4E5F-8A9B-000000000006}."+config+".Build.0 = "+config) {
+			problems = append(problems, "URnetwork.sln does not build the helper for "+config)
+		}
+	}
+	if !strings.Contains(solution, `"URnetworkUpdate", "src\Updater\Updater.vcxproj", "{A1B2C3D4-0006-4E5F-8A9B-000000000006}"`) {
+		problems = append(problems, "URnetwork.sln does not list the helper's project")
+	}
+	for _, want := range []string{`<ClCompile Include="InstallLocationWin32.cpp" />`,
+		`<ClInclude Include="InstallLocationWin32.h" />`, `<ClInclude Include="UpdateApply.h" />`} {
+		if !strings.Contains(common, want) {
+			problems = append(problems, "Common.vcxproj is missing "+want)
+		}
+	}
+	return problems
+}
+
+func TestUpdateApplyHelperIsItsOwnProgram(t *testing.T) {
+	root := repositoryRoot(t)
+	solution, err := os.ReadFile(filepath.Join(root, "app", "URnetwork.sln"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reportProblems(t, checkUpdaterProject(readUpdaterSource(t, "Updater.vcxproj"), string(solution),
+		readCommonSource(t, "Common.vcxproj")))
+	manifest := readUpdaterSource(t, "Updater.manifest")
+	if !strings.Contains(manifest, `<requestedExecutionLevel level="asInvoker" uiAccess="false" />`) {
+		t.Error("Updater.manifest must run the helper as invoked: the tray elevates it, and the relaunch must not be")
+	}
+}
+
+// Before anything else the helper limits where libraries load from and drops
+// the app's URNETWORK_* overrides; nothing in it reads the environment or the
+// user's storage.
+func checkUpdaterEntry(main string, sources map[string]string) []string {
+	entry := applyDefinition(main, "int WINAPI wWinMain(")
+	problems := applyOrderProblems("wWinMain", entry,
+		regexp.QuoteMeta("::SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_SYSTEM32 | LOAD_LIBRARY_SEARCH_APPLICATION_DIR);"),
+		regexp.QuoteMeta("DropAppOverrides();"),
+		regexp.QuoteMeta("::CommandLineToArgvW("),
+		regexp.QuoteMeta(`if (args.size() == 3 && args[1] == L"--apply-update") return urnw::updater::ApplyUpdate(args[2]);`),
+		regexp.QuoteMeta("if (args.size() == 1) return RelaunchApp();"),
+		regexp.QuoteMeta("return static_cast<int>(urnw::update::Refusal::BadArguments);"))
+	if strings.Index(entry, "SetDefaultDllDirectories") > strings.Index(entry, "CommandLineToArgvW") {
+		problems = append(problems, "wWinMain loads shell32 before it limits the library search")
+	}
+	drop := applyDefinition(main, "void DropAppOverrides() {")
+	problems = append(problems, applyOrderProblems("DropAppOverrides", drop,
+		regexp.QuoteMeta("::GetEnvironmentStringsW();"),
+		regexp.QuoteMeta(`if (upper.rfind(L"URNETWORK_", 0) == 0) names.push_back(std::move(name));`),
+		regexp.QuoteMeta("::SetEnvironmentVariableW(name.c_str(), nullptr);"))...)
+	relaunch := applyDefinition(main, "int RelaunchApp() {")
+	problems = append(problems, applyOrderProblems("RelaunchApp", relaunch,
+		regexp.QuoteMeta("if (IsFullyElevated()) return 0;"),
+		regexp.QuoteMeta(`folder / L"URnetwork.exe";`),
+		regexp.QuoteMeta(`L"\" --after-update";`),
+		regexp.QuoteMeta("::CreateProcessW(app.c_str(), command.data(),"))...)
+	for name, source := range sources {
+		for _, forbidden := range []string{"GetEnvironmentVariable", "getenv", "StorageRoot(", "Paths.h",
+			"LoadAppPrefs", "SHGetKnownFolderPath(FOLDERID_LocalAppData"} {
+			if strings.Contains(source, forbidden) {
+				problems = append(problems, "the helper's "+name+" reads "+forbidden+
+					": nothing a user can set may steer the elevated helper")
+			}
+		}
+	}
+	return problems
+}
+
+func updaterSources(t *testing.T) map[string]string {
+	t.Helper()
+	sources := map[string]string{}
+	for _, name := range []string{"main.cpp", "ApplyUpdate.cpp", "Http.cpp", "HelperLog.cpp"} {
+		sources[name] = stripComments(readUpdaterSource(t, name))
+	}
+	sources["InstallLocationWin32.cpp"] = stripComments(readCommonSource(t, "InstallLocationWin32.cpp"))
+	return sources
+}
+
+func TestUpdateApplyHelperStartsClean(t *testing.T) {
+	sources := updaterSources(t)
+	reportProblems(t, checkUpdaterEntry(sources["main.cpp"], sources))
+}
+
+// The helper's steps, in the order the spec gives them: who and where; the
+// feed's list, fetched here; the release it offers; the download through the
+// one allowed redirect; the digest through the handle that holds the file;
+// the package's identity; the image moved out of the way; msiexec; the result.
+func checkApplyUpdate(apply string) []string {
+	body := applyDefinition(apply, "int ApplyUpdate(std::wstring_view tagArgument) {")
+	return applyOrderProblems("ApplyUpdate", body,
+		regexp.QuoteMeta("if (!IsElevated()) {"),
+		regexp.QuoteMeta("return static_cast<int>(Refusal::NotElevated);"),
+		regexp.QuoteMeta("const fs::path executable = install::OwnExecutablePath();"),
+		regexp.QuoteMeta("!install::AdminOnlyLocation(executable, why)"),
+		regexp.QuoteMeta("return static_cast<int>(Refusal::NotInstalled);"),
+		regexp.QuoteMeta("if (version::kCode == 0) {"),
+		regexp.QuoteMeta("const update::Feed& feed = ChannelFeed();"),
+		regexp.QuoteMeta("if (!update::IsTagArgument(feed, tag)) {"),
+		regexp.QuoteMeta(`::CreateMutexW(nullptr, FALSE, L"Global\\URnetworkUpdateHelper")`),
+		regexp.QuoteMeta(`const fs::path updates = installFolder / L"updates";`),
+		regexp.QuoteMeta("if (!PrepareFolder(updates, error) || !PrepareFolder(tagFolder, error)) {"),
+		regexp.QuoteMeta(`L"https://api.github.com/repositories/{}/releases?per_page=15", feed.numericRepoId);`),
+		regexp.QuoteMeta("HttpGet("),
+		regexp.QuoteMeta("if (list.status != 200) {"),
+		regexp.QuoteMeta("if (list.serverUnixSeconds == 0) {"),
+		regexp.QuoteMeta("update::ParseReleaseList(body);"),
+		regexp.QuoteMeta("update::SelectRelease(*releases, kArch, feed, list.serverUnixSeconds);"),
+		regexp.QuoteMeta("if (!update::SelectionOffers(selection, tag, version::kCode)) {"),
+		regexp.QuoteMeta("if (!update::IsFeedAssetUrl(feed, selection.tag, selection.assetName, selection.assetUrl)) {"),
+		regexp.QuoteMeta("HttpGet(WidenAscii(selection.assetUrl), nullptr, 0, nullptr, redirect, error)"),
+		regexp.QuoteMeta("if (redirect.status != 302 || !update::IsAllowedAssetRedirect(redirect.location) ||"),
+		regexp.QuoteMeta("!HttpUrlHostIsOneOf(WidenAscii(redirect.location), update::kAssetRedirectHosts)) {"),
+		regexp.QuoteMeta("GENERIC_WRITE | FILE_READ_ATTRIBUTES, FILE_SHARE_READ,"),
+		regexp.QuoteMeta("nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr));"),
+		regexp.QuoteMeta("WidenAscii(redirect.location), nullptr, kMaxPackageBytes,"),
+		regexp.QuoteMeta("Handle held(::CreateFileW(package.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,"),
+		regexp.QuoteMeta("!SameFile(writtenId, heldId)"),
+		regexp.QuoteMeta("const std::string actual = Sha256(held.get());"),
+		regexp.QuoteMeta("!update::EqualsAsciiCaseless(actual, selection.digestHex)"),
+		regexp.QuoteMeta("return refuse(Refusal::Digest,"),
+		regexp.QuoteMeta("::MsiOpenDatabaseW(package.c_str(), MSIDBOPEN_READONLY, database.put())"),
+		regexp.QuoteMeta(`PackageProperty(database.get(), L"UpgradeCode");`),
+		regexp.QuoteMeta(`PackageProperty(database.get(), L"ProductVersion");`),
+		regexp.QuoteMeta("!update::PackageMatches(*upgradeCode, *productVersion, selection.code)"),
+		regexp.QuoteMeta("return refuse(Refusal::Package,"),
+		regexp.QuoteMeta("::MoveFileExW(executable.c_str(), running.c_str(), MOVEFILE_WRITE_THROUGH)"),
+		regexp.QuoteMeta(`const fs::path msiexec = systemFolder / L"msiexec.exe";`),
+		regexp.QuoteMeta("update::MsiexecCommandLine(msiexec.native(), package.native(),"),
+		regexp.QuoteMeta("::CreateProcessW(msiexec.c_str(), command.data(), nullptr, nullptr, FALSE, 0, nullptr,"),
+		regexp.QuoteMeta("::WaitForSingleObject(installer.get(), INFINITE);"),
+		regexp.QuoteMeta("::GetExitCodeProcess(installer.get(), &exitCode);"),
+		regexp.QuoteMeta("held.Close();"),
+		regexp.QuoteMeta("if (update::KeepsPackage(exitCode)) {"),
+		regexp.QuoteMeta("::DeleteFileW(package.c_str());"),
+		regexp.QuoteMeta("return finish(exitCode);"))
+}
+
+func TestUpdateApplyHelperChecksInOrder(t *testing.T) {
+	reportProblems(t, checkApplyUpdate(updaterSources(t)["ApplyUpdate.cpp"]))
+}
+
+// Every response the helper reads came with redirects refused and a
+// certificate the machine's own trust accepts for the host.
+func checkUpdaterHttp(http string) []string {
+	get := applyDefinition(http, "bool HttpGet(")
+	problems := applyOrderProblems("HttpGet", get,
+		regexp.QuoteMeta("parts.nScheme != INTERNET_SCHEME_HTTPS"),
+		regexp.QuoteMeta("WINHTTP_FLAG_SECURE));"),
+		regexp.QuoteMeta("DWORD policy = WINHTTP_OPTION_REDIRECT_POLICY_NEVER;"),
+		regexp.QuoteMeta("WINHTTP_OPTION_REDIRECT_POLICY, &policy, sizeof(policy))"),
+		regexp.QuoteMeta("::WinHttpReceiveResponse(request.get(), nullptr)"),
+		regexp.QuoteMeta("if (!MachineTrusts(request.get(), host, error)) return false;"),
+		regexp.QuoteMeta("WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER"),
+		regexp.QuoteMeta("if (status != 200 || !sink) return true;"),
+		regexp.QuoteMeta("if (total > maxBytes) {"))
+	trust := applyDefinition(http, "bool MachineTrusts(")
+	problems = append(problems, applyOrderProblems("MachineTrusts", trust,
+		regexp.QuoteMeta("WINHTTP_OPTION_SERVER_CERT_CONTEXT"),
+		regexp.QuoteMeta("::CertGetCertificateChain(HCCE_LOCAL_MACHINE, certificate, nullptr,"),
+		regexp.QuoteMeta("https.dwAuthType = AUTHTYPE_SERVER;"),
+		regexp.QuoteMeta("https.pwszServerName = const_cast<wchar_t*>(host.c_str());"),
+		regexp.QuoteMeta("::CertVerifyCertificateChainPolicy(CERT_CHAIN_POLICY_SSL, chain, &policy, &status);"),
+		regexp.QuoteMeta("if (!checked || status.dwError != 0) {"),
+		regexp.QuoteMeta("return false;"))...)
+	return problems
+}
+
+func TestUpdateApplyHelperTrustsOnlyTheMachine(t *testing.T) {
+	reportProblems(t, checkUpdaterHttp(updaterSources(t)["Http.cpp"]))
+}
+
+// The UpgradeCode the helper requires is the one the package carries.
+func TestUpdateApplyUpgradeCodeIsThePackages(t *testing.T) {
+	document := parseXML(t, filepath.Join(repositoryRoot(t), "app", "installer", "Package.wxs"))
+	packages := document.descendants(wixNamespace, "Package")
+	if len(packages) != 1 {
+		t.Fatalf("Package.wxs has %d Package elements", len(packages))
+	}
+	upgradeCode, _ := packages[0].attribute("UpgradeCode")
+	want := `inline constexpr std::string_view kUpgradeCode = "{` + strings.ToUpper(upgradeCode) + `}";`
+	if !strings.Contains(stripComments(readCommonSource(t, "UpdateApply.h")), want) {
+		t.Errorf("UpdateApply.h does not require Package.wxs's UpgradeCode: want %s", want)
+	}
+}
+
+// A runner test's feed reaches a build only through the four
+// /p:UrnUpdateRunnerTest* properties, never from the environment, and nothing
+// this repository builds official releases with passes them: build.ps1 and
+// every workflow here are checked for any feed setting at all.
+func checkRunnerFeedIsTestOnly(buildScript string, workflows map[string]string, project, apply string,
+	sources map[string]string) []string {
+	var problems []string
+	official := map[string]string{"app/build.ps1": buildScript}
+	for name, text := range workflows {
+		official[name] = text
+	}
+	feedDefault := regexp.MustCompile(`UrnUpdateFeedDefault=["']?([A-Za-z0-9_-]*)`)
+	for name, text := range official {
+		for _, setting := range []string{"UrnUpdateRunnerTest", "URN_UPDATE_RUNNER_TEST", "URN_UPDATE_FEED_DEFAULT_BETA"} {
+			if strings.Contains(text, setting) {
+				problems = append(problems, name+" sets "+setting+": official builds must poll the official feed")
+			}
+		}
+		for _, match := range feedDefault.FindAllStringSubmatch(text, -1) {
+			if match[1] != "official" {
+				problems = append(problems, name+" passes UrnUpdateFeedDefault="+match[1]+
+					": official builds must poll the official feed")
+			}
+		}
+	}
+	if !strings.Contains(project, `<ItemDefinitionGroup Condition="'$(UrnUpdateRunnerTestRepoId)'!=''">`) {
+		problems = append(problems, "Updater.vcxproj defines a runner feed without its property")
+	}
+	if !strings.Contains(project, "$([System.Environment]::GetEnvironmentVariable(`UrnUpdateRunnerTestRepoId`))") {
+		problems = append(problems, "Updater.vcxproj takes a runner feed from the environment")
+	}
+	if !strings.Contains(apply, "#if defined(URN_UPDATE_RUNNER_TEST_REPO_ID)\n  return kRunnerTestFeed;\n#else") {
+		problems = append(problems, "ApplyUpdate.cpp reads the runner feed outside its define")
+	}
+	if strings.Count(apply, "kRunnerTestFeed") != 2 {
+		problems = append(problems, "ApplyUpdate.cpp uses kRunnerTestFeed somewhere other than the channel's feed")
+	}
+	for name, source := range sources {
+		if name != "ApplyUpdate.cpp" && strings.Contains(source, "URN_UPDATE_RUNNER_TEST") {
+			problems = append(problems, name+" reads a runner feed: only the helper's channel may")
+		}
+	}
+	return problems
+}
+
+func officialWorkflows(t *testing.T) map[string]string {
+	t.Helper()
+	root := repositoryRoot(t)
+	paths, err := filepath.Glob(filepath.Join(root, ".github", "workflows", "*.y*ml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(paths) == 0 {
+		t.Fatal("no workflows under .github/workflows")
+	}
+	workflows := map[string]string{}
+	for _, path := range paths {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		workflows[filepath.ToSlash(path[len(root)+1:])] = string(data)
+	}
+	return workflows
+}
+
+func TestUpdateApplyRunnerFeedIsTestOnly(t *testing.T) {
+	root := repositoryRoot(t)
+	build, err := os.ReadFile(filepath.Join(root, "app", "build.ps1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sources := updaterSources(t)
+	appSources := appSourceFiles(t, ".cpp", ".h")
+	for name, source := range appSources {
+		sources["App/"+name] = stripComments(source)
+	}
+	reportProblems(t, checkRunnerFeedIsTestOnly(string(build), officialWorkflows(t),
+		readUpdaterSource(t, "Updater.vcxproj"), sources["ApplyUpdate.cpp"], sources))
+}
+
+// Each check above fails on a source that drops the defence it pins.
+func TestUpdateApplyWiringRejectsWeakerHelpers(t *testing.T) {
+	root := repositoryRoot(t)
+	solutionData, err := os.ReadFile(filepath.Join(root, "app", "URnetwork.sln"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	buildData, err := os.ReadFile(filepath.Join(root, "app", "build.ps1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	project := readUpdaterSource(t, "Updater.vcxproj")
+	solution := string(solutionData)
+	common := readCommonSource(t, "Common.vcxproj")
+	sources := updaterSources(t)
+	workflows := officialWorkflows(t)
+	replace := func(text, old, replacement string) string {
+		if strings.Count(text, old) != 1 {
+			t.Fatalf("negative control: %q is not in the source exactly once", old)
+		}
+		return strings.Replace(text, old, replacement, 1)
+	}
+	with := func(name, text string) map[string]string {
+		copied := map[string]string{}
+		for key, value := range sources {
+			copied[key] = value
+		}
+		copied[name] = text
+		return copied
+	}
+	for _, tc := range []struct {
+		name  string
+		check func() []string
+	}{
+		{"the UpgradeCode check skipped", func() []string {
+			return checkApplyUpdate(replace(sources["ApplyUpdate.cpp"],
+				"!update::PackageMatches(*upgradeCode, *productVersion, selection.code)", "false"))
+		}},
+		{"the digest compared to nothing", func() []string {
+			return checkApplyUpdate(replace(sources["ApplyUpdate.cpp"],
+				"!update::EqualsAsciiCaseless(actual, selection.digestHex)", "false"))
+		}},
+		{"any offered release installed", func() []string {
+			return checkApplyUpdate(replace(sources["ApplyUpdate.cpp"],
+				"if (!update::SelectionOffers(selection, tag, version::kCode)) {", "if (selection.code == 0) {"))
+		}},
+		{"a redirect anywhere", func() []string {
+			return checkApplyUpdate(replace(sources["ApplyUpdate.cpp"],
+				"if (redirect.status != 302 || !update::IsAllowedAssetRedirect(redirect.location) ||",
+				"if (redirect.status != 302 ||"))
+		}},
+		{"hashed after the handle is gone", func() []string {
+			return checkApplyUpdate(replace(sources["ApplyUpdate.cpp"],
+				"const std::string actual = Sha256(held.get());", "const std::string actual = HashPath(package);"))
+		}},
+		{"the image left in the installer's way", func() []string {
+			return checkApplyUpdate(replace(sources["ApplyUpdate.cpp"],
+				"::MoveFileExW(executable.c_str(), running.c_str(), MOVEFILE_WRITE_THROUGH)", "false"))
+		}},
+		{"a user-writable location", func() []string {
+			return checkApplyUpdate(replace(sources["ApplyUpdate.cpp"],
+				"!install::AdminOnlyLocation(executable, why)", "false"))
+		}},
+		{"redirects followed", func() []string {
+			return checkUpdaterHttp(replace(sources["Http.cpp"],
+				"DWORD policy = WINHTTP_OPTION_REDIRECT_POLICY_NEVER;", "DWORD policy = WINHTTP_OPTION_REDIRECT_POLICY_DISALLOW_HTTPS_TO_HTTP;"))
+		}},
+		{"the user's roots trusted", func() []string {
+			return checkUpdaterHttp(replace(sources["Http.cpp"],
+				"::CertGetCertificateChain(HCCE_LOCAL_MACHINE, certificate, nullptr,",
+				"::CertGetCertificateChain(nullptr, certificate, nullptr,"))
+		}},
+		{"no certificate check", func() []string {
+			return checkUpdaterHttp(replace(sources["Http.cpp"],
+				"if (!MachineTrusts(request.get(), host, error)) return false;", ""))
+		}},
+		{"the dynamic C runtime", func() []string {
+			return checkUpdaterProject(replace(project,
+				"<RuntimeLibrary Condition=\"'$(Configuration)'=='Release'\">MultiThreaded</RuntimeLibrary>",
+				"<RuntimeLibrary Condition=\"'$(Configuration)'=='Release'\">MultiThreadedDLL</RuntimeLibrary>"),
+				solution, common)
+		}},
+		{"imports searched in the app's folder", func() []string {
+			return checkUpdaterProject(replace(project, "/DEPENDENTLOADFLAG:0x800 ", ""), solution, common)
+		}},
+		{"libraries loaded before the search is limited", func() []string {
+			main := replace(sources["main.cpp"],
+				"  ::SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_SYSTEM32 | LOAD_LIBRARY_SEARCH_APPLICATION_DIR);\n", "")
+			main = replace(main, "  if (!argv) return",
+				"  ::SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_SYSTEM32 | LOAD_LIBRARY_SEARCH_APPLICATION_DIR);\n  if (!argv) return")
+			return checkUpdaterEntry(main, with("main.cpp", main))
+		}},
+		{"an app override read", func() []string {
+			apply := replace(sources["ApplyUpdate.cpp"], "  const fs::path installFolder = executable.parent_path();",
+				"  const fs::path installFolder = _wgetenv(L\"URNETWORK_APP_ROOT\");")
+			return checkUpdaterEntry(sources["main.cpp"], with("ApplyUpdate.cpp", apply))
+		}},
+		{"the relaunch started elevated", func() []string {
+			main := replace(sources["main.cpp"], "  if (IsFullyElevated()) return 0;\n", "")
+			return checkUpdaterEntry(main, with("main.cpp", main))
+		}},
+		{"build.ps1 passes a runner feed", func() []string {
+			return checkRunnerFeedIsTestOnly(string(buildData)+"\n/p:UrnUpdateRunnerTestRepoId=1\n", workflows,
+				project, sources["ApplyUpdate.cpp"], sources)
+		}},
+		{"build.ps1 passes another feed", func() []string {
+			return checkRunnerFeedIsTestOnly(string(buildData)+"\n/p:UrnUpdateFeedDefault=beta\n", workflows,
+				project, sources["ApplyUpdate.cpp"], sources)
+		}},
+		{"a workflow passes a runner feed", func() []string {
+			changed := map[string]string{".github/workflows/extra.yml": "run: msbuild /p:UrnUpdateRunnerTestRepoId=1"}
+			for name, text := range workflows {
+				changed[name] = text
+			}
+			return checkRunnerFeedIsTestOnly(string(buildData), changed, project, sources["ApplyUpdate.cpp"], sources)
+		}},
+		{"the runner feed from the environment", func() []string {
+			return checkRunnerFeedIsTestOnly(string(buildData), workflows,
+				strings.ReplaceAll(project, "$([System.Environment]::GetEnvironmentVariable(`UrnUpdateRunnerTestRepoId`))", ""),
+				sources["ApplyUpdate.cpp"], sources)
+		}},
+		{"the runner feed as the default", func() []string {
+			apply := replace(sources["ApplyUpdate.cpp"], "  return update::kOfficialFeed;\n", "  return kRunnerTestFeed;\n")
+			return checkRunnerFeedIsTestOnly(string(buildData), workflows, project, apply, sources)
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if problems := tc.check(); len(problems) == 0 {
+				t.Fatal("negative control was not detected")
+			}
+		})
+	}
+}

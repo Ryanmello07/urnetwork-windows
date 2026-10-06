@@ -11,7 +11,8 @@
 //     to;
 //   - which install locations an elevated process may run from
 //     (Common/InstallLocation.h);
-//   - what the update helper's exit code means (Common/UpdateResult.h).
+//   - what the update helper's exit code means (Common/UpdateResult.h);
+//   - what the helper decides before msiexec runs (Common/UpdateApply.h).
 //
 //   c++ -std=c++20 -I ../src/Common update-release-tests.cpp -o /tmp/update-release-tests
 //   /tmp/update-release-tests [<file of "code msi-version" lines>]
@@ -28,6 +29,7 @@
 
 #include "InstallLocation.h"
 #include "ReleaseSelection.h"
+#include "UpdateApply.h"
 #include "UpdateResult.h"
 
 using namespace urnw::update;
@@ -51,6 +53,8 @@ void CheckEq(const std::string& expected, const std::string& actual, const std::
 
 // The release list's Date header in every selection below: 2026-10-06T00:00:00Z.
 constexpr std::int64_t kServerUnix = 1791244800;
+
+std::string Narrow(const std::wstring& text) { return std::string(text.begin(), text.end()); }
 
 std::string Hex(std::uint32_t value) {
   std::ostringstream text;
@@ -504,6 +508,83 @@ void Outcomes() {
         "a runner test feed's tag reads with its prefix only");
 }
 
+void HelperDecisions() {
+  // the tag argument
+  Check(IsTagArgument(kOfficialFeed, "v2026.10.1-1060587890"), "an official tag is a tag argument");
+  Check(IsTagArgument(kOfficialFeed, "2026.10.1-1060587890"), "so is one without its v");
+  Check(IsTagArgument(kRunnerLikeFeed, "runner-test-v2026.10.1-1060587890"),
+        "a runner test feed's prefixed tag is one of its");
+  for (const char* bad : {
+           "", "latest", "v2026.10.1-1060587890 ", " v2026.10.1-1060587890",
+           "v2026.10.1-1060587890\"", "v2026.10.1-1060587890 /qn", "..", "../v2026.10.1-1060587890",
+           "v2026.10.1-1060587890/x", "v2026.10.1-1060587890\\x", "-v2026.10.1-1060587890",
+           "v2026.10.1-1060587890-rc", "runner-test-v2026.10.1-1060587890",
+           "v2026.10.1-1060587890\xc2\xa0",
+       }) {
+    Check(!IsTagArgument(kOfficialFeed, bad), std::string("not an official tag argument: ") + bad);
+  }
+  Check(!IsTagArgument(kRunnerLikeFeed, "v2026.10.1-1060587890"),
+        "a runner test feed takes only its prefixed tags");
+  Check(!IsTagArgument(kOfficialFeed, "v2026.10.1-" + std::string(90, '1')),
+        "a tag past the length cap is refused");
+
+  // the selection must offer the tag, above this build
+  Selection offered;
+  offered.code = 1060587890;
+  offered.tag = "v2026.10.1-1060587890";
+  offered.assetName = "URnetwork-2026.10.1-1060587890-x64.msi";
+  offered.assetUrl = FeedAssetUrl(kOfficialFeed, offered.tag, offered.assetName);
+  offered.digestHex = std::string(64, 'a');
+  Check(SelectionOffers(offered, "v2026.10.1-1060587890", 1053244730),
+        "the list offering the tag above this build is an offer");
+  Check(!SelectionOffers(offered, "v2026.10.2-1061000000", 1053244730),
+        "a list that offers another tag is no offer of this one");
+  Check(!SelectionOffers(offered, "v2026.10.1-1060587890", 1060587890),
+        "a release no newer than this build is no offer");
+  Check(!SelectionOffers(offered, "v2026.10.1-1060587890", 1070000000),
+        "nor is one older than this build");
+  Selection noDigest = offered;
+  noDigest.digestHex.clear();
+  Check(!SelectionOffers(noDigest, "v2026.10.1-1060587890", 1053244730),
+        "an offer without a digest is no offer");
+  Selection none;
+  Check(!SelectionOffers(none, "", 0), "an empty selection offers nothing");
+
+  // the package's identity
+  CheckEq("{A7C1E2D3-4B5F-6081-9C2D-3E4F50617283}", std::string(kUpgradeCode), "the UpgradeCode");
+  Check(PackageMatches("{A7C1E2D3-4B5F-6081-9C2D-3E4F50617283}", "26.10.1090", 1060587890),
+        "this product at the release's ProductVersion matches");
+  Check(PackageMatches("{a7c1e2d3-4b5f-6081-9c2d-3e4f50617283}", "26.10.1090", 1060587890),
+        "the UpgradeCode compares without case");
+  Check(!PackageMatches("{B7C1E2D3-4B5F-6081-9C2D-3E4F50617283}", "26.10.1090", 1060587890),
+        "another product's UpgradeCode is refused");
+  Check(!PackageMatches("{A7C1E2D3-4B5F-6081-9C2D-3E4F50617283}", "0.0.1", 1060587890),
+        "an unstamped package under a release tag is refused");
+  Check(!PackageMatches("{A7C1E2D3-4B5F-6081-9C2D-3E4F50617283}", "26.10.1089", 1060587890),
+        "an older package re-uploaded under a newer tag is refused");
+  Check(!PackageMatches("{A7C1E2D3-4B5F-6081-9C2D-3E4F50617283}", "", 0),
+        "code 0 has no package");
+
+  // msiexec's command line
+  CheckEq("\"C:\\Windows\\system32\\msiexec.exe\" /i \"C:\\Program Files\\URnetwork\\updates\\"
+          "v2026.10.1-1060587890\\URnetwork-2026.10.1-1060587890-x64.msi\" /passive /norestart "
+          "/l*v \"C:\\Program Files\\URnetwork\\updates\\v2026.10.1-1060587890\\install.log\" "
+          "UPDATE_RELAUNCH=1",
+          Narrow(MsiexecCommandLine(
+              L"C:\\Windows\\system32\\msiexec.exe",
+              L"C:\\Program Files\\URnetwork\\updates\\v2026.10.1-1060587890\\"
+              L"URnetwork-2026.10.1-1060587890-x64.msi",
+              L"C:\\Program Files\\URnetwork\\updates\\v2026.10.1-1060587890\\install.log")),
+          "msiexec installs passively, never restarts, logs verbosely and asks for the relaunch");
+
+  // finishedUtc
+  CheckEq("2026-10-01T12:46:29Z", FormatUtcSecond(CodeUnixSeconds(1060587890)),
+          "a release code's instant as a UTC second");
+  CheckEq("1970-01-01T00:00:00Z", FormatUtcSecond(0), "the epoch");
+  CheckEq("2000-02-29T23:59:59Z", FormatUtcSecond(951868799), "a leap day's last second");
+  Check(IsUtcSecond(FormatUtcSecond(kServerUnix)), "what FormatUtcSecond writes, IsUtcSecond reads");
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -520,6 +601,7 @@ int main(int argc, char** argv) {
   Redirects();
   InstallLocations();
   Outcomes();
+  HelperDecisions();
 
   std::cout << (gFailures == 0 ? "PASS" : "FAIL") << " update-release-tests: " << gCases
             << " checks, " << gFailures << " failures\n";
