@@ -3606,6 +3606,30 @@ right way</value>
     <value>Sending…</value>
     <comment>Feedback screen: label of the Send button while the feedback is being sent.</comment>
   </data>
+  <data name="feedback_star_count.zero" xml:space="preserve">
+    <value>{} stars</value>
+    <comment>Feedback screen: screen reader name of one of the five rating stars, the number of stars a tap on it gives (1 to 5).</comment>
+  </data>
+  <data name="feedback_star_count.one" xml:space="preserve">
+    <value>{} star</value>
+    <comment>Feedback screen: screen reader name of one of the five rating stars, the number of stars a tap on it gives (1 to 5).</comment>
+  </data>
+  <data name="feedback_star_count.two" xml:space="preserve">
+    <value>{} stars</value>
+    <comment>Feedback screen: screen reader name of one of the five rating stars, the number of stars a tap on it gives (1 to 5).</comment>
+  </data>
+  <data name="feedback_star_count.few" xml:space="preserve">
+    <value>{} stars</value>
+    <comment>Feedback screen: screen reader name of one of the five rating stars, the number of stars a tap on it gives (1 to 5).</comment>
+  </data>
+  <data name="feedback_star_count.many" xml:space="preserve">
+    <value>{} stars</value>
+    <comment>Feedback screen: screen reader name of one of the five rating stars, the number of stars a tap on it gives (1 to 5).</comment>
+  </data>
+  <data name="feedback_star_count.other" xml:space="preserve">
+    <value>{} stars</value>
+    <comment>Feedback screen: screen reader name of one of the five rating stars, the number of stars a tap on it gives (1 to 5).</comment>
+  </data>
   <data name="fixed_ip" xml:space="preserve">
     <value>Fixed IP</value>
     <comment>A toggle that allows users to enable or disable a fixed IP for their connection.</comment>
@@ -3964,6 +3988,10 @@ right way</value>
   <data name="invalid_balance_code" xml:space="preserve">
     <value>Invalid balance code</value>
     <comment>Used in Shared/Views/RedeemBalanceCodeSheet/RedeemBalanceCodeSheet.swift.</comment>
+  </data>
+  <data name="invalid_input" xml:space="preserve">
+    <value>Invalid input</value>
+    <comment>Text fields: screen reader name of the warning icon shown next to a field whose text is not valid.</comment>
   </data>
   <data name="invalid_referral_code" xml:space="preserve">
     <value>This code is not valid</value>
@@ -7968,6 +7996,10 @@ as it should be.</value>
     <value>Strong Anonymization</value>
     <comment>Connect drawer: strong anonymization toggle — the inverse of allow direct (direct connections expose the real source IP to the provider).</comment>
   </data>
+  <data name="strong_privacy_laws" xml:space="preserve">
+    <value>Strong privacy laws</value>
+    <comment>Locations list: screen reader name of the icon on a location whose country has strong privacy laws.</comment>
+  </data>
   <data name="subscribe" xml:space="preserve">
     <value>Subscribe</value>
     <comment>Button on the plan picker for the monthly plan, which has no free trial.</comment>
@@ -8394,6 +8426,10 @@ as it should be.</value>
   <data name="unlock_supporter_tooltip" xml:space="preserve">
     <value>Unlock even faster speeds and first dibs on new features.</value>
     <comment>Settings</comment>
+  </data>
+  <data name="unstable_connection" xml:space="preserve">
+    <value>Unstable connection</value>
+    <comment>Locations list: screen reader name of the warning icon on a location whose providers may be unstable.</comment>
   </data>
   <data name="unstable_providers_warning" xml:space="preserve">
     <value>* (may be unstable)</value>

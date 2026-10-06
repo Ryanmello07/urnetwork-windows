@@ -3475,6 +3475,10 @@
     <value>กำลังส่ง…</value>
     <comment>Feedback screen: label of the Send button while the feedback is being sent.</comment>
   </data>
+  <data name="feedback_star_count.other" xml:space="preserve">
+    <value>{} ดาว</value>
+    <comment>Feedback screen: screen reader name of one of the five rating stars, the number of stars a tap on it gives (1 to 5).</comment>
+  </data>
   <data name="fixed_ip" xml:space="preserve">
     <value>IP แบบคงที่</value>
     <comment>A toggle that allows users to enable or disable a fixed IP for their connection.</comment>
@@ -3773,6 +3777,10 @@
   <data name="invalid_balance_code" xml:space="preserve">
     <value>รหัสยอดเงินไม่ถูกต้อง</value>
     <comment>Used in Shared/Views/RedeemBalanceCodeSheet/RedeemBalanceCodeSheet.swift.</comment>
+  </data>
+  <data name="invalid_input" xml:space="preserve">
+    <value>ข้อมูลไม่ถูกต้อง</value>
+    <comment>Text fields: screen reader name of the warning icon shown next to a field whose text is not valid.</comment>
   </data>
   <data name="invalid_referral_code" xml:space="preserve">
     <value>โค้ดนี้ไม่ถูกต้อง</value>
@@ -6426,6 +6434,10 @@
     <value>การทำให้ไม่สามารถระบุตัวตนได้แบบเข้มงวด</value>
     <comment>Connect drawer: strong anonymization toggle — the inverse of allow direct (direct connections expose the real source IP to the provider).</comment>
   </data>
+  <data name="strong_privacy_laws" xml:space="preserve">
+    <value>กฎหมายความเป็นส่วนตัวที่เข้มงวด</value>
+    <comment>Locations list: screen reader name of the icon on a location whose country has strong privacy laws.</comment>
+  </data>
   <data name="subscribe" xml:space="preserve">
     <value>สมัครสมาชิก</value>
     <comment>Button on the plan picker for the monthly plan, which has no free trial.</comment>
@@ -6796,6 +6808,10 @@
   <data name="unlock_supporter_tooltip" xml:space="preserve">
     <value>ปลดล็อกความเร็ว และฟังก์ชั่นใหม่ก่อนใคร</value>
     <comment>Settings</comment>
+  </data>
+  <data name="unstable_connection" xml:space="preserve">
+    <value>การเชื่อมต่อไม่เสถียร</value>
+    <comment>Locations list: screen reader name of the warning icon on a location whose providers may be unstable.</comment>
   </data>
   <data name="unstable_providers_warning" xml:space="preserve">
     <value>* (อาจไม่เสถียร)</value>

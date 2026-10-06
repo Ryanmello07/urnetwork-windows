@@ -3534,6 +3534,22 @@ správným způsobem</value>
     <value>Odesílání…</value>
     <comment>Feedback screen: label of the Send button while the feedback is being sent.</comment>
   </data>
+  <data name="feedback_star_count.one" xml:space="preserve">
+    <value>{} hvězdička</value>
+    <comment>Feedback screen: screen reader name of one of the five rating stars, the number of stars a tap on it gives (1 to 5).</comment>
+  </data>
+  <data name="feedback_star_count.few" xml:space="preserve">
+    <value>{} hvězdičky</value>
+    <comment>Feedback screen: screen reader name of one of the five rating stars, the number of stars a tap on it gives (1 to 5).</comment>
+  </data>
+  <data name="feedback_star_count.many" xml:space="preserve">
+    <value>{} hvězdičky</value>
+    <comment>Feedback screen: screen reader name of one of the five rating stars, the number of stars a tap on it gives (1 to 5).</comment>
+  </data>
+  <data name="feedback_star_count.other" xml:space="preserve">
+    <value>{} hvězdiček</value>
+    <comment>Feedback screen: screen reader name of one of the five rating stars, the number of stars a tap on it gives (1 to 5).</comment>
+  </data>
   <data name="fixed_ip" xml:space="preserve">
     <value>Pevná IP</value>
     <comment>A toggle that allows users to enable or disable a fixed IP for their connection.</comment>
@@ -3868,6 +3884,10 @@ správným způsobem</value>
   <data name="invalid_balance_code" xml:space="preserve">
     <value>Neplatný kód na zůstatek</value>
     <comment>Used in Shared/Views/RedeemBalanceCodeSheet/RedeemBalanceCodeSheet.swift.</comment>
+  </data>
+  <data name="invalid_input" xml:space="preserve">
+    <value>Neplatný údaj</value>
+    <comment>Text fields: screen reader name of the warning icon shown next to a field whose text is not valid.</comment>
   </data>
   <data name="invalid_referral_code" xml:space="preserve">
     <value>Tento kód není platný</value>
@@ -6760,6 +6780,10 @@ jaký by měl být.</value>
     <value>Silná anonymizace</value>
     <comment>Connect drawer: strong anonymization toggle — the inverse of allow direct (direct connections expose the real source IP to the provider).</comment>
   </data>
+  <data name="strong_privacy_laws" xml:space="preserve">
+    <value>Přísné zákony na ochranu soukromí</value>
+    <comment>Locations list: screen reader name of the icon on a location whose country has strong privacy laws.</comment>
+  </data>
   <data name="subscribe" xml:space="preserve">
     <value>Předplatit</value>
     <comment>Button on the plan picker for the monthly plan, which has no free trial.</comment>
@@ -7142,6 +7166,10 @@ jaký by měl být.</value>
   <data name="unlock_supporter_tooltip" xml:space="preserve">
     <value>Odemkněte si ještě vyšší rychlost a přednostní právo na nové funkce.</value>
     <comment>Settings</comment>
+  </data>
+  <data name="unstable_connection" xml:space="preserve">
+    <value>Nestabilní připojení</value>
+    <comment>Locations list: screen reader name of the warning icon on a location whose providers may be unstable.</comment>
   </data>
   <data name="unstable_providers_warning" xml:space="preserve">
     <value>* (může být nestabilní)</value>

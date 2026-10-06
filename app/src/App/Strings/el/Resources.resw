@@ -3495,6 +3495,14 @@
     <value>Αποστολή…</value>
     <comment>Feedback screen: label of the Send button while the feedback is being sent.</comment>
   </data>
+  <data name="feedback_star_count.one" xml:space="preserve">
+    <value>{} αστέρι</value>
+    <comment>Feedback screen: screen reader name of one of the five rating stars, the number of stars a tap on it gives (1 to 5).</comment>
+  </data>
+  <data name="feedback_star_count.other" xml:space="preserve">
+    <value>{} αστέρια</value>
+    <comment>Feedback screen: screen reader name of one of the five rating stars, the number of stars a tap on it gives (1 to 5).</comment>
+  </data>
   <data name="fixed_ip" xml:space="preserve">
     <value>Σταθερή IP</value>
     <comment>A toggle that allows users to enable or disable a fixed IP for their connection.</comment>
@@ -3805,6 +3813,10 @@
   <data name="invalid_balance_code" xml:space="preserve">
     <value>Μη έγκυρος κωδικός υπολοίπου</value>
     <comment>Used in Shared/Views/RedeemBalanceCodeSheet/RedeemBalanceCodeSheet.swift.</comment>
+  </data>
+  <data name="invalid_input" xml:space="preserve">
+    <value>Μη έγκυρη τιμή</value>
+    <comment>Text fields: screen reader name of the warning icon shown next to a field whose text is not valid.</comment>
   </data>
   <data name="invalid_referral_code" xml:space="preserve">
     <value>Αυτός ο κωδικός δεν είναι έγκυρος</value>
@@ -6538,6 +6550,10 @@
     <value>Ισχυρή ανωνυμοποίηση</value>
     <comment>Connect drawer: strong anonymization toggle — the inverse of allow direct (direct connections expose the real source IP to the provider).</comment>
   </data>
+  <data name="strong_privacy_laws" xml:space="preserve">
+    <value>Αυστηροί νόμοι για την ιδιωτικότητα</value>
+    <comment>Locations list: screen reader name of the icon on a location whose country has strong privacy laws.</comment>
+  </data>
   <data name="subscribe" xml:space="preserve">
     <value>Εγγραφή</value>
     <comment>Button on the plan picker for the monthly plan, which has no free trial.</comment>
@@ -6912,6 +6928,10 @@
   <data name="unlock_supporter_tooltip" xml:space="preserve">
     <value>Ξεκλειδώστε ακόμη μεγαλύτερες ταχύτητες και αποκτήστε πρώιμη πρόσβαση σε νέες δυνατότητες.</value>
     <comment>Settings</comment>
+  </data>
+  <data name="unstable_connection" xml:space="preserve">
+    <value>Ασταθής σύνδεση</value>
+    <comment>Locations list: screen reader name of the warning icon on a location whose providers may be unstable.</comment>
   </data>
   <data name="unstable_providers_warning" xml:space="preserve">
     <value>* (μπορεί να είναι ασταθές)</value>

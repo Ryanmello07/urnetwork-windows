@@ -3475,6 +3475,10 @@
     <value>送信中…</value>
     <comment>Feedback screen: label of the Send button while the feedback is being sent.</comment>
   </data>
+  <data name="feedback_star_count.other" xml:space="preserve">
+    <value>星{}つ</value>
+    <comment>Feedback screen: screen reader name of one of the five rating stars, the number of stars a tap on it gives (1 to 5).</comment>
+  </data>
   <data name="fixed_ip" xml:space="preserve">
     <value>固定IP</value>
     <comment>A toggle that allows users to enable or disable a fixed IP for their connection.</comment>
@@ -3773,6 +3777,10 @@
   <data name="invalid_balance_code" xml:space="preserve">
     <value>無効な残高コード</value>
     <comment>Used in Shared/Views/RedeemBalanceCodeSheet/RedeemBalanceCodeSheet.swift.</comment>
+  </data>
+  <data name="invalid_input" xml:space="preserve">
+    <value>無効な入力</value>
+    <comment>Text fields: screen reader name of the warning icon shown next to a field whose text is not valid.</comment>
   </data>
   <data name="invalid_referral_code" xml:space="preserve">
     <value>このコードは無効です</value>
@@ -6423,6 +6431,10 @@
     <value>強力な匿名化</value>
     <comment>Connect drawer: strong anonymization toggle — the inverse of allow direct (direct connections expose the real source IP to the provider).</comment>
   </data>
+  <data name="strong_privacy_laws" xml:space="preserve">
+    <value>厳格なプライバシー法</value>
+    <comment>Locations list: screen reader name of the icon on a location whose country has strong privacy laws.</comment>
+  </data>
   <data name="subscribe" xml:space="preserve">
     <value>購読する</value>
     <comment>Button on the plan picker for the monthly plan, which has no free trial.</comment>
@@ -6793,6 +6805,10 @@
   <data name="unlock_supporter_tooltip" xml:space="preserve">
     <value>さらに高速な速度と新機能への優先アクセスをアンロックします。</value>
     <comment>Settings</comment>
+  </data>
+  <data name="unstable_connection" xml:space="preserve">
+    <value>不安定な接続</value>
+    <comment>Locations list: screen reader name of the warning icon on a location whose providers may be unstable.</comment>
   </data>
   <data name="unstable_providers_warning" xml:space="preserve">
     <value>*（不安定な場合があります）</value>
