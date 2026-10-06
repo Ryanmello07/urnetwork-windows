@@ -151,12 +151,7 @@
     <CustomAction Id="RelaunchAfterUpdate" BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)"
                   DllEntry="WixUnelevatedShellExec" Execute="immediate" Impersonate="yes"
                   Return="ignore" />
-    <InstallExecuteSequence>
-      <Custom Action="override Wix4CloseApplications_$(sys.BUILDARCHSHORT)" Before="InstallValidate"
-              Condition="VersionNT &gt; 400" />
-      <Custom Action="RelaunchAfterUpdate" After="InstallFinalize"
-              Condition='UPDATE_RELAUNCH = "1" AND NOT (REMOVE ~= "ALL") AND NOT UPGRADINGPRODUCTCODE' />
-    </InstallExecuteSequence>
+    <!-- Both are scheduled in the one InstallExecuteSequence below. -->
     <MediaTemplate EmbedCab="yes" />
 
     <!-- The app icon, for Add/Remove Programs and the Start Menu shortcut.
@@ -393,6 +388,12 @@
               Condition="REMOVE~=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
       <Custom Action="RemoveStartupApprovedValue" After="RemoveStartupRunValue"
               Condition="REMOVE~=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
+      <!-- The update's close and relaunch: CloseTrayApp and
+           RelaunchAfterUpdate above say why each runs where it does. -->
+      <Custom Action="override Wix4CloseApplications_$(sys.BUILDARCHSHORT)" Before="InstallValidate"
+              Condition="VersionNT &gt; 400" />
+      <Custom Action="RelaunchAfterUpdate" After="InstallFinalize"
+              Condition='UPDATE_RELAUNCH = "1" AND NOT (REMOVE ~= "ALL") AND NOT UPGRADINGPRODUCTCODE' />
     </InstallExecuteSequence>
 
     <Feature Id="Main" Title="URnetwork" Level="1">

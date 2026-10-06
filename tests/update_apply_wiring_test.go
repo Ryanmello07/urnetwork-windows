@@ -315,15 +315,14 @@ func checkRunnerFeedIsTestOnly(buildScript string, workflows map[string]string, 
 	return problems
 }
 
+// The repository's workflows, if it has any: upstream builds on its own
+// hardware and keeps none (2024061), and one added later is checked too.
 func officialWorkflows(t *testing.T) map[string]string {
 	t.Helper()
 	root := repositoryRoot(t)
 	paths, err := filepath.Glob(filepath.Join(root, ".github", "workflows", "*.y*ml"))
 	if err != nil {
 		t.Fatal(err)
-	}
-	if len(paths) == 0 {
-		t.Fatal("no workflows under .github/workflows")
 	}
 	workflows := map[string]string{}
 	for _, path := range paths {
@@ -1026,6 +1025,10 @@ func checkInstallerCloseAndRelaunch(document xmlNode) []string {
 		}
 	}
 	sequence := document.descendants(wixNamespace, "InstallExecuteSequence")
+	if len(sequence) != 1 {
+		// launch_at_startup_wiring_test.go reads the first one as the package's
+		problems = append(problems, fmt.Sprintf("Package.wxs has %d InstallExecuteSequence elements, want one", len(sequence)))
+	}
 	var customs []*xmlNode
 	for _, node := range sequence {
 		customs = append(customs, node.children(wixNamespace, "Custom")...)
@@ -1146,8 +1149,11 @@ func TestUpdateApplyInstallerRejectsWeakerPackages(t *testing.T) {
 			`Condition='NOT (REMOVE ~= "ALL") AND NOT UPGRADINGPRODUCTCODE'`},
 		{"a relaunch from the removed product", `Condition='UPDATE_RELAUNCH = "1" AND NOT (REMOVE ~= "ALL") AND NOT UPGRADINGPRODUCTCODE'`,
 			`Condition='UPDATE_RELAUNCH = "1" AND NOT (REMOVE ~= "ALL")'`},
-		{"a failed relaunch failing the install", `Return="ignore" />`, `Return="check" />`},
+		{"a failed relaunch failing the install", "Impersonate=\"yes\"\n                  Return=\"ignore\" />",
+			"Impersonate=\"yes\"\n                  Return=\"check\" />"},
 		{"the helper harvested twice", "        <Exclude Files=\"$(var.BinDir)\\URnetworkUpdate.exe\" />\n", ""},
+		{"a second install sequence", "    <!-- Both are scheduled in the one InstallExecuteSequence below. -->\n",
+			"    <InstallExecuteSequence />\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if strings.Count(source, tc.old) != 1 {
