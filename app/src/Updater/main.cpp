@@ -8,10 +8,13 @@
 //   (none)                 The relaunch. After an update the helper ran, the
 //                          MSI starts this unelevated, with no arguments
 //                          (WixUnelevatedShellExec passes none), once its files
-//                          are in place (installer/Package.wxs). It starts
-//                          URnetwork.exe beside it with --after-update, which
-//                          waits for the update to finish instead of being
-//                          refused by it (Common/UpdateMarker.h), and ends.
+//                          are in place (installer/Package.wxs); after an
+//                          install that failed, the helper starts it the same
+//                          way (ApplyUpdate.cpp). It starts URnetwork.exe
+//                          beside it with --after-update, which waits for the
+//                          update to finish instead of being refused by it
+//                          (Common/UpdateMarker.h), and ends. It runs as the
+//                          user, in the user's environment, and keeps it.
 // Anything else exits with Refusal::BadArguments.
 //
 // Its own small program rather than a mode of URnetwork.exe: URnetwork.exe
@@ -27,7 +30,6 @@
 #include <shellapi.h>
 
 #include <cwchar>
-#include <cwctype>
 #include <filesystem>
 #include <string>
 #include <string_view>
@@ -35,15 +37,17 @@
 
 #include "ApplyUpdate.h"
 #include "InstallLocationWin32.h"
+#include "UpdateApply.h"
 #include "UpdateResult.h"
 
 namespace {
 
 namespace fs = std::filesystem;
 
-// Drops every URNETWORK_* variable from this process's environment, so
-// nothing here, and nothing it starts, can read one: those overrides belong
-// to the user's app and say nothing to an elevated process.
+// Drops every URNETWORK_* variable from this process's environment
+// (UpdateApply.h IsAppOverrideName), so nothing the elevated helper does, and
+// nothing it starts, can read one: those overrides belong to the user's app
+// and say nothing to an elevated process. Only --apply-update calls it.
 void DropAppOverrides() {
   wchar_t* block = ::GetEnvironmentStringsW();
   if (!block) return;
@@ -52,10 +56,8 @@ void DropAppOverrides() {
     const std::wstring_view text(entry);
     const std::size_t equals = text.find(L'=', 1);
     if (equals == std::wstring_view::npos) continue;
-    std::wstring name(text.substr(0, equals));
-    std::wstring upper = name;
-    for (wchar_t& c : upper) c = static_cast<wchar_t>(std::towupper(c));
-    if (upper.rfind(L"URNETWORK_", 0) == 0) names.push_back(std::move(name));
+    const std::wstring_view name = text.substr(0, equals);
+    if (urnw::update::IsAppOverrideName(name)) names.emplace_back(name);
   }
   ::FreeEnvironmentStringsW(block);
   for (const std::wstring& name : names) ::SetEnvironmentVariableW(name.c_str(), nullptr);
@@ -96,7 +98,6 @@ int RelaunchApp() {
 int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
   // Every library loaded from here on comes from System32 or this folder.
   ::SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_SYSTEM32 | LOAD_LIBRARY_SEARCH_APPLICATION_DIR);
-  DropAppOverrides();
 
   int argc = 0;
   wchar_t** argv = ::CommandLineToArgvW(::GetCommandLineW(), &argc);
@@ -104,7 +105,11 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
   std::vector<std::wstring> args(argv, argv + argc);
   ::LocalFree(argv);
 
-  if (args.size() == 3 && args[1] == L"--apply-update") return urnw::updater::ApplyUpdate(args[2]);
+  if (args.size() == 3 && args[1] == L"--apply-update") {
+    DropAppOverrides();
+    return urnw::updater::ApplyUpdate(args[2]);
+  }
+  // the user's own relaunch, in the user's own environment
   if (args.size() == 1) return RelaunchApp();
   return static_cast<int>(urnw::update::Refusal::BadArguments);
 }

@@ -255,6 +255,17 @@ fs::path OwnExecutablePath() {
   }
 }
 
+bool AdminOnlyPath(const fs::path& path, std::string& why) {
+  HANDLE raw = NonAdminToken(why);
+  if (!raw) return false;
+  Handle token(raw);
+  std::uint32_t rights = 0;
+  if (!RightsFor(token.get(), path, rights, why)) return false;
+  if ((rights & kWriteRights) == 0) return true;
+  why = std::format("a token without admin rights gets 0x{:x} on it", rights);
+  return false;
+}
+
 bool AdminOnlyLocation(const fs::path& executable, std::string& why) {
   InstallPathInfo path;
   InstallRights rights;

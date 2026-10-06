@@ -1,0 +1,728 @@
+# Runner legs for urnetwork/windows A2s that need no release on GitHub: the
+# official binaries, as app\build.ps1 makes them, against a local stand-in for
+# GitHub, and the installs a user or a deployment tool runs by hand. Nothing
+# is published. Every leg runs on its own disposable windows-2022 runner.
+#
+# Setup: on a throwaway branch of the fork that contains A2s, add
+#   .github/workflows/vpn-apply-local.yml   (this file)
+#   .github/vpn-upgrade-lib.ps1             (runner-tests/vpn-upgrade-lib.ps1)
+#   .github/vpn-apply-lib.ps1               (runner-tests/vpn-apply-lib.ps1)
+#   .github/vpn-apply-fake-github.ps1       (runner-tests/vpn-apply-fake-github.ps1)
+# and push it as ci/a2s-local-<anything>. The push runs this workflow.
+#
+# The stand-in (vpn-apply-lib.ps1 Set-UrFakeGitHub): the hosts file sends
+# api.github.com, github.com and the two release-asset hosts to this runner,
+# where a TLS server with a certificate from a test CA in LocalMachine\Root
+# answers as GitHub would for the official feed: a release list (repository
+# 1297133846, the official feed's id) with one immutable release v<vNext>,
+# its MSI's SHA-256, the download URL the feed names, one 302 to
+# release-assets.githubusercontent.com, and the MSI there. So the official
+# helper and the official tray run unchanged; only DNS and a root are test
+# ones, and they are removed before each step ends.
+#
+# The packages (x64, app\build.ps1 under Windows PowerShell 5.1):
+#   vN            a release code from today 00:10 UTC
+#   vNext         a release code from today 00:20 UTC
+#   vnext-broken  vNext's payload and ProductVersion with a urnetworkd.exe
+#                 that never starts: StartServices fails with 1920 and the
+#                 install rolls back, after CloseApplication closed the app
+#   v0            upstream main before A2a (c53da6d), -Version 0.0.0-0: an app
+#                 with no WM_CLOSE handler, at FILEVERSION 0.0.0.0
+#   v0-stamped    the same tree stamped with today's date, as a build from a
+#                 branch without the handler would be: FILEVERSION
+#                 <today>.0, at or above the 2026.10.5.1 the package checks
+#
+# Legs:
+#   update    vN with its app running -> the helper -> vNext: exit 0, the
+#             report, the repair source, every file under updates\ admin-only,
+#             the app closed by CloseApplication's WM_CLOSE inside
+#             Wix4CloseApplications with nothing left for the Restart Manager,
+#             the relaunch's order (waiting, the update still running, the
+#             marker gone after the helper, the icon) and the report shown by
+#             the relaunched vNext. Then a re-run of vNext's package /passive
+#             leaves the relaunched app running with its tray icon
+#             (requirement a).
+#   failure   vN with its app running -> the helper -> vnext-broken: 1603, the
+#             report, the package deleted and the log kept, the helper's image
+#             back, vN rolled back with its service running, and the relaunch
+#             the helper starts itself, which waits and shows the report.
+#   restart   vN with its app running, Windows Installer's Restart Manager off
+#             by policy and a hidden process holding resources.pri without
+#             delete sharing -> the helper -> vNext: 3010, the report, the
+#             repair source kept, the relaunch and its report.
+#   manual    vN with its app running -> msiexec /i vNext /passive by hand:
+#             CloseApplication stays out of it, and the Restart Manager closes
+#             the app through WM_ENDSESSION with ENDSESSION_CLOSEAPP
+#             (requirement e); nothing is left in use.
+#   session0  vN with its app running in this session -> msiexec /i vNext
+#             /passive as SYSTEM from a scheduled task, as a deployment tool
+#             runs it: observed, the app's fate and what was left in use.
+#   pre-a2a   v0 with its app running -> vNext /passive (requirement f), and
+#   fullui    the same in the full UI (a double-click): CloseApplication
+#             neither closes nor waits on v0, and with MSIRMSHUTDOWN=1 the
+#             Restart Manager ends v0 rather than leave it running with no
+#             icon: v0 is gone, nothing is left in use, and a launch afterwards
+#             starts vNext.
+#   stamped   v0-stamped with its app running -> vNext /passive: its
+#             FILEVERSION passes URNETWORK_APP_CLOSABLE, and still
+#             CloseApplication neither closes nor waits on it, since only the
+#             in-app update asks for the close; the Restart Manager ends it.
+#
+# SPDX-License-Identifier: MPL-2.0
+
+name: VPN update helper local legs (A2s)
+
+on:
+  push:
+    branches:
+      - 'ci/a2s-local-*'
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  # A green build of the restored CI on the merged tree: its
+  # urnetwork-sdk-windows artifact matches this tree's SDK headers.
+  SDK_RUN_ID: '37461880306'
+  # upstream main before A2a: the tree every official MSI so far was built from
+  V0_REF: c53da6dbc8963e3aef49340f859828fcc6725e02
+
+jobs:
+  plan:
+    name: Plan the release codes
+    runs-on: ubuntu-latest
+    outputs:
+      vn: ${{ steps.plan.outputs.vn }}
+      vnext: ${{ steps.plan.outputs.vnext }}
+      stamped: ${{ steps.plan.outputs.stamped }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Choose the versions
+        id: plan
+        run: |
+          founded=$(date -u -d 2023-05-23 +%s)
+          mk() {
+            local s
+            s=$(date -u -d "$1" +%s)
+            echo "$(date -u -d "$1" '+%Y.%-m.%-d')-$(( (s - founded) * 10 ))"
+          }
+          d0=$(date -u +%Y-%m-%d)
+          now=$(date -u +%s)
+          if [ $(( now - $(date -u -d "$d0 00:30:00Z" +%s) )) -lt 0 ]; then
+            echo "run this after 00:30 UTC: today's codes must be in the past"; exit 1
+          fi
+          {
+            echo "vn=$(mk "$d0 00:10:00Z")"
+            echo "vnext=$(mk "$d0 00:20:00Z")"
+            echo "stamped=$(mk "$d0 00:00:30Z")"
+          } | tee -a "$GITHUB_OUTPUT"
+
+      - name: Check the plan
+        shell: pwsh
+        env:
+          VN: ${{ steps.plan.outputs.vn }}
+          VNEXT: ${{ steps.plan.outputs.vnext }}
+          STAMPED: ${{ steps.plan.outputs.stamped }}
+        run: |
+          $vn = & ./app/tools/UrVersion.ps1 -Version $env:VN
+          $vnext = & ./app/tools/UrVersion.ps1 -Version $env:VNEXT
+          $stamped = & ./app/tools/UrVersion.ps1 -Version $env:STAMPED
+          foreach ($v in $vn, $vnext, $stamped) {
+            "{0}: code {1} msi {2} file {3}.{4}.{5}.{6}" -f $v.UrVersion, $v.UrVersionCode, $v.UrMsiVersion,
+              $v.UrVersionMajor, $v.UrVersionMinor, $v.UrVersionPatch, $v.UrVersionBuild
+          }
+          if ([uint64]$vn.UrVersionCode -ge [uint64]$vnext.UrVersionCode) { throw "vN must be the older code" }
+          if ([version]$vn.UrMsiVersion -ge [version]$vnext.UrMsiVersion) { throw "vN must have the lower ProductVersion" }
+          if ([version]$stamped.UrMsiVersion -ge [version]$vn.UrMsiVersion) { throw "the stamped build must have the lowest ProductVersion" }
+          $stampedFile = [version]('{0}.{1}.{2}.0' -f $stamped.UrVersionMajor, $stamped.UrVersionMinor, $stamped.UrVersionPatch)
+          $vnextFile = [version]('{0}.{1}.{2}.{3}' -f $vnext.UrVersionMajor, $vnext.UrVersionMinor, $vnext.UrVersionPatch, $vnext.UrVersionBuild)
+          if ($stampedFile -lt [version]'2026.10.5.1') { throw "the stamped build's FILEVERSION $stampedFile is below 2026.10.5.1" }
+          if ($stampedFile -ge $vnextFile) { throw "the stamped build's FILEVERSION $stampedFile is not below vNext's $vnextFile" }
+          "OK"
+
+  build:
+    name: Build ${{ matrix.key }} with build.ps1 under Windows PowerShell 5.1
+    needs: plan
+    runs-on: windows-2022
+    strategy:
+      fail-fast: true
+      matrix:
+        key: [vn, vnext]
+    env:
+      VERSION: ${{ needs.plan.outputs[matrix.key] }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download the SDK zip from run ${{ env.SDK_RUN_ID }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          gh run download $env:SDK_RUN_ID -R $env:GITHUB_REPOSITORY -n urnetwork-sdk-windows -D sdk-zip
+          if ($LASTEXITCODE -ne 0) { throw "could not download the SDK zip" }
+
+      - name: app\build.ps1 -Version ${{ env.VERSION }}
+        shell: cmd
+        run: >-
+          powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass
+          -File app\build.ps1 -Version %VERSION%
+          -SdkZip "%GITHUB_WORKSPACE%\sdk-zip\URnetworkSdkWindows.zip" -Platforms x64
+
+      - name: Check the build and stage the MSI
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-apply-lib.ps1"
+          $ur = & .\app\tools\UrVersion.ps1 -Version $env:VERSION
+          $fileVersion = '{0}.{1}.{2}.{3}' -f $ur.UrVersionMajor, $ur.UrVersionMinor, $ur.UrVersionPatch, $ur.UrVersionBuild
+          $bin = Join-Path $env:GITHUB_WORKSPACE 'app\build\x64\Release'
+          foreach ($exe in 'URnetwork.exe', 'urnetworkd.exe', 'URnetworkUpdate.exe') {
+            $actual = Get-UrFileVersion (Join-Path $bin $exe)
+            if ($actual -ne $fileVersion) { throw "$exe file version $actual, want $fileVersion" }
+          }
+          if ((Get-UrHelperFeed (Join-Path $bin 'URnetworkUpdate.exe')) -ne 'official') { throw "build.ps1 built a helper of another feed" }
+          $out = New-Item -ItemType Directory -Force (Join-Path $env:GITHUB_WORKSPACE 'staged')
+          $msi = Join-Path $env:GITHUB_WORKSPACE "app\build\out\URnetwork-$($env:VERSION)-x64.msi"
+          Copy-Item $msi (Join-Path $out '${{ matrix.key }}.msi')
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\app\tools\verify-msi-payload.ps1 -MsiPath $msi
+          if ($LASTEXITCODE -ne 0) { throw "verify-msi-payload.ps1 refused build.ps1's MSI" }
+          [pscustomobject]@{ key = '${{ matrix.key }}'; version = $env:VERSION; code = [string]$ur.UrVersionCode;
+            msi_version = $ur.UrMsiVersion; file_version = $fileVersion } |
+            ConvertTo-Json | Set-Content -Encoding ascii (Join-Path $out '${{ matrix.key }}.json')
+
+      # vN only: a helper built with a runner test's feed must not get through
+      # the payload check.
+      - name: The payload check refuses a helper built with a test feed
+        if: matrix.key == 'vn'
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-apply-lib.ps1"
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsPath = & $vswhere -latest -products '*' -requires Microsoft.Component.MSBuild -property installationPath
+          $msbuild = & $vswhere -latest -products '*' -requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\amd64\MSBuild.exe' | Select-Object -First 1
+          Import-Module (Join-Path $vsPath 'Common7\Tools\Microsoft.VisualStudio.DevShell.dll')
+          Enter-VsDevShell -VsInstallPath $vsPath -SkipAutomaticLocation -DevCmdArguments '-arch=amd64 -host_arch=amd64' | Out-Null
+          $ur = & .\app\tools\UrVersion.ps1 -Version $env:VERSION
+          $payload = Join-Path $env:RUNNER_TEMP 'bin-runner'
+          Copy-Item (Join-Path $env:GITHUB_WORKSPACE 'app\build\x64\Release') $payload -Recurse
+          $msbuildArgs = @('app\URnetwork.sln', '/t:URnetworkUpdate:Rebuild', '/p:Configuration=Release', '/p:Platform=x64') +
+            @($ur.MsbuildArgs) + @("/p:Version=$($env:VERSION)", "/p:OutDir=$payload\",
+              '/p:UrnUpdateRunnerTestRepoId=1', '/p:UrnUpdateRunnerTestOwner=example', '/p:UrnUpdateRunnerTestRepo=example',
+              '/p:UrnUpdateRunnerTestTagPrefix=example-', '/m', '/nologo', '/v:minimal')
+          & $msbuild @msbuildArgs
+          if ($LASTEXITCODE -ne 0) { throw "the test-feed helper build failed" }
+          if ((Get-UrHelperFeed (Join-Path $payload 'URnetworkUpdate.exe')) -ne 'runner') { throw "the rebuilt helper does not say it has a test feed" }
+          $wixOut = Join-Path $env:RUNNER_TEMP 'wix-runner\'
+          dotnet build app\installer\Installer.wixproj --no-incremental -c Release -p:Platform=x64 "-p:BinDir=$payload" "-p:OutputPath=$wixOut" @($ur.WixArgs) | Out-Host
+          if ($LASTEXITCODE -ne 0) { throw "the test-feed MSI build failed" }
+          $built = @(Get-ChildItem $wixOut -Recurse -Filter *.msi)
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\app\tools\verify-msi-payload.ps1 -MsiPath $built[0].FullName
+          if ($LASTEXITCODE -eq 0) { throw "verify-msi-payload.ps1 passed an MSI whose helper has a test feed" }
+          "OK: verify-msi-payload.ps1 refused the MSI whose helper has a test feed"
+
+      # vNext only: vnext-broken, vNext's payload and ProductVersion with a
+      # urnetworkd.exe that returns at once, never calling
+      # StartServiceCtrlDispatcher: StartServices fails with 1920, after the
+      # close and the old product's removal, and the install rolls back.
+      - name: Package vnext-broken
+        if: matrix.key == 'vnext'
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-apply-lib.ps1"
+          $ur = & .\app\tools\UrVersion.ps1 -Version $env:VERSION
+          $bin = Join-Path $env:GITHUB_WORKSPACE 'app\build\x64\Release'
+          $payload = Join-Path $env:RUNNER_TEMP 'bin-broken'
+          Copy-Item $bin $payload -Recurse
+          $neverStarts = Join-Path $env:RUNNER_TEMP 'never-starts.exe'
+          Add-Type -OutputType ConsoleApplication -OutputAssembly $neverStarts -TypeDefinition @'
+          [assembly: System.Reflection.AssemblyVersion("9999.0.0.0")]
+          [assembly: System.Reflection.AssemblyFileVersion("9999.0.0.0")]
+          public static class NeverStarts {
+            public static int Main() { return 0; }
+          }
+          '@
+          Copy-Item $neverStarts (Join-Path $payload 'urnetworkd.exe') -Force
+          $wixOut = Join-Path $env:RUNNER_TEMP 'wix-broken\'
+          dotnet build app\installer\Installer.wixproj --no-incremental -c Release -p:Platform=x64 "-p:BinDir=$payload" "-p:OutputPath=$wixOut" @($ur.WixArgs) | Out-Host
+          if ($LASTEXITCODE -ne 0) { throw "the vnext-broken MSI build failed" }
+          $built = @(Get-ChildItem $wixOut -Recurse -Filter *.msi)
+          if ($built.Count -ne 1) { throw "want one MSI under $wixOut" }
+          $staged = Join-Path $env:GITHUB_WORKSPACE 'staged\vnext-broken.msi'
+          Copy-Item $built[0].FullName $staged
+          if ((Get-UrMsiProductVersion $staged) -ne $ur.UrMsiVersion) { throw "vnext-broken's ProductVersion is not vNext's" }
+          if ((Get-UrMsiFileVersion $staged 'urnetworkd.exe') -ne '9999.0.0.0') { throw "vnext-broken's urnetworkd.exe is not the one that never starts" }
+          "staged vnext-broken: ProductVersion $($ur.UrMsiVersion), urnetworkd.exe 9999.0.0.0"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: msi-${{ matrix.key }}
+          path: staged/
+          if-no-files-found: error
+
+  build-v0:
+    name: Build ${{ matrix.key }} (upstream before A2a) under Windows PowerShell 5.1
+    needs: plan
+    runs-on: windows-2022
+    strategy:
+      fail-fast: true
+      matrix:
+        key: [v0, v0-stamped]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check out upstream main before A2a
+        uses: actions/checkout@v4
+        with:
+          repository: urnetwork/windows
+          ref: ${{ env.V0_REF }}
+          path: v0
+
+      - name: Download the SDK zip from run 37439135753 (the one v0 builds against)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          gh run download 37439135753 -R $env:GITHUB_REPOSITORY -n urnetwork-sdk-windows -D sdk-zip
+          if ($LASTEXITCODE -ne 0) { throw "could not download the SDK zip" }
+
+      - name: v0\app\build.ps1 -Version 0.0.0-0
+        shell: cmd
+        run: >-
+          powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass
+          -File v0\app\build.ps1 -Version 0.0.0-0
+          -SdkZip "%GITHUB_WORKSPACE%\sdk-zip\URnetworkSdkWindows.zip" -Platforms x64
+
+      - name: Stamp it as a build of today from a branch without the handler
+        if: matrix.key == 'v0-stamped'
+        shell: powershell
+        env:
+          STAMPED: ${{ needs.plan.outputs.stamped }}
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsPath = & $vswhere -latest -products '*' -requires Microsoft.Component.MSBuild -property installationPath
+          $msbuild = & $vswhere -latest -products '*' -requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\amd64\MSBuild.exe' | Select-Object -First 1
+          Import-Module (Join-Path $vsPath 'Common7\Tools\Microsoft.VisualStudio.DevShell.dll')
+          Enter-VsDevShell -VsInstallPath $vsPath -SkipAutomaticLocation -DevCmdArguments '-arch=amd64 -host_arch=amd64' | Out-Null
+          $ur = & .\app\tools\UrVersion.ps1 -Version $env:STAMPED
+          $beta = "$($env:STAMPED)-beta"
+          & $msbuild v0\app\URnetwork.sln /p:Configuration=Release /p:Platform=x64 "/p:UrVersion=$beta" "/p:UrVersionCode=$($ur.UrVersionCode)" `
+            "/p:UrVersionMajor=$($ur.UrVersionMajor)" "/p:UrVersionMinor=$($ur.UrVersionMinor)" "/p:UrVersionPatch=$($ur.UrVersionPatch)" `
+            "/p:Version=$beta" /m /nologo /v:minimal
+          if ($LASTEXITCODE -ne 0) { throw "the stamped v0 build failed" }
+          Remove-Item v0\app\build\out\*.msi -ErrorAction SilentlyContinue
+          Push-Location v0\app
+          dotnet build installer\Installer.wixproj -c Release -p:Platform=x64 "-p:BinDir=$PWD\build\x64\Release" "-p:UrMsiVersion=$($ur.UrMsiVersion)" | Out-Host
+          $code = $LASTEXITCODE
+          Pop-Location
+          if ($code -ne 0) { throw "the stamped v0 MSI build failed" }
+          $msi = Get-ChildItem v0\app\installer\bin -Recurse -Filter *.msi | Select-Object -First 1
+          New-Item -ItemType Directory -Force v0\app\build\out | Out-Null
+          Copy-Item $msi.FullName "v0\app\build\out\URnetwork-0.0.0-0-x64.msi" -Force
+
+      - name: Check ${{ matrix.key }} and stage it
+        shell: powershell
+        env:
+          STAMPED: ${{ needs.plan.outputs.stamped }}
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-apply-lib.ps1"
+          $out = New-Item -ItemType Directory -Force (Join-Path $env:GITHUB_WORKSPACE 'staged')
+          $bin = Join-Path $env:GITHUB_WORKSPACE 'v0\app\build\x64\Release'
+          if ('${{ matrix.key }}' -eq 'v0') {
+            $fileVersion = '0.0.0.0'
+            $msiVersion = '0.0.1'
+          } else {
+            $ur = & .\app\tools\UrVersion.ps1 -Version $env:STAMPED
+            $fileVersion = '{0}.{1}.{2}.0' -f $ur.UrVersionMajor, $ur.UrVersionMinor, $ur.UrVersionPatch
+            $msiVersion = $ur.UrMsiVersion
+          }
+          foreach ($exe in 'URnetwork.exe', 'urnetworkd.exe') {
+            $actual = Get-UrFileVersion (Join-Path $bin $exe)
+            if ($actual -ne $fileVersion) { throw "${{ matrix.key }} $exe file version $actual, want $fileVersion" }
+          }
+          if (Test-Path (Join-Path $bin 'URnetworkUpdate.exe')) { throw "${{ matrix.key }} has an update helper" }
+          $staged = Join-Path $out '${{ matrix.key }}.msi'
+          Copy-Item (Join-Path $env:GITHUB_WORKSPACE 'v0\app\build\out\URnetwork-0.0.0-0-x64.msi') $staged
+          $actual = Get-UrMsiProductVersion $staged
+          if ($actual -ne $msiVersion) { throw "${{ matrix.key }} ProductVersion $actual, want $msiVersion" }
+          [pscustomobject]@{ key = '${{ matrix.key }}'; version = '0.0.0-0'; code = '0'; msi_version = $msiVersion; file_version = $fileVersion } |
+            ConvertTo-Json | Set-Content -Encoding ascii (Join-Path $out '${{ matrix.key }}.json')
+          "staged ${{ matrix.key }}: ProductVersion $actual, payload files $fileVersion"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: msi-${{ matrix.key }}
+          path: staged/
+          if-no-files-found: error
+
+  update:
+    name: The update by the official binaries, its report, and a re-run of its package
+    needs: [plan, build]
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: msi-vn*
+          merge-multiple: true
+          path: ${{ runner.temp }}/msis
+
+      - name: Install vN
+        timeout-minutes: 10
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-apply-lib.ps1"
+          if ((Get-UrProducts).Count -ne 0) { throw "a URnetwork product is already installed on this runner" }
+          $code = Invoke-UrMsiexec '/i' (Get-UrMsiPath 'vn') '/qn' 'vn-install.log'
+          if ($code -ne 0) { throw "vN install exit code $code" }
+          Assert-UrInstalled (Get-UrExpect 'vn') 'vn-install.log' | Out-Null
+          if ((Get-UrHelperFeed $UrHelperPath) -ne 'official') { throw "the installed helper is not the official feed's" }
+          $explorer = @(Get-CimInstance Win32_Process -Filter "Name='explorer.exe'")
+          "session: $($explorer.Count) explorer.exe; this process is in session $((Get-Process -Id $PID).SessionId)"
+
+      - name: The update, with vN's app running
+        timeout-minutes: 20
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-apply-lib.ps1"
+          $vnext = Get-UrExpect 'vnext'
+          $tag = "v$($vnext.version)"
+          $from = Get-UrAppLogLength
+          $app = Start-UrTrayApp
+          $state = $null
+          try {
+            $state = Set-UrFakeGitHub (Get-UrMsiPath 'vnext') $vnext.version
+            $run = Invoke-UrHelper $tag 900 $app
+            $helperEnded = Get-Date
+          } finally {
+            Remove-UrTestNetwork $state
+          }
+          Show-UrUpdates
+          if ($run.ExitCode -ne 0) { throw ("the helper exited {0} (0x{0:X8}), want 0" -f $run.ExitCode) }
+          Assert-UrResult (Read-UrResult) $tag $vnext.code 0
+          $tagDir = Join-Path $UrUpdatesDir $tag
+          $msiLog = Join-Path $tagDir 'install.log'
+          Copy-Item $msiLog (Join-Path $UrLogDir 'vnext-update.log')
+          Assert-UrInstalled $vnext 'vnext-update.log' | Out-Null
+          $kept = Join-Path $tagDir "URnetwork-$($vnext.version)-x64.msi"
+          if ((Get-FileHash -Algorithm SHA256 $kept).Hash -ne (Get-FileHash -Algorithm SHA256 (Get-UrMsiPath 'vnext')).Hash) { throw "the repair source is not the release's MSI" }
+          foreach ($path in $UrUpdatesDir, $tagDir, $kept, $msiLog, (Join-Path $tagDir 'update-helper.log'), $UrResultPath) { Assert-UrAdminOnly $path }
+          if ($null -eq $run.Marked) { throw "the app did not exit while the helper ran: the installer did not close it" }
+          # requirement b's close: WM_CLOSE inside Wix4CloseApplications, and
+          # nothing left for the Restart Manager in InstallValidate
+          $evidence = Get-UrCloseEvidence $msiLog
+          $closed = Get-UrAppLogLines 'tray: WM_CLOSE received, exiting' $from
+          if ($closed.Count -ne 1) { throw "the app logged $($closed.Count) WM_CLOSE lines, want one" }
+          $closedAt = Get-UrAppLogTime $closed[0]
+          "Wix4CloseApplications_X64 $($evidence.CloseStart) - $($evidence.CloseEnd); WM_CLOSE received $closedAt"
+          if ($null -eq $evidence.CloseStart -or $null -eq $evidence.CloseEnd) { throw "no Wix4CloseApplications_X64 in the log" }
+          if ($closedAt -lt $evidence.CloseStart -or $closedAt -gt $evidence.CloseEnd) { throw "the app's WM_CLOSE came outside Wix4CloseApplications_X64" }
+          if ($evidence.ShutDownInValidate.Count -ne 0) { throw "the Restart Manager shut something down in InstallValidate: $($evidence.ShutDownInValidate -join ' | ')" }
+          if ((Get-UrAppLogLines 'the Restart Manager is closing the app' $from).Count -ne 0) { throw "the Restart Manager closed the app, not CloseApplication" }
+          "OK: CloseApplication closed vN's app at $closedAt, inside its own action, and nothing was left in use"
+          # the relaunch: through the MSI and the helper, waiting for the helper
+          $seen = Wait-UrRelaunch $from 150
+          if ($seen.Processes.Count -eq 0) { throw "no URnetwork.exe --after-update was started" }
+          Assert-UrRelaunchWaited $seen $helperEnded
+          if (-not ($seen.Report | Where-Object { $_ -match "last report: $([regex]::Escape($tag)) ended with 0 " })) { throw "the relaunched app did not show the report" }
+          "OK: the relaunched vNext showed the report of $tag"
+          Set-Content -Encoding ascii (Join-Path $env:RUNNER_TEMP 'relaunched.pid') $seen.Processes[0].Id
+
+      - name: a. A re-run of vNext's package leaves the relaunched app running
+        timeout-minutes: 10
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-apply-lib.ps1"
+          $appPid = [int](Get-Content (Join-Path $env:RUNNER_TEMP 'relaunched.pid'))
+          $from = Get-UrAppLogLength
+          $code = Invoke-UrMsiexec '/i' (Get-UrMsiPath 'vnext') '/passive' 'vnext-rerun.log'
+          if ($code -ne 0) { throw "the re-run exit code $code" }
+          Start-Sleep -Seconds 5
+          if (-not (Get-Process -Id $appPid -ErrorAction SilentlyContinue)) { throw "the re-run ended the app (pid $appPid)" }
+          $tray = @((Get-UrTopLevelWindows $appPid) | Where-Object { $_.Class -eq 'URnetworkTrayWindow' })
+          if ($tray.Count -ne 1) { throw "the app's tray window is gone after the re-run" }
+          if ((Get-UrAppLogLines 'WM_CLOSE received|Restart Manager is closing' $from).Count -ne 0) { throw "the re-run asked the app to close" }
+          $evidence = Get-UrCloseEvidence (Join-Path $UrLogDir 'vnext-rerun.log')
+          if ($evidence.ShutDownInValidate.Count -ne 0) { throw "the re-run's Restart Manager shut something down" }
+          "OK: the re-run changed nothing and the app (pid $appPid) still runs with its tray window"
+          Stop-UrAppProcesses
+
+      - name: Collect logs
+        if: always()
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-apply-lib.ps1"
+          Copy-Item "$env:LOCALAPPDATA\URnetwork\app\logs" (Join-Path $UrLogDir 'app-logs') -Recurse -Force -ErrorAction SilentlyContinue
+          Copy-Item $UrUpdatesDir (Join-Path $UrLogDir 'updates') -Recurse -Force -Exclude *.msi -ErrorAction SilentlyContinue
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: update-logs
+          path: ${{ runner.temp }}/upgrade-logs/
+          if-no-files-found: warn
+
+  failure:
+    name: An install that fails after the close starts the app again
+    needs: [plan, build]
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: msi-vn*
+          merge-multiple: true
+          path: ${{ runner.temp }}/msis
+
+      - name: Install vN
+        timeout-minutes: 10
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-apply-lib.ps1"
+          $code = Invoke-UrMsiexec '/i' (Get-UrMsiPath 'vn') '/qn' 'vn-install.log'
+          if ($code -ne 0) { throw "vN install exit code $code" }
+          $product = Assert-UrInstalled (Get-UrExpect 'vn') 'vn-install.log'
+          Set-Content -Encoding ascii (Join-Path $env:RUNNER_TEMP 'vn.productcode') $product.ProductCode
+
+      - name: vnext-broken fails at StartServices, and the helper starts the relaunch
+        timeout-minutes: 20
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-apply-lib.ps1"
+          $vn = Get-UrExpect 'vn'
+          $vnext = Get-UrExpect 'vnext'
+          $tag = "v$($vnext.version)"
+          $from = Get-UrAppLogLength
+          $app = Start-UrTrayApp
+          $state = $null
+          try {
+            $state = Set-UrFakeGitHub (Get-UrMsiPath 'vnext-broken') $vnext.version
+            $run = Invoke-UrHelper $tag 900 $app
+            $helperEnded = Get-Date
+          } finally {
+            Remove-UrTestNetwork $state
+          }
+          Show-UrUpdates
+          if ($run.ExitCode -ne 1603) { throw ("the helper exited {0} (0x{0:X8}), want 1603" -f $run.ExitCode) }
+          Assert-UrResult (Read-UrResult) $tag $vnext.code 1603
+          $tagDir = Join-Path $UrUpdatesDir $tag
+          $msiLog = Join-Path $tagDir 'install.log'
+          if (-not (Test-Path $msiLog)) { throw "the failed install's log is gone" }
+          if (@(Get-ChildItem -LiteralPath $tagDir -Filter '*.msi').Count -ne 0) { throw "the failed install's package is still there" }
+          $text = Get-UrMsiLogText $msiLog
+          foreach ($want in 'Action start \d{1,2}:\d{2}:\d{2}: RemoveExistingProducts\.', 'Error 1920') {
+            if ($text -notmatch $want) { throw "the failed install's log has no '$want'" }
+          }
+          if ($null -eq $run.Marked) { throw "the app did not exit while the helper ran: the installer did not close it" }
+          if ((Get-UrAppLogLines 'tray: WM_CLOSE received, exiting' $from).Count -ne 1) { throw "CloseApplication did not close the app" }
+          $product = Assert-UrInstalled $vn
+          if ($product.ProductCode -ne (Get-Content (Join-Path $env:RUNNER_TEMP 'vn.productcode'))) { throw "another product is registered" }
+          if ((Get-UrHelperFeed $UrHelperPath) -ne 'official' -or (Get-UrFileVersion $UrHelperPath) -ne $vn.file_version) { throw "vN's helper is not back in the install folder" }
+          $helperLog = Get-Content -Raw (Join-Path $tagDir 'update-helper.log')
+          if ($helperLog -notmatch 'started the relaunch through the user''s shell') { throw "the helper did not start the relaunch" }
+          "OK: 1603 after the close, vN rolled back with its service, its helper back, the log kept and the package gone"
+          $seen = Wait-UrRelaunch $from 150
+          if ($seen.Processes.Count -eq 0) { throw "no URnetwork.exe --after-update was started after the failure" }
+          Assert-UrRelaunchWaited $seen $helperEnded
+          if (-not ($seen.Report | Where-Object { $_ -match "last report: $([regex]::Escape($tag)) ended with 1603 " })) { throw "the relaunched app did not show the failure" }
+          "OK: the helper's relaunch waited for it and showed the failure of $tag"
+          Stop-UrAppProcesses
+
+      - name: Collect logs
+        if: always()
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-apply-lib.ps1"
+          Copy-Item "$env:LOCALAPPDATA\URnetwork\app\logs" (Join-Path $UrLogDir 'app-logs') -Recurse -Force -ErrorAction SilentlyContinue
+          Copy-Item $UrUpdatesDir (Join-Path $UrLogDir 'updates') -Recurse -Force -Exclude *.msi -ErrorAction SilentlyContinue
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: failure-logs
+          path: ${{ runner.temp }}/upgrade-logs/
+          if-no-files-found: warn
+
+  restart:
+    name: A file held without delete sharing ends the update in 3010
+    needs: [plan, build]
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: msi-vn*
+          merge-multiple: true
+          path: ${{ runner.temp }}/msis
+
+      - name: Install vN
+        timeout-minutes: 10
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-apply-lib.ps1"
+          $code = Invoke-UrMsiexec '/i' (Get-UrMsiPath 'vn') '/qn' 'vn-install.log'
+          if ($code -ne 0) { throw "vN install exit code $code" }
+          Assert-UrInstalled (Get-UrExpect 'vn') 'vn-install.log' | Out-Null
+
+      - name: The update with resources.pri held
+        timeout-minutes: 20
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-apply-lib.ps1"
+          $vnext = Get-UrExpect 'vnext'
+          $tag = "v$($vnext.version)"
+          $from = Get-UrAppLogLength
+          $app = Start-UrTrayApp
+          $state = $null
+          $holder = $null
+          try {
+            Set-UrRestartManagerOff $true
+            $holder = Start-UrFileHolder (Join-Path $UrInstallDir 'resources.pri')
+            $state = Set-UrFakeGitHub (Get-UrMsiPath 'vnext') $vnext.version
+            $run = Invoke-UrHelper $tag 900 $app
+            $helperEnded = Get-Date
+          } finally {
+            Remove-UrTestNetwork $state
+            if ($holder -and -not $holder.HasExited) { Stop-Process -Id $holder.Id -Force }
+            Set-UrRestartManagerOff $false
+          }
+          Show-UrUpdates
+          if ($run.ExitCode -ne 3010) { throw ("the helper exited {0} (0x{0:X8}), want 3010" -f $run.ExitCode) }
+          Assert-UrResult (Read-UrResult) $tag $vnext.code 3010
+          $tagDir = Join-Path $UrUpdatesDir $tag
+          if (-not (Test-Path (Join-Path $tagDir "URnetwork-$($vnext.version)-x64.msi"))) { throw "3010 deleted the repair source" }
+          $text = Get-UrMsiLogText (Join-Path $tagDir 'install.log')
+          (($text -split "`r?`n") | Where-Object { $_ -match 'resources.pri|1603|1903|3010|reboot' } | Select-Object -First 20) | ForEach-Object { "log: $_" }
+          $products = Get-UrProducts
+          if ($products.Count -ne 1 -or $products[0].Version -ne $vnext.msi_version) { throw "after 3010 want one product at $($vnext.msi_version)" }
+          Wait-UrServiceRunning | Out-Null
+          "OK: 3010, vNext registered with its service running, the repair source kept"
+          $seen = Wait-UrRelaunch $from 150
+          if ($seen.Processes.Count -eq 0) { throw "no URnetwork.exe --after-update was started after 3010" }
+          Assert-UrRelaunchWaited $seen $helperEnded
+          if (-not ($seen.Report | Where-Object { $_ -match "last report: $([regex]::Escape($tag)) ended with 3010 " })) { throw "the relaunched app did not show the 3010 report" }
+          "OK: the relaunch waited and showed the 3010 report"
+          Stop-UrAppProcesses
+
+      - name: Collect logs
+        if: always()
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-apply-lib.ps1"
+          Copy-Item "$env:LOCALAPPDATA\URnetwork\app\logs" (Join-Path $UrLogDir 'app-logs') -Recurse -Force -ErrorAction SilentlyContinue
+          Copy-Item $UrUpdatesDir (Join-Path $UrLogDir 'updates') -Recurse -Force -Exclude *.msi -ErrorAction SilentlyContinue
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: restart-logs
+          path: ${{ runner.temp }}/upgrade-logs/
+          if-no-files-found: warn
+
+  by-hand:
+    name: ${{ matrix.leg }}
+    needs: [plan, build, build-v0]
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        leg: [manual, session0, pre-a2a, fullui, stamped]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: msi-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/msis
+
+      - name: Install the build the leg starts from
+        timeout-minutes: 10
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-apply-lib.ps1"
+          $key = switch ('${{ matrix.leg }}') { 'pre-a2a' { 'v0' } 'fullui' { 'v0' } 'stamped' { 'v0-stamped' } default { 'vn' } }
+          Set-Content -Encoding ascii (Join-Path $env:RUNNER_TEMP 'from.key') $key
+          $code = Invoke-UrMsiexec '/i' (Get-UrMsiPath $key) '/qn' "$key-install.log"
+          if ($code -ne 0) { throw "$key install exit code $code" }
+          Assert-UrInstalled (Get-UrExpect $key) "$key-install.log" | Out-Null
+
+      - name: vNext installed by hand over the running app
+        timeout-minutes: 15
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-apply-lib.ps1"
+          $leg = '${{ matrix.leg }}'
+          $key = Get-Content (Join-Path $env:RUNNER_TEMP 'from.key')
+          $vnext = Get-UrExpect 'vnext'
+          $root = Join-Path $env:RUNNER_TEMP 'app-root'
+          New-Item -ItemType Directory -Force $root | Out-Null
+          $env:URNETWORK_APP_ROOT = $root
+          $appLog = Join-Path $root 'logs\urnetwork-app.log'
+          $app = Start-UrTrayApp
+          Remove-Item Env:\URNETWORK_APP_ROOT
+          $started = Get-Date
+          $log = "vnext-$leg.log"
+          try {
+            $code = switch ($leg) {
+              'session0' { Invoke-UrMsiexecAsSystem '/i' (Get-UrMsiPath 'vnext') '/passive' $log }
+              'fullui' { Invoke-UrMsiexec '/i' (Get-UrMsiPath 'vnext') '' $log }
+              default { Invoke-UrMsiexec '/i' (Get-UrMsiPath 'vnext') '/passive' $log }
+            }
+            "msiexec took $([int]((Get-Date) - $started).TotalSeconds) s, exit $code"
+            $logPath = Join-Path $UrLogDir $log
+            $evidence = Get-UrCloseEvidence $logPath
+            $evidence.RestartManagerLines | Select-Object -First 20 | ForEach-Object { "log: $_" }
+            $text = Get-UrMsiLogText $logPath
+            $inUse = @(($text -split "`r?`n") | Where-Object { $_ -match 'Info 1903' })
+            $closable = @(($text -split "`r?`n") | Where-Object { $_ -match 'Property\(S\): URNETWORK_APP_CLOSABLE = ' })
+            "URNETWORK_APP_CLOSABLE set: $($closable.Count -gt 0); files left for a restart: $($inUse.Count)"
+            Show-UrAfterInstall $app
+            $appLines = @(if (Test-Path $appLog) { Get-Content $appLog | Where-Object { $_ -match 'WM_CLOSE|Restart Manager|session is ending' } })
+            $appLines | ForEach-Object { "app log: $_" }
+            if ($code -ne 0 -and $code -ne 3010) { throw "exit $code, want 0 or 3010" }
+            $products = Get-UrProducts
+            if ($products.Count -ne 1 -or $products[0].Version -ne $vnext.msi_version) { throw "want one product at $($vnext.msi_version)" }
+            Wait-UrServiceRunning | Out-Null
+            if ($leg -eq 'session0') {
+              "OBSERVED (session 0): exit $code; the app still runs: $(-not $app.HasExited); its log says the Restart Manager closed it: $(@($appLines | Where-Object { $_ -match 'Restart Manager' }).Count -gt 0); files left for a restart: $($inUse.Count)"
+              exit 0
+            }
+            # CloseApplication never asks for these installs: no UPDATE_RELAUNCH
+            if ($null -eq $evidence.CloseStart -or $null -eq $evidence.CloseEnd) { throw "no Wix4CloseApplications_X64 in the log" }
+            $closeSeconds = ($evidence.CloseEnd - $evidence.CloseStart).TotalSeconds
+            if ($closeSeconds -ge 5) { throw "Wix4CloseApplications_X64 took $closeSeconds s: it waited on the app" }
+            if ($leg -eq 'stamped' -and $closable.Count -eq 0) { throw "the stamped build should pass URNETWORK_APP_CLOSABLE, the FILEVERSION half of the gate" }
+            if (($leg -eq 'pre-a2a' -or $leg -eq 'fullui') -and $closable.Count -ne 0) { throw "v0 passed URNETWORK_APP_CLOSABLE" }
+            if (@($appLines | Where-Object { $_ -match 'WM_CLOSE received' }).Count -ne 0) { throw "CloseApplication closed the app for an install by hand" }
+            "OK: CloseApplication stayed out of it ($closeSeconds s)"
+            # the Restart Manager closed or ended the app, and left nothing in use
+            if (-not $app.WaitForExit(30000)) { throw "the app (pid $($app.Id)) still runs after the install" }
+            if ($inUse.Count -ne 0) { throw "$($inUse.Count) files were left in use for a restart" }
+            if ($leg -eq 'manual' -and @($appLines | Where-Object { $_ -match 'Restart Manager is closing the app' }).Count -ne 1) {
+              throw "the A2s app did not close through ENDSESSION_CLOSEAPP"
+            }
+            "OK: the app is gone and nothing was left in use"
+            # a launch now starts vNext, not a redirect into a leftover
+            $launch = Start-Process -FilePath (Join-Path $UrInstallDir 'URnetwork.exe') -ArgumentList '--autostart' -PassThru
+            Start-Sleep -Seconds 15
+            if ($launch.HasExited) { throw "the launch after the install exited ($($launch.ExitCode)): something still holds the app's key" }
+            $version = Get-UrFileVersion ((Get-Process -Id $launch.Id).Path)
+            if ($version -ne $vnext.file_version) { throw "the launch runs $version, want vNext's $($vnext.file_version)" }
+            "OK: a launch after the install runs vNext ($version)"
+          } finally {
+            Stop-UrAppProcesses
+          }
+
+      - name: Collect logs
+        if: always()
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-apply-lib.ps1"
+          Copy-Item (Join-Path $env:RUNNER_TEMP 'app-root\logs') (Join-Path $UrLogDir 'app-logs') -Recurse -Force -ErrorAction SilentlyContinue
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: by-hand-${{ matrix.leg }}-logs
+          path: ${{ runner.temp }}/upgrade-logs/
+          if-no-files-found: warn

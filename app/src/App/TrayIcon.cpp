@@ -358,10 +358,12 @@ LRESULT CALLBACK TrayIcon::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
         // end the process as soon as it does. Not when the end was cancelled
         // (a false wParam). The Restart Manager closing the app for an
         // installer (ENDSESSION_CLOSEAPP) is no session end: it is a close
-        // request, as an installer's WM_CLOSE is, and reaches the app where
-        // WM_CLOSE cannot (another session's app, an install run from session
-        // 0), so the update's files are not left in use. WM_QUERYENDSESSION is
-        // DefWindowProc's: the app never holds the end up.
+        // request, as an installer's WM_CLOSE is. Windows Installer asks it
+        // for every install the package does not close the app for itself
+        // (one run by hand, installer/Package.wxs), in the session msiexec
+        // runs in; an app in another session is out of its reach, as it is of
+        // WM_CLOSE's. WM_QUERYENDSESSION is DefWindowProc's: the app never
+        // holds the end up.
         if (wParam && !(lParam & ENDSESSION_CLOSEAPP)) {
           LogInfo("tray: the Windows session is ending ({}), stopping as on quit",
                   (lParam & ENDSESSION_LOGOFF) ? "sign-out" : "shutdown or restart");

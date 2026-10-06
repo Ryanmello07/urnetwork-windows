@@ -17,23 +17,30 @@
 //     asked for administrator rights. Nothing elevated ever reads it;
 //   on an installed copy, one whose folder is an admin-only install location
 //     (Common/InstallLocation.h), starts URnetworkUpdate.exe --apply-update
-//     <tag> from that folder with "runas", records it so no launch starts the
-//     app while it runs (Common/UpdateMarker.h), and waits on it without
-//     quitting. The helper fetches, checks and installs the release itself.
-//     The MSI closes this app before it replaces its files (its
-//     CloseApplication sends the tray's window WM_CLOSE) and starts the new
-//     version once they are in place;
+//     <tag> from that folder with "runas" and waits on it without quitting.
+//     The helper fetches, checks and installs the release itself. The MSI
+//     closes this app before it replaces its files (its CloseApplication
+//     sends the tray's window WM_CLOSE), and as the app exits it records the
+//     helper, so no launch starts the app until the helper ends
+//     (Common/UpdateMarker.h). The MSI starts the new version once its files
+//     are in place, and the helper starts the old one again after an install
+//     that failed;
 //   on a portable or dev copy, shows the checked MSI in Explorer for the user
 //     to run as an installer. Nothing from a user's folder is elevated.
 //
 // The helper reports in last-result.json in the install folder
 // (Common/UpdateResult.h). This app reads it when the helper ends while it
 // still runs, and at its next launch, and the banner says how the update went
-// until the user dismisses it.
+// until the user dismisses it, for as long as the report is still true of
+// this build (ViewOfReport). After a release did not install, the banner can
+// show its installer instead (the portable path), so a release the helper
+// keeps refusing is not a dead end; and the checked copy stays until the
+// report says the update took.
 //
 // Requests are anonymous, and GitHub's answer to too many is honoured: no
 // request goes before its Retry-After or X-RateLimit-Reset (at most a day
-// out, Common/UpdateSchedule.h). When no check has succeeded for 72 hours,
+// out, Common/UpdateSchedule.h), and the helper, which asks GitHub itself, is
+// not started before then either. When no check has succeeded for 72 hours,
 // the banner and the developer line say since when.
 //
 // The feed can change under a check or an apply in flight (the opt-in
@@ -64,6 +71,8 @@
 #include <string>
 #include <thread>
 
+#include "UpdateResult.h"
+
 namespace urnw {
 
 class UpdateChecker {
@@ -84,13 +93,21 @@ class UpdateChecker {
                     // until the user dismisses it or a newer release replaces
                     // it
   };
-  enum class Stage { Idle, Downloading, Verifying, Installing };
+  // Installing: the elevation prompt is up. Helper: the helper runs, with
+  // its own download and check, then msiexec.
+  enum class Stage { Idle, Downloading, Verifying, Installing, Helper };
   enum class Failure {
     None,
     Download,
     Checksum,
     // The elevation prompt was declined, or the helper could not be started.
     Elevation,
+    // GitHub asked this network to wait (holdUntilUnix) before asking it
+    // again, and the helper must ask it: nothing was started.
+    Held,
+    // Windows elevates only signed programs here, and the helper is not
+    // signed: the installer is offered instead.
+    Unsigned,
   };
 
   // What the last CHECK concluded — the developer screen's line, separate from
@@ -110,9 +127,13 @@ class UpdateChecker {
     std::wstring version;  // the release's, v-less
     // msiexec's exit code, or the helper's refusal (Common/UpdateResult.h)
     std::int64_t exitCode = 0;
-    // install.log for msiexec's outcome, update-helper.log for a refusal
+    // install.log for msiexec's outcome, update-helper.log for a refusal;
+    // empty when the helper refused before it could write a report
     std::wstring logPath;
     std::wstring finishedUtc;
+    // What the banner says about it for this build (never Hidden here: a
+    // hidden report is no Result).
+    update::ReportView view = update::ReportView::Hidden;
   };
 
   struct Snapshot {
@@ -131,12 +152,18 @@ class UpdateChecker {
     bool installed = false;
     // Meaningful while phase == Result.
     Result result;
+    // The release a check offers now, whatever the banner shows; 0 when none.
+    // A Result about this release can offer its installer (ShowInstaller).
+    std::uint64_t offeredCode = 0;
     // When a check last succeeded, in Unix seconds, or, before any has, when
     // this install first tried; 0 before either.
     std::int64_t lastSuccessUnix = 0;
     // No check has succeeded for 72 hours while automatic checks are on: the
     // app says so, with lastSuccessUnix.
     bool checkStale = false;
+    // GitHub asked for no request before this Unix second (Retry-After,
+    // X-RateLimit-Reset); 0 when it has not, or that time has passed.
+    std::int64_t holdUntilUnix = 0;
     CheckOutcome lastCheck = CheckOutcome::NeverRan;
     // The newest release tag the last completed check parsed, whether or not
     // it outranks this build — the developer line names it either way.
@@ -173,6 +200,15 @@ class UpdateChecker {
   // Queue the download/verify/install for the currently offered release.
   // Ignored when nothing is offered or an apply is already running.
   void BeginApply();
+  // Queue the portable path for the offered release on any copy: download
+  // (or reuse the checked copy), check it, and show the installer for the
+  // user to run. The way out of a release the helper did not install, and of
+  // a Windows that elevates only signed programs.
+  void ShowInstaller();
+  // The ManualInstall banner's "Show file": checks the shown installer
+  // against GitHub's SHA-256 again before it shows it, since it sits in the
+  // user's folder. Safe from the UI thread.
+  void RevealInstaller();
   // The Result banner's dismissal: the report is not shown again, and the
   // banner closes. Safe from the UI thread.
   void DismissResult();
@@ -190,12 +226,18 @@ class UpdateChecker {
   // just asked for updates, so "in six hours" would be a strange answer.
   void SetAutoCheckEnabled(bool on);
 
-  // Open an Explorer window with `file` selected — the ManualInstall banner's
-  // re-reveal action. Safe from the UI thread.
+  // Whether the Result banner offers the release's installer (ShowInstaller)
+  // rather than only its dismissal: the release did not install, and a check
+  // still offers it.
+  static bool OffersInstaller(Snapshot const& snapshot);
+  // Open an Explorer window with `file` selected.
   static void RevealInExplorer(std::wstring const& file);
   // `unixSeconds` as the user's short local date, for "Couldn't check for
   // updates since <date>".
   static std::wstring LocalDate(std::int64_t unixSeconds);
+  // `unixSeconds` as the user's short local date and time, for "GitHub asked
+  // to wait until <time>".
+  static std::wstring LocalDateTime(std::int64_t unixSeconds);
 
  private:
   // The release a check decided to offer: everything the apply needs, captured
@@ -215,8 +257,10 @@ class UpdateChecker {
 
   void WorkerLoop();
   // Each runs for the feed generation the worker read when it started it.
+  // `manual`: the portable path, whatever this copy is (ShowInstaller).
   void RunCheck(std::uint64_t generation);
-  void RunApply(std::uint64_t generation);
+  void RunApply(std::uint64_t generation, bool manual);
+  void RunReveal(std::uint64_t generation);
   // Best-effort startup hygiene: drop <name>.old / <name>.old-<code> leftovers
   // next to the exe (renamed images from the portable builds' old rename-swap
   // updater) and download dirs whose tag no longer outranks this build.
@@ -248,10 +292,14 @@ class UpdateChecker {
   bool stop_ = false;
   bool checkRequested_ = false;
   bool applyRequested_ = false;
+  bool manualRequested_ = false;
+  bool revealRequested_ = false;
   bool autoCheck_ = true;
   std::chrono::steady_clock::time_point nextAuto_{};
-  // No request before this: GitHub's Retry-After or rate-limit reset.
+  // No request before this: GitHub's Retry-After or rate-limit reset, and
+  // the same instant on the wall clock for what the banner says.
   std::chrono::steady_clock::time_point holdUntil_{};
+  std::int64_t holdUntilUnix_ = 0;
   // Bumped by ChannelChanged; see the header comment.
   std::uint64_t feedGeneration_ = 0;
   Snapshot snapshot_;

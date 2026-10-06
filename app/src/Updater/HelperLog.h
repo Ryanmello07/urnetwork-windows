@@ -21,8 +21,10 @@ class HelperLog {
   HelperLog(const HelperLog&) = delete;
   HelperLog& operator=(const HelperLog&) = delete;
 
-  // Starts the file, replacing an earlier run's, and writes what was kept.
-  void Open(const std::filesystem::path& file);
+  // Starts the file, replacing an earlier run's, created new with
+  // `security` (a SECURITY_ATTRIBUTES*: ApplyUpdate.cpp's admin-only one),
+  // and writes what was kept.
+  void Open(const std::filesystem::path& file, void* security);
 
   void Write(std::string_view line);
 
