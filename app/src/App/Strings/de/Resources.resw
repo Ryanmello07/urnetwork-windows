@@ -910,7 +910,7 @@ richtig auf</value>
   </data>
   <data name="checkout_error_unavailable" xml:space="preserve">
     <value>Der Bezahlvorgang ist gerade nicht verfügbar. Bitte versuche es später erneut.</value>
-    <comment>Checkout error in the desktop apps (the macOS direct download, Windows and Linux) when the ur.io checkout page hands back checkout_unavailable: the site cannot open Stripe's checkout right now (it has no Stripe key), so no payment form was shown and nothing was charged. The user cannot fix it; it may work later.</comment>
+    <comment>Checkout error in the desktop apps (the macOS direct download, Windows and Linux) when the ur.io checkout page hands back checkout_unavailable, or the server refuses to start a checkout with error.code checkout_unavailable: the site or the server cannot open Stripe's checkout right now (it has no Stripe key), so no payment form was shown and nothing was charged. The user cannot fix it; it may work later.</comment>
   </data>
   <data name="checkout_finish_in_browser" xml:space="preserve">
     <value>Schließe den Kauf im Browser ab.</value>
@@ -3459,6 +3459,10 @@ richtig auf</value>
     <value>Melde dich an und verbinde dich, um Extender zu verwalten.</value>
     <comment>Shown in the account Extenders section when there is no signed-in device to manage extenders with.</comment>
   </data>
+  <data name="extenders_reset_done" xml:space="preserve">
+    <value>Extender zurückgesetzt</value>
+    <comment>Confirmation after the extenders were reset (Extenders section under account).</comment>
+  </data>
   <data name="failed_to_connect" xml:space="preserve">
     <value>Verbindung fehlgeschlagen</value>
     <comment>Used in Shared/Intents/ConnectIntent.swift.</comment>
@@ -5626,6 +5630,14 @@ und am stärksten dezentralisierten Ingress- und Egress-Protokoll.</value>
     <value>Code erneut senden</value>
     <comment>Button text to resend the verification code</comment>
   </data>
+  <data name="reset_extenders" xml:space="preserve">
+    <value>Extender zurücksetzen</value>
+    <comment>Button in the Extenders section under account, the title of its confirmation, and the confirmation's action: removes the extenders the user added and clears everything learned about extenders.</comment>
+  </data>
+  <data name="reset_extenders_confirm" xml:space="preserve">
+    <value>Dadurch werden die Extender entfernt, die du hinzugefügt hast, und alles gelöscht, was über Extender bekannt ist. Danach werden Extender von Grund auf neu gesucht.</value>
+    <comment>Body of the confirmation before resetting extenders (Extenders section under account): what the reset removes and clears.</comment>
+  </data>
   <data name="reset_it" xml:space="preserve">
     <value>Zurücksetzen</value>
     <comment>Button text for resetting password</comment>
@@ -7020,7 +7032,7 @@ der Welt</value>
   </data>
   <data name="site_payment_error_already_subscribed" xml:space="preserve">
     <value>Du hast bereits Pro, es wurde nichts berechnet. Verwalte dein Abo in deinem Konto.</value>
-    <comment>ur.io checkout (the Pro upgrade sheet, the onboarding plan step, the offer screen, the free-trial panel): the server refused a new subscription because the network already has an active Pro subscription (error.code already_subscribed). Nothing was charged.</comment>
+    <comment>Checkout (ur.io's payment screens; the plan purchase in the F-Droid and dapp Android builds; the upgrade sheet in the macOS direct download, Windows and Linux): the server refused a new subscription because the network already has an active Pro subscription (error.code already_subscribed). Nothing was charged.</comment>
   </data>
   <data name="site_payment_error_authentication_failed" xml:space="preserve">
     <value>Deine Bank konnte die Karte nicht bestätigen. Versuche es erneut oder verwende eine andere Karte.</value>
@@ -7076,7 +7088,7 @@ der Welt</value>
   </data>
   <data name="site_payment_error_plan_unavailable" xml:space="preserve">
     <value>Dieser Tarif ist gerade nicht verfügbar. Versuche es später erneut.</value>
-    <comment>ur.io checkout: the server cannot sell this Pro plan right now (error.code plan_unavailable: no price or product is configured for it). Nothing was charged.</comment>
+    <comment>Checkout (ur.io's payment screens; the plan purchase in the F-Droid and dapp Android builds; the upgrade sheet in the macOS direct download, Windows and Linux): the server cannot sell this Pro plan right now (error.code plan_unavailable: no price or product is configured for it). Nothing was charged.</comment>
   </data>
   <data name="site_payment_error_processing" xml:space="preserve">
     <value>Die Zahlung konnte gerade nicht verarbeitet werden. Versuche es gleich noch einmal.</value>
@@ -7312,7 +7324,7 @@ der Welt</value>
   </data>
   <data name="site_subscription_error_no_customer" xml:space="preserve">
     <value>Für dieses Netzwerk gibt es keine Stripe-Zahlungsdaten.</value>
-    <comment>ur.io Manage subscription screen, opening the billing details: the network has no Stripe customer, so there is no billing portal (error.code no_customer).</comment>
+    <comment>Manage subscription (ur.io's screen; Settings in the Windows app, Account in the Linux app), opening the billing details: the network has no Stripe customer, so there is no billing portal (error.code no_customer).</comment>
   </data>
   <data name="site_subscription_error_no_subscription" xml:space="preserve">
     <value>Für dieses Netzwerk wird kein Stripe-Abo abgerechnet.</value>
@@ -7324,7 +7336,7 @@ der Welt</value>
   </data>
   <data name="site_subscription_error_store_unavailable" xml:space="preserve">
     <value>Stripe ist gerade nicht erreichbar. Versuche es gleich noch einmal.</value>
-    <comment>ur.io Manage subscription screen: Stripe did not answer or refused the change; trying again usually works (error.code store_unavailable).</comment>
+    <comment>Manage subscription (ur.io's screen; Settings in the Windows app, Account in the Linux app): Stripe did not answer or refused the change, or the billing portal could not be opened; trying again usually works (error.code store_unavailable).</comment>
   </data>
   <data name="site_unexpected_error" xml:space="preserve">
     <value>Etwas Unerwartetes ist passiert.</value>

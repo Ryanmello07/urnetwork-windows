@@ -3439,6 +3439,10 @@
     <value>登入並連接後即可管理擴展器。</value>
     <comment>Shown in the account Extenders section when there is no signed-in device to manage extenders with.</comment>
   </data>
+  <data name="extenders_reset_done" xml:space="preserve">
+    <value>擴展器已重設</value>
+    <comment>Confirmation after the extenders were reset (Extenders section under account).</comment>
+  </data>
   <data name="failed_to_connect" xml:space="preserve">
     <value>連接失敗</value>
     <comment>Used in Shared/Intents/ConnectIntent.swift.</comment>
@@ -5526,6 +5530,14 @@
   <data name="resend_verify_code" xml:space="preserve">
     <value>重新發送驗證碼</value>
     <comment>Button text to resend the verification code</comment>
+  </data>
+  <data name="reset_extenders" xml:space="preserve">
+    <value>重設擴展器</value>
+    <comment>Button in the Extenders section under account, the title of its confirmation, and the confirmation's action: removes the extenders the user added and clears everything learned about extenders.</comment>
+  </data>
+  <data name="reset_extenders_confirm" xml:space="preserve">
+    <value>這會移除已新增的擴展器，並清除已知的所有擴展器資料，之後會從頭重新發現擴展器。</value>
+    <comment>Body of the confirmation before resetting extenders (Extenders section under account): what the reset removes and clears.</comment>
   </data>
   <data name="reset_it" xml:space="preserve">
     <value>重設它</value>

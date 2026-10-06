@@ -902,7 +902,7 @@
   </data>
   <data name="checkout_error_unavailable" xml:space="preserve">
     <value>结账功能目前不可用。请稍后重试。</value>
-    <comment>Checkout error in the desktop apps (the macOS direct download, Windows and Linux) when the ur.io checkout page hands back checkout_unavailable: the site cannot open Stripe's checkout right now (it has no Stripe key), so no payment form was shown and nothing was charged. The user cannot fix it; it may work later.</comment>
+    <comment>Checkout error in the desktop apps (the macOS direct download, Windows and Linux) when the ur.io checkout page hands back checkout_unavailable, or the server refuses to start a checkout with error.code checkout_unavailable: the site or the server cannot open Stripe's checkout right now (it has no Stripe key), so no payment form was shown and nothing was charged. The user cannot fix it; it may work later.</comment>
   </data>
   <data name="checkout_finish_in_browser" xml:space="preserve">
     <value>请在浏览器中完成。</value>
@@ -3439,6 +3439,10 @@
     <value>登录并连接后即可管理扩展器。</value>
     <comment>Shown in the account Extenders section when there is no signed-in device to manage extenders with.</comment>
   </data>
+  <data name="extenders_reset_done" xml:space="preserve">
+    <value>扩展器已重置</value>
+    <comment>Confirmation after the extenders were reset (Extenders section under account).</comment>
+  </data>
   <data name="failed_to_connect" xml:space="preserve">
     <value>连接失败</value>
     <comment>Used in Shared/Intents/ConnectIntent.swift.</comment>
@@ -5527,6 +5531,14 @@
     <value>重新发送代码</value>
     <comment>Button text to resend the verification code</comment>
   </data>
+  <data name="reset_extenders" xml:space="preserve">
+    <value>重置扩展器</value>
+    <comment>Button in the Extenders section under account, the title of its confirmation, and the confirmation's action: removes the extenders the user added and clears everything learned about extenders.</comment>
+  </data>
+  <data name="reset_extenders_confirm" xml:space="preserve">
+    <value>这会移除已添加的扩展器，并清除已知的所有扩展器信息，之后将从头重新发现扩展器。</value>
+    <comment>Body of the confirmation before resetting extenders (Extenders section under account): what the reset removes and clears.</comment>
+  </data>
   <data name="reset_it" xml:space="preserve">
     <value>重置密码</value>
     <comment>Button text for resetting password</comment>
@@ -6900,7 +6912,7 @@
   </data>
   <data name="site_payment_error_already_subscribed" xml:space="preserve">
     <value>您已拥有 Pro，因此未扣款。请在您的账户中管理订阅。</value>
-    <comment>ur.io checkout (the Pro upgrade sheet, the onboarding plan step, the offer screen, the free-trial panel): the server refused a new subscription because the network already has an active Pro subscription (error.code already_subscribed). Nothing was charged.</comment>
+    <comment>Checkout (ur.io's payment screens; the plan purchase in the F-Droid and dapp Android builds; the upgrade sheet in the macOS direct download, Windows and Linux): the server refused a new subscription because the network already has an active Pro subscription (error.code already_subscribed). Nothing was charged.</comment>
   </data>
   <data name="site_payment_error_authentication_failed" xml:space="preserve">
     <value>您的银行无法验证这张卡。请重试或改用另一张卡。</value>
@@ -6956,7 +6968,7 @@
   </data>
   <data name="site_payment_error_plan_unavailable" xml:space="preserve">
     <value>此方案暂不可用。请稍后重试。</value>
-    <comment>ur.io checkout: the server cannot sell this Pro plan right now (error.code plan_unavailable: no price or product is configured for it). Nothing was charged.</comment>
+    <comment>Checkout (ur.io's payment screens; the plan purchase in the F-Droid and dapp Android builds; the upgrade sheet in the macOS direct download, Windows and Linux): the server cannot sell this Pro plan right now (error.code plan_unavailable: no price or product is configured for it). Nothing was charged.</comment>
   </data>
   <data name="site_payment_error_processing" xml:space="preserve">
     <value>暂时无法处理付款。请稍后重试。</value>
@@ -7188,7 +7200,7 @@
   </data>
   <data name="site_subscription_error_no_customer" xml:space="preserve">
     <value>此网络没有 Stripe 账单信息。</value>
-    <comment>ur.io Manage subscription screen, opening the billing details: the network has no Stripe customer, so there is no billing portal (error.code no_customer).</comment>
+    <comment>Manage subscription (ur.io's screen; Settings in the Windows app, Account in the Linux app), opening the billing details: the network has no Stripe customer, so there is no billing portal (error.code no_customer).</comment>
   </data>
   <data name="site_subscription_error_no_subscription" xml:space="preserve">
     <value>此网络没有正在计费的 Stripe 订阅。</value>
@@ -7200,7 +7212,7 @@
   </data>
   <data name="site_subscription_error_store_unavailable" xml:space="preserve">
     <value>暂时无法连接 Stripe。请稍后重试。</value>
-    <comment>ur.io Manage subscription screen: Stripe did not answer or refused the change; trying again usually works (error.code store_unavailable).</comment>
+    <comment>Manage subscription (ur.io's screen; Settings in the Windows app, Account in the Linux app): Stripe did not answer or refused the change, or the billing portal could not be opened; trying again usually works (error.code store_unavailable).</comment>
   </data>
   <data name="site_unexpected_error" xml:space="preserve">
     <value>发生了意外错误。</value>

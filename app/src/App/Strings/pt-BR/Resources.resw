@@ -3459,6 +3459,10 @@ maneira certa</value>
     <value>Entre e conecte-se para gerenciar os extensores.</value>
     <comment>Shown in the account Extenders section when there is no signed-in device to manage extenders with.</comment>
   </data>
+  <data name="extenders_reset_done" xml:space="preserve">
+    <value>Extensores redefinidos</value>
+    <comment>Confirmation after the extenders were reset (Extenders section under account).</comment>
+  </data>
   <data name="failed_to_connect" xml:space="preserve">
     <value>Não foi possível conectar</value>
     <comment>Used in Shared/Intents/ConnectIntent.swift.</comment>
@@ -5625,6 +5629,14 @@ e mais descentralizado protocolo de entrada e saída do mundo.</value>
   <data name="resend_verify_code" xml:space="preserve">
     <value>Reenviar código</value>
     <comment>Button text to resend the verification code</comment>
+  </data>
+  <data name="reset_extenders" xml:space="preserve">
+    <value>Redefinir extensores</value>
+    <comment>Button in the Extenders section under account, the title of its confirmation, and the confirmation's action: removes the extenders the user added and clears everything learned about extenders.</comment>
+  </data>
+  <data name="reset_extenders_confirm" xml:space="preserve">
+    <value>Isso remove os extensores que você adicionou e apaga tudo o que se sabe sobre os extensores, que depois são descobertos de novo do zero.</value>
+    <comment>Body of the confirmation before resetting extenders (Extenders section under account): what the reset removes and clears.</comment>
   </data>
   <data name="reset_it" xml:space="preserve">
     <value>Redefini-la</value>

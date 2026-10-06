@@ -3459,6 +3459,10 @@ bonne manière</value>
     <value>Connectez-vous à votre compte et au réseau pour gérer les extendeurs.</value>
     <comment>Shown in the account Extenders section when there is no signed-in device to manage extenders with.</comment>
   </data>
+  <data name="extenders_reset_done" xml:space="preserve">
+    <value>Extendeurs réinitialisés</value>
+    <comment>Confirmation after the extenders were reset (Extenders section under account).</comment>
+  </data>
   <data name="failed_to_connect" xml:space="preserve">
     <value>Échec de la connexion</value>
     <comment>Used in Shared/Intents/ConnectIntent.swift.</comment>
@@ -5625,6 +5629,14 @@ le plus vaste, le plus sûr et le plus décentralisé au monde.</value>
   <data name="resend_verify_code" xml:space="preserve">
     <value>Renvoyer le code</value>
     <comment>Button text to resend the verification code</comment>
+  </data>
+  <data name="reset_extenders" xml:space="preserve">
+    <value>Réinitialiser les extendeurs</value>
+    <comment>Button in the Extenders section under account, the title of its confirmation, and the confirmation's action: removes the extenders the user added and clears everything learned about extenders.</comment>
+  </data>
+  <data name="reset_extenders_confirm" xml:space="preserve">
+    <value>Cette action supprime les extendeurs que vous avez ajoutés et efface tout ce qui est connu sur les extendeurs. Ils sont ensuite redécouverts depuis le début.</value>
+    <comment>Body of the confirmation before resetting extenders (Extenders section under account): what the reset removes and clears.</comment>
   </data>
   <data name="reset_it" xml:space="preserve">
     <value>Réinitialiser</value>
