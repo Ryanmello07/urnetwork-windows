@@ -94,7 +94,8 @@ inline std::wstring MsiexecCommandLine(std::wstring_view msiexec, std::wstring_v
 // (URNETWORK_APP_ROOT, URNETWORK_NETWORK_HOST, ...): its name starts with
 // URNETWORK_ in any case, as Windows matches variable names. The elevated
 // helper drops every one before it does anything (Updater/main.cpp): they are
-// the user's to set and steer nothing elevated.
+// the user's to set and steer nothing elevated. The relaunch after an update
+// is the user's app, and keeps them.
 inline bool IsAppOverrideName(std::wstring_view name) {
   constexpr std::wstring_view kPrefix = L"URNETWORK_";
   if (name.size() < kPrefix.size()) return false;

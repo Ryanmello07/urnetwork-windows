@@ -4,6 +4,7 @@ package tests
 
 import (
 	"fmt"
+	iofs "io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -71,6 +72,7 @@ func checkUpdaterProject(project, solution, common string) []string {
 		"<RuntimeLibrary Condition=\"'$(Configuration)'=='Debug'\">MultiThreadedDebug</RuntimeLibrary>",
 		"<AdditionalOptions>/DEPENDENTLOADFLAG:0x800 %(AdditionalOptions)</AdditionalOptions>",
 		`<ClCompile Include="..\Common\InstallLocationWin32.cpp" />`,
+		`<ClCompile Include="ShellStart.cpp" />`,
 		"<AdditionalManifestFiles>Updater.manifest</AdditionalManifestFiles>",
 	} {
 		if !strings.Contains(project, want) {
@@ -115,26 +117,41 @@ func TestUpdateApplyHelperIsItsOwnProgram(t *testing.T) {
 	}
 }
 
-// Before anything else the helper limits where libraries load from and drops
-// the app's URNETWORK_* overrides; nothing in it reads the environment or the
-// user's storage.
+// Before anything else the helper limits where libraries load from. Only the
+// elevated mode drops the app's URNETWORK_* overrides (UpdateApply.h
+// IsAppOverrideName decides which); the relaunch is the user's app, in the
+// user's environment, and keeps them. It starts the app only when it is not
+// itself the elevated half of a split token. Nothing in it reads the
+// environment or the user's storage.
 func checkUpdaterEntry(main string, sources map[string]string) []string {
 	entry := applyDefinition(main, "int WINAPI wWinMain(")
 	problems := applyOrderProblems("wWinMain", entry,
 		regexp.QuoteMeta("::SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_SYSTEM32 | LOAD_LIBRARY_SEARCH_APPLICATION_DIR);"),
-		regexp.QuoteMeta("DropAppOverrides();"),
 		regexp.QuoteMeta("::CommandLineToArgvW("),
-		regexp.QuoteMeta(`if (args.size() == 3 && args[1] == L"--apply-update") return urnw::updater::ApplyUpdate(args[2]);`),
+		regexp.QuoteMeta(`if (args.size() == 3 && args[1] == L"--apply-update") {`),
+		regexp.QuoteMeta("DropAppOverrides();"),
+		regexp.QuoteMeta("return urnw::updater::ApplyUpdate(args[2]);"),
 		regexp.QuoteMeta("if (args.size() == 1) return RelaunchApp();"),
 		regexp.QuoteMeta("return static_cast<int>(urnw::update::Refusal::BadArguments);"))
 	if strings.Index(entry, "SetDefaultDllDirectories") > strings.Index(entry, "CommandLineToArgvW") {
 		problems = append(problems, "wWinMain loads shell32 before it limits the library search")
 	}
+	if count := strings.Count(entry, "DropAppOverrides();"); count != 1 {
+		problems = append(problems, fmt.Sprintf("wWinMain drops the app's overrides %d times, want once, for --apply-update", count))
+	} else if branch := strings.Index(entry, `if (args.size() == 3 && args[1] == L"--apply-update") {`); branch < 0 ||
+		strings.Index(entry, "DropAppOverrides();") < branch {
+		problems = append(problems, "wWinMain drops the app's overrides before it knows the mode: the relaunch would start the app without the user's")
+	}
 	drop := applyDefinition(main, "void DropAppOverrides() {")
 	problems = append(problems, applyOrderProblems("DropAppOverrides", drop,
 		regexp.QuoteMeta("::GetEnvironmentStringsW();"),
-		regexp.QuoteMeta(`if (upper.rfind(L"URNETWORK_", 0) == 0) names.push_back(std::move(name));`),
+		regexp.QuoteMeta("const std::wstring_view name = text.substr(0, equals);"),
+		regexp.QuoteMeta("if (urnw::update::IsAppOverrideName(name)) names.emplace_back(name);"),
 		regexp.QuoteMeta("::SetEnvironmentVariableW(name.c_str(), nullptr);"))...)
+	elevated := applyDefinition(main, "bool IsFullyElevated() {")
+	problems = append(problems, applyOrderProblems("IsFullyElevated", elevated,
+		regexp.QuoteMeta("::GetTokenInformation(token, TokenElevationType, &type, sizeof(type), &size);"),
+		regexp.QuoteMeta("return !read || type == TokenElevationTypeFull;"))...)
 	relaunch := applyDefinition(main, "int RelaunchApp() {")
 	problems = append(problems, applyOrderProblems("RelaunchApp", relaunch,
 		regexp.QuoteMeta("if (IsFullyElevated()) return 0;"),
@@ -156,7 +173,7 @@ func checkUpdaterEntry(main string, sources map[string]string) []string {
 func updaterSources(t *testing.T) map[string]string {
 	t.Helper()
 	sources := map[string]string{}
-	for _, name := range []string{"main.cpp", "ApplyUpdate.cpp", "Http.cpp", "HelperLog.cpp"} {
+	for _, name := range []string{"main.cpp", "ApplyUpdate.cpp", "Http.cpp", "HelperLog.cpp", "ShellStart.cpp"} {
 		sources[name] = stripComments(readUpdaterSource(t, name))
 	}
 	sources["InstallLocationWin32.cpp"] = stripComments(readCommonSource(t, "InstallLocationWin32.cpp"))
@@ -171,10 +188,12 @@ func TestUpdateApplyHelperStartsClean(t *testing.T) {
 // The helper's steps, in the order the spec gives them: who and where; the
 // feed's list, fetched here; the release it offers; the download through the
 // one allowed redirect; the digest through the handle that holds the file;
-// the package's identity; the image moved out of the way; msiexec; the result.
+// the package's identity; the folders, the package and the log admin-only by
+// their own ACL; the image moved out of the way; msiexec; the result; and,
+// after an install that failed, the relaunch.
 func checkApplyUpdate(apply string) []string {
 	body := applyDefinition(apply, "int ApplyUpdate(std::wstring_view tagArgument) {")
-	return applyOrderProblems("ApplyUpdate", body,
+	problems := applyOrderProblems("ApplyUpdate", body,
 		regexp.QuoteMeta("if (!IsElevated()) {"),
 		regexp.QuoteMeta("return static_cast<int>(Refusal::NotElevated);"),
 		regexp.QuoteMeta("const fs::path executable = install::OwnExecutablePath();"),
@@ -185,9 +204,16 @@ func checkApplyUpdate(apply string) []string {
 		regexp.QuoteMeta("if (!update::IsTagArgument(feed, tag)) {"),
 		regexp.QuoteMeta(`::CreateMutexW(nullptr, FALSE, L"Global\\URnetworkUpdateHelper")`),
 		regexp.QuoteMeta(`const fs::path updates = installFolder / L"updates";`),
-		regexp.QuoteMeta("if (!PrepareFolder(updates, error) || !PrepareFolder(tagFolder, error)) {"),
+		regexp.QuoteMeta("Security folderSecurity(kAdminOnlyFolderSddl);"),
+		regexp.QuoteMeta("Security fileSecurity(kAdminOnlyFileSddl);"),
+		regexp.QuoteMeta("if (!PrepareFolder(updates, folderSecurity, error) ||"),
+		regexp.QuoteMeta("!PrepareFolder(tagFolder, folderSecurity, error)) {"),
+		regexp.QuoteMeta(`log.Open(tagFolder / L"update-helper.log", fileSecurity.attributes());`),
+		regexp.QuoteMeta("if (WriteResult(updates, result, fileSecurity, writeError)) {"),
 		regexp.QuoteMeta(`L"https://api.github.com/repositories/{}/releases?per_page=15", feed.numericRepoId);`),
 		regexp.QuoteMeta("HttpGet("),
+		regexp.QuoteMeta("if (list.status == 403 || list.status == 429) {"),
+		regexp.QuoteMeta("return refuse(Refusal::RateLimited,"),
 		regexp.QuoteMeta("if (list.status != 200) {"),
 		regexp.QuoteMeta("if (list.serverUnixSeconds == 0) {"),
 		regexp.QuoteMeta("update::ParseReleaseList(body);"),
@@ -198,7 +224,7 @@ func checkApplyUpdate(apply string) []string {
 		regexp.QuoteMeta("if (redirect.status != 302 || !update::IsAllowedAssetRedirect(redirect.location) ||"),
 		regexp.QuoteMeta("!HttpUrlHostIsOneOf(WidenAscii(redirect.location), update::kAssetRedirectHosts)) {"),
 		regexp.QuoteMeta("GENERIC_WRITE | FILE_READ_ATTRIBUTES, FILE_SHARE_READ,"),
-		regexp.QuoteMeta("nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr));"),
+		regexp.QuoteMeta("fileSecurity.attributes(), CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr));"),
 		regexp.QuoteMeta("WidenAscii(redirect.location), nullptr, kMaxPackageBytes,"),
 		regexp.QuoteMeta("Handle held(::CreateFileW(package.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,"),
 		regexp.QuoteMeta("!SameFile(writtenId, heldId)"),
@@ -210,6 +236,11 @@ func checkApplyUpdate(apply string) []string {
 		regexp.QuoteMeta(`PackageProperty(database.get(), L"ProductVersion");`),
 		regexp.QuoteMeta("!update::PackageMatches(*upgradeCode, *productVersion, selection.code)"),
 		regexp.QuoteMeta("return refuse(Refusal::Package,"),
+		regexp.QuoteMeta(`const fs::path installLog = tagFolder / L"install.log";`),
+		regexp.QuoteMeta("::DeleteFileW(installLog.c_str());"),
+		regexp.QuoteMeta("fileSecurity.attributes(), CREATE_NEW,"),
+		regexp.QuoteMeta("!CheckAdminOnly({updates, tagFolder, package, installLog}, error)"),
+		regexp.QuoteMeta("return refuse(Refusal::Staging,"),
 		regexp.QuoteMeta("::MoveFileExW(executable.c_str(), running.c_str(), MOVEFILE_WRITE_THROUGH)"),
 		regexp.QuoteMeta(`const fs::path msiexec = systemFolder / L"msiexec.exe";`),
 		regexp.QuoteMeta("update::MsiexecCommandLine(msiexec.native(), package.native(),"),
@@ -218,12 +249,123 @@ func checkApplyUpdate(apply string) []string {
 		regexp.QuoteMeta("::GetExitCodeProcess(installer.get(), &exitCode);"),
 		regexp.QuoteMeta("held.Close();"),
 		regexp.QuoteMeta("if (update::KeepsPackage(exitCode)) {"),
+		regexp.QuoteMeta("return finish(exitCode);"),
 		regexp.QuoteMeta("::DeleteFileW(package.c_str());"),
-		regexp.QuoteMeta("return finish(exitCode);"))
+		regexp.QuoteMeta("const int ended = finish(exitCode);"),
+		regexp.QuoteMeta("StartThroughShell(executable, shellError)"),
+		regexp.QuoteMeta("return ended;"))
+	// what everything under updates\ is created with: owned by Administrators,
+	// SYSTEM and Administrators full, Users read and execute, nothing inherited
+	for _, want := range []string{
+		`constexpr wchar_t kAdminOnlyFolderSddl[] = L"O:BAD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FRFX;;;BU)";`,
+		`constexpr wchar_t kAdminOnlyFileSddl[] = L"O:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FRFX;;;BU)";`,
+	} {
+		if !strings.Contains(apply, want) {
+			problems = append(problems, "ApplyUpdate.cpp does not create what it writes under updates\\ with "+want)
+		}
+	}
+	prepare := applyDefinition(apply, "bool PrepareFolder(const fs::path& folder, Security& security, std::string& error) {")
+	problems = append(problems, applyOrderProblems("PrepareFolder", prepare,
+		regexp.QuoteMeta("if (::CreateDirectoryW(folder.c_str(), security.attributes())) return true;"),
+		regexp.QuoteMeta("FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,"),
+		regexp.QuoteMeta("(info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)) {"),
+		regexp.QuoteMeta("::SetSecurityInfo("),
+		regexp.QuoteMeta("OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,"),
+		regexp.QuoteMeta("owner, nullptr, dacl, nullptr);"),
+		regexp.QuoteMeta("return true;"))...)
+	write := applyDefinition(apply, "bool WriteResult(const fs::path& updates, const update::UpdateResult& result, Security& security,")
+	problems = append(problems, applyOrderProblems("WriteResult", write,
+		regexp.QuoteMeta("security.attributes(), CREATE_NEW,"),
+		regexp.QuoteMeta("MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH"))...)
+	check := applyDefinition(apply, "bool CheckAdminOnly(const std::vector<fs::path>& paths, std::string& error) {")
+	problems = append(problems, applyOrderProblems("CheckAdminOnly", check,
+		regexp.QuoteMeta("for (const fs::path& path : paths) {"),
+		regexp.QuoteMeta("if (!install::AdminOnlyPath(path, why)) {"),
+		regexp.QuoteMeta("return false;"))...)
+	return problems
+}
+
+// What the helper's admin-only checks judge: a token without admin rights,
+// and the rights that change a file or a folder.
+func checkAdminOnlyPath(location string) []string {
+	return applyOrderProblems("AdminOnlyPath", applyDefinition(location, "bool AdminOnlyPath(const fs::path& path, std::string& why) {"),
+		regexp.QuoteMeta("HANDLE raw = NonAdminToken(why);"),
+		regexp.QuoteMeta("if (!RightsFor(token.get(), path, rights, why)) return false;"),
+		regexp.QuoteMeta("if ((rights & kWriteRights) == 0) return true;"),
+		regexp.QuoteMeta("return false;"))
 }
 
 func TestUpdateApplyHelperChecksInOrder(t *testing.T) {
-	reportProblems(t, checkApplyUpdate(updaterSources(t)["ApplyUpdate.cpp"]))
+	sources := updaterSources(t)
+	reportProblems(t, checkApplyUpdate(sources["ApplyUpdate.cpp"]))
+	reportProblems(t, checkAdminOnlyPath(sources["InstallLocationWin32.cpp"]))
+}
+
+// After an install that failed, the helper starts its relaunch through the
+// desktop's shell, so it runs as the signed-in user, never elevated:
+// Explorer's Shell.Application object, as WixUnelevatedShellExec does.
+func checkShellStart(shell string) []string {
+	start := applyDefinition(shell, "bool StartThroughShell(const std::filesystem::path& program, std::string& error) {")
+	problems := applyOrderProblems("StartThroughShell", start,
+		regexp.QuoteMeta("::CoCreateInstance(CLSID_ShellWindows, nullptr, CLSCTX_LOCAL_SERVER,"),
+		regexp.QuoteMeta("windows->FindWindowSW(&empty, &empty, SWC_DESKTOP, &desktop, SWFO_NEEDDISPATCH,"),
+		regexp.QuoteMeta("services->QueryService(SID_STopLevelBrowser, __uuidof(IShellBrowser),"),
+		regexp.QuoteMeta("browser->QueryActiveShellView(view.GetAddressOf());"),
+		regexp.QuoteMeta("view->GetItemObject(SVGIO_BACKGROUND, __uuidof(IDispatch),"),
+		regexp.QuoteMeta("folderView->get_Application(application.GetAddressOf());"),
+		regexp.QuoteMeta("hr = application.As(&shell);"),
+		regexp.QuoteMeta("hr = shell->ShellExecute(file.get(), arguments, directory, operation, show);"))
+	for _, forbidden := range []string{"CreateProcess", "ShellExecuteEx", "::ShellExecuteW"} {
+		if strings.Contains(shell, forbidden) {
+			problems = append(problems, "ShellStart.cpp starts the relaunch with "+forbidden+
+				": from the elevated helper that would run it elevated")
+		}
+	}
+	return problems
+}
+
+func TestUpdateApplyHelperRelaunchesThroughTheShell(t *testing.T) {
+	reportProblems(t, checkShellStart(updaterSources(t)["ShellStart.cpp"]))
+}
+
+// Which repository's releases the helper installs is decided by the channel's
+// feed alone, and that feed is one compiled in: the channel may at most name
+// an id in ReleaseSelection.h's table (FeedById), never a repository, owner,
+// name or URL read at run time, and nothing in the user's registry hive can
+// choose it. ApplyUpdate.cpp's ChannelFeed says what the opt-in channel's
+// machine-wide store must be; this pins what holds until it lands.
+func checkChannelIsAnIndex(apply string, sources map[string]string) []string {
+	var problems []string
+	runner := regexp.MustCompile(`(?s)#if defined\(URN_UPDATE_RUNNER_TEST_REPO_ID\)\n#define URN_UPDATER_STRINGIZE_.*?#endif\n`)
+	rest := runner.ReplaceAllString(apply, "")
+	if rest == apply {
+		problems = append(problems, "ApplyUpdate.cpp has no runner test feed block to set apart")
+	}
+	for _, built := range []string{"Feed{", ".numericRepoId =", ".owner =", ".repo =", ".tagPrefix ="} {
+		if strings.Contains(rest, built) {
+			problems = append(problems, "ApplyUpdate.cpp builds a feed at run time ("+built+
+				"): the channel may only name one compiled in")
+		}
+	}
+	channel := applyDefinition(apply, "const update::Feed& ChannelFeed() {")
+	if !regexp.MustCompile(`^const update::Feed& ChannelFeed\(\) \{\s*#if defined\(URN_UPDATE_RUNNER_TEST_REPO_ID\)\s*return kRunnerTestFeed;\s*#else\s*return update::kOfficialFeed;\s*#endif\s*\}\s*$`).MatchString(channel) {
+		problems = append(problems, "ChannelFeed returns something other than the compiled-in official feed: "+
+			"the opt-in channel must resolve an admin-only store's id through FeedById (see its comment)")
+	}
+	for name, source := range sources {
+		for _, user := range []string{"HKEY_CURRENT_USER", "HKCU", "HKEY_USERS", "RegOpenCurrentUser"} {
+			if strings.Contains(source, user) {
+				problems = append(problems, "the helper's "+name+" reads "+user+
+					": what it installs is decided where only an administrator can write")
+			}
+		}
+	}
+	return problems
+}
+
+func TestUpdateApplyTheChannelIsOnlyAnIndex(t *testing.T) {
+	sources := updaterSources(t)
+	reportProblems(t, checkChannelIsAnIndex(sources["ApplyUpdate.cpp"], sources))
 }
 
 // Every response the helper reads came with redirects refused and a
@@ -271,18 +413,19 @@ func TestUpdateApplyUpgradeCodeIsThePackages(t *testing.T) {
 }
 
 // A runner test's feed reaches a build only through the four
-// /p:UrnUpdateRunnerTest* properties, never from the environment, and nothing
-// this repository builds official releases with passes them: build.ps1 and
-// every workflow here are checked for any feed setting at all.
-func checkRunnerFeedIsTestOnly(buildScript string, workflows map[string]string, project, apply string,
+// /p:UrnUpdateRunnerTest* properties, never from the environment, and no file
+// in this repository a build reads sets one: every build script, MSBuild
+// project, props, targets and response file, and workflow. A helper built
+// with it says so in its FileDescription, and the release build and the
+// payload check refuse to package one, whatever passed the properties.
+func checkRunnerFeedIsTestOnly(inputs map[string]string, project, resources, apply string,
 	sources map[string]string) []string {
 	var problems []string
-	official := map[string]string{"app/build.ps1": buildScript}
-	for name, text := range workflows {
-		official[name] = text
-	}
 	feedDefault := regexp.MustCompile(`UrnUpdateFeedDefault=["']?([A-Za-z0-9_-]*)`)
-	for name, text := range official {
+	for name, text := range inputs {
+		if name == "app/src/Updater/Updater.vcxproj" {
+			continue
+		}
 		for _, setting := range []string{"UrnUpdateRunnerTest", "URN_UPDATE_RUNNER_TEST", "URN_UPDATE_FEED_DEFAULT_BETA"} {
 			if strings.Contains(text, setting) {
 				problems = append(problems, name+" sets "+setting+": official builds must poll the official feed")
@@ -298,8 +441,30 @@ func checkRunnerFeedIsTestOnly(buildScript string, workflows map[string]string, 
 	if !strings.Contains(project, `<ItemDefinitionGroup Condition="'$(UrnUpdateRunnerTestRepoId)'!=''">`) {
 		problems = append(problems, "Updater.vcxproj defines a runner feed without its property")
 	}
+	if regexp.MustCompile(`<UrnUpdateRunnerTest[A-Za-z]*>`).MatchString(project) {
+		problems = append(problems, "Updater.vcxproj gives a runner feed property a value of its own")
+	}
 	if !strings.Contains(project, "$([System.Environment]::GetEnvironmentVariable(`UrnUpdateRunnerTestRepoId`))") {
 		problems = append(problems, "Updater.vcxproj takes a runner feed from the environment")
+	}
+	if !strings.Contains(project, "<ResourceCompile>\n      <PreprocessorDefinitions>URN_UPDATE_RUNNER_TEST_REPO_ID=$(UrnUpdateRunnerTestRepoId);") {
+		problems = append(problems, "Updater.vcxproj does not tell Updater.rc that a runner feed is compiled in")
+	}
+	if !strings.Contains(resources, "#if defined(URN_UPDATE_RUNNER_TEST_REPO_ID)\n"+
+		`            VALUE "FileDescription",  "URnetwork update (runner test feed)"`+"\n#else\n"+
+		`            VALUE "FileDescription",  "URnetwork update"`+"\n#endif") {
+		problems = append(problems, "Updater.rc does not mark a helper built with a runner feed")
+	}
+	build := inputs["app/build.ps1"]
+	if marked := strings.Index(build, `$helperDescription = [Diagnostics.FileVersionInfo]::GetVersionInfo($helper).FileDescription`); marked < 0 ||
+		!strings.Contains(build, `if ($helperDescription -ne "URnetwork update") {`) ||
+		strings.Index(build, "dotnet @wixArgs") < marked {
+		problems = append(problems, "app/build.ps1 packages an update helper without checking that it is the official feed's")
+	}
+	verify := inputs["app/tools/verify-msi-payload.ps1"]
+	if !strings.Contains(verify, `$description = [Diagnostics.FileVersionInfo]::GetVersionInfo($extracted).FileDescription`) ||
+		!strings.Contains(verify, `if ($description -ne "URnetwork update") {`) {
+		problems = append(problems, "verify-msi-payload.ps1 passes an MSI without checking its update helper's feed")
 	}
 	if !strings.Contains(apply, "#if defined(URN_UPDATE_RUNNER_TEST_REPO_ID)\n  return kRunnerTestFeed;\n#else") {
 		problems = append(problems, "ApplyUpdate.cpp reads the runner feed outside its define")
@@ -315,39 +480,63 @@ func checkRunnerFeedIsTestOnly(buildScript string, workflows map[string]string, 
 	return problems
 }
 
-// The repository's workflows, if it has any: upstream builds on its own
-// hardware and keeps none (2024061), and one added later is checked too.
-func officialWorkflows(t *testing.T) map[string]string {
+// Every file in the repository a build reads, by kind, keyed by its slash
+// path: build and test scripts, MSBuild projects, props, targets and
+// response files, the solution, and workflows. Build output folders are
+// skipped.
+func buildInputs(t *testing.T) map[string]string {
 	t.Helper()
 	root := repositoryRoot(t)
-	paths, err := filepath.Glob(filepath.Join(root, ".github", "workflows", "*.y*ml"))
+	kinds := map[string]bool{".props": true, ".targets": true, ".rsp": true, ".vcxproj": true, ".sln": true,
+		".wixproj": true, ".ps1": true, ".psm1": true, ".cmd": true, ".bat": true, ".sh": true, ".yml": true,
+		".yaml": true}
+	skip := map[string]bool{".git": true, "build": true, "bin": true, "obj": true, "packages": true,
+		"node_modules": true, "vcpkg_installed": true, ".vs": true}
+	inputs := map[string]string{}
+	err := filepath.WalkDir(root, func(path string, entry iofs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			if path != root && skip[entry.Name()] {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !kinds[strings.ToLower(filepath.Ext(entry.Name()))] {
+			return nil
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		relative, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		inputs[filepath.ToSlash(relative)] = string(data)
+		return nil
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	workflows := map[string]string{}
-	for _, path := range paths {
-		data, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatal(err)
+	for _, want := range []string{"app/build.ps1", "app/Directory.Build.props", "app/URnetwork.sln",
+		"app/src/Updater/Updater.vcxproj", "app/tools/verify-msi-payload.ps1"} {
+		if _, ok := inputs[want]; !ok {
+			t.Fatalf("the build inputs miss %s: the walk did not see the repository", want)
 		}
-		workflows[filepath.ToSlash(path[len(root)+1:])] = string(data)
 	}
-	return workflows
+	return inputs
 }
 
 func TestUpdateApplyRunnerFeedIsTestOnly(t *testing.T) {
-	root := repositoryRoot(t)
-	build, err := os.ReadFile(filepath.Join(root, "app", "build.ps1"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	sources := updaterSources(t)
 	appSources := appSourceFiles(t, ".cpp", ".h")
 	for name, source := range appSources {
 		sources["App/"+name] = stripComments(source)
 	}
-	reportProblems(t, checkRunnerFeedIsTestOnly(string(build), officialWorkflows(t),
-		readUpdaterSource(t, "Updater.vcxproj"), sources["ApplyUpdate.cpp"], sources))
+	reportProblems(t, checkRunnerFeedIsTestOnly(buildInputs(t), readUpdaterSource(t, "Updater.vcxproj"),
+		readUpdaterSource(t, "Updater.rc"), sources["ApplyUpdate.cpp"], sources))
 }
 
 // Each check above fails on a source that drops the defence it pins.
@@ -357,15 +546,12 @@ func TestUpdateApplyWiringRejectsWeakerHelpers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	buildData, err := os.ReadFile(filepath.Join(root, "app", "build.ps1"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	project := readUpdaterSource(t, "Updater.vcxproj")
+	resources := readUpdaterSource(t, "Updater.rc")
 	solution := string(solutionData)
 	common := readCommonSource(t, "Common.vcxproj")
 	sources := updaterSources(t)
-	workflows := officialWorkflows(t)
+	inputs := buildInputs(t)
 	replace := func(text, old, replacement string) string {
 		if strings.Count(text, old) != 1 {
 			t.Fatalf("negative control: %q is not in the source exactly once", old)
@@ -380,38 +566,83 @@ func TestUpdateApplyWiringRejectsWeakerHelpers(t *testing.T) {
 		copied[name] = text
 		return copied
 	}
+	withInput := func(name, text string) map[string]string {
+		copied := map[string]string{}
+		for key, value := range inputs {
+			copied[key] = value
+		}
+		copied[name] = text
+		return copied
+	}
+	runnerFeed := func(changed map[string]string) []string {
+		return checkRunnerFeedIsTestOnly(changed, project, resources, sources["ApplyUpdate.cpp"], sources)
+	}
+	apply := func(old, replacement string) []string {
+		return checkApplyUpdate(replace(sources["ApplyUpdate.cpp"], old, replacement))
+	}
 	for _, tc := range []struct {
 		name  string
 		check func() []string
 	}{
 		{"the UpgradeCode check skipped", func() []string {
-			return checkApplyUpdate(replace(sources["ApplyUpdate.cpp"],
-				"!update::PackageMatches(*upgradeCode, *productVersion, selection.code)", "false"))
+			return apply("!update::PackageMatches(*upgradeCode, *productVersion, selection.code)", "false")
 		}},
 		{"the digest compared to nothing", func() []string {
-			return checkApplyUpdate(replace(sources["ApplyUpdate.cpp"],
-				"!update::EqualsAsciiCaseless(actual, selection.digestHex)", "false"))
+			return apply("!update::EqualsAsciiCaseless(actual, selection.digestHex)", "false")
 		}},
 		{"any offered release installed", func() []string {
-			return checkApplyUpdate(replace(sources["ApplyUpdate.cpp"],
-				"if (!update::SelectionOffers(selection, tag, version::kCode)) {", "if (selection.code == 0) {"))
+			return apply("if (!update::SelectionOffers(selection, tag, version::kCode)) {", "if (selection.code == 0) {")
 		}},
 		{"a redirect anywhere", func() []string {
-			return checkApplyUpdate(replace(sources["ApplyUpdate.cpp"],
-				"if (redirect.status != 302 || !update::IsAllowedAssetRedirect(redirect.location) ||",
-				"if (redirect.status != 302 ||"))
+			return apply("if (redirect.status != 302 || !update::IsAllowedAssetRedirect(redirect.location) ||",
+				"if (redirect.status != 302 ||")
 		}},
 		{"hashed after the handle is gone", func() []string {
-			return checkApplyUpdate(replace(sources["ApplyUpdate.cpp"],
-				"const std::string actual = Sha256(held.get());", "const std::string actual = HashPath(package);"))
+			return apply("const std::string actual = Sha256(held.get());", "const std::string actual = HashPath(package);")
 		}},
 		{"the image left in the installer's way", func() []string {
-			return checkApplyUpdate(replace(sources["ApplyUpdate.cpp"],
-				"::MoveFileExW(executable.c_str(), running.c_str(), MOVEFILE_WRITE_THROUGH)", "false"))
+			return apply("::MoveFileExW(executable.c_str(), running.c_str(), MOVEFILE_WRITE_THROUGH)", "false")
 		}},
 		{"a user-writable location", func() []string {
-			return checkApplyUpdate(replace(sources["ApplyUpdate.cpp"],
-				"!install::AdminOnlyLocation(executable, why)", "false"))
+			return apply("!install::AdminOnlyLocation(executable, why)", "false")
+		}},
+		{"GitHub's limit taken for a broken list", func() []string {
+			return apply("if (list.status == 403 || list.status == 429) {", "if (false) {")
+		}},
+		{"the repair source left to what it inherits", func() []string {
+			return apply("fileSecurity.attributes(), CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr));",
+				"nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr));")
+		}},
+		{"msiexec's log left to msiexec", func() []string {
+			return apply("fileSecurity.attributes(), CREATE_NEW,\n", "nullptr, CREATE_NEW,\n")
+		}},
+		{"what the helper writes owned by whoever creates it", func() []string {
+			return apply(`L"O:BAD:P(A;;FA;;;SY)`, `L"D:P(A;;FA;;;SY)`)
+		}},
+		{"a folder inheriting what is above it", func() []string {
+			return apply(`L"O:BAD:P(A;OICI;FA;;;SY)`, `L"O:BAD:(A;OICI;FA;;;SY)`)
+		}},
+		{"an existing folder's security kept", func() []string {
+			return apply("const DWORD set = ::SetSecurityInfo(", "const DWORD set = ERROR_SUCCESS; (void)(")
+		}},
+		{"the rights not checked before msiexec", func() []string {
+			return apply("!CheckAdminOnly({updates, tagFolder, package, installLog}, error)", "false")
+		}},
+		{"a non-admin's rights not judged", func() []string {
+			return checkAdminOnlyPath(replace(sources["InstallLocationWin32.cpp"],
+				"if ((rights & kWriteRights) == 0) return true;", "return true;"))
+		}},
+		{"no relaunch after an install that failed", func() []string {
+			return apply("} else if (StartThroughShell(executable, shellError)) {", "} else if (false) {")
+		}},
+		{"the relaunch before the report", func() []string {
+			moved := replace(sources["ApplyUpdate.cpp"], "  const int ended = finish(exitCode);\n", "")
+			return checkApplyUpdate(replace(moved, "  return ended;\n}", "  const int ended = finish(exitCode);\n  return ended;\n}"))
+		}},
+		{"the relaunch started elevated by the helper", func() []string {
+			return checkShellStart(replace(sources["ShellStart.cpp"],
+				"hr = shell->ShellExecute(file.get(), arguments, directory, operation, show);",
+				"hr = ::CreateProcessW(program.c_str(), nullptr, nullptr, nullptr, FALSE, 0, nullptr, nullptr, nullptr, nullptr) ? S_OK : E_FAIL;"))
 		}},
 		{"redirects followed", func() []string {
 			return checkUpdaterHttp(replace(sources["Http.cpp"],
@@ -443,37 +674,75 @@ func TestUpdateApplyWiringRejectsWeakerHelpers(t *testing.T) {
 			return checkUpdaterEntry(main, with("main.cpp", main))
 		}},
 		{"an app override read", func() []string {
-			apply := replace(sources["ApplyUpdate.cpp"], "  const fs::path installFolder = executable.parent_path();",
+			changed := replace(sources["ApplyUpdate.cpp"], "  const fs::path installFolder = executable.parent_path();",
 				"  const fs::path installFolder = _wgetenv(L\"URNETWORK_APP_ROOT\");")
-			return checkUpdaterEntry(sources["main.cpp"], with("ApplyUpdate.cpp", apply))
+			return checkUpdaterEntry(sources["main.cpp"], with("ApplyUpdate.cpp", changed))
+		}},
+		{"the user's overrides dropped for the relaunch too", func() []string {
+			main := replace(sources["main.cpp"], "    DropAppOverrides();\n", "")
+			main = replace(main, "  int argc = 0;", "  DropAppOverrides();\n  int argc = 0;")
+			return checkUpdaterEntry(main, with("main.cpp", main))
 		}},
 		{"the relaunch started elevated", func() []string {
 			main := replace(sources["main.cpp"], "  if (IsFullyElevated()) return 0;\n", "")
 			return checkUpdaterEntry(main, with("main.cpp", main))
 		}},
+		{"the relaunch's elevation test inverted", func() []string {
+			main := replace(sources["main.cpp"], "return !read || type == TokenElevationTypeFull;",
+				"return !read || type == TokenElevationTypeLimited;")
+			return checkUpdaterEntry(main, with("main.cpp", main))
+		}},
+		{"a channel read from the user's registry", func() []string {
+			changed := replace(sources["ApplyUpdate.cpp"], "#else\n  return update::kOfficialFeed;\n#endif",
+				"#else\n  ::RegGetValueW(HKEY_CURRENT_USER, L\"Software\\\\URnetwork\", L\"Channel\", RRF_RT_REG_SZ, nullptr, nullptr, nullptr);\n  return update::kOfficialFeed;\n#endif")
+			return checkChannelIsAnIndex(changed, with("ApplyUpdate.cpp", changed))
+		}},
+		{"a feed built at run time", func() []string {
+			changed := replace(sources["ApplyUpdate.cpp"], "#else\n  return update::kOfficialFeed;\n#endif",
+				"#else\n  static const update::Feed stored{.id = \"stored\", .numericRepoId = 1, .owner = \"someone\", .repo = \"else\"};\n  return stored;\n#endif")
+			return checkChannelIsAnIndex(changed, with("ApplyUpdate.cpp", changed))
+		}},
 		{"build.ps1 passes a runner feed", func() []string {
-			return checkRunnerFeedIsTestOnly(string(buildData)+"\n/p:UrnUpdateRunnerTestRepoId=1\n", workflows,
-				project, sources["ApplyUpdate.cpp"], sources)
+			return runnerFeed(withInput("app/build.ps1", inputs["app/build.ps1"]+"\n/p:UrnUpdateRunnerTestRepoId=1\n"))
 		}},
 		{"build.ps1 passes another feed", func() []string {
-			return checkRunnerFeedIsTestOnly(string(buildData)+"\n/p:UrnUpdateFeedDefault=beta\n", workflows,
-				project, sources["ApplyUpdate.cpp"], sources)
+			return runnerFeed(withInput("app/build.ps1", inputs["app/build.ps1"]+"\n/p:UrnUpdateFeedDefault=beta\n"))
 		}},
 		{"a workflow passes a runner feed", func() []string {
-			changed := map[string]string{".github/workflows/extra.yml": "run: msbuild /p:UrnUpdateRunnerTestRepoId=1"}
-			for name, text := range workflows {
-				changed[name] = text
-			}
-			return checkRunnerFeedIsTestOnly(string(buildData), changed, project, sources["ApplyUpdate.cpp"], sources)
+			return runnerFeed(withInput(".github/workflows/extra.yml", "run: msbuild /p:UrnUpdateRunnerTestRepoId=1"))
 		}},
-		{"the runner feed from the environment", func() []string {
-			return checkRunnerFeedIsTestOnly(string(buildData), workflows,
-				strings.ReplaceAll(project, "$([System.Environment]::GetEnvironmentVariable(`UrnUpdateRunnerTestRepoId`))", ""),
+		{"a props file sets the runner feed", func() []string {
+			return runnerFeed(withInput("app/Directory.Build.props", inputs["app/Directory.Build.props"]+
+				"\n<PropertyGroup><UrnUpdateRunnerTestRepoId>1</UrnUpdateRunnerTestRepoId></PropertyGroup>\n"))
+		}},
+		{"a response file sets the runner feed", func() []string {
+			return runnerFeed(withInput("app/Directory.Build.rsp", "/p:UrnUpdateRunnerTestRepoId=1"))
+		}},
+		{"build.ps1 packages a runner helper", func() []string {
+			return runnerFeed(withInput("app/build.ps1", replace(inputs["app/build.ps1"],
+				`if ($helperDescription -ne "URnetwork update") {`, `if ($false) {`)))
+		}},
+		{"the payload check passes a runner helper", func() []string {
+			return runnerFeed(withInput("app/tools/verify-msi-payload.ps1", replace(inputs["app/tools/verify-msi-payload.ps1"],
+				`if ($description -ne "URnetwork update") {`, `if ($false) {`)))
+		}},
+		{"a runner helper that does not say so", func() []string {
+			return checkRunnerFeedIsTestOnly(inputs, project, replace(resources, " (runner test feed)", ""),
 				sources["ApplyUpdate.cpp"], sources)
 		}},
+		{"the runner feed from the environment", func() []string {
+			return checkRunnerFeedIsTestOnly(inputs,
+				strings.ReplaceAll(project, "$([System.Environment]::GetEnvironmentVariable(`UrnUpdateRunnerTestRepoId`))", ""),
+				resources, sources["ApplyUpdate.cpp"], sources)
+		}},
+		{"Updater.vcxproj gives the runner feed a value", func() []string {
+			return checkRunnerFeedIsTestOnly(inputs, project+
+				"\n<PropertyGroup><UrnUpdateRunnerTestRepoId>1</UrnUpdateRunnerTestRepoId></PropertyGroup>\n",
+				resources, sources["ApplyUpdate.cpp"], sources)
+		}},
 		{"the runner feed as the default", func() []string {
-			apply := replace(sources["ApplyUpdate.cpp"], "  return update::kOfficialFeed;\n", "  return kRunnerTestFeed;\n")
-			return checkRunnerFeedIsTestOnly(string(buildData), workflows, project, apply, sources)
+			changed := replace(sources["ApplyUpdate.cpp"], "  return update::kOfficialFeed;\n", "  return kRunnerTestFeed;\n")
+			return checkRunnerFeedIsTestOnly(inputs, project, resources, changed, sources)
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

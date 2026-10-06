@@ -106,13 +106,14 @@ inline constexpr int kLaunchRounds = 4;
 // not.
 inline constexpr std::wstring_view kAutostartArgument = L"--autostart";
 
-// The argument of the installer's relaunch after an update the update helper
-// ran: the MSI starts URnetworkUpdate.exe, which starts the app with it once
-// the update's files are in place (installer/Package.wxs). The helper still
-// waits on msiexec then, and the update marker names the helper, so this
-// launch waits for that update to end, at most kAfterUpdateBudget, before it
-// asks like every launch (main.cpp). It changes nothing else: the launch opens
-// the window, as the user's launch does.
+// The argument of the relaunch after an update the update helper ran: once the
+// update's files are in place the MSI starts URnetworkUpdate.exe
+// (installer/Package.wxs), and after an install that failed the helper starts
+// it itself, and either way it starts the app with this argument. The helper
+// may still run then, and the update marker names it, so this launch waits for
+// that update to end (AwaitUpdateEnd), before it asks like every launch
+// (main.cpp). It changes nothing else: the launch opens the window, as the
+// user's launch does, and the window shows how the update went.
 inline constexpr std::wstring_view kAfterUpdateArgument = L"--after-update";
 
 // How long the relaunch waits for the update to end: msiexec ends a moment

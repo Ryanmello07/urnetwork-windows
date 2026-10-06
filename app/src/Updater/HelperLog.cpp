@@ -31,10 +31,14 @@ HelperLog::~HelperLog() {
   if (file_) ::CloseHandle(static_cast<HANDLE>(file_));
 }
 
-void HelperLog::Open(const std::filesystem::path& file) {
+void HelperLog::Open(const std::filesystem::path& file, void* security) {
   if (file_) return;
-  HANDLE handle = ::CreateFileW(file.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr,
-                                CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+  // Deleted and created new, never truncated: a file that is there keeps the
+  // security it has, and this one's is the admin-only one it is given.
+  ::DeleteFileW(file.c_str());
+  HANDLE handle = ::CreateFileW(file.c_str(), GENERIC_WRITE, FILE_SHARE_READ,
+                                static_cast<SECURITY_ATTRIBUTES*>(security), CREATE_NEW,
+                                FILE_ATTRIBUTE_NORMAL, nullptr);
   if (handle == INVALID_HANDLE_VALUE) return;
   file_ = handle;
   WriteAll(handle, kept_);

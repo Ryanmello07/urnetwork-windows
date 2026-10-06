@@ -3,10 +3,10 @@
 //
 // The helper writes the file when it ends, whether msiexec ran or the helper
 // refused first, replacing the previous one atomically. It sits in the
-// admin-only install folder (InstallLocation.h): only an administrator can
-// write it, and every user can read it. The tray app reads it when the helper
-// it waited on ends, and on its next launch, since the installer usually
-// closes the app before the helper finishes.
+// admin-only install folder (InstallLocation.h), with an ACL of its own that
+// only an administrator can change, and every user can read it. The tray app
+// reads it when the helper it waited on ends, and on its next launch, since
+// the installer usually closes the app before the helper finishes.
 //
 //   {"tag":"v2026.10.1-1060587890","code":1060587890,"exitCode":0,
 //    "finishedUtc":"2026-10-01T14:51:17Z"}
