@@ -6842,6 +6842,10 @@
     <value>今天保存您的卡，{0} 扣款 {1}。在此之前可随时取消。</value>
     <comment>Embedded pay page: what happens with the card on a trial. {price} amount, {date} local date.</comment>
   </data>
+  <data name="site_payment_error_already_subscribed" xml:space="preserve">
+    <value>您已拥有 Pro，因此未扣款。请在您的账户中管理订阅。</value>
+    <comment>ur.io checkout (the Pro upgrade sheet, the onboarding plan step, the offer screen, the free-trial panel): the server refused a new subscription because the network already has an active Pro subscription (error.code already_subscribed). Nothing was charged.</comment>
+  </data>
   <data name="site_payment_error_authentication_failed" xml:space="preserve">
     <value>您的银行无法验证这张卡。请重试或改用另一张卡。</value>
     <comment>Pay page (/app/pay-sheet on ur.io): the bank's card verification (3D Secure) failed or was not completed. Nothing was charged.</comment>
@@ -6849,6 +6853,10 @@
   <data name="site_payment_error_card_declined" xml:space="preserve">
     <value>您的卡被拒绝。请换一张卡，或联系您的银行。</value>
     <comment>Pay page (/app/pay-sheet, the card form the desktop apps and the F-Droid app open on ur.io): the card's bank declined the payment (Stripe card_declined). Nothing was charged.</comment>
+  </data>
+  <data name="site_payment_error_checkout_unavailable" xml:space="preserve">
+    <value>结账功能暂不可用。请稍后重试。</value>
+    <comment>ur.io checkout: this deployment has no checkout configured (error.code checkout_unavailable). Nothing was charged.</comment>
   </data>
   <data name="site_payment_error_expired_card" xml:space="preserve">
     <value>您的卡已过期。请换一张卡。</value>
@@ -6866,9 +6874,33 @@
     <value>您的卡余额不足。请换一张卡。</value>
     <comment>Pay page (/app/pay-sheet on ur.io): the card was declined because it does not have enough funds (Stripe decline code insufficient_funds). Nothing was charged.</comment>
   </data>
+  <data name="site_payment_error_invalid_email" xml:space="preserve">
+    <value>该电子邮件地址似乎不正确。请检查后重试。</value>
+    <comment>ur.io Buy data page, buying a code by email: the server refused the email address the code goes to (error.code invalid_email).</comment>
+  </data>
+  <data name="site_payment_error_item_unavailable" xml:space="preserve">
+    <value>此流量包暂不可用。请稍后重试。</value>
+    <comment>ur.io data pack checkout (account panel, Buy data page): the server cannot sell this data pack right now (error.code item_unavailable). Nothing was charged.</comment>
+  </data>
   <data name="site_payment_error_network" xml:space="preserve">
     <value>无法连接。请检查您的网络连接后重试。</value>
     <comment>Pay page (/app/pay-sheet) and the Pro upgrade sheet on ur.io: Stripe or URnetwork's server could not be reached (offline, timed out, or blocked by the network).</comment>
+  </data>
+  <data name="site_payment_error_network_name_required" xml:space="preserve">
+    <value>请输入接收流量的网络。</value>
+    <comment>ur.io Buy data page, paying with USDC: no network name was given for the data (error.code network_name_required).</comment>
+  </data>
+  <data name="site_payment_error_network_not_found" xml:space="preserve">
+    <value>没有使用该名称的网络。请检查名称后重试。</value>
+    <comment>ur.io Buy data page: no network has the name the buyer entered (error.code network_not_found). Nothing was charged.</comment>
+  </data>
+  <data name="site_payment_error_offer_unavailable" xml:space="preserve">
+    <value>欢迎优惠已不再可用。</value>
+    <comment>ur.io Pro upgrade sheet, paying with USDC: the welcome offer is not, or no longer, redeemable by this network (error.code offer_unavailable). Nothing was charged.</comment>
+  </data>
+  <data name="site_payment_error_plan_unavailable" xml:space="preserve">
+    <value>此方案暂不可用。请稍后重试。</value>
+    <comment>ur.io checkout: the server cannot sell this Pro plan right now (error.code plan_unavailable: no price or product is configured for it). Nothing was charged.</comment>
   </data>
   <data name="site_payment_error_processing" xml:space="preserve">
     <value>暂时无法处理付款。请稍后重试。</value>
@@ -7085,6 +7117,34 @@
   <data name="site_sub_stripe_body" xml:space="preserve">
     <value>您的 Pro 订阅通过 Stripe 计费。您可以在下方随时更新付款信息或取消订阅。</value>
     <comment>Subscription: Stripe-billed body</comment>
+  </data>
+  <data name="site_subscription_error_does_not_renew" xml:space="preserve">
+    <value>USDC 付款仅涵盖一个周期且不会续订，因此无需取消。</value>
+    <comment>ur.io Manage subscription screen: a USDC payment covers one period and never renews, so there is nothing to cancel (error.code does_not_renew).</comment>
+  </data>
+  <data name="site_subscription_error_managed_by_app_store" xml:space="preserve">
+    <value>此订阅通过 App Store 计费。请在那里取消。</value>
+    <comment>ur.io Manage subscription screen: the subscription is billed by the App Store, so it is cancelled there (error.code managed_by_app_store).</comment>
+  </data>
+  <data name="site_subscription_error_managed_by_google_play" xml:space="preserve">
+    <value>此订阅通过 Google Play 计费。请在那里取消。</value>
+    <comment>ur.io Manage subscription screen: the subscription is billed by Google Play, so it is cancelled there (error.code managed_by_google_play).</comment>
+  </data>
+  <data name="site_subscription_error_no_customer" xml:space="preserve">
+    <value>此网络没有 Stripe 账单信息。</value>
+    <comment>ur.io Manage subscription screen, opening the billing details: the network has no Stripe customer, so there is no billing portal (error.code no_customer).</comment>
+  </data>
+  <data name="site_subscription_error_no_subscription" xml:space="preserve">
+    <value>此网络没有正在计费的 Stripe 订阅。</value>
+    <comment>ur.io Manage subscription screen, cancelling or resuming: no Stripe subscription is billing this network (error.code no_subscription).</comment>
+  </data>
+  <data name="site_subscription_error_not_cancelable" xml:space="preserve">
+    <value>此订阅无法在此更改。</value>
+    <comment>ur.io Manage subscription screen: the subscription's store is not one the server can change (error.code not_cancelable).</comment>
+  </data>
+  <data name="site_subscription_error_store_unavailable" xml:space="preserve">
+    <value>暂时无法连接 Stripe。请稍后重试。</value>
+    <comment>ur.io Manage subscription screen: Stripe did not answer or refused the change; trying again usually works (error.code store_unavailable).</comment>
   </data>
   <data name="site_unexpected_error" xml:space="preserve">
     <value>发生了意外错误。</value>

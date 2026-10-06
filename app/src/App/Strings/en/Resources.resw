@@ -7460,6 +7460,10 @@ world's content</value>
     <value>Your card is saved today and charged {1} on {0}. Cancel anytime before then.</value>
     <comment>Embedded pay page: what happens with the card on a trial. {price} amount, {date} local date.</comment>
   </data>
+  <data name="site_payment_error_already_subscribed" xml:space="preserve">
+    <value>You already have Pro, so nothing was charged. Manage your subscription from your account.</value>
+    <comment>ur.io checkout (the Pro upgrade sheet, the onboarding plan step, the offer screen, the free-trial panel): the server refused a new subscription because the network already has an active Pro subscription (error.code already_subscribed). Nothing was charged.</comment>
+  </data>
   <data name="site_payment_error_authentication_failed" xml:space="preserve">
     <value>Your bank could not verify the card. Try again or use another card.</value>
     <comment>Pay page (/app/pay-sheet on ur.io): the bank's card verification (3D Secure) failed or was not completed. Nothing was charged.</comment>
@@ -7467,6 +7471,10 @@ world's content</value>
   <data name="site_payment_error_card_declined" xml:space="preserve">
     <value>Your card was declined. Try another card, or contact your bank.</value>
     <comment>Pay page (/app/pay-sheet, the card form the desktop apps and the F-Droid app open on ur.io): the card's bank declined the payment (Stripe card_declined). Nothing was charged.</comment>
+  </data>
+  <data name="site_payment_error_checkout_unavailable" xml:space="preserve">
+    <value>Checkout is not available right now. Try again later.</value>
+    <comment>ur.io checkout: this deployment has no checkout configured (error.code checkout_unavailable). Nothing was charged.</comment>
   </data>
   <data name="site_payment_error_expired_card" xml:space="preserve">
     <value>Your card has expired. Try another card.</value>
@@ -7484,9 +7492,33 @@ world's content</value>
     <value>Your card has insufficient funds. Try another card.</value>
     <comment>Pay page (/app/pay-sheet on ur.io): the card was declined because it does not have enough funds (Stripe decline code insufficient_funds). Nothing was charged.</comment>
   </data>
+  <data name="site_payment_error_invalid_email" xml:space="preserve">
+    <value>That email address does not look right. Check it and try again.</value>
+    <comment>ur.io Buy data page, buying a code by email: the server refused the email address the code goes to (error.code invalid_email).</comment>
+  </data>
+  <data name="site_payment_error_item_unavailable" xml:space="preserve">
+    <value>This data pack is not available right now. Try again later.</value>
+    <comment>ur.io data pack checkout (account panel, Buy data page): the server cannot sell this data pack right now (error.code item_unavailable). Nothing was charged.</comment>
+  </data>
   <data name="site_payment_error_network" xml:space="preserve">
     <value>Could not connect. Check your internet connection and try again.</value>
     <comment>Pay page (/app/pay-sheet) and the Pro upgrade sheet on ur.io: Stripe or URnetwork's server could not be reached (offline, timed out, or blocked by the network).</comment>
+  </data>
+  <data name="site_payment_error_network_name_required" xml:space="preserve">
+    <value>Enter the network that should receive the data.</value>
+    <comment>ur.io Buy data page, paying with USDC: no network name was given for the data (error.code network_name_required).</comment>
+  </data>
+  <data name="site_payment_error_network_not_found" xml:space="preserve">
+    <value>No network has that name. Check the name and try again.</value>
+    <comment>ur.io Buy data page: no network has the name the buyer entered (error.code network_not_found). Nothing was charged.</comment>
+  </data>
+  <data name="site_payment_error_offer_unavailable" xml:space="preserve">
+    <value>The welcome offer is no longer available.</value>
+    <comment>ur.io Pro upgrade sheet, paying with USDC: the welcome offer is not, or no longer, redeemable by this network (error.code offer_unavailable). Nothing was charged.</comment>
+  </data>
+  <data name="site_payment_error_plan_unavailable" xml:space="preserve">
+    <value>This plan is not available right now. Try again later.</value>
+    <comment>ur.io checkout: the server cannot sell this Pro plan right now (error.code plan_unavailable: no price or product is configured for it). Nothing was charged.</comment>
   </data>
   <data name="site_payment_error_processing" xml:space="preserve">
     <value>The payment could not be processed right now. Try again in a moment.</value>
@@ -7723,6 +7755,34 @@ world's content</value>
   <data name="site_sub_stripe_body" xml:space="preserve">
     <value>Your Pro subscription is billed through Stripe. Update your payment details or cancel anytime below.</value>
     <comment>Subscription: Stripe-billed body</comment>
+  </data>
+  <data name="site_subscription_error_does_not_renew" xml:space="preserve">
+    <value>A USDC payment covers one period and does not renew, so there is nothing to cancel.</value>
+    <comment>ur.io Manage subscription screen: a USDC payment covers one period and never renews, so there is nothing to cancel (error.code does_not_renew).</comment>
+  </data>
+  <data name="site_subscription_error_managed_by_app_store" xml:space="preserve">
+    <value>This subscription is billed by the App Store. Cancel it there.</value>
+    <comment>ur.io Manage subscription screen: the subscription is billed by the App Store, so it is cancelled there (error.code managed_by_app_store).</comment>
+  </data>
+  <data name="site_subscription_error_managed_by_google_play" xml:space="preserve">
+    <value>This subscription is billed by Google Play. Cancel it there.</value>
+    <comment>ur.io Manage subscription screen: the subscription is billed by Google Play, so it is cancelled there (error.code managed_by_google_play).</comment>
+  </data>
+  <data name="site_subscription_error_no_customer" xml:space="preserve">
+    <value>This network has no Stripe billing details.</value>
+    <comment>ur.io Manage subscription screen, opening the billing details: the network has no Stripe customer, so there is no billing portal (error.code no_customer).</comment>
+  </data>
+  <data name="site_subscription_error_no_subscription" xml:space="preserve">
+    <value>No Stripe subscription is billing this network.</value>
+    <comment>ur.io Manage subscription screen, cancelling or resuming: no Stripe subscription is billing this network (error.code no_subscription).</comment>
+  </data>
+  <data name="site_subscription_error_not_cancelable" xml:space="preserve">
+    <value>This subscription cannot be changed here.</value>
+    <comment>ur.io Manage subscription screen: the subscription's store is not one the server can change (error.code not_cancelable).</comment>
+  </data>
+  <data name="site_subscription_error_store_unavailable" xml:space="preserve">
+    <value>Stripe could not be reached just now. Try again in a moment.</value>
+    <comment>ur.io Manage subscription screen: Stripe did not answer or refused the change; trying again usually works (error.code store_unavailable).</comment>
   </data>
   <data name="site_unexpected_error" xml:space="preserve">
     <value>Something unexpected happened.</value>
