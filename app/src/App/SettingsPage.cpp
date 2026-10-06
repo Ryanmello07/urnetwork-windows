@@ -21,6 +21,7 @@
 #include "MainWindow.xaml.h"
 #include "ManageSubscription.h"
 #include "PageContext.h"
+#include "PaymentRefusal.h"
 #include "Strings.h"
 #include "SupportContact.h"
 #include "UpdateChecker.h"
@@ -1157,15 +1158,27 @@ winrt::fire_and_forget SettingsPage::OpenCustomerPortal() {
                           std::optional<std::string> err) {
         std::string url, error;
         if (result && result->url) url = *result->url;
-        if (result && result->error) error = result->error->message;
-        else if (err) error = *err;
-        queue.TryEnqueue([weak, url, error] {
+        // the server's refusal in this app's words (PaymentRefusal.h); a
+        // failure with no answer from the server keeps the sdk's words
+        std::optional<PaymentRefusalText> refusal;
+        if (result && result->error) {
+          refusal = PaymentRefusalTextFor(*result->error, "something_went_wrong");
+        } else if (err) {
+          error = *err;
+        }
+        queue.TryEnqueue([weak, url, refusal, error] {
           auto window = weak.get();
           if (!window) return;
           auto& page = window->settings();
           page.manageSubscription_.IsEnabled(true);
           if (!url.empty()) {
             page.LaunchCustomerPortal(url);
+            return;
+          }
+          if (refusal) {
+            page.settingsSnackbar().Show(
+                hstring{PaymentRefusalMessage(Localized(refusal->key), Widen(refusal->detail))},
+                InfoBarSeverity::Error);
             return;
           }
           page.settingsSnackbar().Show(

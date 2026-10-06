@@ -419,6 +419,8 @@
     <ClInclude Include="CloudProxyLink.h" />
     <ClInclude Include="CheckoutBridgeError.h" />
     <ClInclude Include="CheckoutSessionMode.h" />
+    <!-- header-only and WinRT-free: tools/payment-refusal-tests.cpp runs it -->
+    <ClInclude Include="PaymentRefusal.h" />
     <ClInclude Include="ConfirmationPollGate.h" />
     <ClInclude Include="ClientEvents.h" />
     <ClInclude Include="OfferCard.h" />
