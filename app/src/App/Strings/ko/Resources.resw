@@ -3427,6 +3427,10 @@
     <value>익스텐더 통계</value>
     <comment>Title of the section that shows statistics about the extender, directly above the provider statistics section.</comment>
   </data>
+  <data name="extender_tcp_unavailable" xml:space="preserve">
+    <value>TCP 포트 443을 다른 프로그램이 사용 중입니다. 몇 분마다 다시 시도합니다: {}</value>
+    <comment>Extender status when TCP port 443, the one port the extender requires, cannot be bound, usually because another program (often another provider on the same computer) holds it. The extender stays off and tries the port again every few minutes on its own, so this is not the user's mistake: keep the tone calm. The argument is the bind error.</comment>
+  </data>
   <data name="extenders" xml:space="preserve">
     <value>익스텐더</value>
     <comment>Title of the extenders panel in the connect drawer and of the Extenders section under account.</comment>
