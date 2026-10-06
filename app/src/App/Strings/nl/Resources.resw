@@ -3459,6 +3459,10 @@ juiste manier</value>
     <value>Log in en maak verbinding om extenders te beheren.</value>
     <comment>Shown in the account Extenders section when there is no signed-in device to manage extenders with.</comment>
   </data>
+  <data name="extenders_reset_done" xml:space="preserve">
+    <value>Extenders gereset</value>
+    <comment>Confirmation after the extenders were reset (Extenders section under account).</comment>
+  </data>
   <data name="failed_to_connect" xml:space="preserve">
     <value>Fout tijdens verbinden</value>
     <comment>Used in Shared/Intents/ConnectIntent.swift.</comment>
@@ -5586,6 +5590,14 @@ gedecentraliseerde ingress- en egress-protocol ter wereld.</value>
   <data name="resend_verify_code" xml:space="preserve">
     <value>Code opnieuw versturen</value>
     <comment>Button text to resend the verification code</comment>
+  </data>
+  <data name="reset_extenders" xml:space="preserve">
+    <value>Extenders resetten</value>
+    <comment>Button in the Extenders section under account, the title of its confirmation, and the confirmation's action: removes the extenders the user added and clears everything learned about extenders.</comment>
+  </data>
+  <data name="reset_extenders_confirm" xml:space="preserve">
+    <value>Hiermee worden de extenders die je hebt toegevoegd verwijderd en wordt alles gewist wat over extenders bekend is. Daarna worden extenders opnieuw vanaf nul gezocht.</value>
+    <comment>Body of the confirmation before resetting extenders (Extenders section under account): what the reset removes and clears.</comment>
   </data>
   <data name="reset_it" xml:space="preserve">
     <value>Reset het</value>

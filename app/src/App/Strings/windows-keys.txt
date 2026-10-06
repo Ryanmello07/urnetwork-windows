@@ -475,6 +475,7 @@ extender_statistics
 extenders
 extenders_active_of_reserve
 extenders_no_session
+extenders_reset_done
 fast_dns_on_connect
 fast_dns_on_connect_description
 feedback
@@ -790,6 +791,8 @@ remove_rule
 remove_wallet
 remove_wallet_moves_or_holds_payouts
 resend_verify_code
+reset_extenders
+reset_extenders_confirm
 reset_it
 reset_link_rate_limited
 reset_link_sent_to

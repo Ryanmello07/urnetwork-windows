@@ -3439,6 +3439,10 @@ cara yang benar</value>
     <value>Masuk dan hubungkan untuk mengelola extender.</value>
     <comment>Shown in the account Extenders section when there is no signed-in device to manage extenders with.</comment>
   </data>
+  <data name="extenders_reset_done" xml:space="preserve">
+    <value>Extender disetel ulang</value>
+    <comment>Confirmation after the extenders were reset (Extenders section under account).</comment>
+  </data>
   <data name="failed_to_connect" xml:space="preserve">
     <value>Gagal terhubung</value>
     <comment>Used in Shared/Intents/ConnectIntent.swift.</comment>
@@ -5490,6 +5494,14 @@ terbesar, teraman, dan paling terdesentralisasi di dunia.</value>
   <data name="resend_verify_code" xml:space="preserve">
     <value>Kirim ulang kode</value>
     <comment>Button text to resend the verification code</comment>
+  </data>
+  <data name="reset_extenders" xml:space="preserve">
+    <value>Setel ulang extender</value>
+    <comment>Button in the Extenders section under account, the title of its confirmation, and the confirmation's action: removes the extenders the user added and clears everything learned about extenders.</comment>
+  </data>
+  <data name="reset_extenders_confirm" xml:space="preserve">
+    <value>Ini menghapus extender yang Anda tambahkan dan semua yang diketahui tentang extender. Setelah itu, extender ditemukan lagi dari awal.</value>
+    <comment>Body of the confirmation before resetting extenders (Extenders section under account): what the reset removes and clears.</comment>
   </data>
   <data name="reset_it" xml:space="preserve">
     <value>Atur ulang</value>
