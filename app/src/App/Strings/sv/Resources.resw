@@ -92,6 +92,10 @@
     <value>Lägg till en inloggningsmetod</value>
     <comment>A title for the screen that lets the user add a new sign-in method.</comment>
   </data>
+  <data name="add_an_app" xml:space="preserve">
+    <value>Lägg till en app</value>
+    <comment>Split rules screen on macOS, Apps section: the row (and the title of the sheet it opens) that adds an app from /Applications to the apps that bypass the VPN.</comment>
+  </data>
   <data name="add_blocked_location" xml:space="preserve">
     <value>Lägg till blockerad plats</value>
     <comment>Call to action</comment>
@@ -1859,6 +1863,14 @@ rätt sätt</value>
   <data name="dev_exit_flows" xml:space="preserve">
     <value>Flöden: {}</value>
     <comment>Developer tools screen (reliability surface): exit flows control label.</comment>
+  </data>
+  <data name="dev_exit_policy_generation" xml:space="preserve">
+    <value>policygeneration {}</value>
+    <comment>Developer page exit readout: the security policy (safety rules) generation the exit's provider enforces. Connect raises this number with every reviewed change to the built-in rules, so a higher number is newer rules.</comment>
+  </data>
+  <data name="dev_exit_policy_generation_unknown" xml:space="preserve">
+    <value>policygeneration okänd</value>
+    <comment>Developer page exit readout: the exit's provider reported its security policy (safety rules) without a generation, because it predates the generation or runs a custom policy.</comment>
   </data>
   <data name="dev_exits" xml:space="preserve">
     <value>Utgångar</value>
@@ -4624,6 +4636,10 @@ Hämta din bonus genom att skapa ett nätverk!</value>
     <value>100 % öppen källkod och transparent</value>
     <comment>Call to action</comment>
   </data>
+  <data name="open_system_settings" xml:space="preserve">
+    <value>Öppna Systeminställningar</value>
+    <comment>macOS: the button that opens System Settings at the network extensions the user must allow. Use the name macOS gives System Settings in the language.</comment>
+  </data>
   <data name="open_urnetwork" xml:space="preserve">
     <value>Öppna URnetwork</value>
     <comment>Tray menu item that shows the app window. The counterpart of quit_urnetwork.</comment>
@@ -6450,6 +6466,10 @@ innehåll i världen</value>
     <value>Regler gäller hela det sammankopplade nätverksklustret, så relaterad trafik fångas upp tillsammans.</value>
     <comment>Split rules screen: note that a rule matches every host in the same network cluster (related hosts of one site or service), whatever the rule's mode.</comment>
   </data>
+  <data name="split_rules_match_sites_and_apps_macos" xml:space="preserve">
+    <value>Delningsregler gäller webbplatser och adresser. Om du vill hålla en app utanför VPN:et på den här Macen lägger du till den under Appar. Adresser i det lokala nätverket kringgår redan VPN:et.</value>
+    <comment>Split rules screen on macOS 15 and later: the rules match sites and addresses, and an app is kept off the VPN by adding it in the Apps section below (the section is titled with the "Apps" string, so use the same word as that title). Notes that local network addresses already bypass the VPN. Keep Mac and VPN unchanged.</comment>
+  </data>
   <data name="split_rules_match_sites_not_apps" xml:space="preserve">
     <value>Delningsregler gäller webbplatser och adresser, inte appar: Apple tillåter VPN per app bara på enheter som hanteras av en organisation (MDM). Om du vill hålla en app utanför VPN:et dirigerar du de webbplatser den använder lokalt, eller börjar från en förinställning. Adresser i det lokala nätverket kringgår redan VPN:et.</value>
     <comment>Split rules screen (iOS/macOS): why the rules match sites and addresses rather than apps. Apple's per-app VPN (NEAppRule) is available only on devices an organization manages (MDM). Points to host rules and presets, and notes that local network addresses already bypass the VPN. Keep Apple, VPN and MDM unchanged.</comment>
@@ -6461,6 +6481,14 @@ innehåll i världen</value>
   <data name="split_rules_start_from_preset" xml:space="preserve">
     <value>Börja från en förinställning</value>
     <comment>Split rules screen: the menu that starts a route-locally rule from a preset, the address ranges a service publishes for use outside a VPN.</comment>
+  </data>
+  <data name="split_tunnel_apps_not_bypassing" xml:space="preserve">
+    <value>De här apparna kan inte gå utanför VPN:et just nu. Försök igen och tillåt proxykonfigurationen om macOS frågar.</value>
+    <comment>Split rules screen on macOS, Apps section: the split tunnel extension or its proxy configuration could not be installed or started, so the listed apps still use the VPN. The Retry button follows; macOS asks the user to allow URnetwork's proxy configuration the first time. Keep VPN and macOS unchanged.</comment>
+  </data>
+  <data name="split_tunnel_extension_needs_approval" xml:space="preserve">
+    <value>Om du vill hålla de här apparna utanför VPN:et tillåter du tillägget URnetwork Split Tunnel i Systeminställningar.</value>
+    <comment>Split rules screen on macOS, Apps section: the split tunnel system extension waits for the user's one-time approval in System Settings (General &gt; Login Items &amp; Extensions &gt; Network Extensions). Use the name macOS gives System Settings in the language. Keep URnetwork Split Tunnel (the extension's name) and VPN unchanged.</comment>
   </data>
   <data name="sso_browser_open_failed" xml:space="preserve">
     <value>Det gick inte att öppna webbläsaren. Försök igen.</value>
