@@ -909,7 +909,7 @@
   </data>
   <data name="checkout_error_unavailable" xml:space="preserve">
     <value>चेकआउट अभी उपलब्ध नहीं है। कृपया बाद में फिर से प्रयास करें।</value>
-    <comment>Checkout error in the desktop apps (the macOS direct download, Windows and Linux) when the ur.io checkout page hands back checkout_unavailable: the site cannot open Stripe's checkout right now (it has no Stripe key), so no payment form was shown and nothing was charged. The user cannot fix it; it may work later.</comment>
+    <comment>Checkout error in the desktop apps (the macOS direct download, Windows and Linux) when the ur.io checkout page hands back checkout_unavailable, or the server refuses to start a checkout with error.code checkout_unavailable: the site or the server cannot open Stripe's checkout right now (it has no Stripe key), so no payment form was shown and nothing was charged. The user cannot fix it; it may work later.</comment>
   </data>
   <data name="checkout_finish_in_browser" xml:space="preserve">
     <value>अपने ब्राउज़र में पूरा करें।</value>
@@ -6247,6 +6247,14 @@
     <value>अपनी नवीनीकरण तिथि, स्वतः नवीनीकरण की स्थिति और रद्द करने के विकल्प देखें।</value>
     <comment>Account panel: hint under the plan card for Pro members, next to the Manage button that opens Manage Subscription.</comment>
   </data>
+  <data name="site_payment_error_already_subscribed" xml:space="preserve">
+    <value>आपके पास पहले से Pro है, इसलिए कोई शुल्क नहीं लिया गया। अपनी सदस्यता अपने खाते से प्रबंधित करें।</value>
+    <comment>Checkout (ur.io's payment screens; the plan purchase in the F-Droid and dapp Android builds; the upgrade sheet in the macOS direct download, Windows and Linux): the server refused a new subscription because the network already has an active Pro subscription (error.code already_subscribed). Nothing was charged.</comment>
+  </data>
+  <data name="site_payment_error_plan_unavailable" xml:space="preserve">
+    <value>यह प्लान अभी उपलब्ध नहीं है। बाद में फिर से कोशिश करें।</value>
+    <comment>Checkout (ur.io's payment screens; the plan purchase in the F-Droid and dapp Android builds; the upgrade sheet in the macOS direct download, Windows and Linux): the server cannot sell this Pro plan right now (error.code plan_unavailable: no price or product is configured for it). Nothing was charged.</comment>
+  </data>
   <data name="site_save_your_seedphrase" xml:space="preserve">
     <value>अपना सीडफ़्रेज़ सहेजें</value>
     <comment>Instant account creation: heading of the view that shows the new seedphrase once.</comment>
@@ -6358,6 +6366,14 @@
   <data name="site_sub_stripe_body" xml:space="preserve">
     <value>आपकी Pro सदस्यता Stripe के माध्यम से बिल की जाती है। नीचे कभी भी अपने भुगतान विवरण अपडेट करें या सदस्यता रद्द करें।</value>
     <comment>Subscription: Stripe-billed body</comment>
+  </data>
+  <data name="site_subscription_error_no_customer" xml:space="preserve">
+    <value>इस नेटवर्क के लिए Stripe में बिलिंग विवरण नहीं हैं।</value>
+    <comment>Manage subscription (ur.io's screen; Settings in the Windows app, Account in the Linux app), opening the billing details: the network has no Stripe customer, so there is no billing portal (error.code no_customer).</comment>
+  </data>
+  <data name="site_subscription_error_store_unavailable" xml:space="preserve">
+    <value>अभी Stripe से संपर्क नहीं हो सका। थोड़ी देर में फिर से कोशिश करें।</value>
+    <comment>Manage subscription (ur.io's screen; Settings in the Windows app, Account in the Linux app): Stripe did not answer or refused the change, or the billing portal could not be opened; trying again usually works (error.code store_unavailable).</comment>
   </data>
   <data name="skip" xml:space="preserve">
     <value>छोड़ें</value>

@@ -910,7 +910,7 @@ de la manera correcta</value>
   </data>
   <data name="checkout_error_unavailable" xml:space="preserve">
     <value>El pago no está disponible en este momento. Inténtalo de nuevo más tarde.</value>
-    <comment>Checkout error in the desktop apps (the macOS direct download, Windows and Linux) when the ur.io checkout page hands back checkout_unavailable: the site cannot open Stripe's checkout right now (it has no Stripe key), so no payment form was shown and nothing was charged. The user cannot fix it; it may work later.</comment>
+    <comment>Checkout error in the desktop apps (the macOS direct download, Windows and Linux) when the ur.io checkout page hands back checkout_unavailable, or the server refuses to start a checkout with error.code checkout_unavailable: the site or the server cannot open Stripe's checkout right now (it has no Stripe key), so no payment form was shown and nothing was charged. The user cannot fix it; it may work later.</comment>
   </data>
   <data name="checkout_finish_in_browser" xml:space="preserve">
     <value>Termina en tu navegador.</value>
@@ -6250,6 +6250,14 @@ del mundo</value>
     <value>Consulta la fecha de renovación, la renovación automática y las opciones de cancelación.</value>
     <comment>Account panel: hint under the plan card for Pro members, next to the Manage button that opens Manage Subscription.</comment>
   </data>
+  <data name="site_payment_error_already_subscribed" xml:space="preserve">
+    <value>Ya tienes Pro, así que no se te cobró nada. Administra tu suscripción desde tu cuenta.</value>
+    <comment>Checkout (ur.io's payment screens; the plan purchase in the F-Droid and dapp Android builds; the upgrade sheet in the macOS direct download, Windows and Linux): the server refused a new subscription because the network already has an active Pro subscription (error.code already_subscribed). Nothing was charged.</comment>
+  </data>
+  <data name="site_payment_error_plan_unavailable" xml:space="preserve">
+    <value>Este plan no está disponible en este momento. Vuelve a intentarlo más tarde.</value>
+    <comment>Checkout (ur.io's payment screens; the plan purchase in the F-Droid and dapp Android builds; the upgrade sheet in the macOS direct download, Windows and Linux): the server cannot sell this Pro plan right now (error.code plan_unavailable: no price or product is configured for it). Nothing was charged.</comment>
+  </data>
   <data name="site_save_your_seedphrase" xml:space="preserve">
     <value>Guarda tu frase semilla</value>
     <comment>Instant account creation: heading of the view that shows the new seedphrase once.</comment>
@@ -6361,6 +6369,14 @@ del mundo</value>
   <data name="site_sub_stripe_body" xml:space="preserve">
     <value>Tu suscripción Pro se factura a través de Stripe. Actualiza los datos de pago o cancela cuando quieras más abajo.</value>
     <comment>Subscription: Stripe-billed body</comment>
+  </data>
+  <data name="site_subscription_error_no_customer" xml:space="preserve">
+    <value>Esta red no tiene datos de facturación en Stripe.</value>
+    <comment>Manage subscription (ur.io's screen; Settings in the Windows app, Account in the Linux app), opening the billing details: the network has no Stripe customer, so there is no billing portal (error.code no_customer).</comment>
+  </data>
+  <data name="site_subscription_error_store_unavailable" xml:space="preserve">
+    <value>No se pudo conectar con Stripe en este momento. Vuelve a intentarlo en un momento.</value>
+    <comment>Manage subscription (ur.io's screen; Settings in the Windows app, Account in the Linux app): Stripe did not answer or refused the change, or the billing portal could not be opened; trying again usually works (error.code store_unavailable).</comment>
   </data>
   <data name="skip" xml:space="preserve">
     <value>Omitir</value>

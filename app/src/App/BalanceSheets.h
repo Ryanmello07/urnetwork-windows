@@ -177,7 +177,8 @@ class UpgradeSheet : public std::enable_shared_from_this<UpgradeSheet> {
   void ApplyPrices();
   void EmitPurchase(const char* outcome, std::string const& errorClass = std::string());
   // Create a Stripe session in the given ui mode and route the result: embedded
-  // → OpenEmbedded (or retry once as hosted), hosted → LaunchHosted.
+  // → OpenEmbedded (or retry once as hosted), hosted → LaunchHosted, or the
+  // server's refusal in this app's words (PaymentRefusal.h).
   void RequestSession(bool embedded);
   // Open the hosted checkout url in the system browser, OBSERVING the launch:
   // Waiting (+ confirmation poll) only on success; on failure an inline error

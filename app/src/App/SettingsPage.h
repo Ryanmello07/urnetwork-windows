@@ -151,6 +151,9 @@ class SettingsPage {
   // `urnetworkd uninstall`). Same dialog shape as ConfirmRemoveAuth: defaults
   // to Cancel, commits only on the explicit destructive button.
   winrt::fire_and_forget ConfirmUninstallService();
+  // Manage subscription: ask the server for the Stripe billing portal and open
+  // it (LaunchCustomerPortal); the server's refusal reads in this app's words
+  // (PaymentRefusal.h).
   winrt::fire_and_forget OpenCustomerPortal();
   // Open the portal url in the browser, observing the launch: a failure shows
   // site_billing_portal_error instead of looking like a portal that opened.
