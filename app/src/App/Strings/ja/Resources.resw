@@ -6961,14 +6961,6 @@
   <data name="usdc_wallet_address" xml:space="preserve">
     <value>USDCウォレットアドレス</value>
   </data>
-  <data name="use_as_proxy_no_vpn" xml:space="preserve">
-    <value>代わりにプロキシとして使用（VPNなし）</value>
-    <comment>Settings row (Connections) that opens the ur.io cloud proxies page so the user can run URnetwork as a proxy without taking the Android VPN slot.</comment>
-  </data>
-  <data name="use_as_proxy_no_vpn_detail" xml:space="preserve">
-    <value>ur.io を開いて、VPN なしで URnetwork を HTTPS プロキシとして使用します。SOCKS と WireGuard は Pro で利用できます。</value>
-    <comment>Subtitle under the cloud-proxy Settings row explaining that it opens ur.io and that SOCKS and WireGuard require Pro.</comment>
-  </data>
   <data name="use_extender_settings" xml:space="preserve">
     <value>エクステンダー設定を使う</value>
     <comment>Toggle on the import screen: also apply the extender settings carried by the code.</comment>
