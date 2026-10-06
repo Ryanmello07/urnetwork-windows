@@ -2944,14 +2944,6 @@
     <value>Οι προεπιλεγμένες ασφαλείς ρυθμίσεις δεν έχουν εφαρμοστεί</value>
     <comment>dns settings</comment>
   </data>
-  <data name="dns_not_on_tunnel" xml:space="preserve">
-    <value>Το DNS ΔΕΝ περνά από τη σήραγγα — τα ονόματα που αναζητάτε επιλύονται εκτός αυτής.</value>
-    <comment>Connect drawer: warning that DNS is resolving outside the tunnel.</comment>
-  </data>
-  <data name="dns_on_tunnel" xml:space="preserve">
-    <value>Το DNS περνά από τη σήραγγα</value>
-    <comment>Connect drawer: status that DNS goes through the tunnel.</comment>
-  </data>
   <data name="dns_over_https" xml:space="preserve">
     <value>DNS μέσω HTTPS</value>
     <comment>A label displayed in a row of a custom dns settings.</comment>

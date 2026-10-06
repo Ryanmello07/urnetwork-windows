@@ -2983,14 +2983,6 @@ správným způsobem</value>
     <value>Výchozí bezpečná nastavení nejsou použita</value>
     <comment>dns settings</comment>
   </data>
-  <data name="dns_not_on_tunnel" xml:space="preserve">
-    <value>DNS NEJDE tunelem — názvy, které vyhledáváte, se překládají mimo něj.</value>
-    <comment>Connect drawer: warning that DNS is resolving outside the tunnel.</comment>
-  </data>
-  <data name="dns_on_tunnel" xml:space="preserve">
-    <value>DNS jde tunelem</value>
-    <comment>Connect drawer: status that DNS goes through the tunnel.</comment>
-  </data>
   <data name="dns_over_https" xml:space="preserve">
     <value>DNS přes HTTPS</value>
     <comment>A label displayed in a row of a custom dns settings.</comment>

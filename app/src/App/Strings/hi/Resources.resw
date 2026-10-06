@@ -2943,14 +2943,6 @@
     <value>डिफ़ॉल्ट सुरक्षित सेटिंग्स लागू नहीं हैं</value>
     <comment>dns settings</comment>
   </data>
-  <data name="dns_not_on_tunnel" xml:space="preserve">
-    <value>DNS टनल से नहीं जा रहा है — आप जो नाम खोजते हैं वे उसके बाहर हल हो रहे हैं।</value>
-    <comment>Connect drawer: warning that DNS is resolving outside the tunnel.</comment>
-  </data>
-  <data name="dns_on_tunnel" xml:space="preserve">
-    <value>DNS टनल से जा रहा है</value>
-    <comment>Connect drawer: status that DNS goes through the tunnel.</comment>
-  </data>
   <data name="dns_over_https" xml:space="preserve">
     <value>HTTPS पर DNS</value>
     <comment>A label displayed in a row of a custom dns settings.</comment>

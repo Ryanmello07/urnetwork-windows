@@ -2944,14 +2944,6 @@ bonne manière</value>
     <value>Les paramètres sûrs par défaut ne sont pas appliqués</value>
     <comment>dns settings</comment>
   </data>
-  <data name="dns_not_on_tunnel" xml:space="preserve">
-    <value>Le DNS ne passe PAS par le tunnel — les noms que vous consultez sont résolus en dehors.</value>
-    <comment>Connect drawer: warning that DNS is resolving outside the tunnel.</comment>
-  </data>
-  <data name="dns_on_tunnel" xml:space="preserve">
-    <value>Le DNS passe par le tunnel</value>
-    <comment>Connect drawer: status that DNS goes through the tunnel.</comment>
-  </data>
   <data name="dns_over_https" xml:space="preserve">
     <value>DNS via HTTPS</value>
     <comment>A label displayed in a row of a custom dns settings.</comment>

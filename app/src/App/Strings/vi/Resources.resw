@@ -2924,14 +2924,6 @@ cách đúng đắn</value>
     <value>Cài đặt an toàn mặc định chưa được áp dụng</value>
     <comment>dns settings</comment>
   </data>
-  <data name="dns_not_on_tunnel" xml:space="preserve">
-    <value>DNS KHÔNG đi qua đường hầm — các tên bạn tra cứu đang được phân giải bên ngoài nó.</value>
-    <comment>Connect drawer: warning that DNS is resolving outside the tunnel.</comment>
-  </data>
-  <data name="dns_on_tunnel" xml:space="preserve">
-    <value>DNS đang đi qua đường hầm</value>
-    <comment>Connect drawer: status that DNS goes through the tunnel.</comment>
-  </data>
   <data name="dns_over_https" xml:space="preserve">
     <value>DNS qua HTTPS</value>
     <comment>A label displayed in a row of a custom dns settings.</comment>

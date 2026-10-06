@@ -2984,14 +2984,6 @@
     <value>Безпечні налаштування за замовчуванням не застосовані</value>
     <comment>dns settings</comment>
   </data>
-  <data name="dns_not_on_tunnel" xml:space="preserve">
-    <value>DNS НЕ проходить через тунель — імена, які ви шукаєте, розв’язуються поза ним.</value>
-    <comment>Connect drawer: warning that DNS is resolving outside the tunnel.</comment>
-  </data>
-  <data name="dns_on_tunnel" xml:space="preserve">
-    <value>DNS проходить через тунель</value>
-    <comment>Connect drawer: status that DNS goes through the tunnel.</comment>
-  </data>
   <data name="dns_over_https" xml:space="preserve">
     <value>DNS через HTTPS</value>
     <comment>A label displayed in a row of a custom dns settings.</comment>

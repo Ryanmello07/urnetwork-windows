@@ -2944,14 +2944,6 @@ maneira certa</value>
     <value>As definições seguras predefinidas não estão aplicadas</value>
     <comment>dns settings</comment>
   </data>
-  <data name="dns_not_on_tunnel" xml:space="preserve">
-    <value>O DNS NÃO está a passar pelo túnel — os nomes que consulta são resolvidos fora dele.</value>
-    <comment>Connect drawer: warning that DNS is resolving outside the tunnel.</comment>
-  </data>
-  <data name="dns_on_tunnel" xml:space="preserve">
-    <value>O DNS está a passar pelo túnel</value>
-    <comment>Connect drawer: status that DNS goes through the tunnel.</comment>
-  </data>
   <data name="dns_over_https" xml:space="preserve">
     <value>DNS sobre HTTPS</value>
     <comment>A label displayed in a row of a custom dns settings.</comment>
