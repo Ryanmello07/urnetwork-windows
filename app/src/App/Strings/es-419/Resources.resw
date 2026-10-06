@@ -3503,6 +3503,10 @@ de la manera correcta</value>
     <value>{} estrellas</value>
     <comment>Feedback screen: screen reader name of one of the five rating stars, the number of stars a tap on it gives (1 to 5).</comment>
   </data>
+  <data name="feedback_submitted" xml:space="preserve">
+    <value>Comentarios enviados.</value>
+    <comment>Feedback screen: the heading of the overlay shown after feedback is sent.</comment>
+  </data>
   <data name="fixed_ip" xml:space="preserve">
     <value>IP fija</value>
     <comment>A toggle that allows users to enable or disable a fixed IP for their connection.</comment>
@@ -3607,6 +3611,10 @@ de la manera correcta</value>
   <data name="guest_convert_explanation" xml:space="preserve">
     <value>Agrega un correo electrónico y una contraseña para iniciar sesión en esta red. Su plan y su saldo se quedan con ella.</value>
     <comment>Desktop: the first step of "Create an account" on a legacy guest network. The user adds an email and a password to the network they are on now, so they can sign in to it again; its plan and balance stay with it (nothing moves to a new account).</comment>
+  </data>
+  <data name="guest_mode" xml:space="preserve">
+    <value>Modo invitado</value>
+    <comment>Account switcher: the row of the guest account, checked while the app runs in guest mode.</comment>
   </data>
   <data name="hash_count" xml:space="preserve">
     <value>#{}</value>
@@ -5296,6 +5304,14 @@ más grande, seguro y descentralizado del mundo.</value>
     <value>Compra encontrada. Confirmando tu plan — se actualizará automáticamente.</value>
     <comment>Restore-purchases outcome: an entitlement for the current network was found; the confirmation poll now bridges the gap until the server credits it (Shared/ViewModels/AppStoreSubscriptionManager.swift).</comment>
   </data>
+  <data name="purchase_pending_body" xml:space="preserve">
+    <value>Tu compra está esperando aprobación. UR Pro se activará automáticamente cuando se complete; no es necesario volver a comprar.</value>
+    <comment>Upgrade: the overlay shown while a store purchase waits for approval. Keep UR Pro (the plan's name) unchanged.</comment>
+  </data>
+  <data name="purchase_pending_title" xml:space="preserve">
+    <value>Ya casi.</value>
+    <comment>Upgrade: the heading of the overlay shown while a store purchase waits for approval (for example a parent's).</comment>
+  </data>
   <data name="qr_code_not_found" xml:space="preserve">
     <value>No se encontró ningún código QR en la imagen.</value>
     <comment>Error when a chosen photo or image file holds no QR code.</comment>
@@ -5504,8 +5520,20 @@ más grande, seguro y descentralizado del mundo.</value>
     <value>Actualizar</value>
     <comment>Generic refresh action (a button that reloads the current list or view), e.g. the points leaderboard tab.</comment>
   </data>
+  <data name="regenerate" xml:space="preserve">
+    <value>Volver a generar</value>
+    <comment>Settings: the button that makes a new seedphrase in place of the current one.</comment>
+  </data>
   <data name="regenerate_seedphrase" xml:space="preserve">
     <value>Volver a generar la frase semilla</value>
+  </data>
+  <data name="regenerate_seedphrase_body" xml:space="preserve">
+    <value>Tu frase semilla actual dejará de funcionar. Verás una nueva para guardarla.</value>
+    <comment>Settings: the confirmation before a new seedphrase replaces the current one; the new one is shown once, to be saved.</comment>
+  </data>
+  <data name="regenerate_seedphrase_title" xml:space="preserve">
+    <value>¿Volver a generar tu frase semilla?</value>
+    <comment>Settings: the title of the confirmation before a new seedphrase replaces the current one.</comment>
   </data>
   <data name="regions" xml:space="preserve">
     <value>Regiones</value>
@@ -6086,6 +6114,10 @@ del mundo</value>
     <value>Aún no hay tráfico</value>
     <comment>Connect drawer: throughput empty state</comment>
   </data>
+  <data name="site_app_phone" xml:space="preserve">
+    <value>Teléfono</value>
+    <comment>ur.io account profile: the label of a phone number sign-in method in the sign-in methods list.</comment>
+  </data>
   <data name="site_app_plan" xml:space="preserve">
     <value>Plan</value>
     <comment>Connect drawer: plan section label</comment>
@@ -6580,7 +6612,7 @@ como debería ser.</value>
   </data>
   <data name="support" xml:space="preserve">
     <value>Soporte</value>
-    <comment>Used in Shared/ViewModels/SubscriptionBalanceViewModel.swift.</comment>
+    <comment>Navigation: the Support tab, page or section, where users send feedback and contact the URnetwork support team. Customer support, not backing; use the word the language uses for a support team.</comment>
   </data>
   <data name="support_us" xml:space="preserve">
     <value>Apóyanos en la construcción de un nuevo tipo de red que da en lugar de tomar.</value>
@@ -6916,6 +6948,10 @@ como debería ser.</value>
   <data name="unlink_alert_description" xml:space="preserve">
     <value>Al desvincular tu red de referidos, ya no podrás ganar puntos de {}</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="unlink_alert_description_unnamed" xml:space="preserve">
+    <value>Al desvincular tu red de referidos, ya no podrás ganar puntos de esa red</value>
+    <comment>Referral network: the unlink confirmation when the network's name is not known. The counterpart of unlink_alert_description.</comment>
   </data>
   <data name="unlink_referral_network" xml:space="preserve">
     <value>Desvincular red de referidos</value>

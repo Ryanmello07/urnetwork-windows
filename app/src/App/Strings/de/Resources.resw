@@ -3503,6 +3503,10 @@ richtig auf</value>
     <value>{} Sterne</value>
     <comment>Feedback screen: screen reader name of one of the five rating stars, the number of stars a tap on it gives (1 to 5).</comment>
   </data>
+  <data name="feedback_submitted" xml:space="preserve">
+    <value>Feedback gesendet.</value>
+    <comment>Feedback screen: the heading of the overlay shown after feedback is sent.</comment>
+  </data>
   <data name="fixed_ip" xml:space="preserve">
     <value>Feste IP</value>
     <comment>A toggle that allows users to enable or disable a fixed IP for their connection.</comment>
@@ -3607,6 +3611,10 @@ richtig auf</value>
   <data name="guest_convert_explanation" xml:space="preserve">
     <value>Füge eine E-Mail-Adresse und ein Passwort hinzu, um dich bei diesem Netzwerk anzumelden. Sein Tarif und sein Guthaben bleiben erhalten.</value>
     <comment>Desktop: the first step of "Create an account" on a legacy guest network. The user adds an email and a password to the network they are on now, so they can sign in to it again; its plan and balance stay with it (nothing moves to a new account).</comment>
+  </data>
+  <data name="guest_mode" xml:space="preserve">
+    <value>Gastmodus</value>
+    <comment>Account switcher: the row of the guest account, checked while the app runs in guest mode.</comment>
   </data>
   <data name="hash_count" xml:space="preserve">
     <value>#{}</value>
@@ -5296,6 +5304,14 @@ und am stärksten dezentralisierten Ingress- und Egress-Protokoll.</value>
     <value>Kauf gefunden. Dein Plan wird bestätigt — er wird automatisch aktualisiert.</value>
     <comment>Restore-purchases outcome: an entitlement for the current network was found; the confirmation poll now bridges the gap until the server credits it (Shared/ViewModels/AppStoreSubscriptionManager.swift).</comment>
   </data>
+  <data name="purchase_pending_body" xml:space="preserve">
+    <value>Dein Kauf wartet auf Genehmigung. UR Pro schaltet sich von selbst ein, sobald er durchgeht – du musst nicht noch einmal kaufen.</value>
+    <comment>Upgrade: the overlay shown while a store purchase waits for approval. Keep UR Pro (the plan's name) unchanged.</comment>
+  </data>
+  <data name="purchase_pending_title" xml:space="preserve">
+    <value>Fast geschafft.</value>
+    <comment>Upgrade: the heading of the overlay shown while a store purchase waits for approval (for example a parent's).</comment>
+  </data>
   <data name="qr_code_not_found" xml:space="preserve">
     <value>Im Bild wurde kein QR-Code gefunden.</value>
     <comment>Error when a chosen photo or image file holds no QR code.</comment>
@@ -5504,8 +5520,20 @@ und am stärksten dezentralisierten Ingress- und Egress-Protokoll.</value>
     <value>Aktualisieren</value>
     <comment>Generic refresh action (a button that reloads the current list or view), e.g. the points leaderboard tab.</comment>
   </data>
+  <data name="regenerate" xml:space="preserve">
+    <value>Neu erzeugen</value>
+    <comment>Settings: the button that makes a new seedphrase in place of the current one.</comment>
+  </data>
   <data name="regenerate_seedphrase" xml:space="preserve">
     <value>Seedphrase neu erzeugen</value>
+  </data>
+  <data name="regenerate_seedphrase_body" xml:space="preserve">
+    <value>Deine aktuelle Seedphrase funktioniert dann nicht mehr. Dir wird eine neue zum Aufbewahren angezeigt.</value>
+    <comment>Settings: the confirmation before a new seedphrase replaces the current one; the new one is shown once, to be saved.</comment>
+  </data>
+  <data name="regenerate_seedphrase_title" xml:space="preserve">
+    <value>Seedphrase neu erzeugen?</value>
+    <comment>Settings: the title of the confirmation before a new seedphrase replaces the current one.</comment>
   </data>
   <data name="regions" xml:space="preserve">
     <value>Regionen</value>
@@ -7460,7 +7488,7 @@ wie es sein sollte.</value>
   </data>
   <data name="support" xml:space="preserve">
     <value>Support</value>
-    <comment>Used in Shared/ViewModels/SubscriptionBalanceViewModel.swift.</comment>
+    <comment>Navigation: the Support tab, page or section, where users send feedback and contact the URnetwork support team. Customer support, not backing; use the word the language uses for a support team.</comment>
   </data>
   <data name="support_us" xml:space="preserve">
     <value>Unterstütze uns beim Aufbau eines neuen Netzwerktyps, der gibt, anstatt zu nehmen.</value>
@@ -7796,6 +7824,10 @@ wie es sein sollte.</value>
   <data name="unlink_alert_description" xml:space="preserve">
     <value>Wenn du dein Empfehlungsnetzwerk trennst, kannst du keine Punkte mehr von {} erhalten</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="unlink_alert_description_unnamed" xml:space="preserve">
+    <value>Wenn du dein Empfehlungsnetzwerk trennst, kannst du keine Punkte mehr von diesem Netzwerk erhalten</value>
+    <comment>Referral network: the unlink confirmation when the network's name is not known. The counterpart of unlink_alert_description.</comment>
   </data>
   <data name="unlink_referral_network" xml:space="preserve">
     <value>Empfehlungsnetzwerk trennen</value>

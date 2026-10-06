@@ -3630,6 +3630,10 @@ right way</value>
     <value>{} stars</value>
     <comment>Feedback screen: screen reader name of one of the five rating stars, the number of stars a tap on it gives (1 to 5).</comment>
   </data>
+  <data name="feedback_submitted" xml:space="preserve">
+    <value>Feedback submitted.</value>
+    <comment>Feedback screen: the heading of the overlay shown after feedback is sent.</comment>
+  </data>
   <data name="fixed_ip" xml:space="preserve">
     <value>Fixed IP</value>
     <comment>A toggle that allows users to enable or disable a fixed IP for their connection.</comment>
@@ -3750,6 +3754,10 @@ right way</value>
   <data name="guest_convert_explanation" xml:space="preserve">
     <value>Add an email and a password to sign in to this network. Its plan and balance stay with it.</value>
     <comment>Desktop: the first step of "Create an account" on a legacy guest network. The user adds an email and a password to the network they are on now, so they can sign in to it again; its plan and balance stay with it (nothing moves to a new account).</comment>
+  </data>
+  <data name="guest_mode" xml:space="preserve">
+    <value>Guest Mode</value>
+    <comment>Account switcher: the row of the guest account, checked while the app runs in guest mode.</comment>
   </data>
   <data name="hash_count" xml:space="preserve">
     <value>#{}</value>
@@ -5687,6 +5695,14 @@ and most decentralized ingress and egress protocol.</value>
     <value>Purchase found. Confirming your plan — it will update automatically.</value>
     <comment>Restore-purchases outcome: an entitlement for the current network was found; the confirmation poll now bridges the gap until the server credits it (Shared/ViewModels/AppStoreSubscriptionManager.swift).</comment>
   </data>
+  <data name="purchase_pending_body" xml:space="preserve">
+    <value>Your purchase is waiting for approval. UR Pro will turn on by itself once it goes through — there's no need to buy again.</value>
+    <comment>Upgrade: the overlay shown while a store purchase waits for approval. Keep UR Pro (the plan's name) unchanged.</comment>
+  </data>
+  <data name="purchase_pending_title" xml:space="preserve">
+    <value>Almost there.</value>
+    <comment>Upgrade: the heading of the overlay shown while a store purchase waits for approval (for example a parent's).</comment>
+  </data>
   <data name="qr_code_not_found" xml:space="preserve">
     <value>No QR code was found in the image.</value>
     <comment>Error when a chosen photo or image file holds no QR code.</comment>
@@ -5943,8 +5959,20 @@ and most decentralized ingress and egress protocol.</value>
     <value>Refresh</value>
     <comment>Generic refresh action (a button that reloads the current list or view), e.g. the points leaderboard tab.</comment>
   </data>
+  <data name="regenerate" xml:space="preserve">
+    <value>Regenerate</value>
+    <comment>Settings: the button that makes a new seedphrase in place of the current one.</comment>
+  </data>
   <data name="regenerate_seedphrase" xml:space="preserve">
     <value>Regenerate Seedphrase</value>
+  </data>
+  <data name="regenerate_seedphrase_body" xml:space="preserve">
+    <value>Your current seedphrase will stop working. You'll be shown a new one to save.</value>
+    <comment>Settings: the confirmation before a new seedphrase replaces the current one; the new one is shown once, to be saved.</comment>
+  </data>
+  <data name="regenerate_seedphrase_title" xml:space="preserve">
+    <value>Regenerate your seedphrase?</value>
+    <comment>Settings: the title of the confirmation before a new seedphrase replaces the current one.</comment>
   </data>
   <data name="regions" xml:space="preserve">
     <value>Regions</value>
@@ -8026,7 +8054,7 @@ as it should be.</value>
   </data>
   <data name="support" xml:space="preserve">
     <value>Support</value>
-    <comment>Used in Shared/ViewModels/SubscriptionBalanceViewModel.swift.</comment>
+    <comment>Navigation: the Support tab, page or section, where users send feedback and contact the URnetwork support team. Customer support, not backing; use the word the language uses for a support team.</comment>
   </data>
   <data name="support_us" xml:space="preserve">
     <value>Support us in building a new kind of network that gives instead of takes.</value>
@@ -8414,6 +8442,10 @@ as it should be.</value>
   <data name="unlink_alert_description" xml:space="preserve">
     <value>When unlinking your referral network, you will no longer be able to earn points from {}</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="unlink_alert_description_unnamed" xml:space="preserve">
+    <value>When unlinking your referral network, you will no longer be able to earn points from that network</value>
+    <comment>Referral network: the unlink confirmation when the network's name is not known. The counterpart of unlink_alert_description.</comment>
   </data>
   <data name="unlink_referral_network" xml:space="preserve">
     <value>Unlink referral network</value>

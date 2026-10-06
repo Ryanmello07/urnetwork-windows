@@ -3503,6 +3503,10 @@
     <value>{} αστέρια</value>
     <comment>Feedback screen: screen reader name of one of the five rating stars, the number of stars a tap on it gives (1 to 5).</comment>
   </data>
+  <data name="feedback_submitted" xml:space="preserve">
+    <value>Τα σχόλιά σας στάλθηκαν.</value>
+    <comment>Feedback screen: the heading of the overlay shown after feedback is sent.</comment>
+  </data>
   <data name="fixed_ip" xml:space="preserve">
     <value>Σταθερή IP</value>
     <comment>A toggle that allows users to enable or disable a fixed IP for their connection.</comment>
@@ -3607,6 +3611,10 @@
   <data name="guest_convert_explanation" xml:space="preserve">
     <value>Προσθέστε ένα email και έναν κωδικό πρόσβασης για να συνδέεστε σε αυτό το δίκτυο. Το πρόγραμμα και το υπόλοιπό του μένουν σε αυτό.</value>
     <comment>Desktop: the first step of "Create an account" on a legacy guest network. The user adds an email and a password to the network they are on now, so they can sign in to it again; its plan and balance stay with it (nothing moves to a new account).</comment>
+  </data>
+  <data name="guest_mode" xml:space="preserve">
+    <value>Λειτουργία επισκέπτη</value>
+    <comment>Account switcher: the row of the guest account, checked while the app runs in guest mode.</comment>
   </data>
   <data name="hash_count" xml:space="preserve">
     <value>#{}</value>
@@ -5296,6 +5304,14 @@
     <value>Η αγορά βρέθηκε. Επιβεβαιώνουμε το πρόγραμμά σας — θα ενημερωθεί αυτόματα.</value>
     <comment>Restore-purchases outcome: an entitlement for the current network was found; the confirmation poll now bridges the gap until the server credits it (Shared/ViewModels/AppStoreSubscriptionManager.swift).</comment>
   </data>
+  <data name="purchase_pending_body" xml:space="preserve">
+    <value>Η αγορά σας αναμένει έγκριση. Το UR Pro θα ενεργοποιηθεί αυτόματα μόλις ολοκληρωθεί — δεν χρειάζεται να αγοράσετε ξανά.</value>
+    <comment>Upgrade: the overlay shown while a store purchase waits for approval. Keep UR Pro (the plan's name) unchanged.</comment>
+  </data>
+  <data name="purchase_pending_title" xml:space="preserve">
+    <value>Σχεδόν έτοιμο.</value>
+    <comment>Upgrade: the heading of the overlay shown while a store purchase waits for approval (for example a parent's).</comment>
+  </data>
   <data name="qr_code_not_found" xml:space="preserve">
     <value>Δεν βρέθηκε κωδικός QR στην εικόνα.</value>
     <comment>Error when a chosen photo or image file holds no QR code.</comment>
@@ -5504,8 +5520,20 @@
     <value>Ανανέωση</value>
     <comment>Generic refresh action (a button that reloads the current list or view), e.g. the points leaderboard tab.</comment>
   </data>
+  <data name="regenerate" xml:space="preserve">
+    <value>Νέα δημιουργία</value>
+    <comment>Settings: the button that makes a new seedphrase in place of the current one.</comment>
+  </data>
   <data name="regenerate_seedphrase" xml:space="preserve">
     <value>Εκ νέου δημιουργία φράσης ανάκτησης</value>
+  </data>
+  <data name="regenerate_seedphrase_body" xml:space="preserve">
+    <value>Η τρέχουσα φράση ανάκτησης θα σταματήσει να λειτουργεί. Θα σας εμφανιστεί μια νέα για να την αποθηκεύσετε.</value>
+    <comment>Settings: the confirmation before a new seedphrase replaces the current one; the new one is shown once, to be saved.</comment>
+  </data>
+  <data name="regenerate_seedphrase_title" xml:space="preserve">
+    <value>Δημιουργία νέας φράσης ανάκτησης;</value>
+    <comment>Settings: the title of the confirmation before a new seedphrase replaces the current one.</comment>
   </data>
   <data name="regions" xml:space="preserve">
     <value>Περιοχές</value>
@@ -6086,6 +6114,10 @@
     <value>Δεν υπάρχει κίνηση ακόμη</value>
     <comment>Connect drawer: throughput empty state</comment>
   </data>
+  <data name="site_app_phone" xml:space="preserve">
+    <value>Τηλέφωνο</value>
+    <comment>ur.io account profile: the label of a phone number sign-in method in the sign-in methods list.</comment>
+  </data>
   <data name="site_app_plan" xml:space="preserve">
     <value>Πρόγραμμα</value>
     <comment>Connect drawer: plan section label</comment>
@@ -6580,7 +6612,7 @@
   </data>
   <data name="support" xml:space="preserve">
     <value>Υποστήριξη</value>
-    <comment>Used in Shared/ViewModels/SubscriptionBalanceViewModel.swift.</comment>
+    <comment>Navigation: the Support tab, page or section, where users send feedback and contact the URnetwork support team. Customer support, not backing; use the word the language uses for a support team.</comment>
   </data>
   <data name="support_us" xml:space="preserve">
     <value>Υποστηρίξτε μας στην οικοδόμηση ενός νέου τύπου δικτύου που δίνει αντί να παίρνει.</value>
@@ -6916,6 +6948,10 @@
   <data name="unlink_alert_description" xml:space="preserve">
     <value>Όταν αποσυνδέετε το δίκτυο παραπομπών σας, δεν θα μπορείτε πλέον να κερδίζετε πόντους από το {}</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="unlink_alert_description_unnamed" xml:space="preserve">
+    <value>Όταν αποσυνδέετε το δίκτυο παραπομπών σας, δεν θα μπορείτε πλέον να κερδίζετε πόντους από αυτό το δίκτυο</value>
+    <comment>Referral network: the unlink confirmation when the network's name is not known. The counterpart of unlink_alert_description.</comment>
   </data>
   <data name="unlink_referral_network" xml:space="preserve">
     <value>Αποσύνδεση δικτύου παραπομπών</value>
