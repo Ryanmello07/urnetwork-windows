@@ -19,7 +19,9 @@ import (
 // tray's window takes the end of the session only when it is real (wParam)
 // and not the Restart Manager closing the app (ENDSESSION_CLOSEAPP), stops
 // before it returns, and leaves WM_QUERYENDSESSION to DefWindowProc, so the
-// app never holds a sign-out or a shutdown up.
+// app never holds a sign-out or a shutdown up. The Restart Manager's close is
+// a close request, as an installer's WM_CLOSE is: it reaches the app where
+// WM_CLOSE cannot, so an update's files are not left in use.
 func TestSessionEndStopsAsQuit(t *testing.T) {
 	tray := stripComments(readAppSource(t, "TrayIcon.cpp"))
 	wndProc := definitionBody(t, "TrayIcon.cpp", tray, "LRESULT CALLBACK TrayIcon::WndProc(")
@@ -30,11 +32,19 @@ func TestSessionEndStopsAsQuit(t *testing.T) {
 	signOutRequireInOrder(t, "TrayIcon::WndProc's WM_ENDSESSION case", end,
 		regexp.QuoteMeta("if (wParam && !(lParam & ENDSESSION_CLOSEAPP)) {"),
 		regexp.QuoteMeta("if (self->cb_.onSessionEnd) self->cb_.onSessionEnd();"),
+		regexp.QuoteMeta("} else if (wParam) {"),
+		regexp.QuoteMeta("if (self->cb_.onCloseRequest) self->cb_.onCloseRequest();"),
 		regexp.QuoteMeta("}"),
 		regexp.QuoteMeta("return 0;"))
 	quitForbid(t, "TrayIcon::WndProc's WM_ENDSESSION case", end,
 		"the end of a session stops as Quit does, through its own callback",
-		"cb_.onQuit", "cb_.onCloseRequest", "DefWindowProc")
+		"cb_.onQuit", "DefWindowProc")
+	if split := strings.Index(end, "} else if (wParam) {"); split >= 0 {
+		quitForbid(t, "TrayIcon::WndProc's session-end branch", end[:split],
+			"the end of a session is no close request", "cb_.onCloseRequest")
+		quitForbid(t, "TrayIcon::WndProc's Restart Manager branch", end[split:],
+			"the Restart Manager closing the app for an installer stops nothing", "cb_.onSessionEnd")
+	}
 	if strings.Contains(wndProc, "WM_QUERYENDSESSION") {
 		t.Error("TrayIcon::WndProc handles WM_QUERYENDSESSION: the app must not hold a " +
 			"sign-out or a shutdown up")

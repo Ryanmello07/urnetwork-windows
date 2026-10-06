@@ -45,7 +45,8 @@
 // did: nobody is asking to stop anything. The app no longer quits for the
 // in-app update itself; the update's installer closes it. The Restart Manager
 // closing the app for an installer (WM_ENDSESSION with ENDSESSION_CLOSEAPP) is
-// not a session end either: TrayIcon leaves it to Windows, as before.
+// a close request too, not a session end (TrayIcon): it reaches the app where
+// an installer's WM_CLOSE cannot.
 //
 // Not endings, so not in the table:
 //   * Closing the main window (its X, Alt+F4, the taskbar's or the system

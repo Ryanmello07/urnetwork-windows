@@ -128,11 +128,14 @@ func TestUpdateRefusalTheNoticeClosesItself(t *testing.T) {
 	}
 }
 
-// Nothing relaunches the app while the installer runs, so the refusal blocks
-// no relaunch of the installer's own: the MSI starts no URnetwork.exe and the
-// updater starts nothing after it. If one is added, it has to be reconciled
-// with the marker (it would be refused while msiexec still runs).
-func TestUpdateRefusalNothingRelaunchesTheAppDuringTheInstall(t *testing.T) {
+// The one relaunch of the installer's own is reconciled with the marker. After
+// an update the helper ran, the MSI starts the helper unelevated
+// (WixUnelevatedShellExec, which takes no arguments), the helper starts
+// URnetwork.exe with --after-update, and that launch waits for the update to
+// end before it asks (update_apply_wiring_test.go pins the wait). The MSI
+// never starts URnetwork.exe itself, which the marker would refuse while
+// msiexec still runs, and the updater starts nothing after the helper.
+func TestUpdateRefusalTheOnlyRelaunchWaitsForTheUpdate(t *testing.T) {
 	packagePath := filepath.Join(repositoryRoot(t), "app", "installer", "Package.wxs")
 	data, err := os.ReadFile(packagePath)
 	if err != nil {
@@ -146,6 +149,19 @@ func TestUpdateRefusalNothingRelaunchesTheAppDuringTheInstall(t *testing.T) {
 				"the update marker; reconcile it before adding one", launch)
 		}
 	}
+	if strings.Count(installer, `DllEntry="WixUnelevatedShellExec"`) != 1 ||
+		!strings.Contains(installer, `<Property Id="WixUnelevatedShellExecTarget" Value="[#UpdaterExe]" />`) {
+		t.Error("Package.wxs relaunches other than once, through the update helper")
+	}
+	helper := stripComments(readUpdaterSource(t, "main.cpp"))
+	relaunch := definitionBody(t, "Updater/main.cpp", helper, "int RelaunchApp() {")
+	signOutRequireInOrder(t, "the helper's RelaunchApp", relaunch,
+		regexp.QuoteMeta(`folder / L"URnetwork.exe";`),
+		regexp.QuoteMeta(`L"\" --after-update";`))
+	entry := definitionBody(t, "main.cpp", appMainSource(t), "int __stdcall wWinMain(")
+	signOutRequireInOrder(t, "wWinMain", entry,
+		regexp.QuoteMeta("if (urnw::LaunchedAfterUpdate()) urnw::AwaitUpdateEnd();"),
+		regexp.QuoteMeta("urnw::instance::Launch(launcher);"))
 	checker := stripComments(readAppSource(t, "UpdateChecker.cpp"))
 	apply := definitionBody(t, "UpdateChecker.cpp", checker, "void UpdateChecker::RunApply() {")
 	afterStart := apply[strings.Index(apply, "LaunchUpdateHelper(installFolder_ / kHelperName, offer.tag, &helper, launchError)"):]

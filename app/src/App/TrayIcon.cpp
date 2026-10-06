@@ -356,14 +356,19 @@ LRESULT CALLBACK TrayIcon::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
         // Windows is ending the session: a sign-out of Windows, a shutdown or a
         // restart. Stopped as on Quit before this returns, because Windows may
         // end the process as soon as it does. Not when the end was cancelled
-        // (a false wParam), and not the Restart Manager closing the app for an
-        // installer (ENDSESSION_CLOSEAPP), which is left to Windows as before.
-        // WM_QUERYENDSESSION is DefWindowProc's: the app never holds the end
-        // up.
+        // (a false wParam). The Restart Manager closing the app for an
+        // installer (ENDSESSION_CLOSEAPP) is no session end: it is a close
+        // request, as an installer's WM_CLOSE is, and reaches the app where
+        // WM_CLOSE cannot (another session's app, an install run from session
+        // 0), so the update's files are not left in use. WM_QUERYENDSESSION is
+        // DefWindowProc's: the app never holds the end up.
         if (wParam && !(lParam & ENDSESSION_CLOSEAPP)) {
           LogInfo("tray: the Windows session is ending ({}), stopping as on quit",
                   (lParam & ENDSESSION_LOGOFF) ? "sign-out" : "shutdown or restart");
           if (self->cb_.onSessionEnd) self->cb_.onSessionEnd();
+        } else if (wParam) {
+          LogInfo("tray: the Restart Manager is closing the app for an installer, exiting");
+          if (self->cb_.onCloseRequest) self->cb_.onCloseRequest();
         }
         return 0;
       default:

@@ -44,6 +44,9 @@ param(
   #     VC++ runtime (Service.vcxproj UrnStageVCRuntime). Without it the /MD
   #     urnetworkd.exe cannot load on a machine lacking the VC++
   #     Redistributable, and the MSI fails with error 1920.
+  #   - URnetworkUpdate.exe: the in-app update's elevated helper, and the
+  #     target of the MSI's relaunch after an update. Without it an installed
+  #     copy cannot update itself, and the relaunch fails.
   [string[]]$RequireNames = @(
     "Microsoft.WindowsAppRuntime.dll",
     "Microsoft.ui.xaml.dll",
@@ -52,7 +55,8 @@ param(
     "App.xbf",
     "vcruntime140.dll",
     "vcruntime140_1.dll",
-    "msvcp140.dll"
+    "msvcp140.dll",
+    "URnetworkUpdate.exe"
   )
 )
 

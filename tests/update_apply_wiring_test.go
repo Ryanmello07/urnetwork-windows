@@ -3,6 +3,7 @@
 package tests
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -667,6 +668,214 @@ func TestUpdateApplyWiringRejectsWeakerTrays(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if problems := tc.check(); len(problems) == 0 {
+				t.Fatal("negative control was not detected")
+			}
+		})
+	}
+}
+
+// The package closes the running app before it replaces its files, and the
+// close can never fail the install:
+//   - one util:CloseApplication, for URnetwork.exe, by WM_CLOSE alone, with
+//     RebootPrompt="no" said out loud (WiX's default is yes) and no
+//     TerminateProcess, ElevatedCloseMessage or ElevatedEndSessionMessage:
+//     scheduled before InstallValidate, each of those would schedule a
+//     deferred action outside the script and fail every install with 2762;
+//   - not on a re-run of the installed package, and only when the installed
+//     URnetwork.exe is new enough to quit on WM_CLOSE (an AppSearch above
+//     2026.10.5.1 where INSTALLFOLDER puts it);
+//   - Wix4CloseApplications moved before InstallValidate.
+//
+// After an update the helper ran, it starts the app again through the helper,
+// unelevated, once its files are in place, and never on an uninstall or from
+// the old product an upgrade removes; the helper ships as its own component.
+func checkInstallerCloseAndRelaunch(document xmlNode) []string {
+	var problems []string
+	closes := document.descendants(utilNamespace, "CloseApplication")
+	if len(closes) != 1 {
+		return append(problems, fmt.Sprintf("Package.wxs has %d util:CloseApplication, want one", len(closes)))
+	}
+	closer := closes[0]
+	for name, want := range map[string]string{
+		"Target":       "URnetwork.exe",
+		"CloseMessage": "yes",
+		"RebootPrompt": "no",
+		"Condition":    "URNETWORK_APP_CLOSABLE AND (NOT Installed OR REINSTALL OR REMOVE)",
+	} {
+		if value, _ := closer.attribute(name); value != want {
+			problems = append(problems, fmt.Sprintf("CloseApplication %s = %q, want %q", name, value, want))
+		}
+	}
+	for _, deferred := range []string{"TerminateProcess", "ElevatedCloseMessage", "ElevatedEndSessionMessage",
+		"PromptToContinue"} {
+		if _, ok := closer.attribute(deferred); ok {
+			problems = append(problems, "CloseApplication sets "+deferred+
+				": before InstallValidate a deferred action fails every install with 2762")
+		}
+	}
+	if timeout, _ := closer.attribute("Timeout"); timeout == "" || len(timeout) > 2 {
+		problems = append(problems, "CloseApplication's Timeout is not a short, explicit number of seconds: "+timeout)
+	}
+	closable := findByID(document.descendants(wixNamespace, "Property"), "URNETWORK_APP_CLOSABLE")
+	if closable == nil {
+		problems = append(problems, "URNETWORK_APP_CLOSABLE is not a property")
+	} else {
+		if secure, _ := closable.attribute("Secure"); secure != "yes" {
+			problems = append(problems, "URNETWORK_APP_CLOSABLE is not secure")
+		}
+		search := closable.child(wixNamespace, "DirectorySearch")
+		var file *xmlNode
+		if search != nil {
+			file = search.child(wixNamespace, "FileSearch")
+		}
+		path, depth, name, minVersion := "", "", "", ""
+		if search != nil {
+			path, _ = search.attribute("Path")
+			depth, _ = search.attribute("Depth")
+		}
+		if file != nil {
+			name, _ = file.attribute("Name")
+			minVersion, _ = file.attribute("MinVersion")
+		}
+		if path != "[ProgramFiles64Folder]URnetwork" || depth != "0" || name != "URnetwork.exe" ||
+			minVersion != "2026.10.5.1" {
+			problems = append(problems, fmt.Sprintf("URNETWORK_APP_CLOSABLE searches %q depth %q for %q above %q, "+
+				"want the installed URnetwork.exe above 2026.10.5.1", path, depth, name, minVersion))
+		}
+	}
+	sequence := document.descendants(wixNamespace, "InstallExecuteSequence")
+	var customs []*xmlNode
+	for _, node := range sequence {
+		customs = append(customs, node.children(wixNamespace, "Custom")...)
+	}
+	moved, relaunched := false, false
+	for _, custom := range customs {
+		action, _ := custom.attribute("Action")
+		switch action {
+		case "override Wix4CloseApplications_$(sys.BUILDARCHSHORT)":
+			before, _ := custom.attribute("Before")
+			moved = before == "InstallValidate"
+		case "RelaunchAfterUpdate":
+			after, _ := custom.attribute("After")
+			condition, _ := custom.attribute("Condition")
+			relaunched = after == "InstallFinalize" &&
+				condition == `UPDATE_RELAUNCH = "1" AND NOT (REMOVE ~= "ALL") AND NOT UPGRADINGPRODUCTCODE`
+		}
+	}
+	if !moved {
+		problems = append(problems, "Wix4CloseApplications is not moved before InstallValidate")
+	}
+	if !relaunched {
+		problems = append(problems, "RelaunchAfterUpdate does not run after InstallFinalize on the helper's "+
+			`UPDATE_RELAUNCH = "1" only, outside uninstalls and the old product's removal`)
+	}
+	relaunch := findByID(document.descendants(wixNamespace, "CustomAction"), "RelaunchAfterUpdate")
+	if relaunch == nil {
+		problems = append(problems, "RelaunchAfterUpdate is not a custom action")
+	} else {
+		for name, want := range map[string]string{
+			"DllEntry":    "WixUnelevatedShellExec",
+			"BinaryRef":   "Wix4UtilCA_$(sys.BUILDARCHSHORT)",
+			"Execute":     "immediate",
+			"Impersonate": "yes",
+			"Return":      "ignore",
+		} {
+			if value, _ := relaunch.attribute(name); value != want {
+				problems = append(problems, fmt.Sprintf("RelaunchAfterUpdate %s = %q, want %q", name, value, want))
+			}
+		}
+	}
+	properties := document.descendants(wixNamespace, "Property")
+	if target := findByID(properties, "WixUnelevatedShellExecTarget"); target == nil {
+		problems = append(problems, "WixUnelevatedShellExecTarget is not set")
+	} else if value, _ := target.attribute("Value"); value != "[#UpdaterExe]" {
+		problems = append(problems, "the relaunch starts "+value+
+			", not the helper: URnetwork.exe started without its after-update argument is refused by the update marker")
+	}
+	if property := findByID(properties, "UPDATE_RELAUNCH"); property == nil {
+		problems = append(problems, "UPDATE_RELAUNCH is not declared")
+	} else if secure, _ := property.attribute("Secure"); secure != "yes" {
+		problems = append(problems, "UPDATE_RELAUNCH is not secure")
+	}
+	updater := findByID(document.descendants(wixNamespace, "Component"), "UpdaterExe")
+	var updaterFile *xmlNode
+	if updater != nil {
+		updaterFile = updater.child(wixNamespace, "File")
+	}
+	if updaterFile == nil {
+		problems = append(problems, "the helper has no UpdaterExe component")
+	} else {
+		id, _ := updaterFile.attribute("Id")
+		source, _ := updaterFile.attribute("Source")
+		if id != "UpdaterExe" || windowsBase(source) != "URnetworkUpdate.exe" {
+			problems = append(problems, "the UpdaterExe component does not install URnetworkUpdate.exe as UpdaterExe")
+		}
+	}
+	excluded := false
+	for _, node := range document.descendants(wixNamespace, "Exclude") {
+		if files, _ := node.attribute("Files"); windowsBase(files) == "URnetworkUpdate.exe" {
+			excluded = true
+		}
+	}
+	if !excluded {
+		problems = append(problems, "the RuntimeFiles harvest installs URnetworkUpdate.exe a second time")
+	}
+	referenced := false
+	if main := findByID(document.descendants(wixNamespace, "Feature"), "Main"); main != nil {
+		for _, reference := range main.children(wixNamespace, "ComponentRef") {
+			if id, _ := reference.attribute("Id"); id == "UpdaterExe" {
+				referenced = true
+			}
+		}
+	}
+	if !referenced {
+		problems = append(problems, "the Main feature does not install the helper")
+	}
+	return problems
+}
+
+// Each installer check fails on a package that drops what it pins.
+func TestUpdateApplyInstallerRejectsWeakerPackages(t *testing.T) {
+	root := repositoryRoot(t)
+	data, err := os.ReadFile(filepath.Join(root, "app", "installer", "Package.wxs"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(data)
+	for _, tc := range []struct{ name, old, replacement string }{
+		{"TerminateProcess", `CloseMessage="yes" RebootPrompt="no" Timeout="15"`,
+			`CloseMessage="yes" RebootPrompt="no" TerminateProcess="1" Timeout="15"`},
+		{"an elevated close message", `CloseMessage="yes" RebootPrompt="no" Timeout="15"`,
+			`CloseMessage="yes" ElevatedCloseMessage="yes" RebootPrompt="no" Timeout="15"`},
+		{"WiX's default reboot prompt", `CloseMessage="yes" RebootPrompt="no" Timeout="15"`,
+			`CloseMessage="yes" Timeout="15"`},
+		{"a re-run of the installed package closes the app",
+			`Condition="URNETWORK_APP_CLOSABLE AND (NOT Installed OR REINSTALL OR REMOVE)"`,
+			`Condition="URNETWORK_APP_CLOSABLE"`},
+		{"an app without the WM_CLOSE handler closed",
+			`Condition="URNETWORK_APP_CLOSABLE AND (NOT Installed OR REINSTALL OR REMOVE)"`,
+			`Condition="NOT Installed OR REINSTALL OR REMOVE"`},
+		{"the gate on any app", `<FileSearch Name="URnetwork.exe" MinVersion="2026.10.5.1" />`,
+			`<FileSearch Name="URnetwork.exe" />`},
+		{"the close in WiX's slot", `Before="InstallValidate"`, `Before="InstallFiles"`},
+		{"the relaunch elevated", `DllEntry="WixUnelevatedShellExec"`, `DllEntry="WixShellExec"`},
+		{"the relaunch refused by the marker", `Value="[#UpdaterExe]"`, `Value="[#URnetworkExe]"`},
+		{"a relaunch on a manual install", `Condition='UPDATE_RELAUNCH = "1" AND NOT (REMOVE ~= "ALL") AND NOT UPGRADINGPRODUCTCODE'`,
+			`Condition='NOT (REMOVE ~= "ALL") AND NOT UPGRADINGPRODUCTCODE'`},
+		{"a relaunch from the removed product", `Condition='UPDATE_RELAUNCH = "1" AND NOT (REMOVE ~= "ALL") AND NOT UPGRADINGPRODUCTCODE'`,
+			`Condition='UPDATE_RELAUNCH = "1" AND NOT (REMOVE ~= "ALL")'`},
+		{"a failed relaunch failing the install", `Return="ignore" />`, `Return="check" />`},
+		{"the helper harvested twice", "        <Exclude Files=\"$(var.BinDir)\\URnetworkUpdate.exe\" />\n", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if strings.Count(source, tc.old) != 1 {
+				t.Fatalf("negative control: %q is not in Package.wxs exactly once", tc.old)
+			}
+			path := filepath.Join(t.TempDir(), "Package.wxs")
+			if err := os.WriteFile(path, []byte(strings.Replace(source, tc.old, tc.replacement, 1)), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if problems := checkInstallerCloseAndRelaunch(parseXML(t, path)); len(problems) == 0 {
 				t.Fatal("negative control was not detected")
 			}
 		})
