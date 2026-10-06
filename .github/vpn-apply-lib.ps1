@@ -29,8 +29,10 @@ $UrHostsFile = Join-Path $env:SystemRoot 'System32\drivers\etc\hosts'
 $UrHostsTag = '# a2s-runner-test'
 
 # What the runner feed compiles into URnetworkUpdate.exe (Updater.vcxproj's
-# /p:UrnUpdateRunnerTest* properties); the official helper has none of these.
-$UrRunnerFeedStrings = @('a2s-runner-test-', 'Ryanmello07', 'urnetwork-windows')
+# /p:UrnUpdateRunnerTest* properties); the official helper has neither. Not
+# the repository's name: the PDB path every build embeds carries it, since a
+# runner checks out into <repo>\<repo>.
+$UrRunnerFeedStrings = @('a2s-runner-test-', 'Ryanmello07')
 
 # Whether a file's bytes contain an ASCII string (Latin-1 maps each byte to
 # one character, so the search is over the bytes themselves).
