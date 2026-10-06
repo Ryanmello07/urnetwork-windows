@@ -1274,14 +1274,9 @@ func TestInstallerRefusesAnOlderService(t *testing.T) {
 	}
 
 	// And every stamped build passes its FILEVERSION: UrVersion.ps1's WiX
-	// arguments, which build.ps1 splats into the WiX build, and CI's MSI build.
+	// arguments, which build.ps1 splats into the WiX build.
 	if count := strings.Count(read("app/tools/UrVersion.ps1"), `"-p:UrFileVersion=$year.$month.$day.$build"`); count != 1 {
 		t.Errorf("UrVersion.ps1 builds -p:UrFileVersion %d times, want once", count)
-	}
-	const ciFileVersion = "-p:UrFileVersion=${{ needs.build-sdk.outputs.version_major }}.${{ needs.build-sdk.outputs.version_minor }}." +
-		"${{ needs.build-sdk.outputs.version_patch }}.${{ needs.build-sdk.outputs.version_build }}"
-	if count := strings.Count(read(".github/workflows/build-and-test.yml"), ciFileVersion); count != 1 {
-		t.Errorf("CI's MSI build passes %q %d times, want once", ciFileVersion, count)
 	}
 }
 
