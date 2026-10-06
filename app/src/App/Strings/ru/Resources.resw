@@ -7190,6 +7190,42 @@
     <value>Карта сохраняется сегодня, {1} спишется {0}. До этого можно отменить в любой момент.</value>
     <comment>Embedded pay page: what happens with the card on a trial. {price} amount, {date} local date.</comment>
   </data>
+  <data name="site_payment_error_authentication_failed" xml:space="preserve">
+    <value>Банку не удалось подтвердить карту. Попробуйте ещё раз или используйте другую карту.</value>
+    <comment>Pay page (/app/pay-sheet on ur.io): the bank's card verification (3D Secure) failed or was not completed. Nothing was charged.</comment>
+  </data>
+  <data name="site_payment_error_card_declined" xml:space="preserve">
+    <value>Ваша карта отклонена. Попробуйте другую карту или обратитесь в свой банк.</value>
+    <comment>Pay page (/app/pay-sheet, the card form the desktop apps and the F-Droid app open on ur.io): the card's bank declined the payment (Stripe card_declined). Nothing was charged.</comment>
+  </data>
+  <data name="site_payment_error_expired_card" xml:space="preserve">
+    <value>Срок действия карты истёк. Попробуйте другую карту.</value>
+    <comment>Pay page (/app/pay-sheet on ur.io): the card has expired, or the expiry date entered is in the past. Nothing was charged.</comment>
+  </data>
+  <data name="site_payment_error_form_unavailable" xml:space="preserve">
+    <value>Не удалось загрузить форму оплаты. Проверьте подключение к интернету и попробуйте снова.</value>
+    <comment>Pay page (/app/pay-sheet on ur.io): Stripe's card form did not load (usually no internet connection, or a network or content blocker that blocks Stripe). Nothing was charged.</comment>
+  </data>
+  <data name="site_payment_error_incorrect_details" xml:space="preserve">
+    <value>Некоторые платёжные данные неверны или не заполнены. Проверьте их и попробуйте снова.</value>
+    <comment>Pay page (/app/pay-sheet on ur.io): a card number, expiry date, security code or postal code in the payment form is wrong or missing. Stripe's own sentence naming the field is shown under this line. Nothing was charged.</comment>
+  </data>
+  <data name="site_payment_error_insufficient_funds" xml:space="preserve">
+    <value>На карте недостаточно средств. Попробуйте другую карту.</value>
+    <comment>Pay page (/app/pay-sheet on ur.io): the card was declined because it does not have enough funds (Stripe decline code insufficient_funds). Nothing was charged.</comment>
+  </data>
+  <data name="site_payment_error_network" xml:space="preserve">
+    <value>Не удалось подключиться. Проверьте подключение к интернету и попробуйте снова.</value>
+    <comment>Pay page (/app/pay-sheet) and the Pro upgrade sheet on ur.io: Stripe or URnetwork's server could not be reached (offline, timed out, or blocked by the network).</comment>
+  </data>
+  <data name="site_payment_error_processing" xml:space="preserve">
+    <value>Сейчас не удалось обработать платёж. Попробуйте ещё раз чуть позже.</value>
+    <comment>Pay page (/app/pay-sheet on ur.io): Stripe or the bank could not process the payment just now (a temporary error); trying again usually works.</comment>
+  </data>
+  <data name="site_payment_error_rate_limited" xml:space="preserve">
+    <value>Слишком много попыток. Подождите минуту и попробуйте снова.</value>
+    <comment>Pay page (/app/pay-sheet) and the Pro upgrade sheet on ur.io: too many payment attempts in a short time, so Stripe or URnetwork's server turned this one away. Nothing was charged.</comment>
+  </data>
   <data name="site_payment_not_seen_body" xml:space="preserve">
     <value>Мы пока не видим вашего платежа. Если вы завершили его в кошельке, он, возможно, ещё обрабатывается — ваш тариф обновится автоматически в разделе «Аккаунт», как только платёж поступит.</value>
     <comment>Upgrade sheet: give-up state body — the payment may still be processing and will appear under Account</comment>
