@@ -2576,6 +2576,10 @@
     <value>已驗證</value>
     <comment>Developer page: exit state, proven.</comment>
   </data>
+  <data name="dev_state_tier" xml:space="preserve">
+    <value>層級 {}</value>
+    <comment>Developer page exit readout: the exit's tier in its state line, the platform's rank for the provider (0 is best). The value is the tier number, or two numbers with an arrow ("1→3") when live demotion moved the rank that selection uses. The Windows and Linux pages show the same value in their Tier column (dev_col_tier).</comment>
+  </data>
   <data name="dev_state_warned" xml:space="preserve">
     <value>已警告</value>
     <comment>Developer page: exit state, warned.</comment>
