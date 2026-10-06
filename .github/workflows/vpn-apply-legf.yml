@@ -1,0 +1,250 @@
+# Leg f of the A2s runner test on its own (vpn-apply.yml's pre-a2a job): the
+# new MSI over a running pre-A2a app. It publishes nothing and needs no
+# write permission, so it can run again without another throwaway release.
+#
+# Setup: on a throwaway branch of the fork that contains A2s, add
+#   .github/workflows/vpn-apply-legf.yml    (this file)
+#   .github/vpn-upgrade-lib.ps1              (runner-tests/vpn-upgrade-lib.ps1)
+#   .github/vpn-apply-lib.ps1                (runner-tests/vpn-apply-lib.ps1)
+#   .github/vpn-apply-window-watch.ps1       (runner-tests/vpn-apply-window-watch.ps1)
+# and push it as ci/a2s-legf-<anything>, without vpn-apply.yml.
+#
+# The packages (x64): vNext as build.ps1 makes it, a release code from
+# yesterday 15:00 UTC; v0, upstream main before A2a (c53da6d) with
+# -Version 0.0.0-0, an app with no WM_CLOSE handler at FILEVERSION 0.0.0.0.
+#
+# The leg: install v0, start its app, watch its tray window, then install
+# vNext /passive as the update helper does. Asserted: exit 0 or 3010;
+# URNETWORK_APP_CLOSABLE not set (v0's URnetwork.exe is below 2026.10.5.1);
+# Wix4CloseApplications done in under 5 s, so it never waited on v0; one
+# product at vNext's ProductVersion with urnetworkd running. Observed: when
+# v0's tray window went, against msiexec's log, and what Windows Installer's
+# own Restart Manager did.
+#
+# SPDX-License-Identifier: MPL-2.0
+
+name: VPN update helper test, leg f (A2s)
+
+on:
+  push:
+    branches:
+      - 'ci/a2s-legf-*'
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  SDK_RUN_ID: '37439135753'
+  V0_REF: c53da6dbc8963e3aef49340f859828fcc6725e02
+
+jobs:
+  plan:
+    name: Plan vNext's release code
+    runs-on: ubuntu-latest
+    outputs:
+      vnext: ${{ steps.plan.outputs.vnext }}
+    steps:
+      - name: Choose the version
+        id: plan
+        run: |
+          founded=$(date -u -d 2023-05-23 +%s)
+          d1=$(date -u -d '1 day ago' +%Y-%m-%d)
+          s=$(date -u -d "$d1 15:00:00Z" +%s)
+          echo "vnext=$(date -u -d "$d1 15:00:00Z" '+%Y.%-m.%-d')-$(( (s - founded) * 10 ))" | tee -a "$GITHUB_OUTPUT"
+
+  build-vnext:
+    name: Build vNext with build.ps1 under Windows PowerShell 5.1
+    needs: plan
+    runs-on: windows-2022
+    env:
+      VERSION: ${{ needs.plan.outputs.vnext }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download the SDK zip from run ${{ env.SDK_RUN_ID }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          gh run download $env:SDK_RUN_ID -R $env:GITHUB_REPOSITORY -n urnetwork-sdk-windows -D sdk-zip
+          if ($LASTEXITCODE -ne 0) { throw "could not download the SDK zip" }
+
+      - name: app\build.ps1 -Version ${{ env.VERSION }}
+        shell: cmd
+        run: >-
+          powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass
+          -File app\build.ps1 -Version %VERSION%
+          -SdkZip "%GITHUB_WORKSPACE%\sdk-zip\URnetworkSdkWindows.zip" -Platforms x64
+
+      - name: Stage the MSI
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-apply-lib.ps1"
+          $ur = & .\app\tools\UrVersion.ps1 -Version $env:VERSION
+          $fileVersion = '{0}.{1}.{2}.{3}' -f $ur.UrVersionMajor, $ur.UrVersionMinor, $ur.UrVersionPatch, $ur.UrVersionBuild
+          $out = New-Item -ItemType Directory -Force (Join-Path $env:GITHUB_WORKSPACE 'staged')
+          Copy-Item (Join-Path $env:GITHUB_WORKSPACE "app\build\out\URnetwork-$($env:VERSION)-x64.msi") (Join-Path $out 'vnext.msi')
+          $actual = Get-UrMsiProductVersion (Join-Path $out 'vnext.msi')
+          if ($actual -ne $ur.UrMsiVersion) { throw "vNext ProductVersion $actual, want $($ur.UrMsiVersion)" }
+          [pscustomobject]@{ key = 'vnext'; version = $env:VERSION; code = [string]$ur.UrVersionCode;
+            msi_version = $ur.UrMsiVersion; file_version = $fileVersion } |
+            ConvertTo-Json | Set-Content -Encoding ascii (Join-Path $out 'vnext.json')
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: msi-vnext
+          path: staged/
+          if-no-files-found: error
+
+  build-v0:
+    name: Build v0 (upstream before A2a, -Version 0.0.0-0) under Windows PowerShell 5.1
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check out upstream main before A2a
+        uses: actions/checkout@v4
+        with:
+          repository: urnetwork/windows
+          ref: ${{ env.V0_REF }}
+          path: v0
+
+      - name: Download the SDK zip from run ${{ env.SDK_RUN_ID }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          gh run download $env:SDK_RUN_ID -R $env:GITHUB_REPOSITORY -n urnetwork-sdk-windows -D sdk-zip
+          if ($LASTEXITCODE -ne 0) { throw "could not download the SDK zip" }
+
+      - name: v0\app\build.ps1 -Version 0.0.0-0
+        shell: cmd
+        run: >-
+          powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass
+          -File v0\app\build.ps1 -Version 0.0.0-0
+          -SdkZip "%GITHUB_WORKSPACE%\sdk-zip\URnetworkSdkWindows.zip" -Platforms x64
+
+      - name: Check v0 and stage it
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-apply-lib.ps1"
+          $out = New-Item -ItemType Directory -Force (Join-Path $env:GITHUB_WORKSPACE 'staged')
+          $bin = Join-Path $env:GITHUB_WORKSPACE 'v0\app\build\x64\Release'
+          foreach ($exe in 'URnetwork.exe', 'urnetworkd.exe') {
+            $actual = Get-UrFileVersion (Join-Path $bin $exe)
+            if ($actual -ne '0.0.0.0') { throw "v0 $exe file version $actual, want 0.0.0.0" }
+          }
+          Copy-Item (Join-Path $env:GITHUB_WORKSPACE 'v0\app\build\out\URnetwork-0.0.0-0-x64.msi') (Join-Path $out 'v0.msi')
+          $actual = Get-UrMsiProductVersion (Join-Path $out 'v0.msi')
+          if ($actual -ne '0.0.1') { throw "v0 ProductVersion $actual, want 0.0.1" }
+          [pscustomobject]@{ key = 'v0'; version = '0.0.0-0'; code = '0'; msi_version = '0.0.1'; file_version = '0.0.0.0' } |
+            ConvertTo-Json | Set-Content -Encoding ascii (Join-Path $out 'v0.json')
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: msi-v0
+          path: staged/
+          if-no-files-found: error
+
+  pre-a2a:
+    name: Leg f - the new MSI over a running pre-A2a app
+    needs: [build-vnext, build-v0]
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: msi-v*
+          merge-multiple: true
+          path: ${{ runner.temp }}/msis
+
+      - name: Install v0 (upstream before A2a)
+        timeout-minutes: 10
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-apply-lib.ps1"
+          if ((Get-UrProducts).Count -ne 0) { throw "a URnetwork product is already installed on this runner" }
+          $code = Invoke-UrMsiexec '/i' (Get-UrMsiPath 'v0') '/qn' 'v0-install.log'
+          if ($code -ne 0) { throw "v0 install exit code $code" }
+          Assert-UrInstalled (Get-UrExpect 'v0') 'v0-install.log' | Out-Null
+
+      - name: f. vNext over v0 with v0's app running
+        timeout-minutes: 15
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-apply-lib.ps1"
+          $vnext = Get-UrExpect 'vnext'
+          $root = Join-Path $env:RUNNER_TEMP 'v0-app-root'
+          New-Item -ItemType Directory -Force $root | Out-Null
+          $env:URNETWORK_APP_ROOT = $root
+          $app = Start-UrTrayApp
+          $watchOut = Join-Path $UrLogDir 'v0-tray-window-watch.txt'
+          $watch = Start-Process -FilePath 'powershell.exe' -PassThru -WindowStyle Hidden -ArgumentList @(
+            '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File',
+            (Join-Path $env:GITHUB_WORKSPACE '.github\vpn-apply-window-watch.ps1'), '-ProcessId', $app.Id, '-Out', $watchOut)
+          try {
+            Start-Sleep -Seconds 2
+            if ($watch.HasExited) { throw "the window watcher exited at once: $(Get-Content $watchOut -ErrorAction SilentlyContinue)" }
+            $started = Get-Date
+            $code = Invoke-UrMsiexec '/i' (Get-UrMsiPath 'vnext') '/passive' 'vnext-over-running-v0.log'
+            "msiexec took $([int]((Get-Date) - $started).TotalSeconds) s"
+            $log = Read-UrLog 'vnext-over-running-v0.log'
+            if ($code -ne 0 -and $code -ne 3010) { throw "vNext over a running v0 exit code $code, want 0 or 3010" }
+            # Requirement b: CloseApplication leaves an app without the
+            # WM_CLOSE handler alone, so it never waits on it. With the gate
+            # open, Wix4CloseApplications would wait out its 15 s timeout on
+            # v0, which does not exit on WM_CLOSE.
+            if ((Get-UrLogLines $log 'Property\(S\): URNETWORK_APP_CLOSABLE = ').Count -ne 0) {
+              throw "URNETWORK_APP_CLOSABLE was set for v0's app, which has no WM_CLOSE handler"
+            }
+            $closeStart = [regex]::Match($log, 'Action start (\d{1,2}:\d{2}:\d{2}): Wix4CloseApplications_X64\.')
+            $closeEnd = [regex]::Match($log, 'Action ended (\d{1,2}:\d{2}:\d{2}): Wix4CloseApplications_X64\.')
+            if (-not $closeStart.Success -or -not $closeEnd.Success) { throw "no Wix4CloseApplications_X64 action in the log" }
+            $closeSeconds = ([datetime]$closeEnd.Groups[1].Value - [datetime]$closeStart.Groups[1].Value).TotalSeconds
+            if ($closeSeconds -ge 5) { throw "Wix4CloseApplications_X64 took $closeSeconds s: it waited on v0's app" }
+            "OK: CloseApplication left v0's app alone (Wix4CloseApplications_X64 took $closeSeconds s)"
+            $products = Get-UrProducts
+            if ($products.Count -ne 1 -or $products[0].Version -ne $vnext.msi_version) {
+              throw "want one product at $($vnext.msi_version), found $(($products | ForEach-Object { $_.Version }) -join ', ')"
+            }
+            $service = Wait-UrServiceRunning
+            "OK: exit $code, one product at $($products[0].Version), urnetworkd $($service.State) from $($service.PathName)"
+
+            # Observed only: what Windows Installer's own Restart Manager did
+            # to v0's app, which /passive lets it close without asking.
+            Start-Sleep -Seconds 1
+            "OBSERVED: v0's process still running: $(-not $app.HasExited)"
+            if (-not $app.HasExited) {
+              $tray = @((Get-UrTopLevelWindows $app.Id) | Where-Object { $_.Class -eq 'URnetworkTrayWindow' })
+              "OBSERVED: v0's tray window still exists: $($tray.Count -gt 0)"
+            }
+            if (Test-Path $watchOut) { "OBSERVED: $(Get-Content $watchOut)" } else { "OBSERVED: the watcher saw no change" }
+            (Get-UrLogLines $log '^Action (start|ended) \S+: (Wix4CloseApplications_X64|InstallValidate|InstallInitialize|RemoveExistingProducts)\.|RESTART MANAGER') |
+              ForEach-Object { "log: $_" }
+            "OBSERVED: $((Get-UrLogLines $log 'Info 1903\.').Count) in-use file(s) left for deletion at the next restart"
+            foreach ($exe in 'URnetwork.exe', 'urnetworkd.exe', 'URnetworkUpdate.exe') {
+              "OBSERVED: $exe on disk is $(Get-UrFileVersion (Join-Path $UrInstallDir $exe))"
+            }
+          } finally {
+            if (-not $watch.HasExited) { Stop-Process -Id $watch.Id -Force -ErrorAction SilentlyContinue }
+            if (-not $app.HasExited) { Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue }
+          }
+
+      - name: Collect logs
+        if: always()
+        shell: powershell
+        run: |
+          $dest = Join-Path $env:RUNNER_TEMP 'upgrade-logs'
+          New-Item -ItemType Directory -Force $dest | Out-Null
+          foreach ($dir in "$env:RUNNER_TEMP\v0-app-root\logs", "$env:ProgramData\URnetwork\service\logs") {
+            if (Test-Path $dir) { Copy-Item $dir (Join-Path $dest ((Split-Path $dir -Parent | Split-Path -Leaf) + '-logs')) -Recurse -Force }
+          }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pre-a2a-logs
+          path: ${{ runner.temp }}/upgrade-logs/
+          if-no-files-found: warn
