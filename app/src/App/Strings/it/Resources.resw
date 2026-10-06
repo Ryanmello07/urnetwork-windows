@@ -1048,6 +1048,10 @@ modo giusto</value>
     <value>Accesso con codice non riuscito</value>
     <comment>Error shown when signing in with an auth code fails.</comment>
   </data>
+  <data name="collapsed" xml:space="preserve">
+    <value>Compresso</value>
+    <comment>Screen reader state of a row that shows or hides a section below it (Advanced, Why?): the section is hidden. The counterpart of expanded.</comment>
+  </data>
   <data name="commitment_issues" xml:space="preserve">
     <value>Paura di impegnarsi?</value>
     <comment>Login initial</comment>
@@ -3346,6 +3350,10 @@ modo giusto</value>
   <data name="excluded" xml:space="preserve">
     <value>Esclusa</value>
     <comment>transfer stats and split rules</comment>
+  </data>
+  <data name="expanded" xml:space="preserve">
+    <value>Espanso</value>
+    <comment>Screen reader state of a row that shows or hides a section below it (Advanced, Why?): the section is shown. The counterpart of collapsed.</comment>
   </data>
   <data name="expires" xml:space="preserve">
     <value>Scade</value>

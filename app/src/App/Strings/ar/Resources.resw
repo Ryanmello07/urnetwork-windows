@@ -1080,6 +1080,10 @@
     <value>فشل تسجيل الدخول بالرمز</value>
     <comment>Error shown when signing in with an auth code fails.</comment>
   </data>
+  <data name="collapsed" xml:space="preserve">
+    <value>تم التصغير</value>
+    <comment>Screen reader state of a row that shows or hides a section below it (Advanced, Why?): the section is hidden. The counterpart of expanded.</comment>
+  </data>
   <data name="commitment_issues" xml:space="preserve">
     <value>مشاكل في الالتزام؟</value>
     <comment>Login initial</comment>
@@ -3426,6 +3430,10 @@
   <data name="excluded" xml:space="preserve">
     <value>مستثنى</value>
     <comment>transfer stats and split rules</comment>
+  </data>
+  <data name="expanded" xml:space="preserve">
+    <value>تم التوسيع</value>
+    <comment>Screen reader state of a row that shows or hides a section below it (Advanced, Why?): the section is shown. The counterpart of collapsed.</comment>
   </data>
   <data name="expires" xml:space="preserve">
     <value>ينتهي</value>

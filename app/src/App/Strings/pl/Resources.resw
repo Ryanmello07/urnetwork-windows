@@ -1064,6 +1064,10 @@ właściwy sposób</value>
     <value>Logowanie kodem nie powiodło się</value>
     <comment>Error shown when signing in with an auth code fails.</comment>
   </data>
+  <data name="collapsed" xml:space="preserve">
+    <value>Zwinięto</value>
+    <comment>Screen reader state of a row that shows or hides a section below it (Advanced, Why?): the section is hidden. The counterpart of expanded.</comment>
+  </data>
   <data name="commitment_issues" xml:space="preserve">
     <value>Problemy z zobowiązaniem?</value>
     <comment>Login initial</comment>
@@ -3386,6 +3390,10 @@ właściwy sposób</value>
   <data name="excluded" xml:space="preserve">
     <value>Wykluczone</value>
     <comment>transfer stats and split rules</comment>
+  </data>
+  <data name="expanded" xml:space="preserve">
+    <value>Rozwinięto</value>
+    <comment>Screen reader state of a row that shows or hides a section below it (Advanced, Why?): the section is shown. The counterpart of collapsed.</comment>
   </data>
   <data name="expires" xml:space="preserve">
     <value>Wygasa</value>

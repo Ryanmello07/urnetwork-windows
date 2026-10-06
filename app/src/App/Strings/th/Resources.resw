@@ -1040,6 +1040,10 @@
     <value>ลงชื่อเข้าใช้ด้วยรหัสไม่สำเร็จ</value>
     <comment>Error shown when signing in with an auth code fails.</comment>
   </data>
+  <data name="collapsed" xml:space="preserve">
+    <value>ยุบแล้ว</value>
+    <comment>Screen reader state of a row that shows or hides a section below it (Advanced, Why?): the section is hidden. The counterpart of expanded.</comment>
+  </data>
   <data name="commitment_issues" xml:space="preserve">
     <value>ยังตัดสินใจไม่ได้ใช่ไหม?</value>
     <comment>Login initial</comment>
@@ -3326,6 +3330,10 @@
   <data name="excluded" xml:space="preserve">
     <value>ยกเว้น</value>
     <comment>transfer stats and split rules</comment>
+  </data>
+  <data name="expanded" xml:space="preserve">
+    <value>ขยายแล้ว</value>
+    <comment>Screen reader state of a row that shows or hides a section below it (Advanced, Why?): the section is shown. The counterpart of collapsed.</comment>
   </data>
   <data name="expires" xml:space="preserve">
     <value>หมดอายุ</value>

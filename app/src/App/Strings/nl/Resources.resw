@@ -1048,6 +1048,10 @@ juiste manier</value>
     <value>Inloggen met code mislukt</value>
     <comment>Error shown when signing in with an auth code fails.</comment>
   </data>
+  <data name="collapsed" xml:space="preserve">
+    <value>Samengevouwen</value>
+    <comment>Screen reader state of a row that shows or hides a section below it (Advanced, Why?): the section is hidden. The counterpart of expanded.</comment>
+  </data>
   <data name="commitment_issues" xml:space="preserve">
     <value>Problemen met commitment?</value>
     <comment>Login initial</comment>
@@ -3346,6 +3350,10 @@ juiste manier</value>
   <data name="excluded" xml:space="preserve">
     <value>Uitgesloten</value>
     <comment>transfer stats and split rules</comment>
+  </data>
+  <data name="expanded" xml:space="preserve">
+    <value>Uitgevouwen</value>
+    <comment>Screen reader state of a row that shows or hides a section below it (Advanced, Why?): the section is shown. The counterpart of collapsed.</comment>
   </data>
   <data name="expires" xml:space="preserve">
     <value>Vervalt</value>
