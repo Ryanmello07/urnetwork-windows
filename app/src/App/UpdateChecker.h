@@ -1,5 +1,6 @@
 // The in-app update checker (beta-distribution spec §5): finds newer official
-// releases and installs one with a verified download.
+// releases, and installs one through the elevated update helper
+// (app/src/Updater) after a verified download.
 //
 // The feed is the urnetwork/windows GitHub releases (Common/ReleaseSelection.h
 // kOfficialFeed, polled by the repository's numeric id): the stable releases
@@ -9,18 +10,26 @@
 // two manual triggers), pick the release with Common/ReleaseSelection.h, and when
 // it outranks the build's own stamped code, offer ONE click that
 //
-//   downloads the own-arch MSI to %LOCALAPPDATA%\URnetwork\updates\<tag>\,
-//   verifies it against the asset's own SHA-256 digest, stamped by GitHub in
-//     the same releases JSON the check parsed (CNG SHA-256 locally),
-//   starts it with msiexec (elevated: the package is per-machine), records
-//     that installer so no launch starts the app while it runs
-//     (Common/UpdateMarker.h), and quits the app so none of its files are held
-//     open. The MSI's MajorUpgrade replaces the install and its ServiceControl
-//     stops and restarts the service, so there is no second click for the
-//     service. Nothing relaunches the app afterwards.
+//   downloads the own-arch MSI to %LOCALAPPDATA%\URnetwork\updates\<tag>\ and
+//     checks it against the asset's own SHA-256 digest, stamped by GitHub in
+//     the same releases JSON the check parsed. This copy is a pre-check: it
+//     shows the banner's progress and finds a broken release before anyone is
+//     asked for administrator rights. Nothing elevated ever reads it;
+//   on an installed copy, one whose folder is an admin-only install location
+//     (Common/InstallLocation.h), starts URnetworkUpdate.exe --apply-update
+//     <tag> from that folder with "runas", records it so no launch starts the
+//     app while it runs (Common/UpdateMarker.h), and waits on it without
+//     quitting. The helper fetches, checks and installs the release itself.
+//     The MSI closes this app before it replaces its files (its
+//     CloseApplication sends the tray's window WM_CLOSE) and starts the new
+//     version once they are in place;
+//   on a portable or dev copy, shows the checked MSI in Explorer for the user
+//     to run as an installer. Nothing from a user's folder is elevated.
 //
-// If the installer cannot be started (the elevation prompt was declined, or
-// the launch failed), the verified MSI is shown in Explorer for the user to run.
+// The helper reports in last-result.json in the install folder
+// (Common/UpdateResult.h). This app reads it when the helper ends while it
+// still runs, and at its next launch, and the banner says how the update went
+// until the user dismisses it.
 //
 // A dev build (urnw::version::kCode == 0) never self-updates: every release
 // would outrank it forever. The periodic checker is fully disabled there; the
@@ -55,14 +64,24 @@ class UpdateChecker {
     None,         // nothing newer is known (or the checker is disabled)
     Available,    // a newer release exists; the one click is offered
     Applying,       // the click fired; `stage` says how far it has got
-    ManualInstall,  // downloaded + verified, but the installer could not be
-                    // started (elevation declined, launch failed): the MSI
-                    // was revealed in Explorer and the user finishes
-    Failed,         // the last apply attempt failed; `failure` says where.
-                    // Nothing was installed — the click retries from scratch.
+    ManualInstall,  // a portable or dev copy: the MSI was downloaded, checked
+                    // against GitHub's SHA-256 and shown in Explorer, and the
+                    // user runs it
+    Failed,         // the last apply attempt failed before the helper ran;
+                    // `failure` says where. Nothing was installed, and the
+                    // click retries from scratch.
+    Result,         // how the last update the helper ran went (`result`),
+                    // until the user dismisses it or a newer release replaces
+                    // it
   };
   enum class Stage { Idle, Downloading, Verifying, Installing };
-  enum class Failure { None, Download, Checksum };
+  enum class Failure {
+    None,
+    Download,
+    Checksum,
+    // The elevation prompt was declined, or the helper could not be started.
+    Elevation,
+  };
 
   // What the last CHECK concluded — the developer screen's line, separate from
   // the banner phase because "checked and found nothing" must be reportable
@@ -76,6 +95,16 @@ class UpdateChecker {
     Failed,       // the HTTP fetch or the JSON parse failed; details in the log
   };
 
+  // An update the helper ran, as its last-result.json reported it.
+  struct Result {
+    std::wstring version;  // the release's, v-less
+    // msiexec's exit code, or the helper's refusal (Common/UpdateResult.h)
+    std::int64_t exitCode = 0;
+    // install.log for msiexec's outcome, update-helper.log for a refusal
+    std::wstring logPath;
+    std::wstring finishedUtc;
+  };
+
   struct Snapshot {
     Phase phase = Phase::None;
     Stage stage = Stage::Idle;        // meaningful while Applying
@@ -84,9 +113,14 @@ class UpdateChecker {
     // Empty when phase == None.
     std::wstring version;
     std::uint64_t code = 0;
-    // ManualInstall: where the verified MSI sits, for the banner's wording and
+    // ManualInstall: where the checked MSI sits, for the banner's wording and
     // its re-reveal action.
     std::wstring installerPath;
+    // This copy runs from an admin-only install location, so Update runs the
+    // helper; otherwise the banner offers the installer to download.
+    bool installed = false;
+    // Meaningful while phase == Result.
+    Result result;
     CheckOutcome lastCheck = CheckOutcome::NeverRan;
     // The newest release tag the last completed check parsed, whether or not
     // it outranks this build — the developer line names it either way.
@@ -95,22 +129,20 @@ class UpdateChecker {
   };
 
   using Handler = std::function<void(Snapshot const&)>;
-  // Fired on the WORKER thread once the installer is running. The receiver
-  // quits the app (the ordinary tray-quit teardown) so the MSI finds none of
-  // the app's files in use; only the app side knows how to tear itself down.
-  using InstallerStartedHandler = std::function<void()>;
 
   UpdateChecker() = default;
   ~UpdateChecker();
   UpdateChecker(UpdateChecker const&) = delete;
   UpdateChecker& operator=(UpdateChecker const&) = delete;
 
-  // Spawn the worker: stale-file cleanup first (best-effort .old removal and
-  // obsolete download dirs), then the launch-delay check and the 6h cadence.
+  // Spawn the worker: the helper's last report and stale-file cleanup first,
+  // then the launch-delay check and the 6h cadence.
   void Start();
   // Signal and JOIN the worker. A download in flight notices within one read
-  // (the fetch loop polls the stop flag), so this is bounded, not "until the
-  // whole MSI finishes".
+  // (the fetch loop polls the stop flag), and the wait on the helper within a
+  // fraction of a second, so this is bounded, not "until the whole MSI
+  // finishes" or "until the helper ends". The helper carries on without this
+  // app.
   void Stop();
 
   Snapshot Current();
@@ -118,7 +150,6 @@ class UpdateChecker {
   // window is built on the first tray click, which can be minutes after the
   // launch check already ran.
   void SetHandler(Handler h);
-  void SetInstallerStartedHandler(InstallerStartedHandler h);
 
   // Queue a check now (the developer screen's trigger). Coalesces with a check
   // already queued; ignored only after Stop().
@@ -126,6 +157,9 @@ class UpdateChecker {
   // Queue the download/verify/install for the currently offered release.
   // Ignored when nothing is offered or an apply is already running.
   void BeginApply();
+  // The Result banner's dismissal: the report is not shown again, and the
+  // banner closes. Safe from the UI thread.
+  void DismissResult();
 
   // The "Check for updates automatically" preference (Settings): persisted in
   // app_prefs.json beside Advanced Mode, default ON. The static read exists so
@@ -162,12 +196,19 @@ class UpdateChecker {
   // next to the exe (renamed images from the portable builds' old rename-swap
   // updater) and download dirs whose tag no longer outranks this build.
   void CleanupStaleFiles();
+  // The helper's last-result.json, shown as the Result phase unless it was
+  // dismissed already. Installed copies only: elsewhere no file there can be
+  // trusted to be the helper's.
+  void ShowLastResult();
 
   // Copy the snapshot under the lock, mutate, publish to the handler outside
   // it — the handler is never invoked with mutex_ held.
   void Mutate(std::function<void(Snapshot&)> const& fn);
   Handler HandlerCopy();
-  InstallerStartedHandler InstallerStartedCopy();
+
+  // Written by Start before the worker exists, and only read after.
+  bool installed_ = false;
+  std::filesystem::path installFolder_;
 
   std::mutex mutex_;
   std::condition_variable cv_;
@@ -180,11 +221,10 @@ class UpdateChecker {
   Snapshot snapshot_;
   Offer offer_;
 
-  // The handlers' own lock, on SdkHost's advancedMutex_ reasoning: never held
+  // The handler's own lock, on SdkHost's advancedMutex_ reasoning: never held
   // across an invocation, never taken together with mutex_.
   std::mutex handlerMutex_;
   Handler handler_;
-  InstallerStartedHandler installerStarted_;
 };
 
 }  // namespace urnw

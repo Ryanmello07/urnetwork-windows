@@ -328,17 +328,17 @@ func TestQuitTrayNothingStartsAgainAfterQuit(t *testing.T) {
 	provideRequire(t, "SdkHost::SessionWorkerLoop", worker, "if (!device_) ReconcileProviderLocked(req.reason);")
 }
 
-// Not a Quit. A WM_CLOSE from outside the app and the updater's installer
-// handoff exit the app and leave the service as it is; signing out keeps the
-// app running in the tray (Logout stops the tunnel and the provider as Quit
-// does, then logs the service out: sign_out_wiring_test.go).
+// Not a Quit. A WM_CLOSE from outside the app, the in-app update's installer
+// closing it among them, exits the app and leaves the service as it is; the
+// app does not quit for the update by itself. Signing out keeps the app
+// running in the tray (Logout stops the tunnel and the provider as Quit does,
+// then logs the service out: sign_out_wiring_test.go).
 func TestQuitTrayOtherEndingsLeaveTheService(t *testing.T) {
 	controller := appControllerSource(t)
 	provideRequire(t, "AppController::Start", controller,
-		"cb.onCloseRequest = [this] { Shutdown(lifetime::Ending::CloseRequest); };",
-		"OnUi([this] { Shutdown(lifetime::Ending::InstallerHandoff); });")
-	// the Quit, the session end (session_end_wiring_test.go) and these two
-	if strings.Count(controller, "Shutdown(lifetime::Ending::") != 4 {
+		"cb.onCloseRequest = [this] { Shutdown(lifetime::Ending::CloseRequest); };")
+	// the Quit, the session end (session_end_wiring_test.go) and this one
+	if strings.Count(controller, "Shutdown(lifetime::Ending::") != 3 {
 		t.Error("AppController.cpp ends the app from a place this contract does not know")
 	}
 	auth := definitionBody(t, "AppController.cpp", controller,

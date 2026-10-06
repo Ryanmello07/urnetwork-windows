@@ -483,3 +483,192 @@ func TestUpdateApplyWiringRejectsWeakerHelpers(t *testing.T) {
 		})
 	}
 }
+
+// The tray app hands an elevated process nothing but a tag: on an installed
+// copy it starts the helper beside it and waits; on any other copy it shows
+// the checked installer and elevates nothing. It never builds msiexec's
+// arguments, and it does not quit for the installer.
+func checkTrayRunsTheHelper(checker string) []string {
+	var problems []string
+	start := applyDefinition(checker, "void UpdateChecker::Start() {")
+	problems = append(problems, applyOrderProblems("UpdateChecker::Start", start,
+		regexp.QuoteMeta("const fs::path exe = install::OwnExecutablePath();"),
+		regexp.QuoteMeta("installed_ = !exe.empty() && install::AdminOnlyLocation(installFolder_ / kHelperName, why);"),
+		regexp.QuoteMeta("snapshot_.installed = installed_;"),
+		regexp.QuoteMeta("worker_ = std::thread("))...)
+	apply := applyDefinition(checker, "void UpdateChecker::RunApply() {")
+	problems = append(problems, applyOrderProblems("UpdateChecker::RunApply", apply,
+		regexp.QuoteMeta("const fs::path dir = UpdatesDir() / offer.tag;"),
+		regexp.QuoteMeta("const std::string actual = Sha256File(msiPath);"),
+		regexp.QuoteMeta("fail(Failure::Checksum);"),
+		regexp.QuoteMeta("if (!installed_) {"),
+		regexp.QuoteMeta("s.phase = Phase::ManualInstall;"),
+		regexp.QuoteMeta("RevealInExplorer(msiW);"),
+		regexp.QuoteMeta("return;"),
+		regexp.QuoteMeta("LaunchUpdateHelper(installFolder_ / kHelperName, offer.tag, &helper, launchError)"),
+		regexp.QuoteMeta("fail(Failure::Elevation);"),
+		regexp.QuoteMeta("::WaitForSingleObject(helper, 250)"),
+		regexp.QuoteMeta("if (cancelled()) break;"),
+		regexp.QuoteMeta(`ReadResult(installFolder_ / L"updates" / L"last-result.json");`),
+		regexp.QuoteMeta("s.phase = Phase::Result;"))...)
+	if portable := strings.Index(apply, "if (!installed_) {"); portable >= 0 {
+		branch := apply[portable:]
+		if end := strings.Index(branch, "\n  }\n"); end >= 0 {
+			branch = branch[:end]
+		}
+		for _, forbidden := range []string{"LaunchUpdateHelper", "runas", "ShellExecute"} {
+			if strings.Contains(branch, forbidden) {
+				problems = append(problems, "the portable branch of RunApply runs "+forbidden+
+					": a copy outside an admin-only install elevates nothing")
+			}
+		}
+	}
+	launch := applyDefinition(checker,
+		"bool LaunchUpdateHelper(fs::path const& helperPath, std::wstring const& tag, HANDLE* helper,")
+	problems = append(problems, applyOrderProblems("LaunchUpdateHelper", launch,
+		regexp.QuoteMeta(`const std::wstring params = L"--apply-update " + tag;`),
+		regexp.QuoteMeta(`sei.lpVerb = L"runas";`),
+		regexp.QuoteMeta("sei.lpFile = helperPath.c_str();"),
+		regexp.QuoteMeta("sei.lpParameters = params.c_str();"))...)
+	if !strings.Contains(checker, `constexpr wchar_t kHelperName[] = L"URnetworkUpdate.exe";`) {
+		problems = append(problems, "UpdateChecker.cpp does not name the helper URnetworkUpdate.exe")
+	}
+	for _, forbidden := range []string{"msiexec", "/passive", "/l*v", "SetInstallerStartedHandler",
+		"InstallerStarted"} {
+		if strings.Contains(checker, forbidden) {
+			problems = append(problems, "UpdateChecker.cpp has "+forbidden+
+				": only the elevated helper builds msiexec's command line, and the app does not quit for it")
+		}
+	}
+	return problems
+}
+
+func TestUpdateApplyTrayRunsTheHelper(t *testing.T) {
+	reportProblems(t, checkTrayRunsTheHelper(stripComments(readAppSource(t, "UpdateChecker.cpp"))))
+}
+
+// The helper's report is read from the admin-only install folder only, and
+// shown until the user dismisses it.
+func checkTrayReadsTheReport(checker string) []string {
+	var problems []string
+	show := applyDefinition(checker, "void UpdateChecker::ShowLastResult() {")
+	problems = append(problems, applyOrderProblems("UpdateChecker::ShowLastResult", show,
+		regexp.QuoteMeta("if (!installed_) return;"),
+		regexp.QuoteMeta(`ReadResult(installFolder_ / L"updates" / L"last-result.json");`),
+		regexp.QuoteMeta("if (SeenResult() == result->finishedUtc) return;"),
+		regexp.QuoteMeta("s.phase = Phase::Result;"))...)
+	read := applyDefinition(checker, "std::optional<update::UpdateResult> ReadResult(fs::path const& file) {")
+	problems = append(problems, applyOrderProblems("ReadResult", read,
+		regexp.QuoteMeta("return update::ParseUpdateResult(text);"))...)
+	worker := applyDefinition(checker, "void UpdateChecker::WorkerLoop() {")
+	problems = append(problems, applyOrderProblems("UpdateChecker::WorkerLoop", worker,
+		regexp.QuoteMeta("ShowLastResult();"), regexp.QuoteMeta("CleanupStaleFiles();"))...)
+	dismiss := applyDefinition(checker, "void UpdateChecker::DismissResult() {")
+	problems = append(problems, applyOrderProblems("UpdateChecker::DismissResult", dismiss,
+		regexp.QuoteMeta("SaveAppPref(kResultSeenPrefKey, Narrow(finished));"))...)
+	check := applyDefinition(checker, "void UpdateChecker::RunCheck() {")
+	problems = append(problems, applyOrderProblems("UpdateChecker::RunCheck", check,
+		regexp.QuoteMeta("if (snapshot_.phase != Phase::None && snapshot_.phase != Phase::Result) {"))...)
+	return problems
+}
+
+func TestUpdateApplyTrayReadsTheReport(t *testing.T) {
+	reportProblems(t, checkTrayReadsTheReport(stripComments(readAppSource(t, "UpdateChecker.cpp"))))
+}
+
+// The installer's relaunch after an update is the one launch the update
+// marker must not turn away: it carries --after-update and waits, bounded,
+// for the update to end before it asks like every launch.
+func checkRelaunchWaits(main, glue, handover string) []string {
+	var problems []string
+	if !strings.Contains(handover, `inline constexpr std::wstring_view kAfterUpdateArgument = L"--after-update";`) {
+		problems = append(problems, "InstanceHandover.h no longer names the relaunch's argument --after-update")
+	}
+	if !regexp.MustCompile(`inline constexpr std::chrono::milliseconds kAfterUpdateBudget\{\d{5,6}\};`).MatchString(handover) {
+		problems = append(problems, "InstanceHandover.h does not bound the relaunch's wait")
+	}
+	entry := applyDefinition(main, "int __stdcall wWinMain(")
+	problems = append(problems, applyOrderProblems("wWinMain", entry,
+		regexp.QuoteMeta("if (urnw::LaunchedAfterUpdate()) urnw::AwaitUpdateEnd();"),
+		regexp.QuoteMeta("urnw::CreateExitingSignal();"),
+		regexp.QuoteMeta("urnw::instance::Launch(launcher);"))...)
+	problems = append(problems, applyOrderProblems("LaunchedAfterUpdate",
+		applyDefinition(glue, "bool LaunchedAfterUpdate() {"),
+		regexp.QuoteMeta("return instance::HasArgument(::GetCommandLineW(), instance::kAfterUpdateArgument);"))...)
+	problems = append(problems, applyOrderProblems("AwaitUpdateEnd",
+		applyDefinition(glue, "void AwaitUpdateEnd() {"),
+		regexp.QuoteMeta("std::chrono::steady_clock::now() + instance::kAfterUpdateBudget;"),
+		regexp.QuoteMeta("while (UpdateInProgress()) {"),
+		regexp.QuoteMeta("if (std::chrono::steady_clock::now() >= deadline) {"),
+		regexp.QuoteMeta("return;"),
+		regexp.QuoteMeta("::Sleep("))...)
+	return problems
+}
+
+func TestUpdateApplyTheRelaunchWaitsForTheUpdate(t *testing.T) {
+	reportProblems(t, checkRelaunchWaits(appMainSource(t), stripComments(readAppSource(t, "SingleInstance.cpp")),
+		stripComments(readCommonSource(t, "InstanceHandover.h"))))
+}
+
+// Each tray check fails on a source that drops what it pins.
+func TestUpdateApplyWiringRejectsWeakerTrays(t *testing.T) {
+	checker := stripComments(readAppSource(t, "UpdateChecker.cpp"))
+	main := appMainSource(t)
+	glue := stripComments(readAppSource(t, "SingleInstance.cpp"))
+	handover := stripComments(readCommonSource(t, "InstanceHandover.h"))
+	replace := func(text, old, replacement string) string {
+		if strings.Count(text, old) != 1 {
+			t.Fatalf("negative control: %q is not in the source exactly once", old)
+		}
+		return strings.Replace(text, old, replacement, 1)
+	}
+	for _, tc := range []struct {
+		name  string
+		check func() []string
+	}{
+		{"a portable copy runs the helper", func() []string {
+			apply := applyDefinition(checker, "void UpdateChecker::RunApply() {")
+			return checkTrayRunsTheHelper(replace(checker, apply, replace(apply, "if (!installed_) {", "if (false) {")))
+		}},
+		{"the helper started from the portable branch", func() []string {
+			return checkTrayRunsTheHelper(replace(checker, "    RevealInExplorer(msiW);\n    return;\n",
+				"    LaunchUpdateHelper(installFolder_ / kHelperName, offer.tag, &helper, launchError);\n    return;\n"))
+		}},
+		{"any copy treated as installed", func() []string {
+			return checkTrayRunsTheHelper(replace(checker,
+				"installed_ = !exe.empty() && install::AdminOnlyLocation(installFolder_ / kHelperName, why);",
+				"installed_ = !exe.empty();"))
+		}},
+		{"the tray builds msiexec's arguments", func() []string {
+			return checkTrayRunsTheHelper(replace(checker, `const std::wstring params = L"--apply-update " + tag;`,
+				`const std::wstring params = L"/i msiexec --apply-update " + tag;`))
+		}},
+		{"the wait the app's teardown cannot end", func() []string {
+			return checkTrayRunsTheHelper(replace(checker, "    if (cancelled()) break;\n", ""))
+		}},
+		{"a report read on a portable copy", func() []string {
+			return checkTrayReadsTheReport(replace(checker,
+				"void UpdateChecker::ShowLastResult() {\n  if (!installed_) return;\n",
+				"void UpdateChecker::ShowLastResult() {\n"))
+		}},
+		{"a report dropped by the next check", func() []string {
+			return checkTrayReadsTheReport(replace(checker,
+				"if (snapshot_.phase != Phase::None && snapshot_.phase != Phase::Result) {",
+				"if (snapshot_.phase != Phase::None) {"))
+		}},
+		{"the relaunch refused by its own update", func() []string {
+			return checkRelaunchWaits(replace(main, "if (urnw::LaunchedAfterUpdate()) urnw::AwaitUpdateEnd();", ""),
+				glue, handover)
+		}},
+		{"the relaunch waiting without a bound", func() []string {
+			return checkRelaunchWaits(main, replace(glue,
+				"    if (std::chrono::steady_clock::now() >= deadline) {", "    if (false) {"), handover)
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if problems := tc.check(); len(problems) == 0 {
+				t.Fatal("negative control was not detected")
+			}
+		})
+	}
+}

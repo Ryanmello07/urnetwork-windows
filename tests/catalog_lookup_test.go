@@ -156,6 +156,14 @@ var catalogNonLookupLiteralReasons = map[string]string{
 // app source the scan reads.
 var catalogUnscannedTaggedKeyReasons = map[string]string{}
 
+// Keys tagged windows that the app no longer looks up, each with why, until the
+// store moves windows to deprecated for them and the catalogs are regenerated.
+var catalogRetiredTaggedKeyReasons = map[string]string{
+	"upd_manual_install_message": "it calls a download in the user's folder verified and tells the user " +
+		"to run it after a declined elevation; an installed copy now retries through the update helper, " +
+		"and a portable copy's download is described as checked against GitHub's SHA-256",
+}
+
 // A narrow string literal of a source spelled like a key id, at its line.
 type catalogKeyLiteral struct {
 	file string
@@ -369,9 +377,13 @@ func catalogTagMiss(taggedKeys map[string]bool, literal catalogKeyLiteral) strin
 }
 
 // Why `key`, tagged windows, is a stale tag, or "" when `lookedUpKeys` (the
-// keys the scan saw looked up) or catalogUnscannedTaggedKeyReasons has it.
+// keys the scan saw looked up), catalogUnscannedTaggedKeyReasons or
+// catalogRetiredTaggedKeyReasons has it.
 func catalogStaleTagMiss(lookedUpKeys map[string]bool, key string) string {
 	if _, ok := catalogUnscannedTaggedKeyReasons[key]; ok || lookedUpKeys[key] {
+		return ""
+	}
+	if _, ok := catalogRetiredTaggedKeyReasons[key]; ok {
 		return ""
 	}
 	return `"` + key + `" is tagged windows but nothing looks it up: in localizations/keys/` + key +
@@ -750,6 +762,11 @@ func TestCatalogLookupEveryTaggedKeyIsLookedUp(t *testing.T) {
 	for key, reason := range catalogUnscannedTaggedKeyReasons {
 		if !taggedKeys[key] || lookedUpKeys[key] {
 			t.Errorf("%q (%s) is no longer tagged windows, or the scan now sees it: drop it from catalogUnscannedTaggedKeyReasons", key, reason)
+		}
+	}
+	for key, reason := range catalogRetiredTaggedKeyReasons {
+		if !taggedKeys[key] || lookedUpKeys[key] {
+			t.Errorf("%q (%s) is no longer tagged windows, or the app looks it up again: drop it from catalogRetiredTaggedKeyReasons", key, reason)
 		}
 	}
 }

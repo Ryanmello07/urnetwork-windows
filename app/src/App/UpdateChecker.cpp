@@ -14,6 +14,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include "InstallLocationWin32.h"
 #include "Log.h"
 #include "Paths.h"
 #include "ReleaseJson.h"
@@ -21,6 +22,8 @@
 #include "SingleInstance.h"
 #include "Strings.h"
 #include "UpdateFormats.h"
+#include "UpdateResult.h"
+#include "UpdateResultJson.h"
 #include "Version.h"
 #include "VersionGrammar.h"
 
@@ -65,6 +68,12 @@ constexpr const char kArch[] = "x64";
 // preference site, as the note above prescribed.
 
 constexpr char kAutoCheckPrefKey[] = "check_updates_automatically";
+// The finishedUtc of the helper's report the user dismissed last: a report is
+// shown until then.
+constexpr char kResultSeenPrefKey[] = "update_result_seen";
+
+// The update helper, beside this exe in an installed copy (app/src/Updater).
+constexpr wchar_t kHelperName[] = L"URnetworkUpdate.exe";
 
 // ---- paths -------------------------------------------------------------------
 
@@ -302,49 +311,75 @@ std::string Sha256File(fs::path const& file) {
   return hex;
 }
 
-// ---- msiexec -----------------------------------------------------------------
+// ---- the update helper -------------------------------------------------------
 
-// Start the verified MSI with the OS's own msiexec (System32 path, not PATH,
-// so nothing a user installed can interpose), elevated up front with the
-// "runas" verb: the package is per-machine, and asking here makes a declined
-// prompt an observable ERROR_CANCELLED instead of an installer that fails
-// later out of sight. /passive shows progress without questions; /norestart
-// because an update must never reboot the machine on its own. The installer's
-// process is recorded before this returns, and so before the app quits: until
-// it ends, a launch exits with a notice instead of starting the app over the
-// files it replaces (UpdateMarker.h).
-bool LaunchInstaller(fs::path const& msi, std::string& error) {
-  wchar_t sys[MAX_PATH];
-  const UINT n = ::GetSystemDirectoryW(sys, MAX_PATH);
-  if (n == 0 || n >= MAX_PATH) {
-    error = "GetSystemDirectory failed";
-    return false;
-  }
-  const std::wstring msiexec = std::wstring(sys, n) + L"\\msiexec.exe";
-  const std::wstring params =
-      L"/i \"" + msi.wstring() + L"\" /passive /norestart";
+// Starts the update helper for `tag`: the installed, admin-owned
+// URnetworkUpdate.exe beside this exe, elevated up front with the "runas"
+// verb, so a declined prompt is an observable ERROR_CANCELLED instead of a
+// helper that fails out of sight. The tag comes from the release grammar, so
+// it holds no quote or space. Nothing else is passed: the helper fetches the
+// release list, the package and its digest itself, and builds msiexec's
+// arguments itself. Its process is recorded before this returns: until it
+// ends, a launch exits with a notice instead of starting the app over the
+// files the installer replaces (UpdateMarker.h). `*helper` is that process,
+// for the caller to wait on and close; null when the shell returned none.
+bool LaunchUpdateHelper(fs::path const& helperPath, std::wstring const& tag, HANDLE* helper,
+                        std::string& error) {
+  *helper = nullptr;
+  const std::wstring params = L"--apply-update " + tag;
+  const std::wstring folder = helperPath.parent_path().wstring();
   SHELLEXECUTEINFOW sei{};
   sei.cbSize = sizeof(sei);
   sei.fMask = SEE_MASK_NOASYNC | SEE_MASK_NOCLOSEPROCESS;
   sei.lpVerb = L"runas";
-  sei.lpFile = msiexec.c_str();
+  sei.lpFile = helperPath.c_str();
   sei.lpParameters = params.c_str();
-  sei.nShow = SW_SHOWNORMAL;
+  sei.lpDirectory = folder.c_str();
+  sei.nShow = SW_HIDE;
   if (!::ShellExecuteExW(&sei)) {
     const DWORD code = ::GetLastError();
     error = code == ERROR_CANCELLED
                 ? std::string("the elevation prompt was declined")
-                : std::format("ShellExecuteEx(msiexec) failed: {}", code);
+                : std::format("ShellExecuteEx(update helper) failed: {}", code);
     return false;
   }
   if (sei.hProcess) {
     RecordUpdateInProgress(sei.hProcess);
-    ::CloseHandle(sei.hProcess);
+    *helper = sei.hProcess;
   } else {
-    LogWarn("update: the installer's process was not returned; launches during the update "
+    LogWarn("update: the update helper's process was not returned; launches during the update "
             "are not refused");
   }
   return true;
+}
+
+// The report a last-result.json holds, read whole (it is a few hundred bytes),
+// or nullopt.
+std::optional<update::UpdateResult> ReadResult(fs::path const& file) {
+  std::ifstream in(file, std::ios::binary);
+  if (!in) return std::nullopt;
+  std::string text(4096, ' ');
+  in.read(text.data(), static_cast<std::streamsize>(text.size()));
+  text.resize(static_cast<std::size_t>(in.gcount()));
+  return update::ParseUpdateResult(text);
+}
+
+// The log a report points at: msiexec's for an install that ran, the
+// helper's own for a refusal.
+std::wstring ResultLogPath(fs::path const& installFolder, update::UpdateResult const& result) {
+  const fs::path folder = installFolder / L"updates" / Widen(result.tag);
+  return (folder / (update::OutcomeOf(result.exitCode) == update::Outcome::Refused
+                        ? L"update-helper.log"
+                        : L"install.log"))
+      .wstring();
+}
+
+// The dismissed report's finishedUtc, or empty. Type-checked: a value of the
+// wrong type in the preferences reads as none.
+std::string SeenResult() {
+  const nlohmann::json prefs = LoadAppPrefs();
+  const auto it = prefs.find(kResultSeenPrefKey);
+  return it != prefs.end() && it->is_string() ? it->get<std::string>() : std::string{};
 }
 
 }  // namespace
@@ -357,6 +392,19 @@ void UpdateChecker::Start() {
   // Before the thread exists, so no lock is needed; the worker takes the
   // value from the member under the lock like every later reader.
   autoCheck_ = AutoCheckEnabled();
+  // An installed copy runs the elevated helper beside it; anything else (a
+  // portable zip, a dev build, a folder a user can write) is offered the
+  // installer to run, and never elevates anything.
+  const fs::path exe = install::OwnExecutablePath();
+  installFolder_ = exe.parent_path();
+  std::string why;
+  installed_ = !exe.empty() && install::AdminOnlyLocation(installFolder_ / kHelperName, why);
+  if (!installed_) {
+    LogInfo("update: {} is not an admin-only install ({}); an update is offered as the "
+            "installer to run",
+            Narrow(installFolder_.wstring()), why);
+  }
+  snapshot_.installed = installed_;
   if (version::kCode == 0) {
     LogInfo(
         "update: dev build (code 0) — automatic checking disabled; the "
@@ -384,19 +432,9 @@ void UpdateChecker::SetHandler(Handler h) {
   handler_ = std::move(h);
 }
 
-void UpdateChecker::SetInstallerStartedHandler(InstallerStartedHandler h) {
-  std::lock_guard lock(handlerMutex_);
-  installerStarted_ = std::move(h);
-}
-
 UpdateChecker::Handler UpdateChecker::HandlerCopy() {
   std::lock_guard lock(handlerMutex_);
   return handler_;
-}
-
-UpdateChecker::InstallerStartedHandler UpdateChecker::InstallerStartedCopy() {
-  std::lock_guard lock(handlerMutex_);
-  return installerStarted_;
 }
 
 void UpdateChecker::CheckNow() {
@@ -413,6 +451,33 @@ void UpdateChecker::BeginApply() {
     applyRequested_ = true;
   }
   cv_.notify_all();
+}
+
+void UpdateChecker::DismissResult() {
+  std::wstring finished;
+  {
+    std::lock_guard lock(mutex_);
+    if (snapshot_.phase != Phase::Result) return;
+    finished = snapshot_.result.finishedUtc;
+  }
+  SaveAppPref(kResultSeenPrefKey, Narrow(finished));
+  // a release still offered (one whose update did not install) is offered
+  // again
+  Mutate([this](Snapshot& s) {
+    if (s.phase != Phase::Result) return;
+    s.result = Result{};
+    if (offer_.code > version::kCode) {
+      s.phase = Phase::Available;
+      s.stage = Stage::Idle;
+      s.failure = Failure::None;
+      s.version = offer_.version;
+      s.code = offer_.code;
+    } else {
+      s.phase = Phase::None;
+      s.version.clear();
+      s.code = 0;
+    }
+  });
 }
 
 bool UpdateChecker::AutoCheckEnabled() {
@@ -459,6 +524,7 @@ void UpdateChecker::WorkerLoop() {
   // app — and recur on the next 6-hour check. The reads are guarded
   // individually too (ReleaseJson.h); this is the backstop, not the plan.
   try {
+    ShowLastResult();
     CleanupStaleFiles();
   } catch (std::exception const& e) {
     LogError("update: startup cleanup threw: {}", e.what());
@@ -520,6 +586,30 @@ void UpdateChecker::WorkerLoop() {
   }
   lock.unlock();
   winrt::uninit_apartment();
+}
+
+void UpdateChecker::ShowLastResult() {
+  if (!installed_) return;
+  const std::optional<update::UpdateResult> result =
+      ReadResult(installFolder_ / L"updates" / L"last-result.json");
+  if (!result) return;
+  if (SeenResult() == result->finishedUtc) return;
+  LogInfo("update: the update helper's last report: {} ended with {} at {}", result->tag,
+          result->exitCode, result->finishedUtc);
+  std::string version = result->tag;
+  if (!version.empty() && version.front() == 'v') version.erase(0, 1);
+  Mutate([&](Snapshot& s) {
+    s.phase = Phase::Result;
+    s.stage = Stage::Idle;
+    s.failure = Failure::None;
+    s.version = Widen(version);
+    s.code = result->code;
+    s.installerPath.clear();
+    s.result = Result{.version = Widen(version),
+                      .exitCode = result->exitCode,
+                      .logPath = ResultLogPath(installFolder_, *result),
+                      .finishedUtc = Widen(result->finishedUtc)};
+  });
 }
 
 void UpdateChecker::CleanupStaleFiles() {
@@ -662,12 +752,14 @@ void UpdateChecker::RunCheck() {
       snapshot_.lastCheck = CheckOutcome::NoUpdate;
       // A banner for a release that stopped outranking us (it was deleted, or
       // this build updated by hand) closes; a click outcome for it is moot.
-      if (snapshot_.phase != Phase::None) {
-        snapshot_ = Snapshot{.lastCheck = CheckOutcome::NoUpdate,
+      // The helper's report stays until the user dismisses it.
+      if (snapshot_.phase != Phase::None && snapshot_.phase != Phase::Result) {
+        snapshot_ = Snapshot{.installed = installed_,
+                             .lastCheck = CheckOutcome::NoUpdate,
                              .newestVersion = Widen(newestVersion),
                              .newestCode = newestCode};
-        offer_ = Offer{};
       }
+      offer_ = Offer{};
     }
     copy = snapshot_;
   }
@@ -767,15 +859,13 @@ void UpdateChecker::RunApply() {
   }
   LogInfo("update: verified {} ({})", offer.msiName, actual);
 
-  // ---- (c) start the installer, then get out of its way ---------------------
-  Mutate([](Snapshot& s) { s.stage = Stage::Installing; });
-  std::string launchError;
-  if (!LaunchInstaller(msiPath, launchError)) {
-    // Verified and on disk; hand the finish to the user and SHOW them the
-    // file rather than describing where it is.
-    LogWarn("update: installer not started ({}) — downloaded, not installed",
-            launchError);
-    const std::wstring msiW = msiPath.wstring();
+  // ---- (c) the install: the helper on an installed copy, the user elsewhere ---
+  const std::wstring msiW = msiPath.wstring();
+  if (!installed_) {
+    // A portable or dev copy elevates nothing. The checked MSI is the user's to
+    // run as an installer, and the banner says what it was checked against.
+    LogInfo("update: not an admin-only install; showing the installer for v{} to run",
+            Narrow(offer.version));
     Mutate([&msiW](Snapshot& s) {
       s.phase = Phase::ManualInstall;
       s.stage = Stage::Idle;
@@ -784,19 +874,55 @@ void UpdateChecker::RunApply() {
     RevealInExplorer(msiW);
     return;
   }
-  LogInfo("update: installer started for v{}; quitting so it can replace the "
-          "app", Narrow(offer.version));
-  Mutate([](Snapshot& s) {
-    s = Snapshot{.lastCheck = s.lastCheck,
-                 .newestVersion = s.newestVersion,
-                 .newestCode = s.newestCode};
-  });
-  if (auto started = InstallerStartedCopy()) {
-    started();
-  } else {
-    LogWarn("update: no installer handler bound — quit the app so the "
-            "installer can replace it");
+  Mutate([](Snapshot& s) { s.stage = Stage::Installing; });
+  HANDLE helper = nullptr;
+  std::string launchError;
+  if (!LaunchUpdateHelper(installFolder_ / kHelperName, offer.tag, &helper, launchError)) {
+    LogWarn("update: the update helper did not start ({}); nothing was installed", launchError);
+    fail(Failure::Elevation);
+    return;
   }
+  // The helper downloads and checks its own copy; this one has done its job.
+  fs::remove_all(dir, ec);
+  LogInfo("update: the update helper is installing v{}; the installer closes this app before "
+          "it replaces it",
+          Narrow(offer.version));
+  if (!helper) return;
+
+  // Wait without quitting: the installer's CloseApplication closes this app
+  // (WM_CLOSE, a close request), and the app's teardown stops this worker,
+  // which leaves the helper running on its own. A helper that ends while this
+  // app still runs refused, failed, or installed only up to a restart.
+  bool ended = false;
+  for (;;) {
+    if (::WaitForSingleObject(helper, 250) == WAIT_OBJECT_0) {
+      ended = true;
+      break;
+    }
+    if (cancelled()) break;
+  }
+  DWORD exitCode = 0;
+  const bool read = ended && ::GetExitCodeProcess(helper, &exitCode);
+  ::CloseHandle(helper);
+  if (!ended) return;
+  LogInfo("update: the update helper ended with {}", exitCode);
+
+  // Its report, or for a refusal before it could write one, its exit code.
+  const std::optional<update::UpdateResult> report =
+      ReadResult(installFolder_ / L"updates" / L"last-result.json");
+  Result result{.version = offer.version, .exitCode = read ? exitCode : 1603};
+  if (report && Widen(report->tag) == offer.tag) {
+    result.exitCode = report->exitCode;
+    result.logPath = ResultLogPath(installFolder_, *report);
+    result.finishedUtc = Widen(report->finishedUtc);
+  }
+  Mutate([&result](Snapshot& s) {
+    s.phase = Phase::Result;
+    s.stage = Stage::Idle;
+    s.failure = Failure::None;
+    s.version = result.version;
+    s.result = result;
+  });
 }
 
 }  // namespace urnw

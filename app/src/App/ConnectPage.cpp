@@ -13,6 +13,7 @@
 #include <array>
 #include <cctype>
 #include <chrono>
+#include <format>
 #include <iterator>
 #include <tuple>
 #include <utility>
@@ -25,8 +26,10 @@
 #include "PageContext.h"
 #include "Strings.h"
 #include "StatsFormat.h"
+#include "UpdateResult.h"
 #include "UrColors.h"
 #include "UrComponents.h"  // kit::SetTextOrCollapse
+#include "Version.h"
 
 using namespace winrt;
 using namespace winrt::Microsoft::UI::Xaml;
@@ -495,32 +498,44 @@ void ConnectPage::ApplyServiceSetup(urnw::ServiceSetup::Snapshot const& snap) {
 // UpdateBar, directly under the service bar — same shape, same one-writer
 // rule. Labels go through Adv() with `upd_` store ids, as the service bar's
 // use `svc_`. The version is data (release grammar, never translated) and goes
-// in through the title's placeholder; the installer path is appended as data.
+// in through the title's placeholder; paths and exit codes are appended as
+// data. The sentences the elevated update added have no store ids yet, so
+// they are English here until the store carries them for windows.
 void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) {
   using Phase = urnw::UpdateChecker::Phase;
   using Stage = urnw::UpdateChecker::Stage;
   using Failure = urnw::UpdateChecker::Failure;
+  using InfoBarSeverity = winrt::Microsoft::UI::Xaml::Controls::InfoBarSeverity;
   auto bar = w_.UpdateBar();
   if (snap.phase == Phase::None) {
     bar.IsOpen(false);
     return;
   }
 
-  // The headline is the spec's wording in every phase — the banner keeps
-  // saying what it is for while the message says what is happening to it. The
-  // version goes in through the key's placeholder, so a translation places it.
-  const winrt::hstring title{urnw::Format("upd_available_title_version", snap.version)};
+  // The headline is the spec's wording in every phase but the helper's
+  // report — the banner keeps saying what it is for while the message says
+  // what is happening to it. The version goes in through the key's
+  // placeholder, so a translation places it.
+  winrt::hstring title{urnw::Format("upd_available_title_version", snap.version)};
   winrt::hstring action = Loc("update");
   bool enabled = true;
   std::wstring message;
-  auto severity = winrt::Microsoft::UI::Xaml::Controls::InfoBarSeverity::Informational;
+  auto severity = InfoBarSeverity::Informational;
 
   switch (snap.phase) {
     case Phase::Available:
-      message = AdvW("upd_available_msi_message",
-                     L"One click downloads the release, verifies it and runs "
-                     L"its installer, which updates the app and the VPN "
-                     L"service. The app closes while it installs.");
+      if (snap.installed) {
+        message = AdvW("upd_available_msi_message",
+                       L"One click downloads the release, verifies it and runs "
+                       L"its installer, which updates the app and the VPN "
+                       L"service. The app closes while it installs.");
+      } else {
+        // a portable or dev copy elevates nothing: the user runs the installer
+        action = winrt::hstring{L"Download the installer"};
+        message = L"This copy of URnetwork is not installed, so it does not update "
+                  L"itself. Download the installer and run it to install this "
+                  L"release.";
+      }
       break;
     case Phase::Applying:
       enabled = false;
@@ -537,23 +552,31 @@ void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) 
       }
       break;
     case Phase::ManualInstall:
-      // The one phase whose action is not the apply: the installer could not
-      // be started, the verified MSI is downloaded, and the click re-reveals it.
+      // The one phase whose action is not the apply: the installer is
+      // downloaded and checked, and the click shows it again. Never called
+      // verified: what GitHub's SHA-256 proves is that these are the bytes
+      // GitHub has for that release.
       action = Adv("upd_show_file", L"Show file");
-      message = AdvW("upd_manual_install_message",
-                     L"The installer didn't start (it needs administrator "
-                     L"approval). The verified download was shown in Explorer "
-                     L"— quit the app and run it.");
+      message = L"The installer was downloaded and checked against GitHub's SHA-256 "
+                L"for it. Run it to install the update.";
       if (!snap.installerPath.empty())
         message += L" (" + snap.installerPath + L")";
       break;
+    case Phase::Result:
+      action = Loc("got_it");
+      severity = ApplyUpdateResult(snap, title, message);
+      break;
     default: {  // Failed — Phase::None returned above
-      severity = winrt::Microsoft::UI::Xaml::Controls::InfoBarSeverity::Error;
+      severity = InfoBarSeverity::Error;
       switch (snap.failure) {
         case Failure::Download:
           message = AdvW("upd_failed_download",
                          L"The download didn't finish. Check the connection "
                          L"and click to try again.");
+          break;
+        case Failure::Elevation:
+          message = L"The update needs administrator approval to install, and "
+                    L"nothing was installed. Click to try again.";
           break;
         default:  // Checksum
           message = AdvW("upd_failed_checksum",
@@ -573,6 +596,62 @@ void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) 
     button.IsEnabled(enabled);
   }
   bar.IsOpen(true);
+}
+
+// The helper's report: installed, installed up to a restart, or not
+// installed, with why and where its log is. 3010 is not a failure: the new
+// product is registered and its service runs, and the files that were in use
+// are replaced when Windows restarts.
+winrt::Microsoft::UI::Xaml::Controls::InfoBarSeverity ConnectPage::ApplyUpdateResult(
+    urnw::UpdateChecker::Snapshot const& snap, winrt::hstring& title, std::wstring& message) {
+  using InfoBarSeverity = winrt::Microsoft::UI::Xaml::Controls::InfoBarSeverity;
+  using urnw::update::Outcome;
+  using urnw::update::Refusal;
+  const auto& result = snap.result;
+  const std::wstring current = urnw::Widen(urnw::version::kString);
+  const std::wstring log = result.logPath.empty() ? std::wstring{} : L", log: " + result.logPath;
+  switch (urnw::update::OutcomeOf(result.exitCode)) {
+    case Outcome::Installed:
+      title = winrt::hstring{L"Updated to v" + result.version};
+      message.clear();
+      return InfoBarSeverity::Success;
+    case Outcome::RestartRequired:
+      title = winrt::hstring{L"Restart Windows to finish the update to v" + result.version};
+      message = L"The new version is installed and its service is running. Files that "
+                L"were in use are replaced when Windows restarts.";
+      return InfoBarSeverity::Warning;
+    case Outcome::Refused: {
+      std::wstring why;
+      switch (static_cast<Refusal>(result.exitCode)) {
+        case Refusal::NotOffered:
+          why = L"the release is no longer offered";
+          break;
+        case Refusal::Download:
+          why = L"the download failed";
+          break;
+        case Refusal::Digest:
+          why = L"the download did not match GitHub's SHA-256 for it";
+          break;
+        case Refusal::Package:
+          why = L"the package is not this release of URnetwork";
+          break;
+        case Refusal::ReleaseList:
+          why = L"the release list could not be read";
+          break;
+        default:
+          why = std::format(L"the update could not be prepared (0x{:x})", result.exitCode);
+          break;
+      }
+      title = winrt::hstring{L"The update to v" + result.version + L" did not install"};
+      message = L"Nothing was installed: " + why + log + L". You are still on v" + current + L".";
+      return InfoBarSeverity::Error;
+    }
+    default:  // Failed
+      title = winrt::hstring{L"The update to v" + result.version + L" did not install"};
+      message = std::format(L"Windows Installer ended with error {}{}. You are still on v{}.",
+                            result.exitCode, log, current);
+      return InfoBarSeverity::Error;
+  }
 }
 
 // The connect status line, its dot, and the button label — android

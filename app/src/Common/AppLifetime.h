@@ -37,12 +37,13 @@
 //                     than stopping it. A shutdown that does stop the service
 //                     finds nothing left to stop.
 //   CloseRequest      a WM_CLOSE sent to the tray's window from outside the app:
-//                     `taskkill /im URnetwork.exe` without /f, or an installer.
-//   InstallerHandoff  the in-app updater started the MSI, which needs the app's
-//                     files. The MSI stops the service itself (ServiceControl
-//                     Stop="both"), and the session and the provider go with it.
-// The last two exit the app and leave the service as it is, which is what they
-// always did: neither is the user asking to stop anything. The Restart Manager
+//                     `taskkill /im URnetwork.exe` without /f, or an installer,
+//                     the in-app update's MSI among them (its CloseApplication),
+//                     which then stops the service itself (ServiceControl
+//                     Stop="both"), and the session and the provider with it.
+// It exits the app and leaves the service as it is, which is what it always
+// did: nobody is asking to stop anything. The app no longer quits for the
+// in-app update itself; the update's installer closes it. The Restart Manager
 // closing the app for an installer (WM_ENDSESSION with ENDSESSION_CLOSEAPP) is
 // not a session end either: TrayIcon leaves it to Windows, as before.
 //
@@ -67,7 +68,7 @@
 
 namespace urnw::lifetime {
 
-enum class Ending { Quit, SessionEnd, CloseRequest, InstallerHandoff };
+enum class Ending { Quit, SessionEnd, CloseRequest };
 
 // For logs.
 constexpr const char* ToString(Ending ending) {
@@ -75,7 +76,6 @@ constexpr const char* ToString(Ending ending) {
     case Ending::Quit: return "quit";
     case Ending::SessionEnd: return "session end";
     case Ending::CloseRequest: return "close request";
-    case Ending::InstallerHandoff: return "installer handoff";
   }
   return "unknown";
 }
@@ -110,10 +110,6 @@ constexpr Plan PlanFor(Ending ending) {
       p.why =
           "asked to close from outside the app: the service keeps what it "
           "runs, and the next launch adopts it";
-      return p;
-    case Ending::InstallerHandoff:
-      p.why =
-          "the installer is replacing the app: it stops the service itself";
       return p;
   }
   p.why = "an ending this build does not know: the service is left as it is";

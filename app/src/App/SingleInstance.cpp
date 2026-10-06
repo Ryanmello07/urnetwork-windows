@@ -176,6 +176,23 @@ void RecordUpdateInProgress(void* installerProcess) {
           marker.installerProcessId);
 }
 
+bool LaunchedAfterUpdate() {
+  return instance::HasArgument(::GetCommandLineW(), instance::kAfterUpdateArgument);
+}
+
+void AwaitUpdateEnd() {
+  LogInfo("update: relaunched after an update; waiting for it to end");
+  const auto deadline = std::chrono::steady_clock::now() + instance::kAfterUpdateBudget;
+  while (UpdateInProgress()) {
+    if (std::chrono::steady_clock::now() >= deadline) {
+      LogWarn("update: the update had not ended after {} ms; this launch asks as any other",
+              instance::kAfterUpdateBudget.count());
+      return;
+    }
+    ::Sleep(500);
+  }
+}
+
 bool UpdateInProgress() {
   const std::filesystem::path path = UpdateInProgressFile();
   std::optional<std::string> text;

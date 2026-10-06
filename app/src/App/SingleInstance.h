@@ -43,10 +43,20 @@ void BeginExiting();
 // instance::kAutostartArgument.
 bool LaunchedByAutostart();
 
-// The updater has started `installerProcess` (a process handle with
-// PROCESS_QUERY_LIMITED_INFORMATION): until it ends, a launch exits instead of
-// starting the app. Written before the app quits for the installer.
+// The updater has started `installerProcess`, the update helper that runs the
+// install (a process handle with PROCESS_QUERY_LIMITED_INFORMATION): until it
+// ends, a launch exits instead of starting the app.
 void RecordUpdateInProgress(void* installerProcess);
+
+// This process is the installer's relaunch after an update: its command line
+// has instance::kAfterUpdateArgument.
+bool LaunchedAfterUpdate();
+
+// Waits, at most instance::kAfterUpdateBudget, for the update in progress to
+// end (UpdateInProgress, which deletes the marker once its helper has ended).
+// The relaunch calls it before it asks, so the update that started it does
+// not turn it away.
+void AwaitUpdateEnd();
 
 // The updater's installer still runs. A stale marker (its installer ended, it
 // is too old, it does not parse) is deleted on the way, so it never refuses a

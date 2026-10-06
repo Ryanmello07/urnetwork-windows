@@ -1802,10 +1802,14 @@ void MainWindow::OnUpdateBannerAction() {
       urnw::pages::Updates().BeginApply();
       break;
     case Phase::ManualInstall:
-      // The MSI is already downloaded and verified; the only help left to
+      // The installer is already downloaded and checked; the only help left to
       // offer is showing it again.
       if (!updateSnapshot_.installerPath.empty())
         urnw::UpdateChecker::RevealInExplorer(updateSnapshot_.installerPath);
+      break;
+    case Phase::Result:
+      // The update helper's report, read: it is not shown again.
+      urnw::pages::Updates().DismissResult();
       break;
     default:
       break;  // Applying: the button is disabled; None: no banner to click
