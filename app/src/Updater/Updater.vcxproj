@@ -46,7 +46,7 @@
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
-      <AdditionalDependencies>winhttp.lib;crypt32.lib;bcrypt.lib;msi.lib;advapi32.lib;shell32.lib;ole32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>winhttp.lib;crypt32.lib;bcrypt.lib;msi.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <!-- 0x800 = LOAD_LIBRARY_SEARCH_SYSTEM32: the loader resolves this
            program's imports from System32 alone, before its entry point runs
            (Windows 10 1607 and later). main.cpp sets the same search for
@@ -61,14 +61,19 @@
   <!-- A runner test's feed (ApplyUpdate.cpp kRunnerTestFeed): its repository
        id, owner, repo and tag prefix, as bare tokens the source stringizes.
        Only a workflow that tests an apply against a throwaway release passes
-       these, and only as /p: properties: app\build.ps1 and this repository's
-       workflows pass none (update_apply_wiring_test.go), and the check below
+       these, and only as /p: properties: no file in this repository that a
+       build reads sets them (update_apply_wiring_test.go), and the check below
        refuses them from the environment, where a stray variable on a build
-       host would otherwise point an official build at another feed. -->
+       host would otherwise point an official build at another feed. A helper
+       built with them says so in its FileDescription (Updater.rc), and
+       app\build.ps1 and tools\verify-msi-payload.ps1 refuse to package it. -->
   <ItemDefinitionGroup Condition="'$(UrnUpdateRunnerTestRepoId)'!=''">
     <ClCompile>
       <PreprocessorDefinitions>URN_UPDATE_RUNNER_TEST_REPO_ID=$(UrnUpdateRunnerTestRepoId);URN_UPDATE_RUNNER_TEST_OWNER=$(UrnUpdateRunnerTestOwner);URN_UPDATE_RUNNER_TEST_REPO=$(UrnUpdateRunnerTestRepo);URN_UPDATE_RUNNER_TEST_TAG_PREFIX=$(UrnUpdateRunnerTestTagPrefix);%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>URN_UPDATE_RUNNER_TEST_REPO_ID=$(UrnUpdateRunnerTestRepoId);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ResourceCompile>
   </ItemDefinitionGroup>
   <Target Name="UrnCheckRunnerTestFeed" BeforeTargets="ClCompile">
     <Error Condition="'$([System.Environment]::GetEnvironmentVariable(`UrnUpdateRunnerTestRepoId`))$([System.Environment]::GetEnvironmentVariable(`UrnUpdateRunnerTestOwner`))$([System.Environment]::GetEnvironmentVariable(`UrnUpdateRunnerTestRepo`))$([System.Environment]::GetEnvironmentVariable(`UrnUpdateRunnerTestTagPrefix`))'!=''"
@@ -84,12 +89,14 @@
     <ClCompile Include="ApplyUpdate.cpp" />
     <ClCompile Include="Http.cpp" />
     <ClCompile Include="HelperLog.cpp" />
+    <ClCompile Include="ShellStart.cpp" />
     <ClCompile Include="..\Common\InstallLocationWin32.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ApplyUpdate.h" />
     <ClInclude Include="Http.h" />
     <ClInclude Include="HelperLog.h" />
+    <ClInclude Include="ShellStart.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Updater.rc" />

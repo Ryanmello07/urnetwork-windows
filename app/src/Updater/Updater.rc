@@ -2,8 +2,11 @@
 //
 // The update helper's version stamp: the same fields the app and the service
 // carry (Common/Version.h, from the UR_* definitions Directory.Build.props
-// feeds rc.exe), so Windows Installer replaces it by version like them. The
-// FileDescription is what the elevation prompt names.
+// feeds rc.exe), so Windows Installer replaces it by version like them. A
+// signed build's elevation prompt names it by its FileDescription; an
+// unsigned one's, by its file name. A helper built with a runner test's feed
+// (Updater.vcxproj) says so in its FileDescription, and app\build.ps1 and
+// tools\verify-msi-payload.ps1 refuse to package it.
 #include <winresrc.h>
 #include "..\Common\Version.h"
 
@@ -22,7 +25,11 @@ BEGIN
         BLOCK "040904B0"
         BEGIN
             VALUE "CompanyName",      "URnetwork"
+#if defined(URN_UPDATE_RUNNER_TEST_REPO_ID)
+            VALUE "FileDescription",  "URnetwork update (runner test feed)"
+#else
             VALUE "FileDescription",  "URnetwork update"
+#endif
             VALUE "FileVersion",      UR_VERSION_STRING
             VALUE "InternalName",     "URnetworkUpdate"
             VALUE "LegalCopyright",   "URnetwork. Licensed under MPL-2.0."

@@ -2,9 +2,11 @@
 #include "ApplyUpdate.h"
 
 #include <windows.h>
+#include <aclapi.h>
 #include <bcrypt.h>
 #include <msi.h>
 #include <msiquery.h>
+#include <sddl.h>
 
 #include <chrono>
 #include <cstdint>
@@ -21,6 +23,7 @@
 #include "InstallLocationWin32.h"
 #include "ReleaseJson.h"
 #include "ReleaseSelection.h"
+#include "ShellStart.h"
 #include "UpdateApply.h"
 #include "UpdateFormats.h"
 #include "UpdateResult.h"
@@ -50,8 +53,9 @@ constexpr char kArch[] = "x64";
 // A runner test's feed: its repository, a tag prefix its throwaway release
 // carries, and prereleases. Compiled in only when a build passes all four
 // /p:UrnUpdateRunnerTest* properties (Updater.vcxproj, which refuses them from
-// the environment); app\build.ps1 and this repository's workflows pass none,
-// and update_apply_wiring_test.go fails if one ever does.
+// the environment); no file in this repository that a build reads sets them,
+// and update_apply_wiring_test.go fails if one ever does. Such a helper says
+// so in its FileDescription, and app\build.ps1 refuses to package it.
 constexpr update::Feed kRunnerTestFeed{
     .id = "runner-test",
     .numericRepoId = URN_UPDATE_RUNNER_TEST_REPO_ID,
@@ -65,15 +69,65 @@ constexpr update::Feed kRunnerTestFeed{
 #endif
 
 // The feed of the update channel, which the arguments never name.
+//
+// TODO(opt-in channel): read the machine-wide channel here. It decides which
+// repository's releases this process installs with administrator rights, so
+// the invariant holds only while all of these do (update_apply_wiring_test.go
+// checks the first two today):
+//   - the channel is only a feed id, resolved to one of the feeds compiled in
+//     (ReleaseSelection.h kFeeds, FeedById); never a repository id, owner,
+//     name or URL read at run time;
+//   - it is read only here, and never from the arguments, the environment, the
+//     user's registry hive or anything under the user's profile;
+//   - it is stored where only an administrator can write: a value under an
+//     HKLM key whose ACL grants no one else write, or a file in the admin-only
+//     install folder, checked the way InstallLocationWin32.h AdminOnlyPath
+//     checks the package, before it is read;
+//   - only this elevated helper writes it.
+// Until then the channel is official.
 const update::Feed& ChannelFeed() {
 #if defined(URN_UPDATE_RUNNER_TEST_REPO_ID)
   return kRunnerTestFeed;
 #else
-  // TODO(A2c): the opt-in developer channel keeps a machine-wide channel that
-  // only this helper writes; read it here. Until then the channel is official.
   return update::kOfficialFeed;
 #endif
 }
+
+// What every folder and file the helper creates under updates\ carries: owned
+// by Administrators, full control for SYSTEM and Administrators, read and
+// execute for Users, and no ACE inherited from the folder above. Inheritance
+// alone is not enough: Program Files grants CREATOR OWNER full control, and
+// under the policy "System objects: Default owner for objects created by
+// members of the Administrators group" set to "Object creator", what this
+// process creates would be owned by the user's own account, which a process
+// of that user without admin rights could then rewrite. Among what it holds
+// is the package Windows Installer keeps as the product's repair source.
+constexpr wchar_t kAdminOnlyFolderSddl[] = L"O:BAD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FRFX;;;BU)";
+constexpr wchar_t kAdminOnlyFileSddl[] = L"O:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FRFX;;;BU)";
+
+class Security {
+ public:
+  explicit Security(const wchar_t* sddl) {
+    if (::ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl, SDDL_REVISION_1, &descriptor_,
+                                                               nullptr)) {
+      attributes_.nLength = sizeof(attributes_);
+      attributes_.lpSecurityDescriptor = descriptor_;
+      attributes_.bInheritHandle = FALSE;
+    }
+  }
+  ~Security() {
+    if (descriptor_) ::LocalFree(descriptor_);
+  }
+  Security(const Security&) = delete;
+  Security& operator=(const Security&) = delete;
+  bool valid() const { return descriptor_ != nullptr; }
+  SECURITY_ATTRIBUTES* attributes() { return &attributes_; }
+  PSECURITY_DESCRIPTOR descriptor() const { return descriptor_; }
+
+ private:
+  PSECURITY_DESCRIPTOR descriptor_ = nullptr;
+  SECURITY_ATTRIBUTES attributes_{};
+};
 
 class Handle {
  public:
@@ -147,20 +201,64 @@ std::int64_t NowUnixSeconds() {
       .count();
 }
 
-// Creates `folder` unless it exists, inheriting the ACL of the admin-only
-// folder it sits in, and refuses one that is not a plain directory: a reparse
+// Creates `folder` with the admin-only security `security` describes, or,
+// when it exists, gives it that security again: the owner, and the DACL with
+// nothing inherited. Refuses one that is not a plain directory: a reparse
 // point would carry what is written below it somewhere else.
-bool PrepareFolder(const fs::path& folder, std::string& error) {
-  if (!::CreateDirectoryW(folder.c_str(), nullptr) && ::GetLastError() != ERROR_ALREADY_EXISTS) {
+bool PrepareFolder(const fs::path& folder, Security& security, std::string& error) {
+  if (::CreateDirectoryW(folder.c_str(), security.attributes())) return true;
+  if (::GetLastError() != ERROR_ALREADY_EXISTS) {
     error = std::format("{} could not be created: {}", Utf8(folder.native()), ::GetLastError());
     return false;
   }
-  const DWORD attributes = ::GetFileAttributesW(folder.c_str());
-  if (attributes == INVALID_FILE_ATTRIBUTES || !(attributes & FILE_ATTRIBUTE_DIRECTORY) ||
-      (attributes & FILE_ATTRIBUTE_REPARSE_POINT)) {
-    error = std::format("{} is not a plain folder (attributes 0x{:x})", Utf8(folder.native()),
-                        attributes);
+  Handle existing(::CreateFileW(folder.c_str(), READ_CONTROL | WRITE_DAC | WRITE_OWNER | FILE_READ_ATTRIBUTES,
+                                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+                                OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,
+                                nullptr));
+  BY_HANDLE_FILE_INFORMATION info{};
+  if (!existing.valid() || !::GetFileInformationByHandle(existing.get(), &info)) {
+    error = std::format("{} could not be opened: {}", Utf8(folder.native()), ::GetLastError());
     return false;
+  }
+  if (!(info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ||
+      (info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)) {
+    error = std::format("{} is not a plain folder (attributes 0x{:x})", Utf8(folder.native()),
+                        info.dwFileAttributes);
+    return false;
+  }
+  PSID owner = nullptr;
+  BOOL ownerDefaulted = FALSE;
+  BOOL present = FALSE;
+  PACL dacl = nullptr;
+  BOOL daclDefaulted = FALSE;
+  if (!::GetSecurityDescriptorOwner(security.descriptor(), &owner, &ownerDefaulted) ||
+      !::GetSecurityDescriptorDacl(security.descriptor(), &present, &dacl, &daclDefaulted) ||
+      !owner || !present || !dacl) {
+    error = "the admin-only security descriptor has no owner or DACL";
+    return false;
+  }
+  const DWORD set = ::SetSecurityInfo(
+      existing.get(), SE_FILE_OBJECT,
+      OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+      owner, nullptr, dacl, nullptr);
+  if (set != ERROR_SUCCESS) {
+    error = std::format("{}'s security could not be set: {}", Utf8(folder.native()), set);
+    return false;
+  }
+  return true;
+}
+
+// Whether the folders, the package and the log msiexec uses are as only an
+// administrator can change them, judged the way the install folder is
+// (InstallLocationWin32.h AdminOnlyPath), once they are all in place and just
+// before msiexec is started.
+bool CheckAdminOnly(const std::vector<fs::path>& paths, std::string& error) {
+  for (const fs::path& path : paths) {
+    std::string why;
+    if (!install::AdminOnlyPath(path, why)) {
+      error = std::format("{} is not admin-only: {}", Utf8(path.native()), why);
+      return false;
+    }
   }
   return true;
 }
@@ -254,12 +352,14 @@ std::optional<std::string> PackageProperty(MSIHANDLE database, const wchar_t* na
 }
 
 // Writes `result` as last-result.json in `updates`, whole or not at all: a
-// new file beside it, flushed, then renamed over the old one.
-bool WriteResult(const fs::path& updates, const update::UpdateResult& result, std::string& error) {
+// new file beside it, with the admin-only `security`, flushed, then renamed
+// over the old one, so it keeps that security.
+bool WriteResult(const fs::path& updates, const update::UpdateResult& result, Security& security,
+                 std::string& error) {
   const fs::path final = updates / L"last-result.json";
   const fs::path written = updates / L"last-result.json.new";
   ::DeleteFileW(written.c_str());
-  Handle file(::CreateFileW(written.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW,
+  Handle file(::CreateFileW(written.c_str(), GENERIC_WRITE, 0, security.attributes(), CREATE_NEW,
                             FILE_ATTRIBUTE_NORMAL, nullptr));
   if (!file.valid()) {
     error = std::format("last-result.json.new could not be created: {}", ::GetLastError());
@@ -326,12 +426,19 @@ int ApplyUpdate(std::wstring_view tagArgument) {
   const fs::path installFolder = executable.parent_path();
   const fs::path updates = installFolder / L"updates";
   const fs::path tagFolder = updates / WidenAscii(tag);
+  Security folderSecurity(kAdminOnlyFolderSddl);
+  Security fileSecurity(kAdminOnlyFileSddl);
   std::string error;
-  if (!PrepareFolder(updates, error) || !PrepareFolder(tagFolder, error)) {
+  if (!folderSecurity.valid() || !fileSecurity.valid()) {
+    log.Line("refused: the admin-only security descriptors could not be built: {}", ::GetLastError());
+    return static_cast<int>(Refusal::Staging);
+  }
+  if (!PrepareFolder(updates, folderSecurity, error) ||
+      !PrepareFolder(tagFolder, folderSecurity, error)) {
     log.Line("refused: {}", error);
     return static_cast<int>(Refusal::Staging);
   }
-  log.Open(tagFolder / L"update-helper.log");
+  log.Open(tagFolder / L"update-helper.log", fileSecurity.attributes());
   RemoveStaleImages(updates, log);
 
   // From here every ending writes last-result.json.
@@ -341,7 +448,7 @@ int ApplyUpdate(std::wstring_view tagArgument) {
                                       .exitCode = exitCode,
                                       .finishedUtc = update::FormatUtcSecond(NowUnixSeconds())};
     std::string writeError;
-    if (WriteResult(updates, result, writeError)) {
+    if (WriteResult(updates, result, fileSecurity, writeError)) {
       log.Line("result: exit {} written to last-result.json", exitCode);
     } else {
       log.Line("result: exit {}, but {}", exitCode, writeError);
@@ -366,6 +473,12 @@ int ApplyUpdate(std::wstring_view tagArgument) {
           },
           list, error)) {
     return refuse(Refusal::ReleaseList, "the release list: " + error);
+  }
+  if (list.status == 403 || list.status == 429) {
+    // GitHub's limit on anonymous requests, shared by everyone behind this
+    // network's address
+    return refuse(Refusal::RateLimited,
+                  std::format("the release list: GitHub refused it with {}", list.status));
   }
   if (list.status != 200) {
     return refuse(Refusal::ReleaseList, std::format("the release list: http status {}", list.status));
@@ -408,7 +521,7 @@ int ApplyUpdate(std::wstring_view tagArgument) {
   FILE_ID_INFO writtenId{};
   {
     Handle file(::CreateFileW(package.c_str(), GENERIC_WRITE | FILE_READ_ATTRIBUTES, FILE_SHARE_READ,
-                              nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr));
+                              fileSecurity.attributes(), CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr));
     if (!file.valid() || !FileIdOf(file.get(), writtenId)) {
       return refuse(Refusal::Staging,
                     std::format("{} could not be created: {}", selection.assetName, ::GetLastError()));
@@ -478,6 +591,23 @@ int ApplyUpdate(std::wstring_view tagArgument) {
   }
 
   // ---- 8. out of the installer's way, then msiexec --------------------------------
+  // msiexec's log is created here, new and admin-only: msiexec opens the file
+  // it finds there and keeps its security. Then everything msiexec and the
+  // repair source will rely on is checked for what a non-admin may do to it.
+  const fs::path installLog = tagFolder / L"install.log";
+  ::DeleteFileW(installLog.c_str());
+  const bool logCreated = Handle(::CreateFileW(installLog.c_str(), GENERIC_WRITE, FILE_SHARE_READ,
+                                               fileSecurity.attributes(), CREATE_NEW,
+                                               FILE_ATTRIBUTE_NORMAL, nullptr))
+                              .valid();
+  if (!logCreated || !CheckAdminOnly({updates, tagFolder, package, installLog}, error)) {
+    held.Close();
+    ::DeleteFileW(package.c_str());
+    return refuse(Refusal::Staging,
+                  logCreated ? error : std::format("install.log could not be created: {}",
+                                                   ::GetLastError()));
+  }
+
   // This image is one of the files the package replaces. Moved into the
   // download folder (same volume, so a rename, which a running image allows),
   // it holds nothing the installer needs; the next helper deletes it.
@@ -502,7 +632,6 @@ int ApplyUpdate(std::wstring_view tagArgument) {
   }
   const fs::path systemFolder(std::wstring(system, systemLength));
   const fs::path msiexec = systemFolder / L"msiexec.exe";
-  const fs::path installLog = tagFolder / L"install.log";
   std::wstring command = update::MsiexecCommandLine(msiexec.native(), package.native(),
                                                     installLog.native());
   STARTUPINFOW startup{};
@@ -539,15 +668,34 @@ int ApplyUpdate(std::wstring_view tagArgument) {
       log.Line("removed the earlier download {}{}", Utf8(folder.native()),
                ec ? " (partly: " + ec.message() + ")" : "");
     }
-  } else {
-    ::DeleteFileW(package.c_str());
-    // the installed product is still the one this image belongs to
-    if (moved && ::GetFileAttributesW(executable.c_str()) == INVALID_FILE_ATTRIBUTES &&
-        ::MoveFileExW(running.c_str(), executable.c_str(), MOVEFILE_WRITE_THROUGH)) {
-      log.Line("moved this helper's image back into the install folder");
-    }
+    return finish(exitCode);
   }
-  return finish(exitCode);
+  ::DeleteFileW(package.c_str());
+  // the installed product is still the one this image belongs to
+  if (moved && ::GetFileAttributesW(executable.c_str()) == INVALID_FILE_ATTRIBUTES &&
+      ::MoveFileExW(running.c_str(), executable.c_str(), MOVEFILE_WRITE_THROUGH)) {
+    log.Line("moved this helper's image back into the install folder");
+  }
+  const int ended = finish(exitCode);
+
+  // ---- 10. after an install that failed, the relaunch ------------------------------
+  // The installer starts the app again (RelaunchAfterUpdate) only after an
+  // install that took, and its close (CloseApplication, before
+  // InstallValidate) may already have ended the app, with the VPN session
+  // stopped. So the relaunch starts here, now that the report is written:
+  // this helper's own no-argument mode, through the signed-in user's shell,
+  // unelevated, as RelaunchAfterUpdate starts it (main.cpp). It waits for this
+  // helper to end and then shows the report; an app the installer had not
+  // closed takes it as a launch and opens its window.
+  std::string shellError;
+  if (::GetFileAttributesW(executable.c_str()) == INVALID_FILE_ATTRIBUTES) {
+    log.Line("no relaunch: {} is not in the install folder", Utf8(executable.native()));
+  } else if (StartThroughShell(executable, shellError)) {
+    log.Line("started the relaunch through the user's shell");
+  } else {
+    log.Line("the relaunch could not be started: {}", shellError);
+  }
+  return ended;
 }
 
 }  // namespace urnw::updater
