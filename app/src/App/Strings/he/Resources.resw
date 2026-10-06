@@ -3004,14 +3004,6 @@
     <value>הגדרות ברירת המחדל הבטוחות אינן מוחלות</value>
     <comment>dns settings</comment>
   </data>
-  <data name="dns_not_on_tunnel" xml:space="preserve">
-    <value>ה-DNS לא עובר במנהרה — השמות שאתם מחפשים נפתרים מחוץ לה.</value>
-    <comment>Connect drawer: warning that DNS is resolving outside the tunnel.</comment>
-  </data>
-  <data name="dns_on_tunnel" xml:space="preserve">
-    <value>ה-DNS עובר במנהרה</value>
-    <comment>Connect drawer: status that DNS goes through the tunnel.</comment>
-  </data>
   <data name="dns_over_https" xml:space="preserve">
     <value>DNS דרך HTTPS</value>
     <comment>A label displayed in a row of a custom dns settings.</comment>

@@ -3004,14 +3004,6 @@
     <value>Безопасные настройки по умолчанию не применены</value>
     <comment>dns settings</comment>
   </data>
-  <data name="dns_not_on_tunnel" xml:space="preserve">
-    <value>DNS НЕ идёт через туннель — запрашиваемые вами имена разрешаются вне его.</value>
-    <comment>Connect drawer: warning that DNS is resolving outside the tunnel.</comment>
-  </data>
-  <data name="dns_on_tunnel" xml:space="preserve">
-    <value>DNS идёт через туннель</value>
-    <comment>Connect drawer: status that DNS goes through the tunnel.</comment>
-  </data>
   <data name="dns_over_https" xml:space="preserve">
     <value>DNS через HTTPS</value>
     <comment>A label displayed in a row of a custom dns settings.</comment>

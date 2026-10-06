@@ -3044,14 +3044,6 @@
     <value>الإعدادات الآمنة الافتراضية غير مطبقة</value>
     <comment>dns settings</comment>
   </data>
-  <data name="dns_not_on_tunnel" xml:space="preserve">
-    <value>DNS لا يمر عبر النفق — الأسماء التي تبحث عنها تُحلّ خارجه.</value>
-    <comment>Connect drawer: warning that DNS is resolving outside the tunnel.</comment>
-  </data>
-  <data name="dns_on_tunnel" xml:space="preserve">
-    <value>DNS يمر عبر النفق</value>
-    <comment>Connect drawer: status that DNS goes through the tunnel.</comment>
-  </data>
   <data name="dns_over_https" xml:space="preserve">
     <value>DNS عبر HTTPS</value>
     <comment>A label displayed in a row of a custom dns settings.</comment>

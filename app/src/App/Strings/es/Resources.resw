@@ -2964,14 +2964,6 @@ de la manera correcta</value>
     <value>La configuración segura predeterminada no está aplicada</value>
     <comment>dns settings</comment>
   </data>
-  <data name="dns_not_on_tunnel" xml:space="preserve">
-    <value>El DNS NO pasa por el túnel — los nombres que consultas se resuelven fuera de él.</value>
-    <comment>Connect drawer: warning that DNS is resolving outside the tunnel.</comment>
-  </data>
-  <data name="dns_on_tunnel" xml:space="preserve">
-    <value>El DNS pasa por el túnel</value>
-    <comment>Connect drawer: status that DNS goes through the tunnel.</comment>
-  </data>
   <data name="dns_over_https" xml:space="preserve">
     <value>DNS sobre HTTPS</value>
     <comment>A label displayed in a row of a custom dns settings.</comment>

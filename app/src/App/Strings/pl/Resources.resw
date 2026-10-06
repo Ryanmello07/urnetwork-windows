@@ -3004,14 +3004,6 @@ właściwy sposób</value>
     <value>Domyślne bezpieczne ustawienia nie są zastosowane</value>
     <comment>dns settings</comment>
   </data>
-  <data name="dns_not_on_tunnel" xml:space="preserve">
-    <value>DNS NIE przechodzi przez tunel — wyszukiwane nazwy są rozwiązywane poza nim.</value>
-    <comment>Connect drawer: warning that DNS is resolving outside the tunnel.</comment>
-  </data>
-  <data name="dns_on_tunnel" xml:space="preserve">
-    <value>DNS przechodzi przez tunel</value>
-    <comment>Connect drawer: status that DNS goes through the tunnel.</comment>
-  </data>
   <data name="dns_over_https" xml:space="preserve">
     <value>DNS przez HTTPS</value>
     <comment>A label displayed in a row of a custom dns settings.</comment>

@@ -2944,14 +2944,6 @@
     <value>기본 안전 설정이 적용되어 있지 않습니다</value>
     <comment>dns settings</comment>
   </data>
-  <data name="dns_not_on_tunnel" xml:space="preserve">
-    <value>DNS가 터널을 통과하지 않습니다 — 조회하는 이름이 터널 밖에서 해석되고 있습니다.</value>
-    <comment>Connect drawer: warning that DNS is resolving outside the tunnel.</comment>
-  </data>
-  <data name="dns_on_tunnel" xml:space="preserve">
-    <value>DNS가 터널을 통과합니다</value>
-    <comment>Connect drawer: status that DNS goes through the tunnel.</comment>
-  </data>
   <data name="dns_over_https" xml:space="preserve">
     <value>DNS over HTTPS</value>
     <comment>A label displayed in a row of a custom dns settings.</comment>

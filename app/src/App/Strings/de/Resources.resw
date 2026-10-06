@@ -2964,14 +2964,6 @@ richtig auf</value>
     <value>Die sicheren Standardeinstellungen sind nicht angewendet</value>
     <comment>dns settings</comment>
   </data>
-  <data name="dns_not_on_tunnel" xml:space="preserve">
-    <value>DNS läuft NICHT durch den Tunnel — die Namen, die du nachschlägst, werden außerhalb aufgelöst.</value>
-    <comment>Connect drawer: warning that DNS is resolving outside the tunnel.</comment>
-  </data>
-  <data name="dns_on_tunnel" xml:space="preserve">
-    <value>DNS läuft durch den Tunnel</value>
-    <comment>Connect drawer: status that DNS goes through the tunnel.</comment>
-  </data>
   <data name="dns_over_https" xml:space="preserve">
     <value>DNS über HTTPS</value>
     <comment>A label displayed in a row of a custom dns settings.</comment>
