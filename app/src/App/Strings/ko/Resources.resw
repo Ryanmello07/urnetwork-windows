@@ -1044,6 +1044,10 @@
     <value>코드 로그인 실패</value>
     <comment>Error shown when signing in with an auth code fails.</comment>
   </data>
+  <data name="collapsed" xml:space="preserve">
+    <value>접힘</value>
+    <comment>Screen reader state of a row that shows or hides a section below it (Advanced, Why?): the section is hidden. The counterpart of expanded.</comment>
+  </data>
   <data name="commitment_issues" xml:space="preserve">
     <value>결정하기 어려우신가요?</value>
     <comment>Login initial</comment>
@@ -3343,6 +3347,10 @@
     <value>제외</value>
     <comment>transfer stats and split rules</comment>
   </data>
+  <data name="expanded" xml:space="preserve">
+    <value>펼쳐짐</value>
+    <comment>Screen reader state of a row that shows or hides a section below it (Advanced, Why?): the section is shown. The counterpart of collapsed.</comment>
+  </data>
   <data name="expires" xml:space="preserve">
     <value>만료</value>
     <comment>Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.</comment>
@@ -3491,6 +3499,14 @@
     <value>보내는 중…</value>
     <comment>Feedback screen: label of the Send button while the feedback is being sent.</comment>
   </data>
+  <data name="feedback_star_count.other" xml:space="preserve">
+    <value>별 {}개</value>
+    <comment>Feedback screen: screen reader name of one of the five rating stars, the number of stars a tap on it gives (1 to 5).</comment>
+  </data>
+  <data name="feedback_submitted" xml:space="preserve">
+    <value>피드백을 보냈습니다.</value>
+    <comment>Feedback screen: the heading of the overlay shown after feedback is sent.</comment>
+  </data>
   <data name="fixed_ip" xml:space="preserve">
     <value>고정 IP</value>
     <comment>A toggle that allows users to enable or disable a fixed IP for their connection.</comment>
@@ -3591,6 +3607,10 @@
   <data name="guest_convert_explanation" xml:space="preserve">
     <value>이 네트워크에 로그인할 이메일과 비밀번호를 추가하세요. 요금제와 잔액은 이 네트워크에 그대로 남습니다.</value>
     <comment>Desktop: the first step of "Create an account" on a legacy guest network. The user adds an email and a password to the network they are on now, so they can sign in to it again; its plan and balance stay with it (nothing moves to a new account).</comment>
+  </data>
+  <data name="guest_mode" xml:space="preserve">
+    <value>게스트 모드</value>
+    <comment>Account switcher: the row of the guest account, checked while the app runs in guest mode.</comment>
   </data>
   <data name="hash_count" xml:space="preserve">
     <value>#{}</value>
@@ -3789,6 +3809,10 @@
   <data name="invalid_balance_code" xml:space="preserve">
     <value>잘못된 잔액 코드</value>
     <comment>Used in Shared/Views/RedeemBalanceCodeSheet/RedeemBalanceCodeSheet.swift.</comment>
+  </data>
+  <data name="invalid_input" xml:space="preserve">
+    <value>잘못된 입력</value>
+    <comment>Text fields: screen reader name of the warning icon shown next to a field whose text is not valid.</comment>
   </data>
   <data name="invalid_referral_code" xml:space="preserve">
     <value>이 코드는 유효하지 않습니다</value>
@@ -5220,6 +5244,14 @@
     <value>구매 내역을 찾았습니다. 요금제를 확인하는 중이며 자동으로 업데이트됩니다.</value>
     <comment>Restore-purchases outcome: an entitlement for the current network was found; the confirmation poll now bridges the gap until the server credits it (Shared/ViewModels/AppStoreSubscriptionManager.swift).</comment>
   </data>
+  <data name="purchase_pending_body" xml:space="preserve">
+    <value>구매가 승인 대기 중입니다. 승인되면 UR Pro가 자동으로 켜지므로 다시 구매할 필요가 없습니다.</value>
+    <comment>Upgrade: the overlay shown while a store purchase waits for approval. Keep UR Pro (the plan's name) unchanged.</comment>
+  </data>
+  <data name="purchase_pending_title" xml:space="preserve">
+    <value>거의 다 됐습니다.</value>
+    <comment>Upgrade: the heading of the overlay shown while a store purchase waits for approval (for example a parent's).</comment>
+  </data>
   <data name="qr_code_not_found" xml:space="preserve">
     <value>이미지에서 QR 코드를 찾을 수 없습니다.</value>
     <comment>Error when a chosen photo or image file holds no QR code.</comment>
@@ -5416,8 +5448,20 @@
     <value>새로고침</value>
     <comment>Generic refresh action (a button that reloads the current list or view), e.g. the points leaderboard tab.</comment>
   </data>
+  <data name="regenerate" xml:space="preserve">
+    <value>다시 생성</value>
+    <comment>Settings: the button that makes a new seedphrase in place of the current one.</comment>
+  </data>
   <data name="regenerate_seedphrase" xml:space="preserve">
     <value>시드 문구 다시 생성</value>
+  </data>
+  <data name="regenerate_seedphrase_body" xml:space="preserve">
+    <value>현재 시드 문구는 더 이상 작동하지 않습니다. 저장할 새 시드 문구가 표시됩니다.</value>
+    <comment>Settings: the confirmation before a new seedphrase replaces the current one; the new one is shown once, to be saved.</comment>
+  </data>
+  <data name="regenerate_seedphrase_title" xml:space="preserve">
+    <value>시드 문구를 다시 생성할까요?</value>
+    <comment>Settings: the title of the confirmation before a new seedphrase replaces the current one.</comment>
   </data>
   <data name="regions" xml:space="preserve">
     <value>지역</value>
@@ -5985,6 +6029,10 @@
     <value>아직 트래픽 없음</value>
     <comment>Connect drawer: throughput empty state</comment>
   </data>
+  <data name="site_app_phone" xml:space="preserve">
+    <value>전화번호</value>
+    <comment>ur.io account profile: the label of a phone number sign-in method in the sign-in methods list.</comment>
+  </data>
   <data name="site_app_plan" xml:space="preserve">
     <value>플랜</value>
     <comment>Connect drawer: plan section label</comment>
@@ -6457,6 +6505,10 @@
     <value>강력한 익명화</value>
     <comment>Connect drawer: strong anonymization toggle — the inverse of allow direct (direct connections expose the real source IP to the provider).</comment>
   </data>
+  <data name="strong_privacy_laws" xml:space="preserve">
+    <value>엄격한 개인정보 보호법</value>
+    <comment>Locations list: screen reader name of the icon on a location whose country has strong privacy laws.</comment>
+  </data>
   <data name="subscribe" xml:space="preserve">
     <value>구독하기</value>
     <comment>Button on the plan picker for the monthly plan, which has no free trial.</comment>
@@ -6482,8 +6534,8 @@
     <comment>A description of the suggested DNS servers.</comment>
   </data>
   <data name="support" xml:space="preserve">
-    <value>지원</value>
-    <comment>Used in Shared/ViewModels/SubscriptionBalanceViewModel.swift.</comment>
+    <value>고객 지원</value>
+    <comment>Navigation: the Support tab, page or section, where users send feedback and contact the URnetwork support team. Customer support, not backing; use the word the language uses for a support team.</comment>
   </data>
   <data name="support_us" xml:space="preserve">
     <value>취하지 않고 제공하는 새로운 종류의 네트워크를 구축하는 데 도움을 주세요.</value>
@@ -6816,6 +6868,10 @@
     <value>추천 네트워크 연결을 해제하면 더 이상 {}에서 포인트를 얻을 수 없습니다</value>
     <comment>Call to action</comment>
   </data>
+  <data name="unlink_alert_description_unnamed" xml:space="preserve">
+    <value>추천 네트워크 연결을 해제하면 더 이상 해당 네트워크에서 포인트를 얻을 수 없습니다</value>
+    <comment>Referral network: the unlink confirmation when the network's name is not known. The counterpart of unlink_alert_description.</comment>
+  </data>
   <data name="unlink_referral_network" xml:space="preserve">
     <value>추천 네트워크 연결 해제</value>
     <comment>Call to action</comment>
@@ -6827,6 +6883,10 @@
   <data name="unlock_supporter_tooltip" xml:space="preserve">
     <value>더 빠른 속도와 새로운 기능에 대한 우선 접근권을 얻으세요.</value>
     <comment>Settings</comment>
+  </data>
+  <data name="unstable_connection" xml:space="preserve">
+    <value>불안정한 연결</value>
+    <comment>Locations list: screen reader name of the warning icon on a location whose providers may be unstable.</comment>
   </data>
   <data name="unstable_providers_warning" xml:space="preserve">
     <value>* (불안정할 수 있음)</value>

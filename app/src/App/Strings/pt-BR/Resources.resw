@@ -1052,6 +1052,10 @@ maneira certa</value>
     <value>Falha ao entrar com código</value>
     <comment>Error shown when signing in with an auth code fails.</comment>
   </data>
+  <data name="collapsed" xml:space="preserve">
+    <value>Recolhido</value>
+    <comment>Screen reader state of a row that shows or hides a section below it (Advanced, Why?): the section is hidden. The counterpart of expanded.</comment>
+  </data>
   <data name="commitment_issues" xml:space="preserve">
     <value>Problemas de compromisso?</value>
     <comment>Login initial</comment>
@@ -3363,6 +3367,10 @@ maneira certa</value>
     <value>Excluídos</value>
     <comment>transfer stats and split rules</comment>
   </data>
+  <data name="expanded" xml:space="preserve">
+    <value>Expandido</value>
+    <comment>Screen reader state of a row that shows or hides a section below it (Advanced, Why?): the section is shown. The counterpart of collapsed.</comment>
+  </data>
   <data name="expires" xml:space="preserve">
     <value>Expira</value>
     <comment>Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.</comment>
@@ -3511,6 +3519,18 @@ maneira certa</value>
     <value>Enviando…</value>
     <comment>Feedback screen: label of the Send button while the feedback is being sent.</comment>
   </data>
+  <data name="feedback_star_count.one" xml:space="preserve">
+    <value>{} estrela</value>
+    <comment>Feedback screen: screen reader name of one of the five rating stars, the number of stars a tap on it gives (1 to 5).</comment>
+  </data>
+  <data name="feedback_star_count.other" xml:space="preserve">
+    <value>{} estrelas</value>
+    <comment>Feedback screen: screen reader name of one of the five rating stars, the number of stars a tap on it gives (1 to 5).</comment>
+  </data>
+  <data name="feedback_submitted" xml:space="preserve">
+    <value>Feedback enviado.</value>
+    <comment>Feedback screen: the heading of the overlay shown after feedback is sent.</comment>
+  </data>
   <data name="fixed_ip" xml:space="preserve">
     <value>IP fixo</value>
     <comment>A toggle that allows users to enable or disable a fixed IP for their connection.</comment>
@@ -3615,6 +3635,10 @@ maneira certa</value>
   <data name="guest_convert_explanation" xml:space="preserve">
     <value>Adicione um e-mail e uma senha para entrar nesta rede. O plano e o saldo dela continuam com ela.</value>
     <comment>Desktop: the first step of "Create an account" on a legacy guest network. The user adds an email and a password to the network they are on now, so they can sign in to it again; its plan and balance stay with it (nothing moves to a new account).</comment>
+  </data>
+  <data name="guest_mode" xml:space="preserve">
+    <value>Modo convidado</value>
+    <comment>Account switcher: the row of the guest account, checked while the app runs in guest mode.</comment>
   </data>
   <data name="hash_count" xml:space="preserve">
     <value>#{}</value>
@@ -3821,6 +3845,10 @@ maneira certa</value>
   <data name="invalid_balance_code" xml:space="preserve">
     <value>Código de saldo inválido</value>
     <comment>Used in Shared/Views/RedeemBalanceCodeSheet/RedeemBalanceCodeSheet.swift.</comment>
+  </data>
+  <data name="invalid_input" xml:space="preserve">
+    <value>Entrada inválida</value>
+    <comment>Text fields: screen reader name of the warning icon shown next to a field whose text is not valid.</comment>
   </data>
   <data name="invalid_referral_code" xml:space="preserve">
     <value>Este código não é válido</value>
@@ -5304,6 +5332,14 @@ e mais descentralizado protocolo de entrada e saída do mundo.</value>
     <value>Compra encontrada. Confirmando seu plano — ele será atualizado automaticamente.</value>
     <comment>Restore-purchases outcome: an entitlement for the current network was found; the confirmation poll now bridges the gap until the server credits it (Shared/ViewModels/AppStoreSubscriptionManager.swift).</comment>
   </data>
+  <data name="purchase_pending_body" xml:space="preserve">
+    <value>Sua compra está aguardando aprovação. O UR Pro será ativado sozinho assim que ela for concluída — não é preciso comprar de novo.</value>
+    <comment>Upgrade: the overlay shown while a store purchase waits for approval. Keep UR Pro (the plan's name) unchanged.</comment>
+  </data>
+  <data name="purchase_pending_title" xml:space="preserve">
+    <value>Quase lá.</value>
+    <comment>Upgrade: the heading of the overlay shown while a store purchase waits for approval (for example a parent's).</comment>
+  </data>
   <data name="qr_code_not_found" xml:space="preserve">
     <value>Nenhum código QR foi encontrado na imagem.</value>
     <comment>Error when a chosen photo or image file holds no QR code.</comment>
@@ -5512,8 +5548,20 @@ e mais descentralizado protocolo de entrada e saída do mundo.</value>
     <value>Atualizar</value>
     <comment>Generic refresh action (a button that reloads the current list or view), e.g. the points leaderboard tab.</comment>
   </data>
+  <data name="regenerate" xml:space="preserve">
+    <value>Gerar novamente</value>
+    <comment>Settings: the button that makes a new seedphrase in place of the current one.</comment>
+  </data>
   <data name="regenerate_seedphrase" xml:space="preserve">
     <value>Gerar nova frase-semente</value>
+  </data>
+  <data name="regenerate_seedphrase_body" xml:space="preserve">
+    <value>Sua frase-semente atual deixará de funcionar. Você verá uma nova para guardar.</value>
+    <comment>Settings: the confirmation before a new seedphrase replaces the current one; the new one is shown once, to be saved.</comment>
+  </data>
+  <data name="regenerate_seedphrase_title" xml:space="preserve">
+    <value>Gerar uma nova frase-semente?</value>
+    <comment>Settings: the title of the confirmation before a new seedphrase replaces the current one.</comment>
   </data>
   <data name="regions" xml:space="preserve">
     <value>Regiões</value>
@@ -6093,6 +6141,10 @@ conteúdo do mundo</value>
     <value>Ainda sem tráfego</value>
     <comment>Connect drawer: throughput empty state</comment>
   </data>
+  <data name="site_app_phone" xml:space="preserve">
+    <value>Telefone</value>
+    <comment>ur.io account profile: the label of a phone number sign-in method in the sign-in methods list.</comment>
+  </data>
   <data name="site_app_plan" xml:space="preserve">
     <value>Plano</value>
     <comment>Connect drawer: plan section label</comment>
@@ -6569,6 +6621,10 @@ como ela deveria ser.</value>
     <value>Anonimização forte</value>
     <comment>Connect drawer: strong anonymization toggle — the inverse of allow direct (direct connections expose the real source IP to the provider).</comment>
   </data>
+  <data name="strong_privacy_laws" xml:space="preserve">
+    <value>Leis de privacidade rigorosas</value>
+    <comment>Locations list: screen reader name of the icon on a location whose country has strong privacy laws.</comment>
+  </data>
   <data name="subscribe" xml:space="preserve">
     <value>Assinar</value>
     <comment>Button on the plan picker for the monthly plan, which has no free trial.</comment>
@@ -6595,7 +6651,7 @@ como ela deveria ser.</value>
   </data>
   <data name="support" xml:space="preserve">
     <value>Suporte</value>
-    <comment>Used in Shared/ViewModels/SubscriptionBalanceViewModel.swift.</comment>
+    <comment>Navigation: the Support tab, page or section, where users send feedback and contact the URnetwork support team. Customer support, not backing; use the word the language uses for a support team.</comment>
   </data>
   <data name="support_us" xml:space="preserve">
     <value>Apoie-nos na construção de um novo tipo de rede que dá em vez de receber.</value>
@@ -6932,6 +6988,10 @@ como ela deveria ser.</value>
     <value>Ao desvincular sua rede de indicações, você não poderá mais ganhar pontos de {}</value>
     <comment>Call to action</comment>
   </data>
+  <data name="unlink_alert_description_unnamed" xml:space="preserve">
+    <value>Ao desvincular sua rede de indicações, você não poderá mais ganhar pontos dessa rede</value>
+    <comment>Referral network: the unlink confirmation when the network's name is not known. The counterpart of unlink_alert_description.</comment>
+  </data>
   <data name="unlink_referral_network" xml:space="preserve">
     <value>Desvincular rede de indicações</value>
     <comment>Call to action</comment>
@@ -6943,6 +7003,10 @@ como ela deveria ser.</value>
   <data name="unlock_supporter_tooltip" xml:space="preserve">
     <value>Desbloquear velocidades ainda mais rápidas e ter acesso antecipado a novos recursos.</value>
     <comment>Settings</comment>
+  </data>
+  <data name="unstable_connection" xml:space="preserve">
+    <value>Conexão instável</value>
+    <comment>Locations list: screen reader name of the warning icon on a location whose providers may be unstable.</comment>
   </data>
   <data name="unstable_providers_warning" xml:space="preserve">
     <value>* (pode ser instável)</value>

@@ -1051,6 +1051,10 @@
     <value>कोड से साइन इन विफल</value>
     <comment>Error shown when signing in with an auth code fails.</comment>
   </data>
+  <data name="collapsed" xml:space="preserve">
+    <value>संक्षिप्त</value>
+    <comment>Screen reader state of a row that shows or hides a section below it (Advanced, Why?): the section is hidden. The counterpart of expanded.</comment>
+  </data>
   <data name="commitment_issues" xml:space="preserve">
     <value>प्रतिबद्धता संबंधी समस्याएं?</value>
     <comment>Login initial</comment>
@@ -3362,6 +3366,10 @@
     <value>बाहर रखे गए</value>
     <comment>transfer stats and split rules</comment>
   </data>
+  <data name="expanded" xml:space="preserve">
+    <value>विस्तृत</value>
+    <comment>Screen reader state of a row that shows or hides a section below it (Advanced, Why?): the section is shown. The counterpart of collapsed.</comment>
+  </data>
   <data name="expires" xml:space="preserve">
     <value>समाप्त होता है</value>
     <comment>Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.</comment>
@@ -3510,6 +3518,18 @@
     <value>भेजा जा रहा है…</value>
     <comment>Feedback screen: label of the Send button while the feedback is being sent.</comment>
   </data>
+  <data name="feedback_star_count.one" xml:space="preserve">
+    <value>{} स्टार</value>
+    <comment>Feedback screen: screen reader name of one of the five rating stars, the number of stars a tap on it gives (1 to 5).</comment>
+  </data>
+  <data name="feedback_star_count.other" xml:space="preserve">
+    <value>{} स्टार</value>
+    <comment>Feedback screen: screen reader name of one of the five rating stars, the number of stars a tap on it gives (1 to 5).</comment>
+  </data>
+  <data name="feedback_submitted" xml:space="preserve">
+    <value>प्रतिक्रिया भेज दी गई।</value>
+    <comment>Feedback screen: the heading of the overlay shown after feedback is sent.</comment>
+  </data>
   <data name="fixed_ip" xml:space="preserve">
     <value>स्थिर IP</value>
     <comment>A toggle that allows users to enable or disable a fixed IP for their connection.</comment>
@@ -3614,6 +3634,10 @@
   <data name="guest_convert_explanation" xml:space="preserve">
     <value>इस नेटवर्क में साइन इन करने के लिए ईमेल और पासवर्ड जोड़ें। इसका प्लान और बैलेंस इसी के साथ रहते हैं।</value>
     <comment>Desktop: the first step of "Create an account" on a legacy guest network. The user adds an email and a password to the network they are on now, so they can sign in to it again; its plan and balance stay with it (nothing moves to a new account).</comment>
+  </data>
+  <data name="guest_mode" xml:space="preserve">
+    <value>गेस्ट मोड</value>
+    <comment>Account switcher: the row of the guest account, checked while the app runs in guest mode.</comment>
   </data>
   <data name="hash_count" xml:space="preserve">
     <value>#{}</value>
@@ -3820,6 +3844,10 @@
   <data name="invalid_balance_code" xml:space="preserve">
     <value>अमान्य बैलेंस कोड</value>
     <comment>Used in Shared/Views/RedeemBalanceCodeSheet/RedeemBalanceCodeSheet.swift.</comment>
+  </data>
+  <data name="invalid_input" xml:space="preserve">
+    <value>अमान्य इनपुट</value>
+    <comment>Text fields: screen reader name of the warning icon shown next to a field whose text is not valid.</comment>
   </data>
   <data name="invalid_referral_code" xml:space="preserve">
     <value>यह कोड मान्य नहीं है</value>
@@ -5302,6 +5330,14 @@
     <value>खरीदारी मिल गई। आपके प्लान की पुष्टि हो रही है — यह अपने-आप अपडेट हो जाएगा।</value>
     <comment>Restore-purchases outcome: an entitlement for the current network was found; the confirmation poll now bridges the gap until the server credits it (Shared/ViewModels/AppStoreSubscriptionManager.swift).</comment>
   </data>
+  <data name="purchase_pending_body" xml:space="preserve">
+    <value>आपकी खरीदारी अनुमोदन की प्रतीक्षा में है। पूरी होते ही UR Pro अपने आप चालू हो जाएगा — दोबारा खरीदने की ज़रूरत नहीं है।</value>
+    <comment>Upgrade: the overlay shown while a store purchase waits for approval. Keep UR Pro (the plan's name) unchanged.</comment>
+  </data>
+  <data name="purchase_pending_title" xml:space="preserve">
+    <value>बस थोड़ा और।</value>
+    <comment>Upgrade: the heading of the overlay shown while a store purchase waits for approval (for example a parent's).</comment>
+  </data>
   <data name="qr_code_not_found" xml:space="preserve">
     <value>इमेज में कोई QR कोड नहीं मिला।</value>
     <comment>Error when a chosen photo or image file holds no QR code.</comment>
@@ -5510,8 +5546,20 @@
     <value>रीफ़्रेश करें</value>
     <comment>Generic refresh action (a button that reloads the current list or view), e.g. the points leaderboard tab.</comment>
   </data>
+  <data name="regenerate" xml:space="preserve">
+    <value>दोबारा बनाएं</value>
+    <comment>Settings: the button that makes a new seedphrase in place of the current one.</comment>
+  </data>
   <data name="regenerate_seedphrase" xml:space="preserve">
     <value>सीड फ़्रेज़ दोबारा बनाएं</value>
+  </data>
+  <data name="regenerate_seedphrase_body" xml:space="preserve">
+    <value>आपका मौजूदा सीड फ़्रेज़ काम करना बंद कर देगा। आपको सहेजने के लिए एक नया दिखाया जाएगा।</value>
+    <comment>Settings: the confirmation before a new seedphrase replaces the current one; the new one is shown once, to be saved.</comment>
+  </data>
+  <data name="regenerate_seedphrase_title" xml:space="preserve">
+    <value>सीड फ़्रेज़ दोबारा बनाएं?</value>
+    <comment>Settings: the title of the confirmation before a new seedphrase replaces the current one.</comment>
   </data>
   <data name="regions" xml:space="preserve">
     <value>क्षेत्र</value>
@@ -6091,6 +6139,10 @@
     <value>अभी तक कोई ट्रैफ़िक नहीं</value>
     <comment>Connect drawer: throughput empty state</comment>
   </data>
+  <data name="site_app_phone" xml:space="preserve">
+    <value>फ़ोन</value>
+    <comment>ur.io account profile: the label of a phone number sign-in method in the sign-in methods list.</comment>
+  </data>
   <data name="site_app_plan" xml:space="preserve">
     <value>योजना</value>
     <comment>Connect drawer: plan section label</comment>
@@ -6566,6 +6618,10 @@
     <value>मजबूत गुमनामीकरण</value>
     <comment>Connect drawer: strong anonymization toggle — the inverse of allow direct (direct connections expose the real source IP to the provider).</comment>
   </data>
+  <data name="strong_privacy_laws" xml:space="preserve">
+    <value>सख्त निजता कानून</value>
+    <comment>Locations list: screen reader name of the icon on a location whose country has strong privacy laws.</comment>
+  </data>
   <data name="subscribe" xml:space="preserve">
     <value>सदस्यता लें</value>
     <comment>Button on the plan picker for the monthly plan, which has no free trial.</comment>
@@ -6592,7 +6648,7 @@
   </data>
   <data name="support" xml:space="preserve">
     <value>सहायता</value>
-    <comment>Used in Shared/ViewModels/SubscriptionBalanceViewModel.swift.</comment>
+    <comment>Navigation: the Support tab, page or section, where users send feedback and contact the URnetwork support team. Customer support, not backing; use the word the language uses for a support team.</comment>
   </data>
   <data name="support_us" xml:space="preserve">
     <value>एक नए प्रकार के नेटवर्क के निर्माण में हमारा समर्थन करें जो लेने के बजाय देता है।</value>
@@ -6929,6 +6985,10 @@
     <value>जब आप अपने रेफ़रल नेटवर्क को अनलिंक करते हैं, तो आप अब {} से अंक अर्जित नहीं कर पाएंगे</value>
     <comment>Call to action</comment>
   </data>
+  <data name="unlink_alert_description_unnamed" xml:space="preserve">
+    <value>जब आप अपने रेफ़रल नेटवर्क को अनलिंक करते हैं, तो आप अब उस नेटवर्क से अंक अर्जित नहीं कर पाएंगे</value>
+    <comment>Referral network: the unlink confirmation when the network's name is not known. The counterpart of unlink_alert_description.</comment>
+  </data>
   <data name="unlink_referral_network" xml:space="preserve">
     <value>रेफ़रल नेटवर्क को अनलिंक करें</value>
     <comment>Call to action</comment>
@@ -6940,6 +7000,10 @@
   <data name="unlock_supporter_tooltip" xml:space="preserve">
     <value>और भी तेज़ गति अनलॉक करें और नई सुविधाओं तक जल्दी पहुंच प्राप्त करें।</value>
     <comment>Settings</comment>
+  </data>
+  <data name="unstable_connection" xml:space="preserve">
+    <value>अस्थिर कनेक्शन</value>
+    <comment>Locations list: screen reader name of the warning icon on a location whose providers may be unstable.</comment>
   </data>
   <data name="unstable_providers_warning" xml:space="preserve">
     <value>* (अस्थिर हो सकता है)</value>

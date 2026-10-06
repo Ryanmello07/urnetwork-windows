@@ -1052,6 +1052,10 @@ juiste manier</value>
     <value>Inloggen met code mislukt</value>
     <comment>Error shown when signing in with an auth code fails.</comment>
   </data>
+  <data name="collapsed" xml:space="preserve">
+    <value>Samengevouwen</value>
+    <comment>Screen reader state of a row that shows or hides a section below it (Advanced, Why?): the section is hidden. The counterpart of expanded.</comment>
+  </data>
   <data name="commitment_issues" xml:space="preserve">
     <value>Problemen met commitment?</value>
     <comment>Login initial</comment>
@@ -3363,6 +3367,10 @@ juiste manier</value>
     <value>Uitgesloten</value>
     <comment>transfer stats and split rules</comment>
   </data>
+  <data name="expanded" xml:space="preserve">
+    <value>Uitgevouwen</value>
+    <comment>Screen reader state of a row that shows or hides a section below it (Advanced, Why?): the section is shown. The counterpart of collapsed.</comment>
+  </data>
   <data name="expires" xml:space="preserve">
     <value>Vervalt</value>
     <comment>Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.</comment>
@@ -3511,6 +3519,18 @@ juiste manier</value>
     <value>Verzenden…</value>
     <comment>Feedback screen: label of the Send button while the feedback is being sent.</comment>
   </data>
+  <data name="feedback_star_count.one" xml:space="preserve">
+    <value>{} ster</value>
+    <comment>Feedback screen: screen reader name of one of the five rating stars, the number of stars a tap on it gives (1 to 5).</comment>
+  </data>
+  <data name="feedback_star_count.other" xml:space="preserve">
+    <value>{} sterren</value>
+    <comment>Feedback screen: screen reader name of one of the five rating stars, the number of stars a tap on it gives (1 to 5).</comment>
+  </data>
+  <data name="feedback_submitted" xml:space="preserve">
+    <value>Feedback verzonden.</value>
+    <comment>Feedback screen: the heading of the overlay shown after feedback is sent.</comment>
+  </data>
   <data name="fixed_ip" xml:space="preserve">
     <value>Vast IP-adres</value>
     <comment>A toggle that allows users to enable or disable a fixed IP for their connection.</comment>
@@ -3615,6 +3635,10 @@ juiste manier</value>
   <data name="guest_convert_explanation" xml:space="preserve">
     <value>Voeg een e-mailadres en een wachtwoord toe om bij dit netwerk in te loggen. Het abonnement en het tegoed blijven bij dit netwerk.</value>
     <comment>Desktop: the first step of "Create an account" on a legacy guest network. The user adds an email and a password to the network they are on now, so they can sign in to it again; its plan and balance stay with it (nothing moves to a new account).</comment>
+  </data>
+  <data name="guest_mode" xml:space="preserve">
+    <value>Gastmodus</value>
+    <comment>Account switcher: the row of the guest account, checked while the app runs in guest mode.</comment>
   </data>
   <data name="hash_count" xml:space="preserve">
     <value>#{}</value>
@@ -3821,6 +3845,10 @@ juiste manier</value>
   <data name="invalid_balance_code" xml:space="preserve">
     <value>Ongeldige saldo code</value>
     <comment>Used in Shared/Views/RedeemBalanceCodeSheet/RedeemBalanceCodeSheet.swift.</comment>
+  </data>
+  <data name="invalid_input" xml:space="preserve">
+    <value>Ongeldige invoer</value>
+    <comment>Text fields: screen reader name of the warning icon shown next to a field whose text is not valid.</comment>
   </data>
   <data name="invalid_referral_code" xml:space="preserve">
     <value>Deze code is niet geldig</value>
@@ -5305,6 +5333,14 @@ gedecentraliseerde ingress- en egress-protocol ter wereld.</value>
     <value>Aankoop gevonden. Je abonnement wordt bevestigd — het wordt automatisch bijgewerkt.</value>
     <comment>Restore-purchases outcome: an entitlement for the current network was found; the confirmation poll now bridges the gap until the server credits it (Shared/ViewModels/AppStoreSubscriptionManager.swift).</comment>
   </data>
+  <data name="purchase_pending_body" xml:space="preserve">
+    <value>Je aankoop wacht op goedkeuring. UR Pro gaat vanzelf aan zodra die rond is — je hoeft niet opnieuw te kopen.</value>
+    <comment>Upgrade: the overlay shown while a store purchase waits for approval. Keep UR Pro (the plan's name) unchanged.</comment>
+  </data>
+  <data name="purchase_pending_title" xml:space="preserve">
+    <value>Bijna klaar.</value>
+    <comment>Upgrade: the heading of the overlay shown while a store purchase waits for approval (for example a parent's).</comment>
+  </data>
   <data name="qr_code_not_found" xml:space="preserve">
     <value>Er is geen QR-code in de afbeelding gevonden.</value>
     <comment>Error when a chosen photo or image file holds no QR code.</comment>
@@ -5513,8 +5549,20 @@ gedecentraliseerde ingress- en egress-protocol ter wereld.</value>
     <value>Vernieuwen</value>
     <comment>Generic refresh action (a button that reloads the current list or view), e.g. the points leaderboard tab.</comment>
   </data>
+  <data name="regenerate" xml:space="preserve">
+    <value>Opnieuw genereren</value>
+    <comment>Settings: the button that makes a new seedphrase in place of the current one.</comment>
+  </data>
   <data name="regenerate_seedphrase" xml:space="preserve">
     <value>Seedphrase opnieuw genereren</value>
+  </data>
+  <data name="regenerate_seedphrase_body" xml:space="preserve">
+    <value>Je huidige seedphrase werkt dan niet meer. Je krijgt een nieuwe te zien om te bewaren.</value>
+    <comment>Settings: the confirmation before a new seedphrase replaces the current one; the new one is shown once, to be saved.</comment>
+  </data>
+  <data name="regenerate_seedphrase_title" xml:space="preserve">
+    <value>Seedphrase opnieuw genereren?</value>
+    <comment>Settings: the title of the confirmation before a new seedphrase replaces the current one.</comment>
   </data>
   <data name="regions" xml:space="preserve">
     <value>Regio's</value>
@@ -6094,6 +6142,10 @@ inhoud van de wereld</value>
     <value>Nog geen verkeer</value>
     <comment>Connect drawer: throughput empty state</comment>
   </data>
+  <data name="site_app_phone" xml:space="preserve">
+    <value>Telefoon</value>
+    <comment>ur.io account profile: the label of a phone number sign-in method in the sign-in methods list.</comment>
+  </data>
   <data name="site_app_plan" xml:space="preserve">
     <value>Plan</value>
     <comment>Connect drawer: plan section label</comment>
@@ -6570,6 +6622,10 @@ zoals het hoort te zijn.</value>
     <value>Sterke anonimisering</value>
     <comment>Connect drawer: strong anonymization toggle — the inverse of allow direct (direct connections expose the real source IP to the provider).</comment>
   </data>
+  <data name="strong_privacy_laws" xml:space="preserve">
+    <value>Strenge privacywetgeving</value>
+    <comment>Locations list: screen reader name of the icon on a location whose country has strong privacy laws.</comment>
+  </data>
   <data name="subscribe" xml:space="preserve">
     <value>Abonneren</value>
     <comment>Button on the plan picker for the monthly plan, which has no free trial.</comment>
@@ -6595,8 +6651,8 @@ zoals het hoort te zijn.</value>
     <comment>A description of the suggested DNS servers.</comment>
   </data>
   <data name="support" xml:space="preserve">
-    <value>ondersteuning</value>
-    <comment>Used in Shared/ViewModels/SubscriptionBalanceViewModel.swift.</comment>
+    <value>Support</value>
+    <comment>Navigation: the Support tab, page or section, where users send feedback and contact the URnetwork support team. Customer support, not backing; use the word the language uses for a support team.</comment>
   </data>
   <data name="support_us" xml:space="preserve">
     <value>Steun ons bij het bouwen van een nieuw soort netwerk dat geeft in plaats van neemt.</value>
@@ -6933,6 +6989,10 @@ zoals het hoort te zijn.</value>
     <value>Als je je referentienetwerk ontkoppelt, kun je geen punten meer verdienen van {}</value>
     <comment>Call to action</comment>
   </data>
+  <data name="unlink_alert_description_unnamed" xml:space="preserve">
+    <value>Als je je referentienetwerk ontkoppelt, kun je geen punten meer verdienen van dat netwerk</value>
+    <comment>Referral network: the unlink confirmation when the network's name is not known. The counterpart of unlink_alert_description.</comment>
+  </data>
   <data name="unlink_referral_network" xml:space="preserve">
     <value>Referentienetwerk ontkoppelen</value>
     <comment>Call to action</comment>
@@ -6944,6 +7004,10 @@ zoals het hoort te zijn.</value>
   <data name="unlock_supporter_tooltip" xml:space="preserve">
     <value>Ontgrendel nog hogere snelheden en als eerste toegang tot nieuwe functies.</value>
     <comment>Settings</comment>
+  </data>
+  <data name="unstable_connection" xml:space="preserve">
+    <value>Instabiele verbinding</value>
+    <comment>Locations list: screen reader name of the warning icon on a location whose providers may be unstable.</comment>
   </data>
   <data name="unstable_providers_warning" xml:space="preserve">
     <value>* (kan onstabiel zijn)</value>

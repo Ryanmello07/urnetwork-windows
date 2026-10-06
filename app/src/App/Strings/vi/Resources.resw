@@ -1044,6 +1044,10 @@ cách đúng đắn</value>
     <value>Đăng nhập bằng mã thất bại</value>
     <comment>Error shown when signing in with an auth code fails.</comment>
   </data>
+  <data name="collapsed" xml:space="preserve">
+    <value>Đã thu gọn</value>
+    <comment>Screen reader state of a row that shows or hides a section below it (Advanced, Why?): the section is hidden. The counterpart of expanded.</comment>
+  </data>
   <data name="commitment_issues" xml:space="preserve">
     <value>Còn phân vân?</value>
     <comment>Login initial</comment>
@@ -3343,6 +3347,10 @@ cách đúng đắn</value>
     <value>Đã loại trừ</value>
     <comment>transfer stats and split rules</comment>
   </data>
+  <data name="expanded" xml:space="preserve">
+    <value>Đã mở rộng</value>
+    <comment>Screen reader state of a row that shows or hides a section below it (Advanced, Why?): the section is shown. The counterpart of collapsed.</comment>
+  </data>
   <data name="expires" xml:space="preserve">
     <value>Hết hạn</value>
     <comment>Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.</comment>
@@ -3491,6 +3499,14 @@ cách đúng đắn</value>
     <value>Đang gửi…</value>
     <comment>Feedback screen: label of the Send button while the feedback is being sent.</comment>
   </data>
+  <data name="feedback_star_count.other" xml:space="preserve">
+    <value>{} sao</value>
+    <comment>Feedback screen: screen reader name of one of the five rating stars, the number of stars a tap on it gives (1 to 5).</comment>
+  </data>
+  <data name="feedback_submitted" xml:space="preserve">
+    <value>Đã gửi phản hồi.</value>
+    <comment>Feedback screen: the heading of the overlay shown after feedback is sent.</comment>
+  </data>
   <data name="fixed_ip" xml:space="preserve">
     <value>IP cố định</value>
     <comment>A toggle that allows users to enable or disable a fixed IP for their connection.</comment>
@@ -3591,6 +3607,10 @@ cách đúng đắn</value>
   <data name="guest_convert_explanation" xml:space="preserve">
     <value>Thêm email và mật khẩu để đăng nhập vào mạng này. Gói và số dư của mạng vẫn được giữ nguyên.</value>
     <comment>Desktop: the first step of "Create an account" on a legacy guest network. The user adds an email and a password to the network they are on now, so they can sign in to it again; its plan and balance stay with it (nothing moves to a new account).</comment>
+  </data>
+  <data name="guest_mode" xml:space="preserve">
+    <value>Chế độ khách</value>
+    <comment>Account switcher: the row of the guest account, checked while the app runs in guest mode.</comment>
   </data>
   <data name="hash_count" xml:space="preserve">
     <value>#{}</value>
@@ -3789,6 +3809,10 @@ cách đúng đắn</value>
   <data name="invalid_balance_code" xml:space="preserve">
     <value>Mã số dư không hợp lệ</value>
     <comment>Used in Shared/Views/RedeemBalanceCodeSheet/RedeemBalanceCodeSheet.swift.</comment>
+  </data>
+  <data name="invalid_input" xml:space="preserve">
+    <value>Giá trị không hợp lệ</value>
+    <comment>Text fields: screen reader name of the warning icon shown next to a field whose text is not valid.</comment>
   </data>
   <data name="invalid_referral_code" xml:space="preserve">
     <value>Mã này không hợp lệ</value>
@@ -5221,6 +5245,14 @@ an toàn nhất và phi tập trung nhất thế giới.</value>
     <value>Đã tìm thấy giao dịch mua. Đang xác nhận gói của bạn — gói sẽ tự động cập nhật.</value>
     <comment>Restore-purchases outcome: an entitlement for the current network was found; the confirmation poll now bridges the gap until the server credits it (Shared/ViewModels/AppStoreSubscriptionManager.swift).</comment>
   </data>
+  <data name="purchase_pending_body" xml:space="preserve">
+    <value>Giao dịch mua của bạn đang chờ phê duyệt. UR Pro sẽ tự bật khi giao dịch hoàn tất — bạn không cần mua lại.</value>
+    <comment>Upgrade: the overlay shown while a store purchase waits for approval. Keep UR Pro (the plan's name) unchanged.</comment>
+  </data>
+  <data name="purchase_pending_title" xml:space="preserve">
+    <value>Sắp xong rồi.</value>
+    <comment>Upgrade: the heading of the overlay shown while a store purchase waits for approval (for example a parent's).</comment>
+  </data>
   <data name="qr_code_not_found" xml:space="preserve">
     <value>Không tìm thấy mã QR nào trong hình ảnh.</value>
     <comment>Error when a chosen photo or image file holds no QR code.</comment>
@@ -5417,8 +5449,20 @@ an toàn nhất và phi tập trung nhất thế giới.</value>
     <value>Làm mới</value>
     <comment>Generic refresh action (a button that reloads the current list or view), e.g. the points leaderboard tab.</comment>
   </data>
+  <data name="regenerate" xml:space="preserve">
+    <value>Tạo lại</value>
+    <comment>Settings: the button that makes a new seedphrase in place of the current one.</comment>
+  </data>
   <data name="regenerate_seedphrase" xml:space="preserve">
     <value>Tạo lại cụm từ khôi phục</value>
+  </data>
+  <data name="regenerate_seedphrase_body" xml:space="preserve">
+    <value>Cụm từ khôi phục hiện tại của bạn sẽ ngừng hoạt động. Bạn sẽ thấy một cụm từ mới để lưu lại.</value>
+    <comment>Settings: the confirmation before a new seedphrase replaces the current one; the new one is shown once, to be saved.</comment>
+  </data>
+  <data name="regenerate_seedphrase_title" xml:space="preserve">
+    <value>Tạo lại cụm từ khôi phục?</value>
+    <comment>Settings: the title of the confirmation before a new seedphrase replaces the current one.</comment>
   </data>
   <data name="regions" xml:space="preserve">
     <value>Khu vực</value>
@@ -5986,6 +6030,10 @@ nội dung thế giới</value>
     <value>Chưa có lưu lượng</value>
     <comment>Connect drawer: throughput empty state</comment>
   </data>
+  <data name="site_app_phone" xml:space="preserve">
+    <value>Số điện thoại</value>
+    <comment>ur.io account profile: the label of a phone number sign-in method in the sign-in methods list.</comment>
+  </data>
   <data name="site_app_plan" xml:space="preserve">
     <value>Gói</value>
     <comment>Connect drawer: plan section label</comment>
@@ -6458,6 +6506,10 @@ như nó vốn phải thế.</value>
     <value>Ẩn danh mạnh</value>
     <comment>Connect drawer: strong anonymization toggle — the inverse of allow direct (direct connections expose the real source IP to the provider).</comment>
   </data>
+  <data name="strong_privacy_laws" xml:space="preserve">
+    <value>Luật quyền riêng tư nghiêm ngặt</value>
+    <comment>Locations list: screen reader name of the icon on a location whose country has strong privacy laws.</comment>
+  </data>
   <data name="subscribe" xml:space="preserve">
     <value>Đăng ký</value>
     <comment>Button on the plan picker for the monthly plan, which has no free trial.</comment>
@@ -6484,7 +6536,7 @@ như nó vốn phải thế.</value>
   </data>
   <data name="support" xml:space="preserve">
     <value>Hỗ trợ</value>
-    <comment>Used in Shared/ViewModels/SubscriptionBalanceViewModel.swift.</comment>
+    <comment>Navigation: the Support tab, page or section, where users send feedback and contact the URnetwork support team. Customer support, not backing; use the word the language uses for a support team.</comment>
   </data>
   <data name="support_us" xml:space="preserve">
     <value>Hãy hỗ trợ chúng tôi xây dựng một mạng lưới mới, biết cho đi thay vì nhận lại.</value>
@@ -6817,6 +6869,10 @@ như nó vốn phải thế.</value>
     <value>Khi hủy liên kết mạng giới thiệu, bạn sẽ không thể kiếm điểm từ {} nữa</value>
     <comment>Call to action</comment>
   </data>
+  <data name="unlink_alert_description_unnamed" xml:space="preserve">
+    <value>Khi hủy liên kết mạng giới thiệu, bạn sẽ không thể kiếm điểm từ mạng đó nữa</value>
+    <comment>Referral network: the unlink confirmation when the network's name is not known. The counterpart of unlink_alert_description.</comment>
+  </data>
   <data name="unlink_referral_network" xml:space="preserve">
     <value>Hủy liên kết mạng giới thiệu</value>
     <comment>Call to action</comment>
@@ -6828,6 +6884,10 @@ như nó vốn phải thế.</value>
   <data name="unlock_supporter_tooltip" xml:space="preserve">
     <value>Mở khóa tốc độ nhanh hơn và ưu tiên trải nghiệm các tính năng mới.</value>
     <comment>Settings</comment>
+  </data>
+  <data name="unstable_connection" xml:space="preserve">
+    <value>Kết nối không ổn định</value>
+    <comment>Locations list: screen reader name of the warning icon on a location whose providers may be unstable.</comment>
   </data>
   <data name="unstable_providers_warning" xml:space="preserve">
     <value>* (có thể không ổn định)</value>
