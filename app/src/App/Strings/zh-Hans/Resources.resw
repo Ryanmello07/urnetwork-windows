@@ -92,6 +92,10 @@
     <value>添加登录方式</value>
     <comment>A title for the screen that lets the user add a new sign-in method.</comment>
   </data>
+  <data name="add_an_app" xml:space="preserve">
+    <value>添加应用</value>
+    <comment>Split rules screen on macOS, Apps section: the row (and the title of the sheet it opens) that adds an app from /Applications to the apps that bypass the VPN.</comment>
+  </data>
   <data name="add_blocked_location" xml:space="preserve">
     <value>添加被屏蔽的位置</value>
     <comment>Call to action</comment>
@@ -898,7 +902,7 @@
   </data>
   <data name="checkout_error_unavailable" xml:space="preserve">
     <value>结账功能目前不可用。请稍后重试。</value>
-    <comment>Checkout error in the desktop apps (the macOS direct download, Windows and Linux) when the ur.io checkout page hands back checkout_unavailable: the site cannot open Stripe's checkout right now (it has no Stripe key), so no payment form was shown and nothing was charged. The user cannot fix it; it may work later.</comment>
+    <comment>Checkout error in the desktop apps (the macOS direct download, Windows and Linux) when the ur.io checkout page hands back checkout_unavailable, or the server refuses to start a checkout with error.code checkout_unavailable: the site or the server cannot open Stripe's checkout right now (it has no Stripe key), so no payment form was shown and nothing was charged. The user cannot fix it; it may work later.</comment>
   </data>
   <data name="checkout_finish_in_browser" xml:space="preserve">
     <value>请在浏览器中完成。</value>
@@ -4560,6 +4564,10 @@
     <value>100% 开源且透明</value>
     <comment>Call to action</comment>
   </data>
+  <data name="open_system_settings" xml:space="preserve">
+    <value>打开系统设置</value>
+    <comment>macOS: the button that opens System Settings at the network extensions the user must allow. Use the name macOS gives System Settings in the language.</comment>
+  </data>
   <data name="open_urnetwork" xml:space="preserve">
     <value>打开 URnetwork</value>
     <comment>Tray menu item that shows the app window. The counterpart of quit_urnetwork.</comment>
@@ -6842,6 +6850,14 @@
     <value>今天保存您的卡，{0} 扣款 {1}。在此之前可随时取消。</value>
     <comment>Embedded pay page: what happens with the card on a trial. {price} amount, {date} local date.</comment>
   </data>
+  <data name="site_payment_error_already_subscribed" xml:space="preserve">
+    <value>您已拥有 Pro，因此未扣款。请在您的账户中管理订阅。</value>
+    <comment>Checkout (ur.io's payment screens; the plan purchase in the F-Droid and dapp Android builds; the upgrade sheet in the macOS direct download, Windows and Linux): the server refused a new subscription because the network already has an active Pro subscription (error.code already_subscribed). Nothing was charged.</comment>
+  </data>
+  <data name="site_payment_error_plan_unavailable" xml:space="preserve">
+    <value>此方案暂不可用。请稍后重试。</value>
+    <comment>Checkout (ur.io's payment screens; the plan purchase in the F-Droid and dapp Android builds; the upgrade sheet in the macOS direct download, Windows and Linux): the server cannot sell this Pro plan right now (error.code plan_unavailable: no price or product is configured for it). Nothing was charged.</comment>
+  </data>
   <data name="site_payment_not_seen_body" xml:space="preserve">
     <value>我们尚未看到您的付款。如果您已在钱包中完成付款，它可能仍在处理中；付款到账后，您的方案会在“帐户”中自动更新。</value>
     <comment>Upgrade sheet: give-up state body — the payment may still be processing and will appear under Account</comment>
@@ -7050,6 +7066,14 @@
     <value>您的 Pro 订阅通过 Stripe 计费。您可以在下方随时更新付款信息或取消订阅。</value>
     <comment>Subscription: Stripe-billed body</comment>
   </data>
+  <data name="site_subscription_error_no_customer" xml:space="preserve">
+    <value>此网络没有 Stripe 账单信息。</value>
+    <comment>Manage subscription (ur.io's screen; Settings in the Windows app, Account in the Linux app), opening the billing details: the network has no Stripe customer, so there is no billing portal (error.code no_customer).</comment>
+  </data>
+  <data name="site_subscription_error_store_unavailable" xml:space="preserve">
+    <value>暂时无法连接 Stripe。请稍后重试。</value>
+    <comment>Manage subscription (ur.io's screen; Settings in the Windows app, Account in the Linux app): Stripe did not answer or refused the change, or the billing portal could not be opened; trying again usually works (error.code store_unavailable).</comment>
+  </data>
   <data name="site_unexpected_error" xml:space="preserve">
     <value>发生了意外错误。</value>
     <comment>Account panel: generic unexpected error</comment>
@@ -7206,6 +7230,10 @@
     <value>规则会应用到整个关联网络集群，因此相关流量会被一并处理。</value>
     <comment>Split rules screen: note that a rule matches every host in the same network cluster (related hosts of one site or service), whatever the rule's mode.</comment>
   </data>
+  <data name="split_rules_match_sites_and_apps_macos" xml:space="preserve">
+    <value>分流规则针对的是网站和地址。要让此 Mac 上的某个应用不走 VPN，请将它添加到“应用”中。本地网络地址本来就不经过 VPN。</value>
+    <comment>Split rules screen on macOS 15 and later: the rules match sites and addresses, and an app is kept off the VPN by adding it in the Apps section below (the section is titled with the "Apps" string, so use the same word as that title). Notes that local network addresses already bypass the VPN. Keep Mac and VPN unchanged.</comment>
+  </data>
   <data name="split_rules_match_sites_not_apps" xml:space="preserve">
     <value>分流规则针对的是网站和地址，而不是应用：Apple 仅允许在由组织管理的设备（MDM）上使用按应用 VPN。要让某个应用不走 VPN，请将它使用的网站设为本地路由，或从预设开始。本地网络地址本来就不经过 VPN。</value>
     <comment>Split rules screen (iOS/macOS): why the rules match sites and addresses rather than apps. Apple's per-app VPN (NEAppRule) is available only on devices an organization manages (MDM). Points to host rules and presets, and notes that local network addresses already bypass the VPN. Keep Apple, VPN and MDM unchanged.</comment>
@@ -7217,6 +7245,14 @@
   <data name="split_rules_start_from_preset" xml:space="preserve">
     <value>从预设开始</value>
     <comment>Split rules screen: the menu that starts a route-locally rule from a preset, the address ranges a service publishes for use outside a VPN.</comment>
+  </data>
+  <data name="split_tunnel_apps_not_bypassing" xml:space="preserve">
+    <value>这些应用目前无法绕过 VPN。请重试，并在 macOS 询问时允许代理配置。</value>
+    <comment>Split rules screen on macOS, Apps section: the split tunnel extension or its proxy configuration could not be installed or started, so the listed apps still use the VPN. The Retry button follows; macOS asks the user to allow URnetwork's proxy configuration the first time. Keep VPN and macOS unchanged.</comment>
+  </data>
+  <data name="split_tunnel_extension_needs_approval" xml:space="preserve">
+    <value>要让这些应用不走 VPN，请在系统设置中允许 URnetwork Split Tunnel 扩展。</value>
+    <comment>Split rules screen on macOS, Apps section: the split tunnel system extension waits for the user's one-time approval in System Settings (General &gt; Login Items &amp; Extensions &gt; Network Extensions). Use the name macOS gives System Settings in the language. Keep URnetwork Split Tunnel (the extension's name) and VPN unchanged.</comment>
   </data>
   <data name="sso_browser_open_failed" xml:space="preserve">
     <value>无法打开浏览器。请重试。</value>

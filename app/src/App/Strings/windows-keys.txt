@@ -860,6 +860,10 @@ site_app_no_traffic
 site_app_support_intro
 site_billing_portal_error
 site_ext_setting_up
+site_payment_error_already_subscribed
+site_payment_error_plan_unavailable
+site_subscription_error_no_customer
+site_subscription_error_store_unavailable
 skip
 sn_alpha_symbol
 sn_payout_schedule

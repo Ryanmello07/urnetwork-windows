@@ -92,6 +92,10 @@
     <value>Adicionar um método de login</value>
     <comment>A title for the screen that lets the user add a new sign-in method.</comment>
   </data>
+  <data name="add_an_app" xml:space="preserve">
+    <value>Adicionar um app</value>
+    <comment>Split rules screen on macOS, Apps section: the row (and the title of the sheet it opens) that adds an app from /Applications to the apps that bypass the VPN.</comment>
+  </data>
   <data name="add_blocked_location" xml:space="preserve">
     <value>Adicionar localização bloqueada</value>
     <comment>Call to action</comment>
@@ -906,7 +910,7 @@ maneira certa</value>
   </data>
   <data name="checkout_error_unavailable" xml:space="preserve">
     <value>O checkout não está disponível no momento. Tente novamente mais tarde.</value>
-    <comment>Checkout error in the desktop apps (the macOS direct download, Windows and Linux) when the ur.io checkout page hands back checkout_unavailable: the site cannot open Stripe's checkout right now (it has no Stripe key), so no payment form was shown and nothing was charged. The user cannot fix it; it may work later.</comment>
+    <comment>Checkout error in the desktop apps (the macOS direct download, Windows and Linux) when the ur.io checkout page hands back checkout_unavailable, or the server refuses to start a checkout with error.code checkout_unavailable: the site or the server cannot open Stripe's checkout right now (it has no Stripe key), so no payment form was shown and nothing was charged. The user cannot fix it; it may work later.</comment>
   </data>
   <data name="checkout_finish_in_browser" xml:space="preserve">
     <value>Conclua no navegador.</value>
@@ -4623,6 +4627,10 @@ enviamos para você verificar sua identidade.</value>
     <value>100% código aberto e transparente</value>
     <comment>Call to action</comment>
   </data>
+  <data name="open_system_settings" xml:space="preserve">
+    <value>Abrir Ajustes do Sistema</value>
+    <comment>macOS: the button that opens System Settings at the network extensions the user must allow. Use the name macOS gives System Settings in the language.</comment>
+  </data>
   <data name="open_urnetwork" xml:space="preserve">
     <value>Abrir URnetwork</value>
     <comment>Tray menu item that shows the app window. The counterpart of quit_urnetwork.</comment>
@@ -6185,6 +6193,14 @@ conteúdo do mundo</value>
     <value>Veja a data de renovação, a renovação automática e as opções de cancelamento.</value>
     <comment>Account panel: hint under the plan card for Pro members, next to the Manage button that opens Manage Subscription.</comment>
   </data>
+  <data name="site_payment_error_already_subscribed" xml:space="preserve">
+    <value>Você já tem o Pro, então nada foi cobrado. Gerencie sua assinatura na sua conta.</value>
+    <comment>Checkout (ur.io's payment screens; the plan purchase in the F-Droid and dapp Android builds; the upgrade sheet in the macOS direct download, Windows and Linux): the server refused a new subscription because the network already has an active Pro subscription (error.code already_subscribed). Nothing was charged.</comment>
+  </data>
+  <data name="site_payment_error_plan_unavailable" xml:space="preserve">
+    <value>Este plano não está disponível no momento. Tente novamente mais tarde.</value>
+    <comment>Checkout (ur.io's payment screens; the plan purchase in the F-Droid and dapp Android builds; the upgrade sheet in the macOS direct download, Windows and Linux): the server cannot sell this Pro plan right now (error.code plan_unavailable: no price or product is configured for it). Nothing was charged.</comment>
+  </data>
   <data name="site_save_your_seedphrase" xml:space="preserve">
     <value>Salve sua frase-semente</value>
     <comment>Instant account creation: heading of the view that shows the new seedphrase once.</comment>
@@ -6296,6 +6312,14 @@ conteúdo do mundo</value>
   <data name="site_sub_stripe_body" xml:space="preserve">
     <value>Sua assinatura Pro é cobrada através da Stripe. Atualize os dados de pagamento ou cancele quando quiser abaixo.</value>
     <comment>Subscription: Stripe-billed body</comment>
+  </data>
+  <data name="site_subscription_error_no_customer" xml:space="preserve">
+    <value>Esta rede não tem dados de cobrança no Stripe.</value>
+    <comment>Manage subscription (ur.io's screen; Settings in the Windows app, Account in the Linux app), opening the billing details: the network has no Stripe customer, so there is no billing portal (error.code no_customer).</comment>
+  </data>
+  <data name="site_subscription_error_store_unavailable" xml:space="preserve">
+    <value>Não foi possível acessar o Stripe agora. Tente novamente em instantes.</value>
+    <comment>Manage subscription (ur.io's screen; Settings in the Windows app, Account in the Linux app): Stripe did not answer or refused the change, or the billing portal could not be opened; trying again usually works (error.code store_unavailable).</comment>
   </data>
   <data name="skip" xml:space="preserve">
     <value>Pular</value>
@@ -6449,6 +6473,10 @@ conteúdo do mundo</value>
     <value>As regras se aplicam a todo o cluster de rede coassociado, para que o tráfego relacionado seja capturado em conjunto.</value>
     <comment>Split rules screen: note that a rule matches every host in the same network cluster (related hosts of one site or service), whatever the rule's mode.</comment>
   </data>
+  <data name="split_rules_match_sites_and_apps_macos" xml:space="preserve">
+    <value>As regras de divisão se aplicam a sites e endereços. Para manter um app fora da VPN neste Mac, adicione-o em Apps. Os endereços da rede local já ignoram a VPN.</value>
+    <comment>Split rules screen on macOS 15 and later: the rules match sites and addresses, and an app is kept off the VPN by adding it in the Apps section below (the section is titled with the "Apps" string, so use the same word as that title). Notes that local network addresses already bypass the VPN. Keep Mac and VPN unchanged.</comment>
+  </data>
   <data name="split_rules_match_sites_not_apps" xml:space="preserve">
     <value>As regras de divisão se aplicam a sites e endereços, não a apps: a Apple só permite VPN por app em dispositivos gerenciados por uma organização (MDM). Para manter um app fora da VPN, roteie localmente os sites que ele usa ou comece com uma predefinição. Os endereços da rede local já ignoram a VPN.</value>
     <comment>Split rules screen (iOS/macOS): why the rules match sites and addresses rather than apps. Apple's per-app VPN (NEAppRule) is available only on devices an organization manages (MDM). Points to host rules and presets, and notes that local network addresses already bypass the VPN. Keep Apple, VPN and MDM unchanged.</comment>
@@ -6460,6 +6488,14 @@ conteúdo do mundo</value>
   <data name="split_rules_start_from_preset" xml:space="preserve">
     <value>Começar com uma predefinição</value>
     <comment>Split rules screen: the menu that starts a route-locally rule from a preset, the address ranges a service publishes for use outside a VPN.</comment>
+  </data>
+  <data name="split_tunnel_apps_not_bypassing" xml:space="preserve">
+    <value>Esses apps não podem ignorar a VPN agora. Tente novamente e permita a configuração de proxy se o macOS pedir.</value>
+    <comment>Split rules screen on macOS, Apps section: the split tunnel extension or its proxy configuration could not be installed or started, so the listed apps still use the VPN. The Retry button follows; macOS asks the user to allow URnetwork's proxy configuration the first time. Keep VPN and macOS unchanged.</comment>
+  </data>
+  <data name="split_tunnel_extension_needs_approval" xml:space="preserve">
+    <value>Para manter esses apps fora da VPN, permita a extensão URnetwork Split Tunnel nos Ajustes do Sistema.</value>
+    <comment>Split rules screen on macOS, Apps section: the split tunnel system extension waits for the user's one-time approval in System Settings (General &gt; Login Items &amp; Extensions &gt; Network Extensions). Use the name macOS gives System Settings in the language. Keep URnetwork Split Tunnel (the extension's name) and VPN unchanged.</comment>
   </data>
   <data name="sso_browser_open_failed" xml:space="preserve">
     <value>Não foi possível abrir o navegador. Tente novamente.</value>

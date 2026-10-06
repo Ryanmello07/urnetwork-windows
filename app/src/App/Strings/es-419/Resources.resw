@@ -92,6 +92,10 @@
     <value>Agregar un método de inicio de sesión</value>
     <comment>A title for the screen that lets the user add a new sign-in method.</comment>
   </data>
+  <data name="add_an_app" xml:space="preserve">
+    <value>Agregar una app</value>
+    <comment>Split rules screen on macOS, Apps section: the row (and the title of the sheet it opens) that adds an app from /Applications to the apps that bypass the VPN.</comment>
+  </data>
   <data name="add_blocked_location" xml:space="preserve">
     <value>Agregar ubicación bloqueada</value>
     <comment>Call to action</comment>
@@ -906,7 +910,7 @@ de la manera correcta</value>
   </data>
   <data name="checkout_error_unavailable" xml:space="preserve">
     <value>El pago no está disponible en este momento. Inténtalo de nuevo más tarde.</value>
-    <comment>Checkout error in the desktop apps (the macOS direct download, Windows and Linux) when the ur.io checkout page hands back checkout_unavailable: the site cannot open Stripe's checkout right now (it has no Stripe key), so no payment form was shown and nothing was charged. The user cannot fix it; it may work later.</comment>
+    <comment>Checkout error in the desktop apps (the macOS direct download, Windows and Linux) when the ur.io checkout page hands back checkout_unavailable, or the server refuses to start a checkout with error.code checkout_unavailable: the site or the server cannot open Stripe's checkout right now (it has no Stripe key), so no payment form was shown and nothing was charged. The user cannot fix it; it may work later.</comment>
   </data>
   <data name="checkout_finish_in_browser" xml:space="preserve">
     <value>Termina en tu navegador.</value>
@@ -4623,6 +4627,10 @@ enviamos para verificar tu identidad.</value>
     <value>100% código abierto y transparente</value>
     <comment>Call to action</comment>
   </data>
+  <data name="open_system_settings" xml:space="preserve">
+    <value>Abrir Configuración del Sistema</value>
+    <comment>macOS: the button that opens System Settings at the network extensions the user must allow. Use the name macOS gives System Settings in the language.</comment>
+  </data>
   <data name="open_urnetwork" xml:space="preserve">
     <value>Abrir URnetwork</value>
     <comment>Tray menu item that shows the app window. The counterpart of quit_urnetwork.</comment>
@@ -6186,6 +6194,14 @@ del mundo</value>
     <value>Consulta la fecha de renovación, la renovación automática y las opciones de cancelación.</value>
     <comment>Account panel: hint under the plan card for Pro members, next to the Manage button that opens Manage Subscription.</comment>
   </data>
+  <data name="site_payment_error_already_subscribed" xml:space="preserve">
+    <value>Ya tienes Pro, así que no se te cobró nada. Administra tu suscripción desde tu cuenta.</value>
+    <comment>Checkout (ur.io's payment screens; the plan purchase in the F-Droid and dapp Android builds; the upgrade sheet in the macOS direct download, Windows and Linux): the server refused a new subscription because the network already has an active Pro subscription (error.code already_subscribed). Nothing was charged.</comment>
+  </data>
+  <data name="site_payment_error_plan_unavailable" xml:space="preserve">
+    <value>Este plan no está disponible en este momento. Vuelve a intentarlo más tarde.</value>
+    <comment>Checkout (ur.io's payment screens; the plan purchase in the F-Droid and dapp Android builds; the upgrade sheet in the macOS direct download, Windows and Linux): the server cannot sell this Pro plan right now (error.code plan_unavailable: no price or product is configured for it). Nothing was charged.</comment>
+  </data>
   <data name="site_save_your_seedphrase" xml:space="preserve">
     <value>Guarda tu frase semilla</value>
     <comment>Instant account creation: heading of the view that shows the new seedphrase once.</comment>
@@ -6297,6 +6313,14 @@ del mundo</value>
   <data name="site_sub_stripe_body" xml:space="preserve">
     <value>Tu suscripción Pro se factura a través de Stripe. Actualiza los datos de pago o cancela cuando quieras más abajo.</value>
     <comment>Subscription: Stripe-billed body</comment>
+  </data>
+  <data name="site_subscription_error_no_customer" xml:space="preserve">
+    <value>Esta red no tiene datos de facturación en Stripe.</value>
+    <comment>Manage subscription (ur.io's screen; Settings in the Windows app, Account in the Linux app), opening the billing details: the network has no Stripe customer, so there is no billing portal (error.code no_customer).</comment>
+  </data>
+  <data name="site_subscription_error_store_unavailable" xml:space="preserve">
+    <value>No se pudo conectar con Stripe en este momento. Vuelve a intentarlo en un momento.</value>
+    <comment>Manage subscription (ur.io's screen; Settings in the Windows app, Account in the Linux app): Stripe did not answer or refused the change, or the billing portal could not be opened; trying again usually works (error.code store_unavailable).</comment>
   </data>
   <data name="skip" xml:space="preserve">
     <value>Omitir</value>
@@ -6450,6 +6474,10 @@ del mundo</value>
     <value>Las reglas se aplican a todo el clúster de red asociado, así que el tráfico relacionado queda cubierto en conjunto.</value>
     <comment>Split rules screen: note that a rule matches every host in the same network cluster (related hosts of one site or service), whatever the rule's mode.</comment>
   </data>
+  <data name="split_rules_match_sites_and_apps_macos" xml:space="preserve">
+    <value>Las reglas de división se aplican a sitios y direcciones. Para dejar una app fuera de la VPN en esta Mac, agrégala en Apps. Las direcciones de la red local ya omiten la VPN.</value>
+    <comment>Split rules screen on macOS 15 and later: the rules match sites and addresses, and an app is kept off the VPN by adding it in the Apps section below (the section is titled with the "Apps" string, so use the same word as that title). Notes that local network addresses already bypass the VPN. Keep Mac and VPN unchanged.</comment>
+  </data>
   <data name="split_rules_match_sites_not_apps" xml:space="preserve">
     <value>Las reglas de división se aplican a sitios y direcciones, no a apps: Apple solo permite la VPN por app en dispositivos administrados por una organización (MDM). Para dejar una app fuera de la VPN, enruta localmente los sitios que usa o comienza con una plantilla. Las direcciones de la red local ya omiten la VPN.</value>
     <comment>Split rules screen (iOS/macOS): why the rules match sites and addresses rather than apps. Apple's per-app VPN (NEAppRule) is available only on devices an organization manages (MDM). Points to host rules and presets, and notes that local network addresses already bypass the VPN. Keep Apple, VPN and MDM unchanged.</comment>
@@ -6461,6 +6489,14 @@ del mundo</value>
   <data name="split_rules_start_from_preset" xml:space="preserve">
     <value>Comenzar con una plantilla</value>
     <comment>Split rules screen: the menu that starts a route-locally rule from a preset, the address ranges a service publishes for use outside a VPN.</comment>
+  </data>
+  <data name="split_tunnel_apps_not_bypassing" xml:space="preserve">
+    <value>Estas apps no pueden omitir la VPN en este momento. Reintenta y permite la configuración de proxy si macOS lo solicita.</value>
+    <comment>Split rules screen on macOS, Apps section: the split tunnel extension or its proxy configuration could not be installed or started, so the listed apps still use the VPN. The Retry button follows; macOS asks the user to allow URnetwork's proxy configuration the first time. Keep VPN and macOS unchanged.</comment>
+  </data>
+  <data name="split_tunnel_extension_needs_approval" xml:space="preserve">
+    <value>Para dejar estas apps fuera de la VPN, permite la extensión URnetwork Split Tunnel en Configuración del Sistema.</value>
+    <comment>Split rules screen on macOS, Apps section: the split tunnel system extension waits for the user's one-time approval in System Settings (General &gt; Login Items &amp; Extensions &gt; Network Extensions). Use the name macOS gives System Settings in the language. Keep URnetwork Split Tunnel (the extension's name) and VPN unchanged.</comment>
   </data>
   <data name="sso_browser_open_failed" xml:space="preserve">
     <value>No se pudo abrir el navegador. Inténtalo de nuevo.</value>
