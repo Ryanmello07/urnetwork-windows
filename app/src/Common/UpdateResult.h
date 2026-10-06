@@ -6,7 +6,9 @@
 // admin-only install folder (InstallLocation.h), with an ACL of its own that
 // only an administrator can change, and every user can read it. The tray app
 // reads it when the helper it waited on ends, and on its next launch, since
-// the installer usually closes the app before the helper finishes.
+// the installer usually closes the app before the helper finishes. It shows a
+// report only while the report still says something about the build that
+// reads it (ViewOfReport).
 //
 //   {"tag":"v2026.10.1-1060587890","code":1060587890,"exitCode":0,
 //    "finishedUtc":"2026-10-01T14:51:17Z"}
