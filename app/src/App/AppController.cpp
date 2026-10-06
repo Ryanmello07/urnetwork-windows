@@ -16,6 +16,7 @@
 #include "Log.h"
 #include "MainWindow.xaml.h"
 #include "PageContext.h"  // pages::AdvW — the tray tooltip's health words (#27)
+#include "SingleInstance.h"
 #include "Startup.h"
 #include "Strings.h"
 #include "WindowShell.h"
@@ -283,6 +284,11 @@ void AppController::Shutdown(lifetime::Ending ending) {
   if (quitting_.exchange(true, std::memory_order_acq_rel)) return;
   const lifetime::Plan plan = lifetime::PlanFor(ending);
   LogInfo("app: shutdown requested ({}): {}", lifetime::ToString(ending), plan.why);
+  // Before anything holds this thread: a launch that reaches this instance
+  // from here on is refused with the exiting signal raised, waits for this
+  // process to end and starts the app itself, instead of being queued for a
+  // window this thread will never show (InstanceHandover.h).
+  BeginExiting();
   // First, and joined: the checker's worker is the one thread here that does
   // long blocking I/O (a zip download), and it polls its stop flag between
   // reads, so this is bounded — see UpdateChecker::Stop.

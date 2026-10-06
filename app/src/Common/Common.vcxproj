@@ -50,6 +50,7 @@
     <ClInclude Include="DiagnosticLines.h" />
     <ClInclude Include="Heartbeat.h" />
     <ClInclude Include="Ids.h" />
+    <ClInclude Include="InstanceHandover.h" />
     <ClInclude Include="Log.h" />
     <ClInclude Include="LogUpload.h" />
     <ClInclude Include="MemoryTiers.h" />

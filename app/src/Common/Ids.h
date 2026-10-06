@@ -34,6 +34,12 @@ inline constexpr wchar_t kAppUserModelId[] = L"URnetwork.Desktop";
 // sites drift into a keyless app and a second full instance.
 inline constexpr wchar_t kSingleInstanceKey[] = L"URnetwork.Desktop";
 
+// An instance's exiting signal is this, with its process id appended: a
+// manual-reset event that the instance raises when it begins to exit
+// (App/SingleInstance.cpp). The instance creates it and a launch that finds
+// the instance holding kSingleInstanceKey opens it, so both read this name.
+inline constexpr wchar_t kExitingSignalPrefix[] = L"Local\\URnetwork.Desktop.Exiting.";
+
 // Deep-link / OAuth callback scheme (matches macOS `urnetwork://`).
 inline constexpr wchar_t kUriScheme[] = L"urnetwork";
 

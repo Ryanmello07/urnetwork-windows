@@ -204,7 +204,8 @@ void SetApp(std::unique_ptr<AppController> app);
 // The MSI registers the scheme (installer/Package.wxs) as
 // `"URnetwork.exe" "%1"`, so the shell hands the callback uri to the app as a
 // launch argument. Launches while the app is already running are redirected to
-// it by AppInstance (see main.cpp) and arrive on AppInstance::Activated.
+// it by AppInstance (see main.cpp), arrive on AppInstance::Activated and go
+// through the activation gate (SingleInstance.h), which App::OnLaunched opens.
 
 // The urnetwork:// uri carried by an activation, or empty when it carries none.
 // Handles both shapes: a typed Protocol activation (if the scheme is ever

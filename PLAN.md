@@ -317,7 +317,10 @@ Product — DECIDED 2026-07-09:
   Windows (or a shutdown) stops the tunnel and the provider the same as Quit**
   (WM_ENDSESSION, `Ending::SessionEnd`), and so does signing out of URnetwork,
   which keeps the app running and stays owed to an unreachable service until it is
-  delivered (`app/src/Common/SignOut.h`).
+  delivered (`app/src/Common/SignOut.h`). A launch during any of these exits is
+  neither lost nor told the app is already running: the exiting instance refuses it
+  with its exiting signal raised, and the launch waits (bounded) for that instance to
+  end, then starts the app (`app/src/Common/InstanceHandover.h`).
 - **Provide defaults**: ethernet maps as unmetered/provide-eligible via NetworkCostType.
 - **Per-app split tunneling: IN SCOPE for v1** (M3.5) via a clean-room, MPL-2.0,
   attestation-signed WFP callout driver implemented from first principles (Microsoft docs +
