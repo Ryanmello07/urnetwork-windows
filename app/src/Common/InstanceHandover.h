@@ -43,6 +43,11 @@
 // autostart (kAutostartArgument) shows only the tray icon, wherever it lands.
 // A deep link is routed, and its handling brings the window forward.
 //
+// No launch starts the app while an update installs (owner decision,
+// 2026-10-05). Every round of a launch asks first whether the updater's
+// installer still runs (UpdateMarker.h), and if it does, the launch exits with
+// a short notice instead of redirecting, waiting or starting.
+//
 // Pure, header-only and free of Windows headers, like AppLifetime.h:
 // tools/instance-handover-tests.cpp runs it on any host, App/SingleInstance.cpp
 // binds the exiting signal and main.cpp the App SDK.
@@ -416,6 +421,9 @@ enum class LaunchResult {
   StillClosing,
   // Registering for the key threw: the App SDK is not usable.
   RegistrationFailed,
+  // The updater's installer runs (UpdateMarker.h): this process exits without
+  // starting the app, with a short notice unless it is an autostart.
+  Updating,
 };
 
 // For logs.
@@ -429,6 +437,7 @@ constexpr const char* ToString(LaunchResult result) {
     case LaunchResult::NotStarted: return "the redirect could not be started";
     case LaunchResult::StillClosing: return "the running instance is still closing";
     case LaunchResult::RegistrationFailed: return "registering for the key failed";
+    case LaunchResult::Updating: return "an update is installing";
   }
   return "unknown";
 }
@@ -447,8 +456,10 @@ constexpr LaunchResult ReportFor(RedirectResult result) {
   return LaunchResult::NoResponse;
 }
 
-// Drives one launch to its end (see the file comment). `launcher` binds the
-// App SDK (main.cpp):
+// Drives one launch to its end (see the file comment), the first launch
+// included: it holds the key at once and starts, unless an update installs.
+// `launcher` binds the App SDK (main.cpp):
+//   bool UpdateInProgress();     the updater's installer still runs
 //   bool OwnsKey() const;        this process holds the key
 //   bool Register();             find or register for the key again; false
 //                                when that threw
@@ -458,6 +469,7 @@ constexpr LaunchResult ReportFor(RedirectResult result) {
 template <class Launcher>
 LaunchResult Launch(Launcher& launcher) {
   for (int round = 0;; ++round) {
+    if (launcher.UpdateInProgress()) return LaunchResult::Updating;
     if (launcher.OwnsKey()) return LaunchResult::Holder;
     if (round == kLaunchRounds) return LaunchResult::StillClosing;
     const RedirectAttempt attempt = launcher.Redirect();
@@ -465,6 +477,9 @@ LaunchResult Launch(Launcher& launcher) {
       case Step::Exit: return LaunchResult::HandedOver;
       case Step::Report: return ReportFor(attempt.result);
       case Step::AwaitHolderExitThenRegister:
+        // an instance exiting for the installer is not waited out: the launch
+        // could only start over the files the installer is replacing
+        if (launcher.UpdateInProgress()) return LaunchResult::Updating;
         if (!launcher.AwaitHolderExit()) return LaunchResult::StillClosing;
         break;
       case Step::RegisterAgain: break;

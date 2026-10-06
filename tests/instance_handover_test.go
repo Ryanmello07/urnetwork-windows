@@ -57,7 +57,8 @@ func instanceHandoverTestProgram(t *testing.T, mutate func(string) string) strin
 // exiting instance, or whose instance ended, starts the app once that instance
 // has gone, while only an instance that still runs and is not exiting earns an
 // "already running" message. The user's launch opens the window and an
-// autostart shows only the tray icon, wherever each lands.
+// autostart shows only the tray icon, wherever each lands; and no launch
+// starts the app while an update installs.
 func TestInstanceHandover(t *testing.T) {
 	if !strings.Contains(readCommonSource(t, "Common.vcxproj"), `<ClInclude Include="InstanceHandover.h" />`) {
 		t.Error("Common.vcxproj does not list InstanceHandover.h")
@@ -227,4 +228,20 @@ func TestInstanceHandoverRejectsAnAutostartArgumentMatchedLoosely(t *testing.T) 
 			"  return inToken && token == argument;\n",
 			"  return inToken && token.starts_with(argument);\n")
 	}, "arguments: --autostart is matched whole and unquoted")
+}
+
+// The owner's 2026-10-05 decision: no launch starts the app while an update
+// installs. Drop the check every round makes, or the one before waiting out an
+// instance that quits for the installer, and the spec must fail.
+func TestInstanceHandoverRejectsALaunchThatStartsDuringAnUpdate(t *testing.T) {
+	requireInstanceHandoverFailure(t, func(source string) string {
+		return handoverReplace(t, source,
+			"    if (launcher.UpdateInProgress()) return LaunchResult::Updating;\n    if (launcher.OwnsKey()) return LaunchResult::Holder;\n",
+			"    if (launcher.OwnsKey()) return LaunchResult::Holder;\n")
+	}, "update: a launch during an update does not start the app")
+	requireInstanceHandoverFailure(t, func(source string) string {
+		return handoverReplace(t, source,
+			"        if (launcher.UpdateInProgress()) return LaunchResult::Updating;\n        if (!launcher.AwaitHolderExit()) return LaunchResult::StillClosing;\n",
+			"        if (!launcher.AwaitHolderExit()) return LaunchResult::StillClosing;\n")
+	}, "update: a launch that meets the instance quitting for the installer exits without waiting")
 }

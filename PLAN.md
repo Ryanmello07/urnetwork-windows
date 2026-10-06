@@ -327,6 +327,13 @@ Product — DECIDED 2026-07-09:
   autostart at sign-in (`URnetwork.exe --autostart`) shows only the tray icon. Nothing
   registers an autostart yet; launch-at-login must pass `--autostart`
   (`instance::kAutostartArgument`, pinned by a contract test).
+- **Launches during an update: DECIDED 2026-10-05 (owner)** — refused, "protect the
+  update to not be corrupted where possible". The in-app updater records the msiexec
+  it started (process id, creation time, time written) before the app quits; while
+  that installer runs, a launch shows a short self-closing "URnetwork is updating"
+  notice (an autostart none) and exits. The marker is stale once the installer ends or
+  after 20 minutes, and the next launch deletes it (`app/src/Common/UpdateMarker.h`).
+  The MSI relaunches nothing.
 - **Provide defaults**: ethernet maps as unmetered/provide-eligible via NetworkCostType.
 - **Per-app split tunneling: IN SCOPE for v1** (M3.5) via a clean-room, MPL-2.0,
   attestation-signed WFP callout driver implemented from first principles (Microsoft docs +

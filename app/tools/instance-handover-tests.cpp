@@ -3,9 +3,10 @@
 // the launch shows (Common/InstanceHandover.h). The defects it pins: a launch
 // during the moment Quit spends stopping the service was redirected to the
 // quitting instance and lost, or after 15 s was told that URnetwork was already
-// running but did not respond; and the user's first launch showed only the
-// tray icon. Run against the same header the app compiles, on any host with a
-// C++20 compiler.
+// running but did not respond; the user's first launch showed only the tray
+// icon; and a launch during an update started the app over the files the
+// installer replaces. Run against the same header the app compiles, on any
+// host with a C++20 compiler.
 //
 //   c++ -std=c++20 -pthread -I ../src/Common instance-handover-tests.cpp -o /tmp/instance-handover-tests && /tmp/instance-handover-tests
 //
@@ -329,6 +330,16 @@ class FakeLauncher {
   explicit FakeLauncher(std::vector<FakeHolder> holders, bool registerThrows = false)
       : holders_(std::move(holders)), registerThrows_(registerThrows), owns_(holders_.empty()) {}
 
+  // The answers to the launch's update checks, in turn; false once they run
+  // out (the update is over, or there was none).
+  std::vector<bool> updateAnswers;
+  int updateChecks = 0;
+
+  bool UpdateInProgress() {
+    const std::size_t at = static_cast<std::size_t>(updateChecks++);
+    return at < updateAnswers.size() && updateAnswers[at];
+  }
+
   bool OwnsKey() const { return owns_; }
 
   bool Register() {
@@ -546,6 +557,32 @@ void TestTheFourLaunchesTheOwnerNamed() {
         "healthy relaunch: the user's relaunch shows the window, an autostart's shows nothing");
 }
 
+void TestALaunchDuringAnUpdateDoesNotStartTheApp() {
+  // the installer runs and no instance is left: not even the first launch starts
+  FakeLauncher first({});
+  first.updateAnswers = {true};
+  Check(Launch(first) == LaunchResult::Updating,
+        "update: a launch during an update does not start the app");
+  Check(first.calls.empty(), "update: it neither redirects nor registers");
+  // the installer runs and the old instance is still on its way out
+  FakeLauncher second({FakeHolder{.redirect = Attempt(RedirectResult::Taken, true)}});
+  second.updateAnswers = {true};
+  Check(Launch(second) == LaunchResult::Updating && second.calls.empty(),
+        "update: a launch during an update does not redirect to the instance that quits for it");
+  // the update began after this launch's first look: the instance it reached
+  // is quitting for the installer
+  FakeLauncher handoff({FakeHolder{.redirect = Attempt(RedirectResult::Taken, true)}});
+  handoff.updateAnswers = {false, true};
+  Check(Launch(handoff) == LaunchResult::Updating && handoff.calls == Calls{"redirect"},
+        "update: a launch that meets the instance quitting for the installer exits without "
+        "waiting (no wait, no registration)");
+  // the update is over: launches start again
+  FakeLauncher after({FakeHolder{.redirect = Attempt(RedirectResult::Taken, true)}});
+  after.updateAnswers = {false, false};
+  Check(Launch(after) == LaunchResult::Holder,
+        "update: once the installer has ended, launches start the app again");
+}
+
 void TestAfterRedirect() {
   struct Case {
     RedirectResult result;
@@ -590,7 +627,7 @@ void TestNames() {
   for (LaunchResult result :
        {LaunchResult::Holder, LaunchResult::HandedOver, LaunchResult::NoResponse,
         LaunchResult::Refused, LaunchResult::Unreachable, LaunchResult::NotStarted,
-        LaunchResult::StillClosing, LaunchResult::RegistrationFailed}) {
+        LaunchResult::StillClosing, LaunchResult::RegistrationFailed, LaunchResult::Updating}) {
     Check(std::string_view(ToString(result)) != "unknown", "names: every launch result");
   }
 }
@@ -619,6 +656,7 @@ int main() {
   TestArguments();
   TestActionFor();
   TestTheFourLaunchesTheOwnerNamed();
+  TestALaunchDuringAnUpdateDoesNotStartTheApp();
   TestAfterRedirect();
   TestNames();
   std::cout << (gCases - gFailures) << "/" << gCases << " instance handover checks passed\n";

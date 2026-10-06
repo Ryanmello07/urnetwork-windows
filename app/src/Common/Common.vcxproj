@@ -68,6 +68,7 @@
     <ClInclude Include="Strings.h" />
     <ClInclude Include="ThreadGuard.h" />
     <ClInclude Include="UpdateFormats.h" />
+    <ClInclude Include="UpdateMarker.h" />
     <ClInclude Include="Version.h" />
     <ClInclude Include="VersionGrammar.h" />
   </ItemGroup>

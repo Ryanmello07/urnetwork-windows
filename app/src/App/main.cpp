@@ -104,6 +104,7 @@ void ReportLaunchFailure(urnw::instance::LaunchResult result, const std::wstring
       return;
     case LaunchResult::Holder:
     case LaunchResult::HandedOver:
+    case LaunchResult::Updating:
       return;
   }
 }
@@ -142,6 +143,9 @@ class Launcher {
 
   // This process holds the key.
   bool OwnsKey() const { return holder_.IsCurrent(); }
+
+  // The updater's installer still runs (UpdateMarker.h).
+  bool UpdateInProgress() const { return urnw::UpdateInProgress(); }
 
   // Find or register for the key again; false when the App SDK threw.
   bool Register() {
@@ -407,16 +411,22 @@ int __stdcall wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
   // The first launch owns the key. Every later launch hands its activation (a
   // urnetwork:// wallet callback, or a plain relaunch) to the instance that
   // holds the key and exits; when that instance is exiting, the launch waits
-  // for it to end and starts the app itself (InstanceHandover.h).
-  if (!isPrimary) {
+  // for it to end and starts the app itself (InstanceHandover.h). While the
+  // updater's installer runs, no launch, the first included, starts the app.
+  {
     Launcher launcher(args, primary);
     const urnw::instance::LaunchResult launch = urnw::instance::Launch(launcher);
-    urnw::LogInfo("startup: second launch: {}", urnw::instance::ToString(launch));
+    urnw::LogInfo("startup: launch: {}", urnw::instance::ToString(launch));
     switch (launch) {
       case urnw::instance::LaunchResult::Holder:
         break;
       case urnw::instance::LaunchResult::HandedOver:
         return 0;
+      case urnw::instance::LaunchResult::Updating:
+        // an autostart leaves without a word; the user's launch is told why
+        if (!urnw::LaunchedByAutostart()) urnw::ShowUpdatingNotice();
+        // as below: a redirect's worker may still be blocked in its call
+        ::ExitProcess(0);
       default:
         ReportLaunchFailure(launch, launcher.Failure(launch));
         // A worker thread may still be blocked inside the redirect call. Ending

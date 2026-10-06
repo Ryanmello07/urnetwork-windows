@@ -1,7 +1,8 @@
 // The Win32 half of the single instance; the decisions are
-// Common/InstanceHandover.h. This instance's exiting signal and the gate that
-// takes launches redirected to it, a launch's watch over the instance that
-// holds the key, and whether this launch is an autostart.
+// Common/InstanceHandover.h and Common/UpdateMarker.h. This instance's exiting
+// signal and the gate that takes launches redirected to it, a launch's watch
+// over the instance that holds the key, whether this launch is an autostart,
+// and the marker that refuses launches while an update installs.
 //
 // The exiting signal is a manual-reset event named for the process id
 // (ids::kExitingSignalPrefix). Every launch creates its own before it
@@ -20,6 +21,7 @@
 #include <cstdint>
 
 #include "InstanceHandover.h"
+#include "UpdateMarker.h"
 
 namespace urnw {
 
@@ -40,6 +42,22 @@ void BeginExiting();
 // This process was started by an autostart at sign-in: its command line has
 // instance::kAutostartArgument.
 bool LaunchedByAutostart();
+
+// The updater has started `installerProcess` (a process handle with
+// PROCESS_QUERY_LIMITED_INFORMATION): until it ends, a launch exits instead of
+// starting the app. Written before the app quits for the installer.
+void RecordUpdateInProgress(void* installerProcess);
+
+// The updater's installer still runs. A stale marker (its installer ended, it
+// is too old, it does not parse) is deleted on the way, so it never refuses a
+// later launch.
+bool UpdateInProgress();
+
+// Tells the user that the app is updating and this launch will not start it.
+// Blocks until dismissed, or at most kUpdatingNoticeMs: this process runs
+// URnetwork.exe from the folder the installer is replacing, and every second
+// it stays it holds those files open.
+void ShowUpdatingNotice();
 
 // A launch's watch over the instance that holds the key, opened before the
 // launch redirects to it. Not safe for concurrent use; one launch thread owns
