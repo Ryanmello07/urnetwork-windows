@@ -12,6 +12,7 @@
 #include <winrt/Microsoft.UI.Xaml.Media.h>
 #include <winrt/Windows.UI.Text.h>
 
+#include "DeveloperExitPresentation.h"
 #include "Log.h"
 #include "MainWindow.xaml.h"
 #include "PageContext.h"
@@ -431,6 +432,8 @@ void DeveloperPage::ShowPreviewSnapshot() {
   a.EffectiveTier = 1;
   a.FlowCount = 24;
   a.Proven = true;
+  a.ProviderDiagnosticsAvailable = true;  // -> "policy generation 2"
+  a.ProviderSecurityPolicyGeneration = 2;
   urnet::Exit b;
   b.ClientId = "01J8Z2QK7M9V4CXB7WQ2";
   b.WindowType = "";  // -> "auto"
@@ -440,6 +443,7 @@ void DeveloperPage::ShowPreviewSnapshot() {
   b.DialFailureCount = 4;
   b.Warning = true;
   b.WarningCause = "probe_silence";
+  b.ProviderDiagnosticsAvailable = true;  // generation 0 -> "policy generation unknown"
   urnet::Exit c;
   c.ClientId = "01J8Z2QK7M9V4CXCZ0P8";
   c.WindowType = "p2p";
@@ -1594,6 +1598,13 @@ void DeveloperPage::ApplyExits(ReliabilitySnapshot const& snap) {
     if (e.P2pOnly) state.push_back(DevW("dev_state_p2p", L"p2p"));
     // absence of `proven` means "not yet proven", never "bad"
     if (e.Proven) state.push_back(DevW("dev_state_proven", L"proven"));
+    // the provider's security rules generation, once its first diagnostics
+    // arrive. An exit with a lower number than the others runs older rules
+    if (auto policy = developerexit::PolicyGenerationOf(e)) {
+      state.push_back(policy->generation
+                          ? urnw::Format("dev_exit_policy_generation", *policy->generation)
+                          : urnw::Localized("dev_exit_policy_generation_unknown"));
+    }
     std::wstring joined;
     for (auto const& part : state) {
       if (!joined.empty()) joined += L" \u00B7 ";  // middle dot

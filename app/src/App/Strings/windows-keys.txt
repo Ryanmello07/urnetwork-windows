@@ -293,6 +293,8 @@ dev_drop_stalled_exits_fast
 dev_dropped_exit
 dev_effective_tier
 dev_evaluation_pool
+dev_exit_policy_generation
+dev_exit_policy_generation_unknown
 dev_exits
 dev_exits_actions_detail
 dev_fast_first_exit_poll

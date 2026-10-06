@@ -92,6 +92,10 @@
     <value>Dodaj metodę logowania</value>
     <comment>A title for the screen that lets the user add a new sign-in method.</comment>
   </data>
+  <data name="add_an_app" xml:space="preserve">
+    <value>Dodaj aplikację</value>
+    <comment>Split rules screen on macOS, Apps section: the row (and the title of the sheet it opens) that adds an app from /Applications to the apps that bypass the VPN.</comment>
+  </data>
   <data name="add_blocked_location" xml:space="preserve">
     <value>Dodaj zablokowaną lokalizację</value>
     <comment>Call to action</comment>
@@ -1892,6 +1896,14 @@ właściwy sposób</value>
     <value>Przepływy: {}</value>
     <comment>Developer tools screen (reliability surface): exit flows control label.</comment>
   </data>
+  <data name="dev_exit_policy_generation" xml:space="preserve">
+    <value>generacja polityki {}</value>
+    <comment>Developer page exit readout: the security policy (safety rules) generation the exit's provider enforces. Connect raises this number with every reviewed change to the built-in rules, so a higher number is newer rules.</comment>
+  </data>
+  <data name="dev_exit_policy_generation_unknown" xml:space="preserve">
+    <value>generacja polityki nieznana</value>
+    <comment>Developer page exit readout: the exit's provider reported its security policy (safety rules) without a generation, because it predates the generation or runs a custom policy.</comment>
+  </data>
   <data name="dev_exits" xml:space="preserve">
     <value>Wyjścia</value>
     <comment>Developer tools screen (reliability surface): exits control label.</comment>
@@ -2623,6 +2635,10 @@ właściwy sposób</value>
   <data name="dev_state_proven" xml:space="preserve">
     <value>sprawdzone</value>
     <comment>Developer page: exit state, proven.</comment>
+  </data>
+  <data name="dev_state_tier" xml:space="preserve">
+    <value>poziom {}</value>
+    <comment>Developer page exit readout: the exit's tier in its state line, the platform's rank for the provider (0 is best). The value is the tier number, or two numbers with an arrow ("1→3") when live demotion moved the rank that selection uses. The Windows and Linux pages show the same value in their Tier column (dev_col_tier).</comment>
   </data>
   <data name="dev_state_warned" xml:space="preserve">
     <value>ostrzeżone</value>
@@ -4751,6 +4767,10 @@ który wysłaliśmy, aby zweryfikować twoją tożsamość.</value>
     <value>W 100% otwarty kod źródłowy i przejrzystość</value>
     <comment>Call to action</comment>
   </data>
+  <data name="open_system_settings" xml:space="preserve">
+    <value>Otwórz Ustawienia systemowe</value>
+    <comment>macOS: the button that opens System Settings at the network extensions the user must allow. Use the name macOS gives System Settings in the language.</comment>
+  </data>
   <data name="open_urnetwork" xml:space="preserve">
     <value>Otwórz URnetwork</value>
     <comment>Tray menu item that shows the app window. The counterpart of quit_urnetwork.</comment>
@@ -6673,6 +6693,10 @@ treść świata</value>
     <value>Reguły dotyczą całego powiązanego klastra sieciowego, więc pokrewny ruch jest obejmowany razem.</value>
     <comment>Split rules screen: note that a rule matches every host in the same network cluster (related hosts of one site or service), whatever the rule's mode.</comment>
   </data>
+  <data name="split_rules_match_sites_and_apps_macos" xml:space="preserve">
+    <value>Reguły podziału dotyczą witryn i adresów. Aby wyłączyć aplikację z VPN na tym Macu, dodaj ją w sekcji Aplikacje. Adresy sieci lokalnej już omijają VPN.</value>
+    <comment>Split rules screen on macOS 15 and later: the rules match sites and addresses, and an app is kept off the VPN by adding it in the Apps section below (the section is titled with the "Apps" string, so use the same word as that title). Notes that local network addresses already bypass the VPN. Keep Mac and VPN unchanged.</comment>
+  </data>
   <data name="split_rules_match_sites_not_apps" xml:space="preserve">
     <value>Reguły podziału dotyczą witryn i adresów, a nie aplikacji: Apple zezwala na VPN dla poszczególnych aplikacji tylko na urządzeniach zarządzanych przez organizację (MDM). Aby wyłączyć aplikację z VPN, kieruj lokalnie witryny, z których korzysta, albo zacznij od szablonu. Adresy sieci lokalnej już omijają VPN.</value>
     <comment>Split rules screen (iOS/macOS): why the rules match sites and addresses rather than apps. Apple's per-app VPN (NEAppRule) is available only on devices an organization manages (MDM). Points to host rules and presets, and notes that local network addresses already bypass the VPN. Keep Apple, VPN and MDM unchanged.</comment>
@@ -6684,6 +6708,14 @@ treść świata</value>
   <data name="split_rules_start_from_preset" xml:space="preserve">
     <value>Zacznij od szablonu</value>
     <comment>Split rules screen: the menu that starts a route-locally rule from a preset, the address ranges a service publishes for use outside a VPN.</comment>
+  </data>
+  <data name="split_tunnel_apps_not_bypassing" xml:space="preserve">
+    <value>Te aplikacje nie mogą teraz omijać VPN. Spróbuj ponownie i zezwól na konfigurację proxy, jeśli macOS o to poprosi.</value>
+    <comment>Split rules screen on macOS, Apps section: the split tunnel extension or its proxy configuration could not be installed or started, so the listed apps still use the VPN. The Retry button follows; macOS asks the user to allow URnetwork's proxy configuration the first time. Keep VPN and macOS unchanged.</comment>
+  </data>
+  <data name="split_tunnel_extension_needs_approval" xml:space="preserve">
+    <value>Aby wyłączyć te aplikacje z VPN, zezwól na rozszerzenie URnetwork Split Tunnel w Ustawieniach systemowych.</value>
+    <comment>Split rules screen on macOS, Apps section: the split tunnel system extension waits for the user's one-time approval in System Settings (General &gt; Login Items &amp; Extensions &gt; Network Extensions). Use the name macOS gives System Settings in the language. Keep URnetwork Split Tunnel (the extension's name) and VPN unchanged.</comment>
   </data>
   <data name="sso_browser_open_failed" xml:space="preserve">
     <value>Nie udało się otworzyć przeglądarki. Spróbuj ponownie.</value>

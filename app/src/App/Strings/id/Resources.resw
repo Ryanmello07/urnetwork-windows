@@ -92,6 +92,10 @@
     <value>Tambahkan metode masuk</value>
     <comment>A title for the screen that lets the user add a new sign-in method.</comment>
   </data>
+  <data name="add_an_app" xml:space="preserve">
+    <value>Tambahkan aplikasi</value>
+    <comment>Split rules screen on macOS, Apps section: the row (and the title of the sheet it opens) that adds an app from /Applications to the apps that bypass the VPN.</comment>
+  </data>
   <data name="add_blocked_location" xml:space="preserve">
     <value>Tambahkan lokasi yang diblokir</value>
     <comment>Call to action</comment>
@@ -1844,6 +1848,14 @@ cara yang benar</value>
     <value>{} aliran</value>
     <comment>Developer tools screen (reliability surface): exit flows control label.</comment>
   </data>
+  <data name="dev_exit_policy_generation" xml:space="preserve">
+    <value>generasi kebijakan {}</value>
+    <comment>Developer page exit readout: the security policy (safety rules) generation the exit's provider enforces. Connect raises this number with every reviewed change to the built-in rules, so a higher number is newer rules.</comment>
+  </data>
+  <data name="dev_exit_policy_generation_unknown" xml:space="preserve">
+    <value>generasi kebijakan tidak diketahui</value>
+    <comment>Developer page exit readout: the exit's provider reported its security policy (safety rules) without a generation, because it predates the generation or runs a custom policy.</comment>
+  </data>
   <data name="dev_exits" xml:space="preserve">
     <value>Exit</value>
     <comment>Developer tools screen (reliability surface): exits control label.</comment>
@@ -2563,6 +2575,10 @@ cara yang benar</value>
   <data name="dev_state_proven" xml:space="preserve">
     <value>terbukti</value>
     <comment>Developer page: exit state, proven.</comment>
+  </data>
+  <data name="dev_state_tier" xml:space="preserve">
+    <value>tingkat {}</value>
+    <comment>Developer page exit readout: the exit's tier in its state line, the platform's rank for the provider (0 is best). The value is the tier number, or two numbers with an arrow ("1→3") when live demotion moved the rank that selection uses. The Windows and Linux pages show the same value in their Tier column (dev_col_tier).</comment>
   </data>
   <data name="dev_state_warned" xml:space="preserve">
     <value>diperingatkan</value>
@@ -4560,6 +4576,10 @@ Klaim bonus Anda dengan membuat jaringan!</value>
     <value>100% open source dan transparan</value>
     <comment>Call to action</comment>
   </data>
+  <data name="open_system_settings" xml:space="preserve">
+    <value>Buka Pengaturan Sistem</value>
+    <comment>macOS: the button that opens System Settings at the network extensions the user must allow. Use the name macOS gives System Settings in the language.</comment>
+  </data>
   <data name="open_urnetwork" xml:space="preserve">
     <value>Buka URnetwork</value>
     <comment>Tray menu item that shows the app window. The counterpart of quit_urnetwork.</comment>
@@ -6338,6 +6358,10 @@ konten dunia</value>
     <value>Aturan berlaku untuk seluruh klaster jaringan terkait, sehingga lalu lintas yang berhubungan tercakup bersama.</value>
     <comment>Split rules screen: note that a rule matches every host in the same network cluster (related hosts of one site or service), whatever the rule's mode.</comment>
   </data>
+  <data name="split_rules_match_sites_and_apps_macos" xml:space="preserve">
+    <value>Aturan pemisahan berlaku untuk situs dan alamat. Agar aplikasi tidak melalui VPN di Mac ini, tambahkan di Aplikasi. Alamat jaringan lokal sudah tidak melalui VPN.</value>
+    <comment>Split rules screen on macOS 15 and later: the rules match sites and addresses, and an app is kept off the VPN by adding it in the Apps section below (the section is titled with the "Apps" string, so use the same word as that title). Notes that local network addresses already bypass the VPN. Keep Mac and VPN unchanged.</comment>
+  </data>
   <data name="split_rules_match_sites_not_apps" xml:space="preserve">
     <value>Aturan pemisahan berlaku untuk situs dan alamat, bukan aplikasi: Apple hanya mengizinkan VPN per aplikasi di perangkat yang dikelola organisasi (MDM). Agar aplikasi tidak melalui VPN, rutekan situs yang digunakannya secara lokal, atau mulai dari preset. Alamat jaringan lokal sudah tidak melalui VPN.</value>
     <comment>Split rules screen (iOS/macOS): why the rules match sites and addresses rather than apps. Apple's per-app VPN (NEAppRule) is available only on devices an organization manages (MDM). Points to host rules and presets, and notes that local network addresses already bypass the VPN. Keep Apple, VPN and MDM unchanged.</comment>
@@ -6349,6 +6373,14 @@ konten dunia</value>
   <data name="split_rules_start_from_preset" xml:space="preserve">
     <value>Mulai dari preset</value>
     <comment>Split rules screen: the menu that starts a route-locally rule from a preset, the address ranges a service publishes for use outside a VPN.</comment>
+  </data>
+  <data name="split_tunnel_apps_not_bypassing" xml:space="preserve">
+    <value>Aplikasi ini belum bisa melewati VPN saat ini. Coba lagi, dan izinkan konfigurasi proxy jika macOS memintanya.</value>
+    <comment>Split rules screen on macOS, Apps section: the split tunnel extension or its proxy configuration could not be installed or started, so the listed apps still use the VPN. The Retry button follows; macOS asks the user to allow URnetwork's proxy configuration the first time. Keep VPN and macOS unchanged.</comment>
+  </data>
+  <data name="split_tunnel_extension_needs_approval" xml:space="preserve">
+    <value>Agar aplikasi ini tidak melalui VPN, izinkan ekstensi URnetwork Split Tunnel di Pengaturan Sistem.</value>
+    <comment>Split rules screen on macOS, Apps section: the split tunnel system extension waits for the user's one-time approval in System Settings (General &gt; Login Items &amp; Extensions &gt; Network Extensions). Use the name macOS gives System Settings in the language. Keep URnetwork Split Tunnel (the extension's name) and VPN unchanged.</comment>
   </data>
   <data name="sso_browser_open_failed" xml:space="preserve">
     <value>Tidak dapat membuka browser. Silakan coba lagi.</value>

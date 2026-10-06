@@ -367,6 +367,8 @@
     <ClInclude Include="ConnectPage.h" />
     <ClInclude Include="ManageSubscription.h" />
     <ClInclude Include="DeveloperPage.h" />
+    <!-- header-only and WinRT-free: tools/developer-exit-tests.cpp runs it -->
+    <ClInclude Include="DeveloperExitPresentation.h" />
     <ClInclude Include="LoginPage.h" />
     <ClInclude Include="PageContext.h" />
     <ClInclude Include="SettingsPage.h" />

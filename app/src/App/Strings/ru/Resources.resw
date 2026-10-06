@@ -92,6 +92,10 @@
     <value>Добавить способ входа</value>
     <comment>A title for the screen that lets the user add a new sign-in method.</comment>
   </data>
+  <data name="add_an_app" xml:space="preserve">
+    <value>Добавить приложение</value>
+    <comment>Split rules screen on macOS, Apps section: the row (and the title of the sheet it opens) that adds an app from /Applications to the apps that bypass the VPN.</comment>
+  </data>
   <data name="add_blocked_location" xml:space="preserve">
     <value>Добавить заблокированную локацию</value>
     <comment>Call to action</comment>
@@ -1892,6 +1896,14 @@
     <value>Потоков: {}</value>
     <comment>Developer tools screen (reliability surface): exit flows control label.</comment>
   </data>
+  <data name="dev_exit_policy_generation" xml:space="preserve">
+    <value>поколение политики {}</value>
+    <comment>Developer page exit readout: the security policy (safety rules) generation the exit's provider enforces. Connect raises this number with every reviewed change to the built-in rules, so a higher number is newer rules.</comment>
+  </data>
+  <data name="dev_exit_policy_generation_unknown" xml:space="preserve">
+    <value>поколение политики неизвестно</value>
+    <comment>Developer page exit readout: the exit's provider reported its security policy (safety rules) without a generation, because it predates the generation or runs a custom policy.</comment>
+  </data>
   <data name="dev_exits" xml:space="preserve">
     <value>Выходы</value>
     <comment>Developer tools screen (reliability surface): exits control label.</comment>
@@ -2623,6 +2635,10 @@
   <data name="dev_state_proven" xml:space="preserve">
     <value>проверен</value>
     <comment>Developer page: exit state, proven.</comment>
+  </data>
+  <data name="dev_state_tier" xml:space="preserve">
+    <value>уровень {}</value>
+    <comment>Developer page exit readout: the exit's tier in its state line, the platform's rank for the provider (0 is best). The value is the tier number, or two numbers with an arrow ("1→3") when live demotion moved the rank that selection uses. The Windows and Linux pages show the same value in their Tier column (dev_col_tier).</comment>
   </data>
   <data name="dev_state_warned" xml:space="preserve">
     <value>предупреждён</value>
@@ -4751,6 +4767,10 @@
   <data name="open_source_transparent" xml:space="preserve">
     <value>100% открытый исходный код и прозрачность</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="open_system_settings" xml:space="preserve">
+    <value>Открыть Системные настройки</value>
+    <comment>macOS: the button that opens System Settings at the network extensions the user must allow. Use the name macOS gives System Settings in the language.</comment>
   </data>
   <data name="open_urnetwork" xml:space="preserve">
     <value>Открыть URnetwork</value>
@@ -7578,6 +7598,10 @@
     <value>Правила применяются ко всему связанному сетевому кластеру, поэтому сопутствующий трафик учитывается вместе.</value>
     <comment>Split rules screen: note that a rule matches every host in the same network cluster (related hosts of one site or service), whatever the rule's mode.</comment>
   </data>
+  <data name="split_rules_match_sites_and_apps_macos" xml:space="preserve">
+    <value>Правила разделения применяются к сайтам и адресам. Чтобы приложение на этом Mac работало вне VPN, добавьте его в разделе «Приложения». Адреса локальной сети уже идут в обход VPN.</value>
+    <comment>Split rules screen on macOS 15 and later: the rules match sites and addresses, and an app is kept off the VPN by adding it in the Apps section below (the section is titled with the "Apps" string, so use the same word as that title). Notes that local network addresses already bypass the VPN. Keep Mac and VPN unchanged.</comment>
+  </data>
   <data name="split_rules_match_sites_not_apps" xml:space="preserve">
     <value>Правила разделения применяются к сайтам и адресам, а не к приложениям: Apple разрешает VPN для отдельных приложений только на устройствах, которыми управляет организация (MDM). Чтобы приложение работало вне VPN, направьте сайты, которые оно использует, локально или начните с шаблона. Адреса локальной сети уже идут в обход VPN.</value>
     <comment>Split rules screen (iOS/macOS): why the rules match sites and addresses rather than apps. Apple's per-app VPN (NEAppRule) is available only on devices an organization manages (MDM). Points to host rules and presets, and notes that local network addresses already bypass the VPN. Keep Apple, VPN and MDM unchanged.</comment>
@@ -7589,6 +7613,14 @@
   <data name="split_rules_start_from_preset" xml:space="preserve">
     <value>Начать с шаблона</value>
     <comment>Split rules screen: the menu that starts a route-locally rule from a preset, the address ranges a service publishes for use outside a VPN.</comment>
+  </data>
+  <data name="split_tunnel_apps_not_bypassing" xml:space="preserve">
+    <value>Сейчас эти приложения не могут работать в обход VPN. Повторите попытку и разрешите конфигурацию прокси, если macOS попросит.</value>
+    <comment>Split rules screen on macOS, Apps section: the split tunnel extension or its proxy configuration could not be installed or started, so the listed apps still use the VPN. The Retry button follows; macOS asks the user to allow URnetwork's proxy configuration the first time. Keep VPN and macOS unchanged.</comment>
+  </data>
+  <data name="split_tunnel_extension_needs_approval" xml:space="preserve">
+    <value>Чтобы эти приложения работали вне VPN, разрешите расширение URnetwork Split Tunnel в Системных настройках.</value>
+    <comment>Split rules screen on macOS, Apps section: the split tunnel system extension waits for the user's one-time approval in System Settings (General &gt; Login Items &amp; Extensions &gt; Network Extensions). Use the name macOS gives System Settings in the language. Keep URnetwork Split Tunnel (the extension's name) and VPN unchanged.</comment>
   </data>
   <data name="sso_browser_open_failed" xml:space="preserve">
     <value>Не удалось открыть браузер. Попробуйте снова.</value>
