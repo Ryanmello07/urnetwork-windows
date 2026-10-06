@@ -119,6 +119,26 @@ inline constexpr std::wstring_view kAfterUpdateArgument = L"--after-update";
 // after it starts the relaunch, and the helper a moment after msiexec.
 inline constexpr std::chrono::milliseconds kAfterUpdateBudget{120000};
 
+// How often the relaunch asks whether the update has ended.
+inline constexpr std::chrono::milliseconds kAfterUpdatePoll{500};
+
+// The relaunch's wait: while `updating()` says the update marker's installer
+// still runs, sleep kAfterUpdatePoll (`sleep(duration)`) and ask again, until
+// `budget` has passed on `now()` (milliseconds on a steady clock). True when
+// the update ended; false when the budget ran out first, and the launch then
+// asks like any other, so a marker that outlives its update refuses it rather
+// than holding it.
+template <class Updating, class Now, class Sleep>
+bool AwaitUpdateEnd(Updating&& updating, Now&& now, Sleep&& sleep,
+                    std::chrono::milliseconds budget = kAfterUpdateBudget) {
+  const std::chrono::milliseconds deadline = now() + budget;
+  while (updating()) {
+    if (now() >= deadline) return false;
+    sleep(kAfterUpdatePoll);
+  }
+  return true;
+}
+
 // Whether `argument` is one of the arguments on a command line, matched whole
 // and unquoted, the program name included (it never equals an argument).
 inline bool HasArgument(std::wstring_view commandLine, std::wstring_view argument) {

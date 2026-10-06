@@ -22,6 +22,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -57,6 +58,9 @@ enum class Refusal : std::uint32_t {
   Staging = 0x2000000B,
   // msiexec could not be started.
   InstallerNotStarted = 0x2000000C,
+  // GitHub refused the release list (403 or 429): it limits the requests
+  // each network may make, and this one has spent them for now.
+  RateLimited = 0x2000000D,
 };
 
 // The Win32 customer bit: set on every Refusal, never on a msiexec code.
@@ -127,6 +131,90 @@ inline bool IsWellFormed(const UpdateResult& result, std::string_view tagPrefix 
   tag.remove_prefix(tagPrefix.size());
   return result.code != 0 && version::ParseReleaseCode(tag) == result.code &&
          result.exitCode >= 0 && result.exitCode <= 0xFFFFFFFF && IsUtcSecond(result.finishedUtc);
+}
+
+// The Unix second an ISO 8601 UTC second names, the inverse of
+// UpdateApply.h FormatUtcSecond; nullopt when `text` is not one.
+inline std::optional<std::int64_t> ParseUtcSecond(std::string_view text) {
+  if (!IsUtcSecond(text)) return std::nullopt;
+  const auto number = [text](std::size_t at, std::size_t digits) {
+    std::int64_t value = 0;
+    for (std::size_t i = 0; i < digits; ++i) value = value * 10 + (text[at + i] - '0');
+    return value;
+  };
+  const std::int64_t year = number(0, 4);
+  const std::int64_t month = number(5, 2);
+  const std::int64_t day = number(8, 2);
+  const std::int64_t hour = number(11, 2);
+  const std::int64_t minute = number(14, 2);
+  const std::int64_t second = number(17, 2);
+  if (month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59 || second > 59) {
+    return std::nullopt;
+  }
+  // days since 1970-01-01 (Howard Hinnant's days_from_civil)
+  const std::int64_t y = year - (month <= 2 ? 1 : 0);
+  const std::int64_t era = (y >= 0 ? y : y - 399) / 400;
+  const std::int64_t yearOfEra = y - era * 400;
+  const std::int64_t dayOfYear = (153 * (month > 2 ? month - 3 : month + 9) + 2) / 5 + day - 1;
+  const std::int64_t dayOfEra = yearOfEra * 365 + yearOfEra / 4 - yearOfEra / 100 + dayOfYear;
+  const std::int64_t days = era * 146097 + dayOfEra - 719468;
+  return days * 86400 + hour * 3600 + minute * 60 + second;
+}
+
+// How far before the helper's start its report may say it finished and still
+// be its own: the clock a moment set back between the two.
+inline constexpr std::int64_t kReportClockSlackSeconds = 120;
+
+// Whether the report read once the helper ended is that helper's own: its
+// tag, the helper's process exit code, and written no earlier than the helper
+// started. The earliest refusals (NotElevated, NotInstalled, DevBuild,
+// BadArguments, Busy, a Staging before the folder exists) write none, and
+// leave an earlier attempt's report in place, with its own reason and log.
+inline bool IsReportOfRun(const UpdateResult& report, std::string_view tag, std::int64_t exitCode,
+                          std::int64_t startedUnixSeconds) {
+  const std::optional<std::int64_t> finished = ParseUtcSecond(report.finishedUtc);
+  return report.tag == tag && report.exitCode == exitCode && finished &&
+         *finished >= startedUnixSeconds - kReportClockSlackSeconds;
+}
+
+// What the tray app says about a report.
+enum class ReportView {
+  // Nothing: the report is about a release this build has passed, or what it
+  // asked for has happened.
+  Hidden,
+  // "Updated to v...": this build is the release the report installed.
+  Installed,
+  // The update installed while this older app still ran: it is the new
+  // version once URnetwork starts again.
+  RestartApp,
+  // Installed up to a restart of Windows that has not happened yet (3010).
+  RestartWindows,
+  // Failed or refused, and this build is still older than the release.
+  NotInstalled,
+};
+
+// The view of `report` for a build of `ownCode`. `live`: this app started the
+// helper that wrote it and waited on it, so it predates the update.
+// `restartedSince`: Windows has started since the report was written. A report
+// is shown only while it is still true for this build: a 3010 stops asking for
+// a restart once there has been one, an install shows as installed only in the
+// release it installed, and a failure only while this build is still older
+// than the release that failed.
+inline ReportView ViewOfReport(const UpdateResult& report, std::uint64_t ownCode, bool live,
+                               bool restartedSince) {
+  switch (OutcomeOf(report.exitCode)) {
+    case Outcome::Installed:
+      if (ownCode == report.code) return ReportView::Installed;
+      return live && ownCode < report.code ? ReportView::RestartApp : ReportView::Hidden;
+    case Outcome::RestartRequired:
+      if (ownCode > report.code) return ReportView::Hidden;
+      if (!restartedSince) return ReportView::RestartWindows;
+      return ownCode == report.code ? ReportView::Installed : ReportView::Hidden;
+    case Outcome::Failed:
+    case Outcome::Refused:
+      return ownCode < report.code ? ReportView::NotInstalled : ReportView::Hidden;
+  }
+  return ReportView::Hidden;
 }
 
 }  // namespace urnw::update

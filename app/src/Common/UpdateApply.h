@@ -12,7 +12,9 @@
 //   - the package is this product's, at the ProductVersion the tag's code
 //     derives (PackageMatches).
 // Then it runs msiexec with MsiexecCommandLine and reports in last-result.json
-// (UpdateResult.h).
+// (UpdateResult.h). Also here: which environment variables are the app's
+// overrides, which the elevated helper drops (IsAppOverrideName), and how the
+// tray app's wait on the helper ends (AwaitHelper).
 //
 // Pure, header-only and free of Windows headers: tools/update-release-tests.cpp
 // runs it on any host.
@@ -86,6 +88,44 @@ inline std::wstring MsiexecCommandLine(std::wstring_view msiexec, std::wstring_v
   command.append(log);
   command.append(L"\" UPDATE_RELAUNCH=1");
   return command;
+}
+
+// Whether an environment variable is one of the app's overrides
+// (URNETWORK_APP_ROOT, URNETWORK_NETWORK_HOST, ...): its name starts with
+// URNETWORK_ in any case, as Windows matches variable names. The elevated
+// helper drops every one before it does anything (Updater/main.cpp): they are
+// the user's to set and steer nothing elevated.
+inline bool IsAppOverrideName(std::wstring_view name) {
+  constexpr std::wstring_view kPrefix = L"URNETWORK_";
+  if (name.size() < kPrefix.size()) return false;
+  for (std::size_t i = 0; i < kPrefix.size(); ++i) {
+    wchar_t c = name[i];
+    if (c >= L'a' && c <= L'z') c = static_cast<wchar_t>(c - L'a' + L'A');
+    if (c != kPrefix[i]) return false;
+  }
+  return true;
+}
+
+// How the tray app's wait on the update helper it started ended.
+enum class HelperWait {
+  // The helper ended while this app still ran: its report is this app's to
+  // read.
+  Ended,
+  // This app began to exit first (the installer's close, a quit, the end of
+  // the session): the helper runs on without it.
+  AppExiting,
+};
+
+// The tray app's wait on the helper: `ended()` waits one slice and says
+// whether the helper has ended, `exiting()` whether this app has begun to
+// exit. It ends with whichever comes first, so the app's teardown, which joins
+// the thread that waits, never waits for the helper.
+template <class Ended, class Exiting>
+HelperWait AwaitHelper(Ended&& ended, Exiting&& exiting) {
+  for (;;) {
+    if (ended()) return HelperWait::Ended;
+    if (exiting()) return HelperWait::AppExiting;
+  }
 }
 
 // `unixSeconds` as an ISO 8601 UTC second, 2026-10-01T14:51:17Z.
