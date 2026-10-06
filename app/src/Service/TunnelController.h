@@ -218,16 +218,24 @@ class TunnelController {
   // the session's device and the provider-only device run in (networkSpace_
   // and providerSpace_ are the manager's own for the key), so one call resets
   // both: the space's extender network client and node restart and relearn as
-  // on a first run, and their live extender paths keep running. `reset` says
-  // whether the space was held and the reset new to it; with no manager or no
-  // such space nothing is held, and the next import of the space applies the
-  // reset its values carry.
+  // on a first run, and their live extender paths keep running. The result's
+  // `reset` says whether the space was held and the reset new to it; with no
+  // manager or no such space nothing is held, and the next import of the
+  // space applies the reset its values carry.
   //
   // The session lock is taken in budget, for StartProvider's reason, and only
   // to look the space up: the reset joins the space's extender network client,
-  // so it runs with the lock released. False, with `error`, when the lock was
-  // not free or the reset failed.
-  bool ResetExtenders(const proto::ResetExtenders& request, bool& reset, std::string& error);
+  // so it runs with the lock released. Not ok, with `error`, when the lock was
+  // not free -- `busy` then, which the app answers by sending the reset again
+  // once the operation holding the lock ends (Common/ExtenderReset.h) -- or
+  // when the reset failed.
+  struct ExtenderResetResult {
+    bool ok = false;
+    bool busy = false;
+    bool reset = false;
+    std::string error;
+  };
+  ExtenderResetResult ResetExtenders(const proto::ResetExtenders& request);
 
   // The network country the app read (Common/NetworkCountry.h; open bug P052):
   // the country of the mobile broadband network carrying the default route, ""

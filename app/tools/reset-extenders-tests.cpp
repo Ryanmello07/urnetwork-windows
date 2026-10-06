@@ -1,12 +1,14 @@
 // Executable spec for "Reset extenders" on Windows (connect EXTENDER.md E7):
 // the reset_extenders verb on the control pipe (Common/Protocol.h) -- its tag,
-// its strict request, the reply's `reset` and an older service's silence --
-// the key the app names its space by and the service looks the space up with
-// (ResetExtendersRequestFor, SpaceKeyOf), and what the Account page's
-// extenders pane decides (App/ExtenderPresentation.h): the form a reset leaves,
-// read back off the sdk's settings (ExtenderSettingsViewOf), and when its
-// button is live (ExtenderResetEnabled). Run against the same sources the
-// service and the app compile; it needs nlohmann/json, like the app.
+// its strict request, the reply's `reset` and `reset_busy` and an older
+// service's silence -- the key the app names its space by and the service
+// looks the space up with (ResetExtendersRequestFor, SpaceKeyOf), the one
+// re-send a busy service is owed (Common/ExtenderReset.h), and what the
+// Account page's extenders pane decides (App/ExtenderPresentation.h): the form
+// a reset leaves, read back off the sdk's settings (ExtenderSettingsViewOf),
+// and when its button is live (ExtenderResetEnabled). Run against the same
+// sources the service and the app compile; it needs nlohmann/json, like the
+// app.
 //
 //   c++ -std=c++20 -I ../src/Common -I ../src/App -I <dir with nlohmann/json.hpp> reset-extenders-tests.cpp ../src/App/ExtenderPresentation.cpp -o /tmp/reset-extenders-tests && /tmp/reset-extenders-tests
 //
@@ -25,6 +27,7 @@
 #include <vector>
 
 #include "ExtenderPresentation.h"
+#include "ExtenderReset.h"
 #include "Protocol.h"
 
 #if defined(URNW_RESET_EXTENDERS_TESTS_SDK)
@@ -173,7 +176,70 @@ void TestReply() {
   Check(!refusedBack.ok && !refusedBack.reset &&
             refusedBack.error == "a tunnel operation is in progress",
         "reply: a refusal carries its reason and no reset");
-  Check(kProtocolVersion == 4, "wire: no protocol bump for the verb and its field");
+  Check(!refusedBack.reset_busy && !nlohmann::json(refused).contains("reset_busy"),
+        "reply: a refusal that is not busy carries no reset_busy");
+
+  Reply busy;
+  busy.ok = false;
+  busy.in_reply_to = msg::kResetExtenders;
+  busy.error = "a tunnel operation is in progress";
+  busy.reset_busy = true;
+  const Reply busyBack = nlohmann::json::parse(DumpForWire(nlohmann::json(busy))).get<Reply>();
+  Check(!busyBack.ok && busyBack.reset_busy && !busyBack.reset, "reply: reset_busy round-trips");
+  Check(!older.reset_busy, "reply: a service too old for the verb is not busy");
+  Check(kProtocolVersion == 4, "wire: no protocol bump for the verb and its fields");
+}
+
+// (e2) the one re-send a busy service is owed: owed on a busy answer, due at
+// the first pushed status that ends the operation holding the service's lock,
+// and only once
+void TestOwedResend() {
+  using extenderreset::EndsOperation;
+  using extenderreset::Owed;
+  using extenderreset::ServiceAnswer;
+  for (const TunnelState state : {TunnelState::Stopped, TunnelState::Up, TunnelState::Error,
+                                  TunnelState::RpcOnly, TunnelState::Preparing}) {
+    Check(EndsOperation(state),
+          std::string("owed: a pushed ") + ToString(state) + " status ends the operation");
+  }
+  Check(!EndsOperation(TunnelState::Starting), "owed: starting does not end the operation");
+  Check(!EndsOperation(TunnelState::Stopping), "owed: stopping does not end the operation");
+
+  const ResetExtenders request = SampleRequest();
+  {
+    Owed owed;
+    Check(!owed.TakeDue(TunnelState::Stopped), "owed: nothing is due before a refusal");
+    owed.Answered(request, ServiceAnswer::Busy);
+    Check(owed.IsOwed(), "owed: a busy refusal is owed");
+    Check(!owed.TakeDue(TunnelState::Starting),
+          "owed: a transition's status does not end the operation");
+    Check(owed.IsOwed(), "owed: still owed after a transition's status");
+    const std::optional<ResetExtenders> due = owed.TakeDue(TunnelState::Preparing);
+    Check(due && due->host_name == request.host_name && due->env_name == request.env_name &&
+              due->extender_reset_id == request.extender_reset_id,
+          "owed: due at the status that ends it, the same key and the same reset id");
+    Check(!owed.IsOwed() && !owed.TakeDue(TunnelState::Up), "owed: due once");
+  }
+  for (const ServiceAnswer answer : {ServiceAnswer::Taken, ServiceAnswer::NotTaken}) {
+    Owed owed;
+    owed.Answered(request, answer);
+    Check(!owed.IsOwed() && !owed.TakeDue(TunnelState::Stopped),
+          std::string("owed: a press answered ") + extenderreset::ToString(answer) +
+              " owes nothing");
+  }
+  {
+    Owed owed;
+    owed.Answered(request, ServiceAnswer::Busy);
+    ResetExtenders newer = request;
+    newer.extender_reset_id = "01926f3a-5b7c-7d8e-9f01-23456789abce";
+    owed.Answered(newer, ServiceAnswer::Busy);
+    const std::optional<ResetExtenders> due = owed.TakeDue(TunnelState::Stopped);
+    Check(due && due->extender_reset_id == newer.extender_reset_id,
+          "owed: a newer busy press replaces the owed one");
+    owed.Answered(request, ServiceAnswer::Busy);
+    owed.Answered(newer, ServiceAnswer::Taken);
+    Check(!owed.IsOwed(), "owed: a newer press that was answered owes nothing");
+  }
 }
 
 SpaceKey Key(std::optional<std::string> hostName, std::optional<std::string> envName) {
@@ -309,6 +375,7 @@ int main() {
   TestRequestStrict();
   TestReply();
   TestKeys();
+  TestOwedResend();
   TestResetForm();
   TestResetEnabled();
 #if defined(URNW_RESET_EXTENDERS_TESTS_SDK)

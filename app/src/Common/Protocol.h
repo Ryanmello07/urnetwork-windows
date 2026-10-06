@@ -92,11 +92,13 @@ namespace urnw::proto {
 //    keeps the Connect page's Extender switch hidden while disconnected, as
 //    before.
 //
-//    Nor for reset_extenders and Reply::reset: a service that does not know the
-//    verb answers "unknown request type" and resets nothing, which is the
-//    behaviour before it existed, and the app then leaves the reset to the
-//    next import of the space, whose values carry it (extender_reset_id). A
-//    peer that drops `reset` reads as nothing reset, which claims less.
+//    Nor for reset_extenders, Reply::reset and Reply::reset_busy: a service
+//    that does not know the verb answers "unknown request type" and resets
+//    nothing, which is the behaviour before it existed, and the app then leaves
+//    the reset to the next import of the space, whose values carry it
+//    (extender_reset_id). A peer that drops `reset` reads as nothing reset,
+//    which claims less, and one that drops `reset_busy` as a refusal the app
+//    does not send again, which the next import covers as well.
 inline constexpr int kProtocolVersion = 4;
 
 // The first version that understands StartTunnel::mode. Below this, an absent
@@ -658,6 +660,10 @@ struct Reply {
   // reset_extenders' answer: the service held the space and the reset was new
   // to it. False in every other reply, and from a service too old to say.
   bool reset = false;
+  // reset_extenders refused because a tunnel or provider operation held the
+  // service's session lock: the app sends it again once that operation ends
+  // (Common/ExtenderReset.h). False in every other reply.
+  bool reset_busy = false;
 };
 
 // ---- JSON (de)serialization ----------------------------------------------
@@ -1025,6 +1031,7 @@ inline void to_json(nlohmann::json& j, const Reply& v) {
   if (v.log_upload_id != 0) j["log_upload_id"] = v.log_upload_id;
   if (v.log_upload_busy) j["log_upload_busy"] = true;
   if (v.reset) j["reset"] = true;
+  if (v.reset_busy) j["reset_busy"] = true;
 }
 
 inline void from_json(const nlohmann::json& j, Reply& v) {
@@ -1048,6 +1055,7 @@ inline void from_json(const nlohmann::json& j, Reply& v) {
   get("log_upload_id", v.log_upload_id);
   get("log_upload_busy", v.log_upload_busy);
   get("reset", v.reset);
+  get("reset_busy", v.reset_busy);
 }
 
 // Envelope helpers: every message on the wire has a top-level "type" tag.

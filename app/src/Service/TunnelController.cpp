@@ -2120,45 +2120,48 @@ bool TunnelController::SetProvideExtender(bool on, std::string& error) {
   return true;
 }
 
-bool TunnelController::ResetExtenders(const proto::ResetExtenders& request, bool& reset,
-                                      std::string& error) {
-  reset = false;
+TunnelController::ExtenderResetResult TunnelController::ResetExtenders(
+    const proto::ResetExtenders& request) {
+  ExtenderResetResult result;
   const auto key = proto::SpaceKeyOf<urnet::NetworkSpaceKey>(request);
   urnet::NetworkSpace space;
   {
     // Timed, for StartProvider's reason: a wedged bring-up must not hold the
-    // control pipe. The next import of the space carries the reset instead.
+    // control pipe. Busy, so the app sends the reset again once the operation
+    // holding the lock ends; the next import of the space carries it anyway.
     std::unique_lock<std::timed_mutex> lock(mutex_, std::defer_lock);
     if (!lock.try_lock_for(kStopLockBudget)) {
-      error = "a tunnel operation is in progress";
+      result.busy = true;
+      result.error = "a tunnel operation is in progress";
       LogWarn("tunnel: reset_extenders refused: the session lock was not free within {}ms",
               kStopLockBudget.count());
-      return false;
+      return result;
     }
     // A handle of 0 is the sdk's nil: the manager holds no space under the key.
     try {
       if (spaceManager_) space = spaceManager_->getNetworkSpace(key);
     } catch (const std::exception&) {
-      error = "the network space could not be read";
+      result.error = "the network space could not be read";
       LogError("tunnel: stage=reset-extenders outcome=failed step=lookup");
-      return false;
+      return result;
     }
   }
   if (space) {
     // With the session lock released: the reset stops and joins the space's
     // extender network client and node before it starts their replacements.
     try {
-      reset = space.applyExtenderReset(request.extender_reset_id);
+      result.reset = space.applyExtenderReset(request.extender_reset_id);
     } catch (const std::exception&) {
-      error = "the extender reset could not be applied";
+      result.error = "the extender reset could not be applied";
       LogError("tunnel: stage=reset-extenders outcome=failed step=apply");
-      return false;
+      return result;
     }
   }
   LogInfo("tunnel: extenders reset space={}/{} outcome={}", request.host_name,
           request.env_name,
-          !space ? "not-held" : (reset ? "reset" : "already-applied"));
-  return true;
+          !space ? "not-held" : (result.reset ? "reset" : "already-applied"));
+  result.ok = true;
+  return result;
 }
 
 void TunnelController::RetireProviderDeviceLocked() {

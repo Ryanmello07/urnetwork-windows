@@ -13,10 +13,11 @@ import (
 // "Reset extenders" on Windows (connect EXTENDER.md E7): the Account page's
 // extenders pane resets the app's own network space and hands the reset's id
 // to the service (reset_extenders), which resets the space its session's
-// device and its provider-only device run in. The pure parts run in
-// app/tools/reset-extenders-tests.cpp against the production sources; the
-// pane, SdkHost, ServiceClient and the service need Windows (and the app
-// WinRT), so what they must keep doing is read off their sources, with
+// device and its provider-only device run in; a service busy with a tunnel
+// operation is sent the same reset once more when that operation ends. The
+// pure parts run in app/tools/reset-extenders-tests.cpp against the production
+// sources; the pane, SdkHost, ServiceClient and the service need Windows (and
+// the app WinRT), so what they must keep doing is read off their sources, with
 // comments stripped so prose cannot satisfy a contract.
 
 // The sources the harness compiles, by their directory under app/src. They are
@@ -25,6 +26,7 @@ import (
 var resetExtendersSourceDirs = map[string]string{
 	"Protocol.h":               "Common",
 	"ProvideLifecycle.h":       "Common",
+	"ExtenderReset.h":          "Common",
 	"ExtenderPresentation.h":   "App",
 	"ExtenderPresentation.cpp": "App",
 	"ExtenderRingGeometry.h":   "App",
@@ -75,7 +77,8 @@ func resetExtendersTestProgram(t *testing.T, mutate map[string]func(string) stri
 
 // Execute the spec: the verb, its strict request, the reply and an older
 // service's silence, the key from the app's space to the service's lookup, the
-// form a reset leaves and when the pane's button is live.
+// re-send a busy service is owed, the form a reset leaves and when the pane's
+// button is live.
 func TestResetExtenders(t *testing.T) {
 	program := resetExtendersTestProgram(t, nil)
 	if output, err := exec.Command(program).CombinedOutput(); err != nil {
@@ -177,6 +180,12 @@ func TestResetExtendersRejectsAWrongWire(t *testing.T) {
 			want: "reply: reset round-trips",
 		},
 		{
+			name: "the reply's busy not read",
+			mutate: map[string]func(string) string{"Protocol.h": replaceOnce(
+				"  get(\"reset_busy\", v.reset_busy);\n", "")},
+			want: "reply: reset_busy round-trips",
+		},
+		{
 			name: "a request sent without a reset id",
 			mutate: map[string]func(string) string{"Protocol.h": replaceOnce(
 				"      request.extender_reset_id.empty()) {", "      false) {")},
@@ -187,6 +196,40 @@ func TestResetExtendersRejectsAWrongWire(t *testing.T) {
 			mutate: map[string]func(string) string{"Protocol.h": replaceOnce(
 				"  key.env_name = request.env_name;", "  key.env_name = request.host_name;")},
 			want: "keys: the host and the env each go to their own field",
+		},
+	})
+}
+
+// A re-send taken during a transition goes while the operation still holds
+// the service's lock, one that stays owed goes again at every status, one that
+// a newer answered press does not clear resets with an older id, and a
+// teardown counted as an end goes before the teardown has ended.
+func TestResetExtendersRejectsAWrongResend(t *testing.T) {
+	requireResetExtendersFailures(t, []resetExtendersControl{
+		{
+			name: "due during a transition",
+			mutate: map[string]func(string) string{"ExtenderReset.h": replaceOnce(
+				"    if (!EndsOperation(pushed)) return std::nullopt;\n", "    (void)pushed;\n")},
+			want: "owed: a transition's status does not end the operation",
+		},
+		{
+			name: "due more than once",
+			mutate: map[string]func(string) string{"ExtenderReset.h": replaceOnce(
+				"return std::exchange(owed_, std::nullopt);", "return owed_;")},
+			want: "owed: due once",
+		},
+		{
+			name: "an answered press leaves the older one owed",
+			mutate: map[string]func(string) string{"ExtenderReset.h": replaceOnce(
+				"    } else {\n      owed_.reset();\n    }\n", "    }\n")},
+			want: "owed: a newer press that was answered owes nothing",
+		},
+		{
+			name: "stopping counted as an end",
+			mutate: map[string]func(string) string{"ExtenderReset.h": replaceOnce(
+				"return state != proto::TunnelState::Starting && state != proto::TunnelState::Stopping;",
+				"return state != proto::TunnelState::Starting;")},
+			want: "owed: stopping does not end the operation",
 		},
 	})
 }
@@ -291,7 +334,7 @@ func lockBlock(t *testing.T, where, text, lock string) string {
 func TestResetExtendersServiceWiring(t *testing.T) {
 	controller := stripComments(readServiceSource(t, "TunnelController.h"))
 	provideRequire(t, "TunnelController.h", controller,
-		"bool ResetExtenders(const proto::ResetExtenders& request, bool& reset, std::string& error);")
+		"ExtenderResetResult ResetExtenders(const proto::ResetExtenders& request);")
 
 	server := stripComments(readServiceSource(t, "ControlServer.cpp"))
 	// the one pipe's handler, so the pipe's access rule (kPipeSddl) is the verb's
@@ -302,15 +345,17 @@ func TestResetExtendersServiceWiring(t *testing.T) {
 		"type == proto::msg::kResetExtenders", "} else {")
 	provideRequireOrder(t, "the reset_extenders branch", branch,
 		"request.get<proto::ResetExtenders>()",
-		"reply.ok = tunnel_.ResetExtenders(req, reset, error);")
-	provideRequire(t, "the reset_extenders branch", branch, "reply.reset = reset;",
-		"reply.error = error;")
+		"const TunnelController::ExtenderResetResult result = tunnel_.ResetExtenders(req);")
+	provideRequire(t, "the reset_extenders branch", branch, "reply.ok = result.ok;",
+		"reply.reset = result.reset;", "reply.error = result.error;")
+	// a busy refusal says so, and the app sends the reset again (ExtenderReset.h)
+	provideRequire(t, "the reset_extenders branch", branch, "reply.reset_busy = result.busy;")
 	// the tunnel's status does not move
 	requireNone(t, "the reset_extenders branch", branch, "PushState()")
 
 	source := tunnelControllerSource(t)
 	reset := definitionBody(t, "TunnelController.cpp", source,
-		"bool TunnelController::ResetExtenders(const proto::ResetExtenders& request, bool& reset,")
+		"TunnelController::ExtenderResetResult TunnelController::ResetExtenders(")
 	provideRequire(t, "TunnelController::ResetExtenders", reset,
 		"proto::SpaceKeyOf<urnet::NetworkSpaceKey>(request)",
 		"request.host_name", "request.env_name")
@@ -321,15 +366,21 @@ func TestResetExtendersServiceWiring(t *testing.T) {
 		"lock.try_lock_for(kStopLockBudget)", "spaceManager_->getNetworkSpace(key)")
 	refused := sourceBetween(t, "the session lock's block", locked,
 		"lock.try_lock_for(kStopLockBudget)", "LogWarn(")
-	provideRequire(t, "the refusal", refused, "error = \"a tunnel operation is in progress\";")
+	provideRequire(t, "the refusal", refused, "result.busy = true;",
+		"result.error = \"a tunnel operation is in progress\";")
 	provideRequire(t, "the session lock's block", locked,
 		"if (spaceManager_) space = spaceManager_->getNetworkSpace(key);")
 	// the reset joins the space's extender network client: never under the lock
 	requireNone(t, "the session lock's block", locked, "applyExtenderReset")
 	provideRequireOrder(t, "TunnelController::ResetExtenders", reset, locked,
-		"reset = space.applyExtenderReset(request.extender_reset_id);")
+		"result.reset = space.applyExtenderReset(request.extender_reset_id);")
 	provideRequireOrder(t, "TunnelController::ResetExtenders", reset, "if (space) {",
-		"reset = space.applyExtenderReset(request.extender_reset_id);")
+		"result.reset = space.applyExtenderReset(request.extender_reset_id);")
+	// only a lock that was not free is busy (the refusal above): a failed
+	// lookup or reset is not, and is not sent again
+	if count := strings.Count(reset, "result.busy = true;"); count != 1 {
+		t.Errorf("TunnelController::ResetExtenders sets busy %d times; only the lock's refusal may", count)
+	}
 	// one call through the manager's space covers both devices; a reset of one
 	// device's slot would miss the other
 	requireNone(t, "TunnelController::ResetExtenders", reset, "networkSpace_", "providerSpace_")
@@ -341,13 +392,17 @@ func TestResetExtendersServiceWiring(t *testing.T) {
 func TestResetExtendersAppWiring(t *testing.T) {
 	clientHeader := stripComments(readAppSource(t, "ServiceClient.h"))
 	provideRequire(t, "ServiceClient.h", clientHeader,
-		"bool ResetExtenders(const proto::ResetExtenders& request, bool* reset = nullptr,")
+		"extenderreset::ServiceAnswer ResetExtenders(const proto::ResetExtenders& request,")
 	client := stripComments(readAppSource(t, "ServiceClient.cpp"))
 	send := definitionBody(t, "ServiceClient.cpp", client,
-		"bool ServiceClient::ResetExtenders(const proto::ResetExtenders& request, bool* reset,")
+		"extenderreset::ServiceAnswer ServiceClient::ResetExtenders(")
 	provideRequire(t, "ServiceClient::ResetExtenders", send,
-		"nlohmann::json body = request;", "proto::msg::kResetExtenders", "*reset = r.ok && r.reset;",
-		"return r.ok;")
+		"nlohmann::json body = request;", "proto::msg::kResetExtenders")
+	answered := sourceBetween(t, "ServiceClient::ResetExtenders", send, "if (r.ok) {", "}")
+	provideRequire(t, "an answered reset", answered, "*reset = r.reset;",
+		"return extenderreset::ServiceAnswer::Taken;")
+	provideRequire(t, "ServiceClient::ResetExtenders", send,
+		"return r.reset_busy ? extenderreset::ServiceAnswer::Busy")
 
 	hostHeader := stripComments(readAppSource(t, "SdkHost.h"))
 	provideRequire(t, "SdkHost.h", hostHeader, "bool ResetExtenders();")
@@ -421,4 +476,65 @@ func TestResetExtendersAppWiring(t *testing.T) {
 	read := definitionBody(t, "AccountPage.cpp", page, "ExtenderFormReading ReadExtenderForm(")
 	provideRequire(t, "ReadExtenderForm", read, "ExtenderSettingsViewOf(*settings)",
 		"ExtenderSettingsFormFor(view)", "sdk.CurrentNetExtender()")
+}
+
+// A reset the service refused as busy goes again once (Common/ExtenderReset.h):
+// the press records the service's answer outside the host's lock, the first
+// pushed status that ends the operation makes it due on the pipe's reader
+// thread without a pipe call there, and the provider-only worker sends it once
+// more outside mutex_, logging the answer and owing nothing again. It lives
+// in memory only, so an app that exits first drops it.
+func TestResetExtendersResendWiring(t *testing.T) {
+	common := readCommonSource(t, "Common.vcxproj")
+	provideRequire(t, "Common.vcxproj", common, `<ClInclude Include="ExtenderReset.h" />`)
+	owed := stripComments(readCommonSource(t, "ExtenderReset.h"))
+	requireNone(t, "ExtenderReset.h", owed, "fstream", "filesystem", "Marker")
+
+	hostHeader := stripComments(readAppSource(t, "SdkHost.h"))
+	provideRequire(t, "SdkHost.h", hostHeader,
+		"void QueueExtenderResetResend(proto::ResetExtenders request);",
+		"void ResendExtenderReset(const proto::ResetExtenders& request);",
+		"std::optional<proto::ResetExtenders> extenderResetResend_;",
+		"extenderreset::Owed owedExtenderReset_;")
+
+	source := sdkHostSource(t)
+	host := definitionBody(t, "SdkHost.cpp", source, "bool SdkHost::ResetExtenders()")
+	locked := lockBlock(t, "SdkHost::ResetExtenders", host, "std::scoped_lock lock(mutex_);")
+	requireNone(t, "SdkHost::ResetExtenders under mutex_", locked, "owedExtenderReset_")
+	provideRequireOrder(t, "SdkHost::ResetExtenders", host,
+		"const extenderreset::ServiceAnswer answer = service_.ResetExtenders(*request, &reset, &error);",
+		"owedExtenderReset_.Answered(*request, answer);")
+	// a press the service cannot hear owes nothing, an older owed reset included
+	unreachable := sourceBetween(t, "SdkHost::ResetExtenders", host, "if (!service_.IsConnected()) {",
+		"return true;")
+	provideRequire(t, "the unreachable service", unreachable,
+		"owedExtenderReset_.Answered(*request, extenderreset::ServiceAnswer::NotTaken);")
+
+	pushed := handlerSource(t, "SdkHost.cpp", source,
+		"service_.SetStateHandler([this](const proto::TunnelStatus& st) {")
+	provideRequireOrder(t, "the state handler", pushed, "owedExtenderReset_.TakeDue(st.state)",
+		"QueueExtenderResetResend(std::move(*due));")
+	// the reader thread must stay free to read the answer
+	requireNone(t, "the state handler", pushed, "service_.ResetExtenders", "ResendExtenderReset(")
+
+	queue := definitionBody(t, "SdkHost.cpp", source,
+		"void SdkHost::QueueExtenderResetResend(proto::ResetExtenders request)")
+	provideRequire(t, "QueueExtenderResetResend", queue, "std::scoped_lock lock(providerOnlyMutex_);",
+		"extenderResetResend_ = std::move(request);", "providerOnlyKick_ = true;",
+		"providerOnlyCv_.notify_all();")
+
+	loop := definitionBody(t, "SdkHost.cpp", source, "void SdkHost::ProviderOnlyStatsLoop()")
+	provideRequireOrder(t, "ProviderOnlyStatsLoop", loop, "std::unique_lock lock(providerOnlyMutex_);",
+		"extenderReset = std::exchange(extenderResetResend_, std::nullopt);")
+	provideRequireOrder(t, "ProviderOnlyStatsLoop", loop,
+		"if (extenderReset) ResendExtenderReset(*extenderReset);", "service_.GetProviderStats(stats)")
+	provideRequireOrder(t, "ProviderOnlyStatsLoop", loop,
+		"if (extenderReset) ResendExtenderReset(*extenderReset);", "std::scoped_lock lock(mutex_);")
+
+	resend := definitionBody(t, "SdkHost.cpp", source,
+		"void SdkHost::ResendExtenderReset(const proto::ResetExtenders& request)")
+	provideRequireOrder(t, "ResendExtenderReset", resend, "if (!service_.IsConnected()) {",
+		"service_.ResetExtenders(request, &reset, &error)")
+	// once: its answer is never owed again, and it takes no host lock
+	requireNone(t, "ResendExtenderReset", resend, "owedExtenderReset_", "lock(mutex_)")
 }

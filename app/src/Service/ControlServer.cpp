@@ -182,14 +182,16 @@ nlohmann::json ControlServer::Handle(const nlohmann::json& request) {
       // "Reset extenders" in the app's Account > Extenders (TunnelController::
       // ResetExtenders), on this pipe under its access rule (kPipeSddl) like
       // every other request. A request that does not name its space and its
-      // reset throws out of the get<> as a failed reply. The tunnel status does
+      // reset throws out of the get<> as a failed reply. A busy refusal says so
+      // (reset_busy), and the app sends it again once the operation holding the
+      // session lock has pushed the status that ends it. The tunnel status does
       // not change, so nothing is pushed.
       const proto::ResetExtenders req = request.get<proto::ResetExtenders>();
-      std::string error;
-      bool reset = false;
-      reply.ok = tunnel_.ResetExtenders(req, reset, error);
-      reply.reset = reset;
-      reply.error = error;
+      const TunnelController::ExtenderResetResult result = tunnel_.ResetExtenders(req);
+      reply.ok = result.ok;
+      reply.reset = result.reset;
+      reply.reset_busy = result.busy;
+      reply.error = result.error;
     } else {
       reply.ok = false;
       reply.error = "unknown request type: " + type;
