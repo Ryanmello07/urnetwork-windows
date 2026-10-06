@@ -50,6 +50,7 @@
     <ClInclude Include="DiagnosticLines.h" />
     <ClInclude Include="Heartbeat.h" />
     <ClInclude Include="Ids.h" />
+    <ClInclude Include="InstallLocation.h" />
     <ClInclude Include="InstanceHandover.h" />
     <ClInclude Include="Log.h" />
     <ClInclude Include="LogUpload.h" />
@@ -61,6 +62,7 @@
     <ClInclude Include="PipeServer.h" />
     <ClInclude Include="Protocol.h" />
     <ClInclude Include="ProvideLifecycle.h" />
+    <ClInclude Include="ReleaseJson.h" />
     <ClInclude Include="ReleaseSelection.h" />
     <ClInclude Include="RpcSessionBlob.h" />
     <ClInclude Include="Sdk.h" />
@@ -69,6 +71,8 @@
     <ClInclude Include="ThreadGuard.h" />
     <ClInclude Include="UpdateFormats.h" />
     <ClInclude Include="UpdateMarker.h" />
+    <ClInclude Include="UpdateResult.h" />
+    <ClInclude Include="UpdateResultJson.h" />
     <ClInclude Include="Version.h" />
     <ClInclude Include="VersionGrammar.h" />
   </ItemGroup>

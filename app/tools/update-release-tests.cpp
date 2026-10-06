@@ -1,21 +1,34 @@
-// Executable spec for the update checker's release decision
-// (Common/ReleaseSelection.h) and its feed (App/Config.h kUpdateRepo): which
-// repo is polled, which release is offered, and which asset is downloaded -
-// run against the SAME headers the app compiles, on any host with a C++20
-// compiler, with the tag and asset names build/all/run.sh actually publishes
-// and the stable urnetwork/windows releases carry.
+// Executable spec for the update's pure decisions, run against the same
+// headers the tray app and the update helper compile, on any host with a C++20
+// compiler:
+//   - which feed is polled (Common/ReleaseSelection.h kFeeds), and which
+//     release is offered on it (SelectRelease), with the tag and asset names
+//     build/all/run.sh actually publishes;
+//   - the MSI ProductVersion a release code must carry (UrMsiVersion), against
+//     the vectors tools/UrVersion.ps1's Go oracle uses, and against a file of
+//     the oracle's own answers when one is given;
+//   - the download URL a release may name, and the hosts its redirect may go
+//     to;
+//   - which install locations an elevated process may run from
+//     (Common/InstallLocation.h);
+//   - what the update helper's exit code means (Common/UpdateResult.h).
 //
-//   c++ -std=c++20 -I ../src/Common -I ../src/App update-release-tests.cpp -o /tmp/update-release-tests && /tmp/update-release-tests
+//   c++ -std=c++20 -I ../src/Common update-release-tests.cpp -o /tmp/update-release-tests
+//   /tmp/update-release-tests [<file of "code msi-version" lines>]
 //
 // SPDX-License-Identifier: MPL-2.0
 
+#include <cstdint>
+#include <fstream>
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <vector>
 
-#include "Config.h"
+#include "InstallLocation.h"
 #include "ReleaseSelection.h"
+#include "UpdateResult.h"
 
 using namespace urnw::update;
 
@@ -36,53 +49,106 @@ void CheckEq(const std::string& expected, const std::string& actual, const std::
   Check(expected == actual, what + ": expected \"" + expected + "\", got \"" + actual + "\"");
 }
 
+// The release list's Date header in every selection below: 2026-10-06T00:00:00Z.
+constexpr std::int64_t kServerUnix = 1791244800;
+
+std::string Hex(std::uint32_t value) {
+  std::ostringstream text;
+  text << "0x" << std::hex << value;
+  return text.str();
+}
+
 std::string Digest(char c) { return "sha256:" + std::string(64, c); }
 
-ReleaseAsset Asset(std::string name, char digest = 'a') {
-  return {name, "https://github.com/urnetwork/windows/releases/download/x/" + name,
-          Digest(digest)};
+ReleaseAsset Asset(const std::string& tag, const std::string& name, char digest = 'a') {
+  return {.name = name,
+          .url = "https://github.com/urnetwork/windows/releases/download/" + tag + "/" + name,
+          .digest = Digest(digest)};
 }
 
 // One official build as run.sh publishes it: v<version>, both MSIs next to the
-// SDK and the other platforms' assets.
+// SDK and the other platforms' assets, immutable.
 Release Official(const std::string& version) {
-  return {"v" + version,
-          false,
-          false,
-          {Asset("URnetworkSdk-" + version + ".aar"),
-           Asset("URnetworkSdkWindows-" + version + ".zip"),
-           Asset("URnetwork-" + version + "-x64.msi", 'b'),
-           Asset("URnetwork-" + version + "-arm64.msi", 'c'),
-           Asset("URnetwork-" + version + ".pkg")}};
+  const std::string tag = "v" + version;
+  return {.tag = tag,
+          .draft = false,
+          .prerelease = false,
+          .immutable = true,
+          .assets = {Asset(tag, "URnetworkSdk-" + version + ".aar"),
+                     Asset(tag, "URnetworkSdkWindows-" + version + ".zip"),
+                     Asset(tag, "URnetwork-" + version + "-x64.msi", 'b'),
+                     Asset(tag, "URnetwork-" + version + "-arm64.msi", 'c'),
+                     Asset(tag, "URnetwork-" + version + ".pkg")}};
 }
 
 // The F-Droid reproducible-build prerelease run.sh mints at code+2 / code+3.
 Release AndroidPrerelease(const std::string& version) {
-  return {"v" + version,
-          false,
-          true,
-          {Asset("com.bringyour.network-" + version + "-github-arm64-v8a-release.apk")}};
+  const std::string tag = "v" + version;
+  return {.tag = tag,
+          .draft = false,
+          .prerelease = true,
+          .immutable = true,
+          .assets = {Asset(tag, "com.bringyour.network-" + version +
+                                    "-github-arm64-v8a-release.apk")}};
 }
 
-}  // namespace
+// The code of the UTC instant `unix` seconds.
+std::uint64_t CodeAt(std::int64_t unix) {
+  return static_cast<std::uint64_t>(unix - kCodeEpochUnixSeconds) * 10;
+}
 
-int main() {
-  // ---- the feed: the stable urnetwork/windows releases — not the nightly
-  // build repo, never a personal fork ----
-  const std::wstring_view repo(urnw::config::kUpdateRepo);
-  Check(repo == L"urnetwork/windows",
+// A feed that takes -beta prereleases, and one shaped like a runner test's.
+constexpr Feed kBetaLikeFeed{.id = "beta-like",
+                             .numericRepoId = 1,
+                             .owner = "example",
+                             .repo = "example",
+                             .acceptBetaPrereleases = true,
+                             .requireImmutable = false,
+                             .tagPrefix = "",
+                             .acceptAnyPrerelease = false};
+constexpr Feed kRunnerLikeFeed{.id = "runner-test",
+                               .numericRepoId = 2,
+                               .owner = "example",
+                               .repo = "example",
+                               .acceptBetaPrereleases = false,
+                               .requireImmutable = false,
+                               .tagPrefix = "runner-test-",
+                               .acceptAnyPrerelease = true};
+
+void FeedTable() {
+  // The official releases: the stable urnetwork/windows releases, addressed by
+  // the id GitHub gave that repository. Not the nightly build repo, and never
+  // a personal fork.
+  const Feed* official = FeedById("official");
+  Check(official != nullptr, "the official feed is in the table");
+  if (!official) return;
+  Check(official->owner == "urnetwork" && official->repo == "windows",
         "the update checker polls the stable urnetwork/windows releases");
-  Check(repo != L"urnetwork/build",
+  Check(official->numericRepoId == 1297133846,
+        "the official feed is repository 1297133846, urnetwork/windows' own id");
+  Check(official->repo != "build" && official->numericRepoId != 936244679,
         "urnetwork/build holds nightly builds, not the stable feed");
-  Check(repo.starts_with(L"urnetwork/"), "the feed is an official urnetwork repo");
+  Check(official->owner == "urnetwork", "the feed is an official urnetwork repo");
+  Check(!official->acceptBetaPrereleases && !official->acceptAnyPrerelease,
+        "the official feed takes no prerelease");
+  Check(official->requireImmutable, "the official feed requires immutable releases");
+  Check(official->tagPrefix.empty(), "the official feed's tags carry no prefix");
+  Check(std::size(kFeeds) == 1, "the table holds the official feed alone");
+  Check(FeedById("beta") == nullptr && FeedById("") == nullptr, "no other channel resolves");
+  Check(kFeeds[0].numericRepoId == kOfficialFeed.numericRepoId &&
+            kFeeds[0].owner == kOfficialFeed.owner && kFeeds[0].repo == kOfficialFeed.repo,
+        "the table's official row is kOfficialFeed");
+}
 
-  // ---- asset names: run.sh require_windows_artifacts ----
+void AssetNames() {
   CheckEq("URnetwork-2026.8.28-1031763440-x64.msi",
           InstallerAssetName("2026.8.28-1031763440", "x64"), "x64 MSI name");
   CheckEq("URnetwork-2026.8.28-1031763440-arm64.msi",
           InstallerAssetName("2026.8.28-1031763440", "arm64"), "arm64 MSI name");
+}
 
-  // ---- a real release list, newest first as the API returns it ----
+void RealReleaseList() {
+  // newest first, as the API returns it
   const std::vector<Release> releases = {
       AndroidPrerelease("2026.9.22-1053244733"),
       AndroidPrerelease("2026.9.22-1053244732"),
@@ -91,12 +157,12 @@ int main() {
       Official("2026.8.28-1031763440"),
   };
   {
-    const Selection s = SelectRelease(releases, "x64");
+    const Selection s = SelectRelease(releases, "x64", kOfficialFeed, kServerUnix);
     Check(s.code == 1053244730, "offers the newest official release, not an android prerelease");
     CheckEq("2026.9.22-1053244730", s.version, "offered version is v-less");
     CheckEq("v2026.9.22-1053244730", s.tag, "offered tag keeps its v");
     CheckEq("URnetwork-2026.9.22-1053244730-x64.msi", s.assetName, "own-arch MSI");
-    CheckEq("https://github.com/urnetwork/windows/releases/download/x/"
+    CheckEq("https://github.com/urnetwork/windows/releases/download/v2026.9.22-1053244730/"
             "URnetwork-2026.9.22-1053244730-x64.msi",
             s.assetUrl, "download URL comes from the matched asset");
     CheckEq(std::string(64, 'b'), s.digestHex, "digest comes from the matched asset");
@@ -104,33 +170,356 @@ int main() {
     CheckEq("2026.9.22-1053244730", s.newestVersion, "newest version");
   }
   {
-    const Selection s = SelectRelease(releases, "arm64");
+    const Selection s = SelectRelease(releases, "arm64", kOfficialFeed, kServerUnix);
     CheckEq("URnetwork-2026.9.22-1053244730-arm64.msi", s.assetName, "arm64 picks its own MSI");
     CheckEq(std::string(64, 'c'), s.digestHex, "arm64 digest");
   }
+}
 
-  // ---- what is not offered ----
+void NotOffered() {
+  Release draft = Official("2026.10.1-1060000000");
+  draft.draft = true;
+  Release noMsi = Official("2026.9.30-1059000000");
+  noMsi.assets = {Asset(noMsi.tag, "URnetwork-2026.9.30-1059000000.pkg")};
+  Release badDigest = Official("2026.9.29-1058000000");
+  for (auto& a : badDigest.assets) a.digest = "sha512:" + std::string(64, 'b');
+  Release oldZip = Official("2026.9.28-1057000000");
+  oldZip.assets = {Asset(oldZip.tag, "URnetwork-v2026.9.28-1057000000-windows-x64-portable.zip")};
+  const Selection s = SelectRelease({draft, noMsi, badDigest, oldZip, Official("2026.9.22-1053244730")},
+                                    "x64", kOfficialFeed, kServerUnix);
+  Check(s.code == 1053244730, "drafts, MSI-less, digest-less and zip-only releases are skipped");
+  Check(s.newestCode == 1058000000,
+        "newest names the newest release carrying this product's MSI, offerable or not");
+  Check(s.skipped.size() == 3, "the three unverifiable releases are reported as skipped");
+
+  const Selection empty = SelectRelease({}, "x64", kOfficialFeed, kServerUnix);
+  Check(empty.code == 0 && empty.newestCode == 0 && empty.assetUrl.empty(),
+        "empty list offers nothing");
+  Release latest = Official("2026.9.22-1053244730");
+  latest.tag = "latest";
+  const Selection t = SelectRelease({latest}, "x64", kOfficialFeed, kServerUnix);
+  Check(t.code == 0 && t.newestCode == 0, "a tag outside the grammar is ignored");
+}
+
+void ImmutableRequired() {
+  Release mutableRelease = Official("2026.10.1-1060587890");
+  mutableRelease.immutable = false;
+  const Selection s = SelectRelease({mutableRelease, Official("2026.9.22-1053244730")}, "x64",
+                                    kOfficialFeed, kServerUnix);
+  Check(s.code == 1053244730, "a release that is not immutable is not offered on the official feed");
+  Check(s.newestCode == 1053244730, "nor named as the newest");
+  Check(s.skipped.size() == 1 && s.skipped[0].tag == "v2026.10.1-1060587890" &&
+            s.skipped[0].reason.find("immutable") != std::string::npos,
+        "and it is reported as not immutable");
+
+  const Selection beta = SelectRelease({mutableRelease}, "x64", kBetaLikeFeed, kServerUnix);
+  Check(beta.code == 1060587890, "a feed that does not require it offers a mutable release");
+}
+
+void Prereleases() {
+  Release beta = Official("2026.10.3-1062717970-beta");
+  beta.prerelease = true;
+  Release rc = Official("2026.10.3-1062717980");
+  rc.prerelease = true;
   {
-    Release draft = Official("2026.10.1-1060000000");
-    draft.draft = true;
-    Release noMsi = Official("2026.9.30-1059000000");
-    noMsi.assets = {Asset("URnetwork-2026.9.30-1059000000.pkg")};
-    Release badDigest = Official("2026.9.29-1058000000");
-    for (auto& a : badDigest.assets) a.digest = "sha512:" + std::string(64, 'b');
-    Release oldZip = {"v2026.9.28-1057000000", false, false,
-                      {Asset("URnetwork-v2026.9.28-1057000000-windows-x64-portable.zip")}};
-    const Selection s = SelectRelease(
-        {draft, noMsi, badDigest, oldZip, Official("2026.9.22-1053244730")}, "x64");
-    Check(s.code == 1053244730, "drafts, MSI-less, digest-less and zip-only releases are skipped");
-    Check(s.newestCode == 1059000000, "newest names the newest parsed non-draft release");
-    Check(s.skipped.size() == 3, "the three unverifiable releases are reported as skipped");
+    const Selection s = SelectRelease({rc, beta, Official("2026.10.1-1060587890")}, "x64",
+                                      kOfficialFeed, kServerUnix);
+    Check(s.code == 1060587890 && s.newestCode == 1060587890,
+          "the official feed skips every prerelease, -beta ones included");
   }
   {
-    const Selection s = SelectRelease({}, "x64");
-    Check(s.code == 0 && s.newestCode == 0 && s.assetUrl.empty(), "empty list offers nothing");
-    const Selection t = SelectRelease({{"latest", false, false, {}}}, "x64");
-    Check(t.code == 0 && t.newestCode == 0, "a tag outside the grammar is ignored");
+    const Selection s = SelectRelease({rc, beta, Official("2026.10.1-1060587890")}, "x64",
+                                      kBetaLikeFeed, kServerUnix);
+    Check(s.code == 1062717970, "a beta feed offers a -beta prerelease");
+    Check(s.newestCode == 1062717970, "and skips any other prerelease");
   }
+  {
+    Release prefixed = Official("2026.10.3-1062717990");
+    prefixed.tag = "runner-test-" + prefixed.tag;
+    prefixed.prerelease = true;
+    const std::string asset = "URnetwork-2026.10.3-1062717990-x64.msi";
+    prefixed.assets = {{.name = asset,
+                        .url = FeedAssetUrl(kRunnerLikeFeed, prefixed.tag, asset),
+                        .digest = Digest('d')}};
+    const Selection s = SelectRelease({prefixed, rc, Official("2026.10.1-1060587890")}, "x64",
+                                      kRunnerLikeFeed, kServerUnix);
+    Check(s.code == 1062717990 && s.tag == prefixed.tag,
+          "a runner test feed offers its prefixed prerelease");
+    CheckEq("2026.10.3-1062717990", s.version, "its version drops the prefix and the v");
+    Check(s.newestCode == 1062717990, "tags without the prefix are not the runner feed's");
+    const Selection official = SelectRelease({prefixed}, "x64", kOfficialFeed, kServerUnix);
+    Check(official.code == 0 && official.newestCode == 0,
+          "the official feed never reads a prefixed tag");
+  }
+}
+
+void FutureCodes() {
+  // the promised two days, written out: the constant itself could shrink
+  const std::uint64_t atLimit = CodeAt(kServerUnix + 48 * 60 * 60);
+  const std::uint64_t pastLimit = atLimit + 10;
+  auto release = [](std::uint64_t code) {
+    return Official("2026.10.8-" + std::to_string(code));
+  };
+  {
+    const Selection s = SelectRelease({release(pastLimit), Official("2026.10.1-1060587890")},
+                                      "x64", kOfficialFeed, kServerUnix);
+    Check(s.code == 1060587890, "a code more than 48 h past the server's date is not offered");
+    Check(s.newestCode == 1060587890, "nor named as the newest");
+    Check(s.skipped.size() == 1 && s.skipped[0].reason.find("future code") != std::string::npos,
+          "and it is logged as a future code");
+  }
+  {
+    const Selection s = SelectRelease({release(atLimit)}, "x64", kOfficialFeed, kServerUnix);
+    Check(s.code == atLimit, "a code exactly 48 h past the server's date is offered");
+  }
+  {
+    // A one-digit typo of a real code lands decades out.
+    const Selection s = SelectRelease({Official("2057.1.23-10627179700")}, "x64", kOfficialFeed,
+                                      kServerUnix);
+    Check(s.code == 0, "a far-future code is never offered");
+  }
+  {
+    // The cap is the server's clock, not this machine's: the same release is
+    // fine a day later.
+    const Selection s = SelectRelease({release(pastLimit)}, "x64", kOfficialFeed,
+                                      kServerUnix + 24 * 60 * 60);
+    Check(s.code == pastLimit, "the cap moves with the server's date");
+  }
+}
+
+void NewestCountsOwnProduct() {
+  // A newer release with the other platforms' assets only.
+  Release otherPlatforms = Official("2026.10.2-1061000000");
+  otherPlatforms.assets = {Asset(otherPlatforms.tag, "URnetworkSdk-2026.10.2-1061000000.aar"),
+                           Asset(otherPlatforms.tag, "URnetwork-2026.10.2-1061000000.pkg")};
+  const Selection s = SelectRelease({otherPlatforms, Official("2026.10.1-1060587890")}, "x64",
+                                    kOfficialFeed, kServerUnix);
+  Check(s.newestCode == 1060587890,
+        "newest counts only releases carrying this product's MSI for this architecture");
+  // the arm64 MSI alone does not count for x64
+  Release armOnly = Official("2026.10.2-1061000010");
+  armOnly.assets = {Asset(armOnly.tag, "URnetwork-2026.10.2-1061000010-arm64.msi")};
+  const Selection x64 = SelectRelease({armOnly, Official("2026.10.1-1060587890")}, "x64",
+                                      kOfficialFeed, kServerUnix);
+  Check(x64.newestCode == 1060587890, "another architecture's MSI does not count");
+  const Selection arm = SelectRelease({armOnly, Official("2026.10.1-1060587890")}, "arm64",
+                                      kOfficialFeed, kServerUnix);
+  Check(arm.newestCode == 1061000010 && arm.code == 1061000010, "for its own architecture it does");
+}
+
+// tests/ur_version_test.go urFixedVectors, computed with Python's datetime.
+struct MsiVector {
+  std::uint64_t code;
+  const char* msi;
+};
+constexpr MsiVector kMsiVectors[] = {
+    {1060587890, "26.10.1090"},   {1062717970, "26.10.6139"},   {1060587895, "26.10.1090"},
+    {1060587899, "26.10.1090"},   {1060127995, "26.9.61439"},   {1060127999, "26.9.61439"},
+    {824255995, "25.12.63487"},   {1060363020, "26.10.557"},    {1060128000, "26.10.0"},
+    {1060128420, "26.10.0"},      {1060128430, "26.10.1"},      {1034207990, "26.8.63487"},
+    {1034208000, "26.9.0"},       {824255990, "25.12.63487"},   {824256000, "26.1.0"},
+    {244080000, "24.2.58368"},    {244511990, "24.2.59391"},    {244512000, "24.3.0"},
+    {1086911990, "26.10.63487"},  {1086912000, "26.11.0"},      {1, "23.5.45056"},
+    {9, "23.5.45056"},            {73404575990, "255.12.63487"},
+};
+
+void MsiVersions(const char* oracleFile) {
+  for (const MsiVector& v : kMsiVectors) {
+    CheckEq(v.msi, UrMsiVersion(v.code), "UrMsiVersion(" + std::to_string(v.code) + ")");
+  }
+  CheckEq("", UrMsiVersion(0), "code 0 has no MSI version");
+  CheckEq("", UrMsiVersion(73404576000), "2256 is past the last ProductVersion the layout holds");
+  if (!oracleFile) return;
+  // The oracle's own answers: "<code> <msi version>", or "<code> -" for a code
+  // past the layout.
+  std::ifstream in(oracleFile);
+  Check(static_cast<bool>(in), std::string("the oracle's vectors open: ") + oracleFile);
+  std::string line;
+  int vectors = 0;
+  int mismatches = 0;
+  while (std::getline(in, line)) {
+    if (line.empty()) continue;
+    std::istringstream fields(line);
+    std::uint64_t code = 0;
+    std::string want;
+    fields >> code >> want;
+    if (want == "-") want.clear();
+    ++vectors;
+    if (UrMsiVersion(code) != want && ++mismatches <= 10) {
+      CheckEq(want, UrMsiVersion(code), "UrMsiVersion(" + std::to_string(code) + ") against the oracle");
+    }
+  }
+  Check(mismatches == 0, std::to_string(mismatches) + " of the oracle's vectors disagree");
+  Check(vectors >= 1000, "the oracle gave " + std::to_string(vectors) + " vectors");
+  std::cout << "  " << vectors << " oracle vectors\n";
+}
+
+void DownloadUrls() {
+  const std::string tag = "v2026.10.1-1060587890";
+  const std::string asset = "URnetwork-2026.10.1-1060587890-x64.msi";
+  const std::string url = "https://github.com/urnetwork/windows/releases/download/" + tag + "/" + asset;
+  CheckEq(url, FeedAssetUrl(kOfficialFeed, tag, asset), "the official feed's download URL");
+  Check(IsFeedAssetUrl(kOfficialFeed, tag, asset, url), "the feed's own URL is accepted");
+  for (const std::string& bad : {
+           url + "?x=1",
+           url + "/",
+           "http://github.com/urnetwork/windows/releases/download/" + tag + "/" + asset,
+           "https://github.com/urnetwork/build/releases/download/" + tag + "/" + asset,
+           "https://github.com/someone/windows/releases/download/" + tag + "/" + asset,
+           "https://github.com/urnetwork/windows/releases/download/v2026.10.1-1060587891/" + asset,
+           "https://github.com/urnetwork/windows/releases/download/" + tag + "/URnetwork-x.msi",
+           "https://evil.example/urnetwork/windows/releases/download/" + tag + "/" + asset,
+           "https://github.com.evil.example/urnetwork/windows/releases/download/" + tag + "/" + asset,
+           "https://github.com/urnetwork/windows/releases/download/" + tag + "/../" + asset,
+           std::string(),
+       }) {
+    Check(!IsFeedAssetUrl(kOfficialFeed, tag, asset, bad), "refused download URL: " + bad);
+  }
+}
+
+void Redirects() {
+  for (const char* good : {
+           "https://release-assets.githubusercontent.com/github-production-release-asset/"
+           "936244679/60615c0d?sp=r&sv=2018-11-09&sr=b&spr=https",
+           "https://objects.githubusercontent.com/github-production-release-asset-2e65be/1/2",
+           "https://RELEASE-ASSETS.githubusercontent.com/x",
+           "https://release-assets.githubusercontent.com:443/x",
+           "https://release-assets.githubusercontent.com/",
+       }) {
+    Check(IsAllowedAssetRedirect(good), std::string("allowed redirect: ") + good);
+  }
+  for (const char* bad : {
+           "http://release-assets.githubusercontent.com/x",
+           "HTTPS://release-assets.githubusercontent.com/x",
+           "https://release-assets.githubusercontent.com.evil.example/x",
+           "https://release-assets.githubusercontent.com./x",
+           "https://evil.example/release-assets.githubusercontent.com",
+           "https://evil.example/?release-assets.githubusercontent.com",
+           "https://user@release-assets.githubusercontent.com/x",
+           "https://release-assets.githubusercontent.com@evil.example/x",
+           "https://release-assets.githubusercontent.com:8443/x",
+           "https://release-assets.githubusercontent.com:/x",
+           "https://release-assets.githubusercontent.com",
+           "https://release-assets.githubusercontent.com?x",
+           "https://release-assets.githubusercontent.com#x",
+           "https://release-assets.githubusercontent.com\\@evil.example/",
+           "https://release-assets.githubusercontent.com/x y",
+           "https://release-assets.githubusercontent.com/x\ty",
+           "https://xrelease-assets.githubusercontent.com/x",
+           "https://githubusercontent.com/x",
+           "https://github.com/urnetwork/windows/releases/download/v1/x.msi",
+           "https://release-assets.githubusercontent.com\xc2\xa0/x",
+           "",
+       }) {
+    Check(!IsAllowedAssetRedirect(bad), std::string("refused redirect: ") + bad);
+  }
+}
+
+void InstallLocations() {
+  using urnw::install::InstallPathInfo;
+  using urnw::install::InstallRights;
+  using urnw::install::IsAdminOnlyInstallDir;
+  // FILE_GENERIC_READ | FILE_GENERIC_EXECUTE: what Program Files' Users ACE
+  // grants (RX), and Modify and Full control over it
+  constexpr std::uint32_t kUsersRx = 0x001200A9;
+  constexpr std::uint32_t kUsersModify = 0x001301BF;
+  constexpr std::uint32_t kFullControl = 0x001F01FF;
+  constexpr InstallPathInfo kProgramFiles{
+      .underProgramFiles = true, .resolvesToItself = true, .reparsePoint = false};
+
+  Check(IsAdminOnlyInstallDir(kProgramFiles, {.folder = kUsersRx, .executable = kUsersRx}),
+        "Program Files with Users RX is an admin-only install location");
+  Check(IsAdminOnlyInstallDir(kProgramFiles, {.folder = 0, .executable = 0}),
+        "no rights at all is admin-only too");
+  Check(!IsAdminOnlyInstallDir({.underProgramFiles = false, .resolvesToItself = true},
+                               {.folder = kUsersRx, .executable = kUsersRx}),
+        "a user folder is refused, whatever its ACL");
+  Check(!IsAdminOnlyInstallDir(kProgramFiles, {.folder = kUsersModify, .executable = kUsersRx}),
+        "a folder Users can modify is refused");
+  Check(!IsAdminOnlyInstallDir(kProgramFiles, {.folder = kUsersRx, .executable = kUsersModify}),
+        "an executable Users can modify is refused");
+  Check(!IsAdminOnlyInstallDir(kProgramFiles, {.folder = kFullControl, .executable = kFullControl}),
+        "full control is refused");
+  Check(!IsAdminOnlyInstallDir(
+            {.underProgramFiles = true, .resolvesToItself = true, .reparsePoint = true},
+            {.folder = kUsersRx, .executable = kUsersRx}),
+        "a reparse point on the way is refused");
+  Check(!IsAdminOnlyInstallDir({.underProgramFiles = true, .resolvesToItself = false},
+                               {.folder = kUsersRx, .executable = kUsersRx}),
+        "a path that resolves elsewhere is refused");
+  for (const std::uint32_t bit :
+       {urnw::install::kWriteData, urnw::install::kAppendData, urnw::install::kWriteEa,
+        urnw::install::kDeleteChild, urnw::install::kWriteAttributes, urnw::install::kDelete,
+        urnw::install::kWriteDac, urnw::install::kWriteOwner}) {
+    Check(!IsAdminOnlyInstallDir(kProgramFiles, {.folder = kUsersRx | bit, .executable = kUsersRx}),
+          "folder right " + Hex(bit) + " alone is refused");
+    Check(!IsAdminOnlyInstallDir(kProgramFiles, {.folder = kUsersRx, .executable = kUsersRx | bit}),
+          "executable right " + Hex(bit) + " alone is refused");
+  }
+}
+
+void Outcomes() {
+  Check(OutcomeOf(0) == Outcome::Installed, "exit 0 installed");
+  Check(OutcomeOf(3010) == Outcome::RestartRequired, "3010 is restart to finish, not a failure");
+  Check(OutcomeOf(1641) == Outcome::RestartRequired, "1641 is a restart too");
+  for (const std::int64_t code : {1602, 1603, 1618, 1625, 1638, 1}) {
+    Check(OutcomeOf(code) == Outcome::Failed, "msiexec " + std::to_string(code) + " failed");
+  }
+  for (const Refusal refusal :
+       {Refusal::NotElevated, Refusal::NotInstalled, Refusal::DevBuild, Refusal::BadArguments,
+        Refusal::Busy, Refusal::ReleaseList, Refusal::NotOffered, Refusal::Download,
+        Refusal::Digest, Refusal::Package, Refusal::Staging, Refusal::InstallerNotStarted}) {
+    const auto code = static_cast<std::int64_t>(refusal);
+    Check(IsRefusal(code) && OutcomeOf(code) == Outcome::Refused,
+          "helper refusal " + std::to_string(code) + " is a refusal");
+    Check(!KeepsPackage(code), "a refusal keeps no package");
+  }
+  Check(KeepsPackage(0) && KeepsPackage(3010) && KeepsPackage(1641),
+        "an install that took keeps the package as the repair source");
+  Check(!KeepsPackage(1603) && !KeepsPackage(1618), "a failed install deletes it");
+
+  const UpdateResult good{.tag = "v2026.10.1-1060587890",
+                          .code = 1060587890,
+                          .exitCode = 0,
+                          .finishedUtc = "2026-10-01T14:51:17Z"};
+  Check(IsWellFormed(good), "a report the helper writes is well formed");
+  UpdateResult bad = good;
+  bad.code = 1060587891;
+  Check(!IsWellFormed(bad), "a code that is not the tag's is refused");
+  bad = good;
+  bad.tag = "latest";
+  Check(!IsWellFormed(bad), "a tag outside the grammar is refused");
+  bad = good;
+  bad.finishedUtc = "2026-10-01 14:51:17";
+  Check(!IsWellFormed(bad), "a time that is not a UTC second is refused");
+  bad = good;
+  bad.exitCode = -1;
+  Check(!IsWellFormed(bad), "a negative exit code is refused");
+  bad = good;
+  bad.exitCode = 0x100000000;
+  Check(!IsWellFormed(bad), "an exit code no process returns is refused");
+  UpdateResult prefixed = good;
+  prefixed.tag = "runner-test-" + good.tag;
+  Check(IsWellFormed(prefixed, "runner-test-") && !IsWellFormed(prefixed),
+        "a runner test feed's tag reads with its prefix only");
+}
+
+}  // namespace
+
+int main(int argc, char** argv) {
+  FeedTable();
+  AssetNames();
+  RealReleaseList();
+  NotOffered();
+  ImmutableRequired();
+  Prereleases();
+  FutureCodes();
+  NewestCountsOwnProduct();
+  MsiVersions(argc > 1 ? argv[1] : nullptr);
+  DownloadUrls();
+  Redirects();
+  InstallLocations();
+  Outcomes();
 
   std::cout << (gFailures == 0 ? "PASS" : "FAIL") << " update-release-tests: " << gCases
             << " checks, " << gFailures << " failures\n";

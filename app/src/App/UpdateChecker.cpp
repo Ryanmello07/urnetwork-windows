@@ -14,9 +14,9 @@
 
 #include <nlohmann/json.hpp>
 
-#include "Config.h"
 #include "Log.h"
 #include "Paths.h"
+#include "ReleaseJson.h"
 #include "ReleaseSelection.h"
 #include "SingleInstance.h"
 #include "Strings.h"
@@ -92,25 +92,6 @@ fs::path OwnExePath() {
   }
 }
 
-// ---- release-list JSON reads -------------------------------------------------
-//
-// nlohmann's value() only substitutes the default for a MISSING key; a key
-// that is present with the wrong type ("tag_name": null) throws type_error out
-// of get<>(). The release list is another service's JSON — its shape is
-// exactly what this code must survive, not assume — so every read is a
-// find + type check, and a malformed release degrades to "skipped", never to
-// an exception hunting for a backstop.
-bool JsonFlag(nlohmann::json const& j, const char* key) {
-  const auto it = j.find(key);
-  return it != j.end() && it->is_boolean() && it->get<bool>();
-}
-
-std::string JsonString(nlohmann::json const& j, const char* key) {
-  const auto it = j.find(key);
-  if (it == j.end() || !it->is_string()) return {};
-  return it->get<std::string>();
-}
-
 // ---- WinHTTP -----------------------------------------------------------------
 
 struct HInternet {
@@ -145,16 +126,44 @@ std::optional<UrlParts> CrackHttpsUrl(std::wstring const& url) {
   return p;
 }
 
+// The response's Date header in Unix seconds, or 0 when it has none.
+std::int64_t ResponseDateUnixSeconds(HINTERNET request) {
+  SYSTEMTIME date{};
+  DWORD size = sizeof(date);
+  if (!::WinHttpQueryHeaders(request, WINHTTP_QUERY_DATE | WINHTTP_QUERY_FLAG_SYSTEMTIME,
+                             WINHTTP_HEADER_NAME_BY_INDEX, &date, &size,
+                             WINHTTP_NO_HEADER_INDEX)) {
+    return 0;
+  }
+  FILETIME file{};
+  if (!::SystemTimeToFileTime(&date, &file)) return 0;
+  ULARGE_INTEGER ticks{};
+  ticks.LowPart = file.dwLowDateTime;
+  ticks.HighPart = file.dwHighDateTime;
+  // FILETIME counts 100 ns from 1601-01-01, 11644473600 s before Unix time
+  return static_cast<std::int64_t>(ticks.QuadPart / 10000000ULL) - 11644473600LL;
+}
+
+// What a GET said beside its body.
+struct FetchHeaders {
+  // The Date header in Unix seconds, 0 when it had none.
+  std::int64_t serverUnixSeconds = 0;
+};
+
 // One GET, streamed into `sink` chunk by chunk. GitHub requires a User-Agent
-// on every request (a bare WinHTTP GET gets 403), and the asset download is a
-// browser_download_url that 302s to a storage host — WinHTTP's default
-// redirect policy follows https->https transparently, which is exactly the
-// hop those URLs make. `cancelled` is polled between reads so a Stop() during
-// a 100 MB download aborts within one chunk instead of finishing it.
+// on every request (a bare WinHTTP GET gets 403). With `followRedirects`
+// false a redirect is a failure: the release list's URL names the repository
+// by its id, and nothing may move it. The tray's own download of the MSI, a
+// browser_download_url that 302s to a storage host, follows WinHTTP's
+// default https->https policy; what it fetches is only ever shown to the user
+// or checked, never handed to an elevated process. `cancelled` is polled
+// between reads so a Stop() during a 100 MB download aborts within one chunk
+// instead of finishing it.
 bool FetchUrl(std::wstring const& url, const wchar_t* accept,
-              std::uint64_t maxBytes,
+              std::uint64_t maxBytes, bool followRedirects,
               std::function<bool(const char*, DWORD)> const& sink,
-              std::function<bool()> const& cancelled, std::string& error) {
+              std::function<bool()> const& cancelled, FetchHeaders& headers,
+              std::string& error) {
   const auto parts = CrackHttpsUrl(url);
   if (!parts) {
     error = "not an https url";
@@ -189,6 +198,14 @@ bool FetchUrl(std::wstring const& url, const wchar_t* accept,
     error = std::format("WinHttpOpenRequest failed: {}", ::GetLastError());
     return false;
   }
+  if (!followRedirects) {
+    DWORD policy = WINHTTP_OPTION_REDIRECT_POLICY_NEVER;
+    if (!::WinHttpSetOption(request.h, WINHTTP_OPTION_REDIRECT_POLICY, &policy,
+                            sizeof(policy))) {
+      error = std::format("WinHttpSetOption(redirect policy) failed: {}", ::GetLastError());
+      return false;
+    }
+  }
   if (accept) {
     const std::wstring header = std::wstring(L"Accept: ") + accept;
     ::WinHttpAddRequestHeaders(request.h, header.c_str(),
@@ -209,6 +226,7 @@ bool FetchUrl(std::wstring const& url, const wchar_t* accept,
                         WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
                         WINHTTP_HEADER_NAME_BY_INDEX, &status, &statusSize,
                         WINHTTP_NO_HEADER_INDEX);
+  headers.serverUnixSeconds = ResponseDateUnixSeconds(request.h);
   if (status != 200) {
     error = std::format("http status {}", status);
     return false;
@@ -439,7 +457,7 @@ void UpdateChecker::WorkerLoop() {
   // std::terminate, so a single surprise (nlohmann type_error on API-shape
   // drift, bad_alloc mid-download) would otherwise take down the whole tray
   // app — and recur on the next 6-hour check. The reads are guarded
-  // individually too (JsonFlag/JsonString); this is the backstop, not the plan.
+  // individually too (ReleaseJson.h); this is the backstop, not the plan.
   try {
     CleanupStaleFiles();
   } catch (std::exception const& e) {
@@ -547,12 +565,16 @@ void UpdateChecker::CleanupStaleFiles() {
 void UpdateChecker::RunCheck() {
   Mutate([](Snapshot& s) { s.lastCheck = CheckOutcome::InFlight; });
 
-  const std::wstring url = std::wstring(L"https://api.github.com/repos/") +
-                           config::kUpdateRepo + L"/releases?per_page=15";
+  // The repository by its id, so no rename and no re-registered owner name
+  // can move the feed, and with redirects refused for the same reason.
+  const update::Feed& feed = update::kOfficialFeed;
+  const std::wstring url = std::format(
+      L"https://api.github.com/repositories/{}/releases?per_page=15", feed.numericRepoId);
   std::string body;
   std::string error;
+  FetchHeaders headers;
   const bool fetched = FetchUrl(
-      url, L"application/vnd.github+json", kMaxJsonBytes,
+      url, L"application/vnd.github+json", kMaxJsonBytes, /*followRedirects=*/false,
       [&body](const char* data, DWORD n) {
         body.append(data, n);
         return true;
@@ -561,53 +583,48 @@ void UpdateChecker::RunCheck() {
         std::lock_guard lock(mutex_);
         return stop_;
       },
-      error);
+      headers, error);
   if (!fetched) {
     LogWarn("update: release check failed: {}", error);
     Mutate([](Snapshot& s) { s.lastCheck = CheckOutcome::Failed; });
     return;
   }
 
-  // parse(…, false): a malformed body comes back as `discarded`, not a throw.
-  const nlohmann::json releases = nlohmann::json::parse(body, nullptr, false);
-  if (!releases.is_array()) {
+  // The JSON is read into plain structs (ReleaseJson.h, the reader the update
+  // helper uses too) and the decision made by the pure SelectRelease
+  // (ReleaseSelection.h), which the tools test runs against the names the
+  // release pipeline actually publishes. Two maxima, deliberately separate:
+  // the newest release of this product (the honest answer to "is there
+  // something newer") and the newest release this build can actually verify
+  // (carrying a usable sha256 digest). When they differ, that is a broken
+  // release and the log says so.
+  const std::optional<std::vector<update::Release>> parsed = update::ParseReleaseList(body);
+  if (!parsed) {
     LogWarn("update: release list was not a JSON array");
     Mutate([](Snapshot& s) { s.lastCheck = CheckOutcome::Failed; });
     return;
   }
-
-  // The JSON is read into plain structs and the decision made by the pure
-  // SelectRelease (ReleaseSelection.h), which the tools test runs against the
-  // names the release pipeline actually publishes. Two maxima, deliberately
-  // separate: the newest release that PARSES (the honest answer to "is there
-  // something newer") and the newest release this build can actually VERIFY
-  // (own-arch MSI attached, carrying a usable sha256 digest). When they
-  // differ, that is a broken release and the log says so.
-  std::vector<update::Release> parsed;
-  for (auto const& rel : releases) {
-    if (!rel.is_object()) continue;
-    update::Release r;
-    r.tag = JsonString(rel, "tag_name");
-    r.draft = JsonFlag(rel, "draft");
-    r.prerelease = JsonFlag(rel, "prerelease");
-    if (auto assets = rel.find("assets");
-        assets != rel.end() && assets->is_array()) {
-      for (auto const& asset : *assets) {
-        if (!asset.is_object()) continue;
-        r.assets.push_back({JsonString(asset, "name"),
-                            JsonString(asset, "browser_download_url"),
-                            JsonString(asset, "digest")});
-      }
-    }
-    parsed.push_back(std::move(r));
+  // Codes are judged against GitHub's clock, not this machine's. A response
+  // without a Date header is judged against this machine's: the offer is only
+  // what the banner shows, and the helper refuses a list without one.
+  std::int64_t serverUnixSeconds = headers.serverUnixSeconds;
+  if (serverUnixSeconds == 0) {
+    LogWarn("update: the release list had no Date header; judging codes by this clock");
+    serverUnixSeconds = std::chrono::duration_cast<std::chrono::seconds>(
+                            std::chrono::system_clock::now().time_since_epoch())
+                            .count();
   }
-  const update::Selection sel = update::SelectRelease(parsed, kArch);
+  const update::Selection sel = update::SelectRelease(*parsed, kArch, feed, serverUnixSeconds);
   for (auto const& skip : sel.skipped)
     LogWarn("update: release {} {} — skipped", skip.tag, skip.reason);
   const std::uint64_t newestCode = sel.newestCode;
   const std::string& newestVersion = sel.newestVersion;
   Offer offer;
-  if (sel.code != 0) {
+  if (sel.code != 0 && !update::IsFeedAssetUrl(feed, sel.tag, sel.assetName, sel.assetUrl)) {
+    // the helper would refuse it, so it is not offered
+    LogWarn("update: release {} names a download outside its feed ({}) — skipped", sel.tag,
+            sel.assetUrl);
+  } else if (sel.code != 0) {
     LogDebug("update: release {} digest ok ({})", sel.tag, sel.digestHex);
     offer = Offer{Widen(sel.version), sel.code,  Widen(sel.tag),
                   Widen(sel.assetUrl), sel.digestHex, sel.assetName};
@@ -714,13 +731,14 @@ void UpdateChecker::RunApply() {
       return;
     }
     std::string error;
+    FetchHeaders headers;
     const bool ok = FetchUrl(
-        offer.msiUrl, nullptr, kMaxMsiBytes,
+        offer.msiUrl, nullptr, kMaxMsiBytes, /*followRedirects=*/true,
         [&out](const char* data, DWORD n) {
           out.write(data, n);
           return out.good();
         },
-        cancelled, error);
+        cancelled, headers, error);
     out.close();
     if (!ok || !out.good()) {
       LogWarn("update: download failed: {}", ok ? "file write failed" : error);

@@ -109,11 +109,9 @@ var catalogFallbackFunctionNames = map[string]bool{
 	"fault":         true,
 }
 
-// Functions that take a key of something other than the catalog.
-var catalogNonLookupFunctionReasons = map[string]string{
-	"JsonFlag":   "reads a field of a release's JSON",
-	"JsonString": "reads a field of a release's JSON",
-}
+// Functions that take a key of something other than the catalog. None today:
+// the release list's JSON is read by Common/ReleaseJson.h, outside the app.
+var catalogNonLookupFunctionReasons = map[string]string{}
 
 // One lookup a source makes, at the line of its call.
 type catalogLookup struct {
