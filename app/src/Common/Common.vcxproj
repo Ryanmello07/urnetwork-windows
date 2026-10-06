@@ -65,6 +65,7 @@
     <ClInclude Include="RpcSessionBlob.h" />
     <ClInclude Include="Sdk.h" />
     <ClInclude Include="SignOut.h" />
+    <ClInclude Include="StartupRegistration.h" />
     <ClInclude Include="Strings.h" />
     <ClInclude Include="ThreadGuard.h" />
     <ClInclude Include="UpdateFormats.h" />

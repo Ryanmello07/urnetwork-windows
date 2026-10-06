@@ -351,6 +351,10 @@
          are Common/InstanceHandover.h, which tools/instance-handover-tests.cpp
          runs on any host. -->
     <ClCompile Include="SingleInstance.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <!-- "Launch URnetwork on system startup": the user's Run value (plain Win32,
+         no WinRT, so no pch). Its decisions are Common/StartupRegistration.h,
+         which tools/startup-registration-tests.cpp runs on any host. -->
+    <ClCompile Include="LaunchAtStartup.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
     <ClCompile Include="ServiceClient.cpp" />
     <ClCompile Include="ServiceSetup.cpp" />
     <ClCompile Include="TrayIcon.cpp" />
@@ -471,6 +475,7 @@
     <ClInclude Include="FeedbackLogUpload.h" />
     <ClInclude Include="SystemProxy.h" />
     <ClInclude Include="SingleInstance.h" />
+    <ClInclude Include="LaunchAtStartup.h" />
     <ClInclude Include="ServiceClient.h" />
     <ClInclude Include="ServiceSetup.h" />
     <ClInclude Include="TrayIcon.h" />

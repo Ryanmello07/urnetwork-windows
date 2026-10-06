@@ -324,9 +324,18 @@ Product — DECIDED 2026-07-09:
 - **What a launch shows: DECIDED 2026-10-05 (owner)** — "autostart on system start
   should launch only the tray icon": every launch the user starts opens the window
   (a first launch, a relaunch of the running app, one that waited out a quit), and an
-  autostart at sign-in (`URnetwork.exe --autostart`) shows only the tray icon. Nothing
-  registers an autostart yet; launch-at-login must pass `--autostart`
-  (`instance::kAutostartArgument`, pinned by a contract test).
+  autostart at sign-in (`URnetwork.exe --autostart`) shows only the tray icon. Every
+  autostart registration must pass `--autostart` (`instance::kAutostartArgument`,
+  pinned by a contract test).
+- **Launch on system startup: DECIDED 2026-10-05 (owner)** — "Launch URnetwork on
+  system startup" as on macOS, with macOS's default (off): a toggle in Settings
+  (`launch_urnetwork_on_system_startup`) writes the user's own HKCU Run value
+  (`"URnetwork.exe" --autostart`) when turned on and deletes it, with Task Manager's
+  StartupApproved record, when turned off; Task Manager switching it off shows as off.
+  Nothing registers it by itself; each launch only brings an existing value up to date.
+  Uninstalling deletes the uninstalling user's value; other users' stay (their hives are
+  not loaded), and Windows starts nothing for a value whose program is gone
+  (`app/src/Common/StartupRegistration.h`).
 - **Launches during an update: DECIDED 2026-10-05 (owner)** — refused, "protect the
   update to not be corrupted where possible". The in-app updater records the msiexec
   it started (process id, creation time, time written) before the app quits; while

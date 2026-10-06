@@ -136,6 +136,9 @@ class SettingsPage {
   // renders rows, and every other state renders the line that names it.
   void RenderAuthMethods(rows::FieldState state);
   void ApplyLocalDeviceState();  // client id + kill switch, straight off the SDK
+  // "Launch URnetwork on system startup", read from Windows (LaunchAtStartup.h)
+  void ApplyLaunchAtStartup();
+  void OnLaunchAtStartupToggled();
 
   // ---- actions ----
   void OnKillSwitchToggled();
@@ -210,6 +213,8 @@ class SettingsPage {
   // its neighbours: nothing ever writes IsOn back — the pref has one writer
   // (this toggle) and one reader path (the checker), so there is no echo.
   winrt::Microsoft::UI::Xaml::Controls::ToggleSwitch autoUpdateCheck_{nullptr};
+  // "Launch URnetwork on system startup" (StartupRegistration.h)
+  winrt::Microsoft::UI::Xaml::Controls::ToggleSwitch launchAtStartup_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::Button manageSubscription_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::TextBlock versionValue_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::Button deleteAccountButton_{nullptr};
@@ -233,6 +238,8 @@ class SettingsPage {
   bool preferencesLoaded_ = false;
   // same echo guard for the kill switch, whose value is written by the load
   bool applyingKillSwitch_ = false;
+  // and for the launch-on-startup toggle, written whenever Windows is read
+  bool applyingLaunchAtStartup_ = false;
 
   std::shared_ptr<urnw::DeviceNameSheet> deviceNameSheet_;
   std::shared_ptr<urnw::AuthCodeSheet> authCodeSheet_;
