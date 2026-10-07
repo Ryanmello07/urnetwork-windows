@@ -31,6 +31,12 @@
   </PropertyGroup>
 
   <PropertyGroup Label="Configuration">
+    <!-- MSBuild chooses the C++ tool host independently of its own process and
+         the developer shell's PATH. Under x64 MSBuild the ARM64 target defaults
+         to HostX86, whose linker exhausts its address space during Release LTCG.
+         Select the 64-bit tools before the VC toolset resolves their paths;
+         Platform still controls whether the output is x64 or ARM64. -->
+    <PreferredToolArchitecture Condition="'$(MSBuildProjectExtension)'=='.vcxproj' and '$(PreferredToolArchitecture)'==''">x64</PreferredToolArchitecture>
     <PlatformToolset Condition="'$(PlatformToolset)'==''">v143</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
