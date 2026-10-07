@@ -3427,6 +3427,10 @@ cara yang benar</value>
     <value>Statistik extender</value>
     <comment>Title of the section that shows statistics about the extender, directly above the provider statistics section.</comment>
   </data>
+  <data name="extender_tcp_unavailable" xml:space="preserve">
+    <value>Port TCP 443 sedang digunakan oleh program lain. Mencoba lagi setiap beberapa menit: {}</value>
+    <comment>Extender status when TCP port 443, the one port the extender requires, cannot be bound, usually because another program (often another provider on the same computer) holds it. The extender stays off and tries the port again every few minutes on its own, so this is not the user's mistake: keep the tone calm. The argument is the bind error.</comment>
+  </data>
   <data name="extenders" xml:space="preserve">
     <value>Extender</value>
     <comment>Title of the extenders panel in the connect drawer and of the Extenders section under account.</comment>
