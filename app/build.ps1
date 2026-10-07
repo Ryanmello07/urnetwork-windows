@@ -93,9 +93,11 @@ if (-not $msbuild) {
 if (-not $msbuild) { throw "no x64/x86 msbuild.exe in the VS install (need MSBuild\Current\Bin\amd64 or Bin)" }
 
 # Enter the VS dev shell for the C++ toolchain ENVIRONMENT (INCLUDE/LIB, and PATH to
-# cl.exe/rc.exe/mt.exe + the Windows SDK). -host_arch=amd64 picks the x64-hosted VC
-# tools to match the x64 msbuild above. This only sets env vars; the build steps below
-# still invoke $msbuild (x64) explicitly, which is what fixes the markup-compiler arch.
+# cl.exe/rc.exe/mt.exe + the Windows SDK). -host_arch=amd64 puts the x64-hosted VC
+# tools on PATH for dependency preparation. MSBuild resolves its own C++ tools:
+# Directory.Build.props sets PreferredToolArchitecture=x64 so the ARM64 app link
+# also uses the 64-bit host. The explicit $msbuild still controls the independent
+# architecture of the in-process markup compiler.
 $devShell = Join-Path $vsPath 'Common7\Tools\Microsoft.VisualStudio.DevShell.dll'
 try {
   Import-Module $devShell
