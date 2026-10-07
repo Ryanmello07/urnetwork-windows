@@ -151,9 +151,14 @@
          running with no icon, and would hold every later launch of the new
          version to its own old window until the session ends. MSIRMSHUTDOWN=1
          ends an app that does not exit when asked, so after the install either
-         the new version runs or nothing does. The service is never its to
-         stop: StopServices does that, and Windows Installer leaves a service a
-         ServiceControl row stops to it. -->
+         the new version runs or nothing does. The service is StopServices' to
+         stop, and a service a ServiceControl row stops does not by itself make
+         Windows Installer call on the Restart Manager. When something else
+         still holds a file of this package, though, the Restart Manager's
+         shutdown stops the service too, a moment before StopServices would:
+         seen with the Windows Font Cache Service, in the first few seconds
+         after the app first starts. The Restart Manager restarts that other
+         service when the install ends, and StartServices starts this one. -->
     <Property Id="MSIRMSHUTDOWN" Value="1" />
 
     <!-- Start the app again after an update the in-app updater ran: its
