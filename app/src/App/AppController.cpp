@@ -251,13 +251,10 @@ void AppController::Start() {
   }
 
   // The update checker (beta spec §5): its worker owns the launch-delay check
-  // and the 6h cadence; a started installer comes back through this handler,
-  // and the app quits so the MSI finds none of its files in use. Marshalled
-  // onto the UI thread because it is the tray-quit teardown, which is
-  // UI-thread machinery end to end. Not the user's Quit: the MSI stops the
-  // service itself, and the tunnel and the provider with it.
-  updates_.SetInstallerStartedHandler(
-      [this] { OnUi([this] { Shutdown(lifetime::Ending::InstallerHandoff); }); });
+  // and the 6h cadence, and an update runs the elevated helper and waits on
+  // it. The app does not quit for the installer: the MSI closes it before it
+  // replaces its files (WM_CLOSE, a close request, through CloseApplication)
+  // and stops the service itself.
   updates_.Start();
 
   // "Launch URnetwork on system startup": a registration the user turned on

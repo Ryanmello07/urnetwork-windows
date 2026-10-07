@@ -1344,6 +1344,13 @@ void DeveloperPage::ApplyUpdateCheck(UpdateChecker::Snapshot const& snap) {
                   L"The update check failed — see the app log.");
       break;
   }
+  // The connect screen's warning, here too: no check has worked for 72 hours.
+  // The date is data; the sentence has no store id yet.
+  if (snap.checkStale) {
+    if (!text.empty()) text += L"\n";
+    text += L"Couldn't check for updates since " +
+            UpdateChecker::LocalDate(snap.lastSuccessUnix);
+  }
   updateCheckText_.Text(hstring{text});
   updateCheckText_.Visibility(text.empty() ? Visibility::Collapsed
                                            : Visibility::Visible);

@@ -353,6 +353,12 @@ int __stdcall wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     return urnw::WriteDiagnosticsToConsole(diagnostics);
   }
 
+  // The installer's relaunch after an update starts while the update helper
+  // still waits on msiexec, and the update marker names the helper: it waits
+  // for the update to end instead of being refused by it, then asks like every
+  // launch (InstanceHandover.h kAfterUpdateArgument).
+  if (urnw::LaunchedAfterUpdate()) urnw::AwaitUpdateEnd();
+
   // This process's exiting signal and its handler for launches redirected to
   // it come before the key: a later launch can find this process the moment the
   // key is its own, and the App SDK consumes a redirect that arrives with no

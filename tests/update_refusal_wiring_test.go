@@ -17,26 +17,41 @@ import (
 // (instance_handover_test.go); the updater, wWinMain and the Win32 glue need
 // Windows, so these read their sources with every comment blanked.
 
-// The handoff records the installer before the app quits for it: msiexec is
-// started with its process handle kept, the handle goes into the marker (its
-// process id and creation time), and only then does the updater tell the app
-// to quit.
+// The handoff keeps the installer's process: the update helper, which runs
+// msiexec, is started with its process handle kept, and the app waits on it
+// without quitting, so a launch meanwhile reaches the running app. When the
+// app begins to exit while the helper still runs (the installer closing it),
+// the handle goes into the marker (its process id and creation time) before
+// the handle is closed, and so before the process ends: from then until the
+// helper ends, a launch is refused.
 func TestUpdateRefusalTheHandoffRecordsTheInstaller(t *testing.T) {
 	checker := stripComments(readAppSource(t, "UpdateChecker.cpp"))
 	launch := definitionBody(t, "UpdateChecker.cpp", checker,
-		"bool LaunchInstaller(fs::path const& msi, std::string& error) {")
-	signOutRequireInOrder(t, "LaunchInstaller", launch,
+		"bool LaunchUpdateHelper(fs::path const& helperPath, std::wstring const& tag, HANDLE* helper,")
+	signOutRequireInOrder(t, "LaunchUpdateHelper", launch,
 		regexp.QuoteMeta("sei.fMask = SEE_MASK_NOASYNC | SEE_MASK_NOCLOSEPROCESS;"),
+		regexp.QuoteMeta(`sei.lpVerb = L"runas";`),
 		regexp.QuoteMeta("if (!::ShellExecuteExW(&sei)) {"),
 		regexp.QuoteMeta("return false;"),
 		regexp.QuoteMeta("if (sei.hProcess) {"),
-		regexp.QuoteMeta("RecordUpdateInProgress(sei.hProcess);"),
-		regexp.QuoteMeta("::CloseHandle(sei.hProcess);"),
+		regexp.QuoteMeta("*helper = sei.hProcess;"),
 		regexp.QuoteMeta("return true;"))
-	apply := definitionBody(t, "UpdateChecker.cpp", checker, "void UpdateChecker::RunApply() {")
+	apply := definitionBody(t, "UpdateChecker.cpp", checker,
+		"void UpdateChecker::RunApply(std::uint64_t generation, bool manual) {")
 	signOutRequireInOrder(t, "UpdateChecker::RunApply", apply,
-		regexp.QuoteMeta("LaunchInstaller(msiPath, launchError)"),
-		regexp.QuoteMeta("started();"))
+		regexp.QuoteMeta("LaunchUpdateHelper(installFolder_ / kHelperName, offer.tag, &helper, &refusal,"),
+		regexp.QuoteMeta("update::AwaitHelper("),
+		regexp.QuoteMeta("::WaitForSingleObject(helper, 250)"),
+		regexp.QuoteMeta("if (waited == update::HelperWait::AppExiting) {"),
+		regexp.QuoteMeta("RecordUpdateInProgress(helper);"),
+		regexp.QuoteMeta("::CloseHandle(helper);"),
+		regexp.QuoteMeta("return;"),
+		regexp.QuoteMeta("::CloseHandle(helper);"))
+	controller := appControllerSource(t)
+	shutdown := definitionBody(t, "AppController.cpp", controller, "void AppController::Shutdown(lifetime::Ending ending) {")
+	signOutRequireInOrder(t, "AppController::Shutdown", shutdown,
+		regexp.QuoteMeta("BeginExiting();"),
+		regexp.QuoteMeta("updates_.Stop();"))
 
 	glue := stripComments(readAppSource(t, "SingleInstance.cpp"))
 	record := definitionBody(t, "SingleInstance.cpp", glue, "void RecordUpdateInProgress(void* installerProcess) {")
@@ -125,11 +140,15 @@ func TestUpdateRefusalTheNoticeClosesItself(t *testing.T) {
 	}
 }
 
-// Nothing relaunches the app while the installer runs, so the refusal blocks
-// no relaunch of the installer's own: the MSI starts no URnetwork.exe and the
-// updater starts nothing after it. If one is added, it has to be reconciled
-// with the marker (it would be refused while msiexec still runs).
-func TestUpdateRefusalNothingRelaunchesTheAppDuringTheInstall(t *testing.T) {
+// The relaunch after an update is reconciled with the marker. After an update
+// the helper ran, the MSI starts the helper unelevated (WixUnelevatedShellExec,
+// which takes no arguments), and after one that failed the helper starts
+// itself the same way, through the user's shell; the helper starts
+// URnetwork.exe with --after-update, and that launch waits for the update to
+// end before it asks (update_apply_wiring_test.go pins the wait). The MSI
+// never starts URnetwork.exe itself, which the marker would refuse while
+// msiexec still runs, and the tray's updater starts nothing after the helper.
+func TestUpdateRefusalTheOnlyRelaunchWaitsForTheUpdate(t *testing.T) {
 	packagePath := filepath.Join(repositoryRoot(t), "app", "installer", "Package.wxs")
 	data, err := os.ReadFile(packagePath)
 	if err != nil {
@@ -143,9 +162,23 @@ func TestUpdateRefusalNothingRelaunchesTheAppDuringTheInstall(t *testing.T) {
 				"the update marker; reconcile it before adding one", launch)
 		}
 	}
+	if strings.Count(installer, `DllEntry="WixUnelevatedShellExec"`) != 1 ||
+		!strings.Contains(installer, `<Property Id="WixUnelevatedShellExecTarget" Value="[#UpdaterExe]" />`) {
+		t.Error("Package.wxs relaunches other than once, through the update helper")
+	}
+	helper := stripComments(readUpdaterSource(t, "main.cpp"))
+	relaunch := definitionBody(t, "Updater/main.cpp", helper, "int RelaunchApp() {")
+	signOutRequireInOrder(t, "the helper's RelaunchApp", relaunch,
+		regexp.QuoteMeta(`folder / L"URnetwork.exe";`),
+		regexp.QuoteMeta(`L"\" --after-update";`))
+	entry := definitionBody(t, "main.cpp", appMainSource(t), "int __stdcall wWinMain(")
+	signOutRequireInOrder(t, "wWinMain", entry,
+		regexp.QuoteMeta("if (urnw::LaunchedAfterUpdate()) urnw::AwaitUpdateEnd();"),
+		regexp.QuoteMeta("urnw::instance::Launch(launcher);"))
 	checker := stripComments(readAppSource(t, "UpdateChecker.cpp"))
-	apply := definitionBody(t, "UpdateChecker.cpp", checker, "void UpdateChecker::RunApply() {")
-	afterStart := apply[strings.Index(apply, "LaunchInstaller(msiPath, launchError)"):]
+	apply := definitionBody(t, "UpdateChecker.cpp", checker,
+		"void UpdateChecker::RunApply(std::uint64_t generation, bool manual) {")
+	afterStart := apply[strings.Index(apply, "LaunchUpdateHelper(installFolder_ / kHelperName, offer.tag, &helper, &refusal,"):]
 	quitForbid(t, "UpdateChecker::RunApply after the installer starts", afterStart,
 		"the updater relaunches nothing while the installer runs", "CreateProcess", "URnetwork.exe")
 }

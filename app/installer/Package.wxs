@@ -96,6 +96,99 @@
     </Property>
     <Launch Condition="Installed OR NOT NEWER_URNETWORKD"
             Message="A newer build of URnetwork is already installed. Install that build or a later one." />
+
+    <!-- Close the running app before this package replaces its files, so an
+         update needs no restart. Wix4CloseApplications sends WM_CLOSE to every
+         top-level window of each URnetwork.exe it finds and waits up to
+         Timeout seconds for it to end. The tray's window takes WM_CLOSE as a
+         close request (TrayIcon.cpp): the app exits and leaves the service to
+         this package, which stops it. The override runs it before
+         InstallValidate, where Windows Installer looks for files in use; WiX's
+         own slot, before InstallFiles, comes after RemoveExistingProducts has
+         already met them.
+         - Only for an app this package knows has the WM_CLOSE handler: the
+           in-app update (UPDATE_RELAUNCH="1", which only the update helper
+           passes, and the helper ships with the handler's app), and a repair
+           or removal of this package itself. Any other install, by hand or by
+           a deployment tool, may meet an app without the handler, which
+           destroys its tray window on WM_CLOSE and runs on with no icon,
+           holding the install for the timeout: the build an install replaces
+           can be from any branch, so its FILEVERSION says nothing about the
+           handler. Those installs are left to Windows Installer's Restart
+           Manager (MSIRMSHUTDOWN below).
+         - Not when the installed package runs again (maintenance mode with
+           neither REINSTALL nor REMOVE): that changes nothing, and must not
+           quit the app.
+         - And only when the installed URnetwork.exe is at least FILEVERSION
+           2026.10.5.1 (URNETWORK_APP_CLOSABLE), the first stamped build with
+           the handler.
+         - No attribute that needs a deferred action: in this slot there is no
+           script yet, so TerminateProcess, ElevatedCloseMessage,
+           ElevatedEndSessionMessage or RebootPrompt="yes" (WiX's default)
+           would fail every install with error 2762.
+         WM_CLOSE reaches only the windows of the session msiexec runs in. The
+         in-app update's helper is URnetworkUpdate.exe, which this never
+         matches, and its image leaves the install folder before msiexec
+         starts. -->
+    <Property Id="URNETWORK_APP_CLOSABLE" Secure="yes">
+      <DirectorySearch Id="UrnInstalledApp" Path="[ProgramFiles64Folder]URnetwork" Depth="0">
+        <FileSearch Name="URnetwork.exe" MinVersion="2026.10.5.1" />
+      </DirectorySearch>
+    </Property>
+    <util:CloseApplication xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util"
+                           Id="CloseTrayApp" Target="URnetwork.exe"
+                           CloseMessage="yes" RebootPrompt="no" Timeout="15"
+                           Condition='URNETWORK_APP_CLOSABLE AND ((NOT Installed AND UPDATE_RELAUNCH = "1") OR REINSTALL OR REMOVE)' />
+
+    <!-- Windows Installer's Restart Manager closes what still holds this
+         package's files when InstallValidate looks, in the session msiexec
+         runs in and in session 0: in the full UI (a double-click) once the
+         user agrees in Windows Installer's own files-in-use dialog, and
+         without asking at every other UI level (/passive, /qn), since this
+         package authors no dialog to ask in. The app takes its WM_ENDSESSION
+         with ENDSESSION_CLOSEAPP as a close request (TrayIcon.cpp) and exits;
+         an app from before that handler destroys its tray window and keeps
+         running with no icon, and would hold every later launch of the new
+         version to its own old window until the session ends. MSIRMSHUTDOWN=1
+         ends an app that does not exit when asked, so after the install either
+         the new version runs or nothing does. The service is StopServices' to
+         stop, and a service a ServiceControl row stops does not by itself make
+         Windows Installer call on the Restart Manager. When something else
+         still holds a file of this package, though, the Restart Manager's
+         shutdown stops the service too, a moment before StopServices would:
+         seen with the Windows Font Cache Service, in the first few seconds
+         after the app first starts. The Restart Manager restarts that other
+         service when the install ends, and StartServices starts this one. -->
+    <Property Id="MSIRMSHUTDOWN" Value="1" />
+
+    <!-- Start the app again after an update the in-app updater ran: its
+         helper passes UPDATE_RELAUNCH=1, and an install run by hand starts
+         nothing. WixUnelevatedShellExec starts the target through the
+         signed-in user's shell, so the app comes back unelevated however
+         msiexec was started, once InstallFinalize has put the files in place.
+         It passes no arguments, so the target is the helper, which starts
+         URnetwork.exe with the after-update argument (InstanceHandover.h
+         kAfterUpdateArgument): the update marker still names the helper,
+         which waits on this msiexec, and that launch waits for the update to
+         end instead of being refused by it. Never during an
+         uninstall, never from the old product an upgrade removes, and a
+         relaunch that fails fails nothing else. An install that fails never
+         reaches InstallFinalize, though its close may already have ended the
+         app, so after one the helper starts the same relaunch itself
+         (src/Updater/ApplyUpdate.cpp). -->
+    <Property Id="UPDATE_RELAUNCH" Secure="yes" />
+    <Property Id="WixUnelevatedShellExecTarget" Value="[#UpdaterExe]" />
+    <CustomAction Id="RelaunchAfterUpdate" BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)"
+                  DllEntry="WixUnelevatedShellExec" Execute="immediate" Impersonate="yes"
+                  Return="ignore" />
+    <!-- Both are scheduled in the one InstallExecuteSequence below. -->
+
+    <!-- updates\, for the RemoveFolderEx in the UpdaterExe component, whose
+         own condition says when it removes it. Set on every install:
+         WixRemoveFoldersEx fails a row whose property is empty, on every
+         install that runs it. -->
+    <SetProperty Id="URNETWORK_UPDATES_FOLDER" Value="[ProgramFiles64Folder]URnetwork\updates"
+                 Before="Wix4RemoveFoldersEx_$(sys.BUILDARCHSHORT)" Sequence="execute" />
     <MediaTemplate EmbedCab="yes" />
 
     <!-- The app icon, for Add/Remove Programs and the Start Menu shortcut.
@@ -151,6 +244,25 @@
         </Component>
         <Component Id="SdkDll" Guid="*">
           <File Id="URnetworkSdkDll" Source="$(var.BinDir)\URnetworkSdk.dll" KeyPath="yes" />
+        </Component>
+
+        <!-- The in-app update's elevated helper (src/Updater), and the target
+             of RelaunchAfterUpdate above, so it needs its own File id.
+             The helper keeps its downloads, logs and last-result.json in
+             updates\ beside it, files Windows Installer did not install and
+             so does not remove; the release that installed stays there as
+             the product's repair source. Uninstalling removes the folder, but
+             not the old product's removal during an upgrade
+             (UPGRADINGPRODUCTCODE): the new version is installing from
+             updates\<tag>\ then (its helper clears the older downloads
+             itself). RemoveFolderEx reads its path before CostInitialize, so
+             the property is a SetProperty from a folder AppSearch-time
+             properties already know. -->
+        <Component Id="UpdaterExe" Guid="*">
+          <File Id="UpdaterExe" Source="$(var.BinDir)\URnetworkUpdate.exe" KeyPath="yes" />
+          <util:RemoveFolderEx xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util"
+                               Id="RemoveUpdatesFolder" On="uninstall" Property="URNETWORK_UPDATES_FOLDER"
+                               Condition='REMOVE~="ALL" AND NOT UPGRADINGPRODUCTCODE' />
         </Component>
 
         <!-- Localized UI strings: the MakePri index of Strings\<locale>\Resources.resw
@@ -236,12 +348,13 @@
          itself with WIX0004 (confirmed against the pinned 5.0.2 compiler
          binary, not guessed).
 
-         The five files above (AppExe/SdkDll/ResourcesPri/ServiceExe/
-         WintunDll) keep their own hand-authored <Component> because they
-         need behavior <Files> harvesting cannot express — the advertised
-         Start Menu shortcut and the ServiceInstall/ServiceControl rows —
-         so they are excluded here to avoid installing each of them twice
-         (WiX rejects two components claiming the same target path).
+         The six files above (AppExe/SdkDll/UpdaterExe/ResourcesPri/
+         ServiceExe/WintunDll) keep their own hand-authored <Component>
+         because they need behavior <Files> harvesting cannot express — the
+         advertised Start Menu shortcut, the ServiceInstall/ServiceControl
+         rows and a File id the relaunch names — so they are excluded here
+         to avoid installing each of them twice (WiX rejects two components
+         claiming the same target path).
          SplitTunnelDriver is excluded for the same reason: it is
          conditioned on INSTALLDRIVER=1 and must not be unconditionally
          harvested when -IncludeDriver built the .sys into BinDir. Build
@@ -272,6 +385,7 @@
       <Files Include="$(var.BinDir)\**">
         <Exclude Files="$(var.BinDir)\URnetwork.exe" />
         <Exclude Files="$(var.BinDir)\URnetworkSdk.dll" />
+        <Exclude Files="$(var.BinDir)\URnetworkUpdate.exe" />
         <Exclude Files="$(var.BinDir)\resources.pri" />
         <Exclude Files="$(var.BinDir)\urnetworkd.exe" />
         <Exclude Files="$(var.BinDir)\wintun.dll" />
@@ -324,12 +438,19 @@
               Condition="REMOVE~=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
       <Custom Action="RemoveStartupApprovedValue" After="RemoveStartupRunValue"
               Condition="REMOVE~=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
+      <!-- The update's close and relaunch: CloseTrayApp and
+           RelaunchAfterUpdate above say why each runs where it does. -->
+      <Custom Action="override Wix4CloseApplications_$(sys.BUILDARCHSHORT)" Before="InstallValidate"
+              Condition="VersionNT &gt; 400" />
+      <Custom Action="RelaunchAfterUpdate" After="InstallFinalize"
+              Condition='UPDATE_RELAUNCH = "1" AND NOT (REMOVE ~= "ALL") AND NOT UPGRADINGPRODUCTCODE' />
     </InstallExecuteSequence>
 
     <Feature Id="Main" Title="URnetwork" Level="1">
       <ComponentRef Id="AppExe" />
       <ComponentRef Id="PrivateFonts" />
       <ComponentRef Id="SdkDll" />
+      <ComponentRef Id="UpdaterExe" />
       <ComponentRef Id="ResourcesPri" />
       <ComponentRef Id="ServiceExe" />
       <ComponentRef Id="WintunDll" />

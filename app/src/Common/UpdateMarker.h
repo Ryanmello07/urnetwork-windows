@@ -2,22 +2,28 @@
 // decision, 2026-10-05: launches during an update are refused, "protect the
 // update to not be corrupted where possible").
 //
-// The danger. The updater starts the MSI (msiexec /i ... /passive /norestart,
-// elevated) and quits, so the installer finds none of the app's files in use
-// (UpdateChecker.h). A launch in the minute that follows started a new
-// URnetwork.exe from the folder the installer is replacing: its redirect found
-// the instance quitting for the installer, or no instance at all, and the app
-// came up holding URnetwork.exe, the Windows App Runtime and URnetworkSdk.dll
-// open. Windows Installer replaces a file in use only at the next reboot (the
-// install returns 3010 under /norestart), and until then the folder mixes old
-// files and new.
+// The danger. The updater starts the elevated update helper
+// (URnetworkUpdate.exe), which downloads, checks and installs the MSI
+// (msiexec /i ... /passive /norestart); the MSI closes the app before it
+// replaces the app's files (UpdateChecker.h). A launch while that runs started
+// a new URnetwork.exe from the folder the installer is replacing: its redirect
+// found the instance closing for the installer, or no instance at all, and the
+// app came up holding URnetwork.exe, the Windows App Runtime and
+// URnetworkSdk.dll open. Windows Installer replaces a file in use only at the
+// next reboot (the install returns 3010 under /norestart), and until then the
+// folder mixes old files and new.
 //
-// The marker. When the installer has started, the updater records it before
-// the app quits: the installer's process id and creation time, and when the
-// record was written, in a file (Paths.h UpdateInProgressFile). Every launch
-// asks first (instance::Launch). While that installer process runs, the launch
-// exits with a short "URnetwork is updating" notice (an autostart exits
-// without one) instead of redirecting, waiting or starting.
+// The marker. The app waits on the helper it started without quitting, and a
+// launch meanwhile reaches it as usual. When the app begins to exit while the
+// helper still runs (the installer closing it, or a quit), it records the
+// helper before its process ends: the helper's process id and creation time,
+// and when the record was written, in a file (Paths.h UpdateInProgressFile).
+// The helper runs until msiexec has ended, so it is the "installer" below.
+// Every launch asks first (instance::Launch). While that process runs, the
+// launch exits with a short "URnetwork is updating" notice (an autostart exits
+// without one) instead of redirecting, waiting or starting. A launch that
+// reaches the app while it exits waits for its process to end and then finds
+// the marker.
 //
 // It clears itself, so a crashed or failed update, a reboot in the middle of
 // one, or an installer that never returns cannot refuse launches for good.
@@ -27,8 +33,11 @@
 // does not parse, the marker is stale: the launch deletes it and starts as
 // usual. The new version's first launch is usually the one that deletes it.
 //
-// Nothing relaunches the app after an install (Package.wxs), so no launch
-// needs to get past a marker while its installer still runs.
+// The one launch that must not be turned away is the relaunch after an update
+// (Package.wxs after one that took, the helper itself after one that failed).
+// It can start while the helper still runs, carries
+// instance::kAfterUpdateArgument, and waits for this marker to go stale before
+// it asks (main.cpp), so it starts the app once the update has ended.
 //
 // Pure, header-only and free of Windows headers: tools/update-marker-tests.cpp
 // runs it on any host, and App/SingleInstance.cpp binds the file and the
@@ -47,9 +56,10 @@
 
 namespace urnw::update {
 
-// How long a marker refuses launches at most, whatever its installer does. An
-// update installs in a minute or two; this bounds one that hangs, for example
-// on another installation that holds Windows Installer's lock.
+// How long a marker refuses launches at most, whatever its installer does. It
+// is written when the installer closes the app, after the helper's download,
+// and an install takes a minute or two from there; this bounds one that hangs,
+// for example on another installation that holds Windows Installer's lock.
 inline constexpr std::chrono::seconds kUpdateMarkerLifetime{20 * 60};
 
 // How far in the future a marker may say it was written (a clock moved back

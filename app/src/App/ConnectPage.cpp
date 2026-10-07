@@ -13,6 +13,7 @@
 #include <array>
 #include <cctype>
 #include <chrono>
+#include <format>
 #include <iterator>
 #include <tuple>
 #include <utility>
@@ -25,8 +26,10 @@
 #include "PageContext.h"
 #include "Strings.h"
 #include "StatsFormat.h"
+#include "UpdateResult.h"
 #include "UrColors.h"
 #include "UrComponents.h"  // kit::SetTextOrCollapse
+#include "Version.h"
 
 using namespace winrt;
 using namespace winrt::Microsoft::UI::Xaml;
@@ -495,32 +498,72 @@ void ConnectPage::ApplyServiceSetup(urnw::ServiceSetup::Snapshot const& snap) {
 // UpdateBar, directly under the service bar — same shape, same one-writer
 // rule. Labels go through Adv() with `upd_` store ids, as the service bar's
 // use `svc_`. The version is data (release grammar, never translated) and goes
-// in through the title's placeholder; the installer path is appended as data.
+// in through the title's placeholder; paths and exit codes are appended as
+// data. The sentences the elevated update added have no store ids yet, so
+// they are English here until the store carries them for windows.
 void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) {
   using Phase = urnw::UpdateChecker::Phase;
   using Stage = urnw::UpdateChecker::Stage;
   using Failure = urnw::UpdateChecker::Failure;
+  using CheckOutcome = urnw::UpdateChecker::CheckOutcome;
+  using InfoBarSeverity = winrt::Microsoft::UI::Xaml::Controls::InfoBarSeverity;
   auto bar = w_.UpdateBar();
+  // Only a report whose button offers the installer can be closed; closing it
+  // dismisses it (MainWindow).
+  bar.IsClosable(urnw::UpdateChecker::OffersInstaller(snap));
+  const auto nowUnix = std::chrono::duration_cast<std::chrono::seconds>(
+                           std::chrono::system_clock::now().time_since_epoch())
+                           .count();
+  const bool held = snap.holdUntilUnix > nowUnix;
+  const std::wstring heldUntil =
+      held ? urnw::UpdateChecker::LocalDateTime(snap.holdUntilUnix) : std::wstring{};
   if (snap.phase == Phase::None) {
-    bar.IsOpen(false);
+    if (!snap.checkStale) {
+      bar.IsOpen(false);
+      return;
+    }
+    // No check has worked for 72 hours: a release this app cannot see may be
+    // out, and saying nothing would look like being up to date.
+    bar.Severity(InfoBarSeverity::Warning);
+    bar.Title(winrt::hstring{L"Couldn't check for updates since " +
+                             urnw::UpdateChecker::LocalDate(snap.lastSuccessUnix)});
+    bar.Message(winrt::hstring{
+        held ? L"GitHub asked this network to wait until " + heldUntil +
+                   L" before it is asked again, and the app waits until then."
+             : std::wstring{L"A newer release may be out. The app keeps trying every six hours, "
+                            L"and the button tries now."}});
+    if (auto button = bar.ActionButton()) {
+      button.Content(winrt::box_value(Adv("dev_check_updates", L"Check for updates")));
+      button.IsEnabled(snap.lastCheck != CheckOutcome::InFlight && !held);
+    }
+    bar.IsOpen(true);
     return;
   }
 
-  // The headline is the spec's wording in every phase — the banner keeps
-  // saying what it is for while the message says what is happening to it. The
-  // version goes in through the key's placeholder, so a translation places it.
-  const winrt::hstring title{urnw::Format("upd_available_title_version", snap.version)};
+  // The headline is the spec's wording in every phase but the helper's
+  // report — the banner keeps saying what it is for while the message says
+  // what is happening to it. The version goes in through the key's
+  // placeholder, so a translation places it.
+  winrt::hstring title{urnw::Format("upd_available_title_version", snap.version)};
   winrt::hstring action = Loc("update");
   bool enabled = true;
   std::wstring message;
-  auto severity = winrt::Microsoft::UI::Xaml::Controls::InfoBarSeverity::Informational;
+  auto severity = InfoBarSeverity::Informational;
 
   switch (snap.phase) {
     case Phase::Available:
-      message = AdvW("upd_available_msi_message",
-                     L"One click downloads the release, verifies it and runs "
-                     L"its installer, which updates the app and the VPN "
-                     L"service. The app closes while it installs.");
+      if (snap.installed) {
+        message = AdvW("upd_available_msi_message",
+                       L"One click downloads the release, verifies it and runs "
+                       L"its installer, which updates the app and the VPN "
+                       L"service. The app closes while it installs.");
+        message += L" The VPN disconnects while it installs; connect again once URnetwork is back.";
+      } else {
+        // a portable or dev copy elevates nothing: the user runs the installer
+        action = winrt::hstring{L"Download the installer"};
+        message = L"This copy of URnetwork is not installed in Program Files, so it does not "
+                  L"update itself. Download the installer and run it to install this release.";
+      }
       break;
     case Phase::Applying:
       enabled = false;
@@ -531,29 +574,55 @@ void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) 
         case Stage::Verifying:
           message = AdvW("upd_stage_verifying", L"Verifying the download…");
           break;
-        default:  // Installing — Idle never renders under Applying
+        case Stage::Helper:
+          message = L"Installing as administrator: the update is downloaded again and checked "
+                    L"before it installs. URnetwork closes while it installs and opens again "
+                    L"when it is done.";
+          break;
+        default:  // Installing, the elevation prompt — Idle never renders under Applying
           message = AdvW("upd_stage_installing", L"Starting the installer…");
           break;
       }
       break;
     case Phase::ManualInstall:
-      // The one phase whose action is not the apply: the installer could not
-      // be started, the verified MSI is downloaded, and the click re-reveals it.
+      // The one phase whose action is not the apply: the installer is
+      // downloaded and checked, and the click shows it again, checked again.
+      // Never called verified: what GitHub's SHA-256 proves is that these are
+      // the bytes GitHub has for that release.
       action = Adv("upd_show_file", L"Show file");
-      message = AdvW("upd_manual_install_message",
-                     L"The installer didn't start (it needs administrator "
-                     L"approval). The verified download was shown in Explorer "
-                     L"— quit the app and run it.");
+      message = L"The installer was downloaded and checked against GitHub's SHA-256 "
+                L"for it. Run it to install the update.";
       if (!snap.installerPath.empty())
         message += L" (" + snap.installerPath + L")";
       break;
+    case Phase::Result:
+      action = urnw::UpdateChecker::OffersInstaller(snap) ? winrt::hstring{L"Show the installer"}
+                                                         : Loc("got_it");
+      severity = ApplyUpdateResult(snap, title, message);
+      break;
     default: {  // Failed — Phase::None returned above
-      severity = winrt::Microsoft::UI::Xaml::Controls::InfoBarSeverity::Error;
+      severity = InfoBarSeverity::Error;
       switch (snap.failure) {
         case Failure::Download:
           message = AdvW("upd_failed_download",
                          L"The download didn't finish. Check the connection "
                          L"and click to try again.");
+          break;
+        case Failure::Elevation:
+          message = L"The update needs administrator approval to install, and "
+                    L"nothing was installed. Click to try again.";
+          break;
+        case Failure::Held:
+          message = L"GitHub asked this network to wait until " +
+                    (held ? heldUntil : std::wstring{L"later"}) +
+                    L" before it is asked again, and the update has to ask it. Nothing was "
+                    L"installed. Click to try again then.";
+          break;
+        case Failure::Unsigned:
+          action = winrt::hstring{L"Download the installer"};
+          message = L"Windows here runs only signed programs as administrator, and URnetwork's "
+                    L"update helper is not signed, so it could not install the update. Download "
+                    L"the installer and run it instead.";
           break;
         default:  // Checksum
           message = AdvW("upd_failed_checksum",
@@ -573,6 +642,91 @@ void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) 
     button.IsEnabled(enabled);
   }
   bar.IsOpen(true);
+}
+
+// The helper's report, as it reads for this build (UpdateResult.h
+// ViewOfReport): installed, installed up to a restart of the app or of
+// Windows, or not installed, with why and where its log is. 3010 is not a
+// failure: the new product is registered and its service runs, and the files
+// that were in use are replaced when Windows restarts. Whenever msiexec ran,
+// it stopped the VPN session with the service, and the app does not connect
+// by itself, so the banner says so.
+winrt::Microsoft::UI::Xaml::Controls::InfoBarSeverity ConnectPage::ApplyUpdateResult(
+    urnw::UpdateChecker::Snapshot const& snap, winrt::hstring& title, std::wstring& message) {
+  using InfoBarSeverity = winrt::Microsoft::UI::Xaml::Controls::InfoBarSeverity;
+  using urnw::update::Refusal;
+  using urnw::update::ReportView;
+  const auto& result = snap.result;
+  const std::wstring current = urnw::Widen(urnw::version::kString);
+  const std::wstring log = result.logPath.empty() ? std::wstring{} : L", log: " + result.logPath;
+  constexpr wchar_t kReconnect[] =
+      L"The VPN was disconnected for the update; connect again to protect this device.";
+  switch (result.view) {
+    case ReportView::Installed:
+      title = winrt::hstring{L"Updated to v" + result.version};
+      message = kReconnect;
+      return InfoBarSeverity::Success;
+    case ReportView::RestartApp:
+      title = winrt::hstring{L"Restart URnetwork to finish the update to v" + result.version};
+      message = std::wstring{L"The new version is installed, and the one running is still v"} +
+                current + L". Quit URnetwork from its tray icon and start it again. " + kReconnect;
+      return InfoBarSeverity::Warning;
+    case ReportView::RestartWindows:
+      title = winrt::hstring{L"Restart Windows to finish the update to v" + result.version};
+      message = std::wstring{L"The new version is installed and its service is running. Files "
+                             L"that were in use are replaced when Windows restarts. "} +
+                kReconnect;
+      return InfoBarSeverity::Warning;
+    default:  // NotInstalled; a Hidden report is never a Result
+      break;
+  }
+  title = winrt::hstring{L"The update to v" + result.version + L" did not install"};
+  const std::wstring instead = urnw::UpdateChecker::OffersInstaller(snap)
+                                   ? L" Show the installer to install it yourself."
+                                   : L"";
+  if (urnw::update::OutcomeOf(result.exitCode) != urnw::update::Outcome::Refused) {
+    message = std::format(L"Windows Installer ended with error {}{}. You are still on v{}. {}{}",
+                          result.exitCode, log, current, kReconnect, instead);
+    return InfoBarSeverity::Error;
+  }
+  std::wstring why;
+  switch (static_cast<Refusal>(result.exitCode)) {
+    case Refusal::NotOffered:
+      why = L"the release is no longer offered";
+      break;
+    case Refusal::Download:
+      why = L"the download failed";
+      break;
+    case Refusal::Digest:
+      why = L"the download did not match GitHub's SHA-256 for it";
+      break;
+    case Refusal::Package:
+      why = L"the package is not this release of URnetwork";
+      break;
+    case Refusal::ReleaseList:
+      why = L"the release list could not be read";
+      break;
+    case Refusal::RateLimited:
+      why = L"GitHub is limiting requests from this network for now";
+      break;
+    case Refusal::Busy:
+      why = L"another update was already running";
+      break;
+    case Refusal::Staging:
+      why = L"the update's folder could not be prepared";
+      break;
+    case Refusal::InstallerNotStarted:
+      why = L"Windows Installer could not be started";
+      break;
+    case Refusal::NotInstalled:
+      why = L"this copy is not installed where only an administrator can change it";
+      break;
+    default:
+      why = std::format(L"the update could not be prepared (0x{:x})", result.exitCode);
+      break;
+  }
+  message = L"Nothing was installed: " + why + log + L". You are still on v" + current + L"." + instead;
+  return InfoBarSeverity::Error;
 }
 
 // The connect status line, its dot, and the button label — android

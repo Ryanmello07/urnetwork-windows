@@ -168,7 +168,7 @@ class AppController {
   // within the tunnel session that produced it (see OnTunnelState).
   std::optional<health::State> trayHealth_;
   // Set when the app ends (Shutdown: the tray "Quit", a close request, the
-  // installer handoff), so the window's Closing handler lets it close instead
+  // end of the Windows session), so the window's Closing handler lets it close instead
   // of hiding to tray (macOS parity: X/close hides, tray Quit exits). Atomic
   // since D3: OnUi reads it from SDK callback threads as the
   // "stop marshalling, the DispatcherQueue is tearing down" gate — a completion

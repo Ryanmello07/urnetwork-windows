@@ -182,6 +182,19 @@ foreach ($platform in $Platforms) {
 
   $bin = "$PSScriptRoot\build\$platform\$Configuration"
 
+  # The update helper installs releases with administrator rights, from the
+  # official feed alone. One built with a runner test's feed (the four
+  # properties src\Updater\Updater.vcxproj takes for it, which nothing here
+  # passes) says so in its FileDescription (Updater.rc), and is never
+  # packaged, whatever passed those properties to this build.
+  $helper = Join-Path $bin "URnetworkUpdate.exe"
+  if (-not (Test-Path $helper)) { throw "the update helper was not built: no $helper" }
+  $helperDescription = [Diagnostics.FileVersionInfo]::GetVersionInfo($helper).FileDescription
+  if ($helperDescription -ne "URnetwork update") {
+    throw ("URnetworkUpdate.exe describes itself as '$helperDescription', not 'URnetwork update': " +
+      "it was built with a test feed and must not be packaged")
+  }
+
   # The split-tunnel driver is intentionally excluded from URnetwork.sln's build
   # (kernel driver; needs the WDK). Build it on demand when -IncludeDriver is set,
   # so its .sys lands in $bin for the installer to pick up.

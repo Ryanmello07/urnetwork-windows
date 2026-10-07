@@ -32,14 +32,8 @@ inline constexpr const char* kWalletConnectProjectId =
 inline constexpr const char* kWalletConnectProjectId = "";
 #endif
 
-// The GitHub repo the update checker polls for releases (beta-distribution
-// spec §5). Official urnetwork repos only, never a personal fork — and the
-// STABLE feed, not the nightly one: urnetwork/build holds the nightly builds
-// the release pipeline (build/all/run.sh) mints; stable releases are published
-// by hand to each app's own repo, so Windows polls the urnetwork/windows
-// releases, where a stable release v<version> carries the per-arch MSIs
-// (Common/ReleaseSelection.h matches its tag and asset names). Wide because it
-// is spliced into WinHTTP request strings, which are UTF-16 end to end.
-inline constexpr const wchar_t* kUpdateRepo = L"urnetwork/windows";
+// The update feed is not configured here: Common/ReleaseSelection.h holds the
+// feed table, where the tray app and the update helper both read it, each
+// feed addressed by its GitHub repository id.
 
 }  // namespace urnw::config
