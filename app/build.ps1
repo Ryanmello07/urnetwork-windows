@@ -9,7 +9,7 @@ param(
   [Parameter(Mandatory = $true)][string]$Version,
   # sdk/cgo/build/URnetworkSdkWindows.zip, built in this VM by ..\build-sdk.ps1
   [Parameter(Mandatory = $true)][string]$SdkZip,
-  [string[]]$Platforms = @("x64", "ARM64"),
+  [ValidateSet("x64", "ARM64")][string[]]$Platforms = @("x64", "ARM64"),
   [string]$Configuration = "Release",
   # Build + package the WFP split-tunnel driver (needs the WDK). Off by default:
   # the MSI ships without split tunneling until the kernel-driver build is wired
@@ -107,21 +107,36 @@ Write-Host "== msbuild (x64/emulated - hosts the in-process WinUI markup compile
 Require dotnet
 
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
+Remove-Item (Join-Path $OutDir "*.msi") -Force -ErrorAction SilentlyContinue
 
 # 1. Fetch wintun (pinned) + unzip the SDK + build the per-arch import libs.
-& "$PSScriptRoot\tools\fetch-deps.ps1" -SdkZip $SdkZip
+& "$PSScriptRoot\tools\fetch-deps.ps1" -SdkZip $SdkZip -Platforms $Platforms
 
-# 2. Set the version into the app + installer (single source of truth).
+# 2. Set the version into the app + installer. tools\UrVersion.ps1 is the one
+#    derivation (CI calls it too): from $Version, <YYYY.M.D>-<code> as run.sh
+#    passes it, it returns every Ur* property the projects read and the
+#    arguments that carry them. A malformed version, or a code more than 24 h
+#    ahead of this clock, stops the build here.
+#    0.0.0-0 is the version local builds pass: build.sh, test-main.sh and
+#    urnetwork/build's local Windows build. It is not a release version, so it
+#    builds unstamped, as every build did before: the projects' defaults make
+#    it 0.0.0-dev, code 0, which the update checker treats as "never update",
+#    in an MSI of version 0.0.1.
 #    (The SDK Version is baked into the DLL at cross-build time via -ldflags.)
+if ($Version -eq "0.0.0-0") {
+  $urMsbuildArgs = @()
+  $urWixArgs = @()
+  Write-Host "== version 0.0.0-0: an unstamped dev build (0.0.0-dev, code 0, MSI 0.0.1) =="
+} else {
+  $urVersion = & (Join-Path $PSScriptRoot "tools\UrVersion.ps1") -Version $Version
+  $urMsbuildArgs = @($urVersion.MsbuildArgs)
+  $urWixArgs = @($urVersion.WixArgs)
+  Write-Host ("== version {0}: code {1}, file version {2}.{3}.{4}.{5}, MSI {6} ==" -f
+    $urVersion.UrVersion, $urVersion.UrVersionCode, $urVersion.UrVersionMajor,
+    $urVersion.UrVersionMinor, $urVersion.UrVersionPatch, $urVersion.UrVersionBuild,
+    $urVersion.UrMsiVersion)
+}
 $env:URN_VERSION = $Version
-
-# Restore NuGet packages for the solution. The App project uses PackageReference
-# (C++/WinRT, Windows App SDK, WebView2, SDK BuildTools); unlike packages.config its
-# restore is an MSBuild target, not `nuget.exe restore`. The build below imports the
-# obj\*.nuget.g.props/targets this produces; without it App.idl falls back to classic
-# MIDL (MIDL2025 on WinRT `namespace`). Restore is config-agnostic; run it once.
-& $msbuild URnetwork.sln /t:restore /nologo /v:minimal
-if ($LASTEXITCODE -ne 0) { throw "NuGet (PackageReference) restore failed" }
 
 # Protocol v3 is only safe to roll out if an MSI upgrade replaces the service
 # process, not merely the files underneath the old process. Keep the WiX
@@ -142,9 +157,21 @@ if (-not $serviceControl -or
 foreach ($platform in $Platforms) {
   Write-Host "== building $platform $Configuration =="
 
-  # 3. Build the solution (Common, Service, App, SplitTunnel driver).
+  # Restore the selected solution platform. The App project uses PackageReference
+  # (C++/WinRT, Windows App SDK, WebView2, SDK BuildTools); unlike packages.config
+  # its restore is an MSBuild target. Supplying Platform avoids even restoring the
+  # default x64 graph during a focused ARM64 acceptance build.
+  & $msbuild URnetwork.sln /t:restore `
+    /p:Configuration=$Configuration /p:Platform=$platform /nologo /v:minimal
+  if ($LASTEXITCODE -ne 0) {
+    throw "NuGet (PackageReference) restore failed for $platform"
+  }
+
+  # 3. Build the solution (Common, Service, App, SplitTunnel driver), stamped
+  #    with the derived version (nothing for 0.0.0-0).
   & $msbuild URnetwork.sln `
     /p:Configuration=$Configuration /p:Platform=$platform `
+    @urMsbuildArgs `
     /p:Version=$Version /m /nologo /v:minimal
   if ($LASTEXITCODE -ne 0) {
     Diagnose-XamlCodegen -MsBuild $msbuild -Platform $platform -Configuration $Configuration
@@ -202,19 +229,22 @@ foreach ($platform in $Platforms) {
     # .sys/.cat replace the dev-signed ones in $bin before packaging.
   }
 
-  # 5. Build the MSI for this arch (WiX v5), staging from $bin. The driver payload
-  #    is compiled out of the package unless -IncludeDriver produced its .sys above.
+  # 5. Build the MSI for this arch (WiX v5), staging from $bin, with the
+  #    ProductVersion and FILEVERSION UrVersion.ps1 derived (the wixproj's
+  #    defaults, 0.0.1 and 0.0.0.0, for 0.0.0-0). The driver payload is
+  #    compiled out of the package unless -IncludeDriver produced its .sys
+  #    above.
   $wixPlatform = if ($platform -eq "ARM64") { "arm64" } else { "x64" }
   $wixArgs = @("build", "installer\Installer.wixproj", "-c", $Configuration,
-    "-p:Platform=$platform", "-p:BinDir=$bin", "-p:Version=$Version")
+    "-p:Platform=$platform", "-p:BinDir=$bin", "-p:Version=$Version") + $urWixArgs
   if ($IncludeDriver) { $wixArgs += "-p:IncludeDriver=true" }
   dotnet @wixArgs
   if ($LASTEXITCODE -ne 0) { throw "MSI build failed for $platform" }
 
-  # The shared Directory.Build.props redirects OutDir to build\<plat>\<cfg>, which
-  # also moves the WiX MSI there (next to the staged binaries), not the wixproj's
-  # default installer\bin\<plat>\<cfg>. Look in $bin first, with the default as a
-  # fallback so either layout works.
+  # The shared Directory.Build.props redirects OutDir to build\<plat>\<cfg> for
+  # the .vcxproj projects only, so the MSI lands in the wixproj's default
+  # installer\bin\<plat>\<cfg>. $bin is still looked in first, so a layout that
+  # redirects the wixproj too keeps working.
   $msi = Get-ChildItem "$bin\*.msi", "installer\bin\$platform\$Configuration\*.msi" `
     -ErrorAction SilentlyContinue | Select-Object -First 1
   if (-not $msi) { throw "MSI not produced for $platform (looked in $bin and installer\bin\$platform\$Configuration)" }

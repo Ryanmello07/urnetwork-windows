@@ -16,6 +16,11 @@
 
 namespace urnw {
 
+// The BCP 47 language MRT selected for the app's resources (for example,
+// "pt-BR"), falling back to the user's locale and then "en". Product-event
+// registration uses the same language so telemetry and rendered copy agree.
+std::string PrimaryLanguage();
+
 // The localized string for `key`, or `key` itself if it is missing (so a typo is
 // visible rather than silent).
 std::wstring Localized(std::string_view key);
@@ -36,5 +41,20 @@ std::wstring Format(std::string_view key, const Args&... args) {
 //   Plural("host_count", 1)  ->  L"1 host"
 //   Plural("host_count", 4)  ->  L"4 hosts"
 std::wstring Plural(std::string_view key, int64_t count);
+
+// The plural form of `key` for `count`, selected with the CLDR rule for the
+// current language, returned unformatted -- for plural keys that carry extra
+// placeholders beyond the count.
+std::wstring PluralRaw(std::string_view key, int64_t count);
+
+// Plural() for keys with extra placeholders: {0} is the count, {1}... the rest.
+// (A category may use any subset of the placeholders -- "one" forms often spell
+// the count out -- which std::format allows.)
+//
+//   PluralFormat("referral_toast_joined", n, n, gibPerDay)
+template <typename... Args>
+std::wstring PluralFormat(std::string_view key, int64_t count, const Args&... args) {
+  return std::vformat(PluralRaw(key, count), std::make_wformat_args(args...));
+}
 
 }  // namespace urnw

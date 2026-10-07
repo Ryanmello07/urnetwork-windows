@@ -15,7 +15,10 @@
 #include <winrt/Microsoft.UI.Xaml.Shapes.h>
 
 #include "SdkHost.h"
+#include "PlanPicker.h"
+#include "OfferCard.h"
 #include "SubscriptionBalance.h"
+#include "FreeRefreshTicker.h"
 
 namespace urnw {
 
@@ -47,31 +50,37 @@ void PairTermsLabel(winrt::Microsoft::UI::Xaml::Controls::CheckBox const& box,
                     winrt::Microsoft::UI::Xaml::Controls::TextBlock const& label);
 
 // ---- Redeem balance code ----------------------------------------------------
-// 26-character code entry with inline validation, a where-to-get-codes note,
-// and a success state. On success the owner re-polls the balance and refreshes
-// the redeemed-codes list.
+// 26-character code entry (urnet::isBalanceCodeFormatValid) with inline
+// validation, a where-to-get-codes note, and a success state. The answer comes
+// from the SDK's classification (BalanceCodeRedeem.h). The success state is
+// the data the code added (a code is data only, never a plan). onRedeemed
+// fires when this call credited the code (credited=true) or when the network
+// already had it (credited=false); either way the owner reads the balance once
+// and refreshes the redeemed-codes list.
 class RedeemCodeSheet : public std::enable_shared_from_this<RedeemCodeSheet> {
  public:
   static std::shared_ptr<RedeemCodeSheet> Create(
       winrt::Microsoft::UI::Xaml::XamlRoot const& root, SdkHost& sdk,
-      std::function<void()> onRedeemed);
+      std::function<void(bool credited)> onRedeemed);
 
   winrt::Microsoft::UI::Xaml::Controls::ContentDialog Dialog() const { return dialog_; }
 
  private:
-  explicit RedeemCodeSheet(SdkHost& sdk, std::function<void()> onRedeemed)
+  explicit RedeemCodeSheet(SdkHost& sdk, std::function<void(bool)> onRedeemed)
       : sdk_(sdk), onRedeemed_(std::move(onRedeemed)) {}
 
   void Build(winrt::Microsoft::UI::Xaml::XamlRoot const& root);
   void Submit();
-  // rejected: the server refused the code (serverMessage carries its reason,
-  // possibly empty). !ok && !rejected is a transport failure, which gets the
-  // check-your-balance copy — the redeem may have committed server-side.
-  void ApplyResult(bool ok, bool rejected, std::string const& serverMessage,
-                   int64_t balanceByteCount);
+  // urnet::classifyBalanceCodeRedeem on the redeem answer (nullopt for a
+  // transport failure); anything but "redeemed" is classified again with the
+  // network's redeemed-code list before ApplyResult shows it.
+  void Classify(std::string const& secret,
+                std::optional<urnet::RedeemBalanceCodeResult> const& result);
+  void ApplyResult(std::string const& outcome,
+                   std::optional<urnet::RedeemBalanceCodeResult> const& result);
 
   SdkHost& sdk_;
-  std::function<void()> onRedeemed_;
+  std::function<void(bool)> onRedeemed_;
   winrt::Microsoft::UI::Xaml::Controls::ContentDialog dialog_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::StackPanel formPanel_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::StackPanel successPanel_{nullptr};
@@ -79,6 +88,28 @@ class RedeemCodeSheet : public std::enable_shared_from_this<RedeemCodeSheet> {
   winrt::Microsoft::UI::Xaml::Controls::TextBlock errorText_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::TextBlock successAmountText_{nullptr};
   bool redeeming_ = false;
+};
+
+// ---- About your data --------------------------------------------------------
+// What Used, Pending and Available mean, the daily balance the server reports
+// and when the free data refreshes (DataInfo.h), from the window's balance
+// snapshot. Opened from the info button on the Account usage card and from
+// Why? in the out-of-balance banner.
+class DataInfoSheet {
+ public:
+  static std::shared_ptr<DataInfoSheet> Create(
+      winrt::Microsoft::UI::Xaml::XamlRoot const& root, BalanceSnapshot const& balance);
+
+  winrt::Microsoft::UI::Xaml::Controls::ContentDialog Dialog() const { return dialog_; }
+
+ private:
+  DataInfoSheet() = default;
+
+  void Build(winrt::Microsoft::UI::Xaml::XamlRoot const& root, BalanceSnapshot const& balance);
+
+  winrt::Microsoft::UI::Xaml::Controls::ContentDialog dialog_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::TextBlock refreshText_{nullptr};
+  FreeRefreshTicker refreshTicker_;
 };
 
 // ---- Upgrade to UR Pro -------------------------------------------------------
@@ -94,9 +125,18 @@ class RedeemCodeSheet : public std::enable_shared_from_this<RedeemCodeSheet> {
 //     path never hard-fails for want of a webview.
 class UpgradeSheet : public std::enable_shared_from_this<UpgradeSheet> {
  public:
+  // The sheet with the checkout already started for `yearly` (the onboarding
+  // page picked the plan; the sheet's own products page would only ask again).
+  static std::shared_ptr<UpgradeSheet> CreateForCheckout(
+      winrt::Microsoft::UI::Xaml::XamlRoot const& root, SdkHost& sdk,
+      SubscriptionBalanceStore& balance, bool yearly);
+
+  // `freeRefresh`: a start connect refused for the balance opened the sheet
+  // (datainfo::UpgradeShowsFreeRefresh), so it says when the free data
+  // refreshes and offers Wait for refresh.
   static std::shared_ptr<UpgradeSheet> Create(
       winrt::Microsoft::UI::Xaml::XamlRoot const& root, SdkHost& sdk,
-      SubscriptionBalanceStore& balance);
+      SubscriptionBalanceStore& balance, bool freeRefresh = false);
 
   winrt::Microsoft::UI::Xaml::Controls::ContentDialog Dialog() const { return dialog_; }
 
@@ -107,6 +147,11 @@ class UpgradeSheet : public std::enable_shared_from_this<UpgradeSheet> {
   // refresh) flips it to success too.
   void OnBalance(BalanceSnapshot const& snapshot, BalancePollState const& poll);
 
+  // The server refused the checkout because the network is a legacy guest
+  // (guest_sign_in_required): the sheet closed itself, and its opener sends
+  // the guest to the conversion once the dialog is gone.
+  bool GuestSignInRequired() const { return guestSignInRequired_; }
+
  private:
   UpgradeSheet(SdkHost& sdk, SubscriptionBalanceStore& balance)
       : sdk_(sdk), balance_(balance) {}
@@ -114,11 +159,26 @@ class UpgradeSheet : public std::enable_shared_from_this<UpgradeSheet> {
   enum class Page { Products, Checkout, Waiting, Success, TimedOut };
 
   void Build(winrt::Microsoft::UI::Xaml::XamlRoot const& root);
-  winrt::Microsoft::UI::Xaml::Controls::Border BuildProductCard(bool yearly);
-  void ApplySelection();
   void BeginCheckout();
+  // The payment sheet path (mmm/onboarding/PLAN.md: inline Stripe, never an
+  // external browser while a web view exists): Api::stripePaymentSheet{plan}
+  // -> the ur.io embedded pay page https://ur.io/app/pay-sheet?cs=&pk=&plan=
+  // &return= in the WebView2. The page mounts Stripe's Payment Element,
+  // confirms the SetupIntent (yearly: the trial, the welcome offer's coupon
+  // applied server-side) or the PaymentIntent (monthly), and hands control
+  // back by navigating to the return url urnetwork://pay/done or posting
+  // {type: "ur-pay", status} (WebMessageReceived). A pay-sheet failure before
+  // anything rendered continues with the embedded checkout session.
+  void RequestPaymentSheet();
+  winrt::fire_and_forget OpenPaySheet(std::string clientSecret, std::string publishableKey);
+  void HandlePayMessage(std::string const& json);
+  // The balance store's tier/offer: reprint the plan cards and the read-only
+  // offer line (shown while the offer state is active).
+  void ApplyPrices();
+  void EmitPurchase(const char* outcome, std::string const& errorClass = std::string());
   // Create a Stripe session in the given ui mode and route the result: embedded
-  // → OpenEmbedded (or retry once as hosted), hosted → LaunchHosted.
+  // → OpenEmbedded (or retry once as hosted), hosted → LaunchHosted, or the
+  // server's refusal in this app's words (PaymentRefusal.h).
   void RequestSession(bool embedded);
   // Open the hosted checkout url in the system browser, OBSERVING the launch:
   // Waiting (+ confirmation poll) only on success; on failure an inline error
@@ -135,6 +195,9 @@ class UpgradeSheet : public std::enable_shared_from_this<UpgradeSheet> {
   void TeardownWebView();
   void ShowPage(Page page);
   void ShowCheckoutError(winrt::hstring const& message);
+  // The refusal for a guest network (PurchaseRefusalFor): no fallback, no
+  // error line; the sheet hides and GuestSignInRequired() says why.
+  void RefuseForGuest();
 
   SdkHost& sdk_;
   SubscriptionBalanceStore& balance_;
@@ -153,16 +216,22 @@ class UpgradeSheet : public std::enable_shared_from_this<UpgradeSheet> {
   winrt::Microsoft::UI::Xaml::Controls::Grid webviewSlot_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::WebView2 webview_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::ProgressRing checkoutRing_{nullptr};
-  // the two product cards + their selection dots
-  winrt::Microsoft::UI::Xaml::Controls::Border yearlyCard_{nullptr};
-  winrt::Microsoft::UI::Xaml::Controls::Border monthlyCard_{nullptr};
-  winrt::Microsoft::UI::Xaml::Shapes::Ellipse yearlyDot_{nullptr};
-  winrt::Microsoft::UI::Xaml::Shapes::Ellipse monthlyDot_{nullptr};
+  // the plan cards: the picker the onboarding welcome page shows (yearly in
+  // the gold dress with the trial, selected by default; monthly plain, no trial)
+  PlanPicker plans_;
+  // the yearly card's halo pulse, running while the sheet is open (onboarding parity)
+  winrt::Microsoft::UI::Xaml::Media::Animation::Storyboard haloStoryboard_{nullptr};
+  OfferLines offerLine_;            // the active welcome offer, read-only
+  bool purchaseEmitted_ = false;    // purchase.completed once per checkout
+  bool paySheetActive_ = false;     // the web view shows the pay page (not Checkout)
+  bool freeRefresh_ = false;        // opened by a blocked connect (Create)
+  winrt::Microsoft::UI::Xaml::Controls::TextBlock freeRefreshText_{nullptr};
+  FreeRefreshTicker freeRefreshTicker_;
 
   Page page_ = Page::Products;
-  bool yearlySelected_ = true;  // macOS default: yearly, "Most Popular"
   bool checkingOut_ = false;
   bool closed_ = false;  // the dialog was dismissed; drop in-flight checkout legs
+  bool guestSignInRequired_ = false;  // RefuseForGuest closed the sheet
   // embedded-checkout attempt state (linux UpgradeSheet parity)
   bool checkoutPageLoaded_ = false;   // the ur.io page rendered at least once
   bool hostedFallbackTried_ = false;  // one embedded→hosted rescue per attempt

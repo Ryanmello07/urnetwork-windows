@@ -107,6 +107,17 @@ inline constexpr double kUltraWideDip = 1800.0;
 void SetTextOrCollapse(winrt::Microsoft::UI::Xaml::Controls::TextBlock const& line,
                        winrt::hstring const& text);
 
+// Keep a chart inside its pane.
+//
+// TransferChart draws into a Canvas, and a Canvas does not clip: its curves and
+// its edge labels run a few pixels past the host and, in a pane layout, straight
+// across the 1px rule into the NEXT pane. It did - the activity chart put a
+// green sliver and a stray peak marker inside the statistics pane, right at the
+// boundary. A Grid column does not clip its children either, so the clip has to
+// be stated, and re-stated on every resize because Clip is a fixed rectangle.
+// Every chart host calls it: the Connect page's three and the Earnings page's.
+void ClipToBounds(winrt::Microsoft::UI::Xaml::Controls::Grid const& host);
+
 // The Windows idiom for "there is nothing here yet": a large muted Segoe Fluent
 // glyph over one sentence, centred, rather than a bare "-" or an empty panel.
 // A dash cannot distinguish "nothing" from "not loaded" from "failed", and an
@@ -410,6 +421,17 @@ struct PaneTableRow {
 PaneTableRow MakePaneTableRow(std::vector<double> const& weights, double height = 36,
                               size_t textColumns = 1);
 
+// Turns one leading text cell of a table row into a two-line stack: `top`, which
+// takes the cell's place in `row.cells` so callers keep addressing the row's text
+// by index, over `bottom` (a tag or badge, hidden while empty). Rows built with
+// it need a height that fits two lines (52 rather than 36).
+struct PaneTableStack {
+  winrt::Microsoft::UI::Xaml::Controls::StackPanel root{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::TextBlock top{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::TextBlock bottom{nullptr};
+};
+PaneTableStack MakePaneTableStack(PaneTableRow& row, size_t index);
+
 // Its header strip: the same weights, the same alignment rule, the column names,
 // on the 28px group rhythm.
 winrt::Microsoft::UI::Xaml::Controls::Border MakePaneTableHeader(
@@ -499,5 +521,23 @@ class Snackbar {
   // finds a null instead of a dangling pointer.
   std::shared_ptr<Snackbar*> self_;
 };
+
+// ---- DESIGNSTYLE "Placeholders, not pop-in" -----------------------------------
+//
+// A skeleton stands in for content that arrives after first paint, in the
+// content's OWN box, so a section never opens shorter than it settles. The bar
+// is sized by the value it becomes: `sizer` is the text the real value will
+// show (or a representative width) at the value's font size, rendered
+// transparent under the faint rounded fill (UrSkeletonStyle), so the two share
+// one set of metrics. The shimmer is begun on Loaded, only while
+// UISettings.AnimationsEnabled ("Show animations in Windows").
+winrt::Microsoft::UI::Xaml::FrameworkElement MakeSkeletonText(winrt::hstring const& sizer,
+                                                              double fontSize);
+// The dot form of the same bar (a chip's status dot), `size` square.
+winrt::Microsoft::UI::Xaml::FrameworkElement MakeSkeletonDot(double size);
+// Begin the shared shimmer on an element (idempotent per element; no-op with
+// animations off). The kit builders above call this themselves; a skeleton
+// declared in XAML calls it once.
+void StartSkeletonShimmer(winrt::Microsoft::UI::Xaml::FrameworkElement const& element);
 
 }  // namespace urnw::kit

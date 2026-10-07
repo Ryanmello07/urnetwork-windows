@@ -274,6 +274,14 @@ DeviceRemote → service):
   `AppController::HandleDeepLink` → `SdkHost::HandleDeepLink`. Remaining: set
   `UrnWalletConnectProjectId` (see `src/App/Config.h`), deploy ur.io/wallet-connect,
   and do a real-wallet test.
+  > **The Solana payout wallet is back on Earnings (not yet compiled).** The
+  > by-address connect went with the Subtensor rework (`e14049c`); "Connect Solana
+  > wallet" in the overflow beside "Connect Bittensor wallet" restores it for the
+  > legacy USDC payouts: `SolanaWalletSheets` (Phantom/Solflare through the
+  > connect-only `SdkHost::ConnectSolanaWallet`, or an address checked for `SOL`) →
+  > `createAccountWallet` → `setPayoutWallet`, plus the payout wallet card with
+  > Remove; `tools/solana-wallet-tests.cpp` runs its logic on any host.
+  >
   > **No create-network-with-wallet path.** A wallet with no network still only gets
   > an error ("this wallet isn't linked to a network yet") because the app has no
   > sign-up UI at all. Both wallets are equally affected; fix it with the sign up
@@ -298,8 +306,11 @@ DeviceRemote → service):
   generated (`npm run gen`) and indexed into `resources.pri` by MakePri; the UI
   goes through `Localization.h` (`Localized` / `Format` / `Plural`). No string
   lives in the app: add or change one in `localizations/keys/*.yaml`.
-- Toast notifications, launch-at-login (HKCU Run), kill-switch
-  (`vpnInterfaceWhileOffline` via WFP).
+- Toast notifications, kill-switch (`vpnInterfaceWhileOffline` via WFP).
+  ~~Launch-at-login~~ **done**: Settings' "Launch URnetwork on system startup"
+  (off by default, as on macOS) writes the user's HKCU Run value as
+  `"URnetwork.exe" --autostart`, so a sign-in shows only the tray icon; a contract
+  test fails a registration without the argument.
 - Not localized yet, and the store has no keys for them: `StatsFormat.cpp` (byte
   and bit-rate units, `"unknown"`, and the compact relative times `now` / `5s
   ago` / `3m ago` / `2h ago`) and the leaderboard row (`"%d.  %s  —  %.1f MiB"`).

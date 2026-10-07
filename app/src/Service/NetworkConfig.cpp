@@ -6,7 +6,9 @@
 #include <iphlpapi.h>
 #include <netioapi.h>
 
+#include <array>
 #include <atomic>
+#include <cstring>
 #include <cwchar>
 
 #include "Log.h"
@@ -16,6 +18,13 @@
 #pragma comment(lib, "iphlpapi.lib")
 #pragma comment(lib, "ws2_32.lib")
 
+// windns.h (Windows 10 2004+) defines the per-family selector for
+// DNS_INTERFACE_SETTINGS. Older headers that still declare the struct without
+// the flag get the documented value.
+#ifndef DNS_SETTING_IPV6
+#define DNS_SETTING_IPV6 0x0001
+#endif
+
 namespace urnw {
 namespace {
 
@@ -23,12 +32,39 @@ bool ParseV4(const std::string& s, IN_ADDR& out) {
   return ::inet_pton(AF_INET, s.c_str(), &out) == 1;
 }
 
-// Windows defaults IPv6 interfaces to LinkLocalAlwaysOn, which can synthesize
-// a fe80:: address even when the app never supplies an IPv6 address. Keep the
-// Wintun interface genuinely IPv4-only without touching IPv6 on any physical
-// interface. Router discovery/default routes are disabled as a second guard,
-// and an address created before this policy landed is removed explicitly.
-bool EnforceIpv4OnlyTunnelInterface(NET_LUID tun) {
+bool ParseV6(const std::string& s, IN6_ADDR& out) {
+  return ::inet_pton(AF_INET6, s.c_str(), &out) == 1;
+}
+
+// "fe80::/10" for logs, from the table's own bytes.
+std::string PrefixText6(const net::V6Prefix& p) {
+  IN6_ADDR a{};
+  const std::array<uint8_t, 16> bytes = p.Bytes();
+  std::memcpy(&a, bytes.data(), 16);
+  char text[INET6_ADDRSTRLEN] = {};
+  if (!::inet_ntop(AF_INET6, &a, text, sizeof(text))) return "?";
+  return std::format("{}/{}", text, p.prefix);
+}
+
+// The tun's AF_INET6 interface row, for either kind of tunnel.
+//
+// v4-only (no v6 address): Windows defaults IPv6 interfaces to LinkLocalAlwaysOn,
+// which synthesizes a fe80:: address even when the app never supplies an IPv6
+// address. On a Wintun AF_INET6 row, SetIpInterfaceEntry rejects
+// LinkLocalAlwaysOff with ERROR_INVALID_PARAMETER. Leave that unsupported
+// property unchanged, disable router discovery/default routes, and explicitly
+// remove the generated address. With discovery disabled the deleted address
+// stays absent after the IPv4 address brings the adapter up. No
+// physical-interface IPv6 state is touched.
+//
+// dual-stack (a v6 address follows): the same discovery/advertising policy —
+// nothing sends an RA on a tun and Apply installs the address and routes
+// itself — plus the MTU and the metric the v4 row gets, so the v6 capture
+// routes sort above the physical default route the way the v4 ones do. The
+// link-local address is left alone: the stack needs it to run v6 on the
+// interface at all.
+bool ConfigureTunnelIpv6Interface(NET_LUID tun, const TunnelNetworkSettings& settings) {
+  const bool carriesIpv6 = settings.HasIpv6();
   MIB_IPINTERFACE_ROW row;
   ::InitializeIpInterfaceEntry(&row);
   row.Family = AF_INET6;
@@ -36,6 +72,12 @@ bool EnforceIpv4OnlyTunnelInterface(NET_LUID tun) {
   DWORD err = ::GetIpInterfaceEntry(&row);
   if (err == ERROR_NOT_FOUND || err == ERROR_FILE_NOT_FOUND ||
       err == ERROR_NOT_SUPPORTED) {
+    if (carriesIpv6) {
+      LogError("netcfg: tunnel has no IPv6 interface row, so the dual-stack "
+               "tunnel cannot be configured on it: {}",
+               err);
+      return false;
+    }
     LogInfo("netcfg: tunnel has no IPv6 interface row; IPv4-only policy already "
             "satisfied");
     return true;
@@ -45,15 +87,22 @@ bool EnforceIpv4OnlyTunnelInterface(NET_LUID tun) {
     return false;
   }
 
-  row.LinkLocalAddressBehavior = LinkLocalAlwaysOff;
-  row.RouterDiscoveryBehavior = RouterDiscoveryDisabled;
-  row.AdvertisingEnabled = FALSE;
-  row.AdvertiseDefaultRoute = FALSE;
-  row.DisableDefaultRoutes = TRUE;
+  NetworkConfig::PrepareTunnelIpv6InterfaceRow(row, carriesIpv6);
+  if (carriesIpv6) {
+    row.NlMtu = settings.mtu;
+    row.UseAutomaticMetric = FALSE;
+    row.Metric = 1;
+  }
   err = ::SetIpInterfaceEntry(&row);
   if (err != NO_ERROR) {
-    LogError("netcfg: cannot suppress IPv6 on Wintun: {}", err);
+    LogError("netcfg: cannot set the Wintun IPv6 interface policy: {}", err);
     return false;
+  }
+  if (carriesIpv6) {
+    LogInfo("netcfg: Wintun IPv6 interface configured (mtu={} metric=1, "
+            "discovery off); physical IPv6 unchanged",
+            settings.mtu);
+    return true;
   }
 
   PMIB_UNICASTIPADDRESS_TABLE addresses = nullptr;
@@ -123,6 +172,39 @@ bool DeleteTunRoute(NET_LUID tun, uint32_t network, uint8_t prefix) {
   return ::DeleteIpForwardEntry2(&row) == NO_ERROR;
 }
 
+// The v6 route row for one capture prefix: on-link through the tun (:: next
+// hop), the same shape as the v4 rows above.
+MIB_IPFORWARD_ROW2 TunRoute6(NET_LUID tun, const net::V6Prefix& p) {
+  MIB_IPFORWARD_ROW2 row;
+  ::InitializeIpForwardEntry(&row);
+  row.InterfaceLuid = tun;
+  row.DestinationPrefix.Prefix.si_family = AF_INET6;
+  row.DestinationPrefix.Prefix.Ipv6.sin6_family = AF_INET6;
+  const std::array<uint8_t, 16> bytes = p.Bytes();
+  std::memcpy(&row.DestinationPrefix.Prefix.Ipv6.sin6_addr, bytes.data(), 16);
+  row.DestinationPrefix.PrefixLength = p.prefix;
+  row.NextHop.si_family = AF_INET6;
+  row.NextHop.Ipv6.sin6_family = AF_INET6;  // :: next hop => on-link
+  row.Metric = 0;
+  row.Protocol = MIB_IPPROTO_NETMGMT;
+  return row;
+}
+
+bool AddTunRoute6(NET_LUID tun, const net::V6Prefix& p) {
+  MIB_IPFORWARD_ROW2 row = TunRoute6(tun, p);
+  DWORD err = ::CreateIpForwardEntry2(&row);
+  if (err != NO_ERROR && err != ERROR_OBJECT_ALREADY_EXISTS) {
+    LogError("route: add {} via tun failed: {}", PrefixText6(p), err);
+    return false;
+  }
+  return true;
+}
+
+bool DeleteTunRoute6(NET_LUID tun, const net::V6Prefix& p) {
+  MIB_IPFORWARD_ROW2 row = TunRoute6(tun, p);
+  return ::DeleteIpForwardEntry2(&row) == NO_ERROR;
+}
+
 // The interface whose routes CrashRevert() must remove, or 0 when the tunnel is
 // down. A plain atomic so the crash path reads it without taking a lock that
 // the crashing thread might already hold.
@@ -135,8 +217,13 @@ std::atomic<uint64_t> g_armedTunLuid{0};
 // addresses are local. See NetPolicy.h for why that coupling matters and for
 // the 169.254/16 + 224.0.0.0/3 decisions.
 constexpr const auto& kIncludedV4Routes = net::kTunCaptureV4;
+// The IPv6 half, derived the same way from net::kLocalBypassV6; installed only
+// when the settings carry a v6 address.
+constexpr const auto& kIncludedV6Routes = net::kTunCaptureV6;
 
-bool SetTunDns(NET_LUID tun, const std::vector<std::string>& servers,
+// One family per call: DNS_INTERFACE_SETTINGS addresses the v4 settings unless
+// DNS_SETTING_IPV6 is set, so a dual-stack tun takes two calls.
+bool SetTunDns(NET_LUID tun, bool ipv6, const std::vector<std::string>& servers,
                const std::string& search) {
   GUID guid{};
   if (::ConvertInterfaceLuidToGuid(&tun, &guid) != NO_ERROR) return false;
@@ -149,7 +236,7 @@ bool SetTunDns(NET_LUID tun, const std::vector<std::string>& servers,
 
   DNS_INTERFACE_SETTINGS settings{};
   settings.Version = DNS_INTERFACE_SETTINGS_VERSION1;
-  settings.Flags = DNS_SETTING_NAMESERVER;
+  settings.Flags = DNS_SETTING_NAMESERVER | (ipv6 ? DNS_SETTING_IPV6 : 0);
   settings.NameServer = joined.empty() ? nullptr : joined.data();
   std::wstring wsearch = Widen(search);
   if (!wsearch.empty()) {
@@ -160,7 +247,8 @@ bool SetTunDns(NET_LUID tun, const std::vector<std::string>& servers,
   if (err != NO_ERROR) {
     // Win10 pre-2004 lacks SetInterfaceDnsSettings; caller should fall back to
     // the netsh/registry path (plan R6). Surface for diagnostics.
-    LogWarn("dns: SetInterfaceDnsSettings failed: {} (pre-2004? use fallback)", err);
+    LogWarn("dns: SetInterfaceDnsSettings ({}) failed: {} (pre-2004? use fallback)",
+            ipv6 ? "ipv6" : "ipv4", err);
     return false;
   }
   return true;
@@ -193,6 +281,33 @@ DnsFlushFn ResolveDnsFlush() {
 
 }  // namespace
 
+void NetworkConfig::PrepareTunnelIpv6InterfaceRow(MIB_IPINTERFACE_ROW& row,
+                                                  bool carriesIpv6) {
+  // The zero-only SitePrefixLength rule applies to AF_INET, not AF_INET6. More
+  // importantly, Windows 11 rejects LinkLocalAlwaysOff on a Wintun IPv6 row
+  // with ERROR_INVALID_PARAMETER. LinkLocalUnchanged is the API's explicit
+  // setter sentinel; on a v4-only tun the generated fe80:: address is deleted
+  // by the caller instead, on a dual-stack tun it stays.
+  row.LinkLocalAddressBehavior = LinkLocalUnchanged;
+  row.RouterDiscoveryBehavior = RouterDiscoveryDisabled;
+  row.AdvertisingEnabled = FALSE;
+  row.AdvertiseDefaultRoute = FALSE;
+  // The capture set is ::/1 and narrower, never ::/0 itself, so this flag does
+  // not gate the routes Apply installs; it is the legacy "no v6 on this
+  // interface" statement, and a dual-stack tun must not make it.
+  row.DisableDefaultRoutes = carriesIpv6 ? FALSE : TRUE;
+}
+
+void NetworkConfig::PrepareTunnelDnsClearSettings(DNS_INTERFACE_SETTINGS& settings, bool ipv6,
+                                                 wchar_t (&emptyValue)[1]) {
+  emptyValue[0] = L'\0';
+  settings = {};
+  settings.Version = DNS_INTERFACE_SETTINGS_VERSION1;
+  settings.Flags = DNS_SETTING_NAMESERVER | DNS_SETTING_SEARCHLIST | (ipv6 ? DNS_SETTING_IPV6 : 0);
+  settings.NameServer = emptyValue;
+  settings.SearchList = emptyValue;
+}
+
 bool NetworkConfig::ResolverCacheFlushAvailable() {
   return ResolveDnsFlush() != nullptr;
 }
@@ -218,8 +333,7 @@ bool NetworkConfig::FlushResolverCache() {
   return true;
 }
 
-bool NetworkConfig::IsIpv4OnlyTunnelSettings(
-    const TunnelNetworkSettings& settings) {
+bool NetworkConfig::IsValidTunnelSettings(const TunnelNetworkSettings& settings) {
   IN_ADDR address{};
   if (!ParseV4(settings.local_address_v4, address) || settings.prefix_v4 == 0 ||
       settings.prefix_v4 > 32) {
@@ -229,27 +343,44 @@ bool NetworkConfig::IsIpv4OnlyTunnelSettings(
     IN_ADDR dns{};
     if (!ParseV4(server, dns)) return false;
   }
+  if (settings.HasIpv6()) {
+    IN6_ADDR address6{};
+    if (!ParseV6(settings.local_address_v6, address6) || settings.prefix_v6 == 0 ||
+        settings.prefix_v6 > 128) {
+      return false;
+    }
+    for (const auto& server : settings.dns_servers_v6) {
+      IN6_ADDR dns{};
+      if (!ParseV6(server, dns)) return false;
+    }
+  } else if (!settings.dns_servers_v6.empty()) {
+    // a v6 resolver with no v6 address has no route to be reached over
+    return false;
+  }
   return true;
 }
 
 bool NetworkConfig::Apply(const TunnelNetworkSettings& settings) {
-  if (!IsIpv4OnlyTunnelSettings(settings)) {
-    LogError("netcfg: refusing non-IPv4 tunnel configuration (addr={}/{} "
-             "dns-count={})",
+  if (!IsValidTunnelSettings(settings)) {
+    LogError("netcfg: refusing malformed tunnel configuration (addr={}/{} "
+             "addr6={}/{} dns-count={} dns6-count={})",
              settings.local_address_v4, settings.prefix_v4,
-             settings.dns_servers_v4.size());
+             settings.local_address_v6, settings.prefix_v6,
+             settings.dns_servers_v4.size(), settings.dns_servers_v6.size());
     return false;
   }
   settings_ = settings;
+  applied_ipv6_ = false;
 
   // Arm the crash path before the FIRST mutation, not after the last one: a
   // crash halfway through the route loop must still be cleanable.
   ArmCrashRevert(tunLuid_);
 
-  // Do this before installing the IPv4 address or routes. A newly-created
-  // Wintun can otherwise gain an automatic IPv6 link-local address merely by
-  // coming up, despite receiving no IPv6 settings from the SDK.
-  if (!EnforceIpv4OnlyTunnelInterface(tunLuid_)) {
+  // Do this before installing any address or route. A newly-created Wintun
+  // can otherwise gain an automatic IPv6 link-local address merely by coming
+  // up; for a v4-only tunnel that address is removed, for a dual-stack one the
+  // v6 row gets its MTU and metric here so the v6 routes below sort correctly.
+  if (!ConfigureTunnelIpv6Interface(tunLuid_, settings)) {
     DisarmCrashRevert();
     return false;
   }
@@ -287,6 +418,27 @@ bool NetworkConfig::Apply(const TunnelNetworkSettings& settings) {
     if (err != NO_ERROR) LogWarn("netcfg: set MTU/metric failed: {}", err);
   }
 
+  // --- tun IPv6 address (dual-stack only) ---
+  if (settings.HasIpv6()) {
+    IN6_ADDR addr6{};
+    if (!ParseV6(settings.local_address_v6, addr6)) {
+      LogError("netcfg: bad local IPv6 address {}", settings.local_address_v6);
+      return false;
+    }
+    MIB_UNICASTIPADDRESS_ROW ipRow6;
+    ::InitializeUnicastIpAddressEntry(&ipRow6);
+    ipRow6.InterfaceLuid = tunLuid_;
+    ipRow6.Address.Ipv6.sin6_family = AF_INET6;
+    ipRow6.Address.Ipv6.sin6_addr = addr6;
+    ipRow6.OnLinkPrefixLength = settings.prefix_v6;
+    ipRow6.DadState = IpDadStatePreferred;
+    err = ::CreateUnicastIpAddressEntry(&ipRow6);
+    if (err != NO_ERROR && err != ERROR_OBJECT_ALREADY_EXISTS) {
+      LogError("netcfg: set tun IPv6 address failed: {}", err);
+      return false;
+    }
+  }
+
   // --- split-default routes through the tun, EXCLUDING the local network ---
   // From here on the host's traffic is being redirected, so every exit from
   // this function must either leave a complete route set or none at all.
@@ -301,6 +453,23 @@ bool NetworkConfig::Apply(const TunnelNetworkSettings& settings) {
   }
   LogInfo("netcfg: installed {} tun routes (private ranges excluded)",
           std::size(kIncludedV4Routes));
+
+  // The IPv6 half: ::/0 minus link-local, ULA and multicast (net::kLocalBypassV6),
+  // by the same all-or-nothing rule. Revert() removes both families.
+  if (settings.HasIpv6()) {
+    for (const auto& r : kIncludedV6Routes) {
+      routesOk = routesOk && AddTunRoute6(tunLuid_, r);
+    }
+    if (!routesOk) {
+      LogError("netcfg: IPv6 route install incomplete, reverting the partial set");
+      Revert();
+      return false;
+    }
+    applied_ipv6_ = true;
+    LogInfo("netcfg: installed {} tun IPv6 routes (link-local, ULA and "
+            "multicast excluded)",
+            std::size(kIncludedV6Routes));
+  }
 
   // --- DNS ------------------------------------------------------------------
   // NOT fatal, deliberately: tearing a working tunnel down because its
@@ -321,7 +490,7 @@ bool NetworkConfig::Apply(const TunnelNetworkSettings& settings) {
   dns_applied_ = false;
   if (!settings.dns_servers_v4.empty()) {
     dns_applied_ =
-        SetTunDns(tunLuid_, settings.dns_servers_v4, settings.dns_search);
+        SetTunDns(tunLuid_, false, settings.dns_servers_v4, settings.dns_search);
     if (!dns_applied_)
       LogError("netcfg: tun DNS NOT SET — the tunnel is up but name resolution "
                "is not tunnelled (R6). Without the firewall layer queries go to "
@@ -330,6 +499,17 @@ bool NetworkConfig::Apply(const TunnelNetworkSettings& settings) {
   } else {
     LogError("netcfg: NO tun DNS servers supplied — same consequence as a failed "
              "set; reported as dns_applied=false");
+  }
+  // The v6 resolvers ride the same interface. A miss here is degraded, not
+  // unresolving — every query still has the v4 resolver over the tun, and the
+  // firewall permits only the tunnel's resolvers either way — so it is logged
+  // and does not clear dns_applied_.
+  if (settings.HasIpv6() && !settings.dns_servers_v6.empty()) {
+    if (!SetTunDns(tunLuid_, true, settings.dns_servers_v6, settings.dns_search)) {
+      LogWarn("netcfg: tun IPv6 DNS NOT SET; queries keep using the tunnel's "
+              "IPv4 resolver, so resolution stays inside the tunnel (degraded, "
+              "not open)");
+    }
   }
 
   // Cross-check the resolvers against the ONE table (NetPolicy.h). A resolver
@@ -351,10 +531,28 @@ bool NetworkConfig::Apply(const TunnelNetworkSettings& settings) {
     }
   }
 
+  for (const auto& server : settings.dns_servers_v6) {
+    IN6_ADDR s6{};
+    if (!ParseV6(server, s6)) continue;
+    uint8_t bytes[16];
+    std::memcpy(bytes, &s6, 16);
+    if (net::IsLocalBypassV6(bytes)) {
+      LogError("netcfg: tunnel IPv6 resolver {} falls inside a range that "
+               "BYPASSES the tunnel (NetPolicy.h kLocalBypassV6). It is not "
+               "reachable through the tun and the firewall's port-53 block will "
+               "drop it. This is a table/SDK disagreement, not a network fault.",
+               server);
+    }
+  }
+
   applied_ = true;
-  LogInfo("netcfg: applied addr={}/{} mtu={} dns={} dns_applied={}",
-          settings.local_address_v4, settings.prefix_v4, settings.mtu,
-          settings.dns_servers_v4.size(), dns_applied_ ? "yes" : "NO");
+  LogInfo("netcfg: applied addr={}/{} addr6={}/{} mtu={} dns={} dns6={} "
+          "dns_applied={} ipv6={}",
+          settings.local_address_v4, settings.prefix_v4,
+          settings.HasIpv6() ? settings.local_address_v6 : std::string("off"),
+          settings.prefix_v6, settings.mtu, settings.dns_servers_v4.size(),
+          settings.dns_servers_v6.size(), dns_applied_ ? "yes" : "NO",
+          applied_ipv6_ ? "yes" : "no");
   return true;
 }
 
@@ -378,11 +576,22 @@ void NetworkConfig::Revert() {
     ipRow.Address.Ipv4.sin_addr = addr;
     ::DeleteUnicastIpAddressEntry(&ipRow);
   }
+  IN6_ADDR addr6{};
+  if (settings_.HasIpv6() && ParseV6(settings_.local_address_v6, addr6)) {
+    MIB_UNICASTIPADDRESS_ROW ipRow6;
+    ::InitializeUnicastIpAddressEntry(&ipRow6);
+    ipRow6.InterfaceLuid = tunLuid_;
+    ipRow6.Address.Ipv6.sin6_family = AF_INET6;
+    ipRow6.Address.Ipv6.sin6_addr = addr6;
+    ::DeleteUnicastIpAddressEntry(&ipRow6);
+  }
+  const bool hadIpv6 = applied_ipv6_;
   applied_ = false;
+  applied_ipv6_ = false;
   dns_applied_ = false;
   DisarmCrashRevert();
-  LogInfo("netcfg: reverted ({} of {} routes removed, dns cleared)", removed,
-          std::size(kIncludedV4Routes));
+  LogInfo("netcfg: reverted ({} of {} routes removed, dns clear attempted)", removed,
+          std::size(kIncludedV4Routes) + (hadIpv6 ? std::size(kIncludedV6Routes) : 0));
 }
 
 // --- crash safety ----------------------------------------------------------
@@ -392,21 +601,30 @@ int NetworkConfig::DeleteTunnelRoutes(NET_LUID tunLuid) {
   for (const auto& r : kIncludedV4Routes) {
     if (DeleteTunRoute(tunLuid, r.network, r.prefix)) ++removed;
   }
+  // Unconditionally, for the crash path and the sweep: a v6 route that a
+  // v4-only session never installed is simply not found.
+  for (const auto& r : kIncludedV6Routes) {
+    if (DeleteTunRoute6(tunLuid, r)) ++removed;
+  }
   return removed;
 }
 
 void NetworkConfig::ClearTunnelDns(NET_LUID tunLuid) {
   GUID guid{};
   if (::ConvertInterfaceLuidToGuid(&tunLuid, &guid) != NO_ERROR) return;
-  DNS_INTERFACE_SETTINGS settings{};
-  settings.Version = DNS_INTERFACE_SETTINGS_VERSION1;
-  // Clear BOTH of the things Apply can set. Apply adds DNS_SETTING_SEARCHLIST
-  // whenever a search domain is supplied, so clearing only NAMESERVER left the
-  // search list in force on the interface.
-  settings.Flags = DNS_SETTING_NAMESERVER | DNS_SETTING_SEARCHLIST;
-  settings.NameServer = nullptr;
-  settings.SearchList = nullptr;
-  ::SetInterfaceDnsSettings(guid, &settings);
+  // One call per family: the settings struct addresses v4 unless
+  // DNS_SETTING_IPV6 is set, and a dual-stack session set both.
+  for (const bool ipv6 : {false, true}) {
+    wchar_t emptyValue[1]{};
+    DNS_INTERFACE_SETTINGS settings{};
+    // Null pointers with these flags return ERROR_INVALID_PARAMETER and leave
+    // the resolver in force. Non-null empty strings clear both optional fields.
+    PrepareTunnelDnsClearSettings(settings, ipv6, emptyValue);
+    const DWORD error = ::SetInterfaceDnsSettings(guid, &settings);
+    if (error != NO_ERROR)
+      LogWarn("dns: clear tunnel settings failed (family={} error={}); adapter teardown still required",
+              ipv6 ? "ipv6" : "ipv4", error);
+  }
 }
 
 void NetworkConfig::ArmCrashRevert(NET_LUID tunLuid) {
@@ -535,8 +753,9 @@ int NetworkConfig::SweepOrphanedTunnel(const GUID& tunGuid,
     // The only thing filtered out is the harmless residue, which is exactly what
     // the file's own "prefer the miss" rule asks for.
     //
-    // Both families are tried: we only ever install v4 routes and v4 DNS, but
-    // accepting either is the direction that errs towards sweeping.
+    // Both families are tried: a dual-stack session installs routes and DNS
+    // on both, and accepting either is the direction that errs towards
+    // sweeping.
     bool live = false;
     for (const ADDRESS_FAMILY family : {AF_INET, AF_INET6}) {
       MIB_IPINTERFACE_ROW ip{};
@@ -579,8 +798,7 @@ int NetworkConfig::SweepOrphanedTunnel(const GUID& tunGuid,
     ClearTunnelDns(luid);
     LogWarn(
         "netcfg: ORPHANED tun interface \"{}\" (luid {:#x}) present at startup — "
-        "a previous run did not revert; removed {} stale routes and cleared its "
-        "DNS",
+        "a previous run did not revert; removed {} stale routes; DNS clear requested",
         alias, luid.Value, removed);
   }
   // CONFIRMED orphans, not candidates. This return value is what

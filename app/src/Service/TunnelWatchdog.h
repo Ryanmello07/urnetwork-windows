@@ -60,6 +60,8 @@
 #include <thread>
 
 #include "PacketPump.h"  // PacketCounters
+#include "CaptureReadiness.h"
+#include "NetworkChangeNotify.h"  // NotifyCoalescer, kNetworkNotifyDebounceMillis
 #include "Sdk.h"
 
 namespace urnw {
@@ -171,12 +173,9 @@ inline constexpr int64_t StampInSession(int64_t stampMillis,
   return stampMillis >= sessionStartMillis ? stampMillis : -1;
 }
 
-// One SDK network-change notification per this many milliseconds.
-//
-// A roam produces dozens of OS notifications in a second. Below this two
-// notifications never describe different states; above it the burst of a single
-// roam would be split into several kicks.
-inline constexpr int64_t kNetworkNotifyDebounceMillis = 750;
+// One SDK network-change notification per kNetworkNotifyDebounceMillis, which
+// lives with the coalescer in NetworkChangeNotify.h: the provider-only device's
+// notifications follow the same rule.
 
 // How long TunnelWatchdog::Stop() waits for the SDK sampler before abandoning
 // it. Same discipline, and the same reasoning, as kSdkTeardownBudget: a healthy
@@ -269,6 +268,18 @@ struct DeadTunnelSignals {
   // When this session reached Up. 0 means there is no session to judge.
   int64_t upSinceMillis = 0;
 
+  // The beginning of the traffic generation being judged by DEAD_FAST. A
+  // destination replacement may honestly spend longer than kDeadFastMillis
+  // forming; its traffic clock starts only when that new provider window first
+  // becomes ready. 0 retains the session-start behavior for callers that have
+  // no separate traffic boundary.
+  int64_t trafficStartMillis = 0;
+  // False only during the initial formation of a new destination generation.
+  // Once that generation has been ready, later window churn cannot turn this
+  // false again and reset the watchdog forever; ConnectionEpochTracker owns
+  // that one-way rule.
+  bool providerWindowReady = true;
+
   // ---- from the SDK sampler ----
   // The proven-exit count from the last COMPLETED getExits().
   int64_t provenCount = 0;
@@ -333,7 +344,10 @@ inline constexpr DeadTunnelVerdict Evaluate(const DeadTunnelSignals& s,
 
   const int64_t sampleAge = detail::AgeSince(s.lastSampleMillis, s.upSinceMillis, nowMillis);
   const int64_t provenAge = detail::AgeSince(s.lastProvenMillis, s.upSinceMillis, nowMillis);
-  const int64_t inboundAge = detail::AgeSince(s.lastInboundMillis, s.upSinceMillis, nowMillis);
+  const int64_t trafficStartMillis =
+      s.trafficStartMillis > 0 ? s.trafficStartMillis : s.upSinceMillis;
+  const int64_t inboundAge =
+      detail::AgeSince(s.lastInboundMillis, trafficStartMillis, nowMillis);
 
   // ---- THE MEASUREMENT OVERRULES THE CLAIM, AND IT DOES SO FIRST ------------
   //
@@ -378,7 +392,8 @@ inline constexpr DeadTunnelVerdict Evaluate(const DeadTunnelSignals& s,
   // ---- DEAD_FAST ------------------------------------------------------------
   // Committed outbound, zero inbound, nothing proven — all three, continuously.
   const bool fastApplies =
-      s.provenCount == 0 && s.outboundSinceInbound >= kDeadFastOutboundPackets;
+      s.providerWindowReady && s.provenCount == 0 &&
+      s.outboundSinceInbound >= kDeadFastOutboundPackets;
   if (fastApplies && inboundAge >= kDeadFastMillis && provenAge >= kDeadFastMillis) {
     v.reason = DeadTunnelReason::NoInbound;
     return v;
@@ -473,49 +488,57 @@ class TrafficTracker {
 };
 
 // ---------------------------------------------------------------------------
-// the network-change coalescer (pure)
+// the destination-generation tracker (pure)
 // ---------------------------------------------------------------------------
-//
-// A roam produces dozens of OS notifications inside a second, and each one
-// would otherwise become a cgo call into the SDK that kicks every transport in
-// the process. This folds a burst into exactly one notification.
-//
-// TRAILING FIRE ON A FIXED WINDOW, not a re-extending debounce: the deadline is
-// set by the FIRST observation of a burst and never pushed out. A re-extending
-// debounce can be starved indefinitely by a link that keeps flapping, which is
-// precisely the condition in which the SDK most needs to be told.
-class NotifyCoalescer {
+
+// What one WindowStatus observation changes in the evaluator. A destination
+// rebuild resets every verdict clock; the first ready edge of that generation
+// resets only DEAD_FAST's packet/traffic clock. Keeping the two explicit is the
+// distinction that prevents a 27-second honest peer formation from inheriting
+// the old provider's 20-second failure window without giving every reconnect a
+// second 90-second no-exit grace after it is ready.
+struct ConnectionEpochUpdate {
+  bool verdictClockReset = false;
+  bool trafficClockReset = false;
+};
+
+// Consumes the monotonic generation and MinSatisfied values carried by the
+// SDK's WindowStatus. Safe against late callbacks from a retired window: an
+// older generation is ignored. Readiness is one-way inside a generation, so
+// ordinary resize/liveness churn cannot keep resetting the failsafe forever.
+class ConnectionEpochTracker {
  public:
-  // An observation arrived. Never notifies anything; it only records.
-  void Observe(int64_t nowMillis) {
-    ++coalesced_;
-    if (pending_) return;
-    pending_ = true;
-    deadlineMillis_ = nowMillis + kNetworkNotifyDebounceMillis;
+  ConnectionEpochUpdate Observe(int64_t connectionGeneration,
+                                bool minSatisfied) {
+    ConnectionEpochUpdate update;
+    if (!initialized_) {
+      initialized_ = true;
+      connectionGeneration_ = connectionGeneration;
+      forming_ = !minSatisfied;
+      return update;
+    }
+    if (connectionGeneration < connectionGeneration_) return update;
+    if (connectionGeneration > connectionGeneration_) {
+      connectionGeneration_ = connectionGeneration;
+      forming_ = !minSatisfied;
+      update.verdictClockReset = true;
+      update.trafficClockReset = true;
+      return update;
+    }
+    if (forming_ && minSatisfied) {
+      forming_ = false;
+      update.trafficClockReset = true;
+    }
+    return update;
   }
 
-  // Is a notification due? Consumes the pending burst when it says yes, so a
-  // caller that fires on true cannot fire twice for one burst.
-  bool TakeDue(int64_t nowMillis) {
-    if (!pending_ || nowMillis < deadlineMillis_) return false;
-    pending_ = false;
-    lastBurstSize_ = coalesced_;
-    coalesced_ = 0;
-    return true;
-  }
-
-  bool pending() const { return pending_; }
-  int64_t deadlineMillis() const { return deadlineMillis_; }
-  // How many observations the notification just taken folded together. For the
-  // log line, so a roam reads as one kick over N events rather than as a
-  // suspiciously quiet single event.
-  int64_t lastBurstSize() const { return lastBurstSize_; }
+  bool FastVerdictEligible() const { return initialized_ && !forming_; }
+  int64_t connectionGeneration() const { return connectionGeneration_; }
 
  private:
-  bool pending_ = false;
-  int64_t deadlineMillis_ = 0;
-  int64_t coalesced_ = 0;
-  int64_t lastBurstSize_ = 0;
+  bool initialized_ = false;
+  bool forming_ = false;
+  int64_t connectionGeneration_ = 0;
 };
 
 // ---------------------------------------------------------------------------
@@ -531,6 +554,11 @@ class NotifyCoalescer {
 // thread that publishes into its owner's members is a use-after-free waiting
 // for a bad day. It owns a share of this instead.
 struct WatchdogChannel {
+  // Retained in both Preparing and Up so late callbacks cannot queue work for
+  // a replacement session. captureReadiness is set only while capture is pending.
+  std::shared_ptr<CaptureReadiness> sessionReadiness;
+  std::shared_ptr<CaptureReadiness> captureReadiness;
+  std::function<void(CaptureTicket)> onReady;
   std::mutex mutex;
   std::condition_variable wake;
   // Set by Stop(). Checked by the sampler immediately before and immediately
@@ -560,8 +588,16 @@ struct WatchdogChannel {
   std::atomic<int64_t> lastSampleMillis{-1};
   std::atomic<int64_t> lastProvenMillis{-1};
 
+  // The current SDK destination generation and its window readiness, guarded
+  // by `mutex`. WindowStatus carries both in one snapshot; keeping them under
+  // one lock here prevents the evaluator from pairing a new generation with
+  // the retired one's readiness.
+  int64_t connectionGeneration = 0;
+  bool providerWindowMinSatisfied = true;
+
   // the network-change coalescer, guarded by `mutex`
   NotifyCoalescer coalescer;
+  NotifyCoalescer qualityCoalescer;
 
   // WHAT THE FAILSAFE DOES, AND IT LIVES HERE RATHER THAN ON THE WATCHDOG.
   // Guarded by `mutex`; cleared by Stop() and Cancel().
@@ -587,7 +623,7 @@ class TunnelWatchdog {
   TunnelWatchdog(const TunnelWatchdog&) = delete;
   TunnelWatchdog& operator=(const TunnelWatchdog&) = delete;
 
-  // Begin watching `device` for the session that has just reached Up.
+  // Watch this session while preparing (onReady supplied) or after capture.
   //
   // The session's start instant is stamped HERE, from this class's own steady
   // clock, rather than taken as an argument: TunnelController's upSinceMillis_
@@ -600,7 +636,9 @@ class TunnelWatchdog {
   // WindowTrace requires — with the difference that this Stop() is BOUNDED and
   // will abandon a wedged sampler rather than hold the teardown hostage.
   void Start(urnet::DeviceLocal* device,
-             std::shared_ptr<PacketCounters> counters, DeadHandler onDead);
+             std::shared_ptr<PacketCounters> counters, DeadHandler onDead,
+             std::shared_ptr<CaptureReadiness> sessionReadiness,
+             std::function<void(CaptureTicket)> onReady = {});
 
   // Stop watching. Idempotent, safe when nothing was started, and SAFE TO CALL
   // FROM INSIDE the DeadHandler — which is not a nicety: the handler tears the
@@ -617,7 +655,12 @@ class TunnelWatchdog {
   // system worker thread: it records a timestamp and wakes the sampler. THE SDK
   // IS NEVER CALLED FROM HERE — EgressMonitor::Stop() waits for in-flight
   // callbacks, so a blocking one would wedge the teardown.
-  void NoteNetworkEvent();
+  bool NoteNetworkEvent(const std::shared_ptr<CaptureReadiness>& session,
+                        int64_t eventMillis);
+
+  // A radio-quality update keeps transports alive and only remeasures pacing.
+  // Like NoteNetworkEvent, this records work for the SDK sampler thread.
+  void NoteNetworkQualityEvent();
 
   // "A countdown is running right now", for TunnelStatus::failsafe_armed. Read
   // from the RPC thread while a connect may be wedged holding the session lock,
@@ -648,6 +691,10 @@ class TunnelWatchdog {
   // teardown.
   std::mutex stateMutex_;
   std::shared_ptr<WatchdogChannel> channel_;
+  // Emits every real destination rebuild (including same-location Reconnect)
+  // and every readiness transition. The callback captures only a weak channel,
+  // never this object; Stop unsubscribes before the DeviceLocal is closed.
+  urnet::Sub windowStatusSub_;
   std::thread sampler_;
   std::thread evaluator_;
 

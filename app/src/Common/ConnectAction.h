@@ -225,7 +225,8 @@ inline constexpr bool BlockedByKillSwitch(const ServiceFacts& f) {
 inline constexpr bool ActionIsDisconnect(const ServiceFacts& f, health::State h) {
   const bool sdkActive =
       h != health::State::Disconnected && h != health::State::NoService;
-  return sdkActive || (MachineIsCaptured(f) && !BlockedByKillSwitch(f));
+  return sdkActive || f.state == proto::TunnelState::Preparing ||
+         (MachineIsCaptured(f) && !BlockedByKillSwitch(f));
 }
 
 // "The service is currently serving an rpc-only session." Reported by the
@@ -385,9 +386,14 @@ inline constexpr Plan Decide(Gesture g, const ServiceFacts& f, const AppFacts& a
       // for it, or the service clamped and said so.
       const bool needRoutes = a.wantsTunnel && !ServingRpcOnly(f);
       const bool serviceHasWhatWeNeed =
-          proto::IsSessionLive(f.state) && (!needRoutes || f.routesInstalled);
+          proto::IsSessionLive(f.state) &&
+          (!needRoutes || f.routesInstalled ||
+           f.state == proto::TunnelState::Preparing);
       if (a.haveDevice && serviceHasWhatWeNeed) {
-        p.why =
+        p.why = f.state == proto::TunnelState::Preparing
+            ? "the RPC session is prepared; provider selection can continue "
+              "while capture waits for proof"
+            :
             "the session and its tunnel are both live; drive the connect "
             "controller and touch nothing else";
         return p;

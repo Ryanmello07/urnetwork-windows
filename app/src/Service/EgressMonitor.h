@@ -11,11 +11,14 @@
 
 // Same order as NetworkConfig.cpp (which compiles): winsock2 before the IP
 // helpers, and ws2tcpip pulls in ws2ipdef (SOCKADDR_INET) that netioapi needs.
+#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
+#endif
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <iphlpapi.h>
 #include <netioapi.h>    // NET_LUID, MIB_IPINTERFACE_ROW, MIB_NOTIFICATION_TYPE, NotifyIpInterfaceChange
+#include <wlanapi.h>
 
 #include <functional>
 #include <mutex>
@@ -24,8 +27,52 @@
 
 namespace urnw {
 
+// Windows reports Wi-Fi signal quality as 0..100. Five stable buckets match
+// the user-visible bars and keep one-point RSSI jitter out of the SDK.
+inline constexpr int WifiSignalLevel(uint32_t quality) {
+  return static_cast<int>(((quality > 100 ? 100 : quality) * 5) / 101);
+}
+
+// The first OS value establishes the current radio state. Later notifications
+// only matter when they cross a user-visible bar boundary.
+class WifiSignalLevelTracker {
+ public:
+  bool Observe(uint32_t quality) {
+    const int next = WifiSignalLevel(quality);
+    if (level_ < 0) {
+      level_ = next;
+      return false;
+    }
+    if (level_ == next) return false;
+    level_ = next;
+    return true;
+  }
+
+  void Reset() { level_ = -1; }
+
+ private:
+  int level_ = -1;
+};
+
 class EgressMonitor {
  public:
+  // What the monitor does with what it observes.
+  //
+  //   Bind        — the tunnel session's (and rpc-only's) monitor: everything
+  //                 this header describes, R1 binding included.
+  //   ObserveOnly — the provider-only device's network watch
+  //                 (TunnelController::WatchProviderNetworkLocked). There is no
+  //                 tun, and that device deliberately binds nothing: its
+  //                 sockets follow the route table like any other process's
+  //                 (Common/ProvideLifecycle.h). It therefore never
+  //                 discovers or binds an interface and never calls
+  //                 setEgressInterfaceIndex (process-global inside this
+  //                 service's SDK); it only reports, through SetOnNetworkEvent
+  //                 and SetOnNetworkQualityEvent, the observations the binding
+  //                 monitor reports. Its Start() reports nothing: starting to
+  //                 watch is not a network change.
+  enum class Binding { Bind, ObserveOnly };
+
   // tunLuid is the interface to EXCLUDE from egress selection. A zero LUID
   // means "there is no tun" — the rpc-only start mode, which creates no
   // adapter. That is not a sentinel bolted on: DiscoverEgress excludes by
@@ -38,7 +85,8 @@ class EgressMonitor {
   // tunnel that does not exist — so the binding is a plain "prefer the physical
   // default route", and the retention behaviour in Refresh() is conservative
   // rather than load-bearing.
-  explicit EgressMonitor(NET_LUID tunLuid) : tunLuid_(tunLuid) {}
+  explicit EgressMonitor(NET_LUID tunLuid, Binding binding = Binding::Bind)
+      : tunLuid_(tunLuid), binding_(binding) {}
   ~EgressMonitor();
 
   EgressMonitor(const EgressMonitor&) = delete;
@@ -81,6 +129,11 @@ class EgressMonitor {
   using NetworkEventHandler = std::function<void()>;
   void SetOnNetworkEvent(NetworkEventHandler handler);
 
+  // Wi-Fi signal-bar changes do not invalidate working sockets. They request
+  // transfer estimator remeasurement without entering the reconnect path.
+  using NetworkQualityEventHandler = std::function<void()>;
+  void SetOnNetworkQualityEvent(NetworkQualityEventHandler handler);
+
   // Compute the current egress interfaces, push them to the SDK, and register
   // for change notifications to keep them current. Returns false if the
   // notification could not be registered; the initial binding is still applied,
@@ -114,10 +167,13 @@ class EgressMonitor {
   // through.
   static void __stdcall OnRouteChange(void* context, MIB_IPFORWARD_ROW2* row,
                                       MIB_NOTIFICATION_TYPE type);
+  static void WINAPI OnWlanChange(PWLAN_NOTIFICATION_DATA data, void* context);
 
   NET_LUID tunLuid_;
+  const Binding binding_;
   HANDLE notifyHandle_ = nullptr;
   HANDLE routeNotifyHandle_ = nullptr;
+  HANDLE wlanHandle_ = nullptr;
 
   // Serializes Refresh: NotifyIpInterfaceChange callbacks arrive on system
   // worker threads and can overlap each other and Start().
@@ -125,6 +181,8 @@ class EgressMonitor {
   EgressInterfaces current_;
   ChangeHandler onChange_;
   NetworkEventHandler onNetworkEvent_;
+  NetworkQualityEventHandler onNetworkQualityEvent_;
+  WifiSignalLevelTracker wlanSignalLevelTracker_;
 };
 
 }  // namespace urnw

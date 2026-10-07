@@ -3,8 +3,9 @@
 //
 // Settings is macOS SettingsForm parity: account (client id, referral code,
 // referral network, auth codes, sign-in methods), device (name, spec),
-// connections (kill switch, blocked locations), post-quantum identity,
+// connections (kill switch, blocked locations, VLESS), post-quantum identity,
 // preferences (product updates), subscription, logs, community links, version,
+// licenses (LicensesPage),
 // and — below sign out — delete account.
 //
 // The sections above the split rules are BUILT IN CODE, into the three empty
@@ -26,6 +27,7 @@
 #include "SettingsSheets.h"
 #include "StatsSheets.h"
 #include "UrComponents.h"
+#include "VlessSheet.h"
 
 namespace winrt::URnetwork::implementation {
 struct MainWindow;
@@ -50,6 +52,13 @@ class SettingsPage {
   // would only fight the developer's console run. Pushed by
   // MainWindow::ApplyServiceSetup, the one writer of that snapshot.
   void ApplyServiceSetup(urnw::ServiceSetup::Snapshot const& snap);
+  // MainWindow::ApplyBreakpoint: whether the About pane is on screen. The
+  // Licenses row lives there, and moves to the foot of General while About is
+  // folded (see BuildLicensesRows).
+  void ApplyAboutPaneVisible(bool visible);
+  // Manage Subscription shows only for a Stripe subscription
+  // (ShowsManageSubscription): the store family from the balance snapshot.
+  void ApplySubscriptionStore(std::string const& storeFamily);
 
   // The settings destination's API loads: network user (sign-in methods,
   // network name), device info, referral code + network, account preferences.
@@ -62,6 +71,10 @@ class SettingsPage {
                  winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnSendFeedback(winrt::Windows::Foundation::IInspectable const&,
                       winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
+  // urnetwork://onboarding/feedback?token=&r=&why=: records the click for the
+  // campaign (GET /onboarding/feedback/{token}) and pre-fills the form with
+  // the rating and the reason the email button carried.
+  void PrefillFromCampaign(std::string const& token, int rating, std::string const& reason);
 
   // --preview-ui only (Startup.h): raise the feedback acknowledgement, the
   // severity that SHOULD time out, so both snackbar behaviours are visible.
@@ -74,6 +87,10 @@ class SettingsPage {
   // Re-read the network user; called by the add-auth sheet after it links a
   // method, and by the remove path after it unlinks one.
   void LoadNetworkUser();
+
+  // Re-read the referral network when MainWindow opens the dedicated
+  // referrals destination. The destination and Settings share this state.
+  void LoadReferral();
 
   // Drop everything describing the account that just signed out, and put every
   // field back to NoSession. The network name is the dangerous one: it is what
@@ -108,16 +125,20 @@ class SettingsPage {
   void BuildStayInTouchSection(winrt::Microsoft::UI::Xaml::Controls::Panel const& host);
   void BuildSubscriptionSection(winrt::Microsoft::UI::Xaml::Controls::Panel const& host);
   void BuildVersionSection(winrt::Microsoft::UI::Xaml::Controls::Panel const& host);
+  void BuildLicensesRows(winrt::Microsoft::UI::Xaml::Controls::Panel const& about,
+                         winrt::Microsoft::UI::Xaml::Controls::Panel const& general);
   void BuildDangerSection();
 
   // ---- loads ----
   void LoadDeviceInfo();
-  void LoadReferral();
   void LoadPreferences();
   // `state` is the terminal state of the network-user load; only Loaded
   // renders rows, and every other state renders the line that names it.
   void RenderAuthMethods(rows::FieldState state);
   void ApplyLocalDeviceState();  // client id + kill switch, straight off the SDK
+  // "Launch URnetwork on system startup", read from Windows (LaunchAtStartup.h)
+  void ApplyLaunchAtStartup();
+  void OnLaunchAtStartupToggled();
 
   // ---- actions ----
   void OnKillSwitchToggled();
@@ -130,12 +151,24 @@ class SettingsPage {
   // `urnetworkd uninstall`). Same dialog shape as ConfirmRemoveAuth: defaults
   // to Cancel, commits only on the explicit destructive button.
   winrt::fire_and_forget ConfirmUninstallService();
+  // Manage subscription: ask the server for the Stripe billing portal and open
+  // it (LaunchCustomerPortal); the server's refusal reads in this app's words
+  // (PaymentRefusal.h).
   winrt::fire_and_forget OpenCustomerPortal();
+  // Open the portal url in the browser, observing the launch: a failure shows
+  // site_billing_portal_error instead of looking like a portal that opened.
+  winrt::fire_and_forget LaunchCustomerPortal(std::string url);
+  // Open the ur.io cloud proxies page (CloudProxyLink.h) in the browser, the
+  // same observed launch: a failure shows something_went_wrong.
+  winrt::fire_and_forget OpenCloudProxies();
   winrt::fire_and_forget SaveLogsToFile();
-  // Attaches the SDK log directory to an ALREADY-ACCEPTED feedback report,
-  // using the server's own feedback id. Only OnSendFeedback calls it, and only
-  // when the user ticked the box.
+  // Attaches the service's logs to an already-accepted feedback report, using
+  // the server's own feedback id (SdkHost::UploadFeedbackLogs: the service
+  // first, connected or not, then the DeviceRemote, on its own thread). Only
+  // OnSendFeedback calls it, and only when the user ticked the box.
   void UploadLogs(std::string const& feedbackId);
+  void SetFeedbackSending(bool sending);
+  void ApplyFeedbackSendButton();
 
   // ---- sheets (one at a time, through the window's sheetOpen_ guard) ----
   winrt::fire_and_forget ShowDeviceNameSheet();
@@ -144,6 +177,9 @@ class SettingsPage {
   winrt::fire_and_forget ShowReferralNetworkSheet();
   winrt::fire_and_forget ShowIdentitySheet();
   winrt::fire_and_forget ShowDeleteAccountSheet();
+  // Connections > VLESS: the active space's VLESS server (VlessSheet.h). The
+  // login screen's network sheet opens the same sheet before sign-in.
+  winrt::fire_and_forget ShowVlessSheet();
 
   winrt::URnetwork::implementation::MainWindow& w_;
   // "Thanks for the feedback": a transient acknowledgement (iOS UrSnackBar)
@@ -151,12 +187,12 @@ class SettingsPage {
   std::shared_ptr<urnw::AppRulesSheet> appRulesSheet_;
 
   bool built_ = false;
+  // a feedback send is out (FeedbackSendState.h)
+  bool feedbackSending_ = false;
 
   // ---- the code-built controls the loads write into ----
   winrt::Microsoft::UI::Xaml::Controls::TextBlock clientIdValue_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::Button clientIdCopy_{nullptr};
-  winrt::Microsoft::UI::Xaml::Controls::TextBlock referralCodeValue_{nullptr};
-  winrt::Microsoft::UI::Xaml::Controls::Button referralCodeCopy_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::TextBlock referralNetworkValue_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::StackPanel authMethodsPanel_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::TextBlock deviceNameValue_{nullptr};
@@ -180,16 +216,21 @@ class SettingsPage {
   // its neighbours: nothing ever writes IsOn back — the pref has one writer
   // (this toggle) and one reader path (the checker), so there is no echo.
   winrt::Microsoft::UI::Xaml::Controls::ToggleSwitch autoUpdateCheck_{nullptr};
+  // "Launch URnetwork on system startup" (StartupRegistration.h)
+  winrt::Microsoft::UI::Xaml::Controls::ToggleSwitch launchAtStartup_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::Button manageSubscription_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::TextBlock versionValue_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::Button deleteAccountButton_{nullptr};
+  // the Licenses row, twice: About's, and General's while About is folded
+  winrt::Microsoft::UI::Xaml::Controls::StackPanel licensesAboutRow_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::StackPanel licensesGeneralRow_{nullptr};
+  bool aboutPaneVisible_ = true;
   // >>> ADVANCED MODE GOES HERE (D5). <<< The first host in Settings' Advanced
   // group; see BuildAdvancedSection for the row shape to append.
   winrt::Microsoft::UI::Xaml::Controls::StackPanel advancedModeHost_{nullptr};
 
   // ---- loaded state ----
   std::string clientId_;
-  std::string referralCode_;
   std::string networkName_;
   std::string deviceName_;
   std::vector<std::string> authTypes_;
@@ -200,6 +241,8 @@ class SettingsPage {
   bool preferencesLoaded_ = false;
   // same echo guard for the kill switch, whose value is written by the load
   bool applyingKillSwitch_ = false;
+  // and for the launch-on-startup toggle, written whenever Windows is read
+  bool applyingLaunchAtStartup_ = false;
 
   std::shared_ptr<urnw::DeviceNameSheet> deviceNameSheet_;
   std::shared_ptr<urnw::AuthCodeSheet> authCodeSheet_;
@@ -208,6 +251,7 @@ class SettingsPage {
   std::shared_ptr<urnw::BlockedLocationsSheet> blockedSheet_;
   std::shared_ptr<urnw::PostQuantumIdentitySheet> identitySheet_;
   std::shared_ptr<urnw::DeleteAccountSheet> deleteSheet_;
+  std::shared_ptr<urnw::VlessSheet> vlessSheet_;
 };
 
 }  // namespace urnw

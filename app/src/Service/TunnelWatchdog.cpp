@@ -45,19 +45,55 @@ TunnelWatchdog::~TunnelWatchdog() { Stop(); }
 
 void TunnelWatchdog::Start(urnet::DeviceLocal* device,
                            std::shared_ptr<PacketCounters> counters,
-                           DeadHandler onDead) {
+                           DeadHandler onDead,
+                           std::shared_ptr<CaptureReadiness> sessionReadiness,
+                           std::function<void(CaptureTicket)> onReady) {
   if (device == nullptr) return;
   Stop();  // idempotent; also joins anything a previous session left
 
   auto channel = std::make_shared<WatchdogChannel>();
   channel->device.store(device);
   channel->onDead = std::move(onDead);
+  channel->sessionReadiness = std::move(sessionReadiness);
+  if (onReady) channel->captureReadiness = channel->sessionReadiness;
+  channel->onReady = std::move(onReady);
   const int64_t upSince = NowMillis();
+
+  // Subscribe BEFORE reading the level, so a destination rebuild in the gap
+  // is either present in getWindowStatus() or delivered as an edge. The SDK
+  // stamps both with one monotonic connection generation; the callback also
+  // rejects a late event from an older, retired window.
+  std::weak_ptr<WatchdogChannel> weakChannel = channel;
+  auto publishWindowStatus =
+      [weakChannel](std::optional<urnet::WindowStatus> status) {
+        if (!status) return;
+        auto channel = weakChannel.lock();
+        if (!channel || channel->cancelled.load()) return;
+        {
+          std::scoped_lock lock(channel->mutex);
+          if (channel->cancelled.load() ||
+              status->ConnectionGeneration < channel->connectionGeneration)
+            return;
+          channel->connectionGeneration = status->ConnectionGeneration;
+          channel->providerWindowMinSatisfied = status->MinSatisfied;
+          if (channel->captureReadiness)
+            channel->captureReadiness->Invalidate(status->ConnectionGeneration);
+        }
+        channel->wake.notify_all();
+      };
+  urnet::Sub windowStatusSub =
+      device->addWindowStatusChangeListener(publishWindowStatus);
+  publishWindowStatus(device->getWindowStatus());
 
   {
     std::scoped_lock lock(stateMutex_);
     channel_ = channel;
+    windowStatusSub_ = std::move(windowStatusSub);
   }
+  ReplayCaptureNetworkEvent(channel->sessionReadiness,
+      [this](const auto& session, int64_t eventMillis) {
+        return NoteNetworkEvent(session, eventMillis);
+      });
   armed_.store(false, std::memory_order_relaxed);
   millisToFailsafe_.store(0, std::memory_order_relaxed);
 
@@ -100,6 +136,7 @@ void TunnelWatchdog::Cancel() {
     // what publishes `cancelled` against the two waits.
     std::scoped_lock lock(channel->mutex);
     channel->onDead = nullptr;
+    channel->onReady = nullptr;
   }
   channel->wake.notify_all();
   armed_.store(false, std::memory_order_relaxed);
@@ -108,6 +145,7 @@ void TunnelWatchdog::Cancel() {
 
 void TunnelWatchdog::Stop() {
   std::shared_ptr<WatchdogChannel> channel;
+  urnet::Sub windowStatusSub;
   {
     std::scoped_lock lock(stateMutex_);
     // Dropped HERE so NoteNetworkEvent — which runs on a system worker thread
@@ -115,6 +153,7 @@ void TunnelWatchdog::Stop() {
     // instead of queueing behind the joins below.
     channel = std::move(channel_);
     channel_.reset();
+    windowStatusSub = std::move(windowStatusSub_);
   }
   if (channel) {
     channel->cancelled.store(true);
@@ -122,9 +161,16 @@ void TunnelWatchdog::Stop() {
     {
       std::scoped_lock lock(channel->mutex);
       channel->onDead = nullptr;
+      channel->onReady = nullptr;
     }
     channel->wake.notify_all();
   }
+
+  // CallbackList::Remove takes only its own leaf mutex and never waits for an
+  // in-flight callback (which owns a weak share of `channel` anyway). Close it
+  // now, before the caller can close DeviceLocal; unlike an SDK getter this
+  // cannot be stranded behind the device state lock.
+  windowStatusSub = urnet::Sub{};
 
   // ---- the evaluator ------------------------------------------------------
   //
@@ -235,7 +281,25 @@ bool TunnelWatchdog::JoinWithin(const std::shared_ptr<WatchdogChannel>& channel,
   return done->load();
 }
 
-void TunnelWatchdog::NoteNetworkEvent() {
+bool TunnelWatchdog::NoteNetworkEvent(
+    const std::shared_ptr<CaptureReadiness>& session, int64_t eventMillis) {
+  std::shared_ptr<WatchdogChannel> channel;
+  {
+    std::scoped_lock lock(stateMutex_);
+    channel = channel_;
+  }
+  if (!channel || channel->cancelled.load() ||
+      !CaptureNetworkEventMatchesSession(channel->sessionReadiness, session)) return false;
+  {
+    std::scoped_lock lock(channel->mutex);
+    if (channel->cancelled.load()) return false;
+    channel->coalescer.Observe(eventMillis);
+  }
+  channel->wake.notify_all();
+  return true;
+}
+
+void TunnelWatchdog::NoteNetworkQualityEvent() {
   std::shared_ptr<WatchdogChannel> channel;
   {
     std::scoped_lock lock(stateMutex_);
@@ -244,7 +308,7 @@ void TunnelWatchdog::NoteNetworkEvent() {
   if (!channel || channel->cancelled.load()) return;
   {
     std::scoped_lock lock(channel->mutex);
-    channel->coalescer.Observe(NowMillis());
+    channel->qualityCoalescer.Observe(NowMillis());
   }
   channel->wake.notify_all();
 }
@@ -291,10 +355,18 @@ void TunnelWatchdog::RunSampler(std::shared_ptr<WatchdogChannel> channel) {
   // seconds, and an unlatched warning would bury the log it is meant to help
   // someone read.
   static std::atomic<bool> exitsLogged{false};
+  bool windowLogged = false;
+  int64_t probedNetworkMillis = -1;
+  int64_t reportedGeneration = -1;
+  int64_t reportedAdded = -1;
+  int64_t reportedUsable = -1;
+  std::string reportedReason;
 
   int64_t nextSampleMillis = NowMillis();
   for (;;) {
     bool notifyDue = false;
+    bool qualityNotifyDue = false;
+    std::optional<CaptureNetworkEpoch> networkEvent;
     int64_t burst = 0;
     {
       std::unique_lock lock(channel->mutex);
@@ -304,12 +376,22 @@ void TunnelWatchdog::RunSampler(std::shared_ptr<WatchdogChannel> channel) {
         const int64_t untilNotify = channel->coalescer.deadlineMillis() - now;
         if (untilNotify < waitMillis) waitMillis = untilNotify;
       }
+      if (channel->qualityCoalescer.pending()) {
+        const int64_t untilNotify =
+            channel->qualityCoalescer.deadlineMillis() - now;
+        if (untilNotify < waitMillis) waitMillis = untilNotify;
+      }
       if (waitMillis > 0) {
         channel->wake.wait_for(lock, std::chrono::milliseconds(waitMillis),
                                [&] { return channel->cancelled.load(); });
       }
       if (channel->cancelled.load()) return;
       notifyDue = channel->coalescer.TakeDue(NowMillis());
+      if (notifyDue && channel->sessionReadiness) {
+        networkEvent = channel->sessionReadiness->PendingNetworkEvent();
+        notifyDue = networkEvent.has_value();
+      }
+      qualityNotifyDue = channel->qualityCoalescer.TakeDue(NowMillis());
       burst = channel->coalescer.lastBurstSize();
     }
 
@@ -324,7 +406,9 @@ void TunnelWatchdog::RunSampler(std::shared_ptr<WatchdogChannel> channel) {
               burst);
       try {
         device->networkChanged();
+        if (channel->cancelled.load()) return;
         device->notifyNetworkChange();
+        if (networkEvent) channel->sessionReadiness->NetworkEventHandled(*networkEvent);
       } catch (const std::exception& e) {
         LogWarn("watchdog: the sdk network-change notification failed: {}",
                 e.what());
@@ -334,23 +418,104 @@ void TunnelWatchdog::RunSampler(std::shared_ptr<WatchdogChannel> channel) {
       device = channel->device.load();
       if (device == nullptr) return;
     }
+    if (qualityNotifyDue && !notifyDue) {
+      LogInfo("watchdog: Wi-Fi signal quality changed — asking transfer pacing "
+              "to remeasure without reconnecting transports");
+      try {
+        device->networkQualityChanged();
+      } catch (const std::exception& e) {
+        LogWarn("watchdog: the sdk network-quality notification failed: {}",
+                e.what());
+      }
+      if (channel->cancelled.load()) return;
+      device = channel->device.load();
+      if (device == nullptr) return;
+    }
 
     if (NowMillis() < nextSampleMillis) continue;
     nextSampleMillis = NowMillis() + kSdkSampleIntervalMillis;
 
+    // A count without its destination identity can qualify a replacement
+    // window using the retired one's proof. Bracket the SDK read and reject
+    // callbacks, cancellation, or network changes anywhere inside the sample.
+    const auto readiness = channel->captureReadiness;
+    const int64_t proofSinceMillis = readiness ? readiness->ProofSinceMillis() : -1;
+    // Leave a full second after the event before scheduling the bounded SDK
+    // probe pass. That makes a fresh result provable even with truncated ages.
+    if (readiness && proofSinceMillis >= 0 &&
+        proofSinceMillis != probedNetworkMillis &&
+        NowMillis() - proofSinceMillis >= 1000) {
+      try {
+        device->probeAllExits();
+        probedNetworkMillis = proofSinceMillis;
+        LogInfo("tunnel: stage=provider-proof outcome=reprobe network_changed=true");
+      } catch (const std::exception&) {
+        LogWarn("tunnel: stage=provider-proof outcome=reprobe-unavailable");
+      }
+      if (channel->cancelled.load()) return;
+    }
+    const auto captureSample = readiness ? readiness->BeginSample() : CaptureSample{};
+    auto readWindow = [&]() -> std::optional<urnet::WindowStatus> {
+      try {
+        return device->getWindowStatus();
+      } catch (const std::exception&) {
+        if (!windowLogged) {
+          windowLogged = true;
+          LogWarn("tunnel: stage=provider-proof outcome=window-unavailable");
+        }
+        return std::nullopt;
+      }
+    };
+    std::optional<urnet::WindowStatus> before;
+    if (readiness) before = readWindow();
+    if (channel->cancelled.load()) return;
     int64_t proven = 0;
+    int64_t usableProven = 0;
     int64_t total = 0;
+    const int64_t proofSampleMillis = NowMillis();
     if (auto exits = ReadSdkList(exitsLogged, "getExits",
                                  [&] { return device->getExits(); })) {
       for (const auto& e : *exits) {
         ++total;
         if (e.Proven) ++proven;
+        if (CaptureExitIsUsable(
+                {.proven = e.Proven, .done = e.Done, .quarantined = e.Quarantined,
+                 .warning = e.Warning, .probeAgeSeconds = e.ProbeAgeSeconds},
+                proofSampleMillis, captureSample.proofSinceMillis)) ++usableProven;
       }
     }
     // Re-checked on the far side of the SDK call, BEFORE anything is published:
     // Stop() may have run while we were inside it, and a sample published after
     // the session ended would be evidence about a tunnel that no longer exists.
     if (channel->cancelled.load()) return;
+    if (readiness) {
+      const auto after = readWindow();
+      if (channel->cancelled.load()) return;
+      if (before && after) {
+        readiness->CompleteSample(captureSample,
+            {.generation = before->ConnectionGeneration,
+             .added = before->ProviderStateAdded},
+            {.generation = after->ConnectionGeneration,
+             .added = after->ProviderStateAdded}, usableProven);
+        const char* reason = CaptureWaitReason(
+            {.generation = after->ConnectionGeneration,
+             .added = after->ProviderStateAdded}, usableProven, after->StallReason);
+        if (reportedGeneration != after->ConnectionGeneration ||
+            reportedAdded != after->ProviderStateAdded ||
+            reportedUsable != usableProven || reportedReason != reason) {
+          reportedGeneration = after->ConnectionGeneration;
+          reportedAdded = after->ProviderStateAdded;
+          reportedUsable = usableProven;
+          reportedReason = reason;
+          LogInfo("tunnel: stage=provider-proof generation={} added={} usable_proven={} "
+                  "pool_min_satisfied={} reason={} outcome={}", reportedGeneration,
+                  reportedAdded, reportedUsable, after->MinSatisfied,
+                  reason, readiness->Ready() ? "ready" : "pending");
+        }
+      } else {
+        readiness->CompleteSample(captureSample, {}, {}, 0);
+      }
+    }
 
     const int64_t now = NowMillis();
     channel->provenCount.store(proven);
@@ -388,14 +553,26 @@ void TunnelWatchdog::RunEvaluator(std::shared_ptr<WatchdogChannel> channel,
                   counters->inbound.load(std::memory_order_relaxed));
   }
 
-  // The instant every window below is measured from. It STARTS as the session's
-  // start and is rebased whenever this process is found not to have been
-  // running (see kEvaluatorFrozenMillis) — a session nobody watched for eight
-  // hours is owed a grace period, not a verdict.
+  // The instant the SDK/sample windows below are measured from. It STARTS as
+  // the tunnel session's start and is rebased when this process was not running
+  // or the SDK installs a new destination generation. The traffic clock is
+  // separate: a replacement window may honestly take longer than DEAD_FAST to
+  // form, so that clock begins when the generation first becomes ready.
   int64_t sessionStartMillis = upSinceMillis;
+  int64_t trafficStartMillis = upSinceMillis;
   int64_t lastTickMillis = NowMillis();
+  bool captureStallReported = false;
+
+  ConnectionEpochTracker connectionEpoch;
+  {
+    std::scoped_lock lock(channel->mutex);
+    connectionEpoch.Observe(channel->connectionGeneration,
+                            channel->providerWindowMinSatisfied);
+  }
 
   for (;;) {
+    int64_t connectionGeneration = 0;
+    bool providerWindowMinSatisfied = true;
     {
       std::unique_lock lock(channel->mutex);
       if (channel->wake.wait_for(lock,
@@ -403,6 +580,8 @@ void TunnelWatchdog::RunEvaluator(std::shared_ptr<WatchdogChannel> channel,
                                  [&] { return channel->cancelled.load(); })) {
         return;
       }
+      connectionGeneration = channel->connectionGeneration;
+      providerWindowMinSatisfied = channel->providerWindowMinSatisfied;
     }
     if (channel->cancelled.load()) return;
 
@@ -417,6 +596,12 @@ void TunnelWatchdog::RunEvaluator(std::shared_ptr<WatchdogChannel> channel,
     const int64_t tickGap = now - lastTickMillis;
     lastTickMillis = now;
     if (EvaluatorFroze(tickGap)) {
+      if (channel->captureReadiness) {
+        channel->captureReadiness->NetworkChanged(now);
+        std::scoped_lock lock(channel->mutex);
+        channel->coalescer.Observe(now);
+        channel->wake.notify_all();
+      }
       LogWarn("watchdog: this process did not run for {}ms (it asked to wait "
               "{}ms) — a modern-standby resume, a hibernate, a suspended vm or "
               "a machine that could not schedule this thread. Every failsafe "
@@ -426,13 +611,72 @@ void TunnelWatchdog::RunEvaluator(std::shared_ptr<WatchdogChannel> channel,
               "told the network moved by the os events the resume raises.",
               tickGap, kEvaluateIntervalMillis);
       sessionStartMillis = now;
+      trafficStartMillis = now;
       if (counters) {
         traffic.Reset(counters->outbound.load(std::memory_order_relaxed),
                       counters->inbound.load(std::memory_order_relaxed));
       }
       armed_.store(false, std::memory_order_relaxed);
       millisToFailsafe_.store(0, std::memory_order_relaxed);
+      // Accept the current connection generation/readiness as the resumed
+      // baseline. Any edge after this tick is new evidence; anything before it
+      // belongs to the unobserved interval that was just discarded.
+      connectionEpoch.Observe(connectionGeneration,
+                              providerWindowMinSatisfied);
       continue;
+    }
+
+    // Terminal callback, exactly like the dead-tunnel verdict below. It may
+    // replace this watchdog or tear the session down; nothing may touch this
+    // object afterwards. A stale ticket starts a fresh preparing watcher.
+    if (channel->captureReadiness) {
+      if (const auto ticket = channel->captureReadiness->Ready()) {
+        std::function<void(CaptureTicket)> handler;
+        {
+          std::scoped_lock lock(channel->mutex);
+          handler = channel->onReady;
+        }
+        if (handler && !channel->cancelled.load()) {
+          handler(*ticket);
+          return;
+        }
+      }
+    }
+
+    if (channel->captureReadiness) {
+      const bool stalled = CaptureSampleStalled(
+          sessionStartMillis, channel->lastSampleMillis.load(), now);
+      if (stalled && !captureStallReported)
+        LogWarn("tunnel: stage=provider-proof outcome=sample-stalled capture=false");
+      captureStallReported = stalled;
+    }
+
+    const ConnectionEpochUpdate connectionUpdate = connectionEpoch.Observe(
+        connectionGeneration, providerWindowMinSatisfied);
+    if (connectionUpdate.verdictClockReset) {
+      sessionStartMillis = now;
+      LogInfo("watchdog: sdk destination generation {} replaced the provider "
+              "window — every verdict starts fresh; DEAD_FAST remains paused "
+              "until this generation first satisfies its window",
+              connectionEpoch.connectionGeneration());
+    }
+    if (connectionUpdate.trafficClockReset) {
+      trafficStartMillis = now;
+      if (counters) {
+        traffic.Reset(counters->outbound.load(std::memory_order_relaxed),
+                      counters->inbound.load(std::memory_order_relaxed));
+      }
+      if (!connectionUpdate.verdictClockReset) {
+        LogInfo("watchdog: sdk destination generation {} first satisfied its "
+                "provider window — the {}s no-inbound traffic clock starts now",
+                connectionEpoch.connectionGeneration(),
+                kDeadFastMillis / 1000);
+      }
+    }
+    if (connectionUpdate.verdictClockReset ||
+        connectionUpdate.trafficClockReset) {
+      armed_.store(false, std::memory_order_relaxed);
+      millisToFailsafe_.store(0, std::memory_order_relaxed);
     }
 
     if (counters) {
@@ -444,6 +688,8 @@ void TunnelWatchdog::RunEvaluator(std::shared_ptr<WatchdogChannel> channel,
     signals.tunnelUp = TunnelIsUp();
     signals.routesInstalled = signals.tunnelUp;  // see TunnelIsUp
     signals.upSinceMillis = sessionStartMillis;
+    signals.trafficStartMillis = trafficStartMillis;
+    signals.providerWindowReady = connectionEpoch.FastVerdictEligible();
     signals.provenCount = channel->provenCount.load();
     // Folded to "never in this session" when they predate a rebase: the sampler
     // publishes across a freeze without knowing one happened, and a sample
@@ -479,7 +725,7 @@ void TunnelWatchdog::RunEvaluator(std::shared_ptr<WatchdogChannel> channel,
              detail::AgeSince(signals.lastSampleMillis, sessionStartMillis, now),
              channel->exitCount.load(), signals.provenCount,
              detail::AgeSince(signals.lastProvenMillis, sessionStartMillis, now),
-             detail::AgeSince(signals.lastInboundMillis, sessionStartMillis, now),
+             detail::AgeSince(signals.lastInboundMillis, trafficStartMillis, now),
              signals.outboundSinceInbound);
     LogError("watchdog: stopping the tunnel through the ORDINARY teardown. With "
              "the kill switch OFF this gives the machine its internet back — "

@@ -10,10 +10,10 @@
 //     (generateWalletKeyPair / generateSharedSecret / encrypt|decryptData /
 //     base58), so it is wire-compatible with the Apple CryptoKit path and the
 //     Linux app.
-//   - Bittensor (any substrate wallet): a single signMessage step. sr25519
-//     signatures are public, so the bridge returns plain query params (the ss58
-//     address + the hex signature) with no encryption envelope, and there is no
-//     connect handshake to keep state for.
+//   - Bittensor (Talisman): a single signMessage step whose url and hand-back
+//     are the SDK's (urnet::BittensorWalletSession). This class only opens the
+//     url and hands the raw urnetwork://bittensor-sign-message link back to
+//     the session; it parses nothing.
 //
 // First-principles: no macOS mobile-deeplink baggage — the desktop path is the
 // only path here.
@@ -41,13 +41,41 @@ class WalletConnect {
   // on_signature fires on the urnetwork://<provider>-sign-message callback.
   void SignMessage(const std::string& message);
 
-  // Bittensor: no connect handshake — the bridge signs `message` with an
-  // injected substrate wallet (or a WalletConnect pairing, when a project id is
-  // configured) and returns the address and signature together on the
-  // urnetwork://bittensor-sign-message callback.
-  void SignMessageBittensor(const std::string& message);
+  // Bittensor: open the session's bridge url (BittensorWalletSession::
+  // bridgeUrl). The page drives the Talisman extension and returns on
+  // urnetwork://bittensor-sign-message, which on_bittensor_return receives
+  // whole for the session to check.
+  void OpenBittensorBridge(const std::string& bridgeUrl);
 
-  // Route a urnetwork:// callback here. Returns true if it was a wallet callback.
+  // Sign in with Apple straight against Apple: Apple has no desktop SDK, so
+  // the browser opens Apple's authorize page (client_id = the Apple Services
+  // ID, redirect_uri = <api>/auth/apple/callback), Apple posts the result to
+  // the api, and the api redirects to urnetwork://oauth/apple?state=…
+  // &id_token=… (or &error=…), which HandleDeepLink routes to on_sso with
+  // provider "apple"; the host checks the echoed state and the token's nonce.
+  // `state` is echoed back untouched and `nonce` is handed to the provider so
+  // the token carries it. The api picks the urnetwork:// scheme from the
+  // `platform` claim inside `state` (AppleOAuthState); the state is otherwise
+  // opaque.
+  void OpenAppleOAuth(const std::string& apiUrl, const std::string& state,
+                      const std::string& nonce);
+  // Sign in with Google the same way: the browser opens
+  // Google's authorize page (client_id = the ur.io web sign-in client,
+  // redirect_uri = <api>/auth/google/callback, response_type=code), Google
+  // redirects to the api with an authorization code, the api exchanges it for
+  // the identity token and redirects to urnetwork://oauth/google?state=…
+  // &id_token=… (or &error=…), which HandleDeepLink routes to on_sso with
+  // provider "google". The state carries the same platform claim.
+  void OpenGoogleOAuth(const std::string& apiUrl, const std::string& state,
+                       const std::string& nonce);
+  // The state of one Apple or Google attempt: base64url of
+  // {"platform":"windows","token":…}. The api's callbacks read the platform
+  // claim to pick the return scheme; the token is what makes it unique.
+  static std::string AppleOAuthState(const std::string& token);
+  static std::string OAuthState(const std::string& token);
+
+  // Route a urnetwork:// callback here. Returns true if it was a wallet or an
+  // oauth sign-in callback.
   bool HandleDeepLink(const std::string& url);
 
   bool connected() const { return connectedPublicKey_.has_value(); }
@@ -58,6 +86,14 @@ class WalletConnect {
   // Solana, hex sr25519 for Bittensor.
   std::function<void(std::string publicKey, std::string signature, Provider)> on_signature;
   std::function<void(std::string error)> on_error;
+  // the raw urnetwork://bittensor-* hand-back link
+  std::function<void(std::string url)> on_bittensor_return;
+  // urnetwork://oauth/<provider>?state=<state>&id_token=<token>, or
+  // ?state=<state>&error=<message>. `error` is non-empty when the api's
+  // callback reported one or returned no token.
+  std::function<void(std::string provider, std::string authJwt, std::string state,
+                     std::string error)>
+      on_sso;
 
  private:
   static const char* Host(Provider p);
@@ -67,7 +103,8 @@ class WalletConnect {
   void OpenUrl(const std::string& url);
   void HandleConnect(Provider p, const std::string& query);
   void HandleSignMessage(Provider p, const std::string& query);
-  void HandleBittensor(const std::string& host, const std::string& query);
+  // urnetwork://oauth/<apple|google>?state=…&id_token=… (or &error=…)
+  void HandleOAuthReturn(const std::string& url);
 
   std::optional<urnet::WalletKeyPair> dappKeyPair_;
   std::optional<std::string> connectedPublicKey_;

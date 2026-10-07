@@ -8,19 +8,23 @@
 //
 // This mirrors the macOS app<->extension boundary: `start_tunnel` carries the
 // same fields the macOS app puts in NETunnelProviderProtocol.providerConfiguration,
-// and the device RPC (mTLS WebSocket on loopback) is established separately by
-// the SDK once the tunnel is up — this channel only carries lifecycle + config.
+// and device RPC (mTLS WebSocket on loopback) is established once the service
+// is prepared. Provider selection/proof precedes capture and the later Up state.
 //
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <nlohmann/json.hpp>
+
+#include "ProvideLifecycle.h"
 
 namespace urnw::proto {
 
@@ -50,12 +54,58 @@ namespace urnw::proto {
 //    RPC session generation. These fields are required for safe adoption; a
 //    port match alone cannot prove that saved mTLS material belongs to the
 //    listener currently bound there.
-inline constexpr int kProtocolVersion = 3;
+// 4: start_tunnel returns Preparing once RPC is usable. Capture is deferred
+//    until the selected destination has a usable proven provider.
+//
+//    Not bumped for start_provider / stop_provider or the TunnelStatus
+//    provider_* fields, by the same test: does silence mean the wrong thing? It
+//    does not. A service that does not know the verbs answers "unknown request
+//    type" and runs nothing, which is the behaviour before they existed, and a
+//    peer that drops the provider_* fields reads as "no provider-only device",
+//    which claims less than the truth rather than more.
+//
+//    Nor for get_provider_stats: a service that does not know it answers
+//    "unknown request type", which the app reads as "no statistics" and
+//    renders as it did before the verb existed (no client count and no
+//    provider plots while disconnected). Nor for its later extender fields: a
+//    service that does not send them reads as the role unsupported, which
+//    hides the extender row and plot while disconnected, as before.
+//
+//    Nor for the network country (StartTunnel and StartProvider
+//    network_country_*, set_network_country): a service that drops the fields
+//    or does not know the verb sets no network country, which is the
+//    behaviour before they existed, and an app too old to send them leaves a
+//    new service with none.
+//
+//    Nor for StartTunnel::system_proxy, a diagnostic only: a service that drops
+//    it writes no proxy line, and an app too old to send it gets "unknown".
+//
+//    Nor for upload_logs: a service that does not know it answers "unknown
+//    request type", and the app falls back to what it did before the verb
+//    existed (the DeviceRemote's UploadLogs while a session is bound). Its
+//    Reply::log_upload_* and TunnelStatus::log_upload_* fields read as no
+//    upload from a peer too old to send them.
+//
+//    Nor for set_provide_extender and ProviderStats::provide_extender_writable:
+//    the app sends the verb only to a service whose get_provider_stats said it
+//    takes it, and a service that does not say so reads as no writer, which
+//    keeps the Connect page's Extender switch hidden while disconnected, as
+//    before.
+//
+//    Nor for reset_extenders, Reply::reset and Reply::reset_busy: a service
+//    that does not know the verb answers "unknown request type" and resets
+//    nothing, which is the behaviour before it existed, and the app then leaves
+//    the reset to the next import of the space, whose values carry it
+//    (extender_reset_id). A peer that drops `reset` reads as nothing reset,
+//    which claims less, and one that drops `reset_busy` as a refusal the app
+//    does not send again, which the next import covers as well.
+inline constexpr int kProtocolVersion = 4;
 
 // The first version that understands StartTunnel::mode. Below this, an absent
 // `mode` on the wire means "ignored", not "defaulted".
 inline constexpr int kFirstStartModeVersion = 2;
 inline constexpr int kFirstRpcSessionIdentityVersion = 3;
+inline constexpr int kFirstDeferredCaptureVersion = 4;
 
 // ---- message type tags ----------------------------------------------------
 
@@ -67,6 +117,13 @@ inline constexpr const char* kGetState = "get_state";            // app -> servi
 inline constexpr const char* kSetSplitTunnel = "set_split_tunnel"; // app -> service
 inline constexpr const char* kSetKillSwitch = "set_kill_switch"; // app -> service
 inline constexpr const char* kLogout = "logout";                 // app -> service
+inline constexpr const char* kStartProvider = "start_provider";  // app -> service
+inline constexpr const char* kStopProvider = "stop_provider";    // app -> service
+inline constexpr const char* kGetProviderStats = "get_provider_stats";  // app -> service
+inline constexpr const char* kSetNetworkCountry = "set_network_country";  // app -> service
+inline constexpr const char* kUploadLogs = "upload_logs";        // app -> service
+inline constexpr const char* kSetProvideExtender = "set_provide_extender";  // app -> service
+inline constexpr const char* kResetExtenders = "reset_extenders";  // app -> service
 inline constexpr const char* kReply = "reply";                   // service -> app
 inline constexpr const char* kEvent = "event";                   // service -> app (unsolicited)
 }  // namespace msg
@@ -116,6 +173,7 @@ enum class TunnelState {
   // An older peer that does not know this string parses it as `Stopped`, which
   // is the safe direction to be wrong in.
   RpcOnly,
+  Preparing,  // RPC live; capture not committed; routes/DNS fields report transition facts
 };
 
 inline const char* ToString(TunnelState s) {
@@ -126,6 +184,7 @@ inline const char* ToString(TunnelState s) {
     case TunnelState::Stopping: return "stopping";
     case TunnelState::Error: return "error";
     case TunnelState::RpcOnly: return "rpc_only";
+    case TunnelState::Preparing: return "preparing";
   }
   return "unknown";
 }
@@ -133,6 +192,7 @@ inline const char* ToString(TunnelState s) {
 inline TunnelState TunnelStateFromString(const std::string& s) {
   if (s == "starting") return TunnelState::Starting;
   if (s == "up") return TunnelState::Up;
+  if (s == "preparing") return TunnelState::Preparing;
   if (s == "stopping") return TunnelState::Stopping;
   if (s == "error") return TunnelState::Error;
   if (s == "rpc_only") return TunnelState::RpcOnly;
@@ -147,7 +207,8 @@ inline TunnelState TunnelStateFromString(const std::string& s) {
 // with the SAME predicate the rest of the product uses rather than a second
 // copy of it.
 inline constexpr bool IsSessionLive(TunnelState s) {
-  return s == TunnelState::Up || s == TunnelState::RpcOnly;
+  return s == TunnelState::Up || s == TunnelState::RpcOnly ||
+         s == TunnelState::Preparing;
 }
 
 // "Traffic is actually being carried." Use this, never IsSessionLive, for
@@ -193,6 +254,22 @@ struct StartTunnel {
   // one" when no state exists. Getting this backwards would have an old client
   // silently arm a kill switch nobody asked for.
   bool kill_switch = false;
+  // The network country the app read (Common/NetworkCountry.h): the country of
+  // the mobile broadband network carrying the default route, "" for none, and
+  // the source token that says why. The service applies it to its own sdk
+  // before it imports the network space (TunnelController::SetNetworkCountry),
+  // so this session's first extender dials already front with that country's
+  // list while the extender hint cannot be fetched. Absent parses as no
+  // country, which is what a service did before the field existed.
+  std::string network_country_code;
+  std::string network_country_source;
+  // The kind of the user's system proxy (Common/DiagnosticLines.h
+  // UserProxyKind), which the service writes to the log feedback uploads
+  // ([app][proxy]). Per user (WinINet), so the LocalSystem service cannot read
+  // it, and only its kind: never a host, a port, a URL or the bypass list. The
+  // service takes nothing but a kind UserProxyKind can produce. Absent, from
+  // an older app, it is written as "unknown"; an older service ignores it.
+  std::string system_proxy;
 };
 
 struct SetSplitTunnel {
@@ -200,9 +277,205 @@ struct SetSplitTunnel {
   bool allowlist_mode = false;
 };
 
+// logout: the account signed out (Common/SignOut.h). The service ends any
+// session and the provider-only device, deletes this machine's device identity,
+// and logs out what its sdk stored in this network space for the account: the
+// client credential and instance a device persists when it starts, among the
+// rest. The space comes from the app because a restarted service has imported
+// none. Absent, as an older app sends it, the identity alone is deleted, as
+// before. No protocol bump: an older service ignores the field and deletes the
+// identity, which is what it always did.
+struct Logout {
+  std::string network_space_json;  // NetworkSpace.toJson() from the app
+};
+
 struct SetKillSwitch {
   bool on = false;
 };
+
+// start_provider: keep providing while disconnected (ProvideLifecycle.h). The
+// service runs a provider-only DeviceLocal built from the persisted device
+// identity and these credentials, in this network space, with this provide
+// mode — and nothing else: no wintun adapter, no route, no DNS entry, no
+// firewall policy and no device RPC listener, so it carries no RPC material.
+// Refused while a tunnel session exists or is starting, while the kill
+// switch's armed floor is in force, and for a mode that does not provide while
+// disconnected (provide::ProviderStartRefusal). The same request again keeps
+// the running device and only applies the mode (SameProviderDevice); any other
+// request replaces it. stop_provider retires it, and every tunnel teardown
+// retires it first, so a Connect never runs two devices under one identity.
+struct StartProvider {
+  std::string by_jwt;              // client JWT for this device
+  std::string network_space_json;  // NetworkSpace.toJson() from the app
+  std::string instance_id;         // stable instance UUID
+  std::string device_description;
+  std::string device_spec;
+  std::string app_version;
+  std::string provide_mode;        // the provide control mode: "always" | "network" | "auto"
+  // The app's mirror of the provider transport policy (TransportSettings json,
+  // SdkHost::ApplyTransportSettings). Empty when it was never edited here: the
+  // policy the service's DeviceLocal persisted (or its default) stands, exactly
+  // as BootstrapSession seeds a tunnel session's device only when one exists.
+  std::string provider_transport_settings_json;
+  // The network country, as StartTunnel carries it. Applied in place, process
+  // wide, so it is not part of SameProviderDevice: a new country never
+  // rebuilds the running device.
+  std::string network_country_code;
+  std::string network_country_source;
+};
+
+// set_network_country: the network country the app reads changed (it follows
+// the default route, App/NetworkCountryWatch.h), or the app has just greeted a
+// service whose running devices may hold an older one. The service applies it
+// to its sdk, process-wide and in place, from each device's next extender
+// dial; nothing a status reports moves. The fields are StartTunnel's.
+struct SetNetworkCountry {
+  std::string network_country_code;
+  std::string network_country_source;
+};
+
+// upload_logs: "send feedback with logs" whether or not a tunnel runs (support
+// inbox 2090). The logs support reads are the service's — the sdk's UploadLogs
+// zips the glog files of the process it runs in — and the app's DeviceRemote
+// reaches the service's DeviceLocal only while a session runs, so a report sent
+// while disconnected, held by the kill switch or failing to connect carried
+// none. The app now asks the service to upload its own logs for a feedback the
+// server accepted, with the credentials start_provider carries.
+//
+// The service runs the sdk's UploadLogs on the session's device, else on the
+// provider-only device, else on a standalone device built from these
+// credentials (Common/LogUpload.h carries the lifecycle). The upload itself is
+// the sdk's, unchanged: the zip of the service's glog files, POST
+// /log/{feedback_id}/upload on the space's API with the device's client
+// credentials, the server's 100 MB cap and its rate limit of one upload per
+// network per 5 minutes. Nothing goes anywhere it did not go before.
+//
+// The reply comes once the upload is admitted (log_upload_id): the zip and the
+// post run on a thread of their own (logupload::Flight), never under the
+// session lock, which a zip of up to the upload's cap would hold for as long as
+// it reads the disk. One upload at a time: a request while one is in flight is
+// refused with log_upload_busy. The outcome reaches the app in the status the
+// service pushes when the upload ends: log_upload_id names the upload and
+// log_upload_state says how it ended (logupload::CompletionFor).
+//
+// One set of logs: the server keeps one file per feedback and admits one
+// upload per network per 5 minutes, and the sdk zips one process's log
+// directory, so the app's own glog files cannot ride along.
+struct UploadLogs {
+  std::string feedback_id;         // the server-issued id the logs attach to
+  // the same six as StartProvider, used only when no device runs
+  std::string by_jwt;
+  std::string network_space_json;
+  std::string instance_id;
+  std::string device_description;
+  std::string device_spec;
+  std::string app_version;
+};
+
+inline void to_json(nlohmann::json& j, const UploadLogs& v) {
+  j = {
+      {"feedback_id", v.feedback_id},
+      {"by_jwt", v.by_jwt},
+      {"network_space_json", v.network_space_json},
+      {"instance_id", v.instance_id},
+      {"device_description", v.device_description},
+      {"device_spec", v.device_spec},
+      {"app_version", v.app_version},
+  };
+}
+
+inline void from_json(const nlohmann::json& j, UploadLogs& v) {
+  auto get = [&](const char* k, auto& out) {
+    if (auto it = j.find(k); it != j.end() && !it->is_null()) it->get_to(out);
+  };
+  get("feedback_id", v.feedback_id);
+  get("by_jwt", v.by_jwt);
+  get("network_space_json", v.network_space_json);
+  get("instance_id", v.instance_id);
+  get("device_description", v.device_description);
+  get("device_spec", v.device_spec);
+  get("app_version", v.app_version);
+}
+
+// The server's feedback ids are uuids, and this one becomes a path segment of
+// the API url the service's device posts to (/log/<feedback_id>/upload).
+// Anything else — a '/', a "..", a query — is refused before it reaches the
+// SDK.
+inline bool LooksLikeFeedbackId(std::string_view id) {
+  if (id.size() != 36) return false;
+  for (std::size_t i = 0; i < id.size(); ++i) {
+    const char c = id[i];
+    if (i == 8 || i == 13 || i == 18 || i == 23) {
+      if (c != '-') return false;
+    } else if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// set_provide_extender: the Extender switch while disconnected (EXTENDER.md F3,
+// N7). The setting belongs to the network space (`.provide_extender` in the
+// service's storage), and every device reads it from its space when it starts.
+// A session's DeviceRemote writes it over the device rpc; with no session the
+// service writes it through the device it runs, or with none into the space
+// the last device ran in (provide::ExtenderSettingTargetFor). So a Connect
+// after the change reads it, and so does a provider-only device after a change
+// made while connected. Sent only over a status whose
+// ProviderStats::provide_extender_writable said the service takes it.
+struct SetProvideExtender {
+  bool provide_extender = true;
+};
+
+// reset_extenders: "Reset extenders" in the app's Account > Extenders (connect
+// EXTENDER.md E7). The app has reset its own network space -- everything it
+// learned about extenders is cleared and the extenders a user added are
+// removed -- and hands the service the id that reset returned
+// (NetworkSpace::resetExtenders) with the space's key. The service applies it
+// to the space it holds under that key (NetworkSpace::applyExtenderReset),
+// which the session's device and the provider-only device both run in, so one
+// call covers both; a live extender path keeps running, and every new extender
+// dial draws from the fresh directory. A reset the space has applied already,
+// or an older one, changes nothing. A service that holds no such space resets
+// nothing: the next import of the space (start_tunnel, start_provider) carries
+// the id in its values and applies it there. Every field is required.
+struct ResetExtenders {
+  // the space's key
+  std::string host_name;
+  std::string env_name;
+  // what NetworkSpace::resetExtenders returned in the app
+  std::string extender_reset_id;
+};
+
+// The reset_extenders request for the space `key` names, after a reset that
+// returned `resetId`: nullopt when the key or the id is missing, which the
+// service would refuse, so the next import of the space carries the reset
+// instead. A template over urnet::NetworkSpaceKey by the sdk's field names, so
+// this header needs no sdk header.
+template <class Key>
+std::optional<ResetExtenders> ResetExtendersRequestFor(const std::optional<Key>& key,
+                                                       const std::string& resetId) {
+  if (!key || !key->host_name || !key->env_name) return std::nullopt;
+  ResetExtenders request;
+  request.host_name = *key->host_name;
+  request.env_name = *key->env_name;
+  request.extender_reset_id = resetId;
+  if (request.host_name.empty() || request.env_name.empty() ||
+      request.extender_reset_id.empty()) {
+    return std::nullopt;
+  }
+  return request;
+}
+
+// The key of the space a reset_extenders request names, as the service's space
+// manager looks it up (urnet::NetworkSpaceKey).
+template <class Key>
+Key SpaceKeyOf(const ResetExtenders& request) {
+  Key key;
+  key.host_name = request.host_name;
+  key.env_name = request.env_name;
+  return key;
+}
 
 // ---- reply / state payload ------------------------------------------------
 
@@ -230,21 +503,14 @@ struct TunnelStatus {
   // reading its silence as "Tunnel" is honest. What is NOT safe is asking such
   // a peer for RpcOnly — see kFirstStartModeVersion.
   StartMode mode = StartMode::Tunnel;
-  // True only when routes and DNS are actually installed right now. This is the
-  // field to trust for "is my traffic going through the tunnel"; it is false for
-  // the whole life of an rpc-only session.
+  // Controller-reported route-configuration ownership; false for rpc-only.
+  // May be true during partial Apply. Not a fresh route-table query: false after
+  // cleanup requests does not certify kernel removal.
   bool routes_installed = false;
-  // True only when the tunnel's resolvers were actually accepted by the stack.
-  //
-  // routes_installed and dns_applied are separate facts and used to be
-  // conflated. Applying the network settings deliberately SUCCEEDS when the DNS
-  // half fails — tearing a working tunnel down over its resolvers trades a DNS
-  // problem for a connectivity one — so before this field a DNS failure left
-  // state=up, routes_installed=true and one warning in the service log, while
-  // every surface said Connected and every query went out in the clear.
-  //
-  // Defaults FALSE, including for a peer too old to send it. That is the safe
-  // direction: an unknown DNS state renders as degraded, not as clean.
+  // Current owner's IPv4 DNS-apply result, cleared after cleanup requests.
+  // IPv6 failures are logged separately. Capture commits only after this flag
+  // is true; false on teardown does not independently verify resolver removal.
+  // Defaults false for a peer too old to send it.
   bool dns_applied = false;
   // The firewall policy in force: "off" | "armed" | "connecting" | "connected".
   // Reported so the app can say whether leak prevention is actually running — on
@@ -300,6 +566,80 @@ struct TunnelStatus {
   // an automatic teardown is never a surprise. Defaults false — a peer that
   // cannot say simply never warns, which is today's behaviour.
   bool failsafe_armed = false;
+  // The provider-only device (start_provider), which provides while there is
+  // no tunnel session. Its running bit, the control mode it was asked for, its
+  // live tier as the sdk applied it (0 none, 1 network, 3 public) and whether
+  // it holds a Network-mode provide key, read off the device when it was built
+  // or re-moded. All false/empty while a tunnel session runs: that session's
+  // own device is the provider, and the app reads it over the device RPC.
+  //
+  // No protocol bump (see kProtocolVersion): a peer too old to send these reads
+  // as "no provider-only device", which claims less than the truth.
+  bool provider_running = false;
+  std::string provider_control_mode;
+  int64_t provider_mode = 0;
+  bool provider_network_key = false;
+  // The log upload (upload_logs): the last upload the app asked the service
+  // for, as logupload::Flight reads it. Its id (the reply's log_upload_id; 0
+  // before the first), where it is (logupload::ToString(FlightState):
+  // "running", "uploaded", "refused", "failed") and the device that carries
+  // it. The app reads the outcome of its upload here. No protocol bump: a peer
+  // too old to send these reads as no upload.
+  int64_t log_upload_id = 0;
+  std::string log_upload_state;
+  std::string log_upload_carrier;
+};
+
+// get_provider_stats: what the provider-only device carries, for the screens a
+// tunnel session's DeviceRemote feeds while connected — the Connect page's
+// client count, the Earnings provider plots with their gate and their "no
+// traffic yet" line, the Earnings extender row and extender plot, and the
+// client id whose GET /network/provider-status row is this device's. The
+// service reads them off the device's own ContractViewController (the
+// controller the app opens on the DeviceRemote) and its network peers and
+// extender status listeners, never with the session lock or a device call on
+// the way (TunnelController::ProviderStats), so asking cannot wedge the
+// control pipe. `available` is false while no provider-only device runs, or
+// while its statistics could not be opened; every other field is then empty.
+//
+// The points, the distribution and the extender status are the sdk's own json
+// (urnet::ThroughputPoint, urnet::TransportDistribution,
+// urnet::ExtenderProvideStatus), carried as they are: the service writes them
+// with the header's to_json and the app reads them back with its from_json
+// (ProviderPointsOf, ProviderDistributionOf, ExtenderPointsOf,
+// ExtenderProvideStatusOf), so this file needs no sdk header and the field
+// names keep one owner.
+//
+// The extender fields came after the verb, with no protocol bump, by the test
+// kProtocolVersion uses: a service that does not send them leaves no status,
+// which the app reads as the role unsupported and hides the extender row and
+// plot (EXTENDER.md N1), exactly as before they existed. So did
+// provide_extender_writable: a service that does not send it reads as one that
+// cannot take the switch's write, and the switch stays hidden over its status.
+struct ProviderStats {
+  bool available = false;
+  std::string client_id;
+  // the device's connected network peers (Device::getNetworkPeers' Connected),
+  // which the Connect page shows as "Providing to N clients"
+  int64_t client_count = 0;
+  int64_t window_seconds = 60;
+  // the provider section's gate (ContractViewController::getProviderPacketStats)
+  bool has_provider_stats = false;
+  nlohmann::json provider_points = nlohmann::json::array();
+  nlohmann::json provider_distribution;  // null when there is none
+  // the extender series (ContractViewController::getExtenderThroughputPoints)
+  nlohmann::json extender_points = nlohmann::json::array();
+  // The provider extender role on the device (EXTENDER.md N2, N7): the status
+  // its listener pushed last (Device::getExtenderProvideStatus before the
+  // first), null when none was read, and the setting read beside it
+  // (Device::getProvideExtender).
+  nlohmann::json extender_provide_status;
+  bool provide_extender = false;
+  // The service takes set_provide_extender for that setting, sent with the
+  // role's reading: the Connect page's Extender switch may show over it. A
+  // service from before the verb never sends it, which the app reads as no
+  // writer and keeps the switch hidden while disconnected (N1), as before.
+  bool provide_extender_writable = false;
 };
 
 struct Reply {
@@ -307,6 +647,23 @@ struct Reply {
   std::string error;             // set when !ok
   std::optional<TunnelStatus> status;
   std::string in_reply_to;       // request type tag this answers
+  // get_provider_stats' answer; a service too old to know the verb sends none
+  std::optional<ProviderStats> provider_stats;
+  // upload_logs' answer: the device that carries the upload
+  // (logupload::ToString), empty in every other reply
+  std::string log_upload_carrier;
+  // upload_logs' answer: the id status reports the upload under; 0 in every
+  // other reply, and from a service too old to say
+  int64_t log_upload_id = 0;
+  // upload_logs refused because an upload is in flight already
+  bool log_upload_busy = false;
+  // reset_extenders' answer: the service held the space and the reset was new
+  // to it. False in every other reply, and from a service too old to say.
+  bool reset = false;
+  // reset_extenders refused because a tunnel or provider operation held the
+  // service's session lock: the app sends it again once that operation ends
+  // (Common/ExtenderReset.h). False in every other reply.
+  bool reset_busy = false;
 };
 
 // ---- JSON (de)serialization ----------------------------------------------
@@ -329,6 +686,9 @@ inline void to_json(nlohmann::json& j, const StartTunnel& v) {
       {"allowlist_mode", v.allowlist_mode},
       {"mode", ToString(v.mode)},
       {"kill_switch", v.kill_switch},
+      {"network_country_code", v.network_country_code},
+      {"network_country_source", v.network_country_source},
+      {"system_proxy", v.system_proxy},
   };
 }
 
@@ -357,6 +717,9 @@ inline void from_json(const nlohmann::json& j, StartTunnel& v) {
   get("excluded_app_paths", v.excluded_app_paths);
   get("allowlist_mode", v.allowlist_mode);
   get("kill_switch", v.kill_switch);
+  get("network_country_code", v.network_country_code);
+  get("network_country_source", v.network_country_source);
+  get("system_proxy", v.system_proxy);
 }
 
 inline void to_json(nlohmann::json& j, const SetSplitTunnel& v) {
@@ -371,11 +734,113 @@ inline void from_json(const nlohmann::json& j, SetSplitTunnel& v) {
   get("allowlist_mode", v.allowlist_mode);
 }
 
+inline void to_json(nlohmann::json& j, const Logout& v) {
+  j = {{"network_space_json", v.network_space_json}};
+}
+inline void from_json(const nlohmann::json& j, Logout& v) {
+  if (auto it = j.find("network_space_json"); it != j.end() && it->is_string())
+    it->get_to(v.network_space_json);
+}
+
 inline void to_json(nlohmann::json& j, const SetKillSwitch& v) {
   j = {{"on", v.on}};
 }
 inline void from_json(const nlohmann::json& j, SetKillSwitch& v) {
   if (auto it = j.find("on"); it != j.end() && !it->is_null()) it->get_to(v.on);
+}
+
+inline void to_json(nlohmann::json& j, const StartProvider& v) {
+  j = {
+      {"by_jwt", v.by_jwt},
+      {"network_space_json", v.network_space_json},
+      {"instance_id", v.instance_id},
+      {"device_description", v.device_description},
+      {"device_spec", v.device_spec},
+      {"app_version", v.app_version},
+      {"provide_mode", v.provide_mode},
+      {"provider_transport_settings_json", v.provider_transport_settings_json},
+      {"network_country_code", v.network_country_code},
+      {"network_country_source", v.network_country_source},
+  };
+}
+
+inline void from_json(const nlohmann::json& j, StartProvider& v) {
+  auto get = [&](const char* k, auto& out) {
+    if (auto it = j.find(k); it != j.end() && !it->is_null()) it->get_to(out);
+  };
+  get("by_jwt", v.by_jwt);
+  get("network_space_json", v.network_space_json);
+  get("instance_id", v.instance_id);
+  get("device_description", v.device_description);
+  get("device_spec", v.device_spec);
+  get("app_version", v.app_version);
+  get("provide_mode", v.provide_mode);
+  get("provider_transport_settings_json", v.provider_transport_settings_json);
+  get("network_country_code", v.network_country_code);
+  get("network_country_source", v.network_country_source);
+}
+
+inline void to_json(nlohmann::json& j, const SetNetworkCountry& v) {
+  j = {{"network_country_code", v.network_country_code},
+       {"network_country_source", v.network_country_source}};
+}
+inline void from_json(const nlohmann::json& j, SetNetworkCountry& v) {
+  auto get = [&](const char* k, auto& out) {
+    if (auto it = j.find(k); it != j.end() && !it->is_null()) it->get_to(out);
+  };
+  get("network_country_code", v.network_country_code);
+  get("network_country_source", v.network_country_source);
+}
+
+inline void to_json(nlohmann::json& j, const SetProvideExtender& v) {
+  j = {{"provide_extender", v.provide_extender}};
+}
+
+// Strict, unlike the reports: a write whose value did not arrive must not
+// write a default the user never chose. The ControlServer answers the throw
+// as a failed reply.
+inline void from_json(const nlohmann::json& j, SetProvideExtender& v) {
+  auto it = j.find("provide_extender");
+  if (it == j.end() || !it->is_boolean()) {
+    throw std::runtime_error("set_provide_extender requires provide_extender (a boolean)");
+  }
+  v.provide_extender = it->get<bool>();
+}
+
+inline void to_json(nlohmann::json& j, const ResetExtenders& v) {
+  j = {{"host_name", v.host_name},
+       {"env_name", v.env_name},
+       {"extender_reset_id", v.extender_reset_id}};
+}
+
+// Strict, like set_provide_extender's: a request that does not name its space
+// exactly must not reset another, and an id that did not arrive is no reset.
+// The ControlServer answers the throw as a failed reply.
+inline void from_json(const nlohmann::json& j, ResetExtenders& v) {
+  auto required = [&](const char* k, std::string& out) {
+    auto it = j.find(k);
+    if (it == j.end() || !it->is_string() || it->get_ref<const std::string&>().empty()) {
+      throw std::runtime_error(std::string("reset_extenders requires ") + k +
+                               " (a non-empty string)");
+    }
+    out = it->get<std::string>();
+  };
+  required("host_name", v.host_name);
+  required("env_name", v.env_name);
+  required("extender_reset_id", v.extender_reset_id);
+}
+
+// "A device built from `a` can keep running for `b`." Everything that goes into
+// constructing the device must match — credentials, identity, space and the
+// provider transport policy; only the provide mode may differ, because the
+// running device takes a new mode in place, and the network country, which
+// the service applies in place for every device. Shared by the service, which
+// keeps its device for such a request, and the tests.
+inline bool SameProviderDevice(const StartProvider& a, const StartProvider& b) {
+  return a.by_jwt == b.by_jwt && a.network_space_json == b.network_space_json &&
+         a.instance_id == b.instance_id && a.device_description == b.device_description &&
+         a.device_spec == b.device_spec && a.app_version == b.app_version &&
+         a.provider_transport_settings_json == b.provider_transport_settings_json;
 }
 
 inline void to_json(nlohmann::json& j, const TunnelStatus& v) {
@@ -396,6 +861,13 @@ inline void to_json(nlohmann::json& j, const TunnelStatus& v) {
       {"egress_index6", v.egress_index6},
       {"stop_reason", v.stop_reason},
       {"failsafe_armed", v.failsafe_armed},
+      {"provider_running", v.provider_running},
+      {"provider_control_mode", v.provider_control_mode},
+      {"provider_mode", v.provider_mode},
+      {"provider_network_key", v.provider_network_key},
+      {"log_upload_id", v.log_upload_id},
+      {"log_upload_state", v.log_upload_state},
+      {"log_upload_carrier", v.log_upload_carrier},
   };
 }
 
@@ -424,6 +896,121 @@ inline void from_json(const nlohmann::json& j, TunnelStatus& v) {
   get("egress_index6", v.egress_index6);
   get("stop_reason", v.stop_reason);
   get("failsafe_armed", v.failsafe_armed);
+  get("provider_running", v.provider_running);
+  get("provider_control_mode", v.provider_control_mode);
+  get("provider_mode", v.provider_mode);
+  get("provider_network_key", v.provider_network_key);
+  get("log_upload_id", v.log_upload_id);
+  get("log_upload_state", v.log_upload_state);
+  get("log_upload_carrier", v.log_upload_carrier);
+}
+
+// What one status says about the provider-only device, as the app's reconcile
+// reads it (provide::DisconnectedProviderStep). `answered` is the transport's
+// word that the service replied (ServiceClient::GetState); nothing in the
+// payload can carry it.
+inline provide::ServiceProviderFacts ProviderFactsFrom(const TunnelStatus& s, bool answered) {
+  provide::ServiceProviderFacts facts;
+  facts.answered = answered;
+  facts.tunnelSession = IsSessionLive(s.state) || s.state == TunnelState::Starting ||
+                        s.state == TunnelState::Stopping;
+  // Empty reads as off, as ConnectAction.h's WfpInForce does.
+  facts.killSwitchArmed = !s.wfp_state.empty() && s.wfp_state != "off";
+  facts.providerRunning = s.provider_running;
+  return facts;
+}
+
+inline void to_json(nlohmann::json& j, const ProviderStats& v) {
+  j = {
+      {"available", v.available},
+      {"client_id", v.client_id},
+      {"client_count", v.client_count},
+      {"window_seconds", v.window_seconds},
+      {"has_provider_stats", v.has_provider_stats},
+      {"provider_points", v.provider_points},
+      {"provider_distribution", v.provider_distribution},
+      {"extender_points", v.extender_points},
+      {"extender_provide_status", v.extender_provide_status},
+      {"provide_extender", v.provide_extender},
+      {"provide_extender_writable", v.provide_extender_writable},
+  };
+}
+
+inline void from_json(const nlohmann::json& j, ProviderStats& v) {
+  auto get = [&](const char* k, auto& out) {
+    if (auto it = j.find(k); it != j.end() && !it->is_null()) it->get_to(out);
+  };
+  get("available", v.available);
+  get("client_id", v.client_id);
+  get("client_count", v.client_count);
+  get("window_seconds", v.window_seconds);
+  get("has_provider_stats", v.has_provider_stats);
+  get("provide_extender", v.provide_extender);
+  get("provide_extender_writable", v.provide_extender_writable);
+  // The sdk's documents are kept only in the shape they have to have: anything
+  // else reads as none, never as a throw that loses the counts above.
+  if (auto it = j.find("provider_points"); it != j.end() && it->is_array())
+    v.provider_points = *it;
+  if (auto it = j.find("provider_distribution"); it != j.end() && it->is_object())
+    v.provider_distribution = *it;
+  if (auto it = j.find("extender_points"); it != j.end() && it->is_array())
+    v.extender_points = *it;
+  if (auto it = j.find("extender_provide_status"); it != j.end() && it->is_object())
+    v.extender_provide_status = *it;
+}
+
+namespace detail {
+// One series of the sdk's points as the reader's type, oldest first; empty for
+// none, or for something the type cannot read.
+template <typename Point>
+std::vector<Point> PointsOf(const nlohmann::json& points) {
+  if (!points.is_array()) return {};
+  try {
+    return points.get<std::vector<Point>>();
+  } catch (const std::exception&) {
+    return {};
+  }
+}
+}  // namespace detail
+
+// The provider points as the reader's type (urnet::ThroughputPoint in the app),
+// oldest first. Empty for a reply that carries none, or carries something the
+// type cannot read: the plots then draw an empty window, never a partial one.
+template <typename Point>
+std::vector<Point> ProviderPointsOf(const ProviderStats& stats) {
+  return detail::PointsOf<Point>(stats.provider_points);
+}
+
+// The extender points, by the same rule: the extender chart's series.
+template <typename Point>
+std::vector<Point> ExtenderPointsOf(const ProviderStats& stats) {
+  return detail::PointsOf<Point>(stats.extender_points);
+}
+
+// The provider extender status as the reader's type
+// (urnet::ExtenderProvideStatus); nullopt for none, from an older service too,
+// or for one the type cannot read. The app reads nullopt as the role
+// unsupported, which hides the extender row and plot (EXTENDER.md N1).
+template <typename Status>
+std::optional<Status> ExtenderProvideStatusOf(const ProviderStats& stats) {
+  if (!stats.extender_provide_status.is_object()) return std::nullopt;
+  try {
+    return stats.extender_provide_status.get<Status>();
+  } catch (const std::exception&) {
+    return std::nullopt;
+  }
+}
+
+// The provider transport distribution as the reader's type
+// (urnet::TransportDistribution); nullopt for none or an unreadable one.
+template <typename Distribution>
+std::optional<Distribution> ProviderDistributionOf(const ProviderStats& stats) {
+  if (!stats.provider_distribution.is_object()) return std::nullopt;
+  try {
+    return stats.provider_distribution.get<Distribution>();
+  } catch (const std::exception&) {
+    return std::nullopt;
+  }
 }
 
 // "The service stopped this tunnel BY ITSELF because it could not carry
@@ -439,6 +1026,12 @@ inline void to_json(nlohmann::json& j, const Reply& v) {
   j = {{"type", msg::kReply}, {"ok", v.ok}, {"error", v.error},
        {"in_reply_to", v.in_reply_to}};
   if (v.status) j["status"] = *v.status;
+  if (v.provider_stats) j["provider_stats"] = *v.provider_stats;
+  if (!v.log_upload_carrier.empty()) j["log_upload_carrier"] = v.log_upload_carrier;
+  if (v.log_upload_id != 0) j["log_upload_id"] = v.log_upload_id;
+  if (v.log_upload_busy) j["log_upload_busy"] = true;
+  if (v.reset) j["reset"] = true;
+  if (v.reset_busy) j["reset_busy"] = true;
 }
 
 inline void from_json(const nlohmann::json& j, Reply& v) {
@@ -453,6 +1046,16 @@ inline void from_json(const nlohmann::json& j, Reply& v) {
     it->get_to(s);
     v.status = s;
   }
+  if (auto it = j.find("provider_stats"); it != j.end() && it->is_object()) {
+    ProviderStats s;
+    it->get_to(s);
+    v.provider_stats = std::move(s);
+  }
+  get("log_upload_carrier", v.log_upload_carrier);
+  get("log_upload_id", v.log_upload_id);
+  get("log_upload_busy", v.log_upload_busy);
+  get("reset", v.reset);
+  get("reset_busy", v.reset_busy);
 }
 
 // Envelope helpers: every message on the wire has a top-level "type" tag.

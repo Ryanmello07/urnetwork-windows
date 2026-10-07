@@ -4,9 +4,13 @@ Native Windows 10 21H2+ / Windows 11 client for x64 and ARM64. A WinUI 3 tray
 app drives a privileged Windows service that owns the VPN tunnel; both embed
 the URnetwork SDK (the cgo C ABI + C++ wrapper from `sdk/cgo`).
 
-Both architectures build in CI on every push and pull request — see
-`.github/workflows/build-and-test.yml`, which builds the SDK DLLs from
-`urnetwork/sdk` and then the app, the service, and the MSI.
+## Download
+
+Release MSIs (`URnetwork-<version>-x64.msi`, `URnetwork-<version>-arm64.msi`)
+are attached to the stable releases at
+https://github.com/urnetwork/windows/releases. The in-app updater polls the
+same releases (`app/src/App/Config.h`). Nightly builds live at
+https://github.com/urnetwork/build/releases and are not offered by the updater.
 
 ## Architecture
 
@@ -50,7 +54,8 @@ why `MigrateExit` and `ProbeAllExits` return counts rather than void.
   (10.0.22621). The WDK is needed only for the driver.
 - vcpkg (manifest mode; `app/vcpkg.json` pulls nlohmann-json + wil).
 - WiX Toolset v5 (`dotnet tool install --global wix`) for the installer.
-- The SDK Windows DLLs — take the artifact from a CI run, or build them.
+- The SDK Windows DLLs — build them (`build-sdk.ps1` writes
+  `URnetworkSdkWindows.zip`).
 
 ### A note on the SDK bindings
 
@@ -92,7 +97,8 @@ dotnet build installer\Installer.wixproj -c Release -p:Platform=x64
 `tools\build-local.ps1` wraps steps 1–2 for a normal edit/build loop (~60s).
 
 Add the app icons under `app/src/App/Assets/` first (see that folder's README);
-they are generated from the macOS art by `app/tools/make-icons.py`.
+they are generated from the macOS art by the Go command in
+`app/tools/make-icons`.
 
 The app log is at `%LOCALAPPDATA%\URnetwork\app\logs\urnetwork-app.log`.
 
@@ -114,7 +120,8 @@ handle:
   tunnel, and a developer/reliability screen behind an app-wide Advanced Mode
   toggle.
 - **Updater** — `UpdateChecker`, because the Store does not push EXE/MSI
-  updates (see `app/STORE.md`).
+  updates (see `app/STORE.md`). It installs the verified official MSI from the
+  stable urnetwork/windows releases.
 
 ## Docs
 
@@ -125,8 +132,8 @@ handle:
 
 ## Status and known gaps
 
-CI builds both architectures green and the client has been run and exercised on
-real hardware. Still open, and worth knowing before relying on this:
+The client builds for both architectures and has been run and exercised on real
+hardware. Still open, and worth knowing before relying on this:
 
 - Store submission itself (needs Partner Center) and attestation signing for
   the driver — `app/SIGNING.md`, `app/STORE.md`.

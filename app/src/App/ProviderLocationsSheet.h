@@ -11,6 +11,10 @@
 // value shared with the globe: clicking a row centers the globe on it, and
 // stepping the globe's wheel selects the row.
 //
+// The selected row also offers "Stay on this exit" (ProviderLocations.h),
+// which reconnects to that one provider by its client id; the provider the
+// connection already stays on says so instead.
+//
 // NOT ported from android: the mock-location toggle and its setup guide.
 // Windows has no third-party geolocation injection point —
 // GeolocationProvider.SetOverridePosition is a Limited Access Feature needing a
@@ -80,6 +84,8 @@ class ProviderLocationsSheet : public std::enable_shared_from_this<ProviderLocat
   void RefreshDurations();
   void Select(std::string clientId);
   void Remove(const std::string& clientId);
+  // connect to the row's provider alone (SdkHost::Connect) and close the sheet
+  void StayOnExit(const ProviderLocationRow& row);
   void CopyClientId(const std::string& clientId);
   winrt::Microsoft::UI::Xaml::Controls::Grid MakeProviderRow(const ProviderLocationRow& row);
 
@@ -99,6 +105,9 @@ class ProviderLocationsSheet : public std::enable_shared_from_this<ProviderLocat
   std::map<std::string, const ProviderIdentityRow*> identityByClientId_;
   IdenticonCache identiconCache_;
   std::string selectedClientId_;
+  // the client id of the current location when it is a client id location (a
+  // stayed exit or a network peer), else empty; read from the SDK each Render
+  std::string stayingClientId_;
   // the selection the list has already been scrolled to, so a re-render for
   // some other reason (a duration tick, an identity badge) does not scroll
   std::string scrolledToClientId_;

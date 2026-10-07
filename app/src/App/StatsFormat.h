@@ -18,6 +18,9 @@ std::string FormatByteRate(int64_t bytesPerSecond);
 std::string FormatCountCompact(int64_t count);
 // FormatCountCompact + " pkt/s"
 std::string FormatPacketRate(int64_t packetsPerSecond);
+// FormatCountCompact + " " + unit, for a count that is not packets: "340 reads/s"
+// on the extender chart, with the unit already localized (reads_per_second)
+std::string FormatCountRate(int64_t count, std::string const& unit);
 // decimal: "996 bps", "1.2 Kbps", "3.4 Mbps"
 std::string FormatBitRate(int64_t bitsPerSecond);
 

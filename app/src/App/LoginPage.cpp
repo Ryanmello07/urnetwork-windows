@@ -9,9 +9,11 @@
 #include <winrt/Microsoft.UI.Xaml.Automation.h>
 #include <winrt/Windows.System.h>
 
+#include "BittensorWalletDialogs.h"
 #include "Log.h"
 #include "MainWindow.xaml.h"
 #include "PageContext.h"
+#include "SubscriptionBalance.h"
 #include "Strings.h"
 #include "UrColors.h"
 #include "UrComponents.h"
@@ -68,8 +70,10 @@ LoginPage::LoginPage(winrt::URnetwork::implementation::MainWindow& window)
 
 LoginPage::~LoginPage() {
   if (nameCheckTimer_) nameCheckTimer_.Stop();
+  if (nameRetryTimer_) nameRetryTimer_.Stop();
   if (bonusCheckTimer_) bonusCheckTimer_.Stop();
   if (resendCooldownTimer_) resendCooldownTimer_.Stop();
+  if (rateLimitTimer_) rateLimitTimer_.Stop();
 }
 
 void LoginPage::Initialize() {
@@ -81,6 +85,18 @@ void LoginPage::Initialize() {
   nameCheckTimer_.IsRepeating(false);
   nameCheckTimer_.Tick([weak = w_.get_weak()](auto const&, auto const&) {
     if (auto self = weak.get()) self->login().CheckCreateNameNow();
+  });
+  nameRetryTimer_ = queue.CreateTimer();
+  nameRetryTimer_.Interval(std::chrono::seconds(3));
+  nameRetryTimer_.IsRepeating(false);
+  nameRetryTimer_.Tick([weak = w_.get_weak()](auto const&, auto const&) {
+    if (auto self = weak.get()) self->login().CheckCreateNameNow();
+  });
+  nameCheck_ = std::make_unique<urnw::NetworkNameCheckFlow>(urnw::NetworkNameCheckTimers{
+      [timer = nameCheckTimer_] { timer.Start(); },
+      [timer = nameCheckTimer_] { timer.Stop(); },
+      [timer = nameRetryTimer_] { timer.Start(); },
+      [timer = nameRetryTimer_] { timer.Stop(); },
   });
 
   // debounce the bonus referral code validation
@@ -97,6 +113,14 @@ void LoginPage::Initialize() {
   resendCooldownTimer_.IsRepeating(false);
   resendCooldownTimer_.Tick([weak = w_.get_weak()](auto const&, auto const&) {
     if (auto self = weak.get()) self->ResendCodeButton().IsEnabled(true);
+  });
+
+  // rate-limit countdown on the verify and reset steps
+  rateLimitTimer_ = queue.CreateTimer();
+  rateLimitTimer_.Interval(std::chrono::seconds(1));
+  rateLimitTimer_.IsRepeating(true);
+  rateLimitTimer_.Tick([weak = w_.get_weak()](auto const&, auto const&) {
+    if (auto self = weak.get()) self->login().RefreshRateLimits();
   });
 
   // window-level acknowledgements (the account menu's referral copy)
@@ -210,39 +234,36 @@ void LoginPage::UpdateCarouselRunning() {
 // ---- strings ---------------------------------------------------------------
 
 void LoginPage::ApplyStrings() {
-  // sign in — initial (account discovery). Order and wording follow android
-  // ungoogle/LoginInitial.kt: the label sits above the field as its own
-  // URTextInputLabel, and the wallet options are separated from Get started by
-  // a bare centred "or" rather than by a section heading.
+  // sign in — initial. The login stack rule every app follows (ur.io
+  // ConnectDialog is the reference): three full-width pills, then the other
+  // ways in as square icon tiles four per row, then a bare centred "or" and the
+  // email / phone field with its URTextInputLabel above it.
+  w_.GoogleSignInText().Text(Loc("sign_in_with_google"));
+  w_.AppleSignInText().Text(Loc("sign_in_with_apple"));
+  w_.InstantAccountButton().Content(LocBox("create_instant_account"));
+  // The tiles carry a one-word caption; the sentence each stands for is their
+  // UIA name (ApplySignInAutomationNames). Secret key is the seedphrase sign-in
+  // (macOS LoginSeedphrase); Auth code is SdkHost::LoginWithCode.
+  w_.SeedphraseTileText().Text(Loc("login_tile_secret_key"));
+  w_.AuthCodeButtonText().Text(Loc("auth_code"));
+  w_.BittensorSignInText().Text(Loc("bittensor"));
+  w_.SolanaSignInText().Text(Loc("solana"));
+  w_.OrDivider().Text(Loc("or"));
   w_.EmailLabel().Text(Loc("user_auth_label"));
   w_.EmailBox().PlaceholderText(Loc("user_auth_input_placeholder"));
   w_.GetStartedButton().Content(LocBox("get_started"));
-  w_.OrDivider().Text(Loc("or"));
-  w_.GoogleSignInText().Text(Loc("sign_in_with_google"));
-  w_.BittensorSignInText().Text(Loc("bittensor_sign_in"));
-  w_.SolanaSignInText().Text(Loc("solana_sign_in"));
-  // SdkHost::LoginWithCode is the auth-code login the other platforms ship
-  w_.AuthCodeButtonText().Text(Loc("auth_code_login_button_text"));
-  // The seedphrase pair (macOS LoginSeedphrase / CreateNetworkInstant). Every
-  // seedphrase / instant-account string was ABSENT from the shared store —
-  // macOS hardcodes all fourteen as Swift literals, so `npm run gen` has never
-  // seen them — and they were added to Strings/en/Resources.resw here. They
-  // still have to land in urnetwork/localizations for the other 27 locales;
-  // see this branch's report.
-  w_.SeedphraseSignInButton().Content(LocBox("sign_in_with_seedphrase"));
-  w_.InstantAccountButton().Content(LocBox("create_instant_account"));
   // bottom-left, quiet text: point the client at another network API
   w_.NetworkServerLink().Content(LocBox("change_network_api"));
   // MainWindow calls ApplyStrings BEFORE Initialize, so on the first pass there
   // is no carousel yet; Initialize paints it once it exists.
   if (carousel_) carousel_->ApplyStrings();
 
-  UpdateGoogleSignInVisibility();
+  ApplySignInAutomationNames();
 
   // sign in — seedphrase step
   w_.SeedphraseBackButton().Content(LocBox("back"));
   w_.SeedphraseHeading().Text(Loc("sign_in_with_seedphrase"));
-  w_.SeedphraseBox().PlaceholderText(Loc("seedphrase_input_placeholder"));
+  w_.SeedphraseBox().PlaceholderText(Loc("seedphrase_paste_hint"));
   w_.SeedphraseSubmitButton().Content(LocBox("sign_in"));
 
   // sign in — instant account step
@@ -250,6 +271,7 @@ void LoginPage::ApplyStrings() {
   w_.InstantHeading().Text(Loc("create_instant_account"));
   w_.InstantExplanationText().Text(Loc("instant_account_explainer"));
   urnw::SetTermsMarkerText(w_.InstantTermsText(), urnw::Localized("terms_checkbox"), 12);
+  w_.InstantProductUpdatesCheck().Content(LocBox("periodic_product_updates"));
   // after SetTermsMarkerText: it is the inlines that call built which get put
   // back into the content view (see PairTermsLabel)
   urnw::PairTermsLabel(w_.InstantTermsCheck(), w_.InstantTermsText());
@@ -267,11 +289,6 @@ void LoginPage::ApplyStrings() {
   w_.CreateBackButton().Content(LocBox("back"));
   w_.CreateHeading().Text(Loc("join_urnetwork"));
   w_.WalletCreateNote().Text(Loc("wallet_needs_network"));
-  // guest upgrade: status + call to action, two store sentences on two lines
-  w_.GuestUpgradeNote().Text(hstring{urnw::Localized("in_guest_mode") + L"\n" +
-                                     urnw::Localized("start_earning_join")});
-  w_.CreateEmailBox().Header(LocBox("user_auth_label"));
-  w_.CreateEmailBox().PlaceholderText(Loc("user_auth_input_placeholder"));
   w_.CreateNameBox().Header(LocBox("network_name_label"));
   w_.CreateNameBox().PlaceholderText(Loc("enter_a_name_for_your_network"));
   w_.CreateNameStatusText().Text(Loc("network_name_length_error"));
@@ -279,6 +296,7 @@ void LoginPage::ApplyStrings() {
   w_.CreatePasswordHint().Text(Loc("password_must_be_at_least_12_characters_long"));
   // tappable terms / privacy links inside the checkbox label
   urnw::SetTermsMarkerText(w_.TermsText(), urnw::Localized("terms_checkbox"), 12);
+  w_.ProductUpdatesCheck().Content(LocBox("periodic_product_updates"));
   urnw::PairTermsLabel(w_.TermsCheck(), w_.TermsText());
   w_.BonusCodeBox().Header(LocBox("bonus_referral_code_label"));
   w_.BonusCodeBox().PlaceholderText(Loc("enter_a_bonus_referral_code"));
@@ -300,34 +318,23 @@ void LoginPage::ApplyStrings() {
   w_.SendResetButton().Content(LocBox("send_reset_link_2"));
 }
 
-// Whether "Sign in with Google" is offered at all.
-//
-// SdkHost::SsoGoogleEnabled() is the purpose-built answer — GoogleSignIn::
-// Configured() (is an OAuth client id compiled in?) AND the active network
-// space's getSsoGoogle() (does this server offer it?). It had ZERO callers;
-// the gate here was apiReady(), which is api_.has_value(), true from SDK init
-// on every build. The result was a Google button shipped visible and always
-// failing in every default build, and three comments (GoogleSignIn.h,
-// Config.h, SdkHost::SignInWithGoogle) that all described the opposite. Those
-// three were right, so this now agrees with them.
-//
-// Called from ApplyStrings AND after a network-server switch: the space is
-// what supplies half the answer, and switching spaces replaces it.
-void LoginPage::UpdateGoogleSignInVisibility() {
-  const bool enabled = Sdk().SsoGoogleEnabled();
-  w_.GoogleSignInButton().Visibility(enabled ? Visibility::Visible
-                                             : Visibility::Collapsed);
-  // The button's content is a Viewbox + a TextBlock inside a StackPanel, not a
-  // string, so ContentControl derived NO name from it and UIA announced it as
-  // an unnamed button. Every other pill on this screen has the same shape.
+// The pills' content is a Viewbox + a TextBlock inside a StackPanel and the
+// tiles' an icon over a caption, not a string, so ContentControl derives NO
+// name from them and UIA announced each as an unnamed button. A tile's caption
+// is deliberately one word ("Bittensor"); the name is the whole sentence.
+void LoginPage::ApplySignInAutomationNames() {
   Automation::AutomationProperties::SetName(w_.GoogleSignInButton(),
                                             Loc("sign_in_with_google"));
+  Automation::AutomationProperties::SetName(w_.AppleSignInButton(),
+                                            Loc("sign_in_with_apple"));
+  Automation::AutomationProperties::SetName(w_.SeedphraseSignInButton(),
+                                            Loc("sign_in_with_seedphrase"));
+  Automation::AutomationProperties::SetName(w_.AuthCodeButton(),
+                                            Loc("auth_code_login_button_text"));
   Automation::AutomationProperties::SetName(w_.BittensorSignInButton(),
                                             Loc("bittensor_sign_in"));
   Automation::AutomationProperties::SetName(w_.SolanaSignInButton(),
                                             Loc("solana_sign_in"));
-  Automation::AutomationProperties::SetName(w_.AuthCodeButton(),
-                                            Loc("auth_code_login_button_text"));
 }
 
 // ---- window-level calls ----------------------------------------------------
@@ -362,21 +369,41 @@ void LoginPage::ShowErrorOnCurrentStep(hstring const& message) {
   ShowLoginErrorFor(loginStep_, message);
 }
 
-bool LoginPage::IsGuestUpgrade() const {
-  return createMode_ == CreateMode::GuestUpgrade;
+bool LoginPage::ConsumeNewNetwork() {
+  const bool pending = newNetworkPending_;
+  newNetworkPending_ = false;
+  verifyIsNewNetwork_ = false;
+  return pending;
 }
 
-void LoginPage::ClearGuestUpgrade() { createMode_ = CreateMode::Password; }
+winrt::fire_and_forget LoginPage::OpenGuestConversion(std::function<void(bool done)> onClosed) {
+  if (w_.sheetOpen()) co_return;  // only one ContentDialog can show at a time
+  auto self = w_.get_strong();
 
-void LoginPage::BeginGuestUpgrade() {
-  // The create step in guest-upgrade mode (email + name + password ->
-  // Api::upgradeGuest), shown over the login flow while the guest session
-  // stays live. macOS presents the same flow as a sheet over the account view;
-  // linux navigates its create page in UpgradeGuest mode. Back returns home
-  // (OnLoginBack); success re-registers the device and the LoggedIn push
-  // restores the home view.
-  w_.ShowLoginRoot();
-  EnterCreateStep(std::string(), CreateMode::GuestUpgrade);
+  auto weak = w_.get_weak();
+  auto done = std::make_shared<bool>(false);
+  guestConversionSheet_ = urnw::GuestConversionSheet::Create(
+      self->Content().XamlRoot(), Sdk(), Balance(), [weak, done] {
+        *done = true;
+        if (auto self = weak.get()) {
+          self->login().snackbar_->Show(Loc("sign_in_method_added_successfully"),
+                                        InfoBarSeverity::Success);
+        }
+      });
+  w_.SetSheetOpen(true);
+  try {
+    co_await guestConversionSheet_->Dialog().ShowAsync();
+  } catch (winrt::hresult_error const& e) {
+    urnw::LogError("guest conversion sheet: {} (0x{:08x})",
+                   urnw::Narrow(std::wstring{e.message()}),
+                   static_cast<uint32_t>(e.code()));
+  } catch (std::exception const& e) {
+    urnw::LogError("guest conversion sheet: {}", e.what());
+  }
+  w_.SetSheetOpen(false);
+  self->login().guestConversionSheet_.reset();
+  // after the sheet gate is released: the continuation may open the checkout
+  if (onClosed) onClosed(*done);
 }
 
 // ---- sign-in flow ----------------------------------------------------------
@@ -507,14 +534,6 @@ void LoginPage::ApplyLoginRouting(urnw::LoginRouting const& routing) {
 }
 
 void LoginPage::OnLoginBack(IInspectable const& sender, RoutedEventArgs const&) {
-  // backing out of the guest-upgrade create/verify step returns to the home
-  // view: the guest session never went away
-  if (createMode_ == CreateMode::GuestUpgrade && Sdk().IsLoggedIn()) {
-    createMode_ = CreateMode::Password;
-    ShowLoginStep(LoginStep::Initial);  // leave the flow ready for a real sign-out
-    w_.ShowHomeRoot();
-    return;
-  }
   IInspectable tagValue{nullptr};
   if (auto element = sender.try_as<FrameworkElement>()) tagValue = element.Tag();
   const auto tag = winrt::unbox_value_or<hstring>(tagValue, L"initial");
@@ -547,9 +566,11 @@ void LoginPage::OnSignIn(IInspectable const&, RoutedEventArgs const&) {
         // the account still needs its code — route into the verify step
         // instead of dead-ending on an info bar
         page.EnterVerifyStep(page.loginUserAuth_);
-        self->VerifyInfo().Severity(InfoBarSeverity::Informational);
-        self->VerifyInfo().Message(Loc("verification_code_sent"));
-        self->VerifyInfo().IsOpen(true);
+        if (!page.ShowVerifySendError(r.verify_send)) {
+          self->VerifyInfo().Severity(InfoBarSeverity::Informational);
+          self->VerifyInfo().Message(Loc("verification_code_sent"));
+          self->VerifyInfo().IsOpen(true);
+        }
       } else if (!r.ok && !r.error.empty()) {
         page.ShowLoginErrorFor(LoginStep::Password, H(r.error));
       }
@@ -563,6 +584,16 @@ void LoginPage::OnForgotPassword(IInspectable const&, RoutedEventArgs const&) {
   w_.ResetInfo().IsOpen(false);
   w_.SendResetButton().IsEnabled(true);
   ShowLoginStep(LoginStep::Reset);
+  // a rate limit from an earlier send for this account still holds; it is
+  // shown again with the minutes left
+  if (resetRateLimitUserAuth_ != loginUserAuth_) resetRateLimit_.Clear();
+  const auto now = urnw::ResendCooldown::Clock::now();
+  if (resetRateLimit_.Armed() && !resetRateLimit_.CanSend(now)) {
+    resetRateLimitText_ =
+        hstring{urnw::Plural("reset_link_rate_limited", resetRateLimit_.Minutes(now))};
+    ShowLoginErrorFor(LoginStep::Reset, resetRateLimitText_);
+  }
+  RefreshRateLimits();
 }
 
 void LoginPage::OnSendResetLink(IInspectable const&, RoutedEventArgs const&) {
@@ -573,22 +604,48 @@ void LoginPage::OnSendResetLink(IInspectable const&, RoutedEventArgs const&) {
 
   auto queue = w_.DispatcherQueue();
   auto weak = w_.get_weak();
-  Sdk().SendPasswordResetLink(loginUserAuth_, [queue, weak](bool ok) {
-    queue.TryEnqueue([weak, ok] {
+  Sdk().SendPasswordResetLink(loginUserAuth_, [queue, weak](urnw::VerifySendNotice notice) {
+    queue.TryEnqueue([weak, notice] {
       auto self = weak.get();
       if (!self) return;
       auto& page = self->login();
       page.sendingReset_ = false;
       self->SendResetButton().IsEnabled(true);
-      self->ResetInfo().Severity(ok ? InfoBarSeverity::Success
-                                    : InfoBarSeverity::Error);
+      if (page.ShowPasswordResetError(notice)) return;
+      self->ResetInfo().Severity(InfoBarSeverity::Success);
       // "Reset link sent to" + the address it went to (the address is data)
-      self->ResetInfo().Message(ok ? hstring{urnw::Localized("reset_link_sent_to") +
-                                             L" " + urnw::Widen(page.loginUserAuth_)}
-                                   : Loc("something_went_wrong"));
+      self->ResetInfo().Message(hstring{urnw::Localized("reset_link_sent_to") + L" " +
+                                        urnw::Widen(page.loginUserAuth_)});
       self->ResetInfo().IsOpen(true);
     });
   });
+}
+
+bool LoginPage::ShowPasswordResetError(urnw::VerifySendNotice const& notice) {
+  const auto now = urnw::ResendCooldown::Clock::now();
+  resetRateLimit_.Start(notice, now);
+  resetRateLimitUserAuth_ = loginUserAuth_;
+  hstring message;
+  switch (notice.kind) {
+    case urnw::VerifySendNoticeKind::Sent:
+      return false;
+    case urnw::VerifySendNoticeKind::RateLimited:
+      message = hstring{urnw::Plural(urnw::PasswordResetNoticeKey(notice), notice.minutes)};
+      break;
+    case urnw::VerifySendNoticeKind::SendFailed:
+      message = Loc(urnw::PasswordResetNoticeKey(notice));
+      break;
+    case urnw::VerifySendNoticeKind::ServerMessage:
+      message = H(notice.message);
+      break;
+  }
+  ShowLoginErrorFor(LoginStep::Reset, message);
+  resetRateLimitText_ = message;
+  if (resetRateLimit_.Armed()) {
+    w_.SendResetButton().IsEnabled(false);
+    StartRateLimitTimer();
+  }
+  return true;
 }
 
 // ---- create network (sign-up) ----
@@ -600,22 +657,14 @@ void LoginPage::EnterCreateStep(std::string const& userAuth, CreateMode mode) {
   // credential is already held by SdkHost, so all the form collects is a
   // network name and the terms consent.
   const bool walletMode = (mode == CreateMode::Wallet || mode == CreateMode::AuthJwt);
-  const bool guestUpgrade = (mode == CreateMode::GuestUpgrade);
   // wallet mode: the wallet signature is the credential — name + terms only.
-  // guest upgrade: the guest enters an email here (nothing was carried in).
   w_.WalletCreateNote().Visibility(walletMode ? Visibility::Visible : Visibility::Collapsed);
-  w_.GuestUpgradeNote().Visibility(guestUpgrade ? Visibility::Visible : Visibility::Collapsed);
   w_.CreateEmailText().Text(H(userAuth));
   w_.CreateEmailText().Visibility(mode == CreateMode::Password ? Visibility::Visible
                                                                : Visibility::Collapsed);
-  w_.CreateEmailBox().Text(L"");
-  w_.CreateEmailBox().Visibility(guestUpgrade ? Visibility::Visible : Visibility::Collapsed);
   w_.CreatePasswordBox().Visibility(walletMode ? Visibility::Collapsed : Visibility::Visible);
   w_.CreatePasswordHint().Visibility(walletMode ? Visibility::Collapsed : Visibility::Visible);
-  // UpgradeGuestArgs carries no referral code (the bonus only applies to a
-  // fresh create — the sdk/api shape, not a UI choice): hide the bonus row
-  w_.BonusCodeBox().Visibility(guestUpgrade ? Visibility::Collapsed : Visibility::Visible);
-  w_.BonusStatusText().Visibility(guestUpgrade ? Visibility::Collapsed : Visibility::Visible);
+  w_.BonusAppliedChip().Visibility(Visibility::Collapsed);
 
   w_.CreateNameBox().Text(L"");
   w_.CreatePasswordBox().Password(L"");
@@ -624,50 +673,43 @@ void LoginPage::EnterCreateStep(std::string const& userAuth, CreateMode mode) {
   w_.BonusStatusText().Text(L"");
   kit::ApplySupportingText(w_.CreateNameStatusText(), Loc("network_name_length_error"),
                            kit::ValidationState::NotChecked);
-  nameAvailable_ = false;
-  nameChecking_ = false;
-  ++nameCheckGeneration_;
+  if (nameCheck_) nameCheck_->Reset();
   bonusValid_ = false;
   bonusCapped_ = false;
   ++bonusCheckGeneration_;
   w_.CreateError().IsOpen(false);
   ValidateCreateForm();
   ShowLoginStep(LoginStep::Create);
-  if (guestUpgrade) {
-    w_.CreateEmailBox().Focus(FocusState::Programmatic);  // the first empty field
-  } else {
-    w_.CreateNameBox().Focus(FocusState::Programmatic);
-  }
+  w_.CreateNameBox().Focus(FocusState::Programmatic);
 }
 
 void LoginPage::OnCreateNameChanged(IInspectable const&, TextChangedEventArgs const&) {
-  ++nameCheckGeneration_;  // drop any availability check still in flight
-  nameAvailable_ = false;
   w_.CreateError().IsOpen(false);
-  if (nameCheckTimer_) nameCheckTimer_.Stop();
-
+  if (!nameCheck_) return;
   const std::string name = TrimWhitespace(urnw::Narrow(w_.CreateNameBox().Text().c_str()));
-  if (name.size() < kMinNetworkNameLength) {
-    nameChecking_ = false;
-    kit::ApplySupportingText(w_.CreateNameStatusText(), Loc("network_name_length_error"),
-                             kit::ValidationState::NotChecked);
-  } else {
-    nameChecking_ = true;
-    kit::ApplySupportingText(w_.CreateNameStatusText(), hstring(),
-                             kit::ValidationState::Validating);
-    if (nameCheckTimer_) nameCheckTimer_.Start();  // debounce, then check
-  }
+  // drops any check still in flight, then debounces the next one
+  nameCheck_->Edited(kMinNetworkNameLength <= name.size());
+  ShowNameCheck();
   ValidateCreateForm();
 }
 
 void LoginPage::CheckCreateNameNow() {
+  if (!nameCheck_) return;
   const std::string name = TrimWhitespace(urnw::Narrow(w_.CreateNameBox().Text().c_str()));
-  if (name.size() < kMinNetworkNameLength || !Sdk().apiReady()) return;
-  const uint32_t generation = nameCheckGeneration_;
+  // an api that is not ready is applied as a failed check (retried), not
+  // skipped with the line left validating
+  const auto generation =
+      nameCheck_->Fire(kMinNetworkNameLength <= name.size(), Sdk().apiReady());
+  if (!generation) {
+    ShowNameCheck();
+    ValidateCreateForm();
+    return;
+  }
 
   auto queue = w_.DispatcherQueue();
   auto weak = w_.get_weak();
-  Sdk().CheckNetworkName(name, [queue, weak, generation](bool ok, bool available) {
+  Sdk().CheckNetworkName(name, [queue, weak, generation = *generation](bool ok,
+                                                                      bool available) {
     queue.TryEnqueue([weak, generation, ok, available] {
       if (auto self = weak.get()) self->login().ApplyNameCheck(generation, ok, available);
     });
@@ -675,27 +717,36 @@ void LoginPage::CheckCreateNameNow() {
 }
 
 void LoginPage::ApplyNameCheck(uint32_t generation, bool ok, bool available) {
-  if (generation != nameCheckGeneration_) return;  // a later edit superseded this
-  nameChecking_ = false;
-  auto const line = w_.CreateNameStatusText();
-  if (!ok) {
-    nameAvailable_ = false;
-    kit::ApplySupportingText(line, Loc("there_was_an_error_checking_the_network_name"),
-                             kit::ValidationState::Invalid);
-  } else if (available) {
-    nameAvailable_ = true;
-    kit::ApplySupportingText(line, Loc("nice_this_network_name_is_available"),
-                             kit::ValidationState::Valid);
-  } else {
-    nameAvailable_ = false;
-    kit::ApplySupportingText(line, Loc("network_name_taken"), kit::ValidationState::Invalid);
-  }
+  // false when a later edit superseded this answer
+  if (!nameCheck_ || !nameCheck_->Apply(generation, ok, available)) return;
+  ShowNameCheck();
   ValidateCreateForm();
 }
 
-void LoginPage::OnCreateEmailChanged(IInspectable const&, TextChangedEventArgs const&) {
-  w_.CreateError().IsOpen(false);
-  ValidateCreateForm();
+void LoginPage::ShowNameCheck() {
+  auto const line = w_.CreateNameStatusText();
+  switch (nameCheck_ ? nameCheck_->state() : urnw::NetworkNameCheck::TooShort) {
+    case urnw::NetworkNameCheck::TooShort:
+      kit::ApplySupportingText(line, Loc("network_name_length_error"),
+                               kit::ValidationState::NotChecked);
+      break;
+    case urnw::NetworkNameCheck::Checking:
+      kit::ApplySupportingText(line, hstring(), kit::ValidationState::Validating);
+      break;
+    case urnw::NetworkNameCheck::Failed:
+      // not a verdict on the name: Create stays usable (the server validates
+      // the name at create) and the check is retried a few times
+      kit::ApplySupportingText(line, Loc("there_was_an_error_checking_the_network_name"),
+                               kit::ValidationState::NotChecked);
+      break;
+    case urnw::NetworkNameCheck::Available:
+      kit::ApplySupportingText(line, Loc("nice_this_network_name_is_available"),
+                               kit::ValidationState::Valid);
+      break;
+    case urnw::NetworkNameCheck::Taken:
+      kit::ApplySupportingText(line, Loc("network_name_taken"), kit::ValidationState::Invalid);
+      break;
+  }
 }
 
 void LoginPage::OnCreatePasswordChanged(IInspectable const&, RoutedEventArgs const&) {
@@ -712,6 +763,8 @@ void LoginPage::OnBonusCodeChanged(IInspectable const&, TextChangedEventArgs con
   ++bonusCheckGeneration_;  // drop any validation still in flight
   bonusValid_ = false;
   bonusCapped_ = false;
+  w_.BonusAppliedChip().Visibility(Visibility::Collapsed);
+  w_.BonusStatusText().Visibility(Visibility::Visible);
   kit::ApplySupportingText(w_.BonusStatusText(), hstring(),
                            kit::ValidationState::NotChecked);
   if (bonusCheckTimer_) {
@@ -750,12 +803,22 @@ void LoginPage::ApplyBonusValidation(uint32_t generation, bool ok, bool valid,
   bonusCapped_ = ok && capped;
   auto const line = w_.BonusStatusText();
   if (!ok) {
+    w_.BonusAppliedChip().Visibility(Visibility::Collapsed);
+    line.Visibility(Visibility::Visible);
     kit::ApplySupportingText(line, Loc("something_went_wrong"), kit::ValidationState::Invalid);
   } else if (bonusValid_ && !bonusCapped_) {
-    kit::ApplySupportingText(line, Loc("referral_bonus_applied_2"), kit::ValidationState::Valid);
+    // referral royalty: the gold king-frog chip replaces the supporting line
+    // (the same moment android/apple celebrate with the royal welcome)
+    w_.BonusAppliedText().Text(Loc("referral_bonus_applied_2"));
+    w_.BonusAppliedChip().Visibility(Visibility::Visible);
+    line.Visibility(Visibility::Collapsed);
   } else if (bonusCapped_) {
+    w_.BonusAppliedChip().Visibility(Visibility::Collapsed);
+    line.Visibility(Visibility::Visible);
     kit::ApplySupportingText(line, Loc("referral_code_capped"), kit::ValidationState::Invalid);
   } else {
+    w_.BonusAppliedChip().Visibility(Visibility::Collapsed);
+    line.Visibility(Visibility::Visible);
     kit::ApplySupportingText(line, Loc("invalid_referral_code"), kit::ValidationState::Invalid);
   }
 }
@@ -765,13 +828,8 @@ void LoginPage::ValidateCreateForm() {
   const bool passwordOk = createMode_ == CreateMode::Wallet ||
                           createMode_ == CreateMode::AuthJwt ||
                           password.size() >= kMinPasswordLength;
-  // the guest upgrade collects the email on this step (the other modes carry a
-  // discovered / wallet credential in); the server is the real validator
-  const bool emailOk =
-      createMode_ != CreateMode::GuestUpgrade ||
-      LooksLikeUserAuth(TrimWhitespace(urnw::Narrow(w_.CreateEmailBox().Text().c_str())));
   const bool termsOk = w_.TermsCheck().IsChecked() && w_.TermsCheck().IsChecked().Value();
-  w_.CreateButton().IsEnabled(nameAvailable_ && !nameChecking_ && passwordOk && emailOk &&
+  w_.CreateButton().IsEnabled(nameCheck_ && nameCheck_->AllowsCreate() && passwordOk &&
                               termsOk && !creatingNetwork_);
 }
 
@@ -786,6 +844,7 @@ void LoginPage::OnCreateNetwork(IInspectable const&, RoutedEventArgs const&) {
 
   auto queue = w_.DispatcherQueue();
   auto weak = w_.get_weak();
+  // every create is a new network, and a new network gets the onboarding flow
   auto done = [queue, weak](urnw::AuthResult r) {
     queue.TryEnqueue([weak, r] {
       auto self = weak.get();
@@ -794,20 +853,22 @@ void LoginPage::OnCreateNetwork(IInspectable const&, RoutedEventArgs const&) {
       page.creatingNetwork_ = false;
       page.ValidateCreateForm();
       if (r.verification_required) {
+        page.verifyIsNewNetwork_ = true;
         page.EnterVerifyStep(page.loginUserAuth_);
+        page.ShowVerifySendError(r.verify_send);
       } else if (!r.ok && !r.error.empty()) {
         page.ShowLoginErrorFor(LoginStep::Create, H(r.error));
+      } else if (r.ok) {
+        page.newNetworkPending_ = true;
       }
       // success: the auth state relay swaps the panel for the home view
     });
   };
 
-  if (createMode_ == CreateMode::GuestUpgrade) {
-    // the email entered here also drives the verify step, should one be needed
-    loginUserAuth_ = TrimWhitespace(urnw::Narrow(w_.CreateEmailBox().Text().c_str()));
-    Sdk().UpgradeGuest(networkName, loginUserAuth_, password, done);
-    return;
-  }
+  // the marketing opt-out rides on the create call (absent = opted in)
+  const bool productUpdates = w_.ProductUpdatesCheck().IsChecked() &&
+                              w_.ProductUpdatesCheck().IsChecked().Value();
+  Sdk().SetProductUpdatesOptOut(!productUpdates);
 
   urnw::CreateNetworkParams params;
   params.networkName = networkName;
@@ -838,6 +899,7 @@ void LoginPage::EnterVerifyStep(std::string const& userAuth) {
   w_.VerifyButton().IsEnabled(false);
   w_.VerifyInfo().IsOpen(false);
   w_.ResendCodeButton().IsEnabled(true);
+  verifyRateLimit_.Clear();
   ShowLoginStep(LoginStep::Verify);
   w_.VerifyCodeBox().Focus(FocusState::Programmatic);
 }
@@ -874,6 +936,9 @@ void LoginPage::SubmitVerifyCode() {
         // clear the entered code so retyping can resubmit (macOS parity)
         self->VerifyCodeBox().Text(L"");
         page.ShowLoginErrorFor(LoginStep::Verify, Loc("verify_input_invalid"));
+      } else if (page.verifyIsNewNetwork_) {
+        page.verifyIsNewNetwork_ = false;
+        page.newNetworkPending_ = true;
       }
       // success: the auth state relay swaps the panel for the home view
     });
@@ -887,23 +952,82 @@ void LoginPage::OnResendCode(IInspectable const&, RoutedEventArgs const&) {
 
   auto queue = w_.DispatcherQueue();
   auto weak = w_.get_weak();
-  Sdk().ResendVerifyCode(loginUserAuth_, [queue, weak](bool ok) {
-    queue.TryEnqueue([weak, ok] {
+  Sdk().ResendVerifyCode(loginUserAuth_, [queue, weak](urnw::VerifySendNotice notice) {
+    queue.TryEnqueue([weak, notice] {
       auto self = weak.get();
       if (!self) return;
       auto& page = self->login();
-      if (ok) {
-        self->VerifyInfo().Severity(InfoBarSeverity::Success);
-        self->VerifyInfo().Message(Loc("verification_code_sent"));
-        self->VerifyInfo().IsOpen(true);
-        // 15s cooldown before another resend (macOS parity)
-        if (page.resendCooldownTimer_) page.resendCooldownTimer_.Start();
-      } else {
-        self->ResendCodeButton().IsEnabled(true);
-        page.ShowLoginErrorFor(LoginStep::Verify, Loc("something_went_wrong"));
+      if (page.ShowVerifySendError(notice)) {
+        // a rate limit keeps Resend off until its retry time
+        self->ResendCodeButton().IsEnabled(!page.verifyRateLimit_.Armed());
+        return;
       }
+      self->VerifyInfo().Severity(InfoBarSeverity::Success);
+      self->VerifyInfo().Message(Loc("verification_code_sent"));
+      self->VerifyInfo().IsOpen(true);
+      // 15s cooldown before another resend (macOS parity)
+      if (page.resendCooldownTimer_) page.resendCooldownTimer_.Start();
     });
   });
+}
+
+bool LoginPage::ShowVerifySendError(urnw::VerifySendNotice const& notice) {
+  verifyRateLimit_.Start(notice, urnw::ResendCooldown::Clock::now());
+  hstring message;
+  switch (notice.kind) {
+    case urnw::VerifySendNoticeKind::Sent:
+      return false;
+    case urnw::VerifySendNoticeKind::RateLimited:
+      message = hstring{urnw::Plural(urnw::VerifySendNoticeKey(notice), notice.minutes)};
+      break;
+    case urnw::VerifySendNoticeKind::SendFailed:
+      message = Loc(urnw::VerifySendNoticeKey(notice));
+      break;
+    case urnw::VerifySendNoticeKind::ServerMessage:
+      message = H(notice.message);
+      break;
+  }
+  ShowLoginErrorFor(LoginStep::Verify, message);
+  verifyRateLimitText_ = message;
+  if (verifyRateLimit_.Armed()) {
+    w_.ResendCodeButton().IsEnabled(false);
+    StartRateLimitTimer();
+  }
+  return true;
+}
+
+void LoginPage::StartRateLimitTimer() {
+  if (rateLimitTimer_ && !rateLimitTimer_.IsRunning()) rateLimitTimer_.Start();
+}
+
+void LoginPage::RefreshRateLimits() {
+  const auto now = urnw::ResendCooldown::Clock::now();
+  // the notice shows the minutes left; once the retry time has passed it
+  // closes and the control comes back
+  auto refresh = [now](urnw::ResendCooldown& rateLimit, hstring& shown, InfoBar const& info,
+                       Button const& send, std::string_view key) {
+    if (!rateLimit.Armed()) return;
+    // another verdict (a wrong code) may have replaced the rate-limit line
+    const bool ownsInfo = info.IsOpen() && info.Message() == shown;
+    if (rateLimit.CanSend(now)) {
+      rateLimit.Clear();
+      if (ownsInfo) info.IsOpen(false);
+      send.IsEnabled(true);
+      return;
+    }
+    send.IsEnabled(false);
+    if (ownsInfo) {
+      shown = hstring{urnw::Plural(key, rateLimit.Minutes(now))};
+      info.Message(shown);
+    }
+  };
+  refresh(verifyRateLimit_, verifyRateLimitText_, w_.VerifyInfo(), w_.ResendCodeButton(),
+          "verify_code_rate_limited");
+  refresh(resetRateLimit_, resetRateLimitText_, w_.ResetInfo(), w_.SendResetButton(),
+          "reset_link_rate_limited");
+  if (!verifyRateLimit_.Armed() && !resetRateLimit_.Armed() && rateLimitTimer_) {
+    rateLimitTimer_.Stop();
+  }
 }
 
 // ---- auth code login ----
@@ -965,35 +1089,6 @@ winrt::fire_and_forget LoginPage::OnUseCode(IInspectable const&, RoutedEventArgs
   });
 }
 
-// ---- guest mode (macOS GuestModeSheet parity) ------------------------------
-// One tap creates a throwaway network: the sheet collects the terms consent,
-// SdkHost::LoginAsGuest creates and registers it, and the auth-state relay
-// swaps the panel for the home view. The plan cards later offer the upgrade to
-// a full account (BeginGuestUpgrade).
-
-void LoginPage::OnTryGuestMode(IInspectable const&, RoutedEventArgs const&) {
-  SetInitialLoginError(hstring());
-  ShowGuestModeSheet();
-}
-
-winrt::fire_and_forget LoginPage::ShowGuestModeSheet() {
-  if (w_.sheetOpen()) co_return;  // only one ContentDialog can show at a time
-  auto self = w_.get_strong();
-  w_.SetSheetOpen(true);
-  try {
-    guestSheet_ = urnw::GuestModeSheet::Create(self->Content().XamlRoot(), Sdk());
-    co_await guestSheet_->Dialog().ShowAsync();
-  } catch (winrt::hresult_error const& e) {
-    urnw::LogError("guest mode sheet: {} (0x{:08x})",
-                   urnw::Narrow(std::wstring{e.message()}),
-                   static_cast<uint32_t>(e.code()));
-  } catch (std::exception const& e) {
-    urnw::LogError("guest mode sheet: {}", e.what());
-  }
-  guestSheet_.reset();
-  w_.SetSheetOpen(false);
-}
-
 // ---- wallet sign in ------------------------------------------------------
 // Both wallets sign in through the ur.io/wallet-connect browser bridge (desktop
 // wallets are browser extensions): the bridge drives the wallet and returns via
@@ -1001,14 +1096,21 @@ winrt::fire_and_forget LoginPage::ShowGuestModeSheet() {
 // (main.cpp -> App::OnLaunched -> AppController::HandleDeepLink). `done` fires on
 // an SDK thread, so hop to the UI thread before touching the panel.
 
+// Bittensor asks which wallet first (Talisman or TAO.com): Talisman continues in
+// the browser through the bridge, TAO.com in the manual form (MainWindow
+// installs SdkHost's manual handler).
 void LoginPage::OnSignInWithBittensor(IInspectable const&, RoutedEventArgs const&) {
   SetInitialLoginError(hstring());
-  SetWalletSignInEnabled(false);
-  auto queue = w_.DispatcherQueue();
   auto weak = w_.get_weak();
-  Sdk().SignInWithBittensor([queue, weak](urnw::AuthResult r) {
-    queue.TryEnqueue([weak, r] {
-      if (auto self = weak.get()) self->login().ApplyWalletSignInResult(r);
+  ChooseBittensorWallet(w_.get_strong(), [weak](std::string walletId) {
+    auto self = weak.get();
+    if (!self || walletId.empty()) return;
+    self->login().SetWalletSignInEnabled(false);
+    auto queue = self->DispatcherQueue();
+    Sdk().SignInWithBittensor(walletId, [queue, weak](urnw::AuthResult r) {
+      queue.TryEnqueue([weak, r] {
+        if (auto self = weak.get()) self->login().ApplyWalletSignInResult(r);
+      });
     });
   });
 }
@@ -1065,6 +1167,7 @@ void LoginPage::SetWalletSignInEnabled(bool enabled) {
   w_.SolanaSignInButton().IsEnabled(enabled);
   w_.AuthCodeButton().IsEnabled(enabled);
   w_.GoogleSignInButton().IsEnabled(enabled);
+  w_.AppleSignInButton().IsEnabled(enabled);
   w_.SeedphraseSignInButton().IsEnabled(enabled);
   w_.InstantAccountButton().IsEnabled(enabled);
   // NOT a flat `IsEnabled(enabled)`: Get started also depends on the field
@@ -1096,23 +1199,35 @@ void LoginPage::ApplyWalletSignInResult(urnw::AuthResult const& result) {
   ShowLoginErrorFor(LoginStep::Initial, H(result.error));
 }
 
-// ---- Sign in with Google (system browser) ----------------------------------
-// The round trip is GoogleSignIn's: it opens the browser, waits on a loopback
-// socket and exchanges the code. Everything here does is disable the sign-in
-// affordances while that is happening and surface whatever comes back.
+// ---- Sign in with Google / Apple (the provider's web flow) ------------------
+// Neither has a native desktop flow here, so both open the provider's own
+// sign-in page in the default browser with the api's callback as the redirect;
+// the api returns the identity token on urnetwork://oauth/<provider>, which
+// protocol activation routes back into SdkHost (SdkHost::SignInWithSso checks
+// the attempt's state and nonce before authLogin). Everything here does is
+// disable the sign-in affordances while that is happening and surface whatever
+// comes back.
 
-void LoginPage::OnSignInWithGoogle(IInspectable const&, RoutedEventArgs const&) {
+void LoginPage::StartSsoSignIn(const char* provider) {
   SetInitialLoginError(hstring());
   SetWalletSignInEnabled(false);
   auto queue = w_.DispatcherQueue();
   auto weak = w_.get_weak();
-  Sdk().SignInWithGoogle([queue, weak](urnw::AuthResult r) {
+  Sdk().SignInWithSso(provider, [queue, weak](urnw::AuthResult r) {
     queue.TryEnqueue([weak, r] {
       // ApplyWalletSignInResult already handles "authenticated but no network
       // yet" for both credentials and re-enables the buttons.
       if (auto self = weak.get()) self->login().ApplyWalletSignInResult(r);
     });
   });
+}
+
+void LoginPage::OnSignInWithGoogle(IInspectable const&, RoutedEventArgs const&) {
+  StartSsoSignIn("google");
+}
+
+void LoginPage::OnSignInWithApple(IInspectable const&, RoutedEventArgs const&) {
+  StartSsoSignIn("apple");
 }
 
 // ---- Sign in with a seedphrase (macOS LoginSeedphraseView) -----------------
@@ -1147,7 +1262,7 @@ void LoginPage::ValidateSeedphrase() {
     // The count is the whole diagnostic — "invalid seedphrase" would not tell
     // anyone that they pasted 23 words.
     kit::ApplySupportingText(
-        line, hstring{urnw::Format("seedphrase_word_count_warning", words)},
+        line, hstring{urnw::Plural("seedphrase_word_count_warning", static_cast<int64_t>(words))},
         kit::ValidationState::Invalid);
   }
 }
@@ -1221,6 +1336,10 @@ void LoginPage::OnCreateInstantSubmit(IInspectable const&, RoutedEventArgs const
   w_.InstantCreateButton().IsEnabled(false);
   w_.InstantTermsCheck().IsEnabled(false);
   w_.InstantErrorText().Visibility(Visibility::Collapsed);
+  // the marketing opt-out rides on the create call (absent = opted in)
+  const bool productUpdates = w_.InstantProductUpdatesCheck().IsChecked() &&
+                              w_.InstantProductUpdatesCheck().IsChecked().Value();
+  Sdk().SetProductUpdatesOptOut(!productUpdates);
 
   auto queue = w_.DispatcherQueue();
   auto weak = w_.get_weak();
@@ -1302,10 +1421,12 @@ winrt::fire_and_forget LoginPage::ShowSeedphraseSheet(std::string seedphrase) {
                                           InfoBarSeverity::Success);
           }
         },
-        [confirmed] {
+        [confirmed, weak] {
           *confirmed = true;
           // Only now does a session exist. The auth-state relay swaps the
-          // panel for the home view when registration lands.
+          // panel for the home view when registration lands, and the instant
+          // network is new: it gets the onboarding flow.
+          if (auto self = weak.get()) self->login().newNetworkPending_ = true;
           Sdk().ConfirmInstantAccount([](urnw::AuthResult) {});
         });
     co_await seedphraseSheet_->Dialog().ShowAsync();
@@ -1340,10 +1461,14 @@ winrt::fire_and_forget LoginPage::OnChangeNetworkServer(IInspectable const&,
   if (w_.sheetOpen()) co_return;  // only one ContentDialog can show at a time
   auto self = w_.get_strong();
   w_.SetSheetOpen(true);
+  bool openVless = false;
+  bool openControlDoh = false;
   try {
     networkServerSheet_ =
         urnw::NetworkServerSheet::Create(self->Content().XamlRoot(), Sdk());
     co_await networkServerSheet_->Dialog().ShowAsync();
+    openVless = networkServerSheet_->VlessRequested();
+    openControlDoh = networkServerSheet_->ControlDohRequested();
   } catch (winrt::hresult_error const& e) {
     urnw::LogError("network server sheet: {} (0x{:08x})",
                    urnw::Narrow(std::wstring{e.message()}),
@@ -1352,11 +1477,40 @@ winrt::fire_and_forget LoginPage::OnChangeNetworkServer(IInspectable const&,
     urnw::LogError("network server sheet: {}", e.what());
   }
   networkServerSheet_.reset();
+  // The sheet's VLESS button: the VLESS sheet in its place, for the space that
+  // is active now, still under the one-sheet gate. A hide to the tray closes
+  // the network sheet without the request, so it never opens one behind it.
+  if (openVless) {
+    try {
+      vlessSheet_ = urnw::VlessSheet::Create(self->Content().XamlRoot(), Sdk());
+      co_await vlessSheet_->Dialog().ShowAsync();
+    } catch (winrt::hresult_error const& e) {
+      urnw::LogError("vless sheet: {} (0x{:08x})", urnw::Narrow(std::wstring{e.message()}),
+                     static_cast<uint32_t>(e.code()));
+    } catch (std::exception const& e) {
+      urnw::LogError("vless sheet: {}", e.what());
+    }
+    vlessSheet_.reset();
+  }
+  // Its bootstrap DNS-over-HTTPS servers button, the same way: a sign-in on a
+  // network that blocks the built-in servers needs these saved first.
+  if (openControlDoh) {
+    try {
+      controlDohSheet_ = urnw::ControlDohSheet::Create(self->Content().XamlRoot(), Sdk());
+      co_await controlDohSheet_->Dialog().ShowAsync();
+    } catch (winrt::hresult_error const& e) {
+      urnw::LogError("control doh sheet: {} (0x{:08x})", urnw::Narrow(std::wstring{e.message()}),
+                     static_cast<uint32_t>(e.code()));
+    } catch (std::exception const& e) {
+      urnw::LogError("control doh sheet: {}", e.what());
+    }
+    controlDohSheet_.reset();
+  }
   w_.SetSheetOpen(false);
   // A switch re-derives the Api and the LocalState, so the flow starts over on
-  // whatever the new server says about this client — including whether that
-  // server offers Google SSO, which is otherwise only read once at startup.
-  UpdateGoogleSignInVisibility();
+  // whatever the new server says about this client. (The sign-in pills do not
+  // depend on the server: Google and Apple open the provider's own web flow,
+  // which needs only the api url for its callback.)
   ResetToInitialStep();
 }
 
@@ -1384,9 +1538,12 @@ void LoginPage::ApplyAccountIdentity(std::string const& networkName, bool guest,
 void LoginPage::OnAccountMenu(IInspectable const&, RoutedEventArgs const&) {
   auto weak = w_.get_weak();
   urnw::AccountMenuActions actions;
-  if (accountGuest_) {
+  // the jwt claim is gone after a refresh; the balance carries the server's
+  // guest (no login method)
+  const bool guest = accountGuest_ || Balance().Current().guest;
+  if (guest) {
     actions.onCreateAccount = [weak] {
-      if (auto self = weak.get()) self->login().BeginGuestUpgrade();
+      if (auto self = weak.get()) self->login().OpenGuestConversion();
     };
   }
   actions.onSignOut = [] { Sdk().Logout(); };
@@ -1396,7 +1553,7 @@ void LoginPage::OnAccountMenu(IInspectable const&, RoutedEventArgs const&) {
                                     InfoBarSeverity::Success);
     }
   };
-  urnw::ShowAccountMenu(w_.AccountMenuButton(), Sdk(), accountNetworkName_, accountGuest_,
+  urnw::ShowAccountMenu(w_.AccountMenuButton(), Sdk(), accountNetworkName_, guest,
                         std::move(actions));
 }
 

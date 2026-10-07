@@ -2,6 +2,7 @@
 #include "Sdk.h"
 
 #include <format>
+#include <limits>
 #include <system_error>
 
 // WIN32_LEAN_AND_MEAN is already on this project's command line; redefining it
@@ -20,14 +21,55 @@ namespace {
 constexpr wchar_t kGoCrashFile[] = L"go-crash.log";
 constexpr wchar_t kGoCrashPrevFile[] = L"go-crash.prev.log";
 
+// The host measurement behind the memory tier, taken once.
+//
+// GlobalMemoryStatusEx is the whole probe: ullTotalPhys is physical RAM, which
+// is what the tier gate asks about. This process is in no job object and has no
+// working-set limit, so there is no smaller container bound to take the minimum
+// with, the way the Linux daemon does with its cgroup.
+//
+// A failed call returns 0, and 0 takes the base tier: an unknown host is not a
+// large host.
+int64_t MeasureHostMemoryByteCount() {
+  MEMORYSTATUSEX status{};
+  status.dwLength = sizeof(status);
+  if (!::GlobalMemoryStatusEx(&status)) {
+    LogWarn("host memory could not be measured (error {}); taking the base memory tier",
+            ::GetLastError());
+    return 0;
+  }
+  // ullTotalPhys is a ULONGLONG. Anything that would not fit an int64_t is not
+  // a real machine, and clamping such a value to 0 would read as "unknown"
+  // rather than "enormous", so clamp to the int64 maximum instead.
+  constexpr unsigned long long kMaxSigned =
+      static_cast<unsigned long long>((std::numeric_limits<int64_t>::max)());
+  return static_cast<int64_t>(status.ullTotalPhys > kMaxSigned ? kMaxSigned : status.ullTotalPhys);
+}
+
 }  // namespace
+
+int64_t HostMemoryByteCount() {
+  // Function-local static: measured once, thread-safe initialization.
+  static const int64_t byteCount = MeasureHostMemoryByteCount();
+  return byteCount;
+}
+
+int64_t ProcessMemoryBudgetByteCount() {
+  return MemoryTierForHost(HostMemoryByteCount()).process_budget_byte_count;
+}
+
+int64_t DeviceMemoryTargetByteCount() {
+  return MemoryTierForHost(HostMemoryByteCount()).device_target_byte_count;
+}
 
 void SdkInit(bool isService, int64_t memoryLimitBytes) {
   const std::string logDir = Narrow(LogDir(isService).wstring());
   urnet::setLogDir(logDir);
   urnet::setMemoryLimit(memoryLimitBytes);
-  LogInfo("sdk initialized: version={} logDir={} memLimit={}MB",
-          urnet::version(), logDir, memoryLimitBytes / (1024 * 1024));
+  LogInfo("sdk initialized: version={} logDir={} memLimit={}MB hostMem={}MB deviceTarget={}MB",
+          urnet::version(), logDir, memoryLimitBytes / (1024 * 1024),
+          HostMemoryByteCount() / (1024 * 1024),
+          DeviceMemoryTargetByteCount() / (1024 * 1024));
 }
 
 GoCrashCapture RedirectGoCrashOutput(const std::filesystem::path& dir) {

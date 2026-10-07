@@ -16,33 +16,6 @@
 
 namespace urnw {
 
-// ---- Try guest mode -----------------------------------------------------------
-// macOS GuestModeSheet: a brief explainer, the terms consent (the same
-// terms/privacy links the create step uses), and one button that creates a
-// throwaway guest network (SdkHost::LoginAsGuest). On success the dialog hides
-// itself and the auth-state relay swaps the login panel for the home view;
-// errors show inline and leave the sheet open for a retry.
-class GuestModeSheet : public std::enable_shared_from_this<GuestModeSheet> {
- public:
-  static std::shared_ptr<GuestModeSheet> Create(
-      winrt::Microsoft::UI::Xaml::XamlRoot const& root, SdkHost& sdk);
-
-  winrt::Microsoft::UI::Xaml::Controls::ContentDialog Dialog() const { return dialog_; }
-
- private:
-  explicit GuestModeSheet(SdkHost& sdk) : sdk_(sdk) {}
-
-  void Build(winrt::Microsoft::UI::Xaml::XamlRoot const& root);
-  void Submit();
-  void ApplyResult(bool ok, std::string const& error);
-
-  SdkHost& sdk_;
-  winrt::Microsoft::UI::Xaml::Controls::ContentDialog dialog_{nullptr};
-  winrt::Microsoft::UI::Xaml::Controls::CheckBox termsCheck_{nullptr};
-  winrt::Microsoft::UI::Xaml::Controls::TextBlock errorText_{nullptr};
-  bool creating_ = false;
-};
-
 // ---- Seedphrase display -----------------------------------------------------
 // macOS SeedphraseDisplayView: the one and only showing of a newly minted
 // seedphrase — numbered word grid, a warning that this is the only time, copy
@@ -98,12 +71,21 @@ class SeedphraseDisplaySheet : public std::enable_shared_from_this<SeedphraseDis
 // Offered from the SIGNED-OUT screen only, as on iOS: switching servers swaps
 // the LocalState and therefore the stored jwt, so it cannot be done underneath
 // a live session.
+//
+// Its VLESS button edits the ACTIVE space's VLESS server on the VLESS sheet
+// (VlessSheet.h), the one Settings opens. Only one ContentDialog shows at a
+// time, so the button closes this sheet with VlessRequested() set and the
+// caller opens that one in its place (LoginPage::OnChangeNetworkServer).
 class NetworkServerSheet : public std::enable_shared_from_this<NetworkServerSheet> {
  public:
   static std::shared_ptr<NetworkServerSheet> Create(
       winrt::Microsoft::UI::Xaml::XamlRoot const& root, SdkHost& sdk);
 
   winrt::Microsoft::UI::Xaml::Controls::ContentDialog Dialog() const { return dialog_; }
+  // the sheet closed through its VLESS button
+  bool VlessRequested() const { return vlessRequested_; }
+  // the sheet closed through its bootstrap DNS-over-HTTPS servers button
+  bool ControlDohRequested() const { return controlDohRequested_; }
 
  private:
   explicit NetworkServerSheet(SdkHost& sdk) : sdk_(sdk) {}
@@ -120,6 +102,8 @@ class NetworkServerSheet : public std::enable_shared_from_this<NetworkServerShee
 
   SdkHost& sdk_;
   SdkHost::NetworkServer current_;
+  bool vlessRequested_ = false;
+  bool controlDohRequested_ = false;
   winrt::Microsoft::UI::Xaml::Controls::ContentDialog dialog_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::TextBox hostBox_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::TextBox apiBox_{nullptr};
@@ -131,7 +115,7 @@ class NetworkServerSheet : public std::enable_shared_from_this<NetworkServerShee
 // The url/host normalization the sheet applies before anything is sent to the
 // SDK. Free functions, ported one-for-one from iOS NetworkServerUtils.swift
 // (itself a port of android's NetworkServerSelector.kt), so the three clients
-// agree on what "ur.network", "https://api.example.com/" and "[2001:db8::1]:8080"
+// agree on what "bringyour.com", "https://api.example.com/" and "[2001:db8::1]:8080"
 // each mean. Declared here so they are testable and reviewable on their own.
 namespace netserver {
 std::string NormalizeHost(std::string const& raw);

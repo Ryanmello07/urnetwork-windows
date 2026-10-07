@@ -6,12 +6,24 @@
 #include "MainWindow.g.cpp"
 #endif
 
+#include "BittensorWalletDialogs.h"
+
 #include <winrt/Microsoft.UI.Xaml.Automation.h>
 #include <winrt/Windows.Foundation.h>
+#include <winrt/Windows.UI.ViewManagement.h>
+
+#include <cstdlib>
+#include <map>
 
 #include "AppController.h"
+#include "ClientEvents.h"
+#include "DataInfo.h"
+#include "GuestConversion.h"
 #include "Log.h"
+#include "OnboardingRouting.h"
 #include "PageContext.h"
+#include "Paths.h"
+#include "ReferralShare.h"
 #include "StatsFormat.h"
 #include "UrColors.h"
 
@@ -83,6 +95,8 @@ MainWindow::MainWindow() {
   account_ = std::make_unique<urnw::AccountPage>(*this);
   wallet_ = std::make_unique<urnw::WalletPage>(*this);
   settings_ = std::make_unique<urnw::SettingsPage>(*this);
+  referrals_ = std::make_unique<urnw::ReferralsPage>(*this);
+  licenses_ = std::make_unique<urnw::LicensesPage>(*this);
   // Last: its ctor binds SdkHost's mode-notice handler and asks for a refresh,
   // so everything it may paint over must already exist.
   developer_ = std::make_unique<urnw::DeveloperPage>(*this);
@@ -117,6 +131,19 @@ MainWindow::MainWindow() {
         if (auto self = weak.get()) self->network().OnPeers(peers);
       });
     });
+    // The provider extender status (EXTENDER.md N7): one feed for the rows that
+    // draw it, each taking every pushed view on the UI queue, the way
+    // OnStatsChanged hands the live stats to every page that reads them. The
+    // Earnings page also reads the role's `enabled` from it for its statistics
+    // groups (O8).
+    Sdk().SetExtenderProvideStatusHandler([queue, weak](urnw::ExtenderProvideStatusView view) {
+      queue.TryEnqueue([weak, view = std::move(view)] {
+        if (auto self = weak.get()) {
+          self->connect().ApplyExtenderProvideState(view);
+          self->wallet().ApplyExtenderProvideState(view);
+        }
+      });
+    });
   }
 
   ApplyStrings();
@@ -133,17 +160,46 @@ MainWindow::MainWindow() {
   // first creates a full account, like the plan card's affordance)
   {
     Button getPro;
-    getPro.Content(LocBox("become_supporter"));
+    getPro.Content(LocBox("get_pro"));  // the same label as every other app
+    // found by the insufficient-balance acceptance driver beside the banner's id
+    Automation::AutomationProperties::SetAutomationId(getPro,
+                                                      L"acceptance.insufficient-balance.upgrade");
     getPro.Click([weak = get_weak()](auto const&, auto const&) {
       auto self = weak.get();
       if (!self) return;
       if (self->balance_.guest) {
-        self->login().BeginGuestUpgrade();
+        self->DivertGuestToConversion([weak] {
+          if (auto self = weak.get()) self->ShowUpgradeSheet();
+        });
       } else {
         self->ShowUpgradeSheet();
       }
     });
     BalanceWarning().ActionButton(getPro);
+
+    // the banner leads with when the free data refreshes (ConnectPage); Why?
+    // explains the balance in the "About your data" sheet
+    HyperlinkButton why;
+    why.Content(LocBox("data_info_why"));
+    Automation::AutomationProperties::SetAutomationId(why,
+                                                      L"acceptance.insufficient-balance.why");
+    why.Click([weak = get_weak()](auto const&, auto const&) {
+      if (auto self = weak.get()) self->ShowDataInfoSheet();
+    });
+    // a refused start waits on the balance and is run by itself once data is
+    // back (BalanceGate.h, BalanceRecovery); Cancel ends the wait, since a
+    // connect that never started has no Disconnect
+    balanceRecoveryCancel_ = HyperlinkButton();
+    balanceRecoveryCancel_.Content(LocBox("cancel"));
+    balanceRecoveryCancel_.Visibility(Visibility::Collapsed);
+    Automation::AutomationProperties::SetAutomationId(
+        balanceRecoveryCancel_, L"acceptance.insufficient-balance.cancel-reconnect");
+    balanceRecoveryCancel_.Click([](auto const&, auto const&) { urnw::App().ClearBalanceRecovery(); });
+    StackPanel links;
+    links.Orientation(winrt::Microsoft::UI::Xaml::Controls::Orientation::Horizontal);
+    links.Children().Append(why);
+    links.Children().Append(balanceRecoveryCancel_);
+    BalanceWarning().Content(links);
   }
 
   // The service-setup banner's one click (beta spec §3): a single elevated
@@ -248,6 +304,25 @@ MainWindow::MainWindow() {
     Sdk().RefreshModeNotice();
   }
 
+  // ---- Bittensor manual proof (TAO.com) ----
+  // SdkHost asks for the manual form from an SDK thread once a TAO.com proof
+  // has its challenge; the form answers SdkHost directly. A window that is
+  // gone answers with a cancel so the flow is not left waiting.
+  {
+    auto queue = DispatcherQueue();
+    Sdk().SetBittensorManualHandler(
+        [weak = get_weak(), queue](urnw::SdkHost::BittensorManualRequest request) {
+          const bool queued = queue.TryEnqueue([weak, request] {
+            if (auto self = weak.get()) {
+              urnw::pages::ShowBittensorManualForm(self, request);
+            } else {
+              Sdk().CancelBittensorProof();
+            }
+          });
+          if (!queued) Sdk().CancelBittensorProof();
+        });
+  }
+
   // ---- Advanced Mode (D5) ----
   // The SAME two-line pair, for the same reason. The preference is read off
   // disk in SdkHost::Initialize(), which runs at startup; this window is not
@@ -284,6 +359,8 @@ MainWindow::~MainWindow() {
 
 void MainWindow::SetPresentationActive(bool active) {
   connect_->SetPresentationActive(active);
+  // the Earnings statistics charts' clock (EXTENDER.md O8)
+  wallet_->SetPresentationActive(active);
   developer_->SetPresentationActive(active);
   // R4: Network holds two SDK feeds that SdkHost closes with the presentation.
   // Without this line the close had no matching open and the provider list was
@@ -324,6 +401,10 @@ void MainWindow::ApplyStrings() {
   account_->ApplyStrings();
   wallet_->ApplyStrings();
   settings_->ApplyStrings();
+  // the rows ApplyStrings builds start hidden: re-apply the plan's store
+  settings_->ApplySubscriptionStore(balance_.subscriptionStoreFamily);
+  referrals_->ApplyStrings();
+  licenses_->ApplyStrings();
   developer_->ApplyStrings();
 }
 
@@ -447,9 +528,10 @@ void MainWindow::ApplyBreakpoint() {
   // Home's shape, applied to an account: a fixed rail of figures, a wide middle
   // that is the one list worth widening, and a fixed table on the right.
   //
-  //   >= 1000dip   three panes   plan(360) | account(*) | codes(380)
-  //   <  1000dip   two panes     plan(360) | account(*)
-  //   <   640dip   one pane      account(*)
+  //   >= 1900dip   four panes    plan(360) | account(*) | extenders(380) | codes(380)
+  //   >= 1500dip   three panes   plan(360) | account(*) | extenders(380)
+  //   >=  900dip   two panes     plan(360) | account(*)
+  //   <   900dip   one pane      account(*)
   //
   // The codes table folds first because it is a record, not a control: nothing
   // in it is actionable and Redeem lives in the plan pane. Below 640 the PLAN
@@ -461,11 +543,23 @@ void MainWindow::ApplyBreakpoint() {
   // 380, which left the account list 278dip - and a row that is a label, a value
   // and a Copy button in 278dip renders as "..." beside "Please login to
   // URnetwork". A pane that cannot show its labels is not a pane.
+  //
+  // EXTENDERS (connect/EXTENDER.md K6) is the fourth pane, and it takes the
+  // THIRD slot in the fold order rather than the fourth. The rule this
+  // generalises is the one already written above: the codes table folds first
+  // because it is a RECORD, nothing in it is actionable, and the same sentence
+  // decides between it and a pane that is entirely controls - the extender dns
+  // name, the gossip url, the manual host list, share and import. So codes need
+  // a fourth column's worth of room; extenders keep the third.
+  const bool accountFour = 1900.0 <= width;
   const bool accountThree = 1500.0 <= width;
   const bool accountTwo = 900.0 <= width;
-  SetWidth(AccountPaneCColumn(), accountThree ? 380 : 0);
-  AccountPaneCRule().Visibility(accountThree ? Visibility::Visible : Visibility::Collapsed);
-  AccountPaneC().Visibility(accountThree ? Visibility::Visible : Visibility::Collapsed);
+  SetWidth(AccountPaneCColumn(), accountFour ? 380 : 0);
+  AccountPaneCRule().Visibility(accountFour ? Visibility::Visible : Visibility::Collapsed);
+  AccountPaneC().Visibility(accountFour ? Visibility::Visible : Visibility::Collapsed);
+  SetWidth(AccountPaneDColumn(), accountThree ? 380 : 0);
+  AccountPaneDRule().Visibility(accountThree ? Visibility::Visible : Visibility::Collapsed);
+  AccountPaneD().Visibility(accountThree ? Visibility::Visible : Visibility::Collapsed);
   SetWidth(AccountPaneAColumn(), accountTwo ? 360 : 0);
   AccountPaneBRule().Visibility(accountTwo ? Visibility::Visible : Visibility::Collapsed);
   AccountPaneA().Visibility(accountTwo ? Visibility::Visible : Visibility::Collapsed);
@@ -493,6 +587,13 @@ void MainWindow::ApplyBreakpoint() {
   SetStar(SettingsPaneBColumn(), settingsTwo ? 1 : 0);
   SettingsPaneBRule().Visibility(settingsTwo ? Visibility::Visible : Visibility::Collapsed);
   SettingsPaneB().Visibility(settingsTwo ? Visibility::Visible : Visibility::Collapsed);
+  // The Licenses row lives in About, and About folds: below three panes the
+  // row moves to the foot of General, so the attributions some of those
+  // licenses REQUIRE to be shown stay reachable at every width.
+  settings_->ApplyAboutPaneVisible(settingsThree);
+  // The Licenses page, shown in Settings' place, splits list | detail at the
+  // same width Settings keeps two panes.
+  licenses_->ApplyBreakpoint(settingsTwo);
 
   // ---- Support: the form, and the way to reach a human beside it -----------
   // 1080 and an even split. This destination has one form and no data, so the
@@ -615,8 +716,8 @@ void MainWindow::BuildStatusStrip() {
   // particular are the difference between "connected" and "carrying packets",
   // which is the distinction this strip exists to keep visible.
   //
-  // Their labels are Adv() ids — the store has 945 keys and no word for any of
-  // them. See pages::Adv in PageContext.h.
+  // Their labels are Adv() ids, store keys of their own. See pages::Adv in
+  // PageContext.h.
   //
   // NOT here, and reported rather than invented: the egress interface index.
   // The spec's advanced list names it, the driver knows it, and nothing on the
@@ -639,7 +740,7 @@ void MainWindow::BuildStatusStrip() {
     advSection(statusMode_, Adv("adv_session_mode", L"Session"));
     advSection(statusRoutes_, Adv("adv_routes", L"Routes"));
     advSection(statusRpcPort_, Adv("adv_rpc", L"RPC"));
-    advSection(statusRaw_, Adv("adv_raw_status", L"Raw"));
+    advSection(statusRaw_, Adv("adv_raw_status", L"Raw status"));
   } else {
     statusMode_ = {};
     statusRoutes_ = {};
@@ -1034,6 +1135,13 @@ void MainWindow::OnNavSelectionChanged(NavigationView const&,
   HomeNav().Header(paneShell ? IInspectable{nullptr} : item.Content());
 
   const bool wasConnectVisible = ConnectView().Visibility() == Visibility::Visible;
+  // a rail navigation always lands on the destination itself, never on the
+  // Refer and earn page that may have been open in Account's place
+  referralsOpen_ = false;
+  ReferralsView().Visibility(Visibility::Collapsed);
+  // ...and never on the Licenses page that may have been open in Settings'
+  if (LicensesView().Visibility() == Visibility::Visible) licenses_->OnClosed();
+  LicensesView().Visibility(Visibility::Collapsed);
   ConnectView().Visibility(tag == L"connect" ? Visibility::Visible : Visibility::Collapsed);
   NetworkView().Visibility(tag == L"network" ? Visibility::Visible : Visibility::Collapsed);
   AccountView().Visibility(tag == L"account" ? Visibility::Visible : Visibility::Collapsed);
@@ -1050,6 +1158,12 @@ void MainWindow::OnNavSelectionChanged(NavigationView const&,
   // re-renders from whatever snapshot exists now. Same shape as the developer
   // poll above - a destination that is not on screen does not hold a feed open.
   network_->SetSelected(tag == L"network");
+  // ...and Earnings' provider status (P008): the controller opens the first
+  // time the destination shows, and polls only while it shows.
+  wallet_->SetSelected(tag == L"wallet");
+  // The Earnings statistics (EXTENDER.md O8) re-seed from SdkHost's caches as the
+  // destination shows. A cache read with no request, so it runs in preview too.
+  if (tag == L"wallet") wallet_->ResyncProviderStats();
 
   if (tag == L"connect" && !wasConnectVisible) connect_->AnimateDrawerIn();
 
@@ -1114,6 +1228,7 @@ void MainWindow::LoadCurrentDestination() {
     // they sit on "Please login to URnetwork" on the destination that shows
     // them, which is indistinguishable from being signed out.
     settings_->LoadSettings();
+    if (referralsOpen_) referrals_->Load();  // the page is up in Account's place
   } else if (tag == L"wallet") {
     wallet_->LoadWallet();
   } else if (tag == L"leaderboard") {
@@ -1121,6 +1236,45 @@ void MainWindow::LoadCurrentDestination() {
   } else if (tag == L"settings") {
     settings_->LoadSettings();
   }
+}
+
+// ---- the Refer and earn page (reached from Account's Referrals row) ---------
+
+void MainWindow::OpenReferrals() {
+  referralsOpen_ = true;
+  AccountView().Visibility(Visibility::Collapsed);
+  ReferralsView().Visibility(Visibility::Visible);
+  // With no session (signed out, --preview-ui) Load settles every field on its
+  // no-session state without a request; the referral-network row is
+  // SettingsPage's, so its load runs alongside.
+  referrals_->Load();
+  if (!previewUi_ && Sdk().IsLoggedIn()) {
+    account_->LoadReferralInfo();
+    settings_->LoadReferral();
+    Balance().Refresh();  // the card paints from the store's referral figures
+  }
+}
+
+void MainWindow::CloseReferrals() {
+  referralsOpen_ = false;
+  ReferralsView().Visibility(Visibility::Collapsed);
+  AccountView().Visibility(Visibility::Visible);
+}
+
+// ---- the Licenses page (reached from Settings' Licenses row) -----------------
+// No session and no API: the list is embedded in the SDK dll, so this opens the
+// same way signed in, signed out and under --preview-ui.
+
+void MainWindow::OpenLicenses() {
+  SettingsView().Visibility(Visibility::Collapsed);
+  LicensesView().Visibility(Visibility::Visible);
+  licenses_->Load();
+}
+
+void MainWindow::CloseLicenses() {
+  licenses_->OnClosed();
+  LicensesView().Visibility(Visibility::Collapsed);
+  SettingsView().Visibility(Visibility::Visible);
 }
 
 // ---- balance / plan (SubscriptionBalanceStore relay) -----------------------
@@ -1133,9 +1287,281 @@ void MainWindow::LoadCurrentDestination() {
 
 void MainWindow::OnBalanceChanged(urnw::BalanceSnapshot const& snapshot,
                                   urnw::BalancePollState const& poll) {
+  if (onboarding_ && onboarding_->Visible()) onboarding_->OnBalance(snapshot);
+  if (referrals_) referrals_->OnBalance();  // the Refer and earn card follows the store
+  // The Pro celebration, once per purchase: the store confirms the free ->
+  // Pro flip after checkout (the upgrade sheet's success page reads the same
+  // snapshot), and the flight plays over whatever is on screen.
+  const bool becamePro = balance_.loaded && !balance_.isPro && !balance_.guest &&
+                         snapshot.isPro && !snapshot.guest;
+  const bool guestChanged = balance_.guest != snapshot.guest;
   balance_ = snapshot;
   balancePoll_ = poll;
   ApplyBalance();
+  // a refreshed guest is known only from the server's guest: relabel it
+  if (guestChanged) ApplyNetworkIdentity();
+  // a converted guest's purchase continues once the server stops reporting a guest
+  guestUpgrade_.Poll(balance_.guest);
+  if (becamePro) LaunchProCelebration();
+}
+
+// ---- the Pro celebration ----------------------------------------------------
+// One flight at a time; the flight itself declines to start while one is in
+// the air or when the system has animations off, so the callers stay simple.
+void MainWindow::LaunchProCelebration() {
+  if (!proCelebration_) {
+    // the window content is what the mosaic freezes: the whole root grid,
+    // title bar to status strip, which is what the host and canvas cover
+    proCelebration_ = std::make_unique<urnw::ProCelebrationFlight>(
+        ProCelebrationCanvas(), ProCelebrationMosaic(), Content());
+  }
+  proCelebration_->Launch();
+}
+
+// ---- referral crowning (the ur.io king-frog gold celebrations) --------------
+//
+// The store observed new referrals for this network. The first ever earns the
+// full-window gold crowning overlay; later batches get the passing gold toast.
+// Baseline bookkeeping already happened in the store, so showing UI is all
+// that is left to do here.
+void MainWindow::OnReferralCelebration(urnw::ReferralCelebration const& celebration) {
+  if (celebration.isFirst) {
+    ShowReferralCelebration(celebration);
+    return;
+  }
+  if (!referralSnackbar_) {
+    referralSnackbar_ =
+        std::make_unique<urnw::kit::Snackbar>(ReferralSnackbar(), DispatcherQueue());
+  }
+  referralSnackbar_->Show(
+      hstring{urnw::PluralFormat("referral_toast_joined", celebration.joined,
+                                 celebration.joined, Balance().ReferralTerms().bonusGibPerDay)},
+      InfoBarSeverity::Informational);
+}
+
+void MainWindow::ShowReferralCelebration(urnw::ReferralCelebration const& celebration) {
+  namespace anim = Microsoft::UI::Xaml::Media::Animation;
+
+  ReferralCelebrationTitle().Text(Loc("referral_royalty"));
+  ReferralCelebrationDetail().Text(
+      hstring{urnw::PluralFormat("referral_celebration_detail", celebration.joined,
+                                 celebration.joined, Balance().ReferralTerms().bonusGibPerDay)});
+
+  const auto code = Balance().ReferralCode();
+  ReferralCelebrationCode().Text(code ? H(*code) : L"");
+  ReferralCelebrationCopy().Content(LocBox("copy"));
+  ReferralCelebrationShare().Content(LocBox("share"));
+
+  if (!referralCelebrationWired_) {
+    referralCelebrationWired_ = true;
+    auto weak = get_weak();
+    ReferralCelebrationClose().Click([weak](auto const&, auto const&) {
+      if (auto self = weak.get()) self->HideReferralCelebration();
+    });
+    ReferralCelebrationCopy().Click([weak](auto const&, auto const&) {
+      auto self = weak.get();
+      if (!self) return;
+      const auto current = Balance().ReferralCode();
+      if (!current) return;
+      winrt::Windows::ApplicationModel::DataTransfer::DataPackage package;
+      package.SetText(H(*current));
+      winrt::Windows::ApplicationModel::DataTransfer::Clipboard::SetContent(package);
+      self->ReferralCelebrationCopy().Content(LocBox("copied"));
+    });
+    // windows has no share sheet in this app: "share" copies the invite
+    // message, exactly like the account menu's share item
+    ReferralCelebrationShare().Click([weak](auto const&, auto const&) {
+      auto self = weak.get();
+      if (!self) return;
+      const auto current = Balance().ReferralCode();
+      if (!current) return;
+      winrt::Windows::ApplicationModel::DataTransfer::DataPackage package;
+      package.SetText(hstring{urnw::ReferralShareText(
+          urnw::Format("referral_share_message", urnw::Widen(*current)),
+          urnw::Widen(urnw::ReferralLinkUrl(Sdk().linkHostName(), *current)))});
+      winrt::Windows::ApplicationModel::DataTransfer::Clipboard::SetContent(package);
+      self->HideReferralCelebration();
+      if (!self->referralSnackbar_) {
+        self->referralSnackbar_ = std::make_unique<urnw::kit::Snackbar>(
+            self->ReferralSnackbar(), self->DispatcherQueue());
+      }
+      self->referralSnackbar_->Show(Loc("bonus_referral_code_copied_to_clipboard"),
+                                    InfoBarSeverity::Success);
+    });
+  }
+
+  ReferralCelebrationOverlay().Visibility(Visibility::Visible);
+
+  // the site's aura pulse; skipped when the system disables animations
+  if (winrt::Windows::UI::ViewManagement::UISettings().AnimationsEnabled()) {
+    if (!referralAuraStoryboard_) {
+      anim::DoubleAnimation pulse;
+      pulse.From(0.55);
+      pulse.To(0.95);
+      pulse.Duration(Duration{
+          std::chrono::duration_cast<winrt::Windows::Foundation::TimeSpan>(
+              std::chrono::milliseconds(1700)),
+          DurationType::TimeSpan});
+      pulse.AutoReverse(true);
+      pulse.RepeatBehavior(anim::RepeatBehavior{
+          .Count = 0, .Duration = {}, .Type = anim::RepeatBehaviorType::Forever});
+      anim::Storyboard::SetTarget(pulse, ReferralCelebrationAura());
+      anim::Storyboard::SetTargetProperty(pulse, L"Opacity");
+      referralAuraStoryboard_ = anim::Storyboard{};
+      referralAuraStoryboard_.Children().Append(pulse);
+    }
+    referralAuraStoryboard_.Begin();
+  }
+}
+
+// ---- onboarding ---------------------------------------------------------------
+
+void MainWindow::ShowOnboarding() {
+  if (!onboarding_) {
+    auto weak = get_weak();
+    urnw::Onboarding::Actions actions;
+    actions.finish = [weak] {
+      if (auto self = weak.get()) self->HideOnboarding();
+    };
+    actions.startCheckout = [weak](bool yearly) {
+      if (auto self = weak.get()) self->ShowUpgradeCheckout(yearly);
+    };
+    actions.redeemCode = [weak] {
+      if (auto self = weak.get()) self->ShowRedeemSheet();
+    };
+    onboarding_ = urnw::Onboarding::Create(OnboardingOverlay(), std::move(actions));
+  }
+  onboarding_->Show();
+}
+
+void MainWindow::HideOnboarding() {
+  if (onboarding_) onboarding_->Hide();
+}
+
+namespace {
+// percent-decoding for the campaign link's query (the same rules as the
+// checkout callbacks': '+' is a space)
+std::string DecodeQueryValue(std::string const& s) {
+  auto hexv = [](char c) -> int {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    return -1;
+  };
+  std::string out;
+  out.reserve(s.size());
+  for (size_t i = 0; i < s.size(); ++i) {
+    if (s[i] == '%' && i + 2 < s.size()) {
+      const int hi = hexv(s[i + 1]), lo = hexv(s[i + 2]);
+      if (hi >= 0 && lo >= 0) {
+        out.push_back(static_cast<char>((hi << 4) | lo));
+        i += 2;
+        continue;
+      }
+    }
+    out.push_back(s[i] == '+' ? ' ' : s[i]);
+  }
+  return out;
+}
+}  // namespace
+
+void MainWindow::HandleOnboardingLink(std::string const& url) {
+  if (!Sdk().IsLoggedIn()) return;
+  std::map<std::string, std::string> query;
+  if (const size_t q = url.find('?'); q != std::string::npos) {
+    size_t i = q + 1;
+    while (i < url.size()) {
+      const size_t amp = url.find('&', i);
+      const std::string pair =
+          url.substr(i, amp == std::string::npos ? std::string::npos : amp - i);
+      if (const size_t eq = pair.find('='); eq != std::string::npos) {
+        query[pair.substr(0, eq)] = DecodeQueryValue(pair.substr(eq + 1));
+      }
+      if (amp == std::string::npos) break;
+      i = amp + 1;
+    }
+  }
+  switch (urnw::ParseOnboardingLink(url)) {
+    case urnw::OnboardingLink::Connect:
+      HomeNav().SelectedItem(ConnectNavItem());
+      break;
+    case urnw::OnboardingLink::Widgets:
+      // no widgets on the desktop: the Account page is the closest destination
+      HomeNav().SelectedItem(AccountNavItem());
+      break;
+    case urnw::OnboardingLink::Offer:
+      if (balance_.offer.active) {
+        if (!onboarding_) ShowOnboarding();  // builds it (and shows page 1)
+        if (onboarding_) onboarding_->ShowOffer();
+      } else {
+        ShowUpgradeSheet();
+      }
+      break;
+    case urnw::OnboardingLink::Feedback: {
+      HomeNav().SelectedItem(SupportNavItem());
+      int rating = 0;
+      if (auto r = query.find("r"); r != query.end()) rating = std::atoi(r->second.c_str());
+      const std::string why = query.count("why") ? query["why"] : std::string();
+      std::string token = query.count("token") ? query["token"] : std::string();
+      if (token.empty() && query.count("t")) token = query["t"];
+      if (settings_) settings_->PrefillFromCampaign(token, rating, why);
+      break;
+    }
+    case urnw::OnboardingLink::None:
+      break;
+  }
+}
+
+void MainWindow::NoteConnected() {
+  // connect.first: once per network. The network id keys the memory, so a
+  // second account on the same machine gets its own first connect.
+  if (!Sdk().eventsReady()) return;
+  auto byJwt = Sdk().ParsedJwt();
+  if (!byJwt) return;
+  const std::string networkId = byJwt->NetworkId ? *byJwt->NetworkId : byJwt->NetworkName;
+  if (networkId.empty()) return;
+  const std::string key = "connect_first_" + networkId;
+  if (urnw::LoadAppPrefs().value(key, false)) return;
+  urnw::SaveAppPref(key.c_str(), true);
+  Sdk().events().ConnectFirst();
+}
+
+// The upgrade sheet opened straight on the checkout for the plan the
+// onboarding page picked (its own products page would only ask again).
+winrt::fire_and_forget MainWindow::ShowUpgradeCheckout(bool yearly) {
+  if (balance_.guest) {  // no purchase for a guest network (ShowUpgradeSheet)
+    DivertGuestToConversion([weak = get_weak(), yearly] {
+      if (auto self = weak.get()) self->ShowUpgradeCheckout(yearly);
+    });
+    co_return;
+  }
+  if (sheetOpen_) co_return;
+  auto self = get_strong();
+  self->sheetOpen_ = true;
+  bool guestSignInRequired = false;
+  try {
+    self->upgradeSheet_ =
+        urnw::UpgradeSheet::CreateForCheckout(Content().XamlRoot(), Sdk(), Balance(), yearly);
+    co_await self->upgradeSheet_->Dialog().ShowAsync();
+    guestSignInRequired = self->upgradeSheet_->GuestSignInRequired();
+  } catch (...) {
+  }
+  self->upgradeSheet_.reset();
+  self->sheetOpen_ = false;
+  // the server refused the checkout for a guest network the balance had not
+  // reported yet: the conversion, then this checkout once it is done
+  if (guestSignInRequired) {
+    self->DivertGuestToConversion([weak = self->get_weak(), yearly] {
+      if (auto self = weak.get()) self->ShowUpgradeCheckout(yearly);
+    });
+  }
+}
+
+void MainWindow::HideReferralCelebration() {
+  if (referralAuraStoryboard_) referralAuraStoryboard_.Stop();
+  ReferralCelebrationOverlay().Visibility(Visibility::Collapsed);
+  // reset the copy acknowledgement for the next showing
+  ReferralCelebrationCopy().Content(LocBox("copy"));
 }
 
 void MainWindow::ApplyBalance() {
@@ -1152,10 +1578,22 @@ void MainWindow::ApplyBalance() {
   auto planBrush = balance_.isPro ? urnw::colors::ProGoldBrush()
                                   : urnw::colors::TextBrush();
   AccountPlanValueText().Foreground(planBrush);
+  // a Pro network's plan label replays the Pro celebration on a tap (android
+  // AccountRootSubscription onPlanLabelTap); free and guest labels stay text
+  if (!proPlanTapWired_) {
+    proPlanTapWired_ = true;
+    AccountPlanValueText().Tapped([weak = get_weak()](auto const&, auto const&) {
+      if (auto self = weak.get()) {
+        if (self->balance_.isPro && !self->balance_.guest) self->LaunchProCelebration();
+      }
+    });
+  }
+  AccountPlanValueText().IsTapEnabled(balance_.isPro && !balance_.guest);
 
   // the upgrade affordances show for a signed-in free account; a guest gets a
   // create-account affordance on the plan cards instead (macOS AccountRootView,
-  // linux ConnectDrawer), which routes into the guest-upgrade create step
+  // linux ConnectDrawer), which offers signing out to create an account
+  // (LoginPage::OpenGuestConversion)
   const auto upgradeVisibility = (!balance_.isPro && !balance_.guest)
                                      ? Visibility::Visible
                                      : Visibility::Collapsed;
@@ -1165,6 +1603,9 @@ void MainWindow::ApplyBalance() {
                                                    : upgradeVisibility);
   // the wallet panel's checkout stays hidden for guests: an account comes first
   UpgradeButton().Visibility(upgradeVisibility);
+
+  // the Stripe customer portal only manages a Stripe subscription
+  if (settings_) settings_->ApplySubscriptionStore(balance_.subscriptionStoreFamily);
 
   // the small ring while the post-checkout confirmation poll runs
   AccountPlanRing().IsActive(balancePoll_.confirming);
@@ -1178,12 +1619,26 @@ void MainWindow::ApplyBalance() {
   const hstring daily = H(urnw::FormatByteCountCompact(balance_.startBalanceByteCount));
   AccountDailyValue().Text(daily);
 
-  // referral rows: "Total Referrals: N" and "+N*30 GiB/Month"
-  const int64_t totalReferrals = account_ ? account_->totalReferrals() : 0;
-  const hstring totals = hstring{urnw::Format("total_referrals_lld", totalReferrals)};
-  const hstring bonus = hstring{urnw::Format("referral_bonus", totalReferrals * 30)};
-  AccountReferralTotals().Text(totals);
-  AccountReferralBonus().Text(bonus);
+  // referral rows: "Total Referrals: N" and "+N*3 GiB/Day" (the server grants
+  // 3 GiB per referral per 24h -- pro.yml referral; this row said GiB/Month)
+  // once the read lands; a failed read is not "0" but the error and Try again
+  const urnw::ReferralTotalsView totalsView =
+      account_ ? account_->referralTotals().View() : urnw::ReferralTotalsView::Loading;
+  if (totalsView == urnw::ReferralTotalsView::Count) {
+    const int64_t totalReferrals = account_->referralTotals().Total();
+    AccountReferralTotals().Text(hstring{urnw::Format("total_referrals_lld", totalReferrals)});
+    AccountReferralBonus().Text(hstring{urnw::Format(
+        "referral_bonus", Balance().ReferralTerms().EarnedGibPerDay(totalReferrals))});
+  } else {
+    AccountReferralTotals().Text(Loc("total_referrals"));
+    AccountReferralBonus().Text(Loc(totalsView == urnw::ReferralTotalsView::Unavailable
+                                        ? "something_went_wrong"
+                                        : "loading"));
+  }
+  AccountReferralRetry().Content(LocBox("try_again"));
+  AccountReferralRetry().Visibility(totalsView == urnw::ReferralTotalsView::Unavailable
+                                        ? Visibility::Visible
+                                        : Visibility::Collapsed);
 
   UpdateBalanceWarning();
   // the open upgrade sheet watches for the plan flip / poll timeout
@@ -1195,11 +1650,24 @@ void MainWindow::SetInsufficientBalance(bool insufficient) {
   UpdateBalanceWarning();
 }
 
+void MainWindow::SetBalanceRecovery(urnw::balance::RecoveryState state) {
+  // pushed with every stats and balance push; re-render only on a change
+  if (state == balanceRecovery_) return;
+  balanceRecovery_ = state;
+  UpdateBalanceWarning();
+}
+
 void MainWindow::UpdateBalanceWarning() {
   // macOS ConnectActions: the insufficient-balance CTA shows for a non-Pro
-  // account when no confirmation poll is bridging a just-made purchase
-  BalanceWarning().IsOpen(insufficientBalance_ && !balance_.isPro &&
-                          !balancePoll_.confirming);
+  // account when no confirmation poll is bridging a just-made purchase. A
+  // refused start waiting on the balance keeps it open with its Cancel.
+  BalanceWarning().IsOpen(urnw::balance::BannerOpen(outOfBalance(), balanceRecovery_));
+  if (balanceRecoveryCancel_) {
+    const bool cancel = urnw::balance::RecoveryLinesFor(outOfBalance(), false, outOfBalanceKind(),
+                                                        balanceRecovery_)
+                            .cancel;
+    balanceRecoveryCancel_.Visibility(cancel ? Visibility::Visible : Visibility::Collapsed);
+  }
   // The hero canvas renders the same two account states (error / processing)
   // off the same fields, so it is re-rendered from the ONE place they change.
   // Guarded: the balance relay can land before the pages are constructed.
@@ -1329,15 +1797,15 @@ void MainWindow::OnUpdateBannerAction() {
   switch (updateSnapshot_.phase) {
     case Phase::Available:
     case Phase::Failed:
-      // Download / verify / extract / swap, or retry it from scratch — the
+      // Download / verify / install, or retry it from scratch — the
       // checker re-runs the whole pipeline rather than resuming a half state.
       urnw::pages::Updates().BeginApply();
       break;
-    case Phase::ManualUnzip:
-      // The zip is already downloaded and verified; the only help left to
+    case Phase::ManualInstall:
+      // The MSI is already downloaded and verified; the only help left to
       // offer is showing it again.
-      if (!updateSnapshot_.zipPath.empty())
-        urnw::UpdateChecker::RevealInExplorer(updateSnapshot_.zipPath);
+      if (!updateSnapshot_.installerPath.empty())
+        urnw::UpdateChecker::RevealInExplorer(updateSnapshot_.installerPath);
       break;
     default:
       break;  // Applying: the button is disabled; None: no banner to click
@@ -1394,26 +1862,89 @@ void MainWindow::OnOpenUpgrade(IInspectable const&, RoutedEventArgs const&) {
   // a guest first creates a full account (the plan card's affordance reads
   // "Create an account" for them); checkout is for signed-in free accounts
   if (balance_.guest) {
-    login_->BeginGuestUpgrade();
+    // the plan card's "Create an account": the conversion is all it asked for
+    login_->OpenGuestConversion();
     return;
   }
   ShowUpgradeSheet();
+}
+
+void MainWindow::DivertGuestToConversion(std::function<void()> checkout) {
+  guestUpgrade_.Divert(std::move(checkout));
+  login_->OpenGuestConversion([weak = get_weak()](bool done) {
+    auto self = weak.get();
+    if (!self) return;
+    if (done) self->guestUpgrade_.ConversionDone();
+    self->guestUpgrade_.ConversionClosed();
+    // the balance re-read may already have cleared the guest; else OnBalanceChanged
+    self->guestUpgrade_.Poll(self->balance_.guest);
+  });
 }
 
 void MainWindow::OnOpenRedeem(IInspectable const&, RoutedEventArgs const&) {
   ShowRedeemSheet();
 }
 
+void MainWindow::OnOpenDataInfo(IInspectable const&, RoutedEventArgs const&) {
+  ShowDataInfoSheet();
+}
+
+void MainWindow::OpenUpgradeForBlockedConnect() {
+  // ShowUpgradeSheet runs synchronously up to its ShowAsync, so the mark
+  // reaches exactly this opening and no later one
+  upgradeForBlockedConnect_ = true;
+  OnOpenUpgrade(nullptr, nullptr);
+  upgradeForBlockedConnect_ = false;
+}
+
+void MainWindow::OnRetryReferralTotals(IInspectable const&, RoutedEventArgs const&) {
+  if (account_) account_->RetryReferralInfo();
+}
+
 winrt::fire_and_forget MainWindow::ShowUpgradeSheet() {
+  // No purchase for a legacy guest network: whatever was bought would stay
+  // on a network with no login (every entry point lands here or checks first)
+  if (balance_.guest) {
+    DivertGuestToConversion([weak = get_weak()] {
+      if (auto self = weak.get()) self->ShowUpgradeSheet();
+    });
+    co_return;
+  }
+  if (sheetOpen_) co_return;  // only one ContentDialog can show at a time
+  auto self = get_strong();
+  self->sheetOpen_ = true;
+  bool guestSignInRequired = false;
+  try {
+    // a blocked connect's sheet says when the free data refreshes
+    const bool freeRefresh =
+        urnw::datainfo::UpgradeShowsFreeRefresh(upgradeForBlockedConnect_, balance_.isPro);
+    self->upgradeSheet_ =
+        urnw::UpgradeSheet::Create(Content().XamlRoot(), Sdk(), Balance(), freeRefresh);
+    co_await self->upgradeSheet_->Dialog().ShowAsync();
+    guestSignInRequired = self->upgradeSheet_->GuestSignInRequired();
+  } catch (...) {
+  }
+  self->upgradeSheet_.reset();
+  self->sheetOpen_ = false;
+  // the server refused the checkout for a guest network the balance had not
+  // reported yet: the conversion, then the upgrade once it is done
+  if (guestSignInRequired) {
+    self->DivertGuestToConversion([weak = self->get_weak()] {
+      if (auto self = weak.get()) self->ShowUpgradeSheet();
+    });
+  }
+}
+
+winrt::fire_and_forget MainWindow::ShowDataInfoSheet() {
   if (sheetOpen_) co_return;  // only one ContentDialog can show at a time
   auto self = get_strong();
   self->sheetOpen_ = true;
   try {
-    self->upgradeSheet_ = urnw::UpgradeSheet::Create(Content().XamlRoot(), Sdk(), Balance());
-    co_await self->upgradeSheet_->Dialog().ShowAsync();
+    self->dataInfoSheet_ = urnw::DataInfoSheet::Create(Content().XamlRoot(), balance_);
+    co_await self->dataInfoSheet_->Dialog().ShowAsync();
   } catch (...) {
   }
-  self->upgradeSheet_.reset();
+  self->dataInfoSheet_.reset();
   self->sheetOpen_ = false;
 }
 
@@ -1424,10 +1955,13 @@ winrt::fire_and_forget MainWindow::ShowRedeemSheet() {
   try {
     auto weak = get_weak();
     self->redeemSheet_ = urnw::RedeemCodeSheet::Create(
-        Content().XamlRoot(), Sdk(), [weak] {
-          // redeemed: poll the balance up (macOS starts the confirmation poll)
-          // and refresh the redeemed-codes list
-          urnw::App().balance().StartConfirmationPolling();
+        Content().XamlRoot(), Sdk(), [weak](bool /*credited*/) {
+          // Redeemed now or earlier, the code's data is on the balance: read it
+          // once and refresh the redeemed-codes list. A balance code is data
+          // only (the server grants it with pro = false), so never the Pro
+          // confirmation poll: it waits for a plan a code never grants, spins
+          // the plan ring and holds back the balance notice for 2 minutes.
+          urnw::App().balance().Refresh();
           if (auto self = weak.get()) self->account().LoadBalanceCodes();
         });
     co_await self->redeemSheet_->Dialog().ShowAsync();
@@ -1455,28 +1989,65 @@ void MainWindow::ApplyAuthState(urnw::AuthState state, std::string const& error)
     // surface the error on the sign-in step the user is looking at
     login_->ShowErrorOnCurrentStep(H(error));
   }
-  if (loggedIn) login_->ClearGuestUpgrade();  // any guest upgrade resolved
   // The network name behind the idle "{name} is ready to connect" copy. Read
   // from the stored jwt once per auth change (ParsedJwt re-parses on every
   // call, and the status line is rewritten on every stats push).
-  std::string networkName;
-  bool guestMode = false;
-  bool pro = false;
+  identityLoggedIn_ = loggedIn;
+  identityShown_ = showHome;
+  identityNetworkName_.clear();
+  identityJwtGuest_ = false;
+  identityPro_ = false;
   if (loggedIn) {
     if (auto jwt = Sdk().ParsedJwt()) {
-      networkName = jwt->NetworkName;
-      guestMode = jwt->GuestMode;
-      pro = jwt->Pro;
+      identityNetworkName_ = jwt->NetworkName;
+      identityJwtGuest_ = jwt->GuestMode;
+      identityPro_ = jwt->Pro;
     }
   }
-  connect_->SetNetworkIdentity(networkName, guestMode);  // re-renders the status
+  ApplyNetworkIdentity();
+  if (loggedIn && !wasVisible) {
+    // the drawer just appeared: refresh its state and play the entrance
+    connect_->ResyncDrawer();
+    if (Sdk().IsLoggedIn()) account_->LoadReferralInfo();  // usage-bar referral rows
+    if (ConnectView().Visibility() == Visibility::Visible) connect_->AnimateDrawerIn();
+    // Whatever destination is still selected from the PREVIOUS session is now
+    // showing that session's data against this one's token. Re-read it.
+    LoadCurrentDestination();
+    // a network this sign-in just created gets the onboarding flow; an
+    // existing account signing in never does
+    if (login_->ConsumeNewNetwork()) ShowOnboarding();
+  }
+  if (!loggedIn) guestUpgrade_.Clear();  // a purchase does not outlive its session
+  if (!loggedIn && wasVisible) {
+    // signed out: the flow starts over
+    HideOnboarding();
+    login_->ResetToInitialStep();
+    // ...and every page drops the account it was describing. Without this the
+    // next sign-in inherits the previous network's name, auth and referral
+    // state - which for delete-account and password-reset are acts on the
+    // WRONG account, not merely stale text.
+    settings_->ResetForSignOut();
+    account_->ResetForSignOut();
+    referrals_->ResetForSignOut();
+    if (referralsOpen_) CloseReferrals();
+  }
+}
+
+// The identity ApplyAuthState read, onto Connect, the status strip and the
+// account menu. Guest is the claim OR the balance's guest (the server's: no
+// login method), the same rule as the balance store and the purchase gates; a
+// refreshed guest has lost the claim and would otherwise show its network name.
+void MainWindow::ApplyNetworkIdentity() {
+  const bool guest =
+      identityLoggedIn_ && urnw::IsGuestNetwork(identityJwtGuest_, balance_.guest);
+  connect_->SetNetworkIdentity(identityNetworkName_, guest);  // re-renders the status
   // ...and the same identity onto the status strip, which states it on every
   // destination rather than only on Connect.
   if (!statusSamplePinned_) {
-    statusSignedIn_ = loggedIn;
-    statusNetworkName_ = networkName;
-    statusGuest_ = guestMode;
-    if (!loggedIn) {
+    statusSignedIn_ = identityLoggedIn_;
+    statusNetworkName_ = identityNetworkName_;
+    statusGuest_ = guest;
+    if (!identityLoggedIn_) {
       // a signed-out shell describes no provider and carries no traffic; leave
       // nothing of the previous session's session behind it
       statusLocationName_.clear();
@@ -1486,37 +2057,12 @@ void MainWindow::ApplyAuthState(urnw::AuthState state, std::string const& error)
     ApplyStatusStrip();
   }
   // The title-bar avatar + its menu (iOS AccountMenu): same jwt, one more
-  // reader. `showHome`, NOT `loggedIn` — EnterPreviewUi used to reveal the
-  // avatar itself and the very next auth push hid it again, so the one surface
-  // that is signed-in-only was the one surface preview could not show. The
-  // identity stays whatever the jwt says (empty in preview); only the
-  // visibility follows the pinned view.
-  login_->ApplyAccountIdentity(networkName, guestMode, pro, showHome);
-  if (loggedIn && !wasVisible) {
-    // the drawer just appeared: refresh its state and play the entrance
-    connect_->ResyncDrawer();
-    if (Sdk().IsLoggedIn()) account_->LoadReferralInfo();  // usage-bar referral rows
-    if (ConnectView().Visibility() == Visibility::Visible) connect_->AnimateDrawerIn();
-    // Whatever destination is still selected from the PREVIOUS session is now
-    // showing that session's data against this one's token. Re-read it.
-    LoadCurrentDestination();
-  }
-  if (!loggedIn && wasVisible) {
-    // signed out: the flow starts over
-    login_->ResetToInitialStep();
-    // ...and every page drops the account it was describing. Without this the
-    // next sign-in inherits the previous network's name, auth and referral
-    // state - which for delete-account and password-reset are acts on the
-    // WRONG account, not merely stale text.
-    settings_->ResetForSignOut();
-    account_->ResetForSignOut();
-  }
-  if (!loggedIn && !wasVisible && login_->IsGuestUpgrade() && !Sdk().IsLoggedIn()) {
-    // the guest session ended under the upgrade form (server-side
-    // invalidation): fall back to the start of the sign-in flow
-    login_->ClearGuestUpgrade();
-    login_->ResetToInitialStep();
-  }
+  // reader. `identityShown_` (showHome), NOT `identityLoggedIn_` — EnterPreviewUi
+  // used to reveal the avatar itself and the very next auth push hid it again,
+  // so the one surface that is signed-in-only was the one surface preview could
+  // not show. The identity stays whatever the jwt says (empty in preview); only
+  // the visibility follows the pinned view.
+  login_->ApplyAccountIdentity(identityNetworkName_, guest, identityPro_, identityShown_);
 }
 
 void MainWindow::OnTunnelStateChanged(urnw::proto::TunnelStatus const& status) {
@@ -1543,8 +2089,34 @@ void MainWindow::OnTunnelStateChanged(urnw::proto::TunnelStatus const& status) {
   if (advancedMode_) ApplyStatusStrip();
 }
 
+// Every sheet in this app is a ContentDialog built in code, and a dialog built
+// in code shows as the child of an open popup on its XamlRoot. One sweep of the
+// window's open popups therefore finds whichever sheet is up, wherever it was
+// opened from - a page, this window, or a sheet added later - with no list of
+// sheets to keep in step.
+//
+// Hide() is the dismissal Esc is: the dialog raises Closing and Closed, its
+// ShowAsync returns None, and the coroutine awaiting it drops the sheet and
+// clears the sheetOpen gate without acting. A sheet that refuses a close without
+// its own button refuses this one too and comes back with the window: the
+// seedphrase sheet, which holds the only copy of a new network's credential.
+void MainWindow::CloseSheetsForHide() {
+  const auto content = Content();
+  if (!content) return;
+  const auto root = content.XamlRoot();
+  if (!root) return;
+  // collected first, then hidden, so no close runs inside the enumeration
+  std::vector<ContentDialog> openDialogs;
+  for (auto const& popup :
+       Microsoft::UI::Xaml::Media::VisualTreeHelper::GetOpenPopupsForXamlRoot(root)) {
+    if (auto dialog = popup.Child().try_as<ContentDialog>()) openDialogs.push_back(dialog);
+  }
+  for (auto const& dialog : openDialogs) dialog.Hide();
+}
+
 void MainWindow::OnStatsChanged(urnw::LiveStats const& stats) {
   connect_->ApplyStats(stats);
+  if (wallet_) wallet_->ApplyProvideState(stats);  // the Earnings provide row + gate
   // The status strip's three page-independent facts. The connection half is
   // pushed by ConnectPage out of the SAME ApplyConnectStatus that draws the
   // hero, so the strip and the connect screen cannot disagree about the state.
@@ -1553,6 +2125,7 @@ void MainWindow::OnStatsChanged(urnw::LiveStats const& stats) {
   // and the counters are zero, and the strip says "No traffic yet" rather than
   // printing two honest-looking zero rates under the word Connected.
   if (statusSamplePinned_) return;
+  if (stats.connected) NoteConnected();
   statusConnected_ = stats.connected;
   statusLocationName_ = stats.locationName;
   statusDownBps_ = stats.downBitsPerSecond;
@@ -1592,9 +2165,6 @@ void MainWindow::OnSendResetLink(IInspectable const& s, RoutedEventArgs const& e
 void MainWindow::OnCreateNameChanged(IInspectable const& s, TextChangedEventArgs const& e) {
   login_->OnCreateNameChanged(s, e);
 }
-void MainWindow::OnCreateEmailChanged(IInspectable const& s, TextChangedEventArgs const& e) {
-  login_->OnCreateEmailChanged(s, e);
-}
 void MainWindow::OnCreatePasswordChanged(IInspectable const& s, RoutedEventArgs const& e) {
   login_->OnCreatePasswordChanged(s, e);
 }
@@ -1619,9 +2189,6 @@ void MainWindow::OnResendCode(IInspectable const& s, RoutedEventArgs const& e) {
 void MainWindow::OnUseCode(IInspectable const& s, RoutedEventArgs const& e) {
   login_->OnUseCode(s, e);
 }
-void MainWindow::OnTryGuestMode(IInspectable const& s, RoutedEventArgs const& e) {
-  login_->OnTryGuestMode(s, e);
-}
 void MainWindow::OnSignInWithBittensor(IInspectable const& s, RoutedEventArgs const& e) {
   login_->OnSignInWithBittensor(s, e);
 }
@@ -1633,6 +2200,9 @@ void MainWindow::OnUserAuthChanged(IInspectable const& s, TextChangedEventArgs c
 }
 void MainWindow::OnSignInWithGoogle(IInspectable const& s, RoutedEventArgs const& e) {
   login_->OnSignInWithGoogle(s, e);
+}
+void MainWindow::OnSignInWithApple(IInspectable const& s, RoutedEventArgs const& e) {
+  login_->OnSignInWithApple(s, e);
 }
 void MainWindow::OnSignInWithSeedphrase(IInspectable const& s, RoutedEventArgs const& e) {
   login_->OnSignInWithSeedphrase(s, e);
@@ -1669,6 +2239,9 @@ void MainWindow::OnConnectionModeChanged(SelectorBar const& s,
 void MainWindow::OnProvideModeChanged(SelectorBar const& s,
                                       SelectorBarSelectionChangedEventArgs const& e) {
   connect_->OnProvideModeChanged(s, e);
+}
+void MainWindow::OnExtenderToggled(IInspectable const& s, RoutedEventArgs const& e) {
+  connect_->OnExtenderToggled(s, e);
 }
 void MainWindow::OnFixedIpToggled(IInspectable const& s, RoutedEventArgs const& e) {
   connect_->OnFixedIpToggled(s, e);
@@ -1729,8 +2302,42 @@ void MainWindow::OnWalletAddressChanged(IInspectable const& s,
 void MainWindow::OnConnectWallet(IInspectable const& s, RoutedEventArgs const& e) {
   wallet_->OnConnectWallet(s, e);
 }
-void MainWindow::OnVerifySeeker(IInspectable const& s, RoutedEventArgs const& e) {
-  wallet_->OnVerifySeeker(s, e);
+void MainWindow::OnEnterAddressManually(IInspectable const& s, RoutedEventArgs const& e) {
+  wallet_->OnEnterAddressManually(s, e);
+}
+void MainWindow::OnConnectWalletAddress(IInspectable const& s, RoutedEventArgs const& e) {
+  wallet_->OnConnectWalletAddress(s, e);
+}
+void MainWindow::OnWalletMore(IInspectable const& s, RoutedEventArgs const& e) {
+  wallet_->OnWalletMore(s, e);
+}
+void MainWindow::OnSolanaWalletMore(IInspectable const& s, RoutedEventArgs const& e) {
+  wallet_->OnSolanaWalletMore(s, e);
+}
+void MainWindow::OnChangeWallet(IInspectable const& s, RoutedEventArgs const& e) {
+  wallet_->OnChangeWallet(s, e);
+}
+void MainWindow::OnClaimAlpha(IInspectable const& s, RoutedEventArgs const& e) {
+  wallet_->OnClaimAlpha(s, e);
+}
+void MainWindow::OnClaimTop200(IInspectable const& s, RoutedEventArgs const& e) {
+  wallet_->OnClaimTop200(s, e);
+}
+void MainWindow::OnWalletLearnMore(
+    winrt::Microsoft::UI::Xaml::Documents::Hyperlink const&,
+    winrt::Microsoft::UI::Xaml::Documents::HyperlinkClickEventArgs const&) {
+  wallet_->OpenProtocolSite();
+}
+
+// The provide mode is changed on the Connect page (its provide group); the
+// Earnings row is a shortcut there.
+void MainWindow::OnWalletProvideMode(IInspectable const&, RoutedEventArgs const&) {
+  HomeNav().SelectedItem(ConnectNavItem());
+}
+// The extender switch lives in the same provide group; the Earnings extender row
+// is the same shortcut (EXTENDER.md N7).
+void MainWindow::OnWalletExtender(IInspectable const&, RoutedEventArgs const&) {
+  HomeNav().SelectedItem(ConnectNavItem());
 }
 void MainWindow::OnEarningsTableChanged(SelectorBar const& s,
                                         SelectorBarSelectionChangedEventArgs const& e) {

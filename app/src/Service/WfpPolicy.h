@@ -1,8 +1,11 @@
 // The leak-prevention layer: a user-mode Windows Filtering Platform policy
 // owned by urnetworkd. This closes R6 (DNS leaks to other adapters' resolvers)
-// and is what the kill-switch toggle actually drives. The connected tunnel is
-// deliberately IPv4-only without capturing or blocking host IPv6; the IPv6
-// floor below applies only while the kill switch has no connected tunnel.
+// and is what the kill-switch toggle actually drives. A dual-stack tunnel
+// (WfpConfig::tunnel_ipv6) gets the same shape for both families: a floor, the
+// tun lifted through it, the bypass ranges, and the tunnel's own resolvers. A
+// legacy v4-only tunnel leaves host IPv6 on the physical network while
+// connected; the IPv6 floor then applies only while the kill switch has no
+// connected tunnel.
 //
 // Spec: docs/superpowers/research/2026-08-08-windows-leak-prevention-wfp.md
 //
@@ -59,32 +62,11 @@ namespace urnw {
 
 // The four states the policy has.
 //
-// ARMED AND CONNECTING ARE DIFFERENT POLICIES, and the difference is exactly one
-// filter: 9b, the DNS permit for the host's own resolvers.
-//
-// They were one state until 2026-08-08, on the argument that "disconnected but
-// armed" and "trying to connect" must allow exactly the same things or the
-// transition between them is a window where the policy is briefly weaker. That
-// argument is right about the DIRECTION a difference may take and wrong about
-// the price of this particular one. Filter 9b CANNOT BE SCOPED TO OUR PROCESS —
-// Go resolves through GetAddrInfoW, which Windows serves from Dnscache inside
-// svchost.exe, so the permit is address-scoped and machine-wide by construction
-// (see host_resolvers_v4 below). Merged, that meant an armed, idle machine let
-// EVERY process on it resolve in plaintext for as long as the kill switch was
-// on. A kill switch that leaves DNS open while nothing is even connecting is not
-// a kill switch, and "idle" is the state it spends almost all of its time in.
-//
-// The split keeps the safety property the merge was protecting by making the
-// difference ONE-DIRECTIONAL: Connecting is a strict SUPERSET of Armed. The
-// Armed -> Connecting transition only widens, the Connecting -> Armed transition
-// only narrows, and there is no instant at which something both states permit is
-// blocked. The selftest asserts the superset relation with 9b as the single
-// named difference, so a second name silently joining it fails the build's tests.
-//
-// The cost is stated plainly because it is real: while a connection attempt is
-// in flight, plaintext DNS to the host's own resolvers is open MACHINE-WIDE, not
-// just to us. That window is bounded (TunnelController's connecting watchdog),
-// logged at both edges, and disclosed in the kill-switch UI copy.
+// Connecting retains every Armed block and permits bootstrap traffic from
+// the exact installed UI image, alongside the service and existing host-DNS
+// compatibility path. Armed has neither the UI permit nor host-DNS exception.
+// The machine-wide host-resolver exception remains bounded by the connecting
+// watchdog; the selftest pins the complete difference between these policies.
 enum class WfpState {
   // Nothing installed. The machine's network is exactly as WFP found it.
   Off,
@@ -94,7 +76,7 @@ enum class WfpState {
   // resolves. That is not a bug and it is not the "no usable resolver"
   // stand-down; it is what the state means.
   Armed,
-  // A connection attempt IS in flight. Armed plus filter 9b, so our own name
+  // A connection attempt IS in flight. Armed plus the UI image and filter 9b, so our own name
   // resolution (which leaves svchost.exe, not this process) can reach the
   // platform host. Entered before any resolution is attempted and left as soon
   // as the attempt succeeds (-> Connected) or fails (-> Armed).
@@ -145,18 +127,30 @@ struct WfpConfig {
   // The resolvers actually applied to the tun. Only these are permitted on
   // port 53, and only over the tun interface.
   std::vector<std::string> tunnel_resolvers_v4;
+  // The v6 resolvers applied to the tun, the same way. Read in Connected only,
+  // and only when tunnel_ipv6 is set.
+  std::vector<std::string> tunnel_resolvers_v6;
+
+  // The tun carries IPv6 (connect/IPV6.md C2): NetworkConfig installed a v6
+  // address and the ::/0 capture set (net::kTunCaptureV6) on it. Connected then
+  // KEEPS the IPv6 floor and lifts through it exactly what the v4 policy lifts —
+  // the tun, the bypass ranges (net::kLocalBypassV6, the same table the v6
+  // routes are derived from) and the tunnel's v6 resolvers — instead of leaving
+  // host IPv6 on the physical network. False is the legacy v4-only tunnel, for
+  // which Connected still omits the v6 floor. Read in Connected only; Armed and
+  // Connecting are unchanged by it.
+  bool tunnel_ipv6 = false;
 
   // The resolvers the HOST is configured with on its own adapters. READ ONLY IN
   // Connecting: there is no tun yet, so there is no tunnel resolver, and this is
-  // the only path our own name resolution has.
+  // the compatibility path for any lookup made before the SDK's physical
+  // egress bind activates its in-process resolver.
   //
-  // This exists because the service's own name resolution DOES NOT COME OUT OF
-  // urnetworkd.exe. Go on Windows resolves through the OS resolver
-  // (net/lookup_windows.go -> GetAddrInfoW), which is an RPC into the DNS
-  // Client service; the wire query is issued by svchost.exe. So the app-id
-  // permit in the DNS sublayer cannot match it, and without an ADDRESS-scoped
-  // permit a connecting machine cannot resolve the platform host and therefore
-  // cannot connect at all. See filter 9b in WfpPolicy.cpp.
+  // The bound SDK path now resolves in-process and matches the exact
+  // urnetworkd.exe permit in the DNS sublayer. Windows/system lookup paths can
+  // still leave through Dnscache in svchost.exe before that bind is installed;
+  // this address-scoped filter is the bounded Connecting-only fallback for
+  // that transition. See filters 9 and 9b in WfpPolicy.cpp.
   //
   // THE SAME FACT IS WHY Armed IGNORES THIS FIELD. An address-scoped permit is
   // machine-wide — it cannot be narrowed to us, because the query is not ours by
@@ -179,10 +173,12 @@ struct WfpConfig {
   // visible, not so it can be flipped casually.
   bool allow_lan = true;
 
-  // Block IPv6 at the two v6 ALE layers while Armed or Connecting. Connected
-  // deliberately leaves host IPv6 on the physical network: Wintun receives no
-  // IPv6 address, route, or DNS server, and we do not turn that absence into a
-  // blackhole. NOT DisabledComponents and NOT
+  // Block IPv6 at the two v6 ALE layers while Armed or Connecting. A Connected
+  // v4-only tunnel (tunnel_ipv6 false) deliberately leaves host IPv6 on the
+  // physical network: Wintun received no IPv6 address, route, or DNS server,
+  // and we do not turn that absence into a blackhole. A dual-stack tunnel
+  // keeps the floor while connected regardless of this flag, because there the
+  // tun IS the v6 path. NOT DisabledComponents and NOT
   // Set-NetAdapterBinding: Microsoft calls unbinding an unsupported
   // configuration, it is per-adapter so a dock or hotspot leaks anyway, and it
   // is persistent machine state that survives our process dying. Route
@@ -203,61 +199,10 @@ struct WfpConfig {
   // it the machine is armed, blocked, and unable to reconnect.
   std::wstring service_image_path;
 
-  // Full path to URnetwork.exe, the UI process — or empty when it cannot be
-  // located, in which case no app permit is emitted at all.
-  //
-  // READ IN Connected AND NOWHERE ELSE. That scoping is the entire design of
-  // this field and it is enforced in BuildFilterSet, asserted by the selftest,
-  // and must not be relaxed:
-  //
-  //   Armed      — NOT permitted. The owner's standing ruling is that the armed
-  //                state permits urnetworkd and nothing else, so that a kill
-  //                switch cannot put user traffic on the physical NIC in the
-  //                clear. Nothing here touches that.
-  //   Connecting — NOT permitted. Connecting is Armed plus filter 9b and the
-  //                selftest pins that as the SINGLE difference; a second name
-  //                joining it would break the one-directional-widening property
-  //                the Armed/Connecting split rests on.
-  //   Connected  — PERMITTED, and only here.
-  //
-  // WHY Connected NEEDS IT AT ALL. URnetwork.exe runs its OWN SDK instance: a
-  // second URnetworkSdk.dll, a second Go runtime, a second set of platform
-  // sockets for account/auth/JWT refresh. Once the tunnel is up those sockets
-  // follow the route table into the tun like every other process's, so the UI's
-  // platform traffic is carried by the very tunnel it exists to report on — and
-  // when that tunnel has no working exit the UI cannot reach the platform at
-  // exactly the moment the user is looking at it to find out why. Observed
-  // 2026-08-08: "[dtm]failed to refresh JWT: Timeout." logged by URnetwork.exe
-  // (pid 2584) while a tunnel was up.
-  //
-  // The service already solves this for itself, at step 2/8, by binding its SDK
-  // sockets to the physical interface (EgressMonitor -> setEgressInterfaceIndex,
-  // i.e. IP_UNICAST_IF). That is R1 self-exclusion, and it is PROCESS-GLOBAL
-  // inside the SDK — so it covers urnetworkd's DLL instance and cannot reach the
-  // app's. The app now performs the same bind on its own instance, from the
-  // egress index the service reports in TunnelStatus.
-  //
-  // THIS FILTER IS THE OTHER HALF OF THAT, AND NEITHER HALF WORKS ALONE:
-  //   * the bind alone moves the app's sockets off the tun and straight into the
-  //     weight-0 baseline floor, because only cfg.service_image_path is
-  //     permitted there — the app would fail FASTER, not succeed;
-  //   * this permit alone changes nothing, because WFP permits do not reroute:
-  //     without the bind the app's packets are still inside the tun, where they
-  //     are already permitted by the tun-LUID filter.
-  //
-  // WHAT IT COSTS, stated plainly. While Connected, URnetwork.exe may send and
-  // receive on the physical NIC in the clear. That is a real exposure and it is
-  // bounded to: this one binary, this one state, and the traffic it actually
-  // makes — platform API/auth calls to the same hosts urnetworkd is ALREADY
-  // reaching in the clear on that NIC by necessity. It is not a new class of
-  // observable, and it does not touch what the kill switch promises, because the
-  // kill switch is about Armed.
-  //
-  // NOT REPEATED IN THE DNS SUBLAYER, for filter 9's reason: the app is Go too,
-  // Go on Windows resolves through GetAddrInfoW, and the wire query leaves
-  // svchost.exe, so an app-id permit there would match nothing. The app's name
-  // resolution therefore still goes to the tunnel's resolvers over the tun. See
-  // the note in TunnelController::AppImagePath.
+  // Exact installed UI image, or empty if unavailable. Connecting/Connected
+  // permit its SDK control-plane sockets and in-process DNS on physical egress;
+  // Armed excludes it. The service derives this path from its install directory,
+  // never from an RPC peer. No general application exception is introduced.
   std::wstring app_image_path;
 };
 

@@ -10,6 +10,7 @@
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <string>
 
@@ -19,9 +20,13 @@
 #include <winrt/Microsoft.UI.Xaml.Input.h>
 
 #include "AuthSheets.h"
+#include "ControlDohSettings.h"
 #include "LoginCarousel.h"
+#include "NetworkNameCheck.h"
 #include "SdkHost.h"
+#include "SettingsSheets.h"
 #include "UrComponents.h"
+#include "VlessSheet.h"
 
 namespace winrt::URnetwork::implementation {
 struct MainWindow;
@@ -68,11 +73,19 @@ class LoginPage {
                             bool signedIn);
   // surfaces an auth error on whichever step the user is looking at
   void ShowErrorOnCurrentStep(winrt::hstring const& message);
-  bool IsGuestUpgrade() const;
-  void ClearGuestUpgrade();
-  // The plan card's create-account affordance for a guest: the create step in
-  // guest-upgrade mode, shown over the login flow while the session stays live.
-  void BeginGuestUpgrade();
+
+  // True once, right after this sign-in created a network (sign-up, its
+  // verification step, or an instant account): the window shows the
+  // onboarding flow for it. An existing account signing in never sets it.
+  bool ConsumeNewNetwork();
+  // Every create-account and purchase affordance for a legacy guest network
+  // (the plan card, the account menu, Get Pro, the upgrade sheet) opens the
+  // in-place conversion (GuestConversionSheet): a sign-in is added to THIS
+  // network and verified, so its plan and balance stay. Signing out would
+  // abandon the network for good (it has no login to come back to).
+  // `onClosed(done)` runs once the sheet has closed (done: the sign-in was
+  // added and verified), so a purchase entry can continue to its checkout.
+  winrt::fire_and_forget OpenGuestConversion(std::function<void(bool done)> onClosed = {});
 
   // ---- XAML event handlers (forwarded from MainWindow) ----
   void OnGetStarted(winrt::Windows::Foundation::IInspectable const&,
@@ -89,8 +102,6 @@ class LoginPage {
                        winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnCreateNameChanged(winrt::Windows::Foundation::IInspectable const&,
                            winrt::Microsoft::UI::Xaml::Controls::TextChangedEventArgs const&);
-  void OnCreateEmailChanged(winrt::Windows::Foundation::IInspectable const&,
-                            winrt::Microsoft::UI::Xaml::Controls::TextChangedEventArgs const&);
   void OnCreatePasswordChanged(winrt::Windows::Foundation::IInspectable const&,
                                winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnTermsChanged(winrt::Windows::Foundation::IInspectable const&,
@@ -107,8 +118,6 @@ class LoginPage {
                     winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   winrt::fire_and_forget OnUseCode(winrt::Windows::Foundation::IInspectable const&,
                                    winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
-  void OnTryGuestMode(winrt::Windows::Foundation::IInspectable const&,
-                      winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnSignInWithBittensor(winrt::Windows::Foundation::IInspectable const&,
                              winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   winrt::fire_and_forget OnSignInWithSolana(
@@ -117,8 +126,11 @@ class LoginPage {
   // gates Get started on a non-empty field (iOS/android parity)
   void OnUserAuthChanged(winrt::Windows::Foundation::IInspectable const&,
                          winrt::Microsoft::UI::Xaml::Controls::TextChangedEventArgs const&);
+  // Google / Apple through the provider's web flow (SdkHost::SignInWithSso)
   void OnSignInWithGoogle(winrt::Windows::Foundation::IInspectable const&,
                           winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
+  void OnSignInWithApple(winrt::Windows::Foundation::IInspectable const&,
+                         winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   // seedphrase sign-in step
   void OnSignInWithSeedphrase(winrt::Windows::Foundation::IInspectable const&,
                               winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
@@ -133,7 +145,8 @@ class LoginPage {
                              winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnCreateInstantSubmit(winrt::Windows::Foundation::IInspectable const&,
                              winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
-  // the bottom-left "Change Network API" affordance
+  // the bottom-left "Change Network API" affordance, and the VLESS sheet its
+  // VLESS button opens in its place
   winrt::fire_and_forget OnChangeNetworkServer(
       winrt::Windows::Foundation::IInspectable const&,
       winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
@@ -143,17 +156,25 @@ class LoginPage {
 
  private:
   enum class LoginStep { Initial, Password, Create, Verify, Reset, Seedphrase, Instant };
-  // What the create step submits: a fresh network with email + password, one
-  // with the retained wallet auth or SSO id token, or the guest network's
-  // upgrade to a full account (Api::upgradeGuest; linux CreateNetworkPage::Mode
-  // parity).
-  enum class CreateMode { Password, Wallet, AuthJwt, GuestUpgrade };
+  // What the create step submits: a fresh network with email + password, or one
+  // with the retained wallet auth or SSO id token.
+  enum class CreateMode { Password, Wallet, AuthJwt };
 
   void ShowLoginStep(LoginStep step);
   void ApplyLoginRouting(urnw::LoginRouting const& routing);
   void EnterCreateStep(std::string const& userAuth, CreateMode mode);
   void EnterVerifyStep(std::string const& userAuth);
   void ShowLoginErrorFor(LoginStep step, winrt::hstring const& message);
+  // A code the server did not send, on the verify step; false when it was sent
+  // (the caller says so, or not, as before).
+  bool ShowVerifySendError(urnw::VerifySendNotice const& notice);
+  // A reset link the server did not send, on the reset step; false when it was
+  // sent.
+  bool ShowPasswordResetError(urnw::VerifySendNotice const& notice);
+  // Counts the rate-limit notices down and turns Resend / Send back on once
+  // the retry time has passed (rateLimitTimer_ tick).
+  void RefreshRateLimits();
+  void StartRateLimitTimer();
   // the initial step's URInlineErrorText; empty message hides it
   void SetInitialLoginError(winrt::hstring const& message);
   // Get started is enabled only for a non-empty field with no discovery in
@@ -162,13 +183,16 @@ class LoginPage {
   void UpdateGetStartedEnabled();
   void CheckCreateNameNow();   // debounce elapsed: run the availability check
   void ApplyNameCheck(uint32_t generation, bool ok, bool available);
+  void ShowNameCheck();        // the name's supporting line for the flow's state
   void ValidateBonusCodeNow();
   void ApplyBonusValidation(uint32_t generation, bool ok, bool valid, bool capped);
   void ValidateCreateForm();   // gates the Continue button
   void SubmitVerifyCode();
-  winrt::fire_and_forget ShowGuestModeSheet();  // terms consent -> LoginAsGuest
   void SetWalletSignInEnabled(bool enabled);
   void ApplyWalletSignInResult(urnw::AuthResult const& result);
+  // Google or Apple: open the provider's sign-in page and wait for the api's
+  // urnetwork://oauth/<provider> answer; `provider` is "google" or "apple".
+  void StartSsoSignIn(const char* provider);
   // seedphrase step: word count -> the warning line + the submit gate
   void ValidateSeedphrase();
   // Empty the seedphrase field. It is UIA-readable (and writable) by any
@@ -183,10 +207,10 @@ class LoginPage {
   // run the carousel only when it is on the initial step, on screen, and its
   // slot has not been collapsed by the layout above
   void UpdateCarouselRunning();
-  // Show or hide "Sign in with Google" from SdkHost::SsoGoogleEnabled(), and
-  // name the icon-plus-text sign-in buttons for UIA. Re-run after a
-  // network-server switch: the space supplies half the answer.
-  void UpdateGoogleSignInVisibility();
+  // Name the icon-plus-text pills and the icon tiles for UIA: their content is
+  // a panel, not a string, so ContentControl derives no name from it, and a
+  // tile's caption is a short word where the name should be the sentence.
+  void ApplySignInAutomationNames();
 
   winrt::URnetwork::implementation::MainWindow& w_;
 
@@ -199,12 +223,15 @@ class LoginPage {
   CreateMode createMode_ = CreateMode::Password;  // what the create step submits
   bool creatingNetwork_ = false;
   bool verifying_ = false;
+  bool newNetworkPending_ = false;  // see ConsumeNewNetwork
+  bool verifyIsNewNetwork_ = false;  // the verify step follows a sign-up
   bool sendingReset_ = false;
   // create-network name availability (debounced; the generation drops stale checks)
   winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer nameCheckTimer_{nullptr};
-  uint32_t nameCheckGeneration_ = 0;
-  bool nameChecking_ = false;
-  bool nameAvailable_ = false;
+  // re-runs a check that errored (see NetworkNameCheck.h)
+  winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer nameRetryTimer_{nullptr};
+  // the name state, debounce and retries; drives the two timers above
+  std::unique_ptr<urnw::NetworkNameCheckFlow> nameCheck_;
   // bonus referral code validation (debounced)
   winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer bonusCheckTimer_{nullptr};
   uint32_t bonusCheckGeneration_ = 0;
@@ -212,6 +239,16 @@ class LoginPage {
   bool bonusCapped_ = false;
   // resend-code cooldown (15s, macOS parity)
   winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer resendCooldownTimer_{nullptr};
+  // after the server refused a code / reset link for too many attempts:
+  // Resend / Send stay off until the retry time, with a 1s tick counting the
+  // notice down
+  urnw::ResendCooldown verifyRateLimit_;
+  urnw::ResendCooldown resetRateLimit_;
+  std::string resetRateLimitUserAuth_;  // the account resetRateLimit_ is for
+  // the rate-limit line last shown, so the tick only rewrites its own notice
+  winrt::hstring verifyRateLimitText_;
+  winrt::hstring resetRateLimitText_;
+  winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer rateLimitTimer_{nullptr};
 
   // seedphrase / instant-account step state (UI thread only)
   bool seedphraseLoggingIn_ = false;
@@ -221,9 +258,11 @@ class LoginPage {
   std::string accountNetworkName_;
   std::unique_ptr<urnw::LoginCarousel> carousel_;
   bool presentationActive_ = false;
-  std::shared_ptr<urnw::GuestModeSheet> guestSheet_;
   std::shared_ptr<urnw::SeedphraseDisplaySheet> seedphraseSheet_;
   std::shared_ptr<urnw::NetworkServerSheet> networkServerSheet_;
+  std::shared_ptr<urnw::VlessSheet> vlessSheet_;
+  std::shared_ptr<urnw::ControlDohSheet> controlDohSheet_;
+  std::shared_ptr<urnw::GuestConversionSheet> guestConversionSheet_;
   // "Seedphrase copied" / "Referral link copied" acknowledgements
   std::unique_ptr<urnw::kit::Snackbar> snackbar_;
 };

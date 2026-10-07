@@ -9,11 +9,16 @@
 #include <winrt/Microsoft.UI.Xaml.Automation.h>
 #include <winrt/Microsoft.UI.Xaml.Automation.Peers.h>
 #include <winrt/Microsoft.UI.Xaml.Media.Imaging.h>
+#include <winrt/Windows.ApplicationModel.DataTransfer.h>
 #include <winrt/Windows.Storage.Streams.h>
 
+#include "AddSignIn.h"
+#include "BittensorWalletFlow.h"
+#include "DeleteAccountOutcome.h"
 #include "Localization.h"
 #include "Log.h"
 #include "PageContext.h"
+#include "SubscriptionBalance.h"
 #include "Strings.h"
 #include "UrColors.h"
 #include "UrComponents.h"
@@ -429,6 +434,42 @@ void CopyToClipboard(std::string const& text) {
   winrt::Windows::ApplicationModel::DataTransfer::Clipboard::SetContent(package);
 }
 
+// The royal-welcome panel: the crowned frog in gold plus confirmation copy
+// (the referral king-frog moment, matching the ur.io referral panel and the
+// android/apple sheets).
+StackPanel MakeRoyalWelcomePanel() {
+  StackPanel panel;
+  panel.Spacing(12);
+  panel.MinWidth(400);
+
+  Image frog;
+  winrt::Microsoft::UI::Xaml::Media::Imaging::BitmapImage bitmap{
+      winrt::Windows::Foundation::Uri{L"ms-appx:///Assets/ReferralFrog.png"}};
+  frog.Source(bitmap);
+  frog.Width(108);
+  frog.Height(108);
+  frog.HorizontalAlignment(HorizontalAlignment::Center);
+  panel.Children().Append(frog);
+
+  TextBlock title;
+  title.Text(Loc("referral_royal_welcome"));
+  title.FontSize(24);
+  title.FontWeight(winrt::Windows::UI::Text::FontWeights::Bold());
+  title.TextWrapping(TextWrapping::Wrap);
+  title.TextAlignment(TextAlignment::Center);
+  title.Foreground(colors::ReferralGoldLightBrush());
+  panel.Children().Append(title);
+
+  TextBlock detail;
+  detail.Text(hstring{urnw::Format("referral_royal_welcome_detail",
+                                   urnw::pages::Balance().ReferralTerms().bonusGibPerDay)});
+  detail.TextWrapping(TextWrapping::Wrap);
+  detail.TextAlignment(TextAlignment::Center);
+  panel.Children().Append(detail);
+
+  return panel;
+}
+
 ContentDialog MakeSheet(XamlRoot const& root, hstring const& title) {
   ContentDialog dialog;
   dialog.XamlRoot(root);
@@ -675,6 +716,204 @@ void AuthCodeSheet::ApplyResult(std::optional<urnet::AuthCodeCreateResult> resul
   statusText_.Visibility(Visibility::Visible);
 }
 
+namespace {
+
+// The SDK side of the conversion. Every answer is marshalled onto the dialog's
+// queue; one that arrives after the sheet is gone is dropped by `alive_`.
+class SdkGuestConversionSession : public GuestConversionSession {
+ public:
+  // `balance` is null for Settings' AddAuthSheet: that network was never a
+  // guest, so there is no guest state to lift after the add.
+  SdkGuestConversionSession(SdkHost& sdk, SubscriptionBalanceStore* balance,
+                            winrt::Microsoft::UI::Dispatching::DispatcherQueue queue)
+      : sdk_(sdk), balance_(balance), queue_(std::move(queue)) {}
+  ~SdkGuestConversionSession() override { *alive_ = false; }
+
+  void AddSignIn(std::string const& userAuth, std::string const& password,
+                 std::function<void(std::string error)> done) override {
+    urnet::AddAuthArgs args;
+    args.user_auth = userAuth;
+    args.password = password;
+    sdk_.api().addAuth(args, [queue = queue_, alive = alive_, done = std::move(done)](
+                                 std::optional<urnet::AddAuthResult> result,
+                                 std::optional<std::string> err) {
+      std::string error = ServerError(result, err);
+      queue.TryEnqueue([alive, done, error] {
+        if (*alive) done(error);
+      });
+    });
+  }
+
+  void RefreshJwt() override {
+    if (balance_) sdk_.RefreshJwt();
+  }
+
+  void RefreshBalance() override {
+    if (balance_) balance_->Refresh();
+  }
+
+  void SendCode(std::string const& userAuth,
+                std::function<void(VerifySendNotice notice)> done) override {
+    sdk_.ResendVerifyCode(userAuth, [queue = queue_, alive = alive_,
+                                     done = std::move(done)](VerifySendNotice notice) {
+      queue.TryEnqueue([alive, done, notice] {
+        if (*alive) done(notice);
+      });
+    });
+  }
+
+  // authVerify without SdkHost::VerifyCode's sign-in: the returned jwt is for
+  // this same network, and the session already holds one.
+  void VerifyCode(std::string const& userAuth, std::string const& code,
+                  std::function<void(std::string error)> done) override {
+    urnet::AuthVerifyArgs args;
+    args.user_auth = userAuth;
+    args.verify_code = code;
+    sdk_.api().authVerify(args, [queue = queue_, alive = alive_, done = std::move(done)](
+                                    std::optional<urnet::AuthVerifyResult> result,
+                                    std::optional<std::string> err) {
+      std::string error = ServerError(result, err);
+      queue.TryEnqueue([alive, done, error] {
+        if (*alive) done(error);
+      });
+    });
+  }
+
+ private:
+  SdkHost& sdk_;
+  SubscriptionBalanceStore* balance_;
+  winrt::Microsoft::UI::Dispatching::DispatcherQueue queue_;
+  std::shared_ptr<bool> alive_ = std::make_shared<bool>(true);
+};
+
+// The SDK side of adding Apple, Google or a wallet (AddSignIn.h). SdkHost
+// produces the credential under an add-owned flow; this posts it to addAuth on
+// the current network. Nothing here signs in, refreshes or replaces the jwt.
+// Every answer is marshalled onto the dialog's queue; one that arrives after
+// the sheet is gone is dropped by `alive_`.
+class SdkAddSignInSession : public add_sign_in::AddSignInSession {
+ public:
+  SdkAddSignInSession(SdkHost& sdk, winrt::Microsoft::UI::Dispatching::DispatcherQueue queue,
+                      std::function<void(SdkHost::BittensorManualRequest)> manualHandler)
+      : sdk_(sdk), queue_(std::move(queue)), manualHandler_(std::move(manualHandler)) {}
+  ~SdkAddSignInSession() override { *alive_ = false; }
+
+  void ProviderToken(std::string_view provider,
+                     std::function<void(std::string, std::string)> done) override {
+    sdk_.SsoTokenForAdd(std::string(provider), [queue = queue_, alive = alive_, done = std::move(done)](
+                                                   std::string idToken, std::string error) {
+      queue.TryEnqueue([alive, done, idToken, error] {
+        if (*alive) done(idToken, error);
+      });
+    });
+  }
+
+  void SignWallet(add_sign_in::WalletChain chain, std::string_view walletId,
+                  std::function<void(add_sign_in::WalletSignature, std::string)> done) override {
+    auto answer = [queue = queue_, alive = alive_, done = std::move(done)](
+                      std::string address, std::string signature, std::string message,
+                      std::string error) {
+      queue.TryEnqueue([alive, done, address, signature, message, error] {
+        if (*alive) done(add_sign_in::WalletSignature{address, signature, message}, error);
+      });
+    };
+    if (chain == add_sign_in::WalletChain::Solana) {
+      const auto provider = walletId == add_sign_in::kSolanaSolflare
+                                ? WalletConnect::Provider::Solflare
+                                : WalletConnect::Provider::Phantom;
+      sdk_.SignSolanaForAdd(provider, std::move(answer));
+      return;
+    }
+    sdk_.SignBittensorForAdd(std::string(walletId), manualHandler_, std::move(answer));
+  }
+
+  void AddAuth(add_sign_in::AddAuthBody const& body,
+               std::function<void(std::string, std::string)> done) override {
+    urnet::AddAuthArgs args;
+    args.user_auth = body.user_auth;
+    args.password = body.password;
+    args.auth_jwt = body.auth_jwt;
+    args.auth_jwt_type = body.auth_jwt_type;
+    if (body.wallet_auth) {
+      urnet::WalletAuthArgs wallet;
+      wallet.blockchain = body.wallet_auth->blockchain;
+      wallet.wallet_address = body.wallet_auth->address;
+      wallet.wallet_signature = body.wallet_auth->signature;
+      wallet.wallet_message = body.wallet_auth->message;
+      args.wallet_auth = wallet;
+    }
+    // the identity token and the signature are credentials; nothing logs args
+    sdk_.api().addAuth(args, [queue = queue_, alive = alive_, done = std::move(done)](
+                                 std::optional<urnet::AddAuthResult> result,
+                                 std::optional<std::string> err) {
+      std::string error = ServerError(result, err);
+      // signature_mismatch: a pasted signature from another account
+      std::string code = result && result->error ? result->error->code.value_or(std::string())
+                                                 : std::string();
+      queue.TryEnqueue([alive, done, error, code] {
+        if (*alive) done(error, code);
+      });
+    });
+  }
+
+  void Cancel() override { sdk_.CancelAddSignIn(); }
+
+ private:
+  SdkHost& sdk_;
+  winrt::Microsoft::UI::Dispatching::DispatcherQueue queue_;
+  std::function<void(SdkHost::BittensorManualRequest)> manualHandler_;
+  std::shared_ptr<bool> alive_ = std::make_shared<bool>(true);
+};
+
+
+// The last code send's outcome under the code field: a sent code muted, a
+// failure or a counting-down rate limit as an error, nothing for none.
+void ShowSendNotice(TextBlock const& text, std::optional<VerifySendNotice> const& notice) {
+  if (!notice) {
+    text.Text(hstring{});
+    return;
+  }
+  hstring message;
+  switch (notice->kind) {
+    case VerifySendNoticeKind::Sent:
+    case VerifySendNoticeKind::SendFailed:
+      message = Loc(VerifySendNoticeKey(*notice));
+      break;
+    case VerifySendNoticeKind::RateLimited:
+      message = hstring{Plural(VerifySendNoticeKey(*notice), notice->minutes)};
+      break;
+    case VerifySendNoticeKind::ServerMessage:
+      message = H(notice->message);
+      break;
+  }
+  text.Text(message);
+  text.Foreground(notice->kind == VerifySendNoticeKind::Sent ? colors::MutedBrush()
+                                                             : colors::DangerBrush());
+}
+
+// A one-second repeating timer that re-renders while a rate limit counts down
+// (RunCooldownTimer starts and stops it).
+winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer MakeCooldownTimer(
+    winrt::Microsoft::UI::Dispatching::DispatcherQueue const& queue, std::function<void()> render) {
+  auto timer = queue.CreateTimer();
+  timer.Interval(std::chrono::seconds(1));
+  timer.IsRepeating(true);
+  timer.Tick([render = std::move(render)](auto const&, auto const&) { render(); });
+  return timer;
+}
+
+void RunCooldownTimer(winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer const& timer,
+                      GuestConversion const& conversion) {
+  if (!timer) return;
+  if (conversion.CoolingDown()) {
+    if (!timer.IsRunning()) timer.Start();
+  } else if (timer.IsRunning()) {
+    timer.Stop();
+  }
+}
+
+}  // namespace
+
 // ---- AddAuthSheet ----------------------------------------------------------
 
 std::shared_ptr<AddAuthSheet> AddAuthSheet::Create(XamlRoot const& root, SdkHost& sdk,
@@ -684,34 +923,242 @@ std::shared_ptr<AddAuthSheet> AddAuthSheet::Create(XamlRoot const& root, SdkHost
   return sheet;
 }
 
+AddAuthSheet::~AddAuthSheet() {
+  if (cooldownTimer_) cooldownTimer_.Stop();
+  // a browser or wallet step still open is answered and dropped
+  if (add_ && add_->Busy()) add_->Cancel();
+  // the flows go first: they drop their answers before the sessions go
+  add_.reset();
+  addSession_.reset();
+  conversion_.reset();
+  session_.reset();
+}
+
 void AddAuthSheet::Build(XamlRoot const& root) {
-  dialog_ = MakeSheet(root, Loc("site_app_login_methods"));
-  dialog_.PrimaryButtonText(Loc("add"));
+  dialog_ = MakeSheet(root, Loc("add_a_sign_in_method"));
   dialog_.CloseButtonText(Loc("cancel"));
-  dialog_.IsPrimaryButtonEnabled(false);
   dialog_.DefaultButton(ContentDialogButton::Primary);
+  session_ = std::make_unique<SdkGuestConversionSession>(sdk_, nullptr, dialog_.DispatcherQueue());
+  conversion_ = std::make_unique<GuestConversion>(*session_);
+  // TAO.com's manual form shows inside this sheet (a second ContentDialog
+  // cannot open over it); the request comes in on an SDK thread
+  auto manualHandler = [weak = weak_from_this(), queue = dialog_.DispatcherQueue()](
+                           SdkHost::BittensorManualRequest request) {
+    queue.TryEnqueue([weak, request] {
+      if (auto self = weak.lock()) self->ShowManual(request);
+    });
+  };
+  addSession_ = std::make_unique<SdkAddSignInSession>(sdk_, dialog_.DispatcherQueue(),
+                                                      std::move(manualHandler));
+  add_ = std::make_unique<add_sign_in::AddSignInFlow>(*addSession_);
 
   StackPanel content;
   content.MinWidth(380);
   content.Spacing(12);
 
+  // ---- the method: the same options and order as every app and ur.io ----
+  methodPicker_ = RadioButtons();
+  methodPicker_.Header(winrt::box_value(Loc("method")));
+  methodPicker_.MaxColumns(add_sign_in::kMethodCount);
+  int selected = 0;
+  for (int i = 0; i < add_sign_in::kMethodCount; ++i) {
+    methodPicker_.Items().Append(
+        winrt::box_value(Loc(std::string(add_sign_in::MethodLabelKey(add_sign_in::kMethods[i])))));
+    if (add_sign_in::kMethods[i] == method_) selected = i;
+  }
+  methodPicker_.SelectedIndex(selected);
+  methodPicker_.SelectionChanged([weak = weak_from_this()](IInspectable const&,
+                                                           SelectionChangedEventArgs const&) {
+    auto self = weak.lock();
+    if (!self) return;
+    const int index = self->methodPicker_.SelectedIndex();
+    if (index < 0 || add_sign_in::kMethodCount <= index) return;
+    self->SelectMethod(add_sign_in::kMethods[index]);
+  });
+  content.Children().Append(methodPicker_);
+
+  // ---- Apple / Google: the provider's web flow in the browser ----
+  providerPanel_ = StackPanel();
+  providerPanel_.Spacing(12);
+  providerHint_ = Supporting(providerPanel_, hstring{});
+  providerButton_ = Button();
+  providerButton_.Style(Lookup(L"UrPrimaryButtonStyle"));
+  providerButton_.HorizontalAlignment(HorizontalAlignment::Stretch);
+  providerButton_.Click([weak = weak_from_this()](auto const&, auto const&) {
+    auto self = weak.lock();
+    if (!self || !self->sdk_.IsLoggedIn()) return;
+    self->browserHint_ = hstring{};
+    self->add_->StartProvider(self->method_);
+  });
+  providerPanel_.Children().Append(providerButton_);
+  content.Children().Append(providerPanel_);
+
+  // ---- a wallet: Solana (Phantom / Solflare) or Bittensor (the chooser) ----
+  walletPanel_ = StackPanel();
+  walletPanel_.Spacing(8);
+  for (int c = 0; c < add_sign_in::kWalletChainCount; ++c) {
+    const add_sign_in::WalletChain chain = add_sign_in::kWalletChains[c];
+    TextBlock heading;
+    heading.Text(Loc(std::string(add_sign_in::WalletChainLabelKey(chain))));
+    heading.FontWeight(winrt::Windows::UI::Text::FontWeights::SemiBold());
+    walletPanel_.Children().Append(heading);
+    Supporting(walletPanel_, Loc(std::string(add_sign_in::WalletChainHintKey(chain))));
+    // Solana: the login page's two wallets; Bittensor: the shared chooser's
+    std::vector<std::pair<std::string, hstring>> wallets;
+    if (chain == add_sign_in::WalletChain::Solana) {
+      wallets.emplace_back(std::string(add_sign_in::kSolanaPhantom), Loc("phantom"));
+      wallets.emplace_back(std::string(add_sign_in::kSolanaSolflare), Loc("solflare"));
+    } else {
+      for (int i = 0; i < bittensor::kChooserWalletCount; ++i) {
+        const std::string walletId(bittensor::kChooserWallets[i]);
+        wallets.emplace_back(walletId, H(urnet::bittensorWalletDisplayName(walletId)));
+      }
+    }
+    for (auto const& [walletId, name] : wallets) {
+      StackPanel label;
+      TextBlock nameText;
+      nameText.Text(name);
+      label.Children().Append(nameText);
+      const std::string hintKey =
+          chain == add_sign_in::WalletChain::Bittensor ? bittensor::ChooserHintKey(walletId) : std::string();
+      if (!hintKey.empty()) {
+        TextBlock hint;
+        hint.Text(Loc(hintKey));
+        hint.Opacity(0.7);
+        hint.FontSize(12);
+        hint.TextWrapping(TextWrapping::Wrap);
+        label.Children().Append(hint);
+      }
+      Button button;
+      button.HorizontalAlignment(HorizontalAlignment::Stretch);
+      button.HorizontalContentAlignment(HorizontalAlignment::Left);
+      button.Content(label);
+      button.Click([weak = weak_from_this(), chain, walletId = walletId](auto const&, auto const&) {
+        if (auto self = weak.lock()) self->StartWallet(chain, walletId);
+      });
+      walletButtons_.push_back(button);
+      walletPanel_.Children().Append(button);
+    }
+  }
+  content.Children().Append(walletPanel_);
+
+  // ---- TAO.com: sign the message in the wallet, paste the signature ----
+  manualPanel_ = StackPanel();
+  manualPanel_.Spacing(8);
+  manualInstructions_ = TextBlock();
+  manualInstructions_.TextWrapping(TextWrapping::Wrap);
+  manualPanel_.Children().Append(manualInstructions_);
+  manualMessageBox_ = TextBox();
+  manualMessageBox_.Header(winrt::box_value(Loc("bittensor_message_to_sign")));
+  manualMessageBox_.IsReadOnly(true);
+  manualMessageBox_.AcceptsReturn(true);
+  manualMessageBox_.TextWrapping(TextWrapping::Wrap);
+  manualPanel_.Children().Append(manualMessageBox_);
+  Button copyButton;
+  copyButton.Content(winrt::box_value(Loc("copy")));
+  copyButton.Click([weak = weak_from_this()](auto const&, auto const&) {
+    auto self = weak.lock();
+    if (!self) return;
+    namespace dt = winrt::Windows::ApplicationModel::DataTransfer;
+    try {
+      dt::DataPackage package;
+      package.SetText(self->manualMessageBox_.Text());
+      dt::Clipboard::SetContent(package);
+    } catch (...) {
+      LogWarn("add sign-in: the clipboard refused the message");
+    }
+  });
+  manualPanel_.Children().Append(copyButton);
+  manualAddressBox_ = TextBox();
+  manualAddressBox_.PlaceholderText(Loc("earnings_address_placeholder"));
+  manualPanel_.Children().Append(manualAddressBox_);
+  manualSignatureBox_ = TextBox();
+  manualSignatureBox_.Header(winrt::box_value(Loc("bittensor_signature_label")));
+  manualSignatureBox_.PlaceholderText(Loc("bittensor_signature_placeholder"));
+  manualPanel_.Children().Append(manualSignatureBox_);
+  manualErrorText_ = TextBlock();
+  manualErrorText_.FontSize(12);
+  manualErrorText_.TextWrapping(TextWrapping::Wrap);
+  manualErrorText_.Foreground(colors::DangerBrush());
+  manualErrorText_.Visibility(Visibility::Collapsed);
+  manualPanel_.Children().Append(manualErrorText_);
+  StackPanel manualButtons;
+  manualButtons.Orientation(Orientation::Horizontal);
+  manualButtons.Spacing(8);
+  Button manualContinue;
+  manualContinue.Style(Lookup(L"UrPrimaryButtonStyle"));
+  manualContinue.Content(winrt::box_value(Loc("continue_txt")));
+  manualContinue.Click([weak = weak_from_this()](auto const&, auto const&) {
+    auto self = weak.lock();
+    if (!self || !self->manualRequest_) return;
+    const auto answer = self->sdk_.SubmitBittensorManual(
+        Narrow(self->manualAddressBox_.Text().c_str()), Narrow(self->manualSignatureBox_.Text().c_str()));
+    if (answer.closed) {
+      // the proof has its answer; the flow continues to addAuth
+      self->manualRequest_.reset();
+    } else {
+      self->manualErrorText_.Text(H(answer.error));
+      self->manualErrorText_.Visibility(Visibility::Visible);
+    }
+    self->Render();
+  });
+  manualButtons.Children().Append(manualContinue);
+  Button manualCancel;
+  manualCancel.Content(winrt::box_value(Loc("cancel")));
+  manualCancel.Click([weak = weak_from_this()](auto const&, auto const&) {
+    auto self = weak.lock();
+    if (!self || !self->manualRequest_) return;
+    self->manualRequest_.reset();
+    // answered as a quiet cancel: no error, back to the wallets
+    self->sdk_.CancelBittensorProof();
+    self->Render();
+  });
+  manualButtons.Children().Append(manualCancel);
+  manualPanel_.Children().Append(manualButtons);
+  content.Children().Append(manualPanel_);
+
+  statusText_ = TextBlock();
+  statusText_.FontSize(12);
+  statusText_.TextWrapping(TextWrapping::Wrap);
+  statusText_.Foreground(colors::MutedBrush());
+  content.Children().Append(statusText_);
+
+  // ---- email or phone: the sign-in to add ----
+  signInPanel_ = StackPanel();
+  signInPanel_.Spacing(12);
   authBox_ = TextBox();
   authBox_.Style(Lookup(L"UrTextInputStyle"));
   authBox_.Header(winrt::box_value(Loc("your_email")));
   authBox_.TextChanged([weak = weak_from_this()](auto const&, auto const&) {
-    if (auto self = weak.lock()) self->Validate();
+    if (auto self = weak.lock()) self->Render();
   });
-  content.Children().Append(authBox_);
-
+  signInPanel_.Children().Append(authBox_);
   passwordBox_ = PasswordBox();
   passwordBox_.Style(Lookup(L"UrPasswordInputStyle"));
   passwordBox_.Header(winrt::box_value(Loc("password_label")));
   passwordBox_.PasswordChanged([weak = weak_from_this()](auto const&, auto const&) {
-    if (auto self = weak.lock()) self->Validate();
+    if (auto self = weak.lock()) self->Render();
   });
-  content.Children().Append(passwordBox_);
+  signInPanel_.Children().Append(passwordBox_);
+  Supporting(signInPanel_, Loc("password_must_be_at_least_12_characters_long"));
+  content.Children().Append(signInPanel_);
 
-  Supporting(content, Loc("password_must_be_at_least_12_characters_long"));
+  // ---- page 2: verify the added email or phone ----
+  codePanel_ = StackPanel();
+  codePanel_.Spacing(12);
+  Supporting(codePanel_, Loc("verify_explanation"));
+  codeBox_ = TextBox();
+  codeBox_.Style(Lookup(L"UrTextInputStyle"));
+  codeBox_.Header(winrt::box_value(Loc("verify_input_label")));
+  codeBox_.TextChanged([weak = weak_from_this()](auto const&, auto const&) {
+    if (auto self = weak.lock()) self->Render();
+  });
+  codePanel_.Children().Append(codeBox_);
+  noticeText_ = TextBlock();
+  noticeText_.FontSize(12);
+  noticeText_.TextWrapping(TextWrapping::Wrap);
+  codePanel_.Children().Append(noticeText_);
+  content.Children().Append(codePanel_);
 
   errorText_ = TextBlock();
   errorText_.FontSize(12);
@@ -720,68 +1167,310 @@ void AddAuthSheet::Build(XamlRoot const& root) {
   errorText_.Visibility(Visibility::Collapsed);
   content.Children().Append(errorText_);
 
-  dialog_.Content(content);
+  ScrollViewer scroller;
+  scroller.Content(content);
+  dialog_.Content(scroller);
   dialog_.PrimaryButtonClick(
       [weak = weak_from_this()](auto const&, ContentDialogButtonClickEventArgs const& args) {
-        args.Cancel(true);
-        if (auto self = weak.lock()) self->Submit();
+        args.Cancel(true);  // the flow closes the dialog once the code is verified
+        auto self = weak.lock();
+        if (!self) return;
+        if (self->conversion_->Step() == GuestConversionStep::EnterSignIn) {
+          // only the email method has the Add button
+          if (self->method_ != add_sign_in::Method::Email || !self->sdk_.IsLoggedIn()) return;
+          self->conversion_->SubmitSignIn(Narrow(self->authBox_.Text().c_str()),
+                                          Narrow(self->passwordBox_.Password().c_str()));
+        } else {
+          self->conversion_->SubmitCode(Narrow(self->codeBox_.Text().c_str()));
+        }
       });
-
-  if (!sdk_.IsLoggedIn()) {
-    // Adding a sign-in method to no account is not a thing; say so rather than
-    // offering a form whose submit would 401 in silence.
-    authBox_.IsEnabled(false);
-    passwordBox_.IsEnabled(false);
-    ApplyFieldState(errorText_, FieldState::NoSession);
-    errorText_.Visibility(Visibility::Visible);
-  }
-}
-
-void AddAuthSheet::Validate() {
-  const std::string auth = Trim(Narrow(authBox_.Text().c_str()));
-  const std::string password = Narrow(passwordBox_.Password().c_str());
-  // apple AddAuthSheet formValid for the email leg: an auth AND a 12-char
-  // password. The server is the real validator; this only gates the button.
-  const bool valid = !auth.empty() && 12 <= password.size();
-  dialog_.IsPrimaryButtonEnabled(valid && !submitting_ && sdk_.IsLoggedIn());
-  if (sdk_.IsLoggedIn()) errorText_.Visibility(Visibility::Collapsed);
-}
-
-void AddAuthSheet::Submit() {
-  if (submitting_ || !sdk_.IsLoggedIn()) return;
-  const std::string auth = Trim(Narrow(authBox_.Text().c_str()));
-  const std::string password = Narrow(passwordBox_.Password().c_str());
-  if (auth.empty() || password.size() < 12) return;
-
-  submitting_ = true;
-  dialog_.IsPrimaryButtonEnabled(false);
-  errorText_.Visibility(Visibility::Collapsed);
-
-  urnet::AddAuthArgs args;
-  args.user_auth = auth;
-  args.password = password;
-
-  auto queue = dialog_.DispatcherQueue();
-  auto weak = weak_from_this();
-  sdk_.api().addAuth(args, [queue, weak](std::optional<urnet::AddAuthResult> result,
-                                         std::optional<std::string> err) {
-    const std::string error = ServerError(result, err);
-    queue.TryEnqueue([weak, error] {
-      if (auto self = weak.lock()) self->ApplyResult(error.empty(), error);
-    });
+  dialog_.SecondaryButtonClick(
+      [weak = weak_from_this()](auto const&, ContentDialogButtonClickEventArgs const& args) {
+        args.Cancel(true);
+        if (auto self = weak.lock()) self->conversion_->Resend();
+      });
+  cooldownTimer_ = MakeCooldownTimer(dialog_.DispatcherQueue(), [weak = weak_from_this()] {
+    if (auto self = weak.lock()) self->Render();
   });
+  conversion_->on_changed = [weak = weak_from_this()] {
+    if (auto self = weak.lock()) self->Render();
+  };
+  add_->on_changed = [weak = weak_from_this()] {
+    auto self = weak.lock();
+    if (!self) return;
+    // the browser or the wallet answered: its status line and form are done
+    if (!self->add_->Busy()) {
+      self->browserHint_ = hstring{};
+      self->manualRequest_.reset();
+    }
+    self->Render();
+  };
+  Render();
 }
 
-void AddAuthSheet::ApplyResult(bool ok, std::string const& error) {
-  submitting_ = false;
-  if (ok) {
+void AddAuthSheet::SelectMethod(add_sign_in::Method method) {
+  if (method == method_) return;
+  // a browser or wallet step for the previous method is abandoned
+  if (add_->Busy()) add_->Cancel();
+  manualRequest_.reset();
+  browserHint_ = hstring{};
+  method_ = method;
+  Render();
+}
+
+void AddAuthSheet::StartWallet(add_sign_in::WalletChain chain, std::string const& walletId) {
+  if (!sdk_.IsLoggedIn() || add_->Busy()) return;
+  // Talisman asks for the extension's approval, WalletConnect for a scan; a
+  // Solana wallet continues in the browser too
+  browserHint_ = hstring{};
+  if (chain == add_sign_in::WalletChain::Bittensor) {
+    const std::string hintKey = bittensor::BrowserHintKey(walletId);
+    if (hintKey == "bittensor_continue_in_browser") {
+      browserHint_ = hstring{
+          Format("bittensor_continue_in_browser", Widen(urnet::bittensorWalletDisplayName(walletId)))};
+    } else if (!hintKey.empty()) {
+      browserHint_ = Loc(hintKey);
+    }
+  }
+  add_->StartWallet(chain, walletId);
+}
+
+void AddAuthSheet::ShowManual(SdkHost::BittensorManualRequest request) {
+  // only while this sheet's Bittensor step waits for it
+  if (!add_->Busy() || method_ != add_sign_in::Method::Wallet) {
+    sdk_.CancelBittensorProof();
+    return;
+  }
+  manualInstructions_.Text(
+      hstring{Format("bittensor_manual_sign_instructions", Widen(request.walletName))});
+  manualMessageBox_.Text(H(request.message));
+  manualAddressBox_.Text(H(request.address));
+  manualSignatureBox_.Text(hstring{});
+  manualErrorText_.Visibility(Visibility::Collapsed);
+  manualRequest_ = std::move(request);
+  Render();
+}
+
+void AddAuthSheet::Render() {
+  // Apple, Google and a wallet are added once addAuth accepts them (no code);
+  // an email or phone once its code is verified
+  const GuestConversionStep step =
+      add_->Added() ? GuestConversionStep::Done : conversion_->Step();
+  const bool busy = conversion_->Busy() || add_->Busy();
+  const bool signIn =
+      step == GuestConversionStep::EnterSignIn || step == GuestConversionStep::AddingSignIn;
+  const bool email = method_ == add_sign_in::Method::Email;
+  const bool provider = !add_sign_in::SsoProvider(method_).empty();
+  const bool wallet = method_ == add_sign_in::Method::Wallet;
+  if (step == GuestConversionStep::Done) {
+    // added only now that the code was accepted, or addAuth took the credential
+    if (done_) return;
+    done_ = true;
+    if (cooldownTimer_) cooldownTimer_.Stop();
+    addedMessageKey_ = std::string(add_sign_in::AddedMessageKey(add_->Added() ? *add_->Added() : method_));
     if (onChanged_) onChanged_();
     dialog_.Hide();
     return;
   }
-  dialog_.IsPrimaryButtonEnabled(true);
-  errorText_.Text(error.empty() ? Loc("something_went_wrong") : H(error));
-  errorText_.Visibility(Visibility::Visible);
+  methodPicker_.Visibility(signIn ? Visibility::Visible : Visibility::Collapsed);
+  // the method can change while a browser step waits (it is abandoned), not
+  // while an email is being added
+  methodPicker_.IsEnabled(!conversion_->Busy());
+  signInPanel_.Visibility(signIn && email ? Visibility::Visible : Visibility::Collapsed);
+  codePanel_.Visibility(signIn ? Visibility::Collapsed : Visibility::Visible);
+  providerPanel_.Visibility(signIn && provider ? Visibility::Visible : Visibility::Collapsed);
+  walletPanel_.Visibility(signIn && wallet && !manualRequest_ ? Visibility::Visible
+                                                              : Visibility::Collapsed);
+  manualPanel_.Visibility(signIn && wallet && manualRequest_ ? Visibility::Visible
+                                                             : Visibility::Collapsed);
+  if (provider) {
+    providerHint_.Text(Loc(std::string(add_sign_in::MethodHintKey(method_))));
+    providerButton_.Content(winrt::box_value(Loc(std::string(add_sign_in::ProviderButtonKey(method_)))));
+    providerButton_.IsEnabled(!busy && sdk_.IsLoggedIn());
+  }
+  for (auto const& button : walletButtons_) button.IsEnabled(!busy && sdk_.IsLoggedIn());
+  const bool showHint = signIn && !email && add_->Busy() && !manualRequest_ && !browserHint_.empty();
+  statusText_.Text(showHint ? browserHint_ : hstring{});
+  statusText_.Visibility(showHint ? Visibility::Visible : Visibility::Collapsed);
+
+  if (signIn && !sdk_.IsLoggedIn()) {
+    // Adding a sign-in method to no account is not a thing; say so rather than
+    // offering a form whose submit would 401 in silence.
+    ApplyFieldState(errorText_, FieldState::NoSession);
+    errorText_.Visibility(Visibility::Visible);
+  } else {
+    hstring error;
+    if (email || !signIn) {
+      error = H(conversion_->Error());
+    } else if (!add_->Error().empty()) {
+      error = H(WalletProofRefusalText(add_->ErrorCode(), add_->Error(), add_->ErrorWalletId()));
+    } else if (!add_->ErrorKey().empty()) {
+      error = Loc(add_->ErrorKey());
+    }
+    errorText_.Foreground(colors::DangerBrush());
+    errorText_.Text(error);
+    errorText_.Visibility(error.empty() ? Visibility::Collapsed : Visibility::Visible);
+  }
+  if (signIn) {
+    // apple AddAuthSheet formValid for the email leg: an auth AND a 12-char
+    // password. The server is the real validator; this only gates the button.
+    // Apple, Google and the wallets have their own buttons and no Add.
+    dialog_.PrimaryButtonText(email ? Loc("add") : hstring{});
+    dialog_.SecondaryButtonText(hstring{});
+    authBox_.IsEnabled(!busy && sdk_.IsLoggedIn());
+    passwordBox_.IsEnabled(!busy && sdk_.IsLoggedIn());
+    dialog_.IsPrimaryButtonEnabled(
+        email && !busy && sdk_.IsLoggedIn() &&
+        GuestConversion::CanSubmitSignIn(Narrow(authBox_.Text().c_str()),
+                                         Narrow(passwordBox_.Password().c_str())));
+    return;
+  }
+  dialog_.PrimaryButtonText(Loc("verify"));
+  dialog_.SecondaryButtonText(Loc("resend_verify_code"));
+  dialog_.IsSecondaryButtonEnabled(conversion_->CanResend());
+  dialog_.IsPrimaryButtonEnabled(
+      !busy && !GuestConversion::Trim(Narrow(codeBox_.Text().c_str())).empty());
+  ShowSendNotice(noticeText_, conversion_->ShownNotice());
+  RunCooldownTimer(cooldownTimer_, *conversion_);
+}
+
+// ---- GuestConversionSheet --------------------------------------------------
+
+
+std::shared_ptr<GuestConversionSheet> GuestConversionSheet::Create(
+    XamlRoot const& root, SdkHost& sdk, SubscriptionBalanceStore& balance,
+    std::function<void()> onDone) {
+  auto sheet =
+      std::shared_ptr<GuestConversionSheet>(new GuestConversionSheet(sdk, std::move(onDone)));
+  sheet->Build(root, balance);
+  return sheet;
+}
+
+GuestConversionSheet::~GuestConversionSheet() {
+  if (cooldownTimer_) cooldownTimer_.Stop();
+  // the conversion goes first: it drops its answers before the session goes
+  conversion_.reset();
+  session_.reset();
+}
+
+void GuestConversionSheet::Build(XamlRoot const& root, SubscriptionBalanceStore& balance) {
+  dialog_ = MakeSheet(root, Loc("create_an_account"));
+  dialog_.CloseButtonText(Loc("cancel"));
+  dialog_.DefaultButton(ContentDialogButton::Primary);
+  session_ = std::make_unique<SdkGuestConversionSession>(sdk_, &balance, dialog_.DispatcherQueue());
+  conversion_ = std::make_unique<GuestConversion>(*session_);
+
+  StackPanel content;
+  content.MinWidth(380);
+  content.Spacing(12);
+
+  // ---- page 1: the sign-in to add ----
+  signInPanel_ = StackPanel();
+  signInPanel_.Spacing(12);
+  Supporting(signInPanel_, Loc("guest_convert_explanation"));
+  authBox_ = TextBox();
+  authBox_.Style(Lookup(L"UrTextInputStyle"));
+  authBox_.Header(winrt::box_value(Loc("your_email")));
+  authBox_.TextChanged([weak = weak_from_this()](auto const&, auto const&) {
+    if (auto self = weak.lock()) self->Render();
+  });
+  signInPanel_.Children().Append(authBox_);
+  passwordBox_ = PasswordBox();
+  passwordBox_.Style(Lookup(L"UrPasswordInputStyle"));
+  passwordBox_.Header(winrt::box_value(Loc("password_label")));
+  passwordBox_.PasswordChanged([weak = weak_from_this()](auto const&, auto const&) {
+    if (auto self = weak.lock()) self->Render();
+  });
+  signInPanel_.Children().Append(passwordBox_);
+  Supporting(signInPanel_, Loc("password_must_be_at_least_12_characters_long"));
+  content.Children().Append(signInPanel_);
+
+  // ---- page 2: verify the added sign-in ----
+  codePanel_ = StackPanel();
+  codePanel_.Spacing(12);
+  Supporting(codePanel_, Loc("verify_explanation"));
+  codeBox_ = TextBox();
+  codeBox_.Style(Lookup(L"UrTextInputStyle"));
+  codeBox_.Header(winrt::box_value(Loc("verify_input_label")));
+  codeBox_.TextChanged([weak = weak_from_this()](auto const&, auto const&) {
+    if (auto self = weak.lock()) self->Render();
+  });
+  codePanel_.Children().Append(codeBox_);
+  noticeText_ = TextBlock();
+  noticeText_.FontSize(12);
+  noticeText_.TextWrapping(TextWrapping::Wrap);
+  codePanel_.Children().Append(noticeText_);
+  content.Children().Append(codePanel_);
+
+  errorText_ = TextBlock();
+  errorText_.FontSize(12);
+  errorText_.TextWrapping(TextWrapping::Wrap);
+  errorText_.Foreground(colors::DangerBrush());
+  content.Children().Append(errorText_);
+
+  dialog_.Content(content);
+  dialog_.PrimaryButtonClick(
+      [weak = weak_from_this()](auto const&, ContentDialogButtonClickEventArgs const& args) {
+        args.Cancel(true);  // the conversion closes the dialog when it is done
+        auto self = weak.lock();
+        if (!self) return;
+        if (self->conversion_->Step() == GuestConversionStep::EnterSignIn) {
+          self->conversion_->SubmitSignIn(Narrow(self->authBox_.Text().c_str()),
+                                          Narrow(self->passwordBox_.Password().c_str()));
+        } else {
+          self->conversion_->SubmitCode(Narrow(self->codeBox_.Text().c_str()));
+        }
+      });
+  dialog_.SecondaryButtonClick(
+      [weak = weak_from_this()](auto const&, ContentDialogButtonClickEventArgs const& args) {
+        args.Cancel(true);
+        if (auto self = weak.lock()) self->conversion_->Resend();
+      });
+  cooldownTimer_ = MakeCooldownTimer(dialog_.DispatcherQueue(), [weak = weak_from_this()] {
+    if (auto self = weak.lock()) self->Render();
+  });
+  conversion_->on_changed = [weak = weak_from_this()] {
+    if (auto self = weak.lock()) self->Render();
+  };
+  Render();
+}
+
+void GuestConversionSheet::Render() {
+  const GuestConversionStep step = conversion_->Step();
+  const bool busy = conversion_->Busy();
+  const bool signIn =
+      step == GuestConversionStep::EnterSignIn || step == GuestConversionStep::AddingSignIn;
+  signInPanel_.Visibility(signIn ? Visibility::Visible : Visibility::Collapsed);
+  codePanel_.Visibility(signIn ? Visibility::Collapsed : Visibility::Visible);
+  errorText_.Text(H(conversion_->Error()));
+  errorText_.Visibility(conversion_->Error().empty() ? Visibility::Collapsed
+                                                     : Visibility::Visible);
+  if (step == GuestConversionStep::Done) {
+    if (done_) return;
+    done_ = true;
+    if (cooldownTimer_) cooldownTimer_.Stop();
+    if (onDone_) onDone_();
+    dialog_.Hide();
+    return;
+  }
+  if (signIn) {
+    dialog_.PrimaryButtonText(Loc("add"));
+    dialog_.SecondaryButtonText(hstring{});
+    authBox_.IsEnabled(!busy);
+    passwordBox_.IsEnabled(!busy);
+    dialog_.IsPrimaryButtonEnabled(
+        !busy && sdk_.IsLoggedIn() &&
+        GuestConversion::CanSubmitSignIn(Narrow(authBox_.Text().c_str()),
+                                         Narrow(passwordBox_.Password().c_str())));
+    return;
+  }
+  dialog_.PrimaryButtonText(Loc("verify"));
+  dialog_.SecondaryButtonText(Loc("resend_verify_code"));
+  dialog_.IsSecondaryButtonEnabled(conversion_->CanResend());
+  dialog_.IsPrimaryButtonEnabled(
+      !busy && !GuestConversion::Trim(Narrow(codeBox_.Text().c_str())).empty());
+  ShowSendNotice(noticeText_, conversion_->ShownNotice());
+  RunCooldownTimer(cooldownTimer_, *conversion_);
 }
 
 // ---- ReferralNetworkSheet --------------------------------------------------
@@ -940,8 +1629,10 @@ void ReferralNetworkSheet::Submit() {
           self->busy_ = false;
           if (error.empty()) {
             self->codeBox_.Text(L"");
-            self->Load();  // re-read the network the code resolved to
             if (self->onChanged_) self->onChanged_();
+            // linking a referral network is the royal-welcome moment; the
+            // sheet dismisses itself after the beat (reopening re-Loads)
+            self->ShowRoyalWelcome();
             return;
           }
           // A rejected code is the common failure and has its own string; a
@@ -949,6 +1640,24 @@ void ReferralNetworkSheet::Submit() {
           self->ShowError(Loc("invalid_referral_code_please_try_again"));
         });
       });
+}
+
+void ReferralNetworkSheet::ShowRoyalWelcome() {
+  dialog_.Title(winrt::box_value(hstring{}));
+  dialog_.PrimaryButtonText(hstring{});
+  dialog_.IsPrimaryButtonEnabled(false);
+  dialog_.Content(MakeRoyalWelcomePanel());
+
+  royalTimer_ = dialog_.DispatcherQueue().CreateTimer();
+  royalTimer_.Interval(std::chrono::milliseconds(2000));
+  royalTimer_.IsRepeating(false);
+  royalTimer_.Tick([weak = weak_from_this()](auto const&, auto const&) {
+    if (auto self = weak.lock()) {
+      if (self->royalTimer_) self->royalTimer_.Stop();
+      self->dialog_.Hide();
+    }
+  });
+  royalTimer_.Start();
 }
 
 // Arm the confirm. A ContentDialog cannot open a second ContentDialog, so the
@@ -1100,10 +1809,10 @@ void BlockedLocationsSheet::LoadBlocked() {
   sdk_.api().getNetworkBlockedLocations(
       [queue, weak](std::optional<urnet::GetNetworkBlockedLocationsResult> result,
                     std::optional<std::string> err) {
-        // GetNetworkBlockedLocationsResult has NO error field, so a missing
-        // result or a transport error is the only failure signal there is - and
-        // without this check a 401 arrived as an empty list and rendered as the
-        // reassuring "No blocked locations".
+        // The server never sets GetNetworkBlockedLocationsResult.error, so a
+        // missing result or a transport error is the only failure signal there
+        // is - and without this check a 401 arrived as an empty list and
+        // rendered as the reassuring "No blocked locations".
         const bool failed = !result || err.has_value();
         if (failed) {
           LogWarn("settings: getNetworkBlockedLocations failed: {}",
@@ -1661,11 +2370,15 @@ void DeleteAccountSheet::Submit() {
   auto* sdk = &sdk_;
   sdk_.api().networkDelete([queue, weak, sdk](std::optional<urnet::NetworkDeleteResult> result,
                                               std::optional<std::string> err) {
-    // NetworkDeleteResult carries no error field, so a result plus no transport
-    // error is the whole success test. (iOS does not check even that far.)
-    const bool ok = !err && result.has_value();
-    const std::string error = err ? *err : std::string();
-    queue.TryEnqueue([weak, sdk, ok, error] {
+    // A refused deletion is a result with an error (HTTP 200): the account
+    // still exists, so only a result with no error signs out.
+    const bool serverError = result && result->error.has_value();
+    const auto outcome = account::DecideDeleteAccount(
+        err ? &*err : nullptr, result.has_value(), serverError,
+        serverError ? result->error->message : std::string());
+    const bool ok = outcome.deleted;
+    const std::string detail = outcome.detail;
+    queue.TryEnqueue([weak, sdk, ok, detail] {
       auto self = weak.lock();
       if (!self) return;
       self->deleting_ = false;
@@ -1676,8 +2389,10 @@ void DeleteAccountSheet::Submit() {
         sdk->Logout();
         return;
       }
+      // Still signed in: the sheet stays open with the primary enabled for a retry.
       self->dialog_.IsPrimaryButtonEnabled(true);
-      self->errorText_.Text(error.empty() ? Loc("error_deleting_account") : H(error));
+      self->errorText_.Text(H(account::DeleteAccountErrorText(
+          winrt::to_string(Loc("error_deleting_account")), detail)));
       self->errorText_.Visibility(Visibility::Visible);
     });
   });

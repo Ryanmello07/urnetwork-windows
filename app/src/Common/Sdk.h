@@ -16,14 +16,47 @@
 #include <string>
 
 #include "Log.h"
+#include "MemoryTiers.h"
 
 namespace urnw {
 
 // Initialize the SDK for this process: point glog at the per-process log dir and
 // set the process memory budget. Call once at startup, before constructing any
-// NetworkSpace/Device. memoryLimitBytes matches the macOS caps (app ~64MB,
-// service 48-64MB); the service is intentionally memory-bounded.
+// NetworkSpace/Device.
+//
+// memoryLimitBytes is the PROCESS budget only: the message pools and the go
+// soft limit. It is NOT the per-device memory target, which is a separate
+// argument passed at device creation (newDeviceLocalWithMemoryTarget). The two
+// look like one number on a host that passes no target, because the H3
+// constructors then fall back to the process budget -- which is what this
+// service did until it moved to the target-taking constructor.
 void SdkInit(bool isService, int64_t memoryLimitBytes);
+
+// ---- memory: what this process may use, and what its device may use --------
+//
+// The tier table -- a device target and the process budget that backs it, at
+// two sizes -- and the two constraints binding them live in MemoryTiers.h,
+// which is pure and host-testable (tools/memory-tier-tests.cpp). These three
+// are the Windows half: the measurement, and the two numbers the service
+// actually passes.
+//
+// The service runs in no job object and has no working-set limit, so nothing
+// below these values caps it. The app process keeps its own, smaller budget: it
+// owns a DeviceRemote and no data plane.
+
+// Usable physical memory in bytes (GlobalMemoryStatusEx ullTotalPhys), or 0
+// when it cannot be determined. Measured on the first call and cached after,
+// which is the point rather than an optimisation: the process budget is set at
+// startup and the device target when a tunnel is created, and those two must
+// come from the SAME tier. A second measurement could pair a large target with
+// a small budget, which is the one arrangement the constraints exist to forbid.
+int64_t HostMemoryByteCount();
+
+// The two numbers, from that one measurement. Pass ProcessMemoryBudgetByteCount
+// to SdkInit and DeviceMemoryTargetByteCount to newDeviceLocalWithMemoryTarget;
+// never mix a target from one tier with a budget from another.
+int64_t ProcessMemoryBudgetByteCount();
+int64_t DeviceMemoryTargetByteCount();
 
 // ---- Go runtime crash capture ----------------------------------------------
 //

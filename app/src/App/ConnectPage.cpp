@@ -2,6 +2,8 @@
 #include "pch.h"
 
 #include "ConnectPage.h"
+#include "ProvideModeVisual.h"
+#include "DataInfo.h"
 
 #include <winrt/Microsoft.UI.Xaml.Automation.h>
 #include <winrt/Microsoft.UI.Xaml.Media.Animation.h>
@@ -16,6 +18,8 @@
 #include <utility>
 #include <vector>
 
+#include "BalanceGate.h"
+#include "FastDnsOnConnect.h"
 #include "Log.h"
 #include "MainWindow.xaml.h"
 #include "PageContext.h"
@@ -101,6 +105,21 @@ void ConnectPage::Initialize() {
   BuildHero();
   WireDrawerFeeds();
 
+  // the easter egg: five taps on the status dot while connected, each within
+  // two seconds of the previous, play the Pro celebration; silent otherwise
+  w_.StatusDot().Tapped([weak = w_.get_weak()](auto const&, auto const&) {
+    auto self = weak.get();
+    if (!self) return;
+    ConnectPage& page = self->connect();
+    if (page.health_ != urnw::health::State::Connected) {
+      page.connectedIconTaps_.Reset();
+      return;
+    }
+    if (page.connectedIconTaps_.Tap(static_cast<int64_t>(GetTickCount64()))) {
+      self->LaunchProCelebration();
+    }
+  });
+
   // shared drawer clock: ~10 fps chart redraw, plus 1s relative-time refresh
   chartTimer_ = w_.DispatcherQueue().CreateTimer();
   chartTimer_.Interval(std::chrono::milliseconds(100));
@@ -157,7 +176,15 @@ void ConnectPage::ApplyStrings() {
   w_.ProvideAlwaysItem().Text(Loc("always"));
   w_.ProvideNetworkItem().Text(Loc("network"));
   w_.ProvideNeverItem().Text(Loc("never"));
+  // the provider extender row (N7): its title, the switch's name, the
+  // description under it, and the state line again in the new language
+  w_.ExtenderLabel().Text(Loc("extender"));
+  winrt::Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(w_.ExtenderToggle(),
+                                                                       Loc("extender"));
+  w_.ExtenderDescription().Text(Loc("extender_setting_description"));
+  ApplyExtenderProvideRow();
   w_.FixedIpLabel().Text(Loc("fixed_ip"));
+  w_.FixedIpNote().Text(Loc("fixed_ip_subtitle"));
   w_.StrongAnonLabel().Text(Loc("strong_anonymization"));
   w_.PostQuantumLabel().Text(Loc("post_quantum_encryption"));
   // R3: these three are the STATISTICS pane's group headers now, not three
@@ -199,13 +226,18 @@ void ConnectPage::ApplyStrings() {
   w_.DohLabel().Text(Loc("dns_over_https"));
   w_.UdnsLabel().Text(Loc("unencrypted_dns"));
   w_.LdnsLabel().Text(Loc("local_dns"));
-  w_.FallbackLabel().Text(Loc("local_dns_fallback"));
+  w_.FallbackLabel().Text(Loc(urnw::fast_dns_on_connect::kLabelKey));
   w_.DohState().Text(Loc("off"));
   w_.UdnsState().Text(Loc("off"));
   w_.LdnsState().Text(Loc("off"));
   w_.FallbackState().Text(Loc("off"));
   w_.DnsUnavailableText().Text(Loc("dns_settings_unavailable"));
   w_.BlockerLabel().Text(Loc("block_ads_and_trackers"));
+  // The status row's labels and lines, and the extender panel's own fixed
+  // labels (title, the two automation names); guarded because ApplyStrings
+  // also runs before BuildCharts has made them.
+  if (ipFamilyStatusRow_) ipFamilyStatusRow_->ApplyStrings();
+  if (extenderPanel_) extenderPanel_->ApplyStrings();
   // The plan + usage card that used to sit in this rail is gone from Home
   // (spec §5); its strings now belong only to Account, which paints them from
   // MainWindow::ApplyBalance.
@@ -219,9 +251,31 @@ void ConnectPage::OnConnectToggle(IInspectable const&, RoutedEventArgs const&) {
   // still holds a destination and the machine is still captured, so the
   // gesture predicate reads Disconnect, but the button SAYS Retry and a press
   // must do what the button says.
-  const bool retry = RenderHealth() == urnw::health::State::Failed;
+  //
+  // Out of balance the press is Disconnect instead (BalanceGate.h): a retry
+  // reconnects, which cannot succeed there.
+  const bool retry = RenderHealth() == urnw::health::State::Failed && !w_.outOfBalance();
   if (!retry && ConnectActionIsDisconnect()) {
     Sdk().Disconnect();
+    return;
+  }
+  // Out of balance a connect starts nothing and the upgrade path shows instead
+  // (BalanceGate.h, start connect). Asked here, before the optimistic
+  // "Connecting" below, so a blocked press does not flash it; the button is
+  // disabled in that state, so this is the hero and a press racing the push.
+  //
+  // On a stale balance the gate fetches it first and then asks again; that
+  // second ask connects to the selection directly through the SdkHost entry
+  // points (process lifetime, and gated themselves), never through this page,
+  // which may be gone by then.
+  if (!Sdk().AdmitStartConnect("connect button", [retry] {
+        if (retry) Sdk().Disconnect();
+        const auto selected = Sdk().SelectedLocation();
+        if (IsBestAvailableSelected(selected))
+          Sdk().ConnectBestAvailable();
+        else
+          Sdk().Connect(*selected);
+      })) {
     return;
   }
   // Connect to what the user PICKED. This button used to call
@@ -364,10 +418,8 @@ urnw::health::State ConnectPage::RenderHealth() const {
 // The service-setup banner (beta spec §3). Renders MainWindow's one snapshot
 // onto ServiceSetupBar, the InfoBar sitting under BalanceWarning in this pane
 // — same bar shape, same one-writer discipline. Every label goes through
-// Adv(): the store's 916 keys were searched and carry nothing for a Windows
-// service surface (the only "Set up"/"Install" strings are the browser
-// extension's), so these ids wait for the store the same way the inspector's
-// do. The two shipped strings that DO fit are used: "Update" (the generic
+// Adv() with its `svc_` store id (the store's other "Set up"/"Install" strings
+// are the browser extension's). The two older keys that fit are used: "Update" (the generic
 // CTA) and "Setting up…" (site_ext_setting_up — its comment scopes it to the
 // extension, but its value is exactly this moment).
 void ConnectPage::ApplyServiceSetup(urnw::ServiceSetup::Snapshot const& snap) {
@@ -441,10 +493,9 @@ void ConnectPage::ApplyServiceSetup(urnw::ServiceSetup::Snapshot const& snap) {
 
 // The update banner (beta spec §5). Renders MainWindow's snapshot copy onto
 // UpdateBar, directly under the service bar — same shape, same one-writer
-// rule. Labels go through Adv() with `upd_` ids for the same reason the
-// service bar's use `svc_`: the store carries nothing for an update surface,
-// and the version string itself is DATA (release grammar, never translated),
-// so appending it is composition, not a hidden literal.
+// rule. Labels go through Adv() with `upd_` store ids, as the service bar's
+// use `svc_`. The version is data (release grammar, never translated) and goes
+// in through the title's placeholder; the installer path is appended as data.
 void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) {
   using Phase = urnw::UpdateChecker::Phase;
   using Stage = urnw::UpdateChecker::Stage;
@@ -456,9 +507,9 @@ void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) 
   }
 
   // The headline is the spec's wording in every phase — the banner keeps
-  // saying what it is FOR while the message says what is happening to it.
-  const winrt::hstring title{
-      AdvW("upd_available_title", L"Update available:") + L" v" + snap.version};
+  // saying what it is for while the message says what is happening to it. The
+  // version goes in through the key's placeholder, so a translation places it.
+  const winrt::hstring title{urnw::Format("upd_available_title_version", snap.version)};
   winrt::hstring action = Loc("update");
   bool enabled = true;
   std::wstring message;
@@ -466,10 +517,10 @@ void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) 
 
   switch (snap.phase) {
     case Phase::Available:
-      message = AdvW("upd_available_message",
-                     L"One click downloads the release, verifies it, applies "
-                     L"it here and restarts the app. Updating the VPN service "
-                     L"is a second click afterwards.");
+      message = AdvW("upd_available_msi_message",
+                     L"One click downloads the release, verifies it and runs "
+                     L"its installer, which updates the app and the VPN "
+                     L"service. The app closes while it installs.");
       break;
     case Phase::Applying:
       enabled = false;
@@ -480,23 +531,21 @@ void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) 
         case Stage::Verifying:
           message = AdvW("upd_stage_verifying", L"Verifying the download…");
           break;
-        case Stage::Extracting:
-          message = AdvW("upd_stage_extracting", L"Unpacking…");
-          break;
-        default:  // Swapping — Idle never renders under Applying
-          message = AdvW("upd_stage_swapping", L"Applying the new files…");
+        default:  // Installing — Idle never renders under Applying
+          message = AdvW("upd_stage_installing", L"Starting the installer…");
           break;
       }
       break;
-    case Phase::ManualUnzip:
-      // The one phase whose action is not the apply: the folder is not
-      // writable, the verified zip is downloaded, and the click re-reveals it.
+    case Phase::ManualInstall:
+      // The one phase whose action is not the apply: the installer could not
+      // be started, the verified MSI is downloaded, and the click re-reveals it.
       action = Adv("upd_show_file", L"Show file");
-      message = AdvW("upd_manual_message",
-                     L"This folder isn't writable, so the app can't swap its "
-                     L"own files. The verified download was shown in Explorer "
-                     L"— quit the app and extract it over this folder.");
-      if (!snap.zipPath.empty()) message += L" (" + snap.zipPath + L")";
+      message = AdvW("upd_manual_install_message",
+                     L"The installer didn't start (it needs administrator "
+                     L"approval). The verified download was shown in Explorer "
+                     L"— quit the app and run it.");
+      if (!snap.installerPath.empty())
+        message += L" (" + snap.installerPath + L")";
       break;
     default: {  // Failed — Phase::None returned above
       severity = winrt::Microsoft::UI::Xaml::Controls::InfoBarSeverity::Error;
@@ -506,30 +555,10 @@ void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) 
                          L"The download didn't finish. Check the connection "
                          L"and click to try again.");
           break;
-        case Failure::Checksum:
+        default:  // Checksum
           message = AdvW("upd_failed_checksum",
                          L"The download didn't match the release's checksums, "
                          L"so it was discarded. Click to try again.");
-          break;
-        case Failure::Extract:
-          message = AdvW("upd_failed_extract",
-                         L"The downloaded update couldn't be unpacked. "
-                         L"Details are in the app log.");
-          break;
-        case Failure::SwapDirty:
-          // The one failure whose banner must NOT claim a clean floor: the
-          // rollback itself lost a step, so "the previous files were put
-          // back" would be false over exactly the directory it describes.
-          message = AdvW("upd_failed_swap_dirty",
-                         L"The update couldn't be applied, and some previous "
-                         L"files could not be put back — this folder may mix "
-                         L"versions until a retry succeeds. Details are in "
-                         L"the app log.");
-          break;
-        default:  // Swap
-          message = AdvW("upd_failed_swap",
-                         L"The update couldn't be applied, and the previous "
-                         L"files were put back. Details are in the app log.");
           break;
       }
       break;
@@ -578,7 +607,18 @@ void ConnectPage::ApplyConnectStatus() {
   // post-checkout confirmation poll wins over an out-of-balance account: the
   // balance is mid-flight, and showing a warning for it would be wrong.
   const bool processing = w_.balanceConfirming();
-  const bool outOfBalance = !processing && w_.balanceBlocked();
+  const bool outOfBalance = w_.outOfBalance();
+  // the banner's message, kept current while it is open (ApplyBalanceWarningMessage);
+  // a refused start waiting on the balance keeps it open on its own
+  if (urnw::balance::BannerOpen(outOfBalance, w_.balanceRecovery())) {
+    if (balanceRefreshTicker_.Running()) {
+      ApplyBalanceWarningMessage();
+    } else {
+      balanceRefreshTicker_.Start([this] { ApplyBalanceWarningMessage(); });
+    }
+  } else {
+    balanceRefreshTicker_.Stop();
+  }
   switch (render) {
     case Health::Connected:
       // the provider count lives in its own line below (ProviderCountText),
@@ -773,8 +813,16 @@ void ConnectPage::ApplyConnectStatus() {
   // but a failure whose only offered control is "Disconnect" strands the user
   // one manual step from the retry that usually works. OnConnectToggle keeps
   // the two in agreement: a press in this state disconnects AND reconnects.
-  const bool failedAction = render == Health::Failed;
-  const bool disconnectAction = !failedAction && ConnectActionIsDisconnect();
+  //
+  // Out of balance the button keeps its Disconnect and that press stays
+  // enabled (BalanceGate.h): it used to be disabled with the connect, which
+  // left a machine captured with no exit and no way out but the tray.
+  const urnw::balance::ConnectButton button = urnw::balance::DecideConnectButton(
+      render == Health::Failed, ConnectActionIsDisconnect(), processing, outOfBalance,
+      connectStatus_ == ConnectStatus::Connecting, connectWatchdogFired_);
+  const bool failedAction = button.action == urnw::balance::ConnectButtonAction::Retry;
+  const bool disconnectAction =
+      button.action == urnw::balance::ConnectButtonAction::Disconnect;
   w_.ConnectButton().Content(failedAction
                                  ? LocBox("retry")
                                  : (disconnectAction ? LocBox("disconnect")
@@ -838,10 +886,16 @@ void ConnectPage::ApplyConnectStatus() {
     connectWatchdogFired_ = true;
   }
   // out of balance / mid-poll: there is nothing a connect press can do, and iOS
-  // blocks the tap in exactly these two cases
+  // blocks the tap in exactly these two cases. The explicit button's
+  // Disconnect is never blocked by balance (DecideConnectButton, with the
+  // watchdog state above); the hero keeps the plain rule.
   const bool blocked = processing || outOfBalance;
   const bool enabled = !blocked && (!transitional || connectWatchdogFired_);
-  w_.ConnectButton().IsEnabled(enabled);
+  w_.ConnectButton().IsEnabled(urnw::balance::DecideConnectButton(
+                                   render == Health::Failed, ConnectActionIsDisconnect(),
+                                   processing, outOfBalance, transitional,
+                                   connectWatchdogFired_)
+                                   .enabled);
   w_.ConnectHero().IsEnabled(enabled);
 }
 
@@ -905,6 +959,12 @@ void ConnectPage::ApplyStats(urnw::LiveStats const& stats) {
   if (canvas_ && !PreviewHeroActive()) {
     canvas_->SetGrid(stats.gridPoints, stats.gridWidth, stats.gridHeight);
   }
+  // The same grid, counted by proven address family for the drawer. Unlike
+  // the hero this never freezes on connect: which exits can carry v6 is live
+  // information for as long as the window is.
+  if (ipFamilyStatusRow_ && !PreviewHeroActive()) {
+    ipFamilyStatusRow_->SetGrid(stats.gridPoints);
+  }
   ApplyConnectStatus();
   ApplyPeerCount(peers);  // the peers status line below the connect button (req1)
   // the connected country drives the dns-card recommendation pill; only refresh
@@ -927,11 +987,17 @@ void ConnectPage::ApplyStats(urnw::LiveStats const& stats) {
   // #27: gated on the AGGREGATE, not the raw SDK bit — "Connected to N
   // providers" under a headline reading "Finding providers…" is the exact
   // contradiction the aggregate exists to remove.
+  // While connecting the same row reads "Connecting to providers" and still
+  // opens the sheet (it lists the providers known so far, or its own
+  // "Connecting to providers" empty line) — android/apple parity, where the
+  // status label is the tap target in both states.
+  const bool providersConnecting = stats.health == urnw::health::State::Connecting;
   urnw::kit::SetTextOrCollapse(
       w_.ProviderCountText(),
       stats.connected && stats.health == urnw::health::State::Connected
           ? hstring{urnw::Plural("connected_provider_count", stats.providerCount)}
-          : hstring{L""});
+          : providersConnecting ? hstring{Loc("connecting_status_indicator")}
+                                : hstring{L""});
 
   // Live throughput feed: down / up bit rate. This is the ACTIVITY PANE's own
   // header figure now — the pane whose chart and connections table it describes
@@ -941,8 +1007,9 @@ void ConnectPage::ApplyStats(urnw::LiveStats const& stats) {
       stats.connected ? H("↓ " + urnw::FormatBitRate(stats.downBitsPerSecond) +
                           "   ↑ " + urnw::FormatBitRate(stats.upBitsPerSecond))
                       : hstring(L""));
-  w_.LiveStatsGroup().Visibility(stats.connected ? Visibility::Visible
-                                                 : Visibility::Collapsed);
+  w_.LiveStatsGroup().Visibility(stats.connected || providersConnecting
+                                     ? Visibility::Visible
+                                     : Visibility::Collapsed);
   // R3: the statistics pane draws the session as key/value rows, so it needs the
   // figures rather than only the prose lines above.
   downBitsPerSecond_ = stats.downBitsPerSecond;
@@ -953,14 +1020,19 @@ void ConnectPage::ApplyStats(urnw::LiveStats const& stats) {
   // the activity list vs its centred empty line, on the same connected signal
   ApplySessionCardsVisibility(stats.connected);
 
-  // Insufficient-balance warning (auto-disconnect happens in the SDK). The
-  // action button opens the upgrade flow; Pro / a running confirmation poll
-  // suppress it (MainWindow::UpdateBalanceWarning).
+  // Insufficient-balance warning. The action button opens the upgrade flow;
+  // Pro / a running confirmation poll suppress it
+  // (MainWindow::UpdateBalanceWarning). Nothing disconnects on its own: the
+  // tunnel holds traffic until the user upgrades or disconnects
+  // (BalanceGate.h), which the banner body says while a session is up.
   w_.SetInsufficientBalance(stats.insufficientBalance);
 
-  // Provide stats.
+  // Provide stats. Not while the count is unknown: the provider-only device (no
+  // session) reports its peers only through get_provider_stats, which an older
+  // service does not answer, so a count there would be a guess. The indicator
+  // below still shows that it provides.
   hstring provide{L""};
-  if (stats.provideEnabled) {
+  if (stats.provideEnabled && !stats.provideClientsUnknown) {
     provide = stats.providePaused
                   ? Loc("providing_paused")
                   : hstring{urnw::Plural("providing_client_count", stats.provideClients)};
@@ -971,25 +1043,17 @@ void ConnectPage::ApplyStats(urnw::LiveStats const& stats) {
   w_.ProvideStatsText().Text(provide);
   w_.ProvideStatsRow().Visibility(provide.empty() ? Visibility::Collapsed
                                                   : Visibility::Visible);
+  // the extender switch's guess needs whether the device is providing, the
+  // same fact the SDK's not_providing state reports (N3)
+  provideEnabled_ = stats.provideEnabled;
 
   // provide indicator (apple parity). The effective provide mode is a bit set
   // (0 none, 1 network, 2 friends-and-family, 3 public) — per-case only.
   // Solid dot = Network tier; dot + outer ring = Public tier (amber while
   // paused — pause stops public only); coral = not providing.
-  auto provideColor = urnw::colors::kUrCoral;
-  bool provideRing = false;
-  switch (stats.provideMode) {
-    case 3:  // public
-      provideColor = stats.providePaused ? urnw::colors::kUrAmber : urnw::colors::kUrGreen;
-      provideRing = true;
-      break;
-    case 1:  // network (also Auto while idle)
-    case 2:  // friends-and-family
-      provideColor = urnw::colors::kUrGreen;
-      break;
-    default:
-      break;
-  }
+  const auto provideVisual = urnw::ProvideModeVisualFor(stats.provideMode, stats.providePaused);
+  const auto provideColor = provideVisual.color;
+  const bool provideRing = provideVisual.ring;
   // discoverability line (apple/android parity): a paused device stays
   // discoverable — pause stops public provide only
   w_.DiscoverableText().Text(Loc(stats.provideEnabled && stats.provideHasNetworkKey
@@ -1097,38 +1161,56 @@ void ConnectPage::PreviewHeroTick() {
         case 2: p.State = "NotAdded"; break;
         default: p.State = "Added"; break;
       }
+      // a synthetic family too, so the drawer's status row fills in the
+      // preview in the design's expected proportions (mostly dualstack)
+      switch ((h >> 12) % 6) {
+        case 0: p.IpFamily = "v4-only"; break;
+        case 1: p.IpFamily = "v6-only"; break;
+        default: p.IpFamily = "dualstack"; break;
+      }
       p.Active = true;
+      // A few of the preview's providers are reached through an extender, so
+      // the rings of EXTENDER.md K2 are visible in --preview-ui at one, two and
+      // four addresses (four is the collapsed dashed third ring). The colours
+      // are the SDK's own pinned values for these addresses.
+      switch ((h >> 18) % 16) {
+        case 0:
+          p.ExtenderIps = "192.0.2.1";
+          p.ExtenderColorHexes = "3cdd67";
+          break;
+        case 1:
+          p.ExtenderIps = "192.0.2.1,2001:db8::1";
+          p.ExtenderColorHexes = "3cdd67,dd4f3c";
+          break;
+        case 2:
+          p.ExtenderIps = "192.0.2.1,2001:db8::1,198.51.100.7,203.0.113.42";
+          p.ExtenderColorHexes = "3cdd67,dd4f3c,8fd0e8,e8c23c";
+          break;
+        default: break;  // most providers are reached directly
+      }
       points.push_back(p);
     }
   }
   canvas_->SetGrid(points, kCols, kCols);
+  if (ipFamilyStatusRow_) ipFamilyStatusRow_->SetGrid(points);
+  if (extenderPanel_) {
+    // the panel has no feed in preview (there is no device), so give it a
+    // plausible one rather than leaving the row saying 0 of 0 forever
+    urnw::ExtenderStatusView preview;
+    preview.gossipState = (seed % 12) < 8   ? urnw::kGossipStateConnected
+                          : (seed % 12) < 10 ? urnw::kGossipStateConnecting
+                                             : urnw::kGossipStateDisconnected;
+    preview.activeCount = 2;
+    preview.reserveCount = 7;
+    preview.eventCountLastMinute = static_cast<int64_t>(seed % 5);
+    preview.extenders = {
+        urnw::ExtenderInfoView{"192.0.2.1", "3cdd67", 1},
+        urnw::ExtenderInfoView{"2001:db8::1", "dd4f3c", 1},
+        urnw::ExtenderInfoView{"198.51.100.7", "8fd0e8", 0},
+    };
+    extenderPanel_->SetStatus(preview);
+  }
 }
-
-namespace {
-// Keep a chart inside its pane.
-//
-// TransferChart draws into a Canvas, and a Canvas does not clip: its curves and
-// its edge labels run a few pixels past the host and, in a pane layout, straight
-// across the 1px rule into the NEXT pane. It did - the activity chart put a
-// green sliver and a stray peak marker inside the statistics pane, right at the
-// boundary. A Grid column does not clip its children either, so the clip has to
-// be stated, and re-stated on every resize because Clip is a fixed rectangle.
-void ClipToBounds(winrt::Microsoft::UI::Xaml::Controls::Grid const& host) {
-  if (!host) return;
-  auto apply = [](winrt::Microsoft::UI::Xaml::FrameworkElement const& element,
-                  winrt::Windows::Foundation::Size const& size) {
-    winrt::Microsoft::UI::Xaml::Media::RectangleGeometry clip;
-    clip.Rect({0, 0, static_cast<float>(size.Width), static_cast<float>(size.Height)});
-    element.Clip(clip);
-  };
-  host.SizeChanged([apply](winrt::Windows::Foundation::IInspectable const& sender,
-                           SizeChangedEventArgs const& args) {
-    if (auto element = sender.try_as<winrt::Microsoft::UI::Xaml::FrameworkElement>()) {
-      apply(element, args.NewSize());
-    }
-  });
-}
-}  // namespace
 
 void ConnectPage::BuildCharts() {
   remoteChart_ = std::make_unique<urnw::TransferChart>(
@@ -1142,9 +1224,32 @@ void ConnectPage::BuildCharts() {
       urnw::colors::kUrGreen, urnw::colors::kUrPink);
   // R3: a chart is now full-bleed to its pane's edge, so anything it overdraws
   // lands in the pane next door.
-  ClipToBounds(w_.RemoteChartHost());
-  ClipToBounds(w_.BlockedChartHost());
-  ClipToBounds(w_.LocalChartHost());
+  urnw::kit::ClipToBounds(w_.RemoteChartHost());
+  urnw::kit::ClipToBounds(w_.BlockedChartHost());
+  urnw::kit::ClipToBounds(w_.LocalChartHost());
+  // The transport distribution bar (TRANSPORTSTATS): the window's remote traffic
+  // by transport, full width directly under the Remote plot in the activity
+  // pane. Its click opens the client transport settings editor; the bar is its
+  // own row (a pane-row Button), so there is no surrounding card click to win
+  // over here. The window may be gone by the time a click lands, so the
+  // callback resolves the weak window ref like every other XAML handler.
+  transportBar_ = std::make_unique<urnw::TransportBar>(
+      w_.TransportBarHost(), [weak = w_.get_weak()] {
+        if (auto self = weak.get()) {
+          self->connect().ShowTransportSettingsSheet(urnw::TransportSettingsKind::Client);
+        }
+      });
+  // The IP-family status row (IPV6.md D2), directly under the transport bar in
+  // its own host row: the Dualstack / IPv4 / IPv6 columns with their connected
+  // and connecting counts. Fed by ApplyStats from the same grid push the hero
+  // reads.
+  ipFamilyStatusRow_ = std::make_unique<urnw::IpFamilyStatusRow>(w_.IpFamilyStatusRowHost());
+  // The extender panel (EXTENDER.md K4), its own host row directly under the
+  // status row: the extenders carrying live connections, the usable count, and
+  // the gossip network's state. Fed by the SDK's once-a-second extender status
+  // listener rather than by the stats tick -- it is a property of the network,
+  // not of this window's traffic.
+  extenderPanel_ = std::make_unique<urnw::ExtenderPanel>(w_.ExtenderPanelHost());
 }
 
 void ConnectPage::WireDrawerFeeds() {
@@ -1225,8 +1330,46 @@ void ConnectPage::WireDrawerFeeds() {
     queue.TryEnqueue([weak, settings = std::move(settings)] {
       if (auto self = weak.get()) {
         auto& page = self->connect();
+        page.dnsSettled_ = true;  // a push is a reading, present or not
         page.dnsSettings_ = settings;
         page.ApplyDnsCard(settings);
+      }
+    });
+  });
+  // the transport distribution: SdkHost reads it on the same throughput tick as
+  // the points and pushes only when it changed, so this can apply every push
+  sdk.SetTransportDistributionHandler([queue, weak](urnw::TransportDistributionSnapshot d) {
+    queue.TryEnqueue([weak, d = std::move(d)] {
+      if (auto self = weak.get()) {
+        auto& page = self->connect();
+        if (page.transportBar_) page.transportBar_->SetDistribution(d);
+      }
+    });
+  });
+  // the extender network (K4, K5): SdkHost maps the SDK status to the plain
+  // view the panel draws and pushes only when it changed, so this can apply
+  // every push
+  sdk.SetExtenderStatusHandler([queue, weak](urnw::ExtenderStatusView status) {
+    queue.TryEnqueue([weak, status = std::move(status)] {
+      if (auto self = weak.get()) {
+        auto& page = self->connect();
+        if (page.extenderPanel_) page.extenderPanel_->SetStatus(status);
+      }
+    });
+  });
+  // the transport policies in force: cached for the editor (an open editor is
+  // not reset by a push, dns parity); the bar's unused footer follows the policy
+  // through the SDK view controller's enabled flags, not through this
+  sdk.SetTransportSettingsHandler([queue, weak](urnw::TransportSettingsKind kind,
+                                                std::optional<urnet::TransportSettings> settings) {
+    queue.TryEnqueue([weak, kind, settings = std::move(settings)] {
+      if (auto self = weak.get()) {
+        auto& page = self->connect();
+        if (kind == urnw::TransportSettingsKind::Provider) {
+          page.providerTransportSettings_ = settings;
+        } else {
+          page.clientTransportSettings_ = settings;
+        }
       }
     });
   });
@@ -1329,12 +1472,60 @@ void ConnectPage::ResyncDrawer() {
   sdk.CurrentBlockCounts(allowedCount_, blockedCount_);
   splitRules_ = sdk.CurrentSplitRules();
   dnsSettings_ = sdk.CurrentDnsSettings();
+  if (transportBar_) transportBar_->SetDistribution(sdk.CurrentTransportDistribution());
+  if (extenderPanel_) extenderPanel_->SetStatus(sdk.CurrentExtenderStatus());
+  ApplyExtenderProvideState(sdk.CurrentExtenderProvideStatus());
+  clientTransportSettings_ = sdk.CurrentTransportSettings(urnw::TransportSettingsKind::Client);
+  providerTransportSettings_ =
+      sdk.CurrentTransportSettings(urnw::TransportSettingsKind::Provider);
   ApplySplitRuleCount();  // also rebuilds the split-rules list
   ApplyDnsCard(dnsSettings_);
   ApplyConnectionsList();
   ApplyContractsList();
   ApplySessionRows();
   SeedConnectControls();
+  BeginPlaceholders();
+}
+
+// ---- DESIGNSTYLE "Placeholders, not pop-in" -----------------------------------
+
+// How long a loading skeleton may stand before the section settles on its
+// empty reading (DESIGNSTYLE: a placeholder must resolve). The device is up
+// well inside this after a sign-in; past it, the honest reading is the one the
+// feeds gave — the unavailable row, an empty transport track.
+constexpr int64_t kPlaceholderCeilingMillis = 6000;
+
+namespace {
+int64_t SteadyMillis() {
+  return std::chrono::duration_cast<std::chrono::milliseconds>(
+             std::chrono::steady_clock::now().time_since_epoch())
+      .count();
+}
+}  // namespace
+
+// Arm the skeletons for whatever has not been read yet: on every ResyncDrawer
+// (login / re-show) — no shares on a signed-in page means the device is still
+// coming up, and the reading is worth waiting for.
+void ConnectPage::BeginPlaceholders() {
+  placeholdersSinceMillis_ = SteadyMillis();
+  if (!dnsSettings_) {
+    dnsSettled_ = false;
+    ApplyDnsCard(dnsSettings_);
+  }
+  if (transportBar_ && Sdk().CurrentTransportDistribution().shares.empty()) {
+    transportBar_->BeginLoading();
+  }
+}
+
+// The ceiling: whatever is still a skeleton becomes its empty reading, in the
+// same box. Idempotent — a section that settled on real data is untouched.
+void ConnectPage::SettlePlaceholders() {
+  placeholdersSinceMillis_ = 0;
+  if (!dnsSettled_) {
+    dnsSettled_ = true;
+    ApplyDnsCard(dnsSettings_);
+  }
+  if (transportBar_ && transportBar_->IsLoading()) transportBar_->SettleEmpty();
 }
 
 void ConnectPage::SeedConnectControls() {
@@ -1414,6 +1605,60 @@ void ConnectPage::OnProvideModeChanged(SelectorBar const&,
                                        SelectorBarSelectionChangedEventArgs const&) {
   if (updatingControls_) return;
   Sdk().SetProvideControlMode(SelectedProvideMode());
+}
+
+// ---- the provider extender row (connect/EXTENDER.md N7) -----------------------
+
+void ConnectPage::ApplyExtenderProvideState(urnw::ExtenderProvideStatusView const& view) {
+  // a pushed status always replaces the switch's guess
+  extenderProvideView_ = view;
+  ApplyExtenderProvideRow();
+}
+
+void ConnectPage::OnExtenderToggled(IInspectable const&, RoutedEventArgs const&) {
+  if (updatingControls_) return;
+  // Never written while the row is hidden (N1): a device that reports the role
+  // unsupported may be a daemon that cannot take the setting at all, and an
+  // older service cannot take the provider-only device's.
+  if (!urnw::ExtenderProvideRowModelFor(extenderProvideView_).switchVisible) return;
+  const bool on = w_.ExtenderToggle().IsOn();
+  Sdk().SetProvideExtender(on);
+  // Repaint now rather than a device epoch later: grey Off, yellow Setting up
+  // while providing, grey Not providing while not. The next pushed status
+  // replaces the guess.
+  extenderProvideView_ = urnw::ExtenderProvideGuessFor(extenderProvideView_, on, provideEnabled_);
+  ApplyExtenderProvideRow();
+}
+
+void ConnectPage::ApplyExtenderProvideRow() {
+  const urnw::ExtenderProvideRowModel model =
+      urnw::ExtenderProvideRowModelFor(extenderProvideView_);
+  // Hidden, never disabled (N1): a device without the role shows the provide
+  // group exactly as before, and the description goes with the row. So does an
+  // older service's provider-only device, whose status the Earnings row shows.
+  const Visibility shown = model.switchVisible ? Visibility::Visible : Visibility::Collapsed;
+  w_.ExtenderRow().Visibility(shown);
+  w_.ExtenderDescriptionRow().Visibility(shown);
+  const hstring text{urnw::ExtenderProvideText(model)};
+  // the provide dot's drawing; a new state repaints it at once, with no motion
+  w_.ExtenderDot().Fill(urnw::colors::MakeBrush(urnw::ExtenderProvideToneColor(model.tone)));
+  w_.ExtenderNote().Text(text);
+  w_.ExtenderNote().Foreground(urnw::ExtenderProvideNoteBrush(model.tone));
+  // the note style cuts the line at the row's width, so the whole line rides
+  // the tooltip: a listen failure names every carrier
+  ToolTipService::SetToolTip(w_.ExtenderNote(),
+                             text.empty() ? IInspectable{nullptr} : winrt::box_value(text));
+  // the switch is named "Extender" (ApplyStrings) and carries the state as its
+  // help text; the dot is decorative (markup)
+  winrt::Microsoft::UI::Xaml::Automation::AutomationProperties::SetHelpText(
+      w_.ExtenderToggle(), text);
+  // the switch is the setting, read beside the status; the echo guard keeps
+  // the repaint from writing it back
+  if (w_.ExtenderToggle().IsOn() != model.on) {
+    updatingControls_ = true;
+    w_.ExtenderToggle().IsOn(model.on);
+    updatingControls_ = false;
+  }
 }
 
 void ConnectPage::OnFixedIpToggled(IInspectable const&, RoutedEventArgs const&) {
@@ -1645,8 +1890,7 @@ void ConnectPage::ApplySessionRows() {
 // ASN/org, per-connection duration and per-connection RTT. None of those exists
 // on any feed this client can reach. They are in the report as bridging work.
 //
-// Every label here is an Adv() id — see pages::Adv. The store has 945 keys and
-// not one of them names a field of a connection inspector.
+// Every label here is an Adv() id, a store key of its own — see pages::Adv.
 
 void ConnectPage::SelectConnection(std::string const& id) {
   // A second click on the selected row clears it. The alternative is a selection
@@ -2086,13 +2330,43 @@ void ConnectPage::ApplySplitRuleCount() {
 }
 
 void ConnectPage::ApplyDnsCard(std::optional<urnet::DnsResolverSettings> const& settings) {
-  w_.DnsRowsPanel().Visibility(settings ? Visibility::Visible : Visibility::Collapsed);
+  if (settings) dnsSettled_ = true;
+  // DESIGNSTYLE "Placeholders, not pop-in": before the first reading the four
+  // rows are up with their labels (the labels are static) and a skeleton where
+  // the On/Off value goes, so the group opens at its settled 4x34 and the
+  // values are replaced in place. Only a reading that comes back empty swaps
+  // to the unavailable row — the error state, in the same group.
+  const bool loading = !settings && !dnsSettled_;
+  w_.DnsRowsPanel().Visibility(settings || loading ? Visibility::Visible : Visibility::Collapsed);
   // the ROW, not the text inside it: see ProvideStatsRow
-  w_.DnsUnavailableRow().Visibility(settings ? Visibility::Collapsed : Visibility::Visible);
+  w_.DnsUnavailableRow().Visibility(settings || loading ? Visibility::Collapsed
+                                                        : Visibility::Visible);
   // the applied settings just changed: re-evaluate the recommendation pill (it
   // reads dnsSettings_, already updated to `settings` by the caller). Runs in
   // the unavailable path too so the pill collapses with the rows.
   ApplyDnsRecommendationPill();
+  {
+    // the value's skeleton (shimmer begun once, on the first loading pass)
+    const hstring loadingText = Loc("loading");
+    auto skeleton = [loading, &loadingText](Microsoft::UI::Xaml::Shapes::Ellipse const& dot,
+                                            TextBlock const& label, TextBlock const& state,
+                                            Border const& bar) {
+      bar.Visibility(loading ? Visibility::Visible : Visibility::Collapsed);
+      if (!loading) return;
+      dot.Fill(urnw::colors::MakeBrush(urnw::colors::WithAlpha(urnw::colors::kTextFaint, 102)));
+      state.Text(L"");
+      winrt::Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(
+          state, hstring{std::wstring{label.Text()} + L", " + std::wstring{loadingText}});
+      if (!winrt::unbox_value_or<bool>(bar.Tag(), false)) {
+        bar.Tag(winrt::box_value(true));
+        kit::StartSkeletonShimmer(bar);
+      }
+    };
+    skeleton(w_.DohDot(), w_.DohLabel(), w_.DohState(), w_.DohSkeleton());
+    skeleton(w_.UdnsDot(), w_.UdnsLabel(), w_.UdnsState(), w_.UdnsSkeleton());
+    skeleton(w_.LdnsDot(), w_.LdnsLabel(), w_.LdnsState(), w_.LdnsSkeleton());
+    skeleton(w_.FallbackDot(), w_.FallbackLabel(), w_.FallbackState(), w_.FallbackSkeleton());
+  }
   if (!settings) return;
 
   // looked up once for the four rows; the lambda runs here, so capturing by
@@ -2158,6 +2432,35 @@ void ConnectPage::ApplyDnsRecommendationPill() {
   w_.DnsRecPill().Visibility(Visibility::Collapsed);
 }
 
+// The banner leads with when the free data refreshes (DataInfo.h), so Get Pro
+// does not read as the only way back; Why? beside it opens the "About your
+// data" sheet. Then whether the data is reserved or used up (BalanceGate.h),
+// and that the traffic is held while a session is up, which is the state the
+// tray notice announced; otherwise it asks for balance. While a connect the
+// user asked for waits on the balance it says the app reconnects by itself (a
+// refused start keeps the banner open with only that line and Cancel).
+void ConnectPage::ApplyBalanceWarningMessage() {
+  const bool outOfBalance = w_.outOfBalance();
+  const bool sessionUp = ConnectActionIsDisconnect();
+  const auto lines = urnw::datainfo::BannerLinesFor(outOfBalance, sessionUp);
+  const auto recovery = urnw::balance::RecoveryLinesFor(outOfBalance, sessionUp,
+                                                        w_.outOfBalanceKind(), w_.balanceRecovery());
+  std::wstring message;
+  if (lines.refresh) {
+    message = urnw::Format("insufficient_balance_refreshes_in", urnw::FreeRefreshCountdownText()) +
+              L"\n";
+    const std::wstring kind = urnw::OutOfBalanceKindText(recovery.kind, w_.reservedByteCount());
+    if (!kind.empty()) message += kind + L"\n";
+    message += urnw::Localized(lines.held ? "insufficient_balance_held_notice"
+                                          : "insufficient_balance_message");
+  }
+  if (recovery.willReconnect) {
+    if (!message.empty()) message += L"\n";
+    message += urnw::Localized("insufficient_balance_will_reconnect");
+  }
+  w_.BalanceWarning().Message(hstring{message});
+}
+
 void ConnectPage::OnChartTick() {
   // skip the redraw work while the window is hidden (tray) or on another tab
   if (!w_.Visible()) return;
@@ -2178,11 +2481,19 @@ void ConnectPage::OnChartTick() {
       Sdk().RepublishStats();
     }
   }
+  // the loading skeletons' ceiling is clock-driven for the same reason
+  if (placeholdersSinceMillis_ != 0 &&
+      SteadyMillis() - placeholdersSinceMillis_ > kPlaceholderCeilingMillis) {
+    SettlePlaceholders();
+  }
   if (w_.ConnectView().Visibility() != Visibility::Visible && !w_.sheetOpen()) return;
   if (w_.ConnectView().Visibility() == Visibility::Visible) {
     remoteChart_->Tick();
     blockedChart_->Tick();
     localChart_->Tick();
+    // the transport bar's boundary tween / empty fade; returns immediately
+    // unless one is in flight (TransferChart's rule)
+    if (transportBar_) transportBar_->Tick();
     // the hero's only per-frame path; it returns immediately unless a point
     // transition is in flight
     if (canvas_) canvas_->Tick();
@@ -2481,9 +2792,11 @@ void ConnectPage::OnPeersLineClick(IInspectable const&, RoutedEventArgs const&) 
 
 void ConnectPage::OnProviderCountClick(IInspectable const&, RoutedEventArgs const&) {
   // LiveStatsGroup is already collapsed while disconnected, so this guard is
-  // belt-and-braces — but the sheet has nothing to draw without a connection,
-  // and an empty globe reads as a broken one rather than an idle one.
-  if (!connected_) return;
+  // belt-and-braces — the sheet has nothing to draw without a session. While
+  // connecting it opens too, listing the providers known so far (its empty
+  // state reads "Connecting to providers").
+  const bool connecting = health_ == urnw::health::State::Connecting;
+  if (!connected_ && !connecting) return;
   ShowProviderLocationsSheet();
 }
 
@@ -2531,6 +2844,26 @@ winrt::fire_and_forget ConnectPage::ShowDnsSheet() {
   } catch (...) {
   }
   dnsSheet_.reset();
+  w_.SetSheetOpen(false);
+}
+
+winrt::fire_and_forget ConnectPage::ShowTransportSettingsSheet(
+    urnw::TransportSettingsKind kind) {
+  if (w_.sheetOpen()) co_return;
+  auto self = w_.get_strong();
+  w_.SetSheetOpen(true);
+  try {
+    // the draft opens on the policy in force (the last change-listener push, or
+    // the SDK default when none is known) and applies together on Update; live
+    // pushes don't reset the open editor (dns parity)
+    transportSheet_ = urnw::TransportSettingsSheet::Create(
+        self->Content().XamlRoot(), Sdk(), kind,
+        kind == urnw::TransportSettingsKind::Provider ? providerTransportSettings_
+                                                      : clientTransportSettings_);
+    co_await transportSheet_->Dialog().ShowAsync();
+  } catch (...) {
+  }
+  transportSheet_.reset();
   w_.SetSheetOpen(false);
 }
 

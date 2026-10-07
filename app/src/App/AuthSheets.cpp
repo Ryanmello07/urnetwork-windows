@@ -8,10 +8,14 @@
 #include <vector>
 
 #include <winrt/Windows.ApplicationModel.DataTransfer.h>
+#include <winrt/Microsoft.UI.Xaml.Automation.h>
+#include <winrt/Microsoft.UI.Xaml.Automation.Peers.h>
 
-#include "BalanceSheets.h"  // SetTermsMarkerText (the terms/privacy link inlines)
+#include "BalanceSheets.h"
 #include "Ids.h"
 #include "Localization.h"
+#include "PageContext.h"
+#include "ReferralShare.h"
 #include "Log.h"
 #include "Strings.h"
 #include "UrColors.h"
@@ -38,122 +42,6 @@ winrt::Windows::Foundation::IInspectable LocBox(std::string_view key) {
 }
 
 }  // namespace
-
-// ---- GuestModeSheet ---------------------------------------------------------
-
-std::shared_ptr<GuestModeSheet> GuestModeSheet::Create(XamlRoot const& root,
-                                                       SdkHost& sdk) {
-  auto sheet = std::shared_ptr<GuestModeSheet>(new GuestModeSheet(sdk));
-  sheet->Build(root);
-  return sheet;
-}
-
-void GuestModeSheet::Build(XamlRoot const& root) {
-  dialog_ = ContentDialog();
-  dialog_.XamlRoot(root);
-  dialog_.Title(winrt::box_value(Loc("try_guest_mode_2")));
-  dialog_.CloseButtonText(Loc("close"));
-  // brand sheet surface (android SheetBlack; BalanceSheets::MakeDialog)
-  dialog_.Background(colors::SheetBrush());
-  dialog_.PrimaryButtonText(Loc("enter_urnetwork"));
-  dialog_.IsPrimaryButtonEnabled(false);  // gated on the terms consent
-  dialog_.DefaultButton(ContentDialogButton::Primary);
-
-  StackPanel content;
-  content.MinWidth(400);
-  content.Spacing(12);
-
-  // what guest mode is, and that a full account can come later
-  TextBlock explainer;
-  explainer.Text(Loc("guest_mode_explainer"));
-  explainer.FontSize(13);
-  explainer.Foreground(colors::MutedBrush());
-  explainer.TextWrapping(TextWrapping::Wrap);
-  content.Children().Append(explainer);
-
-  // terms consent: checkbox + the tappable terms/privacy links (the same
-  // terms_checkbox string the create step renders)
-  Grid termsRow;
-  ColumnDefinition c0, c1;
-  c0.Width(GridLength{0, GridUnitType::Auto});
-  c1.Width(GridLength{1, GridUnitType::Star});
-  termsRow.ColumnDefinitions().Append(c0);
-  termsRow.ColumnDefinitions().Append(c1);
-  termsRow.ColumnSpacing(8);
-
-  termsCheck_ = CheckBox();
-  termsCheck_.MinWidth(0);
-  termsCheck_.VerticalAlignment(VerticalAlignment::Top);
-  auto onTermsChanged = [weak = weak_from_this()](auto const&, auto const&) {
-    if (auto self = weak.lock()) {
-      const bool agreed =
-          self->termsCheck_.IsChecked() && self->termsCheck_.IsChecked().Value();
-      self->dialog_.IsPrimaryButtonEnabled(agreed && !self->creating_);
-      self->errorText_.Visibility(Visibility::Collapsed);
-    }
-  };
-  termsCheck_.Checked(onTermsChanged);
-  termsCheck_.Unchecked(onTermsChanged);
-  termsRow.Children().Append(termsCheck_);
-
-  TextBlock termsText;
-  termsText.VerticalAlignment(VerticalAlignment::Center);
-  termsText.Foreground(colors::MutedBrush());
-  SetTermsMarkerText(termsText, Localized("terms_checkbox"), 12);
-  // this checkbox had no name at all in the UIA tree; same treatment as the
-  // two on the login page
-  PairTermsLabel(termsCheck_, termsText);
-  Grid::SetColumn(termsText, 1);
-  termsRow.Children().Append(termsText);
-  content.Children().Append(termsRow);
-
-  errorText_ = TextBlock();
-  errorText_.FontSize(12);
-  errorText_.Foreground(colors::DangerBrush());
-  errorText_.TextWrapping(TextWrapping::Wrap);
-  errorText_.Visibility(Visibility::Collapsed);
-  content.Children().Append(errorText_);
-
-  dialog_.Content(content);
-
-  dialog_.PrimaryButtonClick([weak = weak_from_this()](
-                                 auto const&, ContentDialogButtonClickEventArgs const& args) {
-    args.Cancel(true);  // keep the dialog open; ApplyResult decides what shows next
-    if (auto self = weak.lock()) self->Submit();
-  });
-}
-
-void GuestModeSheet::Submit() {
-  const bool agreed = termsCheck_.IsChecked() && termsCheck_.IsChecked().Value();
-  if (creating_ || !agreed || !sdk_.apiReady()) return;
-  creating_ = true;
-  dialog_.IsPrimaryButtonEnabled(false);
-  termsCheck_.IsEnabled(false);
-  errorText_.Visibility(Visibility::Collapsed);
-
-  auto queue = dialog_.DispatcherQueue();
-  auto weak = weak_from_this();
-  sdk_.LoginAsGuest([queue, weak](AuthResult r) {
-    queue.TryEnqueue([weak, r] {
-      if (auto self = weak.lock()) self->ApplyResult(r.ok, r.error);
-    });
-  });
-}
-
-void GuestModeSheet::ApplyResult(bool ok, std::string const& error) {
-  creating_ = false;
-  if (ok) {
-    // the auth-state relay swaps the login panel for the home view underneath
-    dialog_.Hide();
-    return;
-  }
-  termsCheck_.IsEnabled(true);
-  dialog_.IsPrimaryButtonEnabled(termsCheck_.IsChecked() &&
-                                 termsCheck_.IsChecked().Value());
-  // a server error is not localizable; show it when there is one
-  errorText_.Text(error.empty() ? Loc("guest_mode_failed") : H(error));
-  errorText_.Visibility(Visibility::Visible);
-}
 
 // ---- SeedphraseDisplaySheet -------------------------------------------------
 
@@ -194,8 +82,7 @@ void SeedphraseDisplaySheet::Build(XamlRoot const& root) {
   // seedphrase on screen was the only way back into it and had not been
   // written down. The Closing handler below is the actual guard; macOS's
   // .interactiveDismissDisabled(true) is the same idea expressed as a modifier.
-  dialog_.PrimaryButtonText(Loc("seedphrase_saved_confirm"));
-  dialog_.SecondaryButtonText(Loc("copy_to_clipboard"));
+  dialog_.PrimaryButtonText(Loc("i_ve_saved_my_seedphrase"));
   dialog_.DefaultButton(ContentDialogButton::Primary);
 
   StackPanel content;
@@ -280,14 +167,39 @@ void SeedphraseDisplaySheet::Build(XamlRoot const& root) {
   gridFrame.Child(grid);
   content.Children().Append(gridFrame);
 
-  dialog_.Content(content);
+  // Copy is a SECONDARY action with a leading copy glyph, inside the content
+  // rather than on the dialog's button row: the primary (confirm) is this
+  // sheet's one call to action. A plain Button is the secondary look; only
+  // the confirm carries the accent.
+  Button copyButton;
+  copyButton.HorizontalAlignment(HorizontalAlignment::Stretch);
+  StackPanel copyContent;
+  copyContent.Orientation(Orientation::Horizontal);
+  copyContent.Spacing(8);
+  copyContent.HorizontalAlignment(HorizontalAlignment::Center);
+  FontIcon copyGlyph;
+  copyGlyph.FontFamily(Media::FontFamily(L"Segoe Fluent Icons"));
+  copyGlyph.Glyph(L"\uE8C8");  // Copy
+  copyGlyph.FontSize(16);
+  copyGlyph.VerticalAlignment(VerticalAlignment::Center);
+  // decoration beside a label that already carries the word
+  Automation::AutomationProperties::SetAccessibilityView(
+      copyGlyph, Automation::Peers::AccessibilityView::Raw);
+  copyContent.Children().Append(copyGlyph);
+  TextBlock copyLabel;
+  copyLabel.Text(Loc("copy_to_clipboard"));
+  copyLabel.VerticalAlignment(VerticalAlignment::Center);
+  copyContent.Children().Append(copyLabel);
+  copyButton.Content(copyContent);
+  // the content is a glyph + text panel, not a string: name it for Narrator
+  Automation::AutomationProperties::SetName(copyButton, Loc("copy_to_clipboard"));
+  // Copy leaves the sheet OPEN — copying is not confirming.
+  copyButton.Click([weak = weak_from_this()](auto const&, auto const&) {
+    if (auto self = weak.lock()) self->CopyToClipboard();
+  });
+  content.Children().Append(copyButton);
 
-  // Copy leaves the sheet OPEN (args.Cancel) — copying is not confirming.
-  dialog_.SecondaryButtonClick(
-      [weak = weak_from_this()](auto const&, ContentDialogButtonClickEventArgs const& args) {
-        args.Cancel(true);
-        if (auto self = weak.lock()) self->CopyToClipboard();
-      });
+  dialog_.Content(content);
   dialog_.PrimaryButtonClick([weak = weak_from_this()](auto const&, auto const&) {
     if (auto self = weak.lock()) {
       self->confirmed_ = true;  // lets Closing through; see the handler below
@@ -576,6 +488,40 @@ void NetworkServerSheet::Build(XamlRoot const& root) {
   });
   content.Children().Append(apply);
 
+  // The active space's VLESS server, on the sheet Settings opens too. It edits
+  // the space in force now, not the domain typed above: VLESS settings belong
+  // to a space, and Apply is what changes which space that is. This sheet
+  // closes first (one ContentDialog at a time) and LoginPage opens the VLESS
+  // sheet in its place.
+  Button vless;
+  vless.Content(LocBox("vless"));
+  vless.HorizontalAlignment(HorizontalAlignment::Stretch);
+  vless.IsEnabled(current_.managerAvailable);
+  vless.Click([weak = weak_from_this()](auto const&, auto const&) {
+    if (auto self = weak.lock()) {
+      self->vlessRequested_ = true;
+      self->dialog_.Hide();
+    }
+  });
+  content.Children().Append(vless);
+
+  // The active space's bootstrap DNS-over-HTTPS servers, the block Account >
+  // Extenders shows. On a network that blocks the built-in DoH servers a fresh
+  // install cannot resolve the api to sign in, so it needs this before sign-in.
+  // Like VLESS it edits the space in force now, in its own sheet once this one
+  // closes.
+  Button controlDoh;
+  controlDoh.Content(LocBox("control_doh_urls"));
+  controlDoh.HorizontalAlignment(HorizontalAlignment::Stretch);
+  controlDoh.IsEnabled(current_.managerAvailable);
+  controlDoh.Click([weak = weak_from_this()](auto const&, auto const&) {
+    if (auto self = weak.lock()) {
+      self->controlDohRequested_ = true;
+      self->dialog_.Hide();
+    }
+  });
+  content.Children().Append(controlDoh);
+
   dialog_.Content(content);
   ApplyDerivedPlaceholders();
   UpdateInsecureWarning();
@@ -584,11 +530,11 @@ void NetworkServerSheet::Build(XamlRoot const& root) {
 void NetworkServerSheet::ApplyDerivedPlaceholders() {
   const std::string typed = netserver::NormalizeHost(urnw::Narrow(hostBox_.Text().c_str()));
   const std::string host = typed.empty() ? DefaultHost() : typed;
-  // "official" means the PRODUCTION host specifically, not whatever this
-  // process treats as its default — only production carries the migration
-  // domain. A custom or test deployment derives straight off its own name.
-  const bool official = (host == std::string(ids::kNetworkSpaceHostName));
-  const std::string migration = official ? std::string("bringyour.com") : std::string();
+  // No space carries a migration domain: the official key IS the operator
+  // host (ids::kNetworkSpaceHostName, see SdkHost::BuildNetworkSpace), so
+  // production and a custom or test deployment alike derive straight off the
+  // host name.
+  const std::string migration;
   const std::string env(ids::kNetworkSpaceEnvName);
 
   hostBox_.PlaceholderText(H(DefaultHost()));
@@ -631,7 +577,7 @@ void NetworkServerSheet::Apply(std::string const& host, std::string const& apiUr
 
 void NetworkServerSheet::UseDefault() {
   // current_.defaultHostName, NOT ids::kNetworkSpaceHostName. This used to be
-  // the compiled-in "ur.network" both times, so on a session started against a
+  // the compiled-in host both times, so on a session started against a
   // test network (URNETWORK_NETWORK_HOST) the button labelled "Use default
   // network" moved the client to PRODUCTION without saying so.
   const std::string host = DefaultHost();
@@ -687,19 +633,22 @@ void ShowAccountMenu(FrameworkElement const& anchor, SdkHost& sdk,
     // it can reach this menu, would have done on every open.
     if (!sdk.IsLoggedIn()) return;
     sdk.api().getNetworkReferralCode(
-        [onShared, queue](std::optional<urnet::GetNetworkReferralCodeResult> result,
-                          std::optional<std::string>) {
+        [onShared, queue, linkHostName = sdk.linkHostName()](
+            std::optional<urnet::GetNetworkReferralCodeResult> result,
+            std::optional<std::string>) {
           // SDK callback thread: build the message here, but touch the
           // clipboard and the snackbar only on the UI thread.
           std::string code;
           if (result && result->referral_code) code = *result->referral_code;
-          queue.TryEnqueue([onShared, code] {
+          queue.TryEnqueue([onShared, code, linkHostName] {
             // The store's message takes the code; with no code yet there is
             // nothing useful to share, so say nothing rather than share a
             // sentence with a hole in it.
             if (code.empty()) return;
             winrt::Windows::ApplicationModel::DataTransfer::DataPackage package;
-            package.SetText(hstring{urnw::Format("referral_share_message", urnw::Widen(code))});
+            package.SetText(hstring{urnw::ReferralShareText(
+                urnw::Format("referral_share_message", urnw::Widen(code)),
+                urnw::Widen(urnw::ReferralLinkUrl(linkHostName, code)))});
             winrt::Windows::ApplicationModel::DataTransfer::Clipboard::SetContent(package);
             if (onShared) onShared();
           });

@@ -20,7 +20,9 @@
 #include <thread>
 #include <vector>
 
+#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
+#endif
 #include <windows.h>
 
 #include "ConsoleArgs.h"
@@ -44,7 +46,15 @@ using namespace urnw;
 
 namespace {
 
-constexpr int64_t kServiceMemoryLimit = 64ll * 1024 * 1024;
+// The service's process budget: the message pools and the go soft limit, and
+// nothing else. The per-device memory target TunnelController creates its
+// DeviceLocal with is a separate surface, chosen from the SAME cached host
+// measurement so the two are always one tier -- see Common/MemoryTiers.h for
+// the tier table and the constraints binding a target to its budget.
+//
+// A function rather than a constant because the tier depends on measured host
+// memory; urnw::HostMemoryByteCount caches it, so both SdkInit call sites below
+// and TunnelController's device see one decision.
 
 SERVICE_STATUS_HANDLE g_statusHandle = nullptr;
 SERVICE_STATUS g_status{};
@@ -459,12 +469,17 @@ bool ApplyRestartOnFailure(SC_HANDLE svc) {
 // asks for a manual restart, because a process that is still running can at least
 // still turn the tunnel off.
 //
-// These are RPCs to services.exe, made on a thread holding TunnelController's
-// mutex_, which is a thing worth saying out loud rather than discovering. It is
-// acceptable for exactly one reason: the only path that reaches here is a start
-// already being refused, and the operation the operator cannot be denied — Stop()
-// — takes that lock with a timed acquire and reverts the machine without it if it
-// cannot have it (kStopLockBudget). Nothing here can cost anyone their network.
+// ServiceMain also calls it once at every start, before the session exists, so
+// a registration this build did not write converges without waiting for a
+// self-restart (see there).
+//
+// On the self-restart path these are RPCs to services.exe, made on a thread
+// holding TunnelController's mutex_, which is a thing worth saying out loud
+// rather than discovering. It is acceptable for exactly one reason: that path
+// is only reached by a start already being refused, and the operation the
+// operator cannot be denied — Stop() — takes that lock with a timed acquire and
+// reverts the machine without it if it cannot have it (kStopLockBudget).
+// Nothing here can cost anyone their network.
 bool EnsureRestartOnFailure() {
   SC_HANDLE scm = ::OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CONNECT);
   if (!scm) {
@@ -473,7 +488,10 @@ bool EnsureRestartOnFailure() {
              ::GetLastError());
     return false;
   }
-  SC_HANDLE svc = ::OpenServiceW(scm, ids::kServiceName, SERVICE_CHANGE_CONFIG);
+  // SERVICE_START too: the policy written below has SC_ACTION_RESTART entries,
+  // and without it ChangeServiceConfig2W refuses with ERROR_ACCESS_DENIED.
+  SC_HANDLE svc =
+      ::OpenServiceW(scm, ids::kServiceName, install::FailureActionsAccess());
   if (!svc) {
     LogError("service: cannot open our own service record to confirm the "
              "restart-on-failure policy ({})",
@@ -713,7 +731,7 @@ void Run() {
   // machine pointed at a tun that is gone, giving the routes back is more
   // urgent than getting the sdk up.
   ReportAndClearPriorState(/*observeOnly=*/false);
-  SdkInit(/*isService=*/true, kServiceMemoryLimit);
+  SdkInit(/*isService=*/true, ProcessMemoryBudgetByteCount());
   // Immediately after the SDK is up, for the reason spelled out on the function:
   // this is the anchor that survives the SDK becoming delay-loaded.
   UnblindErrorMode("after SdkInit (service)");
@@ -838,6 +856,15 @@ void WINAPI ServiceMain(DWORD, LPWSTR*) {
   }
   g_status.dwServiceType = SERVICE_WIN32_OWN_PROCESS;
   SetState(SERVICE_START_PENDING, NO_ERROR, 5000);
+  // The failure policy is re-applied on every start, not only by the install
+  // verb and the self-restart. An MSI install (the Microsoft Store channel too)
+  // is registered by Package.wxs's util:ServiceConfig, which has one delay for
+  // every slot and used to end in "none"; an older build or an administrator
+  // may have left something else. Nobody re-runs `urnetworkd install` or
+  // repairs the MSI, so the start is where every registration converges to
+  // install::kFailureActions. Best effort: EnsureRestartOnFailure logs its own
+  // failure, and the service starts either way.
+  EnsureRestartOnFailure();
   g_stopEvent = ::CreateEventW(nullptr, TRUE, FALSE, nullptr);
   if (!g_stopEvent) {
     LogError("service: CreateEvent failed: {}", ::GetLastError());
@@ -858,6 +885,8 @@ static_assert(install::kStateStopped == SERVICE_STOPPED);
 static_assert(install::kStateStartPending == SERVICE_START_PENDING);
 static_assert(install::kStateStopPending == SERVICE_STOP_PENDING);
 static_assert(install::kStateRunning == SERVICE_RUNNING);
+static_assert(install::kServiceChangeConfigAccess == SERVICE_CHANGE_CONFIG);
+static_assert(install::kServiceStartAccess == SERVICE_START);
 
 // This executable's own absolute path, unbounded. MAX_PATH is not a real
 // ceiling on this box — the portable zip can be unpacked anywhere, including
@@ -1341,7 +1370,7 @@ int RunConsole(bool rpcOnly, int stopAfterStep = 0) {
           "automatically ({}).",
           (LogDir(/*isService=*/true) / L"go-crash.log").string());
 
-  SdkInit(/*isService=*/true, kServiceMemoryLimit);
+  SdkInit(/*isService=*/true, ProcessMemoryBudgetByteCount());
   UnblindErrorMode("after SdkInit (console)");
   StartHeartbeat(LogDir(/*isService=*/true) / L"heartbeat.txt",
                  &FlushSdkLogsTick);

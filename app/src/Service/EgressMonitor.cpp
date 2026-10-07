@@ -4,6 +4,9 @@
 #include <winsock2.h>
 #include <iphlpapi.h>
 #include <netioapi.h>
+#include <wlanapi.h>
+
+#include <algorithm>
 
 #include "Log.h"
 #include "NetworkConfig.h"
@@ -12,6 +15,7 @@
 #include "ThreadGuard.h"
 
 #pragma comment(lib, "iphlpapi.lib")
+#pragma comment(lib, "wlanapi.lib")
 
 namespace urnw {
 namespace {
@@ -41,7 +45,9 @@ bool InterfaceExists(uint32_t ifIndex) {
 EgressMonitor::~EgressMonitor() { Stop(); }
 
 bool EgressMonitor::Start() {
-  Refresh();
+  // An observing monitor has nothing to bind, and starting to watch is not a
+  // network change to report (see Binding).
+  if (binding_ == Binding::Bind) Refresh();
   bool ok = true;
   DWORD err = ::NotifyIpInterfaceChange(AF_UNSPEC, &EgressMonitor::OnChange,
                                         this, FALSE, &notifyHandle_);
@@ -68,6 +74,21 @@ bool EgressMonitor::Start() {
              err);
     ok = false;
   }
+  DWORD negotiatedVersion = 0;
+  err = ::WlanOpenHandle(2, nullptr, &negotiatedVersion, &wlanHandle_);
+  if (err == ERROR_SUCCESS) {
+    err = ::WlanRegisterNotification(
+        wlanHandle_, WLAN_NOTIFICATION_SOURCE_MSM, FALSE,
+        &EgressMonitor::OnWlanChange, this, nullptr, nullptr);
+  }
+  if (err != ERROR_SUCCESS) {
+    LogWarn("egress: Wi-Fi quality notifications unavailable ({}); adaptive "
+            "pacing will continue from transport feedback", err);
+    if (wlanHandle_) {
+      ::WlanCloseHandle(wlanHandle_, nullptr);
+      wlanHandle_ = nullptr;
+    }
+  }
   return ok;
 }
 
@@ -82,6 +103,16 @@ void EgressMonitor::Stop() {
     ::CancelMibChangeNotify2(routeNotifyHandle_);
     routeNotifyHandle_ = nullptr;
   }
+  if (wlanHandle_) {
+    ::WlanRegisterNotification(wlanHandle_, WLAN_NOTIFICATION_SOURCE_NONE,
+                               FALSE, nullptr, nullptr, nullptr, nullptr);
+    ::WlanCloseHandle(wlanHandle_, nullptr);
+    wlanHandle_ = nullptr;
+  }
+  {
+    std::scoped_lock lock(mutex_);
+    wlanSignalLevelTracker_.Reset();
+  }
 }
 
 void EgressMonitor::SetOnChange(ChangeHandler handler) {
@@ -94,7 +125,24 @@ void EgressMonitor::SetOnNetworkEvent(NetworkEventHandler handler) {
   onNetworkEvent_ = std::move(handler);
 }
 
+void EgressMonitor::SetOnNetworkQualityEvent(NetworkQualityEventHandler handler) {
+  std::scoped_lock lock(mutex_);
+  onNetworkQualityEvent_ = std::move(handler);
+}
+
 void EgressMonitor::Refresh() {
+  // Observe only: report the observation and stop. No discovery, no binding and
+  // no R1 log line — none of it applies to a device that binds nothing.
+  if (binding_ == Binding::ObserveOnly) {
+    NetworkEventHandler observed;
+    {
+      std::scoped_lock lock(mutex_);
+      observed = onNetworkEvent_;
+    }
+    if (observed) observed();
+    return;
+  }
+
   ChangeHandler handler;
   NetworkEventHandler networkEvent;
   EgressInterfaces egress;
@@ -193,7 +241,7 @@ EgressInterfaces EgressMonitor::Current() const {
   return current_;
 }
 
-void __stdcall EgressMonitor::OnChange(void* context, MIB_IPINTERFACE_ROW*,
+void __stdcall EgressMonitor::OnChange(void* context, MIB_IPINTERFACE_ROW* row,
                                        MIB_NOTIFICATION_TYPE) {
   // Called on a system worker thread. Recompute the egress binding; the SDK
   // setter is atomic and cheap, so we can react to every change.
@@ -206,6 +254,10 @@ void __stdcall EgressMonitor::OnChange(void* context, MIB_IPINTERFACE_ROW*,
   // direction only: our handler adds a log line and a route revert to a process
   // that was already dying, and never keeps one alive.
   auto* self = static_cast<EgressMonitor*>(context);
+  // Configuring our prepared adapter is not an uplink change. Feeding it back
+  // into readiness would invalidate every capture transaction's own proof.
+  if (self && row && self->tunLuid_.Value != 0 &&
+      row->InterfaceLuid.Value == self->tunLuid_.Value) return;
   RunGuarded("egress-change", [&] {
     if (self) self->Refresh();
   });
@@ -227,6 +279,26 @@ void __stdcall EgressMonitor::OnRouteChange(void* context,
       row->InterfaceLuid.Value == self->tunLuid_.Value)
     return;
   RunGuarded("egress-route-change", [&] { self->Refresh(); });
+}
+
+void WINAPI EgressMonitor::OnWlanChange(PWLAN_NOTIFICATION_DATA data,
+                                        void* context) {
+  auto* self = static_cast<EgressMonitor*>(context);
+  if (!self) return;
+  RunGuarded("egress-wlan-quality", [&] {
+    if (!data || data->NotificationSource != WLAN_NOTIFICATION_SOURCE_MSM ||
+        data->NotificationCode != wlan_notification_msm_signal_quality_change ||
+        data->dwDataSize < sizeof(ULONG) || data->pData == nullptr)
+      return;
+    const ULONG quality = *static_cast<const ULONG*>(data->pData);
+    NetworkQualityEventHandler handler;
+    {
+      std::scoped_lock lock(self->mutex_);
+      if (!self->wlanSignalLevelTracker_.Observe(quality)) return;
+      handler = self->onNetworkQualityEvent_;
+    }
+    if (handler) handler();
+  });
 }
 
 }  // namespace urnw

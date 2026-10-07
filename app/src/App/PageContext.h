@@ -48,41 +48,23 @@ inline winrt::Windows::Foundation::IInspectable LocBox(std::string_view key) {
   return winrt::box_value(Loc(key));
 }
 
-// A label whose store key does NOT EXIST YET.
+// A label with an English fallback: the store's string for `key`, or `english`
+// when the catalog lacks the id.
 //
-// READ THIS BEFORE ADDING A CALL.
+// Read this before adding a call.
 //
 // The rule for this app is that every user-facing string comes from the shared
-// localization store (@urnetwork/localizations) through Loc/LocBox/Format/Plural,
-// and inventing an English literal in the UI breaks it. The one sanctioned
-// exception is A SURFACE THE STORE HAS NEVER COVERED. The developer screen has
-// been living in that exception since it was built — 88 `dev_*` ids in
-// DeveloperPage.cpp, whose header block is the long-form version of this comment
-// — and Advanced Mode's inline labels are the same category: 945 keys, and not
-// one of them names a field of a connection inspector (`host`, `verdict`,
-// `packets`, `via exit`, ...).
+// localization store (@urnetwork/localizations) through Loc/LocBox/Format/Plural.
+// Adv() was the exception for surfaces the store did not cover yet: the
+// developer screen (Dev() in DeveloperPage.cpp), Advanced Mode's inspector and
+// status strip (adv_), the service banner and uninstall row (svc_), the update
+// banner and Settings toggle (upd_), the connection-health lines and tray
+// (conn_) and the transport names (transport_). Their ids are store keys now,
+// and tests/catalog_lookup_test.go fails on any Adv, Dev, Loc or Format id the
+// generated catalog lacks, so a new label lands with its key in the same change
+// and uses Loc/Format. Adv() stays at the existing call sites.
 //
-// So a call carries BOTH the store id the label should have AND the English it
-// renders until that id lands, and this prefers the store THE MOMENT the key
-// appears — no code change, no second pass. Localized() already returns the key
-// id itself on a miss (that is how a typo is made visible) and Plural() already
-// uses that same equality as its miss test, so the mechanism is the established
-// one here rather than a new one.
-//
-// Every id introduced this way is reported for the store, and the list extracts
-// mechanically rather than living in a doc that would go stale on the next row:
-//
-//     grep -ohE '"(dev|adv|svc|upd|conn)_[a-z0-9_]+"' app/src/App/*.cpp | sort -u
-//
-// (svc_ is the service-manager surface — the setup/start/update banner and the
-// uninstall row — and upd_ is the update checker's banner and Settings toggle;
-// both added with the beta distribution work, same rules. conn_ is the
-// aggregate connection-health surface (#27): the Evaluating/Degraded status
-// words and the blocked-traffic disclosure, shared by the status line and the
-// tray tooltip.)
-//
-// Do NOT use this for a key that DOES exist — that hides a working translation
-// behind an English default. And do not put a bare literal in the UI instead.
+// Do not put a bare literal in the UI instead.
 winrt::hstring Adv(std::string_view key, const wchar_t* english);
 // The same, as a std::wstring, for the places that compose text.
 std::wstring AdvW(std::string_view key, const wchar_t* english);
@@ -92,6 +74,12 @@ std::string TrimWhitespace(std::string const& value);
 // a user auth is an email or a phone number (light shape check; the server is
 // the real validator — macOS ValidationUtils parity in spirit)
 bool LooksLikeUserAuth(std::string const& value);
+
+// `text` in capitals for a chip or a kicker, cased for the user's language
+// (LCMapStringEx with linguistic casing). std::towupper maps ASCII only in the C
+// runtime's default "C" locale, which left the Russian, Ukrainian and Greek
+// chips in lower case.
+winrt::hstring Upper(winrt::hstring const& text);
 
 }  // namespace pages
 }  // namespace urnw

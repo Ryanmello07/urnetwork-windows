@@ -1,12 +1,26 @@
-// The Wallet destination — the payout wallets, the account's points, the
-// network-reliability window, the payouts ledger and the earning multiplier —
-// and the Leaderboard destination, which the phase plan groups with it (payouts
-// / points / leaderboard are one Class-A surface).
+// The Earnings destination (rail item "wallet"): points first, the subnet
+// layer once a Bittensor coldkey is connected, and the leaderboard beside it.
 //
-// Everything here is an in-process `Api` call against the NetworkSpace SdkHost
-// already owns. The markup carries only the static structure (MainWindow.xaml,
-// the Wallet and Leaderboard ScrollViewers); every list, table and card below is
-// built into a named empty panel by this unit.
+//   pane A  the net points figure and its breakdown; the protocol note; the
+//           Bittensor wallet (connected through the ur.io wallet bridge with
+//           purpose "connect", or a pasted address that is still signed) with
+//           its overflow, "Connect Solana wallet" (SolanaWalletSheets); the
+//           Solana payout wallet that USDC payouts go to until the Bittensor
+//           migration completes, and the USDC still waiting for one; the
+//           unclaimed SN25a tile and the claim dialog; the Top 200 head-spot
+//           tile
+//   pane B  the per-epoch history (points; the alpha column only with a
+//           wallet) and the leaderboard, one at a time
+//   pane C  own ranking, reliability
+//
+// Points are URnetwork's own system and always the headline. Alpha accrues
+// from the first epoch after the wallet was attached, never retroactively.
+// Claims are the SDK's on this device, straight to the settlement vault; no
+// URnetwork API is in that path, and the app only ever sees the gas key's
+// address and its ss58 mirror.
+//
+// One unit of the per-page split of MainWindow. It owns the destination's
+// state and the fetches; MainWindow's XAML event handlers forward here.
 //
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
@@ -21,8 +35,22 @@
 #include <winrt/Microsoft.UI.Dispatching.h>
 #include <winrt/Microsoft.UI.Xaml.h>
 #include <winrt/Microsoft.UI.Xaml.Controls.h>
+#include <winrt/Microsoft.UI.Xaml.Input.h>
+#include <winrt/Microsoft.UI.Xaml.Media.Animation.h>
+#include <winrt/Microsoft.UI.Xaml.Shapes.h>
 
+#include "EarningsSheets.h"
+#include "ProviderIdleReason.h"
+#include "ProviderStatusPresentation.h"
+#include "SnPayoutPresentation.h"
+#include "SolanaWalletPresentation.h"
+
+namespace urnw {
+struct LiveStats;
+}
 #include "SdkHost.h"
+#include "TransferChart.h"
+#include "TransportBar.h"
 #include "UrComponents.h"
 
 namespace winrt::URnetwork::implementation {
@@ -31,19 +59,9 @@ struct MainWindow;
 
 namespace urnw {
 
-class WalletDetailSheet;
-class PayoutDetailSheet;
-
-// The points a payment (or the whole account) earned, split by the four
-// account-point events the server emits. iOS AccountPointsStore parity;
-// `point_value` is nano-points, so every field here is already converted.
-struct PointsBreakdown {
-  double net = 0;
-  double payout = 0;
-  double referral = 0;     // payout_linked_account
-  double multiplier = 0;   // payout_multiplier
-  double reliability = 0;  // payout_reliability
-};
+class EmojiTagSheet;
+class TransportSettingsSheet;
+class ConnectSolanaWalletSheet;
 
 class WalletPage {
  public:
@@ -53,210 +71,526 @@ class WalletPage {
   void Initialize();  // the address-validation debounce timer
   void ApplyStrings();
 
-  // Every wallet-destination fetch: wallets, payout wallet, transfer stats,
-  // wallet balance, referrals, points, reliability and payments. Each settles
-  // its own panel independently, so one failing endpoint does not blank the
-  // others.
+  // The provide-mode row (the Connect page's indicator + label with the
+  // current mode), the idle reason under it (P008) and the providing gate:
+  // with providing off the reliability chart hides and the group says so, the
+  // same gate and message as the stats widget. MainWindow relays each
+  // live-stats update here.
+  void ApplyProvideState(urnw::LiveStats const& stats);
+
+  // The read-only extender row under the provide mode row (connect/EXTENDER.md
+  // N7), and the extender statistics section's other half, whether the role is
+  // running (O8). MainWindow hands every pushed status here and to the Connect
+  // page.
+  void ApplyExtenderProvideState(urnw::ExtenderProvideStatusView const& view);
+  // The provider statistics and the extender series (O5, O8), from SdkHost's
+  // feed on every throughput tick.
+  void ApplyProviderThroughput(urnw::ProviderThroughputSnapshot const& snapshot);
+  // Re-seed both from SdkHost's caches when the page is built and when the
+  // destination shows: cache reads, no rpc.
+  void ResyncProviderStats();
+  // The statistics charts' clock runs only while the window presents, as the
+  // Connect page's does, and so does the provider status poll (P008).
+  void SetPresentationActive(bool active);
+  // Whether the Earnings destination is the one showing: the other half of
+  // the provider status poll's gate, from MainWindow's navigation.
+  void SetSelected(bool selected);
+
+  // Every Earnings fetch: points, reliability, the epoch history, the coldkey,
+  // the head-spot status - and, once the coldkey is known, the claims and the
+  // gas key from the chain. Each settles its own panel independently, so one
+  // failing source does not blank the others.
   void LoadWallet();
   void LoadLeaderboard();
 
-  // --preview-ui only (Startup.h): raise the connect-wallet snackbar so the
-  // component can be seen without an account. Same call, same store keys as
-  // the real path; the ERROR severity, which is the one that must persist.
-  void ShowPreviewSnackbar();
-  // --preview-ui only: the API loads are skipped with no session, so settle
-  // every panel on its empty state instead of leaving them on "Loading...",
-  // which is indistinguishable from a hang.
+  // --preview-ui: settle every panel on its empty state (or, with
+  // URNETWORK_PREVIEW_SAMPLE=1, on obviously synthetic rows) instead of
+  // "Loading..." forever.
   void ShowPreviewWalletState();
   void ShowPreviewLeaderboardState();
+  void ShowPreviewSnackbar();
 
+  // XAML handlers, forwarded from MainWindow
+  void OnConnectWallet(winrt::Windows::Foundation::IInspectable const&,
+                       winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
+  void OnChangeWallet(winrt::Windows::Foundation::IInspectable const&,
+                      winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
+  void OnEnterAddressManually(winrt::Windows::Foundation::IInspectable const&,
+                              winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnWalletAddressChanged(
       winrt::Windows::Foundation::IInspectable const&,
       winrt::Microsoft::UI::Xaml::Controls::TextChangedEventArgs const&);
-  void OnConnectWallet(winrt::Windows::Foundation::IInspectable const&,
-                       winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
-  // A coroutine: the wallet picker is a ContentDialog, and the browser-bridge
-  // signature that follows it is asynchronous. MainWindow's forwarder ignores
-  // the fire_and_forget, which is what a XAML Click handler needs.
-  winrt::fire_and_forget OnVerifySeeker(
-      winrt::Windows::Foundation::IInspectable const&,
-      winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
-  void OnLeaderboardPublicToggled(winrt::Windows::Foundation::IInspectable const&,
-                                  winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
-  // R4: the ledger pane shows ONE table at a time and this is the switch in its
-  // header strip. Also what triggers the leaderboard fetch, since the merge
-  // means selecting Earnings no longer implies it.
+  void OnConnectWalletAddress(winrt::Windows::Foundation::IInspectable const&,
+                              winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
+  // the three-dot overflows: beside the Bittensor action in both of its states
+  // ("Connect Solana wallet"), and on the Solana payout wallet's card ("Remove")
+  void OnWalletMore(winrt::Windows::Foundation::IInspectable const&,
+                    winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
+  void OnSolanaWalletMore(winrt::Windows::Foundation::IInspectable const&,
+                          winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
+  winrt::fire_and_forget OnClaimAlpha(winrt::Windows::Foundation::IInspectable const&,
+                                      winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
+  void OnClaimTop200(winrt::Windows::Foundation::IInspectable const&,
+                     winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
+  void OpenProtocolSite();  // the "Learn more" link beside the wallet note
   void OnEarningsTableChanged(
       winrt::Microsoft::UI::Xaml::Controls::SelectorBar const&,
       winrt::Microsoft::UI::Xaml::Controls::SelectorBarSelectionChangedEventArgs const&);
+  void OnLeaderboardPublicToggled(winrt::Windows::Foundation::IInspectable const&,
+                                  winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
 
-  // Called by the wallet-detail sheet once the payout wallet or the wallet list
-  // changed under it.
   void RefreshAfterWalletChange();
 
+  // ---- the points board (android/POINTSLEADERBOARD.md) ----------------------
+  // The leaderboard is two boards behind one switch: Data (the last-4-payments
+  // board above) and Points (the all-time points board). The Points board is
+  // the SDK's PointsLeaderboardViewController rendered as it is: rows, ranks,
+  // sort and pages all come from the controller; nothing here sorts, ranks or
+  // pages. ShowPointsBoard flips the switch; the controller is opened the first
+  // time the Points board shows and closed with the page.
+  void ShowPointsBoard(bool points);
+  winrt::fire_and_forget OnEditEmoji();
+
+  // ---- the points board's row (public: built by a free helper in the .cpp)
+  // One ranked network as the list renders it: a value copy of the SDK row
+  // (the controller re-emits fresh rows on every event) with the texts the
+  // SDK preformats. `displayName` is empty when the row is anonymous; the
+  // list then shows the localized "Anonymous". `emojiTag` shows either way.
+  struct PointsRow {
+    int64_t position = 0;  // the row's 1-based place in the whole ranking (no ties)
+    std::string networkId;
+    std::string displayName;
+    std::string emojiTag;
+    bool anonymous = false;
+    std::string totalPointsText;
+    std::string blocksText;
+    std::string streakText;
+    std::string longestStreakText;
+    std::string rankPointsText;
+    std::string rankBlocksText;
+    std::string rankStreakText;
+    bool operator==(PointsRow const&) const = default;
+  };
+
  private:
-  // MAY THIS SURFACE TALK TO THE SERVER AT ALL?
-  //
-  // Guarding the LOAD paths is not enough and never was. MainWindow's
-  // navigation relay skips the per-destination loads under --preview-ui, and
-  // that is where the guarding stopped — so every ACTION this destination
-  // offers went straight out to the api with no session: a sample wallet card
-  // opened a real sheet whose Remove called removeWallet, the leaderboard
-  // switch called setNetworkLeaderboardPublic on the first click with no env
-  // var at all, and typing 32 characters into the address field fired three
-  // walletValidateAddress calls. Reproduced by watching this process's own
-  // sockets: an ESTABLISHED TLS connection to the api and a 401 in the log,
-  // from a build with no account.
-  //
-  // Worse than a wasted 401 now: a machine that HAS a stored session (this
-  // client finally restores it, see SdkHost::Initialize) would have run those
-  // writes AUTHENTICATED, against the real account, from a preview switch.
-  //
-  // So every write, and every question asked of the server, goes through here:
-  // not previewing, the api exists, and there is a session behind it.
+  // THE ONE GATE for every server call this destination makes. --preview-ui
+  // deliberately has no session, and a guarded LOAD path is not enough: every
+  // action here (connect, claim, the leaderboard switch) has to pass
+  // through this too, or a preview build puts authenticated-looking requests
+  // on the wire with no token.
   bool CanCallApi() const;
-  // The refusal a guarded action shows. Never silent: an affordance that does
-  // nothing and says nothing is indistinguishable from a hang.
+  // Claims read and write the chain through the SDK on this device, which in
+  // this app lives behind the service's DeviceRemote: no device, no claims.
+  bool CanClaim() const;
   void RefuseNoSession();
 
-  // A panel's fetch state. Every list on this destination renders exactly one
-  // of these, because "nothing on screen" must never be able to mean three
-  // different things at once (loading / empty / the request failed).
   enum class Fetch { Loading, Ready, Failed };
-  // one-shot: the leaderboard is fetched the first time its tab is looked at
-  bool leaderboardRequested_ = false;
-  // the ledger pane's header figure belongs to whichever table is showing
-  void ApplyLedgerMeta();
-  int64_t leaderboardCount_ = 0;
-  // ---- wallets / payout wallet ----
-  void ApplyWallets(std::vector<urnet::AccountWallet> const& wallets, Fetch state);
-  void ApplyPayoutWalletId(std::string const& walletId);
-  void RebuildWalletCards();
-  winrt::Microsoft::UI::Xaml::UIElement BuildWalletCard(urnet::AccountWallet const& wallet);
-  winrt::fire_and_forget ShowWalletDetail(urnet::AccountWallet wallet);
 
-  // ---- header stats ----
-  void ApplyTransferStats(int64_t unpaidBytes, bool ok);
-  void ApplyWalletBalance(int64_t balanceUsdcNanoCents, bool ok);
-  void ApplyReferrals(int64_t totalReferrals, bool ok);
+  // the coldkey attached to this network's provider, as the page holds it
+  struct SnWalletInfo {
+    std::string coldkeySs58;
+    std::string clientId;
+    int64_t setAtMillis = 0;
+  };
+  // one finalized epoch of the history (the SDK's AccountEpoch)
+  struct EpochRow {
+    int64_t epoch = 0;
+    int64_t startMillis = 0;
+    int64_t endMillis = 0;
+    double points = 0;
+    int64_t shareBps = 0;
+  };
+  // the head-spot status (the SDK's SnHeadResult)
+  struct HeadInfo {
+    bool eligible = false;
+    double score = 0;
+    double floor = 0;
+    int64_t rankEstimate = 0;
+    int64_t cutoff = 200;
+    bool bound = false;
+    std::string hotkey;
+    int64_t uid = 0;
+    int64_t rank = 0;
+  };
+  // the unauthenticated address check (POST /sn/wallet/validate)
+  struct AddressVerdict {
+    bool validSyntax = false;
+    bool existsOnChain = true;
+    bool banned = false;
+    std::string message;
+  };
 
-  // ---- points ----
+  // ---- fetches (the SDK adapters; every callback marshals to the UI thread)
+  void LoadPoints();
+  void LoadReliability();
+  void LoadEpochs();
+  void LoadSnWallet();
+  void LoadHead();
+  void LoadClaims();
+  void LoadGas();
+
+  // ---- points
   void ApplyPoints(std::vector<urnet::AccountPoint> const& points, Fetch state);
-  void RebuildPointsCard();
+  void RebuildPointsRows();
 
-  // ---- payouts ----
-  void ApplyPayments(std::vector<urnet::AccountPayment> const& payments, Fetch state);
-  void RebuildPayouts();
-  winrt::fire_and_forget ShowPayoutDetail(urnet::AccountPayment payment);
+  // ---- the coldkey
+  void ApplySnWallet(std::optional<SnWalletInfo> wallet, Fetch state);
+  // The bridge answered with a signed challenge (either path). Validates the
+  // address before anything is sent to the account, then attaches it.
+  void ApplyWalletSigned(uint32_t generation, bool ok, std::string const& address,
+                         std::string const& signature, std::string const& message,
+                         std::string const& error, std::string const& expectedAddress);
+  void SubmitWalletConnect(uint32_t generation, std::string const& address,
+                           std::string const& signature, std::string const& message);
+  // `warning` is the SDK's non-blocking warning code (a store key such as
+  // wallet_looks_new_warning) on success; `error` the SnError on failure.
+  void ApplyWalletConnectResult(uint32_t generation, bool ok,
+                                std::optional<urnet::SnError> const& error,
+                                std::string const& warning);
+  void SetConnectingWallet(bool connecting);
+  void StartWalletConnect(std::string const& pinnedAddress);
+  // after the chooser: the proof with `walletId` ("talisman" | "taocom")
+  void ConnectWithWallet(std::string const& walletId, std::string const& pinnedAddress);
 
-  // ---- reliability ----
+  // ---- the manual address (still signed)
+  void ValidateWalletAddress();
+  // Runs the unauthenticated validate call for `address`; `done` gets the
+  // verdict on the UI thread, or nullopt when the call itself failed.
+  void ValidateAddressRemote(std::string const& address,
+                             std::function<void(std::optional<AddressVerdict>)> done);
+  void ApplyManualVerdict(uint32_t generation, std::optional<AddressVerdict> verdict);
+  void ShowManualPanel(bool show);
+
+  // ---- the Solana payout wallet (legacy USDC payouts until the migration)
+  // The account's wallets, the payout wallet id and the payments: three
+  // independent reads, committed together by solana::LegacyLoad so the card and
+  // the waiting line never render from part of them. `reset` (after a write)
+  // hides both until the new answers commit; a plain reload keeps what is on
+  // screen meanwhile; another network is cleared at once.
+  void LoadLegacyWallets(bool reset = false);
+  void ApplyLegacyAnswer(uint32_t generation, solana::LegacyRead which, bool ok,
+                         solana::LegacyAnswer answer);
+  void RebuildSolanaPanel();
+  void ShowWalletMenu(winrt::Microsoft::UI::Xaml::FrameworkElement const& anchor);
+  winrt::fire_and_forget OpenConnectSolanaSheet();
+  // The sheet linked `walletId`: made the payout wallet here when a fresh read of
+  // the payout wallet says it is not yet (ApplyFreshPayoutWallet).
+  void OnSolanaConnected(std::string const& walletId);
+  void ApplyFreshPayoutWallet(uint32_t generation, std::string const& walletId,
+                              std::string const& payoutWalletId);
+  void SwitchPayoutWallet(std::string const& walletId);
+  // the payout read and the switch share one watchdog (legacyFlow_)
+  uint32_t BeginPayoutFlow();
+  void ApplyPayoutSwitchResult(uint32_t generation, bool ok, std::string const& error);
+  void ShowSolanaCardMenu(winrt::Microsoft::UI::Xaml::FrameworkElement const& anchor);
+  winrt::fire_and_forget ConfirmRemoveSolanaWallet();
+  void RemoveSolanaWallet(std::string const& walletId);
+  void ApplyRemoveResult(uint32_t generation, bool ok, std::string const& error,
+                         solana::PayoutRemoval const& removal);
+  // the reload after a removal committed: name the wallet the server promoted
+  void NotifyPromotedPayoutWallet();
+  void SetLegacyBusy(bool busy);
+
+  // ---- history, claims, gas, head
+  void ApplyEpochs(std::vector<EpochRow> const& epochs, Fetch state);
+  void RebuildHistory();
+  // `error` is the SDK's SnError (or one built from a transport error) when
+  // the fetch failed; its stable code picks the store's sentence. `schedule` is
+  // the current epoch's, read with the claims (absent when the SDK could not
+  // read the coordinator's policy).
+  void ApplyClaims(std::vector<EpochClaim> const& claims, int64_t totalClaimableRao,
+                   Fetch state, std::optional<urnet::SnError> const& error,
+                   std::optional<snpayout::EpochSchedule> const& schedule = std::nullopt);
+  // How and when SN payouts happen, under the points figure
+  // (snpayout::PayoutLineFor), from the coldkey, the claims and the schedule.
+  void RebuildPayoutLine();
+  // The default chain settings ship without the vault, coordinator and
+  // operator id, so the first vault read waits for one GET /sn/epoch through
+  // the device, which stores them. `then` runs on the UI thread either way.
+  void EnsureChainSettings(std::function<void()> then);
+  void ApplyGas(std::optional<GasKeyInfo> gas);
+  void ApplyHead(std::optional<HeadInfo> head, Fetch state);
+  void ApplyLedgerMeta();
+  // The SDK claim, wrapped for the dialog (Device.snClaim).
+  Claimer MakeClaimer();
+  std::string ExplorerTxUrl() const;
+  const EpochClaim* ClaimForEpoch(int64_t epoch) const;
+
+  // ---- reliability
   void ApplyReliability(std::optional<urnet::ReliabilityWindow> window, Fetch state);
 
-  // ---- earning multiplier (Seeker) ----
-  void ApplySeekerState();
-  void ApplySeekerResult(uint32_t generation, bool ok, std::string const& serverError);
+  // ---- the statistics groups (connect/EXTENDER.md O5, O8)
+  void BuildCharts();
+  void OnChartTick();
+  // the read-only extender row, from extenderProvideView_ (N7)
+  void ApplyExtenderProvideRow();
+  // The line under the provide mode row (P008): why providing is enabled but
+  // idle (provideridle::ProviderIdleReasonFor), from the last live stats and
+  // the provider bytes in the window, merged with the server's reason once a
+  // status for this device has loaded (providerstatus::LineFor); collapsed
+  // when there is nothing to say.
+  void ApplyProvideReason();
+  // ---- the provider status (P008): the SDK's ProviderStatusViewController,
+  // which reads GET /network/provider-status about once a minute. Opened on
+  // the device once the destination shows with providing enabled (never while
+  // it is off), polling only while the destination shows and the window
+  // presents, and closed with the typed close when providing turns off, the
+  // device it was opened on goes, or the page goes.
+  void ReconcileProviderStatus();
+  void OpenProviderStatus(uint64_t device);
+  // Releases the controller and forgets its readings; touches no XAML, so the
+  // destructor can call it.
+  void CloseProviderStatus(bool deviceAlive);
+  // Mirrors the controller into the page: loaded, the last poll's error and
+  // this device's status (one value copy of the SDK's struct).
+  void ReadProviderStatus();
+  // With no session the provider is the service's provider-only device, which
+  // no controller can be opened on: SdkHost reads its status on the api while
+  // this page wants it (SetProviderOnlyStatusWanted), and these take its
+  // readings into the same three fields the controller fills.
+  void ApplyProviderOnlyStatus(urnw::ProviderOnlyStatus const& status);
+  void TakeProviderOnlyReadings(urnw::ProviderOnlyStatus const& status);
+  // The readings through providerstatus::ViewFor; neither a controller nor the
+  // provider-only source reads as a failed poll.
+  providerstatus::View ProviderStatusView() const;
+  // The Demand row and Why? under the provider plots' gate, and the line.
+  void ApplyProviderStatus();
+  void RebuildProviderWhy();
+  void ToggleProviderWhy();
+  // Both groups' visibility and the provider header's meta label, from
+  // ExtenderStatsSectionsFor. Only a changed reading is painted unless `force`.
+  void ApplyStatsSections(bool force);
+  winrt::fire_and_forget ShowProviderTransportSettingsSheet();
 
-  // ---- connect wallet (external, by address) ----
-  void ValidateWalletAddress();  // debounced; the server validates per chain
-  void ApplyWalletValidation(std::string const& chain, uint32_t generation, bool valid);
-  // `serverError` is the api's own (unlocalizable) message, empty when there is none
-  void ApplyWalletConnectResult(uint32_t generation, bool ok, std::string const& serverError);
-
-  // ---- leaderboard ----
+  // ---- leaderboard
   void ApplyLeaderboard(urnet::LeaderboardEarnersList const& earners, Fetch state);
   void ApplyRanking(urnet::NetworkRanking const& ranking, bool ok);
   void ApplyRankingPublicResult(uint32_t generation, bool ok, bool requested,
                                 std::string const& serverError);
-  // Write the switch without the Toggled handler firing a request back at the
-  // server — the handler cannot tell a user flip from a programmatic one.
   void SetRankingToggle(bool isPublic);
 
-  // The points a single payment earned, from the already-loaded account points.
-  PointsBreakdown BreakdownForPayment(std::string const& paymentId) const;
-  // Total completed USDC paid into one wallet (iOS totalPaymentsByWalletId).
-  double TotalPaidToWallet(std::string const& walletId) const;
+  void OpenUrl(std::string const& url);
 
-  // A request that can never answer must not be able to leave a control dead.
-  //
-  // The three flows below reach the ur.io browser bridge or the api and had no
-  // timeout at all. WalletConnect only reports an error when the deep link
-  // comes BACK carrying one — a closed browser tab produces nothing, ever — so
-  // Verify Seeker greyed itself out and stayed that way until the app was
-  // restarted, with no message and no sign it was waiting. Each flow now takes
-  // a generation on the way out: the answer is dropped unless it is still the
-  // current one, so a watchdog that has already given up cannot be overruled by
-  // a late reply, and a superseded flow cannot resurrect its own busy flag.
+  // A request with a watchdog: BeginFlow arms the timer and returns the
+  // generation the request owns; SettleFlow is false when the answer belongs
+  // to a request already given up on (or superseded).
   struct Flow {
     winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer timer{nullptr};
     uint32_t generation = 0;
   };
-  // Arms `flow`'s timer and returns the generation this attempt owns.
   uint32_t BeginFlow(Flow& flow, int timeoutMs, std::function<void()> onTimeout);
-  // False when `generation` belongs to a flow that has already been given up on
-  // or superseded — the caller must then do nothing at all.
   bool SettleFlow(Flow& flow, uint32_t generation);
 
-  // An api call is answered or it is not; 20s is the sheet's watchdog too.
-  static constexpr int kApiTimeoutMs = 20000;
-  // The bridge flows leave the app entirely: the user opens a browser, picks a
-  // wallet, approves a signature. Minutes, legitimately - so this is long
-  // enough not to interrupt a real attempt and short enough to be a bound.
-  static constexpr int kBridgeTimeoutMs = 180000;
-
-  winrt::URnetwork::implementation::MainWindow& w_;
-  // "Wallet connected" / the server's refusal: a transient message, so it
-  // dismisses itself (iOS UrSnackBar). The bar used to stay open forever.
-  //
-  // TWO bars, one per destination, because each lives INSIDE its own
-  // destination's ScrollViewer and the other one is Collapsed. A 401 from the
-  // leaderboard switch went to the wallet's bar while the user was looking at
-  // the leaderboard: the switch snapped back and the screen said nothing at
-  // all - the message was sitting on a panel three clicks away, and turned up
-  // later when the user happened to open Wallet (screenshotted). Notify() picks
-  // the one the user can actually see.
-  urnw::kit::Snackbar snackbar_;
-  urnw::kit::Snackbar leaderboardSnackbar_;
+  // the snackbar of whichever pane the message belongs to
   void Notify(winrt::hstring const& message,
               winrt::Microsoft::UI::Xaml::Controls::InfoBarSeverity severity);
 
-  // ---- loaded state (UI thread only) ----
-  std::vector<urnet::AccountWallet> wallets_;
-  std::string payoutWalletId_;
-  std::vector<urnet::AccountPayment> payments_;
-  std::vector<urnet::AccountPoint> points_;
+  winrt::URnetwork::implementation::MainWindow& w_;
+  urnw::kit::Snackbar snackbar_;
+  urnw::kit::Snackbar leaderboardSnackbar_;
+
+  // ---- state
+  std::string ownNetworkId_;
+  bool providingEnabled_ = true;  // the reliability chart follows the provide mode
+  // ---- the statistics groups (O5, O8)
+  std::unique_ptr<urnw::TransferChart> extenderChart_;
+  std::unique_ptr<urnw::TransferChart> providerLocalChart_;
+  std::unique_ptr<urnw::TransportBar> providerTransportBar_;
+  std::unique_ptr<urnw::TransferChart> providerBlockedChart_;
+  winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer chartTimer_{nullptr};
+  std::shared_ptr<urnw::TransportSettingsSheet> providerTransportSheet_;
+  // the last pushed status: the read-only row draws it, and its `enabled` is
+  // the extender section's running role
+  urnw::ExtenderProvideStatusView extenderProvideView_;
+  bool extenderRunning_ = false;
+  bool hasProviderStats_ = false;
+  // the bar holds a distribution with shares, so it has nothing to wait for
+  bool providerDistributionSeen_ = false;
+  // the reading last painted; empty before the first
+  std::optional<urnw::ExtenderStatsSections> statsSections_;
+  // the idle reason's inputs (P008): the control mode and the live provide
+  // state from the last live stats, and the provider bytes in the window from
+  // the last provider distribution
+  provideridle::ProvideControlMode provideControlMode_ = provideridle::ProvideControlMode::Unknown;
+  int64_t liveProvideMode_ = 0;
+  bool providePaused_ = false;
+  int64_t providerWindowBytes_ = 0;
+  // ---- the provider status (P008)
+  bool selected_ = false;            // the Earnings destination shows
+  bool presentationActive_ = false;  // the window presents
+  // a live stats reading has set providingEnabled_: until then the gate's
+  // default says nothing, and the controller must not open on it
+  bool provideStateKnown_ = false;
+  std::optional<urnet::ProviderStatusViewController> providerStatusVc_;
+  std::optional<urnet::Sub> providerStatusSub_;
+  // the device handle the controller was opened (or tried) on; 0 for none
+  uint64_t providerStatusVcDevice_ = 0;
+  bool providerStatusStarted_ = false;
+  bool providerStatusLoaded_ = false;
+  std::string providerStatusError_;
+  std::optional<urnet::ProviderStatus> providerStatus_;
+  // the three readings above are the provider-only device's (no session, no
+  // controller), from SdkHost
+  bool providerOnlySource_ = false;
+  bool providerWhyOpen_ = false;  // Why? starts collapsed
+  // the Demand chart's 60 bars, oldest first (BuildCharts)
+  std::vector<winrt::Microsoft::UI::Xaml::Shapes::Rectangle> demandBars_;
   PointsBreakdown accountPoints_;
   std::optional<urnet::ReliabilityWindow> reliability_;
-  bool seekerHolder_ = false;   // any account wallet carries the Seeker token
-  bool verifyingSeeker_ = false;
-  // the signed-in network, for highlighting our own leaderboard row
-  std::string ownNetworkId_;
 
-  Flow seekerFlow_;
+  std::optional<SnWalletInfo> snWallet_;
+  Fetch walletState_ = Fetch::Loading;
+  bool connectingWallet_ = false;
+  // the wallet the current coldkey connect signs with (its refusal names it)
+  std::string connectWalletId_;
+  bool manualPanelOpen_ = false;
+  bool manualAddressOk_ = false;
+  std::string manualAddress_;
+  uint32_t walletValidateGeneration_ = 0;
+  winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer walletValidateTimer_{nullptr};
 
-  // leaderboard ranking + its switch
+  std::vector<EpochRow> epochs_;
+  Fetch epochsState_ = Fetch::Loading;
+  std::vector<EpochClaim> claims_;
+  int64_t totalClaimableRao_ = 0;
+  Fetch claimsState_ = Fetch::Loading;
+  std::optional<snpayout::EpochSchedule> schedule_;
+  std::optional<GasKeyInfo> gas_;
+  std::optional<HeadInfo> head_;
+  bool chainSynced_ = false;
+
   int64_t leaderboardRank_ = 0;
+  int64_t leaderboardCount_ = 0;
   bool rankingPublic_ = false;
-  bool applyingRankingToggle_ = false;  // a programmatic write, not a user flip
+  bool applyingRankingToggle_ = false;
   bool settingRankingPublic_ = false;
+
+  Flow connectFlow_;
   Flow rankingFlow_;
 
-  // connect-wallet state (UI thread only). The address is validated against each
-  // supported chain; the generation drops results from a superseded edit.
-  struct WalletValidation {
-    bool sol = false;
-    bool matic = false;
-    bool tao = false;
-  };
-  winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer walletValidateTimer_{nullptr};
-  WalletValidation walletValidation_;
-  uint32_t walletValidateGeneration_ = 0;
-  std::string walletChain_;          // the chain that accepted the address ("" = none)
-  bool connectingWallet_ = false;
-  Flow connectFlow_;
+  std::shared_ptr<urnw::ClaimAlphaSheet> claimSheet_;
 
-  // the open detail sheet, held for the life of its ShowAsync
-  std::shared_ptr<WalletDetailSheet> walletSheet_;
-  std::shared_ptr<PayoutDetailSheet> payoutSheet_;
+  // the Solana payout wallet: the view last committed from the three reads, and
+  // the load whose answers are still coming in
+  solana::LegacyCommitted legacy_;
+  solana::LegacyLoad legacyLoad_;
+  uint32_t legacyGeneration_ = 0;
+  // a payout switch or a removal is out: every door to another Solana write is
+  // shut (SetLegacyBusy)
+  bool legacyBusy_ = false;
+  Flow legacyFlow_;  // the payout read and switch after a link
+  Flow removeFlow_;  // the removal, on its own flow: a link must never drop its answer
+  // a removal that landed, until the reload after it commits
+  std::optional<solana::PayoutRemoval> payoutRemoval_;
+  std::shared_ptr<urnw::ConnectSolanaWalletSheet> solanaSheet_;
+
+  struct PointsStatTile {
+    winrt::Microsoft::UI::Xaml::Controls::TextBlock value{nullptr};
+    winrt::Microsoft::UI::Xaml::Controls::Border chip{nullptr};
+    winrt::Microsoft::UI::Xaml::Controls::TextBlock rank{nullptr};
+  };
+
+  void InitializePointsBoard();  // wires the switch, the sort bar, the scroll, retry
+  void ApplyPointsBoardStrings();
+  void BuildPointsNetworkHost();  // pane C's block, built in code (rebuilt on strings)
+  // Opens the controller on the current device (or shows why it cannot);
+  // safe to call on every look: a controller on a device that is still the
+  // device is kept.
+  void EnsurePointsBoard();
+  void ClosePointsBoard(bool deviceAlive);
+  // Mirrors the controller into the page: rows (value-compared, so a no-op
+  // event does not re-render the table), sort, loading, end, error, `me`.
+  void ReadPointsBoard();
+  void RenderPointsRows(size_t fromIndex = 0);
+  std::string OwnPointsName();
+  void RenderPointsHeader();
+  void RenderPointsFooter();
+  void OnPointsSortChanged(std::string const& sort);
+  void OnPointsScroll();
+  // ---- the position indicator and the tab reset (mmm/DESIGNSTYLE.md "Long
+  // ranked lists"; the math in LeaderboardIndicator.h)
+  void BuildPointsIndicator();   // the overlay over the points scroller: track, thumb, label, slider
+  void RefreshPointsPosition();  // the first row in view, from the scroller
+  void UpdatePointsIndicator();  // visibility, geometry, the slider's value
+  void OnPointsThumbPressed(double y, winrt::Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const& e);
+  void OnPointsThumbMoved(double y);
+  void OnPointsThumbReleased();
+  void SeekPoints(int64_t rank);  // a rank in the window scrolls there; any other asks the controller
+  void ShowPointsDragLabel(int64_t rank);
+  void HidePointsDragLabel(bool fade);
+  void ScrollPointsToFirstRow();
+  void PrependPointsRows(size_t count);
+  winrt::Microsoft::UI::Xaml::UIElement MakePointsRow(PointsRow const& row, std::string const& ownId);
+  void ResetBoardList(bool pointsBoard);  // a board tab activated (the active one included)
+  void OnPointsRetry();
+  void OnPointsPublicToggled();
+  void SetPointsToggle(bool isPublic);
+  void ApplyPointsPublicResult(uint32_t generation, bool ok, bool requested,
+                               std::string const& serverError);
+  void SaveEmojiTag(std::string tag, std::function<void(std::string)> done);
+  void SettlePointsBoardPreview();
+
+  // false once the page is gone: the controller's listener and the sheet's
+  // completions marshal through the window and must not reach a dead page
+  std::shared_ptr<bool> alive_ = std::make_shared<bool>(true);
+  std::optional<urnet::PointsLeaderboardViewController> pointsVc_;
+  std::optional<urnet::Sub> pointsSub_;
+  uint64_t pointsVcDevice_ = 0;  // the device handle the controller was opened on
+  bool pointsBoardShowing_ = false;
+  std::vector<PointsRow> pointsRows_;
+  std::string pointsSort_ = urnet::PointsLeaderboardSortPoints;
+  std::string pointsRenderedSort_;
+  std::string pointsRenderedOwnId_;   // the own id the rows were drawn with
+  size_t pointsRenderedCount_ = 0;    // rows drawn; the next page appends after them
+  bool pointsLoading_ = false;
+  bool pointsEnd_ = false;
+  bool pointsHasLoaded_ = false;  // the first page landed (rows, an empty end, or an error)
+  std::string pointsError_;
+  int64_t pointsTotalRanked_ = 0;
+  int64_t pointsFirstPosition_ = 1;   // the loaded window's first position
+  bool pointsHasMoreBefore_ = false;  // rows exist above the window (after a seek)
+  int64_t pointsFirstVisible_ = 1;    // the first row in view's position
+  // the draggable position indicator: a slider over ranks 1..N at the
+  // scroller's right edge, the rank and tier beside the thumb while dragging
+  winrt::Microsoft::UI::Xaml::Controls::Canvas pointsIndicator_{nullptr};
+  winrt::Microsoft::UI::Xaml::Shapes::Rectangle pointsTrack_{nullptr};
+  winrt::Microsoft::UI::Xaml::Shapes::Rectangle pointsThumb_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::Slider pointsSlider_{nullptr};  // the keyboard and UIA face of the thumb
+  winrt::Microsoft::UI::Xaml::Controls::Border pointsIndicatorLabel_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::TextBlock pointsIndicatorRank_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::TextBlock pointsIndicatorTier_{nullptr};
+  winrt::Microsoft::UI::Xaml::Media::Animation::Storyboard pointsLabelFade_{nullptr};
+  bool pointsDragging_ = false;
+  double pointsDragGrab_ = 0;  // where inside the thumb the pointer took it
+  double pointsDragTop_ = 0;   // the thumb's top while dragging
+  int64_t pointsDragRank_ = 0;
+  bool applyingPointsSlider_ = false;  // ECHO GUARD on the slider's value
+  bool pointsSeekPending_ = false;     // a seek's window is on its way: scroll to its first row when it lands
+  std::optional<PointsRow> pointsMe_;
+  bool pointsPublic_ = false;  // this network's opt-in, from `me`, updated locally on toggle
+  std::string emojiTag_;       // this network's tag, from `me`, updated locally on save
+  bool settingPointsPublic_ = false;
+  bool applyingPointsToggle_ = false;  // ECHO GUARD on the opt-in switch
+  bool savingEmojiTag_ = false;
+  // after a local toggle or save, `me` from an older in-flight page could
+  // briefly disagree with what the user just did; the local values win until
+  // a response newer than the edit lands
+  uint64_t ownFlagsClock_ = 0;
+  uint64_t ownFlagsEditedAt_ = 0;
+  uint64_t ownFlagsAppliedAt_ = 0;
+  Flow pointsPublicFlow_;
+  std::shared_ptr<urnw::EmojiTagSheet> emojiSheet_;
+
+  // pane C's block (BuildPointsNetworkHost)
+  winrt::Microsoft::UI::Xaml::Controls::TextBlock pointsGroupMeta_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::TextBlock pointsEmojiText_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::TextBlock pointsNameText_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::TextBlock pointsRankedText_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::Button editEmojiButton_{nullptr};
+  PointsStatTile pointsTiles_[3];
+  winrt::Microsoft::UI::Xaml::Controls::TextBlock pointsLongestText_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::ToggleSwitch pointsPublicToggle_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::TextBlock pointsPrivateHint_{nullptr};
 };
 
 }  // namespace urnw

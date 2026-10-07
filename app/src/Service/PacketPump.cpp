@@ -3,10 +3,12 @@
 
 #include <chrono>
 #include <cstdint>
+#include <future>
 #include <span>
 #include <vector>
 
 #include "Log.h"
+#include "NetworkConfig.h"
 #include "ThreadGuard.h"
 
 namespace urnw {
@@ -87,7 +89,13 @@ bool PacketPump::Start() {
         });
       });
 
-  outbound_ = StartGuardedThread("pump-outbound", [this] { OutboundLoop(); });
+  auto started = std::make_shared<std::promise<void>>();
+  auto ready = started->get_future();
+  outbound_ = StartGuardedThread("pump-outbound", [this, started] {
+    started->set_value();
+    OutboundLoop();
+  });
+  ready.get();  // the consumer is running before capture can target the ring
   LogInfo("pump: started");
   return true;
 }
@@ -180,7 +188,7 @@ void PacketPump::OutboundLoop() {
   HANDLE waits[2] = {readEvent, stopEvent_};
   constexpr size_t kMaxPacketCount = 64;
   std::vector<uint8_t> packetBatchBytes;
-  packetBatchBytes.reserve(kMaxPacketCount * (2 + 1440));
+  packetBatchBytes.reserve(kMaxPacketCount * (2 + kTunnelMtu));
 
   while (running_.load()) {
     // Drain everything currently in the ring, then wait for more.

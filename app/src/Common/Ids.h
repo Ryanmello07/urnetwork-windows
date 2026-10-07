@@ -29,12 +29,24 @@ inline constexpr GUID kTrayIconGuid = {
 // and for correct taskbar/tray grouping.
 inline constexpr wchar_t kAppUserModelId[] = L"URnetwork.Desktop";
 
-// AppInstance single-instance key. Shared here because TWO sites must agree on
-// it: wWinMain registers it on launch, and the update relaunch re-acquires it
-// when its CreateProcess fails (AppController::RelaunchOnto) — a key that only
-// existed in main.cpp let that failure path leave the app alive but keyless,
-// so the next launch became a second full instance.
+// AppInstance single-instance key. Shared here so every site that registers it
+// agrees on it (wWinMain registers it on launch); a private copy is how two
+// sites drift into a keyless app and a second full instance.
 inline constexpr wchar_t kSingleInstanceKey[] = L"URnetwork.Desktop";
+
+// An instance's exiting signal is this, with its process id appended: a
+// manual-reset event that the instance raises when it begins to exit
+// (App/SingleInstance.cpp). The instance creates it and a launch that finds
+// the instance holding kSingleInstanceKey opens it, so both read this name.
+inline constexpr wchar_t kExitingSignalPrefix[] = L"Local\\URnetwork.Desktop.Exiting.";
+
+// "Launch URnetwork on system startup" (Common/StartupRegistration.h): the
+// user's Run value of this name, and Task Manager's StartupApproved record of
+// it. The installer's uninstall deletes both by this name (Package.wxs).
+inline constexpr wchar_t kStartupRunKey[] = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+inline constexpr wchar_t kStartupApprovedKey[] =
+    L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run";
+inline constexpr wchar_t kStartupRunValue[] = L"URnetwork";
 
 // Deep-link / OAuth callback scheme (matches macOS `urnetwork://`).
 inline constexpr wchar_t kUriScheme[] = L"urnetwork";
@@ -57,7 +69,16 @@ inline constexpr GUID kTunAdapterGuid = {
 inline constexpr wchar_t kTunAdapterName[] = L"URnetwork";
 
 // Network space identity (matches macOS DeviceManager.initializeNetworkSpace).
-inline constexpr char kNetworkSpaceHostName[] = "ur.network";
+// The operator is bringyour.com: the planned move of the operator to
+// *.ur.network was cancelled, so the official space is keyed by the host it
+// actually talks to and carries NO migration host name (the SDK's ServiceUrl
+// prefers a migration host over the key's host, so a stale one would silently
+// redirect every api/connect url). ur.io stays the link/site domain.
+inline constexpr char kNetworkSpaceHostName[] = "bringyour.com";
+// The key earlier builds bundled under. Each launch re-keys that space to
+// kNetworkSpaceHostName before anything binds to it (NetworkSpaceStartup.h),
+// so the stored credentials and preferences follow the operator host.
+inline constexpr char kLegacyNetworkSpaceHostName[] = "ur.network";
 inline constexpr char kNetworkSpaceEnvName[] = "main";
 
 }  // namespace urnw::ids

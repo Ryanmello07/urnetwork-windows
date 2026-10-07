@@ -10,6 +10,8 @@
 
 #include <filesystem>
 
+#include <nlohmann/json.hpp>
+
 namespace urnw {
 
 // Root storage dir for the current process, created if missing.
@@ -26,6 +28,17 @@ std::filesystem::path LogDir(bool isService);
 // Persisted last-good RPC session file (app side only).
 std::filesystem::path RpcSessionFile();
 
+// Present while a sign-out is owed to the service (app side only;
+// Common/SignOut.h). Its own file rather than an app preference: the
+// preferences are a whole-object read-modify-write from several threads, and a
+// lost write here would be a service never told.
+std::filesystem::path SignOutOwedFile();
+
+// Present while the in-app updater's installer may still run (app side only;
+// Common/UpdateMarker.h): it names that installer, and a launch refuses to
+// start the app while it runs.
+std::filesystem::path UpdateInProgressFile();
+
 // The APP's own preferences (app side only).
 //
 // Distinct from the SDK LocalState, and it has to be: LocalState is a fixed set
@@ -36,5 +49,14 @@ std::filesystem::path RpcSessionFile();
 // one-small-json-file idiom as rpc_session.json and in the same per-worktree
 // StorageRoot, so two agents' worktrees do not share one preferences file.
 std::filesystem::path AppPrefsFile();
+
+// Read the app-preferences object (empty object when the file is missing or
+// unreadable -- a preference is not worth taking the app down for), and write
+// one key back with a whole-object read-modify-write. Never serialize just
+// your own key: that deletes everyone else's. Promoted here at the third
+// preference site (SdkHost, UpdateChecker, SubscriptionBalance), as the
+// duplication note in those units prescribed.
+nlohmann::json LoadAppPrefs();
+void SaveAppPref(const char* key, const nlohmann::json& value);
 
 }  // namespace urnw

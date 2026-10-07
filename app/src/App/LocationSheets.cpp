@@ -175,12 +175,6 @@ bool NonEmpty(std::optional<urnet::ConnectLocationList> const& list) {
 
 }  // namespace
 
-std::string PeerDisplayName(const urnet::NetworkPeer& peer) {
-  if (!peer.DeviceName.empty()) return peer.DeviceName;
-  if (!peer.DeviceSpec.empty()) return peer.DeviceSpec;
-  return peer.ClientId.value_or(std::string());
-}
-
 std::shared_ptr<LocationChooserSheet> LocationChooserSheet::Create(XamlRoot const& root,
                                                                    SdkHost& sdk) {
   auto sheet = std::shared_ptr<LocationChooserSheet>(new LocationChooserSheet(sdk));
@@ -378,12 +372,9 @@ Grid LocationChooserSheet::MakePeerRow(const urnet::NetworkPeer& peer, bool sele
   row.Tapped([weak, peerCopy](IInspectable const&, auto const&) {
     auto self = weak.lock();
     if (!self) return;
-    urnet::ConnectLocation location;
-    urnet::ConnectLocationId id;
-    id.client_id = peerCopy.ClientId;
-    location.connect_location_id = id;
-    location.name = PeerDisplayName(peerCopy);
-    self->sdk_.ConnectFromRow(location);  // coalesced, like every row click
+    // one of the user's own devices, reached as a network peer (PeerLocation.h);
+    // coalesced, like every row click
+    self->sdk_.ConnectFromRow(PeerConnectLocation<urnet::ConnectLocation>(peerCopy));
     self->dialog_.Hide();
   });
   return row;
@@ -703,12 +694,9 @@ void NetworkPage::Render() {
                          /*strongPrivacy=*/false, /*providing=*/true);
       const urnet::NetworkPeer copy = peer;
       row.Click([this, copy](IInspectable const&, auto const&) {
-        urnet::ConnectLocation location;
-        urnet::ConnectLocationId id;
-        id.client_id = copy.ClientId;
-        location.connect_location_id = id;
-        location.name = PeerDisplayName(copy);
-        Sdk().ConnectFromRow(location);  // coalesced, like every row click
+        // one of the user's own devices, reached as a network peer (PeerLocation.h);
+        // coalesced, like every row click
+        Sdk().ConnectFromRow(PeerConnectLocation<urnet::ConnectLocation>(copy));
         Render();
       });
       host.Children().Append(row);

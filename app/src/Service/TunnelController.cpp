@@ -4,7 +4,9 @@
 #include <chrono>
 #include <fstream>
 
+#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
+#endif
 #include <winsock2.h>   // AF_INET / AF_INET6
 #include <windows.h>
 
@@ -12,16 +14,18 @@
 #include "Heartbeat.h"    // the lock-free state mirror the heartbeat reads
 #include "Ids.h"
 #include "Log.h"
+#include "LogUpload.h"   // the log upload's device and its refusals
 #include "Paths.h"
+#include "ProvideLifecycle.h"  // the provider-only device's refusals
 #include "StopBudget.h"   // the shutdown budgets and the abandonable teardown
 #include "Strings.h"
 #include "ThreadGuard.h"
+#include "WintunError.h"
 
 namespace urnw {
 namespace {
 
 constexpr DWORD kRingCapacity = 0x400000;  // 4 MiB (power of two, within wintun bounds)
-constexpr uint32_t kTunnelMtu = 1440;      // matches macOS
 
 std::filesystem::path ExeDir() {
   wchar_t buf[MAX_PATH];
@@ -33,6 +37,86 @@ int64_t NowMillis() {
   return std::chrono::duration_cast<std::chrono::milliseconds>(
              std::chrono::system_clock::now().time_since_epoch())
       .count();
+}
+
+// The log upload flight's clock: it bounds how long an upload may run, which a
+// wall clock that jumps would misjudge.
+int64_t SteadyMillis() {
+  return std::chrono::duration_cast<std::chrono::milliseconds>(
+             std::chrono::steady_clock::now().time_since_epoch())
+      .count();
+}
+
+// How long the service's teardown waits for a log upload's thread to come out
+// of the sdk's call (the zip): past it the process exits around it.
+constexpr std::chrono::milliseconds kLogUploadReturnBudget{2000};
+
+// What the sdk's upload callback needs to end the upload. Owned by the call
+// once the sdk took it, freed by the callback.
+struct LogUploadReport {
+  std::shared_ptr<logupload::Flight> flight;
+  int64_t uploadId = 0;
+  const char* carrierName = "";
+  // tells the standalone device's waiter that the upload reported; empty for
+  // the session's and the provider-only device
+  std::function<void()> reported;
+};
+
+// The sdk's upload callback (urnet_upload_logs_cb), on an SDK thread: the
+// server's answer or the post's error ends the upload in the flight, whose
+// finish hook pushes the status.
+void OnLogUploadReport(void* userData, const char* resultJson, const char* error) {
+  std::unique_ptr<LogUploadReport> report(static_cast<LogUploadReport*>(userData));
+  logupload::FlightState state = logupload::FlightState::Uploaded;
+  if (error != nullptr) {
+    state = logupload::FlightState::Failed;
+    LogWarn("logs: the log upload ({} device) failed: {}", report->carrierName, error);
+  } else if (resultJson != nullptr) {
+    try {
+      const auto result = nlohmann::json::parse(resultJson).get<urnet::UploadLogsResult>();
+      if (result.error) {
+        state = logupload::FlightState::Refused;
+        LogWarn("logs: the log upload ({} device) was refused: {}", report->carrierName,
+                result.error->message);
+      }
+    } catch (const std::exception& e) {
+      state = logupload::FlightState::Failed;
+      LogWarn("logs: the log upload's ({} device) answer did not parse: {}",
+              report->carrierName, e.what());
+    }
+  }
+  if (state == logupload::FlightState::Uploaded) {
+    LogInfo("logs: the log upload ({} device) finished", report->carrierName);
+  }
+  if (report->reported) report->reported();
+  report->flight->Finish(report->uploadId, state);
+}
+
+// The upload's own thread (logupload::Flight::Run): the sdk zips this process's
+// log files and starts the post to /log/{feedback_id}/upload. The call goes
+// through the c abi by the device's handle, which the flight keeps valid until
+// it returns, so that nothing of TunnelController is touched here.
+void UploadLogsOnDevice(const std::shared_ptr<logupload::Flight>& flight, int64_t uploadId,
+                        uint64_t deviceHandle, const std::string& feedbackId,
+                        const char* carrierName, const std::function<void()>& reported) {
+  auto report = std::make_unique<LogUploadReport>();
+  report->flight = flight;
+  report->uploadId = uploadId;
+  report->carrierName = carrierName;
+  report->reported = reported;
+  char* error = nullptr;
+  const bool started = urnet_device_upload_logs(deviceHandle, feedbackId.c_str(),
+                                                &OnLogUploadReport, report.get(), &error);
+  if (started) {
+    // the callback owns it now
+    report.release();
+    return;
+  }
+  const std::string message = error != nullptr ? error : "the device is gone";
+  if (error != nullptr) urnet_free_string(error);
+  LogWarn("logs: the log upload ({} device) did not start: {}", carrierName, message);
+  if (reported) reported();
+  flight->Finish(uploadId, logupload::FlightState::Failed);
 }
 
 std::vector<uint8_t> ReadFileBytes(const std::filesystem::path& p) {
@@ -67,11 +151,26 @@ std::string Join(const std::vector<std::string>& parts) {
 
 }  // namespace
 
-TunnelController::TunnelController() : sdkVersion_(urnet::version()) {
+TunnelController::TunnelController()
+    : logUploadFlight_(std::make_shared<logupload::Flight>(NowMillis())),
+      sdkVersion_(urnet::version()) {
   storageDir_ = StorageRoot(/*isService=*/true);
+  // An upload's end pushes the status that carries it, as a transition does.
+  logUploadFlight_->SetOnFinished([this] { NotifyStateChanged(); });
 }
 
-TunnelController::~TunnelController() { Stop(); }
+TunnelController::~TunnelController() {
+  // First: the hook reaches into this object, and no call of it may run once
+  // it is going.
+  logUploadFlight_->ClearOnFinished();
+  Stop();
+  // A log upload still zipping is given a moment to come out of the sdk's
+  // call, and no more: it holds nothing of this object, and the service's exit
+  // must not wait on a disk.
+  if (!logUploadFlight_->WaitReturned(kLogUploadReturnBudget)) {
+    LogWarn("logs: a log upload was still zipping when the service stopped");
+  }
+}
 
 std::optional<urnet::DeviceLocalKeyMaterial> TunnelController::LoadKeyMaterial() {
   auto seed = ReadFileBytes(storageDir_ / L"client_key_seed.bin");
@@ -88,6 +187,51 @@ void TunnelController::PersistKeyMaterial(const urnet::DeviceLocalKeyMaterial& k
   WriteFileBytes(storageDir_ / L"client_key_seed.bin", km.getClientKeySeed());
   WriteFileBytes(storageDir_ / L"provide_cert.pem", km.getProvideTlsCertificatePem());
   WriteFileBytes(storageDir_ / L"provide_key.pem", km.getProvideTlsPrivateKeyPem());
+}
+
+urnet::NetworkSpace TunnelController::ImportNetworkSpaceLocked(
+    const std::string& networkSpaceJson) {
+  if (!spaceManager_) {
+    spaceManager_ =
+        urnet::newNetworkSpaceManager(Narrow(SdkStorageDir(true).wstring()));
+  }
+  urnet::NetworkSpace space = spaceManager_->importNetworkSpaceFromJson(networkSpaceJson);
+  // Where set_provide_extender writes with no device running. Its own best
+  // effort: a key that cannot be read costs that write, never this start.
+  try {
+    lastSpaceKey_ = space.getKey();
+  } catch (const std::exception&) {
+    lastSpaceKey_.reset();
+  }
+  return space;
+}
+
+urnet::DeviceLocal TunnelController::NewDeviceLocked(const urnet::NetworkSpace& space,
+                                                     const std::string& byJwt,
+                                                     const std::string& deviceDescription,
+                                                     const std::string& deviceSpec,
+                                                     const std::string& appVersion,
+                                                     const std::string& instanceId,
+                                                     const char* who) {
+  auto km = LoadKeyMaterial();
+  // The device target comes from the measured host's memory tier, and the
+  // same cached measurement chose the process budget at startup, so the
+  // target and the budget backing it are always one tier.
+  const int64_t memoryTargetByteCount = DeviceMemoryTargetByteCount();
+  LogInfo("{} constructing DeviceLocal ({} identity, {} MiB memory target)", who,
+          km ? "persisted" : "new", memoryTargetByteCount / (1024 * 1024));
+  if (km) {
+    return urnet::newDeviceLocalWithMemoryTarget(space, byJwt, deviceDescription, deviceSpec,
+                                                 appVersion, instanceId,
+                                                 /*enable_rpc=*/false, *km,
+                                                 memoryTargetByteCount);
+  }
+  // An empty key material (handle 0) is nil in the SDK: new identity.
+  urnet::DeviceLocal device = urnet::newDeviceLocalWithMemoryTarget(
+      space, byJwt, deviceDescription, deviceSpec, appVersion, instanceId,
+      /*enable_rpc=*/false, urnet::DeviceLocalKeyMaterial{}, memoryTargetByteCount);
+  PersistKeyMaterial(device.getKeyMaterial());
+  return device;
 }
 
 void TunnelController::ClampToRpcOnly() {
@@ -116,10 +260,8 @@ void TunnelController::SetStopAfterStep(int step) {
           "{} This flag only ever stops the sequence EARLIER — it enables "
           "nothing, and it does not lift the rpc-only clamp if one is in force.",
           clamped,
-          clamped >= 8 ? std::string("All eight steps run and are then torn "
-                                     "straight back down.")
-          : clamped == 7
-              ? std::string("Step 8/8 will not run.")
+          clamped >= 6 ? std::string("Capture waits for provider proof, with the "
+                                     "pump and split routing prepared first.")
               : std::format("Steps {}/8 to 8/8 will not run.", clamped + 1));
 }
 
@@ -145,14 +287,8 @@ WfpConfig TunnelController::BaseWfpConfig() {
   cfg.allow_lan = true;
   cfg.block_ipv6_when_disconnected = true;
   cfg.service_image_path = ServiceImagePath();
-  // Populated for EVERY state and read by exactly one (Connected). That is
-  // deliberate and it is the same shape host_resolvers_v4 has in reverse:
-  // BuildFilterSet decides which states a field turns into a filter, so this
-  // function stays a pure "what is true of this machine" answer and cannot be
-  // the place a policy quietly widens. BaseWfpConfig is also what the connecting
-  // watchdog rebuilds Armed from off-thread, and Armed's filter set must not
-  // depend on session state — this field is a constant of the install, so it
-  // does not make it one.
+  // Install-derived identity, used only in Connecting/Connected. Armed remains
+  // independent of session state and never permits this UI image.
   cfg.app_image_path = AppImagePath();
   return cfg;
 }
@@ -181,11 +317,18 @@ bool TunnelController::ApplyWfpLocked(WfpState state) {
                      : 0;
   cfg.tunnel_resolvers_v4 =
       state == WfpState::Connected ? appliedResolvers_ : std::vector<std::string>{};
-  // CONNECTING ONLY. There is no tunnel resolver yet, so without this the
-  // port-53 block has nothing to permit and OUR OWN name resolution dies with
-  // everyone else's — and ours does not come out of this process: the SDK is Go,
-  // Go on Windows resolves through GetAddrInfoW, and the wire query is issued by
-  // the DNS Client service in svchost.exe, so the app-id permit cannot match it.
+  // The v6 half follows what NetworkConfig actually installed, so the firewall
+  // and the route table describe the same tunnel: a v6 floor with the tun and
+  // the v6 resolvers lifted through it only when the tun really carries v6.
+  cfg.tunnel_ipv6 =
+      state == WfpState::Connected && netConfig_ != nullptr && netConfig_->AppliedIpv6();
+  cfg.tunnel_resolvers_v6 =
+      cfg.tunnel_ipv6 ? appliedResolversV6_ : std::vector<std::string>{};
+  // CONNECTING ONLY. There is no tunnel resolver yet. The bound SDK normally
+  // resolves in-process and matches the exact service-image permit, but a
+  // Windows/system fallback lookup before that bind is active leaves through
+  // Dnscache in svchost.exe. This address-scoped path keeps that transition
+  // recoverable without widening the idle Armed policy.
   //
   // Deliberately NOT read for Armed. The permit it produces is address-scoped
   // and therefore machine-wide, and Armed is the idle state — nothing is
@@ -205,9 +348,9 @@ bool TunnelController::ApplyWfpLocked(WfpState state) {
               "this attempt rather than leaving it unable to resolve — see the "
               "wfp warning that follows for exactly what that opens.");
     } else {
-      LogInfo("wfp: connecting-state DNS path = the host's own resolvers [{}] "
-              "(read fresh; our name resolution leaves svchost, not this "
-              "process, so it cannot be permitted by app id)",
+      LogInfo("wfp: connecting-state compatibility DNS path = the host's own "
+              "resolvers [{}] (read fresh; Windows fallback lookups leave "
+              "Dnscache in svchost and cannot be permitted by our app id)",
               Join(cfg.host_resolvers_v4));
     }
   }
@@ -222,7 +365,7 @@ bool TunnelController::ApplyWfpLocked(WfpState state) {
   // The app permit, at both edges, and only where it applies. Not fatal when
   // absent: the app then behaves exactly as it did before this existed (its
   // sockets stay in the tun), which is worse but not broken.
-  if (state == WfpState::Connected) {
+  if (AttemptsConnection(state)) {
     if (cfg.app_image_path.empty()) {
       LogWarn("wfp: URnetwork.exe was not found next to this executable, so the "
               "UI process gets NO firewall permit. Its platform traffic stays "
@@ -230,9 +373,9 @@ bool TunnelController::ApplyWfpLocked(WfpState state) {
               "exit, the UI cannot reach the platform to say so.");
     } else {
       LogInfo("wfp: permitting the UI process ({}) on the physical NIC for the "
-              "life of this connected session. It pairs with the app binding "
+              "connection attempt/session. It pairs with the app binding "
               "its own sdk egress off the tun; neither half works alone. This "
-              "permit exists in CONNECTED ONLY — armed still permits urnetworkd "
+              "permit exists while connecting or connected; armed permits urnetworkd "
               "and nothing else.",
               Narrow(cfg.app_image_path));
     }
@@ -363,10 +506,8 @@ bool TunnelController::HaltAfterStepLocked(int step, const char* reached) {
   const int stopAfter = stopAfterStep_.load();
   if (stopAfter == 0 || step < stopAfter) return false;
 
-  // Read off the objects that OWN each fact, not inferred from the step number.
-  // The whole point of this log is to tell the operator whether anything is
-  // still applied to their machine, and a step number is a claim about what
-  // should have happened, not a report of what did.
+  // Read controller ownership and the DNS-apply result, not the step number.
+  // These are not fresh OS route, resolver, adapter or filter observations.
   const bool hadAdapter = adapter_ != nullptr;
   const bool hadRoutes = netConfig_ != nullptr;
   const bool hadDns = netConfig_ != nullptr && netConfig_->DnsApplied();
@@ -377,15 +518,15 @@ bool TunnelController::HaltAfterStepLocked(int step, const char* reached) {
   LogWarn("tunnel: --stop-after={} was passed, so the sequence stops here. The "
           "last thing that ran was step {}/8, which left {}. {}",
           stopAfter, step, reached,
-          step >= 8 ? std::string("Nothing was skipped; the full bring-up is "
-                                  "being torn straight back down.")
-          : step == 7 ? std::string("Step 8/8 did NOT run.")
+          step >= 6 ? std::string("The pump and split routing were prepared "
+                                  "before these capture checkpoints.")
                       : std::format("Steps {}/8 to 8/8 did NOT run.", step + 1));
   LogWarn("tunnel: state AT THE STOP POINT: wintun adapter={}, address/mtu/"
-          "routes={}, tunnel dns={}, firewall policy={}.",
-          hadAdapter ? "CREATED" : "none",
-          hadRoutes ? "APPLIED" : "not applied",
-          hadDns ? "APPLIED" : "not applied", ToString(wfpAtStop));
+          "routes={}, tunnel dns={}, firewall policy={}. facts=ownership "
+          "os_state=unverified",
+          hadAdapter ? "OWNED" : "not owned",
+          hadRoutes ? "OWNED" : "not owned",
+          hadDns ? "ACCEPTED" : "not accepted", ToString(wfpAtStop));
   LogWarn("tunnel: unwinding through the ORDINARY teardown — the same StopLocked "
           "a user pressing disconnect runs, with the same revert, the same "
           "resolver-cache flush, the same active-marker handling and the same "
@@ -399,9 +540,8 @@ bool TunnelController::HaltAfterStepLocked(int step, const char* reached) {
   // of a run whose entire purpose was to prove the machine comes back.
   StopLocked(/*finalDisarm=*/true);
 
-  // What is ACTUALLY left, read again after the unwind. If any of these is not
-  // the benign value, the teardown did not finish and this line is the only
-  // place the operator finds that out before looking at their route table.
+  // Re-read controller owners, the marker and policy state after the unwind.
+  // Empty owners do not verify kernel cleanup, including an abandoned worker.
   const bool routesLeft = netConfig_ != nullptr;
   const bool adapterLeft = adapter_ != nullptr;
   const bool markerLeft = PeekActiveMarker();
@@ -409,34 +549,36 @@ bool TunnelController::HaltAfterStepLocked(int step, const char* reached) {
   const bool clean = !routesLeft && !adapterLeft && !markerLeft &&
                      wfpAfter == WfpState::Off;
   if (clean) {
-    LogWarn("tunnel: ======== STOPPED AFTER STEP {}/8. NOTHING IS LEFT APPLIED "
-            "======== routes/dns reverted, firewall policy off, wintun adapter "
-            "gone, no active marker. {}",
+    LogWarn("tunnel: ======== STOPPED AFTER STEP {}/8. CONTROLLER OWNERS EMPTY "
+            "======== routes=false dns=false adapter=false active_marker=false "
+            "firewall=off facts=ownership os_state=unverified. {}",
             step,
-            hadRoutes ? "This machine's routes and DNS were rewritten by this "
-                        "run and have been given back — diff them against your "
-                        "baseline before you trust that sentence."
-                      : "This run never wrote a route, a dns entry or an "
-                        "address, so there was nothing to give back.");
+            hadRoutes ? "Route/DNS cleanup was attempted; compare OS state "
+                        "with the baseline."
+                      : "No route/DNS configuration owner was present.");
   } else {
-    LogError("tunnel: ======== STOPPED AFTER STEP {}/8, BUT SOMETHING IS STILL "
-             "APPLIED ======== routes={} adapter={} active_marker={} "
-             "firewall={}. The teardown did not fully unwind. Stop this process "
+    LogError("tunnel: ======== STOPPED AFTER STEP {}/8, BUT CONTROLLER CLEANUP "
+             "IS INCOMPLETE ======== routes={} adapter={} active_marker={} "
+             "firewall={} facts=ownership os_state=unverified. Stop this process "
              "(the adapter and the filter policy both die with it), then run "
              "`urnetworkd revert` from an elevated prompt.",
-             step, routesLeft ? "STILL INSTALLED" : "reverted",
-             adapterLeft ? "STILL PRESENT" : "gone",
+             step, routesLeft ? "OWNED" : "not owned",
+             adapterLeft ? "OWNED" : "not owned",
              markerLeft ? "STILL SET" : "clear", ToString(wfpAfter));
   }
   return true;
 }
 
 proto::TunnelStatus TunnelController::StartLocked(const proto::StartTunnel& config) {
+  const uint64_t stopGeneration = stopGeneration_.load();
   // Adopt the caller's kill-switch preference BEFORE the teardown below, so a
   // reconnect keeps the policy in force across the gap rather than dropping it
   // and re-arming.
   killSwitch_.store(config.kill_switch);
   StopLocked(/*finalDisarm=*/false);  // idempotent restart
+  auto readiness = std::make_shared<CaptureReadiness>();
+  std::atomic_store(&captureReadiness_, readiness);
+  if (stopGeneration_.load() != stopGeneration) readiness->Cancel();
   // A NEW ATTEMPT CLEARS THE LAST TEARDOWN'S REASON. Left set, a failsafe stop
   // would keep explaining itself over the top of the connection that replaced
   // it — the app renders "URnetwork disconnected you" beside a live tunnel.
@@ -504,11 +646,9 @@ proto::TunnelStatus TunnelController::StartLocked(const proto::StartTunnel& conf
     // removal, the SCM starts a clean one within seconds, and the app reattaches
     // by itself (SdkHost::OnServiceDisconnected -> ScheduleServiceRetry).
     //
-    // SAFE TO DO FROM HERE, and that is the two-phase invariant paying out: the
-    // StopLocked at the top of this function has already reverted this machine's
-    // routes, DNS, resolver cache, marker and firewall policy, and so had the
-    // abandoned teardown before it walked away. Nothing outstanding can undo
-    // that, and nothing about to be terminated still owes the machine anything.
+    // StopLocked has already requested machine cleanup before SDK teardown.
+    // Process exit remains the adapter backstop; owner release is not a fresh
+    // OS-state verification.
     const bool restarting = RequestSelfRestart(
         "a previous sdk teardown is still holding this session's device");
     error_ = restarting
@@ -525,13 +665,15 @@ proto::TunnelStatus TunnelController::StartLocked(const proto::StartTunnel& conf
              abandoned.outstanding,
              restarting
                  ? "This process is ending itself so the scm restarts it clean; "
-                   "the machine's network is already back and stays back."
+                   "prior route/DNS cleanup=attempted os_state=unverified."
                  : "Nothing can restart this process for you here — stop it and "
                    "run it again.");
     return StatusLocked();
   }
   activeInstanceId_ = config.instance_id;
   rpcSessionId_ = config.rpc_session_id;
+  excludedPaths_ = config.excluded_app_paths;
+  allowlist_ = config.allowlist_mode;
   SetStateLocked(proto::TunnelState::Starting);
   // The clamp wins over the request, and it is applied HERE, once, before
   // anything reads the mode. Everything downstream — the fence, the step-6
@@ -643,16 +785,18 @@ proto::TunnelStatus TunnelController::StartLocked(const proto::StartTunnel& conf
     } else {
       const std::filesystem::path dll = ExeDir() / L"wintun.dll";
       LogInfo("tunnel: [1/8] loading wintun from {}", dll.string());
-      wintun_ = Wintun::Load(dll);
+      // The Windows error code goes into the message the user sees: it is
+      // what tells a missing DLL, a non-elevated process and a blocked driver
+      // apart (WintunError.h).
+      DWORD wintunError = 0;
+      wintun_ = Wintun::Load(dll, &wintunError);
       if (!wintun_)
-        throw std::runtime_error(
-            "failed to load wintun.dll (is it next to urnetworkd.exe?)");
+        throw std::runtime_error(wintun_error::LoadFailure(wintunError));
       adapter_ = WintunAdapter::Create(*wintun_, ids::kTunAdapterName,
-                                       ids::kTunAdapterGuid, kRingCapacity);
+                                       ids::kTunAdapterGuid, kRingCapacity,
+                                       &wintunError);
       if (!adapter_)
-        throw std::runtime_error(
-            "failed to create the wintun adapter (needs LocalSystem/admin and a "
-            "loadable wintun driver)");
+        throw std::runtime_error(wintun_error::AdapterFailure(wintunError));
       NET_IFINDEX tunIndex = 0;
       NET_LUID tunLuid = adapter_->Luid();
       ::ConvertInterfaceLuidToIndex(&tunLuid, &tunIndex);
@@ -710,7 +854,12 @@ proto::TunnelStatus TunnelController::StartLocked(const proto::StartTunnel& conf
     // It must do almost nothing: it runs on a system worker thread that
     // EgressMonitor::Stop() waits for, so it records the event and returns. The
     // SDK calls happen on the watchdog's own thread, coalesced.
-    egress_->SetOnNetworkEvent([this] { deadTunnelWatchdog_.NoteNetworkEvent(); });
+    egress_->SetOnNetworkEvent(CaptureNetworkEventHandler(readiness,
+        [this](const auto& session, int64_t eventMillis) {
+          return deadTunnelWatchdog_.NoteNetworkEvent(session, eventMillis);
+        }));
+    egress_->SetOnNetworkQualityEvent(
+        [this] { deadTunnelWatchdog_.NoteNetworkQualityEvent(); });
     egress_->Start();  // logs the chosen interface; keeps it current on change
     if (egress_->Current().index4 == 0) {
       // Not fatal — there may genuinely be no network yet, and the monitor will
@@ -735,13 +884,12 @@ proto::TunnelStatus TunnelController::StartLocked(const proto::StartTunnel& conf
 
     // --- 3/8 NetworkSpace (own storage; import the app's space json) ---
     step = "3/8 network space";
+    // The network country the app read, in force before the space and its
+    // device exist, so their first extender dials already have it.
+    SetNetworkCountry(config.network_country_code, config.network_country_source);
     LogInfo("tunnel: [3/8] opening the network space in {}",
             SdkStorageDir(true).string());
-    if (!spaceManager_) {
-      spaceManager_ =
-          urnet::newNetworkSpaceManager(Narrow(SdkStorageDir(true).wstring()));
-    }
-    networkSpace_ = spaceManager_->importNetworkSpaceFromJson(config.network_space_json);
+    networkSpace_ = ImportNetworkSpaceLocked(config.network_space_json);
     if (HaltAfterStepLocked(
             3, "an open network space under the service's own storage root — "
                "files, and nothing else"))
@@ -749,21 +897,11 @@ proto::TunnelStatus TunnelController::StartLocked(const proto::StartTunnel& conf
 
     // --- 4/8 DeviceLocal (stable provider identity via persisted key material) ---
     step = "4/8 device";
-    auto km = LoadKeyMaterial();
-    LogInfo("tunnel: [4/8] constructing DeviceLocal ({} identity)",
-            km ? "persisted" : "new");
-    if (km) {
-      device_ = urnet::newDeviceLocalWithKeyMaterial(
-          *networkSpace_, config.by_jwt, config.device_description,
-          config.device_spec, config.app_version, config.instance_id,
-          /*enable_rpc=*/false, *km);
-    } else {
-      device_ = urnet::newDeviceLocalWithDefaults(
-          *networkSpace_, config.by_jwt, config.device_description,
-          config.device_spec, config.app_version, config.instance_id,
-          /*enable_rpc=*/false);
-      PersistKeyMaterial(device_->getKeyMaterial());
-    }
+    // The same construction the provider-only device uses (NewDeviceLocked):
+    // one copy of the identity rules for both.
+    device_ = NewDeviceLocked(*networkSpace_, config.by_jwt, config.device_description,
+                              config.device_spec, config.app_version, config.instance_id,
+                              "tunnel: [4/8]");
     LogInfo("tunnel: [4/8] device client_id={}", device_->getClientId());
 
     // Per-flow app attribution — "which program owns this connection" — fed to
@@ -851,6 +989,11 @@ proto::TunnelStatus TunnelController::StartLocked(const proto::StartTunnel& conf
                "were"))
       return StatusLocked();
 
+    if (readiness->Cancelled()) {
+      StopLocked(/*finalDisarm=*/true);
+      return StatusLocked();
+    }
+
     // === THE FENCE ==========================================================
     // Everything above this line is inert with respect to the machine's
     // network. Step 6, below, is the first call that rewrites routes and DNS.
@@ -873,34 +1016,14 @@ proto::TunnelStatus TunnelController::StartLocked(const proto::StartTunnel& conf
       return StatusLocked();
     }
 
-    // False means --stop-after halted inside steps 6-8 and the teardown has
-    // already run. Returning here rather than falling through is what keeps a
-    // halted session from being reported Up.
-    if (!BringUpTunnelLocked(config, step)) return StatusLocked();
-
-    SetStateLocked(proto::TunnelState::Up);
-    upSinceMillis_ = NowMillis();
-    PublishStatusLocked();  // the uptime clock, set after the transition
-    EgressInterfaces bound = egress_->Current();
-    LogInfo("tunnel: UP in {}ms (rpc={} egress_v4_ifindex={} split_tunnel={})",
-            upSinceMillis_ - startedAtMillis, rpcHostPort_, bound.index4,
-            splitTunnel_.IsAvailable() ? "driver" : "none");
-
-    // --- the tunnel is now the machine's only path: start watching it --------
-    //
-    // HERE, and not one step earlier. Everything before this line is a bring-up
-    // that has its own failure handling; from this line on there is no caller
-    // waiting on anything, no timer, and — until this — nothing in the whole
-    // service that would ever look at the tunnel again. That absence is the
-    // bug: 31 capture routes and a firewall that blocks every other path, held
-    // by a session nobody re-examines.
-    //
-    // The watchdog is given a SHARE of the pump's counters rather than the pump
-    // (which a bounded teardown may abandon) and a raw device pointer with the
-    // same contract WindowTrace has: stopped at the top of StopLocked, before
-    // anything touches device_.
-    deadTunnelWatchdog_.Start(&*device_, pump_ ? pump_->Counters() : nullptr,
-                    [this](DeadTunnelReason reason) { FailsafeStop(reason); });
+    // Return the RPC listener before waiting for providers. The app cannot
+    // select a destination until BootstrapSession receives this reply.
+    SetStateLocked(proto::TunnelState::Preparing);
+    WatchForCaptureLocked();
+    LogInfo("tunnel: stage=bootstrap outcome=rpc-ready capture=pending "
+            "routes=false dns=false firewall={} kill_switch={} elapsed_ms={}",
+            ToString(wfp_.State()), killSwitch_.load(),
+            NowMillis() - startedAtMillis);
   } catch (const std::exception& e) {
     error_ = e.what();
     SetStateLocked(proto::TunnelState::Error);
@@ -916,238 +1039,171 @@ proto::TunnelStatus TunnelController::StartLocked(const proto::StartTunnel& conf
   return StatusLocked();
 }
 
-// Steps 6-8 — the destructive half. Called from exactly one place, immediately
-// after the fence in StartLocked. Caller holds mutex_.
-//
-// Returns false when --stop-after ended the sequence at one of these three
-// steps; the teardown has already run by then, so the caller must return rather
-// than report the session up.
-bool TunnelController::BringUpTunnelLocked(const proto::StartTunnel& config,
-                                           const char*& step) {
-  // The second, independent gate. StartLocked already returned before reaching
-  // this call in rpc-only mode; this checks the STORED mode rather than the
-  // caller's argument, so a future caller that reaches here with the wrong mode
-  // throws instead of rewriting the route table. It is not reachable today, and
-  // that is the point: this function must be impossible to misuse, not merely
-  // unused incorrectly.
-  if (startMode_ != proto::StartMode::Tunnel) {
-    throw std::runtime_error(
-        "refusing to apply network settings: session mode is '" +
-        std::string(proto::ToString(startMode_)) + "', not 'tunnel'");
-  }
-  // Steps 6 and 8 dereference the adapter. It only exists if step 1 ran, which
-  // only happens in tunnel mode — belt to the braces above, and it makes the
-  // dependency explicit rather than a latent null deref.
-  if (!adapter_)
-    throw std::runtime_error(
-        "refusing to apply network settings: no wintun adapter (step 1 did not "
-        "run)");
+// Capture is an asynchronous transaction after RPC and provider preparation.
+// Caller holds mutex_; all SDK preparation precedes machine-wide changes.
+CaptureResult TunnelController::BringUpTunnelLocked(CaptureReadiness& readiness,
+                                                    CaptureTicket ticket,
+                                                    const char*& step) {
+  if (startMode_ != proto::StartMode::Tunnel || !adapter_ || !device_)
+    throw std::runtime_error("capture requires a prepared tunnel session");
 
-  // --- IPv6-only refusal, BEFORE anything is written ------------------------
-  //
-  // Our tunnel and provider transport currently require IPv4. On an IPv6-only
-  // access network (NAT64/DNS64, or Windows CLAT without a discoverable IPv4
-  // default route) the physical IPv6 path can remain usable, but it cannot make
-  // this tunnel functional. Detect and refuse with a message that names the
-  // cause rather than creating a non-working IPv4 interface.
-  //
-  // EgressInterfaces::index4 is the signal and it is already computed: step 2/8
-  // logs when it is 0. Here it is load-bearing rather than advisory.
-  {
-    const EgressInterfaces egress = egress_ ? egress_->Current()
-                                            : NetworkConfig::DiscoverEgress(adapter_->Luid());
-    if (egress.index4 == 0) {
-      if (egress.index6 != 0) {
-        throw std::runtime_error(
-            "this network is IPv6-only (no IPv4 default route, but an IPv6 one "
-            "exists). The tunnel and remote providers currently require an "
-            "IPv4 uplink, so it cannot connect on this network. IPv6 remains "
-            "on the underlying network; refusing instead of creating a "
-            "non-working tunnel.");
-      }
-      throw std::runtime_error(
-          "no usable network: there is no IPv4 default route and no IPv6 one "
-          "either. Nothing to tunnel over.");
-    }
-  }
-
-  // --- arm the leak-prevention layer BEFORE the first route -----------------
-  //
-  // Ordering is the point. Once step 6 installs routes the host's traffic is
-  // being redirected, and if the firewall went up afterwards there would be a
-  // window in which the tun is authoritative but other adapters' DNS is still
-  // wide open. Arming here closes it; connected IPv6 intentionally remains on
-  // the underlying network.
-  //
-  // Deliberately NOT the FIRST installation: on a start that begins with the
-  // policy Off (kill switch off, or a first connect after a deliberate stop),
-  // steps 1-5 bring the SDK up and establish the platform connection, and
-  // installing anything before them would block the APP's own account/auth
-  // traffic for the whole of a slow connect. The window that leaves open is
-  // "connecting, before any route exists", where the machine is exactly as
-  // exposed as it was a second earlier — no worse.
-  //
-  // A start that begins ARMED is the other case, and it is not this one: there
-  // the policy is already installed, and StartLocked has already widened it to
-  // Connecting at the top so steps 3-5 can resolve. See the block there.
-  //
-  // A failure here is FATAL when the kill switch is on (the user asked for a
-  // guarantee we cannot give) and non-fatal when it is off (leak prevention is
-  // still worth having, but it is not what they asked for and a hard failure
-  // would just mean no VPN at all).
-  //
-  // CONNECTING, not Armed. The attempt is still in flight here — the routes are
-  // not installed, the tun carries nothing, and the SDK is still resolving and
-  // dialling — so this is the state that has to carry the DNS path. Applying
-  // Armed here would slam the window shut in the middle of the attempt that
-  // opened it, and on a first connect (kill switch off, policy Off until now) it
-  // would be the only state the attempt ever ran under. For a reconnect this is
-  // usually a no-op: StartLocked already widened to Connecting at the top.
-  step = "6/8 firewall policy";
-  if (!ApplyWfpLocked(WfpState::Connecting)) {
-    const std::string why = wfp_.LastError();
-    if (killSwitch_.load()) {
-      throw std::runtime_error(
-          "the kill switch is on but the leak-prevention firewall could not be "
-          "installed (" + why + "); refusing to connect rather than report a "
-          "protection that is not in force");
-    }
-    LogError("tunnel: [6/8] leak-prevention firewall NOT installed ({}). The "
-             "tunnel will still come up, but other adapters' resolvers are NOT "
-             "blocked — R6 is open for this session. Connected IPv6 is "
-             "intentionally outside the IPv4-only tunnel either way. Reported "
-             "to the app as wfp_state=off.",
-             why);
-  }
-
-  // --- 6/8 network settings (address/MTU/routes/DNS), from the device ---
-  step = "6/8 network config";
   TunnelNetworkSettings settings;
-  settings.local_address_v4 = device_->tunnelLocalAddress();
-  if (settings.local_address_v4.empty()) settings.local_address_v4 = "169.254.2.1";
-  settings.prefix_v4 = 24;
-  settings.mtu = kTunnelMtu;
-  // dns from the device: the dns settings' unencrypted local servers when set,
-  // otherwise the distinct plain-DNS UpgradeMux mask. always plain :53, never OS-level
-  // encrypted DNS: the mux performs the unencrypted-DNS -> DoH upgrade in-tunnel.
-  // the tunnel is ipv4-only, so only the ipv4 resolvers apply
-  if (auto dns = device_->tunnelDnsAddressesIpv4(); dns && !dns->empty()) {
-    settings.dns_servers_v4 = *dns;
-  } else {
-    // Keep the exceptional fallback coupled to the SDK's separately tested
-    // URnetwork-owned UpgradeMux identity.
-    settings.dns_servers_v4 = {urnet::getDefaultTunnelDnsAddressIpv4()};
+  return ApplyCapture(
+      readiness, ticket,
+      [&](CaptureStage stage) {
+        switch (stage) {
+          case CaptureStage::Prepare: {
+            step = "adapter settings";
+            // Complete SDK calls before installing any machine-wide policy.
+            settings.local_address_v4 = device_->tunnelLocalAddress();
+            if (settings.local_address_v4.empty())
+              settings.local_address_v4 = "169.254.2.1";
+            settings.prefix_v4 = 24;
+            settings.mtu = kTunnelMtu;
+            if (auto dns = device_->tunnelDnsAddressesIpv4(); dns && !dns->empty())
+              settings.dns_servers_v4 = *dns;
+            else
+              settings.dns_servers_v4 = {urnet::getDefaultTunnelDnsAddressIpv4()};
+            settings.local_address_v6 = device_->tunnelLocalAddressIpv6();
+            if (settings.HasIpv6()) {
+              const int64_t prefix = urnet::getTunnelLocalPrefixLengthIpv6();
+              settings.prefix_v6 =
+                  (0 < prefix && prefix <= 128) ? static_cast<uint8_t>(prefix) : 64;
+              if (auto dns = device_->tunnelDnsAddressesIpv6(); dns && !dns->empty())
+                settings.dns_servers_v6 = *dns;
+              else
+                settings.dns_servers_v6 = {urnet::getDefaultTunnelDnsAddressIpv6()};
+            }
+            step = "packet pump and split tunnel";
+            // Settings may change during provider discovery. Use the latest
+            // app rules, and prepare both directions before capture routes exist.
+            splitTunnel_.Open();
+            PushExcludedToDriver(excludedPaths_, allowlist_);
+            if (!pump_) {
+              pump_ = std::make_unique<PacketPump>(*adapter_, *device_);
+              if (!pump_->Start())
+                throw std::runtime_error("packet pump failed to start");
+            }
+            LogInfo("tunnel: stage=packet-pump outcome=ready capture=false");
+            return true;
+          }
+          case CaptureStage::Firewall: {
+            step = "capture firewall";
+            // Read actual defaults, not the monitor's retained binding: a lost
+            // uplink keeps its old binding deliberately to prevent routing loops.
+            const auto egress = NetworkConfig::DiscoverEgress(adapter_->Luid());
+            if (egress.index4 == 0 && egress.index6 == 0)
+              throw std::runtime_error("no physical default route");
+            if (!ApplyWfpLocked(WfpState::Connecting)) {
+              if (killSwitch_.load())
+                throw std::runtime_error("kill switch policy unavailable");
+              LogWarn("tunnel: stage=capture-firewall outcome=unavailable "
+                      "kill_switch=false");
+            }
+            return true;
+          }
+          case CaptureStage::Network: {
+            step = "capture routes and DNS";
+            netConfig_ = std::make_unique<NetworkConfig>(adapter_->Luid());
+            SetActiveMarker(true);
+            if (!netConfig_->Apply(settings))
+              throw std::runtime_error("network configuration failed");
+            appliedResolvers_ = settings.dns_servers_v4;
+            appliedResolversV6_ = netConfig_->AppliedIpv6()
+                                      ? settings.dns_servers_v6
+                                      : std::vector<std::string>{};
+            PublishStatusLocked();
+            if (!netConfig_->DnsApplied())
+              throw std::runtime_error("tunnel DNS configuration failed");
+            return true;
+          }
+          case CaptureStage::Connected: {
+            step = "connected firewall";
+            if (wfp_.State() != WfpState::Off &&
+                !ApplyWfpLocked(WfpState::Connected))
+              throw std::runtime_error("connected policy unavailable");
+            NetworkConfig::FlushResolverCache();
+            // The historical debug labels are retained. Preparation now always
+            // precedes capture; no debug mode may install routes into a stopped pump.
+            if (HaltAfterStepLocked(6, "capture routes and DNS applied after "
+                                      "provider proof, with the pump already ready") ||
+                HaltAfterStepLocked(7, "capture with current split-tunnel rules") ||
+                HaltAfterStepLocked(8, "the complete proven tunnel"))
+              return false;
+            return true;
+          }
+        }
+        return false;
+      },
+      [&] {
+        // Idempotent even if a debug stop already unwound the session. A stale
+        // proof may retry with the same pump; a hard failure uses StopLocked.
+        RevertMachineStateLocked(/*finalDisarm=*/false, netConfig_ != nullptr);
+        if (!readiness.Cancelled() && killSwitch_.load() &&
+            wfp_.State() != WfpState::Off)
+          ApplyWfpLocked(WfpState::Connecting);
+        LogInfo("tunnel: stage=capture outcome=rolled-back cleanup=attempted "
+                "routes=false dns=false facts=ownership os_state=unverified "
+                "firewall={}", ToString(wfp_.State()));
+      });
+}
+
+void TunnelController::WatchForCaptureLocked() {
+  const auto readiness = std::atomic_load(&captureReadiness_);
+  deadTunnelWatchdog_.Start(&*device_, nullptr,
+      [this](DeadTunnelReason reason) { FailsafeStop(reason); }, readiness,
+      [this, readiness](CaptureTicket ticket) { ActivateCapture(readiness, ticket); });
+}
+
+void TunnelController::CancelCapture() {
+  if (const auto readiness = std::atomic_load(&captureReadiness_)) readiness->Cancel();
+}
+
+void TunnelController::ActivateCapture(std::shared_ptr<CaptureReadiness> readiness,
+                                       CaptureTicket ticket) {
+  // Stop publishes cancellation before waiting for this mutex. Short timed
+  // acquisitions let a terminal callback waiting behind another control request
+  // leave inside the watchdog's join budget, without ever joining itself.
+  std::unique_lock<std::timed_mutex> lock(mutex_, std::defer_lock);
+  while (!readiness->Cancelled()) {
+    if (lock.try_lock_for(std::chrono::milliseconds(10))) break;
   }
-  LogInfo("tunnel: [6/8] applying network settings addr={}/{} mtu={} dns=[{}]",
-          settings.local_address_v4, settings.prefix_v4, settings.mtu,
-          Join(settings.dns_servers_v4));
-  netConfig_ = std::make_unique<NetworkConfig>(adapter_->Luid());
-  // Mark the machine as "routes installed" BEFORE installing them. The next
-  // start reads this to tell an orderly shutdown from a crash; a marker left
-  // by a run that died between the two is exactly the case we want reported.
-  SetActiveMarker(true);
-  if (!netConfig_->Apply(settings)) throw std::runtime_error("network config failed");
-  appliedResolvers_ = settings.dns_servers_v4;
-  // ROUTES ARE IN, AND THE APP HAS TO BE ABLE TO LEARN IT WITHOUT A TRANSITION.
-  // The state does not become Up until steps 7 and 8 have run, and this machine
-  // is already captured — so a get_state served in that window must say so, or
-  // a disconnect arriving mid-bring-up would find "nothing installed" and leave
-  // the routes exactly where the owner's report found them.
-  PublishStatusLocked();
-
-  // Routes are in. Widen the policy from Armed to Connected: the tun's LUID and
-  // the tunnel's own resolvers become permitted. Doing this AFTER Apply is
-  // deliberate — permitting the tun before it has an address permits nothing,
-  // and permitting a resolver we then failed to set would be a claim we cannot
-  // back.
-  //
-  // If the DNS half failed, say so here too. With the port-53 block in force
-  // the consequence is not a leak but a total DNS outage, which is the safer
-  // failure and still one the user has to be told about (TunnelStatus::
-  // dns_applied carries it to the app).
-  if (wfp_.State() != WfpState::Off && !ApplyWfpLocked(WfpState::Connected)) {
-    LogError("tunnel: [6/8] could not widen the firewall policy to connected "
-             "({}). The armed policy is still in force, which means the tun "
-             "itself is blocked — stopping rather than serving a tunnel that "
-             "cannot carry traffic.",
-             wfp_.LastError());
-    throw std::runtime_error("firewall policy could not follow the tunnel up: " +
-                             wfp_.LastError());
+  if (!lock.owns_lock() || readiness->Cancelled() ||
+      readiness != std::atomic_load(&captureReadiness_) ||
+      state_ != proto::TunnelState::Preparing) return;
+  const char* step = "readiness";
+  try {
+    LogInfo("tunnel: stage=provider-proof generation={} outcome=ready", ticket.generation);
+    const auto result = BringUpTunnelLocked(*readiness, ticket, step);
+    if (result == CaptureResult::Halted || readiness->Cancelled()) return;
+    if (result == CaptureResult::Waiting) {
+      LogInfo("tunnel: stage=capture outcome=superseded routes=false dns=false "
+              "facts=ownership os_state=unverified");
+      WatchForCaptureLocked();
+    } else {
+      upSinceMillis_ = NowMillis();
+      SetStateLocked(proto::TunnelState::Up);
+      LogInfo("tunnel: stage=capture outcome=active generation={} routes=true dns={} "
+              "firewall={}", ticket.generation, netConfig_->DnsApplied(),
+              ToString(wfp_.State()));
+      deadTunnelWatchdog_.Start(&*device_, pump_->Counters(),
+          [this](DeadTunnelReason reason) { FailsafeStop(reason); }, readiness);
+    }
+  } catch (const std::exception&) {
+    // The stage identifies the failure without copying SDK messages containing
+    // network endpoints, credentials, or device identifiers into diagnostics.
+    error_ = std::string("tunnel activation failed at ") + step;
+    LogError("tunnel: stage=capture outcome=failed component={}", step);
+    StopLocked(/*finalDisarm=*/false);
+    SetStateLocked(proto::TunnelState::Error);
   }
-
-  // --- THE Connecting -> Connected EDGE: flush the OS resolver cache ---------
-  //
-  // Everything the machine resolved during the connecting window went out
-  // through the HOST's resolvers, over the physical NIC, in plaintext — that is
-  // what filter 9b permits, and it is machine-wide because the query leaves
-  // svchost.exe rather than this process. Those ANSWERS sit in the one
-  // machine-wide Dnscache and are served to every process for the rest of their
-  // TTL. Setting the tun's resolvers a few lines above changed where the next
-  // QUERY goes and touched none of them.
-  //
-  // So without this line "DNS is pinned to the tunnel's resolvers while
-  // connected" is true of queries and false of answers, and the gap is exactly
-  // as long as the longest TTL the connecting window happened to pick up. Flush
-  // it here, at the instant the policy becomes Connected, for the same reason
-  // WireGuard and Mullvad both flush.
-  //
-  // Failure is logged inside and IGNORED here: a stale cache is not worth
-  // failing a tunnel that is otherwise up and correct.
-  NetworkConfig::FlushResolverCache();
-
-  if (!netConfig_->DnsApplied()) {
-    LogError("tunnel: [6/8] the tunnel is up but its DNS was NOT applied. "
-             "{} Reporting dns_applied=false.",
-             wfp_.State() == WfpState::Off
-                 ? "The firewall is not in force either, so queries go to the "
-                   "physical adapter's resolver IN THE CLEAR (R6)."
-                 : "The firewall blocks every resolver except the tunnel's, and "
-                   "no adapter points at one, so name resolution will fail "
-                   "closed.");
-  }
-
-  // THE STOP POINT THAT MATTERS. Everything labelled 6/8 has now run — the
-  // firewall went to Connecting, the address, MTU, 31 routes and DNS were
-  // applied, the policy widened to Connected, and the resolver cache was
-  // flushed. This machine is redirected. Stopping here and unwinding is Gate D:
-  // "routes, then immediate revert", without ever starting the pump.
-  if (HaltAfterStepLocked(
-          6, "THIS MACHINE'S ROUTES AND DNS REWRITTEN — the tun has its address "
-             "and mtu, the 31 capture routes point at it, its resolvers are set, "
-             "and the leak-prevention policy is CONNECTED. This is the first "
-             "step that changed anything outside this process"))
-    return false;
-
-  // --- 7/8 split tunneling (driver optional) ---
-  step = "7/8 split tunnel";
-  LogInfo("tunnel: [7/8] split tunnel: {} path(s), {} mode",
-          config.excluded_app_paths.size(),
-          config.allowlist_mode ? "allowlist" : "denylist");
-  splitTunnel_.Open();
-  excludedPaths_ = config.excluded_app_paths;
-  allowlist_ = config.allowlist_mode;
-  PushExcludedToDriver(excludedPaths_, allowlist_);
-  if (HaltAfterStepLocked(
-          7, "the routes and dns of step 6 PLUS the split-tunnel driver's app "
-             "rules, if the driver is present. No packet has moved: the pump has "
-             "not started, so the tun is authoritative and silent"))
-    return false;
-
-  // --- 8/8 packet pump ---
-  step = "8/8 pump";
-  LogInfo("tunnel: [8/8] starting the packet pump");
-  pump_ = std::make_unique<PacketPump>(*adapter_, *device_);
-  if (!pump_->Start()) throw std::runtime_error("packet pump failed to start");
-  if (HaltAfterStepLocked(
-          8, "a COMPLETE tunnel — routes, dns, split tunnel and a running packet "
-             "pump. --stop-after=8 is the smoke test: it brings the whole thing "
-             "up and takes it straight back down"))
-    return false;
-
-  return true;
+  lock.unlock();
+  NotifyStateChanged();
 }
 
 void TunnelController::Stop() {
+  stopGeneration_.fetch_add(1);
+  CancelCapture();
   // Whoever called the public Stop() is a person or their agent: the app's
   // Disconnect, the SCM, the console handler, Logout. None of them is the
   // failsafe, which has its own entry point — so the app can tell "you turned
@@ -1189,7 +1245,7 @@ void TunnelController::Stop() {
   NetworkConfig::CrashRevert();
   SetActiveMarker(false);
   DropFirewallOnEscape("stop");
-  // The routes are gone and the policy may be too, but no Stopped transition is
+  // Route cleanup was requested, but no Stopped transition is
   // coming — mutex_ is wedged, so nothing will publish a composed status ever
   // again on this process. Patch what actually changed, or every later
   // get_state reports a machine that is still captured.
@@ -1235,10 +1291,9 @@ void TunnelController::DropFirewallOnEscape(const char* who) {
   }
   if (wfp_.State() == WfpState::Off) return;
   LogWarn("tunnel: [{}] dropping the leak-prevention firewall WITHOUT THE LOCK. "
-          "The routes are already reverted, so leaving the policy installed "
-          "would leave this machine blocked with nothing to blame it on — and "
-          "the kill switch is off, which means fail OPEN is the documented "
-          "default. Traffic falls back to the physical adapter in the clear.",
+          "route_cleanup=requested os_state=unverified. With the kill switch "
+          "off, firewall removal is the documented fail-open action; this does "
+          "not verify physical-network connectivity.",
           who);
   wfp_.Revert();
 }
@@ -1249,6 +1304,8 @@ void TunnelController::DropFirewallOnEscape(const char* who) {
 // thread, which has already logged WHY; what is added here is what is being
 // done about it and what the machine is left in.
 void TunnelController::FailsafeStop(DeadTunnelReason reason) {
+  stopGeneration_.fetch_add(1);
+  CancelCapture();
   // Recorded BEFORE the teardown, so every status pushed during it — including
   // the Stopping transition — already carries the reason. An app that learns
   // "stopped" first and "why" second renders the alarming half alone.
@@ -1258,23 +1315,19 @@ void TunnelController::FailsafeStop(DeadTunnelReason reason) {
 
   std::unique_lock<std::timed_mutex> lock(mutex_, std::defer_lock);
   if (lock.try_lock_for(kStopLockBudget)) {
-    // THE ORDINARY TEARDOWN. Phase 1 hands the machine back — routes, tun DNS,
-    // the resolver cache, the marker, the policy — before phase 2 touches
-    // anything that can block on a network that has already failed. That
-    // two-phase order is not repeated here; it is inherited, which is the point
-    // of there being no second teardown path.
+    // Request machine cleanup before bounded SDK teardown through the same
+    // ordinary path. Its ownership flags do not independently verify OS state.
     StopLocked(finalDisarm);
     lock.unlock();
-    LogWarn("tunnel: the failsafe teardown is complete. {} No reconnection is "
+    LogWarn("tunnel: the failsafe teardown cleanup=attempted facts=ownership "
+            "os_state=unverified. {} No reconnection is "
             "attempted and none will be: the next attempt is the user's, which "
             "is what makes this impossible to thrash.",
             killSwitchOn
-                ? "The KILL SWITCH IS ON, so the firewall narrowed to ARMED and "
-                  "this machine is still blocked — deliberately, and nothing is "
-                  "leaking. Turning the kill switch off lifts it immediately."
-                : "The kill switch is off, so the firewall was lifted and this "
-                  "machine's internet is back, unprotected, exactly as it is "
-                  "after a user disconnect.");
+                ? "The kill switch is on; Armed was requested. Check wfp_state "
+                  "and policy errors for the applied result."
+                : "The kill switch is off; firewall removal was requested. "
+                  "Physical-network connectivity has not been verified.");
     NotifyStateChanged();
     return;
   }
@@ -1294,7 +1347,7 @@ void TunnelController::FailsafeStop(DeadTunnelReason reason) {
   // Same reason as Stop()'s escape: no composed status will ever be published
   // again on this process, and the app decides whether to offer a disconnect
   // from routes_installed and wfp_state. The push below would otherwise carry
-  // "routes installed" over a machine this very function just handed back.
+  // stale ownership flags after this function's best-effort cleanup requests.
   RepublishMachineFactsLockFree(/*routesReverted=*/true);
   // Exit latch only, for the reason spelled out on the identical call in Stop():
   // no worker was ever handed this session, so there is no device for a later
@@ -1322,12 +1375,11 @@ void TunnelController::NotifyStateChanged() {
 }
 
 void TunnelController::StopLocked(bool finalDisarm) {
+  CancelCapture();
   const proto::TunnelState priorState = state_;
   const bool wasRunning = priorState != proto::TunnelState::Stopped;
-  // Whether THIS teardown has routes to give back. netConfig_ exists only if
-  // step 6 ran, which only happens in tunnel mode — so it is also the honest
-  // answer to "was the machine's network touched", and it is read from state
-  // rather than from the mode flag.
+  // A configuration owner can hold partial Apply state. Its presence requests
+  // cleanup; it does not prove which OS changes succeeded.
   const bool hadRoutes = netConfig_ != nullptr;
   if (proto::IsSessionLive(state_) || state_ == proto::TunnelState::Starting)
     SetStateLocked(proto::TunnelState::Stopping);
@@ -1349,10 +1401,9 @@ void TunnelController::StopLocked(bool finalDisarm) {
 
   // --- THE ORDER OF THE UNWIND, WHICH IS THE FIX ----------------------------
   //
-  // PHASE 1 gives the MACHINE back: routes, DNS, resolver cache, marker,
-  // firewall policy. All local, all cheap (133 ms for the whole thing, measured
-  // four times over), none of it able to block on a network that has already
-  // failed.
+  // Phase 1 requests route, DNS, resolver-cache, marker and firewall cleanup
+  // before touching the SDK. Per-operation failures are logged; this path does
+  // not re-read kernel state to certify that every request succeeded.
   //
   // PHASE 2 tears down the SDK and the native plumbing. Any of it can block
   // indefinitely — DeviceLocal::close() unwinding wedged transports is the
@@ -1372,6 +1423,18 @@ void TunnelController::StopLocked(bool finalDisarm) {
   // order — it is simply reached sooner, which is the entire point.
   RevertMachineStateLocked(finalDisarm, hadRoutes);
 
+  // The provider-only device, in every teardown, and so at the head of every
+  // bring-up: StartLocked opens with StopLocked, so a Connect retires the
+  // provider before the new session's DeviceLocal — the same persisted
+  // identity — the adapter or a single route exists, and the two devices never
+  // run together. It is phase 2 work (closing a device can block on the SDK),
+  // so it comes after the machine is given back, and it is a no-op whenever a
+  // tunnel session was running, because the two never coexist.
+  RetireProviderDeviceLocked();
+  // The standalone device a log upload ran on, for the same reason. Its upload
+  // goes on: the POST runs on the network space's API, not on the device.
+  RetireLogUploadDeviceLocked();
+
   const bool tornDown = TearDownSessionLocked();
 
   rpcHostPort_.clear();
@@ -1379,24 +1442,21 @@ void TunnelController::StopLocked(bool finalDisarm) {
   rpcSessionId_.clear();
   upSinceMillis_ = 0;
   SetStateLocked(proto::TunnelState::Stopped);
-  // Do NOT say "network restored" when nothing was ever changed: an rpc-only
-  // session that claims to have restored the network is a claim the reader
-  // would use to rule out a network problem this service did not cause.
+  // Distinguish attempted cleanup from the absence of a configuration owner.
+  // Neither result is an independent check of the machine's network state.
   if (wasRunning)
-    LogInfo("tunnel: stopped, {}{}",
-            hadRoutes ? "network restored"
-                      : "no network state to restore (nothing was applied)",
+    LogInfo("tunnel: stopped, route_dns_cleanup={} routes=false dns=false "
+            "facts=ownership os_state=unverified{}",
+            hadRoutes ? "attempted" : "not-owned",
             tornDown ? "" : " (SDK TEARDOWN ABANDONED — see above)");
 }
 
 void TunnelController::RevertMachineStateLocked(bool finalDisarm, bool hadRoutes) {
   if (netConfig_) { netConfig_->Revert(); netConfig_.reset(); }
   appliedResolvers_.clear();
-  // THE MACHINE IS BACK, AND THIS IS THE MOMENT THE APP MUST BE ABLE TO SEE IT.
-  // Phase 2 (the SDK teardown) may be abandoned on its budget and the Stopped
-  // transition that would otherwise publish sits on the far side of it, so
-  // without this a get_state served during a slow teardown would still report
-  // routes installed — over a machine that already has its network back.
+  appliedResolversV6_.clear();
+  // Publish released ownership before bounded SDK teardown, which may be
+  // abandoned. These flags do not certify route/DNS removal from the OS.
   PublishStatusLocked();
   // --- THE OTHER EDGE: Connected -> Armed/Off --------------------------------
   //
@@ -1409,19 +1469,16 @@ void TunnelController::RevertMachineStateLocked(bool finalDisarm, bool hadRoutes
   // reachable through the tunnel simply fails in a way that looks like a
   // network fault.
   //
-  // Gated on hadRoutes rather than on the mode flag, for StopLocked's own
-  // reason: it is the honest answer to "did this session point the machine at
-  // the tun". An rpc-only session never sets a resolver, so it has nothing to
-  // give back and must flush nothing — that mode's promise is that it does not
-  // touch this machine, and the DNS cache is this machine's.
+  // Gate on configuration ownership, including partial Apply. An rpc-only
+  // session has no configuration owner and must not flush the machine's cache.
   if (hadRoutes) NetworkConfig::FlushResolverCache();
-  // Routes are gone; the marker's job is done whether or not the rest unwinds.
+  // Route cleanup was requested; clear the marker before the remaining unwind.
   SetActiveMarker(false);
 
   // --- the firewall policy, and what the kill switch actually decides -------
   //
-  // The routes have just gone back. THIS is the moment the machine falls to the
-  // clear, and it is the only moment the kill switch has an opinion about.
+  // Route cleanup was requested. Choose the intended post-cleanup policy;
+  // the request does not prove either route removal or packet enforcement.
   //
   //   * finalDisarm (user disconnect, service shutdown): policy Off. The user
   //     asked to stop; leaving them blocked with no UI to explain it is the
@@ -1455,7 +1512,7 @@ void TunnelController::RevertMachineStateLocked(bool finalDisarm, bool hadRoutes
     // ALSO THE CLOSE OF THE CONNECTING WINDOW. This runs on the failed-start and
     // reconnect paths, so it is where an attempt that opened the machine-wide
     // DNS permit gives it back. Narrowing Connecting -> Armed only ever removes
-    // filter 9b, so nothing that was permitted in both states is interrupted.
+    // bootstrap DNS and UI permits; everything shared by both policies remains.
     LogWarn("tunnel: the tunnel is down and the KILL SWITCH IS ON — holding the "
             "firewall in the armed state, so nothing leaves this machine except "
             "our own service, loopback, the LAN, DHCP and NDP until the tunnel "
@@ -1501,18 +1558,17 @@ void TunnelController::RevertMachineStateLocked(bool finalDisarm, bool hadRoutes
     ApplyWfpLocked(WfpState::Off);
   }
   if (hadRoutes)
-    LogInfo("tunnel: this machine's network is BACK — routes reverted, tun dns "
-            "cleared, resolver cache flushed, firewall policy {}. Everything "
-            "below this line is releasing our own objects and cannot cost the "
-            "operator their network, however long it takes.",
+    LogInfo("tunnel: machine cleanup requested routes=false dns=false "
+            "facts=ownership os_state=unverified resolver_cache_flush=attempted "
+            "firewall={}; continuing with bounded session teardown",
             ToString(wfp_.State()));
 }
 
 // --- phase 2: our own objects, on a budget ---------------------------------
 //
-// Everything unwound here is OURS. None of it is state on the operator's
-// machine; phase 1 already gave all of that back. That is what makes it
-// acceptable to give this phase a deadline and walk away from it.
+// Phase 1 has requested machine cleanup. This phase transfers the remaining
+// session owners to a bounded worker; empty controller owners do not prove the
+// worker finished or the adapter disappeared from the OS.
 bool TunnelController::TearDownSessionLocked() {
   // Nothing to do — and, importantly, no thread to spawn — for the common case
   // of a Stop with no session (idempotent restart, a second Stop, ~TunnelController
@@ -1529,6 +1585,7 @@ bool TunnelController::TearDownSessionLocked() {
   if (egress_) {
     egress_->SetOnChange(nullptr);
     egress_->SetOnNetworkEvent(nullptr);
+    egress_->SetOnNetworkQualityEvent(nullptr);
   }
 
   // Take splitMutex_ only to MOVE the client out, never across the close. The
@@ -1604,7 +1661,7 @@ bool TunnelController::TearDownSessionLocked() {
       [pump = std::move(pump), split = std::move(split),
        egress = std::move(egress), device = std::move(device),
        adapter = std::move(adapter), wintun = std::move(wintun),
-       space = std::move(space)]() mutable {
+       space = std::move(space), flight = logUploadFlight_]() mutable {
         if (pump) pump->Stop();
         pump.reset();
         split.Close();
@@ -1618,6 +1675,10 @@ bool TunnelController::TearDownSessionLocked() {
           LogInfo("tunnel: closing the device (this is the call that can block "
                   "on wedged transports)");
           device->close();
+          // A log upload's call may still be on it: the flight then keeps it
+          // until the call returns, and releases it.
+          flight->KeepUntilReturned(device->handle(),
+                                    std::make_shared<urnet::DeviceLocal>(std::move(*device)));
         }
         device.reset();
         adapter.reset();
@@ -1801,8 +1862,9 @@ bool TunnelController::SetKillSwitch(bool on) {
       LogError("tunnel: the leak-prevention firewall STILL could not be "
                "installed ({}). The tunnel is left up — the user asked for "
                "protection, not for a disconnect — but it is NOT protected: "
-               "IPv6 and other adapters' resolvers are open, and reported to "
-               "the app as wfp_state=off. It is retried at the next drop.",
+               "off-tunnel IPv6 and other adapters' resolvers are open, and "
+               "reported to the app as wfp_state=off. It is retried at the next "
+               "drop.",
                wfp_.LastError());
       return false;
     }
@@ -1821,13 +1883,27 @@ bool TunnelController::SetSplitTunnel(const std::vector<std::string>& excludedPa
   return true;
 }
 
-void TunnelController::Logout() {
-  std::scoped_lock lock(mutex_);
+bool TunnelController::Logout(const std::string& networkSpaceJson) {
+  stopGeneration_.fetch_add(1);
+  CancelCapture();
+  // Timed, as Stop() takes it: a connect attempt wedged inside the sdk holds
+  // mutex_ for as long as the process lives, and a logout that waited behind it
+  // held the control pipe with it, so every later request queued behind a lock
+  // that never came back. The app sends stop_tunnel first, whose own escape
+  // gives the machine back, and keeps this logout owed until it succeeds.
+  std::unique_lock<std::timed_mutex> lock(mutex_, std::defer_lock);
+  if (!lock.try_lock_for(kStopLockBudget)) {
+    LogWarn("tunnel: logout could not take the session lock within {}ms; the device "
+            "identity and the account's sdk state were not cleared",
+            kStopLockBudget.count());
+    return false;
+  }
   // As deliberate as a disconnect, so it is reported as one. See Stop().
   lastStopReason_.store(kStopReasonUser);
   // finalDisarm: signing out is as deliberate as disconnecting, and there is no
   // session left to protect. Leaving a signed-out machine blocked would be
-  // unexplainable from any surface the user still has.
+  // unexplainable from any surface the user still has. It retires the
+  // provider-only device too: a signed-out machine provides nothing.
   StopLocked(/*finalDisarm=*/true);
   // Clear persisted device identity so the next login starts clean (mirrors the
   // macOS logout provider message clearing LocalState).
@@ -1835,7 +1911,752 @@ void TunnelController::Logout() {
   std::filesystem::remove(storageDir_ / L"client_key_seed.bin", ec);
   std::filesystem::remove(storageDir_ / L"provide_cert.pem", ec);
   std::filesystem::remove(storageDir_ / L"provide_key.pem", ec);
-  LogInfo("tunnel: logged out (cleared device identity)");
+  // ...and what the sdk stored in the account's space: a DeviceLocal persists
+  // its client credential and instance there when it starts, with its peer pins
+  // and transport policy. Imported here rather than looked up, because a
+  // service restarted since the account's last device has imported no space.
+  bool cleared = true;
+  if (!networkSpaceJson.empty()) {
+    try {
+      const urnet::NetworkSpace space = ImportNetworkSpaceLocked(networkSpaceJson);
+      const urnet::AsyncLocalState asyncLocalState = space.getAsyncLocalState();
+      const urnet::LocalState localState =
+          asyncLocalState ? asyncLocalState.getLocalState() : urnet::LocalState{};
+      if (!localState) throw std::runtime_error("the network space has no local state");
+      localState.logout();
+    } catch (const std::exception& e) {
+      LogError("tunnel: logout could not clear the account's sdk state: {}", e.what());
+      cleared = false;
+    }
+  }
+  LogInfo("tunnel: logged out (cleared device identity{})",
+          networkSpaceJson.empty() ? "; no network space named, so no sdk state"
+                                   : (cleared ? " and the account's sdk state" : ""));
+  return cleared;
+}
+
+// --- the provider-only device (start_provider) ------------------------------
+//
+// See the contract in the header and Common/ProvideLifecycle.h. This is steps 3
+// and 4 of a bring-up and nothing after them: no wintun adapter (step 1), no
+// egress binding (step 2 — with no tun there is nothing to loop into, so the
+// device's sockets follow the route table like any other process's), no rpc
+// listener (step 5), no firewall policy, no route, no DNS entry, no active
+// marker, no packet pump, no split tunnel and no flow-owner lookup.
+
+bool TunnelController::StartProvider(const proto::StartProvider& request,
+                                     std::string& error) {
+  // Timed, like Stop(): a connect attempt wedged inside the SDK holds mutex_ for
+  // as long as the process lives, and a start_provider that waited behind it
+  // would hold the control pipe with it. There is nothing to provide beside a
+  // bring-up in any case — its own device will.
+  std::unique_lock<std::timed_mutex> lock(mutex_, std::defer_lock);
+  if (!lock.try_lock_for(kStopLockBudget)) {
+    error = "a tunnel operation is in progress";
+    LogWarn("provide: start_provider refused: the session lock was not free "
+            "within {}ms",
+            kStopLockBudget.count());
+    return false;
+  }
+  const provide::ControlMode mode = provide::ControlModeFrom(request.provide_mode);
+  provide::ServiceProviderState state;
+  // Any trace of a tunnel session counts, not only the reported state: a
+  // session's DeviceLocal runs under the same identity.
+  state.tunnelSession = state_ == proto::TunnelState::Starting ||
+                        proto::IsSessionLive(state_) ||
+                        state_ == proto::TunnelState::Stopping || device_.has_value() ||
+                        adapter_ != nullptr || netConfig_ != nullptr || pump_ != nullptr ||
+                        egress_ != nullptr;
+  state.firewallInForce = wfp_.State() != WfpState::Off;
+  const AbandonedTeardownSweep abandoned = SweepAbandonedTeardowns();
+  if (abandoned.completed_late > 0)
+    LogWarn("provide: {} previously ABANDONED sdk teardown(s) have since FINISHED "
+            "and released the device they were holding",
+            abandoned.completed_late);
+  state.deviceStillHeld = abandoned.outstanding > 0;
+  state.restartPending = SelfRestartPending();
+  if (const provide::ProviderRefusal refusal = provide::ProviderStartRefusal(mode, state);
+      refusal != provide::ProviderRefusal::None) {
+    error = provide::RefusalReason(refusal);
+    LogInfo("provide: start_provider refused (mode={}): {}", provide::ToString(mode),
+            error);
+    return false;
+  }
+
+  // The network country the app read: in place for a device that keeps running,
+  // and in force before a new one is built.
+  SetNetworkCountry(request.network_country_code, request.network_country_source);
+
+  // The same request again — a relaunched app adopting the provider an earlier
+  // run left, or a reconcile after a mode change: keep the device and apply the
+  // mode in place.
+  if (providerDevice_ && proto::SameProviderDevice(providerRequest_, request)) {
+    try {
+      providerDevice_->setProvideControlMode(request.provide_mode);
+    } catch (const std::exception&) {
+      error = "the provide mode could not be applied";
+      LogError("provide: applying mode {} to the running provider-only device failed",
+               provide::ToString(mode));
+      return false;
+    }
+    providerRequest_.provide_mode = request.provide_mode;
+    ReadProviderFactsLocked();
+    PublishStatusLocked();
+    LogInfo("provide: the provider-only device keeps running (mode={} tier={})",
+            provide::ToString(mode), providerTier_);
+    return true;
+  }
+
+  RetireProviderDeviceLocked();
+  // A standalone log upload device runs under the same identity; its upload
+  // goes on without it (StopLocked says why).
+  RetireLogUploadDeviceLocked();
+  const char* step = "network space";
+  try {
+    providerSpace_ = ImportNetworkSpaceLocked(request.network_space_json);
+    step = "device";
+    providerDevice_ = std::make_unique<urnet::DeviceLocal>(
+        NewDeviceLocked(*providerSpace_, request.by_jwt, request.device_description,
+                        request.device_spec, request.app_version, request.instance_id,
+                        "provide:"));
+    step = "provider transport policy";
+    if (!request.provider_transport_settings_json.empty()) {
+      providerDevice_->setProviderTransportSettings(
+          nlohmann::json::parse(request.provider_transport_settings_json)
+              .get<urnet::TransportSettings>());
+    }
+    step = "provide mode";
+    providerDevice_->setProvideControlMode(request.provide_mode);
+    providerRequest_ = request;
+    ReadProviderFactsLocked();
+    // What the app shows for it while disconnected, and the network changes it
+    // is told about: both best effort, neither a reason to stop providing.
+    OpenProviderStatsLocked();
+    WatchProviderNetworkLocked();
+    PublishStatusLocked();
+    LogInfo("provide: PROVIDING WITHOUT A TUNNEL (mode={} tier={} network_key={} "
+            "client_id={}). No wintun adapter, route, dns entry, firewall policy or "
+            "device rpc listener exists for it: this machine's own traffic is routed "
+            "exactly as it would be without URnetwork.",
+            provide::ToString(mode), providerTier_, providerNetworkKey_,
+            providerDevice_->getClientId());
+    return true;
+  } catch (const std::exception&) {
+    // The stage names the failure, as ActivateCapture's does, without copying an
+    // SDK message that can carry endpoints or identifiers into the reply.
+    error = std::string("the provider could not be started at the ") + step + " step";
+    LogError("provide: stage=provider-only outcome=failed component={}", step);
+    RetireProviderDeviceLocked();
+    return false;
+  }
+}
+
+bool TunnelController::StopProvider() {
+  // A wedged lock means a bring-up is holding it, and every bring-up opens by
+  // retiring the provider-only device itself.
+  std::unique_lock<std::timed_mutex> lock(mutex_, std::defer_lock);
+  if (!lock.try_lock_for(kStopLockBudget)) {
+    LogWarn("provide: stop_provider could not take the session lock within {}ms",
+            kStopLockBudget.count());
+    return false;
+  }
+  RetireProviderDeviceLocked();
+  return true;
+}
+
+bool TunnelController::SetProvideExtender(bool on, std::string& error) {
+  // Timed, for StartProvider's reason: a wedged bring-up must not hold the
+  // control pipe. The app then shows the setting as it stands.
+  std::unique_lock<std::timed_mutex> lock(mutex_, std::defer_lock);
+  if (!lock.try_lock_for(kStopLockBudget)) {
+    error = "a tunnel operation is in progress";
+    LogWarn("provide: set_provide_extender refused: the session lock was not free "
+            "within {}ms",
+            kStopLockBudget.count());
+    return false;
+  }
+  const provide::ExtenderSettingTarget target = provide::ExtenderSettingTargetFor(
+      providerDevice_ != nullptr, device_.has_value(), spaceManager_ && lastSpaceKey_);
+  try {
+    switch (target) {
+      case provide::ExtenderSettingTarget::ProviderDevice:
+        // Persisted in its space and applied at once: the role starts or stops.
+        providerDevice_->setProvideExtender(on);
+        RefreshProviderExtenderLocked();
+        break;
+      case provide::ExtenderSettingTarget::SessionDevice:
+        // The session's DeviceRemote hears it through its status listener.
+        device_->setProvideExtender(on);
+        break;
+      case provide::ExtenderSettingTarget::NetworkSpace: {
+        // The space spaceManager_ keeps for the last device's key: the next
+        // import of that key reuses it, or replaces it with one that reads the
+        // file this writes.
+        urnet::NetworkSpace space = spaceManager_->getNetworkSpace(lastSpaceKey_);
+        if (!space) {
+          error = "the last device's network space is gone";
+          LogWarn("provide: set_provide_extender refused: {}", error);
+          return false;
+        }
+        space.getAsyncLocalState().getLocalState().setProvideExtender(on);
+        break;
+      }
+      case provide::ExtenderSettingTarget::None:
+        error = "no device has run in this service yet, so there is no network space to keep the "
+                "setting in";
+        LogWarn("provide: set_provide_extender refused: {}", error);
+        return false;
+    }
+  } catch (const std::exception&) {
+    // Named by its target, as StartProvider names its step, without copying an
+    // SDK message into the reply.
+    error = std::string("the provide extender setting could not be written to ") +
+            provide::ToString(target);
+    LogError("provide: stage=set-provide-extender outcome=failed target={}",
+             provide::ToString(target));
+    return false;
+  }
+  LogInfo("provide: provide extender {} ({})", on ? "on" : "off", provide::ToString(target));
+  return true;
+}
+
+TunnelController::ExtenderResetResult TunnelController::ResetExtenders(
+    const proto::ResetExtenders& request) {
+  ExtenderResetResult result;
+  const auto key = proto::SpaceKeyOf<urnet::NetworkSpaceKey>(request);
+  urnet::NetworkSpace space;
+  {
+    // Timed, for StartProvider's reason: a wedged bring-up must not hold the
+    // control pipe. Busy, so the app sends the reset again once the operation
+    // holding the lock ends; the next import of the space carries it anyway.
+    std::unique_lock<std::timed_mutex> lock(mutex_, std::defer_lock);
+    if (!lock.try_lock_for(kStopLockBudget)) {
+      result.busy = true;
+      result.error = "a tunnel operation is in progress";
+      LogWarn("tunnel: reset_extenders refused: the session lock was not free within {}ms",
+              kStopLockBudget.count());
+      return result;
+    }
+    // A handle of 0 is the sdk's nil: the manager holds no space under the key.
+    try {
+      if (spaceManager_) space = spaceManager_->getNetworkSpace(key);
+    } catch (const std::exception&) {
+      result.error = "the network space could not be read";
+      LogError("tunnel: stage=reset-extenders outcome=failed step=lookup");
+      return result;
+    }
+  }
+  if (space) {
+    // With the session lock released: the reset stops and joins the space's
+    // extender network client and node before it starts their replacements.
+    try {
+      result.reset = space.applyExtenderReset(request.extender_reset_id);
+    } catch (const std::exception&) {
+      result.error = "the extender reset could not be applied";
+      LogError("tunnel: stage=reset-extenders outcome=failed step=apply");
+      return result;
+    }
+  }
+  LogInfo("tunnel: extenders reset space={}/{} outcome={}", request.host_name,
+          request.env_name,
+          !space ? "not-held" : (result.reset ? "reset" : "already-applied"));
+  result.ok = true;
+  return result;
+}
+
+void TunnelController::RetireProviderDeviceLocked() {
+  if (!providerDevice_ && !providerSpace_) return;
+  // The statistics first, under their own lock, so a get_provider_stats served
+  // from here on says that nothing runs.
+  std::optional<urnet::ContractViewController> statsVc;
+  urnet::Sub peersSub;
+  urnet::Sub extenderSub;
+  {
+    std::scoped_lock lock(providerStatsMutex_);
+    statsVc = std::move(providerStatsVc_);
+    providerStatsVc_.reset();
+    peersSub = std::move(providerPeersSub_);
+    extenderSub = std::move(providerExtenderSub_);
+    providerClients_.reset();
+    providerClientId_.clear();
+    providerExtender_.reset();
+    providerExtenderSetting_ = false;
+  }
+  // The network watch's handlers are dropped on this thread, as
+  // TearDownSessionLocked drops the session monitor's, so the monitor the
+  // worker inherits can only unregister itself.
+  if (providerEgress_) {
+    providerEgress_->SetOnNetworkEvent(nullptr);
+    providerEgress_->SetOnNetworkQualityEvent(nullptr);
+  }
+  // Moved into locals and then reset, for the reason TearDownSessionLocked
+  // spells out: a moved-from engaged optional still tests true.
+  auto egress = std::move(providerEgress_);
+  providerEgress_.reset();
+  auto network = std::move(providerNetwork_);
+  providerNetwork_.reset();
+  auto device = std::move(providerDevice_);
+  providerDevice_.reset();
+  auto space = std::move(providerSpace_);
+  providerSpace_.reset();
+  const provide::ControlMode mode = provide::ControlModeFrom(providerRequest_.provide_mode);
+  providerRequest_ = proto::StartProvider{};
+  providerTier_ = 0;
+  providerNetworkKey_ = false;
+  // Published before the bounded close, as RevertMachineStateLocked publishes
+  // released ownership: the app must not keep showing a provider that is going.
+  PublishStatusLocked();
+  LogInfo("provide: retiring the provider-only device (mode={})", provide::ToString(mode));
+  const auto started = std::chrono::steady_clock::now();
+  const bool finished = RunBounded(
+      kSdkTeardownBudget,
+      [egress = std::move(egress), network = std::move(network), peersSub = std::move(peersSub),
+       extenderSub = std::move(extenderSub), statsVc = std::move(statsVc),
+       device = std::move(device), space = std::move(space), flight = logUploadFlight_]() mutable {
+        // After this returns no further OS observation reaches the notifier.
+        if (egress) egress->Stop();
+        egress.reset();
+        // Ends the notifier's thread, waiting out a call into the device that is
+        // already running: the device has to outlive it, so it goes first.
+        network.reset();
+        // Assigned, never reset(): Sub::reset() releases the handle without
+        // unsubscribing (PacketPump.cpp).
+        peersSub = urnet::Sub{};
+        extenderSub = urnet::Sub{};
+        // The typed close, which releases the controller from the device.
+        if (device && statsVc) device->closeContractViewController(*statsVc);
+        statsVc.reset();
+        if (device) device->close();
+        // A log upload's call may still be on it: the flight then keeps it
+        // until the call returns, and releases it.
+        if (device) {
+          const uint64_t deviceHandle = device->handle();
+          flight->KeepUntilReturned(deviceHandle,
+                                    std::shared_ptr<urnet::DeviceLocal>(std::move(device)));
+        }
+        device.reset();
+        space.reset();
+      },
+      // The worker owns a DeviceLocal under this device's identity. While it is
+      // outstanding a second device — a Connect's — would run beside it, so its
+      // abandonment refuses a start exactly as the session teardown's does, and
+      // the next start restarts the service clean instead.
+      AbandonHazard::HoldsSessionDevice);
+  const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                      std::chrono::steady_clock::now() - started)
+                      .count();
+  if (!finished) {
+    LogError("provide: the provider-only device did not close inside its {}ms "
+             "budget and is LEFT closing on its own thread; a start is refused "
+             "until it finishes",
+             kSdkTeardownBudget.count());
+  } else if (ms > 500) {
+    LogWarn("provide: closing the provider-only device took {}ms", ms);
+  }
+}
+
+void TunnelController::ReadProviderFactsLocked() {
+  providerTier_ = 0;
+  providerNetworkKey_ = false;
+  if (!providerDevice_) return;
+  try {
+    providerTier_ = providerDevice_->getProvideMode();
+    if (auto keys = providerDevice_->getProvideSecretKeys()) {
+      for (const auto& key : *keys) {
+        if (key.provide_mode == urnet::ProvideModeNetwork) {
+          providerNetworkKey_ = true;
+          break;
+        }
+      }
+    }
+  } catch (const std::exception&) {
+    // A status must still be publishable; it then claims less (tier 0).
+    LogWarn("provide: reading the provider-only device's tier failed");
+  }
+}
+
+namespace {
+// The DeviceRemote path's client count (SdkHost::ReadStats): the connected
+// network peers, none when the device reports no peers at all.
+int64_t ConnectedPeerCount(const std::optional<urnet::NetworkPeers>& peers) {
+  return peers && peers->Connected ? static_cast<int64_t>(peers->Connected->size()) : 0;
+}
+}  // namespace
+
+void TunnelController::OpenProviderStatsLocked() {
+  if (!providerDevice_) return;
+  std::string clientId;
+  std::optional<urnet::ContractViewController> vc;
+  urnet::Sub peersSub;
+  auto clients = std::make_shared<std::atomic<int64_t>>(0);
+  try {
+    clientId = providerDevice_->getClientId();
+    vc.emplace(providerDevice_->openContractViewController());
+    // Subscribed before the first read, so a change in between is either in
+    // that read or delivered after it. The listener holds a share of the count,
+    // never this object: a callback already running when the retire
+    // unsubscribes still finds it.
+    peersSub = providerDevice_->addNetworkPeersChangeListener(
+        [clients](std::optional<urnet::NetworkPeers> peers) {
+          clients->store(ConnectedPeerCount(peers));
+        });
+    clients->store(ConnectedPeerCount(providerDevice_->getNetworkPeers()));
+  } catch (const std::exception&) {
+    LogWarn("provide: the provider-only device's statistics could not be opened; the "
+            "app shows no client count or provider plots while disconnected");
+    peersSub = urnet::Sub{};
+    try {
+      if (vc) providerDevice_->closeContractViewController(*vc);
+    } catch (const std::exception&) {
+    }
+    return;
+  }
+  // The provider extender role (EXTENDER.md N2, N7), as a session's
+  // DeviceRemote reports it: a status listener, subscribed before the first
+  // read for the peers listener's reason and holding a share of the reading,
+  // never this object, and the setting read beside it. The setting is read
+  // here and again after set_provide_extender writes it through this device
+  // (RefreshProviderExtenderLocked); a session's device, the only other
+  // writer, never runs beside this one. Its own best effort: a failure costs
+  // the extender row, plot and switch, which then read as the role
+  // unsupported, and nothing else.
+  auto extender = std::make_shared<LatestExtenderProvideStatus>();
+  urnet::Sub extenderSub;
+  bool extenderSetting = false;
+  try {
+    extenderSub = providerDevice_->addExtenderProvideStatusChangeListener(
+        [extender](std::optional<urnet::ExtenderProvideStatus> status) {
+          extender->Store(std::move(status));
+        });
+    extender->Store(providerDevice_->getExtenderProvideStatus());
+    extenderSetting = providerDevice_->getProvideExtender();
+  } catch (const std::exception&) {
+    LogWarn("provide: the provider-only device's extender status could not be read; the "
+            "app shows no extender row or plot while disconnected");
+    extenderSub = urnet::Sub{};
+    extender.reset();
+  }
+  std::scoped_lock lock(providerStatsMutex_);
+  providerStatsVc_ = std::move(vc);
+  providerPeersSub_ = std::move(peersSub);
+  providerClients_ = std::move(clients);
+  providerClientId_ = std::move(clientId);
+  providerExtenderSub_ = std::move(extenderSub);
+  providerExtender_ = std::move(extender);
+  providerExtenderSetting_ = extenderSetting;
+}
+
+void TunnelController::RefreshProviderExtenderLocked() {
+  // The device derives the status from the setting it now holds (off, or
+  // setting up while it provides), so this reading already shows the write; a
+  // listener push that was in flight is replaced by the next one within its
+  // epoch.
+  std::optional<urnet::ExtenderProvideStatus> status;
+  bool setting = false;
+  try {
+    status = providerDevice_->getExtenderProvideStatus();
+    setting = providerDevice_->getProvideExtender();
+  } catch (const std::exception&) {
+    LogWarn("provide: re-reading the provider-only device's extender role failed; its next "
+            "status push reports it");
+    return;
+  }
+  std::scoped_lock lock(providerStatsMutex_);
+  // a role whose reading never opened is not reported, and stays so
+  if (!providerExtender_) return;
+  providerExtender_->Store(std::move(status));
+  providerExtenderSetting_ = setting;
+}
+
+void TunnelController::WatchProviderNetworkLocked() {
+  if (!providerDevice_) return;
+  // Stable for the device's whole life (see providerDevice_), and the notifier
+  // ends before the device is closed (RetireProviderDeviceLocked).
+  urnet::DeviceLocal* device = providerDevice_.get();
+  try {
+    // networkChanged() alone: notifyNetworkChange() is the same seam in this
+    // sdk (reliability_controls.go), and a device with no multi client — no
+    // tunnel — gets the process-wide transport kick and the DoH recovery from
+    // it, which is what a provider-only device needs.
+    providerNetwork_ = std::make_unique<NetworkChangeNotifier>(
+        [device] {
+          LogInfo("provide: the os reported an ip/route change — telling the "
+                  "provider-only device the network moved, so its transports re-dial "
+                  "now instead of timing out against the old path");
+          try {
+            device->networkChanged();
+          } catch (const std::exception& e) {
+            LogWarn("provide: the sdk network-change notification failed: {}", e.what());
+          }
+        },
+        [device] {
+          try {
+            device->networkQualityChanged();
+          } catch (const std::exception& e) {
+            LogWarn("provide: the sdk network-quality notification failed: {}", e.what());
+          }
+        });
+    // A zero LUID: no tun exists to exclude, as in rpc-only mode.
+    providerEgress_ =
+        std::make_unique<EgressMonitor>(NET_LUID{}, EgressMonitor::Binding::ObserveOnly);
+    providerEgress_->SetOnNetworkEvent(providerNetwork_->NetworkEventSink());
+    providerEgress_->SetOnNetworkQualityEvent(providerNetwork_->NetworkQualitySink());
+    providerEgress_->Start();
+  } catch (const std::exception&) {
+    // What did start is retired with the device.
+    LogWarn("provide: network changes will not reach the provider-only device; it "
+            "recovers through its transports' timeouts");
+  }
+}
+
+// See the contract in the header. No session lock and no device call: the copy
+// the build and the listeners left, and the controller's sampled state.
+proto::ProviderStats TunnelController::ProviderStats() {
+  proto::ProviderStats stats;
+  std::scoped_lock lock(providerStatsMutex_);
+  if (!providerStatsVc_) return stats;
+  stats.available = true;
+  stats.client_id = providerClientId_;
+  stats.client_count = providerClients_ ? providerClients_->load() : 0;
+  // Each read on its own, as SdkHost's ReadSdkList reads them: a document one
+  // getter cannot decode costs that field, never the reply. Logged once.
+  static std::atomic<bool> logged{false};
+  const auto read = [&](const char* what, const auto& get) {
+    try {
+      get();
+    } catch (const std::exception& e) {
+      if (!logged.exchange(true))
+        LogWarn("provide: reading the provider-only device's {} failed: {}", what, e.what());
+    }
+  };
+  read("window", [&] {
+    if (const int64_t window = providerStatsVc_->getWindowDurationSeconds(); window > 0)
+      stats.window_seconds = window;
+  });
+  read("throughput", [&] {
+    if (auto points = providerStatsVc_->getProviderThroughputPoints())
+      stats.provider_points = *points;
+  });
+  read("transport distribution", [&] {
+    if (auto distribution = providerStatsVc_->getProviderTransportDistribution())
+      stats.provider_distribution = *distribution;
+  });
+  read("packet stats", [&] {
+    stats.has_provider_stats = providerStatsVc_->getProviderPacketStats().has_value();
+  });
+  read("extender throughput", [&] {
+    if (auto points = providerStatsVc_->getExtenderThroughputPoints())
+      stats.extender_points = *points;
+  });
+  // The extender role, as its listener last said: none when its reading could
+  // not be opened, which the app reads as the role unsupported. Beside it, that
+  // this service takes the switch's write (SetProvideExtender).
+  if (providerExtender_) {
+    if (auto status = providerExtender_->Load()) stats.extender_provide_status = *status;
+    stats.provide_extender = providerExtenderSetting_;
+    stats.provide_extender_writable = true;
+  }
+  return stats;
+}
+
+// See the contract in the header. No session lock: the country is a fact about
+// the network, not about a session, and its one sdk call is a store.
+void TunnelController::SetNetworkCountry(const std::string& code, const std::string& source) {
+  const netcountry::Reading reading = netcountry::Normalized(code, source);
+  std::scoped_lock lock(networkCountryMutex_);
+  if (networkCountry_ && *networkCountry_ == reading) return;
+  networkCountry_ = reading;
+  urnet::setNetworkCountryCode(reading.code);
+  if (reading.code.empty()) {
+    LogInfo("tunnel: no network country ({}): extender dials take the extender "
+            "hint's country, or the global spoof list",
+            reading.source);
+  } else {
+    LogInfo("tunnel: network country \"{}\" ({}): while the extender hint cannot be "
+            "fetched, extender dials front with that country's spoof list",
+            reading.code, reading.source);
+  }
+}
+
+std::optional<netcountry::Reading> TunnelController::NetworkCountry() {
+  std::scoped_lock lock(networkCountryMutex_);
+  return networkCountry_;
+}
+
+// ---- the log upload (upload_logs) -------------------------------------------
+//
+// "Send feedback with logs" uploads this service's glog files, which is where
+// everything support reads about the tunnel, the provider and the network is.
+// It used to reach them only through the app's DeviceRemote, i.e. only while a
+// session ran. Now the app asks here, connected or not.
+
+TunnelController::LogUploadResult TunnelController::UploadLogs(
+    const proto::UploadLogs& request, const std::function<void(std::string_view)>& noteCarrier) {
+  LogUploadResult result;
+  // Timed, like StartProvider: a connect attempt wedged inside the SDK holds
+  // mutex_, and an upload that waited behind it would hold the control pipe.
+  std::unique_lock<std::timed_mutex> lock(mutex_, std::defer_lock);
+  if (!lock.try_lock_for(kStopLockBudget)) {
+    result.error = "a tunnel operation is in progress";
+    LogWarn("logs: upload_logs refused: the session lock was not free within {}ms",
+            kStopLockBudget.count());
+    return result;
+  }
+  const logupload::Carrier which =
+      logupload::CarrierFor(device_.has_value(), providerDevice_ != nullptr);
+  const char* carrierName = logupload::ToString(which);
+  // Admitted before anything is built: one upload at a time.
+  const int64_t uploadId = logUploadFlight_->Begin(which, SteadyMillis());
+  if (uploadId == 0) {
+    result.busy = true;
+    result.error = "a log upload is in flight already";
+    LogInfo("logs: upload_logs refused: a log upload is in flight already");
+    return result;
+  }
+  std::shared_ptr<LogUploadDevice> slot;
+  uint64_t deviceHandle = 0;
+  const char* step = "upload";
+  try {
+    if (which == logupload::Carrier::Tunnel) {
+      deviceHandle = device_->handle();
+    } else if (which == logupload::Carrier::Provider) {
+      deviceHandle = providerDevice_->handle();
+    } else {
+      const AbandonedTeardownSweep abandoned = SweepAbandonedTeardowns();
+      const logupload::StandaloneRefusal refusal =
+          logupload::StandaloneRefusalFor(abandoned.outstanding > 0, SelfRestartPending());
+      if (refusal != logupload::StandaloneRefusal::None) {
+        logUploadFlight_->Finish(uploadId, logupload::FlightState::Failed);
+        result.error = logupload::RefusalReason(refusal);
+        LogInfo("logs: upload_logs refused: {}", result.error);
+        return result;
+      }
+      // Neither runs: a device for the upload alone, built as StartProvider
+      // builds the provider-only device (the persisted identity, the request's
+      // credentials and network space) and nothing after that: no adapter,
+      // route, DNS entry, firewall policy, marker or rpc listener. It provides
+      // to nobody. One at a time, under the one identity.
+      RetireLogUploadDeviceLocked();
+      slot = std::make_shared<LogUploadDevice>();
+      slot->flight = logUploadFlight_;
+      step = "network space";
+      slot->space = ImportNetworkSpaceLocked(request.network_space_json);
+      step = "device";
+      slot->device = std::make_unique<urnet::DeviceLocal>(
+          NewDeviceLocked(*slot->space, request.by_jwt, request.device_description,
+                          request.device_spec, request.app_version, request.instance_id,
+                          "logs:"));
+      step = "provide mode";
+      slot->device->setProvideControlMode("never");
+      logUpload_ = slot;
+      deviceHandle = slot->device->handle();
+      step = "upload";
+    }
+  } catch (const std::exception&) {
+    // The stage names the failure, as StartProvider's does, without copying an
+    // SDK message that can carry endpoints or identifiers into the reply.
+    result.error = std::string("the logs could not be uploaded at the ") + step + " step";
+    LogError("logs: stage=upload outcome=failed component={}", step);
+    logUploadFlight_->Finish(uploadId, logupload::FlightState::Failed);
+    // a standalone device built before the failure is closed, not just released
+    if (slot) {
+      CloseLogUploadDevice(slot);
+      logUpload_.reset();
+    }
+    return result;
+  }
+  // Into the files being uploaded, before the upload's thread zips them: which
+  // device carried the upload tells support whether a tunnel was up when it
+  // was sent.
+  if (noteCarrier) noteCarrier(carrierName);
+  // The standalone device's waiter learns that the upload reported from the
+  // upload's callback, and retires the device then.
+  std::function<void()> reported;
+  if (slot) {
+    reported = [slot] {
+      {
+        std::scoped_lock slotLock(slot->mutex);
+        slot->uploadReported = true;
+      }
+      slot->reported.notify_all();
+    };
+  }
+  // The zip and the post, on the upload's own thread. It holds the flight, the
+  // device's handle and the waiter's signal, and nothing else of this object;
+  // the flight keeps the device alive until the call returns (each teardown
+  // hands it over), and the call's callback ends the upload in it, whose
+  // finish hook pushes the status.
+  logUploadFlight_->Run(uploadId, deviceHandle,
+                        [flight = logUploadFlight_, uploadId, deviceHandle,
+                         feedbackId = request.feedback_id, carrierName, reported] {
+                          UploadLogsOnDevice(flight, uploadId, deviceHandle, feedbackId,
+                                             carrierName, reported);
+                        });
+  if (slot) {
+    // The waiter retires the standalone device once its upload reports, or at
+    // the bound if it never does. It owns a share of the slot and nothing else,
+    // so it may outlive this controller; whoever takes the device first closes
+    // it (CloseLogUploadDevice).
+    std::thread([slot] {
+      RunGuarded("log-upload-retire", [&] {
+        {
+          std::unique_lock<std::mutex> slotLock(slot->mutex);
+          slot->reported.wait_for(slotLock, logupload::kStandaloneDeviceMaxLifetime,
+                                  [&] { return slot->uploadReported || !slot->device; });
+        }
+        CloseLogUploadDevice(slot);
+      });
+    }).detach();
+  }
+  result.ok = true;
+  result.carrier = carrierName;
+  result.uploadId = uploadId;
+  LogInfo("logs: uploading this service's logs for a feedback ({} device)", carrierName);
+  return result;
+}
+
+void TunnelController::CloseLogUploadDevice(const std::shared_ptr<LogUploadDevice>& slot) {
+  std::unique_ptr<urnet::DeviceLocal> device;
+  std::optional<urnet::NetworkSpace> space;
+  {
+    std::scoped_lock slotLock(slot->mutex);
+    device = std::move(slot->device);
+    slot->device.reset();
+    space = std::move(slot->space);
+    slot->space.reset();
+  }
+  // a waiter still waiting finds the slot empty and leaves
+  slot->reported.notify_all();
+  if (!device) return;
+  LogInfo("logs: retiring the device that carried a log upload");
+  const bool finished = RunBounded(
+      kSdkTeardownBudget,
+      [device = std::move(device), space = std::move(space), flight = slot->flight]() mutable {
+        device->close();
+        // The upload's call may still be on it: the flight then keeps it until
+        // the call returns, and releases it.
+        if (flight) {
+          const uint64_t deviceHandle = device->handle();
+          flight->KeepUntilReturned(deviceHandle,
+                                    std::shared_ptr<urnet::DeviceLocal>(std::move(device)));
+        }
+        device.reset();
+        space.reset();
+      },
+      // A DeviceLocal under this device's identity, like the provider-only
+      // device's retire: abandoned, it refuses a start until it finishes.
+      AbandonHazard::HoldsSessionDevice);
+  if (!finished) {
+    LogError("logs: the log upload device did not close inside its {}ms budget and is "
+             "left closing on its own thread; a start is refused until it finishes",
+             kSdkTeardownBudget.count());
+  }
+}
+
+void TunnelController::RetireLogUploadDeviceLocked() {
+  if (!logUpload_) return;
+  CloseLogUploadDevice(logUpload_);
+  logUpload_.reset();
 }
 
 // See the contract in the header. NO SESSION LOCK: a copy of the snapshot that
@@ -1864,6 +2685,11 @@ proto::TunnelStatus TunnelController::Status() {
   s.failsafe_armed = deadTunnelWatchdog_.FailsafeArmed();
   const int64_t upSince = upSinceMirror_.load();
   s.tunnel_local_up_millis = upSince ? (NowMillis() - upSince) : 0;
+  // The log upload in flight, off the flight's own lock (never the session's).
+  const logupload::Flight::Reading upload = logUploadFlight_->Read(SteadyMillis());
+  s.log_upload_id = upload.id;
+  s.log_upload_state = logupload::ToString(upload.state);
+  s.log_upload_carrier = upload.id == 0 ? "" : logupload::ToString(upload.carrier);
   return s;
 }
 
@@ -1889,10 +2715,9 @@ void TunnelController::RepublishMachineFactsLockFree(bool routesReverted) {
   if (routesReverted) {
     statusMirror_.routes_installed = false;
     statusMirror_.dns_applied = false;
-    // The egress pin exists only to keep sockets off a tun that is routed to.
-    // With the routes gone the app must unbind, and AdoptServiceFacts keys that
-    // off routes_installed — but reporting a stale index alongside would be a
-    // claim about a machine state that no longer exists.
+    // Relinquish capture ownership after the best-effort route-only escape.
+    // The app must unbind; neither these flags nor the index reset verify DNS
+    // removal, which that escape deliberately leaves to adapter teardown.
     statusMirror_.egress_index4 = 0;
     statusMirror_.egress_index6 = 0;
   }
@@ -1902,14 +2727,11 @@ proto::TunnelStatus TunnelController::ComposeStatusLocked() {
   proto::TunnelStatus s;
   s.state = state_;
   s.mode = startMode_;
-  // Reported from the object that OWNS the routes, not from the mode: it is
-  // true exactly while an applied-and-not-yet-reverted NetworkConfig exists,
-  // including the window where Apply partially succeeded. The app reads this
-  // rather than inferring "connected" from the mode.
+  // Report configuration ownership, including a partial Apply, not a fresh OS
+  // route-table query. Releasing the owner does not certify kernel cleanup.
   s.routes_installed = netConfig_ != nullptr;
-  // Reported from the object that OWNS the resolvers, for the same reason
-  // routes_installed is. Two separate facts: the tunnel can carry traffic while
-  // its DNS did not take, and that combination used to be invisible.
+  // Report that owner's DNS-apply result, not a resolver readback. False after
+  // cleanup means the flag was cleared, not that removal was independently read.
   s.dns_applied = netConfig_ != nullptr && netConfig_->DnsApplied();
   // "Is leak prevention actually running." Off while the tunnel is up is a
   // materially different state from a protected one — it is what an unelevated
@@ -1936,6 +2758,15 @@ proto::TunnelStatus TunnelController::ComposeStatusLocked() {
     const EgressInterfaces bound = egress_->Current();
     s.egress_index4 = static_cast<int64_t>(bound.index4);
     s.egress_index6 = static_cast<int64_t>(bound.index6);
+  }
+  // The provider-only device, from the members that own it: the request it was
+  // built from and the tier and key ReadProviderFactsLocked read off it. No SDK
+  // call here, for the reason service_version above is the cached copy.
+  s.provider_running = providerDevice_ != nullptr;
+  if (providerDevice_) {
+    s.provider_control_mode = providerRequest_.provide_mode;
+    s.provider_mode = providerTier_;
+    s.provider_network_key = providerNetworkKey_;
   }
   // stop_reason and failsafe_armed are deliberately NOT composed here: Status()
   // overlays them from their own lock-free publishers, so a status served

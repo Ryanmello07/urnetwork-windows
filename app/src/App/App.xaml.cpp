@@ -3,10 +3,12 @@
 
 #include "App.xaml.h"
 
+#include <functional>
 #include <string>
 
 #include "AppController.h"
 #include "Log.h"
+#include "SingleInstance.h"
 #include "Startup.h"
 #include "Strings.h"
 
@@ -38,16 +40,18 @@ App::App() {
 #if defined(_DEBUG)
     if (IsDebuggerPresent()) __debugbreak();
 #endif
+    // the process ends after this box, so a launch meanwhile starts afresh
+    urnw::BeginExiting();
     urnw::FailVisible(L"URnetwork hit an unexpected error and has to close.", message);
   });
   urnw::LogInfo("app: XAML Application constructed");
 }
 
-// A tray app: OnLaunched brings up the controller (tray + SDK) but does not open
-// a window — the user opens it from the tray. Every step is logged, and the two
-// that can fail before there is any UI end in a message box: from outside, "the
-// SDK threw" and "the app is fine, look in the notification area" are the same
-// picture.
+// A tray app: OnLaunched brings up the controller (tray + SDK), then serves its
+// own launch: the user starting the app gets the window, an autostart at
+// sign-in only the tray icon. Every step is logged, and the two that can fail
+// before there is any UI end in a message box: from outside, "the SDK threw"
+// and "the app is fine, look in the notification area" are the same picture.
 void App::OnLaunched(LaunchActivatedEventArgs const&) {
   // main.cpp already opened the log (its first instruction) — this is the entry
   // marker for the XAML side of the handoff, and the proof for wWinMain that
@@ -55,9 +59,14 @@ void App::OnLaunched(LaunchActivatedEventArgs const&) {
   urnw::MarkLaunched();
   urnw::LogInfo("app: OnLaunched");
 
+  // A launch that fails here exits as every ending does: it begins exiting
+  // first (SingleInstance.h), before the message box holds this thread, so a
+  // launch that reaches it meanwhile is refused and starts the app once this
+  // process has ended, instead of waiting on a window that will never exist.
   try {
     urnw::SdkInit(/*isService=*/false, 64ll * 1024 * 1024);
   } catch (const std::exception& e) {
+    urnw::BeginExiting();
     urnw::FailVisible(
         L"The URnetwork SDK could not be initialized, so the app cannot run.\n\n"
         L"Check that URnetworkSdk.dll sits next to URnetwork.exe.",
@@ -65,6 +74,7 @@ void App::OnLaunched(LaunchActivatedEventArgs const&) {
     if (auto app = Application::Current()) app.Exit();
     return;
   } catch (...) {
+    urnw::BeginExiting();
     urnw::FailVisible(
         L"The URnetwork SDK could not be initialized, so the app cannot run.",
         L"An unknown exception escaped SdkInit.");
@@ -77,11 +87,13 @@ void App::OnLaunched(LaunchActivatedEventArgs const&) {
     controller->Start();
     urnw::SetApp(std::move(controller));
   } catch (winrt::hresult_error const& e) {
+    urnw::BeginExiting();
     urnw::FailVisible(L"URnetwork could not start its tray icon and SDK host.",
                       std::wstring{e.message()});
     if (auto app = Application::Current()) app.Exit();
     return;
   } catch (const std::exception& e) {
+    urnw::BeginExiting();
     urnw::FailVisible(L"URnetwork could not start its tray icon and SDK host.",
                       urnw::Widen(e.what()));
     if (auto app = Application::Current()) app.Exit();
@@ -96,41 +108,43 @@ void App::OnLaunched(LaunchActivatedEventArgs const&) {
   // rendering as a key id for the rest of the process (see Startup.h).
   urnw::LogInfo("startup: {}", urnw::Narrow(urnw::ResourceProbe()));
 
-  // urnetwork:// protocol activation — the ur.io/wallet-connect bridge returning
-  // through the browser (see main.cpp). A launch while the app is already running
-  // is redirected to this instance by AppInstance and lands on Activated, which
-  // fires on a background thread: marshal to the UI thread before touching the app.
-  namespace lifecycle = winrt::Microsoft::Windows::AppLifecycle;
+  // This instance's own launch, now that the controller is up. The user
+  // starting the app gets the window (owner decision, 2026-10-05): a first
+  // launch that went only to the notification area looked like it did
+  // nothing, which is why users launched again. An autostart at sign-in shows
+  // only the tray icon. A deep link (urnetwork://, the ur.io/wallet-connect
+  // bridge returning through the browser while the app was not running) is
+  // routed, and its handling brings the window forward. We are on the UI
+  // thread here.
   try {
-    auto instance = lifecycle::AppInstance::GetCurrent();
-    auto queue = winrt::Microsoft::UI::Dispatching::DispatcherQueue::GetForCurrentThread();
-    instance.Activated([queue](winrt::Windows::Foundation::IInspectable const&,
-                               lifecycle::AppActivationArguments const& args) {
-      const std::string url = urnw::DeepLinkFromActivation(args);
-      if (url.empty()) {
-        // A plain relaunch — the user ran URnetwork.exe again, usually because
-        // the first launch "did nothing" (it went to the notification area).
-        // Show the window: an app that ignores being launched is the same
-        // silent non-event all over again.
-        urnw::LogInfo("app: relaunched while running — showing the window");
-        queue.TryEnqueue([] { urnw::App().ShowWindow(nullptr); });
-        return;
-      }
-      queue.TryEnqueue([url] { urnw::App().HandleDeepLink(url); });
-    });
-
-    // ...and the activation this instance was cold-launched with, if any (the app
-    // wasn't running when the wallet returned). We are on the UI thread here.
-    std::string url = urnw::DeepLinkFromActivation(instance.GetActivatedEventArgs());
-    if (url.empty()) url = urnw::LaunchDeepLink();  // fallback: our own command line
-    if (!url.empty()) urnw::App().HandleDeepLink(url);
+    urnw::App().ServeLaunch(urnw::OwnLaunchRequest());
   } catch (winrt::hresult_error const& e) {
-    // Not fatal: the app runs, only the wallet callback would be missed. Loud in
-    // the log rather than on screen.
+    // Not fatal: the app runs in the tray, only this launch's window or the
+    // wallet callback would be missed. Loud in the log rather than on screen.
     urnw::LogError("app: activation routing not wired: {}",
                    urnw::Narrow(std::wstring{e.message()}));
   }
-  urnw::LogInfo("app: launch complete (tray icon is the only UI until it is clicked)");
+
+  // Then the launches redirected here while the app is running. main.cpp
+  // subscribes AppInstance::Activated before it registers the key, and the gate
+  // held whatever arrived while this instance started; opening it serves those
+  // now and posts each later one to this thread (Activated fires on a
+  // background thread), until the instance begins to exit. Each is served the
+  // same way as the own launch: the user's relaunch shows the window, an
+  // autostart that finds the app running changes nothing.
+  try {
+    auto queue = winrt::Microsoft::UI::Dispatching::DispatcherQueue::GetForCurrentThread();
+    urnw::Activations().Open(
+        [queue](std::function<void()> work) {
+          return queue.TryEnqueue([work = std::move(work)] { work(); });
+        },
+        [](const urnw::instance::LaunchRequest& request) { urnw::App().ServeLaunch(request); });
+  } catch (winrt::hresult_error const& e) {
+    urnw::LogError("app: relaunches not wired: {}", urnw::Narrow(std::wstring{e.message()}));
+  } catch (const std::exception& e) {
+    urnw::LogError("app: relaunches not wired: {}", e.what());
+  }
+  urnw::LogInfo("app: launch complete");
 }
 
 }  // namespace winrt::URnetwork::implementation

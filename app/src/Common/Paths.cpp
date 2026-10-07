@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: MPL-2.0
 #include "Paths.h"
 
+#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
+#endif
 #include <windows.h>
 #include <shlobj.h>
 
+#include <fstream>
 #include <system_error>
 
 #pragma comment(lib, "shell32.lib")
@@ -72,8 +75,35 @@ std::filesystem::path RpcSessionFile() {
   return StorageRoot(/*isService=*/false) / L"rpc_session.json";
 }
 
+std::filesystem::path SignOutOwedFile() {
+  return StorageRoot(/*isService=*/false) / L"sign_out_owed";
+}
+
+std::filesystem::path UpdateInProgressFile() {
+  return StorageRoot(/*isService=*/false) / L"update_in_progress";
+}
+
 std::filesystem::path AppPrefsFile() {
   return StorageRoot(/*isService=*/false) / L"app_prefs.json";
+}
+
+
+nlohmann::json LoadAppPrefs() {
+  std::ifstream f(AppPrefsFile());
+  if (!f) return nlohmann::json::object();
+  try {
+    nlohmann::json j = nlohmann::json::parse(f);
+    if (j.is_object()) return j;
+  } catch (...) {
+  }
+  return nlohmann::json::object();
+}
+
+void SaveAppPref(const char* key, const nlohmann::json& value) {
+  nlohmann::json j = LoadAppPrefs();
+  j[key] = value;
+  std::ofstream f(AppPrefsFile(), std::ios::trunc);
+  if (f) f << j.dump();
 }
 
 }  // namespace urnw

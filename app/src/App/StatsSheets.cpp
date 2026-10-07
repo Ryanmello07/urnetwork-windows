@@ -4,6 +4,7 @@
 #include "StatsSheets.h"
 
 #include <winrt/Windows.ApplicationModel.DataTransfer.h>
+#include <winrt/Microsoft.UI.Xaml.Automation.h>  // Narrator names for the constraint warnings
 #include <winrt/Microsoft.UI.Xaml.Documents.h>  // RichTextBlock chip-flow inlines
 #include <winrt/Microsoft.UI.Xaml.Input.h>
 
@@ -13,10 +14,15 @@
 #include <cmath>
 #include <unordered_set>
 
+#include "BlockActionReason.h"  // safety-rule chip + "Route locally" offer
+#include "FastDnsOnConnect.h"
 #include "Localization.h"
+#include "PageContext.h"   // pages::Adv: the transport editor's not-yet-in-store strings
 #include "Sdk.h"   // ReadSdkList: the list-getter null-unwrap guard
 #include "StatsFormat.h"
 #include "Strings.h"  // Widen: the sdk's utf-8 data into the utf-16 ui
+#include "TransportBar.h"  // TransportName / TransportDetail / TransportColor
+#include "TransportStatusPresentation.h"
 #include "UrColors.h"
 
 using namespace winrt;
@@ -1038,6 +1044,14 @@ void SplitRulesSheet::RenderActivity() {
       bytesLabel.FontFamily(FontFamily(L"Consolas"));
       caption.Children().Append(bytesLabel);
     }
+    // the URnetwork safety rules decided this action: say so, with the why on
+    // hover and for Narrator (iOS/Android BlockActionRow "Safety rule")
+    if (block_action_reason::IsSecurity(action.reason)) {
+      auto safety = MakeChip(Loc("safety_rule"), colors::kUrAmber, false);
+      ToolTipService::SetToolTip(safety, winrt::box_value(Loc("safety_rule_detail")));
+      Automation::AutomationProperties::SetHelpText(safety, Loc("safety_rule_detail"));
+      caption.Children().Append(safety);
+    }
     text.Children().Append(caption);
     Grid::SetColumn(text, 0);
     row.Children().Append(text);
@@ -1052,6 +1066,23 @@ void SplitRulesSheet::RenderActivity() {
     chips.Children().Append(MakeChip(action.local ? Loc("local") : Loc("remote"),
                                      action.local ? colors::kUrGreen : colors::kTextMuted,
                                      action.hasRouteOverride));
+    // a safety-ruled action a route-local rule can fix, and no rule decided it
+    // yet: offer the rule outright. It is the same editor the row tap opens,
+    // with the action's hosts pre-selected so Create is one click away.
+    const bool hasOverride = !action.overrideId.empty() || action.hasBlockOverride ||
+                             action.hasRouteOverride;
+    if (block_action_reason::OffersRouteLocal(action.reason, hasOverride)) {
+      Button routeLocal = MakeSubtleButton(Loc("add_local_split_rule"));
+      routeLocal.FontSize(11);
+      routeLocal.Padding(Thickness{6, 2, 6, 2});
+      routeLocal.VerticalAlignment(VerticalAlignment::Center);
+      routeLocal.Foreground(SolidColorBrush(colors::kUrGreen));
+      BlockActionItem target = action;
+      routeLocal.Click([weak, target](IInspectable const&, RoutedEventArgs const&) {
+        if (auto self = weak.lock()) self->OpenEditorForAction(target, true);
+      });
+      chips.Children().Append(routeLocal);
+    }
     Grid::SetColumn(chips, 1);
     row.Children().Append(chips);
 
@@ -1077,7 +1108,7 @@ void SplitRulesSheet::OpenEditorForRule(const SplitRule& rule) {
              std::set<std::string>(rule.hosts.begin(), rule.hosts.end()));
 }
 
-void SplitRulesSheet::OpenEditorForAction(const BlockActionItem& action) {
+void SplitRulesSheet::OpenEditorForAction(const BlockActionItem& action, bool selectAll) {
   // an action decided by a still-existing rule edits that rule
   const SplitRule* rule = nullptr;
   if (!action.overrideId.empty()) {
@@ -1100,8 +1131,12 @@ void SplitRulesSheet::OpenEditorForAction(const BlockActionItem& action) {
   } else {
     // create a rule from the action's host values, all initially UNSELECTED: the
     // common case is picking one or a few server names, so pre-selecting
-    // everything just makes the user uncheck the rest (iOS/Android parity)
-    OpenEditor("", hostValues, std::set<std::string>{});
+    // everything just makes the user uncheck the rest (iOS/Android parity).
+    // "Route locally" on a safety-ruled row selects all: the user asked for
+    // exactly this traffic to go local.
+    std::set<std::string> selected;
+    if (selectAll) selected.insert(hostValues.begin(), hostValues.end());
+    OpenEditor("", hostValues, std::move(selected));
   }
 }
 
@@ -1188,7 +1223,7 @@ DnsEditorSheet::Draft DnsEditorSheet::FromSettings(
   draft.enableLocalDoh = settings->EnableLocalDoh;
   draft.enableRemoteDns = settings->EnableRemoteDns;
   draft.enableLocalDns = settings->EnableLocalDns;
-  draft.enableFallback = settings->EnableFallback;
+  draft.enableFallback = urnw::fast_dns_on_connect::FromSettings(settings);
   auto list = [](std::optional<urnet::StringList> const& values) {
     return values ? *values : std::vector<std::string>{};
   };
@@ -1209,7 +1244,7 @@ urnet::DnsResolverSettings DnsEditorSheet::ToSettings(const Draft& draft) {
   settings.EnableLocalDoh = draft.enableLocalDoh;
   settings.EnableRemoteDns = draft.enableRemoteDns;
   settings.EnableLocalDns = draft.enableLocalDns;
-  settings.EnableFallback = draft.enableFallback;
+  urnw::fast_dns_on_connect::ToSettings(settings, draft.enableFallback);
   settings.RemoteDohUrlsIpv4 = draft.remoteDohUrlsIpv4;
   settings.RemoteDohUrlsIpv6 = draft.remoteDohUrlsIpv6;
   settings.LocalDohUrlsIpv4 = draft.localDohUrlsIpv4;
@@ -1265,11 +1300,11 @@ void DnsEditorSheet::Build(XamlRoot const& root) {
 
   BuildResolverSection(body);
 
-  // local dns fallback + footer
-  body.Children().Append(SectionHeader(Loc("local_dns_fallback")));
+  // fast dns on connect (the opt-in host-network fallback, off by default) + footer
+  body.Children().Append(SectionHeader(Loc(urnw::fast_dns_on_connect::kLabelKey)));
   {
     Grid row = MakeStarAutoRow();
-    auto label = MakeText(Loc("local_dns_fallback"), 13);
+    auto label = MakeText(Loc(urnw::fast_dns_on_connect::kLabelKey), 13);
     label.VerticalAlignment(VerticalAlignment::Center);
     Grid::SetColumn(label, 0);
     row.Children().Append(label);
@@ -1287,7 +1322,7 @@ void DnsEditorSheet::Build(XamlRoot const& root) {
     row.Children().Append(fallbackToggle_);
     body.Children().Append(row);
     body.Children().Append(
-        MakeText(Loc("local_dns_fallback_description"), 11, FaintBrush(), true));
+        MakeText(Loc(urnw::fast_dns_on_connect::kDescriptionKey), 11, FaintBrush(), true));
   }
 
   BuildSuggestionSection(body);
@@ -1629,6 +1664,327 @@ void DnsEditorSheet::SyncFromDraft() {
 void DnsEditorSheet::OnDraftChanged() {
   dialog_.IsPrimaryButtonEnabled(!(draft_ == original_));
   RenderRecommendationPanel();
+}
+
+// ---- TransportSettingsSheet ------------------------------------------------
+
+namespace {
+
+// The transport surface's not-yet-in-store strings: the same id family and
+// mechanism as TransportBar.cpp (see the note there); the store wins the moment
+// a key lands. Extract with: grep -ohE '"transport_[a-z0-9_]+"' app/src/App/*.cpp
+hstring TransportText(std::string_view key, const wchar_t* english) {
+  return pages::Adv(key, english);
+}
+
+}  // namespace
+
+std::shared_ptr<TransportSettingsSheet> TransportSettingsSheet::Create(
+    XamlRoot const& root, SdkHost& sdk, TransportSettingsKind kind,
+    std::optional<urnet::TransportSettings> const& current) {
+  auto sheet = std::shared_ptr<TransportSettingsSheet>(new TransportSettingsSheet(sdk, kind));
+  // The SDK default policy for the kind: what the editor opens on when nothing
+  // is known, and the "Restore default transports" target. Struct-shaped, but
+  // routed through the guard like every other read that happens while BUILDING
+  // A SHEET on the UI thread out of a click handler.
+  static std::atomic<bool> loggedDefaults{false};
+  sheet->defaults_ = urnw::ReadSdkList(loggedDefaults, "defaultTransportSettings", [&] {
+    return kind == TransportSettingsKind::Provider ? urnet::defaultProviderTransportSettings()
+                                                   : urnet::defaultTransportSettings();
+  });
+  if (!sheet->defaults_) {
+    // a bare Auto policy: the SDK normalizes it to the full default on every
+    // helper call, so this is the default by another name
+    urnet::TransportSettings bare;
+    bare.mode = urnet::TransportModeAuto;
+    sheet->defaults_ = bare;
+  }
+  sheet->original_ = current ? current : sheet->defaults_;
+  sheet->draft_ = sheet->original_;
+  sheet->status_ = sdk.CurrentTransportStatus(kind);
+  // The selectable modes in the SDK's preference order (h3, h1, dns, dnspump).
+  // Every transport list in the app shows them in this order and never a
+  // hardcoded one; a StringList getter, so it carries the *List null-unwrap
+  // hazard the guard exists for.
+  static std::atomic<bool> loggedModes{false};
+  if (auto modes = urnw::ReadSdkList(loggedModes, "selectableTransportModes",
+                                     [] { return urnet::selectableTransportModes(); })) {
+    sheet->selectableModes_ = *modes;
+  }
+  sheet->Build(root);
+  return sheet;
+}
+
+void TransportSettingsSheet::Build(XamlRoot const& root) {
+  const bool provider = kind_ == TransportSettingsKind::Provider;
+  dialog_ = MakeDialog(root, provider ? TransportText("provider_transports",
+                                                      L"Provider transports")
+                                      : TransportText("transports", L"Transports"));
+  dialog_.PrimaryButtonText(Loc("update"));
+  dialog_.DefaultButton(ContentDialogButton::Primary);
+  dialog_.IsPrimaryButtonEnabled(false);
+  {
+    std::weak_ptr<TransportSettingsSheet> weak = weak_from_this();
+    dialog_.PrimaryButtonClick(
+        [weak](ContentDialog const&, ContentDialogButtonClickEventArgs const&) {
+          // apply the draft together; the dialog closes after this handler. The
+          // applied policy comes back through the device's change listener.
+          auto self = weak.lock();
+          if (self && self->draft_) self->sdk_.ApplyTransportSettings(self->kind_, *self->draft_);
+        });
+  }
+
+  StackPanel body;
+  body.Spacing(12);
+
+  // the transport: Auto, then one row per selectable mode in the SDK order
+  body.Children().Append(SectionHeader(TransportText("transport", L"Transport")));
+  StackPanel modeList;
+  modeList.Spacing(2);
+  BuildModeRow(modeList, std::string());  // Auto
+  for (const auto& mode : selectableModes_) BuildModeRow(modeList, mode);
+  body.Children().Append(modeList);
+  body.Children().Append(MakeText(
+      provider ? TransportText("transport_provider_footer",
+                               L"The transport this device uses while providing for others. "
+                               L"Auto tries the enabled transports in preference order and "
+                               L"keeps every healthy transport of the same tier connected in "
+                               L"parallel.")
+               : TransportText("transport_client_footer",
+                               L"The transport this device uses to reach providers. Auto "
+                               L"tries the enabled transports in preference order and keeps "
+                               L"every healthy transport of the same tier connected in "
+                               L"parallel."),
+      11, FaintBrush(), true));
+
+  // enabled under Auto: a switch per selectable mode, in the SDK order (shown
+  // only while Auto is selected; SyncFromDraft toggles the section)
+  autoSection_ = StackPanel();
+  autoSection_.Spacing(12);
+  autoSection_.Children().Append(
+      SectionHeader(TransportText("enabled_under_auto", L"Enabled under Auto")));
+  degradedNotice_ = MakeText(
+      TransportText("transport_auto_degraded_memory",
+                    L"Auto is degraded because system memory limits prevent some enabled "
+                    L"transports from running."),
+      12, SolidColorBrush(colors::kUrAmber), true);
+  autoSection_.Children().Append(degradedNotice_);
+  StackPanel autoList;
+  autoList.Spacing(2);
+  for (const auto& mode : selectableModes_) BuildAutoRow(autoList, mode);
+  autoSection_.Children().Append(autoList);
+  autoSection_.Children().Append(MakeText(
+      TransportText("enabled_under_auto_footer",
+                    L"Listed in preference order: H1 first, then H3, whodis, and whodis pump. "
+                    L"The order is fixed. At least one transport stays enabled."),
+      11, FaintBrush(), true));
+  body.Children().Append(autoSection_);
+
+  // restore the SDK default policy, when the draft is not it
+  restoreSection_ = StackPanel();
+  {
+    Button restore;
+    restore.Content(winrt::box_value(
+        TransportText("restore_default_transports", L"Restore default transports")));
+    restore.HorizontalAlignment(HorizontalAlignment::Stretch);
+    std::weak_ptr<TransportSettingsSheet> weak = weak_from_this();
+    restore.Click([weak](IInspectable const&, RoutedEventArgs const&) {
+      if (auto self = weak.lock()) self->SetDraft(self->defaults_);
+    });
+    restoreSection_.Children().Append(restore);
+  }
+  body.Children().Append(restoreSection_);
+
+  dialog_.Content(MakeSheetScroll(body));
+  SyncFromDraft();
+}
+
+void TransportSettingsSheet::BuildModeRow(StackPanel const& parent, std::string const& mode) {
+  const bool isAuto = mode.empty();
+  Grid row;
+  ColumnDefinition c0, c1, c2;
+  c0.Width(GridLength{0, GridUnitType::Auto});
+  c1.Width(GridLength{1, GridUnitType::Star});
+  c2.Width(GridLength{0, GridUnitType::Auto});
+  row.ColumnDefinitions().Append(c0);
+  row.ColumnDefinitions().Append(c1);
+  row.ColumnDefinitions().Append(c2);
+  row.ColumnSpacing(10);
+  row.Padding(Thickness{0, 6, 0, 6});
+  row.Background(SolidColorBrush(kTransparent));  // hit-testable for Tapped
+
+  if (!isAuto) {
+    // the carrier's brand color, the same dot the bar's legend uses
+    auto dot = MakeDot(TransportColor(mode), 10);
+    dot.VerticalAlignment(VerticalAlignment::Top);
+    dot.Margin(Thickness{0, 5, 0, 0});
+    Grid::SetColumn(dot, 0);
+    row.Children().Append(dot);
+  }
+
+  StackPanel text;
+  text.Spacing(2);
+  text.Children().Append(MakeText(isAuto ? Loc("auto") : TransportName(mode), 13));
+  const hstring detail =
+      isAuto ? TransportText("transport_auto_description",
+                             L"Recommended. Uses the enabled transports below.")
+             : TransportDetail(mode);
+  if (!detail.empty()) text.Children().Append(MakeText(detail, 12, MutedBrush(), true));
+  Grid::SetColumn(text, 1);
+  row.Children().Append(text);
+
+  // the check on the selected row (opacity-toggled by SyncFromDraft so the
+  // trailing column keeps its width)
+  FontIcon check;
+  check.Glyph(L"\uE73E");  // CheckMark, as the location rows use
+  check.FontSize(14);
+  check.Foreground(SolidColorBrush(colors::kUrGreen));
+  check.VerticalAlignment(VerticalAlignment::Center);
+  check.Opacity(0);
+  Grid::SetColumn(check, 2);
+  row.Children().Append(check);
+
+  std::weak_ptr<TransportSettingsSheet> weak = weak_from_this();
+  const std::string selected = isAuto ? std::string(urnet::TransportModeAuto) : mode;
+  row.Tapped([weak, selected](IInspectable const&, auto const&) {
+    auto self = weak.lock();
+    if (!self) return;
+    // selecting a mode sets the policy mode THROUGH THE SDK; the Auto policy is
+    // retained by the SDK while a single mode is selected, so switching back to
+    // Auto restores the same enabled set
+    self->SetDraft(urnet::transportSettingsWithMode(self->draft_, selected));
+  });
+  modeRows_.push_back(ModeRowUi{mode, check});
+  parent.Children().Append(row);
+}
+
+void TransportSettingsSheet::BuildAutoRow(StackPanel const& parent, std::string const& mode) {
+  Grid row = MakeStarAutoRow();
+  StackPanel label;
+  label.Orientation(Orientation::Horizontal);
+  label.Spacing(10);
+  label.VerticalAlignment(VerticalAlignment::Center);
+  label.Children().Append(MakeDot(TransportColor(mode), 10));
+  label.Children().Append(MakeText(TransportName(mode), 13));
+  // a runtime warning, not an editing restriction: the toggle stays editable
+  FontIcon constrained;
+  constrained.Glyph(L"\uE7BA");  // Segoe Fluent Warning
+  constrained.FontSize(14);
+  constrained.Foreground(SolidColorBrush(colors::kUrAmber));
+  constrained.Visibility(Visibility::Collapsed);
+  const hstring constraintLabel = TransportText("transport_unavailable_system_constraints",
+                                                L"Unavailable due to system constraints");
+  ToolTipService::SetToolTip(constrained, winrt::box_value(constraintLabel));
+  // announce the reason to Narrator too; color + tooltip alone are not
+  // discoverable
+  Automation::AutomationProperties::SetName(constrained, constraintLabel);
+  label.Children().Append(constrained);
+  Grid::SetColumn(label, 0);
+  row.Children().Append(label);
+
+  ToggleSwitch toggle = MakeBareToggle();
+  {
+    std::weak_ptr<TransportSettingsSheet> weak = weak_from_this();
+    const std::string captured = mode;
+    ToggleSwitch capturedToggle = toggle;
+    toggle.Toggled([weak, captured, capturedToggle](IInspectable const&, RoutedEventArgs const&) {
+      auto self = weak.lock();
+      if (!self || self->updating_) return;
+      // through the SDK: a newly enabled carrier takes its default priority so
+      // the fixed preference order is preserved, and disabling the LAST enabled
+      // carrier is refused (the returned copy equals the input) -- SyncFromDraft
+      // then puts the switch back to the truth
+      self->SetDraft(urnet::transportSettingsWithAutoModeEnabled(self->draft_, captured,
+                                                                 capturedToggle.IsOn()));
+    });
+  }
+  Grid::SetColumn(toggle, 1);
+  row.Children().Append(toggle);
+  autoRows_.push_back(AutoRowUi{mode, toggle, constrained});
+  parent.Children().Append(row);
+}
+
+void TransportSettingsSheet::SetDraft(std::optional<urnet::TransportSettings> draft) {
+  // a nullopt from a helper is a failed sdk call, not a policy: keep the draft
+  if (draft) draft_ = std::move(draft);
+  SyncFromDraft();
+}
+
+std::string TransportSettingsSheet::SelectedMode() const {
+  if (!draft_) return std::string();
+  // only a selectable mode is a single-mode selection; Auto and anything the
+  // SDK would normalize to Auto (an unrecognized mode) read as Auto
+  const std::string& mode = draft_->mode;
+  if (std::find(selectableModes_.begin(), selectableModes_.end(), mode) !=
+      selectableModes_.end()) {
+    return mode;
+  }
+  return std::string();
+}
+
+bool TransportSettingsSheet::IsDirty() const {
+  return !urnet::transportSettingsEqual(draft_, original_);
+}
+
+bool TransportSettingsSheet::IsDefault() const {
+  return urnet::transportSettingsEqual(draft_, defaults_);
+}
+
+void TransportSettingsSheet::SyncFromDraft() {
+  // programmatic switch updates must not re-enter the Toggled handlers
+  updating_ = true;
+  const std::string selected = SelectedMode();
+  for (auto& row : modeRows_) row.check.Opacity(row.mode == selected ? 1.0 : 0.0);
+  const bool isAuto = selected.empty();
+  autoSection_.Visibility(isAuto ? Visibility::Visible : Visibility::Collapsed);
+  // the carriers enabled under Auto, from the SDK (retained while a single mode
+  // is selected, so the section reads the same when Auto is re-selected)
+  std::vector<std::string> autoModes;
+  static std::atomic<bool> loggedAutoModes{false};
+  if (auto modes = urnw::ReadSdkList(loggedAutoModes, "transportSettingsAutoModes",
+                                     [&] { return urnet::transportSettingsAutoModes(draft_); })) {
+    autoModes = *modes;
+  }
+  // the status was fetched at Create() paired with the applied policy of that
+  // moment (original_), so decorations render only while the draft equals it:
+  // a status must never be interpreted against an unrelated draft
+  std::vector<std::string> eligibleModes;
+  if (status_ && status_->auto_eligible_modes) {
+    eligibleModes.assign(status_->auto_eligible_modes->begin(),
+                         status_->auto_eligible_modes->end());
+  }
+  const TransportStatusPresentation decorations = TransportStatusDecorations(
+      isAuto, urnet::transportSettingsEqual(draft_, original_), autoModes,
+      status_.has_value(), status_ && status_->auto_degraded, eligibleModes,
+      status_ ? status_->auto_constraint : "");
+  degradedNotice_.Visibility(decorations.showBanner ? Visibility::Visible
+                                                    : Visibility::Collapsed);
+  if (decorations.showBanner) {
+    // memory has its own wording, any other constraint the generic
+    // system-constraint wording
+    degradedNotice_.Text(
+        decorations.memoryConstraint
+            ? TransportText("transport_auto_degraded_memory",
+                            L"Auto is degraded because system memory limits prevent some "
+                            L"enabled transports from running.")
+            : TransportText("transport_auto_degraded",
+                            L"Auto is degraded because system constraints prevent some "
+                            L"enabled transports from running."));
+  }
+  for (auto& row : autoRows_) {
+    const bool on = std::find(autoModes.begin(), autoModes.end(), row.mode) != autoModes.end();
+    row.toggle.IsOn(on);
+    // the last enabled carrier can't be turned off (the SDK refuses the edit:
+    // an empty Auto policy would resolve to the full default), so show it
+    // disabled rather than let a flip snap back
+    row.toggle.IsEnabled(!(on && autoModes.size() == 1));
+    row.constrained.Visibility(decorations.constrainedModes.count(row.mode) != 0
+                                   ? Visibility::Visible
+                                   : Visibility::Collapsed);
+  }
+  restoreSection_.Visibility(IsDefault() ? Visibility::Collapsed : Visibility::Visible);
+  dialog_.IsPrimaryButtonEnabled(IsDirty());
+  updating_ = false;
 }
 
 // ---- Per-app split tunnel --------------------------------------------------

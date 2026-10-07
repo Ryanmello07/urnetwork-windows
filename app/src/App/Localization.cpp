@@ -39,6 +39,8 @@ std::optional<ResourceLoader>& Loader() {
   return loader;
 }
 
+}  // namespace
+
 // The language MRT resolved the resources with, e.g. "pt-BR". Read from MRT's own
 // context so the plural rule always matches the .resw that is actually loaded.
 std::string PrimaryLanguage() {
@@ -71,6 +73,8 @@ std::string PrimaryLanguage() {
   }();
   return lang;
 }
+
+namespace {
 
 // CLDR cardinal categories, for the languages the store ships. Keep in step with
 // CLDR_CATEGORIES in localizations/gen/store.mjs.
@@ -141,12 +145,16 @@ std::wstring Localized(std::string_view key) {
   return Widen(key);
 }
 
-std::wstring Plural(std::string_view key, int64_t count) {
+std::wstring PluralRaw(std::string_view key, int64_t count) {
   const std::string name =
       std::string{key} + "." + std::string{PluralCategory(PrimaryLanguage(), count)};
   std::wstring fmt = Localized(name);
   if (fmt == Widen(name)) fmt = Localized(std::string{key} + ".other");  // fallback
-  return std::vformat(fmt, std::make_wformat_args(count));
+  return fmt;
+}
+
+std::wstring Plural(std::string_view key, int64_t count) {
+  return std::vformat(PluralRaw(key, count), std::make_wformat_args(count));
 }
 
 }  // namespace urnw

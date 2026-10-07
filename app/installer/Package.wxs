@@ -21,14 +21,81 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
      xmlns:fw="http://wixtoolset.org/schemas/v4/wxs/firewall">
 
-  <!-- Version comes from the .wixproj (UrMsiVersion, yy.M.d from CI; 0.0.1
-       for a bare local build) because ProductVersion fields cannot hold the
-       app's four-digit year. -->
+  <!-- Version comes from the .wixproj: UrMsiVersion, which tools/UrVersion.ps1
+       derives from the release code as (Y-2000).M.<time of month>, because
+       ProductVersion fields cannot hold the app's four-digit year (0.0.1 for
+       a bare local build, and for build.ps1's 0.0.0-0). -->
   <Package Name="URnetwork" Manufacturer="URnetwork" Version="$(var.UrMsiVersion)"
            UpgradeCode="a7c1e2d3-4b5f-6081-9c2d-3e4f50617283"
            Scope="perMachine" Compressed="yes">
 
-    <MajorUpgrade DowngradeErrorMessage="A newer version of URnetwork is already installed." />
+    <!-- Schedule="afterInstallInitialize": RemoveExistingProducts runs right
+         after InstallInitialize, inside this install's transaction. The old
+         product is removed completely before any new file lands, and if the
+         install fails after that (StartServices error 1920, a full disk, or a
+         cancel in the full UI; /passive cannot be cancelled), Windows
+         Installer rolls the removal back too: the old files, registration and
+         service come back, and the service is started again. Its failure
+         actions probably do not: util:ServiceConfig below applies them only
+         when a product installs, so the rolled-back uninstall has none to
+         restore. Nothing relaunches the app or reconnects the tunnel. The WiX
+         default, afterInstallValidate, commits the removal on its own first,
+         so a failed update left neither version installed.
+
+         Files in use do not fail an install: Windows Installer replaces them
+         at the next reboot, and with /norestart the install returns 3010.
+         Until that reboot the new product is registered and its urnetworkd
+         runs, while the old files that were in use stay on disk.
+
+         Never afterInstallExecute, afterInstallExecuteAgain or
+         afterInstallFinalize. Those install the new product over the old one
+         first, which leans on file versioning (an equal-version file is kept,
+         not replaced) and on every harvested component keeping its GUID
+         across builds, or the old product's removal deletes files the new
+         one just installed.
+
+         AllowSameVersionUpgrades="yes": Windows Installer compares only the
+         first three ProductVersion fields, and UrMsiVersion steps about every
+         42 seconds, so two release codes can share one ProductVersion. The
+         ProductCode is regenerated on every build, so without this the second
+         package would install beside the first instead of replacing it. With
+         it, the package installed second replaces the first; when that is the
+         older code, its exes are older too, and the guard below refuses it.
+         It makes only the upgrade row inclusive; the downgrade row stays
+         exclusive, and Installer.wixproj suppresses ICE61 for it. -->
+    <MajorUpgrade Schedule="afterInstallInitialize" AllowSameVersionUpgrades="yes"
+                  DowngradeErrorMessage="A newer version of URnetwork is already installed." />
+
+    <!-- Refuse to install over a newer urnetworkd.exe. Windows Installer costs
+         every component before RemoveExistingProducts runs. A component whose
+         key file on disk has a higher version is skipped ("Disallowing
+         installation of component ... since the same component with higher
+         versioned keyfile exists"), and the old product's removal then
+         deletes that file. Such an install ends with exit 0, the product
+         registered, and no URnetwork.exe, no urnetworkd.exe and no service.
+         An older code that shares this ProductVersion can do that
+         (AllowSameVersionUpgrades above), and so can any package with a
+         higher ProductVersion but older exes.
+
+         The search looks where INSTALLFOLDER puts the service,
+         [ProgramFiles64Folder]URnetwork: AppSearch runs before the
+         directories are resolved. Its MinVersion is UrNewerFileVersion, this
+         build's FILEVERSION with the fourth field plus one
+         (Installer.wixproj). The Signature table also compares the file's
+         language when its version equals MinVersion, and Languages is empty
+         here, so a file at exactly that version may not match. The plus one
+         keeps the guard clear of that edge: an equal or older urnetworkd.exe
+         is never found, and one at least two steps newer always is. (One
+         step is under 3 s of code time.) The exes of every MSI built before
+         versions were stamped are 0.0.0.0, so those installs are never
+         found. -->
+    <Property Id="NEWER_URNETWORKD" Secure="yes">
+      <DirectorySearch Id="UrnInstalledService" Path="[ProgramFiles64Folder]URnetwork" Depth="0">
+        <FileSearch Name="urnetworkd.exe" MinVersion="$(var.UrNewerFileVersion)" />
+      </DirectorySearch>
+    </Property>
+    <Launch Condition="Installed OR NOT NEWER_URNETWORKD"
+            Message="A newer build of URnetwork is already installed. Install that build or a later one." />
     <MediaTemplate EmbedCab="yes" />
 
     <!-- The app icon, for Add/Remove Programs and the Start Menu shortcut.
@@ -59,6 +126,29 @@
                     Directory="ProgramMenuFolder"
                     WorkingDirectory="INSTALLFOLDER" Icon="AppIcon.ico" />
         </Component>
+        <!-- These fonts are private app assets, not globally registered
+             system fonts. OpenType metadata gives each file a version but no
+             language, so harvesting them as independently versioned files
+             violates ICE60. Make them companions of the versioned app:
+             repair/upgrade decisions follow URnetwork.exe without inventing
+             language metadata or adding entries to the Font table.
+
+             WiX v5 permits Subdirectory on Component, not on File children of
+             Component. The directory itself is the component key path because
+             companion files cannot be key paths. The fixed component GUID is
+             safe across x64 and ARM64 because these assets and their target
+             path are identical in both packages. -->
+        <Component Id="PrivateFonts" Guid="2a2cbad5-8a12-41b9-82ee-62c0494b5b61"
+                   Subdirectory="Assets\Fonts" KeyPath="yes">
+          <File Source="$(var.BinDir)\Assets\Fonts\abcgravity_extended.otf"
+                CompanionFile="URnetworkExe" />
+          <File Source="$(var.BinDir)\Assets\Fonts\abcgravity_extra_condensed.otf"
+                CompanionFile="URnetworkExe" />
+          <File Source="$(var.BinDir)\Assets\Fonts\pp_neue_bit_bold.ttf"
+                CompanionFile="URnetworkExe" />
+          <File Source="$(var.BinDir)\Assets\Fonts\pp_neue_montreal_regular.ttf"
+                CompanionFile="URnetworkExe" />
+        </Component>
         <Component Id="SdkDll" Guid="*">
           <File Id="URnetworkSdkDll" Source="$(var.BinDir)\URnetworkSdk.dll" KeyPath="yes" />
         </Component>
@@ -80,12 +170,16 @@
                           Start="auto" ErrorControl="normal"
                           Description="Runs the URnetwork VPN tunnel."
                           Account="LocalSystem">
-            <ServiceConfig DelayedAutoStart="no" OnInstall="yes" OnReinstall="yes" />
-            <!-- restart on crash (plan M4) -->
+            <!-- restart on crash (plan M4). Every slot restarts: the SCM
+                 repeats the last action for each crash past the third in a
+                 day, so "none" there left the machine with no service until
+                 a reboot. util:ServiceConfig has a single delay; ServiceMain
+                 re-applies install::kFailureActions (5, 10, 60 s) at every
+                 start (Service/main.cpp). -->
             <util:ServiceConfig xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util"
                                 FirstFailureActionType="restart"
                                 SecondFailureActionType="restart"
-                                ThirdFailureActionType="none"
+                                ThirdFailureActionType="restart"
                                 RestartServiceDelayInSeconds="5" ResetPeriodInDays="1" />
           </ServiceInstall>
           <ServiceControl Id="UrnetworkdControl" Name="urnetworkd"
@@ -170,7 +264,10 @@
          belt-and-suspenders guard in the zip packager with nothing to
          guard against here. If BinDir ever legitimately grows an obj\
          subtree, add a targeted Exclude for that specific path rather than
-         reintroducing the double-"**" form. -->
+         reintroducing the double-"**" form.
+
+         The four private app fonts are also excluded because the AppExe
+         component above authors them explicitly as companion files. -->
     <ComponentGroup Id="RuntimeFiles" Directory="INSTALLFOLDER">
       <Files Include="$(var.BinDir)\**">
         <Exclude Files="$(var.BinDir)\URnetwork.exe" />
@@ -183,6 +280,10 @@
         <Exclude Files="$(var.BinDir)\**\*.lib" />
         <Exclude Files="$(var.BinDir)\**\*.exp" />
         <Exclude Files="$(var.BinDir)\**\*.ilk" />
+        <Exclude Files="$(var.BinDir)\Assets\Fonts\abcgravity_extended.otf" />
+        <Exclude Files="$(var.BinDir)\Assets\Fonts\abcgravity_extra_condensed.otf" />
+        <Exclude Files="$(var.BinDir)\Assets\Fonts\pp_neue_bit_bold.ttf" />
+        <Exclude Files="$(var.BinDir)\Assets\Fonts\pp_neue_montreal_regular.ttf" />
       </Files>
     </ComponentGroup>
 
@@ -199,8 +300,35 @@
       </Component>
     </StandardDirectory>
 
+    <!-- "Launch URnetwork on system startup" (src/Common/StartupRegistration.h)
+         is the user's own Run value, written by the app and never by this
+         package. Uninstalling deletes it, and Task Manager's StartupApproved
+         record of it, for the user who uninstalls: each action is deferred and
+         impersonated, so HKCU is that user's hive. reg.exe exits 1 when a value
+         is not there, and Return="ignore" keeps that, or any failure, from
+         stopping the uninstall. Not during an upgrade (UPGRADINGPRODUCTCODE):
+         the new version keeps the user's choice, and its first launch points
+         the value at itself. Other users' values stay: their hives are not
+         loaded during an uninstall, so it cannot reach them, and Windows starts
+         nothing for a Run value whose program is gone. -->
+    <SetProperty Id="RemoveStartupRunValue" Sequence="execute" Before="RemoveStartupRunValue"
+                 Value="&quot;[System64Folder]reg.exe&quot; delete &quot;HKCU\Software\Microsoft\Windows\CurrentVersion\Run&quot; /v URnetwork /f" />
+    <CustomAction Id="RemoveStartupRunValue" BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)"
+                  DllEntry="WixQuietExec" Execute="deferred" Impersonate="yes" Return="ignore" />
+    <SetProperty Id="RemoveStartupApprovedValue" Sequence="execute" Before="RemoveStartupApprovedValue"
+                 Value="&quot;[System64Folder]reg.exe&quot; delete &quot;HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run&quot; /v URnetwork /f" />
+    <CustomAction Id="RemoveStartupApprovedValue" BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)"
+                  DllEntry="WixQuietExec" Execute="deferred" Impersonate="yes" Return="ignore" />
+    <InstallExecuteSequence>
+      <Custom Action="RemoveStartupRunValue" Before="InstallFinalize"
+              Condition="REMOVE~=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
+      <Custom Action="RemoveStartupApprovedValue" After="RemoveStartupRunValue"
+              Condition="REMOVE~=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
+    </InstallExecuteSequence>
+
     <Feature Id="Main" Title="URnetwork" Level="1">
       <ComponentRef Id="AppExe" />
+      <ComponentRef Id="PrivateFonts" />
       <ComponentRef Id="SdkDll" />
       <ComponentRef Id="ResourcesPri" />
       <ComponentRef Id="ServiceExe" />

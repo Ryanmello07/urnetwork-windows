@@ -24,12 +24,17 @@
 #include <winrt/Microsoft.UI.Xaml.Input.h>
 
 #include "ConnectCanvas.h"
+#include "ExtenderPanel.h"
+#include "FreeRefreshTicker.h"
+#include "IpFamilyStatusRow.h"
 #include "LocationSheets.h"
 #include "ProviderLocationsSheet.h"
 #include "SdkHost.h"
 #include "ServiceSetup.h"
 #include "StatsSheets.h"
+#include "TapSequenceGate.h"
 #include "TransferChart.h"
+#include "TransportBar.h"
 #include "UpdateChecker.h"
 #include "UrComponents.h"  // kit::PaneListRowButton (the selectable activity row)
 
@@ -65,6 +70,17 @@ class ConnectPage {
 
   // ---- window-level relays ----
   void ApplyStats(urnw::LiveStats const& stats);
+  // The provider extender row under the provide group (connect/EXTENDER.md N7).
+  // MainWindow hands every pushed status here and to the Earnings page, as it
+  // hands the live stats to both.
+  void ApplyExtenderProvideState(urnw::ExtenderProvideStatusView const& view);
+  // The provider transport policy in force, as the settings listener last pushed
+  // it (nullopt: unknown, and the editor opens on the SDK default). The Earnings
+  // provider transport sheet opens on it rather than reading the device on the
+  // UI thread.
+  std::optional<urnet::TransportSettings> const& ProviderTransportSettings() const {
+    return providerTransportSettings_;
+  }
   void SetConnectedUi(bool connected);
   // network name off the stored jwt, for the idle "{name} is ready to connect"
   // copy; re-renders the status line
@@ -99,6 +115,9 @@ class ConnectPage {
   // live on MainWindow: UpdateBalanceWarning calls this so the hero's error and
   // processing states and the InfoBar can never disagree.
   void ApplyConnectStatus();
+  // the out-of-balance banner's message (ApplyConnectStatus, then once per
+  // displayed minute of the free refresh countdown while it is open)
+  void ApplyBalanceWarningMessage();
 
   // ---- XAML event handlers (forwarded from MainWindow) ----
   void OnConnectToggle(winrt::Windows::Foundation::IInspectable const&,
@@ -109,6 +128,10 @@ class ConnectPage {
   void OnProvideModeChanged(
       winrt::Microsoft::UI::Xaml::Controls::SelectorBar const&,
       winrt::Microsoft::UI::Xaml::Controls::SelectorBarSelectionChangedEventArgs const&);
+  // the extender switch: writes the setting through the device and paints the
+  // row's guess until the next pushed status (N7)
+  void OnExtenderToggled(winrt::Windows::Foundation::IInspectable const&,
+                         winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnFixedIpToggled(winrt::Windows::Foundation::IInspectable const&,
                         winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnStrongAnonToggled(winrt::Windows::Foundation::IInspectable const&,
@@ -192,6 +215,9 @@ class ConnectPage {
   void ApplyLocationRowName();
   void ApplySplitRuleCount();
   void ApplyBlockerUi(bool on);
+  // The extender row, its description and its switch, from extenderProvideView_:
+  // the one writer of all three (N7).
+  void ApplyExtenderProvideRow();
   // R3: the activity pane's list vs its empty state. The empty state is a
   // centred line INSIDE the full-height pane, not a card, so this only swaps
   // which of the two is drawn in that same area.
@@ -277,6 +303,11 @@ class ConnectPage {
   winrt::fire_and_forget ShowClientContractsSheet();
   winrt::fire_and_forget ShowSplitRulesSheet();
   winrt::fire_and_forget ShowDnsSheet();
+  // The transport settings editor (TRANSPORTSTATS), opened from the transport
+  // distribution bar under the Remote chart with the CLIENT policy. The
+  // provider policy has no surface on windows yet (there is no provider stats
+  // pane), but the sheet and the SdkHost path are parameterized for it.
+  winrt::fire_and_forget ShowTransportSettingsSheet(urnw::TransportSettingsKind kind);
   winrt::fire_and_forget ShowLocationChooserSheet();
   // The connected providers and where they are: globe + list, opened from the
   // "Connected to N providers" row (android ProviderLocationsScreen parity).
@@ -294,6 +325,8 @@ class ConnectPage {
   bool connected_ = false;
   // the SDK connect controller's own status (ApplyStats); see ConnectStatus
   ConnectStatus connectStatus_ = ConnectStatus::Disconnected;
+  // the easter egg's five-tap count on the status dot (Initialize wires it)
+  TapSequenceGate connectedIconTaps_;
   // ---- #27: the aggregate connection health ----
   // What the status line/dot/strip/hero actually render now. Derived in
   // SdkHost::ReadStats (ConnectionHealth.h owns the transition table) and
@@ -305,6 +338,17 @@ class ConnectPage {
   // which the clock alone changes health_. OnChartTick asks SdkHost to
   // republish then — no SDK event is coming; see LiveStats::healthReevalAtMillis.
   int64_t healthReevalAtMillis_ = 0;
+  // DESIGNSTYLE "Placeholders, not pop-in": the sections whose data arrives
+  // after first paint (the dns readings, the transport legend) hold a skeleton
+  // of their settled box until it lands. `dnsSettled_` is "a reading has been
+  // taken" — absent settings after that are the unavailable row, before it
+  // they are still loading. The chart clock closes both after
+  // kPlaceholderCeilingMillis (a service that never answers settles on its
+  // empty states, not a shimmer).
+  bool dnsSettled_ = false;
+  int64_t placeholdersSinceMillis_ = 0;
+  void BeginPlaceholders();
+  void SettlePlaceholders();
   // network name off the stored jwt, for the idle "{name} is ready to connect"
   // copy. Read once per auth change, not per stats push (ParsedJwt re-parses).
   std::string networkName_;
@@ -326,7 +370,23 @@ class ConnectPage {
   std::unique_ptr<urnw::TransferChart> remoteChart_;
   std::unique_ptr<urnw::TransferChart> blockedChart_;
   std::unique_ptr<urnw::TransferChart> localChart_;
+  // the transport distribution bar directly under the Remote chart (TRANSPORTSTATS)
+  std::unique_ptr<urnw::TransportBar> transportBar_;
+  // the IP-family status row directly under the transport bar (IPV6.md D2):
+  // the Dualstack / IPv4 / IPv6 columns with their connected and connecting
+  // counts, fed from the same grid push as the hero
+  std::unique_ptr<urnw::IpFamilyStatusRow> ipFamilyStatusRow_;
+  // The extender panel (EXTENDER.md K4), the row under the status row. Fed from
+  // SdkHost's extender status feed through the same dispatcher hop as the other
+  // drawer feeds; no click, no sheet.
+  std::unique_ptr<urnw::ExtenderPanel> extenderPanel_;
+  // the client / provider transport policies in force, from SdkHost's change
+  // listeners (nullopt = unknown -> the editor opens on the SDK default). Cached
+  // here so the sheet opens on the last push, like dnsSettings_.
+  std::optional<urnet::TransportSettings> clientTransportSettings_;
+  std::optional<urnet::TransportSettings> providerTransportSettings_;
   winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer chartTimer_{nullptr};
+  urnw::FreeRefreshTicker balanceRefreshTicker_;  // the banner's countdown
   uint32_t chartTickCount_ = 0;
   std::vector<urnw::ContractPeerRow> contractRows_;
   std::vector<urnw::BlockActionItem> blockActions_;
@@ -374,10 +434,17 @@ class ConnectPage {
   uint32_t exitRefreshTick_ = 0;
 
   bool updatingControls_ = false;  // guards programmatic toggle/segment updates
+  // ---- the provider extender row (N7) ----
+  // The last pushed status, or the switch's guess painted over it until the
+  // next push. The default is "no session": hidden, and never written.
+  urnw::ExtenderProvideStatusView extenderProvideView_;
+  // whether the device is providing (LiveStats), which the switch's guess reads
+  bool provideEnabled_ = false;
   bool drawerAnimated_ = false;    // entrance plays once per window
   std::shared_ptr<urnw::ClientContractsSheet> contractsSheet_;
   std::shared_ptr<urnw::SplitRulesSheet> splitRulesSheet_;
   std::shared_ptr<urnw::DnsEditorSheet> dnsSheet_;
+  std::shared_ptr<urnw::TransportSettingsSheet> transportSheet_;
   std::shared_ptr<urnw::LocationChooserSheet> locationSheet_;
   std::shared_ptr<urnw::ProviderLocationsSheet> providerLocationsSheet_;
 };
