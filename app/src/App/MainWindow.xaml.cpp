@@ -226,6 +226,18 @@ MainWindow::MainWindow() {
       if (auto self = weak.get()) self->OnUpdateBannerAction();
     });
     UpdateBar().ActionButton(update);
+    // The report's banner can be closed (ConnectPage::ApplyUpdateChecker
+    // makes it closable when its button offers the installer): closing it is
+    // its dismissal.
+    UpdateBar().Closed(
+        [weak = get_weak()](auto const&,
+                            Microsoft::UI::Xaml::Controls::InfoBarClosedEventArgs const& args) {
+          if (args.Reason() != Microsoft::UI::Xaml::Controls::InfoBarCloseReason::CloseButton) return;
+          auto self = weak.get();
+          if (self && self->updateSnapshot_.phase == urnw::UpdateChecker::Phase::Result) {
+            urnw::pages::Updates().DismissResult();
+          }
+        });
 
     auto queue = DispatcherQueue();
     urnw::pages::Updates().SetHandler(
@@ -1794,21 +1806,38 @@ void MainWindow::ApplyUpdateChecker() {
 
 void MainWindow::OnUpdateBannerAction() {
   using Phase = urnw::UpdateChecker::Phase;
+  using Failure = urnw::UpdateChecker::Failure;
   switch (updateSnapshot_.phase) {
     case Phase::Available:
     case Phase::Failed:
       // Download / verify / install, or retry it from scratch — the
       // checker re-runs the whole pipeline rather than resuming a half state.
-      urnw::pages::Updates().BeginApply();
+      // A Windows that elevates only signed programs gets the installer.
+      if (updateSnapshot_.failure == Failure::Unsigned && updateSnapshot_.phase == Phase::Failed)
+        urnw::pages::Updates().ShowInstaller();
+      else
+        urnw::pages::Updates().BeginApply();
       break;
     case Phase::ManualInstall:
-      // The MSI is already downloaded and verified; the only help left to
-      // offer is showing it again.
-      if (!updateSnapshot_.installerPath.empty())
-        urnw::UpdateChecker::RevealInExplorer(updateSnapshot_.installerPath);
+      // The installer is already downloaded and checked; the only help left to
+      // offer is showing it again, once it is checked again.
+      urnw::pages::Updates().RevealInstaller();
+      break;
+    case Phase::Result:
+      // A release that did not install and is still offered: its installer
+      // (ConnectPage::ApplyUpdateChecker says so on the button). Otherwise
+      // the report, read: it is not shown again.
+      if (urnw::UpdateChecker::OffersInstaller(updateSnapshot_))
+        urnw::pages::Updates().ShowInstaller();
+      else
+        urnw::pages::Updates().DismissResult();
+      break;
+    case Phase::None:
+      // The only banner None shows: checks have not worked for 72 hours.
+      if (updateSnapshot_.checkStale) urnw::pages::Updates().CheckNow();
       break;
     default:
-      break;  // Applying: the button is disabled; None: no banner to click
+      break;  // Applying: the button is disabled
   }
 }
 

@@ -51,9 +51,9 @@ func appLifetimeTestProgram(t *testing.T, mutate func(string) string) string {
 }
 
 // Execute the spec: the tray's Quit and the end of the Windows session stop
-// the tunnel and the provider in the service, a close request and the
-// installer handoff leave the service as it is, and nothing else stops
-// anything.
+// the tunnel and the provider in the service, a close request (the in-app
+// update's installer closes the app with one) leaves the service as it is,
+// and nothing else stops anything.
 func TestAppLifetime(t *testing.T) {
 	if !strings.Contains(readCommonSource(t, "Common.vcxproj"), `<ClInclude Include="AppLifetime.h" />`) {
 		t.Error("Common.vcxproj does not list AppLifetime.h")
@@ -100,16 +100,11 @@ func TestAppLifetimeRejectsASessionEndLeavingTheService(t *testing.T) {
 }
 
 // A WM_CLOSE from outside the app (taskkill, an installer) is nobody choosing
-// Quit, and the updater's MSI stops the service itself: neither may stop it.
+// Quit, and the update's MSI stops the service itself: it may not stop it.
 func TestAppLifetimeRejectsStoppingWithoutAQuit(t *testing.T) {
 	requireAppLifetimeFailure(t, func(source string) string {
 		return strings.Replace(source,
 			"    case Ending::CloseRequest:\n",
 			"    case Ending::CloseRequest:\n      p.stopService = true;\n", 1)
 	}, "close request: the service keeps what it runs")
-	requireAppLifetimeFailure(t, func(source string) string {
-		return strings.Replace(source,
-			"    case Ending::InstallerHandoff:\n",
-			"    case Ending::InstallerHandoff:\n      p.stopService = true;\n", 1)
-	}, "installer handoff: the service is left to the installer")
 }

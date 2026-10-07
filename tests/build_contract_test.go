@@ -1160,6 +1160,13 @@ func TestInstallerContract(t *testing.T) {
 	if len(suppressed) != 2 || !suppressed["ICE03"] || !suppressed["ICE61"] {
 		t.Errorf("SuppressIces = %v, want exactly ICE03 and ICE61", suppressed)
 	}
+
+	// The running app is closed before the files are replaced, by nothing that
+	// needs a deferred action, and the in-app update's relaunch goes through
+	// the helper (update_apply_wiring_test.go).
+	for _, problem := range checkInstallerCloseAndRelaunch(packageXML) {
+		t.Error(problem)
+	}
 }
 
 // A package must not install over a newer urnetworkd.exe. Windows Installer

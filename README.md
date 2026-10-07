@@ -9,7 +9,7 @@ the URnetwork SDK (the cgo C ABI + C++ wrapper from `sdk/cgo`).
 Release MSIs (`URnetwork-<version>-x64.msi`, `URnetwork-<version>-arm64.msi`)
 are attached to the stable releases at
 https://github.com/urnetwork/windows/releases. The in-app updater polls the
-same releases (`app/src/App/Config.h`). Nightly builds live at
+same releases (`app/src/Common/ReleaseSelection.h`, `kOfficialFeed`). Nightly builds live at
 https://github.com/urnetwork/build/releases and are not offered by the updater.
 
 ## Architecture

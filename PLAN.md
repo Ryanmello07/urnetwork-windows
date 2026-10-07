@@ -312,7 +312,9 @@ Product — DECIDED 2026-07-09:
   session and the provider-only device in the service (as Linux does) and lifts any
   firewall policy, as Disconnect does, then exits. An app that is killed or closed by
   a WM_CLOSE from outside leaves the service as it is (the next launch adopts what it
-  runs); the updater's handoff leaves it to the MSI, which stops the service itself.
+  runs). The in-app update is such a close: its MSI closes the app with WM_CLOSE (or,
+  installed by hand, Windows Installer's Restart Manager does) and stops the service
+  itself.
   See `app/src/Common/AppLifetime.h`. **Owner decision 2026-10-05: signing out of
   Windows (or a shutdown) stops the tunnel and the provider the same as Quit**
   (WM_ENDSESSION, `Ending::SessionEnd`), and so does signing out of URnetwork,
@@ -337,12 +339,18 @@ Product — DECIDED 2026-07-09:
   not loaded), and Windows starts nothing for a value whose program is gone
   (`app/src/Common/StartupRegistration.h`).
 - **Launches during an update: DECIDED 2026-10-05 (owner)** — refused, "protect the
-  update to not be corrupted where possible". The in-app updater records the msiexec
-  it started (process id, creation time, time written) before the app quits; while
-  that installer runs, a launch shows a short self-closing "URnetwork is updating"
-  notice (an autostart none) and exits. The marker is stale once the installer ends or
-  after 20 minutes, and the next launch deletes it (`app/src/Common/UpdateMarker.h`).
-  The MSI relaunches nothing.
+  update to not be corrupted where possible". The in-app updater starts the elevated
+  update helper (`URnetworkUpdate.exe`, which downloads, checks and runs the MSI) and
+  waits on it without quitting, so until the MSI closes the app a launch reaches the
+  running app as any launch does. As the app exits while the helper still runs, it
+  records the helper (process id, creation time, time written); while the helper
+  runs, a launch shows a short self-closing "URnetwork is updating" notice (an
+  autostart none) and exits. The marker is stale once the helper ends or 20 minutes
+  after it was written, and the next launch deletes it (`app/src/Common/UpdateMarker.h`).
+  The only launch it lets through is the relaunch after the update: the MSI starts the
+  helper with no arguments after an update that took, the helper does so itself after
+  one that failed, and the helper starts `URnetwork.exe --after-update`, which waits
+  for the marker's helper to end before it asks (`instance::kAfterUpdateArgument`).
 - **Provide defaults**: ethernet maps as unmetered/provide-eligible via NetworkCostType.
 - **Per-app split tunneling: IN SCOPE for v1** (M3.5) via a clean-room, MPL-2.0,
   attestation-signed WFP callout driver implemented from first principles (Microsoft docs +

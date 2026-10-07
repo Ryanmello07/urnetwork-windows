@@ -2,7 +2,8 @@
 // decisions 2026-10-05): the tray menu's Quit, and Windows ending the session
 // (a sign-out of Windows, a shutdown), stop the tunnel session and the
 // provider-only device in the service, while a WM_CLOSE from outside the app
-// and the updater's installer handoff exit and leave the service as it is. Run
+// (taskkill, an installer, the in-app update's among them) exits and leaves the
+// service as it is. Run
 // against the same header the app compiles, on any host with a C++20 compiler.
 //
 //   c++ -std=c++20 -I ../src/Common app-lifetime-tests.cpp -o /tmp/app-lifetime-tests && /tmp/app-lifetime-tests
@@ -30,8 +31,7 @@ void Check(bool condition, const std::string& what) {
   }
 }
 
-constexpr Ending kEndings[] = {Ending::Quit, Ending::SessionEnd, Ending::CloseRequest,
-                               Ending::InstallerHandoff};
+constexpr Ending kEndings[] = {Ending::Quit, Ending::SessionEnd, Ending::CloseRequest};
 
 void TestQuitStopsTheService() {
   const Plan quit = PlanFor(Ending::Quit);
@@ -51,8 +51,6 @@ void TestSessionEndStopsTheService() {
 void TestOtherEndingsLeaveTheService() {
   Check(!PlanFor(Ending::CloseRequest).stopService,
         "close request: the service keeps what it runs (taskkill, an installer)");
-  Check(!PlanFor(Ending::InstallerHandoff).stopService,
-        "installer handoff: the service is left to the installer, which stops it");
 }
 
 void TestOnlyQuitAndSessionEndStop() {
@@ -79,8 +77,6 @@ void TestNames() {
   Check(std::string_view(ToString(Ending::SessionEnd)) == "session end", "names: session end");
   Check(std::string_view(ToString(Ending::CloseRequest)) == "close request",
         "names: close request");
-  Check(std::string_view(ToString(Ending::InstallerHandoff)) == "installer handoff",
-        "names: installer handoff");
 }
 
 }  // namespace
