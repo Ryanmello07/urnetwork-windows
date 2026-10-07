@@ -55,6 +55,59 @@ std::wstring DeepLinkFromCommandLine(std::wstring_view commandLine) {
   return std::wstring(commandLine.substr(start, end - start));
 }
 
+// Exactly the "auth" host - "urnetwork://auth", "urnetwork://auth?..." - so
+// "urnetwork://authenticator/..." cannot match.
+bool IsAuthDeepLink(const std::string& url) {
+  constexpr char kPrefix[] = "urnetwork://auth";
+  constexpr size_t kLen = sizeof(kPrefix) - 1;
+  if (url.rfind(kPrefix, 0) != 0) return false;  // the onboarding check's idiom
+  if (url.size() == kLen) return true;
+  const char next = url[kLen];
+  return next == '?' || next == '/' || next == '#';
+}
+
+// One percent-decoded query parameter of a urnetwork:// uri, "" when absent.
+// WalletConnect.cpp has the full parser (ParseQuery/Unesc) but keeps it in its
+// own anonymous namespace; exporting it for a single parameter is worse than
+// these twenty lines.
+std::string DeepLinkQueryParam(const std::string& url, std::string_view name) {
+  auto hexv = [](char c) -> int {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    return -1;
+  };
+  const size_t q = url.find('?');
+  if (q == std::string::npos) return {};
+  size_t i = q + 1;
+  while (i < url.size()) {
+    const size_t amp = url.find('&', i);
+    const std::string pair =
+        url.substr(i, amp == std::string::npos ? std::string::npos : amp - i);
+    const size_t eq = pair.find('=');
+    if (eq != std::string::npos && pair.compare(0, eq, name) == 0) {
+      const std::string value = pair.substr(eq + 1);
+      std::string out;
+      out.reserve(value.size());
+      for (size_t k = 0; k < value.size(); ++k) {
+        if (value[k] == '%' && k + 2 < value.size()) {
+          const int hi = hexv(value[k + 1]), lo = hexv(value[k + 2]);
+          if (hi >= 0 && lo >= 0) {
+            out.push_back(static_cast<char>((hi << 4) | lo));
+            k += 2;
+            continue;
+          }
+        }
+        out.push_back(value[k] == '+' ? ' ' : value[k]);
+      }
+      return out;
+    }
+    if (amp == std::string::npos) break;
+    i = amp + 1;
+  }
+  return {};
+}
+
 }  // namespace
 
 AppController& App() { return *g_app; }
@@ -764,6 +817,27 @@ void AppController::HandleDeepLink(const std::string& url) {
   if (url.rfind("urnetwork://onboarding/", 0) == 0) {
     if (auto self = window_.try_as<winrt::URnetwork::implementation::MainWindow>()) {
       self->HandleOnboardingLink(url);
+    }
+    return;
+  }
+  // urnetwork://auth?code=<one-time auth code>: the browser sign-in bridge's
+  // handoff (LoginPage::OnSignInWithBrowser; the site builds such urls for its
+  // own app linking - urnetwork/mmm react/src/auth/urlAuthCode.js). A link
+  // must never clobber a session: signed in, it is logged and ignored.
+  if (IsAuthDeepLink(url)) {
+    if (authState_ == AuthState::LoggedIn || sdk_.IsLoggedIn()) {
+      LogWarn("app: auth deep link ignored - a session is signed in");
+      return;
+    }
+    // the code is a credential: its value is never logged
+    const std::string code = DeepLinkQueryParam(url, "code");
+    if (code.empty()) {
+      LogWarn("app: auth deep link carried no code");
+      return;
+    }
+    LogInfo("app: auth deep link routes to the code login");
+    if (auto self = window_.try_as<winrt::URnetwork::implementation::MainWindow>()) {
+      self->login().SignInWithAuthCode(code);
     }
     return;
   }

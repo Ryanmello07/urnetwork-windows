@@ -87,6 +87,13 @@ class LoginPage {
   // guest-upgrade mode, shown over the login flow while the session stays live.
   void BeginGuestUpgrade();
 
+  // Sign in with a one-time auth code, exactly as if it had been typed into
+  // the auth-code sheet and Sign in pressed. Shared by that sheet (OnUseCode),
+  // the browser sign-in bridge sheet and the urnetwork://auth?code= deep link
+  // (AppController::HandleDeepLink, which has already refused the link when a
+  // session exists). The code is a credential and is never logged.
+  void SignInWithAuthCode(std::string code);
+
   // ---- XAML event handlers (forwarded from MainWindow) ----
   void OnGetStarted(winrt::Windows::Foundation::IInspectable const&,
                     winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
@@ -151,6 +158,10 @@ class LoginPage {
                              winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   // the bottom-left "Change Network API" affordance
   winrt::fire_and_forget OnChangeNetworkServer(
+      winrt::Windows::Foundation::IInspectable const&,
+      winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
+  // the bottom-left "Sign in with browser" affordance: the bridge sheet
+  winrt::fire_and_forget OnSignInWithBrowser(
       winrt::Windows::Foundation::IInspectable const&,
       winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   // the title-bar avatar

@@ -12,6 +12,7 @@
 #include "Log.h"
 #include "MainWindow.xaml.h"
 #include "PageContext.h"
+#include "SheetFit.h"  // sheetfit: sheets clamp to the window at open time
 #include "Strings.h"
 #include "UrColors.h"
 #include "UrComponents.h"
@@ -228,7 +229,10 @@ void LoginPage::ApplyStrings() {
   w_.EmailLabel().Text(Loc("user_auth_label"));
   w_.EmailBox().PlaceholderText(Loc("user_auth_input_placeholder"));
   w_.GetStartedButton().Content(LocBox("get_started"));
-  // bottom-left, quiet text: point the client at another network API
+  // bottom-left, quiet text: sign in through the browser bridge
+  // (OnSignInWithBrowser), or point the client at another network API
+  w_.BrowserSignInLink().Content(
+      winrt::box_value(Adv("adv_sign_in_browser", L"Sign in with browser")));
   w_.NetworkServerLink().Content(LocBox("change_network_api"));
   // MainWindow calls ApplyStrings BEFORE Initialize, so on the first pass there
   // is no carousel yet; Initialize paints it once it exists.
@@ -968,13 +972,24 @@ winrt::fire_and_forget LoginPage::OnUseCode(IInspectable const&, RoutedEventArgs
   w_.SetSheetOpen(false);
   if (result != ContentDialogResult::Primary) co_return;
 
-  const std::string code = TrimWhitespace(urnw::Narrow(field.Text().c_str()));
-  if (code.empty()) co_return;
+  SignInWithAuthCode(urnw::Narrow(field.Text().c_str()));
+}
+
+// The submit half of the auth-code sheet, shared with the browser sign-in
+// bridge sheet and the urnetwork://auth?code= deep link: every path that holds
+// a one-time code ends here. The SDK applies the auth state on success and the
+// auth-state relay swaps the panel for the home view; a failure surfaces on
+// the initial step, so make sure that is the step on screen (a no-op for the
+// sheets, which only open from it).
+void LoginPage::SignInWithAuthCode(std::string code) {
+  code = TrimWhitespace(code);
+  if (code.empty()) return;
+  ResetToInitialStep();
 
   SetWalletSignInEnabled(false);
   walletSignInInFlight_ = true;
-  auto queue = self->DispatcherQueue();
-  auto weak = self->get_weak();
+  auto queue = w_.DispatcherQueue();
+  auto weak = w_.get_weak();
   Sdk().LoginWithCode(code, [queue, weak](urnw::AuthResult r) {
     queue.TryEnqueue([weak, r] {
       auto self = weak.get();
@@ -987,6 +1002,92 @@ winrt::fire_and_forget LoginPage::OnUseCode(IInspectable const&, RoutedEventArgs
       }
     });
   });
+}
+
+// ---- sign in with browser (the bridge sheet) -------------------------------
+// Provider SSO through the system browser is blocked upstream for now -
+// Google's production api vault lacks sign_in_oauth and Apple's Services ID
+// does not carry the api's callback url - and a provider token can never be
+// forwarded to a local page: the providers pin their redirect uris to ur.io,
+// and /auth/login pins the accepted token audiences to URnetwork's own client
+// ids. What works TODAY is the api's one-time auth codes (/auth/code-login):
+// sign in at ur.io in the real browser, where password managers and existing
+// Google / Apple sessions live, then hand the app a code from any signed-in
+// surface (Account -> Create auth code).
+winrt::fire_and_forget LoginPage::OnSignInWithBrowser(IInspectable const&,
+                                                      RoutedEventArgs const&) {
+  if (w_.sheetOpen()) co_return;  // only one ContentDialog can show at a time
+  auto self = w_.get_strong();    // keeps the window — and so this page — alive
+  SetInitialLoginError(hstring());
+
+  StackPanel content;
+  content.MinWidth(sheetfit::Width(self->Content().XamlRoot(), 400));
+  content.Spacing(12);
+
+  // wrapped, muted, small - NetworkServerSheet's description is the reference
+  TextBlock body;
+  body.Text(Adv("adv_browser_sign_in_body",
+                L"Sign in at ur.io in your browser — your password manager and existing "
+                L"Google or Apple sessions work there. Then paste a one-time auth code "
+                L"from any signed-in device (Account → Create auth code)."));
+  body.FontSize(12);
+  body.TextWrapping(TextWrapping::Wrap);
+  body.Foreground(colors::MutedBrush());
+  content.Children().Append(body);
+
+  TextBox field;
+  field.PlaceholderText(Loc("auth_code"));
+  if (auto style = Application::Current()
+                       .Resources()
+                       .TryLookup(winrt::box_value(L"UrTextInputStyle"))
+                       .try_as<Style>()) {
+    field.Style(style);
+  }
+  content.Children().Append(field);
+
+  ContentDialog dialog;
+  dialog.XamlRoot(self->Content().XamlRoot());
+  dialog.Title(winrt::box_value(Adv("adv_browser_sign_in_title", L"Browser sign-in")));
+  dialog.Content(content);
+  dialog.PrimaryButtonText(Adv("adv_open_ur_io", L"Open ur.io"));
+  // NOT auth_code_login_button_text ("Log in with Auth Code"): three command
+  // bar buttons split the bar evenly and a 21-character middle one clips
+  // (the trap NetworkServerSheet's comment records). "Sign in" fits anywhere.
+  dialog.SecondaryButtonText(Loc("sign_in"));
+  dialog.CloseButtonText(Loc("cancel"));
+  // Enter in the code field submits the code rather than relaunching the browser
+  dialog.DefaultButton(ContentDialogButton::Secondary);
+
+  // "Open ur.io" launches the system browser but must NOT dismiss the sheet:
+  // the code the browser session produces is pasted into the field that has
+  // to still be open (GuestModeSheet uses the same args.Cancel idiom).
+  dialog.PrimaryButtonClick([](auto const&, ContentDialogButtonClickEventArgs const& args) {
+    args.Cancel(true);
+    try {
+      winrt::Windows::System::Launcher::LaunchUriAsync(
+          winrt::Windows::Foundation::Uri(L"https://ur.io"));
+    } catch (winrt::hresult_error const& e) {
+      urnw::LogError("browser sign-in: open ur.io: {} (0x{:08x})",
+                     urnw::Narrow(std::wstring{e.message()}),
+                     static_cast<uint32_t>(e.code()));
+    }
+  });
+
+  w_.SetSheetOpen(true);
+  ContentDialogResult result{ContentDialogResult::None};
+  try {
+    result = co_await dialog.ShowAsync();
+  } catch (winrt::hresult_error const& e) {
+    urnw::LogError("browser sign-in sheet: {} (0x{:08x})",
+                   urnw::Narrow(std::wstring{e.message()}),
+                   static_cast<uint32_t>(e.code()));
+  } catch (std::exception const& e) {
+    urnw::LogError("browser sign-in sheet: {}", e.what());
+  }
+  w_.SetSheetOpen(false);
+  if (result != ContentDialogResult::Secondary) co_return;
+
+  SignInWithAuthCode(urnw::Narrow(field.Text().c_str()));
 }
 
 // ---- guest mode (macOS GuestModeSheet parity) ------------------------------
@@ -1094,6 +1195,7 @@ void LoginPage::SetWalletSignInEnabled(bool enabled) {
   w_.AppleSignInButton().IsEnabled(enabled);
   w_.SeedphraseSignInButton().IsEnabled(enabled);
   w_.InstantAccountButton().IsEnabled(enabled);
+  w_.BrowserSignInLink().IsEnabled(enabled);
   // NOT a flat `IsEnabled(enabled)`: Get started also depends on the field
   // having something in it, and writing true here re-enabled it over an empty
   // box every time another sign-in method finished.
@@ -1121,6 +1223,17 @@ void LoginPage::ApplyWalletSignInResult(urnw::AuthResult const& result) {
   // on success ApplyAuthState swaps the panel for the home view; only an error
   // needs to be surfaced here
   if (result.ok || result.error.empty()) return;
+  // Google's web flow answers error=not_configured while the production api
+  // vault lacks sign_in_oauth (Apple's is likewise unregistered on the
+  // Services ID). The raw token reads as a broken app on the login screen;
+  // say what to do instead. Every other error surfaces as-is.
+  if (result.error == "not_configured") {
+    ShowLoginErrorFor(LoginStep::Initial,
+                      Adv("adv_sso_not_configured",
+                          L"Provider sign-in isn't available on this network yet — use "
+                          L"email or browser sign-in"));
+    return;
+  }
   ShowLoginErrorFor(LoginStep::Initial, H(result.error));
 }
 

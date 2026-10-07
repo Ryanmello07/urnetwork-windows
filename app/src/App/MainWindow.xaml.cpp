@@ -2751,6 +2751,9 @@ void MainWindow::OnCreateInstantSubmit(IInspectable const& s, RoutedEventArgs co
 void MainWindow::OnChangeNetworkServer(IInspectable const& s, RoutedEventArgs const& e) {
   login_->OnChangeNetworkServer(s, e);
 }
+void MainWindow::OnSignInWithBrowser(IInspectable const& s, RoutedEventArgs const& e) {
+  login_->OnSignInWithBrowser(s, e);
+}
 void MainWindow::OnAccountMenu(IInspectable const& s, RoutedEventArgs const& e) {
   login_->OnAccountMenu(s, e);
 }

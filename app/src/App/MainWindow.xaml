@@ -295,27 +295,39 @@
                                Style="{StaticResource UrInlineErrorTextStyle}"
                                Visibility="Collapsed" />
 
-                    <!-- "Change Network API" (iOS NetworkServerSheet) - the very
-                         last thing on the screen, bottom LEFT, small and muted,
-                         and reading as PLAIN TEXT rather than another pill: it
-                         is a developer/fork affordance, not a sign-in option,
-                         and a sixth white pill would read as one. Left edge
-                         lines up with the "Email or phone number" label above.
+                    <!-- The bottom-left pair of quiet text links, the last things
+                         on the screen: "Sign in with browser" opens the browser
+                         sign-in bridge (OnSignInWithBrowser) and "Change Network
+                         API" the server sheet (iOS NetworkServerSheet). Both are
+                         small, muted and read as PLAIN TEXT rather than another
+                         pill - a sixth white pill would read as a sign-in
+                         option, which the developer/fork affordance is not. The
+                         row's left edge lines up with the "Email or phone
+                         number" label above.
 
-                         A HyperlinkButton, NOT a TextBlock with a Tapped
-                         handler. It looks the same either way, but a TextBlock
-                         is not focusable, never reaches the tab order and is
-                         announced as static text - the UIA tree showed this
-                         affordance as plain "Text" with no invoke pattern, i.e.
-                         unreachable without a mouse. The styling below (no
-                         padding, muted foreground, body face) is what makes a
-                         real control render as quiet text. -->
-                    <HyperlinkButton x:Name="NetworkServerLink" HorizontalAlignment="Left"
-                                     FontSize="12" Margin="0,8,0,0" Padding="0"
-                                     Background="Transparent" BorderThickness="0"
-                                     FontFamily="{StaticResource UrBodyFontFamily}"
-                                     Foreground="{StaticResource UrTextMutedBrush}"
-                                     Click="OnChangeNetworkServer" />
+                         HyperlinkButtons, NOT TextBlocks with Tapped handlers.
+                         They look the same either way, but a TextBlock is not
+                         focusable, never reaches the tab order and is announced
+                         as static text - the UIA tree showed this affordance as
+                         plain "Text" with no invoke pattern, i.e. unreachable
+                         without a mouse. The styling below (no padding, muted
+                         foreground, body face) is what makes a real control
+                         render as quiet text. -->
+                    <StackPanel Orientation="Horizontal" Spacing="16" Margin="0,8,0,0"
+                                HorizontalAlignment="Left">
+                        <HyperlinkButton x:Name="BrowserSignInLink"
+                                         FontSize="12" Padding="0"
+                                         Background="Transparent" BorderThickness="0"
+                                         FontFamily="{StaticResource UrBodyFontFamily}"
+                                         Foreground="{StaticResource UrTextMutedBrush}"
+                                         Click="OnSignInWithBrowser" />
+                        <HyperlinkButton x:Name="NetworkServerLink"
+                                         FontSize="12" Padding="0"
+                                         Background="Transparent" BorderThickness="0"
+                                         FontFamily="{StaticResource UrBodyFontFamily}"
+                                         Foreground="{StaticResource UrTextMutedBrush}"
+                                         Click="OnChangeNetworkServer" />
+                    </StackPanel>
                 </StackPanel>
 
                 <!-- Password: an existing account signs in -->

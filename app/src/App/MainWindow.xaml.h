@@ -234,6 +234,9 @@ struct MainWindow : MainWindowT<MainWindow> {
   // the bottom-left "Change Network API" text affordance
   void OnChangeNetworkServer(winrt::Windows::Foundation::IInspectable const&,
                              winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
+  // the bottom-left "Sign in with browser" text affordance: the bridge sheet
+  void OnSignInWithBrowser(winrt::Windows::Foundation::IInspectable const&,
+                           winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   // the title-bar avatar's menu (identity, create account, share, sign out)
   void OnAccountMenu(winrt::Windows::Foundation::IInspectable const&,
                      winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
