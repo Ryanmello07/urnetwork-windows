@@ -206,6 +206,9 @@ void AccountPage::ApplyStrings() {
   w_.AccountPaneBTitle().Text(Loc("account"));
   w_.AccountPaneCTitle().Text(Loc("balance_codes_title"));
   w_.AccountPaneDTitle().Text(Loc("extenders"));
+  // the fold hosts' headers repeat their panes' title keys: same content, one name
+  w_.AccountPlanFoldTitle().Text(Loc("plan"));
+  w_.AccountExtenderFoldTitle().Text(Loc("extenders"));
   // Landmark names, so a screen reader can tell three regions apart.
   Automation::AutomationProperties::SetName(w_.AccountPaneA(), Loc("plan"));
   Automation::AutomationProperties::SetName(w_.AccountPaneB(), Loc("account"));

@@ -1921,7 +1921,7 @@
                         </Border>
                         <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled"
                                       VerticalScrollBarVisibility="Auto">
-                            <StackPanel>
+                            <StackPanel x:Name="AccountPaneAStack">
                                 <!-- WHAT THE PLAN IS. It leads the pane, the way
                                      the protection state leads Home's. -->
                                 <Border Style="{StaticResource UrPaneRowStyle}"
@@ -2153,6 +2153,35 @@
                                 </Border>
                                 <StackPanel x:Name="AccountReferralsNavHost" />
 
+                                <!-- THE FOLD DOORS for panes A and D (the fold-doors
+                                     design note): below 900dip the plan pane's three
+                                     action rows (upgrade, redeem, manage subscription)
+                                     are REPARENTED into AccountPlanFoldHost - they are
+                                     the plan pane's only commands, and a fold may not
+                                     own content with no second door; below 1500dip the
+                                     WHOLE extender section moves into
+                                     AccountExtenderFoldHost (one named host, every
+                                     field/handler a member reference that survives the
+                                     move). Both sit above the danger section, which
+                                     stays last on the page at every width; pane B is
+                                     the pane that survives to the smallest width, so
+                                     nothing further is needed below 900. ApplyBreakpoint
+                                     moves the rows and flips the hosts in the same
+                                     applied-state pass as the accountTwo/accountThree
+                                     gates. -->
+                                <StackPanel x:Name="AccountPlanFoldHost" Visibility="Collapsed">
+                                    <Border Style="{StaticResource UrGroupHeaderStyle}">
+                                        <TextBlock x:Name="AccountPlanFoldTitle"
+                                                   Style="{StaticResource UrGroupHeaderTextStyle}" />
+                                    </Border>
+                                </StackPanel>
+                                <StackPanel x:Name="AccountExtenderFoldHost" Visibility="Collapsed">
+                                    <Border Style="{StaticResource UrGroupHeaderStyle}">
+                                        <TextBlock x:Name="AccountExtenderFoldTitle"
+                                                   Style="{StaticResource UrGroupHeaderTextStyle}" />
+                                    </Border>
+                                </StackPanel>
+
                                 <!-- the irreversible end, last on the page at
                                      every width -->
                                 <Border Style="{StaticResource UrGroupHeaderStyle}">
@@ -2188,7 +2217,8 @@
                                            Style="{StaticResource UrPaneMetaStyle}" />
                             </Grid>
                         </Border>
-                        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled"
+                        <ScrollViewer Grid.Row="1" x:Name="AccountPaneDScroll"
+                                      HorizontalScrollBarVisibility="Disabled"
                                       VerticalScrollBarVisibility="Auto">
                             <StackPanel x:Name="AccountExtenderHost" />
                         </ScrollViewer>
@@ -2313,7 +2343,7 @@
                         </Border>
                         <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled"
                                       VerticalScrollBarVisibility="Auto">
-                            <StackPanel>
+                            <StackPanel x:Name="WalletPaneAStack">
                                 <!-- THE FIGURE: net points, in the display face,
                                      with its caption and the fetch state beside
                                      it. The breakdown rows follow on the pane's
@@ -2575,6 +2605,25 @@
                                 <Button x:Name="UpgradeButton"
                                         Style="{StaticResource UrPaneActionSecondaryStyle}"
                                         Click="OnOpenUpgrade" />
+                                <!-- THE FOLD DOOR for pane C (the fold-doors design
+                                     note): below the 1500dip earningsThree gate pane C
+                                     folds, and its state-writing rows - the points
+                                     network block, the own-rank + public toggle, the
+                                     provider transport row and the Seeker card - have
+                                     no second door, so they are REPARENTED here (never
+                                     rebuilt: each is single-instance wiring). The host
+                                     sits at the foot of pane A's scroll, before the
+                                     InfoBar; ApplyBreakpoint moves the rows and flips
+                                     this host in the same applied-state pass as the
+                                     gate. Below 900dip pane A folds too, and the host
+                                     itself moves to the ledger pane's foot strip
+                                     (WalletPaneBFoot) - the rows ride with it. -->
+                                <StackPanel x:Name="WalletPaneCFold" Visibility="Collapsed">
+                                    <Border Style="{StaticResource UrGroupHeaderStyle}">
+                                        <TextBlock x:Name="WalletPaneCFoldTitle"
+                                                   Style="{StaticResource UrGroupHeaderTextStyle}" />
+                                    </Border>
+                                </StackPanel>
                                 <muxc:InfoBar x:Name="WalletInfo"
                                               Style="{StaticResource UrSnackbarStyle}"
                                               Margin="12,8" IsOpen="False" />
@@ -2591,12 +2640,14 @@
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
                         <Border Style="{StaticResource UrPaneHeaderStyle}" Padding="12,0">
                             <Grid ColumnSpacing="12">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <!-- the pane's own switch, in its own header
                                      strip: two tables, one at a time -->
@@ -2609,6 +2660,21 @@
                                 <TextBlock x:Name="WalletPaneBMeta" Grid.Column="1"
                                            HorizontalAlignment="Right"
                                            Style="{StaticResource UrPaneMetaStyle}" />
+                                <!-- THE COMMAND DOOR for pane A (the fold-doors design
+                                     note's COMMAND-DOOR DUPLICATION): below 900dip the
+                                     wallet rail folds, and its actions are all doors to
+                                     sheets or menus, so the door is duplicated - one
+                                     "Earnings actions" overflow whose items call the
+                                     SAME member handlers - rather than the surface.
+                                     Shown exactly while pane A is folded. -->
+                                <Button x:Name="EarningsActionsButton" Grid.Column="2"
+                                        Style="{StaticResource UrPaneActionButtonStyle}"
+                                        MinWidth="44" Height="32"
+                                        Visibility="Collapsed"
+                                        Click="OnEarningsActions">
+                                    <FontIcon FontFamily="{StaticResource UrIconFontFamily}"
+                                              Glyph="&#xE712;" FontSize="16" />
+                                </Button>
                             </Grid>
                         </Border>
                         <Grid Grid.Row="1">
@@ -2697,6 +2763,22 @@
                                 </Grid>
                             </Grid>
                         </Grid>
+                        <!-- THE LEDGER'S FOOT STRIP (the fold-doors design note's
+                             option i): below 900dip the wallet rail folds, so the
+                             WalletPaneCFold host - holding pane C's reparented rows -
+                             moves into this strip. Minimal by rule (the note's
+                             "44px-minimal"): the scroll caps at three 44px rows so
+                             the table keeps the floor, and the strip collapses to
+                             nothing the moment the rail has room again. -->
+                        <Border x:Name="WalletPaneBFoot" Grid.Row="2" Visibility="Collapsed"
+                                BorderBrush="{StaticResource UrBorderBrush}"
+                                BorderThickness="0,1,0,0">
+                            <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                                          VerticalScrollBarVisibility="Auto"
+                                          MaxHeight="132">
+                                <StackPanel x:Name="WalletPaneBFootHost" />
+                            </ScrollViewer>
+                        </Border>
                     </Grid>
 
                     <Border x:Name="WalletPaneCRule" Grid.Column="3"
@@ -2716,7 +2798,7 @@
                         </Border>
                         <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled"
                                       VerticalScrollBarVisibility="Auto">
-                            <StackPanel>
+                            <StackPanel x:Name="WalletPaneCStack">
                                 <!-- the points board's network block: this network's
                                      emoji tag and name, its points / blocks / streak
                                      with their ranks, the opt-in switch. Built in code
@@ -2791,7 +2873,10 @@
                                     <TextBlock x:Name="EarningMultipliersHeading"
                                                Style="{StaticResource UrGroupHeaderTextStyle}" />
                                 </Border>
-                                <Border BorderBrush="{StaticResource UrBorderBrush}"
+                                <!-- named for the fold door (the note's VerifySeeker):
+                                     the card moves to WalletPaneCFold with its command
+                                     while pane C is folded -->
+                                <Border x:Name="SeekerCard" BorderBrush="{StaticResource UrBorderBrush}"
                                         BorderThickness="0,0,0,1" Padding="12,10">
                                     <StackPanel Spacing="10">
                                         <TextBlock x:Name="SeekerStatusText" TextWrapping="Wrap"

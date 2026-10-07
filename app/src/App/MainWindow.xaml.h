@@ -315,6 +315,10 @@ struct MainWindow : MainWindowT<MainWindow> {
       winrt::Microsoft::UI::Xaml::Controls::SelectorBarSelectionChangedEventArgs const&);
   void OnLeaderboardPublicToggled(winrt::Windows::Foundation::IInspectable const&,
                                   winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
+  // The ledger header's "Earnings actions" overflow: pane A's command door while
+  // the rail is folded (the fold-doors design note's COMMAND-DOOR DUPLICATION).
+  void OnEarningsActions(winrt::Windows::Foundation::IInspectable const&,
+                         winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
 
   // Connect drawer handlers (forwarded to ConnectPage)
   void OnConnectionModeChanged(
@@ -620,6 +624,37 @@ struct MainWindow : MainWindowT<MainWindow> {
   // whichever visibility an older size decided.
   bool stripTrafficLayout_ = false;
   bool breakpointApplied_ = false;
+
+  // ---- the fold doors (docs/superpowers/2026-09-29-fold-doors-design.md) ----
+  // A foldable pane must not own content with no second door, and no builder in
+  // scope is build-twice-safe (every one keeps handler/render state in members),
+  // so the fold REPARENTS the pane's existing rows into a fold host in the pane
+  // that survives the gate - a named element keeps every member-field reference
+  // and handler across the move. FoldHome is where one such element sits while
+  // its pane is open: the parent (a Panel - index into its Children - or, for
+  // the extender host, the ScrollViewer whose Content it is) recorded before the
+  // first fold, so a widening restore puts every row back EXACTLY, not near.
+  struct FoldHome {
+    winrt::Microsoft::UI::Xaml::DependencyObject parent{nullptr};
+    uint32_t index = 0;
+  };
+  bool foldHomesRecorded_ = false;
+  FoldHome pointsNetworkHome_;
+  FoldHome dataRankingHome_;
+  FoldHome seekerCardHome_;
+  FoldHome walletTransportHome_;
+  FoldHome walletPaneCFoldHome_;
+  FoldHome accountUpgradeHome_;
+  FoldHome redeemRowHome_;
+  FoldHome accountPlanExtraHome_;
+  FoldHome accountExtenderHome_;
+  void RecordFoldHomes();
+  // The earnings fold: pane C's rows <-> WalletPaneCFold (earningsThree), and the
+  // host itself <-> the ledger's foot strip (earningsTwo, the note's option i).
+  void ApplyWalletFold(bool earningsThree, bool earningsTwo);
+  // The account folds: the plan pane's action rows (accountTwo) and the whole
+  // extender section (accountThree) <-> their fold hosts in pane B.
+  void ApplyAccountFold(bool accountThree, bool accountTwo);
 };
 
 }  // namespace winrt::URnetwork::implementation

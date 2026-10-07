@@ -127,3 +127,26 @@ the table/list that owns the floor.
   parent-agnostic.
 - UIA: accessible names appear exactly once at every width; screen reader finds the fold host
   inside its pane's landmark.
+
+## 2026-10-06 implementation addendum (measured live, costs paid)
+
+- **Parent() lies at ctor time.** RecordFoldHomes first read `element.Parent()`: every WALLET
+  element answered its pane stack, every ACCOUNT element answered NULL (the account view is
+  not attached when the first ApplyBreakpoint runs in the window ctor). The moves then detached
+  nothing and Append crashed E_NER "Element is already the child of another element" - the
+  exact failure the pre-R3 Reparent comment trail warned about. Homes are now STRUCTURAL: the
+  named containers WalletPaneAStack / WalletPaneCStack / AccountPaneAStack (pane scroll
+  stacks) and AccountPaneDScroll (the extender host is its Content directly).
+- **Identity is the IUnknown view.** Two accessors of one element can hand out different
+  interface pointers; `==` and even UIElementCollection::IndexOf comparisons across those
+  wrappers are not to be trusted. FoldSame compares `.as<IUnknown>()`, and FoldIndexOf /
+  FoldOutOf search panels by it. Current location is SEARCHED (home + fold host - a fold
+  element's whole world), never asked of Parent().
+- **Verified headless** (`.localstate-verify` captures w7-*): wallet 1600/1400/850 dips,
+  account 1600/850 dips, and a live 850 -> 1600 -> 850 -> 1600 round trip on account -
+  fold and restore exact, no duplicates, no orphans, no crashes. The two sessions' builds
+  were done after purging `app/src/App/x64/Release/*.obj` (the stale-obj trap; the agent
+  also found a second stale intermediate at `app/src/App/App/x64/Release/`).
+- Not verified headless (needs a session): the moved controls' live writes (toggles, extender
+  save, sheets). The wiring is member-reference based by design, so it is parent-agnostic -
+  but a signed-in drag test is the honest proof.

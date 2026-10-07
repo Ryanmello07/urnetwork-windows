@@ -140,6 +140,12 @@ class WalletPage {
       winrt::Microsoft::UI::Xaml::Controls::SelectorBarSelectionChangedEventArgs const&);
   void OnLeaderboardPublicToggled(winrt::Windows::Foundation::IInspectable const&,
                                   winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
+  // The ledger header's "Earnings actions" overflow, shown while pane A is
+  // folded (the fold-doors design note's COMMAND-DOOR DUPLICATION): one menu
+  // whose items call the SAME member handlers the rail's buttons call - claim,
+  // wallet connect/change, the Solana menu and upgrade - so the door survives
+  // the fold without any element being built twice.
+  void ShowEarningsActionsMenu(winrt::Microsoft::UI::Xaml::FrameworkElement const& anchor);
 
   void RefreshAfterWalletChange();
 

@@ -86,6 +86,79 @@ constexpr double kStatusStripTrafficFloorDip = 520;
 // breakpoint only decides how many are visible. Deleted with the layout that
 // needed them.)
 
+// The fold doors' one mechanism, and the reason the fold-doors design note
+// (docs/superpowers/2026-09-29-fold-doors-design.md) can move rows at all: a
+// named element keeps every member-field reference and handler when it changes
+// parents, so the fold REPARENTS the pane's existing rows - the duplication-free
+// move, since no builder in scope is build-twice-safe.
+//
+// The helpers are the pre-R3 Reparent's pattern, not Parent()'s: Parent() has
+// lied in this window before (its comment trail - null before Loaded, a stale
+// answer mid-layout), and Append on an element XAML still counts as parented
+// is the "already the child of another element" crash. So current location is
+// SEARCHED, by identity, and identity is the IUnknown view: two accessors of
+// one element can hand out different interface pointers, and only the IUnknown
+// comparison sees through that. A fold element's whole world is two panels -
+// its recorded home and its fold host - so those are the panels searched.
+bool FoldSame(winrt::Windows::Foundation::IInspectable const& a,
+              winrt::Windows::Foundation::IInspectable const& b) {
+  if (!a || !b) return false;
+  return a.as<winrt::Windows::Foundation::IUnknown>() ==
+         b.as<winrt::Windows::Foundation::IUnknown>();
+}
+
+uint32_t FoldIndexOf(Panel const& panel, UIElement const& child) {
+  if (!panel || !child) return static_cast<uint32_t>(-1);
+  auto children = panel.Children();
+  for (uint32_t i = 0; i < children.Size(); ++i) {
+    if (FoldSame(children.GetAt(i), child)) return i;
+  }
+  return static_cast<uint32_t>(-1);
+}
+
+// Out of a Panel's Children, or out of a ContentControl's Content - the two
+// shapes this app parks rows in (the extender host is pane D's scroller
+// Content directly). No-ops when the element is not there.
+void FoldOutOf(DependencyObject const& parent, UIElement const& child) {
+  if (auto panel = parent.try_as<Panel>()) {
+    if (uint32_t i = FoldIndexOf(panel, child); i != static_cast<uint32_t>(-1)) {
+      panel.Children().RemoveAt(i);
+    }
+  } else if (auto content = parent.try_as<ContentControl>()) {
+    if (FoldSame(content.Content(), child)) content.Content(nullptr);
+  }
+}
+
+// Into the fold host. The already-there early-out is what makes re-runs free:
+// ApplyBreakpoint re-applies every gate on any crossing, and an unconditional
+// remove+append would reorder rows already folded.
+void FoldIn(FrameworkElement const& child, Panel const& host,
+            DependencyObject const& homeParent) {
+  if (!child || !host) return;
+  if (FoldIndexOf(host, child) != static_cast<uint32_t>(-1)) return;
+  FoldOutOf(homeParent, child);
+  FoldOutOf(host, child);  // host==homeParent on a re-run with drift: never a duplicate
+  host.Children().Append(child);
+}
+
+// Back where the row was recorded (RecordFoldHomes). Restores within one panel
+// run in ASCENDING recorded-index order: a row's recorded index counts exactly
+// the children that precede it at rest, and all of those are already home when
+// its turn comes, so InsertAt(index) is exact.
+void FoldBack(FrameworkElement const& child, Panel const& host,
+              DependencyObject const& homeParent, uint32_t homeIndex) {
+  if (!child) return;
+  FoldOutOf(host, child);
+  if (auto panel = homeParent.try_as<Panel>()) {
+    if (FoldIndexOf(panel, child) != static_cast<uint32_t>(-1)) return;
+    const uint32_t size = panel.Children().Size();
+    panel.Children().InsertAt(homeIndex < size ? homeIndex : size, child);
+  } else if (auto content = homeParent.try_as<ContentControl>()) {
+    if (FoldSame(content.Content(), child)) return;
+    content.Content(child);
+  }
+}
+
 }  // namespace
 
 MainWindow::MainWindow() {
@@ -622,6 +695,13 @@ void MainWindow::ApplyBreakpoint() {
   SetWidth(WalletPaneAColumn(), earningsTwo ? 360 : 0);
   WalletPaneBRule().Visibility(earningsTwo ? Visibility::Visible : Visibility::Collapsed);
   WalletPaneA().Visibility(earningsTwo ? Visibility::Visible : Visibility::Collapsed);
+  // The fold rule's doors, in the same applied-state pass as the gates (the
+  // fold-doors design note's placement rule: moved on SizeChanged, the rows
+  // could be stranded by the early-out above). The overflow is pane A's command
+  // door exactly while the rail is folded; the fold hosts hold pane C's rows.
+  EarningsActionsButton().Visibility(earningsTwo ? Visibility::Collapsed
+                                                 : Visibility::Visible);
+  ApplyWalletFold(earningsThree, earningsTwo);
 
   // ---- Account: plan, identity, codes ---------------------------------------
   // Home's shape, applied to an account: a fixed rail of figures, a wide middle
@@ -660,6 +740,10 @@ void MainWindow::ApplyBreakpoint() {
   SetWidth(AccountPaneAColumn(), accountTwo ? 360 : 0);
   AccountPaneBRule().Visibility(accountTwo ? Visibility::Visible : Visibility::Collapsed);
   AccountPaneA().Visibility(accountTwo ? Visibility::Visible : Visibility::Collapsed);
+  // The fold rule's doors, in the same applied-state pass as the gates: the
+  // plan pane's action rows and the whole extender section are reparented into
+  // pane B's fold hosts (pane B survives to the smallest width).
+  ApplyAccountFold(accountThree, accountTwo);
 
   // (Leaderboard's branch is gone with its destination: it is a tab inside
   // Earnings' ledger pane now, and shares that pane's widths.)
@@ -786,6 +870,111 @@ void MainWindow::ApplyBreakpoint() {
   urnw::LogInfo("layout: {} at {:.0f}dip of nav content (window {:.0f}dip){}",
                 ultra ? "ultra" : wide ? "wide" : "narrow", content, width,
                 connectThree ? ", Home in three panes" : "");
+}
+
+// ---- the fold doors (docs/superpowers/2026-09-29-fold-doors-design.md) -------
+
+// Where every reparented row lives at rest, captured on the first breakpoint
+// application. STRUCTURAL, not Parent()'s: measured live, Parent() answers
+// NULL for every account element at ctor time (the account view is not yet
+// attached when the first ApplyBreakpoint runs, and the wallet view is) - the
+// pre-R3 Reparent's comment trail warned about exactly this. The homes are the
+// named pane containers; the index within each comes from the identity search,
+// which is what FoldBack's ascending-order restore relies on.
+void MainWindow::RecordFoldHomes() {
+  if (foldHomesRecorded_) return;
+  foldHomesRecorded_ = true;
+  auto record = [](FrameworkElement const& element, Panel const& panel, FoldHome& home) {
+    home.parent = panel;
+    if (uint32_t i = FoldIndexOf(panel, element); i != static_cast<uint32_t>(-1)) {
+      home.index = i;
+    }
+  };
+  record(PointsNetworkHost(), WalletPaneCStack(), pointsNetworkHome_);
+  record(DataRankingHost(), WalletPaneCStack(), dataRankingHome_);
+  record(SeekerCard(), WalletPaneCStack(), seekerCardHome_);
+  record(WalletProviderTransportBarRow(), WalletPaneCStack(), walletTransportHome_);
+  record(WalletPaneCFold(), WalletPaneAStack(), walletPaneCFoldHome_);
+  record(AccountUpgradeButton(), AccountPaneAStack(), accountUpgradeHome_);
+  record(RedeemRowButton(), AccountPaneAStack(), redeemRowHome_);
+  record(AccountPlanExtraHost(), AccountPaneAStack(), accountPlanExtraHome_);
+  // the extender host is pane D's scroller Content directly (a ContentControl
+  // home; the index is unused on that shape)
+  accountExtenderHome_.parent = AccountPaneDScroll();
+}
+
+// EARNINGS. Below 1500 pane C folds, and its state-writing rows have no second
+// door: the points network block and the own-rank + public-toggle block (both
+// direct API writes with echo guards, not sheet doors), the provider transport
+// row (its sheet's only door) and the Seeker card (a command). They are
+// REPARENTED into WalletPaneCFold at the foot of pane A's scroll - and below
+// 900 pane A folds too, so the host itself moves into the ledger pane's foot
+// strip (the note's option i: the rows ride with the host, wiring untouched).
+// The visibility writers (ShowPointsBoard, ApplyStatsSections) hold element
+// references, so they keep working across the move.
+void MainWindow::ApplyWalletFold(bool earningsThree, bool earningsTwo) {
+  RecordFoldHomes();
+  auto fold = WalletPaneCFold();
+  if (earningsThree) {
+    // ascending recorded-index order within pane C's stack - see FoldBack
+    FoldBack(PointsNetworkHost(), fold, pointsNetworkHome_.parent, pointsNetworkHome_.index);
+    FoldBack(DataRankingHost(), fold, dataRankingHome_.parent, dataRankingHome_.index);
+    FoldBack(SeekerCard(), fold, seekerCardHome_.parent, seekerCardHome_.index);
+    FoldBack(WalletProviderTransportBarRow(), fold, walletTransportHome_.parent,
+             walletTransportHome_.index);
+    fold.Visibility(Visibility::Collapsed);
+  } else {
+    FoldIn(PointsNetworkHost(), fold, pointsNetworkHome_.parent);
+    FoldIn(DataRankingHost(), fold, dataRankingHome_.parent);
+    FoldIn(SeekerCard(), fold, seekerCardHome_.parent);
+    FoldIn(WalletProviderTransportBarRow(), fold, walletTransportHome_.parent);
+    fold.Visibility(Visibility::Visible);
+  }
+  if (earningsTwo) {
+    FoldBack(fold, WalletPaneBFootHost(), walletPaneCFoldHome_.parent,
+             walletPaneCFoldHome_.index);
+    WalletPaneBFoot().Visibility(Visibility::Collapsed);
+  } else {
+    FoldIn(fold, WalletPaneBFootHost(), walletPaneCFoldHome_.parent);
+    WalletPaneBFoot().Visibility(Visibility::Visible);
+  }
+}
+
+// ACCOUNT. Below 900 the plan pane folds: its figures are readings with second
+// doors (the status strip and the tray), but its three action rows - upgrade,
+// redeem, manage subscription - are the pane's only commands, so they are
+// REPARENTED into AccountPlanFoldHost. Below 1500 the extender pane folds, and
+// its share/import sheets' only door plus the dns/gossip/hosts fields live in
+// one named host, so the WHOLE AccountExtenderHost moves into
+// AccountExtenderFoldHost (pane B survives to the smallest width, so nothing
+// further is needed below 900). The extender's build-once guard, save handlers
+// and re-localization registry all hold element references, not tree paths.
+void MainWindow::ApplyAccountFold(bool accountThree, bool accountTwo) {
+  RecordFoldHomes();
+  auto planFold = AccountPlanFoldHost();
+  if (accountTwo) {
+    // ascending recorded-index order within pane A's stack - see FoldBack
+    FoldBack(AccountUpgradeButton(), planFold, accountUpgradeHome_.parent,
+             accountUpgradeHome_.index);
+    FoldBack(RedeemRowButton(), planFold, redeemRowHome_.parent, redeemRowHome_.index);
+    FoldBack(AccountPlanExtraHost(), planFold, accountPlanExtraHome_.parent,
+             accountPlanExtraHome_.index);
+    planFold.Visibility(Visibility::Collapsed);
+  } else {
+    FoldIn(AccountUpgradeButton(), planFold, accountUpgradeHome_.parent);
+    FoldIn(RedeemRowButton(), planFold, redeemRowHome_.parent);
+    FoldIn(AccountPlanExtraHost(), planFold, accountPlanExtraHome_.parent);
+    planFold.Visibility(Visibility::Visible);
+  }
+  auto extenderFold = AccountExtenderFoldHost();
+  if (accountThree) {
+    FoldBack(AccountExtenderHost(), extenderFold, accountExtenderHome_.parent,
+             accountExtenderHome_.index);
+    extenderFold.Visibility(Visibility::Collapsed);
+  } else {
+    FoldIn(AccountExtenderHost(), extenderFold, accountExtenderHome_.parent);
+    extenderFold.Visibility(Visibility::Visible);
+  }
 }
 
 // ---- the persistent status strip (D4) --------------------------------------
@@ -2686,6 +2875,15 @@ void MainWindow::OnEarningsTableChanged(SelectorBar const& s,
 
 void MainWindow::OnLeaderboardPublicToggled(IInspectable const& s, RoutedEventArgs const& e) {
   wallet_->OnLeaderboardPublicToggled(s, e);
+}
+
+// The "Earnings actions" overflow in the ledger pane's header, shown exactly
+// while pane A is folded: pane A's actions are all doors to sheets or menus, so
+// the fold-doors note duplicates the DOOR (one menu calling the same member
+// handlers), never the single-instance surface. The page builds the menu
+// because the items' states (claim enabled, connect vs change) are its members.
+void MainWindow::OnEarningsActions(IInspectable const& s, RoutedEventArgs const&) {
+  if (auto anchor = s.try_as<FrameworkElement>()) wallet_->ShowEarningsActionsMenu(anchor);
 }
 
 void MainWindow::OnManageAppSplitTunnel(IInspectable const& s, RoutedEventArgs const& e) {

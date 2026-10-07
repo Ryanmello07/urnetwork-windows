@@ -596,6 +596,13 @@ void WalletPage::ApplyStrings() {
     automation::AutomationProperties::SetName(more, walletOptions);
     ToolTipService::SetToolTip(more, winrt::box_value(walletOptions));
   }
+  // The ledger header's fold overflow is icon-only too. "Earnings actions" has
+  // no store key - the Adv() fallback (PageContext.h) until it ships.
+  const hstring earningsActions = Adv("adv_earnings_actions", L"Earnings actions");
+  automation::AutomationProperties::SetName(w_.EarningsActionsButton(), earningsActions);
+  ToolTipService::SetToolTip(w_.EarningsActionsButton(), winrt::box_value(earningsActions));
+  // the fold host's header repeats pane C's title key: same content, one name
+  w_.WalletPaneCFoldTitle().Text(Loc("earnings_network_pane_title"));
   w_.UnclaimedHeading().Text(Loc("unclaimed"));
   w_.ClaimButton().Content(LocBox("claim"));
   w_.Top200Heading().Text(Loc("top200"));
@@ -1777,6 +1784,74 @@ void WalletPage::ShowSolanaCardMenu(FrameworkElement const& anchor) {
     if (auto self = weak.get()) self->wallet().ConfirmRemoveSolanaWallet();
   });
   flyout.Items().Append(remove);
+  flyout.ShowAt(anchor);
+}
+
+// The "Earnings actions" overflow (the ledger pane's header, below the 900dip
+// earningsTwo gate): pane A's command door while the rail is folded. Every item
+// calls the SAME member handler its pane-A button calls - the fold-doors note's
+// COMMAND-DOOR DUPLICATION: the door is duplicated, the single-instance surface
+// never is. Item states read the pane's own elements (single source): the claim
+// button's enabled, the connected panel's visibility.
+void WalletPage::ShowEarningsActionsMenu(FrameworkElement const& anchor) {
+  MenuFlyout flyout;
+  auto weak = w_.get_weak();
+
+  MenuFlyoutItem claim;
+  claim.Text(Loc("claim"));
+  claim.IsEnabled(w_.ClaimButton().IsEnabled());
+  claim.Click([weak](IInspectable const& s, RoutedEventArgs const& e) {
+    if (auto self = weak.get()) self->wallet().OnClaimAlpha(s, e);
+  });
+  flyout.Items().Append(claim);
+
+  MenuFlyoutItem wallet;
+  const bool connected =
+      w_.WalletConnectedPanel().Visibility() == Visibility::Visible;
+  wallet.Text(connected ? Loc("earnings_change_wallet") : Loc("connect_bittensor_wallet"));
+  wallet.IsEnabled(!connectingWallet_);
+  wallet.Click([weak, connected](IInspectable const& s, RoutedEventArgs const& e) {
+    if (auto self = weak.get()) {
+      if (connected) {
+        self->wallet().OnChangeWallet(s, e);
+      } else {
+        self->wallet().OnConnectWallet(s, e);
+      }
+    }
+  });
+  flyout.Items().Append(wallet);
+
+  // The Solana door is a MENU, not a sheet: showing it from inside a closing
+  // flyout must be queued, or it is dismissed with the parent. The card's menu
+  // while the card is up (its Remove), the connect menu otherwise - exactly the
+  // choice pane A's two overflows offer.
+  MenuFlyoutItem solana;
+  solana.Text(Loc("solana_wallet"));
+  const bool cardUp = w_.SolanaWalletPanel().Visibility() == Visibility::Visible;
+  solana.Click([weak, anchor, cardUp](IInspectable const&, RoutedEventArgs const&) {
+    if (auto self = weak.get()) {
+      self->DispatcherQueue().TryEnqueue([weak, anchor, cardUp] {
+        if (auto self2 = weak.get()) {
+          if (cardUp) {
+            self2->wallet().ShowSolanaCardMenu(anchor);
+          } else {
+            self2->wallet().ShowWalletMenu(anchor);
+          }
+        }
+      });
+    }
+  });
+  flyout.Items().Append(solana);
+
+  MenuFlyoutItem upgrade;
+  upgrade.Text(Loc("upgrade_with_stripe"));
+  upgrade.Click([weak](IInspectable const&, RoutedEventArgs const&) {
+    // the window's member handler, like the rail's UpgradeButton: guest ->
+    // create-account flow, signed-in free -> the checkout sheet
+    if (auto self = weak.get()) self->OnOpenUpgrade(nullptr, nullptr);
+  });
+  flyout.Items().Append(upgrade);
+
   flyout.ShowAt(anchor);
 }
 
