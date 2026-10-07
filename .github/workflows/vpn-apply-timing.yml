@@ -1,0 +1,158 @@
+# Timing probe for urnetwork/windows A2s. Run 37563669505 (vpn-apply.yml)
+# stopped in its step 2 because Windows Installer's Restart Manager shut
+# something down in InstallValidate, after CloseApplication had closed vN's
+# app; msiexec's log does not say what. That step starts the update helper
+# the moment the app's tray window exists; vpn-apply-local.yml's update leg
+# starts it about two seconds later, after it has set up its stand-in for
+# GitHub, and has never met the Restart Manager.
+#
+# This runs that update leg with the real-release leg's timing (the stand-in
+# first, then the app, then the helper at once), on six runners, and prints
+# the Restart Manager's own events, which name what it shut down. It reuses
+# the MSIs run 37562188056 built from this tree: it builds nothing and
+# publishes nothing.
+#
+# Setup: on a throwaway branch of the fork that contains A2s, add this file
+# and .github/vpn-apply-lib.ps1, .github/vpn-upgrade-lib.ps1 and
+# .github/vpn-apply-fake-github.ps1, and push it as ci/a2s-local-<anything>.
+#
+# SPDX-License-Identifier: MPL-2.0
+
+name: VPN update helper timing probe (A2s)
+
+on:
+  push:
+    branches:
+      - 'ci/a2s-local-*'
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  # vpn-apply-local.yml's run on this tree: its msi-vn and msi-vnext artifacts
+  MSI_RUN_ID: '37562188056'
+
+jobs:
+  update:
+    name: The update, with the helper started as the app comes up (${{ matrix.attempt }})
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        attempt: [1, 2, 3, 4, 5, 6]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download vN and vNext from run ${{ env.MSI_RUN_ID }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          $msis = New-Item -ItemType Directory -Force (Join-Path $env:RUNNER_TEMP 'msis')
+          foreach ($name in 'msi-vn', 'msi-vnext') {
+            $part = Join-Path $env:RUNNER_TEMP "dl-$name"
+            gh run download $env:MSI_RUN_ID -R $env:GITHUB_REPOSITORY -n $name -D $part
+            if ($LASTEXITCODE -ne 0) { throw "could not download $name" }
+            Get-ChildItem $part -File | Move-Item -Destination $msis.FullName
+          }
+          Get-ChildItem $msis.FullName | Format-Table Name, Length -AutoSize | Out-String | Write-Host
+
+      - name: Install vN
+        timeout-minutes: 10
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-apply-lib.ps1"
+          if ((Get-UrProducts).Count -ne 0) { throw "a URnetwork product is already installed on this runner" }
+          $code = Invoke-UrMsiexec '/i' (Get-UrMsiPath 'vn') '/qn' 'vn-install.log'
+          if ($code -ne 0) { throw "vN install exit code $code" }
+          Assert-UrInstalled (Get-UrExpect 'vn') 'vn-install.log' | Out-Null
+          if ((Get-UrHelperFeed $UrHelperPath) -ne 'official') { throw "the installed helper is not the official feed's" }
+          $explorer = @(Get-CimInstance Win32_Process -Filter "Name='explorer.exe'")
+          "session: $($explorer.Count) explorer.exe; this process is in session $((Get-Process -Id $PID).SessionId)"
+
+      - name: The update, with the helper started as vN's app comes up
+        timeout-minutes: 20
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-apply-lib.ps1"
+          $stepStarted = Get-Date
+          $vnext = Get-UrExpect 'vnext'
+          $tag = "v$($vnext.version)"
+          $from = Get-UrAppLogLength
+          $state = $null
+          try {
+            # the stand-in first, so that nothing separates the app's start
+            # from the helper's, as in vpn-apply.yml's step 2
+            $state = Set-UrFakeGitHub (Get-UrMsiPath 'vnext') $vnext.version
+            $app = Start-UrTrayApp
+            $appUp = Get-Date
+            $run = Invoke-UrHelper $tag 900 $app
+            $helperEnded = Get-Date
+          } finally {
+            Remove-UrTestNetwork $state
+          }
+          Show-UrUpdates
+          if ($run.ExitCode -ne 0) { throw ("the helper exited {0} (0x{0:X8}), want 0" -f $run.ExitCode) }
+          Assert-UrResult (Read-UrResult) $tag $vnext.code 0
+          $tagDir = Join-Path $UrUpdatesDir $tag
+          $msiLog = Join-Path $tagDir 'install.log'
+          Copy-Item $msiLog (Join-Path $UrLogDir 'vnext-update.log')
+          Assert-UrInstalled $vnext 'vnext-update.log' | Out-Null
+          if ($null -eq $run.Marked) { throw "the app did not exit while the helper ran: the installer did not close it" }
+          $evidence = Get-UrCloseEvidence $msiLog
+          $closed = Get-UrAppLogLines 'tray: WM_CLOSE received, exiting' $from
+          if ($closed.Count -ne 1) { throw "the app logged $($closed.Count) WM_CLOSE lines, want one" }
+          $closedAt = Get-UrAppLogTime $closed[0]
+          "Wix4CloseApplications_X64 $($evidence.CloseStart) - $($evidence.CloseEnd); WM_CLOSE received $closedAt; the app was up at $($appUp.ToString('HH:mm:ss.fff')) and seen gone by $($run.Marked.ToString('HH:mm:ss.fff'))"
+          if ($null -eq $evidence.CloseStart -or $null -eq $evidence.CloseEnd) { throw "no Wix4CloseApplications_X64 in the log" }
+          if ($closedAt -lt $evidence.CloseStart -or $closedAt -gt $evidence.CloseEnd) { throw "the app's WM_CLOSE came outside Wix4CloseApplications_X64" }
+          # CloseApplication waits for every URnetwork.exe it messaged to end
+          # (WixCloseApplications: ProcWaitForIds, for up to its 15 s timeout).
+          # An action that ended well inside the timeout saw the app's process
+          # end, before InstallValidate began.
+          $closeSeconds = ($evidence.CloseEnd - $evidence.CloseStart).TotalSeconds
+          if ($closeSeconds -lt 0 -or $closeSeconds -ge 10) { throw "Wix4CloseApplications_X64 took $closeSeconds s: it did not see the app's process end inside its timeout" }
+          # What the Restart Manager finds in use in InstallValidate after that
+          # is something else holding a file of the package, and shutting it
+          # down is Windows Installer's own handling. Its events name what it
+          # shut down. Seen when the update starts within about two seconds of
+          # the app's first start (run 37563669505, and six of six in run
+          # 37566391485): the Windows Font Cache Service and, with it, the
+          # URnetwork service, a moment before StopServices would have stopped
+          # it. None may be the app, which CloseApplication closed, or the
+          # update helper, which is running this install.
+          $evidence.RestartManagerLines | ForEach-Object { "log: $_" }
+          $rmEvents = @(Get-WinEvent -FilterHashtable @{ LogName = 'Application'; StartTime = $stepStarted } -ErrorAction SilentlyContinue |
+            Where-Object { $_.ProviderName -match 'RestartManager' } | Sort-Object TimeCreated)
+          $rmEvents | ForEach-Object { "RM event $($_.Id) at $($_.TimeCreated.ToString('HH:mm:ss.fff')): $($_.Message)" }
+          $rmOurs = @($rmEvents | Where-Object { $_.Message -match "'URnetwork'|'URnetwork update" })
+          if ($rmOurs.Count -ne 0) { throw "the Restart Manager acted on the app or the update helper: $(($rmOurs | ForEach-Object { $_.Message }) -join ' | ')" }
+          $rmShutDown = @($rmEvents | Where-Object { $_.Id -eq 10002 })
+          $rmService = @($rmShutDown | Where-Object { $_.Message -match "'URnetwork Service'" })
+          "OBSERVED: the Restart Manager shut something down in InstallValidate: $($evidence.ShutDownInValidate.Count -ne 0); its events name $($rmShutDown.Count) shutdown(s), the URnetwork service among them: $($rmService.Count -ne 0); none is the app or the update helper"
+          if ((Get-UrAppLogLines 'the Restart Manager is closing the app' $from).Count -ne 0) { throw "the Restart Manager closed the app, not CloseApplication" }
+          $seen = Wait-UrRelaunch $from 150
+          if ($seen.Processes.Count -eq 0) { throw "no URnetwork.exe --after-update was started" }
+          Assert-UrRelaunchWaited $seen $helperEnded
+          "OK: the update, started as the app came up, installed, closed the app by CloseApplication and relaunched it"
+          Stop-UrAppProcesses
+
+      - name: Collect logs
+        if: always()
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-apply-lib.ps1"
+          Copy-Item "$env:LOCALAPPDATA\URnetwork\app\logs" (Join-Path $UrLogDir 'app-logs') -Recurse -Force -ErrorAction SilentlyContinue
+          Copy-Item $UrUpdatesDir (Join-Path $UrLogDir 'updates') -Recurse -Force -Exclude *.msi -ErrorAction SilentlyContinue
+          Get-WinEvent -FilterHashtable @{ LogName = 'Application'; StartTime = (Get-Date).AddHours(-2) } -ErrorAction SilentlyContinue |
+            Where-Object { $_.ProviderName -match 'RestartManager' } | Sort-Object TimeCreated |
+            ForEach-Object { "$($_.TimeCreated.ToString('o')) $($_.Id) $($_.Message)" } |
+            Out-File (Join-Path $UrLogDir 'restart-manager-events.txt')
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: timing-logs-${{ matrix.attempt }}
+          path: ${{ runner.temp }}/upgrade-logs/
+          if-no-files-found: warn
