@@ -130,7 +130,8 @@ class LoginPage {
   // gates Get started on a non-empty field (iOS/android parity)
   void OnUserAuthChanged(winrt::Windows::Foundation::IInspectable const&,
                          winrt::Microsoft::UI::Xaml::Controls::TextChangedEventArgs const&);
-  // Google / Apple through the provider's web flow (SdkHost::SignInWithSso)
+  // Google / Apple: the embedded sheet first, the provider's web flow in the
+  // browser as the fallback (StartSsoSignIn)
   void OnSignInWithGoogle(winrt::Windows::Foundation::IInspectable const&,
                           winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnSignInWithApple(winrt::Windows::Foundation::IInspectable const&,
@@ -185,9 +186,21 @@ class LoginPage {
   winrt::fire_and_forget ShowGuestModeSheet();  // terms consent -> LoginAsGuest
   void SetWalletSignInEnabled(bool enabled);
   void ApplyWalletSignInResult(urnw::AuthResult const& result);
-  // Google or Apple: open the provider's sign-in page and wait for the api's
-  // urnetwork://oauth/<provider> answer; `provider` is "google" or "apple".
+  // Google or Apple: the embedded sheet first (SdkHost::SignInWithSsoEmbedded
+  // + SsoSheet — the provider's own page in a WebView2, signed in the ur.io
+  // website's way: Google's fragment flow, Apple's JS-SDK popup), with the
+  // browser flow (SdkHost::SignInWithSso) as the fallback when there is no
+  // embedded url or the webview cannot load the page. `provider` is "google"
+  // or "apple".
   void StartSsoSignIn(const char* provider);
+  // Open the embedded sign-in sheet on the armed attempt's authorize url.
+  // `finish` is the click's one completion (both legs answer through it);
+  // `settled` marks the attempt's UI as answered without the SDK (sheet
+  // cancel, or the fallback's re-arm superseding it) so the attempt's done
+  // does not then touch a page the next flow already owns.
+  winrt::fire_and_forget ShowSsoSheet(std::string provider, std::string url,
+                                      std::function<void(urnw::AuthResult)> finish,
+                                      std::shared_ptr<bool> settled);
   // seedphrase step: word count -> the warning line + the submit gate
   void ValidateSeedphrase();
   // Empty the seedphrase field. It is UIA-readable (and writable) by any
@@ -251,6 +264,7 @@ class LoginPage {
   std::shared_ptr<urnw::GuestModeSheet> guestSheet_;
   std::shared_ptr<urnw::SeedphraseDisplaySheet> seedphraseSheet_;
   std::shared_ptr<urnw::NetworkServerSheet> networkServerSheet_;
+  std::shared_ptr<urnw::SsoSheet> ssoSheet_;
   // "Seedphrase copied" / "Referral link copied" acknowledgements
   std::unique_ptr<urnw::kit::Snackbar> snackbar_;
 };

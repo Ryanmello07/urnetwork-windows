@@ -643,11 +643,14 @@ class SdkHost {
   // Drop the pending instant network jwt without registering (sheet dismissed).
   void DiscardInstantAccount();
 
-  // ---- Google / Apple SSO (the provider's web flow, the api's callback) ------
-  // Neither identity provider has a native desktop flow here, so both run in
-  // the default browser against the provider itself: Google's authorize page
+  // ---- Google / Apple SSO (the provider's web flow, two returns) ------------
+  // Neither identity provider has a native desktop flow here, so both run the
+  // provider's own web sign-in: EMBEDDED first (SignInWithSsoEmbedded — the
+  // SsoSheet's WebView2, the ur.io website's fragment flow against the
+  // redirect uris registered on the providers' web clients) or, as the
+  // fallback, in the default browser (SignInWithSso — Google's authorize page
   // (code flow) or Apple's, with <api>/auth/<provider>/callback as the
-  // redirect. The api hands the identity token back on
+  // redirect). Either way the identity token arrives on
   // urnetwork://oauth/<provider>, which HandleDeepLink routes here (the same
   // client ids the ur.io login dialog uses, so the server accepts the token
   // exactly as it does for the web). The attempt's `state` must be echoed and
@@ -656,6 +659,15 @@ class SdkHost {
   // to the create-network step the same way a wallet does. `provider` is
   // "google" or "apple".
   void SignInWithSso(const std::string& provider, std::function<void(AuthResult)> done);
+  // The same attempt armed IDENTICALLY (same supersede via
+  // CancelPendingWalletFlows, same state/nonce minting, same walletAuthDone_
+  // handoff), but no browser is opened: returns the authorize url for the
+  // embedded sign-in sheet's WebView2 (the ur.io website's fragment flow —
+  // WalletConnect::AppleOAuthEmbeddedUrl / GoogleOAuthEmbeddedUrl), "" for an
+  // unknown provider. The answer still arrives through HandleDeepLink (on_sso):
+  // the sheet synthesizes exactly the deep link the api's callback would have.
+  std::string SignInWithSsoEmbedded(const std::string& provider,
+                                    std::function<void(AuthResult)> done);
   // An SSO identity authenticated but has no network: the id token is retained
   // for CreateNetwork (name + terms, no password), like a wallet.
   bool HasPendingAuthJwt();

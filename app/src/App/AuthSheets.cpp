@@ -5,18 +5,23 @@
 
 #include <algorithm>
 #include <cctype>
+#include <fstream>
 #include <vector>
+
+#include <nlohmann/json.hpp>
 
 #include <winrt/Windows.ApplicationModel.DataTransfer.h>
 #include <winrt/Microsoft.UI.Xaml.Automation.h>
 #include <winrt/Microsoft.UI.Xaml.Automation.Peers.h>
+#include <winrt/Microsoft.Web.WebView2.Core.h>
 
 #include "BalanceSheets.h"  // SetTermsMarkerText (the terms/privacy link inlines)
 #include "Ids.h"
 #include "Localization.h"
 #include "PageContext.h"
 #include "Log.h"
-#include "SheetFit.h"  // sheetfit: sheets clamp to the window at open time
+#include "Paths.h"      // StorageRoot: the WebView2 user-data folder
+#include "SheetFit.h"   // sheetfit: sheets clamp to the window at open time
 #include "Strings.h"
 #include "UrColors.h"
 #include "UrComponents.h"
@@ -40,6 +45,34 @@ hstring Loc(std::string_view key) { return hstring{Localized(key)}; }
 winrt::Windows::Foundation::IInspectable LocBox(std::string_view key) {
   return winrt::box_value(Loc(key));
 }
+
+// The SsoSheet's Apple driver page: a document at the https://ur.io origin
+// (served from disk through a virtual host mapping) that window.open()s the
+// web_message authorize url and forwards Apple's oauthDone web message to the
+// host. This is the ur.io website's AppleID.auth SDK opener (mmm ur.io
+// ConnectDialog) reduced to the two calls of the SDK that matter here.
+// Apple's completion page accepts only an opener whose origin matches the
+// registered redirect's, which is why the page must BE https://ur.io.
+constexpr const char* kAppleDriverPageHead = R"HTML(<!doctype html>
+<meta charset="utf-8">
+<title>Sign in with Apple</title>
+<script>
+window.addEventListener('message', function (e) {
+  if (e.origin !== 'https://appleid.apple.com') return;
+  try {
+    var m = JSON.parse(e.data);
+    if (!m || m.method !== 'oauthDone' || !m.data) return;
+    window.chrome.webview.postMessage(JSON.stringify(m.data));
+  } catch (err) {}
+});
+window.open(')HTML";
+// the authorize url is inlined between the head and tail; its characters are
+// safe in a js string literal by construction — every parameter value came off
+// WalletConnect's Esc ([A-Za-z0-9-._~%]) and the fixed parts carry no quote
+// or backslash
+constexpr const char* kAppleDriverPageTail = R"HTML(', '_blank');
+</script>
+)HTML";
 
 }  // namespace
 
@@ -738,6 +771,406 @@ void NetworkServerSheet::UseDefault() {
 std::string NetworkServerSheet::DefaultHost() const {
   return current_.defaultHostName.empty() ? std::string(ids::kNetworkSpaceHostName)
                                           : current_.defaultHostName;
+}
+
+// ---- SsoSheet (embedded Google / Apple sign-in) ----------------------------
+
+std::shared_ptr<SsoSheet> SsoSheet::Create(XamlRoot const& root, SdkHost& sdk,
+                                           std::string provider, std::string authorizeUrl,
+                                           std::function<void()> onCancel,
+                                           std::function<void()> onFailed) {
+  auto sheet = std::shared_ptr<SsoSheet>(new SsoSheet(sdk, std::move(provider),
+                                                      std::move(authorizeUrl),
+                                                      std::move(onCancel), std::move(onFailed)));
+  sheet->Build(root);
+  return sheet;
+}
+
+void SsoSheet::Build(XamlRoot const& root) {
+  dialog_ = ContentDialog();
+  dialog_.XamlRoot(root);
+  dialog_.Title(winrt::box_value(
+      Loc(provider_ == "apple" ? "sign_in_with_apple" : "sign_in_with_google")));
+  dialog_.Background(colors::SheetBrush());
+  // Close IS the cancel: the sign-in answers only through the sheet's return
+  // paths (the fragment interception, Apple's web message)
+  dialog_.CloseButtonText(Loc("cancel"));
+
+  StackPanel content;
+  content.MinWidth(sheetfit::Width(root, 440));
+  content.Spacing(8);
+
+  // the webview (inserted once the slot loads) sits under a loading ring
+  webviewSlot_ = Grid();
+  webviewSlot_.MinWidth(sheetfit::Width(root, 440));
+  // The provider's form wants room; the reserve covers the dialog's title and
+  // command bar (sheetfit).
+  webviewSlot_.Height(sheetfit::Height(root, 600, 120));
+  webviewSlot_.Background(colors::BackgroundBrush());
+  ring_ = ProgressRing();
+  ring_.Width(36);
+  ring_.Height(36);
+  ring_.IsActive(true);
+  ring_.HorizontalAlignment(HorizontalAlignment::Center);
+  ring_.VerticalAlignment(VerticalAlignment::Center);
+  webviewSlot_.Children().Append(ring_);
+  content.Children().Append(webviewSlot_);
+  dialog_.Content(content);
+
+  // WebView2 init needs the control bound to a shown window, so it starts when
+  // the slot enters the live tree, not from the ctor.
+  webviewSlot_.Loaded([weak = weak_from_this()](auto const&, auto const&) {
+    if (auto self = weak.lock()) self->OpenProviderPage();
+  });
+
+  dialog_.Closed([weak = weak_from_this()](auto const&, auto const&) {
+    if (auto self = weak.lock()) {
+      self->closed_ = true;
+      self->TeardownWebView();
+      // Closed without an answer and not already routed to the browser-flow
+      // fallback: a certain cancel — the login page re-enables its buttons.
+      if (!self->completed_ && !self->failed_ && self->onCancel_) self->onCancel_();
+    }
+  });
+}
+
+winrt::fire_and_forget SsoSheet::OpenProviderPage() {
+  // Google answers through the redirect's fragment; Apple through the web
+  // message popup (the class comment says why the transports differ)
+  if (provider_ == "apple") {
+    OpenApplePopup();
+    co_return;
+  }
+  namespace wv2 = winrt::Microsoft::Web::WebView2::Core;
+  auto weak = weak_from_this();
+  auto queue = dialog_.DispatcherQueue();
+
+  // one webview per showing (a closed WebView2 cannot be revived)
+  TeardownWebView();
+  const uint32_t generation = ++webviewGeneration_;
+  pageLoaded_ = false;
+  webview_ = WebView2();
+  // brand surface while the provider's page loads — never a white flash
+  webview_.DefaultBackgroundColor(colors::kBackground);
+
+  webview_.NavigationStarting([weak, queue](auto const&, auto const& args) {
+    const std::string uri = urnw::Narrow(std::wstring_view{args.Uri()});
+    auto self = weak.lock();
+    if (!self) return;
+    auto link = WalletConnect::OAuthFragmentReturn(self->provider_, uri);
+    if (!link) return;
+    // the provider handing the sign-in's result back in the redirect's
+    // fragment — never a real navigation: the ur.io page never loads, and the
+    // token never leaves the machine except to the provider
+    args.Cancel(true);
+    // deferred: handling closes the sheet and tears this webview down, which
+    // must not happen from inside its own event
+    queue.TryEnqueue([weak, link = std::move(*link)] {
+      if (auto self = weak.lock()) self->HandleReturn(link);
+    });
+  });
+  webview_.NavigationCompleted([weak, queue, generation](auto const&, auto const& args) {
+    const bool ok = args.IsSuccess();
+    queue.TryEnqueue([weak, generation, ok] {
+      auto self = weak.lock();
+      if (!self || generation != self->webviewGeneration_) return;
+      if (ok) {
+        self->pageLoaded_ = true;
+        self->ring_.IsActive(false);
+      } else if (!self->pageLoaded_) {
+        // the authorize page never rendered (offline, dns, tls): nothing was
+        // shown, so no sign-in can be lost — the browser flow can still run
+        self->Fail();
+      }
+    });
+  });
+  webview_.CoreProcessFailed([weak, queue, generation](auto const&, auto const&) {
+    queue.TryEnqueue([weak, generation] {
+      auto self = weak.lock();
+      if (!self || generation != self->webviewGeneration_) return;
+      if (!self->pageLoaded_) {
+        // died before anything rendered: the browser flow can still run
+        self->Fail();
+        return;
+      }
+      // Died mid-sign-in: no token ever existed here, so there is nothing to
+      // lose — closing is the honest cancel, not a browser retry over a
+      // half-completed provider attempt.
+      self->dialog_.Hide();
+    });
+  });
+
+  // under the loading ring (appended in Build, so it stays on top)
+  webviewSlot_.Children().InsertAt(0, webview_);
+  ring_.IsActive(true);
+
+  try {
+    // Explicit user data folder: WebView2's default is next to the exe, which
+    // an install under Program Files cannot write. StorageRoot is the app's
+    // own per-user dir (%LOCALAPPDATA%\URnetwork\app).
+    const std::wstring dataDir = (StorageRoot(/*isService=*/false) / "webview2").wstring();
+    auto environment = co_await wv2::CoreWebView2Environment::CreateWithOptionsAsync(
+        hstring{}, hstring{dataDir}, wv2::CoreWebView2EnvironmentOptions());
+    auto self = weak.lock();
+    if (!self || generation != self->webviewGeneration_ || !self->webview_) co_return;
+    co_await self->webview_.EnsureCoreWebView2Async(environment);
+    // C++/WinRT resumes on the awaiting (UI) apartment; `self` kept the sheet
+    // alive across the await, the generation says whether it still wants us
+    if (generation != self->webviewGeneration_ || !self->webview_) co_return;
+    auto core = self->webview_.CoreWebView2();
+    core.NewWindowRequested([](auto const&, auto const& args) {
+      // target=_blank links (the provider's terms/privacy): the system browser
+      args.Handled(true);
+      try {
+        winrt::Windows::System::Launcher::LaunchUriAsync(
+            winrt::Windows::Foundation::Uri(args.Uri()));
+      } catch (...) {
+      }
+    });
+    core.Navigate(H(self->authorizeUrl_));
+  } catch (...) {
+    // WebView2 init failed (no Evergreen runtime, disk, group policy): the
+    // browser flow saves the sign-in
+    auto self = weak.lock();
+    if (!self || generation != self->webviewGeneration_) co_return;
+    self->Fail();
+  }
+}
+
+void SsoSheet::HandleReturn(std::string const& deepLink) {
+  if (completed_ || closed_) return;
+  completed_ = true;
+  // Exactly the deep link the api's callback would have delivered for this
+  // attempt in the browser flow: the armed attempt's state check, nonce check
+  // and authLogin all run off it unchanged (SdkHost's on_sso).
+  sdk_.HandleDeepLink(deepLink);
+  dialog_.Hide();
+}
+
+winrt::fire_and_forget SsoSheet::OpenApplePopup() {
+  namespace wv2 = winrt::Microsoft::Web::WebView2::Core;
+  auto weak = weak_from_this();
+  auto queue = dialog_.DispatcherQueue();
+
+  TeardownWebView();
+  const uint32_t generation = ++webviewGeneration_;
+  pageLoaded_ = false;
+
+  // The visible webview hosts Apple's page as the driver page's POPUP; the
+  // hidden driver is the opener the result's web message returns to.
+  webview_ = WebView2();
+  webview_.DefaultBackgroundColor(colors::kBackground);
+
+  webview_.NavigationStarting([weak, queue](auto const&, auto const& args) {
+    const std::string uri = urnw::Narrow(std::wstring_view{args.Uri()});
+    auto self = weak.lock();
+    if (!self) return;
+    auto link = WalletConnect::OAuthFragmentReturn(self->provider_, uri);
+    if (!link) return;
+    // belt and braces: Apple's answer normally arrives by web message, but if
+    // the popup ever does navigate to the registered redirect, the fragment
+    // return is still the right read — and the ur.io page never loads
+    args.Cancel(true);
+    queue.TryEnqueue([weak, link = std::move(*link)] {
+      if (auto self = weak.lock()) self->HandleReturn(link);
+    });
+  });
+  webview_.NavigationCompleted([weak, queue, generation](auto const&, auto const& args) {
+    const bool ok = args.IsSuccess();
+    queue.TryEnqueue([weak, generation, ok] {
+      auto self = weak.lock();
+      if (!self || generation != self->webviewGeneration_) return;
+      if (ok) {
+        self->pageLoaded_ = true;
+        self->ring_.IsActive(false);
+      } else if (!self->pageLoaded_) {
+        // Apple's page never rendered (offline, dns, tls): nothing was shown,
+        // so no sign-in can be lost — the browser flow can still run
+        self->Fail();
+      }
+    });
+  });
+  webview_.CoreProcessFailed([weak, queue, generation](auto const&, auto const&) {
+    queue.TryEnqueue([weak, generation] {
+      auto self = weak.lock();
+      if (!self || generation != self->webviewGeneration_) return;
+      if (!self->pageLoaded_) {
+        self->Fail();
+        return;
+      }
+      // Died mid-sign-in: no token ever existed here, so there is nothing to
+      // lose — closing is the honest cancel, not a browser retry over a
+      // half-completed provider attempt.
+      self->dialog_.Hide();
+    });
+  });
+
+  driverWebview_ = WebView2();
+  // a working opener, not a surface: the driver never shows
+  driverWebview_.Width(1);
+  driverWebview_.Height(1);
+  driverWebview_.Opacity(0);
+  driverWebview_.HorizontalAlignment(HorizontalAlignment::Left);
+  driverWebview_.VerticalAlignment(VerticalAlignment::Top);
+  driverWebview_.WebMessageReceived([weak, queue](auto const&, auto const& args) {
+    // the driver page forwarding Apple's oauthDone payload (a json string)
+    std::string json;
+    try {
+      json = urnw::Narrow(std::wstring{args.TryGetWebMessageAsString()});
+    } catch (...) {
+      try {
+        json = urnw::Narrow(std::wstring{args.WebMessageAsJson()});
+      } catch (...) {
+        return;
+      }
+    }
+    queue.TryEnqueue([weak, json] {
+      if (auto self = weak.lock()) self->HandleAppleMessage(json);
+    });
+  });
+  driverWebview_.NavigationCompleted([weak, queue, generation](auto const&, auto const& args) {
+    const bool ok = args.IsSuccess();
+    queue.TryEnqueue([weak, generation, ok] {
+      auto self = weak.lock();
+      if (!self || generation != self->webviewGeneration_) return;
+      // the driver is local (a virtual host mapping to a file we just wrote):
+      // it failing means no popup will ever open, and nothing was shown
+      if (!ok && !self->pageLoaded_) self->Fail();
+    });
+  });
+  driverWebview_.CoreProcessFailed([weak, queue, generation](auto const&, auto const&) {
+    queue.TryEnqueue([weak, generation] {
+      auto self = weak.lock();
+      if (!self || generation != self->webviewGeneration_) return;
+      // the driver dying kills the result's return path
+      if (!self->pageLoaded_) {
+        self->Fail();
+        return;
+      }
+      self->dialog_.Hide();
+    });
+  });
+
+  // popup over driver, both under the loading ring (appended in Build)
+  webviewSlot_.Children().InsertAt(0, driverWebview_);
+  webviewSlot_.Children().InsertAt(0, webview_);
+  ring_.IsActive(true);
+
+  try {
+    const std::wstring dataDir = (StorageRoot(/*isService=*/false) / "webview2").wstring();
+    auto environment = co_await wv2::CoreWebView2Environment::CreateWithOptionsAsync(
+        hstring{}, hstring{dataDir}, wv2::CoreWebView2EnvironmentOptions());
+    auto self = weak.lock();
+    if (!self || generation != self->webviewGeneration_ || !self->webview_ ||
+        !self->driverWebview_)
+      co_return;
+    // the popup first: the driver's window.open assigns it as the NewWindow,
+    // which wants an ensured core
+    co_await self->webview_.EnsureCoreWebView2Async(environment);
+    co_await self->driverWebview_.EnsureCoreWebView2Async(environment);
+    if (generation != self->webviewGeneration_ || !self->webview_ || !self->driverWebview_)
+      co_return;
+    auto popupCore = self->webview_.CoreWebView2();
+    auto driverCore = self->driverWebview_.CoreWebView2();
+    // window.open from the driver hosts Apple's page in the sheet's visible
+    // webview. NewWindow (not Handled + the system browser) is what keeps
+    // window.opener — and with it the web_message return path — intact.
+    driverCore.NewWindowRequested([popupCore](auto const&, auto const& args) {
+      args.NewWindow(popupCore);
+    });
+    popupCore.NewWindowRequested([](auto const&, auto const& args) {
+      // target=_blank links inside Apple's page (terms, privacy, help): the
+      // system browser
+      args.Handled(true);
+      try {
+        winrt::Windows::System::Launcher::LaunchUriAsync(
+            winrt::Windows::Foundation::Uri(args.Uri()));
+      } catch (...) {
+      }
+    });
+    // A page at the ur.io origin, served from disk through a virtual host
+    // mapping: Apple's completion page postMessages the result to the opener
+    // only when the opener's origin matches the registered redirect's
+    // (https://ur.io), so the driver page must BE https://ur.io — without
+    // depending on the real site being reachable.
+    const auto driverDir = StorageRoot(/*isService=*/false) / "sso-driver";
+    std::error_code ec;
+    std::filesystem::create_directories(driverDir, ec);
+    const auto driverFile = driverDir / "apple-popup-driver.html";
+    {
+      std::ofstream out(driverFile, std::ios::binary | std::ios::trunc);
+      out << kAppleDriverPageHead << authorizeUrl_ << kAppleDriverPageTail;
+    }
+    driverCore.SetVirtualHostNameToFolderMapping(
+        hstring{L"ur.io"}, hstring{driverDir.wstring()},
+        wv2::CoreWebView2HostResourceAccessKind::Allow);
+    driverCore.Navigate(hstring{L"https://ur.io/apple-popup-driver.html"});
+  } catch (...) {
+    // WebView2 init failed (no Evergreen runtime, disk, group policy): the
+    // browser flow saves the sign-in
+    auto self = weak.lock();
+    if (!self || generation != self->webviewGeneration_) co_return;
+    self->Fail();
+  }
+}
+
+void SsoSheet::HandleAppleMessage(std::string const& json) {
+  // Apple's oauthDone payload, forwarded by the driver page: {authorization:
+  // {id_token, code, state}} on success — the code is the hybrid flow's other
+  // half and is ignored, as on the website — or {error: "..."} on failure.
+  auto data = nlohmann::json::parse(json, nullptr, false);
+  if (!data.is_object()) return;
+  const auto getStr = [](nlohmann::json const& obj, const char* key) {
+    auto it = obj.find(key);
+    return it != obj.end() && it->is_string() ? it->get<std::string>() : std::string();
+  };
+  std::string idToken, state;
+  if (auto it = data.find("authorization"); it != data.end() && it->is_object()) {
+    idToken = getStr(*it, "id_token");
+    state = getStr(*it, "state");
+  }
+  const std::string error = getStr(data, "error");
+  // not the sign-in's answer (a stray message, a malformed payload): keep
+  // waiting — the sheet's close is the cancel
+  if (idToken.empty() && error.empty()) return;
+  HandleReturn(WalletConnect::OAuthDeepLink(provider_, state, idToken, error));
+}
+
+void SsoSheet::Fail() {
+  // failed_ first: the Closed handler must not report a cancel on top of the
+  // fallback, and onFailed_ re-arms (superseding this attempt) in the caller.
+  failed_ = true;
+  dialog_.Hide();
+  if (onFailed_) onFailed_();
+}
+
+void SsoSheet::TeardownWebView() {
+  // invalidate every async continuation of the current attempt first: init,
+  // navigation results and the failure fallback all check the generation
+  ++webviewGeneration_;
+  pageLoaded_ = false;
+  ring_.IsActive(false);
+  if (!webview_ && !driverWebview_) return;
+  auto view = webview_;
+  auto driver = driverWebview_;
+  webview_ = nullptr;
+  driverWebview_ = nullptr;
+  // Deferred: teardown is reachable from inside a webview's own event handlers
+  // (a canceled fragment navigation or a web message closes the sheet), and
+  // closing the control during its own event emission is the same reentrancy
+  // the upgrade sheet defers around.
+  auto slot = webviewSlot_;
+  dialog_.DispatcherQueue().TryEnqueue([slot, view, driver] {
+    for (auto const& v : {view, driver}) {
+      if (!v) continue;
+      uint32_t index = 0;
+      if (slot.Children().IndexOf(v, index)) slot.Children().RemoveAt(index);
+      try {
+        v.Close();
+      } catch (...) {
+      }
+    }
+  });
 }
 
 // ---- Account menu (iOS Shared/Views/AccountMenu.swift) ----------------------

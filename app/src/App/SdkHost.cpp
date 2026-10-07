@@ -1793,6 +1793,44 @@ void SdkHost::SignInWithSso(const std::string& provider, std::function<void(Auth
   }
 }
 
+// Visibly parallel to SignInWithSso above: the SAME arming, then the embedded
+// sheet's authorize url instead of a browser. The attempt's answer comes back
+// through the same HandleDeepLink -> on_sso path — the sheet's WebView2
+// intercepts the provider's fragment redirect (Google) or receives Apple's web
+// message and synthesizes the urnetwork://oauth/<provider> link itself
+// (SsoSheet), so the state check, the nonce check and authLogin below run
+// unchanged.
+std::string SdkHost::SignInWithSsoEmbedded(const std::string& provider,
+                                           std::function<void(AuthResult)> done) {
+  if (provider != "google" && provider != "apple") {
+    if (done) done({false, false, "unknown sign-in provider"});
+    return "";
+  }
+  SetAuthState(AuthState::Authenticating);
+  {
+    std::scoped_lock lock(mutex_);
+    // a fresh sign-in supersedes any retained token or wallet auth
+    pendingAuthJwt_.reset();
+    pendingAuthJwtType_.clear();
+    pendingWalletAuth_.reset();
+  }
+  // the browser round trip has ONE pair of callbacks: whatever was waiting is TOLD
+  CancelPendingWalletFlows("superseded by a sign-in");
+  walletAuthDone_ = std::move(done);
+  // Fresh per attempt: `state` is echoed by the provider and `nonce` rides
+  // inside the identity token it issues, so a stale or replayed callback can
+  // match neither. Both come from the SDK's random source, like a wallet nonce.
+  const std::string state = WalletConnect::OAuthState(urnet::generateNonce());
+  ssoAttempt_ = SsoAttempt{provider, state, urnet::generateNonce()};
+  // No browser and no api url: the embedded flows redirect to the ur.io urls
+  // registered on the providers' own clients, so the api's callback is never
+  // involved. The sheet drives its WebView2 with the returned url (Google by
+  // navigating to it, Apple by window.open from its ur.io-origin driver page).
+  return provider == "apple"
+             ? WalletConnect::AppleOAuthEmbeddedUrl(ssoAttempt_->state, ssoAttempt_->nonce)
+             : WalletConnect::GoogleOAuthEmbeddedUrl(ssoAttempt_->state, ssoAttempt_->nonce);
+}
+
 void SdkHost::AuthLoginWithSso(const std::string& provider, const std::string& idToken,
                                std::function<void(AuthResult)> done) {
   urnet::AuthLoginArgs args;

@@ -10,6 +10,7 @@
 #include <wincrypt.h>
 
 #include <cstdint>
+#include <cstring>
 #include <map>
 #include <string>
 #include <vector>
@@ -36,6 +37,12 @@ constexpr const char* kGoogleClientId =
     "338638865390-cg4m0t700mq9073smhn9do81mr640ig1.apps.googleusercontent.com";
 constexpr const char* kGoogleCallbackPath = "/auth/google/callback";
 constexpr const char* kGoogleReturnPath = "/google";
+// The embedded SSO sheet (SsoSheet): redirect uris registered on the providers'
+// own client configurations, the same ones the ur.io website signs in against
+// (mmm ur.io/react/src/auth/googleOAuth.js). Apple's Services ID registers the
+// bare origin; Google's web client registers the callback path.
+constexpr const char* kAppleEmbeddedRedirect = "https://ur.io";
+constexpr const char* kGoogleEmbeddedRedirect = "https://ur.io/auth/google/callback";
 constexpr const char* kPlatform = "windows";
 constexpr const char* kAppUrl = "https://ur.io";
 constexpr const char* kCluster = "mainnet-beta";
@@ -120,6 +127,28 @@ std::string Base64Url(const std::string& s) {
     else if (c == '/') c = '_';
   }
   while (!out.empty() && out.back() == '=') out.pop_back();
+  return out;
+}
+
+// A random v4 UUID, the shape Apple's JS SDK mints per signIn() for frame_id.
+std::string NewUuid() {
+  uint8_t b[16];
+  HCRYPTPROV prov = 0;
+  bool ok = CryptAcquireContextA(&prov, nullptr, nullptr, PROV_RSA_FULL,
+                                 CRYPT_VERIFYCONTEXT) &&
+            CryptGenRandom(prov, static_cast<DWORD>(sizeof(b)), b);
+  if (prov) CryptReleaseContext(prov, 0);
+  if (!ok) return "";
+  b[6] = (b[6] & 0x0f) | 0x40;  // version 4
+  b[8] = (b[8] & 0x3f) | 0x80;  // variant 10
+  static const char* hex = "0123456789abcdef";
+  std::string out;
+  out.reserve(36);
+  for (int i = 0; i < 16; ++i) {
+    if (i == 4 || i == 6 || i == 8 || i == 10) out.push_back('-');
+    out.push_back(hex[b[i] >> 4]);
+    out.push_back(hex[b[i] & 0xF]);
+  }
   return out;
 }
 
@@ -294,6 +323,87 @@ void WalletConnect::OpenAppleOAuth(const std::string& apiUrl, const std::string&
                     "&response_type=" + Esc("code id_token") + "&response_mode=form_post" +
                     "&scope=" + Esc("name email") + "&state=" + Esc(state) + "&nonce=" + Esc(nonce);
   OpenUrl(url);
+}
+
+std::string WalletConnect::AppleOAuthEmbeddedUrl(const std::string& state,
+                                                 const std::string& nonce) {
+  // The ur.io website's own Apple button (mmm ur.io ConnectDialog) drives
+  // Apple's JS SDK (appleid.auth.js) with usePopup:true, and this is the url
+  // that SDK opens. Apple requires response_mode=form_post the moment the
+  // name or email scope is requested ("invalid_request: response_mode must be
+  // form_post when name or email scope is requested"), and the one redirect
+  // registered on the Services ID (https://ur.io) answers a form POST with
+  // 405 — so the SDK's popup mode is the only transport that works with the
+  // scopes the server needs (the id token's email claim is the account
+  // identity there). Apple's completion page postMessages the result to the
+  // OPENER, which must be a page at the registered redirect's origin — the
+  // SsoSheet hosts one and window.open()s this url from it, exactly as the
+  // SDK does; frame_id/m/v are the SDK's own url parameters (v=1.5.7 is its
+  // version stamp). The parameter order mirrors the SDK's url builder.
+  const std::string frameId = NewUuid();
+  if (frameId.empty()) return "";
+  return std::string(kAppleAuthorize) + "?client_id=" + Esc(kAppleServicesId) +
+         "&redirect_uri=" + Esc(kAppleEmbeddedRedirect) +
+         "&response_type=" + Esc("code id_token") + "&state=" + Esc(state) +
+         "&scope=" + Esc("name email") + "&nonce=" + Esc(nonce) +
+         "&response_mode=web_message" + "&frame_id=" + frameId + "&m=11&v=1.5.7";
+}
+
+std::string WalletConnect::GoogleOAuthEmbeddedUrl(const std::string& state,
+                                                  const std::string& nonce) {
+  // The ur.io website's own Google button (googleOAuth.js): the implicit flow —
+  // response_type=id_token hands the identity token straight to the redirect's
+  // fragment, no server exchange. The sheet navigates its webview here and
+  // intercepts the fragment redirect (OAuthFragmentReturn).
+  return std::string(kGoogleAuthorize) + "?client_id=" + Esc(kGoogleClientId) +
+         "&redirect_uri=" + Esc(kGoogleEmbeddedRedirect) + "&response_type=id_token" +
+         "&response_mode=fragment" + "&scope=" + Esc("openid email profile") +
+         "&state=" + Esc(state) + "&nonce=" + Esc(nonce) + "&prompt=select_account";
+}
+
+std::string WalletConnect::OAuthDeepLink(const std::string& provider, const std::string& state,
+                                         const std::string& idToken, const std::string& error) {
+  // Exactly the deep link the api's callback would have delivered for this
+  // attempt in the browser flow (HandleOAuthReturn parses it).
+  std::string link =
+      std::string("urnetwork://") + kOAuthReturnHost + "/" + provider + "?state=" + Esc(state);
+  if (!idToken.empty()) link += "&id_token=" + Esc(idToken);
+  if (!error.empty()) link += "&error=" + Esc(error);
+  return link;
+}
+
+std::optional<std::string> WalletConnect::OAuthFragmentReturn(const std::string& provider,
+                                                              const std::string& uri) {
+  // What counts as the sign-in's answer in the sheet's WebView2:
+  //   google -> https://ur.io/auth/google/callback, the web client's
+  //     registered redirect, with the result in the fragment (the primary
+  //     Google return path);
+  //   apple  -> any navigation to https://ur.io with that exact host. Apple's
+  //     answer normally arrives by web message instead (SsoSheet), but if the
+  //     popup ever does navigate to the registered redirect — an error path,
+  //     a provider-side change — the fragment return is still the right read,
+  //     and the sheet never otherwise goes there.
+  // Anything else is an ordinary in-sheet navigation and is left alone. The
+  // boundary check keeps https://ur.io.evil.example and .../callback2 out.
+  const char* redirect = provider == "apple"    ? kAppleEmbeddedRedirect
+                         : provider == "google" ? kGoogleEmbeddedRedirect
+                                                : nullptr;
+  if (!redirect) return std::nullopt;
+  const size_t prefix = std::strlen(redirect);
+  if (uri.rfind(redirect, 0) != 0) return std::nullopt;
+  const char tail = uri.size() > prefix ? uri[prefix] : '\0';
+  if (tail != '\0' && tail != '/' && tail != '#' && tail != '?') return std::nullopt;
+  // The result rides in the FRAGMENT (response_mode=fragment). Only an
+  // id_token or an error is an answer; a fragment with neither (or none at
+  // all) is not the provider reporting back, so the navigation stands.
+  const auto hash = uri.find('#', prefix);
+  if (hash == std::string::npos || hash + 1 == uri.size()) return std::nullopt;
+  auto params = ParseQuery(uri.substr(hash + 1));
+  const std::string idToken = params.count("id_token") ? params["id_token"] : std::string();
+  const std::string error = params.count("error") ? params["error"] : std::string();
+  if (idToken.empty() && error.empty()) return std::nullopt;
+  const std::string state = params.count("state") ? params["state"] : std::string();
+  return OAuthDeepLink(provider, state, idToken, error);
 }
 
 void WalletConnect::HandleOAuthReturn(const std::string& url) {

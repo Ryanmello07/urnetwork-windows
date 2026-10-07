@@ -1140,13 +1140,21 @@ void LoginPage::OnWindowReactivated() {
 }
 
 // ---- Sign in with Google / Apple (the provider's web flow) ------------------
-// Neither has a native desktop flow here, so both open the provider's own
-// sign-in page in the default browser with the api's callback as the redirect;
-// the api returns the identity token on urnetwork://oauth/<provider>, which
-// protocol activation routes back into SdkHost (SdkHost::SignInWithSso checks
-// the attempt's state and nonce before authLogin). Everything here does is
-// disable the sign-in affordances while that is happening and surface whatever
-// comes back.
+// Neither has a native desktop flow here. The EMBEDDED flow comes first: the
+// provider's own sign-in page in a sheet's WebView2 (SsoSheet), authorized the
+// way the ur.io website does it — for Google the implicit fragment flow
+// against the redirect registered on the web client; for Apple the Apple JS
+// SDK's popup transport (web_message), because Apple insists on form_post once
+// the name/email scope is requested and the one registered redirect answers a
+// POST with 405. The sheet hands the result to HandleDeepLink as exactly the
+// urnetwork://oauth/<provider> deep link the api's callback would have
+// delivered (SdkHost::SignInWithSsoEmbedded arms the attempt; the state and
+// nonce checks and authLogin run unchanged off the synthesized link). The
+// api-callback browser flow (SdkHost::SignInWithSso) stays as the fallback for
+// a sheet that cannot bring the provider's page up at all — no Evergreen
+// WebView2 runtime, an init failure, the authorize page never rendering.
+// Everything here does is disable the sign-in affordances while that is
+// happening and surface whatever comes back.
 
 void LoginPage::StartSsoSignIn(const char* provider) {
   SetInitialLoginError(hstring());
@@ -1154,13 +1162,79 @@ void LoginPage::StartSsoSignIn(const char* provider) {
   walletSignInInFlight_ = true;
   auto queue = w_.DispatcherQueue();
   auto weak = w_.get_weak();
-  Sdk().SignInWithSso(provider, [queue, weak](urnw::AuthResult r) {
+  // The one completion for every leg of this click (embedded or browser):
+  // ApplyWalletSignInResult already handles "authenticated but no network yet"
+  // for both credentials and re-enables the buttons.
+  std::function<void(urnw::AuthResult)> finish = [queue, weak](urnw::AuthResult r) {
     queue.TryEnqueue([weak, r] {
-      // ApplyWalletSignInResult already handles "authenticated but no network
-      // yet" for both credentials and re-enables the buttons.
       if (auto self = weak.get()) self->login().ApplyWalletSignInResult(r);
     });
-  });
+  };
+  // `settled` marks the attempt's UI as answered WITHOUT the SDK: by the
+  // sheet's cancel, or by the browser fallback's re-arm superseding it. The
+  // attempt itself is left armed in the SDK (a late answer still has to match
+  // its state and nonce), but once settled its done must not touch the page —
+  // the next flow owns it.
+  auto settled = std::make_shared<bool>(false);
+  const std::string url =
+      Sdk().SignInWithSsoEmbedded(provider, [finish, settled](urnw::AuthResult r) {
+        if (*settled) return;
+        finish(r);
+      });
+  if (url.empty()) {
+    // no embedded authorize url (an unknown provider): the browser path guards
+    // and answers the same way
+    urnw::LogWarn("sso: no embedded authorize url for {}, using the browser flow", provider);
+    Sdk().SignInWithSso(provider, finish);
+    return;
+  }
+  ShowSsoSheet(provider, url, std::move(finish), std::move(settled));
+}
+
+winrt::fire_and_forget LoginPage::ShowSsoSheet(std::string provider, std::string url,
+                                               std::function<void(urnw::AuthResult)> finish,
+                                               std::shared_ptr<bool> settled) {
+  if (w_.sheetOpen()) {
+    // another sheet owns the dialog slot: the browser flow saves the sign-in
+    urnw::LogWarn("sso sheet: a sheet is already open, using the browser flow");
+    *settled = true;
+    Sdk().SignInWithSso(provider, finish);
+    co_return;
+  }
+  auto self = w_.get_strong();
+  w_.SetSheetOpen(true);
+  auto weak = w_.get_weak();
+  try {
+    ssoSheet_ = urnw::SsoSheet::Create(
+        self->Content().XamlRoot(), Sdk(), provider, std::move(url),
+        // onCancel: closed without an answer — closing our own sheet is a
+        // certain cancel signal (unlike a closed browser tab), so re-enable
+        // the affordances with an empty error, which shows nothing.
+        [weak, settled] {
+          *settled = true;
+          if (auto self = weak.get())
+            self->login().ApplyWalletSignInResult(urnw::AuthResult{false, false, ""});
+        },
+        // onFailed: the webview could not bring up the provider's page at all.
+        // Nothing was shown, so no sign-in can be lost: the browser flow
+        // re-arms and supersedes this attempt cleanly.
+        [weak, provider, finish, settled] {
+          if (auto self = weak.get()) {
+            urnw::LogWarn("sso sheet: the embedded webview failed before the provider "
+                          "page loaded, using the browser flow");
+            *settled = true;  // the re-arm's supersede answer is the fallback's own
+            Sdk().SignInWithSso(provider, finish);
+          }
+        });
+    co_await ssoSheet_->Dialog().ShowAsync();
+  } catch (winrt::hresult_error const& e) {
+    urnw::LogError("sso sheet: {} (0x{:08x})", urnw::Narrow(std::wstring{e.message()}),
+                   static_cast<uint32_t>(e.code()));
+  } catch (std::exception const& e) {
+    urnw::LogError("sso sheet: {}", e.what());
+  }
+  ssoSheet_.reset();
+  w_.SetSheetOpen(false);
 }
 
 void LoginPage::OnSignInWithGoogle(IInspectable const&, RoutedEventArgs const&) {

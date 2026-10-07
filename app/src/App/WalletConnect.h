@@ -76,6 +76,42 @@ class WalletConnect {
   static std::string AppleOAuthState(const std::string& token);
   static std::string OAuthState(const std::string& token);
 
+  // ---- embedded SSO (the SsoSheet's WebView2) ------------------------------
+  // The authorize urls the embedded sign-in sheet drives its WebView2 with,
+  // mirroring the ur.io website's own sign-in (mmm ur.io ConnectDialog / react
+  // auth). No api callback is involved anywhere: the api-callback flow above
+  // is rejected by both providers' current configurations (Google's api vault
+  // lacks sign_in_oauth; the api url is not registered on Apple's Services ID).
+  //
+  //   google -> the website's implicit flow (googleOAuth.js):
+  //     response_type=id_token, response_mode=fragment against the registered
+  //     redirect https://ur.io/auth/google/callback. The answer rides the
+  //     redirect's FRAGMENT; the sheet's NavigationStarting sees it and cancels
+  //     the navigation, so the ur.io page never loads.
+  //   apple -> the website's Apple JS SDK popup (AppleID.auth.init with
+  //     usePopup:true): response_mode=web_message, because Apple insists on
+  //     form_post the moment the name or email scope is requested and the one
+  //     registered redirect (https://ur.io) answers a POST with 405. The sheet
+  //     window.open()s the url from a ur.io-origin driver page, and Apple's
+  //     completion page postMessages the result back to that page.
+  //
+  // `state`/`nonce` are the armed attempt's, exactly as in the browser flow.
+  static std::string AppleOAuthEmbeddedUrl(const std::string& state, const std::string& nonce);
+  static std::string GoogleOAuthEmbeddedUrl(const std::string& state, const std::string& nonce);
+  // The sheet's NavigationStarting test. When `uri` is the provider's fragment
+  // callback (the embedded redirect target above, with an id_token or an error
+  // in the fragment), returns the urnetwork://oauth/<provider> deep link for
+  // HandleDeepLink (OAuthDeepLink), and the sheet cancels the navigation — the
+  // ur.io page never loads, so the token never leaves the machine except to
+  // the provider. nullopt for any other navigation.
+  static std::optional<std::string> OAuthFragmentReturn(const std::string& provider,
+                                                        const std::string& uri);
+  // Synthesize exactly the urnetwork://oauth/<provider> deep link the api's
+  // callback would have delivered in the browser flow — state, id_token and
+  // error carried over.
+  static std::string OAuthDeepLink(const std::string& provider, const std::string& state,
+                                   const std::string& idToken, const std::string& error);
+
   // Route a urnetwork:// callback here. Returns true if it was a wallet or an
   // oauth sign-in callback.
   bool HandleDeepLink(const std::string& url);
