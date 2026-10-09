@@ -256,6 +256,11 @@ func TestUpdateReleaseRejectsWeakerDecisions(t *testing.T) {
 			"if (!publishedUnixSeconds || serverUnixSeconds <= 0) return false;",
 			"if (!publishedUnixSeconds) return false;",
 			"a list with no date counts no release"},
+		{"a release dated after the list counted", "ReleaseSelection.h",
+			"return *publishedUnixSeconds + feed.soakSeconds <= UtcDayStart(serverUnixSeconds);",
+			"return *publishedUnixSeconds + feed.soakSeconds <= UtcDayStart(serverUnixSeconds) ||\n" +
+				"         *publishedUnixSeconds > serverUnixSeconds;",
+			"a release published after the list's date is not offered"},
 		{"a day of twelve hours", "ReleaseSelection.h",
 			"inline constexpr std::int64_t kSecondsPerDay = 24 * 60 * 60;",
 			"inline constexpr std::int64_t kSecondsPerDay = 12 * 60 * 60;",

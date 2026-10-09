@@ -214,6 +214,12 @@ func checkTrayLater(checker, header, window, connect string) []string {
 	problems = append(problems, applyOrderProblems("UpdateChecker::DismissResult", dismiss,
 		regexp.QuoteMeta("if (offer_.code > version::kCode && !update::HiddenByLater(laterCode_, offer_.code)) {"),
 		regexp.QuoteMeta("s.phase = Phase::Available;"))...)
+	// Those two are the only places that put an offer on the banner: a third
+	// would be one Later does not reach.
+	if offered := regexp.MustCompile(`\bphase = Phase::Available;`).FindAllString(checker, -1); len(offered) != 2 {
+		problems = append(problems, fmt.Sprintf("UpdateChecker.cpp puts an offer on the banner in %d places, want the two "+
+			"that ask HiddenByLater first: the check and the dismissal of a report", len(offered)))
+	}
 	problems = append(problems, applyOrderProblems("MainWindow's update banner", window,
 		regexp.QuoteMeta("UpdateBar().ActionButton(update);"),
 		regexp.QuoteMeta(`later.Content(winrt::box_value(L"Later"));`),
@@ -476,6 +482,11 @@ func TestUpdateOfferWiringRejectsWeakerSources(t *testing.T) {
 			return checkTrayLater(replace(checker,
 				"if (offer_.code > version::kCode && !update::HiddenByLater(laterCode_, offer_.code)) {",
 				"if (offer_.code > version::kCode) {"), header, window, connect)
+		}},
+		{"a third place puts the offer back on the banner", "puts an offer on the banner in 3 places", func() []string {
+			return checkTrayLater(replace(checker, "  if (update::KeepsPackage(ended)) fs::remove_all(dir, ec);\n",
+				"  if (update::KeepsPackage(ended)) fs::remove_all(dir, ec);\n"+
+					"  Mutate([](Snapshot& s) { s.phase = Phase::Available; });\n"), header, window, connect)
 		}},
 		{"Later written somewhere else", "laterCode_ = offer.code;", func() []string {
 			return checkTrayLater(replace(checker, "      offer_ = offer;\n      offerServerUnix_ = serverUnixSeconds;\n",
