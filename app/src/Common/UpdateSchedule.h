@@ -122,6 +122,9 @@ struct ClickAfterCheck {
 
 inline constexpr ClickStep StepAfterCheck(const ClickAfterCheck& click) {
   if (!click.sameFeed || click.clickedCode == 0) return ClickStep::Dropped;
+  // What the feed offers now is asked before whether the banner still holds
+  // the click: a check that found another release, or none, has itself moved
+  // the banner on by the time the click is judged.
   if (click.checked && click.offeredCode == 0) return ClickStep::Withdrawn;
   if (click.checked && click.offeredCode != click.clickedCode) return ClickStep::Replaced;
   if (!click.bannerHolds || HiddenByLater(click.laterCode, click.clickedCode)) {

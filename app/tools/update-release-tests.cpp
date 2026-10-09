@@ -872,6 +872,19 @@ void ClickAfterTheCheck() {
           c.viaHelper = false;
         }) == ClickStep::Withdrawn,
         "nor is its installer shown");
+  // The check itself moves the banner on when the offer changed: to the
+  // release offered now, or shut. So the banner no longer holds the click by
+  // the time it is judged, and what became of its release is still the answer.
+  Check(step([](ClickAfterCheck& c) {
+          c.offeredCode = kNewer;
+          c.bannerHolds = false;
+        }) == ClickStep::Replaced,
+        "a release the check has already put on the banner is said to have replaced the clicked one");
+  Check(step([](ClickAfterCheck& c) {
+          c.offeredCode = 0;
+          c.bannerHolds = false;
+        }) == ClickStep::Withdrawn,
+        "a release whose banner the check has already shut is said to be withdrawn");
 
   // the click no longer stands
   Check(step([](ClickAfterCheck& c) { c.laterCode = kClicked; }) == ClickStep::Dropped,
