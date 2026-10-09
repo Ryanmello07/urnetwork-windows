@@ -648,9 +648,15 @@ func checkUpdateBannerAutomationIds(xaml map[string]string, window, developer st
 // polls: the feed's own repository, by the owner and name compiled in. It
 // says what the updater offers without promising every release, that a hand
 // install should prefer a release that has been out for a day (the newest
-// one can be minutes old, and no soak covers a hand install), and which
-// releases do not update themselves from this feed, by a date and not by a
-// tag that the next release would make wrong.
+// one can be minutes old, and no soak covers a hand install), and that a
+// release built before the updater polled this feed does not update itself
+// from it. Which releases those are it says by neither a date nor a tag: the
+// last of them is not known until a release is built with this change, and
+// one cut from main before then would make either wrong. It gives a way to
+// tell instead: nothing offered while a newer release has been listed for
+// three days. A release is offered 24 to 48 hours after it last changed, and
+// a running app checks at launch and then every six hours, so a running copy
+// that polls this feed is offered one within 54 hours.
 func checkReadmeNamesTheFeed(readme, selection string) []string {
 	var problems []string
 	feed := applyDefinitionUntil(selection, "inline constexpr Feed kOfficialFeed{", "\n};\n")
@@ -684,16 +690,33 @@ func checkReadmeNamesTheFeed(readme, selection string) []string {
 	for what, pattern := range map[string]string{
 		"that a hand install should prefer a release that has been out for a day": `can be minutes old\. When you install by hand, prefer the newest one that has been out for a day`,
 		"that the updater offers the newest release that has been out for a day":  `It offers the newest release that has been out, unchanged, for a day`,
-		"which releases do not update themselves, by a date":                      `A release published on or before \d{4}-\d{2}-\d{2} does not look for updates here`,
-		"that one install by hand of a later release is what it takes":            `Install one published after that by hand once`,
+		"which releases do not update themselves from this feed":                  `A release built before the updater polled these releases does not look for updates here, and never offers one\.`,
+		"how to tell that a copy is one of them":                                  `If the app has offered nothing while a release newer than yours has been listed for three days,`,
+		"that one install by hand of the newest release is what it takes":         `install the newest release by hand once`,
 	} {
 		if !regexp.MustCompile(pattern).MatchString(prose) {
 			problems = append(problems, "README.md's Download section does not say "+what)
 		}
 	}
-	if regexp.MustCompile(`Running v\d{4}\.\d+\.\d+-\d+ or an earlier release`).MatchString(prose) {
-		problems = append(problems, "README.md's Download section names the last release that does not update itself by its "+
-			"tag: a release cut before this is merged makes it wrong")
+	// Which releases those are is said by neither a date nor a tag. The
+	// paragraph that says it is read on its own: the first release that does
+	// look here can be named, once there is one, in a paragraph of its own.
+	date := regexp.MustCompile(`\b\d{4}-\d{2}-\d{2}`)
+	tag := regexp.MustCompile(`\bv?\d{4}\.\d{1,2}\.\d{1,2}(-\d+)?`)
+	for _, paragraph := range strings.Split(section, "\n\n") {
+		text := strings.Join(strings.Fields(paragraph), " ")
+		if !strings.Contains(text, "look for updates here") {
+			continue
+		}
+		for _, found := range date.FindAllString(text, -1) {
+			problems = append(problems, "README.md's Download section dates the releases that do not update themselves ("+found+
+				"): the last of them is not known until a release is built with this change, and one cut before then makes the date wrong")
+		}
+		for _, found := range tag.FindAllString(text, -1) {
+			problems = append(problems, "README.md's Download section names a release ("+found+
+				") where it says which do not update themselves: the last of them is not known until a release is built with "+
+				"this change, and one cut before then makes the tag wrong")
+		}
 	}
 	if strings.Contains(prose, "at most once a day") {
 		problems = append(problems, "README.md's Download section says the offer changes at most once a day: "+
@@ -1209,8 +1232,12 @@ func TestUpdateOfferWiringRejectsWeakerSources(t *testing.T) {
 			return checkReadmeNamesTheFeed(replace(readme, "It offers the newest\nrelease that has been out, unchanged, for a day",
 				"It offers a release\nonce it has been out for a day"), selection)
 		}},
-		{"the README names the last release by its tag", "names the last release that does not update itself by its tag", func() []string {
-			return checkReadmeNamesTheFeed(replace(readme, "A release published on or before 2026-10-08 does not look for updates here,",
+		{"the README dates the releases that do not update themselves", "dates the releases that do not update themselves (2026-10-08)", func() []string {
+			return checkReadmeNamesTheFeed(replace(readme, "A release built before the updater polled these releases does not look for\nupdates here,",
+				"A release published on or before 2026-10-08 does not look for updates here,"), selection)
+		}},
+		{"the README names the last release that does not update itself by its tag", "names a release (v2026.10.8-1066946420) where it says which do not update themselves", func() []string {
+			return checkReadmeNamesTheFeed(replace(readme, "A release built before the updater polled these releases does not look for\nupdates here,",
 				"Running v2026.10.8-1066946420 or an earlier release? It does not look for updates here,"), selection)
 		}},
 		{"the README says the offer changes at most once a day", "says the offer changes at most once a day", func() []string {

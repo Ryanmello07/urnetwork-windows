@@ -24,9 +24,11 @@ never offered. A release that is deleted, marked a pre-release or edited stops
 being offered at once. "Later" on the banner hides a release until the app is
 next started.
 
-A release published on or before 2026-10-08 does not look for updates here,
-and never offers one. Install one published after that by hand once: it
-upgrades the installed copy in place, and updates itself from then on.
+A release built before the updater polled these releases does not look for
+updates here, and never offers one. If the app has offered nothing while a
+release newer than yours has been listed for three days, install the newest
+release by hand once: it upgrades the installed copy in place, and updates
+itself from then on.
 
 ## Architecture
 
