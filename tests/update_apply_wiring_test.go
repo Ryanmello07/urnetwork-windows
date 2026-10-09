@@ -641,7 +641,10 @@ func TestUpdateApplyWiringRejectsWeakerHelpers(t *testing.T) {
 			return apply("fileSecurity.attributes(), CREATE_NEW,\n", "nullptr, CREATE_NEW,\n")
 		}},
 		{"what the helper writes owned by whoever creates it", func() []string {
-			return apply(`L"O:BAD:P(A;;FA;;;SY)`, `L"D:P(A;;FA;;;SY)`)
+			// anchored on the whole file SDDL: the lock file's SDDL now shares
+			// the O:BAD:P(A;;FA;;;SY) prefix, so this drops the owner from
+			// kAdminOnlyFileSddl in particular
+			return apply(`L"O:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FRFX;;;BU)";`, `L"D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FRFX;;;BU)";`)
 		}},
 		{"a folder inheriting what is above it", func() []string {
 			return apply(`L"O:BAD:P(A;OICI;FA;;;SY)`, `L"O:BAD:(A;OICI;FA;;;SY)`)
