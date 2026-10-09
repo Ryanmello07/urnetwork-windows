@@ -3,7 +3,11 @@
 // compiler:
 //   - which feed is polled (Common/ReleaseSelection.h kFeeds), and which
 //     release is offered on it (SelectRelease), with the tag and asset names
-//     build/all/run.sh actually publishes;
+//     build/all/run.sh actually publishes, and the page of releases
+//     urnetwork/build's API listed on 2026-10-09;
+//   - how long a release must have been out, unchanged, before the official
+//     feed offers it (SoakStartOf, HasSoaked), and that which releases count
+//     changes only when the server's day does;
 //   - the MSI ProductVersion a release code must carry (UrMsiVersion), against
 //     the vectors tools/UrVersion.ps1's Go oracle uses, and against a file of
 //     the oracle's own answers when one is given;
@@ -15,8 +19,10 @@
 //     a report (Common/UpdateResult.h);
 //   - what the helper decides before msiexec runs, which variables it drops,
 //     and how the tray app's wait on it ends (Common/UpdateApply.h);
-//   - when the tray app asks GitHub again after a refusal, and when it says
-//     its checks have not worked (Common/UpdateSchedule.h).
+//   - when the tray app asks GitHub again after a refusal, when it says its
+//     checks have not worked, which release the banner's Later holds back, and
+//     what becomes of a click once the check before it has returned
+//     (Common/UpdateSchedule.h).
 //
 //   c++ -std=c++20 -I ../src/Common update-release-tests.cpp -o /tmp/update-release-tests
 //   /tmp/update-release-tests [<file of "code msi-version" lines>]
@@ -56,8 +62,12 @@ void CheckEq(const std::string& expected, const std::string& actual, const std::
   Check(expected == actual, what + ": expected \"" + expected + "\", got \"" + actual + "\"");
 }
 
-// The release list's Date header in every selection below: 2026-10-06T00:00:00Z.
+// The release list's Date header in every selection below, unless the test
+// says otherwise: 2026-10-06T00:00:00Z, the first second of a UTC day.
 constexpr std::int64_t kServerUnix = 1791244800;
+
+// 24 hours, written out: the soak's own constant could shrink.
+constexpr std::int64_t kDay = 24 * 60 * 60;
 
 std::string Narrow(const std::wstring& text) { return std::string(text.begin(), text.end()); }
 
@@ -69,41 +79,84 @@ std::string Hex(std::uint32_t value) {
 
 std::string Digest(char c) { return "sha256:" + std::string(64, c); }
 
-ReleaseAsset Asset(const std::string& tag, const std::string& name, char digest = 'a') {
+// An asset as the API lists it, uploaded at `uploadedAt`.
+ReleaseAsset Asset(const std::string& tag, const std::string& name, const std::string& uploadedAt,
+                   char digest = 'a') {
   return {.name = name,
-          .url = "https://github.com/urnetwork/windows/releases/download/" + tag + "/" + name,
-          .digest = Digest(digest)};
-}
-
-// One official build as run.sh publishes it: v<version>, both MSIs next to the
-// SDK and the other platforms' assets, immutable.
-Release Official(const std::string& version) {
-  const std::string tag = "v" + version;
-  return {.tag = tag,
-          .draft = false,
-          .prerelease = false,
-          .immutable = true,
-          .assets = {Asset(tag, "URnetworkSdk-" + version + ".aar"),
-                     Asset(tag, "URnetworkSdkWindows-" + version + ".zip"),
-                     Asset(tag, "URnetwork-" + version + "-x64.msi", 'b'),
-                     Asset(tag, "URnetwork-" + version + "-arm64.msi", 'c'),
-                     Asset(tag, "URnetwork-" + version + ".pkg")}};
-}
-
-// The F-Droid reproducible-build prerelease run.sh mints at code+2 / code+3.
-Release AndroidPrerelease(const std::string& version) {
-  const std::string tag = "v" + version;
-  return {.tag = tag,
-          .draft = false,
-          .prerelease = true,
-          .immutable = true,
-          .assets = {Asset(tag, "com.bringyour.network-" + version +
-                                    "-github-arm64-v8a-release.apk")}};
+          .url = "https://github.com/urnetwork/build/releases/download/" + tag + "/" + name,
+          .digest = Digest(digest),
+          .updatedAt = uploadedAt};
 }
 
 // The code of the UTC instant `unix` seconds.
 std::uint64_t CodeAt(std::int64_t unix) {
   return static_cast<std::uint64_t>(unix - kCodeEpochUnixSeconds) * 10;
+}
+
+// When the pipeline publishes a build, unless a test says otherwise: two hours
+// after the instant its code names. urnetwork/build's 62 releases with the
+// MSIs were published 1.2 to 2.5 hours after theirs.
+std::int64_t PublishedByDefault(const std::string& version) {
+  return CodeUnixSeconds(urnw::version::ParseReleaseCode(version)) + 2 * 60 * 60;
+}
+
+// One official build as run.sh publishes it and as GitHub lists it while
+// nobody touches it: v<version>, both MSIs next to the SDK and the other
+// platforms' assets, immutable, published at `published`, its updated_at the
+// same second, and every asset uploaded half an hour before that.
+Release OfficialAt(const std::string& version, std::int64_t published) {
+  const std::string tag = "v" + version;
+  const std::string uploaded = FormatUtcSecond(published - 30 * 60);
+  return {.tag = tag,
+          .draft = false,
+          .prerelease = false,
+          .immutable = true,
+          .publishedAt = FormatUtcSecond(published),
+          .updatedAt = FormatUtcSecond(published),
+          .assets = {Asset(tag, "URnetworkSdk-" + version + ".aar", uploaded),
+                     Asset(tag, "URnetworkSdkWindows-" + version + ".zip", uploaded),
+                     Asset(tag, "URnetwork-" + version + "-x64.msi", uploaded, 'b'),
+                     Asset(tag, "URnetwork-" + version + "-arm64.msi", uploaded, 'c'),
+                     Asset(tag, "URnetwork-" + version + ".pkg", uploaded)}};
+}
+
+// The same, published when the pipeline would have.
+Release Official(const std::string& version) {
+  return OfficialAt(version, PublishedByDefault(version));
+}
+
+// The same, published at the UTC second `publishedAt` names.
+Release Official(const std::string& version, const char* publishedAt) {
+  return OfficialAt(version, *ParseUtcSecond(publishedAt));
+}
+
+// The F-Droid reproducible-build prerelease run.sh mints at code+2 / code+3.
+Release AndroidPrereleaseAt(const std::string& version, std::int64_t published) {
+  const std::string tag = "v" + version;
+  return {.tag = tag,
+          .draft = false,
+          .prerelease = true,
+          .immutable = true,
+          .publishedAt = FormatUtcSecond(published),
+          .updatedAt = FormatUtcSecond(published),
+          .assets = {Asset(tag, "com.bringyour.network-" + version + "-github-arm64-v8a-release.apk",
+                           FormatUtcSecond(published - 30 * 60))}};
+}
+
+Release AndroidPrerelease(const std::string& version) {
+  return AndroidPrereleaseAt(version, PublishedByDefault(version));
+}
+
+Release AndroidPrerelease(const std::string& version, const char* publishedAt) {
+  return AndroidPrereleaseAt(version, *ParseUtcSecond(publishedAt));
+}
+
+// This architecture's package of `release`, for a test that changes it.
+ReleaseAsset& X64Msi(Release& release) {
+  for (ReleaseAsset& asset : release.assets) {
+    if (asset.name.size() > 8 && asset.name.substr(asset.name.size() - 8) == "-x64.msi") return asset;
+  }
+  return release.assets.front();
 }
 
 // A feed that takes -beta prereleases, and one shaped like a runner test's.
@@ -123,30 +176,52 @@ constexpr Feed kRunnerLikeFeed{.id = "runner-test",
                                .requireImmutable = false,
                                .tagPrefix = "runner-test-",
                                .acceptAnyPrerelease = true};
+// The official feed without its soak, for the rules the soak would hide: a
+// release whose code is two days ahead of the list cannot have been out for a
+// day.
+constexpr Feed kNoSoakFeed{.id = "no-soak",
+                           .numericRepoId = 936244679,
+                           .owner = "urnetwork",
+                           .repo = "build",
+                           .acceptBetaPrereleases = false,
+                           .requireImmutable = true,
+                           .soakSeconds = 0,
+                           .tagPrefix = "",
+                           .acceptAnyPrerelease = false};
 
 void FeedTable() {
-  // The official releases: the stable urnetwork/windows releases, addressed by
-  // the id GitHub gave that repository. Not the nightly build repo, and never
-  // a personal fork.
+  // The official releases: urnetwork/build's, where the release pipeline
+  // publishes the MSIs, addressed by the id GitHub gave that repository.
+  // Never a personal fork, and no other repository of the organisation.
   const Feed* official = FeedById("official");
   Check(official != nullptr, "the official feed is in the table");
   if (!official) return;
-  Check(official->owner == "urnetwork" && official->repo == "windows",
-        "the update checker polls the stable urnetwork/windows releases");
-  Check(official->numericRepoId == 1297133846,
-        "the official feed is repository 1297133846, urnetwork/windows' own id");
-  Check(official->repo != "build" && official->numericRepoId != 936244679,
-        "urnetwork/build holds nightly builds, not the stable feed");
   Check(official->owner == "urnetwork", "the feed is an official urnetwork repo");
+  Check(official->owner == "urnetwork" && official->repo == "build",
+        "the update checker polls urnetwork/build's published releases");
+  Check(official->numericRepoId == 936244679,
+        "the official feed is repository 936244679, urnetwork/build's own id");
   Check(!official->acceptBetaPrereleases && !official->acceptAnyPrerelease,
         "the official feed takes no prerelease");
   Check(official->requireImmutable, "the official feed requires immutable releases");
+  Check(official->soakSeconds == kDay, "the official feed soaks a release for 24 hours");
   Check(official->tagPrefix.empty(), "the official feed's tags carry no prefix");
   Check(std::size(kFeeds) == 1, "the table holds the official feed alone");
   Check(FeedById("beta") == nullptr && FeedById("") == nullptr, "no other channel resolves");
   Check(kFeeds[0].numericRepoId == kOfficialFeed.numericRepoId &&
-            kFeeds[0].owner == kOfficialFeed.owner && kFeeds[0].repo == kOfficialFeed.repo,
+            kFeeds[0].owner == kOfficialFeed.owner && kFeeds[0].repo == kOfficialFeed.repo &&
+            kFeeds[0].soakSeconds == kOfficialFeed.soakSeconds,
         "the table's official row is kOfficialFeed");
+
+  // The list both the tray app and the update helper ask for.
+  CheckEq("https://api.github.com/repositories/936244679/releases?per_page=30",
+          ReleaseListUrl(kOfficialFeed), "the official feed's release list, by the repository's id");
+  // The pipeline publishes three releases a build, and has published six
+  // builds within two days (2026-09-08): a release that soaks waits up to two
+  // days, and the list must still reach the one before those.
+  Check(kReleaseListPageSize >= 3 * (6 + 1),
+        "one page of the list holds two days of the pipeline's builds and the one before them");
+  Check(kReleaseListPageSize <= 100, "GitHub serves at most 100 releases a page");
 }
 
 void AssetNames() {
@@ -171,7 +246,7 @@ void RealReleaseList() {
     CheckEq("2026.9.22-1053244730", s.version, "offered version is v-less");
     CheckEq("v2026.9.22-1053244730", s.tag, "offered tag keeps its v");
     CheckEq("URnetwork-2026.9.22-1053244730-x64.msi", s.assetName, "own-arch MSI");
-    CheckEq("https://github.com/urnetwork/windows/releases/download/v2026.9.22-1053244730/"
+    CheckEq("https://github.com/urnetwork/build/releases/download/v2026.9.22-1053244730/"
             "URnetwork-2026.9.22-1053244730-x64.msi",
             s.assetUrl, "download URL comes from the matched asset");
     CheckEq(std::string(64, 'b'), s.digestHex, "digest comes from the matched asset");
@@ -189,17 +264,20 @@ void NotOffered() {
   Release draft = Official("2026.10.1-1060000000");
   draft.draft = true;
   Release noMsi = Official("2026.9.30-1059000000");
-  noMsi.assets = {Asset(noMsi.tag, "URnetwork-2026.9.30-1059000000.pkg")};
+  noMsi.assets = {Asset(noMsi.tag, "URnetwork-2026.9.30-1059000000.pkg", noMsi.publishedAt)};
   Release badDigest = Official("2026.9.29-1058000000");
   for (auto& a : badDigest.assets) a.digest = "sha512:" + std::string(64, 'b');
   Release oldZip = Official("2026.9.28-1057000000");
-  oldZip.assets = {Asset(oldZip.tag, "URnetwork-v2026.9.28-1057000000-windows-x64-portable.zip")};
+  oldZip.assets = {Asset(oldZip.tag, "URnetwork-v2026.9.28-1057000000-windows-x64-portable.zip",
+                         oldZip.publishedAt)};
   const Selection s = SelectRelease({draft, noMsi, badDigest, oldZip, Official("2026.9.22-1053244730")},
                                     "x64", kOfficialFeed, kServerUnix);
   Check(s.code == 1053244730, "drafts, MSI-less, digest-less and zip-only releases are skipped");
   Check(s.newestCode == 1058000000,
         "newest names the newest release carrying this product's MSI, offerable or not");
   Check(s.skipped.size() == 3, "the three unverifiable releases are reported as skipped");
+  Check(!s.skipped[0].soaking && !s.skipped[1].soaking && !s.skipped[2].soaking,
+        "and none of them as only waiting for its day");
 
   const Selection empty = SelectRelease({}, "x64", kOfficialFeed, kServerUnix);
   Check(empty.code == 0 && empty.newestCode == 0 && empty.assetUrl.empty(),
@@ -249,7 +327,8 @@ void Prereleases() {
     const std::string asset = "URnetwork-2026.10.3-1062717990-x64.msi";
     prefixed.assets = {{.name = asset,
                         .url = FeedAssetUrl(kRunnerLikeFeed, prefixed.tag, asset),
-                        .digest = Digest('d')}};
+                        .digest = Digest('d'),
+                        .updatedAt = {}}};
     const Selection s = SelectRelease({prefixed, rc, Official("2026.10.1-1060587890")}, "x64",
                                       kRunnerLikeFeed, kServerUnix);
     Check(s.code == 1062717990 && s.tag == prefixed.tag,
@@ -269,51 +348,583 @@ void FutureCodes() {
   auto release = [](std::uint64_t code) {
     return Official("2026.10.8-" + std::to_string(code));
   };
+  // The cap itself, on a feed that does not soak: a release with a code two
+  // days ahead of the list was published after the list's date.
   {
     const Selection s = SelectRelease({release(pastLimit), Official("2026.10.1-1060587890")},
-                                      "x64", kOfficialFeed, kServerUnix);
+                                      "x64", kNoSoakFeed, kServerUnix);
     Check(s.code == 1060587890, "a code more than 48 h past the server's date is not offered");
     Check(s.newestCode == 1060587890, "nor named as the newest");
-    Check(s.skipped.size() == 1 && s.skipped[0].reason.find("future code") != std::string::npos,
+    Check(s.skipped.size() == 1 && s.skipped[0].reason.find("future code") != std::string::npos &&
+              !s.skipped[0].soaking,
           "and it is logged as a future code");
   }
   {
-    const Selection s = SelectRelease({release(atLimit)}, "x64", kOfficialFeed, kServerUnix);
+    const Selection s = SelectRelease({release(atLimit)}, "x64", kNoSoakFeed, kServerUnix);
     Check(s.code == atLimit, "a code exactly 48 h past the server's date is offered");
   }
   {
     // A one-digit typo of a real code lands decades out.
-    const Selection s = SelectRelease({Official("2057.1.23-10627179700")}, "x64", kOfficialFeed,
+    const Selection s = SelectRelease({Official("2057.1.23-10627179700")}, "x64", kNoSoakFeed,
                                       kServerUnix);
     Check(s.code == 0, "a far-future code is never offered");
   }
   {
     // The cap is the server's clock, not this machine's: the same release is
     // fine a day later.
-    const Selection s = SelectRelease({release(pastLimit)}, "x64", kOfficialFeed,
+    const Selection s = SelectRelease({release(pastLimit)}, "x64", kNoSoakFeed,
                                       kServerUnix + 24 * 60 * 60);
     Check(s.code == pastLimit, "the cap moves with the server's date");
+  }
+  // On the official feed the cap comes first, and the soak then holds the
+  // rest back.
+  {
+    const Selection s = SelectRelease({release(pastLimit), Official("2026.10.1-1060587890")},
+                                      "x64", kOfficialFeed, kServerUnix);
+    Check(s.code == 1060587890 && s.newestCode == 1060587890 && s.waitingCode == 0,
+          "on the official feed a code past the cap is neither offered nor named as waiting");
+    Check(s.skipped.size() == 1 && s.skipped[0].reason.find("future code") != std::string::npos,
+          "and is logged as a future code there too");
+    const Selection ahead = SelectRelease({release(atLimit), Official("2026.10.1-1060587890")},
+                                          "x64", kOfficialFeed, kServerUnix);
+    Check(ahead.code == 1060587890 && ahead.waitingCode == atLimit,
+          "a code within the cap that is not out yet by the list's date waits for its day");
+    Check(SelectRelease({Official("2057.1.23-10627179700")}, "x64", kOfficialFeed, kServerUnix)
+                  .code == 0,
+          "a far-future code is never offered on the official feed");
   }
 }
 
 void NewestCountsOwnProduct() {
   // A newer release with the other platforms' assets only.
   Release otherPlatforms = Official("2026.10.2-1061000000");
-  otherPlatforms.assets = {Asset(otherPlatforms.tag, "URnetworkSdk-2026.10.2-1061000000.aar"),
-                           Asset(otherPlatforms.tag, "URnetwork-2026.10.2-1061000000.pkg")};
+  otherPlatforms.assets = {
+      Asset(otherPlatforms.tag, "URnetworkSdk-2026.10.2-1061000000.aar", otherPlatforms.publishedAt),
+      Asset(otherPlatforms.tag, "URnetwork-2026.10.2-1061000000.pkg", otherPlatforms.publishedAt)};
   const Selection s = SelectRelease({otherPlatforms, Official("2026.10.1-1060587890")}, "x64",
                                     kOfficialFeed, kServerUnix);
   Check(s.newestCode == 1060587890,
         "newest counts only releases carrying this product's MSI for this architecture");
   // the arm64 MSI alone does not count for x64
   Release armOnly = Official("2026.10.2-1061000010");
-  armOnly.assets = {Asset(armOnly.tag, "URnetwork-2026.10.2-1061000010-arm64.msi")};
+  armOnly.assets = {
+      Asset(armOnly.tag, "URnetwork-2026.10.2-1061000010-arm64.msi", armOnly.publishedAt)};
   const Selection x64 = SelectRelease({armOnly, Official("2026.10.1-1060587890")}, "x64",
                                       kOfficialFeed, kServerUnix);
   Check(x64.newestCode == 1060587890, "another architecture's MSI does not count");
   const Selection arm = SelectRelease({armOnly, Official("2026.10.1-1060587890")}, "arm64",
                                       kOfficialFeed, kServerUnix);
   Check(arm.newestCode == 1061000010 && arm.code == 1061000010, "for its own architecture it does");
+}
+
+// How long a release must have been out before the official feed offers it:
+// 24 hours, when the UTC day of the release list's date began.
+void Soak() {
+  const std::string version = "2026.10.5-1064000000";
+  const auto offered = [&version](std::int64_t published, std::int64_t server) {
+    return SelectRelease({OfficialAt(version, published)}, "x64", kOfficialFeed, server).code != 0;
+  };
+  // the line, at the day's first second
+  Check(!offered(kServerUnix - kDay + 60, kServerUnix),
+        "a release 23 h 59 m old when the day began is not offered");
+  Check(!offered(kServerUnix - kDay + 1, kServerUnix), "nor one a second short of 24 h");
+  Check(offered(kServerUnix - kDay, kServerUnix),
+        "a release 24 h old when the day began is offered");
+  Check(offered(kServerUnix - kDay - 60, kServerUnix), "and so is an older one");
+  // the line is the day's start, not the list's own second
+  Check(!offered(kServerUnix - kDay + 1, kServerUnix + kDay - 1),
+        "a release whose 24 hours end during the day waits for the next day");
+  Check(offered(kServerUnix - kDay + 1, kServerUnix + kDay),
+        "and is offered from the next day's first second");
+  Check(!offered(kServerUnix - 1, kServerUnix + kDay - 1),
+        "a release 24 h old only at the day's last second is not offered that day");
+
+  // the day
+  Check(UtcDayStart(kServerUnix) == kServerUnix && UtcDayStart(kServerUnix + kDay - 1) == kServerUnix &&
+            UtcDayStart(kServerUnix + kDay) == kServerUnix + kDay &&
+            UtcDayStart(kServerUnix - 1) == kServerUnix - kDay,
+        "a UTC day runs from its first second through its 86400th");
+  Check(UtcDayStart(0) == 0 && UtcDayStart(-1) == -kDay, "before 1970 too");
+
+  // a release whose published_at is missing, or is not a UTC second
+  Release unpublished = OfficialAt(version, kServerUnix - 2 * kDay);
+  unpublished.publishedAt.clear();
+  const Selection none = SelectRelease({unpublished}, "x64", kOfficialFeed, kServerUnix);
+  Check(none.code == 0 && none.newestCode == 0 && none.waitingCode == 0,
+        "a release without a publication time is never offered on a feed that soaks");
+  Check(none.skipped.size() == 1 && !none.skipped[0].soaking &&
+            none.skipped[0].reason.find("no publication time") != std::string::npos,
+        "and it is reported as having none");
+  for (const char* bad : {"2026-10-01", "2026-10-01T14:51:17", "2026-10-01T14:51:17+00:00",
+                          "2026-10-01T14:51:17.000Z", "2026-13-01T00:00:00Z", "yesterday",
+                          "1790866277", " 2026-10-01T14:51:17Z", "2026-09-31T00:00:00Z"}) {
+    Release misdated = OfficialAt(version, kServerUnix - 2 * kDay);
+    misdated.publishedAt = bad;
+    Check(SelectRelease({misdated}, "x64", kOfficialFeed, kServerUnix + 30 * kDay).code == 0,
+          std::string("a publication time that is not a UTC second is none: ") + bad);
+  }
+  Check(!HasSoaked(kOfficialFeed, std::nullopt, kServerUnix),
+        "no publication time has not soaked, whatever the date");
+
+  // a published_at after the list's date
+  const Selection future =
+      SelectRelease({OfficialAt(version, kServerUnix + 3600)}, "x64", kOfficialFeed, kServerUnix);
+  Check(future.code == 0 && future.newestCode == 0,
+        "a release published after the list's date is not offered");
+  Check(future.waitingCode == 1064000000 && future.waitingFromUnixSeconds == kServerUnix + 2 * kDay,
+        "it counts from the first day that begins 24 h after its publication");
+  Check(!offered(kServerUnix + 400 * kDay, kServerUnix),
+        "nor is a release dated a year ahead of the list");
+
+  // a list with no date
+  Check(!HasSoaked(kOfficialFeed, kServerUnix - 10 * kDay, 0) &&
+            !HasSoaked(kOfficialFeed, -10 * kDay, 0),
+        "a list with no date counts no release on a feed that soaks, whenever it was published");
+  Check(!offered(kServerUnix - kDay, 0), "and offers none");
+
+  // feeds that do not soak
+  Release fresh = OfficialAt("2026.10.3-1062717970-beta", kServerUnix - 60);
+  fresh.prerelease = true;
+  Check(SelectRelease({fresh}, "x64", kBetaLikeFeed, kServerUnix).code == 1062717970,
+        "a feed without a soak offers a release the minute it is published");
+  fresh.publishedAt.clear();
+  fresh.updatedAt.clear();
+  for (ReleaseAsset& asset : fresh.assets) asset.updatedAt.clear();
+  Check(SelectRelease({fresh}, "x64", kBetaLikeFeed, kServerUnix).code == 1062717970,
+        "and one whose times the list does not give");
+  Check(HasSoaked(kBetaLikeFeed, std::nullopt, 0) && HasSoaked(kRunnerLikeFeed, std::nullopt, 0),
+        "a feed without a soak counts every release");
+  Check(SoakEndUnixSeconds(kBetaLikeFeed, kServerUnix - 60) == kServerUnix - 60,
+        "from the second it is published");
+
+  // what is still soaking is neither offered nor the newest, and is named
+  Release otherPlatforms = OfficialAt("2026.10.5-1064000010", kServerUnix - 1800);
+  otherPlatforms.assets = {Asset(otherPlatforms.tag, "URnetwork-2026.10.5-1064000010.pkg",
+                                 otherPlatforms.publishedAt)};
+  const Selection two = SelectRelease({otherPlatforms, OfficialAt(version, kServerUnix - 3600),
+                                       OfficialAt("2026.10.4-1063000000", kServerUnix - 7200),
+                                       Official("2026.10.1-1060587890")},
+                                      "x64", kOfficialFeed, kServerUnix);
+  Check(two.code == 1060587890,
+        "a release still soaking is not offered: the newest one that has soaked is");
+  Check(two.newestCode == 1060587890, "a release still soaking is not named as the newest");
+  Check(two.waitingCode == 1064000000 && two.waitingVersion == version,
+        "the newest release with this product's MSI that the soak holds back is named as waiting");
+  CheckEq(FormatUtcSecond(kServerUnix + kDay), FormatUtcSecond(two.waitingFromUnixSeconds),
+          "with the first second it counts from");
+  Check(two.skipped.size() == 3 && !two.skipped[0].soaking && two.skipped[1].soaking &&
+            two.skipped[2].soaking,
+        "a release only its day holds back is marked as that, and one without the MSI is not");
+
+  // SoakEndUnixSeconds against HasSoaked, across four days of publication
+  // times and seven of list dates
+  int disagreements = 0;
+  int pairs = 0;
+  for (std::int64_t published = kServerUnix - 4 * kDay; published <= kServerUnix; published += 1789) {
+    const std::int64_t end = SoakEndUnixSeconds(kOfficialFeed, published);
+    if (end % kDay != 0 || end < published + kDay || end >= published + 2 * kDay) ++disagreements;
+    for (std::int64_t server = kServerUnix - 4 * kDay; server <= kServerUnix + 3 * kDay; server += 613) {
+      ++pairs;
+      if (HasSoaked(kOfficialFeed, published, server) != (server >= end)) ++disagreements;
+    }
+  }
+  Check(SoakEndUnixSeconds(kOfficialFeed, kServerUnix - kDay) == kServerUnix &&
+            SoakEndUnixSeconds(kOfficialFeed, kServerUnix - kDay + 1) == kServerUnix + kDay,
+        "a release counts from the first UTC day that begins at least 24 h after its publication");
+  Check(disagreements == 0 && pairs > 100000,
+        "SoakEndUnixSeconds is the first second HasSoaked holds, 24 to 48 hours after publication: " +
+            std::to_string(disagreements) + " of " + std::to_string(pairs) + " disagree");
+}
+
+// The soak is counted from when a release last became what the list shows:
+// the latest of its publication, its last change, and the upload of this
+// product's package. GitHub lets a published release be edited and its
+// prerelease mark set and cleared, immutable or not, and keeps published_at
+// when it is; a release that sat among the prereleases for its day, where
+// nothing offers it, was out for nobody.
+void SoakCountsFromTheLastChange() {
+  // built on 2026-09-27, and published a week before the list
+  const std::string version = "2026.9.28-1057000000";
+  constexpr std::uint64_t kCode = 1057000000;
+  constexpr std::int64_t kPublished = kServerUnix - 7 * kDay;
+  const auto select = [](const Release& release, std::int64_t server, const char* arch = "x64") {
+    return SelectRelease({release}, arch, kOfficialFeed, server);
+  };
+  Check(select(OfficialAt(version, kPublished), kServerUnix).code == kCode,
+        "a release published a week ago and not touched since is offered");
+
+  // changed an hour before the day began
+  Release edited = OfficialAt(version, kPublished);
+  edited.updatedAt = FormatUtcSecond(kServerUnix - 3600);
+  {
+    const Selection s = select(edited, kServerUnix);
+    Check(s.code == 0 && s.newestCode == 0,
+          "a release published a week ago and changed an hour ago is not offered");
+    Check(s.waitingCode == kCode && s.waitingFromUnixSeconds == kServerUnix + kDay,
+          "it is named as waiting, from the first day that begins 24 h after the change");
+    Check(s.skipped.size() == 1 && s.skipped[0].soaking &&
+              s.skipped[0].reason.find("unchanged") != std::string::npos,
+          "and reported as not out, unchanged, for its day");
+    Check(select(edited, kServerUnix + kDay - 1).code == 0 &&
+              select(edited, kServerUnix + kDay).code == kCode,
+          "it is offered again once it has been unchanged for a day when a day begins");
+  }
+  edited.updatedAt = FormatUtcSecond(kServerUnix - kDay);
+  Check(select(edited, kServerUnix).code == kCode,
+        "a release unchanged for exactly 24 h when the day began is offered");
+  edited.updatedAt = FormatUtcSecond(kServerUnix - kDay + 1);
+  Check(select(edited, kServerUnix).code == 0, "and one second less is not enough");
+
+  // the time it spent as a prerelease: listed as one it is skipped, and the
+  // second its mark is cleared its day starts
+  Release promoted = OfficialAt(version, kPublished);
+  promoted.prerelease = true;
+  Check(select(promoted, kServerUnix).code == 0 && select(promoted, kServerUnix).waitingCode == 0,
+        "a release marked a prerelease is neither offered nor named as waiting");
+  promoted.prerelease = false;
+  promoted.updatedAt = FormatUtcSecond(kServerUnix + 12 * 3600);
+  {
+    const Selection s = select(promoted, kServerUnix + 12 * 3600 + 60);
+    Check(s.code == 0 && s.waitingCode == kCode,
+          "a release that became one a minute ago is not offered at once, however long ago it "
+          "was published");
+    CheckEq(FormatUtcSecond(kServerUnix + 2 * kDay), FormatUtcSecond(s.waitingFromUnixSeconds),
+            "its day starts when it last changed");
+  }
+
+  // the package itself
+  Release reuploaded = OfficialAt(version, kPublished);
+  X64Msi(reuploaded).updatedAt = FormatUtcSecond(kServerUnix - 3600);
+  {
+    const Selection s = select(reuploaded, kServerUnix);
+    Check(s.code == 0 && s.waitingCode == kCode && s.waitingFromUnixSeconds == kServerUnix + kDay,
+          "a package uploaded an hour ago is not offered, whenever its release was published");
+    Check(select(reuploaded, kServerUnix, "arm64").code == kCode,
+          "the other architecture's package, uploaded before the publication, is");
+  }
+
+  // the latest of the three, whichever it is
+  Release early = OfficialAt(version, kServerUnix - 3600);
+  early.updatedAt = FormatUtcSecond(kPublished);
+  Check(select(early, kServerUnix).code == 0,
+        "an update time before the publication does not shorten the soak");
+  {
+    const std::string a = FormatUtcSecond(kPublished);
+    const std::string b = FormatUtcSecond(kPublished + 3600);
+    const std::string c = FormatUtcSecond(kPublished + 7200);
+    Check(SoakStartOf(kCode, c, a, b).unixSeconds == std::optional<std::int64_t>{kPublished + 7200} &&
+              SoakStartOf(kCode, a, c, b).unixSeconds == std::optional<std::int64_t>{kPublished + 7200} &&
+              SoakStartOf(kCode, a, b, c).unixSeconds == std::optional<std::int64_t>{kPublished + 7200},
+          "the soak starts at the latest of the publication, the last change and the upload");
+    Check(SoakStartOf(kCode, a, a, a).problem.empty(), "and has nothing to report then");
+  }
+
+  // a missing or unreadable time never counts
+  for (const char* bad : {"", "2026-10-05", "2026-10-05T23:00:00", "1791241200"}) {
+    Release undated = OfficialAt(version, kPublished);
+    undated.updatedAt = bad;
+    const Selection s = select(undated, kServerUnix + 30 * kDay);
+    Check(s.code == 0 && s.waitingCode == 0 && s.skipped.size() == 1 && !s.skipped[0].soaking &&
+              s.skipped[0].reason.find("last change") != std::string::npos,
+          std::string("a release without a readable time of its last change is never offered: '") +
+              bad + "'");
+    Release unstamped = OfficialAt(version, kPublished);
+    X64Msi(unstamped).updatedAt = bad;
+    const Selection t = select(unstamped, kServerUnix + 30 * kDay);
+    Check(t.code == 0 && t.waitingCode == 0 && t.skipped.size() == 1 &&
+              t.skipped[0].reason.find("upload time") != std::string::npos,
+          std::string("nor one whose package has no readable upload time: '") + bad + "'");
+  }
+}
+
+// A publication time that reads as a UTC second and cannot be the release's:
+// one before the release was built. Its code is the instant it was built, to
+// within the two days a code may be ahead of GitHub's clock.
+void PublishedBeforeItWasBuilt() {
+  const std::string version = "2026.9.28-1057000000";
+  constexpr std::uint64_t kCode = 1057000000;
+  const std::int64_t built = CodeUnixSeconds(kCode);
+  // the list is read three weeks later: every soak that started is long over
+  constexpr std::int64_t kLater = kServerUnix + 14 * kDay;
+  for (const char* impossible : {"1970-01-01T00:00:00Z", "0000-01-01T00:00:00Z",
+                                 "2026-09-01T00:00:00Z"}) {
+    Release release = Official(version);
+    release.publishedAt = impossible;
+    const Selection s = SelectRelease({release}, "x64", kOfficialFeed, kLater);
+    Check(s.code == 0 && s.newestCode == 0 && s.waitingCode == 0,
+          std::string("a release published before it was built is never offered: ") + impossible);
+    Check(s.skipped.size() == 1 && !s.skipped[0].soaking &&
+              s.skipped[0].reason.find("before its own code") != std::string::npos,
+          std::string("and it is reported as published before its code: ") + impossible);
+  }
+  // the two days, written out: the constant could shrink or grow
+  Check(SelectRelease({OfficialAt(version, built - 48 * 3600)}, "x64", kOfficialFeed, kLater).code ==
+            kCode,
+        "a publication time 48 h before the code's instant is within a build clock's skew");
+  Check(SelectRelease({OfficialAt(version, built - 48 * 3600 - 1)}, "x64", kOfficialFeed, kLater)
+                .code == 0,
+        "one second more is not");
+  Check(SelectRelease({OfficialAt(version, built - 48 * 3600 - 1)}, "x64", kNoSoakFeed, kLater).code ==
+            kCode,
+        "a feed without a soak does not read the publication time at all");
+}
+
+// urnetwork/build's newest releases as its API listed them, without a token,
+// on 2026-10-09: each build's release, which carries the MSIs, and the two
+// android prereleases the pipeline publishes with it at code+2 and code+3.
+std::vector<Release> FeedPage() {
+  return {
+      Official("2026.10.8-1066946420", "2026-10-08T23:34:12Z"),
+      AndroidPrerelease("2026.10.8-1066946423", "2026-10-08T23:34:28Z"),
+      AndroidPrerelease("2026.10.8-1066946422", "2026-10-08T23:34:21Z"),
+      Official("2026.10.6-1065506180", "2026-10-07T07:29:19Z"),
+      AndroidPrerelease("2026.10.6-1065506183", "2026-10-07T07:29:32Z"),
+      AndroidPrerelease("2026.10.6-1065506182", "2026-10-07T07:29:26Z"),
+      Official("2026.10.1-1060587890", "2026-10-01T14:51:17Z"),
+      Official("2026.10.1-1060477040", "2026-10-01T11:39:28Z"),
+      AndroidPrerelease("2026.10.1-1060587893", "2026-10-01T14:51:28Z"),
+      AndroidPrerelease("2026.10.1-1060587892", "2026-10-01T14:51:23Z"),
+      AndroidPrerelease("2026.10.1-1060477043", "2026-10-01T11:39:39Z"),
+      AndroidPrerelease("2026.10.1-1060477042", "2026-10-01T11:39:33Z"),
+      Official("2026.9.30-1060363020", "2026-10-01T08:32:40Z"),
+      Official("2026.9.30-1060242630", "2026-10-01T05:12:28Z"),
+      AndroidPrerelease("2026.9.30-1060363023", "2026-10-01T08:32:50Z"),
+  };
+}
+
+void TheFeedAsListed() {
+  const std::vector<Release> page = FeedPage();
+  const auto at = [&page](const char* serverDate, const char* arch = "x64") {
+    return SelectRelease(page, arch, kOfficialFeed, *ParseUtcSecond(serverDate));
+  };
+  {
+    // the list's own Date header when it was read
+    const Selection s = at("2026-10-09T01:24:01Z");
+    CheckEq("v2026.10.6-1065506180", s.tag,
+            "on 2026-10-09 the feed offers the release published on 2026-10-07");
+    Check(s.code == 1065506180 && s.newestCode == 1065506180, "which is the newest that counts");
+    CheckEq("https://github.com/urnetwork/build/releases/download/v2026.10.6-1065506180/"
+            "URnetwork-2026.10.6-1065506180-x64.msi",
+            s.assetUrl, "at urnetwork/build's download URL");
+    Check(IsFeedAssetUrl(kOfficialFeed, s.tag, s.assetName, s.assetUrl),
+          "which is the official feed's own");
+    Check(s.waitingCode == 1066946420 && s.waitingVersion == "2026.10.8-1066946420",
+          "the release published two hours before that list is held back");
+    CheckEq("2026-10-10T00:00:00Z", FormatUtcSecond(s.waitingFromUnixSeconds),
+            "until the first second of 2026-10-10");
+    Check(s.skipped.size() == 1 && s.skipped[0].tag == "v2026.10.8-1066946420" &&
+              s.skipped[0].reason.find("24 h") != std::string::npos,
+          "and it is reported as not out for 24 h");
+    // the update helper's question: does the list offer the tag it was given?
+    Check(SelectionOffers(s, "v2026.10.6-1065506180", 1060587890),
+          "an older build is offered the release that has soaked");
+    Check(!SelectionOffers(s, "v2026.10.8-1066946420", 1060587890),
+          "and is not offered the one still soaking, whatever tag it asks for");
+  }
+  CheckEq("v2026.10.6-1065506180", at("2026-10-09T23:34:12Z").tag,
+          "when the newer release turns 24 h old it still waits: the line is the day's start");
+  CheckEq("v2026.10.6-1065506180", at("2026-10-09T23:59:59Z").tag,
+          "through that day's last second");
+  {
+    const Selection s = at("2026-10-10T00:00:00Z");
+    CheckEq("v2026.10.8-1066946420", s.tag, "the next day begins with it offered");
+    Check(s.waitingCode == 0 && s.skipped.empty(), "and nothing held back");
+  }
+  CheckEq("URnetwork-2026.10.6-1065506180-arm64.msi", at("2026-10-09T01:24:01Z", "arm64").assetName,
+          "arm64 is offered its own MSI of the same release");
+  Check(at("2026-10-20T00:00:00Z").code == 1066946420,
+        "the android prereleases above a release are never offered, soaked or not");
+  // the day the release of 2026-10-07 itself was still soaking
+  const Selection earlier = at("2026-10-08T12:00:00Z");
+  CheckEq("v2026.10.1-1060587890", earlier.tag,
+          "on 2026-10-08 the feed still offered the newest release of 2026-10-01");
+
+  // The same page, had the release it offers been edited an hour before the
+  // list was read: its day starts over, and the one before it is offered.
+  std::vector<Release> edited = FeedPage();
+  edited[3].updatedAt = "2026-10-09T00:24:01Z";
+  const Selection after =
+      SelectRelease(edited, "x64", kOfficialFeed, *ParseUtcSecond("2026-10-09T01:24:01Z"));
+  CheckEq("v2026.10.1-1060587890", after.tag,
+          "the offered release, edited an hour before the list, is taken off the offer");
+  Check(after.waitingCode == 1066946420 && after.skipped.size() == 2 && after.skipped[0].soaking &&
+            after.skipped[1].soaking,
+        "and it waits with the newer one");
+  CheckEq("v2026.10.8-1066946420",
+          SelectRelease(edited, "x64", kOfficialFeed, *ParseUtcSecond("2026-10-11T00:00:00Z")).tag,
+          "two midnights later the newest release is offered as it would have been");
+}
+
+// At most one new offer a day. Through one server day, with a release reaching
+// its 24th hour in every hour of it, what the official feed offers never
+// changes; the next day begins with the newest of them offered. Every
+// selection here is made afresh from the list and its date: nothing is kept
+// from one check to the next, so restarting the app cannot bring a second
+// offer.
+void OneOfferADay() {
+  std::vector<Release> list;
+  std::vector<std::int64_t> soakedAt;  // when each one's 24 hours end
+  std::uint64_t newest = 0;
+  for (int hour = 0; hour < 24; ++hour) {
+    // published through the day before, one an hour, at half past
+    const std::int64_t published = kServerUnix - kDay + hour * 3600 + 1800;
+    newest = CodeAt(published - 2 * 3600);
+    list.push_back(OfficialAt("2026.10.5-" + std::to_string(newest), published));
+    soakedAt.push_back(published + kDay);
+  }
+  // the release that had soaked when the day began
+  const std::uint64_t standing = CodeAt(kServerUnix - 3 * kDay);
+  list.push_back(
+      OfficialAt("2026.10.3-" + std::to_string(standing), kServerUnix - 3 * kDay + 2 * 3600));
+
+  int checks = 0;
+  int otherOffers = 0;
+  int bySecond = 0;  // changes a soak judged at the list's own second would make
+  std::size_t counted = 0;
+  for (std::int64_t server = kServerUnix; server < kServerUnix + kDay; server += 600) {
+    ++checks;
+    if (SelectRelease(list, "x64", kOfficialFeed, server).code != standing) ++otherOffers;
+    std::size_t soaked = 0;
+    for (const std::int64_t end : soakedAt) {
+      if (end <= server) ++soaked;
+    }
+    if (soaked != counted) {
+      ++bySecond;
+      counted = soaked;
+    }
+  }
+  Check(checks == 144 && otherOffers == 0,
+        "what the feed offers does not change during one server day: " +
+            std::to_string(otherOffers) + " of " + std::to_string(checks) +
+            " checks offered another release");
+  Check(bySecond == 24,
+        "while 24 releases reached their 24th hour in that day, an hour apart: " +
+            std::to_string(bySecond));
+  const Selection next = SelectRelease(list, "x64", kOfficialFeed, kServerUnix + kDay);
+  Check(next.code == newest && next.waitingCode == 0,
+        "the next day begins with the newest of them offered: one new offer for the 24");
+
+  // The tray app checks again before it acts on an offer that is no longer
+  // fresh: one older than five minutes, since a release can be withdrawn at any
+  // moment, and one from before GitHub's day changed, when a newer release may
+  // count.
+  Check(kOfferFreshSeconds == 5 * 60, "an offer is taken as fresh for five minutes");
+  Check(!OfferMayHaveChanged(kOfficialFeed, kServerUnix + 3600, 0) &&
+            !OfferMayHaveChanged(kOfficialFeed, kServerUnix + 3600, 5 * 60),
+        "a fresh offer made the same day needs no second check");
+  Check(OfferMayHaveChanged(kOfficialFeed, kServerUnix + 3600, 5 * 60 + 1),
+        "an offer older than five minutes is checked again, the same day too");
+  Check(OfferMayHaveChanged(kOfficialFeed, kServerUnix + 3600, 6 * 3600),
+        "and so is one from the check before");
+  Check(!OfferMayHaveChanged(kOfficialFeed, kServerUnix + kDay - 100, 99),
+        "a fresh offer needs none through the day's last second");
+  Check(OfferMayHaveChanged(kOfficialFeed, kServerUnix + kDay - 100, 100),
+        "an offer made before GitHub's day changed is checked again, however fresh");
+  Check(OfferMayHaveChanged(kOfficialFeed, kServerUnix + kDay - 1, 1),
+        "one second across midnight UTC is another day");
+  Check(OfferMayHaveChanged(kOfficialFeed, kServerUnix, 30 * kDay), "and so is a month");
+  Check(!OfferMayHaveChanged(kBetaLikeFeed, kServerUnix + kDay - 1, 60),
+        "a fresh offer of a feed that does not soak is not tied to the day");
+  Check(OfferMayHaveChanged(kBetaLikeFeed, kServerUnix, 5 * 60 + 1),
+        "and is checked again once it is no longer fresh: any feed's release can be withdrawn");
+  Check(OfferMayHaveChanged(kOfficialFeed, kServerUnix + 3600, -1),
+        "a clock that ran backwards since the check is not taken for a fresh offer");
+}
+
+// What becomes of a click on the banner once the check the tray app ran
+// first has returned.
+void ClickAfterTheCheck() {
+  constexpr std::uint64_t kClicked = 1065506180;
+  constexpr std::uint64_t kNewer = 1066946420;
+  constexpr std::uint64_t kOlder = 1060587890;
+  // the check found the release the click was on still offered
+  constexpr ClickAfterCheck kSame{.clickedCode = kClicked,
+                                  .sameFeed = true,
+                                  .checked = true,
+                                  .offeredCode = kClicked,
+                                  .bannerHolds = true,
+                                  .laterCode = 0,
+                                  .viaHelper = true};
+  const auto step = [&kSame](auto&& change) {
+    ClickAfterCheck click = kSame;
+    change(click);
+    return StepAfterCheck(click);
+  };
+  Check(StepAfterCheck(kSame) == ClickStep::Proceed,
+        "a click on a release the feed still offers goes on");
+  Check(step([](ClickAfterCheck& c) { c.viaHelper = false; }) == ClickStep::Proceed,
+        "and so when the user is handed the installer");
+
+  // the feed offers something else now
+  Check(step([](ClickAfterCheck& c) { c.offeredCode = kNewer; }) == ClickStep::Replaced,
+        "an offer that changed waits for a click of its own");
+  Check(step([](ClickAfterCheck& c) {
+          c.offeredCode = kNewer;
+          c.viaHelper = false;
+        }) == ClickStep::Replaced,
+        "on the installer's path too");
+  Check(step([](ClickAfterCheck& c) { c.offeredCode = kOlder; }) == ClickStep::Replaced,
+        "an older release, offered once the clicked one was withdrawn, is another release too");
+  Check(step([](ClickAfterCheck& c) { c.offeredCode = 0; }) == ClickStep::Withdrawn,
+        "a release the feed no longer offers is not started");
+  Check(step([](ClickAfterCheck& c) {
+          c.offeredCode = 0;
+          c.viaHelper = false;
+        }) == ClickStep::Withdrawn,
+        "nor is its installer shown");
+  // The check itself moves the banner on when the offer changed: to the
+  // release offered now, or shut. So the banner no longer holds the click by
+  // the time it is judged, and what became of its release is still the answer.
+  Check(step([](ClickAfterCheck& c) {
+          c.offeredCode = kNewer;
+          c.bannerHolds = false;
+        }) == ClickStep::Replaced,
+        "a release the check has already put on the banner is said to have replaced the clicked one");
+  Check(step([](ClickAfterCheck& c) {
+          c.offeredCode = 0;
+          c.bannerHolds = false;
+        }) == ClickStep::Withdrawn,
+        "a release whose banner the check has already shut is said to be withdrawn");
+
+  // the click no longer stands
+  Check(step([](ClickAfterCheck& c) { c.laterCode = kClicked; }) == ClickStep::Dropped,
+        "Later chosen while the check ran is not undone by the click");
+  Check(step([](ClickAfterCheck& c) { c.laterCode = kNewer; }) == ClickStep::Proceed,
+        "Later on another release does not stop this one");
+  Check(step([](ClickAfterCheck& c) { c.bannerHolds = false; }) == ClickStep::Dropped,
+        "a banner that moved on drops the click");
+  Check(step([](ClickAfterCheck& c) { c.sameFeed = false; }) == ClickStep::Dropped,
+        "a change of channel drops the click");
+  Check(step([](ClickAfterCheck& c) {
+          c.sameFeed = false;
+          c.offeredCode = kNewer;
+        }) == ClickStep::Dropped,
+        "whatever the other feed offers");
+  Check(StepAfterCheck({}) == ClickStep::Dropped, "and no click is no click");
+
+  // the check could not be made
+  Check(step([](ClickAfterCheck& c) { c.checked = false; }) == ClickStep::Proceed,
+        "the helper asks GitHub itself: a check that could not be made leaves the click to it");
+  Check(step([](ClickAfterCheck& c) {
+          c.checked = false;
+          c.viaHelper = false;
+        }) == ClickStep::Unconfirmed,
+        "an installer is not shown when GitHub could not be asked whether its release is offered");
+  Check(step([](ClickAfterCheck& c) {
+          c.checked = false;
+          c.offeredCode = 0;
+        }) == ClickStep::Proceed &&
+            step([](ClickAfterCheck& c) {
+              c.checked = false;
+              c.offeredCode = kNewer;
+            }) == ClickStep::Proceed,
+        "a check that could not be made says nothing about what the feed offers");
+  Check(step([](ClickAfterCheck& c) {
+          c.checked = false;
+          c.viaHelper = false;
+          c.laterCode = kClicked;
+        }) == ClickStep::Dropped,
+        "and Later still drops the click");
 }
 
 // tests/ur_version_test.go urFixedVectors, computed with Python's datetime.
@@ -366,20 +977,21 @@ void MsiVersions(const char* oracleFile) {
 void DownloadUrls() {
   const std::string tag = "v2026.10.1-1060587890";
   const std::string asset = "URnetwork-2026.10.1-1060587890-x64.msi";
-  const std::string url = "https://github.com/urnetwork/windows/releases/download/" + tag + "/" + asset;
+  const std::string url = "https://github.com/urnetwork/build/releases/download/" + tag + "/" + asset;
   CheckEq(url, FeedAssetUrl(kOfficialFeed, tag, asset), "the official feed's download URL");
   Check(IsFeedAssetUrl(kOfficialFeed, tag, asset, url), "the feed's own URL is accepted");
   for (const std::string& bad : {
            url + "?x=1",
            url + "/",
-           "http://github.com/urnetwork/windows/releases/download/" + tag + "/" + asset,
-           "https://github.com/urnetwork/build/releases/download/" + tag + "/" + asset,
-           "https://github.com/someone/windows/releases/download/" + tag + "/" + asset,
-           "https://github.com/urnetwork/windows/releases/download/v2026.10.1-1060587891/" + asset,
-           "https://github.com/urnetwork/windows/releases/download/" + tag + "/URnetwork-x.msi",
-           "https://evil.example/urnetwork/windows/releases/download/" + tag + "/" + asset,
-           "https://github.com.evil.example/urnetwork/windows/releases/download/" + tag + "/" + asset,
-           "https://github.com/urnetwork/windows/releases/download/" + tag + "/../" + asset,
+           "http://github.com/urnetwork/build/releases/download/" + tag + "/" + asset,
+           "https://github.com/urnetwork/windows/releases/download/" + tag + "/" + asset,
+           "https://github.com/someone/build/releases/download/" + tag + "/" + asset,
+           "https://github.com/urnetwork/build/releases/download/v2026.10.1-1060587891/" + asset,
+           "https://github.com/urnetwork/build/releases/download/" + tag + "/URnetwork-x.msi",
+           "https://evil.example/urnetwork/build/releases/download/" + tag + "/" + asset,
+           "https://github.com.evil.example/urnetwork/build/releases/download/" + tag + "/" + asset,
+           "https://github.com/urnetwork/build/releases/download/" + tag + "/../" + asset,
+           "https://github.com/urnetwork/build-fork/releases/download/" + tag + "/" + asset,
            std::string(),
        }) {
     Check(!IsFeedAssetUrl(kOfficialFeed, tag, asset, bad), "refused download URL: " + bad);
@@ -652,6 +1264,16 @@ void Reports() {
                           "2026-10-01T00:00:60Z", "2026-10-01T00:00:00"}) {
     Check(!ParseUtcSecond(bad), std::string("not a UTC second: ") + bad);
   }
+  // a day its month does not have is no day of the next month
+  for (const char* bad : {"2026-02-29T00:00:00Z", "2026-02-31T00:00:00Z", "2026-04-31T00:00:00Z",
+                          "2026-09-31T12:00:00Z", "2100-02-29T00:00:00Z", "2026-10-32T00:00:00Z"}) {
+    Check(!ParseUtcSecond(bad), std::string("not a day of its month: ") + bad);
+  }
+  Check(ParseUtcSecond("2024-02-29T23:59:59Z") == std::optional<std::int64_t>{1709251199} &&
+            ParseUtcSecond("2000-02-29T00:00:00Z") == std::optional<std::int64_t>{951782400} &&
+            ParseUtcSecond("2026-12-31T23:59:59Z") == std::optional<std::int64_t>{1798761599} &&
+            ParseUtcSecond("2026-04-30T00:00:00Z") == std::optional<std::int64_t>{1777507200},
+        "the last day of a month, and a leap day in a leap year, read as themselves");
 
   // whose report
   const UpdateResult written = report(static_cast<std::int64_t>(Refusal::Digest));
@@ -754,6 +1376,16 @@ void Schedule() {
   Check(!CheckIsStale(kServerUnix, 0, true), "without a baseline nothing is claimed");
   Check(!CheckIsStale(kServerUnix, kServerUnix + 3600, true),
         "a success after this clock's now (a clock set back) is not stale");
+
+  // the banner's Later
+  constexpr std::uint64_t kOffered = 1065506180;
+  constexpr std::uint64_t kNewer = 1066946420;
+  Check(!HiddenByLater(0, kOffered) && !HiddenByLater(0, kNewer),
+        "a launch starts with no release hidden by Later");
+  Check(HiddenByLater(kOffered, kOffered), "Later hides the release it was chosen on");
+  Check(!HiddenByLater(kOffered, kNewer), "Later does not hide a newer release");
+  Check(!HiddenByLater(kNewer, kOffered), "nor an older one");
+  Check(!HiddenByLater(0, 0), "and no Later hides no offer");
 }
 
 }  // namespace
@@ -767,6 +1399,12 @@ int main(int argc, char** argv) {
   Prereleases();
   FutureCodes();
   NewestCountsOwnProduct();
+  Soak();
+  SoakCountsFromTheLastChange();
+  PublishedBeforeItWasBuilt();
+  TheFeedAsListed();
+  OneOfferADay();
+  ClickAfterTheCheck();
   MsiVersions(argc > 1 ? argv[1] : nullptr);
   DownloadUrls();
   Redirects();

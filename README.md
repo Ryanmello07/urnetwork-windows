@@ -7,10 +7,28 @@ the URnetwork SDK (the cgo C ABI + C++ wrapper from `sdk/cgo`).
 ## Download
 
 Release MSIs (`URnetwork-<version>-x64.msi`, `URnetwork-<version>-arm64.msi`)
-are attached to the stable releases at
-https://github.com/urnetwork/windows/releases. The in-app updater polls the
-same releases (`app/src/Common/ReleaseSelection.h`, `kOfficialFeed`). Nightly builds live at
-https://github.com/urnetwork/build/releases and are not offered by the updater.
+are attached to the releases the build pipeline publishes. The newest release
+is at https://github.com/urnetwork/build/releases/latest. Now and then one
+carries no MSIs: take the newest that does. The pipeline publishes on its own,
+so the newest release can be minutes old. When you install by hand, prefer the
+newest one that has been out for a day, which is what the updater offers: the
+releases page dates each release, and the developer screen's update line names
+the one offered.
+
+The in-app updater polls the same releases
+(`app/src/Common/ReleaseSelection.h`, `kOfficialFeed`). It offers the newest
+release that has been out, unchanged, for a day, judged at the start of each
+UTC day. So the offer is a day or two behind that page and moves on when the
+UTC day does, and a build that a later one overtakes before its day is up is
+never offered. A release that is deleted, marked a pre-release or edited stops
+being offered at once. "Later" on the banner hides a release until the app is
+next started.
+
+A release built before the updater polled these releases does not look for
+updates here, and never offers one. If the app has offered nothing while a
+release newer than yours has been listed for three days, install the newest
+release by hand once: it upgrades the installed copy in place, and updates
+itself from then on.
 
 ## Architecture
 
@@ -120,8 +138,9 @@ handle:
   tunnel, and a developer/reliability screen behind an app-wide Advanced Mode
   toggle.
 - **Updater** — `UpdateChecker`, because the Store does not push EXE/MSI
-  updates (see `app/STORE.md`). It installs the verified official MSI from the
-  stable urnetwork/windows releases.
+  updates (see `app/STORE.md`). It installs the official MSI from
+  urnetwork/build's releases, checked against GitHub's SHA-256 for it, once
+  the release has been out, unchanged, for a day.
 
 ## Docs
 

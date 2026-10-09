@@ -13,6 +13,10 @@
 // succeeded for kStaleAfter, the app says "Couldn't check for updates since
 // <date>" until one does.
 //
+// Also here: which offered release the banner's Later holds back
+// (HiddenByLater), and what becomes of a click on the banner once the check
+// the tray app ran first has returned (StepAfterCheck).
+//
 // Pure and header-only: tools/update-release-tests.cpp runs it on any host.
 //
 // SPDX-License-Identifier: MPL-2.0
@@ -63,6 +67,71 @@ inline constexpr bool CheckIsStale(std::int64_t nowUnixSeconds, std::int64_t las
                                    bool checking) {
   return checking && lastSuccessUnixSeconds > 0 &&
          nowUnixSeconds - lastSuccessUnixSeconds > kStaleAfterSeconds;
+}
+
+// Whether the banner's Later holds the offered release back. `laterCode` is
+// the code of the release the user chose Later on in this run of the app, 0
+// when none. Later hides that release and no other, so a newer one is shown;
+// and the app keeps it in memory only, so the next launch starts from 0 and
+// shows the release again.
+inline constexpr bool HiddenByLater(std::uint64_t laterCode, std::uint64_t offeredCode) {
+  return laterCode != 0 && offeredCode == laterCode;
+}
+
+// What the tray app does with a click on the banner's action once the check
+// it ran first has returned. It runs that check when the offer behind the
+// banner is no longer fresh (ReleaseSelection.h OfferMayHaveChanged).
+enum class ClickStep {
+  // The feed still offers the release the click was on: the update goes on.
+  Proceed,
+  // The feed offers another release. It is on the banner, which says what it
+  // replaced, and waits for a click of its own: the click was on a release
+  // the user saw, and no other is installed on its strength.
+  Replaced,
+  // The feed offers nothing above this build any more. The banner has
+  // closed, and nothing is started.
+  Withdrawn,
+  // The check could not be made, and nothing else asks GitHub on this path:
+  // the user would be handed an installer the feed may have withdrawn.
+  // Nothing is shown.
+  Unconfirmed,
+  // The click no longer stands: the channel changed, the banner moved on to
+  // something else, or Later hid the release. Nothing is started.
+  Dropped,
+};
+
+// What RunApply knows when that check has returned, read under one lock.
+struct ClickAfterCheck {
+  // The release the click was on.
+  std::uint64_t clickedCode = 0;
+  // The feed is still the one the click was made under.
+  bool sameFeed = false;
+  // The check reached GitHub and judged its list.
+  bool checked = false;
+  // The release the feed offers above this build now, 0 for none. After a
+  // check that could not be made, the offer as it stood before it.
+  std::uint64_t offeredCode = 0;
+  // The banner still shows this click's release as being worked on.
+  bool bannerHolds = false;
+  // The release Later hid in this run, 0 for none.
+  std::uint64_t laterCode = 0;
+  // The update helper installs, and asks GitHub itself before it does.
+  // Otherwise the user is handed the installer to run.
+  bool viaHelper = false;
+};
+
+inline constexpr ClickStep StepAfterCheck(const ClickAfterCheck& click) {
+  if (!click.sameFeed || click.clickedCode == 0) return ClickStep::Dropped;
+  // What the feed offers now is asked before whether the banner still holds
+  // the click: a check that found another release, or none, has itself moved
+  // the banner on by the time the click is judged.
+  if (click.checked && click.offeredCode == 0) return ClickStep::Withdrawn;
+  if (click.checked && click.offeredCode != click.clickedCode) return ClickStep::Replaced;
+  if (!click.bannerHolds || HiddenByLater(click.laterCode, click.clickedCode)) {
+    return ClickStep::Dropped;
+  }
+  if (!click.checked && !click.viaHelper) return ClickStep::Unconfirmed;
+  return ClickStep::Proceed;
 }
 
 }  // namespace urnw::update

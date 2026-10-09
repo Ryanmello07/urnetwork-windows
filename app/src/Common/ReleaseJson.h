@@ -9,6 +9,12 @@
 // fields left empty (which SelectRelease then skips), and a body that is not
 // an array is no list at all. Nothing here throws.
 //
+// What a release must be to count reads as that only when the list says so:
+// immutable only for the boolean true, and published and not a prerelease
+// only for the boolean false (NotFalse). A draft or prerelease key that is
+// missing, null or of another type reads as a draft or a prerelease, which
+// is skipped, where reading it as false would offer it.
+//
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
 
@@ -30,6 +36,12 @@ inline bool Flag(nlohmann::json const& object, const char* field) {
   return it != object.end() && it->is_boolean() && it->get<bool>();
 }
 
+// Everything but the boolean false.
+inline bool NotFalse(nlohmann::json const& object, const char* field) {
+  const auto it = object.find(field);
+  return it == object.end() || !it->is_boolean() || it->get<bool>();
+}
+
 inline std::string Text(nlohmann::json const& object, const char* field) {
   const auto it = object.find(field);
   if (it == object.end() || !it->is_string()) return {};
@@ -49,15 +61,18 @@ inline std::optional<std::vector<Release>> ParseReleaseList(std::string_view bod
     if (!item.is_object()) continue;
     Release release;
     release.tag = json_detail::Text(item, "tag_name");
-    release.draft = json_detail::Flag(item, "draft");
-    release.prerelease = json_detail::Flag(item, "prerelease");
+    release.draft = json_detail::NotFalse(item, "draft");
+    release.prerelease = json_detail::NotFalse(item, "prerelease");
     release.immutable = json_detail::Flag(item, "immutable");
+    release.publishedAt = json_detail::Text(item, "published_at");
+    release.updatedAt = json_detail::Text(item, "updated_at");
     if (auto assets = item.find("assets"); assets != item.end() && assets->is_array()) {
       for (auto const& asset : *assets) {
         if (!asset.is_object()) continue;
         release.assets.push_back({.name = json_detail::Text(asset, "name"),
                                   .url = json_detail::Text(asset, "browser_download_url"),
-                                  .digest = json_detail::Text(asset, "digest")});
+                                  .digest = json_detail::Text(asset, "digest"),
+                                  .updatedAt = json_detail::Text(asset, "updated_at")});
       }
     }
     releases.push_back(std::move(release));
