@@ -1,0 +1,718 @@
+# Runner test for the official update feed: the update helper, as app\build.ps1
+# makes it, against urnetwork/build's own releases. It publishes nothing and
+# creates no release or tag anywhere: the feed is read, without a token, as
+# the app and the helper read it, and URnetwork is installed and updated on
+# disposable windows-2022 runners only.
+#
+# Setup: on a throwaway branch of the fork that contains the official feed
+# change, add
+#   .github/workflows/vpn-feed.yml     (this file)
+#   .github/vpn-upgrade-lib.ps1        (runner-tests/vpn-upgrade-lib.ps1)
+#   .github/vpn-apply-lib.ps1          (runner-tests/vpn-apply-lib.ps1)
+#   .github/vpn-feed-lib.ps1           (runner-tests/a2b/vpn-feed-lib.ps1)
+#   .github/vpn-feed-standin.ps1       (runner-tests/a2b/vpn-feed-standin.ps1)
+# and push it as ci/a2b-runner-<anything>. The push runs this workflow.
+#
+# What each run reads from the feed (vpn-feed-lib.ps1 Get-UrFeedReading, this
+# test's own reading of the rules, not the app's code):
+#   offered   the newest release that had been published for 24 h when the UTC
+#             day of the list's Date header began
+#   waiting   the newest release only that rule holds back, if there is one
+#
+# The package (x64, app\build.ps1 under Windows PowerShell 5.1):
+#   vN        this branch at a release code six hours before the offered
+#             release's, so the offered release is an update for it
+#
+# Legs, each on its own runner:
+#   real      Against GitHub itself, nothing redirected.
+#             0. Install vN; its URnetworkUpdate.exe is the official feed's.
+#             1. vN's tray app, started as a user starts it, makes its launch
+#                check: its log must name the offered release as the newest,
+#                and the waiting one as held back until the day it counts.
+#             2. The helper asked for the waiting release refuses it
+#                (Refusal::NotOffered, 0x20000007), downloads nothing and
+#                leaves vN installed. Skipped, and said so, on a day the feed
+#                holds nothing back.
+#             3. The helper asked for the offered release, with vN's app
+#                running: it fetches the list from GitHub's API, follows the
+#                asset's redirect to GitHub's storage, checks the MSI (GitHub's
+#                SHA-256, the UpgradeCode, the ProductVersion of the release
+#                code) and installs it: exit 0, the report, one product at the
+#                release's ProductVersion with every file and urnetworkd
+#                running, the MSI kept as the repair source and admin-only.
+#                The relaunch is checked when the release's package has one;
+#                a release built before the package relaunched the app has
+#                none, and the step says so.
+#   before    The feed's own list, GitHub's bytes, served by a stand-in on this
+#   at        runner (vpn-feed-standin.ps1) with a chosen Date header: one
+#             second before the boundary release counts, and the second it
+#             does. The boundary release is the waiting one, or the offered
+#             one on a day nothing waits. "before": the helper asked for it
+#             refuses (NotOffered) and nothing is downloaded. "at": the helper
+#             installs it, with vN's app running, from the stand-in's copy of
+#             the release's real MSI: the close, the report, the repair source
+#             and the relaunch, as far as that release's package goes.
+#
+# SPDX-License-Identifier: MPL-2.0
+
+name: VPN official feed test
+
+on:
+  push:
+    branches:
+      - 'ci/a2b-runner-*'
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  # A green build of the restored CI: its urnetwork-sdk-windows artifact
+  # matches this tree's SDK headers.
+  SDK_RUN_ID: '37562185056'
+
+jobs:
+  plan:
+    name: Read the feed and choose vN
+    runs-on: windows-2022
+    outputs:
+      vn: ${{ steps.plan.outputs.vn }}
+      offered: ${{ steps.plan.outputs.offered }}
+      waiting: ${{ steps.plan.outputs.waiting }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read the feed as the app does
+        id: plan
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-feed-lib.ps1"
+          [void](Wait-UrAnonymousRequests 4)
+          $list = Get-UrFeedNow (Join-Path $env:RUNNER_TEMP 'releases.json')
+          $reading = Get-UrFeedReading $list.Releases $list.ServerUnix
+          if (-not $reading.Offered) { throw "the feed offers nothing today: there is no release to update to" }
+          # vN: six hours before the offered release's code
+          $code = [uint64]$reading.Offered.Code - 216000
+          $instant = [DateTimeOffset]::FromUnixTimeSeconds($UrFoundedUnix + [long][math]::Floor([decimal]$code / 10)).UtcDateTime
+          $vnVersion = '{0}.{1}.{2}-{3}' -f $instant.Year, $instant.Month, $instant.Day, $code
+          $vn = & .\app\tools\UrVersion.ps1 -Version $vnVersion
+          $offered = Get-UrExpectOfRelease $reading.Offered 'official'
+          $vnFile = [version]('{0}.{1}.{2}.{3}' -f $vn.UrVersionMajor, $vn.UrVersionMinor, $vn.UrVersionPatch, $vn.UrVersionBuild)
+          "vN {0}: code {1} msi {2} file {3}" -f $vn.UrVersion, $vn.UrVersionCode, $vn.UrMsiVersion, $vnFile
+          "offered {0}: code {1} msi {2} file {3}" -f $offered.version, $offered.code, $offered.msi_version, $offered.file_version
+          if ([version]$vn.UrMsiVersion -ge [version]$offered.msi_version) { throw "vN must have the lower ProductVersion" }
+          if ($vnFile -ge [version]$offered.file_version) { throw "vN's files must be older than the offered release's" }
+          if ($vnFile -le [version]'2026.10.5.1') { throw "vN's FILEVERSION $vnFile is not above the CloseApplication gate 2026.10.5.1" }
+          $waiting = ''
+          if ($reading.Waiting) { $waiting = $reading.Waiting.Tag }
+          "vn=$vnVersion", "offered=$($reading.Offered.Tag)", "waiting=$waiting" | ForEach-Object {
+            Write-Host $_
+            Add-Content -Encoding ascii -Path $env:GITHUB_OUTPUT -Value $_
+          }
+
+  build:
+    name: Build vN with build.ps1 under Windows PowerShell 5.1
+    needs: plan
+    runs-on: windows-2022
+    env:
+      VERSION: ${{ needs.plan.outputs.vn }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download the SDK zip from run ${{ env.SDK_RUN_ID }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          gh run download $env:SDK_RUN_ID -R $env:GITHUB_REPOSITORY -n urnetwork-sdk-windows -D sdk-zip
+          if ($LASTEXITCODE -ne 0) { throw "could not download the SDK zip" }
+          Get-ChildItem sdk-zip
+
+      - name: app\build.ps1 -Version ${{ env.VERSION }}
+        shell: cmd
+        run: >-
+          powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass
+          -File app\build.ps1 -Version %VERSION%
+          -SdkZip "%GITHUB_WORKSPACE%\sdk-zip\URnetworkSdkWindows.zip" -Platforms x64
+
+      - name: Check the build's update helper and stage the MSI
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-feed-lib.ps1"
+          $ur = & .\app\tools\UrVersion.ps1 -Version $env:VERSION
+          $fileVersion = '{0}.{1}.{2}.{3}' -f $ur.UrVersionMajor, $ur.UrVersionMinor, $ur.UrVersionPatch, $ur.UrVersionBuild
+          $bin = Join-Path $env:GITHUB_WORKSPACE 'app\build\x64\Release'
+          foreach ($exe in 'URnetwork.exe', 'urnetworkd.exe', 'URnetworkUpdate.exe') {
+            $actual = Get-UrFileVersion (Join-Path $bin $exe)
+            if ($actual -ne $fileVersion) { throw "$exe file version $actual, want $fileVersion" }
+          }
+          # the helper as build.ps1 ships it: no test feed is compiled in
+          $feed = Get-UrHelperFeed (Join-Path $bin 'URnetworkUpdate.exe')
+          if ($feed -ne 'official') { throw "build.ps1 built a URnetworkUpdate.exe with the $feed feed" }
+          "OK: build.ps1's URnetworkUpdate.exe is the official feed's"
+          $out = New-Item -ItemType Directory -Force (Join-Path $env:GITHUB_WORKSPACE 'staged')
+          $msi = Join-Path $env:GITHUB_WORKSPACE "app\build\out\URnetwork-$($env:VERSION)-x64.msi"
+          Copy-Item $msi (Join-Path $out 'vn.msi')
+          $productVersion = Get-UrMsiProductVersion (Join-Path $out 'vn.msi')
+          if ($productVersion -ne $ur.UrMsiVersion) { throw "vN MSI ProductVersion $productVersion, want $($ur.UrMsiVersion)" }
+          [pscustomobject]@{ key = 'vn'; version = $env:VERSION; code = [string]$ur.UrVersionCode;
+            msi_version = $ur.UrMsiVersion; file_version = $fileVersion } |
+            ConvertTo-Json | Set-Content -Encoding ascii (Join-Path $out 'vn.json')
+          "staged vN: ProductVersion $productVersion, files $fileVersion"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: msi-vn
+          path: staged/
+          if-no-files-found: error
+
+  real:
+    name: The official feed itself
+    needs: [plan, build]
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: msi-vn
+          path: ${{ runner.temp }}/msis
+
+      - name: Inventory and the session
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-feed-lib.ps1"
+          Get-ChildItem $UrMsiDir | Format-Table Name, Length -AutoSize | Out-String | Write-Host
+          Get-UrMsiPath 'vn' | Out-Null
+          if ((Get-UrProducts).Count -ne 0) { throw "a URnetwork product is already installed on this runner" }
+          if (Get-UrServiceInfo) { throw "a urnetworkd service already exists on this runner" }
+          whoami
+          whoami /groups | Select-String 'Mandatory Label' | ForEach-Object { "session: $_" }
+          if ((Get-Content $UrHostsFile) -match 'github') { throw "this runner's hosts file names a GitHub host" }
+          "OK: the hosts file redirects no GitHub host"
+
+      - name: The feed, read without a token, and its release as a browser gets it
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-feed-lib.ps1"
+          [void](Wait-UrAnonymousRequests 8)
+          $list = Get-UrFeedNow (Join-Path $env:RUNNER_TEMP 'releases.json')
+          $reading = Get-UrFeedReading $list.Releases $list.ServerUnix
+          if (-not $reading.Offered) { throw "the feed offers nothing today" }
+          $vn = Get-UrExpect 'vn'
+          if ([uint64]$vn.code -ge [uint64]$reading.Offered.Code) { throw "vN ($($vn.code)) is not older than the offered release ($($reading.Offered.Code))" }
+          $reading | ConvertTo-Json -Depth 4 | Set-Content -Encoding ascii (Join-Path $env:RUNNER_TEMP 'reading.json')
+          # The offered release's MSI, fetched here as a browser fetches it, and
+          # what the helper's package checks will see in it.
+          $official = Join-Path $UrMsiDir 'official.msi'
+          [void](Save-UrReleaseMsi $reading.Offered $official)
+          $expect = Get-UrExpectOfRelease $reading.Offered 'official'
+          $expect | ConvertTo-Json | Set-Content -Encoding ascii (Join-Path $UrMsiDir 'official.json')
+          $traits = Get-UrPackageTraits $official
+          $traits | ConvertTo-Json | Set-Content -Encoding ascii (Join-Path $env:RUNNER_TEMP 'official-traits.json')
+          if ($traits.UpgradeCode -ne $UrUpgradeCode) { throw "FINDING: $($reading.Offered.Asset) has UpgradeCode $($traits.UpgradeCode), not $UrUpgradeCode" }
+          if ($traits.ProductVersion -ne $expect.msi_version) {
+            throw "FINDING: $($reading.Offered.Asset) has ProductVersion $($traits.ProductVersion), and its release code $($expect.code) derives $($expect.msi_version)"
+          }
+          "OK: $($reading.Offered.Asset) is this product (UpgradeCode $($traits.UpgradeCode)) at the ProductVersion its code derives, $($traits.ProductVersion)"
+          if ($reading.Waiting) {
+            $waitingMsi = Join-Path $env:RUNNER_TEMP 'waiting.msi'
+            [void](Save-UrReleaseMsi $reading.Waiting $waitingMsi)
+            $waitingExpect = Get-UrExpectOfRelease $reading.Waiting 'waiting'
+            $waitingTraits = Get-UrPackageTraits $waitingMsi
+            if ($waitingTraits.UpgradeCode -ne $UrUpgradeCode -or $waitingTraits.ProductVersion -ne $waitingExpect.msi_version) {
+              throw "FINDING: $($reading.Waiting.Asset) is UpgradeCode $($waitingTraits.UpgradeCode) ProductVersion $($waitingTraits.ProductVersion), want $UrUpgradeCode $($waitingExpect.msi_version)"
+            }
+            "OK: $($reading.Waiting.Asset), the release held back, passes the same package checks"
+          }
+
+      - name: 0. Install vN (its update helper polls the official feed)
+        timeout-minutes: 10
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-feed-lib.ps1"
+          $code = Invoke-UrMsiexec '/i' (Get-UrMsiPath 'vn') '/qn' 'vn-install.log'
+          if ($code -ne 0) { throw "vN install exit code $code" }
+          $product = Assert-UrInstalled (Get-UrExpect 'vn') 'vn-install.log'
+          Set-Content -Encoding ascii (Join-Path $env:RUNNER_TEMP 'vn.productcode') $product.ProductCode
+          if ((Get-UrHelperFeed $UrHelperPath) -ne 'official') { throw "the installed URnetworkUpdate.exe is not the official feed's" }
+          "OK: $UrHelperPath is the official feed's"
+
+      - name: 1. The tray app's own check names the same release
+        timeout-minutes: 10
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-feed-lib.ps1"
+          $reading = Get-Content -Raw (Join-Path $env:RUNNER_TEMP 'reading.json') | ConvertFrom-Json
+          $vn = Get-UrExpect 'vn'
+          $from = Get-UrAppLogLength
+          $app = Start-UrTrayApp
+          Set-Content -Encoding ascii (Join-Path $env:RUNNER_TEMP 'app.pid') $app.Id
+          # the launch check runs 30 s after the app starts
+          $check = Wait-UrTrayCheck $from
+          if ($null -eq $check) {
+            "NOT VERIFIED on this run: the tray app's own check. GitHub refused it or it failed (see the app log lines above); the helper's own fetch is step 3's."
+            exit 0
+          }
+          if ($check.OwnCode -ne $vn.code) { throw "the app says its code is $($check.OwnCode), want $($vn.code)" }
+          if ($check.NewestCode -ne [string]$reading.Offered.Code -or $check.Newest -ne $reading.Offered.Version) {
+            throw "the app found $($check.Newest) (code $($check.NewestCode)) newest, and the feed offers $($reading.Offered.Tag)"
+          }
+          if ($reading.Waiting) {
+            $wantFrom = Format-UrUnix ([long]$reading.Waiting.CountsFrom)
+            if ($check.Waiting -ne $reading.Waiting.Version -or $check.WaitingFrom -ne $wantFrom) {
+              throw "the app holds '$($check.Waiting)' back until '$($check.WaitingFrom)', want $($reading.Waiting.Version) until $wantFrom"
+            }
+            "OK: the tray app's check, from GitHub, offers $($check.Newest) and holds $($check.Waiting) back until $($check.WaitingFrom)"
+          } else {
+            if ($check.Waiting) { throw "the app holds $($check.Waiting) back, and the feed holds nothing back today" }
+            "OK: the tray app's check, from GitHub, offers $($check.Newest); the feed holds nothing back today"
+          }
+
+      - name: 2. A release younger than 24 h is not offered
+        timeout-minutes: 15
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-feed-lib.ps1"
+          $reading = Get-Content -Raw (Join-Path $env:RUNNER_TEMP 'reading.json') | ConvertFrom-Json
+          if (-not $reading.Waiting) {
+            "NOT VERIFIED on this run, against GitHub: a release younger than 24 h. The feed holds nothing back today; the 'before' leg serves the same list a second before its newest release counts."
+            exit 0
+          }
+          $waiting = $reading.Waiting
+          $before = Get-Content (Join-Path $env:RUNNER_TEMP 'vn.productcode')
+          $run = Invoke-UrHelperPatiently $waiting.Tag 600
+          Show-UrUpdates
+          if ($run.ExitCode -ne $UrRefusalNotOffered) {
+            throw ("the helper asked for {0} exited {1} (0x{1:X8}), want Refusal::NotOffered 0x{2:X8}" -f $waiting.Tag, $run.ExitCode, $UrRefusalNotOffered)
+          }
+          Assert-UrResult (Read-UrResult) $waiting.Tag ([string]$waiting.Code) $UrRefusalNotOffered
+          $log = Get-UrHelperLog $waiting.Tag
+          Assert-UrHelperLogHas $log ("release " + [regex]::Escape($waiting.Tag) + " had not been published for 24 h when the server's day began: skipped") 'the release has not been out for 24 h'
+          Assert-UrHelperLogHas $log ("refused: the official feed offers " + [regex]::Escape($reading.Offered.Tag) + " ") 'which release the feed offers instead'
+          $tagDir = Join-Path $UrUpdatesDir $waiting.Tag
+          $left = @(Get-ChildItem -LiteralPath $tagDir -Filter '*.msi' -ErrorAction SilentlyContinue)
+          if ($left.Count -ne 0) { throw "a package was downloaded for the refused release: $($left.FullName -join ', ')" }
+          if (Test-Path (Join-Path $tagDir 'install.log')) { throw "msiexec ran: $tagDir\install.log exists" }
+          $product = Assert-UrInstalled (Get-UrExpect 'vn')
+          if ($product.ProductCode -ne $before) { throw "a different product is registered" }
+          # how old the release was when this job read the list, by GitHub's
+          # own two times: the helper's list is seconds later
+          $age = [long]$reading.ServerUnix - [long]$waiting.Published
+          $ageText = "{0} h {1} min" -f [math]::Floor($age / 3600), [math]::Floor(($age % 3600) / 60)
+          "OK: $($waiting.Tag), published $($waiting.PublishedAt) and $ageText old by the list's date, is not offered: the helper refused it (NotOffered), downloaded nothing, and vN is still the one product"
+          if ($age -ge 86400) {
+            "NOT VERIFIED on this run, against GitHub: a release younger than 24 h. The one held back is $ageText old: it had not been out for 24 h when the list's day began, and counts from $(Format-UrUnix ([long]$waiting.CountsFrom))."
+          } else {
+            "OK: that release is younger than 24 h"
+          }
+
+      - name: 3. The update to the offered release, with vN's tray app running
+        timeout-minutes: 25
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-feed-lib.ps1"
+          $stepStarted = Get-Date
+          $reading = Get-Content -Raw (Join-Path $env:RUNNER_TEMP 'reading.json') | ConvertFrom-Json
+          $traits = Get-Content -Raw (Join-Path $env:RUNNER_TEMP 'official-traits.json') | ConvertFrom-Json
+          $offered = $reading.Offered
+          $expect = Get-UrExpect 'official'
+          $before = Get-Content (Join-Path $env:RUNNER_TEMP 'vn.productcode')
+          $from = Get-UrAppLogLength
+          # vN's app, from step 1; started here if that one is gone
+          $app = $null
+          $saved = Join-Path $env:RUNNER_TEMP 'app.pid'
+          if (Test-Path $saved) { $app = Get-Process -Id ([int](Get-Content $saved)) -ErrorAction SilentlyContinue }
+          if ($null -eq $app -or $app.HasExited) { $app = Start-UrTrayApp } else { $null = $app.Handle; "vN's app is running as pid $($app.Id)" }
+          $run = Invoke-UrHelperPatiently $offered.Tag 900 $app
+          $helperEnded = Get-Date
+          Show-UrUpdates
+          if ($run.ExitCode -ne 0) { throw ("the helper exited {0} (0x{0:X8}), want 0" -f $run.ExitCode) }
+          Assert-UrResult (Read-UrResult) $offered.Tag ([string]$offered.Code) 0
+
+          # what the helper says it did
+          $log = Get-UrHelperLog $offered.Tag
+          Assert-UrHelperLogHas $log ("release " + [regex]::Escape($offered.Tag) + " is offered; downloading " + [regex]::Escape($offered.Asset) + " from (release-assets|objects)\.githubusercontent\.com$") "it downloaded the offered release from GitHub's storage"
+          Assert-UrHelperLogHas $log ("SHA-256 " + $offered.Digest + " matches GitHub's for " + [regex]::Escape($offered.Asset)) "the download is GitHub's SHA-256"
+          Assert-UrHelperLogHas $log ("package " + [regex]::Escape($offered.Asset) + " is this product's ProductVersion " + [regex]::Escape($expect.msi_version) + "$") "the package is this product at the release code's ProductVersion"
+          if ($reading.Waiting) {
+            Assert-UrHelperLogHas $log ("release " + [regex]::Escape($reading.Waiting.Tag) + " had not been published for 24 h when the server's day began: skipped") 'the newer release is held back'
+          }
+
+          # msiexec's log, under the admin-only install folder
+          $tagDir = Join-Path $UrUpdatesDir $offered.Tag
+          $msiLog = Join-Path $tagDir 'install.log'
+          if (-not (Test-Path $msiLog)) { throw "no install.log in $tagDir" }
+          Copy-Item $msiLog (Join-Path $UrLogDir 'official-apply.log')
+          $product = Assert-UrInstalled $expect 'official-apply.log'
+          if ($product.ProductCode -eq $before) { throw "vN's product is still registered" }
+
+          # the repair source: the checked MSI, kept, GitHub's bytes, and
+          # everything the helper wrote there admin-only by its own ACL
+          $kept = Join-Path $tagDir $offered.Asset
+          if (-not (Test-Path $kept)) { throw "the MSI is not kept at $kept" }
+          $keptHash = (Get-FileHash -Algorithm SHA256 $kept).Hash.ToLowerInvariant()
+          if ($keptHash -ne $offered.Digest) { throw "the kept MSI is SHA-256 $keptHash, and GitHub lists $($offered.Digest)" }
+          foreach ($path in $UrUpdatesDir, $tagDir, $kept, $msiLog, (Join-Path $tagDir 'update-helper.log'), $UrResultPath) {
+            Assert-UrAdminOnly $path
+          }
+          "OK: the repair source $kept is the release's MSI, SHA-256 $keptHash"
+
+          # the helper's image was out of the install folder while msiexec ran
+          $moved = Join-Path $tagDir "URnetworkUpdate.$($run.Process.Id).running"
+          if (-not (Test-Path $moved)) { throw "the helper's image is not at $moved" }
+          if ((Get-UrFileVersion $moved) -ne (Get-UrExpect 'vn').file_version) { throw "$moved is not vN's helper" }
+          "OK: vN's helper ran msiexec from $moved"
+
+          # the running app: closed by the installer while the helper ran
+          if ($null -eq $run.Marked) { throw "vN's app did not exit while the helper ran: the installer did not close it" }
+          if ($traits.CloseApp) {
+            $evidence = Get-UrCloseEvidence $msiLog
+            $closed = Get-UrAppLogLines 'tray: WM_CLOSE received, exiting' $from
+            if ($closed.Count -ne 1) { throw "the app logged $($closed.Count) WM_CLOSE lines, want one" }
+            $closedAt = Get-UrAppLogTime $closed[0]
+            "Wix4CloseApplications_X64 $($evidence.CloseStart) - $($evidence.CloseEnd); WM_CLOSE received $closedAt"
+            if ($null -eq $evidence.CloseStart -or $null -eq $evidence.CloseEnd) { throw "no Wix4CloseApplications_X64 in the log" }
+            if ($closedAt -lt $evidence.CloseStart -or $closedAt -gt $evidence.CloseEnd) { throw "the app's WM_CLOSE came outside Wix4CloseApplications_X64" }
+            "OK: the package's CloseApplication closed vN's app at $closedAt, inside its own action"
+          } else {
+            (Get-UrMsiLogLines $msiLog 'RESTART MANAGER') | Select-Object -First 12 | ForEach-Object { "log: $_" }
+            (Get-UrAppLogLines 'the Restart Manager is closing the app|WM_CLOSE received|WM_ENDSESSION' $from) | ForEach-Object { "app log: $_" }
+            "OBSERVED: $($offered.Tag)'s package has no CloseApplication (it was built before the in-app update closed the app); vN's app exited while the helper ran, closed by Windows Installer's Restart Manager"
+          }
+          $rmEvents = @(Get-WinEvent -FilterHashtable @{ LogName = 'Application'; StartTime = $stepStarted } -ErrorAction SilentlyContinue |
+            Where-Object { $_.ProviderName -match 'RestartManager' } | Sort-Object TimeCreated)
+          $rmEvents | ForEach-Object { "RM event $($_.Id) at $($_.TimeCreated.ToString('HH:mm:ss.fff')): $($_.Message)" }
+
+          # the relaunch, when the release's package has one
+          if ($traits.Relaunch) {
+            if ((Get-UrMsiLogLines $msiLog 'Action start \d{1,2}:\d{2}:\d{2}: RelaunchAfterUpdate\.').Count -eq 0) { throw "RelaunchAfterUpdate did not run" }
+            $seen = Wait-UrRelaunch $from 150
+            if ($seen.Processes.Count -eq 0) { throw "no URnetwork.exe --after-update was started" }
+            Assert-UrRelaunchWaited $seen $helperEnded
+            if ($seen.Report.Count -eq 0) { throw "the relaunched app did not show the helper's report" }
+            "OK: the package relaunched the app, which waited for the helper and showed its report"
+          } else {
+            Start-Sleep -Seconds 20
+            # assigned, not wrapped in @(): the function returns its list as
+            # one array, and @() around that counts 1 whatever it holds
+            $again = Get-UrAppProcesses
+            if ($traits.Helper) { throw "$($offered.Asset) carries URnetworkUpdate.exe and no RelaunchAfterUpdate" }
+            if (Test-Path $UrHelperPath) { throw "the installed product has a URnetworkUpdate.exe, and its package lists none" }
+            foreach ($process in $again) { "URnetwork.exe is running: pid $($process.Id), started $($process.Created): $($process.CommandLine)" }
+            "OBSERVED: URnetwork.exe processes 20 s after the install: $($again.Count)"
+            "NOT VERIFIED on this run: the relaunch after the update. $($offered.Tag) was built before the package relaunched the app: its MSI has no RelaunchAfterUpdate action and no URnetworkUpdate.exe (read from its tables), so nothing in it starts the app again. The 'at' leg installs a release whose package has both."
+          }
+          Stop-UrAppProcesses
+
+      - name: Collect logs
+        if: always()
+        shell: powershell
+        run: |
+          $dest = Join-Path $env:RUNNER_TEMP 'upgrade-logs'
+          New-Item -ItemType Directory -Force $dest | Out-Null
+          foreach ($name in 'releases.json', 'reading.json', 'official-traits.json') {
+            $file = Join-Path $env:RUNNER_TEMP $name
+            if (Test-Path $file) { Copy-Item $file $dest }
+          }
+          if (Test-Path "$env:LOCALAPPDATA\URnetwork\app\logs") {
+            Copy-Item "$env:LOCALAPPDATA\URnetwork\app\logs" (Join-Path $dest 'app-logs') -Recurse -Force
+          }
+          if (Test-Path "$env:ProgramData\URnetwork\service\logs") {
+            Copy-Item "$env:ProgramData\URnetwork\service\logs" (Join-Path $dest 'service-logs') -Recurse -Force
+          }
+          $updates = 'C:\Program Files\URnetwork\updates'
+          if (Test-Path $updates) {
+            Get-ChildItem -Recurse -Force $updates | ForEach-Object { "$($_.FullName) $($_.Length)" } |
+              Out-File (Join-Path $dest 'updates-listing.txt')
+            Get-ChildItem -Recurse -File $updates -Include '*.log', '*.json' | ForEach-Object {
+              $name = 'updates_' + ($_.FullName.Substring($updates.Length).TrimStart('\') -replace '\\', '_')
+              Copy-Item -LiteralPath $_.FullName (Join-Path $dest $name)
+            }
+          }
+          Get-CimInstance Win32_Service | Where-Object { $_.PathName -like '*urnetwork*' } |
+            Format-List Name, State, PathName | Out-File (Join-Path $dest 'services.txt')
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: feed-logs-real
+          path: ${{ runner.temp }}/upgrade-logs/
+          if-no-files-found: warn
+
+  boundary:
+    name: The feed's own list, ${{ matrix.leg }} its newest release counts
+    needs: [plan, build]
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        leg: [before, at]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: msi-vn
+          path: ${{ runner.temp }}/msis
+
+      - name: The feed, read without a token, and the boundary release's MSI
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-feed-lib.ps1"
+          if ((Get-UrProducts).Count -ne 0) { throw "a URnetwork product is already installed on this runner" }
+          [void](Wait-UrAnonymousRequests 4)
+          $list = Get-UrFeedNow (Join-Path $env:RUNNER_TEMP 'releases.json')
+          $reading = Get-UrFeedReading $list.Releases $list.ServerUnix
+          # The boundary release: the one the feed holds back today, or, on a
+          # day it holds nothing back, the one it offers.
+          $boundary = $reading.Waiting
+          if (-not $boundary) { $boundary = $reading.Offered }
+          if (-not $boundary) { throw "the feed has no release that counts or waits" }
+          $vn = Get-UrExpect 'vn'
+          if ([uint64]$vn.code -ge [uint64]$boundary.Code) { throw "vN ($($vn.code)) is not older than $($boundary.Tag)" }
+          "boundary release: $($boundary.Tag), published $($boundary.PublishedAt), counts from $(Format-UrUnix $boundary.CountsFrom)"
+          $boundary | ConvertTo-Json | Set-Content -Encoding ascii (Join-Path $env:RUNNER_TEMP 'boundary.json')
+          $official = Join-Path $UrMsiDir 'official.msi'
+          [void](Save-UrReleaseMsi $boundary $official)
+          $expect = Get-UrExpectOfRelease $boundary 'official'
+          $expect | ConvertTo-Json | Set-Content -Encoding ascii (Join-Path $UrMsiDir 'official.json')
+          $traits = Get-UrPackageTraits $official
+          $traits | ConvertTo-Json | Set-Content -Encoding ascii (Join-Path $env:RUNNER_TEMP 'official-traits.json')
+          if ($traits.UpgradeCode -ne $UrUpgradeCode -or $traits.ProductVersion -ne $expect.msi_version) {
+            throw "FINDING: $($boundary.Asset) is UpgradeCode $($traits.UpgradeCode) ProductVersion $($traits.ProductVersion), want $UrUpgradeCode $($expect.msi_version)"
+          }
+          # At the second it counts, and at the one before, the stand-in's list
+          # must read as this test expects: the same reading, on those dates.
+          $at = Get-UrFeedReading $list.Releases ([long]$boundary.CountsFrom)
+          $before = Get-UrFeedReading $list.Releases ([long]$boundary.CountsFrom - 1)
+          if (-not $at.Offered -or $at.Offered.Tag -ne $boundary.Tag) { throw "at $(Format-UrUnix $boundary.CountsFrom) the list should offer $($boundary.Tag)" }
+          if ($before.Offered -and $before.Offered.Tag -eq $boundary.Tag) { throw "a second earlier the list should not offer $($boundary.Tag)" }
+          # What the list offers a second before the line: the release a tray
+          # app that checked then has on its banner when the day changes.
+          if ($before.Offered) {
+            $before.Offered | ConvertTo-Json | Set-Content -Encoding ascii (Join-Path $env:RUNNER_TEMP 'offered-before.json')
+            "a second before the line the list offers $($before.Offered.Tag)"
+          }
+
+      - name: 0. Install vN
+        timeout-minutes: 10
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-feed-lib.ps1"
+          $code = Invoke-UrMsiexec '/i' (Get-UrMsiPath 'vn') '/qn' 'vn-install.log'
+          if ($code -ne 0) { throw "vN install exit code $code" }
+          $product = Assert-UrInstalled (Get-UrExpect 'vn') 'vn-install.log'
+          Set-Content -Encoding ascii (Join-Path $env:RUNNER_TEMP 'vn.productcode') $product.ProductCode
+          if ((Get-UrHelperFeed $UrHelperPath) -ne 'official') { throw "the installed URnetworkUpdate.exe is not the official feed's" }
+
+      - name: One second before the release counts, the helper refuses it
+        if: matrix.leg == 'before'
+        timeout-minutes: 15
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-feed-lib.ps1"
+          $boundary = Get-Content -Raw (Join-Path $env:RUNNER_TEMP 'boundary.json') | ConvertFrom-Json
+          $before = Get-Content (Join-Path $env:RUNNER_TEMP 'vn.productcode')
+          $state = $null
+          try {
+            $state = Set-UrFeedStandIn (Join-Path $env:RUNNER_TEMP 'releases.json') ([long]$boundary.CountsFrom - 1) $boundary (Get-UrMsiPath 'official')
+            # vN's tray app, on the same list and date: it holds the release back
+            $from = Get-UrAppLogLength
+            [void](Start-UrTrayApp)
+            $check = Wait-UrTrayCheck $from
+            if ($null -eq $check) { throw "the tray app's check of the stand-in's list failed" }
+            $wantFrom = Format-UrUnix ([long]$boundary.CountsFrom)
+            if ($check.Newest -eq $boundary.Version) { throw "the tray app offers $($boundary.Version) one second before it counts" }
+            if ($check.Waiting -ne $boundary.Version -or $check.WaitingFrom -ne $wantFrom) {
+              throw "the tray app holds '$($check.Waiting)' back until '$($check.WaitingFrom)', want $($boundary.Version) until $wantFrom"
+            }
+            "OK: one second before it counts, the tray app's check holds $($check.Waiting) back until $($check.WaitingFrom) (it offers $($check.Newest))"
+            $run = Invoke-UrHelper $boundary.Tag 600
+            Show-UrUpdates
+            if ($run.ExitCode -ne $UrRefusalNotOffered) {
+              throw ("the helper exited {0} (0x{0:X8}), want Refusal::NotOffered 0x{1:X8}" -f $run.ExitCode, $UrRefusalNotOffered)
+            }
+            Assert-UrResult (Read-UrResult) $boundary.Tag ([string]$boundary.Code) $UrRefusalNotOffered
+            $log = Get-UrHelperLog $boundary.Tag
+            Assert-UrHelperLogHas $log ("release " + [regex]::Escape($boundary.Tag) + " had not been published for 24 h when the server's day began: skipped") 'the release has not been out for 24 h'
+            $served = @(Get-Content $state.Log)
+            $lists = @($served | Where-Object { $_ -match '^list: .* \[URnetwork-Windows-Update/' })
+            if ($lists.Count -ne 1) { throw "the stand-in served the helper the release list $($lists.Count) times, want once" }
+            if (@($served | Where-Object { $_ -match '^(redirect|served): ' }).Count -ne 0) { throw "the helper asked for a download of a release it refused" }
+            $tagDir = Join-Path $UrUpdatesDir $boundary.Tag
+            if (@(Get-ChildItem -LiteralPath $tagDir -Filter '*.msi' -ErrorAction SilentlyContinue).Count -ne 0) { throw "a package is on disk for the refused release" }
+            if (Test-Path (Join-Path $tagDir 'install.log')) { throw "msiexec ran" }
+            $product = Assert-UrInstalled (Get-UrExpect 'vn')
+            if ($product.ProductCode -ne $before) { throw "a different product is registered" }
+            # how old the release is on that date: it may be past 24 h, since
+            # the line is drawn where the list's UTC day began
+            $age = [long]$boundary.CountsFrom - 1 - [long]$boundary.Published
+            $ageText = "{0} h {1} min" -f [math]::Floor($age / 3600), [math]::Floor(($age % 3600) / 60)
+            "OK: with the list dated $(Format-UrUnix ([long]$boundary.CountsFrom - 1)), one second before it counts, $($boundary.Tag), then $ageText old, is refused (NotOffered) and nothing is downloaded"
+          } finally {
+            Stop-UrAppProcesses
+            Remove-UrTestNetwork $state
+          }
+
+      - name: The second the release counts, the helper installs it, with vN's app running
+        if: matrix.leg == 'at'
+        timeout-minutes: 25
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-feed-lib.ps1"
+          $stepStarted = Get-Date
+          $boundary = Get-Content -Raw (Join-Path $env:RUNNER_TEMP 'boundary.json') | ConvertFrom-Json
+          $traits = Get-Content -Raw (Join-Path $env:RUNNER_TEMP 'official-traits.json') | ConvertFrom-Json
+          $expect = Get-UrExpect 'official'
+          $before = Get-Content (Join-Path $env:RUNNER_TEMP 'vn.productcode')
+          $from = Get-UrAppLogLength
+          $state = $null
+          try {
+            $state = Set-UrFeedStandIn (Join-Path $env:RUNNER_TEMP 'releases.json') ([long]$boundary.CountsFrom) $boundary (Get-UrMsiPath 'official')
+            # vN's tray app, on the same list and date: it offers the release
+            $app = Start-UrTrayApp
+            $check = Wait-UrTrayCheck $from
+            if ($null -eq $check) { throw "the tray app's check of the stand-in's list failed" }
+            if ($check.Newest -ne $boundary.Version -or $check.NewestCode -ne [string]$boundary.Code) {
+              throw "the tray app found $($check.Newest) newest, and the list offers $($boundary.Tag) from this second"
+            }
+            if ($check.Waiting -eq $boundary.Version) { throw "the tray app still holds $($boundary.Version) back" }
+            "OK: the second it counts, the tray app's check offers $($check.Newest)"
+
+            # The release that was on the banner a second earlier. A tray app
+            # whose check was before midnight UTC asks the helper for that tag;
+            # the helper's own list is from after it, offers the newer release,
+            # and the helper refuses the tag it was given.
+            $helperLists = 1
+            $earlierFile = Join-Path $env:RUNNER_TEMP 'offered-before.json'
+            $earlier = $null
+            if (Test-Path $earlierFile) { $earlier = Get-Content -Raw $earlierFile | ConvertFrom-Json }
+            if ($null -eq $earlier -or [uint64]$earlier.Code -le [uint64](Get-UrExpect 'vn').code) {
+              "NOT VERIFIED on this run: a tag offered before the line, asked for after it. The list offers nothing newer than vN a second before the line."
+            } else {
+              $stale = Invoke-UrHelper $earlier.Tag 600
+              $helperLists = 2
+              if ($stale.ExitCode -ne $UrRefusalNotOffered) {
+                throw ("asked for {0}, the helper exited {1} (0x{1:X8}), want Refusal::NotOffered 0x{2:X8}" -f $earlier.Tag, $stale.ExitCode, $UrRefusalNotOffered)
+              }
+              Assert-UrResult (Read-UrResult) $earlier.Tag ([string]$earlier.Code) $UrRefusalNotOffered
+              $staleLog = Get-UrHelperLog $earlier.Tag
+              Assert-UrHelperLogHas $staleLog ("refused: the official feed offers " + [regex]::Escape($boundary.Tag) + " ") 'its own list offers the newer release'
+              $servedSoFar = @(Get-Content $state.Log)
+              if (@($servedSoFar | Where-Object { $_ -match '^(redirect|served): ' }).Count -ne 0) { throw "the helper asked for a download of a release it refused" }
+              $staleDir = Join-Path $UrUpdatesDir $earlier.Tag
+              if (@(Get-ChildItem -LiteralPath $staleDir -Filter '*.msi' -ErrorAction SilentlyContinue).Count -ne 0) { throw "a package is on disk for the refused release" }
+              if (Test-Path (Join-Path $staleDir 'install.log')) { throw "msiexec ran for the refused release" }
+              $product = Assert-UrInstalled (Get-UrExpect 'vn')
+              if ($product.ProductCode -ne $before) { throw "a different product is registered" }
+              if ($app.HasExited) { throw "vN's app exited when the helper refused" }
+              "OK: asked for $($earlier.Tag), which the list offered a second earlier, the helper refuses it (NotOffered) because the list now offers $($boundary.Tag); nothing was downloaded, and vN and its app are as they were"
+            }
+
+            $run = Invoke-UrHelper $boundary.Tag 900 $app
+            $helperEnded = Get-Date
+            Show-UrUpdates
+            if ($run.ExitCode -ne 0) { throw ("the helper exited {0} (0x{0:X8}), want 0" -f $run.ExitCode) }
+            Assert-UrResult (Read-UrResult) $boundary.Tag ([string]$boundary.Code) 0
+            # the helper's own requests, by its User-Agent: vN's tray app may ask
+            # for the list too, on its launch check
+            $served = @(Get-Content $state.Log)
+            foreach ($kind in 'list', 'redirect', 'served') {
+              $count = @($served | Where-Object { $_ -match "^${kind}: .* \[URnetwork-Windows-Update/" }).Count
+              $want = 1
+              if ($kind -eq 'list') { $want = $helperLists }
+              if ($count -ne $want) { throw "the stand-in answered the helper's '$kind' $count times, want $want" }
+            }
+            $log = Get-UrHelperLog $boundary.Tag
+            Assert-UrHelperLogHas $log ("release " + [regex]::Escape($boundary.Tag) + " is offered; downloading " + [regex]::Escape($boundary.Asset) + " from release-assets\.githubusercontent\.com$") 'it took the release the list offers that day'
+            Assert-UrHelperLogHas $log ("SHA-256 " + $boundary.Digest + " matches GitHub's for " + [regex]::Escape($boundary.Asset)) "the download is GitHub's SHA-256"
+            Assert-UrHelperLogHas $log ("package " + [regex]::Escape($boundary.Asset) + " is this product's ProductVersion " + [regex]::Escape($expect.msi_version) + "$") "the package is this product at the release code's ProductVersion"
+
+            $tagDir = Join-Path $UrUpdatesDir $boundary.Tag
+            $msiLog = Join-Path $tagDir 'install.log'
+            if (-not (Test-Path $msiLog)) { throw "no install.log in $tagDir" }
+            Copy-Item $msiLog (Join-Path $UrLogDir 'official-apply.log')
+            $product = Assert-UrInstalled $expect 'official-apply.log'
+            if ($product.ProductCode -eq $before) { throw "vN's product is still registered" }
+            $kept = Join-Path $tagDir $boundary.Asset
+            if (-not (Test-Path $kept)) { throw "the MSI is not kept at $kept" }
+            if ((Get-FileHash -Algorithm SHA256 $kept).Hash.ToLowerInvariant() -ne $boundary.Digest) { throw "the kept MSI is not GitHub's bytes" }
+            foreach ($path in $UrUpdatesDir, $tagDir, $kept, $msiLog, (Join-Path $tagDir 'update-helper.log'), $UrResultPath) {
+              Assert-UrAdminOnly $path
+            }
+            $moved = Join-Path $tagDir "URnetworkUpdate.$($run.Process.Id).running"
+            if (-not (Test-Path $moved)) { throw "the helper's image is not at $moved" }
+            "OK: with the list dated $(Format-UrUnix ([long]$boundary.CountsFrom)), the second it counts, the helper installed $($boundary.Tag): exit 0, the report, one product at $($expect.msi_version), the MSI kept and admin-only"
+
+            if ($null -eq $run.Marked) { throw "vN's app did not exit while the helper ran: the installer did not close it" }
+            if ($traits.CloseApp) {
+              if ((Get-UrMsiLogLines $msiLog 'Property\(S\): URNETWORK_APP_CLOSABLE = ').Count -eq 0) {
+                throw "URNETWORK_APP_CLOSABLE was not set: the installer did not consider vN's app closable"
+              }
+              $evidence = Get-UrCloseEvidence $msiLog
+              $closed = Get-UrAppLogLines 'tray: WM_CLOSE received, exiting' $from
+              if ($closed.Count -ne 1) { throw "the app logged $($closed.Count) WM_CLOSE lines, want one" }
+              $closedAt = Get-UrAppLogTime $closed[0]
+              "Wix4CloseApplications_X64 $($evidence.CloseStart) - $($evidence.CloseEnd); WM_CLOSE received $closedAt"
+              if ($null -eq $evidence.CloseStart -or $null -eq $evidence.CloseEnd) { throw "no Wix4CloseApplications_X64 in the log" }
+              if ($closedAt -lt $evidence.CloseStart -or $closedAt -gt $evidence.CloseEnd) { throw "the app's WM_CLOSE came outside Wix4CloseApplications_X64" }
+              if ((Get-UrAppLogLines 'the Restart Manager is closing the app' $from).Count -ne 0) { throw "the Restart Manager closed the app, not CloseApplication" }
+              "OK: the release's own CloseApplication closed vN's app at $closedAt, inside its action"
+            } else {
+              "OBSERVED: $($boundary.Tag)'s package has no CloseApplication; vN's app exited while the helper ran"
+            }
+            $rmEvents = @(Get-WinEvent -FilterHashtable @{ LogName = 'Application'; StartTime = $stepStarted } -ErrorAction SilentlyContinue |
+              Where-Object { $_.ProviderName -match 'RestartManager' } | Sort-Object TimeCreated)
+            $rmEvents | ForEach-Object { "RM event $($_.Id) at $($_.TimeCreated.ToString('HH:mm:ss.fff')): $($_.Message)" }
+
+            if ($traits.Relaunch) {
+              if ((Get-UrMsiLogLines $msiLog 'Action start \d{1,2}:\d{2}:\d{2}: RelaunchAfterUpdate\.').Count -eq 0) { throw "RelaunchAfterUpdate did not run" }
+              $seen = Wait-UrRelaunch $from 150
+              if ($seen.Processes.Count -eq 0) { throw "no URnetwork.exe --after-update was started" }
+              Assert-UrRelaunchWaited $seen $helperEnded
+              if ($seen.Report.Count -eq 0) { throw "the relaunched app did not show the helper's report" }
+              $relaunched = Get-UrFileVersion (Join-Path $UrInstallDir 'URnetwork.exe')
+              "OK: $($boundary.Tag)'s package relaunched the app (URnetwork.exe $relaunched), which waited for the helper and showed its report"
+            } else {
+              "NOT VERIFIED on this run: the relaunch. $($boundary.Tag)'s package has no RelaunchAfterUpdate action."
+            }
+            Stop-UrAppProcesses
+          } finally {
+            Remove-UrTestNetwork $state
+          }
+
+      - name: Collect logs
+        if: always()
+        shell: powershell
+        run: |
+          $dest = Join-Path $env:RUNNER_TEMP 'upgrade-logs'
+          New-Item -ItemType Directory -Force $dest | Out-Null
+          foreach ($name in 'releases.json', 'boundary.json', 'official-traits.json') {
+            $file = Join-Path $env:RUNNER_TEMP $name
+            if (Test-Path $file) { Copy-Item $file $dest }
+          }
+          $standin = Join-Path $env:RUNNER_TEMP 'feed-standin\server.log'
+          if (Test-Path $standin) { Copy-Item $standin (Join-Path $dest 'standin-server.log') }
+          if (Test-Path "$env:LOCALAPPDATA\URnetwork\app\logs") {
+            Copy-Item "$env:LOCALAPPDATA\URnetwork\app\logs" (Join-Path $dest 'app-logs') -Recurse -Force
+          }
+          if (Test-Path "$env:ProgramData\URnetwork\service\logs") {
+            Copy-Item "$env:ProgramData\URnetwork\service\logs" (Join-Path $dest 'service-logs') -Recurse -Force
+          }
+          $updates = 'C:\Program Files\URnetwork\updates'
+          if (Test-Path $updates) {
+            Get-ChildItem -Recurse -Force $updates | ForEach-Object { "$($_.FullName) $($_.Length)" } |
+              Out-File (Join-Path $dest 'updates-listing.txt')
+            Get-ChildItem -Recurse -File $updates -Include '*.log', '*.json' | ForEach-Object {
+              $name = 'updates_' + ($_.FullName.Substring($updates.Length).TrimStart('\') -replace '\\', '_')
+              Copy-Item -LiteralPath $_.FullName (Join-Path $dest $name)
+            }
+          }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: feed-logs-${{ matrix.leg }}
+          path: ${{ runner.temp }}/upgrade-logs/
+          if-no-files-found: warn
