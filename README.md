@@ -7,8 +7,9 @@ the URnetwork SDK (the cgo C ABI + C++ wrapper from `sdk/cgo`).
 ## Download
 
 Release MSIs (`URnetwork-<version>-x64.msi`, `URnetwork-<version>-arm64.msi`)
-are attached to every release the build pipeline publishes. The newest is at
-https://github.com/urnetwork/build/releases/latest.
+are attached to the releases the build pipeline publishes. The newest release
+is at https://github.com/urnetwork/build/releases/latest. Now and then one
+carries no MSIs: take the newest that does.
 
 The in-app updater polls the same releases
 (`app/src/Common/ReleaseSelection.h`, `kOfficialFeed`). It offers a release

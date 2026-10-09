@@ -79,12 +79,13 @@ struct Feed {
 };
 
 // The official releases: urnetwork/build's, never a personal fork. That
-// repository is where the release pipeline (build/all/run.sh) publishes every
-// build, the Windows MSIs among its assets, each as an immutable release. The
-// app's own repository, urnetwork/windows, publishes none (urnetwork/windows#3
-// asks for them): were it to, this constant's id, owner and repo are all that
-// name the feed. The numeric id is the one GitHub assigned the repository.
-// Immutable releases are required, as on every official feed.
+// repository is where the release pipeline (build/all/run.sh) publishes its
+// builds as immutable releases, the Windows MSIs among their assets; a build
+// it published without them is skipped (SelectRelease). The app's own
+// repository, urnetwork/windows, publishes none (urnetwork/windows#3 asks for
+// them): were it to, this constant's id, owner and repo are all that name the
+// feed. The numeric id is the one GitHub assigned the repository. Immutable
+// releases are required, as on every official feed.
 //
 // The pipeline publishes whenever it runs, several builds on some days, and a
 // build published a moment ago has run nowhere yet. So a release counts only

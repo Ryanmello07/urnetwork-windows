@@ -4,11 +4,12 @@
 //
 // The feed is urnetwork/build's GitHub releases (Common/ReleaseSelection.h
 // kOfficialFeed, polled by the repository's numeric id): the releases the
-// release pipeline publishes, each carrying one MSI per architecture. A
-// release counts once it has been out for a day, judged at the start of
-// GitHub's day by the release list's own Date header, so what is offered
-// changes at most once a day, and the update helper, which judges the same
-// way, comes to the same release (ReleaseSelection.h HasSoaked).
+// release pipeline publishes, with one MSI per architecture among a build's
+// assets (a release without them is skipped). A release counts once it has
+// been out for a day, judged at the start of GitHub's day by the release
+// list's own Date header, so what is offered changes at most once a day, and
+// the update helper, which judges the same way, comes to the same release
+// (ReleaseSelection.h HasSoaked).
 // Poll the release list (on launch after ~30s, then every 6 hours, and on the
 // two manual triggers), pick the release with Common/ReleaseSelection.h, and when
 // it outranks the build's own stamped code, offer ONE click that
