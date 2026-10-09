@@ -52,6 +52,7 @@ inline std::optional<std::vector<Release>> ParseReleaseList(std::string_view bod
     release.draft = json_detail::Flag(item, "draft");
     release.prerelease = json_detail::Flag(item, "prerelease");
     release.immutable = json_detail::Flag(item, "immutable");
+    release.publishedAt = json_detail::Text(item, "published_at");
     if (auto assets = item.find("assets"); assets != item.end() && assets->is_array()) {
       for (auto const& asset : *assets) {
         if (!asset.is_object()) continue;

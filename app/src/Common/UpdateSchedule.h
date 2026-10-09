@@ -13,6 +13,9 @@
 // succeeded for kStaleAfter, the app says "Couldn't check for updates since
 // <date>" until one does.
 //
+// Also here: which offered release the banner's Later holds back
+// (HiddenByLater).
+//
 // Pure and header-only: tools/update-release-tests.cpp runs it on any host.
 //
 // SPDX-License-Identifier: MPL-2.0
@@ -63,6 +66,15 @@ inline constexpr bool CheckIsStale(std::int64_t nowUnixSeconds, std::int64_t las
                                    bool checking) {
   return checking && lastSuccessUnixSeconds > 0 &&
          nowUnixSeconds - lastSuccessUnixSeconds > kStaleAfterSeconds;
+}
+
+// Whether the banner's Later holds the offered release back. `laterCode` is
+// the code of the release the user chose Later on in this run of the app, 0
+// when none. Later hides that release and no other, so a newer one is shown;
+// and the app keeps it in memory only, so the next launch starts from 0 and
+// shows the release again.
+inline constexpr bool HiddenByLater(std::uint64_t laterCode, std::uint64_t offeredCode) {
+  return laterCode != 0 && offeredCode == laterCode;
 }
 
 }  // namespace urnw::update

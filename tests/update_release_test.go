@@ -16,10 +16,11 @@ import (
 
 // The update's pure decisions, compiled and run by
 // app/tools/update-release-tests.cpp against the same headers the tray app and
-// the update helper compile: the feed and the release it offers
-// (Common/ReleaseSelection.h), the install locations an elevated process may
-// run from (Common/InstallLocation.h), and what the helper's exit code means
-// (Common/UpdateResult.h). The MSI ProductVersion a release must carry
+// the update helper compile: the feed, how long a release must have been out,
+// and the release it offers (Common/ReleaseSelection.h), the install locations
+// an elevated process may run from (Common/InstallLocation.h), and what the
+// helper's exit code means (Common/UpdateResult.h). The MSI ProductVersion a
+// release must carry
 // (UrMsiVersion) is also checked against UrVersion.ps1's Go oracle
 // (ur_version_test.go) on every day boundary the layout can reach.
 
@@ -162,31 +163,41 @@ func updateReleaseReplace(old, replacement string) func(string) string {
 	}
 }
 
-// The official feed must be the stable urnetwork/windows releases, addressed
-// by that repository's own id, immutable and without prereleases: pointing it
-// at the nightly build repo or a personal fork, or loosening it, fails the
-// suite, not just a review.
+// The official feed must be urnetwork/build's published releases, addressed
+// by that repository's own id, immutable, without prereleases, and out for a
+// day: pointing it at a personal fork or at any other repository, or
+// loosening it, fails the suite, not just a review.
 func TestUpdateReleaseRejectsOtherFeeds(t *testing.T) {
 	for _, tc := range []struct {
 		name, old, replacement, want string
 	}{
-		{"nightly build repo", `.repo = "windows",`, `.repo = "build",`, "nightly builds, not the stable feed"},
-		{"personal fork", `.owner = "urnetwork",
-    .repo = "windows",`, `.owner = "example-user",
+		{"a personal fork", `.owner = "urnetwork",
+    .repo = "build",`, `.owner = "example-user",
     .repo = "urnetwork-windows",`, "official urnetwork repo"},
-		{"another repository's id", ".numericRepoId = 1297133846,", ".numericRepoId = 1,",
-			"urnetwork/windows' own id"},
+		{"a personal fork, by its id too", `.numericRepoId = 936244679,
+    .owner = "urnetwork",
+    .repo = "build",`, `.numericRepoId = 1,
+    .owner = "example-user",
+    .repo = "urnetwork-windows",`, "official urnetwork repo"},
+		{"a personal fork behind the organisation's names", ".numericRepoId = 936244679,", ".numericRepoId = 1,",
+			"urnetwork/build's own id"},
+		{"another repository of the organisation", `.repo = "build",`, `.repo = "windows",`,
+			"polls urnetwork/build's published releases"},
 		{"mutable releases", ".requireImmutable = true,", ".requireImmutable = false,",
 			"requires immutable releases"},
 		{"prereleases", `.id = "official",
-    .numericRepoId = 1297133846,
+    .numericRepoId = 936244679,
     .owner = "urnetwork",
-    .repo = "windows",
+    .repo = "build",
     .acceptBetaPrereleases = false,`, `.id = "official",
-    .numericRepoId = 1297133846,
+    .numericRepoId = 936244679,
     .owner = "urnetwork",
-    .repo = "windows",
+    .repo = "build",
     .acceptBetaPrereleases = true,`, "takes no prerelease"},
+		{"a release offered the moment it is published", ".soakSeconds = 24 * 60 * 60,", ".soakSeconds = 0,",
+			"soaks a release for 24 hours"},
+		{"an hour's soak", ".soakSeconds = 24 * 60 * 60,", ".soakSeconds = 60 * 60,",
+			"soaks a release for 24 hours"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			requireUpdateReleaseFailure(t, "ReleaseSelection.h", updateReleaseReplace(tc.old, tc.replacement), tc.want)
@@ -212,12 +223,90 @@ func TestUpdateReleaseRejectsWeakerDecisions(t *testing.T) {
 			"inline constexpr std::int64_t kFutureCodeLimitSeconds = 24 * 60 * 60;",
 			"exactly 48 h past the server's date is offered"},
 		{"newest counts every release", "ReleaseSelection.h",
-			"if (!match || match->url.empty()) {\n      s.skipped.push_back({rel.tag, \"lacks \" + name});\n      continue;\n    }\n    if (tag->code > s.newestCode) {",
-			"if (tag->code > s.newestCode) {\n      s.newestCode = tag->code;\n      s.newestVersion = tag->version;\n    }\n    if (!match || match->url.empty()) {\n      s.skipped.push_back({rel.tag, \"lacks \" + name});\n      continue;\n    }\n    if (tag->code > s.newestCode) {",
+			"    if (!match || match->url.empty()) {\n      s.skipped.push_back({rel.tag, \"lacks \" + name});\n      continue;\n    }\n",
+			"    if (tag->code > s.newestCode) {\n      s.newestCode = tag->code;\n      s.newestVersion = tag->version;\n    }\n    if (!match || match->url.empty()) {\n      s.skipped.push_back({rel.tag, \"lacks \" + name});\n      continue;\n    }\n",
 			"newest counts only releases carrying this product's MSI"},
 		{"prereleases taken anywhere", "ReleaseSelection.h",
 			"if (rel.prerelease && !feed.acceptAnyPrerelease &&", "if (false && rel.prerelease && !feed.acceptAnyPrerelease &&",
 			"skips every prerelease"},
+		{"the soak never applied", "ReleaseSelection.h",
+			"if (!HasSoaked(feed, published, serverUnixSeconds)) {", "if (false) {",
+			"23 h 59 m old when the day began is not offered"},
+		{"the soak judged at the list's own second", "ReleaseSelection.h",
+			"return *publishedUnixSeconds + feed.soakSeconds <= UtcDayStart(serverUnixSeconds);",
+			"return *publishedUnixSeconds + feed.soakSeconds <= serverUnixSeconds;",
+			"does not change during one server day"},
+		{"the soak judged at the day's end", "ReleaseSelection.h",
+			"return *publishedUnixSeconds + feed.soakSeconds <= UtcDayStart(serverUnixSeconds);",
+			"return *publishedUnixSeconds + feed.soakSeconds <= UtcDayStart(serverUnixSeconds) + kSecondsPerDay;",
+			"a release whose 24 hours end during the day waits for the next day"},
+		{"23 h 59 m is enough", "ReleaseSelection.h",
+			"return *publishedUnixSeconds + feed.soakSeconds <= UtcDayStart(serverUnixSeconds);",
+			"return *publishedUnixSeconds + feed.soakSeconds - 60 <= UtcDayStart(serverUnixSeconds);",
+			"23 h 59 m old when the day began is not offered"},
+		{"24 h exactly is not enough", "ReleaseSelection.h",
+			"return *publishedUnixSeconds + feed.soakSeconds <= UtcDayStart(serverUnixSeconds);",
+			"return *publishedUnixSeconds + feed.soakSeconds < UtcDayStart(serverUnixSeconds);",
+			"24 h old when the day began is offered"},
+		{"a release without a publication time counted", "ReleaseSelection.h",
+			"if (!publishedUnixSeconds || serverUnixSeconds <= 0) return false;",
+			"if (serverUnixSeconds <= 0) return false;\n  if (!publishedUnixSeconds) return true;",
+			"without a publication time is never offered"},
+		{"a list without a date counted", "ReleaseSelection.h",
+			"if (!publishedUnixSeconds || serverUnixSeconds <= 0) return false;",
+			"if (!publishedUnixSeconds) return false;",
+			"a list with no date counts no release"},
+		{"a day of twelve hours", "ReleaseSelection.h",
+			"inline constexpr std::int64_t kSecondsPerDay = 24 * 60 * 60;",
+			"inline constexpr std::int64_t kSecondsPerDay = 12 * 60 * 60;",
+			"a UTC day runs from its first second"},
+		{"a release still soaking named as the newest", "ReleaseSelection.h",
+			"    const std::optional<std::int64_t> published = ParseUtcSecond(rel.publishedAt);\n",
+			"    if (tag->code > s.newestCode) {\n      s.newestCode = tag->code;\n      s.newestVersion = tag->version;\n    }\n" +
+				"    const std::optional<std::int64_t> published = ParseUtcSecond(rel.publishedAt);\n",
+			"a release still soaking is not named as the newest"},
+		{"the held-back release said to count a day early", "ReleaseSelection.h",
+			"return day == soaked ? soaked : day + kSecondsPerDay;", "return day;",
+			"the first second HasSoaked holds"},
+		{"the held-back release not named", "ReleaseSelection.h",
+			"if (tag->code > s.waitingCode) {", "if (false && tag->code > s.waitingCode) {",
+			"is named as waiting"},
+		{"a release of the other platforms named as held back", "ReleaseSelection.h",
+			"    if (!match || match->url.empty()) {\n      s.skipped.push_back({rel.tag, \"lacks \" + name});\n      continue;\n    }\n" +
+				"    const std::optional<std::int64_t> published = ParseUtcSecond(rel.publishedAt);\n",
+			"    const std::optional<std::int64_t> published = ParseUtcSecond(rel.publishedAt);\n" +
+				"    if (!HasSoaked(feed, published, serverUnixSeconds) && published && tag->code > s.waitingCode) {\n" +
+				"      s.waitingCode = tag->code;\n      s.waitingVersion = tag->version;\n" +
+				"      s.waitingFromUnixSeconds = SoakEndUnixSeconds(feed, *published);\n    }\n" +
+				"    if (!match || match->url.empty()) {\n      s.skipped.push_back({rel.tag, \"lacks \" + name});\n      continue;\n    }\n",
+			"with this product's MSI that the soak holds back is named as waiting"},
+		{"a page of fifteen releases", "ReleaseSelection.h",
+			"inline constexpr int kReleaseListPageSize = 30;", "inline constexpr int kReleaseListPageSize = 15;",
+			"one page of the list holds two days of the pipeline's builds"},
+		{"the list asked for by the repository's name", "ReleaseSelection.h",
+			`return "https://api.github.com/repositories/" + std::to_string(feed.numericRepoId) +`,
+			`return "https://api.github.com/repos/" + std::string(feed.owner) + "/" + std::string(feed.repo) +`,
+			"by the repository's id"},
+		{"the day's change not noticed before the helper starts", "ReleaseSelection.h",
+			"  return UtcDayStart(serverUnixSecondsAtCheck + secondsSince) !=\n         UtcDayStart(serverUnixSecondsAtCheck);",
+			"  return secondsSince > 2 * kSecondsPerDay;",
+			"an offer made before GitHub's day changed is checked again"},
+		{"a second check before every update", "ReleaseSelection.h",
+			"  return UtcDayStart(serverUnixSecondsAtCheck + secondsSince) !=\n         UtcDayStart(serverUnixSecondsAtCheck);",
+			"  return secondsSince >= 0;",
+			"an offer made the same day needs no second check"},
+		{"a clock that ran backwards taken for the same day", "ReleaseSelection.h",
+			"  if (secondsSince < 0) return true;\n", "",
+			"a clock that ran backwards since the check"},
+		{"Later hides every release", "UpdateSchedule.h",
+			"return laterCode != 0 && offeredCode == laterCode;", "return laterCode != 0 && offeredCode != 0;",
+			"Later does not hide a newer release"},
+		{"Later hides nothing", "UpdateSchedule.h",
+			"return laterCode != 0 && offeredCode == laterCode;", "return laterCode != 0 && offeredCode == laterCode + 1;",
+			"Later hides the release it was chosen on"},
+		{"no Later hides the offer", "UpdateSchedule.h",
+			"return laterCode != 0 && offeredCode == laterCode;", "return offeredCode == laterCode || offeredCode != 0;",
+			"a launch starts with no release hidden by Later"},
 		{"download URL by prefix", "ReleaseSelection.h",
 			"return url == FeedAssetUrl(feed, tag, asset);",
 			"return url.substr(0, FeedAssetUrl(feed, tag, asset).size()) == FeedAssetUrl(feed, tag, asset);",
