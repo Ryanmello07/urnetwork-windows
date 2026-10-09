@@ -63,6 +63,7 @@ constexpr update::Feed kRunnerTestFeed{
     .repo = URN_UPDATER_STRINGIZE(URN_UPDATE_RUNNER_TEST_REPO),
     .acceptBetaPrereleases = false,
     .requireImmutable = false,
+    .soakSeconds = 0,
     .tagPrefix = URN_UPDATER_STRINGIZE(URN_UPDATE_RUNNER_TEST_TAG_PREFIX),
     .acceptAnyPrerelease = true,
 };
@@ -174,6 +175,15 @@ std::string Utf8(std::wstring_view text) {
 }
 
 std::wstring WidenAscii(std::string_view text) { return std::wstring(text.begin(), text.end()); }
+
+// The host of a redirect IsAllowedAssetRedirect accepted, for the log: the
+// rest of that URL is a signed, short-lived address.
+std::string RedirectHost(std::string_view url) {
+  constexpr std::string_view kScheme = "https://";
+  if (url.substr(0, kScheme.size()) != kScheme) return {};
+  url.remove_prefix(kScheme.size());
+  return std::string(url.substr(0, url.find_first_of("/:")));
+}
 
 // The tag as ASCII, or empty when it holds anything else.
 std::string AsciiTag(std::wstring_view tag) {
@@ -461,8 +471,9 @@ int ApplyUpdate(std::wstring_view tagArgument) {
   };
 
   // ---- 2 and 3. the release list, fetched here -------------------------------
-  const std::wstring listUrl = std::format(
-      L"https://api.github.com/repositories/{}/releases?per_page=15", feed.numericRepoId);
+  // The same request the tray app's check makes (ReleaseListUrl), so the two
+  // judge the same page of releases.
+  const std::wstring listUrl = WidenAscii(update::ReleaseListUrl(feed));
   std::string body;
   HttpResponse list;
   if (!HttpGet(
@@ -490,6 +501,10 @@ int ApplyUpdate(std::wstring_view tagArgument) {
   if (!releases) return refuse(Refusal::ReleaseList, "the release list is not a JSON array");
 
   // ---- 4. the release it offers ------------------------------------------------
+  // Judged against the list's own Date header, the soak included: how long a
+  // release has been out, unchanged, is GitHub's clock against the times
+  // GitHub gives the release, and nothing this machine or its user can set
+  // moves either.
   const update::Selection selection =
       update::SelectRelease(*releases, kArch, feed, list.serverUnixSeconds);
   for (const auto& skip : selection.skipped) log.Line("release {} {}: skipped", skip.tag, skip.reason);
@@ -516,6 +531,8 @@ int ApplyUpdate(std::wstring_view tagArgument) {
                               "GitHub's release assets",
                               redirect.status, redirect.location));
   }
+  log.Line("release {} is offered; downloading {} from {}", selection.tag, selection.assetName,
+           RedirectHost(redirect.location));
   const fs::path package = tagFolder / WidenAscii(selection.assetName);
   ::DeleteFileW(package.c_str());  // an earlier, interrupted attempt's
   FILE_ID_INFO writtenId{};

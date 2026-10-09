@@ -143,6 +143,26 @@
     <value>पूरे ऐप में कच्चे मान, पहचानकर्ता, कनेक्शन इंस्पेक्टर और विश्वसनीयता ट्यूनिंग दिखाता है।</value>
     <comment>Settings: explanation under the advanced mode switch.</comment>
   </data>
+  <data name="adv_allow_host" xml:space="preserve">
+    <value>इस होस्ट को अनुमति दें</value>
+    <comment>Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the button that allows the connection's host. It adds an allowing rule for a host that was blocked, or removes the rule blocking it while one is in force, so the label always names what the press leaves behind.</comment>
+  </data>
+  <data name="adv_always_tunnel" xml:space="preserve">
+    <value>हमेशा टनल से</value>
+    <comment>Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the button that keeps the connection's host inside the VPN tunnel. It adds a rule for a host that bypassed the tunnel, or removes the bypass rule while one is in force.</comment>
+  </data>
+  <data name="adv_best_available_note" xml:space="preserve">
+    <value>URnetwork आपके लिए सबसे तेज़ और ठीक से काम कर रहे प्रदाता चुनता है, बिना किसी स्थान की पाबंदी के, और नेटवर्क बदलने पर फिर से चुनता है।</value>
+    <comment>Network page, selected provider pane: note under the Name row while Best available provider is selected, saying what best available means.</comment>
+  </data>
+  <data name="adv_block_host" xml:space="preserve">
+    <value>इस होस्ट को ब्लॉक करें</value>
+    <comment>Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the button that blocks the connection's host. It adds a blocking rule, or removes the rule allowing the host while one is in force, so the label always names what the press leaves behind.</comment>
+  </data>
+  <data name="adv_bypass_tunnel" xml:space="preserve">
+    <value>टनल को बायपास करें</value>
+    <comment>Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the button that sends the connection's host directly from this device, outside the VPN. It adds a split rule, or removes the rule keeping the host in the tunnel while one is in force.</comment>
+  </data>
   <data name="adv_bytes_total" xml:space="preserve">
     <value>बाइट (कुल)</value>
     <comment>Connection inspector: label of the total bytes row.</comment>
@@ -150,6 +170,22 @@
   <data name="adv_clear_selection" xml:space="preserve">
     <value>चयन हटाएँ</value>
     <comment>Connection inspector: button that clears the selected connection.</comment>
+  </data>
+  <data name="adv_connection_count.one" xml:space="preserve">
+    <value>{} कनेक्शन</value>
+    <comment>Connect page, Activity pane, grouped by host: how many connections (routing decisions) one host's row stands for, at the start of the row's figures and in its accessible name. The argument is the number of connections.</comment>
+  </data>
+  <data name="adv_connection_count.other" xml:space="preserve">
+    <value>{} कनेक्शन</value>
+    <comment>Connect page, Activity pane, grouped by host: how many connections (routing decisions) one host's row stands for, at the start of the row's figures and in its accessible name. The argument is the number of connections.</comment>
+  </data>
+  <data name="adv_copy_details" xml:space="preserve">
+    <value>विवरण कॉपी करें</value>
+    <comment>Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the button that copies the connection's details (host, addresses, verdict, reason, totals) to the clipboard.</comment>
+  </data>
+  <data name="adv_details_copied" xml:space="preserve">
+    <value>कनेक्शन विवरण कॉपी किए गए</value>
+    <comment>Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the confirmation after Copy details put the connection's details on the clipboard.</comment>
   </data>
   <data name="adv_exit_dial_failures" xml:space="preserve">
     <value>डायल विफलताएँ</value>
@@ -195,9 +231,41 @@
     <value>एग्ज़िट</value>
     <comment>Connection inspector: heading of the exits section.</comment>
   </data>
+  <data name="adv_filter_all" xml:space="preserve">
+    <value>सभी</value>
+    <comment>Connect page, Activity pane: the first choice of the verdict filter above the list of connections (routing decisions). Shows every connection, whatever its verdict. Short: it shares one row with Blocked, Tunnelled and Bypassed.</comment>
+  </data>
+  <data name="adv_filter_bypassed" xml:space="preserve">
+    <value>टनल से बाहर</value>
+    <comment>Connect page, Activity pane: the verdict filter choice that shows only the connections that bypassed the tunnel (allowed, but sent directly from this device outside the VPN, for example by a split rule, so not protected). Short: it shares one row with All, Blocked and Tunnelled.</comment>
+  </data>
+  <data name="adv_filter_tunnelled" xml:space="preserve">
+    <value>टनल किए गए</value>
+    <comment>Connect page, Activity pane: the verdict filter choice that shows only the connections sent through the URnetwork tunnel (allowed and protected). Short: it shares one row with All, Blocked and Bypassed.</comment>
+  </data>
+  <data name="adv_group_by_host" xml:space="preserve">
+    <value>होस्ट के अनुसार समूहित करें</value>
+    <comment>Connect page, Activity pane: label of the switch beside the search field that folds the list of connections into one row per host (with the count, the summed traffic and the latest decision). Clicking a host's row turns the switch off and searches for that host.</comment>
+  </data>
   <data name="adv_host" xml:space="preserve">
     <value>होस्ट</value>
     <comment>Connection inspector: label of the host row.</comment>
+  </data>
+  <data name="adv_host_allowed" xml:space="preserve">
+    <value>इस होस्ट को अनुमति दी जाएगी</value>
+    <comment>Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the confirmation after a press added a rule allowing the connection's host from now on.</comment>
+  </data>
+  <data name="adv_host_blocked" xml:space="preserve">
+    <value>यह होस्ट ब्लॉक किया जाएगा</value>
+    <comment>Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the confirmation after a press added a rule blocking the connection's host from now on.</comment>
+  </data>
+  <data name="adv_host_bypassed" xml:space="preserve">
+    <value>यह होस्ट टनल को बायपास करेगा</value>
+    <comment>Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the confirmation after a press added a split rule sending the connection's host outside the VPN tunnel from now on.</comment>
+  </data>
+  <data name="adv_host_tunnelled" xml:space="preserve">
+    <value>यह होस्ट टनल का उपयोग करेगा</value>
+    <comment>Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the confirmation after a press added a rule keeping the connection's host inside the VPN tunnel from now on.</comment>
   </data>
   <data name="adv_inspector" xml:space="preserve">
     <value>इंस्पेक्टर</value>
@@ -273,11 +341,15 @@
   </data>
   <data name="adv_mode_tunnel" xml:space="preserve">
     <value>टनल</value>
-    <comment>Windows status strip (Advanced Mode), Session value: a full tunnel session. Lowercase, a short status value.</comment>
+    <comment>Windows and Linux status strip (Advanced Mode), Session value: a full tunnel session. Lowercase, a short status value.</comment>
   </data>
   <data name="adv_na" xml:space="preserve">
     <value>—</value>
     <comment>Connection inspector: placeholder dash for a value that is not available.</comment>
+  </data>
+  <data name="adv_no_activity_matches" xml:space="preserve">
+    <value>इस खोज से कोई गतिविधि मेल नहीं खाती।</value>
+    <comment>Split rules sheet: the line in the Activity list when the search matches none of the connections it holds.</comment>
   </data>
   <data name="adv_no_selection" xml:space="preserve">
     <value>कोई कनेक्शन चयनित नहीं</value>
@@ -287,6 +359,10 @@
     <value>कोई नहीं</value>
     <comment>Connection inspector: value shown when a field has nothing.</comment>
   </data>
+  <data name="adv_open_split_rules" xml:space="preserve">
+    <value>स्प्लिट नियम खोलें</value>
+    <comment>Connect page, Advanced Mode, the connection inspector: the end of the Reason value's name for screen readers when a rule decided the connection, because pressing the value opens the Split rules sheet. Lowercase: it follows a comma.</comment>
+  </data>
   <data name="adv_override_id" xml:space="preserve">
     <value>ओवरराइड</value>
     <comment>Connection inspector: label of the override id row.</comment>
@@ -294,6 +370,10 @@
   <data name="adv_packets_total" xml:space="preserve">
     <value>पैकेट (कुल)</value>
     <comment>Connection inspector: label of the total packets row.</comment>
+  </data>
+  <data name="adv_pick_location_note" xml:space="preserve">
+    <value>इसके बजाय वहाँ कनेक्ट करने के लिए सूची में कोई देश, क्षेत्र, शहर या डिवाइस चुनें।</value>
+    <comment>Network page, selected provider pane: note under the best available explanation, saying how to connect to a chosen location instead.</comment>
   </data>
   <data name="adv_probe_age" xml:space="preserve">
     <value>प्रोब की आयु</value>
@@ -333,15 +413,15 @@
   </data>
   <data name="adv_routes" xml:space="preserve">
     <value>रूट</value>
-    <comment>Windows status strip (Advanced Mode): label of the field that shows whether the tunnel's routes are installed.</comment>
+    <comment>Windows and Linux status strip (Advanced Mode): label of the field that shows whether the tunnel's routes are installed.</comment>
   </data>
   <data name="adv_routes_dns_degraded" xml:space="preserve">
     <value>चालू, DNS लागू नहीं</value>
-    <comment>Windows status strip (Advanced Mode), Routes value: routes are installed but the tunnel's DNS is not. Lowercase, a short status value.</comment>
+    <comment>Windows and Linux status strip (Advanced Mode), Routes value: routes are installed but the tunnel's DNS is not. Lowercase, a short status value.</comment>
   </data>
   <data name="adv_routes_kill_switch_armed" xml:space="preserve">
     <value>बंद, किल स्विच सक्रिय</value>
-    <comment>Windows status strip (Advanced Mode), Routes value: no routes are installed and the kill switch is blocking traffic. Lowercase, a short status value.</comment>
+    <comment>Windows and Linux status strip (Advanced Mode), Routes value: no routes are installed and the kill switch is blocking traffic. Lowercase, a short status value.</comment>
   </data>
   <data name="adv_routes_no_firewall" xml:space="preserve">
     <value>चालू, लीक सुरक्षा नहीं</value>
@@ -349,7 +429,23 @@
   </data>
   <data name="adv_rpc" xml:space="preserve">
     <value>RPC</value>
-    <comment>Windows status strip (Advanced Mode): label of the field that shows the service's RPC endpoint (host:port). RPC is a technical term.</comment>
+    <comment>Windows and Linux status strip (Advanced Mode): label of the field that shows the service's RPC endpoint (host:port). RPC is a technical term.</comment>
+  </data>
+  <data name="adv_rule_active" xml:space="preserve">
+    <value>नियम सक्रिय है, हटाने के लिए क्लिक करें</value>
+    <comment>Connect page, Advanced Mode, the connection inspector and an Activity row's menu: added to a rule button's name for screen readers, after its label, while the button's rule is in force: pressing it removes the rule. Lowercase: it follows a comma.</comment>
+  </data>
+  <data name="adv_rule_removed" xml:space="preserve">
+    <value>नियम हटाया गया</value>
+    <comment>Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the confirmation after a press removed the rule that was in force for the connection's host.</comment>
+  </data>
+  <data name="adv_search_activity_placeholder" xml:space="preserve">
+    <value>गतिविधि खोजें</value>
+    <comment>Split rules sheet: placeholder and accessible name of the search field above the Activity list. Typing filters the list to the connections whose host name or IP address contains the text; the rules above are not filtered.</comment>
+  </data>
+  <data name="adv_search_connections" xml:space="preserve">
+    <value>होस्ट या IP खोजें</value>
+    <comment>Connect page, Activity pane: placeholder and accessible name of the search field above the list of connections. Typing filters the list to the connections whose host name or IP address contains the text.</comment>
   </data>
   <data name="adv_select_a_row" xml:space="preserve">
     <value>जाँचने के लिए गतिविधि में कोई पंक्ति चुनें</value>
@@ -369,11 +465,23 @@
   </data>
   <data name="adv_session_mode" xml:space="preserve">
     <value>सत्र</value>
-    <comment>Windows status strip (Advanced Mode): label of the field that shows which kind of session the service granted (tunnel or rpc-only).</comment>
+    <comment>Windows and Linux status strip (Advanced Mode): label of the field that shows which kind of session the service granted (tunnel or rpc-only).</comment>
+  </data>
+  <data name="adv_split_rules_note" xml:space="preserve">
+    <value>स्प्लिट नियम आपकी चुनी हुई साइटों को VPN के बाहर सीधे कनेक्ट होने देते हैं, और नीचे दी गई गतिविधि दिखाती है कि हर कनेक्शन कैसे रूट किया गया।</value>
+    <comment>Split rules sheet: the one-sentence explainer at the top, above the note on network clusters. A split rule sends the chosen sites directly from this device, outside the VPN; the sheet's Activity list shows how each connection was routed.</comment>
+  </data>
+  <data name="adv_undo" xml:space="preserve">
+    <value>पूर्ववत करें</value>
+    <comment>Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the button on the confirmation after a press added a rule; it deletes the rule that was just added.</comment>
   </data>
   <data name="adv_unknown_exit" xml:space="preserve">
     <value>रूटिंग टेबल में नहीं है</value>
     <comment>Connection inspector: exit value when the destination is not in the routing table.</comment>
+  </data>
+  <data name="adv_verdict" xml:space="preserve">
+    <value>निर्णय</value>
+    <comment>Connect page, Advanced Mode: the label of the verdict line (blocked, tunnelled, or bypassed the tunnel) in the connection details Copy details puts on the clipboard.</comment>
   </data>
   <data name="adv_verdict_blocked" xml:space="preserve">
     <value>ब्लॉक किया गया — कोई पैकेट नहीं भेजा गया</value>
@@ -477,6 +585,10 @@
     <value>0 स्प्लिट ऐप्स</value>
     <comment>Generic starter label on the app-split panel when no apps are included or excluded yet (shown instead of "0 apps excluded").</comment>
   </data>
+  <data name="app_start_failed_detail" xml:space="preserve">
+    <value>URnetwork शुरू नहीं हो सका। इसके लॉग {} में हैं।</value>
+    <comment>Linux: the body of the dialog shown when the app cannot start (its SDK host failed to initialize, so there is no window and no tray), under the heading something_went_wrong. The argument is the folder that holds the app's log files. The raw error follows on its own lines, untranslated.</comment>
+  </data>
   <data name="app_too_old_for_daemon" xml:space="preserve">
     <value>यह ऐप्लिकेशन इंस्टॉल की गई URnetwork सिस्टम सेवा से पुराना है। कनेक्ट करने के लिए ऐप्लिकेशन को अपडेट करें।</value>
     <comment>Shown on the linux home screen when the urnetworkd system service rejected this app for speaking an older control protocol than the service supports. The fix is updating the app, not the service.</comment>
@@ -495,7 +607,7 @@
   </data>
   <data name="apps" xml:space="preserve">
     <value>ऐप्स</value>
-    <comment>transfer stats and split rules</comment>
+    <comment>transfer stats and split rules; Linux: the header over the apps not yet excluded in Settings &gt; Exclude apps from the VPN.</comment>
   </data>
   <data name="apps_excluded_count.one" xml:space="preserve">
     <value>{} ऐप बाहर रखा गया</value>
@@ -1085,7 +1197,7 @@
   </data>
   <data name="conn_degraded" xml:space="preserve">
     <value>कनेक्शन कमज़ोर — फिर से कनेक्ट हो रहा है</value>
-    <comment>Windows connection status (Connect page headline and tray tooltip) when a working connection dropped and the app is reconnecting on its own.</comment>
+    <comment>Windows and Linux connection status (Connect page headline, status strip and tray tooltip) when a working connection dropped and the app is reconnecting on its own.</comment>
   </data>
   <data name="conn_disconnecting" xml:space="preserve">
     <value>डिस्कनेक्ट हो रहा है — आपका ट्रैफ़िक अभी भी टनल से जा रहा है</value>
@@ -1097,19 +1209,19 @@
   </data>
   <data name="conn_failed_detail" xml:space="preserve">
     <value>किसी भी प्रदाता तक नहीं पहुँचा जा सका। दोबारा कोशिश करने पर कनेक्शन शुरू से फिर बनता है।</value>
-    <comment>Windows Connect page reason line when connecting failed.</comment>
+    <comment>Windows and Linux Connect page reason line when connecting failed.</comment>
   </data>
   <data name="conn_failsafe_armed" xml:space="preserve">
     <value>अगर जल्द ही कुछ नहीं पहुँचता, तो URnetwork टनल को अपने आप बंद कर देगा ताकि आपका इंटरनेट चलता रहे।</value>
-    <comment>Windows Connect page: sentence appended to the line above when the service will stop a tunnel that carries nothing.</comment>
+    <comment>Windows Connect page: sentence appended to the line above when the service will stop a tunnel that carries nothing. Linux Connect page: shown on its own on the notice line under the connect controls while no other notice is there.</comment>
   </data>
   <data name="conn_failsafe_blocked" xml:space="preserve">
     <value>टनल ट्रैफ़िक नहीं ले जा पा रहा था, इसलिए URnetwork ने उसे बंद कर दिया। किल स्विच चालू है, इसलिए जब तक आप फिर से कनेक्ट नहीं करते या किल स्विच बंद नहीं करते, इस कंप्यूटर से कुछ भी बाहर नहीं जाता — कुछ भी लीक नहीं हो रहा।</value>
-    <comment>Windows Connect page line after the service stopped a tunnel that carried nothing, while the kill switch keeps this computer blocked.</comment>
+    <comment>Windows and Linux Connect page line after the service stopped a tunnel that carried nothing, while the kill switch keeps this computer blocked.</comment>
   </data>
   <data name="conn_failsafe_restored" xml:space="preserve">
     <value>आपको ऑनलाइन रखने के लिए URnetwork ने आपको डिस्कनेक्ट कर दिया: टनल चालू था, लेकिन उससे कुछ भी नहीं गुज़र रहा था। आपका ट्रैफ़िक अब सामान्य रूप से बाहर जा रहा है और सुरक्षित नहीं है। फिर से कोशिश करने के लिए कनेक्ट दबाएँ।</value>
-    <comment>Windows Connect page line and tray notification after the service stopped a tunnel that carried nothing, with the kill switch off. Keep the emphasis on NOT.</comment>
+    <comment>Windows and Linux Connect page line, and Windows tray notification, after the service stopped a tunnel that carried nothing, with the kill switch off. Keep the emphasis on NOT.</comment>
   </data>
   <data name="conn_finding_providers" xml:space="preserve">
     <value>प्रदाता खोजे जा रहे हैं…</value>
@@ -1121,27 +1233,27 @@
   </data>
   <data name="conn_reason_auth" xml:space="preserve">
     <value>प्लेटफ़ॉर्म में साइन इन विफल हो रहा है…</value>
-    <comment>Windows Connect page reason line while the app's sign-in to the URnetwork platform keeps failing.</comment>
+    <comment>Windows and Linux Connect page reason line while the app's sign-in to the URnetwork platform keeps failing.</comment>
   </data>
   <data name="conn_reason_platform" xml:space="preserve">
     <value>प्लेटफ़ॉर्म से संपर्क किया जा रहा है…</value>
-    <comment>Windows Connect page reason line while the app cannot reach the URnetwork platform (the API servers).</comment>
+    <comment>Windows and Linux Connect page reason line while the app cannot reach the URnetwork platform (the API servers).</comment>
   </data>
   <data name="conn_reason_providers" xml:space="preserve">
     <value>प्रदाता जवाब नहीं दे रहे — दोबारा कोशिश हो रही है…</value>
-    <comment>Windows Connect page reason line while the selected providers do not answer.</comment>
+    <comment>Windows and Linux Connect page reason line while the selected providers do not answer.</comment>
   </data>
   <data name="conn_reason_rate_limited" xml:space="preserve">
     <value>अनुरोध सीमा पूरी — प्रतीक्षा हो रही है…</value>
-    <comment>Windows Connect page reason line while the platform asks the app to slow down.</comment>
+    <comment>Windows and Linux Connect page reason line while the platform asks the app to slow down.</comment>
   </data>
   <data name="conn_traffic_blocked" xml:space="preserve">
     <value>अभी कोई काम करने वाला प्रदाता नहीं है — आपका ट्रैफ़िक अवरुद्ध है, उजागर नहीं। अपने सामान्य कनेक्शन पर लौटने के लिए डिस्कनेक्ट करें।</value>
-    <comment>Windows Connect page line while connected but no provider carries traffic, with leak protection in force.</comment>
+    <comment>Windows and Linux Connect page line while connected but no provider carries traffic, with leak protection in force (on Linux, the kill switch's block floor).</comment>
   </data>
   <data name="conn_traffic_blocked_unprotected" xml:space="preserve">
     <value>अभी कोई काम करने वाला प्रदाता नहीं है — टनल में भेजा गया ट्रैफ़िक कहीं नहीं पहुँच रहा, और लीक सुरक्षा बंद है, इसलिए कुछ ट्रैफ़िक इसे बायपास कर सकता है। अपने सामान्य कनेक्शन पर लौटने के लिए डिस्कनेक्ट करें।</value>
-    <comment>Windows Connect page line while connected but no provider carries traffic, and leak protection (the firewall policy) is not in force.</comment>
+    <comment>Windows and Linux Connect page line while connected but no provider carries traffic, and leak protection (the Windows firewall policy, the Linux kill switch's block floor) is not in force.</comment>
   </data>
   <data name="conn_tray_blocked_kill_switch" xml:space="preserve">
     <value>अवरुद्ध (किल स्विच चालू)</value>
@@ -1165,11 +1277,11 @@
   </data>
   <data name="conn_tray_force_tunnel_off" xml:space="preserve">
     <value>टनल को ज़बरदस्ती बंद करें (रिकवरी)</value>
-    <comment>Windows tray menu item that stops the tunnel directly when the normal Disconnect is stuck.</comment>
+    <comment>Windows tray menu item that stops the tunnel directly when the normal Disconnect is stuck. Linux tray menu item that stops the service's tunnel while the app holds no session of its own.</comment>
   </data>
   <data name="conn_tray_lift_kill_switch" xml:space="preserve">
     <value>किल स्विच बंद करें (इस कंप्यूटर को अनब्लॉक करें)</value>
-    <comment>Windows tray menu item that lifts the kill switch's block on this computer.</comment>
+    <comment>Windows and Linux tray menu item that lifts the kill switch's block on this computer.</comment>
   </data>
   <data name="connect" xml:space="preserve">
     <value>कनेक्ट करें</value>
@@ -1519,6 +1631,10 @@
     <value>URnetwork सिस्टम सेवा नहीं चल रही है। इसे इंस्टॉल या शुरू करें, फिर दोबारा कोशिश करें।</value>
     <comment>Shown on the linux home screen when the privileged urnetworkd system service cannot be reached over its control socket (not installed, not running, or the user lacks access). Distinct from daemon_too_old by contract.</comment>
   </data>
+  <data name="daily_data_balance" xml:space="preserve">
+    <value>दैनिक डेटा बैलेंस</value>
+    <comment>Key of the daily data balance row on the Account page, in the data info sheet and under the usage bar: a label beside its right-aligned value, so it carries no colon.</comment>
+  </data>
   <data name="daily_data_balance_label" xml:space="preserve">
     <value>दैनिक डेटा बैलेंस:</value>
     <comment>Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.</comment>
@@ -1689,7 +1805,7 @@
   </data>
   <data name="dev_check_updates" xml:space="preserve">
     <value>अपडेट जाँचें</value>
-    <comment>Developer page: button that checks for a new release now.</comment>
+    <comment>Developer page: button that checks for a new release now. Linux Settings &gt; General: the title of the row whose button does the same.</comment>
   </data>
   <data name="dev_choose_logs" xml:space="preserve">
     <value>लॉग चुनें…</value>
@@ -2701,15 +2817,15 @@
   </data>
   <data name="dev_update_check_failed" xml:space="preserve">
     <value>अपडेट की जाँच विफल रही — ऐप लॉग देखें।</value>
-    <comment>Developer page: report line when the update check failed.</comment>
+    <comment>Developer page, and the line under Linux Settings &gt; Check for updates: report line when the update check failed.</comment>
   </data>
   <data name="dev_update_checking" xml:space="preserve">
     <value>अपडेट जाँचे जा रहे हैं…</value>
-    <comment>Developer page: update check status while checking.</comment>
+    <comment>Developer page, and the line under Linux Settings &gt; Check for updates: update check status while checking.</comment>
   </data>
   <data name="dev_update_dev_build" xml:space="preserve">
     <value>डेवलपमेंट बिल्ड: नवीनतम रिलीज़ v{} है, और डेवलपमेंट बिल्ड कभी अपने-आप अपडेट नहीं होता।</value>
-    <comment>Developer page: update check result on a development build. {version} is the newest release version.</comment>
+    <comment>Developer page, and the line under Linux Settings &gt; Check for updates: update check result on a development build. {version} is the newest release version.</comment>
   </data>
   <data name="dev_update_dev_build_note" xml:space="preserve">
     <value>यह डेवलपमेंट बिल्ड है (कोड 0), जो कभी खुद अपडेट नहीं होता</value>
@@ -2733,7 +2849,7 @@
   </data>
   <data name="dev_update_no_releases" xml:space="preserve">
     <value>अभी तक कोई स्थिर रिलीज़ प्रकाशित नहीं हुई है।</value>
-    <comment>Developer page: update check result when there is no stable release.</comment>
+    <comment>Developer page, and the line under Linux Settings &gt; Check for updates: update check result when there is no stable release.</comment>
   </data>
   <data name="dev_update_none" xml:space="preserve">
     <value>कोई अपडेट नहीं: यह बिल्ड नवीनतम है</value>
@@ -2741,7 +2857,7 @@
   </data>
   <data name="dev_update_up_to_date" xml:space="preserve">
     <value>अपडेट है। नवीनतम रिलीज़: v{}</value>
-    <comment>Developer page: update check result on the newest release. {version} is the release version.</comment>
+    <comment>Developer page, and the line under Linux Settings &gt; Check for updates: update check result on the newest release. {version} is the release version.</comment>
   </data>
   <data name="dev_uplink_gate" xml:space="preserve">
     <value>अपलिंक चुप्पी गेट</value>
@@ -3356,7 +3472,7 @@
   </data>
   <data name="excluded" xml:space="preserve">
     <value>बाहर रखे गए</value>
-    <comment>transfer stats and split rules</comment>
+    <comment>transfer stats and split rules; Linux: the header over the apps already excluded in Settings &gt; Exclude apps from the VPN.</comment>
   </data>
   <data name="expanded" xml:space="preserve">
     <value>विस्तृत</value>
@@ -4648,6 +4764,10 @@
   <data name="on" xml:space="preserve">
     <value>चालू</value>
     <comment>A label for a DNS setting that is enabled.</comment>
+  </data>
+  <data name="onb_tray_balloon_hide" xml:space="preserve">
+    <value>अभी भी चल रहा है — URnetwork सिस्टम ट्रे में बंद हुआ है। इसे फिर से खोलने के लिए वहाँ इसके आइकन पर क्लिक करें।</value>
+    <comment>Linux desktop notification, shown once ever, the first time closing the window hides it to the system tray (only while a tray has the app's icon). Its title is the product name. Windows shows a tray balloon at the same moment under this key.</comment>
   </data>
   <data name="onboarding_step_of" xml:space="preserve">
     <value>{1} में से चरण {0}</value>
@@ -7057,6 +7177,22 @@
     <value>अपडेट उपलब्ध है: v{}</value>
     <comment>Update notice title (Linux Settings, Windows update banner): a newer release is available. {version} is the release version, for example 2026.10.5-1024555910; keep the "v" before it.</comment>
   </data>
+  <data name="upd_check_held_message" xml:space="preserve">
+    <value>GitHub ने इस नेटवर्क से {} तक दोबारा न पूछने को कहा है, और ऐप तब तक इंतज़ार करता है।</value>
+    <comment>Linux Settings &gt; General, the line under Check for updates: GitHub refused the update check with its rate limit (requests are anonymous and shared by everyone behind the same address) and said when it may be asked again; no check is sent before then, and the Check now button waits too. {time} is that local date and time.</comment>
+  </data>
+  <data name="upd_check_now" xml:space="preserve">
+    <value>अभी जाँचें</value>
+    <comment>Linux Settings &gt; General: the button on the "Check for updates" row that checks for a new release now. The last check's outcome shows on the line under the row.</comment>
+  </data>
+  <data name="upd_check_stale_message" xml:space="preserve">
+    <value>हो सकता है कोई नया रिलीज़ आ गया हो। ऐप हर छह घंटे में कोशिश करता रहता है, और बटन अभी कोशिश करता है।</value>
+    <comment>Linux Settings &gt; General: the sentence under upd_check_stale_title ("Couldn't check for updates since {date}"). The app checks again every six hours while automatic checks are on; "the button" is the row's Check now button.</comment>
+  </data>
+  <data name="upd_check_stale_title" xml:space="preserve">
+    <value>{} से अपडेट की जाँच नहीं हो सकी</value>
+    <comment>Linux Settings &gt; General, the line under Check for updates, and the developer page's update line: shown while automatic checks are on and no update check has reached GitHub for more than 72 hours, because a release the app cannot see may be out. {date} is the local short date of the last check that did (or of the first launch that tried).</comment>
+  </data>
   <data name="upd_downloaded_message" xml:space="preserve">
     <value>इस AppImage के फ़ोल्डर में लिखा नहीं जा सकता, इसलिए सत्यापित डाउनलोड नीचे सहेजा गया है। AppImage को इससे मैन्युअल रूप से बदलें।</value>
     <comment>Linux Settings update notice when the app cannot replace itself: the verified file's path is shown in the row below.</comment>
@@ -7163,7 +7299,7 @@
   </data>
   <data name="urnetwork_status" xml:space="preserve">
     <value>URnetwork स्थिति</value>
-    <comment>Used in NetworkApp.swift.</comment>
+    <comment>Used in NetworkApp.swift. Also the Windows and Linux status strip's name for its connection state field, read by screen readers.</comment>
   </data>
   <data name="urnetwork_system_menu" xml:space="preserve">
     <value>URnetwork सिस्टम मेनू</value>

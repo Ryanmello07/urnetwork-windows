@@ -143,6 +143,26 @@
     <value>Toont ruwe waarden, identifiers, de verbindingsinspecteur en de betrouwbaarheidsinstellingen in de hele app.</value>
     <comment>Settings: explanation under the advanced mode switch.</comment>
   </data>
+  <data name="adv_allow_host" xml:space="preserve">
+    <value>Deze host toestaan</value>
+    <comment>Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the button that allows the connection's host. It adds an allowing rule for a host that was blocked, or removes the rule blocking it while one is in force, so the label always names what the press leaves behind.</comment>
+  </data>
+  <data name="adv_always_tunnel" xml:space="preserve">
+    <value>Altijd door de tunnel</value>
+    <comment>Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the button that keeps the connection's host inside the VPN tunnel. It adds a rule for a host that bypassed the tunnel, or removes the bypass rule while one is in force.</comment>
+  </data>
+  <data name="adv_best_available_note" xml:space="preserve">
+    <value>URnetwork kiest voor je de snelste goed werkende aanbieders, zonder locatiebeperking, en kiest opnieuw als het netwerk verandert.</value>
+    <comment>Network page, selected provider pane: note under the Name row while Best available provider is selected, saying what best available means.</comment>
+  </data>
+  <data name="adv_block_host" xml:space="preserve">
+    <value>Deze host blokkeren</value>
+    <comment>Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the button that blocks the connection's host. It adds a blocking rule, or removes the rule allowing the host while one is in force, so the label always names what the press leaves behind.</comment>
+  </data>
+  <data name="adv_bypass_tunnel" xml:space="preserve">
+    <value>Buiten de tunnel om</value>
+    <comment>Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the button that sends the connection's host directly from this device, outside the VPN. It adds a split rule, or removes the rule keeping the host in the tunnel while one is in force.</comment>
+  </data>
   <data name="adv_bytes_total" xml:space="preserve">
     <value>Bytes (totaal)</value>
     <comment>Connection inspector: label of the total bytes row.</comment>
@@ -150,6 +170,22 @@
   <data name="adv_clear_selection" xml:space="preserve">
     <value>Selectie wissen</value>
     <comment>Connection inspector: button that clears the selected connection.</comment>
+  </data>
+  <data name="adv_connection_count.one" xml:space="preserve">
+    <value>{} verbinding</value>
+    <comment>Connect page, Activity pane, grouped by host: how many connections (routing decisions) one host's row stands for, at the start of the row's figures and in its accessible name. The argument is the number of connections.</comment>
+  </data>
+  <data name="adv_connection_count.other" xml:space="preserve">
+    <value>{} verbindingen</value>
+    <comment>Connect page, Activity pane, grouped by host: how many connections (routing decisions) one host's row stands for, at the start of the row's figures and in its accessible name. The argument is the number of connections.</comment>
+  </data>
+  <data name="adv_copy_details" xml:space="preserve">
+    <value>Details kopiëren</value>
+    <comment>Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the button that copies the connection's details (host, addresses, verdict, reason, totals) to the clipboard.</comment>
+  </data>
+  <data name="adv_details_copied" xml:space="preserve">
+    <value>Verbindingsdetails gekopieerd</value>
+    <comment>Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the confirmation after Copy details put the connection's details on the clipboard.</comment>
   </data>
   <data name="adv_exit_dial_failures" xml:space="preserve">
     <value>Mislukte verbindingspogingen</value>
@@ -195,9 +231,41 @@
     <value>Exits</value>
     <comment>Connection inspector: heading of the exits section.</comment>
   </data>
+  <data name="adv_filter_all" xml:space="preserve">
+    <value>Alle</value>
+    <comment>Connect page, Activity pane: the first choice of the verdict filter above the list of connections (routing decisions). Shows every connection, whatever its verdict. Short: it shares one row with Blocked, Tunnelled and Bypassed.</comment>
+  </data>
+  <data name="adv_filter_bypassed" xml:space="preserve">
+    <value>Buiten de tunnel</value>
+    <comment>Connect page, Activity pane: the verdict filter choice that shows only the connections that bypassed the tunnel (allowed, but sent directly from this device outside the VPN, for example by a split rule, so not protected). Short: it shares one row with All, Blocked and Tunnelled.</comment>
+  </data>
+  <data name="adv_filter_tunnelled" xml:space="preserve">
+    <value>Door de tunnel</value>
+    <comment>Connect page, Activity pane: the verdict filter choice that shows only the connections sent through the URnetwork tunnel (allowed and protected). Short: it shares one row with All, Blocked and Bypassed.</comment>
+  </data>
+  <data name="adv_group_by_host" xml:space="preserve">
+    <value>Groeperen per host</value>
+    <comment>Connect page, Activity pane: label of the switch beside the search field that folds the list of connections into one row per host (with the count, the summed traffic and the latest decision). Clicking a host's row turns the switch off and searches for that host.</comment>
+  </data>
   <data name="adv_host" xml:space="preserve">
     <value>Host</value>
     <comment>Connection inspector: label of the host row.</comment>
+  </data>
+  <data name="adv_host_allowed" xml:space="preserve">
+    <value>Deze host wordt toegestaan</value>
+    <comment>Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the confirmation after a press added a rule allowing the connection's host from now on.</comment>
+  </data>
+  <data name="adv_host_blocked" xml:space="preserve">
+    <value>Deze host wordt geblokkeerd</value>
+    <comment>Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the confirmation after a press added a rule blocking the connection's host from now on.</comment>
+  </data>
+  <data name="adv_host_bypassed" xml:space="preserve">
+    <value>Deze host gaat buiten de tunnel om</value>
+    <comment>Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the confirmation after a press added a split rule sending the connection's host outside the VPN tunnel from now on.</comment>
+  </data>
+  <data name="adv_host_tunnelled" xml:space="preserve">
+    <value>Deze host gebruikt de tunnel</value>
+    <comment>Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the confirmation after a press added a rule keeping the connection's host inside the VPN tunnel from now on.</comment>
   </data>
   <data name="adv_inspector" xml:space="preserve">
     <value>Inspecteur</value>
@@ -273,11 +341,15 @@
   </data>
   <data name="adv_mode_tunnel" xml:space="preserve">
     <value>tunnel</value>
-    <comment>Windows status strip (Advanced Mode), Session value: a full tunnel session. Lowercase, a short status value.</comment>
+    <comment>Windows and Linux status strip (Advanced Mode), Session value: a full tunnel session. Lowercase, a short status value.</comment>
   </data>
   <data name="adv_na" xml:space="preserve">
     <value>—</value>
     <comment>Connection inspector: placeholder dash for a value that is not available.</comment>
+  </data>
+  <data name="adv_no_activity_matches" xml:space="preserve">
+    <value>Geen activiteit komt overeen met deze zoekopdracht.</value>
+    <comment>Split rules sheet: the line in the Activity list when the search matches none of the connections it holds.</comment>
   </data>
   <data name="adv_no_selection" xml:space="preserve">
     <value>Geen verbinding geselecteerd</value>
@@ -287,6 +359,10 @@
     <value>geen</value>
     <comment>Connection inspector: value shown when a field has nothing.</comment>
   </data>
+  <data name="adv_open_split_rules" xml:space="preserve">
+    <value>splitsregels openen</value>
+    <comment>Connect page, Advanced Mode, the connection inspector: the end of the Reason value's name for screen readers when a rule decided the connection, because pressing the value opens the Split rules sheet. Lowercase: it follows a comma.</comment>
+  </data>
   <data name="adv_override_id" xml:space="preserve">
     <value>Override</value>
     <comment>Connection inspector: label of the override id row.</comment>
@@ -294,6 +370,10 @@
   <data name="adv_packets_total" xml:space="preserve">
     <value>Pakketten (totaal)</value>
     <comment>Connection inspector: label of the total packets row.</comment>
+  </data>
+  <data name="adv_pick_location_note" xml:space="preserve">
+    <value>Kies een land, regio, stad of apparaat in de lijst om daar verbinding mee te maken.</value>
+    <comment>Network page, selected provider pane: note under the best available explanation, saying how to connect to a chosen location instead.</comment>
   </data>
   <data name="adv_probe_age" xml:space="preserve">
     <value>Leeftijd van de meting</value>
@@ -333,15 +413,15 @@
   </data>
   <data name="adv_routes" xml:space="preserve">
     <value>Routes</value>
-    <comment>Windows status strip (Advanced Mode): label of the field that shows whether the tunnel's routes are installed.</comment>
+    <comment>Windows and Linux status strip (Advanced Mode): label of the field that shows whether the tunnel's routes are installed.</comment>
   </data>
   <data name="adv_routes_dns_degraded" xml:space="preserve">
     <value>aan, DNS niet toegepast</value>
-    <comment>Windows status strip (Advanced Mode), Routes value: routes are installed but the tunnel's DNS is not. Lowercase, a short status value.</comment>
+    <comment>Windows and Linux status strip (Advanced Mode), Routes value: routes are installed but the tunnel's DNS is not. Lowercase, a short status value.</comment>
   </data>
   <data name="adv_routes_kill_switch_armed" xml:space="preserve">
     <value>uit, Kill switch actief</value>
-    <comment>Windows status strip (Advanced Mode), Routes value: no routes are installed and the kill switch is blocking traffic. Lowercase, a short status value.</comment>
+    <comment>Windows and Linux status strip (Advanced Mode), Routes value: no routes are installed and the kill switch is blocking traffic. Lowercase, a short status value.</comment>
   </data>
   <data name="adv_routes_no_firewall" xml:space="preserve">
     <value>aan, geen lekbeveiliging</value>
@@ -349,7 +429,23 @@
   </data>
   <data name="adv_rpc" xml:space="preserve">
     <value>RPC</value>
-    <comment>Windows status strip (Advanced Mode): label of the field that shows the service's RPC endpoint (host:port). RPC is a technical term.</comment>
+    <comment>Windows and Linux status strip (Advanced Mode): label of the field that shows the service's RPC endpoint (host:port). RPC is a technical term.</comment>
+  </data>
+  <data name="adv_rule_active" xml:space="preserve">
+    <value>regel actief, klik om te verwijderen</value>
+    <comment>Connect page, Advanced Mode, the connection inspector and an Activity row's menu: added to a rule button's name for screen readers, after its label, while the button's rule is in force: pressing it removes the rule. Lowercase: it follows a comma.</comment>
+  </data>
+  <data name="adv_rule_removed" xml:space="preserve">
+    <value>Regel verwijderd</value>
+    <comment>Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the confirmation after a press removed the rule that was in force for the connection's host.</comment>
+  </data>
+  <data name="adv_search_activity_placeholder" xml:space="preserve">
+    <value>Zoek in activiteit</value>
+    <comment>Split rules sheet: placeholder and accessible name of the search field above the Activity list. Typing filters the list to the connections whose host name or IP address contains the text; the rules above are not filtered.</comment>
+  </data>
+  <data name="adv_search_connections" xml:space="preserve">
+    <value>Zoek hosts of IP's</value>
+    <comment>Connect page, Activity pane: placeholder and accessible name of the search field above the list of connections. Typing filters the list to the connections whose host name or IP address contains the text.</comment>
   </data>
   <data name="adv_select_a_row" xml:space="preserve">
     <value>Selecteer een rij in Activiteit om die te inspecteren</value>
@@ -369,11 +465,23 @@
   </data>
   <data name="adv_session_mode" xml:space="preserve">
     <value>Sessie</value>
-    <comment>Windows status strip (Advanced Mode): label of the field that shows which kind of session the service granted (tunnel or rpc-only).</comment>
+    <comment>Windows and Linux status strip (Advanced Mode): label of the field that shows which kind of session the service granted (tunnel or rpc-only).</comment>
+  </data>
+  <data name="adv_split_rules_note" xml:space="preserve">
+    <value>Met splitsregels maken de sites die je kiest rechtstreeks verbinding, buiten de VPN om, en de activiteit hieronder laat zien hoe elke verbinding is gerouteerd.</value>
+    <comment>Split rules sheet: the one-sentence explainer at the top, above the note on network clusters. A split rule sends the chosen sites directly from this device, outside the VPN; the sheet's Activity list shows how each connection was routed.</comment>
+  </data>
+  <data name="adv_undo" xml:space="preserve">
+    <value>Ongedaan maken</value>
+    <comment>Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the button on the confirmation after a press added a rule; it deletes the rule that was just added.</comment>
   </data>
   <data name="adv_unknown_exit" xml:space="preserve">
     <value>Niet in de routeringstabel</value>
     <comment>Connection inspector: exit value when the destination is not in the routing table.</comment>
+  </data>
+  <data name="adv_verdict" xml:space="preserve">
+    <value>Oordeel</value>
+    <comment>Connect page, Advanced Mode: the label of the verdict line (blocked, tunnelled, or bypassed the tunnel) in the connection details Copy details puts on the clipboard.</comment>
   </data>
   <data name="adv_verdict_blocked" xml:space="preserve">
     <value>Geblokkeerd — geen pakketten verzonden</value>
@@ -477,6 +585,10 @@
     <value>0 gesplitste apps</value>
     <comment>Generic starter label on the app-split panel when no apps are included or excluded yet (shown instead of "0 apps excluded").</comment>
   </data>
+  <data name="app_start_failed_detail" xml:space="preserve">
+    <value>URnetwork kon niet worden gestart. De logbestanden staan in {}.</value>
+    <comment>Linux: the body of the dialog shown when the app cannot start (its SDK host failed to initialize, so there is no window and no tray), under the heading something_went_wrong. The argument is the folder that holds the app's log files. The raw error follows on its own lines, untranslated.</comment>
+  </data>
   <data name="app_too_old_for_daemon" xml:space="preserve">
     <value>Deze app is ouder dan de geïnstalleerde URnetwork-systeemservice. Werk de app bij om verbinding te maken.</value>
     <comment>Shown on the linux home screen when the urnetworkd system service rejected this app for speaking an older control protocol than the service supports. The fix is updating the app, not the service.</comment>
@@ -495,7 +607,7 @@
   </data>
   <data name="apps" xml:space="preserve">
     <value>Apps</value>
-    <comment>transfer stats and split rules</comment>
+    <comment>transfer stats and split rules; Linux: the header over the apps not yet excluded in Settings &gt; Exclude apps from the VPN.</comment>
   </data>
   <data name="apps_excluded_count.one" xml:space="preserve">
     <value>{} app uitgesloten</value>
@@ -1086,7 +1198,7 @@ juiste manier</value>
   </data>
   <data name="conn_degraded" xml:space="preserve">
     <value>Verbinding verslechterd – opnieuw verbinden</value>
-    <comment>Windows connection status (Connect page headline and tray tooltip) when a working connection dropped and the app is reconnecting on its own.</comment>
+    <comment>Windows and Linux connection status (Connect page headline, status strip and tray tooltip) when a working connection dropped and the app is reconnecting on its own.</comment>
   </data>
   <data name="conn_disconnecting" xml:space="preserve">
     <value>Verbinding verbreken – je verkeer gaat nog door de tunnel</value>
@@ -1098,19 +1210,19 @@ juiste manier</value>
   </data>
   <data name="conn_failed_detail" xml:space="preserve">
     <value>Er was geen provider bereikbaar. Opnieuw proberen bouwt de verbinding helemaal opnieuw op.</value>
-    <comment>Windows Connect page reason line when connecting failed.</comment>
+    <comment>Windows and Linux Connect page reason line when connecting failed.</comment>
   </data>
   <data name="conn_failsafe_armed" xml:space="preserve">
     <value>Als er binnenkort niets doorkomt, schakelt URnetwork de tunnel automatisch uit zodat je internet blijft werken.</value>
-    <comment>Windows Connect page: sentence appended to the line above when the service will stop a tunnel that carries nothing.</comment>
+    <comment>Windows Connect page: sentence appended to the line above when the service will stop a tunnel that carries nothing. Linux Connect page: shown on its own on the notice line under the connect controls while no other notice is there.</comment>
   </data>
   <data name="conn_failsafe_blocked" xml:space="preserve">
     <value>De tunnel kon geen verkeer vervoeren, dus heeft URnetwork hem uitgeschakeld. De Kill switch staat aan, dus er verlaat niets deze computer totdat je opnieuw verbinding maakt of de Kill switch uitzet – er lekt niets.</value>
-    <comment>Windows Connect page line after the service stopped a tunnel that carried nothing, while the kill switch keeps this computer blocked.</comment>
+    <comment>Windows and Linux Connect page line after the service stopped a tunnel that carried nothing, while the kill switch keeps this computer blocked.</comment>
   </data>
   <data name="conn_failsafe_restored" xml:space="preserve">
     <value>URnetwork heeft de verbinding verbroken zodat je online blijft: de tunnel was actief, maar er kwam niets door. Je verkeer gaat nu weer normaal naar buiten en is NIET beschermd. Druk op Verbinden om het opnieuw te proberen.</value>
-    <comment>Windows Connect page line and tray notification after the service stopped a tunnel that carried nothing, with the kill switch off. Keep the emphasis on NOT.</comment>
+    <comment>Windows and Linux Connect page line, and Windows tray notification, after the service stopped a tunnel that carried nothing, with the kill switch off. Keep the emphasis on NOT.</comment>
   </data>
   <data name="conn_finding_providers" xml:space="preserve">
     <value>Providers zoeken…</value>
@@ -1122,27 +1234,27 @@ juiste manier</value>
   </data>
   <data name="conn_reason_auth" xml:space="preserve">
     <value>Aanmelden bij het platform mislukt…</value>
-    <comment>Windows Connect page reason line while the app's sign-in to the URnetwork platform keeps failing.</comment>
+    <comment>Windows and Linux Connect page reason line while the app's sign-in to the URnetwork platform keeps failing.</comment>
   </data>
   <data name="conn_reason_platform" xml:space="preserve">
     <value>Contact maken met het platform…</value>
-    <comment>Windows Connect page reason line while the app cannot reach the URnetwork platform (the API servers).</comment>
+    <comment>Windows and Linux Connect page reason line while the app cannot reach the URnetwork platform (the API servers).</comment>
   </data>
   <data name="conn_reason_providers" xml:space="preserve">
     <value>Providers reageren niet – opnieuw proberen…</value>
-    <comment>Windows Connect page reason line while the selected providers do not answer.</comment>
+    <comment>Windows and Linux Connect page reason line while the selected providers do not answer.</comment>
   </data>
   <data name="conn_reason_rate_limited" xml:space="preserve">
     <value>Limiet bereikt – wachten…</value>
-    <comment>Windows Connect page reason line while the platform asks the app to slow down.</comment>
+    <comment>Windows and Linux Connect page reason line while the platform asks the app to slow down.</comment>
   </data>
   <data name="conn_traffic_blocked" xml:space="preserve">
     <value>Nu geen werkende provider – je verkeer is geblokkeerd, niet blootgesteld. Verbreek de verbinding om terug te gaan naar je normale verbinding.</value>
-    <comment>Windows Connect page line while connected but no provider carries traffic, with leak protection in force.</comment>
+    <comment>Windows and Linux Connect page line while connected but no provider carries traffic, with leak protection in force (on Linux, the kill switch's block floor).</comment>
   </data>
   <data name="conn_traffic_blocked_unprotected" xml:space="preserve">
     <value>Nu geen werkende provider – verkeer dat de tunnel in gaat, komt nergens aan, en de lekbeveiliging staat uit, dus een deel van het verkeer kan eromheen gaan. Verbreek de verbinding om terug te gaan naar je normale verbinding.</value>
-    <comment>Windows Connect page line while connected but no provider carries traffic, and leak protection (the firewall policy) is not in force.</comment>
+    <comment>Windows and Linux Connect page line while connected but no provider carries traffic, and leak protection (the Windows firewall policy, the Linux kill switch's block floor) is not in force.</comment>
   </data>
   <data name="conn_tray_blocked_kill_switch" xml:space="preserve">
     <value>Geblokkeerd (Kill switch aan)</value>
@@ -1166,11 +1278,11 @@ juiste manier</value>
   </data>
   <data name="conn_tray_force_tunnel_off" xml:space="preserve">
     <value>Tunnel geforceerd uitschakelen (herstel)</value>
-    <comment>Windows tray menu item that stops the tunnel directly when the normal Disconnect is stuck.</comment>
+    <comment>Windows tray menu item that stops the tunnel directly when the normal Disconnect is stuck. Linux tray menu item that stops the service's tunnel while the app holds no session of its own.</comment>
   </data>
   <data name="conn_tray_lift_kill_switch" xml:space="preserve">
     <value>Kill switch uitzetten (deze computer deblokkeren)</value>
-    <comment>Windows tray menu item that lifts the kill switch's block on this computer.</comment>
+    <comment>Windows and Linux tray menu item that lifts the kill switch's block on this computer.</comment>
   </data>
   <data name="connect" xml:space="preserve">
     <value>Verbinden</value>
@@ -1520,6 +1632,10 @@ juiste manier</value>
     <value>De URnetwork-systeemservice draait niet. Installeer of start deze en probeer het opnieuw.</value>
     <comment>Shown on the linux home screen when the privileged urnetworkd system service cannot be reached over its control socket (not installed, not running, or the user lacks access). Distinct from daemon_too_old by contract.</comment>
   </data>
+  <data name="daily_data_balance" xml:space="preserve">
+    <value>Dagelijkse databundel</value>
+    <comment>Key of the daily data balance row on the Account page, in the data info sheet and under the usage bar: a label beside its right-aligned value, so it carries no colon.</comment>
+  </data>
   <data name="daily_data_balance_label" xml:space="preserve">
     <value>Dagelijkse databundel:</value>
     <comment>Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.</comment>
@@ -1690,7 +1806,7 @@ juiste manier</value>
   </data>
   <data name="dev_check_updates" xml:space="preserve">
     <value>Controleer op updates</value>
-    <comment>Developer page: button that checks for a new release now.</comment>
+    <comment>Developer page: button that checks for a new release now. Linux Settings &gt; General: the title of the row whose button does the same.</comment>
   </data>
   <data name="dev_choose_logs" xml:space="preserve">
     <value>Logs kiezen…</value>
@@ -2702,15 +2818,15 @@ juiste manier</value>
   </data>
   <data name="dev_update_check_failed" xml:space="preserve">
     <value>Controleren op updates is mislukt — zie het app-log.</value>
-    <comment>Developer page: report line when the update check failed.</comment>
+    <comment>Developer page, and the line under Linux Settings &gt; Check for updates: report line when the update check failed.</comment>
   </data>
   <data name="dev_update_checking" xml:space="preserve">
     <value>Controleren op updates…</value>
-    <comment>Developer page: update check status while checking.</comment>
+    <comment>Developer page, and the line under Linux Settings &gt; Check for updates: update check status while checking.</comment>
   </data>
   <data name="dev_update_dev_build" xml:space="preserve">
     <value>Ontwikkelversie: de nieuwste release is v{}, en een ontwikkelversie wordt nooit automatisch bijgewerkt.</value>
-    <comment>Developer page: update check result on a development build. {version} is the newest release version.</comment>
+    <comment>Developer page, and the line under Linux Settings &gt; Check for updates: update check result on a development build. {version} is the newest release version.</comment>
   </data>
   <data name="dev_update_dev_build_note" xml:space="preserve">
     <value>dit is een ontwikkelversie (code 0), die zichzelf nooit bijwerkt</value>
@@ -2734,7 +2850,7 @@ juiste manier</value>
   </data>
   <data name="dev_update_no_releases" xml:space="preserve">
     <value>Er is nog geen stabiele release gepubliceerd.</value>
-    <comment>Developer page: update check result when there is no stable release.</comment>
+    <comment>Developer page, and the line under Linux Settings &gt; Check for updates: update check result when there is no stable release.</comment>
   </data>
   <data name="dev_update_none" xml:space="preserve">
     <value>Geen update: deze versie is actueel</value>
@@ -2742,7 +2858,7 @@ juiste manier</value>
   </data>
   <data name="dev_update_up_to_date" xml:space="preserve">
     <value>Actueel. Nieuwste release: v{}</value>
-    <comment>Developer page: update check result on the newest release. {version} is the release version.</comment>
+    <comment>Developer page, and the line under Linux Settings &gt; Check for updates: update check result on the newest release. {version} is the release version.</comment>
   </data>
   <data name="dev_uplink_gate" xml:space="preserve">
     <value>Stiltepoort voor de uplink</value>
@@ -3357,7 +3473,7 @@ juiste manier</value>
   </data>
   <data name="excluded" xml:space="preserve">
     <value>Uitgesloten</value>
-    <comment>transfer stats and split rules</comment>
+    <comment>transfer stats and split rules; Linux: the header over the apps already excluded in Settings &gt; Exclude apps from the VPN.</comment>
   </data>
   <data name="expanded" xml:space="preserve">
     <value>Uitgevouwen</value>
@@ -4651,6 +4767,10 @@ Ontvang je bonus door een netwerk aan te maken.</value>
   <data name="on" xml:space="preserve">
     <value>Aan</value>
     <comment>A label for a DNS setting that is enabled.</comment>
+  </data>
+  <data name="onb_tray_balloon_hide" xml:space="preserve">
+    <value>Nog actief — URnetwork is naar het systeemvak gesloten. Klik daar op het pictogram om het weer te openen.</value>
+    <comment>Linux desktop notification, shown once ever, the first time closing the window hides it to the system tray (only while a tray has the app's icon). Its title is the product name. Windows shows a tray balloon at the same moment under this key.</comment>
   </data>
   <data name="onboarding_step_of" xml:space="preserve">
     <value>Stap {0} van {1}</value>
@@ -7061,6 +7181,22 @@ zoals het hoort te zijn.</value>
     <value>Update beschikbaar: v{}</value>
     <comment>Update notice title (Linux Settings, Windows update banner): a newer release is available. {version} is the release version, for example 2026.10.5-1024555910; keep the "v" before it.</comment>
   </data>
+  <data name="upd_check_held_message" xml:space="preserve">
+    <value>GitHub heeft dit netwerk gevraagd tot {} te wachten voordat het opnieuw iets vraagt, en de app wacht tot dan.</value>
+    <comment>Linux Settings &gt; General, the line under Check for updates: GitHub refused the update check with its rate limit (requests are anonymous and shared by everyone behind the same address) and said when it may be asked again; no check is sent before then, and the Check now button waits too. {time} is that local date and time.</comment>
+  </data>
+  <data name="upd_check_now" xml:space="preserve">
+    <value>Nu controleren</value>
+    <comment>Linux Settings &gt; General: the button on the "Check for updates" row that checks for a new release now. The last check's outcome shows on the line under the row.</comment>
+  </data>
+  <data name="upd_check_stale_message" xml:space="preserve">
+    <value>Er is misschien een nieuwere release. De app blijft het elke zes uur proberen, en de knop probeert het nu.</value>
+    <comment>Linux Settings &gt; General: the sentence under upd_check_stale_title ("Couldn't check for updates since {date}"). The app checks again every six hours while automatic checks are on; "the button" is the row's Check now button.</comment>
+  </data>
+  <data name="upd_check_stale_title" xml:space="preserve">
+    <value>Kon sinds {} niet controleren op updates</value>
+    <comment>Linux Settings &gt; General, the line under Check for updates, and the developer page's update line: shown while automatic checks are on and no update check has reached GitHub for more than 72 hours, because a release the app cannot see may be out. {date} is the local short date of the last check that did (or of the first launch that tried).</comment>
+  </data>
   <data name="upd_downloaded_message" xml:space="preserve">
     <value>De map van deze AppImage is niet beschrijfbaar, dus de gecontroleerde download is hieronder opgeslagen. Vervang de AppImage er handmatig door.</value>
     <comment>Linux Settings update notice when the app cannot replace itself: the verified file's path is shown in the row below.</comment>
@@ -7167,7 +7303,7 @@ zoals het hoort te zijn.</value>
   </data>
   <data name="urnetwork_status" xml:space="preserve">
     <value>URnetwork Status</value>
-    <comment>Used in NetworkApp.swift.</comment>
+    <comment>Used in NetworkApp.swift. Also the Windows and Linux status strip's name for its connection state field, read by screen readers.</comment>
   </data>
   <data name="urnetwork_system_menu" xml:space="preserve">
     <value>URnetwork Systeem Menu</value>

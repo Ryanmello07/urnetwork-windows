@@ -499,8 +499,9 @@ void ConnectPage::ApplyServiceSetup(urnw::ServiceSetup::Snapshot const& snap) {
 // rule. Labels go through Adv() with `upd_` store ids, as the service bar's
 // use `svc_`. The version is data (release grammar, never translated) and goes
 // in through the title's placeholder; paths and exit codes are appended as
-// data. The sentences the elevated update added have no store ids yet, so
-// they are English here until the store carries them for windows.
+// data. The sentences the elevated update and the official feed added have no
+// store ids yet, so they are English here until the store carries them for
+// windows; each is one format string, so its key takes its place as written.
 void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) {
   using Phase = urnw::UpdateChecker::Phase;
   using Stage = urnw::UpdateChecker::Stage;
@@ -508,9 +509,27 @@ void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) 
   using CheckOutcome = urnw::UpdateChecker::CheckOutcome;
   using InfoBarSeverity = winrt::Microsoft::UI::Xaml::Controls::InfoBarSeverity;
   auto bar = w_.UpdateBar();
+  // The bar's two controls are one row, its content, which MainWindow
+  // builds: the action button first, then Later.
+  winrt::Microsoft::UI::Xaml::Controls::Button actionButton{nullptr};
+  winrt::Microsoft::UI::Xaml::UIElement later{nullptr};
+  if (const auto row = bar.Content().try_as<winrt::Microsoft::UI::Xaml::Controls::Panel>()) {
+    const auto controls = row.Children();
+    if (controls.Size() == 2) {
+      actionButton = controls.GetAt(0).try_as<winrt::Microsoft::UI::Xaml::Controls::Button>();
+      later = controls.GetAt(1);
+    }
+  }
   // Only a report whose button offers the installer can be closed; closing it
   // dismisses it (MainWindow).
   bar.IsClosable(urnw::UpdateChecker::OffersInstaller(snap));
+  // Later shows while the banner offers a release: it hides that release
+  // until the next launch.
+  if (later) {
+    later.Visibility(urnw::UpdateChecker::OffersLater(snap)
+                         ? winrt::Microsoft::UI::Xaml::Visibility::Visible
+                         : winrt::Microsoft::UI::Xaml::Visibility::Collapsed);
+  }
   const auto nowUnix = std::chrono::duration_cast<std::chrono::seconds>(
                            std::chrono::system_clock::now().time_since_epoch())
                            .count();
@@ -532,7 +551,7 @@ void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) 
                    L" before it is asked again, and the app waits until then."
              : std::wstring{L"A newer release may be out. The app keeps trying every six hours, "
                             L"and the button tries now."}});
-    if (auto button = bar.ActionButton()) {
+    if (auto button = actionButton) {
       button.Content(winrt::box_value(Adv("dev_check_updates", L"Check for updates")));
       button.IsEnabled(snap.lastCheck != CheckOutcome::InFlight && !held);
     }
@@ -564,10 +583,21 @@ void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) 
         message = L"This copy of URnetwork is not installed in Program Files, so it does not "
                   L"update itself. Download the installer and run it to install this release.";
       }
+      // The release took another's place, after a click on that one or while
+      // it was being installed: the banner's version changed under the user,
+      // and it says why. The version is data.
+      if (urnw::UpdateChecker::SaysReplaced(snap)) {
+        message = std::format(L"This release replaced v{}, which was not installed. ",
+                              snap.replacedVersion) +
+                  message;
+      }
       break;
     case Phase::Applying:
       enabled = false;
       switch (snap.stage) {
+        case Stage::Checking:
+          message = L"Checking that this is still the release offered…";
+          break;
         case Stage::Downloading:
           message = AdvW("upd_stage_downloading", L"Downloading the update…");
           break;
@@ -624,6 +654,17 @@ void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) 
                     L"update helper is not signed, so it could not install the update. Download "
                     L"the installer and run it instead.";
           break;
+        case Failure::Unconfirmed:
+          // the click asks for the installer again (MainWindow)
+          action = winrt::hstring{L"Download the installer"};
+          message = L"URnetwork could not ask GitHub whether this release is still the one "
+                    L"offered, so its installer is not shown. Check the connection and click to "
+                    L"try again.";
+          if (held) {
+            message += L" GitHub asked this network to wait until " + heldUntil +
+                       L" before it is asked again.";
+          }
+          break;
         default:  // Checksum
           message = AdvW("upd_failed_checksum",
                          L"The download didn't match the release's checksums, "
@@ -637,7 +678,7 @@ void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) 
   bar.Severity(severity);
   bar.Title(title);
   bar.Message(winrt::hstring{message});
-  if (auto button = bar.ActionButton()) {
+  if (auto button = actionButton) {
     button.Content(winrt::box_value(action));
     button.IsEnabled(enabled);
   }
