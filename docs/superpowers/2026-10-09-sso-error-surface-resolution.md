@@ -13,11 +13,17 @@ screen, whether the window was visible, hidden to the tray or minimized. Commits
 
 ## Root cause (measured on the live desktop)
 
-Not the layout, not the callback, not the delivery. **The window never came to
-the front.** `Window::Activate()` is refused by Windows' foreground lock when
-another process (the browser) owns the foreground and nobody handed this process
-the right; the taskbar button flashes and the window stays behind. The error
-was set, laid out and on screen *inside a window the browser covered*.
+Not the callback, not the delivery. **The window never came to the front, and
+nothing asked Windows to bring it there.** `Window::Activate()` is
+`ShowWindow` + `UpdateWindow` + `SetActiveWindow`: it never requests the
+foreground, so it cannot lift a visible window that another process (the browser)
+covers, whatever rights this process holds. The error was set, laid out and on
+screen *inside a window the browser covered*. (An earlier draft of this note said
+Windows' foreground lock "refused" `Activate()` because nobody handed the process
+the right. That was wrong: the Windows App SDK's `RedirectActivationToAsync`
+already passes the right to the running instance - `AppInstance::QueueRequest`
+calls `AllowSetForegroundWindow` - and the WinUI binaries import
+`SetActiveWindow` but never `SetForegroundWindow`.)
 
 | flow (500x600, the shell minimum) | before | after |
 | --- | --- | --- |
@@ -26,15 +32,41 @@ was set, laid out and on screen *inside a window the browser covered*.
 | callback while hidden to the tray | not measured | in front at +194 ms |
 | callback while minimized | not measured | in front at +198 ms |
 
-A second, real but smaller cause stacked on it: at 500x600 `LoginErrorText` is
-the last row of a scrolling page and sat below the fold (fixed by the
-scroll-into-view tick in `SetInitialLoginError`).
+A second, smaller cause stacks on it only at or near the window minimum: at
+500x600 `LoginErrorText` is the last row of a scrolling page and sat below the
+fold (fixed by the scroll-into-view tick in `SetInitialLoginError`; the row fits
+without scrolling from roughly 700 px of outer height at 125% scale). **The
+500x600 in the log is harness-written**: `resize-tour.ps1` hard-codes
+`SetWindowPos(60, 40, ...)`, and the log shows `restored placement 1000x800` four
+seconds before `saved placement 500x600 at (60,40)`. The owner's last pre-harness
+window was 1000x800, where the row fits, so occlusion alone explains the original
+report. The 01:16 completions in the handoff are not evidence of what the owner
+saw (a maximized browser and a harness-positioned window; who clicked is
+unknown); the first provably owner-driven handoffs are the ones measured above.
 
-The fix has two halves, each pinned by `tests/foreground_handoff_test.go`:
-the second launch (the process the browser just launched, which holds the
-foreground right) calls `AllowSetForegroundWindow(primary.ProcessId())` before it
-redirects; the running instance calls `shell::RaiseToFront` after `Activate()`
-(`SetForegroundWindow`, then a topmost toggle, which is not foreground-locked).
+The fix, pinned by `tests/foreground_handoff_test.go`:
+
+- **`shell::RaiseToFront`, called after `Activate()`, is the operative half.**
+  `SetForegroundWindow` first (it succeeds after any launch that held the
+  foreground right, which the SDK's redirect passes on); when Windows refuses it,
+  a topmost toggle lifts the window above the others without taking focus
+  (z-order is not foreground-locked).
+- The second launch also calls `AllowSetForegroundWindow(primary.ProcessId())`
+  before it redirects. That is **defensive**: the SDK already does it. Keep it for
+  its log line - `handed the foreground right` vs `no foreground right (error 5)`
+  is the only record of whether the launch held a right.
+
+Both branches were exercised live (500x600): a launch that held a right (a real
+browser click, and scripted launches from the agent's own chain, which descend
+from the foreground terminal) takes the `SetForegroundWindow` path; a launch with
+no foreground ancestry (a one-shot Task Scheduler task, `dl-front-norights.ps1`)
+logged `no foreground right to hand ... (error 5)`, then the primary logged
+`the foreground lock refused the window`, and the toggle put the window in front
+in 184 ms **while the browser kept the focus**.
+
+Caveats: "in front" is not "unobscured" - another process's always-on-top window
+or a different virtual desktop can still cover the app, and nothing raises it a
+second time. Only Chromium (Comet) was observed as the launcher.
 
 ## Why every earlier check said "visible"
 
@@ -51,6 +83,11 @@ Observe-only probes now live beside it (`.localstate-verify/dl-*.ps1`, gitignore
   how many of three probe points show the app (`WindowFromPoint`), plus real
   `CopyFromScreen` pixels. It asserts "in front within 2.5 s, unaided".
 - `dl-front-away.ps1 -Mode hide|minimize` does the same with the window away.
+- `dl-front-norights.ps1` fires the callback from a one-shot scheduled task (a
+  launch with no foreground ancestry), the only way to exercise the fallback.
+  A plain `Start-Process` from the agent's chain always holds a transient right.
+  Judge every probe on the FIRST sample after `deep link received`: an unrelated
+  window (a chat notification) can take the foreground a moment later.
 - `dl-watch-real.ps1` is passive: start it, then have the owner do the real
   browser handoff; it records the same signals from the moment the deep link lands.
 - `dl-supersede.ps1`, `dl-replay.ps1` cover the two page-level behaviors.
@@ -93,6 +130,28 @@ Windows is not doing SSO differently.
   consumed state. An attempt armed for 4 min 42 s matched fine.
 - *"on_error may not reach the `walletAuthDone_` branch."* It does; the
   "no flow in flight" warning has never been logged.
+
+## Logging added so this is readable from the log alone
+
+`sdkhost: <provider> sign-in armed`; a warning when a pending attempt is dropped
+(`CancelPendingWalletFlows`); `login: dropped a superseded sign-in answer`;
+`login: sign-in error line shown on the initial step` (never the text); the
+refusal line names who owned the foreground; and the startup `executable` line
+now carries the exe's write time, because the `build` line is `__DATE__ __TIME__`
+of one translation unit that an incremental build does not recompile (it read
+`Oct 8 2026 18:13:01` for every build that day).
+
+## Known latent hazard (not fixed, not reproduced)
+
+`ssoAttempt_` is cleared only by a match or by `CancelPendingWalletFlows`; neither
+a completed email/instant sign-in nor Logout clears it. Click Google, leave the
+tab, sign in another way, then finish the Google tab: the return matches,
+`on_error` finds `walletAuthDone_` still set and pushes `AuthState::Error` while
+the SDK session is signed in, flipping the UI to the login screen. Today every
+Google attempt ends in `not_configured`, so this is reachable. A guard belongs at
+the `on_sso` / `on_error` entry points (UI thread), not in `RegisterNetworkClient`
+or Logout (SDK threads writing UI-thread members). Needs a throwaway sign-in to
+reproduce.
 
 ## Cheap follow-ups (not done)
 
