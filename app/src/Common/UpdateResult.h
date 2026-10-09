@@ -135,8 +135,17 @@ inline bool IsWellFormed(const UpdateResult& result, std::string_view tagPrefix 
          result.exitCode >= 0 && result.exitCode <= 0xFFFFFFFF && IsUtcSecond(result.finishedUtc);
 }
 
+// How many days `month` (1 to 12) has in `year` of the Gregorian calendar.
+inline constexpr std::int64_t DaysInMonth(std::int64_t year, std::int64_t month) {
+  constexpr std::int64_t kDays[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+  const bool leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+  return month == 2 && leap ? 29 : kDays[month - 1];
+}
+
 // The Unix second an ISO 8601 UTC second names, the inverse of
-// UpdateApply.h FormatUtcSecond; nullopt when `text` is not one.
+// UpdateApply.h FormatUtcSecond; nullopt when `text` is not one, a day its
+// month does not have included (2026-02-31 would otherwise read as a day in
+// March).
 inline std::optional<std::int64_t> ParseUtcSecond(std::string_view text) {
   if (!IsUtcSecond(text)) return std::nullopt;
   const auto number = [text](std::size_t at, std::size_t digits) {
@@ -150,9 +159,10 @@ inline std::optional<std::int64_t> ParseUtcSecond(std::string_view text) {
   const std::int64_t hour = number(11, 2);
   const std::int64_t minute = number(14, 2);
   const std::int64_t second = number(17, 2);
-  if (month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59 || second > 59) {
+  if (month < 1 || month > 12 || day < 1 || hour > 23 || minute > 59 || second > 59) {
     return std::nullopt;
   }
+  if (day > DaysInMonth(year, month)) return std::nullopt;
   // days since 1970-01-01 (Howard Hinnant's days_from_civil)
   const std::int64_t y = year - (month <= 2 ? 1 : 0);
   const std::int64_t era = (y >= 0 ? y : y - 399) / 400;

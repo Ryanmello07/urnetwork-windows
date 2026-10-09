@@ -502,8 +502,9 @@ int ApplyUpdate(std::wstring_view tagArgument) {
 
   // ---- 4. the release it offers ------------------------------------------------
   // Judged against the list's own Date header, the soak included: how long a
-  // release has been out is GitHub's clock against GitHub's published_at, and
-  // nothing this machine or its user can set moves either.
+  // release has been out, unchanged, is GitHub's clock against the times
+  // GitHub gives the release, and nothing this machine or its user can set
+  // moves either.
   const update::Selection selection =
       update::SelectRelease(*releases, kArch, feed, list.serverUnixSeconds);
   for (const auto& skip : selection.skipped) log.Line("release {} {}: skipped", skip.tag, skip.reason);

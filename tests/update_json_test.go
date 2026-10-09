@@ -65,8 +65,9 @@ func TestUpdateJson(t *testing.T) {
 	t.Logf("%s", output)
 }
 
-// A reader that trusts a field's type, or skips a check of the report, fails
-// a named check.
+// A reader that trusts a field's type, takes one time for another, reads a
+// mark that is not there as false, or skips a check of the report, fails a
+// named check.
 func TestUpdateJsonRejectsLooserReaders(t *testing.T) {
 	for _, tc := range []struct {
 		name, header, old, replacement, want string
@@ -74,7 +75,7 @@ func TestUpdateJsonRejectsLooserReaders(t *testing.T) {
 		{"immutable from any value", "ReleaseJson.h",
 			`release.immutable = json_detail::Flag(item, "immutable");`,
 			`release.immutable = item.contains("immutable");`,
-			"fields of the wrong type read as empty and false"},
+			"a tag and an immutable mark of the wrong type read as empty and as not immutable"},
 		{"immutable never read", "ReleaseJson.h",
 			`release.immutable = json_detail::Flag(item, "immutable");`, "",
 			"a published immutable release reads as one"},
@@ -89,6 +90,40 @@ func TestUpdateJsonRejectsLooserReaders(t *testing.T) {
 			`release.publishedAt = json_detail::Text(item, "published_at");`,
 			`release.publishedAt = item.contains("published_at") ? item["published_at"].dump() : std::string{};`,
 			"a null published_at reads as none"},
+		{"the time of the last change never read", "ReleaseJson.h",
+			`release.updatedAt = json_detail::Text(item, "updated_at");`, "",
+			"its last change is updated_at"},
+		{"the publication time taken for the last change", "ReleaseJson.h",
+			`release.updatedAt = json_detail::Text(item, "updated_at");`,
+			`release.updatedAt = json_detail::Text(item, "published_at");`,
+			"its last change is updated_at"},
+		{"a time of the last change of any type", "ReleaseJson.h",
+			`release.updatedAt = json_detail::Text(item, "updated_at");`,
+			`release.updatedAt = item.contains("updated_at") ? item["updated_at"].dump() : std::string{};`,
+			"an updated_at that is not a string reads as none"},
+		{"the package's upload time never read", "ReleaseJson.h",
+			`.updatedAt = json_detail::Text(asset, "updated_at")});`, `.updatedAt = {}});`,
+			"its assets keep their upload times"},
+		{"the package's creation time taken for its upload", "ReleaseJson.h",
+			`.updatedAt = json_detail::Text(asset, "updated_at")});`,
+			`.updatedAt = json_detail::Text(asset, "created_at")});`,
+			"its assets keep their upload times"},
+		{"a release without a prerelease mark read as a release", "ReleaseJson.h",
+			`release.prerelease = json_detail::NotFalse(item, "prerelease");`,
+			`release.prerelease = json_detail::Flag(item, "prerelease");`,
+			"a release without a prerelease mark is not offered"},
+		{"a release without a draft mark read as published", "ReleaseJson.h",
+			`release.draft = json_detail::NotFalse(item, "draft");`,
+			`release.draft = json_detail::Flag(item, "draft");`,
+			"a release without a draft mark is not offered"},
+		{"a mark of another type read as false", "ReleaseJson.h",
+			"return it == object.end() || !it->is_boolean() || it->get<bool>();",
+			"return it == object.end() || (it->is_boolean() && it->get<bool>());",
+			"a prerelease mark that is not the boolean false is a prerelease: null"},
+		{"a missing mark read as false", "ReleaseJson.h",
+			"return it == object.end() || !it->is_boolean() || it->get<bool>();",
+			"return it != object.end() && (!it->is_boolean() || it->get<bool>());",
+			"a release without the two marks reads as a draft and a prerelease"},
 		{"report code from a string", "UpdateResultJson.h",
 			"!code->is_number_unsigned() ||", "", `not a report: {"tag":"v2026.10.1-1060587890","code":"1060587890"`},
 		{"report not checked", "UpdateResultJson.h",
@@ -96,6 +131,8 @@ func TestUpdateJsonRejectsLooserReaders(t *testing.T) {
 			"not a report: {\"tag\":\"latest\""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			// each control builds from its own copy of the headers
+			t.Parallel()
 			program := updateJsonTestProgram(t, tc.header, func(source string) string {
 				if strings.Count(source, tc.old) != 1 {
 					return source

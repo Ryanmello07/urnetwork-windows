@@ -24,8 +24,9 @@
 //     list's own Date header: one mistyped or hostile far-future code would
 //     otherwise outrank every real release for good;
 //   - releases without this product's MSI for this architecture;
-//   - releases that have not soaked, on a feed that soaks (HasSoaked): a build
-//     published a moment ago has run nowhere yet.
+//   - releases that have not soaked, on a feed that soaks (SoakStartOf,
+//     HasSoaked): a build published a moment ago has run nowhere yet, and one
+//     that was changed a moment ago is not the release that was out before.
 // "Newest" then counts only what is left, so a release of the other platforms
 // alone, or one still soaking, is never named as the newest one. The offer
 // additionally needs a usable sha256 digest on that asset.
@@ -40,6 +41,7 @@
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -67,9 +69,9 @@ struct Feed {
   bool acceptBetaPrereleases = false;
   // Only immutable releases count.
   bool requireImmutable = false;
-  // How long a release must have been published, when the UTC day of the
-  // release list's date began, before it counts (HasSoaked). 0: a release
-  // counts from the moment it is published.
+  // How long a release must have been out, unchanged, when the UTC day of the
+  // release list's date began, before it counts (SoakStartOf, HasSoaked). 0: a
+  // release counts from the moment it is published.
   std::int64_t soakSeconds = 0;
   // A runner test's feed only, never one of kFeeds: every tag starts with
   // this, and it is stripped before the grammar is read.
@@ -89,9 +91,11 @@ struct Feed {
 //
 // The pipeline publishes whenever it runs, several builds on some days, and a
 // build published a moment ago has run nowhere yet. So a release counts only
-// once it has been out for a day, judged at the start of GitHub's day: what
-// this feed offers changes at most once a day, and it is the same release for
-// every install and for the update helper.
+// once it has been out, unchanged, for a day, judged at the start of GitHub's
+// day. Which releases count therefore changes only when that day does, and
+// the newest of them is the same release for every install and for the update
+// helper all day. A release that is deleted, marked a prerelease or edited
+// stops counting at once, whatever the hour: that is how one is withdrawn.
 inline constexpr Feed kOfficialFeed{
     .id = "official",
     .numericRepoId = 936244679,
@@ -154,54 +158,100 @@ inline constexpr std::int64_t UtcDayStart(std::int64_t unixSeconds) {
   return unixSeconds - intoDay;
 }
 
+// The second a release's soak is counted from, or why it has none.
+struct SoakStart {
+  std::optional<std::int64_t> unixSeconds;
+  // Why there is none, for the log; empty when there is one.
+  std::string_view problem;
+};
+
+// When the release of `code` last became what the list shows, by the list's
+// own three times, each an ISO 8601 UTC second: the latest of
+//   - `publishedAt`, the release's published_at;
+//   - `updatedAt`, the release's updated_at, the time GitHub gives for its
+//     last change. A published release can still be edited, and marked a
+//     prerelease or a release again, immutable or not, and its published_at
+//     stays as it was. A release marked a prerelease is skipped here, so the
+//     time it spent as one is time it was offered to nobody;
+//   - `assetUpdatedAt`, the updated_at of this product's package in it: when
+//     those bytes were uploaded.
+// None, with why, when any of the three is missing or is not a UTC second,
+// and when published_at is more than kFutureCodeLimit before the instant the
+// code names. A release cannot be published before it is built, and a time
+// that far back (a zeroed one, 1970-01-01T00:00:00Z) would read as a soak
+// that ended long ago.
+inline SoakStart SoakStartOf(std::uint64_t code, std::string_view publishedAt,
+                             std::string_view updatedAt, std::string_view assetUpdatedAt) {
+  const std::optional<std::int64_t> published = ParseUtcSecond(publishedAt);
+  if (!published) return {std::nullopt, "has no publication time to judge its soak by"};
+  if (*published < CodeUnixSeconds(code) - kFutureCodeLimitSeconds) {
+    return {std::nullopt, "has a publication time before its own code's"};
+  }
+  const std::optional<std::int64_t> changed = ParseUtcSecond(updatedAt);
+  if (!changed) return {std::nullopt, "has no time of its last change to judge its soak by"};
+  const std::optional<std::int64_t> uploaded = ParseUtcSecond(assetUpdatedAt);
+  if (!uploaded) return {std::nullopt, "has no upload time of its package to judge its soak by"};
+  return {std::max({*published, *changed, *uploaded}), {}};
+}
+
 // Whether a release of `feed` counts yet in a release list dated
-// `serverUnixSeconds`, its Date header. `publishedUnixSeconds` is the
-// release's published_at, or nullopt when the list gave none that reads as a
-// UTC second: on a feed that soaks, such a release never counts, and no
-// release does while the list has no date. Both times are GitHub's; this
-// machine's clock takes no part.
+// `serverUnixSeconds`, its Date header. `sinceUnixSeconds` is the second the
+// release's soak is counted from (SoakStartOf), or nullopt when it has none:
+// on a feed that soaks, such a release never counts, and no release does
+// while the list has no date. Both times are GitHub's; this machine's clock
+// takes no part.
 //
 // The line is drawn at the start of the list's UTC day, not at its second. A
 // release whose soak had ended when today began counts all day; one whose
 // soak ends today counts from tomorrow. So every list of one day, whoever
-// fetches it and when, counts the same releases, and what a feed offers
-// changes at most once a day. The tray app's check and the update helper's
-// own, minutes apart, disagree only across midnight UTC.
-inline constexpr bool HasSoaked(const Feed& feed, std::optional<std::int64_t> publishedUnixSeconds,
+// fetches it and when, counts the same releases, unless one of them is
+// withdrawn or changed during it. The tray app's check and the update
+// helper's own, minutes apart, disagree only then and across midnight UTC.
+inline constexpr bool HasSoaked(const Feed& feed, std::optional<std::int64_t> sinceUnixSeconds,
                                 std::int64_t serverUnixSeconds) {
   if (feed.soakSeconds <= 0) return true;
-  if (!publishedUnixSeconds || serverUnixSeconds <= 0) return false;
-  return *publishedUnixSeconds + feed.soakSeconds <= UtcDayStart(serverUnixSeconds);
+  if (!sinceUnixSeconds || serverUnixSeconds <= 0) return false;
+  return *sinceUnixSeconds + feed.soakSeconds <= UtcDayStart(serverUnixSeconds);
 }
 
-// The first second a release of `feed` published at `publishedUnixSeconds`
-// counts: for every later list date HasSoaked holds, and for none before.
-inline constexpr std::int64_t SoakEndUnixSeconds(const Feed& feed,
-                                                 std::int64_t publishedUnixSeconds) {
-  if (feed.soakSeconds <= 0) return publishedUnixSeconds;
-  const std::int64_t soaked = publishedUnixSeconds + feed.soakSeconds;
+// The first second a release of `feed` counts whose soak is counted from
+// `sinceUnixSeconds`: for every later list date HasSoaked holds, and for none
+// before.
+inline constexpr std::int64_t SoakEndUnixSeconds(const Feed& feed, std::int64_t sinceUnixSeconds) {
+  if (feed.soakSeconds <= 0) return sinceUnixSeconds;
+  const std::int64_t soaked = sinceUnixSeconds + feed.soakSeconds;
   const std::int64_t day = UtcDayStart(soaked);
   return day == soaked ? soaked : day + kSecondsPerDay;
 }
 
-// Whether the tray app should check again before it starts the update helper
-// for an offer made from a list dated `serverUnixSecondsAtCheck`,
-// `secondsSince` seconds ago by this machine's steady clock. On a feed that
-// soaks, once GitHub's day has changed the helper may be offered a newer
-// release and refuse this one, after the download and the administrator
-// prompt; a check first puts the newer release on the banner instead.
+// How long after a check the tray app still takes its offer for what the feed
+// offers. A release can be withdrawn at any moment (deleted, marked a
+// prerelease, edited), and the banner that offers it may have been up for
+// hours.
+inline constexpr std::int64_t kOfferFreshSeconds = 5 * 60;
+
+// Whether the tray app should check again before it acts on an offer made
+// from a list dated `serverUnixSecondsAtCheck`, `secondsSince` seconds ago by
+// this machine's steady clock: before it starts the update helper, and
+// before it hands the user an installer to run. It should once the offer is
+// older than kOfferFreshSeconds, and, on a feed that soaks, once GitHub's day
+// has changed, when a newer release may count. The helper asks GitHub itself
+// and would refuse a release that is no longer offered, after the download
+// and the administrator prompt; nothing else asks before an installer is
+// shown.
 inline constexpr bool OfferMayHaveChanged(const Feed& feed, std::int64_t serverUnixSecondsAtCheck,
                                           std::int64_t secondsSince) {
+  if (secondsSince < 0 || secondsSince > kOfferFreshSeconds) return true;
   if (feed.soakSeconds <= 0 || serverUnixSecondsAtCheck <= 0) return false;
-  if (secondsSince < 0) return true;
   return UtcDayStart(serverUnixSecondsAtCheck + secondsSince) !=
          UtcDayStart(serverUnixSecondsAtCheck);
 }
 
 struct ReleaseAsset {
   std::string name;
-  std::string url;     // browser_download_url
-  std::string digest;  // the API's `sha256:<hex>`, verbatim
+  std::string url;        // browser_download_url
+  std::string digest;     // the API's `sha256:<hex>`, verbatim
+  std::string updatedAt;  // updated_at, verbatim: 2026-10-01T14:07:24Z
 };
 
 struct Release {
@@ -210,6 +260,7 @@ struct Release {
   bool prerelease = false;
   bool immutable = false;
   std::string publishedAt;  // published_at, verbatim: 2026-10-01T14:51:17Z
+  std::string updatedAt;    // updated_at, verbatim
   std::vector<ReleaseAsset> assets;
 };
 
@@ -220,8 +271,9 @@ struct Selection {
   std::string newestVersion;  // v-less
 
   // The newest release only the feed's soak holds back, and the Unix second
-  // it counts from (SoakEndUnixSeconds): the developer screen says it is
-  // coming. Code 0 when the soak holds none back.
+  // it counts from if nothing about it changes before then
+  // (SoakEndUnixSeconds): the developer screen names it. Code 0 when the soak
+  // holds none back.
   std::uint64_t waitingCode = 0;
   std::string waitingVersion;  // v-less
   std::int64_t waitingFromUnixSeconds = 0;
@@ -239,6 +291,9 @@ struct Selection {
   struct Skip {
     std::string tag;
     std::string reason;
+    // Only the feed's soak holds it back. That is how a feed that soaks
+    // looks on most days, and nothing is wrong with the release.
+    bool soaking = false;
   };
   std::vector<Skip> skipped;
 };
@@ -314,11 +369,12 @@ inline Selection SelectRelease(std::vector<Release> const& releases, std::string
     const std::optional<FeedTag> tag = ParseFeedTag(feed, rel.tag);
     if (!tag) continue;
     if (feed.requireImmutable && !rel.immutable) {
-      s.skipped.push_back({rel.tag, "is not an immutable release"});
+      s.skipped.push_back({rel.tag, "is not an immutable release", false});
       continue;
     }
     if (CodeUnixSeconds(tag->code) > serverUnixSeconds + kFutureCodeLimitSeconds) {
-      s.skipped.push_back({rel.tag, "has a future code (more than 48 h after the server's date)"});
+      s.skipped.push_back(
+          {rel.tag, "has a future code (more than 48 h after the server's date)", false});
       continue;
     }
 
@@ -328,22 +384,25 @@ inline Selection SelectRelease(std::vector<Release> const& releases, std::string
       if (asset.name == name) match = &asset;
     }
     if (!match || match->url.empty()) {
-      s.skipped.push_back({rel.tag, "lacks " + name});
+      s.skipped.push_back({rel.tag, "lacks " + name, false});
       continue;
     }
-    const std::optional<std::int64_t> published = ParseUtcSecond(rel.publishedAt);
-    if (!HasSoaked(feed, published, serverUnixSeconds)) {
-      if (!published) {
-        s.skipped.push_back({rel.tag, "has no publication time to judge its soak by"});
+    const SoakStart since =
+        SoakStartOf(tag->code, rel.publishedAt, rel.updatedAt, match->updatedAt);
+    if (!HasSoaked(feed, since.unixSeconds, serverUnixSeconds)) {
+      if (!since.unixSeconds) {
+        s.skipped.push_back({rel.tag, std::string(since.problem), false});
         continue;
       }
       s.skipped.push_back(
-          {rel.tag, "had not been published for " + std::to_string(feed.soakSeconds / 3600) +
-                        " h when the server's day began"});
+          {rel.tag,
+           "had not been out, unchanged, for " + std::to_string(feed.soakSeconds / 3600) +
+               " h when the server's day began",
+           true});
       if (tag->code > s.waitingCode) {
         s.waitingCode = tag->code;
         s.waitingVersion = tag->version;
-        s.waitingFromUnixSeconds = SoakEndUnixSeconds(feed, *published);
+        s.waitingFromUnixSeconds = SoakEndUnixSeconds(feed, *since.unixSeconds);
       }
       continue;
     }
@@ -356,7 +415,7 @@ inline Selection SelectRelease(std::vector<Release> const& releases, std::string
     // own upload-time SHA-256 for exactly the bytes this URL serves.
     std::string digestHex = DigestHexFromAssetDigest(match->digest);
     if (digestHex.empty()) {
-      s.skipped.push_back({rel.tag, "lacks a usable digest for " + name});
+      s.skipped.push_back({rel.tag, "lacks a usable digest for " + name, false});
       continue;
     }
     s.code = tag->code;

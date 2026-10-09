@@ -14,11 +14,13 @@
 //      status 200, its Date header kept.
 //   4. SelectRelease on that list must offer exactly <tag>, above this
 //      build's code, at the feed's own download URL. On the official feed
-//      that is the newest release that had been out for a day when the list's
-//      UTC day began (ReleaseSelection.h HasSoaked), judged by the list's Date
-//      header and the release's published_at alone. A tag the tray app was
-//      offered before a newer release reached that line is refused
-//      (NotOffered), and the tray app checks again.
+//      that is the newest release that had been out, unchanged, for a day
+//      when the list's UTC day began (ReleaseSelection.h SoakStartOf,
+//      HasSoaked), judged by the list's Date header and the times the list
+//      gives the release alone: its published_at, its updated_at and its
+//      package's updated_at. A tag the tray app was offered before a newer
+//      release reached that line, or before the release was withdrawn or
+//      changed, is refused (NotOffered), and the tray app checks again.
 //   5. The download: one 302, followed only to GitHub's release-asset hosts,
 //      then 200, at most 1 GiB, written to <install>\updates\<tag>\<asset>,
 //      the file created new. The folders are no reparse points, and they and
