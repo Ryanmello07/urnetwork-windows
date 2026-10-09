@@ -1,0 +1,143 @@
+# The "ui" job of vpn-feed.yml alone: vN's tray app in its own window, against
+# the stand-in on a running clock. vN is not built here: it is the msi-vn
+# artifact of a vpn-feed.yml run on the same product commit. For working on
+# the UI steps; the run that counts is vpn-feed.yml's.
+#
+# Setup: as vpn-feed.yml, on a branch pushed as ci/a2b-ui-<anything>.
+#
+# SPDX-License-Identifier: MPL-2.0
+
+name: VPN official feed test, the tray app's window alone
+
+on:
+  push:
+    branches:
+      - 'ci/a2b-ui-*'
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  MSI_RUN_ID: '37890190400'
+
+jobs:
+  ui:
+    name: The tray app's own window, Later and its own update
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download vN, built by run ${{ env.MSI_RUN_ID }} from the same product commit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          gh run download $env:MSI_RUN_ID -R $env:GITHUB_REPOSITORY -n msi-vn -D "$env:RUNNER_TEMP/msis"
+          if ($LASTEXITCODE -ne 0) { throw "could not download msi-vn" }
+          Get-ChildItem "$env:RUNNER_TEMP/msis"
+
+      - name: The feed, read without a token, and the boundary release's MSI
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-feed-lib.ps1"
+          if ((Get-UrProducts).Count -ne 0) { throw "a URnetwork product is already installed on this runner" }
+          whoami
+          whoami /groups | Select-String 'Mandatory Label' | ForEach-Object { "session: $_" }
+          "session id: $((Get-Process -Id $PID).SessionId); explorer: $(@(Get-Process explorer -ErrorAction SilentlyContinue | ForEach-Object { "pid $($_.Id) session $($_.SessionId)" }) -join ', ')"
+          Get-CimInstance Win32_VideoController | ForEach-Object { "display: $($_.Name) $($_.CurrentHorizontalResolution)x$($_.CurrentVerticalResolution)" }
+          "EnableLUA: $((Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System').EnableLUA)"
+          [void](Wait-UrAnonymousRequests 4)
+          $list = Get-UrFeedNow (Join-Path $env:RUNNER_TEMP 'releases.json')
+          $reading = Get-UrFeedReading $list.Releases $list.ServerUnix
+          $boundary = $reading.Waiting
+          if (-not $boundary) { $boundary = $reading.Offered }
+          if (-not $boundary) { throw "the feed has no release that counts or waits" }
+          $vn = Get-UrExpect 'vn'
+          if ([uint64]$vn.code -ge [uint64]$boundary.Code) { throw "vN ($($vn.code)) is not older than $($boundary.Tag)" }
+          "boundary release: $($boundary.Tag), published $($boundary.PublishedAt), counts from $(Format-UrUnix $boundary.CountsFrom)"
+          $boundary | ConvertTo-Json | Set-Content -Encoding ascii (Join-Path $env:RUNNER_TEMP 'boundary.json')
+          $official = Join-Path $UrMsiDir 'official.msi'
+          [void](Save-UrReleaseMsi $boundary $official)
+          $expect = Get-UrExpectOfRelease $boundary 'official'
+          $expect | ConvertTo-Json | Set-Content -Encoding ascii (Join-Path $UrMsiDir 'official.json')
+          $traits = Get-UrPackageTraits $official
+          $traits | ConvertTo-Json | Set-Content -Encoding ascii (Join-Path $env:RUNNER_TEMP 'official-traits.json')
+          if ($traits.UpgradeCode -ne $UrUpgradeCode -or $traits.ProductVersion -ne $expect.msi_version) {
+            throw "FINDING: $($boundary.Asset) is UpgradeCode $($traits.UpgradeCode) ProductVersion $($traits.ProductVersion), want $UrUpgradeCode $($expect.msi_version)"
+          }
+          $at = Get-UrFeedReading $list.Releases ([long]$boundary.CountsFrom)
+          $before = Get-UrFeedReading $list.Releases ([long]$boundary.CountsFrom - 1)
+          if (-not $at.Offered -or $at.Offered.Tag -ne $boundary.Tag) { throw "at $(Format-UrUnix $boundary.CountsFrom) the list should offer $($boundary.Tag)" }
+          if ($before.Offered -and $before.Offered.Tag -eq $boundary.Tag) { throw "a second earlier the list should not offer $($boundary.Tag)" }
+          if ($before.Offered) {
+            $before.Offered | ConvertTo-Json | Set-Content -Encoding ascii (Join-Path $env:RUNNER_TEMP 'offered-before.json')
+            "a second before the line the list offers $($before.Offered.Tag)"
+          }
+
+      - name: 0. Install vN
+        timeout-minutes: 10
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-feed-lib.ps1"
+          $code = Invoke-UrMsiexec '/i' (Get-UrMsiPath 'vn') '/qn' 'vn-install.log'
+          if ($code -ne 0) { throw "vN install exit code $code" }
+          $product = Assert-UrInstalled (Get-UrExpect 'vn') 'vn-install.log'
+          Set-Content -Encoding ascii (Join-Path $env:RUNNER_TEMP 'vn.productcode') $product.ProductCode
+          if ((Get-UrHelperFeed $UrHelperPath) -ne 'official') { throw "the installed URnetworkUpdate.exe is not the official feed's" }
+
+      - name: The tray app's window, from its launch check to its own update
+        timeout-minutes: 45
+        shell: powershell
+        run: |
+          & "$env:GITHUB_WORKSPACE\.github\vpn-feed-ui.ps1"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - name: Collect logs
+        if: always()
+        shell: powershell
+        run: |
+          $dest = Join-Path $env:RUNNER_TEMP 'upgrade-logs'
+          New-Item -ItemType Directory -Force $dest | Out-Null
+          foreach ($name in 'releases.json', 'boundary.json', 'offered-before.json', 'official-traits.json') {
+            $file = Join-Path $env:RUNNER_TEMP $name
+            if (Test-Path $file) { Copy-Item $file $dest }
+          }
+          $standin = Join-Path $env:RUNNER_TEMP 'feed-standin\server.log'
+          if (Test-Path $standin) { Copy-Item $standin (Join-Path $dest 'standin-server.log') }
+          if (Test-Path "$env:LOCALAPPDATA\URnetwork\app\logs") {
+            Copy-Item "$env:LOCALAPPDATA\URnetwork\app\logs" (Join-Path $dest 'app-logs') -Recurse -Force
+          }
+          if (Test-Path "$env:LOCALAPPDATA\URnetwork\app\app_prefs.json") {
+            Copy-Item "$env:LOCALAPPDATA\URnetwork\app\app_prefs.json" $dest
+          }
+          if (Test-Path "$env:LOCALAPPDATA\URnetwork\updates") {
+            Get-ChildItem -Recurse -Force "$env:LOCALAPPDATA\URnetwork\updates" | ForEach-Object { "$($_.FullName) $($_.Length)" } |
+              Out-File (Join-Path $dest 'tray-updates-listing.txt')
+          }
+          if (Test-Path "$env:ProgramData\URnetwork\service\logs") {
+            Copy-Item "$env:ProgramData\URnetwork\service\logs" (Join-Path $dest 'service-logs') -Recurse -Force
+          }
+          $updates = 'C:\Program Files\URnetwork\updates'
+          if (Test-Path $updates) {
+            Get-ChildItem -Recurse -Force $updates | ForEach-Object { "$($_.FullName) $($_.Length)" } |
+              Out-File (Join-Path $dest 'updates-listing.txt')
+            Get-ChildItem -Recurse -File $updates -Include '*.log', '*.json' | ForEach-Object {
+              $name = 'updates_' + ($_.FullName.Substring($updates.Length).TrimStart('\') -replace '\\', '_')
+              Copy-Item -LiteralPath $_.FullName (Join-Path $dest $name)
+            }
+          }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: feed-logs-ui
+          path: ${{ runner.temp }}/upgrade-logs/
+          if-no-files-found: warn
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ui-shots
+          path: ${{ runner.temp }}/ui-shots/
+          if-no-files-found: warn
