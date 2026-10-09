@@ -51,4 +51,22 @@ bool ApplyNativeShell(winrt::Microsoft::UI::Xaml::Window const& window, HWND hwn
 // of a drag. Returns whether a complete placement was written.
 bool SaveWindowPlacement(HWND hwnd);
 
+// Put the window in front of whatever covers it, for a show the USER caused
+// somewhere else: the browser's "Open URnetwork?" after a sign-in, an email
+// link. Window::Activate() alone is not enough. Windows' foreground lock
+// refuses SetForegroundWindow from a process that neither owns the foreground
+// nor was handed the right, and then only flashes the taskbar button - so the
+// window, and the sign-in result or error it had just painted, stayed behind
+// the browser (measured live: a matched error callback laid its message out
+// inside a window the browser covered for the whole observation, which reads
+// as "the app did nothing"). macOS gets this from NSApp.activate(
+// ignoringOtherApps:) and Android from the OS; on Windows it is ours to do.
+//
+// Order: the sanctioned SetForegroundWindow first - it succeeds when main.cpp's
+// second launch handed this process the right. When the lock refuses, z-order
+// is NOT locked, so a topmost toggle lifts the window above every normal window
+// WITHOUT stealing focus. Returns true only when the window became the
+// foreground window; false still leaves it on top.
+bool RaiseToFront(HWND hwnd);
+
 }  // namespace urnw::shell

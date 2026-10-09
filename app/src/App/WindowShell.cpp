@@ -293,4 +293,33 @@ bool SaveWindowPlacement(HWND hwnd) {
   return true;
 }
 
+bool RaiseToFront(HWND hwnd) {
+  if (!hwnd || !::IsWindow(hwnd)) return false;
+  // Nothing below raises a minimized window; ShowWindowImpl restores it first,
+  // and this keeps the helper honest when it is called on its own.
+  if (::IsIconic(hwnd)) ::ShowWindow(hwnd, SW_RESTORE);
+
+  ::SetForegroundWindow(hwnd);
+  if (::GetForegroundWindow() == hwnd) {
+    LogInfo("shell: the window is the foreground window");
+    return true;
+  }
+
+  // The foreground lock refused it (the process owns no foreground and was
+  // handed no right - a launch from a background script, or a launcher that
+  // gave none). z-order is not locked: lifting a window to TOPMOST and dropping
+  // it straight back leaves it above every normal window, unfocused, which is
+  // all this needs - the result it carries is on screen. A window the user
+  // already pinned topmost (PowerToys Always on Top) is above them already and
+  // must not be un-pinned by this.
+  if ((::GetWindowLongPtrW(hwnd, GWL_EXSTYLE) & WS_EX_TOPMOST) == 0) {
+    constexpr UINT kKeepSizeAndFocus = SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE;
+    ::SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, kKeepSizeAndFocus);
+    ::SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, kKeepSizeAndFocus);
+  }
+  LogInfo("shell: the foreground lock refused the window; lifted it above the "
+          "other windows without taking focus");
+  return false;
+}
+
 }  // namespace urnw::shell

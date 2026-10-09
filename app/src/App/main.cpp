@@ -66,6 +66,26 @@ std::wstring HresultDetail(winrt::hresult_error const& e) {
 // (it would deadlock), so it runs on a worker while this thread keeps pumping —
 // the pattern from the Windows App SDK instancing sample.
 bool RedirectActivation(AppInstance const& primary, AppActivationArguments const& args) {
+  // THE FOREGROUND RIGHT. This process was just launched by whatever the user
+  // clicked - the browser's "Open URnetwork?" after a sign-in, an email link -
+  // so for a moment it holds what the running instance does not: the right to
+  // take the foreground. It has no window to use it on and is about to exit, so
+  // it hands the right to the instance that will show the window. Without this
+  // Windows' foreground lock refuses that instance's SetForegroundWindow and
+  // the window stays BEHIND the browser holding a result nobody can see
+  // (measured live). A launch from a background script has no right to give;
+  // shell::RaiseToFront is the second line of defence for that case.
+  try {
+    if (::AllowSetForegroundWindow(primary.ProcessId())) {
+      urnw::LogInfo("startup: handed the foreground right to the running instance");
+    } else {
+      urnw::LogWarn("startup: no foreground right to hand to the running instance "
+                    "(error {})", ::GetLastError());
+    }
+  } catch (...) {
+    // never let this stand between the user's launch and the redirect below
+  }
+
   // The worker can outlive a wait that timed out, so everything it touches is
   // owned by shared state rather than by this stack frame.
   struct Redirect {

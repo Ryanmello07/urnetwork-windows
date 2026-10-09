@@ -326,6 +326,7 @@ void AppController::OnAuthState(AuthState state, const std::string& error) {
   const bool wasLoggedIn = (authState_ == AuthState::LoggedIn);
   authState_ = state;
   authError_ = error;
+  authErrorUndelivered_ = !error.empty();
   UpdateTray();
   // balance store lifecycle follows the session. A repeated LoggedIn push is a
   // device re-registration (guest upgrade): restart the store so the plan
@@ -338,8 +339,10 @@ void AppController::OnAuthState(AuthState state, const std::string& error) {
   // the tray always reflects state; only push into the window when it is
   // actually visible (resynced on show) so a hidden window doesn't churn.
   if (windowVisible_ && window_) {
-    if (auto self = window_.try_as<winrt::URnetwork::implementation::MainWindow>())
+    if (auto self = window_.try_as<winrt::URnetwork::implementation::MainWindow>()) {
       self->OnAuthStateChanged(state, error);
+      authErrorUndelivered_ = false;  // a presented window has it now
+    }
   }
   if (state == AuthState::LoggedIn) {
     tray_.ShowBalloon(Localized("app_name"), Localized("signed_in"));
@@ -708,6 +711,13 @@ void AppController::ShowWindowImpl(const POINT* anchor) {
   windowShown_ = true;
   SyncWindowMinimized();
   window_.Activate();
+  // Activate() is refused by the foreground lock when another process (the
+  // browser a sign-in just came back from) owns the foreground and nobody gave
+  // this one the right: the window then stays BEHIND it, painting a result no
+  // one can see. A tray click owns the foreground and gets through the first
+  // line of RaiseToFront; a deep link or relaunch may not, and falls back to
+  // lifting the window without focus.
+  shell::RaiseToFront(windowHwnd_);
   ReconcileWindowPresentation();
 }
 
@@ -797,7 +807,12 @@ void AppController::ReconcileWindowPresentation() {
     // Re-apply the current state after the hidden/inactive interval. The stats
     // snapshot goes through OnStats (#27), not straight to the window, so the
     // tray's health reading refreshes at the same instant the window's does.
-    self->OnAuthStateChanged(authState_, authError_);
+    // The standing ERROR is replayed only while no presented window has seen it
+    // (authErrorUndelivered_): a failure that landed while the window was hidden
+    // is delivered once on the next show, never again after that.
+    self->OnAuthStateChanged(authState_,
+                             authErrorUndelivered_ ? authError_ : std::string());
+    authErrorUndelivered_ = false;
     if (lastTunnelStatus_) self->OnTunnelStateChanged(*lastTunnelStatus_);
     OnStats(sdk_.CurrentStats());
     self->OnBalanceChanged(balance_.Current(), balance_.CurrentPoll());
