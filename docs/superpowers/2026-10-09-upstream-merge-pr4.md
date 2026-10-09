@@ -49,6 +49,12 @@ from it.
     mutated copy of `InstanceHandover.h` that GCC accepts.
   - A Windows working tree has CRLF line endings, which the source-text contracts
     do not expect: run them on an LF copy.
+- `beta-build.yml` on the merge commit (`a18ab6c`): the SDK job, the x64 and ARM64
+  app jobs, the MSI build and its payload check, and the prerelease job all passed.
+  The published beta (`v2026.10.9-1067413860-beta`) carries the numbers
+  `UrVersion.ps1` derives from its code: numeric FILEVERSION `2026.10.9.18693` on
+  `URnetwork.exe`, `urnetworkd.exe` and `URnetworkUpdate.exe`, and MSI
+  ProductVersion `26.10.17270`.
 - Not yet run: a live launch of the merged build. It needs the merged
   `urnetworkd.exe` swapped in for the running service.
 
