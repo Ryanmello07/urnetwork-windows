@@ -9,7 +9,13 @@ below.
 After the browser returns (`urnetwork://oauth/<provider>?...`), the app's window
 now comes in front of the browser by itself, with the sign-in result or error on
 screen, whether the window was visible, hidden to the tray or minimized. Commits
-`f8c3997` (error line, supersede, mapping) and `dec4d14` (foreground).
+`f8c3997` (error line, supersede, mapping) and `dec4d14` (foreground); later
+commits correct the mechanism wording and add logging and contracts.
+
+State of the providers on Windows today: **Sign in with Apple works end to end**
+(a real sign-in, verified live 2026-10-09); **Sign in with Google still cannot
+succeed** because production's vault lacks `sign_in_oauth` (server side), and now
+fails visibly instead of looking hung.
 
 ## Root cause (measured on the live desktop)
 
@@ -112,12 +118,22 @@ Windows is not doing SSO differently.
   `not_configured`. The owner is raising that with URnetwork. Native Android/iOS and the ur.io
   website sign in with Google without that server secret (the website asks Google
   for the identity token directly), which is why only the desktop code flow hits it.
-- **Apple probably already works.** Its callback needs no vault config, and
-  Android ships the same Apple browser flow against the same api origin
-  (Services ID `network.ur.service`). The handoff's "add the return URL in the
-  Apple console" item is likely unnecessary; check by pressing Sign in with Apple
-  (Apple's page rejects an unregistered return URL as soon as it loads) before
-  asking URnetwork for anything.
+- **Apple works, end to end (verified live 2026-10-09).** The owner pressed
+  Sign in with Apple, Apple's page loaded and asked "Do you want to continue
+  using URnetwork with your Apple Account ...?", and after Continue the log shows
+  the whole chain: `apple sign-in armed` -> the browser's handoff carrying
+  Apple's code and token -> `shell: the window is the foreground window` ->
+  `an sso callback matched the apple sign-in in flight` (state and nonce
+  verified) -> `signed in; no session started` 2.6 s later -> the login pills
+  gone and the home shell showing. So the handoff's "add the return URL
+  `https://api.bringyour.com/auth/apple/callback` to the Apple Services ID" item
+  is **unnecessary - do not ask URnetwork for it** (it is registered, and
+  `/auth/login` accepts the Services-ID audience). This was also the first live
+  pass of the SUCCESS path through the window raise.
+- **Only Google needs URnetwork.** The error copy ("Provider sign-in isn't
+  available on this network yet - use email or browser sign-in") predates this and
+  does not mention that Apple works; `not_configured` only ever comes from the
+  Google callback.
 
 ## Myths retired
 

@@ -1051,15 +1051,17 @@ void LoginPage::SignInWithAuthCode(std::string code) {
 }
 
 // ---- sign in with browser (the bridge sheet) -------------------------------
-// Provider SSO through the system browser is blocked upstream for now -
-// Google's production api vault lacks sign_in_oauth and Apple's Services ID
-// does not carry the api's callback url - and a provider token can never be
-// forwarded to a local page: the providers pin their redirect uris to ur.io,
-// and /auth/login pins the accepted token audiences to URnetwork's own client
-// ids. What works TODAY is the api's one-time auth codes (/auth/code-login):
-// sign in at ur.io in the real browser, where password managers and existing
-// Google / Apple sessions live, then hand the app a code from any signed-in
-// surface (Account -> Create auth code).
+// Google through the system browser is blocked upstream for now: the production
+// api vault lacks sign_in_oauth, so its callback answers error=not_configured.
+// Apple is NOT blocked - its callback needs no vault config and the Services ID
+// does carry the api's callback url (a real Apple sign-in completed end to end
+// on 2026-10-09). A provider token can never be forwarded to a local page: the
+// providers pin their redirect uris to ur.io, and /auth/login pins the accepted
+// token audiences to URnetwork's own client ids. So for Google what works TODAY
+// is the api's one-time auth codes (/auth/code-login): sign in at ur.io in the
+// real browser, where password managers and existing Google / Apple sessions
+// live, then hand the app a code from any signed-in surface (Account -> Create
+// auth code).
 winrt::fire_and_forget LoginPage::OnSignInWithBrowser(IInspectable const&,
                                                       RoutedEventArgs const&) {
   if (w_.sheetOpen()) co_return;  // only one ContentDialog can show at a time
