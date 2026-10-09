@@ -499,8 +499,9 @@ void ConnectPage::ApplyServiceSetup(urnw::ServiceSetup::Snapshot const& snap) {
 // rule. Labels go through Adv() with `upd_` store ids, as the service bar's
 // use `svc_`. The version is data (release grammar, never translated) and goes
 // in through the title's placeholder; paths and exit codes are appended as
-// data. The sentences the elevated update added have no store ids yet, so
-// they are English here until the store carries them for windows.
+// data. The sentences the elevated update and the official feed added have no
+// store ids yet, so they are English here until the store carries them for
+// windows; each is one format string, so its key takes its place as written.
 void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) {
   using Phase = urnw::UpdateChecker::Phase;
   using Stage = urnw::UpdateChecker::Stage;
@@ -571,10 +572,21 @@ void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) 
         message = L"This copy of URnetwork is not installed in Program Files, so it does not "
                   L"update itself. Download the installer and run it to install this release.";
       }
+      // The release took another's place, after a click on that one or while
+      // it was being installed: the banner's version changed under the user,
+      // and it says why. The version is data.
+      if (urnw::UpdateChecker::SaysReplaced(snap)) {
+        message = std::format(L"This release replaced v{}, which was not installed. ",
+                              snap.replacedVersion) +
+                  message;
+      }
       break;
     case Phase::Applying:
       enabled = false;
       switch (snap.stage) {
+        case Stage::Checking:
+          message = L"Checking that this is still the release offered…";
+          break;
         case Stage::Downloading:
           message = AdvW("upd_stage_downloading", L"Downloading the update…");
           break;
@@ -630,6 +642,17 @@ void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) 
           message = L"Windows here runs only signed programs as administrator, and URnetwork's "
                     L"update helper is not signed, so it could not install the update. Download "
                     L"the installer and run it instead.";
+          break;
+        case Failure::Unconfirmed:
+          // the click asks for the installer again (MainWindow)
+          action = winrt::hstring{L"Download the installer"};
+          message = L"URnetwork could not ask GitHub whether this release is still the one "
+                    L"offered, so its installer is not shown. Check the connection and click to "
+                    L"try again.";
+          if (held) {
+            message += L" GitHub asked this network to wait until " + heldUntil +
+                       L" before it is asked again.";
+          }
           break;
         default:  // Checksum
           message = AdvW("upd_failed_checksum",

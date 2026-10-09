@@ -841,6 +841,10 @@ void DeveloperPage::Build() {
       // updateCheckText_ below via MainWindow's fan-out, not here.
       Button checkUpdates =
           MakeActionButton(Dev("dev_check_updates", L"Check for updates"));
+      // found by a UI Automation driver of the update banner, with the line
+      // below
+      Automation::AutomationProperties::SetAutomationId(checkUpdates,
+                                                        L"acceptance.update.check-now");
       checkUpdates.Click(
           [](auto const&, auto const&) { urnw::pages::Updates().CheckNow(); });
       actions.Children().Append(checkUpdates);
@@ -853,6 +857,8 @@ void DeveloperPage::Build() {
 
     updateCheckText_ = MakeText(hstring{}, 12, MutedBrush(), true);
     updateCheckText_.Visibility(Visibility::Collapsed);
+    Automation::AutomationProperties::SetAutomationId(updateCheckText_,
+                                                      L"acceptance.update.check-line");
     body.Children().Append(updateCheckText_);
     body.Children().Append(MakeText(
         Dev("dev_actions_are_requests",
@@ -1345,12 +1351,16 @@ void DeveloperPage::ApplyUpdateCheck(UpdateChecker::Snapshot const& snap) {
       break;
   }
   // A newer release the feed holds back until it has been out for a day:
-  // "this build is current" alone would not be the whole answer. The version
-  // and the time are data; the sentence has no store id yet.
-  if (snap.waitingCode != 0) {
+  // "this build is current" alone would not be the whole answer. It names the
+  // earliest time and promises none: a later build that reaches its day at the
+  // same midnight is offered instead. Not after a failed check, when the time
+  // would be an earlier check's (NamesWaiting). The version and the time are
+  // data; the sentence has no store id yet, and is one format string so that
+  // its key takes its place as written.
+  if (UpdateChecker::NamesWaiting(snap)) {
     if (!text.empty()) text += L"\n";
-    text += L"v" + snap.waitingVersion + L" is published and is offered from " +
-            UpdateChecker::LocalDateTime(snap.waitingFromUnix);
+    text += std::format(L"v{0} is published and is offered no earlier than {1}",
+                        snap.waitingVersion, UpdateChecker::LocalDateTime(snap.waitingFromUnix));
   }
   // The connect screen's warning, here too: no check has worked for 72 hours.
   // The date is data; the sentence has no store id yet.

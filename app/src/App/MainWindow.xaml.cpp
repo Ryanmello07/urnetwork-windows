@@ -225,12 +225,16 @@ MainWindow::MainWindow() {
     update.Click([weak = get_weak()](auto const&, auto const&) {
       if (auto self = weak.get()) self->OnUpdateBannerAction();
     });
+    // found by a UI Automation driver of the update banner, with Later's
+    Automation::AutomationProperties::SetAutomationId(update, L"acceptance.update.action");
     UpdateBar().ActionButton(update);
     // Later, under the banner's message while it offers a release
     // (ConnectPage::ApplyUpdateChecker shows and hides it): that release is not
-    // shown again until the next launch. The label has no store id yet.
+    // shown again until the next launch, or a check the user asks for. The
+    // label has no store id yet.
     HyperlinkButton later;
     later.Content(winrt::box_value(L"Later"));
+    Automation::AutomationProperties::SetAutomationId(later, L"acceptance.update.later");
     later.Visibility(Visibility::Collapsed);
     later.Click([](auto const&, auto const&) { urnw::pages::Updates().Later(); });
     UpdateBar().Content(later);
@@ -1820,6 +1824,13 @@ void MainWindow::OnUpdateBannerAction() {
     case Phase::Failed:
       // Download / verify / install, or retry it from scratch — the
       // checker re-runs the whole pipeline rather than resuming a half state.
+      // An installer that could not be shown because GitHub could not be
+      // asked is asked for again as an installer.
+      if (updateSnapshot_.phase == Phase::Failed &&
+          updateSnapshot_.failure == Failure::Unconfirmed) {
+        urnw::pages::Updates().ShowInstaller();
+        break;
+      }
       // A Windows that elevates only signed programs gets the installer.
       if (updateSnapshot_.failure == Failure::Unsigned && updateSnapshot_.phase == Phase::Failed)
         urnw::pages::Updates().ShowInstaller();

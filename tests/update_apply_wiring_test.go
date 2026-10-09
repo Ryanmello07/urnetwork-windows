@@ -874,7 +874,7 @@ func checkTrayReadsTheReport(checker string) []string {
 	dismiss := applyDefinition(checker, "void UpdateChecker::DismissResult() {")
 	problems = append(problems, applyOrderProblems("UpdateChecker::DismissResult", dismiss,
 		regexp.QuoteMeta("if (!finished.empty()) SaveAppPref(kResultSeenPrefKey, Narrow(finished));"))...)
-	check := applyDefinition(checker, "void UpdateChecker::RunCheck(std::uint64_t generation) {")
+	check := applyDefinition(checker, "bool UpdateChecker::RunCheck(std::uint64_t generation) {")
 	problems = append(problems, applyOrderProblems("UpdateChecker::RunCheck", check,
 		regexp.QuoteMeta("if (snapshot_.phase != Phase::None && snapshot_.phase != Phase::Result) {"))...)
 	return problems
@@ -891,6 +891,9 @@ func TestUpdateApplyTrayReadsTheReport(t *testing.T) {
 // taken; a Windows that elevates only signed programs is offered the
 // installer too. The installer shown from the user's folder is checked again
 // before every "Show file", since any of the user's processes can write it.
+// A release the helper refused as no longer offered is followed by a check,
+// run there, so the banner says what the feed offers now
+// (update_offer_wiring_test.go pins what that check's answer does).
 func checkTrayShowsTheInstaller(checker, window, connect string) []string {
 	var problems []string
 	offers := applyDefinition(checker, "bool UpdateChecker::OffersInstaller(Snapshot const& snapshot) {")
@@ -913,7 +916,7 @@ func checkTrayShowsTheInstaller(checker, window, connect string) []string {
 		regexp.QuoteMeta("LaunchUpdateHelper("),
 		regexp.QuoteMeta("if (update::KeepsPackage(ended)) fs::remove_all(dir, ec);"),
 		regexp.QuoteMeta("if (ended == static_cast<std::int64_t>(update::Refusal::NotOffered)) {"),
-		regexp.QuoteMeta("checkRequested_ = true;"),
+		regexp.QuoteMeta("RunCheck(generation);"),
 		regexp.QuoteMeta("s.offeredCode = offer_.code;"))...)
 	if handOff := strings.Index(apply, "LaunchUpdateHelper("); handOff >= 0 {
 		if kept := strings.Index(apply, "if (update::KeepsPackage(ended)) fs::remove_all(dir, ec);"); kept > handOff &&
@@ -1217,10 +1220,10 @@ func checkTrayFollowsTheFeed(checker string) []string {
 	if unscoped.MatchString(worker) {
 		problems = append(problems, "UpdateChecker::WorkerLoop changes the snapshot without a generation")
 	}
-	check := applyDefinition(checker, "void UpdateChecker::RunCheck(std::uint64_t generation) {")
+	check := applyDefinition(checker, "bool UpdateChecker::RunCheck(std::uint64_t generation) {")
 	problems = append(problems, applyOrderProblems("UpdateChecker::RunCheck", check,
 		regexp.QuoteMeta("if (feedGeneration_ != generation) {"),
-		regexp.QuoteMeta("return;"),
+		regexp.QuoteMeta("return false;"),
 		regexp.QuoteMeta("snapshot_.newestCode = newestCode;"),
 		regexp.QuoteMeta("offer_ = offer;"),
 		regexp.QuoteMeta("snapshot_.offeredCode = offer_.code;"))...)
@@ -1269,12 +1272,12 @@ func checkTrayHonoursGitHub(checker string) []string {
 		regexp.QuoteMeta(`headers.rateLimitResetUnixSeconds = NumericHeader(request.h, L"X-RateLimit-Reset", 0);`),
 		regexp.QuoteMeta(`headers.rateLimitExhausted = NumericHeader(request.h, L"X-RateLimit-Remaining", -1) == 0;`),
 		regexp.QuoteMeta("return false;"))...)
-	check := applyDefinition(checker, "void UpdateChecker::RunCheck(std::uint64_t generation) {")
+	check := applyDefinition(checker, "bool UpdateChecker::RunCheck(std::uint64_t generation) {")
 	problems = append(problems, applyOrderProblems("UpdateChecker::RunCheck", check,
 		regexp.QuoteMeta("held = steady_clock::now() < holdUntil_;"),
 		regexp.QuoteMeta("if (held) {"),
 		regexp.QuoteMeta("CheckFailed(generation);"),
-		regexp.QuoteMeta("return;"),
+		regexp.QuoteMeta("return false;"),
 		regexp.QuoteMeta("FetchUrl("),
 		regexp.QuoteMeta("if (!fetched) {"),
 		regexp.QuoteMeta(".retryAfterSeconds = headers.retryAfterSeconds,"),
@@ -1286,7 +1289,7 @@ func checkTrayHonoursGitHub(checker string) []string {
 		regexp.QuoteMeta("holdUntilUnix_ = NowUnixSeconds() + wait;"),
 		regexp.QuoteMeta("snapshot_.holdUntilUnix = holdUntilUnix_;"),
 		regexp.QuoteMeta("CheckFailed(generation);"),
-		regexp.QuoteMeta("return;"))...)
+		regexp.QuoteMeta("return false;"))...)
 	apply := applyDefinition(checker, "void UpdateChecker::RunApply(std::uint64_t generation, bool manual) {")
 	problems = append(problems, applyOrderProblems("UpdateChecker::RunApply", apply,
 		regexp.QuoteMeta("held = viaHelper && steady_clock::now() < holdUntil_;"),
@@ -1319,7 +1322,7 @@ func checkTraySaysWhenChecksFail(checker, connect, window, developer string) []s
 		regexp.QuoteMeta("snapshot_.lastSuccessUnix = NowUnixSeconds();"),
 		regexp.QuoteMeta("SaveAppPref(kLastSuccessPrefKey, snapshot_.lastSuccessUnix);"),
 		regexp.QuoteMeta("worker_ = std::thread("))...)
-	check := applyDefinition(checker, "void UpdateChecker::RunCheck(std::uint64_t generation) {")
+	check := applyDefinition(checker, "bool UpdateChecker::RunCheck(std::uint64_t generation) {")
 	problems = append(problems, applyOrderProblems("UpdateChecker::RunCheck", check,
 		regexp.QuoteMeta("update::ParseReleaseList(body);"),
 		regexp.QuoteMeta("if (!parsed) {"),
@@ -1408,11 +1411,11 @@ func TestUpdateApplyWiringRejectsWeakerWorkers(t *testing.T) {
 			return follows(replace(checker, "if (feedGeneration_ != generation) return false;", "if (false) return false;"))
 		}},
 		{"a check of the old feed published", func() []string {
-			return follows(within("void UpdateChecker::RunCheck(std::uint64_t generation) {",
+			return follows(within("bool UpdateChecker::RunCheck(std::uint64_t generation) {",
 				"if (feedGeneration_ != generation) {", "if (false) {"))
 		}},
 		{"a check that changes the snapshot unscoped", func() []string {
-			return follows(within("void UpdateChecker::RunCheck(std::uint64_t generation) {",
+			return follows(within("bool UpdateChecker::RunCheck(std::uint64_t generation) {",
 				"MutateFor(generation, [](Snapshot& s) { s.lastCheck = CheckOutcome::InFlight; });",
 				"Mutate([](Snapshot& s) { s.lastCheck = CheckOutcome::InFlight; });"))
 		}},

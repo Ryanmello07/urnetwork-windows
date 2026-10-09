@@ -930,7 +930,8 @@
                                      theirs. Severity is set in code - Informational normally,
                                      Error when an apply failed. -->
                                 <InfoBar x:Name="UpdateBar" IsOpen="False" IsClosable="False"
-                                         Margin="12,8" Severity="Informational" />
+                                         Margin="12,8" Severity="Informational"
+                                         AutomationProperties.AutomationId="acceptance.update.banner" />
 
                                 <!-- provide ....................................... -->
                                 <Border Style="{StaticResource UrGroupHeaderStyle}">

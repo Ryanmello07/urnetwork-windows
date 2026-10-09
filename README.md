@@ -9,16 +9,23 @@ the URnetwork SDK (the cgo C ABI + C++ wrapper from `sdk/cgo`).
 Release MSIs (`URnetwork-<version>-x64.msi`, `URnetwork-<version>-arm64.msi`)
 are attached to the releases the build pipeline publishes. The newest release
 is at https://github.com/urnetwork/build/releases/latest. Now and then one
-carries no MSIs: take the newest that does.
+carries no MSIs: take the newest that does. The pipeline publishes on its own,
+so the newest release can be minutes old. When you install by hand, prefer the
+newest one that has been out for a day, which is what the updater offers: the
+releases page dates each release, and the developer screen's update line names
+the one offered.
 
 The in-app updater polls the same releases
-(`app/src/Common/ReleaseSelection.h`, `kOfficialFeed`). It offers a release
-once it has been out for a day, judged at the start of each UTC day, so the
-offer changes at most once a day and is a day or two behind that page. "Later"
-on the banner hides a release until the app is next started.
+(`app/src/Common/ReleaseSelection.h`, `kOfficialFeed`). It offers the newest
+release that has been out, unchanged, for a day, judged at the start of each
+UTC day. So the offer is a day or two behind that page and moves on when the
+UTC day does, and a build that a later one overtakes before its day is up is
+never offered. A release that is deleted, marked a pre-release or edited stops
+being offered at once. "Later" on the banner hides a release until the app is
+next started.
 
-Running v2026.10.8-1066946420 or an earlier release? It does not look for
-updates here, and never offers one. Install a newer MSI by hand once: it
+A release published on or before 2026-10-08 does not look for updates here,
+and never offers one. Install one published after that by hand once: it
 upgrades the installed copy in place, and updates itself from then on.
 
 ## Architecture
@@ -131,7 +138,7 @@ handle:
 - **Updater** — `UpdateChecker`, because the Store does not push EXE/MSI
   updates (see `app/STORE.md`). It installs the official MSI from
   urnetwork/build's releases, checked against GitHub's SHA-256 for it, once
-  the release has been out for a day.
+  the release has been out, unchanged, for a day.
 
 ## Docs
 

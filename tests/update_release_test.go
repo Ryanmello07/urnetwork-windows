@@ -593,7 +593,7 @@ func TestUpdateReleaseRejectsWeakerDecisions(t *testing.T) {
 // (update_offer_wiring_test.go pins that nothing else dates them).
 func TestUpdateReleaseTheCheckPollsTheFeedById(t *testing.T) {
 	checker := stripComments(readAppSource(t, "UpdateChecker.cpp"))
-	check := definitionBody(t, "UpdateChecker.cpp", checker, "void UpdateChecker::RunCheck(std::uint64_t generation) {")
+	check := definitionBody(t, "UpdateChecker.cpp", checker, "bool UpdateChecker::RunCheck(std::uint64_t generation) {")
 	signOutRequireInOrder(t, "UpdateChecker::RunCheck", check,
 		regexp.QuoteMeta("const update::Feed& feed = update::kOfficialFeed;"),
 		regexp.QuoteMeta("const std::wstring url = Widen(update::ReleaseListUrl(feed));"),
