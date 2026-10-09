@@ -1,0 +1,425 @@
+# Runner test for the update helper's lock. #7 serialised the elevated helper
+# with a named mutex, Global\URnetworkUpdateHelper; this branch replaces it with
+# updates\helper.lock, a file only an administrator can take. The test shows,
+# on disposable windows-2022 runners:
+#   - the OLD defect, on a build of main: a process without administrator
+#     rights holds the mutex's name, and main's helper refuses as Busy;
+#   - the SAME holder against this build: the helper is not stopped by it, and
+#     an update installs end to end with the lock in place;
+#   - a process without administrator rights can neither open updates\helper.lock
+#     for its data, nor create, delete or replace it;
+#   - two helpers still exclude each other: with the lock held, the second
+#     answers Busy;
+#   - a call with a bad tag: BadArguments, leaving an admin-only updates\ and
+#     its lock file; and, with the lock held, Busy before that bad tag.
+#
+# It reads the real official feed (urnetwork/build) without a token, as the app
+# does, and creates no release and no tag anywhere. The real feed's offered
+# release is installed once, end to end, by this build's helper.
+#
+# The non-admin principals (the runner's own session is elevated):
+#   - NT AUTHORITY\LOCAL SERVICE, a non-administrator service account that has
+#     SeCreateGlobalPrivilege: it can create the old Global\ mutex (the defect)
+#     and cannot touch the admin-only lock (the fix). A scheduled task runs as
+#     it with no password.
+#   - a throwaway standard local account, best-effort, for the same probes.
+# What a runner cannot show: Windows' consent prompt (it elevates without one),
+# and a second interactive user.
+#
+# Setup: on a throwaway branch of the fork that carries this branch's fix, add
+#   .github/workflows/vpn-lock.yml   (this file)
+#   .github/vpn-upgrade-lib.ps1
+#   .github/vpn-apply-lib.ps1
+#   .github/vpn-feed-lib.ps1
+#   .github/vpn-lock-lib.ps1
+#   .github/vpn-lock-probe.ps1
+# and push it as ci/lockfix-runner-<anything>. SDK_RUN_ID is a green run of the
+# restored CI (build-and-test.yml) whose urnetwork-sdk-windows artifact matches
+# this tree's SDK headers.
+#
+# SPDX-License-Identifier: MPL-2.0
+
+name: VPN update helper lock test
+
+on:
+  push:
+    branches:
+      - 'ci/lockfix-runner-*'
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  SDK_RUN_ID: '37975013824'
+  # a valid official-feed tag (grammar only); main's old helper reaches the
+  # mutex after the tag's grammar check, before it fetches anything
+  OLD_HELPER_TAG: 'v2026.10.1-1060587890'
+
+jobs:
+  plan:
+    name: Read the feed and choose vN
+    runs-on: windows-2022
+    outputs:
+      vn: ${{ steps.plan.outputs.vn }}
+      offered: ${{ steps.plan.outputs.offered }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read the official feed as the app does
+        id: plan
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-feed-lib.ps1"
+          [void](Wait-UrAnonymousRequests 4)
+          $list = Get-UrFeedNow (Join-Path $env:RUNNER_TEMP 'releases.json')
+          $reading = Get-UrFeedReading $list.Releases $list.ServerUnix
+          if (-not $reading.Offered) { throw "the official feed offers nothing today: there is no release to install end to end" }
+          $offered = $reading.Offered
+          # vN: six hours of code below the offered release, so it is an update for vN
+          $code = [uint64]$offered.Code - 216000
+          $instant = [DateTimeOffset]::FromUnixTimeSeconds($UrFoundedUnix + [long][math]::Floor([decimal]$code / 10)).UtcDateTime
+          $vnVersion = '{0}.{1}.{2}-{3}' -f $instant.Year, $instant.Month, $instant.Day, $code
+          $vn = & .\app\tools\UrVersion.ps1 -Version $vnVersion
+          $vnFile = [version]('{0}.{1}.{2}.{3}' -f $vn.UrVersionMajor, $vn.UrVersionMinor, $vn.UrVersionPatch, $vn.UrVersionBuild)
+          $offeredExpect = Get-UrExpectOfRelease $offered 'official'
+          "vN $($vn.UrVersion): code $($vn.UrVersionCode) msi $($vn.UrMsiVersion) file $vnFile"
+          "offered $($offered.Tag): code $($offered.Code) msi $($offeredExpect.msi_version) file $($offeredExpect.file_version)"
+          if ([version]$vn.UrMsiVersion -ge [version]$offeredExpect.msi_version) { throw "vN must have the lower ProductVersion" }
+          if ($vnFile -le [version]'2026.10.5.1') { throw "vN's FILEVERSION $vnFile is not above the CloseApplication gate 2026.10.5.1" }
+          "vn=$vnVersion", "offered=$($offered.Tag)" | ForEach-Object {
+            Write-Host $_
+            Add-Content -Encoding ascii -Path $env:GITHUB_OUTPUT -Value $_
+          }
+
+  build-fix:
+    name: Build vN (this branch) with build.ps1
+    needs: plan
+    runs-on: windows-2022
+    env:
+      VERSION: ${{ needs.plan.outputs.vn }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download the SDK zip from run ${{ env.SDK_RUN_ID }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          gh run download $env:SDK_RUN_ID -R $env:GITHUB_REPOSITORY -n urnetwork-sdk-windows -D sdk-zip
+          if ($LASTEXITCODE -ne 0) { throw "could not download the SDK zip" }
+          Get-ChildItem sdk-zip
+
+      - name: app\build.ps1 -Version ${{ env.VERSION }}
+        shell: cmd
+        run: >-
+          powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass
+          -File app\build.ps1 -Version %VERSION%
+          -SdkZip "%GITHUB_WORKSPACE%\sdk-zip\URnetworkSdkWindows.zip" -Platforms x64
+
+      - name: Stage vN's MSI and check its helper is the official feed's
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-feed-lib.ps1"
+          $ur = & .\app\tools\UrVersion.ps1 -Version $env:VERSION
+          $fileVersion = '{0}.{1}.{2}.{3}' -f $ur.UrVersionMajor, $ur.UrVersionMinor, $ur.UrVersionPatch, $ur.UrVersionBuild
+          $bin = Join-Path $env:GITHUB_WORKSPACE 'app\build\x64\Release'
+          $feed = Get-UrHelperFeed (Join-Path $bin 'URnetworkUpdate.exe')
+          if ($feed -ne 'official') { throw "build.ps1 built a URnetworkUpdate.exe with the $feed feed" }
+          "OK: vN's URnetworkUpdate.exe is the official feed's, file $fileVersion"
+          $out = New-Item -ItemType Directory -Force (Join-Path $env:GITHUB_WORKSPACE 'staged')
+          $msi = Join-Path $env:GITHUB_WORKSPACE "app\build\out\URnetwork-$($env:VERSION)-x64.msi"
+          Copy-Item $msi (Join-Path $out 'vn.msi')
+          $productVersion = Get-UrMsiProductVersion (Join-Path $out 'vn.msi')
+          if ($productVersion -ne $ur.UrMsiVersion) { throw "vN MSI ProductVersion $productVersion, want $($ur.UrMsiVersion)" }
+          [pscustomobject]@{ key = 'vn'; version = $env:VERSION; code = [string]$ur.UrVersionCode;
+            msi_version = $ur.UrMsiVersion; file_version = $fileVersion } |
+            ConvertTo-Json | Set-Content -Encoding ascii (Join-Path $out 'vn.json')
+          "staged vN: ProductVersion $productVersion, files $fileVersion"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: msi-vn
+          path: staged/
+          if-no-files-found: error
+
+  build-main-helper:
+    name: Build main's old helper (URnetworkUpdate.exe)
+    needs: plan
+    runs-on: windows-2022
+    env:
+      VERSION: ${{ needs.plan.outputs.vn }}
+    steps:
+      - name: Check out urnetwork/windows main
+        uses: actions/checkout@v4
+        with:
+          repository: urnetwork/windows
+          ref: main
+
+      - name: Record main's head
+        shell: pwsh
+        run: git rev-parse HEAD
+
+      - name: Download the SDK zip from run ${{ env.SDK_RUN_ID }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          gh run download $env:SDK_RUN_ID -R $env:GITHUB_REPOSITORY -n urnetwork-sdk-windows -D sdk-zip
+          if ($LASTEXITCODE -ne 0) { throw "could not download the SDK zip" }
+
+      - name: app\build.ps1 -Version ${{ env.VERSION }} (for the helper only)
+        shell: cmd
+        run: >-
+          powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass
+          -File app\build.ps1 -Version %VERSION%
+          -SdkZip "%GITHUB_WORKSPACE%\sdk-zip\URnetworkSdkWindows.zip" -Platforms x64
+
+      - name: Stage main's helper and confirm it uses the mutex
+        shell: powershell
+        run: |
+          $bin = Join-Path $env:GITHUB_WORKSPACE 'app\build\x64\Release'
+          $exe = Join-Path $bin 'URnetworkUpdate.exe'
+          if (-not (Test-Path $exe)) { throw "main did not build a URnetworkUpdate.exe" }
+          $out = New-Item -ItemType Directory -Force (Join-Path $env:GITHUB_WORKSPACE 'old-helper')
+          Copy-Item $exe (Join-Path $out 'URnetworkUpdate.exe')
+          # a sanity check on the source main was built from: the mutex is there
+          $main = git -C $env:GITHUB_WORKSPACE rev-parse HEAD
+          "main helper built from $main"
+          $info = [Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $out 'URnetworkUpdate.exe'))
+          "main helper FileDescription '$($info.FileDescription)' file $($info.FileVersion)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: old-helper
+          path: old-helper/
+          if-no-files-found: error
+
+  lock:
+    name: The helper's lock, against the old mutex
+    needs: [plan, build-fix, build-main-helper]
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: msi-vn
+          path: ${{ runner.temp }}/msis
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: old-helper
+          path: ${{ runner.temp }}/old-helper
+
+      - name: Inventory and the session
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-lock-lib.ps1"
+          Get-ChildItem $UrMsiDir | Format-Table Name, Length -AutoSize | Out-String | Write-Host
+          if ((Get-UrProducts).Count -ne 0) { throw "a URnetwork product is already installed on this runner" }
+          whoami
+          whoami /groups | Select-String 'Mandatory Label' | ForEach-Object { "session label: $_" }
+          "SeCreateGlobalPrivilege in this session:"; whoami /priv | Select-String 'SeCreateGlobalPrivilege'
+
+      - name: 0. Install vN (this build's helper)
+        timeout-minutes: 10
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-lock-lib.ps1"
+          $code = Invoke-UrMsiexec '/i' (Get-UrMsiPath 'vn') '/qn' 'vn-install.log'
+          if ($code -ne 0) { throw "vN install exit code $code" }
+          $product = Assert-UrInstalled (Get-UrExpect 'vn') 'vn-install.log'
+          Set-Content -Encoding ascii (Join-Path $env:RUNNER_TEMP 'vn.productcode') $product.ProductCode
+          if ((Get-UrHelperFeed $UrHelperPath) -ne 'official') { throw "the installed URnetworkUpdate.exe is not the official feed's" }
+          "OK: $UrHelperPath is this build's official-feed helper"
+
+      - name: 1. The OLD defect - a non-admin holds the mutex, main's helper is Busy
+        timeout-minutes: 10
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-lock-lib.ps1"
+          $oldHelper = Install-UrOldHelper (Join-Path $env:RUNNER_TEMP 'old-helper\URnetworkUpdate.exe')
+          # a process WITHOUT administrator rights (LOCAL SERVICE) creates and holds the mutex name
+          $holder = Start-UrMutexHolder 'LOCAL SERVICE'
+          try {
+            if (-not $holder.CreatedNew) { throw "the mutex name was not new to the non-admin holder; another holder exists" }
+            "OK: $($holder.Whoami), which is not an administrator, created and holds $UrMutexName"
+            $run = Invoke-UrHelperAt $oldHelper $env:OLD_HELPER_TAG 180
+            if ($run.ExitCode -ne $UrRefusalBusy) {
+              throw ("main's helper exited {0} (0x{0:X8}), want Refusal::Busy 0x{1:X8}: the old defect did not reproduce" -f $run.ExitCode, $UrRefusalBusy)
+            }
+            "OK: with a non-admin holding $UrMutexName, main's helper refused as Busy (0x{0:X8}) - every update on this PC would be blocked" -f $run.ExitCode
+          } finally {
+            Stop-UrMutexHolder $holder
+          }
+          # best-effort: does a plain standard account hold the Global\ name too?
+          # (it holds for two seconds and reports; no stop file needed)
+          $std = New-UrStandardUser
+          if ($std) {
+            try {
+              $r = Invoke-UrProbeAsUser $std 'stdmutex' @('-Mode', 'mutex', '-MutexName', ('"' + $UrMutexName + '"'), '-HoldSeconds', '2')
+              "OBSERVED: a plain standard account creating $UrMutexName -> held=$($r.held) createdNew=$($r.createdNew) error='$($r.error)' (standard users usually lack SeCreateGlobalPrivilege)"
+            } finally {
+              Remove-UrStandardUser $std
+            }
+          }
+
+      - name: 2. A bad tag - BadArguments, leaving an admin-only updates\ and its lock
+        timeout-minutes: 8
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-lock-lib.ps1"
+          $badTag = 'not-a-tag'
+          $run = Invoke-UrHelperAt $UrHelperPath $badTag 120
+          if ($run.ExitCode -ne $UrRefusalBadArguments) {
+            throw ("the helper exited {0} (0x{0:X8}) for a bad tag, want Refusal::BadArguments 0x{1:X8}" -f $run.ExitCode, $UrRefusalBadArguments)
+          }
+          if (-not (Test-Path -LiteralPath $UrUpdatesDir)) { throw "updates\ was not created" }
+          if (-not (Test-Path -LiteralPath $UrLockPath)) { throw "helper.lock was not created" }
+          Assert-UrAdminOnly $UrUpdatesDir
+          Assert-UrAdminOnly $UrLockPath
+          if (Test-Path -LiteralPath (Join-Path $UrUpdatesDir $badTag)) { throw "a tag folder was created for the bad tag" }
+          $left = @(Get-ChildItem -Force -LiteralPath $UrUpdatesDir | ForEach-Object { $_.Name })
+          "OK: a bad tag left BadArguments (0x{0:X8}); updates\ holds only: $($left -join ', ')" -f $run.ExitCode
+
+      - name: 3. Busy before a bad tag - the lock is taken before the tag is judged
+        timeout-minutes: 8
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-lock-lib.ps1"
+          $lh = Start-UrLockHolderElevated 120
+          try {
+            $run = Invoke-UrHelperAt $UrHelperPath 'not-a-tag' 60
+            if ($run.ExitCode -ne $UrRefusalBusy) {
+              throw ("with the lock held, a bad tag exited {0} (0x{0:X8}), want Refusal::Busy 0x{1:X8}: the lock is not taken before the tag" -f $run.ExitCode, $UrRefusalBusy)
+            }
+            "OK: with helper.lock held, a bad tag answered Busy (0x{0:X8}) - the lock is taken before the tag is judged" -f $run.ExitCode
+          } finally {
+            Stop-UrLockHolder $lh
+          }
+
+      - name: 4. A non-admin cannot open, delete or replace the lock
+        timeout-minutes: 10
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-lock-lib.ps1"
+          if (-not (Test-Path -LiteralPath $UrLockPath)) { throw "helper.lock is not present for the probes" }
+          Assert-UrAdminOnly $UrLockPath
+          $svc = Get-UrServicePrincipal 'LOCAL SERVICE'
+          $open = Invoke-UrProbe $svc 'open' @('-Mode', 'open', '-Target', ('"' + $UrLockPath + '"'))
+          if ($open.ok) { throw "a non-admin opened helper.lock for its data" }
+          $del = Invoke-UrProbe $svc 'delete' @('-Mode', 'delete', '-Target', ('"' + $UrLockPath + '"'))
+          if ($del.ok) { throw "a non-admin deleted helper.lock" }
+          $ren = Invoke-UrProbe $svc 'rename' @('-Mode', 'rename', '-Target', ('"' + $UrLockPath + '"'))
+          if ($ren.ok) { throw "a non-admin replaced helper.lock by rename" }
+          "OK: LOCAL SERVICE could not open helper.lock for data ('$($open.error)'), delete it ('$($del.error)') or replace it ('$($ren.error)')"
+          # create-first: the elevated session removes the lock, then a non-admin tries to plant it
+          Remove-Item -Force -LiteralPath $UrLockPath
+          $cre = Invoke-UrProbe $svc 'create' @('-Mode', 'create', '-Target', ('"' + $UrLockPath + '"'))
+          if ($cre.ok) { throw "a non-admin created helper.lock in updates\" }
+          "OK: LOCAL SERVICE could not create helper.lock in updates\ ('$($cre.error)')"
+          # best-effort: the same open probe as a plain standard account
+          $std = New-UrStandardUser
+          if ($std) {
+            try {
+              if (-not (Test-Path -LiteralPath $UrLockPath)) {
+                # recreate the lock admin-only via a bad-tag run, so the standard open has a target
+                [void](Invoke-UrHelperAt $UrHelperPath 'not-a-tag' 60)
+              }
+              $so = Invoke-UrProbeAsUser $std 'open' @('-Mode', 'open', '-Target', ('"' + $UrLockPath + '"'))
+              if ($so.ok) { throw "a standard account opened helper.lock for its data" }
+              "OK: a plain standard account could not open helper.lock for data either ('$($so.error)')"
+            } finally {
+              Remove-UrStandardUser $std
+            }
+          }
+          # leave the lock present and admin-only for the next step
+          if (-not (Test-Path -LiteralPath $UrLockPath)) { [void](Invoke-UrHelperAt $UrHelperPath 'not-a-tag' 60) }
+          Assert-UrAdminOnly $UrLockPath
+
+      - name: 5. Two helpers exclude each other - the second answers Busy
+        timeout-minutes: 8
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-lock-lib.ps1"
+          $tag = '${{ needs.plan.outputs.offered }}'
+          $lh = Start-UrLockHolderElevated 180
+          try {
+            $run = Invoke-UrHelperAt $UrHelperPath $tag 120
+            if ($run.ExitCode -ne $UrRefusalBusy) {
+              throw ("the second helper exited {0} (0x{0:X8}) while the first held the lock, want Refusal::Busy 0x{1:X8}" -f $run.ExitCode, $UrRefusalBusy)
+            }
+            "OK: while a first helper held updates\helper.lock, the second answered Busy (0x{0:X8}) and installed nothing" -f $run.ExitCode
+            if (Test-Path -LiteralPath (Join-Path $UrUpdatesDir $tag)) {
+              $msis = @(Get-ChildItem -LiteralPath (Join-Path $UrUpdatesDir $tag) -Filter '*.msi' -ErrorAction SilentlyContinue)
+              if ($msis.Count -ne 0) { throw "the second helper downloaded a package despite Busy" }
+            }
+          } finally {
+            Stop-UrLockHolder $lh
+          }
+
+      - name: 6. The same mutex holder does not stop this build - it installs end to end
+        timeout-minutes: 25
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-lock-lib.ps1"
+          $tag = '${{ needs.plan.outputs.offered }}'
+          $code = $tag -replace '^v[0-9.]+-', ''
+          $vn = Get-UrExpect 'vn'
+          $before = Get-Content (Join-Path $env:RUNNER_TEMP 'vn.productcode')
+          # a non-admin holds the old mutex name for the whole install
+          $holder = Start-UrMutexHolder 'LOCAL SERVICE' 1200
+          try {
+            if (-not $holder.CreatedNew) { throw "the mutex name was not new to the holder" }
+            "a non-admin ($($holder.Whoami)) holds $UrMutexName throughout this install"
+            $app = Start-UrTrayApp
+            $run = Invoke-UrHelperPatiently $tag 900 $app
+            if ($run.ExitCode -ne 0) { throw ("the helper exited {0} (0x{0:X8}) while the mutex was held, want 0" -f $run.ExitCode) }
+            Assert-UrResult (Read-UrResult) $tag $code 0
+            $products = Get-UrProducts
+            if ($products.Count -ne 1) { throw "want exactly one URnetwork product, found $($products.Count)" }
+            if ($products[0].ProductCode -eq $before) { throw "vN's product is still registered; the update did not install" }
+            if ($products[0].Version -eq $vn.msi_version) { throw "the installed ProductVersion is still vN's ($($vn.msi_version))" }
+            $service = Wait-UrServiceRunning
+            "installed product: $($products[0].ProductCode) $($products[0].Version); service $($service.State)"
+            # the helper's own log shows it fetched, checked and installed the real release past the lock
+            $log = Get-UrHelperLog $tag
+            Assert-UrHelperLogHas $log ("release " + [regex]::Escape($tag) + " is offered; downloading ") "it downloaded the offered release past the lock"
+            Assert-UrHelperLogHas $log ("package .* is this product's ProductVersion ") "the package is this product at the release code's ProductVersion"
+            # the lock survived the install and is still admin-only
+            foreach ($p in $UrUpdatesDir, $UrLockPath) { Assert-UrAdminOnly $p }
+            if (-not (Test-Path -LiteralPath $UrLockPath)) { throw "helper.lock did not survive the install" }
+            "OK: with $UrMutexName held by a non-admin throughout, this build's helper installed $tag end to end (exit 0); helper.lock is intact and admin-only"
+          } finally {
+            Stop-UrMutexHolder $holder
+            Stop-UrAppProcesses
+          }
+
+      - name: Collect logs
+        if: always()
+        shell: powershell
+        run: |
+          $dest = Join-Path $env:RUNNER_TEMP 'lock-logs'
+          New-Item -ItemType Directory -Force $dest | Out-Null
+          $updates = 'C:\Program Files\URnetwork\updates'
+          if (Test-Path $updates) {
+            Get-ChildItem -Recurse -Force $updates | ForEach-Object { "$($_.FullName) $($_.Length)" } |
+              Out-File (Join-Path $dest 'updates-listing.txt')
+            Get-ChildItem -Recurse -File $updates -Include '*.log', '*.json' | ForEach-Object {
+              $name = 'updates_' + ($_.FullName.Substring($updates.Length).TrimStart('\') -replace '\\', '_')
+              Copy-Item -LiteralPath $_.FullName (Join-Path $dest $name)
+            }
+            (Get-Acl $updates\helper.lock -ErrorAction SilentlyContinue | Format-List | Out-String) | Out-File (Join-Path $dest 'helper-lock-acl.txt')
+          }
+          $probeDir = Join-Path $env:SystemDrive 'urnlockprobe'
+          if (Test-Path $probeDir) {
+            Get-ChildItem $probeDir -Filter '*.json' | ForEach-Object { Copy-Item $_.FullName $dest }
+          }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lock-logs
+          path: ${{ runner.temp }}/lock-logs/
+          if-no-files-found: warn
