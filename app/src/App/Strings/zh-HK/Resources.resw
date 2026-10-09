@@ -4508,6 +4508,10 @@
     <value>在此裝置上找不到已安裝的 Solana 錢包。請安裝錢包後再試一次。</value>
     <comment>Call to action</comment>
   </data>
+  <data name="no_wallets_found_enter_address_manually" xml:space="preserve">
+    <value>此裝置上找不到相容的 Solana 錢包應用程式。請選擇「手動輸入地址」，改為貼上你的錢包地址。</value>
+    <comment>Body of the no-wallet alert (android) and note (iOS) of the Solana payout wallet's connect sheet, when no wallet app on the device can connect (android: no wallet app answers the Mobile Wallet Adapter request, as reported with Brave Wallet installed; iOS: neither Phantom nor Solflare is installed). A typed address works with any wallet, so the line points at the sheet's manual entry, naming its Enter address manually control in that control's own words (enter_address_manually); the android alert also offers that control as its action. Signing in needs a wallet app and keeps no_wallets_found_alert_content.</comment>
+  </data>
   <data name="none" xml:space="preserve">
     <value>無</value>
     <comment>Empty value: the VLESS settings show it for no security and no flow (all apps), and the Referrals section shows it on windows and linux when no referral network is linked.</comment>
@@ -6321,6 +6325,10 @@
   <data name="solana_wallet" xml:space="preserve">
     <value>Solana 錢包</value>
     <comment>Label of the connected Solana wallet block on the Earnings screen (parallel to bittensor_wallet).</comment>
+  </data>
+  <data name="solana_wallet_error_extension_not_found" xml:space="preserve">
+    <value>在此瀏覽器中找不到 {} 擴充功能。請安裝後再試一次，或選擇「手動輸入地址」以貼上你的錢包地址。</value>
+    <comment>Error in the Solana payout wallet's connect sheet of the desktop apps (macOS, Windows, Linux) when the ur.io wallet bridge page returns extension_not_found: the chosen wallet's browser extension is not in this browser. The argument is the wallet product name (Phantom or Solflare). The sheet also takes a typed address, which works with any wallet, so the line points at its Enter address manually control, named in that control's own words (enter_address_manually). Signing in has no manual entry and keeps bittensor_error_extension_not_found.</comment>
   </data>
   <data name="solana_wallet_error_session_not_found" xml:space="preserve">
     <value>在此瀏覽器中找不到錢包連接。請重新開始以重新連接你的錢包。</value>

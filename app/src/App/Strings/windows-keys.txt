@@ -881,6 +881,7 @@ sn_status_open
 solana
 solana_sign_in
 solana_wallet
+solana_wallet_error_extension_not_found
 solana_wallet_error_session_not_found
 solflare
 something_went_wrong

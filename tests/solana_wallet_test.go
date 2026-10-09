@@ -171,8 +171,10 @@ func TestSolanaBridgeErrorCodes(t *testing.T) {
 			t.Errorf("WalletConnect.cpp LocalizedBridgeError: missing %s", want)
 		}
 	}
+	// (the connect step also says whether its Connect offered manual entry:
+	// TestPayoutNoExtensionPointsAtManualEntry)
 	for _, handler := range []string{"void WalletConnect::HandleConnect(", "void WalletConnect::HandleSignMessage("} {
-		if !strings.Contains(functionBody(bridge, handler), `on_error(LocalizedBridgeError(p, params["errorCode"], pageText));`) {
+		if !strings.Contains(functionBody(bridge, handler), `on_error(LocalizedBridgeError(p, params["errorCode"], pageText`) {
 			t.Errorf("WalletConnect.cpp %s: the bridge page's code does not reach the error text", handler)
 		}
 	}
@@ -236,6 +238,73 @@ func TestSolanaBridgeCodesMatchTheSdkHeader(t *testing.T) {
 		}
 		if !strings.Contains(presentationSource, `if (code == "`+code+`")`) {
 			t.Errorf("SolanaWalletPresentation.cpp: BridgeErrorTextFor does not know the sdk's %q", code)
+		}
+	}
+}
+
+// The payout wallet's connect sheet when the bridge finds no extension of the
+// chosen wallet in the browser (extension_not_found). The sheet also takes a
+// typed address, which works with any wallet (a Brave Wallet user on android
+// was told only to install a wallet, although entering the address worked), so
+// its line points at the sheet's Enter address manually control, named in the
+// control's own words in every language (App/SolanaWalletPresentation.h
+// PayoutBridgeErrorTextFor, run by TestSolanaWalletPresentation). Signing in
+// and a sign-in method's signature have no manual entry and keep the shared
+// words.
+func TestPayoutNoExtensionPointsAtManualEntry(t *testing.T) {
+	host := stripLineComments(readAppSource(t, "SdkHost.cpp"))
+	if !strings.Contains(functionBody(host, "void SdkHost::ConnectSolanaWallet("), "wallet_.Connect(provider, /*offersManualEntry=*/true);") {
+		t.Error("SdkHost::ConnectSolanaWallet: the payout sheet's connect does not offer manual entry")
+	}
+	for _, signIn := range []string{"void SdkHost::SignInWithSolana(", "void SdkHost::SignWithSolanaWallet("} {
+		body := functionBody(host, signIn)
+		if !strings.Contains(body, "wallet_.Connect(provider);") || strings.Contains(body, "offersManualEntry") {
+			t.Errorf("%s: a sign-in connect must keep the shared words", signIn)
+		}
+	}
+	bridge := stripLineComments(readAppSource(t, "WalletConnect.cpp"))
+	if !strings.Contains(functionBody(bridge, "void WalletConnect::Connect("), "connectOffersManualEntry_ = offersManualEntry;") {
+		t.Error("WalletConnect::Connect does not keep whether it offered manual entry")
+	}
+	if !strings.Contains(functionBody(bridge, "std::string LocalizedBridgeError("), "offersManualEntry ? solana::PayoutBridgeErrorTextFor(code)") {
+		t.Error("LocalizedBridgeError does not read a payout connect's failure in the payout words")
+	}
+	if !strings.Contains(functionBody(bridge, "void WalletConnect::HandleConnect("),
+		`on_error(LocalizedBridgeError(p, params["errorCode"], pageText, connectOffersManualEntry_));`) {
+		t.Error("WalletConnect::HandleConnect: the connect step's failure ignores whether its Connect offered manual entry")
+	}
+	if !strings.Contains(functionBody(bridge, "void WalletConnect::HandleSignMessage("),
+		`on_error(LocalizedBridgeError(p, params["errorCode"], pageText));`) {
+		t.Error("WalletConnect::HandleSignMessage: the sign step must keep the shared words")
+	}
+
+	const key = "solana_wallet_error_extension_not_found"
+	const english = "The {} extension was not found in this browser. Install it and try again, or choose “Enter address manually” to paste your wallet address."
+	root := repositoryRoot(t)
+	if value := reswValue(t, root, "en", key); value != english {
+		t.Fatalf("en/Resources.resw %s = %q", key, value)
+	}
+	entries, err := os.ReadDir(filepath.Join(root, "app", "src", "App", "Strings"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		value := reswValue(t, root, entry.Name(), key)
+		label := reswValue(t, root, entry.Name(), "enter_address_manually")
+		switch {
+		case value == "":
+			t.Errorf("%s/Resources.resw has no %s", entry.Name(), key)
+		case label == "":
+			t.Errorf("%s/Resources.resw has no enter_address_manually", entry.Name())
+		case !strings.Contains(value, label):
+			t.Errorf("%s/Resources.resw %s does not name %q: %q", entry.Name(), key, label, value)
+		case !strings.Contains(value, "{}"):
+			t.Errorf("%s/Resources.resw %s drops the wallet name: %q", entry.Name(), key, value)
+		case entry.Name() != "en" && value == english:
+			t.Errorf("%s/Resources.resw %s is English", entry.Name(), key)
 		}
 	}
 }

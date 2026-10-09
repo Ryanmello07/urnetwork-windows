@@ -2037,7 +2037,9 @@ void SdkHost::ConnectSolanaWallet(
   // Not a sign-in: the auth state does not move (see on_error above).
   CancelPendingWalletFlows("superseded by a wallet connect request");
   walletConnectDone_ = std::move(done);
-  wallet_.Connect(provider);  // continues on the deep-link callback (on_public_key)
+  // continues on the deep-link callback (on_public_key). The payout sheet also
+  // takes a typed address, so a missing extension points at it.
+  wallet_.Connect(provider, /*offersManualEntry=*/true);
 }
 
 void SdkHost::SignWithBittensorWallet(
