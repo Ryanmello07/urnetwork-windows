@@ -7,6 +7,8 @@
 #include <windows.h>
 #include <sddl.h>
 
+#include <exception>
+
 #include "Ids.h"
 #include "Log.h"
 #include "Protocol.h"
@@ -190,6 +192,29 @@ void PipeServer::ServeConnection(void* pipeHandle) {
     }
   }
   ::CloseHandle(ov.hEvent);
+}
+
+bool PipeServer::RunAsClient(const std::function<void()>& work) {
+  HANDLE pipe = nullptr;
+  {
+    std::scoped_lock lock(writeMutex_);
+    pipe = static_cast<HANDLE>(activePipe_);
+  }
+  if (pipe == nullptr) return false;
+  if (!::ImpersonateNamedPipeClient(pipe)) {
+    LogWarn("pipe: could not act as the client: {}", ::GetLastError());
+    return false;
+  }
+  // Back to the service's own token on every way out of `work`, an exception
+  // included. Should that fail, the thread would go on as the client, so the
+  // process ends instead (its terminate handler reverts the routes).
+  struct Revert {
+    ~Revert() {
+      if (!::RevertToSelf()) std::terminate();
+    }
+  } revert;
+  work();
+  return true;
 }
 
 void PipeServer::PushEvent(const nlohmann::json& event) {

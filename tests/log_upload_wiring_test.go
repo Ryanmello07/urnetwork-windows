@@ -64,6 +64,16 @@ func TestLogUploadWiringServiceValidatesBeforeUploading(t *testing.T) {
 		"proto::LooksLikeFeedbackId(req.feedback_id)", "tunnel_.UploadLogs(req, [this](std::string_view chosen) {")
 	provideRequireOrder(t, "upload_logs", branch,
 		"tunnel_.UploadLogs(req, [this](std::string_view chosen) {", "diagnostics_.NoteLogUpload(chosen);")
+	// the app's own log files: opened only once the request is valid, and only
+	// while acting as the app's pipe client, then handed to the upload
+	provideRequire(t, "upload_logs", branch,
+		"pipe_.RunAsClient([&] { appLogFiles = OpenAppLogHandles(req.app_log_dir); })",
+		"}, std::move(appLogFiles));")
+	provideRequireOrder(t, "upload_logs", branch, "proto::LooksLikeFeedbackId(req.feedback_id)",
+		"pipe_.RunAsClient(")
+	provideRequireOrder(t, "upload_logs", branch, "pipe_.RunAsClient(",
+		"tunnel_.UploadLogs(req, [this](std::string_view chosen) {")
+	requireNone(t, "upload_logs", branch, "CreateFileW(", "FindFirstFile", "OpenAppLogHandles(req.app_log_dir);\n")
 }
 
 // The upload is admitted before anything is built; the device that runs
@@ -104,7 +114,7 @@ func TestLogUploadWiringStandaloneDeviceTouchesNoMachineState(t *testing.T) {
 		"SetStateLocked(", " device_ = ", "providerDevice_ = ", "networkSpace_ = ",
 		"OpenProviderStatsLocked(", "WatchProviderNetworkLocked(",
 		// the zip belongs to the upload's thread, never to the session lock
-		"->uploadLogs(", "urnet_device_upload_logs(",
+		"->uploadLogs(", "urnet_device_upload_logs(", "urnet_device_local_upload_logs_with_files(",
 	} {
 		if strings.Contains(upload, forbidden) {
 			t.Errorf("UploadLogs must not call %q: the standalone device changes nothing on "+
@@ -153,8 +163,8 @@ func TestLogUploadWiringUploadAndRetirement(t *testing.T) {
 
 	thread := definitionBody(t, "TunnelController.cpp", source, "void UploadLogsOnDevice(")
 	provideRequire(t, "UploadLogsOnDevice", thread,
-		"urnet_device_upload_logs(deviceHandle, feedbackId.c_str(),",
-		"&OnLogUploadReport, report.get(), &error);",
+		"urnet_device_local_upload_logs_with_files(",
+		"deviceHandle, feedbackId.c_str(), uploadLogsFilesJson.c_str(), &OnLogUploadReport,\n      report.get(), &error);",
 		"report.release();",
 		"flight->Finish(uploadId, logupload::FlightState::Failed);",
 		"urnet_free_string(error);")
@@ -337,4 +347,63 @@ func TestLogUploadWiringAppAsksTheServiceFirst(t *testing.T) {
 	}
 	provideRequire(t, "OnSendFeedback", page,
 		"if (attachLogs && !feedbackId.empty()) page.UploadLogs(feedbackId);")
+}
+
+// The app's own log files ride in the service's zip, under app/
+// (Common/AppLogFiles.h). The app names its log directory, flushed first; the
+// service lists and opens the files there only while acting as the app's pipe
+// client, so Windows checks every open against the app's rights, and is the
+// service again on every way out, or ends; it refuses a directory that is not
+// a local one before acting at all, and keeps no link and no file that is not
+// a disk file. The upload's thread hands them to the sdk by handle under app/
+// and closes them once the call returned: the sdk read them in it.
+func TestLogUploadWiringTheAppsLogFilesRideAsTheApp(t *testing.T) {
+	pipe := stripComments(readCommonSource(t, "PipeServer.cpp"))
+	runAsClient := definitionBody(t, "PipeServer.cpp", pipe,
+		"bool PipeServer::RunAsClient(const std::function<void()>& work)")
+	provideRequire(t, "RunAsClient", runAsClient,
+		"pipe = static_cast<HANDLE>(activePipe_);",
+		"if (!::RevertToSelf()) std::terminate();",
+		"} revert;")
+	provideRequireOrder(t, "RunAsClient", runAsClient, "if (!::ImpersonateNamedPipeClient(pipe)) {",
+		"work();")
+	provideRequireOrder(t, "RunAsClient", runAsClient, "} revert;", "work();")
+
+	handles := stripComments(readServiceSource(t, "AppLogHandles.h"))
+	open := definitionBody(t, "AppLogHandles.h", handles,
+		"inline AppLogHandles OpenAppLogHandles(const std::string& dir)")
+	provideRequireOrder(t, "OpenAppLogHandles", open,
+		"if (!applogs::LooksLikeLocalDirectory(dir)) return files;", "::FindFirstFileExW(")
+	provideRequire(t, "OpenAppLogHandles", open,
+		"FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT |",
+		"if (!applogs::LooksLikeGlogFileName(name)) continue;",
+		"applogs::PickAppLogFiles(std::move(entries))",
+		"FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT",
+		"::GetFileType(handle) != FILE_TYPE_DISK",
+		"files.Add(name, handle);")
+	requireNone(t, "OpenAppLogHandles", open, "Log(", "LogInfo(", "LogWarn(", "LogError(")
+
+	source := tunnelControllerSource(t)
+	thread := definitionBody(t, "TunnelController.cpp", source, "void UploadLogsOnDevice(")
+	provideRequire(t, "UploadLogsOnDevice", thread,
+		"uploadLogsFile.Source = applogs::kAppLogFilesSource;",
+		"uploadLogsFile.FileDescriptor = static_cast<int64_t>(reinterpret_cast<intptr_t>(file.handle));")
+	provideRequireOrder(t, "UploadLogsOnDevice", thread, "nlohmann::json(uploadLogsFiles).dump()",
+		"urnet_device_local_upload_logs_with_files(")
+	provideRequireOrder(t, "UploadLogsOnDevice", thread, "urnet_device_local_upload_logs_with_files(",
+		"appLogFiles.CloseAll();")
+	provideRequireOrder(t, "UploadLogsOnDevice", thread, "appLogFiles.CloseAll();", "if (started) {")
+	upload := definitionBody(t, "TunnelController.cpp", source,
+		"TunnelController::LogUploadResult TunnelController::UploadLogs(")
+	run := uploadSpan(upload, "logUploadFlight_->Run(uploadId, deviceHandle,", "});")
+	provideRequire(t, "the upload's thread", run,
+		"appLogFiles = std::make_shared<AppLogHandles>(std::move(appLogFiles))]",
+		"carrierName, reported, *appLogFiles);")
+
+	ask := definitionBody(t, "SdkHost.cpp", sdkHostSource(t),
+		"logupload::ServiceAnswer SdkHost::AskServiceToUploadLogs(const std::string& feedbackId)")
+	provideRequireOrder(t, "AskServiceToUploadLogs", ask, "urnet::flushGlog();",
+		"request.app_log_dir = urnet::getLogDir();")
+	provideRequireOrder(t, "AskServiceToUploadLogs", ask, "request.app_log_dir = urnet::getLogDir();",
+		"service_.UploadLogs(request, &carrier, &uploadId, &error)")
 }

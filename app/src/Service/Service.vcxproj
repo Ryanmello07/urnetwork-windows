@@ -64,6 +64,7 @@
     <ClCompile Include="SelfTest.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="AppLogHandles.h" />
     <ClInclude Include="ConsoleArgs.h" />
     <ClInclude Include="ControlServer.h" />
     <ClInclude Include="InstallVerb.h" />

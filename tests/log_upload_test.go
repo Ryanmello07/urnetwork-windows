@@ -17,6 +17,7 @@ import (
 // The headers the log upload harness includes, by the directory under app/src
 // each lives in.
 var logUploadHeaderDirs = map[string]string{
+	"AppLogFiles.h":       "Common",
 	"LogUpload.h":         "Common",
 	"Protocol.h":          "Common",
 	"ProvideLifecycle.h":  "Common",
@@ -241,6 +242,41 @@ func TestLogUploadNegativeControls(t *testing.T) {
 			find:       "      {\"log_upload_state\", v.log_upload_state},\n",
 			replace:    "",
 			want:       "status: the upload comes back",
+		},
+		{
+			defect:     "the app's log directory left off the wire",
+			headerName: "Protocol.h",
+			find:       "  if (!v.app_log_dir.empty()) j[\"app_log_dir\"] = v.app_log_dir;\n",
+			replace:    "",
+			want:       "app logs: the request names the app's directory",
+		},
+		{
+			defect:     "a file glog did not write taken from the app's directory",
+			headerName: "AppLogFiles.h",
+			find:       "  if (name.empty() || name.size() > 255 || name.front() == '.') return false;\n",
+			replace:    "  return !name.empty();\n",
+			want:       `app logs: a glog name only, refuses "app_prefs.json"`,
+		},
+		{
+			defect:     "a share acted on as the app",
+			headerName: "AppLogFiles.h",
+			find:       "  if (!((drive >= 'A' && drive <= 'Z') || (drive >= 'a' && drive <= 'z'))) return false;\n  if (path[1] != ':' || (path[2] != '\\\\' && path[2] != '/')) return false;\n",
+			replace:    "  (void)drive;\n",
+			want:       `app logs: never a share, a device or a climb, refuses "\\server\share\logs"`,
+		},
+		{
+			defect:     "more of the app's files than the cap",
+			headerName: "AppLogFiles.h",
+			find:       "    if (names.size() >= kMaxAppLogFiles) break;\n",
+			replace:    "",
+			want:       "app logs: no more than the cap",
+		},
+		{
+			defect:     "the oldest of the app's files taken first",
+			headerName: "AppLogFiles.h",
+			find:       "    if (a.lastWriteTime != b.lastWriteTime) return a.lastWriteTime > b.lastWriteTime;",
+			replace:    "    if (a.lastWriteTime != b.lastWriteTime) return a.lastWriteTime < b.lastWriteTime;",
+			want:       "app logs: the newest first, files written at once in name order",
 		},
 	}
 	for _, control := range controls {

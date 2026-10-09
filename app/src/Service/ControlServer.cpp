@@ -149,6 +149,16 @@ nlohmann::json ControlServer::Handle(const nlohmann::json& request) {
             "upload_logs requires the server's feedback id, the device's client "
             "jwt, its exact instance id, and the network space");
       }
+      // The app's own log files ride in the upload, under app/
+      // (Common/AppLogFiles.h): listed and opened while this thread acts as
+      // the app's pipe client, so every open is the app's to make, never this
+      // service's. An app that names no directory (an older one) sends none.
+      AppLogHandles appLogFiles;
+      if (!req.app_log_dir.empty() &&
+          !pipe_.RunAsClient([&] { appLogFiles = OpenAppLogHandles(req.app_log_dir); })) {
+        LogWarn("logs: the app's log files are left out: the app's pipe client could not be "
+                "acted as");
+      }
       // The carrier's line goes into the upload itself, so it is written from
       // inside, once the device is chosen (ServiceDiagnostics.h). The reply
       // comes once the upload is admitted; its end pushes the status that
@@ -156,7 +166,7 @@ nlohmann::json ControlServer::Handle(const nlohmann::json& request) {
       const TunnelController::LogUploadResult result =
           tunnel_.UploadLogs(req, [this](std::string_view chosen) {
             diagnostics_.NoteLogUpload(chosen);
-          });
+          }, std::move(appLogFiles));
       reply.ok = result.ok;
       reply.error = result.error;
       reply.log_upload_carrier = result.carrier;

@@ -20,6 +20,7 @@
 #include <string_view>
 #include <thread>
 
+#include "AppLogHandles.h"
 #include "EgressMonitor.h"
 #include "FlowOwner.h"
 #include "LogUpload.h"
@@ -289,6 +290,11 @@ class TunnelController {
   // gets the carrier's name once the device is chosen and before the upload's
   // thread starts the zip, under the session lock, so the line it writes is in
   // this upload (ControlServer passes ServiceDiagnostics::NoteLogUpload).
+  //
+  // `appLogFiles` are the app's own log files, opened as the app
+  // (Common/AppLogFiles.h): the zip carries them under app/, and they are
+  // closed once the sdk's call has read them, or when the request ends without
+  // one.
   struct LogUploadResult {
     bool ok = false;
     bool busy = false;
@@ -297,7 +303,8 @@ class TunnelController {
     std::string error;
   };
   LogUploadResult UploadLogs(const proto::UploadLogs& request,
-                             const std::function<void(std::string_view)>& noteCarrier);
+                             const std::function<void(std::string_view)>& noteCarrier,
+                             AppLogHandles appLogFiles);
 
   // THE STATUS THE APP DECIDES ON, and it must never block.
   //
