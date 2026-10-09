@@ -18,6 +18,9 @@
 //               credentials, as start_provider builds its device, with provide
 //               mode never and nothing else, retired once the upload reports
 //
+// The app's own glog files ride in the same zip, under app/: the service opens
+// them as the app (AppLogFiles.h).
+//
 // The upload runs on a thread of its own (Flight), never under the session
 // lock: the sdk zips the log directory inside its UploadLogs call, up to the
 // upload's cap read from disk. The request is answered once the upload is

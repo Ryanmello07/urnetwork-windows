@@ -93,20 +93,35 @@ void OnLogUploadReport(void* userData, const char* resultJson, const char* error
 }
 
 // The upload's own thread (logupload::Flight::Run): the sdk zips this process's
-// log files and starts the post to /log/{feedback_id}/upload. The call goes
-// through the c abi by the device's handle, which the flight keeps valid until
-// it returns, so that nothing of TunnelController is touched here.
+// log files, with the app's under app/, and starts the post to
+// /log/{feedback_id}/upload. The call goes through the c abi by the device's
+// handle, which the flight keeps valid until it returns, so that nothing of
+// TunnelController is touched here. The sdk reads the app's files through its
+// own duplicates of their handles before the call returns
+// (DeviceLocal.UploadLogsWithFiles), so they are closed right after it.
 void UploadLogsOnDevice(const std::shared_ptr<logupload::Flight>& flight, int64_t uploadId,
                         uint64_t deviceHandle, const std::string& feedbackId,
-                        const char* carrierName, const std::function<void()>& reported) {
+                        const char* carrierName, const std::function<void()>& reported,
+                        AppLogHandles& appLogFiles) {
+  urnet::UploadLogsFileList uploadLogsFiles;
+  for (const AppLogHandles::File& file : appLogFiles.Files()) {
+    urnet::UploadLogsFile uploadLogsFile;
+    uploadLogsFile.Source = applogs::kAppLogFilesSource;
+    uploadLogsFile.Name = file.name;
+    uploadLogsFile.FileDescriptor = static_cast<int64_t>(reinterpret_cast<intptr_t>(file.handle));
+    uploadLogsFiles.push_back(std::move(uploadLogsFile));
+  }
+  const std::string uploadLogsFilesJson = nlohmann::json(uploadLogsFiles).dump();
   auto report = std::make_unique<LogUploadReport>();
   report->flight = flight;
   report->uploadId = uploadId;
   report->carrierName = carrierName;
   report->reported = reported;
   char* error = nullptr;
-  const bool started = urnet_device_upload_logs(deviceHandle, feedbackId.c_str(),
-                                                &OnLogUploadReport, report.get(), &error);
+  const bool started = urnet_device_local_upload_logs_with_files(
+      deviceHandle, feedbackId.c_str(), uploadLogsFilesJson.c_str(), &OnLogUploadReport,
+      report.get(), &error);
+  appLogFiles.CloseAll();
   if (started) {
     // the callback owns it now
     report.release();
@@ -2491,7 +2506,8 @@ std::optional<netcountry::Reading> TunnelController::NetworkCountry() {
 // session ran. Now the app asks here, connected or not.
 
 TunnelController::LogUploadResult TunnelController::UploadLogs(
-    const proto::UploadLogs& request, const std::function<void(std::string_view)>& noteCarrier) {
+    const proto::UploadLogs& request, const std::function<void(std::string_view)>& noteCarrier,
+    AppLogHandles appLogFiles) {
   LogUploadResult result;
   // Timed, like StartProvider: a connect attempt wedged inside the SDK holds
   // mutex_, and an upload that waited behind it would hold the control pipe.
@@ -2582,15 +2598,17 @@ TunnelController::LogUploadResult TunnelController::UploadLogs(
     };
   }
   // The zip and the post, on the upload's own thread. It holds the flight, the
-  // device's handle and the waiter's signal, and nothing else of this object;
-  // the flight keeps the device alive until the call returns (each teardown
-  // hands it over), and the call's callback ends the upload in it, whose
-  // finish hook pushes the status.
+  // device's handle, the waiter's signal and the app's log files, and nothing
+  // else of this object; the flight keeps the device alive until the call
+  // returns (each teardown hands it over), and the call's callback ends the
+  // upload in it, whose finish hook pushes the status.
+  const size_t appLogFileCount = appLogFiles.Size();
   logUploadFlight_->Run(uploadId, deviceHandle,
                         [flight = logUploadFlight_, uploadId, deviceHandle,
-                         feedbackId = request.feedback_id, carrierName, reported] {
+                         feedbackId = request.feedback_id, carrierName, reported,
+                         appLogFiles = std::make_shared<AppLogHandles>(std::move(appLogFiles))] {
                           UploadLogsOnDevice(flight, uploadId, deviceHandle, feedbackId,
-                                             carrierName, reported);
+                                             carrierName, reported, *appLogFiles);
                         });
   if (slot) {
     // The waiter retires the standalone device once its upload reports, or at
@@ -2611,7 +2629,9 @@ TunnelController::LogUploadResult TunnelController::UploadLogs(
   result.ok = true;
   result.carrier = carrierName;
   result.uploadId = uploadId;
-  LogInfo("logs: uploading this service's logs for a feedback ({} device)", carrierName);
+  LogInfo("logs: uploading this service's logs for a feedback ({} device), with {} of the "
+          "app's log files",
+          carrierName, appLogFileCount);
   return result;
 }
 

@@ -342,13 +342,13 @@ struct SetNetworkCountry {
 // none. The app now asks the service to upload its own logs for a feedback the
 // server accepted, with the credentials start_provider carries.
 //
-// The service runs the sdk's UploadLogs on the session's device, else on the
-// provider-only device, else on a standalone device built from these
+// The service runs the sdk's UploadLogsWithFiles on the session's device, else
+// on the provider-only device, else on a standalone device built from these
 // credentials (Common/LogUpload.h carries the lifecycle). The upload itself is
-// the sdk's, unchanged: the zip of the service's glog files, POST
-// /log/{feedback_id}/upload on the space's API with the device's client
-// credentials, the server's 100 MB cap and its rate limit of one upload per
-// network per 5 minutes. Nothing goes anywhere it did not go before.
+// the sdk's: the zip of the service's glog files and of the app's (app_log_dir,
+// below), POST /log/{feedback_id}/upload on the space's API with the device's
+// client credentials, the server's 100 MB cap and its rate limit of one upload
+// per network per 5 minutes. Nothing goes anywhere it did not go before.
 //
 // The reply comes once the upload is admitted (log_upload_id): the zip and the
 // post run on a thread of their own (logupload::Flight), never under the
@@ -359,8 +359,10 @@ struct SetNetworkCountry {
 // log_upload_state says how it ended (logupload::CompletionFor).
 //
 // One set of logs: the server keeps one file per feedback and admits one
-// upload per network per 5 minutes, and the sdk zips one process's log
-// directory, so the app's own glog files cannot ride along.
+// upload per network per 5 minutes, so the app's own glog files ride in the
+// service's zip, under app/. The app names its log directory, and the service
+// opens the glog files there as the app's pipe client, never with its own
+// rights (Common/AppLogFiles.h).
 struct UploadLogs {
   std::string feedback_id;         // the server-issued id the logs attach to
   // the same six as StartProvider, used only when no device runs
@@ -370,6 +372,9 @@ struct UploadLogs {
   std::string device_description;
   std::string device_spec;
   std::string app_version;
+  // The app's glog directory (urnet::getLogDir in the app). Additive: absent
+  // from an older app, and ignored by an older service.
+  std::string app_log_dir;
 };
 
 inline void to_json(nlohmann::json& j, const UploadLogs& v) {
@@ -382,6 +387,7 @@ inline void to_json(nlohmann::json& j, const UploadLogs& v) {
       {"device_spec", v.device_spec},
       {"app_version", v.app_version},
   };
+  if (!v.app_log_dir.empty()) j["app_log_dir"] = v.app_log_dir;
 }
 
 inline void from_json(const nlohmann::json& j, UploadLogs& v) {
@@ -395,6 +401,7 @@ inline void from_json(const nlohmann::json& j, UploadLogs& v) {
   get("device_description", v.device_description);
   get("device_spec", v.device_spec);
   get("app_version", v.app_version);
+  get("app_log_dir", v.app_log_dir);
 }
 
 // The server's feedback ids are uuids, and this one becomes a path segment of

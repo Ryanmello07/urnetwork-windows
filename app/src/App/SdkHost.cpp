@@ -6686,6 +6686,16 @@ logupload::ServiceAnswer SdkHost::AskServiceToUploadLogs(const std::string& feed
     }
   }
   if (!haveRequest || !service_.IsConnected()) return logupload::ServiceAnswer::NotTaken;
+  // This app's own log files ride in the service's zip, under app/: the
+  // service opens them in the directory named here while acting as this app
+  // (Common/AppLogFiles.h). Flushed first, so the lines written up to the
+  // feedback are on disk when it does.
+  try {
+    urnet::flushGlog();
+    request.app_log_dir = urnet::getLogDir();
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: this app's log directory is left out of the log upload: {}", e.what());
+  }
   std::string carrier;
   int64_t uploadId = 0;
   std::string error;
