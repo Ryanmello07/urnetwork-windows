@@ -927,8 +927,10 @@
                                      above: everything is written by
                                      ConnectPage::ApplyUpdateChecker, and the action button and
                                      the Later link are built in the MainWindow ctor beside
-                                     theirs. Severity is set in code - Informational normally,
-                                     Error when an apply failed. -->
+                                     theirs, as one row in this bar's content: the bar's own
+                                     action slot has room for one control. Severity is set in
+                                     code - Informational normally, Error when an apply
+                                     failed. -->
                                 <InfoBar x:Name="UpdateBar" IsOpen="False" IsClosable="False"
                                          Margin="12,8" Severity="Informational"
                                          AutomationProperties.AutomationId="acceptance.update.banner" />

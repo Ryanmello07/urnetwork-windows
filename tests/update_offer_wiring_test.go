@@ -259,19 +259,42 @@ func checkTrayLater(checker, header, window, connect string) []string {
 			"that ask HiddenByLater first: the check and the dismissal of a report", len(offered)))
 	}
 	// The label is whatever the link shows; what is pinned is the link, its
-	// place on the banner and what a click on it does.
+	// place on the banner and what a click on it does. Its place is beside the
+	// banner's action, in one row that is the bar's content: in the bar's own
+	// action slot the button has a row to itself and the content the next one
+	// down, and at the size the window opens with (480 by 760) that row is cut
+	// off at the bottom of the connect screen.
 	problems = append(problems, applyOrderProblems("MainWindow's update banner", window,
-		regexp.QuoteMeta("UpdateBar().ActionButton(update);"),
 		regexp.QuoteMeta("HyperlinkButton later;"),
 		`later\.Content\(`,
 		regexp.QuoteMeta("later.Visibility(Visibility::Collapsed);"),
 		regexp.QuoteMeta("later.Click([](auto const&, auto const&) { urnw::pages::Updates().Later(); });"),
-		regexp.QuoteMeta("UpdateBar().Content(later);"))...)
+		regexp.QuoteMeta("StackPanel actions;"),
+		regexp.QuoteMeta("actions.Orientation(winrt::Microsoft::UI::Xaml::Controls::Orientation::Horizontal);"),
+		regexp.QuoteMeta("actions.Children().Append(update);"),
+		regexp.QuoteMeta("actions.Children().Append(later);"),
+		regexp.QuoteMeta("UpdateBar().Content(actions);"))...)
+	if strings.Contains(window, "UpdateBar().ActionButton(") {
+		problems = append(problems, "MainWindow puts a control in the update banner's own action slot: "+
+			"Later would then be on a row of its own under it, which the window cuts off at the size it opens with")
+	}
 	banner := applyDefinition(connect, "void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) {")
 	problems = append(problems, applyOrderProblems("ConnectPage::ApplyUpdateChecker", banner,
+		regexp.QuoteMeta("if (const auto row = bar.Content().try_as<winrt::Microsoft::UI::Xaml::Controls::Panel>()) {"),
+		regexp.QuoteMeta("actionButton = controls.GetAt(0).try_as<winrt::Microsoft::UI::Xaml::Controls::Button>();"),
+		regexp.QuoteMeta("later = controls.GetAt(1);"),
 		regexp.QuoteMeta("bar.IsClosable(urnw::UpdateChecker::OffersInstaller(snap));"),
 		regexp.QuoteMeta("later.Visibility(urnw::UpdateChecker::OffersLater(snap)"),
 		regexp.QuoteMeta("if (snap.phase == Phase::None) {"))...)
+	// The banner's button is written through that row. The bar's own action
+	// slot is empty: a label or a state written to it reaches no control.
+	if strings.Contains(banner, "bar.ActionButton()") {
+		problems = append(problems, "ConnectPage::ApplyUpdateChecker writes the banner's button through the bar's action slot, which is empty")
+	}
+	if count := strings.Count(banner, "if (auto button = actionButton) {"); count != 2 {
+		problems = append(problems, fmt.Sprintf("ConnectPage::ApplyUpdateChecker writes the banner's button in %d places, want its two: "+
+			"the warning that checks have not worked, and every other banner", count))
+	}
 	return problems
 }
 
@@ -598,9 +621,10 @@ func checkUpdateBannerAutomationIds(xaml map[string]string, window, developer st
 	}
 	problems = append(problems, applyOrderProblems("MainWindow's update banner", window,
 		regexp.QuoteMeta(`Automation::AutomationProperties::SetAutomationId(update, L"acceptance.update.action");`),
-		regexp.QuoteMeta("UpdateBar().ActionButton(update);"),
 		regexp.QuoteMeta(`Automation::AutomationProperties::SetAutomationId(later, L"acceptance.update.later");`),
-		regexp.QuoteMeta("UpdateBar().Content(later);"))...)
+		regexp.QuoteMeta("actions.Children().Append(update);"),
+		regexp.QuoteMeta("actions.Children().Append(later);"),
+		regexp.QuoteMeta("UpdateBar().Content(actions);"))...)
 	problems = append(problems, applyOrderProblems("DeveloperPage's update check", developer,
 		regexp.QuoteMeta("Automation::AutomationProperties::SetAutomationId(checkUpdates,"),
 		regexp.QuoteMeta(`L"acceptance.update.check-now");`),
@@ -915,20 +939,42 @@ func TestUpdateOfferWiringRejectsWeakerSources(t *testing.T) {
 			return checkTrayLater(checker, header, replace(window,
 				"later.Click([](auto const&, auto const&) { urnw::pages::Updates().Later(); });", ""), connect)
 		}},
-		{"a Later link that is not on the banner", "MainWindow's update banner is missing UpdateBar", func() []string {
-			return checkTrayLater(checker, header, replace(window, "    UpdateBar().Content(later);\n", ""), connect)
+		{"a Later link that is not on the banner", "MainWindow's update banner is missing actions", func() []string {
+			return checkTrayLater(checker, header, replace(window, "    actions.Children().Append(later);\n", ""), connect)
+		}},
+		{"a row that is not on the banner", "MainWindow's update banner is missing UpdateBar", func() []string {
+			return checkTrayLater(checker, header, replace(window, "    UpdateBar().Content(actions);\n", ""), connect)
+		}},
+		{"Later on a row of its own under the action", "puts a control in the update banner's own action slot", func() []string {
+			return checkTrayLater(checker, header, replace(window, "    actions.Children().Append(update);\n",
+				"    UpdateBar().ActionButton(update);\n"), connect)
+		}},
+		{"the banner's button written through the bar's empty action slot", "writes the banner's button through the bar's action slot", func() []string {
+			return checkTrayLater(checker, header, window, replace(connect,
+				"  if (auto button = actionButton) {\n    button.Content(winrt::box_value(action));\n",
+				"  if (auto button = bar.ActionButton()) {\n    button.Content(winrt::box_value(action));\n"))
+		}},
+		{"the warning's button never written", "writes the banner's button in 1 places", func() []string {
+			return checkTrayLater(checker, header, window, replace(connect,
+				"    if (auto button = actionButton) {\n      button.Content(winrt::box_value(Adv(\"dev_check_updates\", L\"Check for updates\")));\n",
+				"    if (false) {\n      auto button = w_.UpdateBar();\n"))
+		}},
+		{"the action and Later taken in the other order", "ConnectPage::ApplyUpdateChecker is missing actionButton = controls", func() []string {
+			return checkTrayLater(checker, header, window, replace(connect,
+				"      actionButton = controls.GetAt(0).try_as<winrt::Microsoft::UI::Xaml::Controls::Button>();\n      later = controls.GetAt(1);\n",
+				"      actionButton = controls.GetAt(1).try_as<winrt::Microsoft::UI::Xaml::Controls::Button>();\n      later = controls.GetAt(0);\n"))
 		}},
 		{"a Later link that is always shown", "ConnectPage::ApplyUpdateChecker is missing later", func() []string {
 			return checkTrayLater(checker, header, window, replace(connect,
 				"later.Visibility(urnw::UpdateChecker::OffersLater(snap)", "later.Visibility(true"))
 		}},
 		{"a Later link left up when the banner closes", `ConnectPage::ApplyUpdateChecker is missing if \(snap\.phase == Phase::None\)`, func() []string {
-			moved := replace(connect, "  if (const auto later = bar.Content().try_as<winrt::Microsoft::UI::Xaml::UIElement>()) {\n"+
+			moved := replace(connect, "  if (later) {\n"+
 				"    later.Visibility(urnw::UpdateChecker::OffersLater(snap)\n"+
 				"                         ? winrt::Microsoft::UI::Xaml::Visibility::Visible\n"+
 				"                         : winrt::Microsoft::UI::Xaml::Visibility::Collapsed);\n  }\n", "")
 			moved = replace(moved, "  winrt::hstring title{urnw::Format(\"upd_available_title_version\", snap.version)};\n",
-				"  if (const auto later = bar.Content().try_as<winrt::Microsoft::UI::Xaml::UIElement>()) {\n"+
+				"  if (later) {\n"+
 					"    later.Visibility(urnw::UpdateChecker::OffersLater(snap)\n"+
 					"                         ? winrt::Microsoft::UI::Xaml::Visibility::Visible\n"+
 					"                         : winrt::Microsoft::UI::Xaml::Visibility::Collapsed);\n  }\n"+

@@ -509,12 +509,23 @@ void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) 
   using CheckOutcome = urnw::UpdateChecker::CheckOutcome;
   using InfoBarSeverity = winrt::Microsoft::UI::Xaml::Controls::InfoBarSeverity;
   auto bar = w_.UpdateBar();
+  // The bar's two controls are one row, its content, which MainWindow
+  // builds: the action button first, then Later.
+  winrt::Microsoft::UI::Xaml::Controls::Button actionButton{nullptr};
+  winrt::Microsoft::UI::Xaml::UIElement later{nullptr};
+  if (const auto row = bar.Content().try_as<winrt::Microsoft::UI::Xaml::Controls::Panel>()) {
+    const auto controls = row.Children();
+    if (controls.Size() == 2) {
+      actionButton = controls.GetAt(0).try_as<winrt::Microsoft::UI::Xaml::Controls::Button>();
+      later = controls.GetAt(1);
+    }
+  }
   // Only a report whose button offers the installer can be closed; closing it
   // dismisses it (MainWindow).
   bar.IsClosable(urnw::UpdateChecker::OffersInstaller(snap));
-  // Later, the bar's content (MainWindow builds the link), shows while the
-  // banner offers a release: it hides that release until the next launch.
-  if (const auto later = bar.Content().try_as<winrt::Microsoft::UI::Xaml::UIElement>()) {
+  // Later shows while the banner offers a release: it hides that release
+  // until the next launch.
+  if (later) {
     later.Visibility(urnw::UpdateChecker::OffersLater(snap)
                          ? winrt::Microsoft::UI::Xaml::Visibility::Visible
                          : winrt::Microsoft::UI::Xaml::Visibility::Collapsed);
@@ -540,7 +551,7 @@ void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) 
                    L" before it is asked again, and the app waits until then."
              : std::wstring{L"A newer release may be out. The app keeps trying every six hours, "
                             L"and the button tries now."}});
-    if (auto button = bar.ActionButton()) {
+    if (auto button = actionButton) {
       button.Content(winrt::box_value(Adv("dev_check_updates", L"Check for updates")));
       button.IsEnabled(snap.lastCheck != CheckOutcome::InFlight && !held);
     }
@@ -667,7 +678,7 @@ void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) 
   bar.Severity(severity);
   bar.Title(title);
   bar.Message(winrt::hstring{message});
-  if (auto button = bar.ActionButton()) {
+  if (auto button = actionButton) {
     button.Content(winrt::box_value(action));
     button.IsEnabled(enabled);
   }
