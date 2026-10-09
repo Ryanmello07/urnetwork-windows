@@ -364,4 +364,9 @@ BridgeErrorText BridgeErrorTextFor(std::string_view code) {
   return {};
 }
 
+BridgeErrorText PayoutBridgeErrorTextFor(std::string_view code) {
+  if (code == "extension_not_found") return {"solana_wallet_error_extension_not_found", true};
+  return BridgeErrorTextFor(code);
+}
+
 }  // namespace urnw::solana

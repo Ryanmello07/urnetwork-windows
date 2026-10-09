@@ -35,6 +35,16 @@ class PipeServer {
   // Push an unsolicited event to the currently connected client (no-op if none).
   void PushEvent(const nlohmann::json& event);
 
+  // Runs `work` on this thread as the connected client (ImpersonateNamedPipeClient),
+  // so that every file it opens is checked against the client's rights, not
+  // this service's; then acts as the service again, whatever `work` does, and
+  // ends the process if it cannot (a thread left acting as the client would
+  // answer every later request as it). Only from inside the request handler,
+  // where the connected client is the one being answered. False, without
+  // running `work`, when there is no client or it cannot be acted as.
+  // `work` must not log: the thread is not the service's own while it runs.
+  bool RunAsClient(const std::function<void()>& work);
+
  private:
   void AcceptLoop();
   void ServeConnection(void* pipe);

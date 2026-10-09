@@ -4679,6 +4679,10 @@ enviamos para verificar tu identidad.</value>
     <value>No se encontraron billeteras de Solana instaladas en este dispositivo. Instale una billetera e intente nuevamente.</value>
     <comment>Call to action</comment>
   </data>
+  <data name="no_wallets_found_enter_address_manually" xml:space="preserve">
+    <value>No se encontró ninguna app de billetera de Solana compatible en este dispositivo. Elige "Ingresar la dirección manualmente" para pegar la dirección de tu billetera en su lugar.</value>
+    <comment>Body of the no-wallet alert (android) and note (iOS) of the Solana payout wallet's connect sheet, when no wallet app on the device can connect (android: no wallet app answers the Mobile Wallet Adapter request, as reported with Brave Wallet installed; iOS: neither Phantom nor Solflare is installed). A typed address works with any wallet, so the line points at the sheet's manual entry, naming its Enter address manually control in that control's own words (enter_address_manually); the android alert also offers that control as its action. Signing in needs a wallet app and keeps no_wallets_found_alert_content.</comment>
+  </data>
   <data name="none" xml:space="preserve">
     <value>Ninguno</value>
     <comment>Empty value: the VLESS settings show it for no security and no flow (all apps), and the Referrals section shows it on windows and linux when no referral network is linked.</comment>
@@ -6553,6 +6557,10 @@ del mundo</value>
   <data name="solana_wallet" xml:space="preserve">
     <value>Billetera de Solana</value>
     <comment>Label of the connected Solana wallet block on the Earnings screen (parallel to bittensor_wallet).</comment>
+  </data>
+  <data name="solana_wallet_error_extension_not_found" xml:space="preserve">
+    <value>No se encontró la extensión de {} en este navegador. Instálala y vuelve a intentarlo, o elige "Ingresar la dirección manualmente" para pegar la dirección de tu billetera.</value>
+    <comment>Error in the Solana payout wallet's connect sheet of the desktop apps (macOS, Windows, Linux) when the ur.io wallet bridge page returns extension_not_found: the chosen wallet's browser extension is not in this browser. The argument is the wallet product name (Phantom or Solflare). The sheet also takes a typed address, which works with any wallet, so the line points at its Enter address manually control, named in that control's own words (enter_address_manually). Signing in has no manual entry and keeps bittensor_error_extension_not_found.</comment>
   </data>
   <data name="solana_wallet_error_session_not_found" xml:space="preserve">
     <value>No se encontró la conexión de la billetera en este navegador. Comienza de nuevo para volver a conectar tu billetera.</value>

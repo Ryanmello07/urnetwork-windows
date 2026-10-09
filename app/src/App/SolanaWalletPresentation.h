@@ -342,4 +342,11 @@ struct BridgeErrorText {
 
 BridgeErrorText BridgeErrorTextFor(std::string_view code);
 
+// The payout wallet's connect sheet (SolanaWalletSheets) reads the page's codes
+// as BridgeErrorTextFor does, except a missing extension: the sheet also takes a
+// typed address, which works with any wallet, so that line points at its Enter
+// address manually control in the control's own words. Signing in has no manual
+// entry and keeps BridgeErrorTextFor's words.
+BridgeErrorText PayoutBridgeErrorTextFor(std::string_view code);
+
 }  // namespace urnw::solana

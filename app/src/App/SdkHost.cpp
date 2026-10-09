@@ -2037,7 +2037,9 @@ void SdkHost::ConnectSolanaWallet(
   // Not a sign-in: the auth state does not move (see on_error above).
   CancelPendingWalletFlows("superseded by a wallet connect request");
   walletConnectDone_ = std::move(done);
-  wallet_.Connect(provider);  // continues on the deep-link callback (on_public_key)
+  // continues on the deep-link callback (on_public_key). The payout sheet also
+  // takes a typed address, so a missing extension points at it.
+  wallet_.Connect(provider, /*offersManualEntry=*/true);
 }
 
 void SdkHost::SignWithBittensorWallet(
@@ -6686,6 +6688,16 @@ logupload::ServiceAnswer SdkHost::AskServiceToUploadLogs(const std::string& feed
     }
   }
   if (!haveRequest || !service_.IsConnected()) return logupload::ServiceAnswer::NotTaken;
+  // This app's own log files ride in the service's zip, under app/: the
+  // service opens them in the directory named here while acting as this app
+  // (Common/AppLogFiles.h). Flushed first, so the lines written up to the
+  // feedback are on disk when it does.
+  try {
+    urnet::flushGlog();
+    request.app_log_dir = urnet::getLogDir();
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: this app's log directory is left out of the log upload: {}", e.what());
+  }
   std::string carrier;
   int64_t uploadId = 0;
   std::string error;

@@ -865,6 +865,26 @@ void BridgeErrorTests() {
       CheckEq("", BridgeErrorTextFor(code).key, std::string("no key for \"") + code + "\"");
     }
   }
+  {
+    TEST_CASE("thePayoutSheetPointsAMissingExtensionAtManualEntry");
+    // the payout sheet also takes a typed address, which works with any wallet:
+    // its line for a missing extension points at Enter address manually.
+    // Signing in has no manual entry and keeps the shared line.
+    const BridgeErrorText payout = PayoutBridgeErrorTextFor("extension_not_found");
+    CheckEq("solana_wallet_error_extension_not_found", payout.key, "the payout sheet's key");
+    Check(payout.takesWalletName, "the payout sheet's line names the wallet");
+    CheckEq("bittensor_error_extension_not_found", BridgeErrorTextFor("extension_not_found").key,
+            "the shared key");
+    // every other code reads as it does everywhere else
+    for (const char* code : {"no_account", "session_not_found", "user_rejected", "invalid_request",
+                             "wallet_error", "-1", ""}) {
+      const BridgeErrorText other = PayoutBridgeErrorTextFor(code);
+      const BridgeErrorText shared = BridgeErrorTextFor(code);
+      CheckEq(shared.key, other.key, std::string("the payout sheet's key for \"") + code + "\"");
+      Check(other.takesWalletName == shared.takesWalletName,
+            std::string("the payout sheet's wallet name for \"") + code + "\"");
+    }
+  }
 }
 
 // ---- where a wallet-bridge return goes (WalletBridgeRoute.h) -----------------

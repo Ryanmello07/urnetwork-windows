@@ -18,6 +18,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -27,7 +28,9 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <vector>
 
+#include "AppLogFiles.h"
 #include "FeedbackLogUpload.h"
 #include "LogUpload.h"
 #include "Protocol.h"
@@ -602,6 +605,69 @@ void TestFeedbackLogUploadExitLeavesTheOldPathsCall() {
   callEndedFuture.wait();
 }
 
+// (s) the app's own log files ride in the service's zip (Common/AppLogFiles.h):
+// the request names the app's log directory, additively on the wire; the
+// service acts as the app only in a local directory, takes only glog names,
+// the newest first and no more than the cap, files written at once in name
+// order
+void TestAppLogFiles() {
+  proto::UploadLogs sent = SampleRequest();
+  sent.app_log_dir = "C:\\Users\\someone\\AppData\\Local\\URnetwork\\app\\logs";
+  const proto::UploadLogs got =
+      nlohmann::json::parse(proto::DumpForWire(proto::Request(proto::msg::kUploadLogs, sent)))
+          .get<proto::UploadLogs>();
+  Check(got.app_log_dir == sent.app_log_dir, "app logs: the request names the app's directory");
+  Check(!nlohmann::json(SampleRequest()).contains("app_log_dir"),
+        "app logs: a request that names none sends no field, as an older app's");
+  Check(nlohmann::json::parse(R"({"feedback_id":"x"})").get<proto::UploadLogs>().app_log_dir.empty(),
+        "app logs: an older app's request names no directory");
+
+  for (const char* name : {"URnetwork.exe.HOST.someone.log.INFO.20260901-000000.101",
+                           "URnetwork.exe.HOST.someone.log.WARNING.20260901-000000.101",
+                           "URnetwork.exe.HOST.someone.log.ERROR.20260901-000000.101",
+                           "URnetwork.exe.HOST.someone.log.FATAL.20260901-000000.101"}) {
+    Check(applogs::LooksLikeGlogFileName(name), std::string("app logs: takes \"") + name + "\"");
+  }
+  for (const char* name : {"", "urnetwork-app.log", "app_prefs.json", "rpc_session.json",
+                           "URnetwork.exe.INFO", ".a.log.INFO.1", "..\\a.log.INFO.1",
+                           "a/b.log.INFO.1", "a.log.INFO.1:stream", "a\nb.log.INFO.1"}) {
+    Check(!applogs::LooksLikeGlogFileName(name),
+          std::string("app logs: a glog name only, refuses \"") + name + "\"");
+  }
+
+  for (const char* dir : {"C:\\Users\\someone\\AppData\\Local\\URnetwork\\app\\logs",
+                          "D:/worktree/.localstate/logs", "c:\\logs\\"}) {
+    Check(applogs::LooksLikeLocalDirectory(dir),
+          std::string("app logs: a local directory, \"") + dir + "\"");
+  }
+  for (const char* dir : {"", "logs", "C:logs", "\\\\server\\share\\logs", "//server/share/logs",
+                          "\\\\?\\C:\\logs", "\\\\.\\pipe\\x", "C:\\logs\\..\\..\\Windows",
+                          "C:\\logs\\.\\x", "C:\\logs:stream", "C:\\lo\ngs"}) {
+    Check(!applogs::LooksLikeLocalDirectory(dir),
+          std::string("app logs: never a share, a device or a climb, refuses \"") + dir + "\"");
+  }
+
+  std::vector<applogs::AppLogEntry> entries;
+  for (size_t i = 0; i < applogs::kMaxAppLogFiles + 3; ++i) {
+    entries.push_back(applogs::AppLogEntry{
+        "URnetwork.exe.HOST.someone.log.INFO.20260901-000000." + std::to_string(100 + i), 1000 + i});
+  }
+  entries.push_back(applogs::AppLogEntry{"urnetwork-app.log", 999999});
+  entries.push_back(applogs::AppLogEntry{"URnetwork.exe.HOST.someone.log.ERROR.b", 5000});
+  entries.push_back(applogs::AppLogEntry{"URnetwork.exe.HOST.someone.log.ERROR.a", 5000});
+  const std::vector<std::string> picked = applogs::PickAppLogFiles(entries);
+  Check(picked.size() == applogs::kMaxAppLogFiles, "app logs: no more than the cap");
+  Check(!picked.empty() && picked[0] == "URnetwork.exe.HOST.someone.log.ERROR.a" &&
+            picked.size() > 1 && picked[1] == "URnetwork.exe.HOST.someone.log.ERROR.b",
+        "app logs: the newest first, files written at once in name order");
+  Check(std::find(picked.begin(), picked.end(), "urnetwork-app.log") == picked.end(),
+        "app logs: a name glog did not write is never taken, however new");
+  Check(std::find(picked.begin(), picked.end(),
+                  "URnetwork.exe.HOST.someone.log.INFO.20260901-000000.100") == picked.end(),
+        "app logs: the oldest are the ones left out");
+  Check(std::string(applogs::kAppLogFilesSource) == "app", "app logs: the zip folder is app/");
+}
+
 // (r) the feedback id becomes a path segment of the API url, so only the
 // server's own ids pass
 void TestFeedbackId() {
@@ -637,6 +703,7 @@ int main() {
   TestReply();
   TestStatusCarriesTheUpload();
   TestFeedbackId();
+  TestAppLogFiles();
   TestFlightStateNames();
   TestFlightRunsTheUploadOffTheCallersThread();
   TestFlightAdmitsOneUploadAtATime();
