@@ -68,13 +68,15 @@ std::wstring HresultDetail(winrt::hresult_error const& e) {
 bool RedirectActivation(AppInstance const& primary, AppActivationArguments const& args) {
   // THE FOREGROUND RIGHT. This process was just launched by whatever the user
   // clicked - the browser's "Open URnetwork?" after a sign-in, an email link -
-  // so for a moment it holds what the running instance does not: the right to
-  // take the foreground. It has no window to use it on and is about to exit, so
-  // it hands the right to the instance that will show the window. Without this
-  // Windows' foreground lock refuses that instance's SetForegroundWindow and
-  // the window stays BEHIND the browser holding a result nobody can see
-  // (measured live). A launch from a background script has no right to give;
-  // shell::RaiseToFront is the second line of defence for that case.
+  // so for a moment it may hold the right to take the foreground, which the
+  // running instance needs to raise its window (shell::RaiseToFront). It has no
+  // window to use it on and is about to exit. The Windows App SDK's
+  // RedirectActivationToAsync already passes the right on (AppInstance::
+  // QueueRequest calls AllowSetForegroundWindow), so this explicit grant is
+  // belt-and-braces against that changing - and its log line is the only record
+  // of whether THIS launch held a right at all. "No foreground right" means a
+  // launcher with no foreground ancestry (a scheduled task, a service): there
+  // only RaiseToFront's z-order fallback can put the window in front.
   try {
     if (::AllowSetForegroundWindow(primary.ProcessId())) {
       urnw::LogInfo("startup: handed the foreground right to the running instance");

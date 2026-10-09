@@ -711,12 +711,13 @@ void AppController::ShowWindowImpl(const POINT* anchor) {
   windowShown_ = true;
   SyncWindowMinimized();
   window_.Activate();
-  // Activate() is refused by the foreground lock when another process (the
-  // browser a sign-in just came back from) owns the foreground and nobody gave
-  // this one the right: the window then stays BEHIND it, painting a result no
-  // one can see. A tray click owns the foreground and gets through the first
-  // line of RaiseToFront; a deep link or relaunch may not, and falls back to
-  // lifting the window without focus.
+  // Activate() is ShowWindow + SetActiveWindow: it never asks for the foreground,
+  // so it leaves the window BEHIND the browser a sign-in just came back from,
+  // painting a result no one can see (measured). RaiseToFront asks -
+  // SetForegroundWindow, which the SDK's redirect has made permissible for a
+  // browser click or any launch that held a right - and falls back to lifting
+  // the window without focus when Windows refuses. A tray click owns the
+  // foreground already and returns on its first line.
   shell::RaiseToFront(windowHwnd_);
   ReconcileWindowPresentation();
 }

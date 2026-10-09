@@ -74,7 +74,10 @@ size_t CountWords(std::string const& value) {
 // counter of clicks, so a genuine late result - signed in, needs a network, a
 // real error - is never dropped along with it.
 bool SupersededAnswer(urnw::AuthResult const& result) {
-  return !result.ok && bridge::IsSuperseded(result.error);
+  const bool superseded = !result.ok && bridge::IsSuperseded(result.error);
+  // the reason is one of SdkHost's fixed "superseded by ..." literals, never user data
+  if (superseded) LogInfo("login: dropped a superseded sign-in answer ({})", result.error);
+  return superseded;
 }
 }  // namespace
 
@@ -428,6 +431,8 @@ void LoginPage::SetInitialLoginError(hstring const& message) {
   }
   w_.LoginErrorText().Text(message);
   w_.LoginErrorText().Visibility(Visibility::Visible);
+  // the fact, never the text: an error can carry server words
+  LogInfo("login: sign-in error line shown on the initial step");
   // The line sits under Get started — below the fold at compact heights, and a
   // sign-in error the user cannot see reads as "nothing happened" (measured: a
   // failed browser sso return at 500x600 showed no trace of why). Deferred to

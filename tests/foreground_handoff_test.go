@@ -15,24 +15,32 @@ func lf(source string) string {
 
 // A browser handoff must surface the window. Measured live: after a real
 // "Open URnetwork?" the login page had laid its sign-in error out on screen
-// inside a window that Windows' foreground lock kept BEHIND the browser for as
-// long as anyone watched - which reads as "the app did nothing". macOS gets the
-// raise from NSApp.activate(ignoringOtherApps:) and Android from the OS; on
-// Windows it takes two halves, and each contract below pins one so a tidy-up
-// cannot silently remove it. The window-level behavior itself was verified on
-// the live desktop (z-order and real screen pixels, not PrintWindow, which draws
-// a window that is covered just as happily as one that is not).
+// inside a window that stayed BEHIND the browser for as long as anyone watched -
+// which reads as "the app did nothing". Nothing asked Windows to raise it:
+// Window::Activate() is ShowWindow + UpdateWindow + SetActiveWindow and never
+// requests the foreground. macOS gets the raise from NSApp.activate(
+// ignoringOtherApps:) and Android from the OS. On Windows the contracts below
+// pin the pieces so a tidy-up cannot silently remove one. The window-level
+// behavior itself was verified on the live desktop (z-order and real screen
+// pixels, not PrintWindow, which draws a covered window just as happily as an
+// uncovered one), on both branches: a launch that held the foreground right,
+// and one that held none (a Task Scheduler launch: the z-order fallback).
 
-// The launch the browser caused holds the foreground right; the instance that
-// is already running does not. The second launch has no window to use the right
-// on and is about to exit, so it must hand the right over BEFORE it redirects.
+// The second launch is the process the browser just launched, so it may hold
+// the foreground right the running instance needs. The Windows App SDK's
+// RedirectActivationToAsync already passes it on (AppInstance::QueueRequest ->
+// AllowSetForegroundWindow); the explicit grant before the redirect is
+// belt-and-braces against that changing, and its log line is the only record of
+// whether the launch held a right at all (a launcher with none is the case only
+// the z-order fallback can serve). Pinned so it is not removed as "redundant"
+// without that being decided.
 func TestSecondLaunchHandsTheForegroundRightToTheRunningInstance(t *testing.T) {
 	source := stripLineComments(lf(readAppSource(t, "main.cpp")))
 	redirect := definitionBody(t, "main.cpp", source, "bool RedirectActivation(")
 	allowAt := strings.Index(redirect, "::AllowSetForegroundWindow(")
 	redirectAt := strings.Index(redirect, "RedirectActivationToAsync(")
 	if allowAt < 0 {
-		t.Fatal("RedirectActivation no longer hands the foreground right to the running instance: its window would stay behind the browser after a sign-in return")
+		t.Fatal("RedirectActivation no longer hands the foreground right to the running instance explicitly: the SDK's redirect still does, but the 'no foreground right' log line that distinguishes the launcher with none is gone")
 	}
 	if redirectAt < 0 || allowAt > redirectAt {
 		t.Fatal("RedirectActivation must call AllowSetForegroundWindow BEFORE it redirects the activation: the second launch exits right after")
@@ -42,22 +50,24 @@ func TestSecondLaunchHandsTheForegroundRightToTheRunningInstance(t *testing.T) {
 	}
 }
 
-// ...and the running instance must use it. Window::Activate() alone is refused
-// by the foreground lock whenever nobody handed the right (a launcher that
-// gives none, a script), and then only flashes the taskbar button.
+// ...and the running instance must USE it: nothing else asks. Window::Activate()
+// never requests the foreground, so without shell::RaiseToFront the window stays
+// under the browser whatever rights the process holds.
 func TestShowWindowRaisesTheWindowAfterActivate(t *testing.T) {
 	source := stripLineComments(lf(readAppSource(t, "AppController.cpp")))
 	show := definitionBody(t, "AppController.cpp", source, "void AppController::ShowWindowImpl(")
 	activateAt := strings.Index(show, "window_.Activate()")
 	raiseAt := strings.Index(show, "shell::RaiseToFront(")
 	if activateAt < 0 || raiseAt < 0 || raiseAt < activateAt {
-		t.Fatal("ShowWindowImpl must call shell::RaiseToFront after window_.Activate(): Activate alone leaves the window behind the browser when the foreground lock refuses it")
+		t.Fatal("ShowWindowImpl must call shell::RaiseToFront after window_.Activate(): Activate never asks for the foreground, so alone it leaves the window behind the browser")
 	}
 }
 
 // A refused SetForegroundWindow is not the end of it: z-order is NOT locked, so
 // the topmost toggle still leaves the window on top (unfocused). That fallback
-// is what makes the result visible when the launcher gave no foreground right.
+// is what makes the result visible when the launch held no foreground right to
+// pass on (measured with a Task Scheduler launch: error 5, the lock refuses, the
+// toggle puts the window in front in 184 ms while the browser keeps the focus).
 func TestRaiseToFrontFallsBackToTheZOrderWhenTheForegroundIsRefused(t *testing.T) {
 	source := stripLineComments(lf(readAppSource(t, "WindowShell.cpp")))
 	raise := definitionBody(t, "WindowShell.cpp", source, "bool RaiseToFront(")

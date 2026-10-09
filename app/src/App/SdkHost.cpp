@@ -1585,7 +1585,13 @@ uint64_t SdkHost::CancelPendingWalletFlows(const char* reason) {
   // First: from here on every earlier flow's challenge continuation is stale.
   const uint64_t flow = walletFlows_.Start();
   // an sso attempt answers through walletAuthDone_ below; its state/nonce die
-  // with it so the bridge's late answer is ignored rather than acted on
+  // with it so the bridge's late answer is ignored rather than acted on. Said
+  // out loud: this reset is otherwise silent when no done-callback was pending,
+  // and an armed attempt that simply vanished from the log read as a bug.
+  if (ssoAttempt_) {
+    LogWarn("sdkhost: a pending {} sign-in attempt was dropped ({})", ssoAttempt_->provider,
+            reason);
+  }
   ssoAttempt_.reset();
   if (auto connectDone = std::exchange(walletConnectDone_, nullptr)) {
     LogWarn("sdkhost: a wallet connect request was superseded ({})", reason);
@@ -1795,6 +1801,8 @@ void SdkHost::SignInWithSso(const std::string& provider, std::function<void(Auth
   // audience with no provider config of its own.
   const std::string state = WalletConnect::OAuthState(urnet::generateNonce());
   ssoAttempt_ = SsoAttempt{provider, state, urnet::generateNonce()};
+  // the provider only: the state and the nonce are the attempt's secrets
+  LogInfo("sdkhost: {} sign-in armed", provider);
   const std::string apiUrl = ids::kOperatorApiUrl;
   // opens the browser; the rest continues on the deep-link callback (on_sso)
   // the guard above admits only these two providers: no other flow exists

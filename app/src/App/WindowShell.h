@@ -53,20 +53,24 @@ bool SaveWindowPlacement(HWND hwnd);
 
 // Put the window in front of whatever covers it, for a show the USER caused
 // somewhere else: the browser's "Open URnetwork?" after a sign-in, an email
-// link. Window::Activate() alone is not enough. Windows' foreground lock
-// refuses SetForegroundWindow from a process that neither owns the foreground
-// nor was handed the right, and then only flashes the taskbar button - so the
-// window, and the sign-in result or error it had just painted, stayed behind
-// the browser (measured live: a matched error callback laid its message out
-// inside a window the browser covered for the whole observation, which reads
-// as "the app did nothing"). macOS gets this from NSApp.activate(
-// ignoringOtherApps:) and Android from the OS; on Windows it is ours to do.
+// link. Window::Activate() does NOT do this: it is ShowWindow + UpdateWindow +
+// SetActiveWindow and never asks for the foreground, so it cannot lift a visible
+// window another process covers, whatever rights this process holds. The
+// window, and the sign-in result or error it had just painted, stayed behind the
+// browser (measured live: a matched error callback laid its message out inside
+// a window the browser covered for 8 s, which reads as "the app did nothing").
+// macOS gets this from NSApp.activate(ignoringOtherApps:) and Android from the
+// OS; on Windows it is ours to ask for.
 //
-// Order: the sanctioned SetForegroundWindow first - it succeeds when main.cpp's
-// second launch handed this process the right. When the lock refuses, z-order
-// is NOT locked, so a topmost toggle lifts the window above every normal window
-// WITHOUT stealing focus. Returns true only when the window became the
-// foreground window; false still leaves it on top.
+// Order: SetForegroundWindow first. The Windows App SDK's redirect already hands
+// the running instance the foreground right (AppInstance::QueueRequest ->
+// AllowSetForegroundWindow), so this succeeds after a browser click or any
+// launch that held a right. When Windows refuses it (a launch with none to pass
+// on: a scheduled task, a service), z-order is NOT locked, so a topmost toggle
+// lifts the window above every normal window WITHOUT stealing focus. Returns true
+// only when the window became the foreground window; false still leaves it on
+// top. "In front" is not "unobscured": another process's always-on-top window or
+// a different virtual desktop can still cover it, and nothing raises it again.
 bool RaiseToFront(HWND hwnd);
 
 }  // namespace urnw::shell
