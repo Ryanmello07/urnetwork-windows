@@ -473,13 +473,14 @@ func TestUpdateReleaseRejectsWeakerDecisions(t *testing.T) {
 
 // The tray app's check asks for the feed's repository by its id, with
 // redirects refused, reads the list with the reader the update helper uses,
-// and judges release codes against the response's Date header.
+// and judges releases against the response's Date header
+// (update_offer_wiring_test.go pins that nothing else dates them).
 func TestUpdateReleaseTheCheckPollsTheFeedById(t *testing.T) {
 	checker := stripComments(readAppSource(t, "UpdateChecker.cpp"))
 	check := definitionBody(t, "UpdateChecker.cpp", checker, "void UpdateChecker::RunCheck(std::uint64_t generation) {")
 	signOutRequireInOrder(t, "UpdateChecker::RunCheck", check,
 		regexp.QuoteMeta("const update::Feed& feed = update::kOfficialFeed;"),
-		regexp.QuoteMeta(`L"https://api.github.com/repositories/{}/releases?per_page=15", feed.numericRepoId);`),
+		regexp.QuoteMeta("const std::wstring url = Widen(update::ReleaseListUrl(feed));"),
 		`kMaxJsonBytes,\s*false,`,
 		regexp.QuoteMeta("update::ParseReleaseList(body);"),
 		regexp.QuoteMeta("std::int64_t serverUnixSeconds = headers.serverUnixSeconds;"),

@@ -210,7 +210,7 @@ func checkApplyUpdate(apply string) []string {
 		regexp.QuoteMeta("!PrepareFolder(tagFolder, folderSecurity, error)) {"),
 		regexp.QuoteMeta(`log.Open(tagFolder / L"update-helper.log", fileSecurity.attributes());`),
 		regexp.QuoteMeta("if (WriteResult(updates, result, fileSecurity, writeError)) {"),
-		regexp.QuoteMeta(`L"https://api.github.com/repositories/{}/releases?per_page=15", feed.numericRepoId);`),
+		regexp.QuoteMeta("const std::wstring listUrl = WidenAscii(update::ReleaseListUrl(feed));"),
 		regexp.QuoteMeta("HttpGet("),
 		regexp.QuoteMeta("if (list.status == 403 || list.status == 429) {"),
 		regexp.QuoteMeta("return refuse(Refusal::RateLimited,"),

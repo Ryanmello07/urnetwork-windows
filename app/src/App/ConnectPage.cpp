@@ -511,6 +511,13 @@ void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) 
   // Only a report whose button offers the installer can be closed; closing it
   // dismisses it (MainWindow).
   bar.IsClosable(urnw::UpdateChecker::OffersInstaller(snap));
+  // Later, the bar's content (MainWindow builds the link), shows while the
+  // banner offers a release: it hides that release until the next launch.
+  if (const auto later = bar.Content().try_as<winrt::Microsoft::UI::Xaml::UIElement>()) {
+    later.Visibility(urnw::UpdateChecker::OffersLater(snap)
+                         ? winrt::Microsoft::UI::Xaml::Visibility::Visible
+                         : winrt::Microsoft::UI::Xaml::Visibility::Collapsed);
+  }
   const auto nowUnix = std::chrono::duration_cast<std::chrono::seconds>(
                            std::chrono::system_clock::now().time_since_epoch())
                            .count();

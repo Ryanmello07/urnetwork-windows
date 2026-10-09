@@ -2,10 +2,13 @@
 // releases, and installs one through the elevated update helper
 // (app/src/Updater) after a verified download.
 //
-// The feed is the urnetwork/windows GitHub releases (Common/ReleaseSelection.h
-// kOfficialFeed, polled by the repository's numeric id): the stable releases
-// published to the app's own repo, each carrying one MSI per architecture
-// (urnetwork/build holds the nightlies and is not polled).
+// The feed is urnetwork/build's GitHub releases (Common/ReleaseSelection.h
+// kOfficialFeed, polled by the repository's numeric id): the releases the
+// release pipeline publishes, each carrying one MSI per architecture. A
+// release counts once it has been out for a day, judged at the start of
+// GitHub's day by the release list's own Date header, so what is offered
+// changes at most once a day, and the update helper, which judges the same
+// way, comes to the same release (ReleaseSelection.h HasSoaked).
 // Poll the release list (on launch after ~30s, then every 6 hours, and on the
 // two manual triggers), pick the release with Common/ReleaseSelection.h, and when
 // it outranks the build's own stamped code, offer ONE click that
@@ -36,6 +39,19 @@
 // show its installer instead (the portable path), so a release the helper
 // keeps refusing is not a dead end; and the checked copy stays until the
 // report says the update took.
+//
+// The banner's Later hides the offered release until the next launch: it is
+// kept in memory, never saved, and a newer release is shown
+// (Common/UpdateSchedule.h HiddenByLater).
+//
+// The helper asks GitHub itself and installs only the release its own list
+// offers. When GitHub's day has changed since the check behind the banner, a
+// newer release may have reached the end of its day, so the check runs again
+// before the download and the administrator prompt, and a different offer
+// replaces the banner instead of being refused by the helper afterwards
+// (ReleaseSelection.h OfferMayHaveChanged). One that changes in the minutes
+// between that check and the helper's own is refused there (NotOffered), and
+// a check follows.
 //
 // Requests are anonymous, and GitHub's answer to too many is honoured: no
 // request goes before its Retry-After or X-RateLimit-Reset (at most a day
@@ -169,6 +185,12 @@ class UpdateChecker {
     // it outranks this build — the developer line names it either way.
     std::wstring newestVersion;
     std::uint64_t newestCode = 0;
+    // A release newer than this build and than the offer that the feed holds
+    // back until it has been out for a day, and the Unix second it is offered
+    // from; code 0 when there is none. The developer line names it.
+    std::wstring waitingVersion;
+    std::uint64_t waitingCode = 0;
+    std::int64_t waitingFromUnix = 0;
   };
 
   using Handler = std::function<void(Snapshot const&)>;
@@ -212,6 +234,10 @@ class UpdateChecker {
   // The Result banner's dismissal: the report is not shown again, and the
   // banner closes. Safe from the UI thread.
   void DismissResult();
+  // The banner's Later: the release it offers is not shown again until the
+  // next launch. Nothing is saved, and a newer release is shown. Ignored
+  // unless the banner offers Later (OffersLater). Safe from the UI thread.
+  void Later();
   // The update channel changed (the opt-in developer channel calls this): a
   // check or an apply still running under the old feed is abandoned, the
   // offer and its banner are dropped (the helper's report stays), and a check
@@ -230,6 +256,9 @@ class UpdateChecker {
   // rather than only its dismissal: the release did not install, and a check
   // still offers it.
   static bool OffersInstaller(Snapshot const& snapshot);
+  // Whether the banner offers Later beside its action: it offers a release,
+  // and nothing is in flight for it.
+  static bool OffersLater(Snapshot const& snapshot);
   // Open an Explorer window with `file` selected.
   static void RevealInExplorer(std::wstring const& file);
   // `unixSeconds` as the user's short local date, for "Couldn't check for
@@ -304,6 +333,14 @@ class UpdateChecker {
   std::uint64_t feedGeneration_ = 0;
   Snapshot snapshot_;
   Offer offer_;
+  // GitHub's clock at the check that made offer_ (the list's Date header),
+  // and this machine's steady clock then. Together they say whether GitHub's
+  // day has changed since, without this machine's wall clock.
+  std::int64_t offerServerUnix_ = 0;
+  std::chrono::steady_clock::time_point offerCheckedAt_{};
+  // The release the banner's Later hid, 0 when none: not shown again in this
+  // run. A member and nothing else, so the next launch offers it again.
+  std::uint64_t laterCode_ = 0;
 
   // The handler's own lock, on SdkHost's advancedMutex_ reasoning: never held
   // across an invocation, never taken together with mutex_.

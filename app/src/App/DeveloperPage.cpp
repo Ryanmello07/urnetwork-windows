@@ -1344,6 +1344,14 @@ void DeveloperPage::ApplyUpdateCheck(UpdateChecker::Snapshot const& snap) {
                   L"The update check failed — see the app log.");
       break;
   }
+  // A newer release the feed holds back until it has been out for a day:
+  // "this build is current" alone would not be the whole answer. The version
+  // and the time are data; the sentence has no store id yet.
+  if (snap.waitingCode != 0) {
+    if (!text.empty()) text += L"\n";
+    text += L"v" + snap.waitingVersion + L" is published and is offered from " +
+            UpdateChecker::LocalDateTime(snap.waitingFromUnix);
+  }
   // The connect screen's warning, here too: no check has worked for 72 hours.
   // The date is data; the sentence has no store id yet.
   if (snap.checkStale) {

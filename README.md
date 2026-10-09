@@ -7,10 +7,18 @@ the URnetwork SDK (the cgo C ABI + C++ wrapper from `sdk/cgo`).
 ## Download
 
 Release MSIs (`URnetwork-<version>-x64.msi`, `URnetwork-<version>-arm64.msi`)
-are attached to the stable releases at
-https://github.com/urnetwork/windows/releases. The in-app updater polls the
-same releases (`app/src/Common/ReleaseSelection.h`, `kOfficialFeed`). Nightly builds live at
-https://github.com/urnetwork/build/releases and are not offered by the updater.
+are attached to every release the build pipeline publishes. The newest is at
+https://github.com/urnetwork/build/releases/latest.
+
+The in-app updater polls the same releases
+(`app/src/Common/ReleaseSelection.h`, `kOfficialFeed`). It offers a release
+once it has been out for a day, judged at the start of each UTC day, so the
+offer changes at most once a day and is a day or two behind that page. "Later"
+on the banner hides a release until the app is next started.
+
+Running v2026.10.8-1066946420 or an earlier release? It does not look for
+updates here, and never offers one. Install a newer MSI by hand once: it
+upgrades the installed copy in place, and updates itself from then on.
 
 ## Architecture
 
@@ -120,8 +128,9 @@ handle:
   tunnel, and a developer/reliability screen behind an app-wide Advanced Mode
   toggle.
 - **Updater** — `UpdateChecker`, because the Store does not push EXE/MSI
-  updates (see `app/STORE.md`). It installs the verified official MSI from the
-  stable urnetwork/windows releases.
+  updates (see `app/STORE.md`). It installs the official MSI from
+  urnetwork/build's releases, checked against GitHub's SHA-256 for it, once
+  the release has been out for a day.
 
 ## Docs
 

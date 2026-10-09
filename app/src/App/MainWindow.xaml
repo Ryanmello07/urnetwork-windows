@@ -925,10 +925,10 @@
                                      digest from the releases API, starts the installer and
                                      quits. Same bar shape and one-writer discipline as the two
                                      above: everything is written by
-                                     ConnectPage::ApplyUpdateChecker, and the action button is
-                                     built in the MainWindow ctor beside theirs. Severity is
-                                     set in code - Informational normally, Error when an apply
-                                     failed. -->
+                                     ConnectPage::ApplyUpdateChecker, and the action button and
+                                     the Later link are built in the MainWindow ctor beside
+                                     theirs. Severity is set in code - Informational normally,
+                                     Error when an apply failed. -->
                                 <InfoBar x:Name="UpdateBar" IsOpen="False" IsClosable="False"
                                          Margin="12,8" Severity="Informational" />
 

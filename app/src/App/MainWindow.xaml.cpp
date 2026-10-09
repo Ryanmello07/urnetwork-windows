@@ -226,6 +226,14 @@ MainWindow::MainWindow() {
       if (auto self = weak.get()) self->OnUpdateBannerAction();
     });
     UpdateBar().ActionButton(update);
+    // Later, under the banner's message while it offers a release
+    // (ConnectPage::ApplyUpdateChecker shows and hides it): that release is not
+    // shown again until the next launch. The label has no store id yet.
+    HyperlinkButton later;
+    later.Content(winrt::box_value(L"Later"));
+    later.Visibility(Visibility::Collapsed);
+    later.Click([](auto const&, auto const&) { urnw::pages::Updates().Later(); });
+    UpdateBar().Content(later);
     // The report's banner can be closed (ConnectPage::ApplyUpdateChecker
     // makes it closable when its button offers the installer): closing it is
     // its dismissal.

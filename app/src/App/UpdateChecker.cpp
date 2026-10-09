@@ -556,11 +556,11 @@ void UpdateChecker::DismissResult() {
   // remember, and nothing at a later launch shows it again.
   if (!finished.empty()) SaveAppPref(kResultSeenPrefKey, Narrow(finished));
   // a release still offered (one whose update did not install) is offered
-  // again
+  // again, unless Later hid it for this run
   Mutate([this](Snapshot& s) {
     if (s.phase != Phase::Result) return;
     s.result = Result{};
-    if (offer_.code > version::kCode) {
+    if (offer_.code > version::kCode && !update::HiddenByLater(laterCode_, offer_.code)) {
       s.phase = Phase::Available;
       s.stage = Stage::Idle;
       s.failure = Failure::None;
@@ -574,12 +574,34 @@ void UpdateChecker::DismissResult() {
   });
 }
 
+void UpdateChecker::Later() {
+  std::wstring version;
+  Mutate([this, &version](Snapshot& s) {
+    if (!OffersLater(s)) return;
+    // In this member and nowhere else: the next launch starts without it and
+    // offers the release again.
+    laterCode_ = s.code;
+    version = s.version;
+    s.phase = Phase::None;
+    s.stage = Stage::Idle;
+    s.failure = Failure::None;
+    s.version.clear();
+    s.code = 0;
+    s.installerPath.clear();
+  });
+  if (!version.empty()) {
+    LogInfo("update: Later: v{} is not shown again until the next launch", Narrow(version));
+  }
+}
+
 void UpdateChecker::ChannelChanged() {
   Snapshot copy;
   {
     std::lock_guard lock(mutex_);
     ++feedGeneration_;
     offer_ = Offer{};
+    // Later was about a release of the feed the user has left
+    laterCode_ = 0;
     // The report of an update the helper ran is true whatever the feed, and
     // stays until the user dismisses it; every other banner was about the
     // offer.
@@ -654,6 +676,14 @@ bool UpdateChecker::OffersInstaller(Snapshot const& snapshot) {
   return snapshot.phase == Phase::Result &&
          snapshot.result.view == update::ReportView::NotInstalled && snapshot.offeredCode != 0 &&
          snapshot.offeredCode == snapshot.code;
+}
+
+bool UpdateChecker::OffersLater(Snapshot const& snapshot) {
+  // Not while an apply runs, and not on the helper's report, which has its
+  // own dismissal.
+  return snapshot.code != 0 &&
+         (snapshot.phase == Phase::Available || snapshot.phase == Phase::Failed ||
+          snapshot.phase == Phase::ManualInstall);
 }
 
 void UpdateChecker::RevealInExplorer(std::wstring const& file) {
@@ -879,10 +909,11 @@ void UpdateChecker::RunCheck(std::uint64_t generation) {
   MutateFor(generation, [](Snapshot& s) { s.lastCheck = CheckOutcome::InFlight; });
 
   // The repository by its id, so no rename and no re-registered owner name
-  // can move the feed, and with redirects refused for the same reason.
+  // can move the feed, and with redirects refused for the same reason. The
+  // same request the update helper makes (ReleaseListUrl), so the two judge
+  // the same page of releases.
   const update::Feed& feed = update::kOfficialFeed;
-  const std::wstring url = std::format(
-      L"https://api.github.com/repositories/{}/releases?per_page=15", feed.numericRepoId);
+  const std::wstring url = Widen(update::ReleaseListUrl(feed));
   std::string body;
   std::string error;
   FetchHeaders headers;
@@ -929,16 +960,18 @@ void UpdateChecker::RunCheck(std::uint64_t generation) {
     CheckFailed(generation);
     return;
   }
+  // Releases are judged against GitHub's clock, never this machine's: how far
+  // ahead a code may be, and how long a release has been out. A list without
+  // a Date header cannot be judged, and the helper refuses one too, so
+  // nothing is offered from it and the check has not succeeded.
+  if (headers.serverUnixSeconds == 0) {
+    LogWarn("update: the release list had no Date header; nothing is offered from it");
+    CheckFailed(generation);
+    return;
+  }
   const std::int64_t succeeded = NowUnixSeconds();
   SaveAppPref(kLastSuccessPrefKey, succeeded);
-  // Codes are judged against GitHub's clock, not this machine's. A response
-  // without a Date header is judged against this machine's: the offer is only
-  // what the banner shows, and the helper refuses a list without one.
-  std::int64_t serverUnixSeconds = headers.serverUnixSeconds;
-  if (serverUnixSeconds == 0) {
-    LogWarn("update: the release list had no Date header; judging codes by this clock");
-    serverUnixSeconds = succeeded;
-  }
+  const std::int64_t serverUnixSeconds = headers.serverUnixSeconds;
   const update::Selection sel = update::SelectRelease(*parsed, kArch, feed, serverUnixSeconds);
   for (auto const& skip : sel.skipped)
     LogWarn("update: release {} {} — skipped", skip.tag, skip.reason);
@@ -955,10 +988,14 @@ void UpdateChecker::RunCheck(std::uint64_t generation) {
                   Widen(sel.assetUrl), sel.digestHex, sel.assetName};
   }
 
-  LogInfo("update: check complete — own code {}, newest release {} (code {})",
+  LogInfo("update: check complete — own code {}, newest release {} (code {}){}",
           static_cast<unsigned long long>(version::kCode),
           newestVersion.empty() ? "none" : newestVersion,
-          static_cast<unsigned long long>(newestCode));
+          static_cast<unsigned long long>(newestCode),
+          sel.waitingCode == 0
+              ? std::string{}
+              : std::format("; {} counts from {}", sel.waitingVersion,
+                            update::FormatUtcSecond(sel.waitingFromUnixSeconds)));
 
   Snapshot copy;
   {
@@ -981,11 +1018,17 @@ void UpdateChecker::RunCheck(std::uint64_t generation) {
           newestCode ? CheckOutcome::DevBuild : CheckOutcome::NoUpdate;
     } else if (offer.code > version::kCode) {
       offer_ = offer;
+      offerServerUnix_ = serverUnixSeconds;
+      offerCheckedAt_ = steady_clock::now();
       snapshot_.lastCheck = CheckOutcome::UpdateFound;
       // A different (newer) release replaces whatever the banner said about
       // an older one; the SAME release keeps its standing ManualInstall/Failed
-      // state — a periodic check must not wipe the outcome of a click.
-      if (snapshot_.phase == Phase::None || snapshot_.code != offer.code) {
+      // state — a periodic check must not wipe the outcome of a click. A
+      // release the user chose Later on stays off the banner for this run.
+      if (update::HiddenByLater(laterCode_, offer.code)) {
+        LogInfo("update: v{} is offered, and Later keeps it off the banner until the next launch",
+                Narrow(offer.version));
+      } else if (snapshot_.phase == Phase::None || snapshot_.code != offer.code) {
         snapshot_.phase = Phase::Available;
         snapshot_.stage = Stage::Idle;
         snapshot_.failure = Failure::None;
@@ -1008,6 +1051,12 @@ void UpdateChecker::RunCheck(std::uint64_t generation) {
       offer_ = Offer{};
     }
     snapshot_.offeredCode = offer_.code;
+    // What the feed holds back until it has been out for a day is named only
+    // when it is newer than this build and than what is offered.
+    const bool waiting = sel.waitingCode > version::kCode && sel.waitingCode > offer_.code;
+    snapshot_.waitingCode = waiting ? sel.waitingCode : 0;
+    snapshot_.waitingVersion = waiting ? Widen(sel.waitingVersion) : std::wstring{};
+    snapshot_.waitingFromUnix = waiting ? sel.waitingFromUnixSeconds : 0;
     copy = snapshot_;
   }
   if (auto handler = HandlerCopy()) handler(copy);
@@ -1017,6 +1066,8 @@ void UpdateChecker::RunCheck(std::uint64_t generation) {
 
 void UpdateChecker::RunApply(std::uint64_t generation, bool manual) {
   Offer offer;
+  std::int64_t offerServerUnix = 0;
+  steady_clock::time_point offerCheckedAt{};
   {
     std::lock_guard lock(mutex_);
     // Update answers what offers the release; ShowInstaller also answers the
@@ -1027,6 +1078,8 @@ void UpdateChecker::RunApply(std::uint64_t generation, bool manual) {
                             (manual && snapshot_.phase == Phase::Result);
     if (!actionable || offer_.code == 0 || feedGeneration_ != generation) return;
     offer = offer_;
+    offerServerUnix = offerServerUnix_;
+    offerCheckedAt = offerCheckedAt_;
   }
   // On an installed copy the helper installs; on any other copy, and
   // whenever the user asked for the installer, the user runs it.
@@ -1050,6 +1103,31 @@ void UpdateChecker::RunApply(std::uint64_t generation, bool manual) {
     std::lock_guard lock(mutex_);
     return stop_;
   };
+  // The helper installs only what its own release list offers, and on a feed
+  // that soaks that changes when GitHub's day does. Once that day has changed
+  // since the check behind this offer, the check runs again first: a newer
+  // release then replaces the banner, where the helper would have refused
+  // this one after the download and the administrator prompt. Measured from
+  // the list's Date header by the steady clock, not by this machine's date.
+  // A check that fails leaves the offer as it was, and the helper decides.
+  const std::int64_t sinceCheck =
+      std::chrono::duration_cast<std::chrono::seconds>(steady_clock::now() - offerCheckedAt).count();
+  if (viaHelper && update::OfferMayHaveChanged(update::kOfficialFeed, offerServerUnix, sinceCheck)) {
+    LogInfo("update: GitHub's day has changed since v{} was offered; checking again before "
+            "the update",
+            Narrow(offer.version));
+    RunCheck(generation);
+    std::lock_guard lock(mutex_);
+    // The banner kept its button while that check ran. A click made then was
+    // on the offer as it stood before the check, and starts nothing more.
+    applyRequested_ = false;
+    manualRequested_ = false;
+    if (feedGeneration_ != generation || offer_.code != offer.code) {
+      LogInfo("update: v{} is no longer what the feed offers; nothing was started",
+              Narrow(offer.version));
+      return;
+    }
+  }
   // The helper asks GitHub for the release list itself: while GitHub holds
   // this network's requests, it would only be refused, after the prompt and
   // the download.
