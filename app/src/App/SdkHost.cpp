@@ -1776,14 +1776,15 @@ void SdkHost::SignInWithSso(const std::string& provider, std::function<void(Auth
   // match neither. Both come from the SDK's random source, like a wallet nonce.
   // Both providers run their own web flow: the state carries the platform
   // claim the api's callback reads to redirect back to this app
-  // (urnetwork://oauth/<provider>).
+  // (urnetwork://oauth/<provider>). The callback origin is pinned to the
+  // OPERATOR's api (ids::kOperatorApiUrl), not the pointed-at space's:
+  // bringyour manages the provider registrations and the exchange secret
+  // centrally, and the token that comes back signs into the ACTIVE space
+  // through AuthLoginWithSso -> /auth/login, which verifies signature +
+  // audience with no provider config of its own.
   const std::string state = WalletConnect::OAuthState(urnet::generateNonce());
   ssoAttempt_ = SsoAttempt{provider, state, urnet::generateNonce()};
-  std::string apiUrl;
-  {
-    std::scoped_lock lock(mutex_);
-    if (networkSpace_) apiUrl = networkSpace_->getApiUrl();
-  }
+  const std::string apiUrl = ids::kOperatorApiUrl;
   // opens the browser; the rest continues on the deep-link callback (on_sso)
   // the guard above admits only these two providers: no other flow exists
   if (provider == "apple") {
