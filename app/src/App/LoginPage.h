@@ -74,8 +74,12 @@ class LoginPage {
   // relay, which already parses the jwt.
   void ApplyAccountIdentity(std::string const& networkName, bool guest, bool pro,
                             bool signedIn);
-  // surfaces an auth error on whichever step the user is looking at
-  void ShowErrorOnCurrentStep(winrt::hstring const& message);
+  // Surfaces an auth error on whichever step the user is looking at. Takes the
+  // RAW string the auth relay carries: the machine tokens it can contain are
+  // mapped to their friendly copy here (MapAuthErrorForDisplay), because the
+  // relay also replays an error that landed while the window was away, and an
+  // unmapped replay used to replace the mapped sentence with the raw token.
+  void ShowErrorOnCurrentStep(std::string const& error);
   bool IsGuestUpgrade() const;
   void ClearGuestUpgrade();
 
@@ -196,6 +200,11 @@ class LoginPage {
   winrt::fire_and_forget ShowGuestModeSheet();  // terms consent -> LoginAsGuest
   void SetWalletSignInEnabled(bool enabled);
   void ApplyWalletSignInResult(urnw::AuthResult const& result);
+  // The one place bridge error tokens become display copy. Google's web flow
+  // answers error=not_configured while the production api vault lacks
+  // sign_in_oauth; the raw token reads as a broken app on the login screen.
+  // Every other error passes through as-is.
+  winrt::hstring MapAuthErrorForDisplay(std::string const& error);
   // Google or Apple: open the provider's sign-in page and wait for the api's
   // urnetwork://oauth/<provider> answer; `provider` is "google" or "apple".
   void StartSsoSignIn(const char* provider);

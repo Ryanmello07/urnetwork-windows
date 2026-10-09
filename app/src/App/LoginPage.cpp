@@ -16,6 +16,7 @@
 #include "Strings.h"
 #include "UrColors.h"
 #include "UrComponents.h"
+#include "WalletBridgeRoute.h"
 #include "WalletConnect.h"
 
 using namespace winrt;
@@ -61,6 +62,19 @@ size_t CountWords(std::string const& value) {
     inWord = !space;
   }
   return count;
+}
+
+// The SSO / wallet browser round trips share the bridge's ONE callback pair, so a
+// fresh click SUPERSEDES the attempt before it, and the SDK ANSWERS the
+// superseded attempt with a "superseded by ..." reason (SdkHost::
+// CancelPendingWalletFlows). That answer is bookkeeping, not a failure: applying
+// it would un-grey the affordances the fresh click just disabled and put the
+// reason string on screen as a login error. It is matched on the reason itself
+// (bridge::IsSuperseded, the seam WalletPage already uses) rather than on a
+// counter of clicks, so a genuine late result - signed in, needs a network, a
+// real error - is never dropped along with it.
+bool SupersededAnswer(urnw::AuthResult const& result) {
+  return !result.ok && bridge::IsSuperseded(result.error);
 }
 }  // namespace
 
@@ -350,8 +364,8 @@ void LoginPage::ClearSeedphraseField() {
   if (w_.SeedphraseBox()) w_.SeedphraseBox().Text(L"");
 }
 
-void LoginPage::ShowErrorOnCurrentStep(hstring const& message) {
-  ShowLoginErrorFor(loginStep_, message);
+void LoginPage::ShowErrorOnCurrentStep(std::string const& error) {
+  ShowLoginErrorFor(loginStep_, MapAuthErrorForDisplay(error));
 }
 
 bool LoginPage::IsGuestUpgrade() const {
@@ -414,6 +428,33 @@ void LoginPage::SetInitialLoginError(hstring const& message) {
   }
   w_.LoginErrorText().Text(message);
   w_.LoginErrorText().Visibility(Visibility::Visible);
+  // The line sits under Get started — below the fold at compact heights, and a
+  // sign-in error the user cannot see reads as "nothing happened" (measured: a
+  // failed browser sso return at 500x600 showed no trace of why). Deferred to
+  // the next tick (ProviderLocationsSheet's selection scroll is the same
+  // shape) AND forced through a layout first: the line was made visible THIS
+  // tick, so its bounds do not exist until the pending layout runs — a bare
+  // StartBringIntoView, synchronous or enqueued ahead of that pass, has
+  // nothing to measure and does nothing (measured: UIA reported the set line
+  // off-screen with no rect at exactly this size).
+  if (auto queue = w_.DispatcherQueue()) {
+    // Weak, like every sibling tick in this file: a late completion on a queue
+    // that is draining at quit must find nothing and do nothing (the tray-quit
+    // crash was exactly that), and an exception that reaches XAML ends the
+    // process - a failed scroll must never become one.
+    queue.TryEnqueue([weak = w_.get_weak()] {
+      auto self = weak.get();
+      if (!self) return;
+      try {
+        auto line = self->LoginErrorText();
+        line.UpdateLayout();
+        line.StartBringIntoView();
+      } catch (winrt::hresult_error const& e) {
+        LogWarn("login: could not scroll the error line into view: {}",
+                urnw::Narrow(std::wstring{e.message()}));
+      }
+    });
+  }
 }
 
 void LoginPage::ShowLoginErrorFor(LoginStep step, hstring const& message) {
@@ -1134,7 +1175,10 @@ void LoginPage::OnSignInWithBittensor(IInspectable const&, RoutedEventArgs const
   auto weak = w_.get_weak();
   Sdk().SignInWithBittensor([queue, weak](urnw::AuthResult r) {
     queue.TryEnqueue([weak, r] {
-      if (auto self = weak.get()) self->login().ApplyWalletSignInResult(r);
+      auto self = weak.get();
+      // a newer click superseded this attempt: the newer flow owns the page
+      if (!self || SupersededAnswer(r)) return;
+      self->login().ApplyWalletSignInResult(r);
     });
   });
 }
@@ -1180,7 +1224,10 @@ winrt::fire_and_forget LoginPage::OnSignInWithSolana(IInspectable const&,
   auto weak = self->get_weak();
   Sdk().SignInWithSolana(provider, [queue, weak](urnw::AuthResult r) {
     queue.TryEnqueue([weak, r] {
-      if (auto self = weak.get()) self->login().ApplyWalletSignInResult(r);
+      auto self = weak.get();
+      // as above: a superseded attempt's answer must not touch the page
+      if (!self || SupersededAnswer(r)) return;
+      self->login().ApplyWalletSignInResult(r);
     });
   });
 }
@@ -1223,18 +1270,24 @@ void LoginPage::ApplyWalletSignInResult(urnw::AuthResult const& result) {
   // on success ApplyAuthState swaps the panel for the home view; only an error
   // needs to be surfaced here
   if (result.ok || result.error.empty()) return;
-  // Google's web flow answers error=not_configured while the production api
-  // vault lacks sign_in_oauth (Apple's is likewise unregistered on the
-  // Services ID). The raw token reads as a broken app on the login screen;
-  // say what to do instead. Every other error surfaces as-is.
-  if (result.error == "not_configured") {
-    ShowLoginErrorFor(LoginStep::Initial,
-                      Adv("adv_sso_not_configured",
-                          L"Provider sign-in isn't available on this network yet — use "
-                          L"email or browser sign-in"));
-    return;
+  ShowLoginErrorFor(LoginStep::Initial, MapAuthErrorForDisplay(result.error));
+}
+
+// The same bridge error reaches the screen through TWO channels: this flow's
+// own callback (ApplyWalletSignInResult) and the auth-state relay
+// (ApplyAuthState -> ShowErrorOnCurrentStep), which also delivers an error that
+// landed while the window was away (AppController::ReconcileWindowPresentation
+// replays it once, until a presented window has shown it). Both go through here
+// so the two can never disagree — before they shared the mapping, the raw token
+// flashed on the failure itself and the next replay replaced the mapped
+// sentence with it for good.
+hstring LoginPage::MapAuthErrorForDisplay(std::string const& error) {
+  if (error == "not_configured") {
+    return Adv("adv_sso_not_configured",
+               L"Provider sign-in isn't available on this network yet — use "
+               L"email or browser sign-in");
   }
-  ShowLoginErrorFor(LoginStep::Initial, H(result.error));
+  return H(error);
 }
 
 // The SSO / wallet browser flows re-enable the affordances only from their
@@ -1270,8 +1323,12 @@ void LoginPage::StartSsoSignIn(const char* provider) {
   Sdk().SignInWithSso(provider, [queue, weak](urnw::AuthResult r) {
     queue.TryEnqueue([weak, r] {
       // ApplyWalletSignInResult already handles "authenticated but no network
-      // yet" for both credentials and re-enables the buttons.
-      if (auto self = weak.get()) self->login().ApplyWalletSignInResult(r);
+      // yet" for both credentials and re-enables the buttons. A stale answer
+      // (a click superseded this attempt while its browser tab was open) is
+      // dropped instead - see SupersededAnswer.
+      auto self = weak.get();
+      if (!self || SupersededAnswer(r)) return;
+      self->login().ApplyWalletSignInResult(r);
     });
   });
 }

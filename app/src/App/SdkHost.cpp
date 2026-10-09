@@ -1508,7 +1508,13 @@ void SdkHost::SetupWalletCallbacks() {
   wallet_.on_sso = [this](std::string provider, std::string authJwt, std::string state,
                           std::string error) {
     // NO ATTEMPT IN FLIGHT (see on_error below): a late or replayed callback
-    // must not be able to move the auth state.
+    // must not be able to move the auth state. A return for a state that was
+    // already consumed lands here - a stale browser tab completed a second
+    // time, a script re-firing the uri, or a restart of the app between the
+    // click and the return. It is harmless: the first delivery consumed the
+    // attempt below. (A real browser handoff delivers ONCE - measured; the
+    // "launched twice" pairs seen in the log were two separate launches, each
+    // with its own process, not a protocol double-fire.)
     if (!ssoAttempt_) {
       LogWarn("sdkhost: an sso callback arrived with no sign-in in flight, ignoring it");
       return;
@@ -1521,6 +1527,11 @@ void SdkHost::SetupWalletCallbacks() {
     }
     const SsoAttempt attempt = *ssoAttempt_;
     ssoAttempt_.reset();
+    // Matched: say so. The drops above warn and the flow's own answer is
+    // silent, so without this line a CONSUMED attempt reads in the log as if
+    // it had died silently (the error value is a bridge token, not a secret).
+    LogInfo("sdkhost: an sso callback matched the {} sign-in in flight{}", provider,
+            error.empty() ? "" : "; it carried an error: " + error);
     if (!error.empty() || authJwt.empty()) {
       if (wallet_.on_error) wallet_.on_error(error.empty() ? "sign-in returned no identity token" : error);
       return;

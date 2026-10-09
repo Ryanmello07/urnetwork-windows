@@ -2504,8 +2504,9 @@ void MainWindow::ApplyAuthState(urnw::AuthState state, std::string const& error)
   LoginRoot().Visibility(showHome ? Visibility::Collapsed : Visibility::Visible);
   HomeNav().Visibility(showHome ? Visibility::Visible : Visibility::Collapsed);
   if (!error.empty()) {
-    // surface the error on the sign-in step the user is looking at
-    login_->ShowErrorOnCurrentStep(H(error));
+    // surface the error on the sign-in step the user is looking at (raw: the
+    // page maps the machine tokens it knows to their friendly copy)
+    login_->ShowErrorOnCurrentStep(error);
   }
   if (loggedIn) login_->ClearGuestUpgrade();  // any guest upgrade resolved
   // The network name behind the idle "{name} is ready to connect" copy. Read
