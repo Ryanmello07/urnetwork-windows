@@ -56,6 +56,23 @@ class WifiSignalLevelTracker {
 
 class EgressMonitor {
  public:
+  // What the monitor does with what it observes.
+  //
+  //   Bind        — the tunnel session's (and rpc-only's) monitor: everything
+  //                 this header describes, R1 binding included.
+  //   ObserveOnly — the provider-only device's network watch
+  //                 (TunnelController::WatchProviderNetworkLocked). There is no
+  //                 tun, and that device deliberately binds nothing: its
+  //                 sockets follow the route table like any other process's
+  //                 (Common/ProvideLifecycle.h). It therefore never
+  //                 discovers or binds an interface and never calls
+  //                 setEgressInterfaceIndex (process-global inside this
+  //                 service's SDK); it only reports, through SetOnNetworkEvent
+  //                 and SetOnNetworkQualityEvent, the observations the binding
+  //                 monitor reports. Its Start() reports nothing: starting to
+  //                 watch is not a network change.
+  enum class Binding { Bind, ObserveOnly };
+
   // tunLuid is the interface to EXCLUDE from egress selection. A zero LUID
   // means "there is no tun" — the rpc-only start mode, which creates no
   // adapter. That is not a sentinel bolted on: DiscoverEgress excludes by
@@ -68,7 +85,8 @@ class EgressMonitor {
   // tunnel that does not exist — so the binding is a plain "prefer the physical
   // default route", and the retention behaviour in Refresh() is conservative
   // rather than load-bearing.
-  explicit EgressMonitor(NET_LUID tunLuid) : tunLuid_(tunLuid) {}
+  explicit EgressMonitor(NET_LUID tunLuid, Binding binding = Binding::Bind)
+      : tunLuid_(tunLuid), binding_(binding) {}
   ~EgressMonitor();
 
   EgressMonitor(const EgressMonitor&) = delete;
@@ -152,6 +170,7 @@ class EgressMonitor {
   static void WINAPI OnWlanChange(PWLAN_NOTIFICATION_DATA data, void* context);
 
   NET_LUID tunLuid_;
+  const Binding binding_;
   HANDLE notifyHandle_ = nullptr;
   HANDLE routeNotifyHandle_ = nullptr;
   HANDLE wlanHandle_ = nullptr;

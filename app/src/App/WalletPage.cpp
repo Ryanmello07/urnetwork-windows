@@ -25,6 +25,8 @@
 #include <limits>
 #include <string_view>
 
+#include "BittensorWalletDialogs.h"
+#include "BittensorWalletFlow.h"
 #include "EarningsSheets.h"
 #include "EmojiKeyboard.h"
 #include "LeaderboardIndicator.h"
@@ -55,14 +57,15 @@ using winrt::Windows::Foundation::IInspectable;
 
 namespace {
 
-// The wallet bridge opens a browser and the user may take a while in it; a
-// plain api call does not.
-constexpr int kBridgeTimeoutMs = 180'000;
+// The wallet bridge opens a browser (or the manual form waits for a pasted
+// signature) and the user may take a while; a plain api call does not. The
+// challenge itself lives five minutes, so waiting longer cannot succeed.
+constexpr int kBridgeTimeoutMs = 300'000;
 constexpr int kApiTimeoutMs = 20'000;
 
-// The bridge's purpose for a signature that attaches a coldkey to the provider
-// (the sign-in leaves it empty).
-constexpr const char* kConnectPurpose = "connect";
+// The session's purpose for a signature that attaches a coldkey to the
+// provider (urnet::BittensorWalletPurposeConnect).
+constexpr std::string_view kConnectPurpose = bittensor::kPurposeConnect;
 
 // Where the claim and head-spot routes live on the web app.
 constexpr const char* kUrXyzUrl = "https://ur.xyz";
@@ -70,6 +73,33 @@ constexpr const char* kTop200Path = "/app/account/top200";
 
 // A head score this close to the eviction floor is worth a warning.
 constexpr double kDemotionWarningRatio = 1.15;
+
+int64_t NowMillis() {
+  return std::chrono::duration_cast<std::chrono::milliseconds>(
+             std::chrono::system_clock::now().time_since_epoch())
+      .count();
+}
+
+// The user's zone's offset from UTC at `millis`, in minutes, by Windows' rules
+// for that date (daylight time included); 0 when Windows cannot say.
+int32_t LocalUtcOffsetMinutes(int64_t millis) {
+  // a FILETIME counts 100 ns ticks from 1601-01-01
+  constexpr int64_t kUnixEpochFileTimeMillis = 11'644'473'600'000;
+  const uint64_t ticks = static_cast<uint64_t>(millis + kUnixEpochFileTimeMillis) * 10'000;
+  FILETIME utcFile{static_cast<DWORD>(ticks & 0xFFFFFFFF), static_cast<DWORD>(ticks >> 32)};
+  SYSTEMTIME utc{};
+  SYSTEMTIME local{};
+  FILETIME localFile{};
+  if (!FileTimeToSystemTime(&utcFile, &utc) ||
+      !SystemTimeToTzSpecificLocalTime(nullptr, &utc, &local) ||
+      !SystemTimeToFileTime(&local, &localFile)) {
+    return 0;
+  }
+  const uint64_t localTicks =
+      (static_cast<uint64_t>(localFile.dwHighDateTime) << 32) | localFile.dwLowDateTime;
+  return static_cast<int32_t>((static_cast<int64_t>(localTicks) - static_cast<int64_t>(ticks)) /
+                              600'000'000);
+}
 
 // A stat tile's value, in the colour its state deserves. The dash is a
 // PLACEHOLDER, not a number: faint for the placeholder, text colour for a real
@@ -113,9 +143,11 @@ urnet::SnError TransportError(std::string const& message) {
 }
 
 // SnSetWallet predates the common coded SnError result shape. Adapt its
-// message explicitly instead of assigning between two unrelated optionals.
+// code and message explicitly instead of assigning between two unrelated
+// optionals (the code reaches ApplyWalletConnectResult as on the device path).
 urnet::SnError SetWalletError(urnet::SnSetWalletError const& source) {
   urnet::SnError error;
+  error.code = source.code;
   error.message = source.message;
   return error;
 }
@@ -428,6 +460,62 @@ urnet::LeaderboardEarnersList SampleEarners() {
   };
 }
 
+// ---- the provider status (P008) ----------------------------------------------
+
+// The Demand bars stand in the Blocked chart's 66 px, over a 1 px baseline.
+constexpr double kDemandBarsHeight = 65;
+
+// The percent pattern and sign of the language the app's strings are in
+// (LOCALE_IPOSITIVEPERCENT, LOCALE_SPERCENT), read once; "#%" when Windows
+// cannot say.
+struct PercentStyle {
+  int pattern = 1;
+  std::string sign = "%";
+};
+
+PercentStyle const& LocalePercentStyle() {
+  static const PercentStyle style = [] {
+    PercentStyle read;
+    const std::wstring language = urnw::Widen(urnw::PrimaryLanguage());
+    DWORD pattern = 0;
+    if (::GetLocaleInfoEx(language.c_str(), LOCALE_IPOSITIVEPERCENT | LOCALE_RETURN_NUMBER,
+                          reinterpret_cast<LPWSTR>(&pattern),
+                          sizeof(pattern) / sizeof(wchar_t)) != 0) {
+      read.pattern = static_cast<int>(pattern);
+    }
+    wchar_t sign[8]{};
+    if (::GetLocaleInfoEx(language.c_str(), LOCALE_SPERCENT, sign,
+                          static_cast<int>(std::size(sign))) != 0 &&
+        sign[0] != L'\0') {
+      read.sign = urnw::Narrow(sign);
+    }
+    return read;
+  }();
+  return style;
+}
+
+// Why?'s values in the store's words and the reader's numbers: the locale's
+// percent, and the byte rate the provider charts label theirs with.
+providerstatus::ValueText<std::wstring> ProviderStatusText() {
+  providerstatus::ValueText<std::wstring> text;
+  text.localized = [](std::string_view key) { return urnw::Localized(key); };
+  text.format = [](std::string_view key, std::wstring const& value, std::wstring const& bound) {
+    return urnw::Format(key, value, bound);
+  };
+  text.formatCounts = [](std::string_view key, int64_t count, int64_t total) {
+    return urnw::Format(key, count, total);
+  };
+  text.percent = [](double ratio) {
+    PercentStyle const& style = LocalePercentStyle();
+    return urnw::Widen(providerstatus::FormatPercent(ratio, style.pattern, style.sign));
+  };
+  text.rate = [](double bytesPerSecond) {
+    return urnw::Widen(urnw::FormatByteRate(static_cast<int64_t>(std::llround(bytesPerSecond))));
+  };
+  text.plain = [](std::string const& utf8) { return urnw::Widen(utf8); };
+  return text;
+}
+
 }  // namespace
 
 WalletPage::WalletPage(winrt::URnetwork::implementation::MainWindow& window)
@@ -439,7 +527,6 @@ WalletPage::~WalletPage() {
   *alive_ = false;  // the controller's listener and the sheet's completions stop here
   if (walletValidateTimer_) walletValidateTimer_.Stop();
   if (chartTimer_) chartTimer_.Stop();
-  if (seekerFlow_.timer) seekerFlow_.timer.Stop();
   if (connectFlow_.timer) connectFlow_.timer.Stop();
   if (rankingFlow_.timer) rankingFlow_.timer.Stop();
   if (pointsPublicFlow_.timer) pointsPublicFlow_.timer.Stop();
@@ -449,6 +536,12 @@ WalletPage::~WalletPage() {
     ClosePointsBoard(/*deviceAlive=*/true);
   } catch (...) {
     // the host may already be gone at teardown; nothing left to close on
+  }
+  try {
+    CloseProviderStatus(/*deviceAlive=*/true);
+    Sdk().SetProviderOnlyStatusWanted(false);
+  } catch (...) {
+    // likewise
   }
 }
 
@@ -525,12 +618,23 @@ void WalletPage::Initialize() {
       if (auto self = weak.get()) self->wallet().ApplyProviderThroughput(snapshot);
     });
   });
+  // the provider-only device's provider status (P008, no session), read on the
+  // api by SdkHost; applied on the UI thread like the controller's
+  Sdk().SetProviderOnlyStatusHandler([queue, weak](urnw::ProviderOnlyStatus status) {
+    queue.TryEnqueue([weak, status = std::move(status)] {
+      if (auto self = weak.get()) self->wallet().ApplyProviderOnlyStatus(status);
+    });
+  });
   // ConnectPage's ~10 fps chart clock, started and stopped with the window's
   // presentation (SetPresentationActive)
   chartTimer_ = w_.DispatcherQueue().CreateTimer();
   chartTimer_.Interval(std::chrono::milliseconds(100));
   chartTimer_.Tick([weak](auto const&, auto const&) {
     if (auto self = weak.get()) self->wallet().OnChartTick();
+  });
+  // the provider status's Why? (P008), a disclosure row that starts collapsed
+  w_.WalletProviderWhyButton().Click([weak](auto const&, auto const&) {
+    if (auto self = weak.get()) self->wallet().ToggleProviderWhy();
   });
   // Seed the read-only row, the running role and the provider gate from
   // SdkHost's caches, so a window built long after the session bootstrapped
@@ -540,12 +644,21 @@ void WalletPage::Initialize() {
 }
 
 void WalletPage::SetPresentationActive(bool active) {
+  // the provider status polls only while the window presents (P008)
+  presentationActive_ = active;
+  ReconcileProviderStatus();
   if (!chartTimer_) return;
   if (active) {
     if (!chartTimer_.IsRunning()) chartTimer_.Start();
   } else {
     chartTimer_.Stop();
   }
+}
+
+void WalletPage::SetSelected(bool selected) {
+  if (selected_ == selected) return;
+  selected_ = selected;
+  ReconcileProviderStatus();
 }
 
 void WalletPage::OpenUrl(std::string const& url) {
@@ -605,24 +718,36 @@ void WalletPage::ApplyStrings() {
   w_.WalletPaneCFoldTitle().Text(Loc("earnings_network_pane_title"));
   w_.UnclaimedHeading().Text(Loc("unclaimed"));
   w_.ClaimButton().Content(LocBox("claim"));
+  w_.SetColdkeyButton().Content(LocBox("set_coldkey"));
+  w_.SnPayoutClaimButton().Content(LocBox("claim"));
   w_.Top200Heading().Text(Loc("top200"));
   w_.Top200Button().Content(LocBox("claim_your_spot"));
   w_.Top200Warning().Text(Loc("top200_demotion_warning"));
   w_.UpgradeButton().Content(LocBox("upgrade_with_stripe"));
 
   // pane C
-  w_.EarningMultipliersHeading().Text(Loc("earning_multipliers"));
-  w_.SeekerPointsOnlyText().Text(Loc("seeker_points_only"));
-  w_.VerifySeekerButton().Content(LocBox("verify_seeker"));
   w_.NetworkReliabilityHeading().Text(Loc("site_app_network_reliability"));
   w_.WalletProvideModeLabel().Text(Loc("provide_mode"));
   w_.WalletProvideModeValue().Text(Loc(Sdk().CurrentProvideControlMode().c_str()));
+  // the idle reason's action (P008) and its line, in the language
+  w_.WalletProvideReasonChange().Content(LocBox("change"));
+  ApplyProvideReason();
   // the two statistics groups (connect/EXTENDER.md O8) and the read-only
   // extender row (N7), whose state line follows the language too
   w_.WalletExtenderStatsHeading().Text(Loc("extender_statistics"));
   w_.WalletProviderStatsHeading().Text(Loc("provider_statistics"));
   w_.WalletExtenderLabel().Text(Loc("extender"));
   ApplyExtenderProvideRow();
+  // the Demand chart beside the provider plots and its Why? (P008); the
+  // caption is also what a screen reader reads for the bars, which have no
+  // automation peer
+  w_.WalletProviderDemandTitle().Text(Loc("provider_status_demand"));
+  w_.WalletProviderDemandCaption().Text(Loc("provider_status_histogram_title"));
+  w_.WalletProviderDemandStart().Text(Loc("provider_status_histogram_start"));
+  w_.WalletProviderDemandEnd().Text(Loc("provider_status_histogram_end"));
+  w_.WalletProviderWhyLabel().Text(Loc("provider_status_why"));
+  automation::AutomationProperties::SetName(w_.WalletProviderWhyButton(),
+                                            Loc("provider_status_why"));
   ApplyStatsSections(/*force=*/true);
   w_.LeaderboardRankLabel().Text(Loc("current_ranking"));
   w_.LeaderboardNetProvidedLabel().Text(Loc("net_provided"));
@@ -646,12 +771,13 @@ void WalletPage::ApplyStrings() {
   SetStatValue(w_.UnclaimedValue(), dash, false);
   SetStatValue(w_.LeaderboardRankValue(), dash, false);
   SetStatValue(w_.LeaderboardNetProvidedValue(), dash, false);
-  ApplySeekerState();
   ShowManualPanel(manualPanelOpen_);
   // Not part of the Loading seeding above: the Solana card and the waiting line
   // stay collapsed until their reads land. Their formatted text and names are
-  // in the language, though, so a strings change redraws them.
+  // in the language, though, so a strings change redraws them. So does the
+  // payout line, collapsed until the coldkey is known.
   RebuildSolanaPanel();
+  RebuildPayoutLine();
 }
 
 // The ledger pane shows ONE table at a time; this is the switch in its header.
@@ -678,7 +804,6 @@ void WalletPage::LoadWallet() {
   if (!Sdk().IsLoggedIn()) return;  // the caller's guard is not the only one
   if (auto jwt = Sdk().ParsedJwt(); jwt && jwt->NetworkId) ownNetworkId_ = *jwt->NetworkId;
   LoadPoints();
-  LoadSeeker();
   LoadReliability();
   LoadEpochs();
   LoadSnWallet();  // continues into LoadClaims/LoadGas once the coldkey is known
@@ -761,33 +886,6 @@ void WalletPage::LoadPoints() {
         self->wallet().ApplyPoints(points, ok ? Fetch::Ready : Fetch::Failed);
     });
   });
-}
-
-// The Seeker flag still lives on the account's wallets (has_seeker_token on
-// the verified Solana wallet). Nothing else about those wallets is shown.
-void WalletPage::LoadSeeker() {
-  auto queue = w_.DispatcherQueue();
-  auto weak = w_.get_weak();
-  Sdk().api().getAccountWallets(
-      [queue, weak](std::optional<urnet::GetAccountWalletsResult> result,
-                    std::optional<std::string> err) {
-        bool holder = false;
-        if (result && result->wallets && !err) {
-          for (auto const& wallet : *result->wallets) {
-            if (wallet.has_seeker_token) holder = true;
-          }
-        } else {
-          urnw::LogError("earnings: getAccountWallets failed{}",
-                         err ? (": " + *err) : std::string());
-        }
-        queue.TryEnqueue([weak, holder] {
-          if (auto self = weak.get()) {
-            self->wallet().seekerHolder_ = holder;
-            self->wallet().ApplySeekerState();
-            self->wallet().RebuildPointsRows();
-          }
-        });
-      });
 }
 
 void WalletPage::LoadReliability() {
@@ -937,8 +1035,17 @@ void WalletPage::LoadClaims() {
     const bool ok = !error.has_value();
     std::vector<EpochClaim> claims;
     int64_t total = 0;
+    std::optional<snpayout::EpochSchedule> schedule;
     if (ok) {
       total = result->total_claimable_rao;
+      if (result->schedule) {
+        snpayout::EpochSchedule s;
+        s.epoch = result->schedule->epoch;
+        s.endMillis = result->schedule->end_millis;
+        s.claimOpenMillis = result->schedule->claim_open_millis;
+        s.expiryMillis = result->schedule->expiry_millis;
+        schedule = s;
+      }
       if (result->claims) {
         for (auto const& c : *result->claims) {
           EpochClaim claim;
@@ -958,9 +1065,10 @@ void WalletPage::LoadClaims() {
       urnw::LogError("earnings: snClaims failed: {} {}", error->code.value_or(std::string()),
                      error->message);
     }
-    queue.TryEnqueue([weak, claims = std::move(claims), total, ok, error] {
+    queue.TryEnqueue([weak, claims = std::move(claims), total, ok, error, schedule] {
       if (auto self = weak.get())
-        self->wallet().ApplyClaims(claims, total, ok ? Fetch::Ready : Fetch::Failed, error);
+        self->wallet().ApplyClaims(claims, total, ok ? Fetch::Ready : Fetch::Failed, error,
+                                   schedule);
     });
   });
 }
@@ -1077,8 +1185,9 @@ void WalletPage::ApplyPoints(std::vector<urnet::AccountPoint> const& points, Fet
 }
 
 // The breakdown as rows on the pane's grid: providing, referral, reliability,
-// and the Seeker 2x only for a holder (it is points only, and it is the one
-// row that says so).
+// and the Seeker 2x whenever the points carry a multiplier (payout_multiplier).
+// That is read from the points alone, never a wallet lookup: Seeker
+// verification lives only in the Android Solana dApp Store build.
 void WalletPage::RebuildPointsRows() {
   auto panel = w_.AccountPointsPanel();
   panel.Children().Clear();
@@ -1089,7 +1198,7 @@ void WalletPage::RebuildPointsRows() {
   add(Loc("providing"), accountPoints_.payout);
   add(Loc("referral"), accountPoints_.referral);
   add(Loc("reliability"), accountPoints_.reliability);
-  if (seekerHolder_) {
+  if (accountPoints_.multiplier > 0) {
     auto row = kit::MakePaneKeyValueRow(
         Loc("seeker_token_verified"),
         hstring{urnw::Format("plus_amount", FormatPointsValue(accountPoints_.multiplier))});
@@ -1126,9 +1235,11 @@ void WalletPage::ApplySnWallet(std::optional<SnWalletInfo> wallet, Fetch state) 
   if (!connected) {
     claims_.clear();
     totalClaimableRao_ = 0;
+    schedule_.reset();
     gas_.reset();
   }
   RebuildHistory();
+  RebuildPayoutLine();
   if (connected && !w_.previewUi()) {
     EnsureChainSettings([weak = w_.get_weak()] {
       if (auto self = weak.get()) {
@@ -1151,8 +1262,9 @@ void WalletPage::SetConnectingWallet(bool connecting) {
 }
 
 // Both doors lead here. `pinnedAddress` is the pasted address (the challenge
-// is fetched for it and the bridge has to answer with it), or empty for the
-// bridge's own pick.
+// is fetched for it and the wallet has to sign with it), or empty for the
+// wallet's own pick. The user picks the wallet first: Talisman continues in the
+// browser, TAO.com in the manual form.
 void WalletPage::StartWalletConnect(std::string const& pinnedAddress) {
   if (connectingWallet_ || w_.sheetOpen()) return;
   // Before the browser opens, not after: with no session this ends in a
@@ -1161,7 +1273,28 @@ void WalletPage::StartWalletConnect(std::string const& pinnedAddress) {
     RefuseNoSession();
     return;
   }
+  auto weak = w_.get_weak();
+  ChooseBittensorWallet(w_.get_strong(), [weak, pinnedAddress](std::string walletId) {
+    auto self = weak.get();
+    if (!self || walletId.empty()) return;
+    self->wallet().ConnectWithWallet(walletId, pinnedAddress);
+  });
+}
+
+void WalletPage::ConnectWithWallet(std::string const& walletId, std::string const& pinnedAddress) {
+  if (connectingWallet_) return;
   SetConnectingWallet(true);
+  connectWalletId_ = walletId;
+  // Talisman asks for the extension's approval, WalletConnect for a scan
+  const std::string browserHint = bittensor::BrowserHintKey(walletId);
+  if (browserHint == "bittensor_continue_in_browser") {
+    kit::SetTextOrCollapse(
+        w_.WalletConnectStatusText(),
+        winrt::hstring{urnw::Format("bittensor_continue_in_browser",
+                                    Widen(urnet::bittensorWalletDisplayName(walletId)))});
+  } else if (!browserHint.empty()) {
+    kit::SetTextOrCollapse(w_.WalletConnectStatusText(), Loc(browserHint));
+  }
 
   // WalletConnect has no timeout, and its on_error only fires when the deep
   // link comes BACK carrying an error. A closed browser tab produces nothing
@@ -1177,7 +1310,7 @@ void WalletPage::StartWalletConnect(std::string const& pinnedAddress) {
   auto queue = w_.DispatcherQueue();
   auto weak = w_.get_weak();
   Sdk().SignWithBittensorWallet(
-      pinnedAddress, kConnectPurpose,
+      walletId, pinnedAddress, std::string(kConnectPurpose),
       [queue, weak, generation, pinnedAddress](bool ok, std::string address,
                                                std::string signature, std::string message,
                                                std::string error) {
@@ -1215,8 +1348,9 @@ void WalletPage::ApplyWalletSigned(uint32_t generation, bool ok, std::string con
     SettleFlow(connectFlow_, generation);
     SetConnectingWallet(false);
     if (bridge::IsSuperseded(error)) {
-      // the user started another wallet flow (the Solana sheet, Seeker): this
-      // attempt ended by their choice, and the block is simply ready again
+      // the user started another wallet flow (the Solana sheet, or adding a
+      // sign-in method in Settings): this attempt ended by their choice, and
+      // the block is simply ready again
       urnw::LogInfo("earnings: the Bittensor wallet connect was superseded ({})", error);
       return;
     }
@@ -1351,6 +1485,19 @@ void WalletPage::ApplyWalletConnectResult(uint32_t generation, bool ok,
   }
   SetConnectingWallet(false);
   if (!ok) {
+    // a signature pasted from the manual wallet that is not from the entered
+    // address: say so, and what to do in that wallet
+    const std::string transport =
+        connectWalletId_.empty()
+            ? std::string()
+            : urnet::bittensorWalletTransportFor(connectWalletId_, std::string(bittensor::kPlatform));
+    const std::string key = bittensor::ConnectErrorKey(
+        error ? error->code.value_or(std::string()) : std::string(), transport);
+    if (!key.empty()) {
+      Notify(hstring{urnw::Format(key, Widen(urnet::bittensorWalletDisplayName(connectWalletId_)))},
+             InfoBarSeverity::Error);
+      return;
+    }
     Notify(error ? SnErrorText(error) : Loc("wallet_connect_failed"), InfoBarSeverity::Error);
     return;
   }
@@ -1570,7 +1717,22 @@ void WalletPage::ApplyLegacyAnswer(uint32_t generation, solana::LegacyRead which
   // another load's answer, or a read that already answered
   if (!legacyLoad_.Answer(generation, which, ok, std::move(answer))) return;
   // legacy_.networkId is the network the current load was begun for
-  if (legacyLoad_.Commit(legacy_, legacy_.networkId)) RebuildSolanaPanel();
+  if (legacyLoad_.Commit(legacy_, legacy_.networkId)) {
+    RebuildSolanaPanel();
+    NotifyPromotedPayoutWallet();
+  }
+}
+
+void WalletPage::NotifyPromotedPayoutWallet() {
+  if (!payoutRemoval_) return;
+  const solana::PayoutRemoval removal = *payoutRemoval_;
+  payoutRemoval_.reset();
+  // the card shows the promoted wallet now; the line says payouts moved to it
+  if (auto promoted = solana::PromotedPayoutWallet(removal, legacy_)) {
+    Notify(hstring{urnw::Format("payouts_now_go_to",
+                                urnw::Widen(solana::ShortAddress(promoted->address)))},
+           InfoBarSeverity::Success);
+  }
 }
 
 void WalletPage::RebuildSolanaPanel() {
@@ -1873,7 +2035,10 @@ winrt::fire_and_forget WalletPage::ConfirmRemoveSolanaWallet() {
   ContentDialog dialog;
   dialog.XamlRoot(self->Content().XamlRoot());
   dialog.Title(winrt::box_value(Loc("remove_wallet")));
-  dialog.Content(winrt::box_value(Loc("remove_wallet_holds_payouts")));
+  // Removing the payout wallet makes another of the network's Solana or
+  // Polygon wallets the payout wallet when there is one (the server picks it)
+  // and holds USDC payouts when there is none: one line for both.
+  dialog.Content(winrt::box_value(Loc("remove_wallet_moves_or_holds_payouts")));
   dialog.PrimaryButtonText(Loc("remove"));
   dialog.IsPrimaryButtonEnabled(allowActions);
   dialog.CloseButtonText(Loc("cancel"));
@@ -1913,22 +2078,25 @@ void WalletPage::RemoveSolanaWallet(std::string const& walletId) {
 
   urnet::RemoveWalletArgs args;
   args.wallet_id = walletId;
+  // the payout wallet now, to tell a promotion from no payout wallet afterwards
+  const solana::PayoutRemoval removal{legacy_.networkId, walletId, legacy_.payoutWalletId};
   auto queue = w_.DispatcherQueue();
   auto weak = w_.get_weak();
   Sdk().api().removeWallet(
-      args, [queue, weak, generation](std::optional<urnet::RemoveWalletResult> result,
-                                      std::optional<std::string> err) {
+      args, [queue, weak, generation, removal](std::optional<urnet::RemoveWalletResult> result,
+                                               std::optional<std::string> err) {
         std::string error = err ? *err : std::string();
         if (error.empty() && result && result->error) error = result->error->message;
         const bool ok = result && result->success && error.empty();
         if (!ok) urnw::LogError("earnings: removeWallet failed: {}", error);
-        queue.TryEnqueue([weak, generation, ok, error] {
-          if (auto self = weak.get()) self->wallet().ApplyRemoveResult(generation, ok, error);
+        queue.TryEnqueue([weak, generation, ok, error, removal] {
+          if (auto self = weak.get()) self->wallet().ApplyRemoveResult(generation, ok, error, removal);
         });
       });
 }
 
-void WalletPage::ApplyRemoveResult(uint32_t generation, bool ok, std::string const& error) {
+void WalletPage::ApplyRemoveResult(uint32_t generation, bool ok, std::string const& error,
+                                   solana::PayoutRemoval const& removal) {
   if (!SettleFlow(removeFlow_, generation)) {
     urnw::LogWarn("earnings: dropping a remove result for an abandoned request (ok={})", ok);
     return;
@@ -1939,8 +2107,11 @@ void WalletPage::ApplyRemoveResult(uint32_t generation, bool ok, std::string con
     Notify(SolanaFailureText(error), InfoBarSeverity::Error);
     return;
   }
-  // No snackbar on success: the store has no "wallet removed" sentence, so the
-  // removal reports itself the way the old wallet sheet's did - the card goes.
+  // Removing the payout wallet makes another active Solana or Polygon wallet
+  // the payout wallet when the network has one: the reload's commit names it
+  // (NotifyPromotedPayoutWallet). Otherwise the removal reports itself the way
+  // the old wallet sheet's did - the card goes.
+  payoutRemoval_ = removal;
   LoadLegacyWallets(/*reset=*/true);
 }
 
@@ -2048,10 +2219,13 @@ void WalletPage::ApplyLedgerMeta() {
 // ---- claims, gas, head -----------------------------------------------------
 
 void WalletPage::ApplyClaims(std::vector<EpochClaim> const& claims, int64_t totalClaimableRao,
-                             Fetch state, std::optional<urnet::SnError> const& error) {
+                             Fetch state, std::optional<urnet::SnError> const& error,
+                             std::optional<snpayout::EpochSchedule> const& schedule) {
   claims_ = claims;
   totalClaimableRao_ = totalClaimableRao;
   claimsState_ = state;
+  schedule_ = schedule;
+  RebuildPayoutLine();
   size_t claimable = 0;
   for (auto const& claim : claims_) {
     if (claim.status == "claimable") ++claimable;
@@ -2082,6 +2256,33 @@ void WalletPage::ApplyClaims(std::vector<EpochClaim> const& claims, int64_t tota
   const bool previewSample = w_.previewUi() && PreviewSample() && !claims_.empty();
   w_.ClaimButton().IsEnabled((totalClaimableRao_ > 0 && CanClaim()) || previewSample);
   RebuildHistory();
+}
+
+// How and when SN payouts happen, under the points figure. The decision is
+// snpayout::PayoutLineFor's; the times are the reader's local time, with the
+// zone's offset taken at each instant. Claim opens the claim dialog and Set
+// coldkey the coldkey flow, the same handlers as the unclaimed tile's button and
+// the Bittensor block's; the app never claims by itself.
+void WalletPage::RebuildPayoutLine() {
+  const bool walletKnown = walletState_ == Fetch::Ready || snWallet_.has_value();
+  const auto view = snpayout::PayoutLineFor(
+      walletKnown, snWallet_.has_value(), totalClaimableRao_, schedule_, NowMillis(),
+      [](int64_t millis) {
+        return snpayout::FormatScheduleTime(millis, LocalUtcOffsetMinutes(millis));
+      });
+  const bool shown = view.kind != snpayout::LineKind::Hidden;
+  w_.SnPayoutPanel().Visibility(shown ? Visibility::Visible : Visibility::Collapsed);
+  if (!shown) return;
+  const bool setColdkey = view.kind == snpayout::LineKind::SetColdkey;
+  w_.SnPayoutText().Text(setColdkey ? Loc("set_coldkey_to_get_paid") : Loc("sn_payout_schedule"));
+  kit::SetTextOrCollapse(
+      w_.SnPayoutTimesText(),
+      view.showTimes ? hstring{urnw::Format("sn_payout_schedule_times", urnw::Widen(view.epochEnd),
+                                            urnw::Widen(view.claimOpen), urnw::Widen(view.expiry))}
+                     : hstring{});
+  w_.SetColdkeyButton().Visibility(setColdkey ? Visibility::Visible : Visibility::Collapsed);
+  w_.SnPayoutClaimButton().Visibility(view.showClaim ? Visibility::Visible : Visibility::Collapsed);
+  w_.SnPayoutClaimButton().IsEnabled(view.showClaim && CanClaim());
 }
 
 void WalletPage::ApplyGas(std::optional<GasKeyInfo> gas) { gas_ = std::move(gas); }
@@ -2311,148 +2512,6 @@ void WalletPage::ApplyReliability(std::optional<urnet::ReliabilityWindow> window
   }
 }
 
-// ---- the Seeker multiplier (points only) ------------------------------------
-
-void WalletPage::ApplySeekerState() {
-  if (seekerHolder_) {
-    w_.SeekerStatusText().Text(
-        hstring{urnw::Localized("seeker_token_verified") + L" " +
-                urnw::Localized("you_re_earning_2x_points")});
-    w_.VerifySeekerButton().Visibility(Visibility::Collapsed);
-    return;
-  }
-  // "Waiting" is a state the user must be able to SEE.
-  w_.SeekerStatusText().Text(verifyingSeeker_ ? Loc("opening_wallet_in_browser")
-                                              : Loc("connect_seeker_wallet"));
-  w_.VerifySeekerButton().Visibility(Visibility::Visible);
-  w_.VerifySeekerButton().IsEnabled(!verifyingSeeker_);
-}
-
-// Claim the 2x multiplier by proving a Solana wallet holds the Seeker token
-// (android SettingsScreen.signAndVerifySeekerHolder). The wallet signs a
-// timestamped challenge through the ur.io/wallet-connect browser bridge and
-// the signed triple goes to Api.verifySeekerHolder. Points only: the Seeker
-// wallet has no bearing on SN25a, which settles on the Bittensor coldkey.
-winrt::fire_and_forget WalletPage::OnVerifySeeker(IInspectable const&, RoutedEventArgs const&) {
-  if (w_.sheetOpen() || verifyingSeeker_) co_return;
-  // Before the wallet picker, not after: with no session this ends in
-  // verifySeekerHolder, and it opens a BROWSER on the way there.
-  if (!CanCallApi()) {
-    RefuseNoSession();
-    co_return;
-  }
-  auto self = w_.get_strong();
-
-  ContentDialog dialog;
-  dialog.XamlRoot(self->Content().XamlRoot());
-  dialog.Title(winrt::box_value(Loc("confirm_seeker_token")));
-  dialog.Content(winrt::box_value(Loc("connect_seeker_wallet")));
-  dialog.PrimaryButtonText(Loc("phantom"));
-  dialog.SecondaryButtonText(Loc("solflare"));
-  dialog.CloseButtonText(Loc("cancel"));
-  dialog.DefaultButton(ContentDialogButton::Primary);
-  dialog.Background(colors::SheetBrush());
-
-  self->SetSheetOpen(true);
-  ContentDialogResult result{ContentDialogResult::None};
-  try {
-    result = co_await dialog.ShowAsync();
-  } catch (...) {
-  }
-  self->SetSheetOpen(false);
-  if (result == ContentDialogResult::None) co_return;
-
-  const auto provider = (result == ContentDialogResult::Secondary)
-                            ? urnw::WalletConnect::Provider::Solflare
-                            : urnw::WalletConnect::Provider::Phantom;
-
-  self->wallet().verifyingSeeker_ = true;
-  self->wallet().ApplySeekerState();
-
-  // A closed browser tab produces nothing at all, so the watchdog is what
-  // brings the button back.
-  const uint32_t generation = self->wallet().BeginFlow(
-      self->wallet().seekerFlow_, kBridgeTimeoutMs, [weak = self->get_weak()] {
-        if (auto w = weak.get()) {
-          w->wallet().verifyingSeeker_ = false;
-          w->wallet().ApplySeekerState();
-          w->wallet().Notify(Loc("error_claiming_multiplier"), InfoBarSeverity::Error);
-        }
-      });
-
-  // android's challenge shape, timestamp and all: a fixed string would be
-  // replayable
-  const std::string message =
-      "Verify Seeker Token Holder - " +
-      std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(
-                         std::chrono::system_clock::now().time_since_epoch())
-                         .count());
-
-  auto queue = self->DispatcherQueue();
-  auto weak = self->get_weak();
-  Sdk().SignWithSolanaWallet(
-      provider, message,
-      [queue, weak, message, generation](bool ok, std::string address, std::string signature,
-                                         std::string error) {
-        if (!ok) {
-          // a superseded request is not a failure (ApplySeekerResult says so quietly)
-          if (!bridge::IsSuperseded(error)) {
-            urnw::LogError("seeker: wallet signature failed: {}", error);
-          }
-          queue.TryEnqueue([weak, error, generation] {
-            if (auto w = weak.get()) w->wallet().ApplySeekerResult(generation, false, error);
-          });
-          return;
-        }
-        urnet::VerifySeekerNftHolderArgs args;
-        args.wallet_address = address;
-        args.wallet_signature = signature;
-        args.wallet_message = message;
-        Sdk().api().verifySeekerHolder(
-            args, [queue, weak, generation](
-                      std::optional<urnet::VerifySeekerNftHolderResult> result,
-                      std::optional<std::string> err) {
-              std::string failure = err ? *err : std::string();
-              if (failure.empty() && result && result->error) failure = result->error->message;
-              const bool verified = result && result->success && failure.empty();
-              if (!verified) urnw::LogError("seeker: verifySeekerHolder failed: {}", failure);
-              queue.TryEnqueue([weak, verified, failure, generation] {
-                if (auto w = weak.get())
-                  w->wallet().ApplySeekerResult(generation, verified, failure);
-              });
-            });
-      });
-}
-
-void WalletPage::ApplySeekerResult(uint32_t generation, bool ok,
-                                   std::string const& serverError) {
-  // The watchdog already gave up on this one and said so: do not now contradict
-  // it by reporting the outcome of a request the user was told had failed.
-  if (!SettleFlow(seekerFlow_, generation)) {
-    urnw::LogWarn("seeker: dropping a result for an abandoned verification (ok={})", ok);
-    return;
-  }
-  verifyingSeeker_ = false;
-  if (!ok && bridge::IsSuperseded(serverError)) {
-    // the user started another wallet flow (the Solana sheet): this attempt
-    // ended by their choice, and the button is simply ready again
-    urnw::LogInfo("seeker: the wallet signature was superseded ({})", serverError);
-    ApplySeekerState();
-    return;
-  }
-  Notify(ok ? Loc("successfully_claimed_multiplier")
-            : (serverError.empty()
-                   ? Loc("error_claiming_multiplier")
-                   : hstring{urnw::Format("error_claiming_multiplier_with_reason",
-                                          urnw::Widen(serverError))}),
-         ok ? InfoBarSeverity::Success : InfoBarSeverity::Error);
-  if (ok) {
-    LoadSeeker();  // has_seeker_token now reads true on the verified wallet
-    return;
-  }
-  ApplySeekerState();
-}
-
 void WalletPage::ShowPreviewSnackbar() {
   snackbar_.Show(Loc("wallet_connect_failed"), InfoBarSeverity::Error);
 }
@@ -2491,7 +2550,6 @@ void WalletPage::ShowPreviewWalletState() {
   ApplyLegacyAnswer(legacyGeneration, solana::LegacyRead::Payout, true, payout);
   ApplyLegacyAnswer(legacyGeneration, solana::LegacyRead::Payments, true, payments);
   if (PreviewSample()) {
-    seekerHolder_ = true;
     ApplyPoints(SamplePoints(), Fetch::Ready);
     ApplyReliability(SampleReliability(), Fetch::Ready);
     std::vector<EpochRow> epochs;
@@ -2520,7 +2578,14 @@ void WalletPage::ShowPreviewWalletState() {
     claims.push_back(claim(120, 3'241'000'000, "claimable", nullptr));
     claims.push_back(claim(119, 2'980'500'000, "claimed", "0xSAMPLEtxHASHnotREAL111111"));
     claims.push_back(claim(118, 2'700'000'000, "expired", nullptr));
-    ApplyClaims(claims, 3'241'000'000, Fetch::Ready, std::nullopt);
+    // epoch 121 closes three days out on the sample's 12 s blocks: the
+    // 14,400-block finalize offset, then 8 claim epochs plus 1 grace epoch
+    snpayout::EpochSchedule schedule;
+    schedule.epoch = 121;
+    schedule.endMillis = NowMillis() + 21'600LL * 12'000;
+    schedule.claimOpenMillis = schedule.endMillis + 14'400LL * 12'000;
+    schedule.expiryMillis = schedule.endMillis + (9LL * 50'400 - 1) * 12'000;
+    ApplyClaims(claims, 3'241'000'000, Fetch::Ready, std::nullopt, schedule);
     GasKeyInfo gas;
     gas.address = kSampleGasAddress;
     gas.mirrorSs58 = kSampleGasMirror;
@@ -3963,21 +4028,35 @@ void WalletPage::ApplyProvideState(urnw::LiveStats const& stats) {
   w_.WalletProvideModeDot().Fill(urnw::colors::MakeBrush(visual.color));
   w_.WalletProvideModeRing().Stroke(urnw::colors::MakeBrush(visual.color));
   w_.WalletProvideModeRing().Visibility(visual.ring ? Visibility::Visible : Visibility::Collapsed);
+  // read once: on the DeviceRemote the control mode is an rpc into the service
+  const std::string controlMode = Sdk().CurrentProvideControlMode();
   // the control mode strings are the store keys of their labels
-  w_.WalletProvideModeValue().Text(Loc(Sdk().CurrentProvideControlMode().c_str()));
+  w_.WalletProvideModeValue().Text(Loc(controlMode));
+  // The idle reason under the row (P008) follows every live update, so it is
+  // painted ahead of the gate's early return.
+  provideControlMode_ = provideridle::ProvideControlModeFrom(controlMode);
+  liveProvideMode_ = stats.provideMode;
+  providePaused_ = stats.providePaused;
+  ApplyProvideReason();
   // the gate reads the same value the row shows: the provide mode the user
   // picked. Never hides every provider plot behind the disabled message,
   // whatever the device's live provide state says.
-  const bool enabled = Sdk().CurrentProvideControlMode() != "never";
-  if (enabled == providingEnabled_) return;
-  providingEnabled_ = enabled;
-  // the provider statistics share this gate (O8)
-  ApplyStatsSections(/*force=*/false);
-  if (enabled) {
-    LoadReliability();  // repaint the chart the gate was hiding
-  } else {
-    ApplyReliability(std::nullopt, Fetch::Ready);  // the gate paints the message
+  const bool enabled = controlMode != "never";
+  provideStateKnown_ = true;
+  if (enabled != providingEnabled_) {
+    providingEnabled_ = enabled;
+    // the provider statistics share this gate (O8)
+    ApplyStatsSections(/*force=*/false);
+    if (enabled) {
+      LoadReliability();  // repaint the chart the gate was hiding
+    } else {
+      ApplyReliability(std::nullopt, Fetch::Ready);  // the gate paints the message
+    }
   }
+  // The provider status controller (P008) follows the gate and the session's
+  // device on every update: a session that comes up, or a new one, brings
+  // another device.
+  ReconcileProviderStatus();
 }
 
 // ---- the statistics groups (connect/EXTENDER.md O5, O8) ------------------------
@@ -4006,6 +4085,23 @@ void WalletPage::BuildCharts() {
   urnw::kit::ClipToBounds(w_.WalletExtenderChartHost());
   urnw::kit::ClipToBounds(w_.WalletProviderLocalChartHost());
   urnw::kit::ClipToBounds(w_.WalletProviderBlockedChartHost());
+  // The Demand chart (P008): 60 bars, the oldest minute at the left, standing
+  // on the baseline the markup draws, in the Local chart's provider green; the
+  // last, the current and partial minute, is drawn lighter.
+  // ApplyProviderStatus sets their heights.
+  auto bars = w_.WalletProviderDemandBars();
+  for (size_t i = 0; i < providerstatus::kBarCount; ++i) {
+    bars.ColumnDefinitions().Append(StarColumn());
+    winrt::Microsoft::UI::Xaml::Shapes::Rectangle bar{};
+    bar.Fill(colors::MakeBrush(colors::kUrGreen));
+    bar.VerticalAlignment(VerticalAlignment::Bottom);
+    bar.Margin(ThicknessHelper::FromLengths(0.5, 0, 0.5, 0));
+    bar.Height(0);
+    if (i + 1 == providerstatus::kBarCount) bar.Opacity(0.5);
+    Grid::SetColumn(bar, static_cast<int32_t>(i));
+    bars.Children().Append(bar);
+    demandBars_.push_back(bar);
+  }
 }
 
 void WalletPage::OnChartTick() {
@@ -4030,6 +4126,28 @@ void WalletPage::ApplyExtenderProvideState(urnw::ExtenderProvideStatusView const
     extenderRunning_ = view.enabled;
     ApplyStatsSections(/*force=*/false);
   }
+}
+
+void WalletPage::ApplyProvideReason() {
+  const provideridle::ProviderIdleReason idle = provideridle::ProviderIdleReasonFor(
+      provideControlMode_, liveProvideMode_, providePaused_,
+      // the desktop provides on any network, so it is never paused for Wi-Fi
+      provideridle::ProvideNetworkMode::All, providerWindowBytes_);
+  // the server's reason joins once a status for this device has loaded
+  const bool server = ProviderStatusView().sections.serverReason && providerStatus_;
+  const providerstatus::Line line = providerstatus::LineFor(
+      idle, server ? std::string_view{providerStatus_->reason} : std::string_view{},
+      server ? std::string_view{providerStatus_->reason_text} : std::string_view{});
+  // never while providing is off, where "Providing is disabled" says it
+  const bool shown =
+      line.shown() && provideControlMode_ != provideridle::ProvideControlMode::Never;
+  // Change opens the Connect page's provide group, as the row above does
+  // (OnWalletProvideMode in the markup); it never changes the mode itself.
+  // A reason this build does not know reads as the server's English.
+  hstring text;
+  if (shown) text = line.key.empty() ? hstring{urnw::Widen(line.text)} : Loc(line.key);
+  w_.WalletProvideReasonText().Text(text);
+  w_.WalletProvideReasonRow().Visibility(shown ? Visibility::Visible : Visibility::Collapsed);
 }
 
 void WalletPage::ApplyExtenderProvideRow() {
@@ -4063,6 +4181,9 @@ void WalletPage::ApplyProviderThroughput(urnw::ProviderThroughputSnapshot const&
   if (snapshot.providerDistribution) {
     providerTransportBar_->SetDistribution(*snapshot.providerDistribution);
     providerDistributionSeen_ = !snapshot.providerDistribution->shares.empty();
+    // the idle reason's "no traffic yet" reads the provider bytes in the window
+    providerWindowBytes_ = snapshot.providerDistribution->byteCount;
+    ApplyProvideReason();
   }
   // a hide's clear carries no reading, and the page keeps the one it has
   if (snapshot.hasProviderStats) hasProviderStats_ = *snapshot.hasProviderStats;
@@ -4095,6 +4216,8 @@ void WalletPage::ApplyStatsSections(bool force) {
   w_.WalletProviderLocalChartRow().Visibility(shown(sections.providerVisible));
   w_.WalletProviderTransportBarRow().Visibility(shown(sections.providerVisible));
   w_.WalletProviderBlockedChartRow().Visibility(shown(sections.providerVisible));
+  // the Demand chart and its Why? sit with the plots, under the same gate (P008)
+  ApplyProviderStatus();
   if (!providerTransportBar_) return;
   if (!sections.providerVisible) {
     providerTransportBar_->SettleEmpty();
@@ -4103,6 +4226,222 @@ void WalletPage::ApplyStatsSections(bool force) {
     // the first distribution lands, which settles it
     providerTransportBar_->BeginLoading();
   }
+}
+
+// ---- the provider status (P008) ----------------------------------------------
+
+void WalletPage::ReconcileProviderStatus() {
+  // the controller lives on the device: no session, no device, no controller
+  const bool device = CanCallApi() && Sdk().hasDevice();
+  const uint64_t handle = device ? Sdk().device().handle() : 0;
+  bool changed = false;
+  // closed while providing is off, and once the device it was opened on goes
+  if (providerStatusVcDevice_ != 0 && (!providingEnabled_ || handle != providerStatusVcDevice_)) {
+    CloseProviderStatus(/*deviceAlive=*/true);
+    changed = true;
+  }
+  // No session, so no device: the provider is the service's provider-only
+  // device, and SdkHost reads its status on the api. Entering or leaving that
+  // source starts the readings over, from SdkHost's snapshot on the way in.
+  const bool providerOnly = !device && CanCallApi() && provideStateKnown_ && providingEnabled_;
+  if (providerOnly != providerOnlySource_) {
+    providerOnlySource_ = providerOnly;
+    providerStatusLoaded_ = false;
+    providerStatusError_.clear();
+    providerStatus_.reset();
+    if (providerOnly) TakeProviderOnlyReadings(Sdk().CurrentProviderOnlyStatus());
+    changed = true;
+  }
+  // opened once the destination shows with providing enabled, as a live
+  // reading says; one that failed to open is not retried on the same device
+  if (providerStatusVcDevice_ == 0 && provideStateKnown_ && providingEnabled_ && selected_ &&
+      device) {
+    OpenProviderStatus(handle);
+    changed = true;
+  }
+  // polling while the destination shows and the window presents; a stop keeps
+  // the last snapshot, so coming back shows it while the next poll runs
+  const bool run = providerStatusVc_.has_value() && selected_ && presentationActive_;
+  if (run != providerStatusStarted_) {
+    providerStatusStarted_ = run;
+    if (run) {
+      providerStatusVc_->start();
+    } else if (providerStatusVc_) {
+      providerStatusVc_->stop();
+    }
+  }
+  // the provider-only source polls on the same terms
+  Sdk().SetProviderOnlyStatusWanted(providerOnly && selected_ && presentationActive_);
+  if (changed) ApplyProviderStatus();
+}
+
+void WalletPage::OpenProviderStatus(uint64_t device) {
+  providerStatusVcDevice_ = device;
+  try {
+    providerStatusVc_.emplace(Sdk().device().openProviderStatusViewController());
+  } catch (std::exception const& e) {
+    urnw::LogError("provider status: could not open the controller: {}", e.what());
+    providerStatusVc_.reset();
+    return;
+  }
+  auto queue = w_.DispatcherQueue();
+  auto weak = w_.get_weak();
+  auto alive = alive_;
+  // the SDK calls from its own thread, after every poll and after a stop that
+  // dropped one; the state is read on the UI thread
+  providerStatusSub_.emplace(providerStatusVc_->addProviderStatusListener([queue, weak, alive] {
+    queue.TryEnqueue([weak, alive] {
+      if (!*alive) return;
+      if (auto self = weak.get()) self->wallet().ReadProviderStatus();
+    });
+  }));
+}
+
+void WalletPage::CloseProviderStatus(bool deviceAlive) {
+  providerStatusSub_.reset();  // unsubscribes, before the controller closes
+  if (providerStatusVc_) {
+    // The typed close, on the device that opened it: the generic close stops
+    // the controller but cannot release it from the device. A device that is
+    // gone took its controllers with it.
+    if (deviceAlive && Sdk().hasDevice() && Sdk().device().handle() == providerStatusVcDevice_) {
+      Sdk().device().closeProviderStatusViewController(*providerStatusVc_);
+    }
+    providerStatusVc_.reset();
+  }
+  providerStatusVcDevice_ = 0;
+  providerStatusStarted_ = false;
+  providerStatusLoaded_ = false;
+  providerStatusError_.clear();
+  providerStatus_.reset();
+}
+
+void WalletPage::ReadProviderStatus() {
+  if (!providerStatusVc_) return;  // closed while this read was queued
+  try {
+    providerStatusLoaded_ = providerStatusVc_->getIsLoaded();
+    std::string error = providerStatusVc_->getLastFetchError();
+    // once per new error: until the route is deployed every poll answers 404
+    if (!error.empty() && error != providerStatusError_) {
+      urnw::LogWarn("provider status: a poll failed: {}", error);
+    }
+    providerStatusError_ = std::move(error);
+    providerStatus_ = providerStatusVc_->getProviderStatus();
+  } catch (std::exception const& e) {
+    // a malformed document must never take the page down
+    urnw::LogError("provider status: reading the controller failed: {}", e.what());
+    return;
+  } catch (...) {
+    urnw::LogError("provider status: reading the controller failed");
+    return;
+  }
+  ApplyProviderStatus();
+}
+
+void WalletPage::ApplyProviderOnlyStatus(urnw::ProviderOnlyStatus const& status) {
+  // a session's controller, or no source at all, owns the readings now
+  if (!providerOnlySource_) return;
+  TakeProviderOnlyReadings(status);
+  ApplyProviderStatus();
+}
+
+void WalletPage::TakeProviderOnlyReadings(urnw::ProviderOnlyStatus const& status) {
+  // once per new error, as ReadProviderStatus logs the controller's
+  if (!status.error.empty() && status.error != providerStatusError_) {
+    urnw::LogWarn("provider status: no status for the provider-only device: {}", status.error);
+  }
+  providerStatusLoaded_ = status.loaded;
+  providerStatusError_ = status.error;
+  providerStatus_ = status.status;
+}
+
+providerstatus::View WalletPage::ProviderStatusView() const {
+  // neither a controller nor the provider-only source (signed out, providing
+  // off, --preview-ui) reads as a failed poll: the status is unavailable,
+  // never loading for good
+  return providerstatus::ViewFor(providerStatusLoaded_,
+                                 (!providerStatusVc_ && !providerOnlySource_) ||
+                                     !providerStatusError_.empty(),
+                                 providerStatus_);
+}
+
+void WalletPage::ApplyProviderStatus() {
+  using providerstatus::DemandArea;
+  const providerstatus::View view = ProviderStatusView();
+  const providerstatus::Sections& sections = view.sections;
+  const auto shown = [](bool visible) {
+    return visible ? Visibility::Visible : Visibility::Collapsed;
+  };
+  // Demand and Why? sit with the provider plots, under their gate (the owner's
+  // placement); while providing is disabled the plots' message covers them
+  const bool plots = statsSections_ && statsSections_->providerVisible;
+  w_.WalletProviderDemandRow().Visibility(shown(plots && sections.area != DemandArea::Hidden));
+  w_.WalletProviderWhyRow().Visibility(shown(plots && sections.why));
+  // loading or unavailable in place of the chart; the chart, its baseline and
+  // its axis for the empty hour and the counted one
+  hstring status;
+  if (sections.area == DemandArea::Loading) status = Loc("loading");
+  if (sections.area == DemandArea::Unavailable) status = Loc("provider_status_unavailable");
+  kit::SetTextOrCollapse(w_.WalletProviderDemandStatus(), status);
+  const bool chart = sections.area == DemandArea::Empty || sections.area == DemandArea::Bars;
+  w_.WalletProviderDemandChart().Visibility(shown(chart));
+  w_.WalletProviderDemandAxis().Visibility(shown(chart));
+  kit::SetTextOrCollapse(w_.WalletProviderDemandEmpty(),
+                         sections.area == DemandArea::Empty ? Loc("provider_status_histogram_empty")
+                                                            : hstring{});
+  kit::SetTextOrCollapse(
+      w_.WalletProviderDemandTotal(),
+      sections.area == DemandArea::Bars
+          ? hstring{urnw::Plural("provider_status_histogram_total", view.histogram.total)}
+          : hstring{});
+  for (size_t i = 0; i < demandBars_.size() && i < view.histogram.fractions.size(); ++i) {
+    demandBars_[i].Height(view.histogram.fractions[i] * kDemandBarsHeight);
+  }
+  if (providerWhyOpen_) RebuildProviderWhy();
+  ApplyProvideReason();
+}
+
+void WalletPage::RebuildProviderWhy() {
+  namespace automation = winrt::Microsoft::UI::Xaml::Automation;
+  auto panel = w_.WalletProviderWhyPanel();
+  panel.Children().Clear();
+  if (!providerStatus_) return;
+  // one row per ranking number in the server's order, then the country: the
+  // label, the value (amber while it holds the device back) and the help line
+  for (auto const& row : providerstatus::WhyRowsFor(*providerStatus_, ProviderStatusText())) {
+    const hstring label = Loc(row.labelKey);
+    StackPanel entry;
+    entry.Spacing(2);
+    Grid line;
+    line.ColumnSpacing(12);
+    line.ColumnDefinitions().Append(StarColumn());
+    line.ColumnDefinitions().Append(AutoColumn());
+    TextBlock labelText = MakeText(label, 13, colors::MutedBrush(), /*wrap=*/true);
+    TextBlock valueText = MakeText(hstring{row.value}, 13,
+                                   row.passes ? colors::TextBrush()
+                                              : colors::MakeBrush(colors::kUrAmber));
+    valueText.HorizontalAlignment(HorizontalAlignment::Right);
+    valueText.TextAlignment(TextAlignment::Right);
+    Grid::SetColumn(valueText, 1);
+    line.Children().Append(labelText);
+    line.Children().Append(valueText);
+    // one fact, read once: "Reliability, last hour, 98% (needs 95%)"
+    automation::AutomationProperties::SetAccessibilityView(
+        labelText, automation::Peers::AccessibilityView::Raw);
+    automation::AutomationProperties::SetName(valueText,
+                                              hstring{std::wstring{label} + L", " + row.value});
+    entry.Children().Append(line);
+    entry.Children().Append(MakeText(Loc(row.helpKey), 11, colors::MutedBrush(), /*wrap=*/true));
+    panel.Children().Append(entry);
+  }
+}
+
+void WalletPage::ToggleProviderWhy() {
+  providerWhyOpen_ = !providerWhyOpen_;
+  w_.WalletProviderWhyPanel().Visibility(providerWhyOpen_ ? Visibility::Visible
+                                                          : Visibility::Collapsed);
+  // ChevronDown while collapsed, ChevronUp while open
+  w_.WalletProviderWhyChevron().Glyph(providerWhyOpen_ ? L"\uE70E" : L"\uE70D");
+  if (providerWhyOpen_) RebuildProviderWhy();
 }
 
 winrt::fire_and_forget WalletPage::ShowProviderTransportSettingsSheet() {

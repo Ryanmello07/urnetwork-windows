@@ -1,7 +1,9 @@
 // Orchestrates one tunnel session, mirroring the macOS PacketTunnelProvider:
 // build the NetworkSpace + DeviceLocal from the app's config, start the mTLS RPC
 // listener the app's DeviceRemote dials, bring up the wintun adapter, apply
-// network settings, wire the packet pump, and keep R1 egress current.
+// network settings, wire the packet pump, and keep R1 egress current. While
+// there is no tunnel session it can instead run a provider-only DeviceLocal
+// (StartProvider) that touches none of that and never coexists with a session.
 //
 // Thread-safety: Start/Stop are serialized by the ControlServer (single client).
 //
@@ -10,15 +12,20 @@
 
 #include <atomic>
 #include <condition_variable>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <thread>
 
 #include "EgressMonitor.h"
 #include "FlowOwner.h"
+#include "LogUpload.h"
+#include "NetworkChangeNotify.h"
 #include "NetworkConfig.h"
+#include "NetworkCountry.h"
 #include "PacketPump.h"
 #include "Protocol.h"
 #include "Sdk.h"
@@ -150,8 +157,147 @@ class TunnelController {
   //     deliberately — see StopLocked.
   bool SetKillSwitch(bool on);
 
-  // Clear persisted auth/session state (mirrors the macOS logout message).
-  void Logout();
+  // The account signed out (logout; Common/SignOut.h). Ends any session and
+  // the provider-only device as Stop() does, deletes this machine's device
+  // identity, and logs out what the sdk stored in `networkSpaceJson`'s space
+  // (mirrors the macOS logout message clearing LocalState): the client
+  // credential and instance a DeviceLocal persists when it starts, among the
+  // rest, so nothing kept here belongs to the account that left. An empty
+  // space, from an older app, deletes the identity alone.
+  //
+  // Timed like Stop() and StopProvider(): false, with nothing cleared, when the
+  // session lock is not free within kStopLockBudget, and false when the sdk
+  // state could not be logged out. The app keeps a refused logout owed and
+  // sends it again; the stop_tunnel it sends first gives the machine back
+  // without the lock.
+  bool Logout(const std::string& networkSpaceJson);
+
+  // The provider-only device (start_provider; Common/ProvideLifecycle.h). Keeps
+  // providing while there is no tunnel session: a DeviceLocal built from the
+  // persisted identity and the request's credentials, network space, provider
+  // transport policy and provide mode — and nothing else. No wintun adapter, no
+  // route, no DNS entry, no firewall policy, no active marker and no device RPC
+  // listener, so this machine's own traffic is routed exactly as it would be
+  // without URnetwork, and no client can drive the device.
+  //
+  // Refused (false, `error` set) while a tunnel session exists or is starting,
+  // while the kill switch's armed floor is in force, while an abandoned
+  // teardown still holds a device under this identity, and for a mode that does
+  // not provide while disconnected (provide::ProviderStartRefusal) — every
+  // refusal before anything is built. The same request again keeps the running
+  // device and only applies the mode (proto::SameProviderDevice); any other
+  // request replaces it. Every teardown retires it (StopLocked: the first SDK
+  // teardown, right after the machine is given back), and every bring-up opens
+  // with a teardown, so a Connect never runs two devices under one identity.
+  bool StartProvider(const proto::StartProvider& request, std::string& error);
+  // stop_provider: retire the provider-only device and touch nothing else — no
+  // tunnel, no firewall policy. False only when the session lock could not be
+  // taken in budget.
+  bool StopProvider();
+  // get_provider_stats (Protocol.h ProviderStats): the provider-only device's
+  // statistics, for the screens a session's DeviceRemote feeds. Never blocks on
+  // the session lock or the device, for Status()'s reason: it is served on the
+  // control pipe, and every later get_state would queue behind it. It copies
+  // the client id, the peer count, the extender status and the extender
+  // setting the build and the listeners left, and reads the device's
+  // ContractViewController, whose getters answer from its own sampled state
+  // and never call into the device. `available` is false while none runs.
+  proto::ProviderStats ProviderStats();
+  // The Connect page's Extender switch while there is no session
+  // (set_provide_extender). Writes the provider extender setting where
+  // provide::ExtenderSettingTargetFor says: through the provider-only device
+  // (persisted in its space, applied at once, and in the next
+  // get_provider_stats), a session's device that came up meanwhile, or with
+  // neither the space the last device ran in, which the next start reads.
+  // Timed like StartProvider: a bring-up holding the session lock refuses it.
+  // False with `error` when nothing took the write.
+  bool SetProvideExtender(bool on, std::string& error);
+  // reset_extenders (Protocol.h ResetExtenders; connect EXTENDER.md E7): the
+  // app reset its own space and hands the reset's id here. Applied to the
+  // space spaceManager_ holds under the request's key, which is the one object
+  // the session's device and the provider-only device run in (networkSpace_
+  // and providerSpace_ are the manager's own for the key), so one call resets
+  // both: the space's extender network client and node restart and relearn as
+  // on a first run, and their live extender paths keep running. The result's
+  // `reset` says whether the space was held and the reset new to it; with no
+  // manager or no such space nothing is held, and the next import of the
+  // space applies the reset its values carry.
+  //
+  // The session lock is taken in budget, for StartProvider's reason, and only
+  // to look the space up: the reset joins the space's extender network client,
+  // so it runs with the lock released. Not ok, with `error`, when the lock was
+  // not free -- `busy` then, which the app answers by sending the reset again
+  // once the operation holding the lock ends (Common/ExtenderReset.h) -- or
+  // when the reset failed.
+  struct ExtenderResetResult {
+    bool ok = false;
+    bool busy = false;
+    bool reset = false;
+    std::string error;
+  };
+  ExtenderResetResult ResetExtenders(const proto::ResetExtenders& request);
+
+  // The network country the app read (Common/NetworkCountry.h; open bug P052):
+  // the country of the mobile broadband network carrying the default route, ""
+  // for none. The extender dials of this process's devices front with that
+  // country's spoof list while the extender hint cannot be fetched.
+  //
+  // urnet::setNetworkCountryCode is process-wide inside this service's sdk, so
+  // one call reaches the tunnel session's device and the provider-only device
+  // alike, in place from their next extender dial. start_tunnel and
+  // start_provider apply theirs before the space is imported (StartLocked,
+  // StartProvider), so a new device's first dials already have it; the app's
+  // set_network_country brings every later change. Normalized on the way in
+  // (netcountry::Normalized) and logged when it changes.
+  //
+  // No session lock: a connect wedged inside the sdk holds mutex_ for as long as
+  // the process lives, and the app's push must not queue behind it. Its own
+  // lock, innermost, held across the one store into the sdk.
+  void SetNetworkCountry(const std::string& code, const std::string& source);
+  // The country in force, none until the app first sends one: what the log
+  // feedback uploads says ([app][network-country], ServiceDiagnostics). Under
+  // the same lock, never mutex_.
+  std::optional<netcountry::Reading> NetworkCountry();
+
+  // The kill-switch preference the app last sent (start_tunnel or
+  // set_kill_switch), for the diagnostic lines: the firewall state a status
+  // reports does not say it, and "on" over a firewall that is off is the
+  // difference between a guarantee and a hope. Lock-free, like killSwitch_.
+  bool KillSwitchPreference() const { return killSwitch_.load(); }
+
+  // upload_logs (Protocol.h; Common/LogUpload.h carries the lifecycle): "send
+  // feedback with logs" uploads this service's glog files whether or not a
+  // tunnel runs. The sdk's UploadLogs runs on the session's device, else on the
+  // provider-only device, else on a standalone device built from the request's
+  // credentials exactly as the provider-only device is (provide mode never,
+  // and no adapter, route, DNS entry, firewall policy or listener). That one is
+  // retired once its upload reports or after
+  // logupload::kStandaloneDeviceMaxLifetime (a waiter thread that owns only
+  // the device's slot), and before any other device under this identity is
+  // built (every teardown, start_provider, the next upload).
+  //
+  // The sdk's call (the zip, then the post started) runs on the upload's own
+  // thread (logupload::Flight), never under the session lock; it holds the
+  // device's handle, and the device stays alive until the call returns (each
+  // teardown hands it to the flight while the call is on it). One upload at a
+  // time: `busy` while one is in flight. Refused too when the session lock is
+  // not free in budget, and for a standalone device while a held device or a
+  // restart is pending; the app then falls back to its DeviceRemote. Returns
+  // once the upload is admitted, with `carrier` naming the device
+  // (logupload::ToString) and `uploadId` the id status reports its outcome
+  // under; the service pushes its status when the upload ends. `noteCarrier`
+  // gets the carrier's name once the device is chosen and before the upload's
+  // thread starts the zip, under the session lock, so the line it writes is in
+  // this upload (ControlServer passes ServiceDiagnostics::NoteLogUpload).
+  struct LogUploadResult {
+    bool ok = false;
+    bool busy = false;
+    int64_t uploadId = 0;
+    std::string carrier;
+    std::string error;
+  };
+  LogUploadResult UploadLogs(const proto::UploadLogs& request,
+                             const std::function<void(std::string_view)>& noteCarrier);
 
   // THE STATUS THE APP DECIDES ON, and it must never block.
   //
@@ -331,6 +477,78 @@ class TunnelController {
   // Load persisted DeviceLocalKeyMaterial blobs, or return nullopt on first run.
   std::optional<urnet::DeviceLocalKeyMaterial> LoadKeyMaterial();
   void PersistKeyMaterial(const urnet::DeviceLocalKeyMaterial& km);
+  // Steps 3 and 4 of a bring-up, shared by the tunnel session and the
+  // provider-only device so both come from one copy of the identity rules:
+  // the space imported into the service's own storage, and a DeviceLocal with
+  // the persisted key material (a new identity persisted only when none was
+  // stored), sized at the host's memory tier, with enable_rpc=false — a device
+  // gets a listener only from setRpcServer, which the provider-only device
+  // never calls. `who` prefixes the log line. Both throw on failure. Caller
+  // holds mutex_.
+  urnet::NetworkSpace ImportNetworkSpaceLocked(const std::string& networkSpaceJson);
+  urnet::DeviceLocal NewDeviceLocked(const urnet::NetworkSpace& space,
+                                     const std::string& byJwt,
+                                     const std::string& deviceDescription,
+                                     const std::string& deviceSpec,
+                                     const std::string& appVersion,
+                                     const std::string& instanceId, const char* who);
+  // Retire the provider-only device: clear and publish its status, then hand
+  // the device and its space to a bounded worker that closes them
+  // (RunBounded, AbandonHazard::HoldsSessionDevice — while that worker is
+  // outstanding a second device would run under the same identity, so it
+  // refuses a start exactly like an abandoned session teardown). A no-op
+  // without one. Caller holds mutex_.
+  void RetireProviderDeviceLocked();
+  // Read the provider-only device's live tier and network-key bit into the
+  // fields ComposeStatusLocked reports. SDK calls, so never from a publish
+  // path: only after the device is built or re-moded. Caller holds mutex_.
+  void ReadProviderFactsLocked();
+  // Open what get_provider_stats reads on a freshly built provider-only
+  // device: its client id, a ContractViewController (the controller the app
+  // opens on the DeviceRemote, sampling once a second, whose extender series
+  // is the extender plot's), a network peers listener that keeps the client
+  // count, and an extender status listener with the setting read beside it
+  // (the Earnings extender row and its plot's gate). Best effort: providing
+  // does not depend on it, a failure leaves the statistics unavailable, and a
+  // failure of the extender reading alone leaves the role unreported. Caller
+  // holds mutex_.
+  void OpenProviderStatsLocked();
+  // Read the provider-only device's extender status and setting again after
+  // set_provide_extender wrote it, into the copies get_provider_stats answers,
+  // so the next answer carries the write rather than waiting for the status
+  // listener's next push. Nothing when the role's reading never opened. SDK
+  // calls; caller holds mutex_.
+  void RefreshProviderExtenderLocked();
+  // Tell the provider-only device the network moved, as the tunnel session's
+  // device is told by TunnelWatchdog's sampler, which EgressMonitor feeds. An
+  // observe-only EgressMonitor (it binds nothing, so the device's sockets
+  // still follow the route table) feeds a NetworkChangeNotifier, whose own
+  // thread calls networkChanged() once per burst and networkQualityChanged()
+  // for a Wi-Fi signal change. Best effort, like the statistics. Caller holds
+  // mutex_.
+  void WatchProviderNetworkLocked();
+  // The standalone device a log upload runs on while neither the session's nor
+  // the provider-only device exists (UploadLogs). Shared by this controller and
+  // the waiter thread that retires it, so either may take the device and the
+  // waiter needs nothing of this object: it owns a share of the slot, never
+  // `this`. The slot's mutex is innermost and never held across a call into
+  // the device; the upload callback only sets uploadReported under it.
+  struct LogUploadDevice {
+    std::mutex mutex;
+    std::condition_variable reported;
+    bool uploadReported = false;
+    std::unique_ptr<urnet::DeviceLocal> device;
+    std::optional<urnet::NetworkSpace> space;
+    // the flight whose call may still be on the device when it is closed
+    std::shared_ptr<logupload::Flight> flight;
+  };
+  // Takes the device out of `slot` and closes it on a bounded worker, as the
+  // provider-only device's retire does (AbandonHazard::HoldsSessionDevice). A
+  // no-op once taken. Static: the waiter calls it after this object may be
+  // gone.
+  static void CloseLogUploadDevice(const std::shared_ptr<LogUploadDevice>& slot);
+  // Retires the standalone log upload device, if any. Caller holds mutex_.
+  void RetireLogUploadDeviceLocked();
   void PushExcludedToDriver(const std::vector<std::string>& paths, bool allowlist);
   // Re-point the driver at a new physical interface. Runs from the egress
   // monitor's change callback, on a system worker thread.
@@ -401,8 +619,87 @@ class TunnelController {
   // SDK objects. NetworkSpaceManager persists across sessions; the rest are
   // per-session.
   std::optional<urnet::NetworkSpaceManager> spaceManager_;
+  // The key of the space ImportNetworkSpaceLocked imported last: the space the
+  // last device ran in, which spaceManager_ keeps after that device is gone and
+  // the next start of either device imports again. set_provide_extender writes
+  // into it when no device runs. Guarded by mutex_.
+  std::optional<urnet::NetworkSpaceKey> lastSpaceKey_;
   std::optional<urnet::NetworkSpace> networkSpace_;
   std::optional<urnet::DeviceLocal> device_;
+  // The provider-only device (StartProvider), its space and the request it was
+  // built from. Separate slots from networkSpace_ and device_, which keep their
+  // one meaning — the tunnel session's — for every check that reads them (the
+  // capture precondition, the teardown, the published identity). Never engaged
+  // together with a tunnel session. providerTier_ and providerNetworkKey_ are
+  // what ReadProviderFactsLocked last read off the device. Guarded by mutex_.
+  //
+  // The device lives in a unique_ptr because the network notifier's calls hold
+  // a raw pointer to it: its address does not move when the retire hands it to
+  // the teardown worker, which ends the notifier (a join) before it closes the
+  // device.
+  std::optional<urnet::NetworkSpace> providerSpace_;
+  std::unique_ptr<urnet::DeviceLocal> providerDevice_;
+  proto::StartProvider providerRequest_;
+  int64_t providerTier_ = 0;
+  bool providerNetworkKey_ = false;
+  // The provider-only device's network watch (WatchProviderNetworkLocked).
+  // Guarded by mutex_; retired with the device.
+  std::unique_ptr<EgressMonitor> providerEgress_;
+  std::unique_ptr<NetworkChangeNotifier> providerNetwork_;
+  // The provider extender role's last status (EXTENDER.md N2): what its
+  // listener pushed last, or what the statistics' opening read before the
+  // first push. Shared with that listener, never the controller, as the peer
+  // count is, and locked inside its own two calls only.
+  class LatestExtenderProvideStatus {
+   public:
+    void Store(std::optional<urnet::ExtenderProvideStatus> status) {
+      std::scoped_lock lock(mutex_);
+      status_ = std::move(status);
+    }
+    std::optional<urnet::ExtenderProvideStatus> Load() const {
+      std::scoped_lock lock(mutex_);
+      return status_;
+    }
+
+   private:
+    mutable std::mutex mutex_;
+    std::optional<urnet::ExtenderProvideStatus> status_;
+  };
+  // What get_provider_stats reads (ProviderStats), under a mutex of its own,
+  // never mutex_: the request is served on the control pipe and must not queue
+  // behind a bring-up holding the session lock. Innermost — taken under mutex_
+  // by the build and the retire, alone by ProviderStats() — and never held
+  // across a call into the device. providerClients_ and providerExtender_ are
+  // shared with the peers and extender status listeners, which can still be
+  // running after the retire has dropped them. providerExtenderSetting_ is the
+  // provide extender setting, read when the statistics open and again after
+  // set_provide_extender writes it through this device
+  // (RefreshProviderExtenderLocked); a session's device, the only other
+  // writer, never runs beside this one.
+  std::mutex providerStatsMutex_;
+  std::optional<urnet::ContractViewController> providerStatsVc_;
+  urnet::Sub providerPeersSub_;
+  std::shared_ptr<std::atomic<int64_t>> providerClients_;
+  std::string providerClientId_;
+  urnet::Sub providerExtenderSub_;
+  std::shared_ptr<LatestExtenderProvideStatus> providerExtender_;
+  bool providerExtenderSetting_ = false;
+  // The standalone log upload device's slot (LogUploadDevice), empty while
+  // none was built. A third device slot, never engaged beside device_ or
+  // providerDevice_: both are built only after RetireLogUploadDeviceLocked.
+  // Guarded by mutex_.
+  std::shared_ptr<LogUploadDevice> logUpload_;
+  // The log upload in flight, shared with its thread, its callback and the
+  // teardown workers, which hold nothing else of this object
+  // (logupload::Flight: its own lock). Its finish hook pushes the status; the
+  // destructor clears it before anything it uses is gone.
+  std::shared_ptr<logupload::Flight> logUploadFlight_;
+
+  // The network country last applied to this process's sdk
+  // (SetNetworkCountry), empty until the app first sends one. Guarded by
+  // networkCountryMutex_ alone.
+  std::mutex networkCountryMutex_;
+  std::optional<netcountry::Reading> networkCountry_;
 
   // Native tunnel plumbing.
   std::unique_ptr<Wintun> wintun_;

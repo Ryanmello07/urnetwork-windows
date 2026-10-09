@@ -14,7 +14,9 @@
 #include "Heartbeat.h"    // the lock-free state mirror the heartbeat reads
 #include "Ids.h"
 #include "Log.h"
+#include "LogUpload.h"   // the log upload's device and its refusals
 #include "Paths.h"
+#include "ProvideLifecycle.h"  // the provider-only device's refusals
 #include "StopBudget.h"   // the shutdown budgets and the abandonable teardown
 #include "Strings.h"
 #include "ThreadGuard.h"
@@ -35,6 +37,86 @@ int64_t NowMillis() {
   return std::chrono::duration_cast<std::chrono::milliseconds>(
              std::chrono::system_clock::now().time_since_epoch())
       .count();
+}
+
+// The log upload flight's clock: it bounds how long an upload may run, which a
+// wall clock that jumps would misjudge.
+int64_t SteadyMillis() {
+  return std::chrono::duration_cast<std::chrono::milliseconds>(
+             std::chrono::steady_clock::now().time_since_epoch())
+      .count();
+}
+
+// How long the service's teardown waits for a log upload's thread to come out
+// of the sdk's call (the zip): past it the process exits around it.
+constexpr std::chrono::milliseconds kLogUploadReturnBudget{2000};
+
+// What the sdk's upload callback needs to end the upload. Owned by the call
+// once the sdk took it, freed by the callback.
+struct LogUploadReport {
+  std::shared_ptr<logupload::Flight> flight;
+  int64_t uploadId = 0;
+  const char* carrierName = "";
+  // tells the standalone device's waiter that the upload reported; empty for
+  // the session's and the provider-only device
+  std::function<void()> reported;
+};
+
+// The sdk's upload callback (urnet_upload_logs_cb), on an SDK thread: the
+// server's answer or the post's error ends the upload in the flight, whose
+// finish hook pushes the status.
+void OnLogUploadReport(void* userData, const char* resultJson, const char* error) {
+  std::unique_ptr<LogUploadReport> report(static_cast<LogUploadReport*>(userData));
+  logupload::FlightState state = logupload::FlightState::Uploaded;
+  if (error != nullptr) {
+    state = logupload::FlightState::Failed;
+    LogWarn("logs: the log upload ({} device) failed: {}", report->carrierName, error);
+  } else if (resultJson != nullptr) {
+    try {
+      const auto result = nlohmann::json::parse(resultJson).get<urnet::UploadLogsResult>();
+      if (result.error) {
+        state = logupload::FlightState::Refused;
+        LogWarn("logs: the log upload ({} device) was refused: {}", report->carrierName,
+                result.error->message);
+      }
+    } catch (const std::exception& e) {
+      state = logupload::FlightState::Failed;
+      LogWarn("logs: the log upload's ({} device) answer did not parse: {}",
+              report->carrierName, e.what());
+    }
+  }
+  if (state == logupload::FlightState::Uploaded) {
+    LogInfo("logs: the log upload ({} device) finished", report->carrierName);
+  }
+  if (report->reported) report->reported();
+  report->flight->Finish(report->uploadId, state);
+}
+
+// The upload's own thread (logupload::Flight::Run): the sdk zips this process's
+// log files and starts the post to /log/{feedback_id}/upload. The call goes
+// through the c abi by the device's handle, which the flight keeps valid until
+// it returns, so that nothing of TunnelController is touched here.
+void UploadLogsOnDevice(const std::shared_ptr<logupload::Flight>& flight, int64_t uploadId,
+                        uint64_t deviceHandle, const std::string& feedbackId,
+                        const char* carrierName, const std::function<void()>& reported) {
+  auto report = std::make_unique<LogUploadReport>();
+  report->flight = flight;
+  report->uploadId = uploadId;
+  report->carrierName = carrierName;
+  report->reported = reported;
+  char* error = nullptr;
+  const bool started = urnet_device_upload_logs(deviceHandle, feedbackId.c_str(),
+                                                &OnLogUploadReport, report.get(), &error);
+  if (started) {
+    // the callback owns it now
+    report.release();
+    return;
+  }
+  const std::string message = error != nullptr ? error : "the device is gone";
+  if (error != nullptr) urnet_free_string(error);
+  LogWarn("logs: the log upload ({} device) did not start: {}", carrierName, message);
+  if (reported) reported();
+  flight->Finish(uploadId, logupload::FlightState::Failed);
 }
 
 std::vector<uint8_t> ReadFileBytes(const std::filesystem::path& p) {
@@ -69,11 +151,26 @@ std::string Join(const std::vector<std::string>& parts) {
 
 }  // namespace
 
-TunnelController::TunnelController() : sdkVersion_(urnet::version()) {
+TunnelController::TunnelController()
+    : logUploadFlight_(std::make_shared<logupload::Flight>(NowMillis())),
+      sdkVersion_(urnet::version()) {
   storageDir_ = StorageRoot(/*isService=*/true);
+  // An upload's end pushes the status that carries it, as a transition does.
+  logUploadFlight_->SetOnFinished([this] { NotifyStateChanged(); });
 }
 
-TunnelController::~TunnelController() { Stop(); }
+TunnelController::~TunnelController() {
+  // First: the hook reaches into this object, and no call of it may run once
+  // it is going.
+  logUploadFlight_->ClearOnFinished();
+  Stop();
+  // A log upload still zipping is given a moment to come out of the sdk's
+  // call, and no more: it holds nothing of this object, and the service's exit
+  // must not wait on a disk.
+  if (!logUploadFlight_->WaitReturned(kLogUploadReturnBudget)) {
+    LogWarn("logs: a log upload was still zipping when the service stopped");
+  }
+}
 
 std::optional<urnet::DeviceLocalKeyMaterial> TunnelController::LoadKeyMaterial() {
   auto seed = ReadFileBytes(storageDir_ / L"client_key_seed.bin");
@@ -90,6 +187,51 @@ void TunnelController::PersistKeyMaterial(const urnet::DeviceLocalKeyMaterial& k
   WriteFileBytes(storageDir_ / L"client_key_seed.bin", km.getClientKeySeed());
   WriteFileBytes(storageDir_ / L"provide_cert.pem", km.getProvideTlsCertificatePem());
   WriteFileBytes(storageDir_ / L"provide_key.pem", km.getProvideTlsPrivateKeyPem());
+}
+
+urnet::NetworkSpace TunnelController::ImportNetworkSpaceLocked(
+    const std::string& networkSpaceJson) {
+  if (!spaceManager_) {
+    spaceManager_ =
+        urnet::newNetworkSpaceManager(Narrow(SdkStorageDir(true).wstring()));
+  }
+  urnet::NetworkSpace space = spaceManager_->importNetworkSpaceFromJson(networkSpaceJson);
+  // Where set_provide_extender writes with no device running. Its own best
+  // effort: a key that cannot be read costs that write, never this start.
+  try {
+    lastSpaceKey_ = space.getKey();
+  } catch (const std::exception&) {
+    lastSpaceKey_.reset();
+  }
+  return space;
+}
+
+urnet::DeviceLocal TunnelController::NewDeviceLocked(const urnet::NetworkSpace& space,
+                                                     const std::string& byJwt,
+                                                     const std::string& deviceDescription,
+                                                     const std::string& deviceSpec,
+                                                     const std::string& appVersion,
+                                                     const std::string& instanceId,
+                                                     const char* who) {
+  auto km = LoadKeyMaterial();
+  // The device target comes from the measured host's memory tier, and the
+  // same cached measurement chose the process budget at startup, so the
+  // target and the budget backing it are always one tier.
+  const int64_t memoryTargetByteCount = DeviceMemoryTargetByteCount();
+  LogInfo("{} constructing DeviceLocal ({} identity, {} MiB memory target)", who,
+          km ? "persisted" : "new", memoryTargetByteCount / (1024 * 1024));
+  if (km) {
+    return urnet::newDeviceLocalWithMemoryTarget(space, byJwt, deviceDescription, deviceSpec,
+                                                 appVersion, instanceId,
+                                                 /*enable_rpc=*/false, *km,
+                                                 memoryTargetByteCount);
+  }
+  // An empty key material (handle 0) is nil in the SDK: new identity.
+  urnet::DeviceLocal device = urnet::newDeviceLocalWithMemoryTarget(
+      space, byJwt, deviceDescription, deviceSpec, appVersion, instanceId,
+      /*enable_rpc=*/false, urnet::DeviceLocalKeyMaterial{}, memoryTargetByteCount);
+  PersistKeyMaterial(device.getKeyMaterial());
+  return device;
 }
 
 void TunnelController::ClampToRpcOnly() {
@@ -742,13 +884,12 @@ proto::TunnelStatus TunnelController::StartLocked(const proto::StartTunnel& conf
 
     // --- 3/8 NetworkSpace (own storage; import the app's space json) ---
     step = "3/8 network space";
+    // The network country the app read, in force before the space and its
+    // device exist, so their first extender dials already have it.
+    SetNetworkCountry(config.network_country_code, config.network_country_source);
     LogInfo("tunnel: [3/8] opening the network space in {}",
             SdkStorageDir(true).string());
-    if (!spaceManager_) {
-      spaceManager_ =
-          urnet::newNetworkSpaceManager(Narrow(SdkStorageDir(true).wstring()));
-    }
-    networkSpace_ = spaceManager_->importNetworkSpaceFromJson(config.network_space_json);
+    networkSpace_ = ImportNetworkSpaceLocked(config.network_space_json);
     if (HaltAfterStepLocked(
             3, "an open network space under the service's own storage root — "
                "files, and nothing else"))
@@ -756,27 +897,11 @@ proto::TunnelStatus TunnelController::StartLocked(const proto::StartTunnel& conf
 
     // --- 4/8 DeviceLocal (stable provider identity via persisted key material) ---
     step = "4/8 device";
-    auto km = LoadKeyMaterial();
-    // The device target comes from the measured host's memory tier, and the
-    // SAME cached measurement chose the process budget at startup, so the
-    // target and the budget backing it are always one tier.
-    const int64_t memoryTargetByteCount = DeviceMemoryTargetByteCount();
-    LogInfo("tunnel: [4/8] constructing DeviceLocal ({} identity, {} MiB memory target)",
-            km ? "persisted" : "new", memoryTargetByteCount / (1024 * 1024));
-    if (km) {
-      device_ = urnet::newDeviceLocalWithMemoryTarget(
-          *networkSpace_, config.by_jwt, config.device_description,
-          config.device_spec, config.app_version, config.instance_id,
-          /*enable_rpc=*/false, *km, memoryTargetByteCount);
-    } else {
-      // An empty key material (handle 0) is nil in the SDK: new identity.
-      device_ = urnet::newDeviceLocalWithMemoryTarget(
-          *networkSpace_, config.by_jwt, config.device_description,
-          config.device_spec, config.app_version, config.instance_id,
-          /*enable_rpc=*/false, urnet::DeviceLocalKeyMaterial{},
-          memoryTargetByteCount);
-      PersistKeyMaterial(device_->getKeyMaterial());
-    }
+    // The same construction the provider-only device uses (NewDeviceLocked):
+    // one copy of the identity rules for both.
+    device_ = NewDeviceLocked(*networkSpace_, config.by_jwt, config.device_description,
+                              config.device_spec, config.app_version, config.instance_id,
+                              "tunnel: [4/8]");
     LogInfo("tunnel: [4/8] device client_id={}", device_->getClientId());
 
     // Per-flow app attribution — "which program owns this connection" — fed to
@@ -1298,6 +1423,18 @@ void TunnelController::StopLocked(bool finalDisarm) {
   // order — it is simply reached sooner, which is the entire point.
   RevertMachineStateLocked(finalDisarm, hadRoutes);
 
+  // The provider-only device, in every teardown, and so at the head of every
+  // bring-up: StartLocked opens with StopLocked, so a Connect retires the
+  // provider before the new session's DeviceLocal — the same persisted
+  // identity — the adapter or a single route exists, and the two devices never
+  // run together. It is phase 2 work (closing a device can block on the SDK),
+  // so it comes after the machine is given back, and it is a no-op whenever a
+  // tunnel session was running, because the two never coexist.
+  RetireProviderDeviceLocked();
+  // The standalone device a log upload ran on, for the same reason. Its upload
+  // goes on: the POST runs on the network space's API, not on the device.
+  RetireLogUploadDeviceLocked();
+
   const bool tornDown = TearDownSessionLocked();
 
   rpcHostPort_.clear();
@@ -1524,7 +1661,7 @@ bool TunnelController::TearDownSessionLocked() {
       [pump = std::move(pump), split = std::move(split),
        egress = std::move(egress), device = std::move(device),
        adapter = std::move(adapter), wintun = std::move(wintun),
-       space = std::move(space)]() mutable {
+       space = std::move(space), flight = logUploadFlight_]() mutable {
         if (pump) pump->Stop();
         pump.reset();
         split.Close();
@@ -1538,6 +1675,10 @@ bool TunnelController::TearDownSessionLocked() {
           LogInfo("tunnel: closing the device (this is the call that can block "
                   "on wedged transports)");
           device->close();
+          // A log upload's call may still be on it: the flight then keeps it
+          // until the call returns, and releases it.
+          flight->KeepUntilReturned(device->handle(),
+                                    std::make_shared<urnet::DeviceLocal>(std::move(*device)));
         }
         device.reset();
         adapter.reset();
@@ -1742,15 +1883,27 @@ bool TunnelController::SetSplitTunnel(const std::vector<std::string>& excludedPa
   return true;
 }
 
-void TunnelController::Logout() {
+bool TunnelController::Logout(const std::string& networkSpaceJson) {
   stopGeneration_.fetch_add(1);
   CancelCapture();
-  std::scoped_lock lock(mutex_);
+  // Timed, as Stop() takes it: a connect attempt wedged inside the sdk holds
+  // mutex_ for as long as the process lives, and a logout that waited behind it
+  // held the control pipe with it, so every later request queued behind a lock
+  // that never came back. The app sends stop_tunnel first, whose own escape
+  // gives the machine back, and keeps this logout owed until it succeeds.
+  std::unique_lock<std::timed_mutex> lock(mutex_, std::defer_lock);
+  if (!lock.try_lock_for(kStopLockBudget)) {
+    LogWarn("tunnel: logout could not take the session lock within {}ms; the device "
+            "identity and the account's sdk state were not cleared",
+            kStopLockBudget.count());
+    return false;
+  }
   // As deliberate as a disconnect, so it is reported as one. See Stop().
   lastStopReason_.store(kStopReasonUser);
   // finalDisarm: signing out is as deliberate as disconnecting, and there is no
   // session left to protect. Leaving a signed-out machine blocked would be
-  // unexplainable from any surface the user still has.
+  // unexplainable from any surface the user still has. It retires the
+  // provider-only device too: a signed-out machine provides nothing.
   StopLocked(/*finalDisarm=*/true);
   // Clear persisted device identity so the next login starts clean (mirrors the
   // macOS logout provider message clearing LocalState).
@@ -1758,7 +1911,752 @@ void TunnelController::Logout() {
   std::filesystem::remove(storageDir_ / L"client_key_seed.bin", ec);
   std::filesystem::remove(storageDir_ / L"provide_cert.pem", ec);
   std::filesystem::remove(storageDir_ / L"provide_key.pem", ec);
-  LogInfo("tunnel: logged out (cleared device identity)");
+  // ...and what the sdk stored in the account's space: a DeviceLocal persists
+  // its client credential and instance there when it starts, with its peer pins
+  // and transport policy. Imported here rather than looked up, because a
+  // service restarted since the account's last device has imported no space.
+  bool cleared = true;
+  if (!networkSpaceJson.empty()) {
+    try {
+      const urnet::NetworkSpace space = ImportNetworkSpaceLocked(networkSpaceJson);
+      const urnet::AsyncLocalState asyncLocalState = space.getAsyncLocalState();
+      const urnet::LocalState localState =
+          asyncLocalState ? asyncLocalState.getLocalState() : urnet::LocalState{};
+      if (!localState) throw std::runtime_error("the network space has no local state");
+      localState.logout();
+    } catch (const std::exception& e) {
+      LogError("tunnel: logout could not clear the account's sdk state: {}", e.what());
+      cleared = false;
+    }
+  }
+  LogInfo("tunnel: logged out (cleared device identity{})",
+          networkSpaceJson.empty() ? "; no network space named, so no sdk state"
+                                   : (cleared ? " and the account's sdk state" : ""));
+  return cleared;
+}
+
+// --- the provider-only device (start_provider) ------------------------------
+//
+// See the contract in the header and Common/ProvideLifecycle.h. This is steps 3
+// and 4 of a bring-up and nothing after them: no wintun adapter (step 1), no
+// egress binding (step 2 — with no tun there is nothing to loop into, so the
+// device's sockets follow the route table like any other process's), no rpc
+// listener (step 5), no firewall policy, no route, no DNS entry, no active
+// marker, no packet pump, no split tunnel and no flow-owner lookup.
+
+bool TunnelController::StartProvider(const proto::StartProvider& request,
+                                     std::string& error) {
+  // Timed, like Stop(): a connect attempt wedged inside the SDK holds mutex_ for
+  // as long as the process lives, and a start_provider that waited behind it
+  // would hold the control pipe with it. There is nothing to provide beside a
+  // bring-up in any case — its own device will.
+  std::unique_lock<std::timed_mutex> lock(mutex_, std::defer_lock);
+  if (!lock.try_lock_for(kStopLockBudget)) {
+    error = "a tunnel operation is in progress";
+    LogWarn("provide: start_provider refused: the session lock was not free "
+            "within {}ms",
+            kStopLockBudget.count());
+    return false;
+  }
+  const provide::ControlMode mode = provide::ControlModeFrom(request.provide_mode);
+  provide::ServiceProviderState state;
+  // Any trace of a tunnel session counts, not only the reported state: a
+  // session's DeviceLocal runs under the same identity.
+  state.tunnelSession = state_ == proto::TunnelState::Starting ||
+                        proto::IsSessionLive(state_) ||
+                        state_ == proto::TunnelState::Stopping || device_.has_value() ||
+                        adapter_ != nullptr || netConfig_ != nullptr || pump_ != nullptr ||
+                        egress_ != nullptr;
+  state.firewallInForce = wfp_.State() != WfpState::Off;
+  const AbandonedTeardownSweep abandoned = SweepAbandonedTeardowns();
+  if (abandoned.completed_late > 0)
+    LogWarn("provide: {} previously ABANDONED sdk teardown(s) have since FINISHED "
+            "and released the device they were holding",
+            abandoned.completed_late);
+  state.deviceStillHeld = abandoned.outstanding > 0;
+  state.restartPending = SelfRestartPending();
+  if (const provide::ProviderRefusal refusal = provide::ProviderStartRefusal(mode, state);
+      refusal != provide::ProviderRefusal::None) {
+    error = provide::RefusalReason(refusal);
+    LogInfo("provide: start_provider refused (mode={}): {}", provide::ToString(mode),
+            error);
+    return false;
+  }
+
+  // The network country the app read: in place for a device that keeps running,
+  // and in force before a new one is built.
+  SetNetworkCountry(request.network_country_code, request.network_country_source);
+
+  // The same request again — a relaunched app adopting the provider an earlier
+  // run left, or a reconcile after a mode change: keep the device and apply the
+  // mode in place.
+  if (providerDevice_ && proto::SameProviderDevice(providerRequest_, request)) {
+    try {
+      providerDevice_->setProvideControlMode(request.provide_mode);
+    } catch (const std::exception&) {
+      error = "the provide mode could not be applied";
+      LogError("provide: applying mode {} to the running provider-only device failed",
+               provide::ToString(mode));
+      return false;
+    }
+    providerRequest_.provide_mode = request.provide_mode;
+    ReadProviderFactsLocked();
+    PublishStatusLocked();
+    LogInfo("provide: the provider-only device keeps running (mode={} tier={})",
+            provide::ToString(mode), providerTier_);
+    return true;
+  }
+
+  RetireProviderDeviceLocked();
+  // A standalone log upload device runs under the same identity; its upload
+  // goes on without it (StopLocked says why).
+  RetireLogUploadDeviceLocked();
+  const char* step = "network space";
+  try {
+    providerSpace_ = ImportNetworkSpaceLocked(request.network_space_json);
+    step = "device";
+    providerDevice_ = std::make_unique<urnet::DeviceLocal>(
+        NewDeviceLocked(*providerSpace_, request.by_jwt, request.device_description,
+                        request.device_spec, request.app_version, request.instance_id,
+                        "provide:"));
+    step = "provider transport policy";
+    if (!request.provider_transport_settings_json.empty()) {
+      providerDevice_->setProviderTransportSettings(
+          nlohmann::json::parse(request.provider_transport_settings_json)
+              .get<urnet::TransportSettings>());
+    }
+    step = "provide mode";
+    providerDevice_->setProvideControlMode(request.provide_mode);
+    providerRequest_ = request;
+    ReadProviderFactsLocked();
+    // What the app shows for it while disconnected, and the network changes it
+    // is told about: both best effort, neither a reason to stop providing.
+    OpenProviderStatsLocked();
+    WatchProviderNetworkLocked();
+    PublishStatusLocked();
+    LogInfo("provide: PROVIDING WITHOUT A TUNNEL (mode={} tier={} network_key={} "
+            "client_id={}). No wintun adapter, route, dns entry, firewall policy or "
+            "device rpc listener exists for it: this machine's own traffic is routed "
+            "exactly as it would be without URnetwork.",
+            provide::ToString(mode), providerTier_, providerNetworkKey_,
+            providerDevice_->getClientId());
+    return true;
+  } catch (const std::exception&) {
+    // The stage names the failure, as ActivateCapture's does, without copying an
+    // SDK message that can carry endpoints or identifiers into the reply.
+    error = std::string("the provider could not be started at the ") + step + " step";
+    LogError("provide: stage=provider-only outcome=failed component={}", step);
+    RetireProviderDeviceLocked();
+    return false;
+  }
+}
+
+bool TunnelController::StopProvider() {
+  // A wedged lock means a bring-up is holding it, and every bring-up opens by
+  // retiring the provider-only device itself.
+  std::unique_lock<std::timed_mutex> lock(mutex_, std::defer_lock);
+  if (!lock.try_lock_for(kStopLockBudget)) {
+    LogWarn("provide: stop_provider could not take the session lock within {}ms",
+            kStopLockBudget.count());
+    return false;
+  }
+  RetireProviderDeviceLocked();
+  return true;
+}
+
+bool TunnelController::SetProvideExtender(bool on, std::string& error) {
+  // Timed, for StartProvider's reason: a wedged bring-up must not hold the
+  // control pipe. The app then shows the setting as it stands.
+  std::unique_lock<std::timed_mutex> lock(mutex_, std::defer_lock);
+  if (!lock.try_lock_for(kStopLockBudget)) {
+    error = "a tunnel operation is in progress";
+    LogWarn("provide: set_provide_extender refused: the session lock was not free "
+            "within {}ms",
+            kStopLockBudget.count());
+    return false;
+  }
+  const provide::ExtenderSettingTarget target = provide::ExtenderSettingTargetFor(
+      providerDevice_ != nullptr, device_.has_value(), spaceManager_ && lastSpaceKey_);
+  try {
+    switch (target) {
+      case provide::ExtenderSettingTarget::ProviderDevice:
+        // Persisted in its space and applied at once: the role starts or stops.
+        providerDevice_->setProvideExtender(on);
+        RefreshProviderExtenderLocked();
+        break;
+      case provide::ExtenderSettingTarget::SessionDevice:
+        // The session's DeviceRemote hears it through its status listener.
+        device_->setProvideExtender(on);
+        break;
+      case provide::ExtenderSettingTarget::NetworkSpace: {
+        // The space spaceManager_ keeps for the last device's key: the next
+        // import of that key reuses it, or replaces it with one that reads the
+        // file this writes.
+        urnet::NetworkSpace space = spaceManager_->getNetworkSpace(lastSpaceKey_);
+        if (!space) {
+          error = "the last device's network space is gone";
+          LogWarn("provide: set_provide_extender refused: {}", error);
+          return false;
+        }
+        space.getAsyncLocalState().getLocalState().setProvideExtender(on);
+        break;
+      }
+      case provide::ExtenderSettingTarget::None:
+        error = "no device has run in this service yet, so there is no network space to keep the "
+                "setting in";
+        LogWarn("provide: set_provide_extender refused: {}", error);
+        return false;
+    }
+  } catch (const std::exception&) {
+    // Named by its target, as StartProvider names its step, without copying an
+    // SDK message into the reply.
+    error = std::string("the provide extender setting could not be written to ") +
+            provide::ToString(target);
+    LogError("provide: stage=set-provide-extender outcome=failed target={}",
+             provide::ToString(target));
+    return false;
+  }
+  LogInfo("provide: provide extender {} ({})", on ? "on" : "off", provide::ToString(target));
+  return true;
+}
+
+TunnelController::ExtenderResetResult TunnelController::ResetExtenders(
+    const proto::ResetExtenders& request) {
+  ExtenderResetResult result;
+  const auto key = proto::SpaceKeyOf<urnet::NetworkSpaceKey>(request);
+  urnet::NetworkSpace space;
+  {
+    // Timed, for StartProvider's reason: a wedged bring-up must not hold the
+    // control pipe. Busy, so the app sends the reset again once the operation
+    // holding the lock ends; the next import of the space carries it anyway.
+    std::unique_lock<std::timed_mutex> lock(mutex_, std::defer_lock);
+    if (!lock.try_lock_for(kStopLockBudget)) {
+      result.busy = true;
+      result.error = "a tunnel operation is in progress";
+      LogWarn("tunnel: reset_extenders refused: the session lock was not free within {}ms",
+              kStopLockBudget.count());
+      return result;
+    }
+    // A handle of 0 is the sdk's nil: the manager holds no space under the key.
+    try {
+      if (spaceManager_) space = spaceManager_->getNetworkSpace(key);
+    } catch (const std::exception&) {
+      result.error = "the network space could not be read";
+      LogError("tunnel: stage=reset-extenders outcome=failed step=lookup");
+      return result;
+    }
+  }
+  if (space) {
+    // With the session lock released: the reset stops and joins the space's
+    // extender network client and node before it starts their replacements.
+    try {
+      result.reset = space.applyExtenderReset(request.extender_reset_id);
+    } catch (const std::exception&) {
+      result.error = "the extender reset could not be applied";
+      LogError("tunnel: stage=reset-extenders outcome=failed step=apply");
+      return result;
+    }
+  }
+  LogInfo("tunnel: extenders reset space={}/{} outcome={}", request.host_name,
+          request.env_name,
+          !space ? "not-held" : (result.reset ? "reset" : "already-applied"));
+  result.ok = true;
+  return result;
+}
+
+void TunnelController::RetireProviderDeviceLocked() {
+  if (!providerDevice_ && !providerSpace_) return;
+  // The statistics first, under their own lock, so a get_provider_stats served
+  // from here on says that nothing runs.
+  std::optional<urnet::ContractViewController> statsVc;
+  urnet::Sub peersSub;
+  urnet::Sub extenderSub;
+  {
+    std::scoped_lock lock(providerStatsMutex_);
+    statsVc = std::move(providerStatsVc_);
+    providerStatsVc_.reset();
+    peersSub = std::move(providerPeersSub_);
+    extenderSub = std::move(providerExtenderSub_);
+    providerClients_.reset();
+    providerClientId_.clear();
+    providerExtender_.reset();
+    providerExtenderSetting_ = false;
+  }
+  // The network watch's handlers are dropped on this thread, as
+  // TearDownSessionLocked drops the session monitor's, so the monitor the
+  // worker inherits can only unregister itself.
+  if (providerEgress_) {
+    providerEgress_->SetOnNetworkEvent(nullptr);
+    providerEgress_->SetOnNetworkQualityEvent(nullptr);
+  }
+  // Moved into locals and then reset, for the reason TearDownSessionLocked
+  // spells out: a moved-from engaged optional still tests true.
+  auto egress = std::move(providerEgress_);
+  providerEgress_.reset();
+  auto network = std::move(providerNetwork_);
+  providerNetwork_.reset();
+  auto device = std::move(providerDevice_);
+  providerDevice_.reset();
+  auto space = std::move(providerSpace_);
+  providerSpace_.reset();
+  const provide::ControlMode mode = provide::ControlModeFrom(providerRequest_.provide_mode);
+  providerRequest_ = proto::StartProvider{};
+  providerTier_ = 0;
+  providerNetworkKey_ = false;
+  // Published before the bounded close, as RevertMachineStateLocked publishes
+  // released ownership: the app must not keep showing a provider that is going.
+  PublishStatusLocked();
+  LogInfo("provide: retiring the provider-only device (mode={})", provide::ToString(mode));
+  const auto started = std::chrono::steady_clock::now();
+  const bool finished = RunBounded(
+      kSdkTeardownBudget,
+      [egress = std::move(egress), network = std::move(network), peersSub = std::move(peersSub),
+       extenderSub = std::move(extenderSub), statsVc = std::move(statsVc),
+       device = std::move(device), space = std::move(space), flight = logUploadFlight_]() mutable {
+        // After this returns no further OS observation reaches the notifier.
+        if (egress) egress->Stop();
+        egress.reset();
+        // Ends the notifier's thread, waiting out a call into the device that is
+        // already running: the device has to outlive it, so it goes first.
+        network.reset();
+        // Assigned, never reset(): Sub::reset() releases the handle without
+        // unsubscribing (PacketPump.cpp).
+        peersSub = urnet::Sub{};
+        extenderSub = urnet::Sub{};
+        // The typed close, which releases the controller from the device.
+        if (device && statsVc) device->closeContractViewController(*statsVc);
+        statsVc.reset();
+        if (device) device->close();
+        // A log upload's call may still be on it: the flight then keeps it
+        // until the call returns, and releases it.
+        if (device) {
+          const uint64_t deviceHandle = device->handle();
+          flight->KeepUntilReturned(deviceHandle,
+                                    std::shared_ptr<urnet::DeviceLocal>(std::move(device)));
+        }
+        device.reset();
+        space.reset();
+      },
+      // The worker owns a DeviceLocal under this device's identity. While it is
+      // outstanding a second device — a Connect's — would run beside it, so its
+      // abandonment refuses a start exactly as the session teardown's does, and
+      // the next start restarts the service clean instead.
+      AbandonHazard::HoldsSessionDevice);
+  const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                      std::chrono::steady_clock::now() - started)
+                      .count();
+  if (!finished) {
+    LogError("provide: the provider-only device did not close inside its {}ms "
+             "budget and is LEFT closing on its own thread; a start is refused "
+             "until it finishes",
+             kSdkTeardownBudget.count());
+  } else if (ms > 500) {
+    LogWarn("provide: closing the provider-only device took {}ms", ms);
+  }
+}
+
+void TunnelController::ReadProviderFactsLocked() {
+  providerTier_ = 0;
+  providerNetworkKey_ = false;
+  if (!providerDevice_) return;
+  try {
+    providerTier_ = providerDevice_->getProvideMode();
+    if (auto keys = providerDevice_->getProvideSecretKeys()) {
+      for (const auto& key : *keys) {
+        if (key.provide_mode == urnet::ProvideModeNetwork) {
+          providerNetworkKey_ = true;
+          break;
+        }
+      }
+    }
+  } catch (const std::exception&) {
+    // A status must still be publishable; it then claims less (tier 0).
+    LogWarn("provide: reading the provider-only device's tier failed");
+  }
+}
+
+namespace {
+// The DeviceRemote path's client count (SdkHost::ReadStats): the connected
+// network peers, none when the device reports no peers at all.
+int64_t ConnectedPeerCount(const std::optional<urnet::NetworkPeers>& peers) {
+  return peers && peers->Connected ? static_cast<int64_t>(peers->Connected->size()) : 0;
+}
+}  // namespace
+
+void TunnelController::OpenProviderStatsLocked() {
+  if (!providerDevice_) return;
+  std::string clientId;
+  std::optional<urnet::ContractViewController> vc;
+  urnet::Sub peersSub;
+  auto clients = std::make_shared<std::atomic<int64_t>>(0);
+  try {
+    clientId = providerDevice_->getClientId();
+    vc.emplace(providerDevice_->openContractViewController());
+    // Subscribed before the first read, so a change in between is either in
+    // that read or delivered after it. The listener holds a share of the count,
+    // never this object: a callback already running when the retire
+    // unsubscribes still finds it.
+    peersSub = providerDevice_->addNetworkPeersChangeListener(
+        [clients](std::optional<urnet::NetworkPeers> peers) {
+          clients->store(ConnectedPeerCount(peers));
+        });
+    clients->store(ConnectedPeerCount(providerDevice_->getNetworkPeers()));
+  } catch (const std::exception&) {
+    LogWarn("provide: the provider-only device's statistics could not be opened; the "
+            "app shows no client count or provider plots while disconnected");
+    peersSub = urnet::Sub{};
+    try {
+      if (vc) providerDevice_->closeContractViewController(*vc);
+    } catch (const std::exception&) {
+    }
+    return;
+  }
+  // The provider extender role (EXTENDER.md N2, N7), as a session's
+  // DeviceRemote reports it: a status listener, subscribed before the first
+  // read for the peers listener's reason and holding a share of the reading,
+  // never this object, and the setting read beside it. The setting is read
+  // here and again after set_provide_extender writes it through this device
+  // (RefreshProviderExtenderLocked); a session's device, the only other
+  // writer, never runs beside this one. Its own best effort: a failure costs
+  // the extender row, plot and switch, which then read as the role
+  // unsupported, and nothing else.
+  auto extender = std::make_shared<LatestExtenderProvideStatus>();
+  urnet::Sub extenderSub;
+  bool extenderSetting = false;
+  try {
+    extenderSub = providerDevice_->addExtenderProvideStatusChangeListener(
+        [extender](std::optional<urnet::ExtenderProvideStatus> status) {
+          extender->Store(std::move(status));
+        });
+    extender->Store(providerDevice_->getExtenderProvideStatus());
+    extenderSetting = providerDevice_->getProvideExtender();
+  } catch (const std::exception&) {
+    LogWarn("provide: the provider-only device's extender status could not be read; the "
+            "app shows no extender row or plot while disconnected");
+    extenderSub = urnet::Sub{};
+    extender.reset();
+  }
+  std::scoped_lock lock(providerStatsMutex_);
+  providerStatsVc_ = std::move(vc);
+  providerPeersSub_ = std::move(peersSub);
+  providerClients_ = std::move(clients);
+  providerClientId_ = std::move(clientId);
+  providerExtenderSub_ = std::move(extenderSub);
+  providerExtender_ = std::move(extender);
+  providerExtenderSetting_ = extenderSetting;
+}
+
+void TunnelController::RefreshProviderExtenderLocked() {
+  // The device derives the status from the setting it now holds (off, or
+  // setting up while it provides), so this reading already shows the write; a
+  // listener push that was in flight is replaced by the next one within its
+  // epoch.
+  std::optional<urnet::ExtenderProvideStatus> status;
+  bool setting = false;
+  try {
+    status = providerDevice_->getExtenderProvideStatus();
+    setting = providerDevice_->getProvideExtender();
+  } catch (const std::exception&) {
+    LogWarn("provide: re-reading the provider-only device's extender role failed; its next "
+            "status push reports it");
+    return;
+  }
+  std::scoped_lock lock(providerStatsMutex_);
+  // a role whose reading never opened is not reported, and stays so
+  if (!providerExtender_) return;
+  providerExtender_->Store(std::move(status));
+  providerExtenderSetting_ = setting;
+}
+
+void TunnelController::WatchProviderNetworkLocked() {
+  if (!providerDevice_) return;
+  // Stable for the device's whole life (see providerDevice_), and the notifier
+  // ends before the device is closed (RetireProviderDeviceLocked).
+  urnet::DeviceLocal* device = providerDevice_.get();
+  try {
+    // networkChanged() alone: notifyNetworkChange() is the same seam in this
+    // sdk (reliability_controls.go), and a device with no multi client — no
+    // tunnel — gets the process-wide transport kick and the DoH recovery from
+    // it, which is what a provider-only device needs.
+    providerNetwork_ = std::make_unique<NetworkChangeNotifier>(
+        [device] {
+          LogInfo("provide: the os reported an ip/route change — telling the "
+                  "provider-only device the network moved, so its transports re-dial "
+                  "now instead of timing out against the old path");
+          try {
+            device->networkChanged();
+          } catch (const std::exception& e) {
+            LogWarn("provide: the sdk network-change notification failed: {}", e.what());
+          }
+        },
+        [device] {
+          try {
+            device->networkQualityChanged();
+          } catch (const std::exception& e) {
+            LogWarn("provide: the sdk network-quality notification failed: {}", e.what());
+          }
+        });
+    // A zero LUID: no tun exists to exclude, as in rpc-only mode.
+    providerEgress_ =
+        std::make_unique<EgressMonitor>(NET_LUID{}, EgressMonitor::Binding::ObserveOnly);
+    providerEgress_->SetOnNetworkEvent(providerNetwork_->NetworkEventSink());
+    providerEgress_->SetOnNetworkQualityEvent(providerNetwork_->NetworkQualitySink());
+    providerEgress_->Start();
+  } catch (const std::exception&) {
+    // What did start is retired with the device.
+    LogWarn("provide: network changes will not reach the provider-only device; it "
+            "recovers through its transports' timeouts");
+  }
+}
+
+// See the contract in the header. No session lock and no device call: the copy
+// the build and the listeners left, and the controller's sampled state.
+proto::ProviderStats TunnelController::ProviderStats() {
+  proto::ProviderStats stats;
+  std::scoped_lock lock(providerStatsMutex_);
+  if (!providerStatsVc_) return stats;
+  stats.available = true;
+  stats.client_id = providerClientId_;
+  stats.client_count = providerClients_ ? providerClients_->load() : 0;
+  // Each read on its own, as SdkHost's ReadSdkList reads them: a document one
+  // getter cannot decode costs that field, never the reply. Logged once.
+  static std::atomic<bool> logged{false};
+  const auto read = [&](const char* what, const auto& get) {
+    try {
+      get();
+    } catch (const std::exception& e) {
+      if (!logged.exchange(true))
+        LogWarn("provide: reading the provider-only device's {} failed: {}", what, e.what());
+    }
+  };
+  read("window", [&] {
+    if (const int64_t window = providerStatsVc_->getWindowDurationSeconds(); window > 0)
+      stats.window_seconds = window;
+  });
+  read("throughput", [&] {
+    if (auto points = providerStatsVc_->getProviderThroughputPoints())
+      stats.provider_points = *points;
+  });
+  read("transport distribution", [&] {
+    if (auto distribution = providerStatsVc_->getProviderTransportDistribution())
+      stats.provider_distribution = *distribution;
+  });
+  read("packet stats", [&] {
+    stats.has_provider_stats = providerStatsVc_->getProviderPacketStats().has_value();
+  });
+  read("extender throughput", [&] {
+    if (auto points = providerStatsVc_->getExtenderThroughputPoints())
+      stats.extender_points = *points;
+  });
+  // The extender role, as its listener last said: none when its reading could
+  // not be opened, which the app reads as the role unsupported. Beside it, that
+  // this service takes the switch's write (SetProvideExtender).
+  if (providerExtender_) {
+    if (auto status = providerExtender_->Load()) stats.extender_provide_status = *status;
+    stats.provide_extender = providerExtenderSetting_;
+    stats.provide_extender_writable = true;
+  }
+  return stats;
+}
+
+// See the contract in the header. No session lock: the country is a fact about
+// the network, not about a session, and its one sdk call is a store.
+void TunnelController::SetNetworkCountry(const std::string& code, const std::string& source) {
+  const netcountry::Reading reading = netcountry::Normalized(code, source);
+  std::scoped_lock lock(networkCountryMutex_);
+  if (networkCountry_ && *networkCountry_ == reading) return;
+  networkCountry_ = reading;
+  urnet::setNetworkCountryCode(reading.code);
+  if (reading.code.empty()) {
+    LogInfo("tunnel: no network country ({}): extender dials take the extender "
+            "hint's country, or the global spoof list",
+            reading.source);
+  } else {
+    LogInfo("tunnel: network country \"{}\" ({}): while the extender hint cannot be "
+            "fetched, extender dials front with that country's spoof list",
+            reading.code, reading.source);
+  }
+}
+
+std::optional<netcountry::Reading> TunnelController::NetworkCountry() {
+  std::scoped_lock lock(networkCountryMutex_);
+  return networkCountry_;
+}
+
+// ---- the log upload (upload_logs) -------------------------------------------
+//
+// "Send feedback with logs" uploads this service's glog files, which is where
+// everything support reads about the tunnel, the provider and the network is.
+// It used to reach them only through the app's DeviceRemote, i.e. only while a
+// session ran. Now the app asks here, connected or not.
+
+TunnelController::LogUploadResult TunnelController::UploadLogs(
+    const proto::UploadLogs& request, const std::function<void(std::string_view)>& noteCarrier) {
+  LogUploadResult result;
+  // Timed, like StartProvider: a connect attempt wedged inside the SDK holds
+  // mutex_, and an upload that waited behind it would hold the control pipe.
+  std::unique_lock<std::timed_mutex> lock(mutex_, std::defer_lock);
+  if (!lock.try_lock_for(kStopLockBudget)) {
+    result.error = "a tunnel operation is in progress";
+    LogWarn("logs: upload_logs refused: the session lock was not free within {}ms",
+            kStopLockBudget.count());
+    return result;
+  }
+  const logupload::Carrier which =
+      logupload::CarrierFor(device_.has_value(), providerDevice_ != nullptr);
+  const char* carrierName = logupload::ToString(which);
+  // Admitted before anything is built: one upload at a time.
+  const int64_t uploadId = logUploadFlight_->Begin(which, SteadyMillis());
+  if (uploadId == 0) {
+    result.busy = true;
+    result.error = "a log upload is in flight already";
+    LogInfo("logs: upload_logs refused: a log upload is in flight already");
+    return result;
+  }
+  std::shared_ptr<LogUploadDevice> slot;
+  uint64_t deviceHandle = 0;
+  const char* step = "upload";
+  try {
+    if (which == logupload::Carrier::Tunnel) {
+      deviceHandle = device_->handle();
+    } else if (which == logupload::Carrier::Provider) {
+      deviceHandle = providerDevice_->handle();
+    } else {
+      const AbandonedTeardownSweep abandoned = SweepAbandonedTeardowns();
+      const logupload::StandaloneRefusal refusal =
+          logupload::StandaloneRefusalFor(abandoned.outstanding > 0, SelfRestartPending());
+      if (refusal != logupload::StandaloneRefusal::None) {
+        logUploadFlight_->Finish(uploadId, logupload::FlightState::Failed);
+        result.error = logupload::RefusalReason(refusal);
+        LogInfo("logs: upload_logs refused: {}", result.error);
+        return result;
+      }
+      // Neither runs: a device for the upload alone, built as StartProvider
+      // builds the provider-only device (the persisted identity, the request's
+      // credentials and network space) and nothing after that: no adapter,
+      // route, DNS entry, firewall policy, marker or rpc listener. It provides
+      // to nobody. One at a time, under the one identity.
+      RetireLogUploadDeviceLocked();
+      slot = std::make_shared<LogUploadDevice>();
+      slot->flight = logUploadFlight_;
+      step = "network space";
+      slot->space = ImportNetworkSpaceLocked(request.network_space_json);
+      step = "device";
+      slot->device = std::make_unique<urnet::DeviceLocal>(
+          NewDeviceLocked(*slot->space, request.by_jwt, request.device_description,
+                          request.device_spec, request.app_version, request.instance_id,
+                          "logs:"));
+      step = "provide mode";
+      slot->device->setProvideControlMode("never");
+      logUpload_ = slot;
+      deviceHandle = slot->device->handle();
+      step = "upload";
+    }
+  } catch (const std::exception&) {
+    // The stage names the failure, as StartProvider's does, without copying an
+    // SDK message that can carry endpoints or identifiers into the reply.
+    result.error = std::string("the logs could not be uploaded at the ") + step + " step";
+    LogError("logs: stage=upload outcome=failed component={}", step);
+    logUploadFlight_->Finish(uploadId, logupload::FlightState::Failed);
+    // a standalone device built before the failure is closed, not just released
+    if (slot) {
+      CloseLogUploadDevice(slot);
+      logUpload_.reset();
+    }
+    return result;
+  }
+  // Into the files being uploaded, before the upload's thread zips them: which
+  // device carried the upload tells support whether a tunnel was up when it
+  // was sent.
+  if (noteCarrier) noteCarrier(carrierName);
+  // The standalone device's waiter learns that the upload reported from the
+  // upload's callback, and retires the device then.
+  std::function<void()> reported;
+  if (slot) {
+    reported = [slot] {
+      {
+        std::scoped_lock slotLock(slot->mutex);
+        slot->uploadReported = true;
+      }
+      slot->reported.notify_all();
+    };
+  }
+  // The zip and the post, on the upload's own thread. It holds the flight, the
+  // device's handle and the waiter's signal, and nothing else of this object;
+  // the flight keeps the device alive until the call returns (each teardown
+  // hands it over), and the call's callback ends the upload in it, whose
+  // finish hook pushes the status.
+  logUploadFlight_->Run(uploadId, deviceHandle,
+                        [flight = logUploadFlight_, uploadId, deviceHandle,
+                         feedbackId = request.feedback_id, carrierName, reported] {
+                          UploadLogsOnDevice(flight, uploadId, deviceHandle, feedbackId,
+                                             carrierName, reported);
+                        });
+  if (slot) {
+    // The waiter retires the standalone device once its upload reports, or at
+    // the bound if it never does. It owns a share of the slot and nothing else,
+    // so it may outlive this controller; whoever takes the device first closes
+    // it (CloseLogUploadDevice).
+    std::thread([slot] {
+      RunGuarded("log-upload-retire", [&] {
+        {
+          std::unique_lock<std::mutex> slotLock(slot->mutex);
+          slot->reported.wait_for(slotLock, logupload::kStandaloneDeviceMaxLifetime,
+                                  [&] { return slot->uploadReported || !slot->device; });
+        }
+        CloseLogUploadDevice(slot);
+      });
+    }).detach();
+  }
+  result.ok = true;
+  result.carrier = carrierName;
+  result.uploadId = uploadId;
+  LogInfo("logs: uploading this service's logs for a feedback ({} device)", carrierName);
+  return result;
+}
+
+void TunnelController::CloseLogUploadDevice(const std::shared_ptr<LogUploadDevice>& slot) {
+  std::unique_ptr<urnet::DeviceLocal> device;
+  std::optional<urnet::NetworkSpace> space;
+  {
+    std::scoped_lock slotLock(slot->mutex);
+    device = std::move(slot->device);
+    slot->device.reset();
+    space = std::move(slot->space);
+    slot->space.reset();
+  }
+  // a waiter still waiting finds the slot empty and leaves
+  slot->reported.notify_all();
+  if (!device) return;
+  LogInfo("logs: retiring the device that carried a log upload");
+  const bool finished = RunBounded(
+      kSdkTeardownBudget,
+      [device = std::move(device), space = std::move(space), flight = slot->flight]() mutable {
+        device->close();
+        // The upload's call may still be on it: the flight then keeps it until
+        // the call returns, and releases it.
+        if (flight) {
+          const uint64_t deviceHandle = device->handle();
+          flight->KeepUntilReturned(deviceHandle,
+                                    std::shared_ptr<urnet::DeviceLocal>(std::move(device)));
+        }
+        device.reset();
+        space.reset();
+      },
+      // A DeviceLocal under this device's identity, like the provider-only
+      // device's retire: abandoned, it refuses a start until it finishes.
+      AbandonHazard::HoldsSessionDevice);
+  if (!finished) {
+    LogError("logs: the log upload device did not close inside its {}ms budget and is "
+             "left closing on its own thread; a start is refused until it finishes",
+             kSdkTeardownBudget.count());
+  }
+}
+
+void TunnelController::RetireLogUploadDeviceLocked() {
+  if (!logUpload_) return;
+  CloseLogUploadDevice(logUpload_);
+  logUpload_.reset();
 }
 
 // See the contract in the header. NO SESSION LOCK: a copy of the snapshot that
@@ -1787,6 +2685,11 @@ proto::TunnelStatus TunnelController::Status() {
   s.failsafe_armed = deadTunnelWatchdog_.FailsafeArmed();
   const int64_t upSince = upSinceMirror_.load();
   s.tunnel_local_up_millis = upSince ? (NowMillis() - upSince) : 0;
+  // The log upload in flight, off the flight's own lock (never the session's).
+  const logupload::Flight::Reading upload = logUploadFlight_->Read(SteadyMillis());
+  s.log_upload_id = upload.id;
+  s.log_upload_state = logupload::ToString(upload.state);
+  s.log_upload_carrier = upload.id == 0 ? "" : logupload::ToString(upload.carrier);
   return s;
 }
 
@@ -1855,6 +2758,15 @@ proto::TunnelStatus TunnelController::ComposeStatusLocked() {
     const EgressInterfaces bound = egress_->Current();
     s.egress_index4 = static_cast<int64_t>(bound.index4);
     s.egress_index6 = static_cast<int64_t>(bound.index6);
+  }
+  // The provider-only device, from the members that own it: the request it was
+  // built from and the tier and key ReadProviderFactsLocked read off it. No SDK
+  // call here, for the reason service_version above is the cached copy.
+  s.provider_running = providerDevice_ != nullptr;
+  if (providerDevice_) {
+    s.provider_control_mode = providerRequest_.provide_mode;
+    s.provider_mode = providerTier_;
+    s.provider_network_key = providerNetworkKey_;
   }
   // stop_reason and failsafe_armed are deliberately NOT composed here: Status()
   // overlays them from their own lock-free publishers, so a status served

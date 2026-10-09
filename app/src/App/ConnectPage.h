@@ -26,6 +26,7 @@
 
 #include "ConnectCanvas.h"
 #include "ExtenderPanel.h"
+#include "FreeRefreshTicker.h"
 #include "IpFamilyStatusRow.h"
 #include "LocationSheets.h"
 #include "ProviderLocationsSheet.h"
@@ -113,9 +114,13 @@ class ConnectPage {
   // The update banner (beta spec §5): the one writer of UpdateBar, stacked
   // directly under ServiceSetupBar with the same one-writer discipline —
   // MainWindow owns the snapshot copy and pushes every change through here.
-  // Phase::None closes the bar; everything else renders one of the four
-  // standing states (offer / in-flight / manual finish / failure).
+  // Phase::None closes the bar, unless no check has worked for 72 hours, which
+  // it says; everything else renders one of the five standing states (offer /
+  // in-flight / manual finish / failure / the update helper's report).
   void ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap);
+  // The report's title, message and severity.
+  static winrt::Microsoft::UI::Xaml::Controls::InfoBarSeverity ApplyUpdateResult(
+      urnw::UpdateChecker::Snapshot const& snap, winrt::hstring& title, std::wstring& message);
 
   // Status line + status dot + hero canvas + connect button, from connectStatus_
   // (the SDK), connected_ (the service tunnel) and the window's balance state.
@@ -123,6 +128,9 @@ class ConnectPage {
   // live on MainWindow: UpdateBalanceWarning calls this so the hero's error and
   // processing states and the InfoBar can never disagree.
   void ApplyConnectStatus();
+  // the out-of-balance banner's message (ApplyConnectStatus, then once per
+  // displayed minute of the free refresh countdown while it is open)
+  void ApplyBalanceWarningMessage();
 
   // ---- XAML event handlers (forwarded from MainWindow) ----
   void OnConnectToggle(winrt::Windows::Foundation::IInspectable const&,
@@ -583,6 +591,7 @@ class ConnectPage {
   std::optional<urnet::TransportSettings> clientTransportSettings_;
   std::optional<urnet::TransportSettings> providerTransportSettings_;
   winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer chartTimer_{nullptr};
+  urnw::FreeRefreshTicker balanceRefreshTicker_;  // the banner's countdown
   uint32_t chartTickCount_ = 0;
   std::vector<urnw::ContractPeerRow> contractRows_;
   std::vector<urnw::BlockActionItem> blockActions_;

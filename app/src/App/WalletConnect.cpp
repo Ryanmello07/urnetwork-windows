@@ -17,6 +17,10 @@
 #include <nlohmann/json.hpp>
 
 #include "Config.h"
+#include "Localization.h"
+#include "SolanaWalletPresentation.h"
+#include "Strings.h"
+#include "UrlQuery.h"
 
 namespace urnw {
 namespace {
@@ -46,47 +50,6 @@ std::wstring Widen(const std::string& s) {
   std::wstring w(n, L'\0');
   MultiByteToWideChar(CP_UTF8, 0, s.data(), static_cast<int>(s.size()), w.data(), n);
   return w;
-}
-
-// Percent-encode everything except RFC 3986 unreserved characters.
-std::string Esc(const std::string& s) {
-  static const char* hex = "0123456789ABCDEF";
-  std::string out;
-  out.reserve(s.size() * 3);
-  for (unsigned char c : s) {
-    if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' ||
-        c == '_' || c == '.' || c == '~') {
-      out.push_back(static_cast<char>(c));
-    } else {
-      out.push_back('%');
-      out.push_back(hex[c >> 4]);
-      out.push_back(hex[c & 0xF]);
-    }
-  }
-  return out;
-}
-
-std::string Unesc(const std::string& s) {
-  auto hexv = [](char c) -> int {
-    if (c >= '0' && c <= '9') return c - '0';
-    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-    return -1;
-  };
-  std::string out;
-  out.reserve(s.size());
-  for (size_t i = 0; i < s.size(); ++i) {
-    if (s[i] == '%' && i + 2 < s.size()) {
-      int hi = hexv(s[i + 1]), lo = hexv(s[i + 2]);
-      if (hi >= 0 && lo >= 0) {
-        out.push_back(static_cast<char>((hi << 4) | lo));
-        i += 2;
-        continue;
-      }
-    }
-    out.push_back(s[i] == '+' ? ' ' : s[i]);
-  }
-  return out;
 }
 
 std::string Base64(const uint8_t* data, size_t len) {
@@ -123,6 +86,19 @@ std::string Base64Url(const std::string& s) {
   return out;
 }
 
+// The words for a failure the bridge page handed back: this app's own for a
+// code it knows (solana::BridgeErrorTextFor), with the wallet's name where the
+// string takes it, else the page's text.
+std::string LocalizedBridgeError(WalletConnect::Provider p, const std::string& code,
+                                 const std::string& pageText) {
+  const solana::BridgeErrorText text = solana::BridgeErrorTextFor(code);
+  if (text.key.empty()) return pageText;
+  if (!text.takesWalletName) return Narrow(Localized(text.key));
+  const std::wstring walletName =
+      Localized(p == WalletConnect::Provider::Solflare ? "solflare" : "phantom");
+  return Narrow(Format(text.key, walletName));
+}
+
 void SplitUrl(const std::string& url, std::string& host, std::string& query) {
   auto scheme = url.find("://");
   size_t start = (scheme == std::string::npos) ? 0 : scheme + 3;
@@ -132,21 +108,6 @@ void SplitUrl(const std::string& url, std::string& host, std::string& query) {
                               slash == std::string::npos ? url.size() : slash);
   host = url.substr(start, hostEnd - start);
   query = (q == std::string::npos) ? std::string() : url.substr(q + 1);
-}
-
-std::map<std::string, std::string> ParseQuery(const std::string& query) {
-  std::map<std::string, std::string> out;
-  size_t i = 0;
-  while (i < query.size()) {
-    auto amp = query.find('&', i);
-    std::string pair =
-        query.substr(i, amp == std::string::npos ? std::string::npos : amp - i);
-    auto eq = pair.find('=');
-    if (eq != std::string::npos) out[pair.substr(0, eq)] = Unesc(pair.substr(eq + 1));
-    if (amp == std::string::npos) break;
-    i = amp + 1;
-  }
-  return out;
 }
 
 }  // namespace
@@ -198,9 +159,10 @@ void WalletConnect::Connect(Provider p) {
   }
   const std::string redirect = std::string("urnetwork://") + Host(p) + "-connect";
   std::string url = std::string(kWebBridge) +
-                    "?dapp_encryption_public_key=" + Esc(dappKeyPair_->PublicKeyBase58) +
-                    "&cluster=" + kCluster + "&app_url=" + Esc(kAppUrl) +
-                    "&redirect_link=" + Esc(redirect) + "&method=connect&provider=" + Host(p);
+                    "?dapp_encryption_public_key=" + PercentEncode(dappKeyPair_->PublicKeyBase58) +
+                    "&cluster=" + kCluster + "&app_url=" + PercentEncode(kAppUrl) +
+                    "&redirect_link=" + PercentEncode(redirect) +
+                    "&method=connect&provider=" + Host(p);
   OpenUrl(url);
 }
 
@@ -229,32 +191,21 @@ void WalletConnect::SignMessage(const std::string& message) {
   const std::string redirect =
       std::string("urnetwork://") + Host(currentProvider_) + "-sign-message";
   std::string url = std::string(kWebBridge) +
-                    "?dapp_encryption_public_key=" + Esc(dappKeyPair_->PublicKeyBase58) +
-                    "&cluster=" + kCluster + "&nonce=" + Esc(nonce) +
-                    "&redirect_link=" + Esc(redirect) + "&payload=" + Esc(enc) +
+                    "?dapp_encryption_public_key=" + PercentEncode(dappKeyPair_->PublicKeyBase58) +
+                    "&cluster=" + kCluster + "&nonce=" + PercentEncode(nonce) +
+                    "&redirect_link=" + PercentEncode(redirect) + "&payload=" + PercentEncode(enc) +
                     "&method=signMessage&provider=" + Host(currentProvider_);
   OpenUrl(url);
 }
 
-void WalletConnect::SignMessageBittensor(const std::string& message, const std::string& purpose) {
-  // No connect handshake and no encryption envelope: the bridge drives an
-  // injected substrate wallet (Bittensor Wallet, SubWallet, Talisman,
-  // polkadot-js) and returns the ss58 address with the sr25519 signature.
+void WalletConnect::OpenBittensorBridge(const std::string& bridgeUrl) {
+  // No connect handshake and no encryption envelope: sr25519 signatures are
+  // public, and the session already holds everything the url carries.
   connectedPublicKey_.reset();
   walletEncryptionPublicKey_.reset();
   session_.reset();
   currentProvider_ = Provider::Bittensor;
-  const std::string redirect =
-      std::string("urnetwork://") + Host(Provider::Bittensor) + "-sign-message";
-  std::string url = std::string(kWebBridge) + "?provider=" + Host(Provider::Bittensor) +
-                    "&method=signMessage&message=" + Esc(message) +
-                    "&redirect_link=" + Esc(redirect);
-  if (!purpose.empty()) url += "&purpose=" + Esc(purpose);
-  // The WalletConnect Cloud project id lets the bridge pair with a wallet app;
-  // without one the bridge falls back to injected (extension) wallets only.
-  const std::string projectId = config::kWalletConnectProjectId;
-  if (!projectId.empty()) url += "&wc_project_id=" + Esc(projectId);
-  OpenUrl(url);
+  OpenUrl(bridgeUrl);
 }
 
 std::string WalletConnect::OAuthState(const std::string& token) {
@@ -274,10 +225,12 @@ void WalletConnect::OpenGoogleOAuth(const std::string& apiUrl, const std::string
   while (!origin.empty() && origin.back() == '/') origin.pop_back();
   // the code flow: google only hands the identity token to a server, so the
   // api's callback exchanges the code and redirects it back to this app
-  std::string url = std::string(kGoogleAuthorize) + "?client_id=" + Esc(kGoogleClientId) +
-                    "&redirect_uri=" + Esc(origin + kGoogleCallbackPath) +
-                    "&response_type=code" + "&scope=" + Esc("openid email profile") +
-                    "&state=" + Esc(state) + "&nonce=" + Esc(nonce) + "&prompt=select_account";
+  std::string url = std::string(kGoogleAuthorize) +
+                    "?client_id=" + PercentEncode(kGoogleClientId) +
+                    "&redirect_uri=" + PercentEncode(origin + kGoogleCallbackPath) +
+                    "&response_type=code" + "&scope=" + PercentEncode("openid email profile") +
+                    "&state=" + PercentEncode(state) + "&nonce=" + PercentEncode(nonce) +
+                    "&prompt=select_account";
   OpenUrl(url);
 }
 
@@ -289,10 +242,12 @@ void WalletConnect::OpenAppleOAuth(const std::string& apiUrl, const std::string&
   }
   std::string origin = apiUrl;
   while (!origin.empty() && origin.back() == '/') origin.pop_back();
-  std::string url = std::string(kAppleAuthorize) + "?client_id=" + Esc(kAppleServicesId) +
-                    "&redirect_uri=" + Esc(origin + kAppleCallbackPath) +
-                    "&response_type=" + Esc("code id_token") + "&response_mode=form_post" +
-                    "&scope=" + Esc("name email") + "&state=" + Esc(state) + "&nonce=" + Esc(nonce);
+  std::string url = std::string(kAppleAuthorize) +
+                    "?client_id=" + PercentEncode(kAppleServicesId) +
+                    "&redirect_uri=" + PercentEncode(origin + kAppleCallbackPath) +
+                    "&response_type=" + PercentEncode("code id_token") +
+                    "&response_mode=form_post" + "&scope=" + PercentEncode("name email") +
+                    "&state=" + PercentEncode(state) + "&nonce=" + PercentEncode(nonce);
   OpenUrl(url);
 }
 
@@ -310,7 +265,7 @@ void WalletConnect::HandleOAuthReturn(const std::string& url) {
     return;
   }
   auto q = url.find('?');
-  auto params = ParseQuery(q == std::string::npos ? std::string() : url.substr(q + 1));
+  auto params = ParseQueryString(q == std::string::npos ? std::string() : url.substr(q + 1));
   const std::string state = params.count("state") ? params["state"] : std::string();
   const std::string idToken = params.count("id_token") ? params["id_token"] : std::string();
   std::string error = params.count("error") ? params["error"] : std::string();
@@ -327,9 +282,10 @@ bool WalletConnect::HandleDeepLink(const std::string& url) {
   }
   auto provider = ProviderForHost(host);
   if (!provider) return false;
-  if (*provider == Provider::Bittensor)
-    HandleBittensor(host, query);
-  else if (host.find("-connect") != std::string::npos)
+  if (*provider == Provider::Bittensor) {
+    // the session checks it (urnet::BittensorWalletSession::handleBridgeReturn)
+    if (on_bittensor_return) on_bittensor_return(url);
+  } else if (host.find("-connect") != std::string::npos)
     HandleConnect(*provider, query);
   else
     HandleSignMessage(*provider, query);
@@ -337,9 +293,13 @@ bool WalletConnect::HandleDeepLink(const std::string& url) {
 }
 
 void WalletConnect::HandleConnect(Provider p, const std::string& query) {
-  auto params = ParseQuery(query);
+  auto params = ParseQueryString(query);
   if (params.count("errorCode")) {
-    if (on_error) on_error(params.count("errorMessage") ? params["errorMessage"] : "wallet connect error");
+    if (on_error) {
+      const std::string pageText =
+          params.count("errorMessage") ? params["errorMessage"] : "wallet connect error";
+      on_error(LocalizedBridgeError(p, params["errorCode"], pageText));
+    }
     return;
   }
   const std::string keyParam = std::string(Host(p)) + "_encryption_public_key";
@@ -370,9 +330,13 @@ void WalletConnect::HandleConnect(Provider p, const std::string& query) {
 }
 
 void WalletConnect::HandleSignMessage(Provider p, const std::string& query) {
-  auto params = ParseQuery(query);
+  auto params = ParseQueryString(query);
   if (params.count("errorCode")) {
-    if (on_error) on_error(params.count("errorMessage") ? params["errorMessage"] : "wallet signing error");
+    if (on_error) {
+      const std::string pageText =
+          params.count("errorMessage") ? params["errorMessage"] : "wallet signing error";
+      on_error(LocalizedBridgeError(p, params["errorCode"], pageText));
+    }
     return;
   }
   if (!params.count("nonce") || !params.count("data") || !dappKeyPair_ ||
@@ -404,37 +368,6 @@ void WalletConnect::HandleSignMessage(Provider p, const std::string& query) {
   } catch (const std::exception& e) {
     if (on_error) on_error(std::string("bad signature response: ") + e.what());
   }
-}
-
-// Bittensor returns plain query params from the bridge — sr25519 signatures are
-// public, so there is no envelope to decrypt (apple/android parity):
-//   urnetwork://bittensor-sign-message?address=<ss58>&signature=<0xhex>
-//   urnetwork://bittensor-connect?address=<ss58>
-//   urnetwork://bittensor-*?errorCode=-1&errorMessage=<text>
-void WalletConnect::HandleBittensor(const std::string& host, const std::string& query) {
-  auto params = ParseQuery(query);
-  if (params.count("errorCode")) {
-    if (on_error) on_error(params.count("errorMessage") ? params["errorMessage"] : "wallet signing error");
-    return;
-  }
-  const std::string address = params.count("address") ? params["address"] : std::string();
-  if (address.empty()) {
-    if (on_error) on_error("missing wallet address parameter");
-    return;
-  }
-  connectedPublicKey_ = address;
-  currentProvider_ = Provider::Bittensor;
-  if (host == "bittensor-connect") {
-    if (on_public_key) on_public_key(address, Provider::Bittensor);
-    return;
-  }
-  const std::string signature = params.count("signature") ? params["signature"] : std::string();
-  if (signature.empty()) {
-    if (on_error) on_error("missing wallet signature parameters");
-    return;
-  }
-  // The server verifies the hex sr25519 signature as returned (no re-encoding).
-  if (on_signature) on_signature(address, signature, Provider::Bittensor);
 }
 
 }  // namespace urnw

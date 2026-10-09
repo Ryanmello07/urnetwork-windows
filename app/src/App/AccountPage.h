@@ -14,12 +14,16 @@
 #include <utility>
 #include <vector>
 
+#include <winrt/Microsoft.UI.Dispatching.h>
 #include <winrt/Microsoft.UI.Xaml.h>
 #include <winrt/Microsoft.UI.Xaml.Controls.h>
 
+#include "ControlDohSettings.h"  // the bootstrap DNS-over-HTTPS servers block
 #include "ExtenderSheets.h"   // the share + import sheets (EXTENDER.md K7)
+#include "ReferralTotalsState.h"
 #include "SettingsSheets.h"  // rows::FieldState + the row kit
 #include "UrComponents.h"
+#include "VerifySendNotice.h"
 
 namespace winrt::URnetwork::implementation {
 struct MainWindow;
@@ -35,17 +39,19 @@ class AccountPage {
 
   void LoadAccount();
   void LoadReferralInfo();   // referral code + totals (pane A's usage-bar rows)
+  void RetryReferralInfo();  // the referral rows' Try again: back to Loading, read again
   void LoadBalanceCodes();   // redeemed-codes list (account panel)
   // Pane D (EXTENDER.md K6). Reads the effective settings through the SDK's
   // ExtenderViewController and the legacy private extender off the network
   // space -- BOTH off the UI thread, because the controller lives on the
   // DeviceRemote and its read is an rpc to the service. Safe to call with no
-  // session: it renders the NoDevice state.
+  // session: it renders the NoDevice state. The bootstrap DNS-over-HTTPS
+  // servers are read too, session or not (ControlDohSettings.h).
   winrt::fire_and_forget LoadExtenderSettings();
 
   // read by MainWindow::ApplyBalance for the "Total Referrals" / bonus rows on
-  // both plan cards
-  int64_t totalReferrals() const { return totalReferrals_; }
+  // both plan cards: the count, or Loading / an error until a read lands
+  ReferralTotalsFetch const& referralTotals() const { return referralTotals_; }
 
   void OnSaveNetworkName(winrt::Windows::Foundation::IInspectable const&,
                          winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
@@ -100,7 +106,16 @@ class AccountPage {
   void ApplyExtenderStrings();
   winrt::fire_and_forget ShowExtenderShareSheet();
   winrt::fire_and_forget ShowExtenderImportSheet();
+  // "Reset extenders" (connect EXTENDER.md E7): the confirmation, then the
+  // reset itself off the UI thread (SdkHost::ResetExtenders: the app's own
+  // space, then the service's by its control verb), which reloads the form it
+  // leaves before it says "Extenders reset". Needs no session.
+  winrt::fire_and_forget ConfirmResetExtenders();
+  winrt::fire_and_forget ResetExtenders();
   void SendPasswordReset();
+  // Counts a password reset rate limit down and turns Send back on once the
+  // retry time has passed (resetRateLimitTimer_ tick).
+  void RefreshResetRateLimit();
   // Every async field on this surface reaches one of these, for the same reason
   // the settings page does: before it, a 401 and an empty account looked
   // identical (the redeemed-codes list rendered "No balance codes found" for
@@ -109,7 +124,7 @@ class AccountPage {
 
   winrt::URnetwork::implementation::MainWindow& w_;
 
-  int64_t totalReferrals_ = 0;
+  ReferralTotalsFetch referralTotals_;
   std::string referralCode_;
   // the auth this account signs in with, needed by the password-reset call
   std::string userAuth_;
@@ -141,9 +156,15 @@ class AccountPage {
   // Cancel restores
   std::string networkName_;
   bool sendingReset_ = false;
+  // after the server refused a reset link for too many attempts: Send stays
+  // off until the retry time, with a 1s tick counting the status line down
+  urnw::ResendCooldown resetRateLimit_;
+  winrt::hstring resetRateLimitText_;
+  winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer resetRateLimitTimer_{nullptr};
 
   // ---- pane D: extenders ---------------------------------------------------
   bool extenderBuilt_ = false;
+  // a save or a reset of pane D is running; the pane's other writes wait
   bool savingExtender_ = false;
   bool advancedOpen_ = false;
   winrt::Microsoft::UI::Xaml::Controls::TextBox extenderDnsBox_{nullptr};
@@ -155,6 +176,7 @@ class AccountPage {
   winrt::Microsoft::UI::Xaml::Controls::Button privateSaveButton_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::Button shareExtendersButton_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::Button importExtendersButton_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::Button resetExtendersButton_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::Button advancedButton_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::StackPanel advancedPanel_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::TextBlock extenderStatus_{nullptr};
@@ -172,6 +194,12 @@ class AccountPage {
   // held for as long as its dialog is showing, like every other sheet here
   std::shared_ptr<urnw::ExtenderShareSheet> extenderShareSheet_;
   std::shared_ptr<urnw::ExtenderImportSheet> extenderImportSheet_;
+  // The bootstrap DNS-over-HTTPS servers, under the extender settings. Not
+  // gated on the view controller like the rows above it: the servers are a
+  // value of the app's own space, read and saved through SdkHost, and a user
+  // whose network blocks the built-in servers needs them before the app can
+  // reach its own servers, let alone hold a session.
+  std::shared_ptr<urnw::ControlDohBlock> controlDoh_;
 };
 
 }  // namespace urnw

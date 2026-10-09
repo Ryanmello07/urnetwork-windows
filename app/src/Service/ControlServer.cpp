@@ -55,6 +55,8 @@ nlohmann::json ControlServer::Handle(const nlohmann::json& request) {
             "start_tunnel requires an exact instance id, RPC session id, "
             "loopback endpoint, and per-session mTLS credentials");
       }
+      // The user's system proxy, as the app read it for this connect.
+      diagnostics_.NoteStart(cfg);
       proto::TunnelStatus st = tunnel_.Start(cfg);
       // "ok" means "I did what you asked" — live AND in the mode requested.
       // A clamped process serving a tunnel request produces a live session, but
@@ -91,10 +93,105 @@ nlohmann::json ControlServer::Handle(const nlohmann::json& request) {
       reply.status = tunnel_.Status();
       PushState();
     } else if (type == proto::msg::kLogout) {
-      tunnel_.Logout();
-      reply.ok = true;
+      // Not ok when the session lock was not free or the account's sdk state
+      // could not be cleared: the app keeps the sign-out owed and sends it
+      // again (Common/SignOut.h).
+      const proto::Logout req = request.get<proto::Logout>();
+      reply.ok = tunnel_.Logout(req.network_space_json);
       reply.status = tunnel_.Status();
       PushState();
+    } else if (type == proto::msg::kStartProvider) {
+      // Keep providing while disconnected (TunnelController::StartProvider). The
+      // device registers under this machine's persisted identity with the
+      // request's credentials, so the request must name the device exactly —
+      // validated before anything is retired or built, like start_tunnel's
+      // identity above. The mode and the machine's state are the controller's
+      // to judge (provide::ProviderStartRefusal).
+      proto::StartProvider req = request.get<proto::StartProvider>();
+      if (!rpcsession::IsPairableInstanceId(req.instance_id) || req.by_jwt.empty() ||
+          req.network_space_json.empty()) {
+        throw std::runtime_error(
+            "start_provider requires the device's client jwt, its exact instance "
+            "id, and the network space");
+      }
+      std::string error;
+      reply.ok = tunnel_.StartProvider(req, error);
+      reply.error = error;
+      // The status rides on a refusal too, so the app sees what is running (a
+      // tunnel session, an armed floor) beside the reason.
+      reply.status = tunnel_.Status();
+      PushState();
+    } else if (type == proto::msg::kStopProvider) {
+      reply.ok = tunnel_.StopProvider();
+      reply.status = tunnel_.Status();
+      PushState();
+    } else if (type == proto::msg::kSetNetworkCountry) {
+      // The network country the app reads changed, or the app has just greeted
+      // this service (TunnelController::SetNetworkCountry). No session lock, and
+      // nothing a status reports moves, so nothing is pushed.
+      proto::SetNetworkCountry s = request.get<proto::SetNetworkCountry>();
+      tunnel_.SetNetworkCountry(s.network_country_code, s.network_country_source);
+      // The country now in force, for the log feedback uploads, when it moved.
+      diagnostics_.NoteNetworkCountry(tunnel_.NetworkCountry());
+      reply.ok = true;
+      reply.status = tunnel_.Status();
+    } else if (type == proto::msg::kUploadLogs) {
+      // "Send feedback with logs" whether or not a tunnel runs
+      // (TunnelController::UploadLogs). The feedback id becomes part of the url
+      // the device posts to, and a standalone device registers under this
+      // machine's persisted identity with these credentials, so both are
+      // validated before anything is touched, like start_provider's above.
+      proto::UploadLogs req = request.get<proto::UploadLogs>();
+      if (!proto::LooksLikeFeedbackId(req.feedback_id) ||
+          !rpcsession::IsPairableInstanceId(req.instance_id) || req.by_jwt.empty() ||
+          req.network_space_json.empty()) {
+        throw std::runtime_error(
+            "upload_logs requires the server's feedback id, the device's client "
+            "jwt, its exact instance id, and the network space");
+      }
+      // The carrier's line goes into the upload itself, so it is written from
+      // inside, once the device is chosen (ServiceDiagnostics.h). The reply
+      // comes once the upload is admitted; its end pushes the status that
+      // carries its outcome (TunnelController's flight hook).
+      const TunnelController::LogUploadResult result =
+          tunnel_.UploadLogs(req, [this](std::string_view chosen) {
+            diagnostics_.NoteLogUpload(chosen);
+          });
+      reply.ok = result.ok;
+      reply.error = result.error;
+      reply.log_upload_carrier = result.carrier;
+      reply.log_upload_id = result.uploadId;
+      reply.log_upload_busy = result.busy;
+    } else if (type == proto::msg::kGetProviderStats) {
+      // The provider-only device's statistics (TunnelController::ProviderStats),
+      // answered like get_state: no session lock, no device call, and nothing
+      // changed, so nothing is pushed.
+      reply.ok = true;
+      reply.provider_stats = tunnel_.ProviderStats();
+    } else if (type == proto::msg::kSetProvideExtender) {
+      // The Extender switch while disconnected (TunnelController::
+      // SetProvideExtender), on this pipe under its access rule (kPipeSddl)
+      // like every other request. A request without the value throws out of
+      // the get<> as a failed reply. The tunnel status does not change, so
+      // nothing is pushed; the next get_provider_stats carries the setting.
+      proto::SetProvideExtender req = request.get<proto::SetProvideExtender>();
+      std::string error;
+      reply.ok = tunnel_.SetProvideExtender(req.provide_extender, error);
+      reply.error = error;
+    } else if (type == proto::msg::kResetExtenders) {
+      // "Reset extenders" in the app's Account > Extenders (TunnelController::
+      // ResetExtenders), on this pipe under its access rule (kPipeSddl) like
+      // every other request. A request that does not name its space and its
+      // reset throws out of the get<> as a failed reply. A busy refusal says so
+      // (reset_busy), and the app sends it again once the operation holding the
+      // session lock has pushed the status that ends it. The tunnel status does
+      // not change, so nothing is pushed.
+      const proto::ResetExtenders req = request.get<proto::ResetExtenders>();
+      const TunnelController::ExtenderResetResult result = tunnel_.ResetExtenders(req);
+      reply.ok = result.ok;
+      reply.reset = result.reset;
+      reply.reset_busy = result.busy;
+      reply.error = result.error;
     } else {
       reply.ok = false;
       reply.error = "unknown request type: " + type;
@@ -124,6 +221,11 @@ void ControlServer::PushState() {
   // has returned and released mutex_, so it cannot sequence a call that may
   // block inside the Go runtime ahead of the route revert. See the note on
   // TunnelController::SetStateLocked.
+  //
+  // The diagnostic lines of the state being pushed go first, for the same
+  // reason and so the flush takes them along (ServiceDiagnostics.h).
+  diagnostics_.NoteStatus(tunnel_.Status(), tunnel_.KillSwitchPreference(),
+                          tunnel_.NetworkCountry());
   urnet::flushGlog();
   nlohmann::json event;
   event["event"] = "tunnel_state";

@@ -36,17 +36,17 @@ func lf(source string) string {
 // without that being decided.
 func TestSecondLaunchHandsTheForegroundRightToTheRunningInstance(t *testing.T) {
 	source := stripLineComments(lf(readAppSource(t, "main.cpp")))
-	redirect := definitionBody(t, "main.cpp", source, "bool RedirectActivation(")
+	redirect := definitionBody(t, "main.cpp", source, "urnw::instance::RedirectAttempt Launcher::Redirect() {")
 	allowAt := strings.Index(redirect, "::AllowSetForegroundWindow(")
 	redirectAt := strings.Index(redirect, "RedirectActivationToAsync(")
 	if allowAt < 0 {
-		t.Fatal("RedirectActivation no longer hands the foreground right to the running instance explicitly: the SDK's redirect still does, but the 'no foreground right' log line that distinguishes the launcher with none is gone")
+		t.Fatal("Launcher::Redirect no longer hands the foreground right to the running instance explicitly: the SDK's redirect still does, but the 'no foreground right' log line that distinguishes the launcher with none is gone")
 	}
 	if redirectAt < 0 || allowAt > redirectAt {
-		t.Fatal("RedirectActivation must call AllowSetForegroundWindow BEFORE it redirects the activation: the second launch exits right after")
+		t.Fatal("Launcher::Redirect must call AllowSetForegroundWindow BEFORE it redirects the activation: the second launch exits right after")
 	}
-	if !strings.Contains(redirect, "primary.ProcessId()") {
-		t.Fatal("RedirectActivation must hand the right to the PRIMARY instance (AppInstance::ProcessId), not to ASFW_ANY and not to itself")
+	if !strings.Contains(redirect, "::AllowSetForegroundWindow(holder_.ProcessId())") {
+		t.Fatal("Launcher::Redirect must hand the right to the HOLDER of the key (AppInstance::ProcessId), not to ASFW_ANY and not to itself")
 	}
 }
 

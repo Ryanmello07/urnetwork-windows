@@ -106,6 +106,61 @@ std::vector<std::string> ParseExtenderHostLines(std::string_view text) {
   return hosts;
 }
 
+// ---- reset (E7) -------------------------------------------------------------
+
+bool ExtenderResetEnabled(bool signedIn, bool writing) { return signedIn && !writing; }
+
+// ---- the bootstrap DNS-over-HTTPS servers -------------------------------------
+
+std::vector<std::string> ParseControlDohLines(std::string_view text) {
+  std::vector<std::string> urls;
+  std::size_t start = 0;
+  while (start <= text.size()) {
+    std::size_t end = text.size();
+    for (std::size_t i = start; i < text.size(); ++i) {
+      if (text[i] == '\n' || text[i] == '\r') {
+        end = i;
+        break;
+      }
+    }
+    const std::string_view line = Trim(text.substr(start, end - start));
+    if (!line.empty()) urls.emplace_back(line);
+    if (end == text.size()) break;
+    start = end + 1;
+  }
+  return urls;
+}
+
+std::string ControlDohText(const std::vector<std::string>& urls) {
+  std::string text;
+  for (const std::string& url : urls) {
+    if (!text.empty()) text += "\n";
+    text += url;
+  }
+  return text;
+}
+
+const char* ControlDohErrorKey(std::string_view errorId) {
+  for (const char* id : kControlDohErrorIds) {
+    if (errorId == id) return id;
+  }
+  // the call could not run, or a newer sdk refused for a reason this build
+  // cannot name: neither is about the url the user typed
+  return "something_went_wrong";
+}
+
+ControlDohSaveOutcome ControlDohSaveOutcomeFor(std::string_view errorId) {
+  ControlDohSaveOutcome outcome;
+  if (!errorId.empty()) {
+    outcome.messageKey = ControlDohErrorKey(errorId);
+    return outcome;
+  }
+  outcome.saved = true;
+  outcome.messageKey = "control_doh_urls_saved";
+  outcome.nextConnectNote = true;
+  return outcome;
+}
+
 // ---- share ------------------------------------------------------------------
 
 std::string TrimShareText(std::string_view text) { return std::string(Trim(text)); }
@@ -217,6 +272,14 @@ ExtenderImportDecision DecideExtenderImport(const ExtenderShareDecodeView& decod
     decision.confirmArg =
         decoded.settingsHost.empty() ? decoded.networkHost : decoded.settingsHost;
   }
+  // Named whether or not the settings are taken yet: the line is what the user
+  // weighs before turning them on.
+  if (decoded.hasSettings) {
+    for (const std::string& url : decoded.controlDohUrls) {
+      if (!decision.controlDohUrlsArg.empty()) decision.controlDohUrlsArg += ", ";
+      decision.controlDohUrlsArg += url;
+    }
+  }
   return decision;
 }
 
@@ -251,6 +314,7 @@ const char* ExtenderProvideFamiliesKey(bool activatedV4, bool activatedV6) {
 // does not know.
 const char* ExtenderProvideErrorKey(std::string_view errorCase) {
   if (errorCase == kExtenderProvideErrorStart) return "extender_start_failed";
+  if (errorCase == kExtenderProvideErrorTcpUnavailable) return "extender_tcp_unavailable";
   if (errorCase == kExtenderProvideErrorListen) return "extender_listen_failed";
   if (errorCase == kExtenderProvideErrorActivationRefused) return "extender_activation_refused";
   if (errorCase == kExtenderProvideErrorActivationFailed) return "extender_activation_failed";
@@ -262,6 +326,9 @@ const char* ExtenderProvideErrorKey(std::string_view errorCase) {
 ExtenderProvideRowModel ExtenderProvideRowModelFor(const ExtenderProvideStatusView& view) {
   ExtenderProvideRowModel model;
   model.visible = view.supported;
+  // the switch writes through a session's device, or for the provider-only
+  // device's status through the service, when it takes the write
+  model.switchVisible = view.supported && (!view.providerOnly || view.serviceWritable);
   model.on = view.provideExtender;
   const std::string_view state = view.state;
   if (state == kExtenderProvideStateOff) {
@@ -307,6 +374,9 @@ ExtenderProvideStatusView ExtenderProvideGuessFor(const ExtenderProvideStatusVie
                                                   bool on, bool providing) {
   ExtenderProvideStatusView guess;
   guess.supported = current.supported;
+  guess.providerOnly = current.providerOnly;
+  // the switch that was just flipped stays shown over its own guess
+  guess.serviceWritable = current.serviceWritable;
   guess.state = !on        ? kExtenderProvideStateOff
                 : providing ? kExtenderProvideStateSettingUp
                             : kExtenderProvideStateNotProviding;
@@ -314,6 +384,16 @@ ExtenderProvideStatusView ExtenderProvideGuessFor(const ExtenderProvideStatusVie
   guess.enabled = on && providing;
   guess.provideExtender = on;
   return guess;
+}
+
+ExtenderProvideWriteRoute ExtenderProvideWriteRouteFor(bool sessionDevice,
+                                                       const ExtenderProvideStatusView& shown) {
+  if (sessionDevice) return ExtenderProvideWriteRoute::Device;
+  // exactly the status the switch shows over with no session
+  if (shown.supported && shown.providerOnly && shown.serviceWritable) {
+    return ExtenderProvideWriteRoute::Service;
+  }
+  return ExtenderProvideWriteRoute::None;
 }
 
 // ---- the statistics sections ----------------------------------------------------

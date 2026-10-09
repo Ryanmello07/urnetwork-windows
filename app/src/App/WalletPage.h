@@ -11,7 +11,7 @@
 //           tile
 //   pane B  the per-epoch history (points; the alpha column only with a
 //           wallet) and the leaderboard, one at a time
-//   pane C  own ranking, the Seeker multiplier (points only), reliability
+//   pane C  own ranking, reliability
 //
 // Points are URnetwork's own system and always the headline. Alpha accrues
 // from the first epoch after the wallet was attached, never retroactively.
@@ -40,6 +40,9 @@
 #include <winrt/Microsoft.UI.Xaml.Shapes.h>
 
 #include "EarningsSheets.h"
+#include "ProviderIdleReason.h"
+#include "ProviderStatusPresentation.h"
+#include "SnPayoutPresentation.h"
 #include "SolanaWalletPresentation.h"
 
 namespace urnw {
@@ -69,9 +72,10 @@ class WalletPage {
   void ApplyStrings();
 
   // The provide-mode row (the Connect page's indicator + label with the
-  // current mode) and the providing gate: with providing off the reliability
-  // chart hides and the group says so, the same gate and message as the
-  // stats widget. MainWindow relays each live-stats update here.
+  // current mode), the idle reason under it (P008) and the providing gate:
+  // with providing off the reliability chart hides and the group says so, the
+  // same gate and message as the stats widget. MainWindow relays each
+  // live-stats update here.
   void ApplyProvideState(urnw::LiveStats const& stats);
 
   // The read-only extender row under the provide mode row (connect/EXTENDER.md
@@ -86,13 +90,16 @@ class WalletPage {
   // destination shows: cache reads, no rpc.
   void ResyncProviderStats();
   // The statistics charts' clock runs only while the window presents, as the
-  // Connect page's does.
+  // Connect page's does, and so does the provider status poll (P008).
   void SetPresentationActive(bool active);
+  // Whether the Earnings destination is the one showing: the other half of
+  // the provider status poll's gate, from MainWindow's navigation.
+  void SetSelected(bool selected);
 
-  // Every Earnings fetch: points, the Seeker flag, reliability, the epoch
-  // history, the coldkey, the head-spot status - and, once the coldkey is
-  // known, the claims and the gas key from the chain. Each settles its own
-  // panel independently, so one failing source does not blank the others.
+  // Every Earnings fetch: points, reliability, the epoch history, the coldkey,
+  // the head-spot status - and, once the coldkey is known, the claims and the
+  // gas key from the chain. Each settles its own panel independently, so one
+  // failing source does not blank the others.
   void LoadWallet();
   void LoadLeaderboard();
 
@@ -133,8 +140,6 @@ class WalletPage {
   void OnClaimTop200(winrt::Windows::Foundation::IInspectable const&,
                      winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OpenProtocolSite();  // the "Learn more" link beside the wallet note
-  winrt::fire_and_forget OnVerifySeeker(winrt::Windows::Foundation::IInspectable const&,
-                                        winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnEarningsTableChanged(
       winrt::Microsoft::UI::Xaml::Controls::SelectorBar const&,
       winrt::Microsoft::UI::Xaml::Controls::SelectorBarSelectionChangedEventArgs const&);
@@ -183,7 +188,7 @@ class WalletPage {
  private:
   // THE ONE GATE for every server call this destination makes. --preview-ui
   // deliberately has no session, and a guarded LOAD path is not enough: every
-  // ACTION here (connect, claim, verify, the leaderboard switch) has to pass
+  // action here (connect, claim, the leaderboard switch) has to pass
   // through this too, or a preview build puts authenticated-looking requests
   // on the wire with no token.
   bool CanCallApi() const;
@@ -230,7 +235,6 @@ class WalletPage {
 
   // ---- fetches (the SDK adapters; every callback marshals to the UI thread)
   void LoadPoints();
-  void LoadSeeker();
   void LoadReliability();
   void LoadEpochs();
   void LoadSnWallet();
@@ -258,6 +262,8 @@ class WalletPage {
                                 std::string const& warning);
   void SetConnectingWallet(bool connecting);
   void StartWalletConnect(std::string const& pinnedAddress);
+  // after the chooser: the proof with `walletId` ("talisman" | "taocom")
+  void ConnectWithWallet(std::string const& walletId, std::string const& pinnedAddress);
 
   // ---- the manual address (still signed)
   void ValidateWalletAddress();
@@ -292,16 +298,25 @@ class WalletPage {
   void ShowSolanaCardMenu(winrt::Microsoft::UI::Xaml::FrameworkElement const& anchor);
   winrt::fire_and_forget ConfirmRemoveSolanaWallet();
   void RemoveSolanaWallet(std::string const& walletId);
-  void ApplyRemoveResult(uint32_t generation, bool ok, std::string const& error);
+  void ApplyRemoveResult(uint32_t generation, bool ok, std::string const& error,
+                         solana::PayoutRemoval const& removal);
+  // the reload after a removal committed: name the wallet the server promoted
+  void NotifyPromotedPayoutWallet();
   void SetLegacyBusy(bool busy);
 
   // ---- history, claims, gas, head
   void ApplyEpochs(std::vector<EpochRow> const& epochs, Fetch state);
   void RebuildHistory();
   // `error` is the SDK's SnError (or one built from a transport error) when
-  // the fetch failed; its stable code picks the store's sentence.
+  // the fetch failed; its stable code picks the store's sentence. `schedule` is
+  // the current epoch's, read with the claims (absent when the SDK could not
+  // read the coordinator's policy).
   void ApplyClaims(std::vector<EpochClaim> const& claims, int64_t totalClaimableRao,
-                   Fetch state, std::optional<urnet::SnError> const& error);
+                   Fetch state, std::optional<urnet::SnError> const& error,
+                   std::optional<snpayout::EpochSchedule> const& schedule = std::nullopt);
+  // How and when SN payouts happen, under the points figure
+  // (snpayout::PayoutLineFor), from the coldkey, the claims and the schedule.
+  void RebuildPayoutLine();
   // The default chain settings ship without the vault, coordinator and
   // operator id, so the first vault read waits for one GET /sn/epoch through
   // the device, which stores them. `then` runs on the UI thread either way.
@@ -322,14 +337,43 @@ class WalletPage {
   void OnChartTick();
   // the read-only extender row, from extenderProvideView_ (N7)
   void ApplyExtenderProvideRow();
+  // The line under the provide mode row (P008): why providing is enabled but
+  // idle (provideridle::ProviderIdleReasonFor), from the last live stats and
+  // the provider bytes in the window, merged with the server's reason once a
+  // status for this device has loaded (providerstatus::LineFor); collapsed
+  // when there is nothing to say.
+  void ApplyProvideReason();
+  // ---- the provider status (P008): the SDK's ProviderStatusViewController,
+  // which reads GET /network/provider-status about once a minute. Opened on
+  // the device once the destination shows with providing enabled (never while
+  // it is off), polling only while the destination shows and the window
+  // presents, and closed with the typed close when providing turns off, the
+  // device it was opened on goes, or the page goes.
+  void ReconcileProviderStatus();
+  void OpenProviderStatus(uint64_t device);
+  // Releases the controller and forgets its readings; touches no XAML, so the
+  // destructor can call it.
+  void CloseProviderStatus(bool deviceAlive);
+  // Mirrors the controller into the page: loaded, the last poll's error and
+  // this device's status (one value copy of the SDK's struct).
+  void ReadProviderStatus();
+  // With no session the provider is the service's provider-only device, which
+  // no controller can be opened on: SdkHost reads its status on the api while
+  // this page wants it (SetProviderOnlyStatusWanted), and these take its
+  // readings into the same three fields the controller fills.
+  void ApplyProviderOnlyStatus(urnw::ProviderOnlyStatus const& status);
+  void TakeProviderOnlyReadings(urnw::ProviderOnlyStatus const& status);
+  // The readings through providerstatus::ViewFor; neither a controller nor the
+  // provider-only source reads as a failed poll.
+  providerstatus::View ProviderStatusView() const;
+  // The Demand row and Why? under the provider plots' gate, and the line.
+  void ApplyProviderStatus();
+  void RebuildProviderWhy();
+  void ToggleProviderWhy();
   // Both groups' visibility and the provider header's meta label, from
   // ExtenderStatsSectionsFor. Only a changed reading is painted unless `force`.
   void ApplyStatsSections(bool force);
   winrt::fire_and_forget ShowProviderTransportSettingsSheet();
-
-  // ---- the Seeker multiplier (points only)
-  void ApplySeekerState();
-  void ApplySeekerResult(uint32_t generation, bool ok, std::string const& serverError);
 
   // ---- leaderboard
   void ApplyLeaderboard(urnet::LeaderboardEarnersList const& earners, Fetch state);
@@ -377,14 +421,41 @@ class WalletPage {
   bool providerDistributionSeen_ = false;
   // the reading last painted; empty before the first
   std::optional<urnw::ExtenderStatsSections> statsSections_;
+  // the idle reason's inputs (P008): the control mode and the live provide
+  // state from the last live stats, and the provider bytes in the window from
+  // the last provider distribution
+  provideridle::ProvideControlMode provideControlMode_ = provideridle::ProvideControlMode::Unknown;
+  int64_t liveProvideMode_ = 0;
+  bool providePaused_ = false;
+  int64_t providerWindowBytes_ = 0;
+  // ---- the provider status (P008)
+  bool selected_ = false;            // the Earnings destination shows
+  bool presentationActive_ = false;  // the window presents
+  // a live stats reading has set providingEnabled_: until then the gate's
+  // default says nothing, and the controller must not open on it
+  bool provideStateKnown_ = false;
+  std::optional<urnet::ProviderStatusViewController> providerStatusVc_;
+  std::optional<urnet::Sub> providerStatusSub_;
+  // the device handle the controller was opened (or tried) on; 0 for none
+  uint64_t providerStatusVcDevice_ = 0;
+  bool providerStatusStarted_ = false;
+  bool providerStatusLoaded_ = false;
+  std::string providerStatusError_;
+  std::optional<urnet::ProviderStatus> providerStatus_;
+  // the three readings above are the provider-only device's (no session, no
+  // controller), from SdkHost
+  bool providerOnlySource_ = false;
+  bool providerWhyOpen_ = false;  // Why? starts collapsed
+  // the Demand chart's 60 bars, oldest first (BuildCharts)
+  std::vector<winrt::Microsoft::UI::Xaml::Shapes::Rectangle> demandBars_;
   PointsBreakdown accountPoints_;
-  bool seekerHolder_ = false;
-  bool verifyingSeeker_ = false;
   std::optional<urnet::ReliabilityWindow> reliability_;
 
   std::optional<SnWalletInfo> snWallet_;
   Fetch walletState_ = Fetch::Loading;
   bool connectingWallet_ = false;
+  // the wallet the current coldkey connect signs with (its refusal names it)
+  std::string connectWalletId_;
   bool manualPanelOpen_ = false;
   bool manualAddressOk_ = false;
   std::string manualAddress_;
@@ -396,6 +467,7 @@ class WalletPage {
   std::vector<EpochClaim> claims_;
   int64_t totalClaimableRao_ = 0;
   Fetch claimsState_ = Fetch::Loading;
+  std::optional<snpayout::EpochSchedule> schedule_;
   std::optional<GasKeyInfo> gas_;
   std::optional<HeadInfo> head_;
   bool chainSynced_ = false;
@@ -407,7 +479,6 @@ class WalletPage {
   bool settingRankingPublic_ = false;
 
   Flow connectFlow_;
-  Flow seekerFlow_;
   Flow rankingFlow_;
 
   std::shared_ptr<urnw::ClaimAlphaSheet> claimSheet_;
@@ -422,6 +493,8 @@ class WalletPage {
   bool legacyBusy_ = false;
   Flow legacyFlow_;  // the payout read and switch after a link
   Flow removeFlow_;  // the removal, on its own flow: a link must never drop its answer
+  // a removal that landed, until the reload after it commits
+  std::optional<solana::PayoutRemoval> payoutRemoval_;
   std::shared_ptr<urnw::ConnectSolanaWalletSheet> solanaSheet_;
 
   struct PointsStatTile {

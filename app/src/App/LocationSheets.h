@@ -27,6 +27,7 @@
 #include <winrt/Microsoft.UI.Xaml.Media.h>
 #include <winrt/Microsoft.UI.Xaml.Shapes.h>
 
+#include "PeerLocation.h"  // PeerDisplayName, PeerConnectLocation
 #include "SdkHost.h"
 
 namespace winrt::URnetwork::implementation {
@@ -34,10 +35,6 @@ struct MainWindow;
 }
 
 namespace urnw {
-
-// A network peer's display name: DeviceName, else DeviceSpec, else the client
-// id. Shared with the connect drawer's selected-location label (req4).
-std::string PeerDisplayName(const urnet::NetworkPeer& peer);
 
 class LocationChooserSheet : public std::enable_shared_from_this<LocationChooserSheet> {
  public:

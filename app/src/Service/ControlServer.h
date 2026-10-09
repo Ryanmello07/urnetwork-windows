@@ -5,6 +5,7 @@
 #pragma once
 
 #include "PipeServer.h"
+#include "ServiceDiagnostics.h"
 #include "TunnelController.h"
 
 namespace urnw {
@@ -34,6 +35,11 @@ class ControlServer {
   nlohmann::json Handle(const nlohmann::json& request);
   void PushState();
 
+  // The lines "send feedback with logs" uploads, written at the RPC boundary:
+  // every pushed state (PushState), every start_tunnel and every upload_logs
+  // the service carries. Declared first, so it is destroyed last: a push from
+  // the pipe or the tunnel can reach it until both are gone.
+  ServiceDiagnostics diagnostics_;
   TunnelController tunnel_;
   PipeServer pipe_;
 };

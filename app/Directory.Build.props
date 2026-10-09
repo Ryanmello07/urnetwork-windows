@@ -31,14 +31,25 @@
   </PropertyGroup>
 
   <PropertyGroup Label="Configuration">
+    <!-- MSBuild chooses the C++ tool host independently of its own process and
+         the developer shell's PATH. Under x64 MSBuild the ARM64 target defaults
+         to HostX86, whose linker exhausts its address space during Release LTCG.
+         Select the 64-bit tools before the VC toolset resolves their paths;
+         Platform still controls whether the output is x64 or ARM64. -->
+    <PreferredToolArchitecture Condition="'$(MSBuildProjectExtension)'=='.vcxproj' and '$(PreferredToolArchitecture)'==''">x64</PreferredToolArchitecture>
     <PlatformToolset Condition="'$(PlatformToolset)'==''">v143</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
 
-  <!-- The build's version identity. CI derives the android-format version
-       (v<YYYY.M.D>-<code>[-beta]) and passes it in as
-         /p:UrVersion=2026.8.9-<code>-beta /p:UrVersionCode=<code>
-         /p:UrVersionMajor=2026 /p:UrVersionMinor=8 /p:UrVersionPatch=9
+  <!-- The build's version identity. tools/UrVersion.ps1 derives it from the
+       android-format version (<YYYY.M.D>-<code>[-beta]), and build.ps1 and
+       CI pass it in as
+         /p:UrVersion=2026.10.1-1060587890 /p:UrVersionCode=1060587890
+         /p:UrVersionMajor=2026 /p:UrVersionMinor=10 /p:UrVersionPatch=1
+         /p:UrVersionBuild=22994
+       Major/Minor/Patch are the UTC date of the code's instant, and Build is
+       half its second of the day, so the numeric FILEVERSION rises with the
+       code even between two builds of one day.
        Local builds pass nothing and get these defaults - which is not
        cosmetic: code 0 is the value that DISABLES the update checker, so a
        build that was never released can never try to replace itself with one
@@ -49,6 +60,7 @@
     <UrVersionMajor Condition="'$(UrVersionMajor)'==''">0</UrVersionMajor>
     <UrVersionMinor Condition="'$(UrVersionMinor)'==''">0</UrVersionMinor>
     <UrVersionPatch Condition="'$(UrVersionPatch)'==''">0</UrVersionPatch>
+    <UrVersionBuild Condition="'$(UrVersionBuild)'==''">0</UrVersionBuild>
   </PropertyGroup>
 
   <!-- Per-arch vendored SDK: dll + import lib + include (.h/.hpp) -->
@@ -69,9 +81,9 @@
       <!-- UR_VERSION_RAW is the BARE version token; Common/Version.h stringizes
            it into UR_VERSION_STRING. A \" escaped literal here does not survive
            MSBuild's command-line quoting on this toolchain - the same verified
-           finding as URN_WINDOWSAPPSDK_VERSION_RAW in App.vcxproj. The four
+           finding as URN_WINDOWSAPPSDK_VERSION_RAW in App.vcxproj. The five
            numeric parts pass straight through as integers. -->
-      <PreprocessorDefinitions>UR_VERSION_RAW=$(UrVersion);UR_VERSION_CODE=$(UrVersionCode);UR_VER_MAJOR=$(UrVersionMajor);UR_VER_MINOR=$(UrVersionMinor);UR_VER_PATCH=$(UrVersionPatch);NOMINMAX;WIN32_LEAN_AND_MEAN;UNICODE;_UNICODE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>UR_VERSION_RAW=$(UrVersion);UR_VERSION_CODE=$(UrVersionCode);UR_VER_MAJOR=$(UrVersionMajor);UR_VER_MINOR=$(UrVersionMinor);UR_VER_PATCH=$(UrVersionPatch);UR_VERSION_BUILD=$(UrVersionBuild);NOMINMAX;WIN32_LEAN_AND_MEAN;UNICODE;_UNICODE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <WarningLevel>Level3</WarningLevel>
       <!-- the sources are utf-8 and narrow literals carry non-ascii (e.g. the
@@ -84,11 +96,11 @@
       <AdditionalOptions>/utf-8 /we4005 /we4651 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <ResourceCompile>
-      <!-- The same five definitions for rc.exe, so the VERSIONINFO resources
+      <!-- The same six definitions for rc.exe, so the VERSIONINFO resources
            (App.rc, Service.rc) are compiled from the identical values the code
            sees. ResourceCompile is its own tool with its own definition list -
            the ClCompile ones above never reach it. -->
-      <PreprocessorDefinitions>UR_VERSION_RAW=$(UrVersion);UR_VERSION_CODE=$(UrVersionCode);UR_VER_MAJOR=$(UrVersionMajor);UR_VER_MINOR=$(UrVersionMinor);UR_VER_PATCH=$(UrVersionPatch);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>UR_VERSION_RAW=$(UrVersion);UR_VERSION_CODE=$(UrVersionCode);UR_VER_MAJOR=$(UrVersionMajor);UR_VER_MINOR=$(UrVersionMinor);UR_VER_PATCH=$(UrVersionPatch);UR_VERSION_BUILD=$(UrVersionBuild);%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ResourceCompile>
   </ItemDefinitionGroup>
 

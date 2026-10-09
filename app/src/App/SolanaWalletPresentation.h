@@ -2,8 +2,9 @@
 // whether a pasted address is worth asking the server about, its short form,
 // which of the account's wallets is the Solana payout wallet, the USDC still
 // waiting to be paid out, how the three reads behind the card commit and what
-// the Earnings pane shows from them, the connect sheet's state machine, and the
-// store key a failure renders with.
+// the Earnings pane shows from them, the connect sheet's state machine, the
+// store key a failure renders with, and the words for the wallet bridge page's
+// own failure codes.
 //
 // Why it exists: USDC payouts continue until the migration to Bittensor
 // completes, and a network whose payouts are held for want of a wallet is
@@ -25,6 +26,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace urnw::solana {
@@ -207,6 +209,24 @@ class LegacyLoad {
 // What the pane shows from a committed view: SolanaPanelFor over its parts.
 SolanaPanelView SolanaPanelFor(const LegacyCommitted& view);
 
+// A removal of the payout wallet, waiting for the reload that follows it.
+struct PayoutRemoval {
+  std::string networkId;      // the network the wallet was removed from
+  std::string removedId;      // the wallet removed
+  std::string priorPayoutId;  // the payout wallet id before the removal
+};
+
+// The wallet that became the payout wallet when `removal` removed it, from the
+// committed view of the reload that followed: removing the payout wallet makes
+// another active Solana or Polygon wallet of the network the payout wallet when
+// there is one (server fix/remove-wallet-promote), and the pane says so
+// ("Payouts now go to …", payouts_now_go_to). Nothing when the removed wallet
+// was not the payout wallet, when the payout read failed or found none (an
+// empty id keeps the removed one), when the new payout wallet is not one the
+// card shows, or when the view is another network's.
+std::optional<LegacyWallet> PromotedPayoutWallet(const PayoutRemoval& removal,
+                                                 const LegacyCommitted& view);
+
 // After a wallet is linked: POST /account/payout-wallet is needed unless the new
 // wallet already is the payout wallet. The server makes a new non-TAO wallet the
 // payout wallet by itself only when the network has none.
@@ -302,5 +322,24 @@ bool CheckIsError(const ConnectMachine& m);
 // error_connecting_wallet_with_reason (formatted with the detail) when there is a
 // detail, something_went_wrong when there is none - as after a watchdog gave up.
 const char* FailureKey(const std::string& detail);
+
+// ---- the bridge page's failures ---------------------------------------------
+//
+// The ur.io wallet bridge hands a failure back with a stable code (the SDK's
+// urnet::SolanaWalletBridgeError*) next to its English text, on the connect or
+// the sign step (WalletConnect.cpp). The codes it shares with the Bittensor
+// bridge page mean the same, so they read in the same strings, with Phantom or
+// Solflare as the wallet's name.
+
+// What this app says for a code: the store key, and whether it takes the
+// wallet's product name ("{}"). An empty key for any other code (the page's
+// invalid_request and wallet_error, a code this app does not know, the -1 of
+// pages before the codes): the page's own text is shown then.
+struct BridgeErrorText {
+  std::string key;
+  bool takesWalletName = false;
+};
+
+BridgeErrorText BridgeErrorTextFor(std::string_view code);
 
 }  // namespace urnw::solana

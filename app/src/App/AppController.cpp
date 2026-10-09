@@ -4,6 +4,7 @@
 #include "AppController.h"
 
 #include <algorithm>
+#include <chrono>
 #include <string_view>
 
 #include <winrt/Microsoft.UI.Windowing.h>
@@ -11,10 +12,12 @@
 #include <winrt/Windows.ApplicationModel.Activation.h>
 
 #include "Ids.h"
+#include "LaunchAtStartup.h"
 #include "Localization.h"
 #include "Log.h"
 #include "MainWindow.xaml.h"
 #include "PageContext.h"  // pages::AdvW — the tray tooltip's health words (#27)
+#include "SingleInstance.h"
 #include "Startup.h"
 #include "Strings.h"
 #include "WindowShell.h"
@@ -148,11 +151,23 @@ void AppController::Start() {
   // over a machine that needed exactly one of them. Both now ask the same
   // predicate, which says Disconnect whenever there is anything for a disconnect
   // to DO.
+  //
+  // Out of balance the tray's Connect starts nothing and opens the upgrade path
+  // (BalanceGate.h, start connect); its Disconnect always works.
   cb.onConnectToggle = [this] {
-    if (gesture::ActionIsDisconnect(CurrentServiceFacts(), TrayHealth()))
-      sdk_.Disconnect();
-    else
-      sdk_.ConnectBestAvailable();
+    struct Sinks {
+      AppController& app;
+      void Connect() { app.sdk_.ConnectBestAvailable(); }
+      void Disconnect() { app.sdk_.Disconnect(); }
+      void Upgrade() {
+        LogInfo("app: tray connect blocked: out of balance");
+        // the refused Connect waits on the balance and runs again once it is back
+        app.WaitOnBalance([self = &app] { self->sdk_.ConnectBestAvailable(); });
+        app.ShowUpgradeForBlockedConnect();
+      }
+    } sinks{*this};
+    urnw::balance::RouteConnectGesture(
+        gesture::ActionIsDisconnect(CurrentServiceFacts(), TrayHealth()), OutOfBalance(), sinks);
   };
   cb.isConnected = [this] {
     return gesture::ActionIsDisconnect(CurrentServiceFacts(), TrayHealth());
@@ -190,7 +205,19 @@ void AppController::Start() {
     LogInfo("app: tray -> turn the kill switch off");
     sdk_.SetKillSwitch(false);
   };
-  cb.onQuit = [this] { Shutdown(); };
+  // The user's Quit stops the tunnel and the provider with the app; a close
+  // from outside the app only ends the app (AppLifetime.h).
+  cb.onQuit = [this] {
+    LogInfo("app: tray -> quit");
+    Shutdown(lifetime::Ending::Quit);
+  };
+  cb.onCloseRequest = [this] { Shutdown(lifetime::Ending::CloseRequest); };
+  // Signing out of Windows, or a shutdown, stops them as Quit does (owner
+  // decision, 2026-10-05).
+  cb.onSessionEnd = [this] {
+    LogInfo("app: tray -> the Windows session is ending");
+    Shutdown(lifetime::Ending::SessionEnd);
+  };
   // The tray icon is the app's ONLY affordance on launch — no icon means no way
   // in, and from outside that is indistinguishable from a process that died. Say
   // so on screen. The app keeps running: TrayIcon re-adds itself on
@@ -203,6 +230,20 @@ void AppController::Start() {
         L"URnetwork.exe from Task Manager.",
         L"See the log for the failing Shell_NotifyIcon call.");
   }
+
+  // Every connect entry point (button, hero, tray, location and peer rows)
+  // passes through this before it starts anything (BalanceGate.h).
+  sdk_.SetStartConnectGate([this] { return CurrentStartConnectFacts(); },
+                           [this](std::function<void()> refused) {
+                             WaitOnBalance(std::move(refused));
+                             ShowUpgradeForBlockedConnect();
+                           },
+                           [this](std::function<void()> settled) {
+                             balance_.FetchThen(std::move(settled));
+                           });
+  // another connect, or the user's Disconnect, ends any wait on the balance
+  sdk_.SetConnectGestureObserver([this] { ClearBalanceRecovery(); },
+                                 [this] { ClearBalanceRecovery(); });
 
   // SDK state -> tray + window (marshaled onto the UI thread).
   sdk_.SetAuthStateHandler([this](AuthState s, const std::string& e) {
@@ -228,9 +269,17 @@ void AppController::Start() {
   balance_.Initialize(uiThread_);
   balance_.SetChangeHandler([this](const BalanceSnapshot& snapshot,
                                    const BalancePollState& poll) {
+    // a plan flip or a confirmation poll changes the gate, and a balance that
+    // rose ends a latched out-of-balance state
+    ObserveBalanceLatch();
+    ReactToBalance();
+    // and a balance that is back runs a connect the balance blocked
+    ObserveBalanceRecovery();
     if (windowVisible_ && window_) {
-      if (auto self = window_.try_as<winrt::URnetwork::implementation::MainWindow>())
+      if (auto self = window_.try_as<winrt::URnetwork::implementation::MainWindow>()) {
+        self->SetInsufficientBalance(insufficientBalance_);
         self->OnBalanceChanged(snapshot, poll);
+      }
     }
   });
   // Referral celebrations (the king-frog gold moments). The store only polls
@@ -255,12 +304,16 @@ void AppController::Start() {
   }
 
   // The update checker (beta spec §5): its worker owns the launch-delay check
-  // and the 6h cadence; a started installer comes back through this handler,
-  // and the app quits so the MSI finds none of its files in use. Marshalled
-  // onto the UI thread because it is the tray-quit teardown, which is
-  // UI-thread machinery end to end.
-  updates_.SetInstallerStartedHandler([this] { OnUi([this] { Shutdown(); }); });
+  // and the 6h cadence, and an update runs the elevated helper and waits on
+  // it. The app does not quit for the installer: the MSI closes it before it
+  // replaces its files (WM_CLOSE, a close request, through CloseApplication)
+  // and stops the service itself.
   updates_.Start();
+
+  // "Launch URnetwork on system startup": a registration the user turned on
+  // follows this install (its path, and --autostart), and none is made here
+  // (StartupRegistration.h).
+  RefreshLaunchAtStartup();
 
   LogInfo("app: initializing the sdk host");
   if (!sdk_.Initialize()) {
@@ -279,13 +332,19 @@ void AppController::Start() {
   LogInfo("app: started");
 }
 
-void AppController::Shutdown() {
+void AppController::Shutdown(lifetime::Ending ending) {
   // Once. A double Quit click, or the relaunch handoff racing a tray quit,
   // must not run the teardown below twice against a window that is half gone.
   // exchange() also flips the OnUi gate before anything is torn down, so no
   // SDK callback can queue new UI work into the drain that follows.
   if (quitting_.exchange(true, std::memory_order_acq_rel)) return;
-  LogInfo("app: shutdown requested (tray quit)");
+  const lifetime::Plan plan = lifetime::PlanFor(ending);
+  LogInfo("app: shutdown requested ({}): {}", lifetime::ToString(ending), plan.why);
+  // Before anything holds this thread: a launch that reaches this instance
+  // from here on is refused with the exiting signal raised, waits for this
+  // process to end and starts the app itself, instead of being queued for a
+  // window this thread will never show (InstanceHandover.h).
+  BeginExiting();
   // First, and joined: the checker's worker is the one thread here that does
   // long blocking I/O (a zip download), and it polls its stop flag between
   // reads, so this is bounded — see UpdateChecker::Stop.
@@ -311,14 +370,26 @@ void AppController::Shutdown() {
   //     own timers, by their documented contract — and every weak-ref lambda
   //     already queued finds null and no-ops instead of touching a dead tree.
   //
-  // Nothing here waits on anything unbounded: updates_.Stop() above is the
-  // only join, and it is bounded by design.
+  // Nothing up to the service stop below waits on anything unbounded:
+  // updates_.Stop() above is the only join, and it is bounded by design.
   if (placementSaveTimer_) placementSaveTimer_.Stop();
   balance_.Stop();
   tray_.Destroy();
   if (window_) window_.Close();
   window_ = nullptr;
   windowHwnd_ = nullptr;
+  // The user's Quit ends the tunnel and the provider too (owner decision,
+  // 2026-10-05). Last before the exit, with the window and the tray already
+  // gone, because it blocks this thread: it joins SdkHost's own threads, waits
+  // out a session pass in flight and makes two pipe calls, each bounded by the
+  // pipe's timeout and in the service by StopBudget.h. Nothing on screen is
+  // left to freeze while it does. Nothing it throws may keep the app from
+  // exiting: the tray, its only way out, is already gone.
+  try {
+    if (plan.stopService) sdk_.Quit();
+  } catch (const std::exception& e) {
+    LogError("app: stopping the service on quit failed: {}", e.what());
+  }
   if (auto app = Application::Current()) app.Exit();
 }
 
@@ -335,6 +406,16 @@ void AppController::OnAuthState(AuthState state, const std::string& error) {
     balance_.Start();
   } else if (state == AuthState::LoggedOut && wasLoggedIn) {
     balance_.Stop();
+  }
+  // a sign-in or sign-out ends the session the out-of-balance latch describes
+  if (state == AuthState::LoggedIn || (state == AuthState::LoggedOut && wasLoggedIn)) {
+    balanceLatch_.Reset();
+    rawInsufficientBalance_ = false;
+    providersConnected_ = false;
+    insufficientBalance_ = false;
+    // a connect the previous session asked for must not start in this one
+    connectRequested_ = false;
+    ClearBalanceRecovery();
   }
   // the tray always reflects state; only push into the window when it is
   // actually visible (resynced on show) so a hidden window doesn't churn.
@@ -385,7 +466,7 @@ void AppController::OnTunnelState(const proto::TunnelStatus& status) {
             // that rather than apologising: nothing is leaking, and the escape
             // is named because it is one click away in this very menu.
             ? pages::AdvW(
-                  "conn_failsafe_blocked",
+                  "conn_tray_failsafe_blocked",
                   L"The tunnel could not carry traffic, so URnetwork shut it "
                   L"down. The kill switch is on, so this machine stays blocked "
                   L"and nothing is leaking. Reconnect, or turn off the kill "
@@ -417,11 +498,129 @@ void AppController::OnStats(const LiveStats& stats) {
     trayHealth_ = stats.health;
     UpdateTray();
   }
+  // The contract status is reset with the destination, the user's Disconnect
+  // included, so the gate reads the latch, not the raw push (BalanceGate.h).
+  rawInsufficientBalance_ = stats.insufficientBalance;
+  providersConnected_ = stats.connectionStatus == "CONNECTED" && 0 < stats.providerCount;
+  connectRequested_ = stats.connected;
+  ObserveBalanceLatch();
+  ReactToBalance();
+  ObserveBalanceRecovery();
   // Live stats otherwise only matter to the window; push only when visible.
+  // The window's gate and banner read the same latched state.
   if (windowVisible_ && window_) {
-    if (auto self = window_.try_as<winrt::URnetwork::implementation::MainWindow>())
-      self->OnStatsChanged(stats);
+    if (auto self = window_.try_as<winrt::URnetwork::implementation::MainWindow>()) {
+      LiveStats latched = stats;
+      latched.insufficientBalance = insufficientBalance_;
+      self->OnStatsChanged(latched);
+    }
   }
+}
+
+void AppController::ObserveBalanceLatch() {
+  urnw::balance::OutOfBalanceLatch::Observation o;
+  o.insufficientBalance = rawInsufficientBalance_;
+  o.providersConnected = providersConnected_;
+  const BalanceSnapshot balance = balance_.Current();
+  o.balanceKnown = balance.loaded;
+  o.availableBytes = balance.availableByteCount;
+  balanceLatch_.Observe(o);
+  insufficientBalance_ = balanceLatch_.InsufficientBalance();
+}
+
+void AppController::ReactToBalance() {
+  // The sinks the shared reaction may use. Disconnect is the user path and is
+  // never called from there: out of balance, capture stays until the user
+  // disconnects, so nothing leaves outside the tunnel without them knowing.
+  struct Sinks {
+    AppController& app;
+    void Notice() {
+      // one line per posted notice: the acceptance driver counts these, since
+      // a balloon cannot be read back from the shell
+      LogInfo("app: insufficient balance notice posted");
+      app.tray_.ShowBalloon(Localized("insufficient_balance"),
+                            Localized("insufficient_balance_held_notice"));
+    }
+    void Disconnect() { app.sdk_.Disconnect(); }
+  } sinks{*this};
+  urnw::balance::ReactToBalancePush(balanceNotice_, insufficientBalance_,
+                                    balance_.Current().isPro,
+                                    balance_.CurrentPoll().confirming, sinks);
+}
+
+bool AppController::OutOfBalance() const {
+  return urnw::balance::OutOfBalance(insufficientBalance_, balance_.Current().isPro,
+                                     balance_.CurrentPoll().confirming);
+}
+
+urnw::balance::StartConnectFacts AppController::CurrentStartConnectFacts() const {
+  const BalanceSnapshot balance = balance_.Current();
+  urnw::balance::StartConnectFacts f;
+  f.latched = insufficientBalance_;
+  f.supporter = balance.isPro;
+  f.confirming = balance_.CurrentPoll().confirming;
+  f.balance.known = balance.loaded;
+  f.balance.pro = balance.isPro;
+  f.balance.availableBytes = balance.availableByteCount;
+  f.balance.openTransferBytes = balance.pendingByteCount;
+  f.balance.fetchedAtMs = balance.fetchedAtMillis;
+  f.fetchSettled = balance_.FetchSettledAtMillis() != 0;
+  f.fetchSettledAtMs = balance_.FetchSettledAtMillis();
+  // the same monotonic clock the store stamps its fetches with
+  f.nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now().time_since_epoch())
+                .count();
+  return f;
+}
+
+void AppController::ShowUpgradeForBlockedConnect() {
+  // Deferred: a row click lands here from inside the location chooser, whose
+  // dialog must close before the upgrade sheet can show.
+  OnUi([this] {
+    ShowWindow(nullptr);
+    if (auto self = window_.try_as<winrt::URnetwork::implementation::MainWindow>())
+      self->OpenUpgradeForBlockedConnect();
+  });
+}
+
+void AppController::WaitOnBalance(std::function<void()> refused) {
+  if (!refused) return;
+  balanceRecovery_.StartRefused(std::move(refused), CurrentStartConnectFacts().nowMs);
+  PublishBalanceRecovery();
+}
+
+void AppController::ClearBalanceRecovery() {
+  balanceRecovery_.Clear();
+  PublishBalanceRecovery();
+}
+
+void AppController::ObserveBalanceRecovery() {
+  // the balance as the start-connect gate reads it, on the same monotonic clock
+  const urnw::balance::StartConnectFacts facts = CurrentStartConnectFacts();
+  auto step = balanceRecovery_.Observe(OutOfBalance(), connectRequested_, facts.balance, facts.nowMs);
+  PublishBalanceRecovery();
+  if (step.kind == urnw::balance::RecoveryStepKind::None) return;
+  LogInfo("app: the balance is back: retrying the connect it blocked");
+  // Past the gate: the recovery decided on a fresh balance, and a held
+  // connection keeps the gate latched until the rebuild replaces it.
+  if (step.kind == urnw::balance::RecoveryStepKind::Start) {
+    sdk_.RetryRefusedConnect(step.target);
+  } else {
+    sdk_.RetryRefusedConnect([this] {
+      if (auto location = sdk_.SelectedLocation()) {
+        sdk_.Connect(*location);
+      } else {
+        sdk_.ConnectBestAvailable();
+      }
+    });
+  }
+  tray_.ShowBalloon(Localized("app_name"), Localized("insufficient_balance_reconnecting"));
+}
+
+void AppController::PublishBalanceRecovery() {
+  if (!windowVisible_ || !window_) return;
+  if (auto self = window_.try_as<winrt::URnetwork::implementation::MainWindow>())
+    self->SetBalanceRecovery(balanceRecovery_.State());
 }
 
 gesture::ServiceFacts AppController::CurrentServiceFacts() const {
@@ -622,12 +821,19 @@ void AppController::ShowWindowImpl(const POINT* anchor) {
     // button. XAML's Window.VisibilityChanged reports Visible=false on
     // minimize as well as on AppWindow.Hide(), so it covers both teardown
     // states; the handler re-reads IsIconic instead of trusting args.Visible()
-    // (see SyncWindowMinimized for why). Window.Activated is deliberately not
-    // consumed here any more: focus loss used to stop the presentation, and
-    // the rebuild-on-refocus was the reset the owner reported.
+    // (see SyncWindowMinimized for why). Window.Activated does not feed the
+    // presentation gate: focus loss used to stop the presentation, and the
+    // rebuild-on-refocus was the reset the owner reported.
     window_.VisibilityChanged([this](auto const&, auto const&) {
       SyncWindowMinimized();
       ReconcileWindowPresentation();
+    });
+    // Activation feeds only the purchase-confirmation poll. A hosted checkout
+    // leaves this window visible behind the browser, so without focus the
+    // confirmation budget burned while the user paid and came back to a
+    // false "timed out" (UPGRADE.md D1).
+    window_.Activated([this](auto const&, WindowActivatedEventArgs const& args) {
+      balance_.SetFocused(args.WindowActivationState() != WindowActivationState::Deactivated);
     });
   }
 
@@ -823,6 +1029,22 @@ void AppController::ReconcileWindowPresentation() {
 
 // ---- urnetwork:// protocol activation --------------------------------------
 
+void AppController::ServeLaunch(const instance::LaunchRequest& request) {
+  const instance::LaunchAction action = instance::ActionFor(request);
+  LogInfo("app: launch{}: {}", request.autostart ? " (autostart)" : "",
+          instance::ToString(action));
+  switch (action) {
+    case instance::LaunchAction::HandleDeepLink:
+      HandleDeepLink(request.deepLink);
+      return;
+    case instance::LaunchAction::ShowWindow:
+      ShowWindow(nullptr);
+      return;
+    case instance::LaunchAction::TrayOnly:
+      return;
+  }
+}
+
 void AppController::HandleDeepLink(const std::string& url) {
   // never log the uri itself: a wallet callback carries the address + signature
   LogInfo("app: deep link received");
@@ -885,5 +1107,28 @@ std::string DeepLinkFromActivation(
 }
 
 std::string LaunchDeepLink() { return Narrow(DeepLinkFromCommandLine(::GetCommandLineW())); }
+
+instance::LaunchRequest LaunchRequestFromActivation(
+    winrt::Microsoft::Windows::AppLifecycle::AppActivationArguments const& args) {
+  namespace lifecycle = winrt::Microsoft::Windows::AppLifecycle;
+  namespace activation = winrt::Windows::ApplicationModel::Activation;
+  instance::LaunchRequest request{.deepLink = DeepLinkFromActivation(args)};
+  if (args && args.Kind() == lifecycle::ExtendedActivationKind::Launch) {
+    if (auto launchArgs = args.Data().try_as<activation::ILaunchActivatedEventArgs>()) {
+      request.autostart =
+          instance::HasArgument(launchArgs.Arguments(), instance::kAutostartArgument);
+    }
+  }
+  return request;
+}
+
+instance::LaunchRequest OwnLaunchRequest() {
+  namespace lifecycle = winrt::Microsoft::Windows::AppLifecycle;
+  const auto activation = lifecycle::AppInstance::GetCurrent().GetActivatedEventArgs();
+  instance::LaunchRequest request{.deepLink = DeepLinkFromActivation(activation),
+                                  .autostart = LaunchedByAutostart()};
+  if (request.deepLink.empty()) request.deepLink = LaunchDeepLink();  // our own command line
+  return request;
+}
 
 }  // namespace urnw

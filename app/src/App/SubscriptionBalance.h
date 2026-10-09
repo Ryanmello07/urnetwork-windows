@@ -4,9 +4,10 @@
 // keeps it fresh with a 30-second background poll while the window is visible,
 // and offers a 5-second confirmation poll with a 2-minute active-polling
 // budget for after a checkout or a code redeem, so the plan flips as soon as
-// the server's payment webhook lands. The budget pauses whenever the window
-// loses focus (the poll stops with it), so the clock never runs while the
-// user is off paying in the browser.
+// the server's payment webhook lands. The confirmation poll and its budget run
+// only while the window is visible AND focused (ConfirmationPollGate): a hosted
+// checkout leaves the window visible behind the browser, so the clock must
+// also stop on focus loss while the user is off paying.
 //
 // Pro is readable OFFLINE from the stored jwt (LocalState::parseByJwt), which
 // seeds the snapshot at login; the server is the source of truth afterwards,
@@ -23,10 +24,14 @@
 #include <functional>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include <winrt/Microsoft.UI.Dispatching.h>
 
+#include "ConfirmationPollGate.h"
 #include "PricePresentation.h"
+#include "ReferralCodeState.h"
+#include "ReferralTotalsState.h"
 #include "SdkHost.h"
 
 namespace urnw {
@@ -38,8 +43,12 @@ struct BalanceSnapshot {
   int64_t availableByteCount = 0;
   int64_t startBalanceByteCount = 0;  // the "daily data balance" row
   bool isPro = false;
+  // the current subscription's store family (urnet::classifySubscriptionStore:
+  // "stripe", "apple", "google", "other"), "" without a subscription
+  std::string subscriptionStoreFamily;
   bool guest = false;
   bool loaded = false;  // at least one successful fetch this session
+  int64_t fetchedAtMillis = 0;  // steady clock, the last successful fetch
   // The plan response's price tier (standard/regional, from the storefront
   // country the server resolved), the network's welcome offer and the
   // in-app offer experiment's assignment (mmm/onboarding/PLAN.md). Defaults
@@ -103,14 +112,18 @@ class SubscriptionBalanceStore {
   void Initialize(winrt::Microsoft::UI::Dispatching::DispatcherQueue queue);
 
   void SetChangeHandler(ChangeHandler h) { onChange_ = std::move(h); }
-  // Stop/start every timer with window visibility. A confirmation pauses with
-  // the window: its give-up budget only burns while the poll actually runs, so
-  // time spent unfocused (typing card details in the browser) costs nothing,
-  // and showing the window again fires an immediate poll with the banked
-  // budget. Re-showing also always fetches once — even for a Pro network whose
-  // background poll is stopped — so a plan bought or lapsed on the web lands
-  // on the next focus.
+  // Stop/start every timer with window visibility (shown and not minimized).
+  // A confirmation pauses with the window, and showing it again fires an
+  // immediate poll with the banked budget. Re-showing also always fetches
+  // once — even for a Pro network whose background poll is stopped — so a
+  // plan bought or lapsed on the web lands on the next show.
   void SetVisible(bool visible);
+  // Window activation. Only the confirmation poll follows focus (the
+  // background poll and the presentation keep running while another app is
+  // in front): its give-up budget only burns while the poll actually runs, so
+  // time spent typing card details in the browser costs nothing, and
+  // refocusing the window fires an immediate poll with the banked budget.
+  void SetFocused(bool focused);
 
   // Login: seed Pro/guest offline from the stored jwt, fetch once, and begin
   // the 30s background poll. Once Pro with balance the periodic poll stops,
@@ -122,6 +135,12 @@ class SubscriptionBalanceStore {
   void Stop();
   // Fetch now (navigating to the account panel, window shown, redeem success).
   void Refresh();
+  // Fetch now for a start connect (BalanceGate.h, FetchBalance) and call
+  // `settled` once the fetch has settled: succeeded, failed, or not back
+  // within kStartConnectFetchTimeoutMs. Waiters share one fetch.
+  void FetchThen(std::function<void()> settled);
+  // steady clock, when a fetch last settled (0 = never this session)
+  int64_t FetchSettledAtMillis() const { return fetchSettledAtMillis_; }
 
   // Re-derive Pro from the (freshly refreshed) jwt. Wired to the sdk's jwt-refresh
   // listener so a mid-session Pro change -- notably a Pro->free lapse a Pro
@@ -130,15 +149,15 @@ class SubscriptionBalanceStore {
   // on the UI thread (AppController marshals it via OnUi).
   void OnJwtRefreshed();
 
-  // After a checkout was handed to the browser (or a balance code redeemed):
-  // poll every 5 seconds until the server confirms, giving up after 2 minutes
-  // of ACTIVE polling. The budget pauses with the poll (SetVisible), so a slow
-  // browser checkout can never burn it down to a false TimedOut.
+  // After a checkout was handed to the browser: poll every 5 seconds until the
+  // server confirms Pro, giving up after 2 minutes of ACTIVE polling. The
+  // budget pauses with the poll (SetVisible, SetFocused), so a slow browser
+  // checkout can never burn it down to a false TimedOut.
   void StartConfirmationPolling();
   void ClearTimeout();
 
   BalanceSnapshot Current() const { return snapshot_; }
-  BalancePollState CurrentPoll() const { return {confirming_, timedOut_}; }
+  BalancePollState CurrentPoll() const { return {gate_.Confirming(), timedOut_}; }
   // A freshly issued offer (POST /onboarding/offer/issue) lands here so every
   // plan surface prints it before the next poll. Publishes.
   void SetOffer(urnet::OnboardingOffer const& offer);
@@ -153,8 +172,14 @@ class SubscriptionBalanceStore {
   void SetReferralCelebrationHandler(ReferralCelebrationHandler h) {
     onReferralCelebration_ = std::move(h);
   }
-  std::optional<std::string> ReferralCode() const { return referralCode_; }
-  int64_t TotalReferrals() const { return totalReferrals_; }
+  std::optional<std::string> ReferralCode() const { return referral_.Code(); }
+  // what the referral card shows where the code goes
+  ReferralCodeView ReferralView() const { return referral_.View(); }
+  // Read the code again now (the card's Try again). Publishes.
+  void RetryReferral();
+  int64_t TotalReferrals() const { return totals_.Total(); }
+  // what a "Total referrals" figure shows: the count, or an error until a read lands
+  ReferralTotalsView TotalsView() const { return totals_.View(); }
   // the cap and bonus, from the server with the code (defaults until then)
   urnw::ReferralTerms ReferralTerms() const { return terms_; }
 
@@ -172,37 +197,42 @@ class SubscriptionBalanceStore {
     return snapshot_.isPro && snapshot_.availableByteCount > 0;
   }
   void EnsureBackgroundPolling();
+  // The gate opened (or a confirmation started): arm the timer and poll now,
+  // or give up when the banked budget is already spent.
   void ResumeConfirmationPolling();
-  // Focus loss: stop the confirmation timer and bank the unspent budget so
-  // ResumeConfirmationPolling can re-arm from where it left off.
-  void PauseConfirmationPolling();
   void StopBackground();
   void StopConfirmation(bool timedOut);
   void Publish();
+  // a fetch settled: run the FetchThen waiters
+  void Settle();
 
   SdkHost& sdk_;
   winrt::Microsoft::UI::Dispatching::DispatcherQueue queue_{nullptr};
   winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer backgroundTimer_{nullptr};
   winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer confirmTimer_{nullptr};
   winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer referralTimer_{nullptr};
+  winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer settleTimer_{nullptr};
+  std::vector<std::function<void()>> settleWaiters_;  // FetchThen
+  int64_t fetchSettledAtMillis_ = 0;
   ChangeHandler onChange_;
   ReferralCelebrationHandler onReferralCelebration_;
-  std::optional<std::string> referralCode_;
-  int64_t totalReferrals_ = 0;
+  ReferralCodeFetch referral_;
+  ReferralTotalsFetch totals_;
   urnw::ReferralTerms terms_;
   bool referralLoading_ = false;
   BalanceSnapshot snapshot_;
   bool started_ = false;
   bool visible_ = false;
   bool jwtPro_ = false;     // the jwt's Pro claim (stale across plan changes)
+  // snapshot_.guest is IsGuestNetwork(jwtGuest_, serverGuest_): the jwt's
+  // GuestMode claim (a refresh clears it) or the server's `guest` (no login
+  // method, read live)
+  bool jwtGuest_ = false;
+  bool serverGuest_ = false;
   bool loading_ = false;    // one fetch in flight at a time
-  bool confirming_ = false;
   bool timedOut_ = false;
-  // The confirmation give-up budget, counted in ACTIVE polling time only.
-  // deadlineMillis_ (monotonic) is armed while the confirm timer runs;
-  // pausing banks what is left back into confirmRemainingMillis_.
-  int64_t deadlineMillis_ = 0;
-  int64_t confirmRemainingMillis_ = 0;
+  // whether a confirmation runs, and its give-up budget in ACTIVE polling time
+  ConfirmationPollGate gate_{kConfirmationBudgetMillis};
   uint32_t generation_ = 0;      // drops fetch results from a superseded session
 };
 

@@ -3,8 +3,7 @@
 // and, where the code is unambiguous, its cause - run against the SAME header
 // the service compiles, on any host with a C++20 compiler.
 //
-//   c++ -std=c++20 -I ../src/Service wintun-error-tests.cpp
-//       -o /tmp/wintun-error-tests && /tmp/wintun-error-tests
+//   c++ -std=c++20 -I ../src/Service wintun-error-tests.cpp -o /tmp/wintun-error-tests && /tmp/wintun-error-tests
 //
 // SPDX-License-Identifier: MPL-2.0
 

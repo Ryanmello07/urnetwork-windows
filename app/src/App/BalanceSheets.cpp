@@ -3,6 +3,11 @@
 
 #include "BalanceSheets.h"
 
+#include "BalanceCodeRedeem.h"
+#include "CheckoutBridgeError.h"
+#include "CheckoutSessionMode.h"
+#include "PaymentRefusal.h"
+
 #include <winrt/Microsoft.UI.Xaml.Automation.h>
 #include <winrt/Microsoft.UI.Xaml.Documents.h>
 #include <winrt/Microsoft.Web.WebView2.Core.h>
@@ -13,6 +18,8 @@
 #include <nlohmann/json.hpp>
 
 #include "ClientEvents.h"
+#include "DataInfo.h"
+#include "GuestConversion.h"
 #include "Localization.h"
 #include "Log.h"
 #include "Paths.h"
@@ -21,6 +28,7 @@
 #include "StatsFormat.h"
 #include "Strings.h"
 #include "UrColors.h"
+#include "UrlQuery.h"
 
 using namespace winrt;
 using namespace winrt::Windows::Foundation;
@@ -40,21 +48,23 @@ namespace {
 using ShapeEllipse = winrt::Microsoft::UI::Xaml::Shapes::Ellipse;
 
 constexpr winrt::Windows::UI::Color kTransparent{0, 0, 0, 0};
-// a redeemable balance code is exactly 26 characters (macOS RedeemBalanceCodeSheet)
-constexpr size_t kBalanceCodeLength = 26;
 
 // The ur.io bridge page (mmm/ur.io react EmbeddedCheckout.jsx): mounts Stripe's
 // Embedded Checkout for the session's client_secret — the card form stays in
 // Stripe's iframe, no card data ever touches the app — and hands control back
 // by navigating to the redirect_link:
 //   done:  urnetwork://checkout?status=complete&session_id=cs_...
-//   error: urnetwork://checkout?errorCode=-1&errorMessage=...
-// There is no cancel url: Stripe's embedded flow never leaves the page, so the
-// checkout header's own close (X) is the only way out. (Linux UpgradeSheet
-// parity; the wallet-connect bridge uses the same envelope.)
-constexpr const char* kCheckoutPage = "https://ur.io/checkout";
-constexpr const char* kCheckoutRedirect = "urnetwork://checkout";
-constexpr const char* kCheckoutScheme = "urnetwork://";
+//   error: urnetwork://checkout?errorCode=<code>&errorMessage=...
+// (the error's code is one of urnet::CheckoutBridgeError*, CheckoutBridgeError.h)
+// The session is redirect_on_completion "never" (CheckoutSessionMode.h), so the
+// done hand-back comes from Stripe's onComplete on the bridge page, in place.
+// The url and the hand-back are the SDK's envelope
+// (urnet::buildInlineCheckoutBridgeUrl, urnet::parseCheckoutRedirect; linux
+// UpgradeSheet parity). There is no cancel
+// url: Stripe's embedded flow never leaves the page, so the checkout header's
+// own close (X) is the only way out. Every urnetwork:// navigation in the
+// webview is a hand-back (the checkout bridge's or the pay page's).
+constexpr const char* kAppScheme = "urnetwork://";
 // The ur.io embedded pay page (mmm/ur.io /app/pay-sheet): mounts Stripe's
 // Payment Element for the payment sheet's client secret, confirms the intent,
 // and hands control back by navigating to the return url (success) or posting
@@ -87,66 +97,6 @@ bool WebView2RuntimeAvailable() {
   } catch (...) {
     return false;
   }
-}
-
-// Percent-encode everything except RFC 3986 unreserved characters
-// (WalletConnect.cpp builds its bridge urls the same way).
-std::string Esc(std::string const& s) {
-  static const char* hex = "0123456789ABCDEF";
-  std::string out;
-  out.reserve(s.size() * 3);
-  for (unsigned char c : s) {
-    if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ||
-        c == '-' || c == '_' || c == '.' || c == '~') {
-      out.push_back(static_cast<char>(c));
-    } else {
-      out.push_back('%');
-      out.push_back(hex[c >> 4]);
-      out.push_back(hex[c & 0xF]);
-    }
-  }
-  return out;
-}
-
-std::string Unesc(std::string const& s) {
-  auto hexv = [](char c) -> int {
-    if (c >= '0' && c <= '9') return c - '0';
-    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-    return -1;
-  };
-  std::string out;
-  out.reserve(s.size());
-  for (size_t i = 0; i < s.size(); ++i) {
-    if (s[i] == '%' && i + 2 < s.size()) {
-      const int hi = hexv(s[i + 1]), lo = hexv(s[i + 2]);
-      if (hi >= 0 && lo >= 0) {
-        out.push_back(static_cast<char>((hi << 4) | lo));
-        i += 2;
-        continue;
-      }
-    }
-    out.push_back(s[i] == '+' ? ' ' : s[i]);
-  }
-  return out;
-}
-
-// The query parameters of a urnetwork:// callback, percent-decoded.
-std::map<std::string, std::string> ParseQuery(std::string const& url) {
-  std::map<std::string, std::string> out;
-  const size_t q = url.find('?');
-  if (q == std::string::npos) return out;
-  size_t i = q + 1;
-  while (i < url.size()) {
-    const auto amp = url.find('&', i);
-    const std::string pair =
-        url.substr(i, amp == std::string::npos ? std::string::npos : amp - i);
-    const auto eq = pair.find('=');
-    if (eq != std::string::npos) out[pair.substr(0, eq)] = Unesc(pair.substr(eq + 1));
-    if (amp == std::string::npos) break;
-    i = amp + 1;
-  }
-  return out;
 }
 
 // A UI string from the shared localization store, by key id (Localization.h).
@@ -308,7 +258,7 @@ void PairTermsLabel(CheckBox const& box, TextBlock const& label) {
 
 std::shared_ptr<RedeemCodeSheet> RedeemCodeSheet::Create(XamlRoot const& root,
                                                          SdkHost& sdk,
-                                                         std::function<void()> onRedeemed) {
+                                                         std::function<void(bool)> onRedeemed) {
   auto sheet = std::shared_ptr<RedeemCodeSheet>(
       new RedeemCodeSheet(sdk, std::move(onRedeemed)));
   sheet->Build(root);
@@ -331,12 +281,12 @@ void RedeemCodeSheet::Build(XamlRoot const& root) {
   codeBox_ = TextBox();
   codeBox_.Header(winrt::box_value(Loc("balance_code")));
   codeBox_.PlaceholderText(Loc("enter_balance_code"));
-  codeBox_.MaxLength(static_cast<int32_t>(kBalanceCodeLength));
+  codeBox_.MaxLength(static_cast<int32_t>(urnet::BalanceCodeLength));
   codeBox_.TextChanged([weak = weak_from_this()](auto const&, auto const&) {
     if (auto self = weak.lock()) {
-      const std::string code = TrimWhitespace(urnw::Narrow(self->codeBox_.Text().c_str()));
+      const std::string code = urnw::Narrow(self->codeBox_.Text().c_str());
       self->dialog_.IsPrimaryButtonEnabled(!self->redeeming_ &&
-                                           code.size() == kBalanceCodeLength);
+                                           urnet::isBalanceCodeFormatValid(code));
       self->errorText_.Visibility(Visibility::Collapsed);
     }
   });
@@ -383,7 +333,7 @@ void RedeemCodeSheet::Build(XamlRoot const& root) {
 void RedeemCodeSheet::Submit() {
   const std::string secret = TrimWhitespace(urnw::Narrow(codeBox_.Text().c_str()));
   // IsLoggedIn(), not apiReady() - see WalletPage::ValidateWalletAddress.
-  if (redeeming_ || secret.size() != kBalanceCodeLength || !sdk_.IsLoggedIn()) return;
+  if (redeeming_ || !urnet::isBalanceCodeFormatValid(secret) || !sdk_.IsLoggedIn()) return;
   redeeming_ = true;
   dialog_.IsPrimaryButtonEnabled(false);
   codeBox_.IsEnabled(false);
@@ -393,50 +343,187 @@ void RedeemCodeSheet::Submit() {
   auto queue = dialog_.DispatcherQueue();
   auto weak = weak_from_this();
   sdk_.api().redeemBalanceCode(
-      args, [queue, weak](std::optional<urnet::RedeemBalanceCodeResult> result,
-                          std::optional<std::string> err) {
-        const bool ok = result && result->transfer_balance.has_value();
-        // rejected = the server was reached, decided, and refused the code.
-        // Anything else (err set / null result) is a TRANSPORT failure: the
-        // redeem may have committed server-side with only the response lost.
-        const bool rejected = !ok && result && result->error;
-        const std::string serverMessage = rejected ? result->error->message : std::string();
-        const int64_t bytes = ok ? result->transfer_balance->balance_byte_count : 0;
-        queue.TryEnqueue([weak, ok, rejected, serverMessage, bytes] {
-          if (auto self = weak.lock()) self->ApplyResult(ok, rejected, serverMessage, bytes);
+      args, [queue, weak, secret](std::optional<urnet::RedeemBalanceCodeResult> result,
+                                  std::optional<std::string> err) {
+        // a transport failure has no result to classify: the outcome is unknown
+        if (err) result.reset();
+        queue.TryEnqueue([weak, secret, result = std::move(result)] {
+          if (auto self = weak.lock()) self->Classify(secret, result);
         });
       });
 }
 
-void RedeemCodeSheet::ApplyResult(bool ok, bool rejected, std::string const& serverMessage,
-                                  int64_t balanceByteCount) {
+void RedeemCodeSheet::Classify(std::string const& secret,
+                               std::optional<urnet::RedeemBalanceCodeResult> const& result) {
+  const std::string outcome = urnet::classifyBalanceCodeRedeem(result, std::nullopt, secret);
+  if (!BalanceCodeRedeemNeedsCodeList(outcome)) {
+    ApplyResult(outcome, result);
+    return;
+  }
+  // Not credited by this call. The server's refusal is the same for an
+  // unknown code and one this network already redeemed, and a lost response
+  // may have committed: ask the network's redeemed-code list before saying
+  // anything.
+  auto queue = dialog_.DispatcherQueue();
+  auto weak = weak_from_this();
+  sdk_.api().getNetworkRedeemedBalanceCodes(
+      [queue, weak, secret, result](std::optional<urnet::GetNetworkRedeemedBalanceCodesResult> list,
+                                    std::optional<std::string> listErr) {
+        std::optional<urnet::RedeemedBalanceCodeList> codes;
+        if (!listErr && list && !list->error) {
+          codes = list->balance_codes.value_or(urnet::RedeemedBalanceCodeList{});
+        }
+        queue.TryEnqueue([weak, secret, result, codes = std::move(codes)] {
+          if (auto self = weak.lock()) {
+            self->ApplyResult(urnet::classifyBalanceCodeRedeem(result, codes, secret), result);
+          }
+        });
+      });
+}
+
+void RedeemCodeSheet::ApplyResult(std::string const& outcome,
+                                  std::optional<urnet::RedeemBalanceCodeResult> const& result) {
   redeeming_ = false;
-  if (ok) {
+  const BalanceCodeRedeemNotice notice = BalanceCodeRedeemNoticeFor(outcome);
+  if (notice == BalanceCodeRedeemNotice::Redeemed) {
     formPanel_.Visibility(Visibility::Collapsed);
     successPanel_.Visibility(Visibility::Visible);
-    successAmountText_.Text(H("+" + FormatByteCountCompact(balanceByteCount)));
+    const int64_t bytes =
+        result && result->transfer_balance ? result->transfer_balance->balance_byte_count : 0;
+    successAmountText_.Text(H("+" + FormatByteCountCompact(bytes)));
     dialog_.PrimaryButtonText(hstring{L""});  // nothing left to submit
-    if (onRedeemed_) onRedeemed_();
+    if (onRedeemed_) onRedeemed_(/*credited=*/true);
     return;
   }
   codeBox_.IsEnabled(true);
   dialog_.IsPrimaryButtonEnabled(true);
-  // A rejection is authoritative — surface the server's own reason when it
-  // sent one (not localizable), else the generic invalid-code line. A
-  // transport failure is NOT "invalid": the code may already be applied, so
-  // the copy says to check the balance before trying again — never telling a
-  // user whose code just credited that it was invalid.
-  errorText_.Text(rejected ? (serverMessage.empty() ? Loc("invalid_balance_code")
-                                                    : H(serverMessage))
-                           : Loc("balance_code_transport_error"));
+  errorText_.Foreground(colors::DangerBrush());
+  switch (notice) {
+    case BalanceCodeRedeemNotice::AlreadyRedeemed:
+      // this network has the code: the data is on the balance (a retry after
+      // a lost-but-credited response lands here). Not an error.
+      errorText_.Text(Loc("balance_code_already_redeemed_message"));
+      errorText_.Foreground(colors::TextBrush());
+      if (onRedeemed_) onRedeemed_(/*credited=*/false);
+      break;
+    case BalanceCodeRedeemNotice::Invalid:
+      // A rejection of a code this network never redeemed — surface the
+      // server's own reason when it sent one (not localizable), else the
+      // generic invalid-code line.
+      errorText_.Text(result && result->error && !result->error->message.empty()
+                          ? H(result->error->message)
+                          : Loc("invalid_balance_code"));
+      break;
+    default:
+      // No answer (or an empty one) is NOT "invalid": the code may already be
+      // applied, so the copy says to check the balance before trying again.
+      errorText_.Text(Loc("balance_code_transport_error"));
+      break;
+  }
   errorText_.Visibility(Visibility::Visible);
+}
+
+// ---- DataInfoSheet ----------------------------------------------------------
+
+namespace {
+
+// One amount: the usage bar's dot and name with the amount at the right, and
+// what it means under them.
+StackPanel MakeDataInfoRow(hstring const& name, winrt::Windows::UI::Color const& dot,
+                           std::wstring const& amount, hstring const& explanation) {
+  StackPanel row;
+  row.Spacing(4);
+  Grid line;
+  line.ColumnSpacing(8);
+  ColumnDefinition nameColumn;
+  nameColumn.Width(GridLength{1, GridUnitType::Star});
+  ColumnDefinition amountColumn;
+  amountColumn.Width(GridLength{0, GridUnitType::Auto});
+  line.ColumnDefinitions().Append(nameColumn);
+  line.ColumnDefinitions().Append(amountColumn);
+  StackPanel key;
+  key.Orientation(Orientation::Horizontal);
+  key.Spacing(6);
+  ShapeEllipse mark;
+  mark.Width(8);
+  mark.Height(8);
+  mark.VerticalAlignment(VerticalAlignment::Center);
+  mark.Fill(SolidColorBrush(dot));
+  key.Children().Append(mark);
+  key.Children().Append(MakeText(name, 14, colors::MutedBrush()));
+  line.Children().Append(key);
+  auto value = MakeText(hstring{amount}, 14, colors::MutedBrush());
+  Grid::SetColumn(value, 1);
+  line.Children().Append(value);
+  row.Children().Append(line);
+  row.Children().Append(MakeText(explanation, 14, colors::TextBrush(), true));
+  return row;
+}
+
+}  // namespace
+
+std::shared_ptr<DataInfoSheet> DataInfoSheet::Create(XamlRoot const& root,
+                                                     BalanceSnapshot const& balance) {
+  auto sheet = std::shared_ptr<DataInfoSheet>(new DataInfoSheet());
+  sheet->Build(root, balance);
+  return sheet;
+}
+
+void DataInfoSheet::Build(XamlRoot const& root, BalanceSnapshot const& balance) {
+  dialog_ = MakeDialog(root, Loc("data_info_title"));
+
+  StackPanel content;
+  content.Spacing(16);
+  content.MinWidth(360);
+  content.MaxWidth(440);
+
+  // the usage bar's split, names and colors (UsageBar.cpp)
+  const auto info = datainfo::DataInfoFrom(
+      balance.startBalanceByteCount, balance.availableByteCount, balance.pendingByteCount,
+      [](int64_t bytes) { return Widen(FormatByteCountCompact(bytes)); });
+  content.Children().Append(MakeDataInfoRow(Loc("used_data_key"), colors::kUrElectricBlue,
+                                            info.used, Loc("data_info_used")));
+  content.Children().Append(MakeDataInfoRow(Loc("pending_data_key"), colors::kUrCoral,
+                                            info.pending, Loc("data_info_pending")));
+  content.Children().Append(MakeDataInfoRow(Loc("available_data_key"), colors::kTextFaint,
+                                            info.available, Loc("data_info_available")));
+
+  // the daily balance, as the Account card's row prints it
+  Grid daily;
+  daily.ColumnSpacing(8);
+  ColumnDefinition labelColumn;
+  labelColumn.Width(GridLength{1, GridUnitType::Star});
+  ColumnDefinition valueColumn;
+  valueColumn.Width(GridLength{0, GridUnitType::Auto});
+  daily.ColumnDefinitions().Append(labelColumn);
+  daily.ColumnDefinitions().Append(valueColumn);
+  daily.Children().Append(MakeText(Loc("daily_data_balance_label"), 14, colors::MutedBrush()));
+  auto dailyValue = MakeText(hstring{info.daily}, 14, colors::MutedBrush());
+  Grid::SetColumn(dailyValue, 1);
+  daily.Children().Append(dailyValue);
+  content.Children().Append(daily);
+
+  // Pro gets no free daily grant, so no refresh line
+  if (datainfo::ShowsFreeRefresh(balance.isPro)) {
+    refreshText_ = MakeText(hstring{L""}, 14, colors::MutedBrush(), true);
+    content.Children().Append(refreshText_);
+    auto text = refreshText_;
+    // stopped with the sheet, which the window drops once ShowAsync returns
+    refreshTicker_.Start([text] {
+      text.Text(hstring{Format("data_info_refresh_at", FreeRefreshCountdownText())});
+    });
+  }
+
+  dialog_.Content(content);
 }
 
 // ---- UpgradeSheet -----------------------------------------------------------
 
 std::shared_ptr<UpgradeSheet> UpgradeSheet::Create(XamlRoot const& root, SdkHost& sdk,
-                                                   SubscriptionBalanceStore& balance) {
+                                                   SubscriptionBalanceStore& balance,
+                                                   bool freeRefresh) {
   auto sheet = std::shared_ptr<UpgradeSheet>(new UpgradeSheet(sdk, balance));
+  sheet->freeRefresh_ = freeRefresh;
   sheet->Build(root);
   return sheet;
 }
@@ -466,7 +553,41 @@ void UpgradeSheet::Build(XamlRoot const& root) {
   proTitle.FontWeight(winrt::Windows::UI::Text::FontWeights::Bold());
   productsPanel_.Children().Append(proTitle);
   // No explainer under the title: the sheet is the title and the two plan
-  // options (android UpgradeScreenHeader).
+  // options (android UpgradeScreenHeader). A blocked connect is the exception:
+  // upgrading must not read as the only way back, so the sheet says when the
+  // free data refreshes and offers to wait for it.
+  if (freeRefresh_) {
+    freeRefreshText_ = MakeText(hstring{L""}, 14, colors::MutedBrush(), true);
+    productsPanel_.Children().Append(freeRefreshText_);
+    auto text = freeRefreshText_;
+    freeRefreshTicker_.Start([text] {
+      text.Text(hstring{Format("insufficient_balance_refreshes_in", FreeRefreshCountdownText())});
+    });
+    // reserved data may come back before the refresh; used up does not
+    {
+      const BalanceSnapshot snapshot = balance_.Current();
+      balance::AccountBalance read;
+      read.known = snapshot.loaded;
+      read.pro = snapshot.isPro;
+      read.availableBytes = snapshot.availableByteCount;
+      read.openTransferBytes = snapshot.pendingByteCount;
+      read.fetchedAtMs = snapshot.fetchedAtMillis;
+      const std::wstring kind =
+          OutOfBalanceKindText(balance::OutOfBalanceKindFor(read), snapshot.pendingByteCount);
+      if (!kind.empty()) {
+        productsPanel_.Children().Append(MakeText(hstring{kind}, 14, colors::MutedBrush(), true));
+      }
+    }
+    Button waitForRefresh;
+    waitForRefresh.Content(winrt::box_value(Loc("wait_for_refresh")));
+    waitForRefresh.HorizontalAlignment(HorizontalAlignment::Stretch);
+    winrt::Microsoft::UI::Xaml::Automation::AutomationProperties::SetAutomationId(
+        waitForRefresh, L"acceptance.upgrade.wait-for-refresh");
+    waitForRefresh.Click([weak = weak_from_this()](auto const&, auto const&) {
+      if (auto self = weak.lock()) self->dialog_.Hide();
+    });
+    productsPanel_.Children().Append(waitForRefresh);
+  }
 
   // the plan picker the onboarding welcome page shows: yearly in the gold
   // dress with the trial, selected by default, monthly plain below it. One
@@ -661,6 +782,7 @@ void UpgradeSheet::Build(XamlRoot const& root) {
         self->purchaseEmitted_ = true;
       }
       if (self->haloStoryboard_) self->haloStoryboard_.Stop();
+      self->freeRefreshTicker_.Stop();
       self->TeardownWebView();
     }
   });
@@ -733,6 +855,21 @@ void UpgradeSheet::ShowCheckoutError(hstring const& message) {
   checkoutErrorText_.Visibility(Visibility::Visible);
 }
 
+void UpgradeSheet::RefuseForGuest() {
+  if (!purchaseEmitted_) {
+    EmitPurchase("failed", std::string(kPurchaseErrorCodeGuestSignInRequired));
+    purchaseEmitted_ = true;
+  }
+  checkingOut_ = false;
+  subscribeRing_.IsActive(false);
+  subscribeButton_.IsEnabled(true);
+  plans_.SetEnabled(true);
+  guestSignInRequired_ = true;
+  // only one ContentDialog can show at a time: the opener starts the
+  // conversion once this one is gone (MainWindow::ShowUpgradeSheet)
+  dialog_.Hide();
+}
+
 void UpgradeSheet::BeginCheckout() {
   if (checkingOut_ || !sdk_.IsLoggedIn()) return;
   checkingOut_ = true;
@@ -769,6 +906,9 @@ void UpgradeSheet::RequestPaymentSheet() {
         // trial defers the charge), the PaymentIntent for monthly
         std::string clientSecret;
         std::string publishableKey;
+        const PurchaseRefusal refusal =
+            result && result->error ? PurchaseRefusalFor(result->error->code.value_or(std::string()))
+                                    : PurchaseRefusal::PaymentError;
         if (!err && result && !result->error) {
           if (result->setup_intent_client_secret && !result->setup_intent_client_secret->empty()) {
             clientSecret = *result->setup_intent_client_secret;
@@ -779,9 +919,13 @@ void UpgradeSheet::RequestPaymentSheet() {
           if (result->publishable_key) publishableKey = *result->publishable_key;
         }
         if (err) LogWarn("upgrade: payment sheet failed: {}", *err);
-        queue.TryEnqueue([weak, clientSecret, publishableKey] {
+        queue.TryEnqueue([weak, clientSecret, publishableKey, refusal] {
           auto self = weak.lock();
           if (!self || self->closed_) return;
+          if (refusal == PurchaseRefusal::AddSignIn) {
+            self->RefuseForGuest();
+            return;
+          }
           if (clientSecret.empty() || publishableKey.empty()) {
             // nothing rendered yet: the embedded checkout session saves the purchase
             self->RequestSession(/*embedded=*/true);
@@ -812,7 +956,7 @@ winrt::fire_and_forget UpgradeSheet::OpenPaySheet(std::string clientSecret,
 
   webview_.NavigationStarting([weak, queue](auto const&, auto const& args) {
     const std::string uri = urnw::Narrow(std::wstring_view{args.Uri()});
-    if (!uri.starts_with(kCheckoutScheme)) return;
+    if (!uri.starts_with(kAppScheme)) return;
     // the pay page handing control back (urnetwork://pay/done) — never a real navigation
     args.Cancel(true);
     queue.TryEnqueue([weak, uri] {
@@ -870,10 +1014,10 @@ winrt::fire_and_forget UpgradeSheet::OpenPaySheet(std::string clientSecret,
   checkoutRing_.IsActive(true);
   ShowPage(Page::Checkout);
 
-  const std::string url = std::string(kPaySheetPage) + "?cs=" + Esc(clientSecret) +
-                          "&pk=" + Esc(publishableKey) +
-                          "&plan=" + Esc(PlanName(plans_.Yearly())) +
-                          "&return=" + Esc(kPayReturn);
+  const std::string url = std::string(kPaySheetPage) + "?cs=" + PercentEncode(clientSecret) +
+                          "&pk=" + PercentEncode(publishableKey) +
+                          "&plan=" + PercentEncode(PlanName(plans_.Yearly())) +
+                          "&return=" + PercentEncode(kPayReturn);
   try {
     const std::wstring dataDir = (StorageRoot(/*isService=*/false) / "webview2").wstring();
     auto environment = co_await wv2::CoreWebView2Environment::CreateWithOptionsAsync(
@@ -921,7 +1065,7 @@ void UpgradeSheet::HandlePayMessage(std::string const& json) {
     return;
   }
   const std::string detail = message.value("message", std::string());
-  HandleCheckoutCallback("urnetwork://pay/error?errorMessage=" + Esc(detail));
+  HandleCheckoutCallback("urnetwork://pay/error?errorMessage=" + PercentEncode(detail));
 }
 
 void UpgradeSheet::RequestSession(bool embedded) {
@@ -931,7 +1075,11 @@ void UpgradeSheet::RequestSession(bool embedded) {
   }
   urnet::StripeCreateCheckoutSessionArgs args;
   args.item_id = plans_.Yearly() ? "pro_yearly" : "pro_monthly";
-  args.ui_mode = embedded ? "embedded" : "hosted";
+  const CheckoutSessionMode mode = CheckoutSessionModeFor(embedded);
+  args.ui_mode = mode.uiMode;
+  if (!mode.redirectOnCompletion.empty()) {
+    args.redirect_on_completion = mode.redirectOnCompletion;
+  }
 
   auto queue = dialog_.DispatcherQueue();
   auto weak = weak_from_this();
@@ -940,32 +1088,44 @@ void UpgradeSheet::RequestSession(bool embedded) {
                 std::optional<urnet::StripeCreateCheckoutSessionResult> result,
                 std::optional<std::string> err) {
         // the api callback runs on an sdk thread; decide on the ui thread
-        const std::string serverError =
-            result && result->error ? result->error->message : std::string();
+        const bool refused = result && result->error;
+        // the server's refusal in this app's words (PaymentRefusal.h)
+        const PaymentRefusalText refusalText =
+            refused ? PaymentRefusalTextFor(*result->error, "something_went_wrong")
+                    : PaymentRefusalText{};
+        const PurchaseRefusal refusal =
+            refused ? PurchaseRefusalFor(result->error->code.value_or(std::string()))
+                    : PurchaseRefusal::PaymentError;
         const std::string url =
             result && result->checkout_url ? *result->checkout_url : std::string();
         const std::string clientSecret =
             result && result->client_secret ? *result->client_secret : std::string();
         const std::string transportError = err ? *err : std::string();
-        queue.TryEnqueue([weak, embedded, serverError, url, clientSecret,
-                          transportError] {
+        queue.TryEnqueue([weak, embedded, refused, refusalText, url, clientSecret,
+                          transportError, refusal] {
           auto self = weak.lock();
           if (!self || self->closed_) return;
+          if (refusal == PurchaseRefusal::AddSignIn) {
+            // a guest network: no other session can sell it a plan either
+            self->RefuseForGuest();
+            return;
+          }
           if (embedded) {
             // Any embedded failure — transport, server error, or a session
             // without a client_secret — retries once as hosted: nothing has
             // been shown yet, so no payment can be lost by switching. The
             // hosted retry is a SEPARATE session (never created up front);
             // the embedded one just expires server-side.
-            if (serverError.empty() && transportError.empty() && !clientSecret.empty()) {
+            if (!refused && transportError.empty() && !clientSecret.empty()) {
               self->OpenEmbedded(clientSecret);
             } else {
               self->RequestSession(/*embedded=*/false);
             }
             return;
           }
-          if (!serverError.empty()) {
-            self->ShowCheckoutError(H(serverError));
+          if (refused) {
+            self->ShowCheckoutError(hstring{
+                PaymentRefusalMessage(Localized(refusalText.key), Widen(refusalText.detail))});
             return;
           }
           if (url.empty()) {
@@ -1034,7 +1194,7 @@ winrt::fire_and_forget UpgradeSheet::OpenEmbedded(std::string clientSecret) {
 
   webview_.NavigationStarting([weak, queue](auto const&, auto const& args) {
     const std::string uri = urnw::Narrow(std::wstring_view{args.Uri()});
-    if (!uri.starts_with(kCheckoutScheme)) return;
+    if (!uri.starts_with(kAppScheme)) return;
     // the checkout page handing control back — never a real navigation
     args.Cancel(true);
     // deferred: handling flips pages and tears this webview down, which must
@@ -1088,9 +1248,9 @@ winrt::fire_and_forget UpgradeSheet::OpenEmbedded(std::string clientSecret) {
   checkoutRing_.IsActive(true);
   ShowPage(Page::Checkout);
 
-  const std::string url = std::string(kCheckoutPage) +
-                          "?client_secret=" + Esc(clientSecret) +
-                          "&redirect_link=" + Esc(kCheckoutRedirect);
+  // the session is "never" (CheckoutSessionModeFor(true)): the bridge hands
+  // back from Stripe's onComplete
+  const std::string url = urnet::buildInlineCheckoutBridgeUrl(clientSecret);
   try {
     // Explicit user data folder: WebView2's default is next to the exe, which
     // an install under Program Files cannot write. StorageRoot is the app's
@@ -1124,10 +1284,29 @@ winrt::fire_and_forget UpgradeSheet::OpenEmbedded(std::string clientSecret) {
 }
 
 void UpgradeSheet::HandleCheckoutCallback(std::string const& uri) {
-  const auto params = ParseQuery(uri);
-  const auto status = params.find("status");
-  const bool payDone = uri.rfind(kPayReturn, 0) == 0;
-  if (payDone || (status != params.end() && status->second == "complete")) {
+  // the checkout bridge's hand-back is the SDK's envelope; the pay page's
+  // (urnetwork://pay/done, urnetwork://pay/error?errorMessage=) is this sheet's
+  bool complete = false;
+  std::string errorCode;
+  std::string errorMessage;
+  if (urnet::isCheckoutRedirect(uri)) {
+    try {
+      if (auto redirect = urnet::parseCheckoutRedirect(uri)) {
+        complete = redirect->Complete;
+        errorCode = redirect->ErrorCode;
+        errorMessage = redirect->ErrorMessage;
+      }
+    } catch (...) {
+      // a malformed hand-back: an error with no message of its own
+    }
+  } else {
+    complete = uri.rfind(kPayReturn, 0) == 0;
+    const auto params = ParseUrlQuery(uri);
+    if (const auto message = params.find("errorMessage"); message != params.end()) {
+      errorMessage = message->second;
+    }
+  }
+  if (complete) {
     // Paid inside the webview. The server only believes the Stripe payment
     // webhook — a client saying "I paid" is not evidence — so bridge the gap
     // with the same confirmation poll as hosted checkout.
@@ -1137,7 +1316,6 @@ void UpgradeSheet::HandleCheckoutCallback(std::string const& uri) {
     return;
   }
   if (page_ != Page::Checkout) return;  // stale error after close
-  const auto message = params.find("errorMessage");
   if (!purchaseEmitted_) {
     // before the page flips: leaving Checkout tears the web view down and
     // forgets which page (pay sheet or checkout) failed
@@ -1145,9 +1323,9 @@ void UpgradeSheet::HandleCheckoutCallback(std::string const& uri) {
     purchaseEmitted_ = true;
   }
   ShowPage(Page::Products);
-  ShowCheckoutError(message != params.end() && !message->second.empty()
-                        ? H(message->second)
-                        : Loc("something_went_wrong"));
+  // the page's code in this app's words when it knows it, else the page's text
+  const CheckoutFailureText failure = CheckoutFailureTextFor(errorCode, errorMessage);
+  ShowCheckoutError(failure.key.empty() ? H(failure.pageText) : Loc(failure.key));
 }
 
 void UpgradeSheet::FallBackToHosted() {

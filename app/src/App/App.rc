@@ -24,15 +24,17 @@ IDR_WORLD_TOPOLOGY RCDATA "Assets\\world-110m.json"
 // takes them from the UR_* definitions Directory.Build.props feeds rc.exe —
 // the exact values the code compiles against, so Explorer's Details tab, the
 // in-app About row, and the update checker's self-comparison can never drift
-// apart. The fourth numeric field is a permanent 0: the date parts alone name
-// a release, and the code lives in the ProductVersion STRING (the full
-// grammar), where VerQueryValue readers parse it back out.
+// apart. The numeric fields are the UTC date of the code's instant and half
+// its second of the day (tools/UrVersion.ps1), so they rise with the code even
+// between two builds of one day; Windows Installer replaces files by them. The
+// code itself lives in the ProductVersion STRING (the full grammar), where
+// VerQueryValue readers parse it back out.
 #include <winresrc.h>
 #include "..\Common\Version.h"
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION    UR_VER_MAJOR,UR_VER_MINOR,UR_VER_PATCH,0
- PRODUCTVERSION UR_VER_MAJOR,UR_VER_MINOR,UR_VER_PATCH,0
+ FILEVERSION    UR_VER_MAJOR,UR_VER_MINOR,UR_VER_PATCH,UR_VERSION_BUILD
+ PRODUCTVERSION UR_VER_MAJOR,UR_VER_MINOR,UR_VER_PATCH,UR_VERSION_BUILD
  FILEFLAGSMASK  VS_FFI_FILEFLAGSMASK
  FILEFLAGS      0x0L
  FILEOS         VOS_NT_WINDOWS32

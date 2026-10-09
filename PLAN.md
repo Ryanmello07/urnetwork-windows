@@ -306,7 +306,51 @@ Product — DECIDED 2026-07-09:
   push updates for EXE/MSI listings (only MSIX auto-updates). We ship our own
   **service-assisted updater** (`urnetworkd` downloads + swaps binaries, no UAC
   prompt) and upload new installers to the Store per release. See STORE.md.
-- **Tunnel persistence after tray quit**: tunnel keeps running (service-owned).
+- **Tunnel persistence after tray quit**: ~~tunnel keeps running (service-owned)~~
+  **CHANGED 2026-10-05 (owner decision)** — closing the window hides it to the tray
+  and the tunnel and the provider keep running; the tray's **Quit** stops the tunnel
+  session and the provider-only device in the service (as Linux does) and lifts any
+  firewall policy, as Disconnect does, then exits. An app that is killed or closed by
+  a WM_CLOSE from outside leaves the service as it is (the next launch adopts what it
+  runs). The in-app update is such a close: its MSI closes the app with WM_CLOSE (or,
+  installed by hand, Windows Installer's Restart Manager does) and stops the service
+  itself.
+  See `app/src/Common/AppLifetime.h`. **Owner decision 2026-10-05: signing out of
+  Windows (or a shutdown) stops the tunnel and the provider the same as Quit**
+  (WM_ENDSESSION, `Ending::SessionEnd`), and so does signing out of URnetwork,
+  which keeps the app running and stays owed to an unreachable service until it is
+  delivered (`app/src/Common/SignOut.h`). A launch during any of these exits is
+  neither lost nor told the app is already running: the exiting instance refuses it
+  with its exiting signal raised, and the launch waits (bounded) for that instance to
+  end, then starts the app (`app/src/Common/InstanceHandover.h`).
+- **What a launch shows: DECIDED 2026-10-05 (owner)** — "autostart on system start
+  should launch only the tray icon": every launch the user starts opens the window
+  (a first launch, a relaunch of the running app, one that waited out a quit), and an
+  autostart at sign-in (`URnetwork.exe --autostart`) shows only the tray icon. Every
+  autostart registration must pass `--autostart` (`instance::kAutostartArgument`,
+  pinned by a contract test).
+- **Launch on system startup: DECIDED 2026-10-05 (owner)** — "Launch URnetwork on
+  system startup" as on macOS, with macOS's default (off): a toggle in Settings
+  (`launch_urnetwork_on_system_startup`) writes the user's own HKCU Run value
+  (`"URnetwork.exe" --autostart`) when turned on and deletes it, with Task Manager's
+  StartupApproved record, when turned off; Task Manager switching it off shows as off.
+  Nothing registers it by itself; each launch only brings an existing value up to date.
+  Uninstalling deletes the uninstalling user's value; other users' stay (their hives are
+  not loaded), and Windows starts nothing for a value whose program is gone
+  (`app/src/Common/StartupRegistration.h`).
+- **Launches during an update: DECIDED 2026-10-05 (owner)** — refused, "protect the
+  update to not be corrupted where possible". The in-app updater starts the elevated
+  update helper (`URnetworkUpdate.exe`, which downloads, checks and runs the MSI) and
+  waits on it without quitting, so until the MSI closes the app a launch reaches the
+  running app as any launch does. As the app exits while the helper still runs, it
+  records the helper (process id, creation time, time written); while the helper
+  runs, a launch shows a short self-closing "URnetwork is updating" notice (an
+  autostart none) and exits. The marker is stale once the helper ends or 20 minutes
+  after it was written, and the next launch deletes it (`app/src/Common/UpdateMarker.h`).
+  The only launch it lets through is the relaunch after the update: the MSI starts the
+  helper with no arguments after an update that took, the helper does so itself after
+  one that failed, and the helper starts `URnetwork.exe --after-update`, which waits
+  for the marker's helper to end before it asks (`instance::kAfterUpdateArgument`).
 - **Provide defaults**: ethernet maps as unmetered/provide-eligible via NetworkCostType.
 - **Per-app split tunneling: IN SCOPE for v1** (M3.5) via a clean-room, MPL-2.0,
   attestation-signed WFP callout driver implemented from first principles (Microsoft docs +

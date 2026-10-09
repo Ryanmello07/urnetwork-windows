@@ -330,6 +330,49 @@ LRESULT CALLBACK TrayIcon::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
         if (lParam && wcscmp(reinterpret_cast<const wchar_t*>(lParam), L"ImmersiveColorSet") == 0)
           self->OnThemeChanged();
         return 0;
+      case WM_SYSCOMMAND:
+        // Alt+F4 while this hidden window still holds the foreground after the
+        // tray menu closes. DefWindowProc turns it into the WM_CLOSE below,
+        // which exits the app. Closing hides to the tray (owner decision,
+        // 2026-10-05), and this window is never shown, so there is nothing to
+        // hide: the gesture does nothing. Quit is in the menu.
+        if ((wParam & 0xFFF0) == SC_CLOSE) {
+          LogInfo("tray: Alt+F4 on the tray window ignored: closing hides to the "
+                  "tray, and Quit is in its menu");
+          return 0;
+        }
+        return ::DefWindowProcW(hwnd, msg, wParam, lParam);
+      case WM_CLOSE:
+        // A WM_CLOSE from outside the app: `taskkill /im URnetwork.exe` without
+        // /f, or an installer closing the app. DefWindowProc would destroy this
+        // window and leave the app running with no tray icon and no way to
+        // quit it, so the app exits instead. Not the menu's Quit: nobody chose
+        // to stop the tunnel or the provider, so the service keeps them
+        // (AppLifetime.h, CloseRequest).
+        LogInfo("tray: WM_CLOSE received, exiting");
+        if (self->cb_.onCloseRequest) self->cb_.onCloseRequest();
+        return 0;
+      case WM_ENDSESSION:
+        // Windows is ending the session: a sign-out of Windows, a shutdown or a
+        // restart. Stopped as on Quit before this returns, because Windows may
+        // end the process as soon as it does. Not when the end was cancelled
+        // (a false wParam). The Restart Manager closing the app for an
+        // installer (ENDSESSION_CLOSEAPP) is no session end: it is a close
+        // request, as an installer's WM_CLOSE is. Windows Installer asks it
+        // for every install the package does not close the app for itself
+        // (one run by hand, installer/Package.wxs), in the session msiexec
+        // runs in; an app in another session is out of its reach, as it is of
+        // WM_CLOSE's. WM_QUERYENDSESSION is DefWindowProc's: the app never
+        // holds the end up.
+        if (wParam && !(lParam & ENDSESSION_CLOSEAPP)) {
+          LogInfo("tray: the Windows session is ending ({}), stopping as on quit",
+                  (lParam & ENDSESSION_LOGOFF) ? "sign-out" : "shutdown or restart");
+          if (self->cb_.onSessionEnd) self->cb_.onSessionEnd();
+        } else if (wParam) {
+          LogInfo("tray: the Restart Manager is closing the app for an installer, exiting");
+          if (self->cb_.onCloseRequest) self->cb_.onCloseRequest();
+        }
+        return 0;
       default:
         return ::DefWindowProcW(hwnd, msg, wParam, lParam);
     }

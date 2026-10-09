@@ -8,19 +8,34 @@
     <!-- default staging dir; override on the command line per arch/config -->
     <BinDir Condition="'$(BinDir)'==''">$(MSBuildThisFileDirectory)..\build\$(Platform)\Release</BinDir>
     <!-- MSI ProductVersion fields are 16-bit-bounded (and the first two
-         effectively 8-bit), so the MSI cannot carry the app's yyyy.M.d date:
-         CI passes -p:UrMsiVersion=yy.M.d instead. The default keeps a bare
-         `dotnet build` compiling. Real upgrade ordering is the signing
-         milestone's problem, not this compile-proof's. -->
+         effectively 8-bit), so the MSI cannot carry the app's yyyy.M.d date.
+         build.ps1 and CI pass -p:UrMsiVersion from tools/UrVersion.ps1,
+         (Y-2000).M.<time of month>, which rises with the release code. The
+         default, 0.0.1, keeps a bare `dotnet build` and build.ps1's 0.0.0-0
+         compiling. A 0.0.1 package replaces any installed 0.0.1 product of
+         this UpgradeCode, which includes every official MSI built before
+         build.ps1 stamped versions; any stamped package replaces it, and it
+         is refused over a stamped one. -->
     <UrMsiVersion Condition="'$(UrMsiVersion)'==''">0.0.1</UrMsiVersion>
-    <DefineConstants>BinDir=$(BinDir);UrMsiVersion=$(UrMsiVersion)</DefineConstants>
+    <!-- This build's FILEVERSION, the four fields both exes carry. build.ps1
+         and CI pass -p:UrFileVersion from tools/UrVersion.ps1 with
+         UrMsiVersion. The default is what an unstamped build's exes carry
+         (Directory.Build.props defaults every Ur* field to 0), so a bare or
+         0.0.0-0 package compares itself, correctly, as 0.0.0.0. -->
+    <UrFileVersion Condition="'$(UrFileVersion)'==''">0.0.0.0</UrFileVersion>
+    <!-- The lowest FILEVERSION above this build's: the fourth field plus one.
+         Package.wxs refuses to install over a urnetworkd.exe at or above it.
+         A UrFileVersion without four fields leaves this empty, and the WiX
+         build then fails on the empty MinVersion. -->
+    <UrNewerFileVersion Condition="$([System.Version]::Parse('$(UrFileVersion)').Revision) &gt;= 0">$([System.Version]::Parse('$(UrFileVersion)').ToString(3)).$([MSBuild]::Add($([System.Version]::Parse('$(UrFileVersion)').Revision), 1))</UrNewerFileVersion>
+    <DefineConstants>BinDir=$(BinDir);UrMsiVersion=$(UrMsiVersion);UrNewerFileVersion=$(UrNewerFileVersion)</DefineConstants>
     <!-- -p:IncludeDriver=true (build.ps1 -IncludeDriver) compiles the split-tunnel
          driver component into the package; otherwise the .sys is omitted so the MSI
          builds without the (WDK-built) driver. -->
     <DefineConstants Condition="'$(IncludeDriver)'=='true'">$(DefineConstants);IncludeDriver</DefineConstants>
     <!-- Installer warnings describe upgrade/repair correctness, not polish.
-         The known third-party ICE03 exception below is narrowly suppressed;
-         every other WiX warning must stop the package build. -->
+         The two ICE exceptions below are suppressed, each for its stated
+         reason; every other WiX warning must stop the package build. -->
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <!-- ICE03 (generic column-type/range validation across standard MSI tables)
          fails post-build on the harvested WindowsAppRuntime payload, not on
@@ -41,8 +56,19 @@
          at all. Suppressing ICE03 does NOT suppress other ICEs — confirmed
          locally that ICE60 still runs with ICE03 suppressed. Private app
          fonts are authored explicitly as companion files of the versioned app
-         executable in Package.wxs. -->
-    <SuppressIces>ICE03</SuppressIces>
+         executable in Package.wxs.
+
+         ICE61 checks the Upgrade table. With MajorUpgrade
+         AllowSameVersionUpgrades="yes" (Package.wxs) it reports one row, on
+         purpose: the upgrade row's maximum version is this package's own
+         ProductVersion, inclusive ("The Maximum version is not less than the
+         current product", followed by that version twice). Two release codes
+         can share a ProductVersion, and either must replace the other rather
+         than install beside it. That expected row is ICE61's only message
+         today, but the suppression is package-wide: it would also hide every
+         other ICE61 check on any Upgrade row authored here later. Suppressing
+         ICE61 does not suppress other ICEs. -->
+    <SuppressIces>ICE03;ICE61</SuppressIces>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="WixToolset.Util.wixext" Version="5.0.2" />

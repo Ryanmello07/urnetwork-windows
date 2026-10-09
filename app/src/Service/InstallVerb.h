@@ -91,6 +91,35 @@ constexpr bool RestartsIndefinitely() {
   return n > 0 && kFailureActions[n - 1].restart;
 }
 
+// --- the access the failure-action write needs ------------------------------
+//
+// ChangeServiceConfig2W(SERVICE_CONFIG_FAILURE_ACTIONS) needs SERVICE_CHANGE_CONFIG
+// on the handle, AND SERVICE_START as soon as any action is SC_ACTION_RESTART
+// (the ChangeServiceConfig2 reference: "If the service controller handles the
+// SC_ACTION_RESTART action, hService must have the SERVICE_START access
+// right"). The self-restart's EnsureRestartOnFailure opened its handle with
+// SERVICE_CHANGE_CONFIG alone, so the write was refused with
+// ERROR_ACCESS_DENIED every time, the self-restart never armed, and a held
+// device always fell back to "this service process must be restarted". The
+// install verb never hit it only because it holds SERVICE_ALL_ACCESS.
+//
+// Restated as numbers (winsvc.h values, asserted in main.cpp) so selftest and
+// tools/install-verb-tests.cpp can pin it without windows.h.
+inline constexpr unsigned long kServiceChangeConfigAccess = 0x0002;  // SERVICE_CHANGE_CONFIG
+inline constexpr unsigned long kServiceStartAccess = 0x0010;         // SERVICE_START
+
+constexpr bool AnyFailureActionRestarts() {
+  for (const auto& action : kFailureActions)
+    if (action.restart) return true;
+  return false;
+}
+
+// The access mask to open the service with before writing kFailureActions.
+constexpr unsigned long FailureActionsAccess() {
+  return kServiceChangeConfigAccess |
+         (AnyFailureActionRestarts() ? kServiceStartAccess : 0);
+}
+
 // --- binPath quoting --------------------------------------------------------
 //
 // The service's image path MUST be stored quoted. An unquoted path with spaces

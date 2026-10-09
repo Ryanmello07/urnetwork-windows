@@ -244,7 +244,7 @@ void Onboarding::ApplyPrices() {
     offerEyebrow_.Text(Upper(hstring{Format("offer_percent_off_first_year", offer.percentOff)}));
   }
   if (offerHeadline_) {
-    offerHeadline_.Text(hstring{Format("offer_months_free_headline", offer.monthsFree)});
+    offerHeadline_.Text(hstring{Plural("offer_months_free_headline", offer.monthsFree)});
   }
   if (offerPrice_) {
     offerPrice_.Text(hstring{Format(
@@ -260,7 +260,7 @@ void Onboarding::ApplyPrices() {
   offerLines_.Update(offer, tier, kFreeTrialDays);
   if (offerCta_) {
     offerCta_.Content(winrt::box_value(
-        hstring{Format("offer_cta_start_trial_months_free", offer.monthsFree)}));
+        hstring{Plural("offer_cta_start_trial_months_free", offer.monthsFree)}));
   }
   // the intro surface's shown event, once the offer is actually on the page
   if (showOffer && step_ == kOnboardingStepWelcome && !introOfferShown_ && Sdk().eventsReady()) {

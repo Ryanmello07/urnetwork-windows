@@ -8,14 +8,11 @@
 namespace urnw::config {
 
 // WalletConnect Cloud project id — one project id shared by every URnetwork
-// client (see apple/NEXTSTEPS2.md). It is passed to the ur.io/wallet-connect
-// bridge as `wc_project_id` so the bridge can pair with a wallet app (QR /
-// mobile deep link).
-//
-// Empty is fine and is the common desktop case: the bridge then drives injected
-// (browser-extension) wallets only — Bittensor Wallet, SubWallet, Talisman,
-// polkadot-js for Bittensor; Phantom/Solflare for Solana. Nothing crashes and no
-// button dies; only mobile wallet pairing is lost.
+// client (see apple/NEXTSTEPS2.md). The Bittensor WalletConnect wallet passes
+// it to the ur.io bridge page (SdkHost::BeginBittensorProof ->
+// BittensorWalletSession::setWalletConnectProjectId -> wc_project_id), which
+// pairs with it; empty = the page's own project id. The Solana bridge drives
+// the Phantom/Solflare extensions and does not use it.
 //
 // Inject it on the build (CI / build machine, the way android takes it from
 // local.properties) rather than committing it:
@@ -35,15 +32,8 @@ inline constexpr const char* kWalletConnectProjectId =
 inline constexpr const char* kWalletConnectProjectId = "";
 #endif
 
-// The GitHub repo the update checker polls for releases (beta-distribution
-// spec §5): the beta fork today — the fork IS the beta channel, publishing
-// every green build of this branch as a prerelease tagged
-// v<YYYY.M.D>-<code>-beta with the per-arch MSIs attached
-// (.github/workflows/beta-build.yml; Common/ReleaseSelection.h matches its tag
-// and asset names and accepts exactly those beta-marked prereleases) — and the
-// whole upstream handoff is this one line: repoint it at urnetwork/windows
-// when the fork graduates. Wide because it is spliced into WinHTTP request
-// strings, which are UTF-16 end to end.
-inline constexpr const wchar_t* kUpdateRepo = L"Ryanmello07/urnetwork-windows";
+// The update feed is not configured here: Common/ReleaseSelection.h holds the
+// feed table, where the tray app and the update helper both read it, each
+// feed addressed by its GitHub repository id.
 
 }  // namespace urnw::config

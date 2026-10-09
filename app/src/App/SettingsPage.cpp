@@ -13,12 +13,18 @@
 
 #include "BalanceSheets.h"  // SetMarkdownLinkText, for the community link rows
 #include "ClientEvents.h"
+#include "CloudProxyLink.h"
+#include "FeedbackSendState.h"
 #include "Ids.h"
+#include "LaunchAtStartup.h"
 #include "Localization.h"
 #include "Log.h"
 #include "MainWindow.xaml.h"
+#include "ManageSubscription.h"
 #include "PageContext.h"
+#include "PaymentRefusal.h"
 #include "Strings.h"
+#include "SupportContact.h"
 #include "UpdateChecker.h"
 #include "UrColors.h"
 #include "Version.h"
@@ -104,15 +110,6 @@ hstring Missing(std::string_view key, const wchar_t* english) {
   return hstring{value};
 }
 
-void OpenUrl(std::wstring_view url) {
-  try {
-    winrt::Windows::System::Launcher::LaunchUriAsync(
-        winrt::Windows::Foundation::Uri(hstring{url}));
-  } catch (...) {
-    LogWarn("settings: could not open {}", urnw::Narrow(url));
-  }
-}
-
 }  // namespace
 
 SettingsPage::SettingsPage(winrt::URnetwork::implementation::MainWindow& window)
@@ -134,12 +131,10 @@ void SettingsPage::ApplyStrings() {
   // The box shipped with no content whatsoever - an unlabelled tick offering to
   // upload the user's logs. The string existed the whole time.
   w_.FeedbackIncludeLogs().Content(LocBox("feedback_include_logs"));
-  // The primary action's label. A plain-string Content would name the button
-  // for free; the explicit SetName stays so the one way to submit this form is
+  // The primary action's label ("Send", or "Sending…" while the request is out;
+  // ApplyFeedbackSendButton owns both): the one way to submit this form is
   // never nameless to a screen reader.
-  w_.SendFeedbackButton().Content(LocBox("send"));
-  winrt::Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(
-      w_.SendFeedbackButton(), Loc("send"));
+  ApplyFeedbackSendButton();
   Automation::AutomationProperties::SetName(w_.SupportPaneA(), Loc("feedback"));
   Automation::AutomationProperties::SetName(w_.SupportPaneB(), Loc("support"));
 
@@ -353,8 +348,7 @@ void SettingsPage::BuildGeneralSection(Panel const& host) {
   // — it describes this installation, not the account — which is why it needs
   // no session, no FieldState and no server round-trip. Default ON; turning it
   // on also fires a check right away (see SetAutoCheckEnabled). The labels are
-  // Adv() ids like every update-surface string: the store carries nothing for
-  // an updater.
+  // Adv() ids like every update-surface string.
   autoUpdateCheck_ = ToggleRow(
       card, Adv("upd_auto_check", L"Check for updates automatically"),
       Adv("upd_auto_check_note",
@@ -364,6 +358,15 @@ void SettingsPage::BuildGeneralSection(Panel const& host) {
   autoUpdateCheck_.Toggled([this](auto const&, auto const&) {
     urnw::pages::Updates().SetAutoCheckEnabled(autoUpdateCheck_.IsOn());
   });
+
+  // Launch URnetwork on system startup, as on macOS (owner decision,
+  // 2026-10-05): this installation's own registration with Windows, so it
+  // needs no session. Off until the user turns it on; a sign-in then starts
+  // the app in the tray (StartupRegistration.h). The value is Windows's, read
+  // again whenever the page loads, since Task Manager can switch it off too.
+  launchAtStartup_ = ToggleRow(card, Loc("launch_urnetwork_on_system_startup"), hstring{});
+  ApplyLaunchAtStartup();
+  launchAtStartup_.Toggled([this](auto const&, auto const&) { OnLaunchAtStartupToggled(); });
 }
 
 // ADVANCED. The home the Advanced Mode toggle drops into, and export logs.
@@ -525,6 +528,9 @@ void SettingsPage::BuildConnectionsSection(Panel const& host) {
 
   killSwitch_ = ToggleSwitch();
   killSwitch_.Style(Lookup(L"UrSwitchToggleStyle"));
+  // the insufficient-balance acceptance driver's kill-switch case toggles this
+  winrt::Microsoft::UI::Xaml::Automation::AutomationProperties::SetAutomationId(
+      killSwitch_, L"acceptance.settings.kill-switch");
   killSwitchControls.Children().Append(killSwitch_);
   Row(card, Loc("kill_switch"),
       Adv("adv_kill_switch_note",
@@ -565,6 +571,13 @@ void SettingsPage::BuildConnectionsSection(Panel const& host) {
   auto blockedButton = NavRow(card, Loc("blocked_locations_2"), unused);
   blockedButton.Click([this](auto const&, auto const&) { ShowBlockedLocationsSheet(); });
 
+  // VLESS: a server of the user's own that the client strategy also dials
+  // through, for networks that block direct connections. A value of the
+  // network space rather than of the session, so it needs no device; the login
+  // screen's network sheet opens the same sheet before sign-in.
+  auto vlessButton = NavRow(card, Loc("vless"), unused);
+  vlessButton.Click([this](auto const&, auto const&) { ShowVlessSheet(); });
+
   // App split rules, in from the loose heading-plus-card-plus-button that used
   // to sit under both settings columns. It is a VPN-and-privacy preference like
   // the two above it, so it is a row like them.
@@ -573,17 +586,25 @@ void SettingsPage::BuildConnectionsSection(Panel const& host) {
   splitButton.Click(
       [this](auto const& sender, auto const& args) { OnManageAppSplitTunnel(sender, args); });
 
+  // Cloud proxies. The app has no protocol switch, so WireGuard, SOCKS and
+  // HTTPS proxies are created on ur.io, and this row opens that page in the
+  // browser (CloudProxyLink.h).
+  auto proxies = kit::MakePaneTwoLineRowButton(Loc("use_wireguard_socks_https_proxy"),
+                                               Loc("use_wireguard_socks_https_proxy_note"));
+  proxies.root.Click([this](auto const&, auto const&) { OpenCloudProxies(); });
+  card.Children().Append(proxies.root);
+
   // Uninstall the VPN service (beta spec §3). Last in the group: it is the one
   // machine-level action on a page of preferences. Labels are Adv() ids — the
-  // store carries nothing for a Windows service surface (see the banner in
-  // ConnectPage::ApplyServiceSetup) — and the row starts COLLAPSED until a
+  // Windows wording of the service row, not linux's systemd one (see the banner
+  // in ConnectPage::ApplyServiceSetup) — and the row starts collapsed until a
   // classification proves a service is actually registered; ApplyServiceSetup
   // below is the only writer of that visibility.
   serviceRowHost_ = StackPanel();
   card.Children().Append(serviceRowHost_);
   uninstallServiceButton_ = ButtonRow(
       serviceRowHost_, Adv("svc_service_label", L"VPN service"),
-      Adv("svc_uninstall_note",
+      Adv("svc_uninstall_note_windows",
           L"Remove the Windows service URnetwork uses to carry traffic."),
       Adv("svc_uninstall_action", L"Uninstall"));
   uninstallServiceButton_.Click(
@@ -616,8 +637,8 @@ void SettingsPage::BuildIdentitySection(Panel const& host) {
 }
 
 // The community half of ABOUT. The product-updates preference that used to open
-// this card is a PREFERENCE and moved to General; what is left is the two ways
-// to reach the project and the protocol link, which is About material.
+// this card is a PREFERENCE and moved to General; what is left is the ways to
+// reach the project and the protocol link, which is About material.
 void SettingsPage::BuildStayInTouchSection(Panel const& host) {
   Heading(host, Loc("stay_in_touch"), hstring{});
   auto card = Card(host);
@@ -627,9 +648,9 @@ void SettingsPage::BuildStayInTouchSection(Panel const& host) {
   // is no plain-text variant of the DePIN Hub line - and needs no extra "Open"
   // word beside it. Each sits in a pane row so it shares the left edge and the
   // hairline grid with everything above it.
-  auto linkRow = [&card](std::string_view key) {
+  auto linkRow = [&card](std::wstring const& markdown) {
     TextBlock text;
-    SetMarkdownLinkText(text, Localized(key), 13);
+    SetMarkdownLinkText(text, markdown, 13);
     text.TextWrapping(TextWrapping::Wrap);
     Border box;
     box.Padding(ThicknessHelper::FromLengths(12, 10, 12, 10));
@@ -638,8 +659,21 @@ void SettingsPage::BuildStayInTouchSection(Panel const& host) {
     box.Child(text);
     card.Children().Append(box);
   };
-  linkRow("join_the_community_on_discord_https_discord_com");
-  linkRow("verified_project_on_depin_hub_https_depinhub_io");
+  // The Discord invite is unreachable in some regions, so the support address
+  // is offered beside it (support::kStayInTouchLinks).
+  for (const auto link : support::kStayInTouchLinks) {
+    switch (link) {
+      case support::StayInTouchLink::Discord:
+        linkRow(Localized("join_the_community_on_discord_https_discord_com"));
+        break;
+      case support::StayInTouchLink::SupportEmail:
+        linkRow(support::SupportEmailMarkdown(Localized("email_support_at")));
+        break;
+      case support::StayInTouchLink::DePinHub:
+        linkRow(Localized("verified_project_on_depin_hub_https_depinhub_io"));
+        break;
+    }
+  }
 
   // The protocol link, which used to hang off the very bottom of the page under
   // everything else with nothing holding it there.
@@ -688,7 +722,7 @@ void SettingsPage::BuildSupportContactSection(Panel const& host, bool withGroupH
   // already navigated to.
   TextBlock unused{nullptr};
   auto row = rows::NavRow(host, Loc("learn_more_protocol_page"), unused);
-  row.Click([](auto const&, auto const&) { OpenUrl(L"https://ur.xyz"); });
+  row.Click([this](auto const&, auto const&) { OpenProtocolPage(); });
 }
 
 void SettingsPage::BuildSubscriptionSection(Panel const& host) {
@@ -698,6 +732,14 @@ void SettingsPage::BuildSubscriptionSection(Panel const& host) {
   TextBlock unused{nullptr};
   manageSubscription_ = NavRow(card, Loc("site_app_manage_subscription"), unused);
   manageSubscription_.Click([this](auto const&, auto const&) { OpenCustomerPortal(); });
+  // hidden until the balance shows a Stripe subscription (ApplySubscriptionStore)
+  manageSubscription_.Visibility(Visibility::Collapsed);
+}
+
+void SettingsPage::ApplySubscriptionStore(std::string const& storeFamily) {
+  if (!manageSubscription_) return;
+  manageSubscription_.Visibility(urnw::ShowsManageSubscription(storeFamily) ? Visibility::Visible
+                                                                            : Visibility::Collapsed);
 }
 
 void SettingsPage::BuildVersionSection(Panel const& host) {
@@ -909,6 +951,14 @@ void SettingsPage::ApplyLocalDeviceState() {
   applyingKillSwitch_ = true;
   killSwitch_.IsOn(Sdk().CurrentKillSwitch());
   applyingKillSwitch_ = false;
+  ApplyLaunchAtStartup();
+}
+
+void SettingsPage::ApplyLaunchAtStartup() {
+  if (!launchAtStartup_) return;  // the section is not built yet
+  applyingLaunchAtStartup_ = true;
+  launchAtStartup_.IsOn(urnw::LaunchAtStartupEnabled());
+  applyingLaunchAtStartup_ = false;
 }
 
 void SettingsPage::LoadNetworkUser() {
@@ -1165,7 +1215,7 @@ winrt::fire_and_forget SettingsPage::ConfirmUninstallService() {
     dialog.CloseButtonText(Loc("cancel"));
     dialog.DefaultButton(ContentDialogButton::Close);  // Enter must not remove
     TextBlock body;
-    body.Text(Adv("svc_uninstall_confirm",
+    body.Text(Adv("svc_uninstall_confirm_windows",
                   L"This stops the URnetwork service and removes it from "
                   L"Windows. The app can't connect until it is set up again. "
                   L"Windows will ask for administrator permission."));
@@ -1194,17 +1244,35 @@ winrt::fire_and_forget SettingsPage::ShowKillSwitchException() {
     dialog.CloseButtonText(Loc("got_it"));
     dialog.DefaultButton(ContentDialogButton::Close);
     TextBlock body;
+    // the tun captures ::/0 minus the local scopes (net::kTunCaptureV6), so
+    // the only public-route exception is SMTP on port 25
     body.Text(Adv(
-        "kill_switch_exception_detail",
-        L"While the VPN is connected, IPv6 is not routed through URnetwork and "
-        L"may use your local network, even when the kill switch is on. Outbound "
-        L"SMTP on TCP port 25 also bypasses the VPN. These exceptions may expose "
-        L"your local public IP to those destinations. SMTP on ports 465 and 587 "
-        L"stays in the VPN and must establish TLS."));
+        "kill_switch_exception_smtp_detail",
+        L"While the VPN is connected, IPv6 is routed through URnetwork like "
+        L"IPv4. Outbound SMTP on TCP port 25 bypasses the VPN, even when the "
+        L"kill switch is on, which may expose your local public IP to those "
+        L"mail servers. SMTP on ports 465 and 587 stays in the VPN and must "
+        L"establish TLS."));
     body.FontSize(14);
     body.TextWrapping(TextWrapping::Wrap);
     body.MinWidth(320);
-    dialog.Content(body);
+    // the safety-rule exception depends on the kill switch, unlike the two
+    // above: off, that traffic leaves from the local ip; on, it is dropped
+    TextBlock safetyRules;
+    safetyRules.Text(Adv(
+        "kill_switch_exception_unrecognized_encrypted",
+        L"When the kill switch is off, traffic that URnetwork safety rules keep "
+        L"off the network, such as unrecognized encrypted protocols, bypasses the "
+        L"VPN and uses your local public IP. With the kill switch on, that traffic "
+        L"is blocked."));
+    safetyRules.FontSize(14);
+    safetyRules.TextWrapping(TextWrapping::Wrap);
+    safetyRules.MinWidth(320);
+    StackPanel content;
+    content.Spacing(12);
+    content.Children().Append(body);
+    content.Children().Append(safetyRules);
+    dialog.Content(content);
     co_await dialog.ShowAsync();
   } catch (...) {
   }
@@ -1225,6 +1293,15 @@ void SettingsPage::OnKillSwitchToggled() {
   applyingKillSwitch_ = true;
   killSwitch_.IsOn(actual);
   applyingKillSwitch_ = false;
+  snackbar_.Show(Loc("something_went_wrong"), InfoBarSeverity::Error);
+}
+
+void SettingsPage::OnLaunchAtStartupToggled() {
+  if (applyingLaunchAtStartup_) return;  // the read wrote it; do not echo it back
+  const bool wanted = launchAtStartup_.IsOn();
+  if (urnw::SetLaunchAtStartup(wanted)) return;
+  // As macOS does when SMAppService refuses: back to what Windows actually has.
+  ApplyLaunchAtStartup();
   snackbar_.Show(Loc("something_went_wrong"), InfoBarSeverity::Error);
 }
 
@@ -1304,15 +1381,27 @@ winrt::fire_and_forget SettingsPage::OpenCustomerPortal() {
                           std::optional<std::string> err) {
         std::string url, error;
         if (result && result->url) url = *result->url;
-        if (result && result->error) error = result->error->message;
-        else if (err) error = *err;
-        queue.TryEnqueue([weak, url, error] {
+        // the server's refusal in this app's words (PaymentRefusal.h); a
+        // failure with no answer from the server keeps the sdk's words
+        std::optional<PaymentRefusalText> refusal;
+        if (result && result->error) {
+          refusal = PaymentRefusalTextFor(*result->error, "something_went_wrong");
+        } else if (err) {
+          error = *err;
+        }
+        queue.TryEnqueue([weak, url, refusal, error] {
           auto window = weak.get();
           if (!window) return;
           auto& page = window->settings();
           page.manageSubscription_.IsEnabled(true);
           if (!url.empty()) {
-            OpenUrl(urnw::Widen(url));
+            page.LaunchCustomerPortal(url);
+            return;
+          }
+          if (refusal) {
+            page.settingsSnackbar().Show(
+                hstring{PaymentRefusalMessage(Localized(refusal->key), Widen(refusal->detail))},
+                InfoBarSeverity::Error);
             return;
           }
           page.settingsSnackbar().Show(
@@ -1321,6 +1410,59 @@ winrt::fire_and_forget SettingsPage::OpenCustomerPortal() {
         });
       });
   co_return;
+}
+
+winrt::fire_and_forget SettingsPage::LaunchCustomerPortal(std::string url) {
+  auto self = w_.get_strong();  // keep the window alive across the launch
+  // Await the launcher's verdict: a fire-and-forget launch that failed looked
+  // exactly like a portal that opened (UPGRADE.md D5).
+  bool launched = false;
+  try {
+    launched = co_await winrt::Windows::System::Launcher::LaunchUriAsync(
+        winrt::Windows::Foundation::Uri(winrt::to_hstring(url)));
+  } catch (winrt::hresult_error const& e) {
+    LogWarn("settings: customer portal launch failed: {}", urnw::Narrow(std::wstring{e.message()}));
+    launched = false;
+  } catch (...) {
+    launched = false;
+  }
+  if (launched) co_return;
+  LogWarn("settings: the customer portal did not open");
+  snackbar_.Show(Loc("site_billing_portal_error"), InfoBarSeverity::Error);
+}
+
+winrt::fire_and_forget SettingsPage::OpenCloudProxies() {
+  auto self = w_.get_strong();  // keep the window alive across the launch
+  bool launched = false;
+  try {
+    launched = co_await winrt::Windows::System::Launcher::LaunchUriAsync(
+        winrt::Windows::Foundation::Uri(hstring{cloudproxy::kProxiesUrl}));
+  } catch (winrt::hresult_error const& e) {
+    LogWarn("settings: cloud proxies launch failed: {}", urnw::Narrow(std::wstring{e.message()}));
+    launched = false;
+  } catch (...) {
+    launched = false;
+  }
+  if (launched) co_return;
+  LogWarn("settings: the cloud proxies page did not open");
+  snackbar_.Show(Loc("something_went_wrong"), InfoBarSeverity::Error);
+}
+
+winrt::fire_and_forget SettingsPage::OpenProtocolPage() {
+  auto self = w_.get_strong();  // keep the window alive across the launch
+  bool launched = false;
+  try {
+    launched = co_await winrt::Windows::System::Launcher::LaunchUriAsync(
+        winrt::Windows::Foundation::Uri(L"https://ur.xyz"));
+  } catch (winrt::hresult_error const& e) {
+    LogWarn("settings: protocol page launch failed: {}", urnw::Narrow(std::wstring{e.message()}));
+    launched = false;
+  } catch (...) {
+    launched = false;
+  }
+  if (launched) co_return;
+  LogWarn("settings: the protocol page did not open");
+  snackbar_.Show(Loc("something_went_wrong"), InfoBarSeverity::Error);
 }
 
 winrt::fire_and_forget SettingsPage::SaveLogsToFile() {
@@ -1355,38 +1497,26 @@ winrt::fire_and_forget SettingsPage::SaveLogsToFile() {
   }
 }
 
-// Attach the SDK's log directory to a feedback report the server has already
-// accepted, identified by ITS id. Called only from OnSendFeedback, only when
+// Attach the service's logs to a feedback report the server has already
+// accepted, identified by its id. Called only from OnSendFeedback, only when
 // the user ticked the box - apple's FeedbackView contract. Never a standalone
 // affordance: an upload the user did not ask for, correlated with nothing, is
 // exfiltration with a friendly label.
 //
-// Failure is silent BY DESIGN here and only here: the feedback itself was
+// SdkHost asks the service first, which uploads its own logs whether or not a
+// tunnel runs, and falls back to the DeviceRemote, the only path before the
+// service could be asked. It returns at once: the request runs on its own
+// thread (App/FeedbackLogUpload.h), never on this one.
+//
+// Failure is silent by design here and only here: the feedback itself was
 // accepted, so telling the user their report failed would be false, and the
 // attachment is an extra. It is logged.
 void SettingsPage::UploadLogs(std::string const& feedbackId) {
-  if (feedbackId.empty() || !Sdk().hasDevice()) {
-    LogWarn("settings: log attach skipped (feedbackId={} device={})",
-            feedbackId.empty() ? "none" : "present", Sdk().hasDevice());
+  if (feedbackId.empty()) {
+    LogWarn("settings: log attach skipped (no feedback id)");
     return;
   }
-  auto queue = w_.DispatcherQueue();
-  auto weak = w_.get_weak();
-  try {
-    Sdk().device().uploadLogs(feedbackId,
-                              [queue, weak](std::optional<urnet::UploadLogsResult> result,
-                                            std::optional<std::string> err) {
-                                std::string error;
-                                if (result && result->error) error = result->error->message;
-                                else if (err) error = *err;
-                                if (!error.empty()) {
-                                  LogWarn("settings: log attach failed: {}", error);
-                                }
-                              });
-  } catch (const std::exception& e) {
-    // Device::uploadLogs throws synchronously when the C call fails.
-    LogWarn("settings: log attach threw: {}", e.what());
-  }
+  Sdk().UploadFeedbackLogs(feedbackId);
 }
 
 // ---- sheets ----------------------------------------------------------------
@@ -1437,6 +1567,10 @@ winrt::fire_and_forget SettingsPage::ShowAddAuthSheet() {
       if (auto window = weak.get()) window->settings().LoadNetworkUser();
     });
     co_await addAuthSheet_->Dialog().ShowAsync();
+    // the added line for the method (apple's snackbar, ur.io's done step)
+    if (!addAuthSheet_->AddedMessageKey().empty()) {
+      snackbar_.Show(Loc(addAuthSheet_->AddedMessageKey()), InfoBarSeverity::Success);
+    }
   } catch (...) {
   }
   addAuthSheet_.reset();
@@ -1482,6 +1616,19 @@ winrt::fire_and_forget SettingsPage::ShowIdentitySheet() {
   } catch (...) {
   }
   identitySheet_.reset();
+  w_.SetSheetOpen(false);
+}
+
+winrt::fire_and_forget SettingsPage::ShowVlessSheet() {
+  if (w_.sheetOpen()) co_return;
+  auto self = w_.get_strong();
+  w_.SetSheetOpen(true);
+  try {
+    vlessSheet_ = urnw::VlessSheet::Create(self->Content().XamlRoot(), Sdk());
+    co_await vlessSheet_->Dialog().ShowAsync();
+  } catch (...) {
+  }
+  vlessSheet_.reset();
   w_.SetSheetOpen(false);
 }
 
@@ -1543,6 +1690,26 @@ void SettingsPage::PrefillFromCampaign(std::string const& token, int rating,
       });
 }
 
+// Send reads "Sending…" and stays disabled while the request is out; the
+// label also names the button for a screen reader. Kept in feedbackSending_ so
+// ApplyStrings mid-send keeps the right label.
+void SettingsPage::SetFeedbackSending(bool sending) {
+  feedbackSending_ = sending;
+  ApplyFeedbackSendButton();
+}
+
+void SettingsPage::ApplyFeedbackSendButton() {
+  const FeedbackSendButton button = FeedbackSendButtonFor(feedbackSending_);
+  const winrt::hstring label = Loc(button.labelKey);
+  w_.SendFeedbackButton().IsEnabled(button.enabled);
+  // this pane's Send is a plain-content button (the pane model's, not the old
+  // glyph-plus-label panel), so the label IS the content; the explicit name
+  // stays so the one way to submit this form is never nameless
+  w_.SendFeedbackButton().Content(winrt::box_value(label));
+  winrt::Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(
+      w_.SendFeedbackButton(), label);
+}
+
 void SettingsPage::OnSendFeedback(IInspectable const&, RoutedEventArgs const&) {
   // This had NO session guard at all and reported success unconditionally: a
   // 401 rendered as "Thanks for the feedback!" while nothing had been sent.
@@ -1563,7 +1730,7 @@ void SettingsPage::OnSendFeedback(IInspectable const&, RoutedEventArgs const&) {
   const int64_t sentRating = args.star_count;  // for feedback.submitted
   const std::string sentText = text;
 
-  w_.SendFeedbackButton().IsEnabled(false);
+  SetFeedbackSending(true);
   auto queue = w_.DispatcherQueue();
   auto weak = w_.get_weak();
   Sdk().api().sendFeedback(
@@ -1584,7 +1751,7 @@ void SettingsPage::OnSendFeedback(IInspectable const&, RoutedEventArgs const&) {
           auto self = weak.get();
           if (!self) return;
           auto& page = self->settings();
-          self->SendFeedbackButton().IsEnabled(true);
+          page.SetFeedbackSending(false);
           if (!ok) {
             page.settingsSnackbar().Show(
                 error.empty() ? Loc("error_sending_feedback") : winrt::to_hstring(error),

@@ -2,7 +2,8 @@
 // Solana connect option on Earnings): the address check a pasted address
 // passes before it is sent to the server, the short form, which account wallet
 // is the Solana payout wallet, the USDC still waiting, what the pane shows from
-// those, and the connect sheet's state machine (App/SolanaWalletPresentation.h),
+// those, the connect sheet's state machine and the words for the bridge page's
+// failure codes (App/SolanaWalletPresentation.h),
 // plus where the wallet bridge's returns go and when a late challenge may still
 // open the bridge (App/WalletBridgeRoute.h) - run
 // against the SAME sources the app compiles, on any host with a C++20 compiler.
@@ -11,9 +12,7 @@
 // cannot be built off Windows at all; what is verified here is every decision
 // they make before they touch a XAML object.
 //
-//   c++ -std=c++20 -I ../src/App solana-wallet-tests.cpp \
-//       ../src/App/SolanaWalletPresentation.cpp \
-//       -o /tmp/solana-wallet-tests && /tmp/solana-wallet-tests
+//   c++ -std=c++20 -I ../src/App solana-wallet-tests.cpp ../src/App/SolanaWalletPresentation.cpp -o /tmp/solana-wallet-tests && /tmp/solana-wallet-tests
 //
 // SPDX-License-Identifier: MPL-2.0
 
@@ -523,6 +522,71 @@ void LegacyLoadTests() {
 
 // ---- the connect sheet ------------------------------------------------------
 
+// Removing the payout wallet makes another active Solana or Polygon wallet of
+// the network the payout wallet when there is one (server
+// fix/remove-wallet-promote); the reload after the removal names it.
+void PromotionTests() {
+  const LegacyWallet removed = Wallet("w1", "SOL", kUsdcMint);
+  const LegacyWallet next = Wallet("w2", "SOL", kTokenProgram);
+  const LegacyWallet polygon = Wallet("w3", "MATIC", "0x4b2a9f3e1c7d8a6b5e0f2d1c3b4a596877665544");
+  const PayoutRemoval removal{"net-a", "w1", "w1"};
+  // the reload after the removal: the server's answers for the network
+  auto reload = [&](const std::vector<LegacyWallet>& wallets, const std::string& payoutId,
+                    bool payoutOk = true) {
+    LegacyCommitted view = CommittedView("net-a", removed, 0);
+    BeginLegacyLoad(view, "net-a", /*reset=*/true);
+    LegacyLoad load(2);
+    load.Answer(2, LegacyRead::Wallets, true, WalletsAnswer(wallets));
+    load.Answer(2, LegacyRead::Payout, payoutOk, PayoutAnswer(payoutId));
+    load.Answer(2, LegacyRead::Payments, true);
+    load.Commit(view, "net-a");
+    return view;
+  };
+  {
+    TEST_CASE("removingThePayoutWalletNamesThePromotedOne");
+    const LegacyCommitted view = reload({next, polygon}, "w2");
+    const auto promoted = PromotedPayoutWallet(removal, view);
+    Check(promoted.has_value(), "a promoted wallet");
+    if (promoted) CheckEq("w2", promoted->id, "the new payout wallet");
+    Check(SolanaPanelFor(view).showCard, "its card");
+  }
+  {
+    TEST_CASE("aPromotedPolygonWalletIsNamedToo");
+    const auto promoted = PromotedPayoutWallet(removal, reload({polygon}, "w3"));
+    Check(promoted.has_value() && promoted->id == "w3", "the Polygon wallet");
+  }
+  {
+    TEST_CASE("nothingPromotedNamesNothing");
+    // the server found no other Solana or Polygon wallet: no payout id, and the
+    // empty-id rule keeps the removed one
+    const LegacyCommitted view = reload({polygon}, "");
+    CheckEq("w1", view.payoutWalletId, "the removed id stands");
+    Check(!PromotedPayoutWallet(removal, view).has_value(), "no promotion");
+  }
+  {
+    TEST_CASE("aFailedPayoutReadNamesNothing");
+    Check(!PromotedPayoutWallet(removal, reload({next}, "w2", /*payoutOk=*/false)).has_value(),
+          "an unknown payout wallet is not called promoted");
+  }
+  {
+    TEST_CASE("removingAnotherWalletNamesNothing");
+    const PayoutRemoval notPayout{"net-a", "w9", "w1"};
+    Check(!PromotedPayoutWallet(notPayout, reload({next}, "w2")).has_value(),
+          "the removed wallet was not the payout wallet");
+  }
+  {
+    TEST_CASE("aPayoutWalletTheCardCannotShowNamesNothing");
+    const LegacyWallet tao = Wallet("w4", "TAO", kColdkey);
+    Check(!PromotedPayoutWallet(removal, reload({tao}, "w4")).has_value(), "a TAO payout wallet");
+  }
+  {
+    TEST_CASE("anotherNetworksViewNamesNothing");
+    LegacyCommitted view = reload({next}, "w2");
+    view.networkId = "net-b";
+    Check(!PromotedPayoutWallet(removal, view).has_value(), "the removal was net-a's");
+  }
+}
+
 void BridgeTests() {
   {
     TEST_CASE("aProviderOpensTheBrowser");
@@ -769,6 +833,40 @@ void LinkTests() {
   }
 }
 
+// ---- the bridge page's failure codes ---------------------------------------
+
+void BridgeErrorTests() {
+  {
+    TEST_CASE("theBridgePagesCodesReadInTheAppsWords");
+    // the page's code (urnet::SolanaWalletBridgeError*), the store key, and
+    // whether the string names the wallet (Phantom or Solflare)
+    struct Expected {
+      const char* code;
+      const char* key;
+      bool takesWalletName;
+    };
+    for (const Expected& c : {
+             Expected{"extension_not_found", "bittensor_error_extension_not_found", true},
+             Expected{"no_account", "bittensor_error_no_account", true},
+             Expected{"session_not_found", "solana_wallet_error_session_not_found", false},
+             Expected{"user_rejected", "bittensor_error_user_rejected", false},
+         }) {
+      const BridgeErrorText text = BridgeErrorTextFor(c.code);
+      CheckEq(c.key, text.key, std::string("the key for ") + c.code);
+      Check(text.takesWalletName == c.takesWalletName,
+            std::string("the wallet's name for ") + c.code);
+    }
+  }
+  {
+    TEST_CASE("anyOtherCodeShowsThePagesText");
+    // the page's other failures, a code this app does not know, a page before
+    // the codes (-1), and a wallet's own numeric code
+    for (const char* code : {"invalid_request", "wallet_error", "wallet_locked", "-1", "4001", ""}) {
+      CheckEq("", BridgeErrorTextFor(code).key, std::string("no key for \"") + code + "\"");
+    }
+  }
+}
+
 // ---- where a wallet-bridge return goes (WalletBridgeRoute.h) -----------------
 
 std::string RouteName(urnw::bridge::PublicKeyRoute route) {
@@ -807,7 +905,7 @@ void BridgeRouteTests() {
   {
     TEST_CASE("aSignatureRequestSignsBeforeASignIn");
     CheckEq("SignForRequest", RouteName(RoutePublicKey(false, false, true, true)),
-            "the Seeker request's own message is signed");
+            "an add-sign-in request's own message is signed");
   }
   {
     TEST_CASE("aWalletSignInStillSignsIn");
@@ -909,12 +1007,16 @@ int main() {
   PanelTests();
   std::cout << "the three reads\n";
   LegacyLoadTests();
+  std::cout << "a removal that promotes another payout wallet\n";
+  PromotionTests();
   std::cout << "connect: wallet app\n";
   BridgeTests();
   std::cout << "connect: manual address\n";
   ManualTests();
   std::cout << "connect: linking\n";
   LinkTests();
+  std::cout << "the bridge page's failure codes\n";
+  BridgeErrorTests();
   std::cout << "wallet bridge routing\n";
   BridgeRouteTests();
 

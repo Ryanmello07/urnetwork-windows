@@ -10,10 +10,10 @@
 //     (generateWalletKeyPair / generateSharedSecret / encrypt|decryptData /
 //     base58), so it is wire-compatible with the Apple CryptoKit path and the
 //     Linux app.
-//   - Bittensor (any substrate wallet): a single signMessage step. sr25519
-//     signatures are public, so the bridge returns plain query params (the ss58
-//     address + the hex signature) with no encryption envelope, and there is no
-//     connect handshake to keep state for.
+//   - Bittensor (Talisman): a single signMessage step whose url and hand-back
+//     are the SDK's (urnet::BittensorWalletSession). This class only opens the
+//     url and hands the raw urnetwork://bittensor-sign-message link back to
+//     the session; it parses nothing.
 //
 // First-principles: no macOS mobile-deeplink baggage — the desktop path is the
 // only path here.
@@ -41,13 +41,11 @@ class WalletConnect {
   // on_signature fires on the urnetwork://<provider>-sign-message callback.
   void SignMessage(const std::string& message);
 
-  // Bittensor: no connect handshake — the bridge signs `message` with an
-  // injected substrate wallet (or a WalletConnect pairing, when a project id is
-  // configured) and returns the address and signature together on the
-  // urnetwork://bittensor-sign-message callback. `purpose` is shown by the
-  // bridge and echoed back: empty for sign-in, "connect" when the signature
-  // attaches the coldkey to the provider (Earnings).
-  void SignMessageBittensor(const std::string& message, const std::string& purpose = std::string());
+  // Bittensor: open the session's bridge url (BittensorWalletSession::
+  // bridgeUrl). The page drives the Talisman extension and returns on
+  // urnetwork://bittensor-sign-message, which on_bittensor_return receives
+  // whole for the session to check.
+  void OpenBittensorBridge(const std::string& bridgeUrl);
 
   // Sign in with Apple straight against Apple: Apple has no desktop SDK, so
   // the browser opens Apple's authorize page (client_id = the Apple Services
@@ -88,6 +86,8 @@ class WalletConnect {
   // Solana, hex sr25519 for Bittensor.
   std::function<void(std::string publicKey, std::string signature, Provider)> on_signature;
   std::function<void(std::string error)> on_error;
+  // the raw urnetwork://bittensor-* hand-back link
+  std::function<void(std::string url)> on_bittensor_return;
   // urnetwork://oauth/<provider>?state=<state>&id_token=<token>, or
   // ?state=<state>&error=<message>. `error` is non-empty when the api's
   // callback reported one or returned no token.
@@ -103,7 +103,6 @@ class WalletConnect {
   void OpenUrl(const std::string& url);
   void HandleConnect(Provider p, const std::string& query);
   void HandleSignMessage(Provider p, const std::string& query);
-  void HandleBittensor(const std::string& host, const std::string& query);
   // urnetwork://oauth/<apple|google>?state=…&id_token=… (or &error=…)
   void HandleOAuthReturn(const std::string& url);
 

@@ -279,7 +279,8 @@
                          the field owns the padding above its underline. -->
                     <StackPanel Spacing="0">
                         <TextBlock x:Name="EmailLabel" Style="{StaticResource UrTextInputLabelStyle}" />
-                        <TextBox x:Name="EmailBox" Style="{StaticResource UrTextInputStyle}"
+                        <TextBox x:Name="EmailBox" AutomationProperties.AutomationId="acceptance.password.user"
+                                 Style="{StaticResource UrTextInputStyle}"
                                  TextChanged="OnUserAuthChanged" />
                     </StackPanel>
 
@@ -287,6 +288,7 @@
                          and android: an enabled primary button over an empty
                          field promises an action that cannot happen. -->
                     <Button x:Name="GetStartedButton" IsEnabled="False"
+                            AutomationProperties.AutomationId="acceptance.password.next"
                             Style="{StaticResource UrPrimaryButtonStyle}"
                             Click="OnGetStarted" />
 
@@ -345,9 +347,11 @@
                         <TextBlock x:Name="PasswordHeading" FontFamily="{StaticResource UrHeadingFontFamily}" FontSize="20" FontWeight="SemiBold" />
                         <TextBlock x:Name="PasswordEmailText"
                                    Foreground="{StaticResource UrTextMutedBrush}" />
-                        <PasswordBox x:Name="PasswordBox" Style="{StaticResource UrPasswordInputStyle}"
+                        <PasswordBox x:Name="PasswordBox" AutomationProperties.AutomationId="acceptance.password.input"
+                                     Style="{StaticResource UrPasswordInputStyle}"
                                      KeyDown="OnPasswordKeyDown" />
                         <Button x:Name="SignInButton"
+                                AutomationProperties.AutomationId="acceptance.password.submit"
                                 Style="{StaticResource AccentButtonStyle}"
                                 HorizontalAlignment="Stretch" Click="OnSignIn" />
                         <muxc:InfoBar x:Name="PasswordError" Severity="Error" IsOpen="False" IsClosable="False" />
@@ -381,16 +385,8 @@
                         <TextBlock x:Name="WalletCreateNote" Style="{StaticResource UrSupportingTextStyle}"
                                    Visibility="Collapsed"
                                    />
-                        <!-- guest upgrade (the plan card's create-account affordance):
-                             status + call to action, and an editable email in place of
-                             the echoed one -->
-                        <TextBlock x:Name="GuestUpgradeNote" Style="{StaticResource UrSupportingTextStyle}"
-                                   Visibility="Collapsed"
-                                   />
                         <TextBlock x:Name="CreateEmailText"
                                    Foreground="{StaticResource UrTextMutedBrush}" />
-                        <TextBox x:Name="CreateEmailBox" Style="{StaticResource UrTextInputStyle}"
-                                 Visibility="Collapsed" TextChanged="OnCreateEmailChanged" />
                         <TextBox x:Name="CreateNameBox" Style="{StaticResource UrTextInputStyle}"
                                  TextChanged="OnCreateNameChanged" />
                         <TextBlock x:Name="CreateNameStatusText" Style="{StaticResource UrSupportingTextStyle}"
@@ -689,7 +685,8 @@
                 </DataTemplate>
             </muxc:NavigationView.HeaderTemplate>
             <muxc:NavigationView.MenuItems>
-                <muxc:NavigationViewItem x:Name="ConnectNavItem" Tag="connect" IsSelected="True">
+                <muxc:NavigationViewItem x:Name="ConnectNavItem" Tag="connect" IsSelected="True"
+                                         AutomationProperties.AutomationId="acceptance.nav.connect">
                     <muxc:NavigationViewItem.Icon>
                         <FontIcon FontFamily="{StaticResource UrIconFontFamily}" FontSize="20" Glyph="&#xE80F;" />
                     </muxc:NavigationViewItem.Icon>
@@ -721,7 +718,8 @@
                         <FontIcon FontFamily="{StaticResource UrIconFontFamily}" FontSize="20" Glyph="&#xEBE8;" />
                     </muxc:NavigationViewItem.Icon>
                 </muxc:NavigationViewItem>
-                <muxc:NavigationViewItem x:Name="SettingsNavItem" Tag="settings">
+                <muxc:NavigationViewItem x:Name="SettingsNavItem" Tag="settings"
+                                         AutomationProperties.AutomationId="acceptance.nav.settings">
                     <muxc:NavigationViewItem.Icon>
                         <FontIcon FontFamily="{StaticResource UrIconFontFamily}" FontSize="20" Glyph="&#xE713;" />
                     </muxc:NavigationViewItem.Icon>
@@ -922,6 +920,7 @@
                                      UrPaneActionPrimaryStyle in App.xaml for why the
                                      full-bleed lime slab that used to be here is gone. -->
                                 <Button x:Name="ConnectButton"
+                                        AutomationProperties.AutomationId="acceptance.connect"
                                         Style="{StaticResource UrPaneActionPrimaryStyle}"
                                         Click="OnConnectToggle" />
                                 <!-- network peers (apple ConnectActions parity) -->
@@ -938,8 +937,13 @@
                                                    Foreground="{StaticResource UrTextMutedBrush}" />
                                     </StackPanel>
                                 </Button>
-                                <!-- out of balance: the action opens the upgrade flow -->
+                                <!-- out of balance: the action opens the upgrade flow. The
+                                     acceptance.* automation ids here and on the connect
+                                     button, sign-in fields and nav items are what the
+                                     insufficient-balance acceptance driver finds by UI
+                                     Automation; renaming one breaks that driver. -->
                                 <InfoBar x:Name="BalanceWarning" IsOpen="False" IsClosable="False"
+                                         AutomationProperties.AutomationId="acceptance.insufficient-balance.alert"
                                          Margin="12,8" Severity="Warning" />
                                 <!-- the VPN service needs setting up / starting / updating:
                                      the action is ONE elevated `urnetworkd install`. Title,
@@ -1076,8 +1080,16 @@
                                         </Grid.ColumnDefinitions>
                                         <FontIcon Glyph="&#xE71B;" FontSize="14"
                                                   Style="{StaticResource UrRowIconStyle}" />
-                                        <TextBlock x:Name="FixedIpLabel" Grid.Column="1"
-                                                   Style="{StaticResource UrRowTitleStyle}" />
+                                        <!-- a Fixed IP window keeps its one exit for the
+                                             session (connect stickyExit) -->
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center"
+                                                    Spacing="1">
+                                            <TextBlock x:Name="FixedIpLabel"
+                                                       Style="{StaticResource UrRowTitleStyle}" />
+                                            <TextBlock x:Name="FixedIpNote" TextWrapping="Wrap"
+                                                       Style="{StaticResource UrRowNoteStyle}"
+                                                       TextTrimming="None" />
+                                        </StackPanel>
                                         <ToggleSwitch x:Name="FixedIpToggle" Grid.Column="2" Width="44"
                                                       Style="{StaticResource UrSwitchToggleStyle}"
                                                       AutomationProperties.LabeledBy="{Binding ElementName=FixedIpLabel}"
@@ -1967,8 +1979,24 @@
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock x:Name="AccountDailyLabel"
-                                                   Style="{StaticResource UrKeyTextStyle}" />
+                                        <StackPanel Orientation="Horizontal" Spacing="4"
+                                                    VerticalAlignment="Center">
+                                            <TextBlock x:Name="AccountDailyLabel"
+                                                       VerticalAlignment="Center"
+                                                       Style="{StaticResource UrKeyTextStyle}" />
+                                            <!-- "About your data" (DataInfoSheet): what Used,
+                                                 Pending and Available mean and when the free
+                                                 data refreshes; named in AccountPage -->
+                                            <Button x:Name="AccountDataInfoButton"
+                                                    Click="OnOpenDataInfo"
+                                                    Width="28" Height="28" Padding="0"
+                                                    Background="Transparent" BorderThickness="0"
+                                                    AutomationProperties.AutomationId="acceptance.account.data-info">
+                                                <FontIcon FontFamily="{StaticResource UrIconFontFamily}"
+                                                          Glyph="&#xE946;" FontSize="14"
+                                                          Foreground="{StaticResource UrTextMutedBrush}" />
+                                            </Button>
+                                        </StackPanel>
                                         <TextBlock x:Name="AccountDailyValue" Grid.Column="1"
                                                    Style="{StaticResource UrValueTextStyle}" />
                                     </Grid>
@@ -2023,8 +2051,14 @@
                                         </Grid.ColumnDefinitions>
                                         <TextBlock x:Name="AccountReferralTotals"
                                                    Style="{StaticResource UrKeyTextStyle}" />
-                                        <TextBlock x:Name="AccountReferralBonus" Grid.Column="1"
-                                                   Style="{StaticResource UrValueTextStyle}" />
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                            <TextBlock x:Name="AccountReferralBonus"
+                                                       VerticalAlignment="Center"
+                                                       Style="{StaticResource UrValueTextStyle}" />
+                                            <Button x:Name="AccountReferralRetry"
+                                                    Visibility="Collapsed"
+                                                    Click="OnRetryReferralTotals" />
+                                        </StackPanel>
                                     </Grid>
                                 </Border>
                                 <!-- what the referral bonus MEANS, in the program's
@@ -2319,7 +2353,7 @@
                                          leaderboard table, one at a time, both
                                          filling to the floor
                        col 4  NETWORK    why the number is what it is - own
-                                         rank, the Seeker multiplier, reliability
+                                         rank, reliability
 
                      THE LEDGER PANE IS TABBED: history and the leaderboard are
                      both wide multi-column tables that want the same space,
@@ -2376,6 +2410,35 @@
                                     </StackPanel>
                                 </Border>
                                 <StackPanel x:Name="AccountPointsPanel" />
+                                <!-- how and when SN payouts happen, under the figure:
+                                     the explanation, this epoch's times and Claim while
+                                     something is claimable; with no coldkey, the prompt
+                                     to set it. Collapsed until the coldkey is known
+                                     (WalletPage::RebuildPayoutLine) -->
+                                <Border x:Name="SnPayoutPanel" Visibility="Collapsed"
+                                        BorderBrush="{StaticResource UrBorderBrush}"
+                                        BorderThickness="0,0,0,1" Padding="12,10">
+                                    <StackPanel Spacing="6">
+                                        <TextBlock x:Name="SnPayoutText" TextWrapping="Wrap"
+                                                   Style="{StaticResource UrRowNoteStyle}"
+                                                   TextTrimming="None" />
+                                        <TextBlock x:Name="SnPayoutTimesText" TextWrapping="Wrap"
+                                                   Style="{StaticResource UrRowNoteStyle}"
+                                                   TextTrimming="None" Visibility="Collapsed" />
+                                        <!-- the coldkey flow the Bittensor block's button opens -->
+                                        <HyperlinkButton x:Name="SetColdkeyButton"
+                                                         Padding="0" Margin="0"
+                                                         HorizontalAlignment="Left"
+                                                         Visibility="Collapsed"
+                                                         Click="OnConnectWallet" />
+                                        <!-- the claim dialog the unclaimed tile opens -->
+                                        <Button x:Name="SnPayoutClaimButton"
+                                                Style="{StaticResource UrPaneActionPrimaryStyle}"
+                                                HorizontalAlignment="Stretch"
+                                                Visibility="Collapsed"
+                                                Click="OnClaimAlpha" />
+                                    </StackPanel>
+                                </Border>
 
                                 <!-- the protocol note and the ur.xyz link -->
 
@@ -2620,8 +2683,8 @@
                                 <!-- THE FOLD DOOR for pane C (the fold-doors design
                                      note): below the 1500dip earningsThree gate pane C
                                      folds, and its state-writing rows - the points
-                                     network block, the own-rank + public toggle, the
-                                     provider transport row and the Seeker card - have
+                                     network block, the own-rank + public toggle and
+                                     the provider transport row - have
                                      no second door, so they are REPARENTED here (never
                                      rebuilt: each is single-instance wiring). The host
                                      sits at the foot of pane A's scroll, before the
@@ -2879,30 +2942,6 @@
                                               Style="{StaticResource UrSnackbarStyle}"
                                               Margin="12,8" IsOpen="False" />
 
-                                <!-- earning multipliers: the Seeker token, points
-                                     only ........................................ -->
-                                <Border Style="{StaticResource UrGroupHeaderStyle}">
-                                    <TextBlock x:Name="EarningMultipliersHeading"
-                                               Style="{StaticResource UrGroupHeaderTextStyle}" />
-                                </Border>
-                                <!-- named for the fold door (the note's VerifySeeker):
-                                     the card moves to WalletPaneCFold with its command
-                                     while pane C is folded -->
-                                <Border x:Name="SeekerCard" BorderBrush="{StaticResource UrBorderBrush}"
-                                        BorderThickness="0,0,0,1" Padding="12,10">
-                                    <StackPanel Spacing="10">
-                                        <TextBlock x:Name="SeekerStatusText" TextWrapping="Wrap"
-                                                   Style="{StaticResource UrKeyTextStyle}"
-                                                   TextTrimming="None" />
-                                        <TextBlock x:Name="SeekerPointsOnlyText" TextWrapping="Wrap"
-                                                   Style="{StaticResource UrRowNoteStyle}"
-                                                   TextTrimming="None" />
-                                        <Button x:Name="VerifySeekerButton"
-                                                HorizontalAlignment="Stretch"
-                                                Click="OnVerifySeeker" />
-                                    </StackPanel>
-                                </Border>
-
                                 <!-- network reliability ........................ -->
                                 <Border Style="{StaticResource UrGroupHeaderStyle}">
                                     <Grid>
@@ -2988,6 +3027,24 @@
                                         </Grid>
                                     </Button>
                                 </Border>
+                                <!-- why providing is enabled but idle (P008): one muted line
+                                     under the provide mode row, and Change, which opens the
+                                     Connect page's provide group as the row above does.
+                                     WalletPage::ApplyProvideReason writes the line and
+                                     collapses the row when there is nothing to say. -->
+                                <Border x:Name="WalletProvideReasonRow" Visibility="Collapsed"
+                                        Style="{StaticResource UrPaneRowStyle}"
+                                        MinHeight="0" Padding="12,8">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock x:Name="WalletProvideReasonText" TextWrapping="Wrap"
+                                                   Style="{StaticResource UrRowNoteStyle}"
+                                                   TextTrimming="None" />
+                                        <HyperlinkButton x:Name="WalletProvideReasonChange"
+                                                         Padding="0" Margin="0"
+                                                         HorizontalAlignment="Left"
+                                                         Click="OnWalletProvideMode" />
+                                    </StackPanel>
+                                </Border>
                                 <!-- the read-only extender row (N7): the Connect page's
                                      extender row with a chevron in place of the switch,
                                      opening the Connect page where the switch lives, as the
@@ -3045,6 +3102,87 @@
                                         Style="{StaticResource UrPaneRowStyle}"
                                         MinHeight="0" Padding="12,0">
                                     <Grid x:Name="WalletProviderBlockedChartHost" Height="66" />
+                                </Border>
+                                <!-- Demand (P008): how many times the network offered this
+                                     device to clients in each minute of the last hour, 60
+                                     bars with the current minute at the right, from the
+                                     SDK's provider status controller. It sits with the
+                                     plots above and under their gate; inside it the
+                                     controller's state shows loading, unavailable, the
+                                     empty hour or the bars with their total, at the
+                                     Blocked chart's height. WalletPage::ApplyProviderStatus
+                                     writes it and BuildCharts adds the bars. -->
+                                <Border x:Name="WalletProviderDemandRow" Visibility="Collapsed"
+                                        Style="{StaticResource UrPaneRowStyle}"
+                                        MinHeight="0" Padding="12,6,12,8">
+                                    <StackPanel Spacing="2">
+                                        <Grid ColumnSpacing="8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <!-- the Local and Blocked titles' face (TransferChart) -->
+                                            <TextBlock x:Name="WalletProviderDemandTitle"
+                                                       FontSize="11" FontWeight="Medium"
+                                                       Foreground="{StaticResource UrTextMutedBrush}" />
+                                            <TextBlock x:Name="WalletProviderDemandTotal" Grid.Column="1"
+                                                       Visibility="Collapsed"
+                                                       Style="{StaticResource UrPaneMetaStyle}" />
+                                        </Grid>
+                                        <TextBlock x:Name="WalletProviderDemandCaption" TextWrapping="Wrap"
+                                                   Style="{StaticResource UrRowNoteStyle}"
+                                                   TextTrimming="None" />
+                                        <TextBlock x:Name="WalletProviderDemandStatus" Visibility="Collapsed"
+                                                   Margin="0,6,0,0" TextWrapping="Wrap"
+                                                   Style="{StaticResource UrRowNoteStyle}"
+                                                   TextTrimming="None" />
+                                        <Grid x:Name="WalletProviderDemandChart" Visibility="Collapsed"
+                                              Height="66" Margin="0,4,0,0">
+                                            <Grid x:Name="WalletProviderDemandBars" Margin="0,0,0,1" />
+                                            <Border Height="1" VerticalAlignment="Bottom"
+                                                    Background="{StaticResource UrBorderBrush}" />
+                                            <TextBlock x:Name="WalletProviderDemandEmpty" Visibility="Collapsed"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                       Style="{StaticResource UrRowNoteStyle}" />
+                                        </Grid>
+                                        <Grid x:Name="WalletProviderDemandAxis" Visibility="Collapsed">
+                                            <TextBlock x:Name="WalletProviderDemandStart"
+                                                       Style="{StaticResource UrRowNoteStyle}" />
+                                            <TextBlock x:Name="WalletProviderDemandEnd"
+                                                       HorizontalAlignment="Right"
+                                                       Style="{StaticResource UrRowNoteStyle}" />
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+                                <!-- Why?: collapsed until opened; then one row per number the
+                                     network ranks this device by, in the server's order,
+                                     and the country, each a label, a value (amber while it
+                                     holds the device back) and a help line. A disclosure
+                                     row rather than an Expander, as on Account. Shown with
+                                     the Demand row (WalletPage::ApplyProviderStatus). -->
+                                <Border x:Name="WalletProviderWhyRow" Visibility="Collapsed"
+                                        BorderBrush="{StaticResource UrBorderBrush}"
+                                        BorderThickness="0,0,0,1">
+                                    <StackPanel>
+                                        <Button x:Name="WalletProviderWhyButton"
+                                                Style="{StaticResource UrPaneRowButtonStyle}"
+                                                BorderThickness="0">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock x:Name="WalletProviderWhyLabel"
+                                                           Style="{StaticResource UrKeyTextStyle}"
+                                                           AutomationProperties.AccessibilityView="Raw" />
+                                                <FontIcon x:Name="WalletProviderWhyChevron" Grid.Column="1"
+                                                          Glyph="&#xE70D;" FontSize="12"
+                                                          Style="{StaticResource UrRowIconStyle}" />
+                                            </Grid>
+                                        </Button>
+                                        <StackPanel x:Name="WalletProviderWhyPanel" Visibility="Collapsed"
+                                                    Padding="12,2,12,10" Spacing="10" />
+                                    </StackPanel>
                                 </Border>
                             </StackPanel>
                         </ScrollViewer>

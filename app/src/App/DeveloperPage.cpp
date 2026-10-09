@@ -12,6 +12,7 @@
 #include <winrt/Microsoft.UI.Xaml.Media.h>
 #include <winrt/Windows.UI.Text.h>
 
+#include "DeveloperExitPresentation.h"
 #include "Log.h"
 #include "MainWindow.xaml.h"
 #include "PageContext.h"
@@ -38,36 +39,21 @@ constexpr std::chrono::milliseconds kPollInterval{5000};
 
 // ---- strings ---------------------------------------------------------------
 //
-// READ THIS BEFORE ADDING A ROW.
+// Read this before adding a row.
 //
 // The rule for this app is that every user-facing string comes from the shared
-// localization store (@urnetwork/localizations) through Localization.h. The
-// developer surface is the one place where that is not yet possible: the store
-// ships 916 English keys and NOT ONE of them covers this screen. `reliability`
-// is the earnings-page word and `reliability_settings` is "Contribute
-// bandwidth" — a different feature entirely. iOS is in the same position: its
-// DeveloperView passes bare `LocalizedStringKey` literals with no catalog
-// entries behind them, so those literals ARE its strings.
-//
-// So each row below carries BOTH the store key id it should have and the iOS
-// literal, and Dev() prefers the store the moment the key lands. Localized()
-// already returns the key id itself on a miss (that is how a typo is made
-// visible), and Plural() already uses that same equality as its miss test — so
-// this is the established idiom here, not a new one.
-//
-// Adding the keys to @urnetwork/localizations is separate work. There is no
-// doc listing them and there should not be one — it would go stale the first
-// time a row is added. The list IS this file, and it extracts mechanically:
-//
-//     grep -oE '"dev_[a-z0-9_]+"' DeveloperPage.cpp | sort -u
-//
-// When they land, this screen localizes with no code change.
+// localization store (@urnetwork/localizations) through Localization.h. Each row
+// below carries its store key id and the English it renders if the catalog
+// lacks the id, and Dev() prefers the store. Rows that say exactly what the
+// android developer screen says use its key (and its translations); the rest
+// are untranslatable developer keys, English in every catalog, as on linux.
+// Every id must exist in the store: tests/catalog_lookup_test.go fails on an id
+// the generated catalog lacks, so a new row lands with its key.
 //
 // D5: the implementation moved to pages::Adv in PageContext.h, because Advanced
 // Mode's inline labels are the same category and needed the same mechanism, and
 // two copies of a rule this load-bearing is one copy too many. These two names
-// stay as the local spelling — 88 call sites in this file say `Dev`, and `Dev`
-// is what the extraction grep keys on.
+// stay as the local spelling.
 hstring Dev(std::string_view key, const wchar_t* english) {
   return urnw::pages::Adv(key, english);
 }
@@ -463,6 +449,8 @@ void DeveloperPage::ShowPreviewSnapshot() {
   a.EffectiveTier = 1;
   a.FlowCount = 24;
   a.Proven = true;
+  a.ProviderDiagnosticsAvailable = true;  // -> "policy generation 2"
+  a.ProviderSecurityPolicyGeneration = 2;
   urnet::Exit b;
   b.ClientId = "01J8Z2QK7M9V4CXB7WQ2";
   b.WindowType = "";  // -> "auto"
@@ -472,6 +460,7 @@ void DeveloperPage::ShowPreviewSnapshot() {
   b.DialFailureCount = 4;
   b.Warning = true;
   b.WarningCause = "probe_silence";
+  b.ProviderDiagnosticsAvailable = true;  // generation 0 -> "policy generation unknown"
   urnet::Exit c;
   c.ClientId = "01J8Z2QK7M9V4CXCZ0P8";
   c.WindowType = "p2p";
@@ -746,7 +735,7 @@ void DeveloperPage::RunShuffleExits() {
       if (!self) return;
       self->developer().ApplySnapshot(snap);
       self->developer().SetLastAction(DevW("dev_requested", L"Requested:") + L" " +
-                                      DevW("dev_shuffle_exits", L"Shuffle exit window"));
+                                      DevW("dev_shuffle_exits", L"Shuffle all exits"));
     });
   });
 }
@@ -825,7 +814,7 @@ void DeveloperPage::Build() {
                 Widen(version::kString)},
         11, FaintBrush(), true));
 
-    connectHint_ = MakeText(Dev("dev_connect_to_use", L"Connect to use these tools."), 14,
+    connectHint_ = MakeText(Dev("developer_disconnected", L"Connect to use these tools."), 14,
                             colors::TextBrush(), true);
     body.Children().Append(connectHint_);
 
@@ -932,9 +921,9 @@ void DeveloperPage::Build() {
     // without the other.
     metric("dev_flows_opened", L"Flows opened",
            L"Total since reset, so runs of different lengths compare");
-    metric("dev_provider_connect_failures", L"Provider connect failures",
+    metric("dev_dial_failures", L"Provider connect failures",
            L"Times a provider reported it could not open the upstream connection");
-    metric("dev_moved_to_another_exit", L"Moved to another exit",
+    metric("dev_flows_reraced", L"Moved to another exit",
            L"How many of those failures were quietly moved instead of hanging");
     metric("dev_probes", L"Probes", L"Qualification probes this session");
     metric("dev_busy_probes", L"Busy probes",
@@ -947,7 +936,7 @@ void DeveloperPage::Build() {
     metric("dev_suspends_caught", L"Suspends caught",
            L"Host suspends the detector caught, each one a batch of verdicts held instead "
            L"of executed on a just-resumed machine");
-    metric("dev_quic_flows_rebound", L"QUIC flows rebound",
+    metric("dev_flows_rebound", L"QUIC flows rebound",
            L"Flows moved to a warm exit inside a removal; accepted means the server took "
            L"the path change without a re-dial");
 
@@ -957,11 +946,11 @@ void DeveloperPage::Build() {
 
     metric("dev_blast_radius", L"Blast radius",
            L"Connections lost per provider failure. Lower is better");
-    metric("dev_worst_single_failure", L"Worst single failure",
+    metric("dev_worst_loss", L"Worst single failure",
            L"The one the user actually feels");
-    metric("dev_recovery_time", L"Recovery time",
+    metric("dev_recovery", L"Recovery time",
            L"From an exit dying to that site answering again");
-    metric("dev_never_came_back", L"Never came back",
+    metric("dev_recovery_missed", L"Never came back",
            L"Sites abandoned rather than recovered");
 
     Button reset = MakeActionButton(Dev("dev_reset_measurements", L"Reset measurements"));
@@ -1005,7 +994,7 @@ void DeveloperPage::Build() {
             L"Nothing here is queued or retried — an action that misses is reported, not "
             L"replayed."),
         12, MutedBrush(), true));
-    Button shuffle = MakeActionButton(Dev("dev_shuffle_exits", L"Shuffle exit window"));
+    Button shuffle = MakeActionButton(Dev("dev_shuffle_exits", L"Shuffle all exits"));
     shuffle.Click([weak = w_.get_weak()](auto const&, auto const&) {
       if (auto self = weak.get()) self->developer().RunShuffleExits();
     });
@@ -1161,7 +1150,7 @@ void DeveloperPage::Build() {
   using RS = urnet::ReliabilitySettings;
 
   // Detection: how an exit is judged to be failing, and how fast.
-  settingsCard(Dev("dev_detection", L"Detection"), section);
+  settingsCard(Dev("dev_section_detection", L"Detection"), section);
   millisRow("dev_drop_stalled_exits_fast", L"Drop stalled exits fast",
             L"How long an exit may stop delivering before it is dropped, in ms. Off waits 30s",
             &RS::SendStallTimeoutMillis);
@@ -1190,18 +1179,18 @@ void DeveloperPage::Build() {
             L"How long a provider still acknowledging traffic may return nothing before it "
             L"is dropped, in ms. Off keeps them until they stop acknowledging",
             &RS::BlackholeReceiveTimeoutMillis);
-  boolRow("dev_demote_before_removing", L"Demote before removing",
+  boolRow("dev_soft_verdict", L"Demote before removing",
           L"Ambiguous verdicts bench an exit instead of tearing down its flows; removal "
           L"needs sustained evidence or an empty exit",
           &RS::SoftVerdictDemote);
 
   // Placement: which exit a flow lands on, and how the pool is shaped.
-  settingsCard(Dev("dev_placement", L"Placement"), section);
-  boolRow("dev_live_tier_demotion", L"Live tier demotion",
+  settingsCard(Dev("dev_section_placement", L"Placement"), section);
+  boolRow("dev_effective_tier", L"Live tier demotion",
           L"Failing dials and survived verdicts push a provider down the ranking within a "
           L"second; promotion back needs clean minutes and a proven connect",
           &RS::EffectiveTierSelection);
-  countRow("dev_max_connections_per_exit", L"Max connections per exit",
+  countRow("dev_max_flows_per_exit", L"Max connections per exit",
            L"Losing an exit kills every connection on it. Lower spreads the damage; a site "
            L"may then use more than one exit IP",
            &RS::MaxFlowsPerExit, L"Unlimited");
@@ -1225,7 +1214,7 @@ void DeveloperPage::Build() {
             L"The window the removal limit is counted over, in ms. Off (like a limit of 0) "
             L"turns the breaker off",
             &RS::RemovalBudgetWindowMillis);
-  boolRow("dev_keep_a_spare_exit_warm", L"Keep a spare exit warm",
+  boolRow("dev_standing_reserve", L"Keep a spare exit warm",
           L"Size each window one exit beyond its target so a replacement is already "
           L"connected. Off waits until a loss to backfill",
           &RS::StandingReserve);
@@ -1237,24 +1226,24 @@ void DeveloperPage::Build() {
            L"How many distinct destinations must be silent before an exit is convicted on "
            L"no-receive, so one dead site cannot remove a working exit",
            &RS::MinBlackholeDestinations, L"Off");
-  boolRow("dev_group_ips_by_site", L"Group IPs by site",
+  boolRow("dev_cluster_affinity", L"Group IPs by site",
           L"Keeps a site on one exit when its hostname is not visible",
           &RS::ClusterAffinityFallback);
-  boolRow("dev_converge_late_named_flows", L"Converge late-named flows",
+  boolRow("dev_server_name_bridge", L"Converge late-named flows",
           L"Moves later connections onto the exit the first one already uses",
           &RS::ServerNameAffinityBridge);
 
   // Recovery: getting a flow moving again after its exit fails.
-  settingsCard(Dev("dev_recovery", L"Recovery"), section);
-  boolRow("dev_rebind_quic_on_exit_loss", L"Rebind QUIC on exit loss",
+  settingsCard(Dev("dev_section_recovery", L"Recovery"), section);
+  boolRow("dev_quic_rebind", L"Rebind QUIC on exit loss",
           L"Re-pin established QUIC flows to a live exit inside the removal instead of "
           L"tearing them down",
           &RS::QuicRebindOnExitLoss);
-  boolRow("dev_retry_refused_connects_elsewhere", L"Retry refused connects elsewhere",
+  boolRow("dev_dial_failure_rerace", L"Retry refused connects elsewhere",
           L"When a provider can't reach a site, move the connection to another exit instead "
           L"of letting it hang",
           &RS::DialFailureRerace);
-  boolRow("dev_signal_udp_teardown", L"Signal UDP teardown",
+  boolRow("dev_udp_teardown", L"Signal UDP teardown",
           L"Tells DNS and QUIC the path is gone instead of going silent",
           &RS::UdpTeardownSignal);
   millisRow("dev_release_stuck_retransmits", L"Release stuck retransmits",
@@ -1276,7 +1265,7 @@ void DeveloperPage::Build() {
             &RS::FormationPollTimeoutMillis);
 
   // Probing: proving an exit can actually reach real destinations.
-  settingsCard(Dev("dev_probing", L"Probing"), section);
+  settingsCard(Dev("dev_section_probing", L"Probing"), section);
   boolRow("dev_probe_providers", L"Probe providers",
           L"Qualify exits by dialing real sites through them. An answer proves the exit; "
           L"silence never counts against it",
@@ -1285,7 +1274,7 @@ void DeveloperPage::Build() {
             L"How long a qualification probe waits for an answer, in ms. Off uses the "
             L"built-in 4s. It only bounds waiting for proof, it never convicts",
             &RS::ProbeTimeoutMillis);
-  countRow("dev_probe_hosts_per_pass", L"Probe hosts per pass",
+  countRow("dev_probe_sample_hosts", L"Probe hosts per pass",
            L"How many health sites one qualification pass dials through an exit. 0 probes "
            L"the entire embedded list; a smaller number rotates through it in blocks",
            &RS::ProbeSampleHostCount, L"All");
@@ -1293,7 +1282,7 @@ void DeveloperPage::Build() {
            L"How many consecutive probe passes an exit may answer with total silence before "
            L"it is warned out of new-flow placement. Placement only",
            &RS::ProbeSilenceWarnStreak, L"Off");
-  countRow("dev_candidates_per_slot", L"Candidates evaluated per slot",
+  countRow("dev_evaluation_pool", L"Candidates evaluated per slot",
            L"How many providers a window expansion pings and ranks per slot it needs, "
            L"keeping the best. 1 evaluates exactly what it needs",
            &RS::EvaluationPoolMultiple, L"1 (min)");
@@ -1308,7 +1297,7 @@ void DeveloperPage::Build() {
   }
 
   // Observability: what the session writes to the log for later forensics.
-  settingsCard(Dev("dev_observability", L"Observability"), section);
+  settingsCard(Dev("dev_section_observability", L"Observability"), section);
   millisRow("dev_state_heartbeat", L"State heartbeat",
             L"How often one line summarizing live state is written to the log for later "
             L"forensics, in ms. Off silences it",
@@ -1354,15 +1343,15 @@ void DeveloperPage::ApplyUpdateCheck(UpdateChecker::Snapshot const& snap) {
              L" (" + Widen(urnw::version::kString) + L"; " +
              DevW("dev_update_newest_seen", L"newest release seen:") + L" " +
              (snap.newestCode ? L"v" + snap.newestVersion
-                              : DevW("dev_update_none_seen", L"none")) +
+                              : DevW("adv_none", L"none")) +
              L")";
       break;
     case Outcome::UpdateFound:
-      text = DevW("dev_update_found", L"Update found:") + L" v" +
+      text = DevW("dev_update_found_label", L"Update found:") + L" v" +
              snap.newestVersion;
       break;
     case Outcome::DevBuild:
-      text = DevW("dev_update_dev_build",
+      text = DevW("dev_update_newest_release_is",
                   L"Newest release is") +
              L" v" + snap.newestVersion + L" — " +
              DevW("dev_update_dev_build_note",
@@ -1372,6 +1361,13 @@ void DeveloperPage::ApplyUpdateCheck(UpdateChecker::Snapshot const& snap) {
       text = DevW("dev_update_check_failed",
                   L"The update check failed — see the app log.");
       break;
+  }
+  // The connect screen's warning, here too: no check has worked for 72 hours.
+  // The date is data; the sentence has no store id yet.
+  if (snap.checkStale) {
+    if (!text.empty()) text += L"\n";
+    text += L"Couldn't check for updates since " +
+            UpdateChecker::LocalDate(snap.lastSuccessUnix);
   }
   updateCheckText_.Text(hstring{text});
   updateCheckText_.Visibility(text.empty() ? Visibility::Collapsed
@@ -1572,7 +1568,7 @@ void DeveloperPage::ApplyExits(ReliabilitySnapshot const& snap) {
         if (auto self = weak.get())
           self->developer().RunAction(
               ReliabilityAction::MigrateExit,
-              DevW("dev_migrate_exit", L"Migrated exit") + L" " + ShortId(clientId), clientId);
+              DevW("dev_migrated_exit", L"Migrated exit") + L" " + ShortId(clientId), clientId);
       });
       actions.Children().Append(migrate);
 
@@ -1587,8 +1583,8 @@ void DeveloperPage::ApplyExits(ReliabilitySnapshot const& snap) {
         });
         actions.Children().Append(b);
       };
-      fault("dev_drop", L"Drop", FaultAction::Drop);
-      fault("dev_stall", L"Stall", FaultAction::Stall);
+      fault("dev_drop_exit", L"Drop", FaultAction::Drop);
+      fault("dev_stall_exit", L"Stall", FaultAction::Stall);
       fault("dev_unstall", L"Unstall", FaultAction::Unstall);
 
       PutCell(row, 6, actions);
@@ -1627,6 +1623,13 @@ void DeveloperPage::ApplyExits(ReliabilitySnapshot const& snap) {
     if (e.P2pOnly) state.push_back(DevW("dev_state_p2p", L"p2p"));
     // absence of `proven` means "not yet proven", never "bad"
     if (e.Proven) state.push_back(DevW("dev_state_proven", L"proven"));
+    // the provider's security rules generation, once its first diagnostics
+    // arrive. An exit with a lower number than the others runs older rules
+    if (auto policy = developerexit::PolicyGenerationOf(e)) {
+      state.push_back(policy->generation
+                          ? urnw::Format("dev_exit_policy_generation", *policy->generation)
+                          : urnw::Localized("dev_exit_policy_generation_unknown"));
+    }
     std::wstring joined;
     for (auto const& part : state) {
       if (!joined.empty()) joined += L" \u00B7 ";  // middle dot

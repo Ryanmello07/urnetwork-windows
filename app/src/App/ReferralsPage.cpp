@@ -13,6 +13,7 @@
 #include "Localization.h"
 #include "MainWindow.xaml.h"
 #include "PageContext.h"
+#include "ReferralTotalsState.h"
 #include "SdkHost.h"
 #include "UrColors.h"
 
@@ -30,6 +31,16 @@ namespace {
 
 // The points event the referral figure sums (server AccountPointEvent).
 constexpr const char* kEventReferral = "payout_linked_account";
+
+// A "Total referrals" figure in the field vocabulary.
+FieldState TotalsFieldState(ReferralTotalsView view) {
+  switch (view) {
+    case ReferralTotalsView::Count: return FieldState::Loaded;
+    case ReferralTotalsView::Unavailable: return FieldState::Failed;
+    case ReferralTotalsView::Loading: return FieldState::Loading;
+  }
+  return FieldState::Loading;
+}
 
 // Integer when it rounds clean, else two decimals; hand-grouped thousands
 // (locale-independent by design: the store owns the words, not the digits).
@@ -82,9 +93,15 @@ void ReferralsPage::Build() {
   rows::SetPaneMode(true);
   rows::Heading(host, Loc("referrals"), L"");
   auto card = rows::Card(host);
-  totalValue_ = rows::ValueRow(card, Loc("total_referrals"));
-  pointsValue_ = rows::ValueRow(card, Loc("referral_points"));
+  // Try again shows only on a failed read: the total reads again through the
+  // store (as the card's Try again does), the points through this page.
+  totalValue_ = rows::ValueActionRow(card, Loc("total_referrals"), Loc("try_again"), totalRetry_);
+  pointsValue_ = rows::ValueActionRow(card, Loc("referral_points"), Loc("try_again"), pointsRetry_);
   rows::SetPaneMode(false);
+  totalRetry_.Visibility(Visibility::Collapsed);
+  pointsRetry_.Visibility(Visibility::Collapsed);
+  totalRetry_.Click([](auto const&, auto const&) { Balance().RetryReferral(); });
+  pointsRetry_.Click([this](auto const&, auto const&) { LoadPoints(); });
 
   // Every async field starts in the state that says nothing has been
   // requested (--preview-ui never runs a load).
@@ -112,11 +129,17 @@ void ReferralsPage::Load() {
     // No token: nothing here can be fetched, and every field says so rather
     // than sitting on a dash or a spinner that never resolves.
     ApplyFieldState(totalValue_, FieldState::NoSession);
-    ApplyFieldState(pointsValue_, FieldState::NoSession);
+    totalRetry_.Visibility(Visibility::Collapsed);
+    ApplyPoints(FieldState::NoSession, 0);
     return;
   }
   ApplyTotal();
-  ApplyFieldState(pointsValue_, FieldState::Loading);
+  LoadPoints();
+}
+
+void ReferralsPage::LoadPoints() {
+  if (!Sdk().IsLoggedIn()) return;
+  ApplyPoints(FieldState::Loading, 0);
   auto queue = w_.DispatcherQueue();
   auto weak = w_.get_weak();
   Sdk().api().getAccountPoints([queue, weak](std::optional<urnet::AccountPointsResult> result,
@@ -148,16 +171,19 @@ void ReferralsPage::OnBalance() {
 void ReferralsPage::ResetForSignOut() {
   if (!built_) return;
   ApplyFieldState(totalValue_, FieldState::NoSession);
-  ApplyFieldState(pointsValue_, FieldState::NoSession);
+  totalRetry_.Visibility(Visibility::Collapsed);
+  ApplyPoints(FieldState::NoSession, 0);
   card_.Apply();  // the store has dropped the departed network's code and count
 }
 
 // ---- painters ----------------------------------------------------------------
 
 void ReferralsPage::ApplyTotal() {
-  // the store's figure, "0" until its referral read lands
-  ApplyFieldState(totalValue_, FieldState::Loaded,
-                  hstring{std::to_wstring(Balance().TotalReferrals())});
+  // the store's figure once its referral read lands; a failed read is not "0"
+  const auto state = TotalsFieldState(Balance().TotalsView());
+  ApplyFieldState(totalValue_, state, hstring{std::to_wstring(Balance().TotalReferrals())});
+  totalRetry_.Visibility(state == FieldState::Failed ? Visibility::Visible
+                                                     : Visibility::Collapsed);
 }
 
 void ReferralsPage::ApplyPoints(rows::FieldState state, double points) {
@@ -166,6 +192,8 @@ void ReferralsPage::ApplyPoints(rows::FieldState state, double points) {
   } else {
     ApplyFieldState(pointsValue_, state);
   }
+  pointsRetry_.Visibility(state == FieldState::Failed ? Visibility::Visible
+                                                      : Visibility::Collapsed);
 }
 
 }  // namespace urnw

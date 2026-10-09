@@ -206,6 +206,14 @@ SolanaPanelView SolanaPanelFor(const LegacyCommitted& view) {
                         view.pendingNanoCents);
 }
 
+std::optional<LegacyWallet> PromotedPayoutWallet(const PayoutRemoval& removal,
+                                                 const LegacyCommitted& view) {
+  if (removal.removedId.empty() || removal.priorPayoutId != removal.removedId) return std::nullopt;
+  if (view.networkId != removal.networkId || !view.ready || !view.reads.payout) return std::nullopt;
+  if (view.payoutWalletId.empty() || view.payoutWalletId == removal.removedId) return std::nullopt;
+  return PayoutWalletFor(view.wallets, view.payoutWalletId);
+}
+
 bool NeedsPayoutSwitch(const std::string& newWalletId, const std::string& payoutWalletId) {
   return !newWalletId.empty() && newWalletId != payoutWalletId;
 }
@@ -346,6 +354,14 @@ bool CheckIsError(const ConnectMachine& m) {
 
 const char* FailureKey(const std::string& detail) {
   return detail.empty() ? "something_went_wrong" : "error_connecting_wallet_with_reason";
+}
+
+BridgeErrorText BridgeErrorTextFor(std::string_view code) {
+  if (code == "extension_not_found") return {"bittensor_error_extension_not_found", true};
+  if (code == "no_account") return {"bittensor_error_no_account", true};
+  if (code == "session_not_found") return {"solana_wallet_error_session_not_found", false};
+  if (code == "user_rejected") return {"bittensor_error_user_rejected", false};
+  return {};
 }
 
 }  // namespace urnw::solana

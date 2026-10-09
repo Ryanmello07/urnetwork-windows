@@ -31,9 +31,13 @@
 #include <winrt/Microsoft.UI.Xaml.Controls.h>
 #include <winrt/Microsoft.UI.Xaml.Media.h>
 
+#include "AddSignIn.h"
+#include "GuestConversion.h"
 #include "SdkHost.h"
 
 namespace urnw {
+
+class SubscriptionBalanceStore;
 
 // ---- the row kit ----------------------------------------------------------
 namespace rows {
@@ -222,33 +226,117 @@ class AuthCodeSheet : public std::enable_shared_from_this<AuthCodeSheet> {
   bool creating_ = false;
 };
 
-// ---- Add auth method (apple AddAuthSheet) ----------------------------------
+// ---- Add auth method (apple AddAuthSheet, ur.io AddSignInSheet) -------------
 //
-// Email/phone + password. The wallet legs of iOS's sheet (Solana/Bittensor) are
-// NOT here: they need the browser signing bridge, which is P5's surface.
+// The options every app offers (AddSignIn.h), in order: Apple, Google, a
+// Solana or Bittensor wallet, and an email or phone.
+// - Email/phone + password, then the emailed code: added (onChanged reloads
+//   the methods, the dialog closes) only once the code is verified
+//   (GuestConversion, the flow the guest conversion uses).
+// - Apple / Google: the provider's web flow in the browser under an add-owned
+//   attempt (SdkHost::SsoTokenForAdd), then addAuth{auth_jwt}.
+// - Solana: Phantom or Solflare through the ur.io bridge signs a fresh
+//   challenge (SdkHost::SignSolanaForAdd), then addAuth{wallet_auth}.
+// - Bittensor: the shared chooser's wallets (BittensorWalletFlow.h) under the
+//   session helper's add purpose (SdkHost::SignBittensorForAdd); TAO.com's
+//   manual form is shown inside this sheet, since a second ContentDialog
+//   cannot open over it.
+// Adding never signs in or replaces the session's jwt.
 class AddAuthSheet : public std::enable_shared_from_this<AddAuthSheet> {
  public:
   static std::shared_ptr<AddAuthSheet> Create(
       winrt::Microsoft::UI::Xaml::XamlRoot const& root, SdkHost& sdk,
       std::function<void()> onChanged);
+  ~AddAuthSheet();
 
   winrt::Microsoft::UI::Xaml::Controls::ContentDialog Dialog() const { return dialog_; }
+  // the added line's store key once a method was added ("" otherwise)
+  std::string const& AddedMessageKey() const { return addedMessageKey_; }
 
  private:
   AddAuthSheet(SdkHost& sdk, std::function<void()> onChanged)
       : sdk_(sdk), onChanged_(std::move(onChanged)) {}
   void Build(winrt::Microsoft::UI::Xaml::XamlRoot const& root);
-  void Validate();
-  void Submit();
-  void ApplyResult(bool ok, std::string const& error);
+  void Render();
+  void SelectMethod(add_sign_in::Method method);
+  void StartWallet(add_sign_in::WalletChain chain, std::string const& walletId);
+  void ShowManual(SdkHost::BittensorManualRequest request);
 
   SdkHost& sdk_;
   std::function<void()> onChanged_;
+  std::unique_ptr<GuestConversionSession> session_;
+  std::unique_ptr<GuestConversion> conversion_;
+  std::unique_ptr<add_sign_in::AddSignInSession> addSession_;
+  std::unique_ptr<add_sign_in::AddSignInFlow> add_;
+  add_sign_in::Method method_ = add_sign_in::kDefaultMethod;
+  // the status line while the browser is open ("" for none)
+  winrt::hstring browserHint_;
+  // the TAO.com proof waiting for the manual form
+  std::optional<SdkHost::BittensorManualRequest> manualRequest_;
+  std::string addedMessageKey_;
+  bool done_ = false;
   winrt::Microsoft::UI::Xaml::Controls::ContentDialog dialog_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::RadioButtons methodPicker_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::StackPanel providerPanel_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::TextBlock providerHint_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::Button providerButton_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::StackPanel walletPanel_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::StackPanel manualPanel_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::TextBlock manualInstructions_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::TextBox manualMessageBox_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::TextBox manualAddressBox_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::TextBox manualSignatureBox_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::TextBlock manualErrorText_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::TextBlock statusText_{nullptr};
+  std::vector<winrt::Microsoft::UI::Xaml::Controls::Button> walletButtons_;
+  winrt::Microsoft::UI::Xaml::Controls::StackPanel signInPanel_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::StackPanel codePanel_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::TextBox authBox_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::PasswordBox passwordBox_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::TextBox codeBox_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::TextBlock errorText_{nullptr};
-  bool submitting_ = false;
+  winrt::Microsoft::UI::Xaml::Controls::TextBlock noticeText_{nullptr};
+  // re-renders each second while a rate limit counts down
+  winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer cooldownTimer_{nullptr};
+};
+
+// ---- Create an account, for a legacy guest network ------------------------
+//
+// GuestConversion.h: adds an email/phone + password sign-in to the CURRENT
+// network and verifies it with the emailed code. The network, its plan and its
+// balance stay; nothing signs out (a guest network has no login to come back
+// to). Two pages in one dialog: the sign-in fields (Add), then the code
+// (Verify, Resend). Settings' AddAuthSheet runs the same flow.
+class GuestConversionSheet : public std::enable_shared_from_this<GuestConversionSheet> {
+ public:
+  static std::shared_ptr<GuestConversionSheet> Create(
+      winrt::Microsoft::UI::Xaml::XamlRoot const& root, SdkHost& sdk,
+      SubscriptionBalanceStore& balance, std::function<void()> onDone);
+  ~GuestConversionSheet();
+
+  winrt::Microsoft::UI::Xaml::Controls::ContentDialog Dialog() const { return dialog_; }
+
+ private:
+  GuestConversionSheet(SdkHost& sdk, std::function<void()> onDone)
+      : sdk_(sdk), onDone_(std::move(onDone)) {}
+  void Build(winrt::Microsoft::UI::Xaml::XamlRoot const& root, SubscriptionBalanceStore& balance);
+  void Render();
+
+  SdkHost& sdk_;
+  std::function<void()> onDone_;
+  std::unique_ptr<GuestConversionSession> session_;
+  std::unique_ptr<GuestConversion> conversion_;
+  bool done_ = false;
+  winrt::Microsoft::UI::Xaml::Controls::ContentDialog dialog_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::StackPanel signInPanel_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::StackPanel codePanel_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::TextBox authBox_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::PasswordBox passwordBox_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::TextBox codeBox_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::TextBlock errorText_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::TextBlock noticeText_{nullptr};
+  // re-renders each second while a rate limit counts down
+  winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer cooldownTimer_{nullptr};
 };
 
 // ---- Referral network (apple UpdateReferralNetworkSheet) -------------------

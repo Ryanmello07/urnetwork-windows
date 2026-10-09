@@ -1,13 +1,10 @@
-# Builds the solution on THIS machine, without CI.
+# Builds the solution on THIS machine.
 #
-# CI is the reference build (v143, both arches, ~7 min plus queue). This is the
-# fast inner loop: one arch, whatever toolset is actually installed, and it
+# The fast inner loop: one arch, whatever toolset is actually installed, and it
 # reuses an SDK zip you already have instead of cross-building Go + mingw.
 #
-# Get an SDK zip from any green CI run:
-#   gh run download <run-id> -n urnetwork-sdk-windows -D .local-deps
-#
-# Then:
+# Put an SDK zip (URnetworkSdkWindows.zip, as build-sdk.ps1 writes it) at
+# .local-deps\URnetworkSdkWindows.zip, or pass -SdkZip. Then:
 #   pwsh -File app\tools\build-local.ps1                  # x64, Release
 #   pwsh -File app\tools\build-local.ps1 -Configuration Debug
 #   pwsh -File app\tools\build-local.ps1 -SkipDeps        # sources only, ~fast
@@ -90,8 +87,7 @@ if (-not $SkipDeps) {
   if (-not (Test-Path $SdkZip)) {
     throw @"
 SDK zip not found at $SdkZip
-Download one from a green CI run:
-  gh run download <run-id> -n urnetwork-sdk-windows -D .local-deps
+Build one with build-sdk.ps1 (URnetworkSdkWindows.zip), or pass -SdkZip <path>.
 "@
   }
   & "$app\tools\fetch-deps.ps1" -SdkZip (Resolve-Path $SdkZip).Path

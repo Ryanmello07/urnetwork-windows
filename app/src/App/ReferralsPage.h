@@ -47,6 +47,7 @@ class ReferralsPage {
 
  private:
   void Build();  // idempotent
+  void LoadPoints();  // the points row's API read (Load and its Try again)
   void ApplyTotal();
   void ApplyPoints(rows::FieldState state, double points);
 
@@ -55,6 +56,8 @@ class ReferralsPage {
   ReferralCard card_;
   winrt::Microsoft::UI::Xaml::Controls::TextBlock totalValue_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::TextBlock pointsValue_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::Button totalRetry_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::Button pointsRetry_{nullptr};
 };
 
 }  // namespace urnw

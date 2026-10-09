@@ -273,12 +273,15 @@
          USDC waiting, the connect sheet's state machine) are WinRT-free (no
          pch) so tools/solana-wallet-tests.cpp runs them on any host; the page
          and the sheet that draw them use the pch. -->
+    <ClCompile Include="SnPayoutPresentation.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
     <ClCompile Include="SolanaWalletPresentation.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
     <ClCompile Include="SolanaWalletSheets.cpp" />
     <ClCompile Include="AppController.cpp" />
     <ClCompile Include="AuthSheets.cpp" />
     <ClCompile Include="LoginCarousel.cpp" />
     <ClCompile Include="BalanceSheets.cpp" />
+    <ClCompile Include="FreeRefreshTicker.cpp" />
+    <ClCompile Include="BittensorWalletDialogs.cpp" />
     <ClCompile Include="Localization.cpp" />
     <ClCompile Include="LocationSheets.cpp" />
     <!-- The provider-locations pure logic is deliberately WinRT-free (no pch)
@@ -314,6 +317,16 @@
     <ClCompile Include="ExtenderPresentation.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
     <ClCompile Include="ExtenderPanel.cpp" />
     <ClCompile Include="ExtenderSheets.cpp" />
+    <!-- The bootstrap DNS-over-HTTPS servers block (Account > Extenders and the
+         login screen's network sheet); its decisions are ExtenderPresentation. -->
+    <ClCompile Include="ControlDohSettings.cpp" />
+    <!-- The VLESS settings sheet's decisions (field visibility, the form <->
+         settings mapping, error keys, picker options, the reading of a space's
+         stored values) are WinRT-free (no pch) so
+         tools/vless-presentation-tests.cpp runs them on any host; the sheet
+         that draws them uses the pch. -->
+    <ClCompile Include="VlessPresentation.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <ClCompile Include="VlessSheet.cpp" />
     <!-- The vendored QR ENCODER (third_party/qrcodegen, MIT). Two dependency-free
          files compiled straight into the app: no pch (it is plain C++17 with no
          WinRT), and it is also compiled by tools/extender-tests.cpp, which is
@@ -323,6 +336,25 @@
     <ClCompile Include="..\..\third_party\qrcodegen\qrcodegen.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
     <ClCompile Include="UsageBar.cpp" />
     <ClCompile Include="WalletConnect.cpp" />
+    <!-- The network country's Win32 half (IP helper and MbnApi): plain Win32 and
+         COM with no WinRT, so no pch. Its decisions are Common/NetworkCountry.h
+         and its thread NetworkCountryWatch.h, which
+         tools/network-country-tests.cpp runs on any host. -->
+    <ClCompile Include="MobileBroadband.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <!-- The user's system proxy, by kind (WinHTTP, no WinRT, so no pch); the
+         kind is Common/DiagnosticLines.h's, which
+         tools/diagnostic-lines-tests.cpp runs on any host. -->
+    <ClCompile Include="SystemProxy.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <!-- The single instance's Win32 half (this instance's exiting signal, the
+         gate for launches redirected to it, a launch's watch over the key's
+         holder): plain Win32 and COM with no WinRT, so no pch. Its decisions
+         are Common/InstanceHandover.h, which tools/instance-handover-tests.cpp
+         runs on any host. -->
+    <ClCompile Include="SingleInstance.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <!-- "Launch URnetwork on system startup": the user's Run value (plain Win32,
+         no WinRT, so no pch). Its decisions are Common/StartupRegistration.h,
+         which tools/startup-registration-tests.cpp runs on any host. -->
+    <ClCompile Include="LaunchAtStartup.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
     <ClCompile Include="ServiceClient.cpp" />
     <ClCompile Include="ServiceSetup.cpp" />
     <ClCompile Include="TrayIcon.cpp" />
@@ -336,11 +368,17 @@
     <ClInclude Include="MainWindow.xaml.h"><DependentUpon>MainWindow.xaml</DependentUpon></ClInclude>
     <ClInclude Include="AccountPage.h" />
     <ClInclude Include="ReferralCard.h" />
+    <ClInclude Include="ReferralCodeState.h" />
+    <ClInclude Include="ReferralShare.h" />
+    <ClInclude Include="ReferralTotalsState.h" />
     <ClInclude Include="ReferralsPage.h" />
     <ClInclude Include="LicensesPage.h" />
     <ClInclude Include="LicensePresentation.h" />
     <ClInclude Include="ConnectPage.h" />
+    <ClInclude Include="ManageSubscription.h" />
     <ClInclude Include="DeveloperPage.h" />
+    <!-- header-only and WinRT-free: tools/developer-exit-tests.cpp runs it -->
+    <ClInclude Include="DeveloperExitPresentation.h" />
     <ClInclude Include="LoginPage.h" />
     <ClInclude Include="PageContext.h" />
     <ClInclude Include="SettingsPage.h" />
@@ -353,15 +391,26 @@
     <ClInclude Include="LeaderboardIndicator.h" />
     <ClInclude Include="WalletPage.h" />
     <ClInclude Include="EarningsSheets.h" />
+    <ClInclude Include="SnPayoutPresentation.h" />
     <ClInclude Include="SolanaWalletPresentation.h" />
     <ClInclude Include="SolanaWalletSheets.h" />
     <ClInclude Include="AppController.h" />
     <ClInclude Include="AuthSheets.h" />
     <ClInclude Include="BalanceSheets.h" />
+    <!-- header-only and WinRT-free: tools/data-info-tests.cpp runs it -->
+    <ClInclude Include="DataInfo.h" />
+    <ClInclude Include="FreeRefreshTicker.h" />
+    <ClInclude Include="AddSignIn.h" />
+    <ClInclude Include="BittensorWalletDialogs.h" />
+    <ClInclude Include="BittensorWalletFlow.h" />
     <ClInclude Include="Config.h" />
+    <ClInclude Include="BalanceCodeRedeem.h" />
     <ClInclude Include="LoginCarousel.h" />
+    <ClInclude Include="NetworkNameCheck.h" />
     <ClInclude Include="Localization.h" />
     <ClInclude Include="LocationSheets.h" />
+    <!-- header-only and WinRT-free: tools/peer-location-tests.cpp runs it -->
+    <ClInclude Include="PeerLocation.h" />
     <ClInclude Include="GlobeGeometry.h" />
     <ClInclude Include="WorldTopology.h" />
     <ClInclude Include="ProviderLocations.h" />
@@ -371,16 +420,27 @@
     <ClInclude Include="ProviderLocationsSheet.h" />
     <ClInclude Include="ConnectCanvas.h" />
     <ClInclude Include="SdkHost.h" />
+    <ClInclude Include="VerifySendNotice.h" />
+    <ClInclude Include="GuestConversion.h" />
     <ClInclude Include="StatsFormat.h" />
+    <ClInclude Include="BlockActionReason.h" />
     <ClInclude Include="StatsSheets.h" />
     <ClInclude Include="Startup.h" />
     <ClInclude Include="SubscriptionBalance.h" />
+    <ClInclude Include="SupportContact.h" />
+    <ClInclude Include="CloudProxyLink.h" />
+    <ClInclude Include="CheckoutBridgeError.h" />
+    <ClInclude Include="CheckoutSessionMode.h" />
+    <!-- header-only and WinRT-free: tools/payment-refusal-tests.cpp runs it -->
+    <ClInclude Include="PaymentRefusal.h" />
+    <ClInclude Include="ConfirmationPollGate.h" />
     <ClInclude Include="ClientEvents.h" />
     <ClInclude Include="OfferCard.h" />
     <ClInclude Include="OnboardingRouting.h" />
     <ClInclude Include="PricePresentation.h" />
     <ClInclude Include="TransferChart.h" />
     <ClInclude Include="TransportBar.h" />
+    <ClInclude Include="FastDnsOnConnect.h" />
     <ClInclude Include="IpFamilyStatus.h" />
     <ClInclude Include="IpFamilyStatusRow.h" />
     <ClInclude Include="ProviderDotDiameter.h" />
@@ -388,16 +448,36 @@
     <ClInclude Include="ExtenderPresentation.h" />
     <ClInclude Include="ExtenderPanel.h" />
     <ClInclude Include="ExtenderSheets.h" />
+    <ClInclude Include="ControlDohSettings.h" />
+    <ClInclude Include="VlessPresentation.h" />
+    <ClInclude Include="VlessSheet.h" />
+    <!-- header-only and WinRT-free: the sdk's internal error id, the app's one copy -->
+    <ClInclude Include="SdkErrorId.h" />
     <ClInclude Include="ConnectorGlyph.h" />
+    <ClInclude Include="UrlQuery.h" />
     <ClInclude Include="TransportStatusPresentation.h" />
     <ClInclude Include="UsageBar.h" />
     <ClInclude Include="UrColors.h" />
     <ClInclude Include="ProvideModeVisual.h" />
+    <!-- header-only and WinRT-free: tools/provider-idle-tests.cpp runs it -->
+    <ClInclude Include="ProviderIdleReason.h" />
+    <!-- header-only and WinRT-free: tools/provider-status-tests.cpp runs it -->
+    <ClInclude Include="ProviderStatusPresentation.h" />
     <ClInclude Include="UrComponents.h" />
     <ClInclude Include="WalletConnect.h" />
+    <!-- header-only and WinRT-free: tools/feedback-send-tests.cpp runs it -->
+    <ClInclude Include="FeedbackSendState.h" />
     <!-- header-only and WinRT-free: tools/solana-wallet-tests.cpp runs it -->
     <ClInclude Include="WalletBridgeRoute.h" />
     <ClInclude Include="WindowShell.h" />
+    <ClInclude Include="MobileBroadband.h" />
+    <!-- header-only and WinRT-free: tools/network-country-tests.cpp runs it -->
+    <ClInclude Include="NetworkCountryWatch.h" />
+    <!-- header-only and WinRT-free: tools/log-upload-tests.cpp runs it -->
+    <ClInclude Include="FeedbackLogUpload.h" />
+    <ClInclude Include="SystemProxy.h" />
+    <ClInclude Include="SingleInstance.h" />
+    <ClInclude Include="LaunchAtStartup.h" />
     <ClInclude Include="ServiceClient.h" />
     <ClInclude Include="ServiceSetup.h" />
     <ClInclude Include="TrayIcon.h" />

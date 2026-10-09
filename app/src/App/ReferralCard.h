@@ -16,6 +16,8 @@
 
 #include <winrt/Microsoft.UI.Xaml.Controls.h>
 
+#include "ReferralCodeState.h"
+
 namespace urnw {
 
 class ReferralCard {
@@ -26,7 +28,7 @@ class ReferralCard {
   // `animations` gates the halo pulse (UISettings().AnimationsEnabled()).
   void Build(winrt::Microsoft::UI::Xaml::Controls::Panel const& host, bool animations);
   // Repaints from the balance store (terms, total referrals, code). The panel
-  // is rebuilt only when the code, the count or the cap changed.
+  // is rebuilt only when the code, its read state, the count or the cap changed.
   void Apply();
   bool built() const { return referralPanelHost_ != nullptr; }
 
@@ -36,6 +38,7 @@ class ReferralCard {
   std::string shownReferralCode_;
   int64_t shownReferralTotal_ = -1;
   int64_t shownReferralMax_ = -1;
+  ReferralCodeView shownReferralView_ = ReferralCodeView::Loading;
 };
 
 }  // namespace urnw

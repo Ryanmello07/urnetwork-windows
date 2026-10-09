@@ -12,10 +12,7 @@
 // cannot be built off Windows at all; what is verified here is every decision
 // they make before they touch a XAML object.
 //
-//   c++ -std=c++20 -I ../src/App -I ../third_party/qrcodegen \
-//       extender-tests.cpp ../src/App/ExtenderPresentation.cpp \
-//       ../third_party/qrcodegen/qrcodegen.cpp \
-//       -o /tmp/extender-tests && /tmp/extender-tests
+//   c++ -std=c++20 -I ../src/App -I ../third_party/qrcodegen extender-tests.cpp ../src/App/ExtenderPresentation.cpp ../third_party/qrcodegen/qrcodegen.cpp -o /tmp/extender-tests && /tmp/extender-tests
 //
 // SPDX-License-Identifier: MPL-2.0
 
@@ -34,6 +31,7 @@
 
 #include "ExtenderPresentation.h"
 #include "ExtenderRingGeometry.h"
+#include "SdkErrorId.h"
 #include "qrcodegen.hpp"
 
 using namespace urnw;
@@ -866,7 +864,8 @@ void ProvideRowTests() {
     Check(!EnglishStore().empty(),
           std::string("the en store opens and parses from app/tools: ") + kEnglishStorePath);
     const char* const kTakesArgument[] = {"extender_active", "extender_start_failed",
-                                          "extender_listen_failed", "extender_activation_refused",
+                                          "extender_tcp_unavailable", "extender_listen_failed",
+                                          "extender_activation_refused",
                                           "extender_activation_failed"};
     const char* const kWholeText[] = {"off", "extender_not_providing", "extender_setting_up",
                                       "ipv4", "ipv6", "ipv4_and_ipv6", "extender_revoked"};
@@ -902,6 +901,50 @@ void ProvideRowTests() {
       Check(ExtenderProvideRowModelFor(view).visible,
             std::string("supported ") + state + " is shown");
     }
+  }
+  {
+    TEST_CASE("theProviderOnlyDeviceShowsTheSwitchItsServiceWrites");
+    // While disconnected the provider is the service's provider-only device.
+    // The Earnings row, which has no switch, shows its status. The Connect
+    // page's row is the switch: a session's device takes its write over the
+    // device rpc, and with no session the service does (set_provide_extender)
+    // when its answer said so. Over a service that did not, the switch stays
+    // hidden (N1: never a dead switch).
+    for (const char* state :
+         {kExtenderProvideStateOff, kExtenderProvideStateNotProviding,
+          kExtenderProvideStateSettingUp, kExtenderProvideStateActive,
+          kExtenderProvideStateError}) {
+      const ExtenderProvideStatusView session = ProvideStatus(state);
+      const auto sessionModel = ExtenderProvideRowModelFor(session);
+      Check(sessionModel.visible && sessionModel.switchVisible,
+            std::string("a session's ") + state + " shows both rows");
+      ExtenderProvideStatusView providerOnly = session;
+      providerOnly.providerOnly = true;
+      const auto older = ExtenderProvideRowModelFor(providerOnly);
+      Check(older.visible, std::string("the provider-only device's ") + state +
+                               " shows the Earnings row");
+      Check(!older.switchVisible, std::string("an older service's provider-only ") + state +
+                                      " keeps the switch's row hidden");
+      providerOnly.serviceWritable = true;
+      const auto model = ExtenderProvideRowModelFor(providerOnly);
+      Check(model.visible && model.switchVisible,
+            std::string("a provider-only ") + state + " the service writes shows both rows");
+      Check(model.on == providerOnly.provideExtender,
+            std::string("and its switch is that device's setting, ") + state);
+      CheckEq(RowText(sessionModel), RowText(model),
+              std::string("and reads as a session's ") + state + " does");
+      CheckTone(sessionModel.tone, model.tone, std::string("in the same colour, ") + state);
+      providerOnly.supported = false;
+      const auto hidden = ExtenderProvideRowModelFor(providerOnly);
+      Check(!hidden.visible && !hidden.switchVisible,
+            std::string("an unsupported provider-only ") + state + " hides both rows");
+    }
+    Check(!ExtenderProvideRowModelFor(ExtenderProvideStatusView{}).switchVisible,
+          "no session and no provider-only device hides the switch's row");
+    ExtenderProvideStatusView writerAlone;
+    writerAlone.serviceWritable = true;
+    Check(!ExtenderProvideRowModelFor(writerAlone).switchVisible,
+          "a writer with no status to show shows no switch");
   }
   {
     TEST_CASE("offAndNotProvidingAreGrey");
@@ -979,6 +1022,10 @@ void ProvideRowTests() {
     const ErrorRow rows[] = {
         {kExtenderProvideErrorStart, "no extender directory", "extender_start_failed",
          "Could not start: no extender directory"},
+        {kExtenderProvideErrorTcpUnavailable, "listen tcp :443: bind: address already in use",
+         "extender_tcp_unavailable",
+         "TCP port 443 is in use by another program. Trying again every few minutes: listen tcp "
+         ":443: bind: address already in use"},
         {kExtenderProvideErrorListen,
          "tcp 443: bind: permission denied; udp 443: bind: permission denied",
          "extender_listen_failed",
@@ -1058,8 +1105,8 @@ void ProvideRowTests() {
 // Every field of urnet::ExtenderProvideStatus (urnetwork_sdk.hpp), by the SDK's
 // names and types. ExtenderProvideStatusViewOf reads the same names in SdkHost,
 // so a rename breaks the app build there; here the struct pins which of the
-// eighteen the view reads, and that the ten it leaves to the SDK's state rule
-// change nothing.
+// twenty-six the view reads, and that the eighteen it leaves alone change
+// nothing.
 struct FullStatus {
   bool Supported{};
   std::string State{};
@@ -1067,6 +1114,7 @@ struct FullStatus {
   std::string Reason{};
   bool Enabled{};
   std::string StartError{};
+  std::string TcpUnavailableError{};
   bool Listening{};
   std::string ListenError{};
   bool ActivatedV4{};
@@ -1078,6 +1126,13 @@ struct FullStatus {
   bool LastActivationRefused{};
   int64_t RevokedTime{};
   std::string DnsPorts{};
+  int64_t PeerPingCount{};
+  int64_t PeerPingCosignedCount{};
+  int64_t PeerPingRejectedCount{};
+  int64_t PeerPingUnknownCount{};
+  int64_t LastPeerPingTime{};
+  int64_t LimitedBySubnetsCount{};
+  int64_t LimitedBySourceCount{};
   int64_t ConnectionCount{};
 };
 
@@ -1102,6 +1157,8 @@ void ProvideStatusViewTests() {
     TEST_CASE("readsOnlyTheContractFields");
     FullStatus noisy = BaseStatus();
     noisy.StartError = "no extender directory";
+    // the bind error reaches the row as the Reason of the tcp_unavailable case
+    noisy.TcpUnavailableError = "listen tcp :443: bind: address already in use";
     noisy.Listening = true;
     noisy.ListenError = "udp 4053: bind: address already in use";
     noisy.Ipv4 = "192.0.2.10";
@@ -1110,9 +1167,16 @@ void ProvideStatusViewTests() {
     noisy.LastActivationError = "context deadline exceeded";
     noisy.RevokedTime = 1757800000001;
     noisy.DnsPorts = "53,4053";
+    noisy.PeerPingCount = 9;
+    noisy.PeerPingCosignedCount = 5;
+    noisy.PeerPingRejectedCount = 2;
+    noisy.PeerPingUnknownCount = 2;
+    noisy.LastPeerPingTime = 1757800000002;
+    noisy.LimitedBySubnetsCount = 3;
+    noisy.LimitedBySourceCount = 4;
     noisy.ConnectionCount = 12;
     Check(ViewOf(noisy) == base,
-          "the ten fields the SDK's state rule already read change nothing");
+          "the eighteen fields the view leaves alone change nothing");
   }
   {
     TEST_CASE("eachReadFieldMovesTheView");
@@ -1160,6 +1224,22 @@ void ProvideStatusViewTests() {
     FullStatus stopped = BaseStatus();
     stopped.Enabled = false;
     Check(base.enabled && !ViewOf(stopped).enabled, "enabled follows Enabled");
+  }
+  {
+    TEST_CASE("theDeviceItIsOfIsAChange");
+    // A session that takes over from the provider-only device can bring the
+    // very same reading; the feed must still publish it, or the Connect page's
+    // switch would stay hidden for the whole session.
+    ExtenderProvideStatusView providerOnly = base;
+    providerOnly.providerOnly = true;
+    Check(providerOnly != base, "the provider-only device's reading alone is a change");
+    Check(!base.providerOnly, "a status read off a device is a session's unless marked");
+    // ...and so is whether the service takes its write: the switch comes or
+    // goes with it
+    ExtenderProvideStatusView writable = providerOnly;
+    writable.serviceWritable = true;
+    Check(writable != providerOnly, "whether the service writes it alone is a change");
+    Check(!providerOnly.serviceWritable, "a status the service did not mark has no writer");
   }
   {
     TEST_CASE("aHiddenRowReadsNoSetting");
@@ -1228,6 +1308,78 @@ void ProvideGuessTests() {
     Check(!guess.activatedV4 && !guess.activatedV6 && !guess.refused, "no families, no refusal");
     Check(guess.supported, "and the device is still the one that supports the role");
   }
+  {
+    TEST_CASE("theGuessStaysOfItsDevice");
+    Check(!ExtenderProvideGuessFor(listening, true, true).providerOnly,
+          "a guess over a session's status stays a session's");
+    ExtenderProvideStatusView providerOnly = listening;
+    providerOnly.providerOnly = true;
+    const auto guess = ExtenderProvideGuessFor(providerOnly, false, true);
+    Check(guess.providerOnly, "a guess over the provider-only device's status stays its");
+    Check(!ExtenderProvideRowModelFor(guess).switchVisible,
+          "so the switch's row stays hidden over an older service's");
+    providerOnly.serviceWritable = true;
+    const auto written = ExtenderProvideGuessFor(providerOnly, false, true);
+    Check(written.providerOnly && written.serviceWritable,
+          "a guess over a status the service writes keeps its writer");
+    const auto writtenModel = ExtenderProvideRowModelFor(written);
+    Check(writtenModel.switchVisible && !writtenModel.on,
+          "so the switch just flipped stays shown, in its new position");
+  }
+}
+
+// ---- ExtenderPresentation.h: where the switch's write goes ------------------
+
+void ProvideWriteRouteTests() {
+  const ExtenderProvideStatusView session = ProvideStatus(kExtenderProvideStateActive);
+  ExtenderProvideStatusView older = session;
+  older.providerOnly = true;
+  ExtenderProvideStatusView writable = older;
+  writable.serviceWritable = true;
+  {
+    TEST_CASE("aSessionsDeviceTakesEveryWrite");
+    // whatever was last on screen: the bound device is the one that runs
+    for (const ExtenderProvideStatusView& shown :
+         {session, older, writable, ExtenderProvideStatusView{}}) {
+      Check(ExtenderProvideWriteRouteFor(true, shown) == ExtenderProvideWriteRoute::Device,
+            "with a session the write goes through its device");
+    }
+  }
+  {
+    TEST_CASE("withNoSessionTheServiceTakesTheProviderOnlyDevicesWrite");
+    Check(ExtenderProvideWriteRouteFor(false, writable) == ExtenderProvideWriteRoute::Service,
+          "with no session the provider-only device's write goes to the service");
+  }
+  {
+    TEST_CASE("withNoSessionNothingElseIsWritten");
+    Check(ExtenderProvideWriteRouteFor(false, older) == ExtenderProvideWriteRoute::None,
+          "an older service's provider-only status is never written");
+    Check(ExtenderProvideWriteRouteFor(false, session) == ExtenderProvideWriteRoute::None,
+          "a session's status left over with no session is never written");
+    Check(ExtenderProvideWriteRouteFor(false, ExtenderProvideStatusView{}) ==
+              ExtenderProvideWriteRoute::None,
+          "no status is never written");
+    ExtenderProvideStatusView unsupported = writable;
+    unsupported.supported = false;
+    Check(ExtenderProvideWriteRouteFor(false, unsupported) == ExtenderProvideWriteRoute::None,
+          "an unsupported role is never written");
+  }
+  {
+    TEST_CASE("theServiceIsWrittenExactlyWhereTheSwitchShows");
+    // the switch's visibility and the write's route are one rule: no switch
+    // the user can flip goes unwritten, and nothing hidden is written
+    for (const ExtenderProvideStatusView& shown :
+         {session, older, writable, ExtenderProvideStatusView{}}) {
+      for (bool supported : {false, true}) {
+        ExtenderProvideStatusView view = shown;
+        view.supported = supported;
+        if (!view.providerOnly) continue;
+        Check(ExtenderProvideRowModelFor(view).switchVisible ==
+                  (ExtenderProvideWriteRouteFor(false, view) == ExtenderProvideWriteRoute::Service),
+              "the provider-only switch shows exactly when its write goes to the service");
+      }
+    }
+  }
 }
 
 // ---- ExtenderPresentation.h: the statistics sections (O8) --------------------
@@ -1271,6 +1423,154 @@ void StatsSectionsTests() {
   }
 }
 
+// ---- ExtenderPresentation.h: the bootstrap DNS-over-HTTPS servers ---------------
+
+// A regional preset in the shape of the sdk's (connect RegionalControlDohUrls),
+// as the box shows it after "Use China resolvers", on documentation addresses.
+const std::vector<std::string> kPresetServers = {
+    "https://192.0.2.53/dns-query",
+    "https://192.0.2.54/dns-query",
+    "https://198.51.100.53/dns-query",
+    "https://203.0.113.53/dns-query",
+};
+
+void ControlDohTests() {
+  {
+    TEST_CASE("theBoxSplitsOnLineBreaksOnly");
+    const std::string_view typed = "https://192.0.2.53/q\r\n  https://198.51.100.53/q \rhttps://203.0.113.4/a,b\n\n";
+    const auto lines = ParseControlDohLines(typed);
+    CheckEq(3, static_cast<long long>(lines.size()), "three servers");
+    if (lines.size() == 3) {
+      CheckEq("https://192.0.2.53/q", lines[0], "first, past its CRLF");
+      CheckEq("https://198.51.100.53/q", lines[1], "second, trimmed, ended by a bare CR");
+      CheckEq("https://203.0.113.4/a,b", lines[2],
+              "a comma is part of a url, never a separator as in the hosts box");
+    }
+  }
+  {
+    TEST_CASE("theOrderAndTheRepeatsAreTheSdks");
+    const auto lines = ParseControlDohLines(
+        "https://192.0.2.54/dns-query\nhttps://192.0.2.53/dns-query\nhttps://192.0.2.54/dns-query");
+    Check(lines == std::vector<std::string>{"https://192.0.2.54/dns-query",
+                                            "https://192.0.2.53/dns-query",
+                                            "https://192.0.2.54/dns-query"},
+          "in the order typed, with the repeat left for the sdk to drop");
+  }
+  {
+    TEST_CASE("anEmptyBoxIsTheBuiltInServersAlone");
+    Check(ParseControlDohLines("").empty(), "nothing typed");
+    Check(ParseControlDohLines(" \r\n\t\n\r").empty(), "nothing but whitespace and line breaks");
+  }
+  {
+    TEST_CASE("theBoxShowsOneServerPerLine");
+    CheckEq(R"(https://192.0.2.53/dns-query
+https://192.0.2.54/dns-query
+https://198.51.100.53/dns-query
+https://203.0.113.53/dns-query)",
+            ControlDohText(kPresetServers), "the preset, one per line, in the sdk's order");
+    Check(ParseControlDohLines(ControlDohText(kPresetServers)) == kPresetServers,
+          "what the box shows is what a save sends back");
+    CheckEq("", ControlDohText({}), "no servers is an empty box, which means the built-in ones");
+  }
+  {
+    TEST_CASE("everySdkErrorIdIsItsOwnStoreKey");
+    // the sdk's literal ids (sdk control_doh_ui.go ControlDohError*)
+    CheckEq("control_doh_error_url_invalid", kControlDohErrorUrlInvalid, "url invalid");
+    CheckEq("control_doh_error_https_required", kControlDohErrorHttpsRequired, "https required");
+    CheckEq("control_doh_error_ip_required", kControlDohErrorIpRequired, "ip required");
+    CheckEq("control_doh_error_too_many", kControlDohErrorTooMany, "too many");
+    for (const char* id : kControlDohErrorIds) {
+      CheckEq(id, ControlDohErrorKey(id), std::string(id) + " is its own key");
+      Check(EnglishStore().count(id) == 1, std::string("the store carries ") + id);
+    }
+  }
+  {
+    TEST_CASE("anyOtherIdIsSomethingWentWrong");
+    // Loc() of a key the store does not carry shows the key itself, and none
+    // of these is about the url the user typed
+    CheckEq("something_went_wrong", ControlDohErrorKey(kSdkErrorIdInternal),
+            "the call could not run (urnet::ErrorIdInternal)");
+    CheckEq("something_went_wrong", ControlDohErrorKey("control_doh_error_from_a_newer_sdk"),
+            "a newer sdk's id");
+    CheckEq("something_went_wrong", ControlDohErrorKey("vless_error_link_invalid"),
+            "another feature's id");
+    CheckEq("something_went_wrong", ControlDohErrorKey(""), "no id at all");
+    Check(EnglishStore().count("something_went_wrong") == 1,
+          "the store carries something_went_wrong");
+  }
+  {
+    TEST_CASE("onlyAnEmptyAnswerIsASave");
+    const auto saved = ControlDohSaveOutcomeFor("");
+    Check(saved.saved, "\"\" is saved");
+    CheckEq("control_doh_urls_saved", saved.messageKey, "with the saved line");
+    Check(saved.nextConnectNote, "and the next-connect note: the service imports the space later");
+    for (const char* id : {kSdkErrorIdInternal, "control_doh_error_from_a_newer_sdk",
+                           kControlDohErrorIpRequired, kControlDohErrorTooMany}) {
+      const auto refused = ControlDohSaveOutcomeFor(id);
+      Check(!refused.saved, std::string(id) + " is not a save");
+      Check(!refused.nextConnectNote, std::string(id) + " promises nothing for the next connect");
+      CheckEq(ControlDohErrorKey(id), refused.messageKey, std::string(id) + " says its own message");
+    }
+    CheckEq("something_went_wrong", ControlDohSaveOutcomeFor(kSdkErrorIdInternal).messageKey,
+            "a save that could not run is something went wrong, never saved");
+  }
+  {
+    TEST_CASE("theStoreHasEveryKeyTheBlockShows");
+    for (const char* key :
+         {"control_doh_urls", "control_doh_urls_description", "control_doh_urls_hint",
+          "control_doh_use_china", "control_doh_use_china_hint", "control_doh_urls_reset",
+          "control_doh_urls_saved", "control_doh_urls_next_connect", "save"}) {
+      const auto found = EnglishStore().find(key);
+      Check(found != EnglishStore().end(), std::string("the store carries ") + key);
+      if (found == EnglishStore().end()) continue;
+      Check(found->second.find('{') == std::string::npos,
+            std::string(key) + " is whole text, with no placeholder");
+    }
+    const auto line = EnglishStore().find("import_extenders_control_doh_urls");
+    Check(line != EnglishStore().end(), "the store carries import_extenders_control_doh_urls");
+    if (line != EnglishStore().end()) {
+      const std::size_t first = line->second.find("{}");
+      Check(first != std::string::npos && line->second.find("{}", first + 2) == std::string::npos,
+            "import_extenders_control_doh_urls holds exactly one {}");
+    }
+  }
+  {
+    TEST_CASE("aSettingsBlockWithServersNamesThemBeforeTheToggle");
+    auto decoded = GoodDecode();
+    decoded.hasSettings = true;
+    decoded.settingsHost = "bringyour.com";
+    decoded.controlDohUrls = {"https://192.0.2.53/dns-query", "https://198.51.100.53/dns-query"};
+    const std::string servers = "https://192.0.2.53/dns-query, https://198.51.100.53/dns-query";
+    for (const bool useSettings : {false, true}) {
+      const auto decision = DecideExtenderImport(decoded, useSettings);
+      CheckEq(servers, decision.controlDohUrlsArg,
+              std::string("the servers, joined, with the toggle ") + (useSettings ? "on" : "off"));
+      Check(decision.canImport, "and the import itself is unchanged");
+    }
+    const std::string shown = FilledFor("import_extenders_control_doh_urls",
+                                        DecideExtenderImport(decoded, true).controlDohUrlsArg);
+    Check(shown.find("They will see URnetwork's server lookups") != std::string::npos &&
+              servers.size() < shown.size() &&
+              shown.compare(shown.size() - servers.size(), servers.size(), servers) == 0,
+          "the line says who will see the lookups and names them: " + shown);
+  }
+  {
+    TEST_CASE("noServersInTheCodeSaysNothing");
+    auto decoded = GoodDecode();
+    decoded.hasSettings = true;
+    CheckEq("", DecideExtenderImport(decoded, true).controlDohUrlsArg,
+            "a block that names none leaves the importer's own servers alone");
+    auto unsettled = GoodDecode();
+    unsettled.controlDohUrls = kPresetServers;
+    CheckEq("", DecideExtenderImport(unsettled, true).controlDohUrlsArg,
+            "servers ride only in a settings block, and only it can apply them");
+    ExtenderShareDecodeView bad;
+    bad.hasSettings = true;
+    bad.controlDohUrls = kPresetServers;
+    CheckEq("", DecideExtenderImport(bad, true).controlDohUrlsArg, "a failed decode names nothing");
+  }
+}
+
 }  // namespace
 
 int main() {
@@ -1286,6 +1586,8 @@ int main() {
   PanelModelTests();
   std::cout << "extender settings form\n";
   SettingsFormTests();
+  std::cout << "bootstrap DNS-over-HTTPS servers\n";
+  ControlDohTests();
   std::cout << "share payload\n";
   ShareTests();
   std::cout << "share QR layout\n";
@@ -1302,6 +1604,8 @@ int main() {
   ProvideStatusViewTests();
   std::cout << "provider extender switch guess\n";
   ProvideGuessTests();
+  std::cout << "provider extender switch write\n";
+  ProvideWriteRouteTests();
   std::cout << "statistics sections\n";
   StatsSectionsTests();
 

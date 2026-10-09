@@ -14,9 +14,11 @@
 #include <vector>
 
 #include "AccountPage.h"
+#include "BalanceGate.h"
 #include "BalanceSheets.h"
 #include "ConnectPage.h"
 #include "DeveloperPage.h"
+#include "GuestConversion.h"
 #include "LicensesPage.h"
 #include "LocationSheets.h"
 #include "LoginPage.h"
@@ -98,6 +100,10 @@ struct MainWindow : MainWindowT<MainWindow> {
   void CloseLicenses();
   // last ContractStatus push (ConnectPage::ApplyStats) -> the warning InfoBar
   void SetInsufficientBalance(bool insufficient);
+  // the balance recovery's state (AppController, BalanceGate.h) -> the warning
+  // InfoBar: "You'll be reconnected when data is available again." and, for a
+  // refused start, Cancel; a waiting start keeps the banner open on its own
+  void SetBalanceRecovery(urnw::balance::RecoveryState state);
   // ---- the persistent status strip (D4) ----
   // ProtonVPN's bottom line, at window level: it is true whichever destination
   // is on screen, so it cannot live on a page.
@@ -115,7 +121,26 @@ struct MainWindow : MainWindowT<MainWindow> {
   // on, read from here rather than recomputed in ConnectPage, so the hero and
   // the InfoBar cannot end up disagreeing about the account's state.
   bool balanceConfirming() const { return balancePoll_.confirming; }
-  bool balanceBlocked() const { return insufficientBalance_ && !balance_.isPro; }
+  // The insufficient-balance gate (BalanceGate.h): out of balance, not Pro,
+  // and no confirmation poll running.
+  bool outOfBalance() const {
+    return urnw::balance::OutOfBalance(insufficientBalance_, balance_.isPro,
+                                       balancePoll_.confirming);
+  }
+  // The banner's recovery state (SetBalanceRecovery), and whether the missing
+  // data is reserved or used up, with the reserved amount, from the same
+  // balance the banner reads.
+  urnw::balance::RecoveryState balanceRecovery() const { return balanceRecovery_; }
+  urnw::balance::OutOfBalanceKind outOfBalanceKind() const {
+    urnw::balance::AccountBalance b;
+    b.known = balance_.loaded;
+    b.pro = balance_.isPro;
+    b.availableBytes = balance_.availableByteCount;
+    b.openTransferBytes = balance_.pendingByteCount;
+    b.fetchedAtMs = balance_.fetchedAtMillis;
+    return urnw::balance::OutOfBalanceKindFor(b);
+  }
+  int64_t reservedByteCount() const { return balance_.pendingByteCount; }
   // #27: the last firewall state the SERVICE reported ("off" | "armed" |
   // "connecting" | "connected"), for the connect page's blocked-traffic line.
   // Read from here rather than re-cached on the page for the balance reason
@@ -177,10 +202,6 @@ struct MainWindow : MainWindowT<MainWindow> {
                        winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnCreateNameChanged(winrt::Windows::Foundation::IInspectable const&,
                            winrt::Microsoft::UI::Xaml::Controls::TextChangedEventArgs const&);
-  // the guest upgrade collects the email on the create step (the other modes
-  // carry it in from the initial step)
-  void OnCreateEmailChanged(winrt::Windows::Foundation::IInspectable const&,
-                            winrt::Microsoft::UI::Xaml::Controls::TextChangedEventArgs const&);
   void OnCreatePasswordChanged(winrt::Windows::Foundation::IInspectable const&,
                                winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnTermsChanged(winrt::Windows::Foundation::IInspectable const&,
@@ -198,12 +219,6 @@ struct MainWindow : MainWindowT<MainWindow> {
   // opens android's AuthCodeLoginSheet as a dialog
   void OnUseCode(winrt::Windows::Foundation::IInspectable const&,
                  winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
-  // guest mode: opens the terms-consent sheet (macOS GuestModeSheet parity).
-  // No longer reachable from the login screen - the android login has no guest
-  // affordance and guest mode is superseded by the seedphrase system - but the
-  // sheet and BeginGuestUpgrade stay for existing guest sessions.
-  void OnTryGuestMode(winrt::Windows::Foundation::IInspectable const&,
-                      winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnSignInWithBittensor(winrt::Windows::Foundation::IInspectable const&,
                              winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   // one Solana button, as android has; the wallet is chosen in a dialog because
@@ -275,6 +290,16 @@ struct MainWindow : MainWindowT<MainWindow> {
                      winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnOpenRedeem(winrt::Windows::Foundation::IInspectable const&,
                     winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
+  // "About your data" (DataInfoSheet), from the Account usage card's info button
+  void OnOpenDataInfo(winrt::Windows::Foundation::IInspectable const&,
+                      winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
+  // The upgrade path of a start connect refused for the balance
+  // (AppController::ShowUpgradeForBlockedConnect): OnOpenUpgrade, with the
+  // sheet it opens saying when the free data refreshes.
+  void OpenUpgradeForBlockedConnect();
+  // the account pane's referral rows after a failed read
+  void OnRetryReferralTotals(winrt::Windows::Foundation::IInspectable const&,
+                             winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnSendFeedback(winrt::Windows::Foundation::IInspectable const&,
                       winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnWalletAddressChanged(
@@ -308,14 +333,11 @@ struct MainWindow : MainWindowT<MainWindow> {
   // where its switch lives, as the provide mode row does.
   void OnWalletExtender(winrt::Windows::Foundation::IInspectable const&,
                         winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
-  // wallet: Seeker-token multiplier verification. leaderboard: the
-  // public/private switch.
-  void OnVerifySeeker(winrt::Windows::Foundation::IInspectable const&,
-                      winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   // R4: the ledger pane's History / Leaderboard switch (Earnings).
   void OnEarningsTableChanged(
       winrt::Microsoft::UI::Xaml::Controls::SelectorBar const&,
       winrt::Microsoft::UI::Xaml::Controls::SelectorBarSelectionChangedEventArgs const&);
+  // leaderboard: the public/private switch.
   void OnLeaderboardPublicToggled(winrt::Windows::Foundation::IInspectable const&,
                                   winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   // The ledger header's "Earnings actions" overflow: pane A's command door while
@@ -397,6 +419,11 @@ struct MainWindow : MainWindowT<MainWindow> {
   // re-read whatever page is already on screen (see the definition).
   void LoadCurrentDestination();
   void ApplyAuthState(urnw::AuthState state, std::string const& error);
+  // Pushes the network identity (name, guest, pro) to Connect, the status strip
+  // and the account menu. Guest is IsGuestNetwork(the jwt claim, the balance's
+  // guest): a refresh drops the claim, so the claim alone labels a refreshed
+  // guest by its network name. Re-run when the balance's guest changes.
+  void ApplyNetworkIdentity();
 
   // ---- the one responsive switch (D4) ----
   // Every destination declares a Narrow and a Wide visual state in markup; this
@@ -451,7 +478,13 @@ struct MainWindow : MainWindowT<MainWindow> {
   // ---- balance / plan (SubscriptionBalanceStore relay) ----
   void UpdateBalanceWarning();  // insufficient-balance InfoBar gating
   winrt::fire_and_forget ShowUpgradeSheet();
+  // A guest's purchase entry: the in-place conversion first, then `checkout`
+  // once it is done and the network no longer reads as a guest
+  // (GuestUpgradeContinuation).
+  void DivertGuestToConversion(std::function<void()> checkout);
+  urnw::GuestUpgradeContinuation guestUpgrade_;
   winrt::fire_and_forget ShowRedeemSheet();
+  winrt::fire_and_forget ShowDataInfoSheet();
 
   // ---- the in-app service manager (beta spec §3) ----
   // The window owns the ONE snapshot every service-setup surface reads —
@@ -496,8 +529,15 @@ struct MainWindow : MainWindowT<MainWindow> {
   urnw::BalancePollState balancePoll_;
   std::unique_ptr<urnw::UsageBar> accountUsageBar_;
   bool insufficientBalance_ = false;  // last ContractStatus push
+  urnw::balance::RecoveryState balanceRecovery_;  // SetBalanceRecovery
+  // the warning InfoBar's Cancel, shown while a refused start waits
+  winrt::Microsoft::UI::Xaml::Controls::HyperlinkButton balanceRecoveryCancel_{nullptr};
   std::shared_ptr<urnw::UpgradeSheet> upgradeSheet_;
   std::shared_ptr<urnw::RedeemCodeSheet> redeemSheet_;
+  std::shared_ptr<urnw::DataInfoSheet> dataInfoSheet_;
+  // set only while OpenUpgradeForBlockedConnect runs: ShowUpgradeSheet reads it
+  // before its first suspension
+  bool upgradeForBlockedConnect_ = false;
 
   // The Pro celebration (ProCelebration.h): the confetti canvas and the
   // mosaic host at the bottom of MainWindow.xaml. Plays once at the free -> Pro flip, and
@@ -582,6 +622,12 @@ struct MainWindow : MainWindowT<MainWindow> {
   std::vector<winrt::Microsoft::UI::Xaml::UIElement> statusTrafficParts_;
   std::string statusNetworkName_;
   bool statusGuest_ = false;
+  // the identity ApplyAuthState read from the jwt, for ApplyNetworkIdentity
+  bool identityLoggedIn_ = false;
+  bool identityShown_ = false;
+  std::string identityNetworkName_;
+  bool identityJwtGuest_ = false;
+  bool identityPro_ = false;
   bool statusSignedIn_ = false;
   bool statusConnected_ = false;
   std::string statusLocationName_;
@@ -644,7 +690,6 @@ struct MainWindow : MainWindowT<MainWindow> {
   bool foldHomesRecorded_ = false;
   FoldHome pointsNetworkHome_;
   FoldHome dataRankingHome_;
-  FoldHome seekerCardHome_;
   FoldHome walletTransportHome_;
   FoldHome walletPaneCFoldHome_;
   FoldHome accountUpgradeHome_;

@@ -118,6 +118,13 @@ int64_t NowMillis() {
       .count();
 }
 
+// The client id of the current location when it is a client id location (a
+// stayed exit or a network peer), else empty.
+std::string StayingClientId(std::optional<urnet::ConnectLocation> const& selected) {
+  if (!selected || !selected->connect_location_id) return std::string();
+  return selected->connect_location_id->client_id.value_or(std::string());
+}
+
 // "2h 5m" / "3m" / "45s", or empty when the SDK has no connected-since stamp.
 hstring DurationText(int64_t connectedSinceMillis, int64_t nowMillis) {
   const ConnectedDuration duration = SplitConnectedDuration(connectedSinceMillis, nowMillis);
@@ -222,6 +229,7 @@ void ProviderLocationsSheet::UpdateIdentities(std::vector<ProviderIdentityRow> i
 void ProviderLocationsSheet::Render() {
   list_.Children().Clear();
   durationLabels_.clear();
+  stayingClientId_ = StayingClientId(sdk_.SelectedLocation());
 
   // the optimistic trim: a row being removed leaves the list immediately
   std::vector<ProviderLocationRow> visible;
@@ -389,7 +397,7 @@ Grid ProviderLocationsSheet::MakeProviderRow(const ProviderLocationRow& row) {
     tag.VerticalAlignment(VerticalAlignment::Top);
     TextBlock tagText = MakeText(IpFamilyLabelText(row.ipFamilyLabel), 10, colors::MutedBrush());
     tag.Child(tagText);
-    ToolTipService::SetToolTip(tag, box_value(pages::Adv("ip_families", L"IP families")));
+    ToolTipService::SetToolTip(tag, box_value(pages::Adv("ip_families", L"IP versions")));
     Grid::SetColumn(tag, 1);
     placeRow.Children().Append(tag);
     text.Children().Append(placeRow);
@@ -405,6 +413,37 @@ Grid ProviderLocationsSheet::MakeProviderRow(const ProviderLocationRow& row) {
   durationText.HorizontalAlignment(HorizontalAlignment::Left);
   text.Children().Append(durationText);
   durationLabels_.emplace_back(row.connectedSinceMillis, durationText);
+
+  // "Stay on this exit": the selected row offers it, and the provider the
+  // connection already stays on says so instead (StayOnExitStateFor)
+  switch (StayOnExitStateFor(row, selectedClientId_, stayingClientId_)) {
+    case StayOnExitState::Offer: {
+      TextBlock note = MakeText(Loc("stay_on_this_exit_note"), 12, colors::MutedBrush(), true);
+      note.HorizontalAlignment(HorizontalAlignment::Left);
+      note.Margin(Thickness{0, 4, 0, 0});
+      text.Children().Append(note);
+      HyperlinkButton stay;
+      stay.Content(winrt::box_value(Loc("stay_on_this_exit")));
+      stay.FontSize(12);
+      stay.Padding(Thickness{0, 2, 0, 2});
+      stay.HorizontalAlignment(HorizontalAlignment::Left);
+      const ProviderLocationRow stayRow = row;
+      stay.Click([weak, stayRow](IInspectable const&, RoutedEventArgs const&) {
+        if (auto self = weak.lock()) self->StayOnExit(stayRow);
+      });
+      text.Children().Append(stay);
+      break;
+    }
+    case StayOnExitState::Staying: {
+      TextBlock staying = MakeText(Loc("staying_on_this_exit"), 12, colors::MutedBrush(), true);
+      staying.HorizontalAlignment(HorizontalAlignment::Left);
+      staying.Margin(Thickness{0, 4, 0, 0});
+      text.Children().Append(staying);
+      break;
+    }
+    case StayOnExitState::None:
+      break;
+  }
 
   Grid::SetColumn(text, 1);
   grid.Children().Append(text);
@@ -456,6 +495,26 @@ void ProviderLocationsSheet::Remove(const std::string& clientId) {
   sdk_.RemoveConnectedProvider(clientId);
   selectedClientId_ = sdk_.SelectedProviderClientId();
   Render();
+}
+
+void ProviderLocationsSheet::StayOnExit(const ProviderLocationRow& row) {
+  const std::optional<StayOnExitTarget> target = MakeStayOnExitTarget(row);
+  if (!target) return;
+  // the one provider, by its client id, as a public exit: network_peer false,
+  // so it keeps the public provide mode it carries the traffic under now
+  urnet::ConnectLocation location;
+  urnet::ConnectLocationId id;
+  id.client_id = target->clientId;
+  location.connect_location_id = id;
+  location.name = target->name;
+  location.city = target->city;
+  location.region = target->region;
+  location.country = target->country;
+  location.country_code = target->countryCode;
+  location.network_peer = false;
+  // the same gated connect as a location pick, then back to the connect page
+  sdk_.Connect(location);
+  dialog_.Hide();
 }
 
 void ProviderLocationsSheet::CopyClientId(const std::string& clientId) {

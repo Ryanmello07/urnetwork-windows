@@ -11,10 +11,11 @@
 #include <winrt/Microsoft.UI.Xaml.Automation.h>
 #include <winrt/Microsoft.UI.Xaml.Automation.Peers.h>
 
-#include "BalanceSheets.h"  // SetTermsMarkerText (the terms/privacy link inlines)
+#include "BalanceSheets.h"
 #include "Ids.h"
 #include "Localization.h"
 #include "PageContext.h"
+#include "ReferralShare.h"
 #include "Log.h"
 #include "SheetFit.h"  // sheetfit: sheets clamp to the window at open time
 #include "Strings.h"
@@ -42,186 +43,6 @@ winrt::Windows::Foundation::IInspectable LocBox(std::string_view key) {
 }
 
 }  // namespace
-
-// ---- GuestModeSheet ---------------------------------------------------------
-
-std::shared_ptr<GuestModeSheet> GuestModeSheet::Create(XamlRoot const& root,
-                                                       SdkHost& sdk) {
-  auto sheet = std::shared_ptr<GuestModeSheet>(new GuestModeSheet(sdk));
-  sheet->Build(root);
-  return sheet;
-}
-
-void GuestModeSheet::Build(XamlRoot const& root) {
-  dialog_ = ContentDialog();
-  dialog_.XamlRoot(root);
-  dialog_.Title(winrt::box_value(Loc("try_guest_mode_2")));
-  dialog_.CloseButtonText(Loc("close"));
-  // brand sheet surface (android SheetBlack; BalanceSheets::MakeDialog)
-  dialog_.Background(colors::SheetBrush());
-  dialog_.PrimaryButtonText(Loc("enter_urnetwork"));
-  dialog_.IsPrimaryButtonEnabled(false);  // gated on the terms consent
-  dialog_.DefaultButton(ContentDialogButton::Primary);
-
-  StackPanel content;
-  content.MinWidth(sheetfit::Width(root, 400));
-  content.Spacing(12);
-
-  // what guest mode is, and that a full account can come later
-  TextBlock explainer;
-  explainer.Text(Loc("guest_mode_explainer"));
-  explainer.FontSize(13);
-  explainer.Foreground(colors::MutedBrush());
-  explainer.TextWrapping(TextWrapping::Wrap);
-  content.Children().Append(explainer);
-
-  // terms consent: checkbox + the tappable terms/privacy links (the same
-  // terms_checkbox string the create step renders)
-  Grid termsRow;
-  ColumnDefinition c0, c1;
-  c0.Width(GridLength{0, GridUnitType::Auto});
-  c1.Width(GridLength{1, GridUnitType::Star});
-  termsRow.ColumnDefinitions().Append(c0);
-  termsRow.ColumnDefinitions().Append(c1);
-  termsRow.ColumnSpacing(8);
-
-  termsCheck_ = CheckBox();
-  termsCheck_.MinWidth(0);
-  termsCheck_.VerticalAlignment(VerticalAlignment::Top);
-  auto onTermsChanged = [weak = weak_from_this()](auto const&, auto const&) {
-    if (auto self = weak.lock()) {
-      const bool agreed =
-          self->termsCheck_.IsChecked() && self->termsCheck_.IsChecked().Value();
-      self->dialog_.IsPrimaryButtonEnabled(agreed && !self->creating_);
-      self->errorText_.Visibility(Visibility::Collapsed);
-    }
-  };
-  termsCheck_.Checked(onTermsChanged);
-  termsCheck_.Unchecked(onTermsChanged);
-  termsRow.Children().Append(termsCheck_);
-
-  TextBlock termsText;
-  termsText.VerticalAlignment(VerticalAlignment::Center);
-  termsText.Foreground(colors::MutedBrush());
-  SetTermsMarkerText(termsText, Localized("terms_checkbox"), 12);
-  // this checkbox had no name at all in the UIA tree; same treatment as the
-  // two on the login page
-  PairTermsLabel(termsCheck_, termsText);
-  Grid::SetColumn(termsText, 1);
-  termsRow.Children().Append(termsText);
-  content.Children().Append(termsRow);
-
-  // optional referral code (android/apple instant-account parity): the server
-  // links the referral on the guest create path too
-  codeBox_ = TextBox();
-  codeBox_.Header(winrt::box_value(Loc("bonus_referral_code_label")));
-  codeBox_.PlaceholderText(Loc("enter_a_bonus_referral_code"));
-  if (auto style = Application::Current()
-                       .Resources()
-                       .TryLookup(winrt::box_value(L"UrTextInputStyle"))
-                       .try_as<Style>()) {
-    codeBox_.Style(style);
-  }
-  codeBox_.TextChanged([weak = weak_from_this()](auto const&, auto const&) {
-    if (auto self = weak.lock()) self->codeStatus_.Visibility(Visibility::Collapsed);
-  });
-  content.Children().Append(codeBox_);
-
-  codeStatus_ = TextBlock();
-  codeStatus_.FontSize(12);
-  codeStatus_.Foreground(colors::DangerBrush());
-  codeStatus_.TextWrapping(TextWrapping::Wrap);
-  codeStatus_.Visibility(Visibility::Collapsed);
-  content.Children().Append(codeStatus_);
-
-  errorText_ = TextBlock();
-  errorText_.FontSize(12);
-  errorText_.Foreground(colors::DangerBrush());
-  errorText_.TextWrapping(TextWrapping::Wrap);
-  errorText_.Visibility(Visibility::Collapsed);
-  content.Children().Append(errorText_);
-
-  dialog_.Content(content);
-
-  dialog_.PrimaryButtonClick([weak = weak_from_this()](
-                                 auto const&, ContentDialogButtonClickEventArgs const& args) {
-    args.Cancel(true);  // keep the dialog open; ApplyResult decides what shows next
-    if (auto self = weak.lock()) self->Submit();
-  });
-}
-
-void GuestModeSheet::Submit() {
-  const bool agreed = termsCheck_.IsChecked() && termsCheck_.IsChecked().Value();
-  if (creating_ || !agreed || !sdk_.apiReady()) return;
-  creating_ = true;
-  dialog_.IsPrimaryButtonEnabled(false);
-  termsCheck_.IsEnabled(false);
-  errorText_.Visibility(Visibility::Collapsed);
-  codeStatus_.Visibility(Visibility::Collapsed);
-
-  auto queue = dialog_.DispatcherQueue();
-  auto weak = weak_from_this();
-
-  const std::string code = pages::TrimWhitespace(Narrow(codeBox_.Text().c_str()));
-  if (code.empty()) {
-    sdk_.LoginAsGuest([queue, weak](AuthResult r) {
-      queue.TryEnqueue([weak, r] {
-        if (auto self = weak.lock()) self->ApplyResult(r.ok, r.error);
-      });
-    });
-    return;
-  }
-
-  // a code was entered: it must validate before the create, so a typo shows
-  // an error instead of silently dropping the bonus
-  urnet::ValidateReferralCodeArgs args;
-  args.referral_code = code;
-  sdk_.api().validateReferralCode(
-      args, [queue, weak, code](std::optional<urnet::ValidateReferralCodeResult> result,
-                                std::optional<std::string> err) {
-        const bool ok = !err && result.has_value();
-        const bool valid = ok && result->is_valid;
-        const bool capped = ok && result->is_capped;
-        queue.TryEnqueue([weak, code, ok, valid, capped] {
-          auto self = weak.lock();
-          if (!self) return;
-          if (!ok || !valid || capped) {
-            self->creating_ = false;
-            self->termsCheck_.IsEnabled(true);
-            self->dialog_.IsPrimaryButtonEnabled(true);
-            self->codeStatus_.Text(!ok    ? Loc("something_went_wrong")
-                                   : capped ? Loc("referral_code_capped")
-                                            : Loc("invalid_referral_code"));
-            self->codeStatus_.Visibility(Visibility::Visible);
-            return;
-          }
-          auto queue2 = self->dialog_.DispatcherQueue();
-          auto weak2 = self->weak_from_this();
-          self->sdk_.LoginAsGuest(
-              [queue2, weak2](AuthResult r) {
-                queue2.TryEnqueue([weak2, r] {
-                  if (auto inner = weak2.lock()) inner->ApplyResult(r.ok, r.error);
-                });
-              },
-              code);
-        });
-      });
-}
-
-void GuestModeSheet::ApplyResult(bool ok, std::string const& error) {
-  creating_ = false;
-  if (ok) {
-    // the auth-state relay swaps the login panel for the home view underneath
-    dialog_.Hide();
-    return;
-  }
-  termsCheck_.IsEnabled(true);
-  dialog_.IsPrimaryButtonEnabled(termsCheck_.IsChecked() &&
-                                 termsCheck_.IsChecked().Value());
-  // a server error is not localizable; show it when there is one
-  errorText_.Text(error.empty() ? Loc("guest_mode_failed") : H(error));
-  errorText_.Visibility(Visibility::Visible);
-}
 
 // ---- SeedphraseDisplaySheet -------------------------------------------------
 
@@ -262,7 +83,7 @@ void SeedphraseDisplaySheet::Build(XamlRoot const& root) {
   // seedphrase on screen was the only way back into it and had not been
   // written down. The Closing handler below is the actual guard; macOS's
   // .interactiveDismissDisabled(true) is the same idea expressed as a modifier.
-  dialog_.PrimaryButtonText(Loc("seedphrase_saved_confirm"));
+  dialog_.PrimaryButtonText(Loc("i_ve_saved_my_seedphrase"));
   dialog_.DefaultButton(ContentDialogButton::Primary);
 
   StackPanel content;
@@ -668,6 +489,40 @@ void NetworkServerSheet::Build(XamlRoot const& root) {
   });
   content.Children().Append(apply);
 
+  // The active space's VLESS server, on the sheet Settings opens too. It edits
+  // the space in force now, not the domain typed above: VLESS settings belong
+  // to a space, and Apply is what changes which space that is. This sheet
+  // closes first (one ContentDialog at a time) and LoginPage opens the VLESS
+  // sheet in its place.
+  Button vless;
+  vless.Content(LocBox("vless"));
+  vless.HorizontalAlignment(HorizontalAlignment::Stretch);
+  vless.IsEnabled(current_.managerAvailable);
+  vless.Click([weak = weak_from_this()](auto const&, auto const&) {
+    if (auto self = weak.lock()) {
+      self->vlessRequested_ = true;
+      self->dialog_.Hide();
+    }
+  });
+  content.Children().Append(vless);
+
+  // The active space's bootstrap DNS-over-HTTPS servers, the block Account >
+  // Extenders shows. On a network that blocks the built-in DoH servers a fresh
+  // install cannot resolve the api to sign in, so it needs this before sign-in.
+  // Like VLESS it edits the space in force now, in its own sheet once this one
+  // closes.
+  Button controlDoh;
+  controlDoh.Content(LocBox("control_doh_urls"));
+  controlDoh.HorizontalAlignment(HorizontalAlignment::Stretch);
+  controlDoh.IsEnabled(current_.managerAvailable);
+  controlDoh.Click([weak = weak_from_this()](auto const&, auto const&) {
+    if (auto self = weak.lock()) {
+      self->controlDohRequested_ = true;
+      self->dialog_.Hide();
+    }
+  });
+  content.Children().Append(controlDoh);
+
   dialog_.Content(content);
   ApplyDerivedPlaceholders();
   UpdateInsecureWarning();
@@ -779,19 +634,22 @@ void ShowAccountMenu(FrameworkElement const& anchor, SdkHost& sdk,
     // it can reach this menu, would have done on every open.
     if (!sdk.IsLoggedIn()) return;
     sdk.api().getNetworkReferralCode(
-        [onShared, queue](std::optional<urnet::GetNetworkReferralCodeResult> result,
-                          std::optional<std::string>) {
+        [onShared, queue, linkHostName = sdk.linkHostName()](
+            std::optional<urnet::GetNetworkReferralCodeResult> result,
+            std::optional<std::string>) {
           // SDK callback thread: build the message here, but touch the
           // clipboard and the snackbar only on the UI thread.
           std::string code;
           if (result && result->referral_code) code = *result->referral_code;
-          queue.TryEnqueue([onShared, code] {
+          queue.TryEnqueue([onShared, code, linkHostName] {
             // The store's message takes the code; with no code yet there is
             // nothing useful to share, so say nothing rather than share a
             // sentence with a hole in it.
             if (code.empty()) return;
             winrt::Windows::ApplicationModel::DataTransfer::DataPackage package;
-            package.SetText(hstring{urnw::Format("referral_share_message", urnw::Widen(code))});
+            package.SetText(hstring{urnw::ReferralShareText(
+                urnw::Format("referral_share_message", urnw::Widen(code)),
+                urnw::Widen(urnw::ReferralLinkUrl(linkHostName, code)))});
             winrt::Windows::ApplicationModel::DataTransfer::Clipboard::SetContent(package);
             if (onShared) onShared();
           });

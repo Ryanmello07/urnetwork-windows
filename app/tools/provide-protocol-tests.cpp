@@ -1,0 +1,577 @@
+// Executable spec for the provider-only device on the control pipe
+// (Common/Protocol.h): the start_provider and stop_provider tags, the
+// StartProvider request on the wire, the TunnelStatus provider_* fields and
+// their reading from a service too old to send them, the request comparison
+// that keeps a running device (SameProviderDevice), and what one status tells
+// the app's reconcile (ProviderFactsFrom). And get_provider_stats: the verb,
+// the ProviderStats payload in a reply and an older service's silence, its
+// extender fields and a service too old to send them, and the readers that
+// turn its sdk documents back into the app's types (ProviderPointsOf,
+// ProviderDistributionOf, ExtenderPointsOf, ExtenderProvideStatusOf). And the
+// Extender switch while disconnected: set_provide_extender, its strict
+// request, and provide_extender_writable with an older service's silence. Run
+// against the same header the service and the app compile; it needs
+// nlohmann/json, like the app.
+//
+//   c++ -std=c++20 -I ../src/Common -I <dir with nlohmann/json.hpp> provide-protocol-tests.cpp -o /tmp/provide-protocol-tests && /tmp/provide-protocol-tests
+//
+// With URNW_PROVIDE_PROTOCOL_TESTS_SDK the readers run on the generated
+// header's own urnet::ThroughputPoint, urnet::TransportDistribution and
+// urnet::ExtenderProvideStatus, written the way the service writes them (their
+// to_json), so the wire is proved to carry the sdk's documents back unchanged.
+// The header is a system include, like nlohmann/json: the generated code does
+// not build with -Wextra -Werror.
+//
+// SPDX-License-Identifier: MPL-2.0
+
+#include <iostream>
+#include <optional>
+#include <string>
+#include <vector>
+
+#include "Protocol.h"
+
+#if defined(URNW_PROVIDE_PROTOCOL_TESTS_SDK)
+#include "urnetwork_sdk.hpp"
+#endif
+
+using namespace urnw;
+using namespace urnw::proto;
+
+#if !defined(URNW_PROVIDE_PROTOCOL_TESTS_SDK)
+// The fields of the sdk's documents the readers are checked on, by the
+// generated wrapper's names, with json conversions of the same shape.
+namespace sample {
+struct ThroughputSample {
+  int64_t EgressByteCount = 0;
+  int64_t IngressByteCount = 0;
+};
+struct ThroughputPoint {
+  int64_t Time = 0;
+  // the extender chart's route
+  std::optional<ThroughputSample> Remote;
+  std::optional<ThroughputSample> Local;
+};
+struct TransportDistribution {
+  int64_t ByteCount = 0;
+  bool Active = false;
+};
+inline void to_json(nlohmann::json& j, const ThroughputSample& v) {
+  j = {{"EgressByteCount", v.EgressByteCount}, {"IngressByteCount", v.IngressByteCount}};
+}
+inline void from_json(const nlohmann::json& j, ThroughputSample& v) {
+  j.at("EgressByteCount").get_to(v.EgressByteCount);
+  j.at("IngressByteCount").get_to(v.IngressByteCount);
+}
+inline void to_json(nlohmann::json& j, const ThroughputPoint& v) {
+  j = {{"Time", v.Time}};
+  if (v.Remote) j["Remote"] = *v.Remote;
+  if (v.Local) j["Local"] = *v.Local;
+}
+inline void from_json(const nlohmann::json& j, ThroughputPoint& v) {
+  j.at("Time").get_to(v.Time);
+  if (auto it = j.find("Remote"); it != j.end() && !it->is_null()) v.Remote = it->get<ThroughputSample>();
+  if (auto it = j.find("Local"); it != j.end() && !it->is_null()) v.Local = it->get<ThroughputSample>();
+}
+inline void to_json(nlohmann::json& j, const TransportDistribution& v) {
+  j = {{"ByteCount", v.ByteCount}, {"Active", v.Active}};
+}
+inline void from_json(const nlohmann::json& j, TransportDistribution& v) {
+  j.at("ByteCount").get_to(v.ByteCount);
+  j.at("Active").get_to(v.Active);
+}
+// the fields of urnet::ExtenderProvideStatus the app's view reads
+struct ExtenderProvideStatus {
+  bool Supported = false;
+  std::string State;
+  std::string Reason;
+  bool Enabled = false;
+  bool ActivatedV4 = false;
+};
+inline void to_json(nlohmann::json& j, const ExtenderProvideStatus& v) {
+  j = {{"Supported", v.Supported},
+       {"State", v.State},
+       {"Reason", v.Reason},
+       {"Enabled", v.Enabled},
+       {"ActivatedV4", v.ActivatedV4}};
+}
+inline void from_json(const nlohmann::json& j, ExtenderProvideStatus& v) {
+  j.at("Supported").get_to(v.Supported);
+  j.at("State").get_to(v.State);
+  j.at("Reason").get_to(v.Reason);
+  j.at("Enabled").get_to(v.Enabled);
+  j.at("ActivatedV4").get_to(v.ActivatedV4);
+}
+}  // namespace sample
+namespace doc = sample;
+#else
+namespace doc = urnet;
+#endif
+
+namespace {
+
+int gFailures = 0;
+int gCases = 0;
+
+void Check(bool condition, const std::string& what) {
+  ++gCases;
+  if (!condition) {
+    ++gFailures;
+    std::cout << "  FAIL " << what << "\n";
+  }
+}
+
+StartProvider SampleRequest() {
+  StartProvider r;
+  r.by_jwt = "client.jwt.value";
+  r.network_space_json = R"({"key":{"host_name":"network.example","env_name":"main"}})";
+  r.instance_id = "0193e520-0000-7000-8000-000000000001";
+  r.device_description = "DESKTOP-1";
+  r.device_spec = "windows amd64";
+  r.app_version = "2026.10.5-1";
+  r.provide_mode = "always";
+  r.provider_transport_settings_json = R"({"mode":"auto"})";
+  return r;
+}
+
+// (a) the verbs
+void TestTags() {
+  Check(std::string(msg::kStartProvider) == "start_provider", "tags: start_provider");
+  Check(std::string(msg::kStopProvider) == "stop_provider", "tags: stop_provider");
+  const nlohmann::json request = Request(msg::kStartProvider, SampleRequest());
+  Check(TypeOf(request) == "start_provider", "tags: the request carries its type");
+}
+
+// (b) the request survives the wire, and an absent field is empty, not a throw
+void TestStartProviderJson() {
+  const StartProvider sent = SampleRequest();
+  const nlohmann::json wire = nlohmann::json::parse(DumpForWire(nlohmann::json(sent)));
+  const StartProvider got = wire.get<StartProvider>();
+  Check(got.by_jwt == sent.by_jwt, "request: by_jwt");
+  Check(got.network_space_json == sent.network_space_json, "request: network_space_json");
+  Check(got.instance_id == sent.instance_id, "request: instance_id");
+  Check(got.device_description == sent.device_description, "request: device_description");
+  Check(got.device_spec == sent.device_spec, "request: device_spec");
+  Check(got.app_version == sent.app_version, "request: app_version");
+  Check(got.provide_mode == sent.provide_mode, "request: provide_mode");
+  Check(got.provider_transport_settings_json == sent.provider_transport_settings_json,
+        "request: provider_transport_settings_json");
+  // no RPC material: the provider-only device has no listener to pin
+  for (const char* rpc : {"rpc_server_pem", "rpc_client_cert_pem", "rpc_listen_hostport",
+                          "rpc_session_id"}) {
+    Check(!wire.contains(rpc), std::string("request: carries no ") + rpc);
+  }
+  const StartProvider sparse =
+      nlohmann::json::parse(R"({"provide_mode":"auto","by_jwt":null})").get<StartProvider>();
+  Check(sparse.provide_mode == "auto" && sparse.by_jwt.empty() &&
+            sparse.provider_transport_settings_json.empty(),
+        "request: absent and null fields read as empty");
+}
+
+// (c) the status fields, and a service too old to send them
+void TestStatusFields() {
+  TunnelStatus status;
+  status.provider_running = true;
+  status.provider_control_mode = "auto";
+  status.provider_mode = 1;
+  status.provider_network_key = true;
+  const nlohmann::json wire = nlohmann::json::parse(DumpForWire(nlohmann::json(status)));
+  for (const char* key : {"provider_running", "provider_control_mode", "provider_mode",
+                          "provider_network_key"}) {
+    Check(wire.contains(key), std::string("status: writes ") + key);
+  }
+  const TunnelStatus got = wire.get<TunnelStatus>();
+  Check(got.provider_running, "status: provider_running round-trips");
+  Check(got.provider_control_mode == "auto", "status: provider_control_mode round-trips");
+  Check(got.provider_mode == 1, "status: provider_mode round-trips");
+  Check(got.provider_network_key, "status: provider_network_key round-trips");
+
+  // an older service: no provider fields at all reads as "no provider-only
+  // device", which claims less than the truth
+  const TunnelStatus old = nlohmann::json::parse(
+                               R"({"state":"stopped","wfp_state":"off","protocol_version":4})")
+                               .get<TunnelStatus>();
+  Check(!old.provider_running && old.provider_control_mode.empty() && old.provider_mode == 0 &&
+            !old.provider_network_key,
+        "status: an older service reads as no provider-only device");
+  Check(kProtocolVersion == 4, "status: no protocol bump for the provider verbs and fields");
+
+  // a refused start_provider still carries the status beside its reason
+  Reply refused;
+  refused.ok = false;
+  refused.error = provide::RefusalReason(provide::ProviderRefusal::KillSwitchArmed);
+  refused.in_reply_to = msg::kStartProvider;
+  TunnelStatus armed;
+  armed.wfp_state = "armed";
+  refused.status = armed;
+  const Reply back = nlohmann::json::parse(DumpForWire(nlohmann::json(refused))).get<Reply>();
+  Check(!back.ok && back.error == refused.error && back.status &&
+            back.status->wfp_state == "armed" && !back.status->provider_running,
+        "status: a refusal carries its reason and the status");
+}
+
+// (d) the comparison that keeps a running device
+void TestSameProviderDevice() {
+  const StartProvider base = SampleRequest();
+  StartProvider remoded = base;
+  remoded.provide_mode = "network";
+  Check(SameProviderDevice(base, remoded), "same device: only the mode differs");
+  Check(SameProviderDevice(base, base), "same device: identical");
+
+  struct Change {
+    const char* field;
+    void (*apply)(StartProvider&);
+  };
+  const Change changes[] = {
+      {"by_jwt", [](StartProvider& r) { r.by_jwt = "refreshed.jwt"; }},
+      {"network_space_json", [](StartProvider& r) { r.network_space_json = "{}"; }},
+      {"instance_id",
+       [](StartProvider& r) { r.instance_id = "0193e520-0000-7000-8000-000000000002"; }},
+      {"device_description", [](StartProvider& r) { r.device_description = "DESKTOP-2"; }},
+      {"device_spec", [](StartProvider& r) { r.device_spec = "windows arm64"; }},
+      {"app_version", [](StartProvider& r) { r.app_version = "2026.10.6-1"; }},
+      {"provider_transport_settings_json",
+       [](StartProvider& r) { r.provider_transport_settings_json = ""; }},
+  };
+  for (const Change& change : changes) {
+    StartProvider other = base;
+    change.apply(other);
+    Check(!SameProviderDevice(base, other),
+          std::string("same device: a different ") + change.field + " builds a new device");
+  }
+}
+
+// (e) what one status tells the app's reconcile
+void TestProviderFacts() {
+  TunnelStatus idle;
+  idle.state = TunnelState::Stopped;
+  idle.wfp_state = "off";
+  const provide::ServiceProviderFacts answered = ProviderFactsFrom(idle, true);
+  Check(answered.answered && !answered.tunnelSession && !answered.killSwitchArmed &&
+            !answered.providerRunning,
+        "facts: an idle service");
+  Check(!ProviderFactsFrom(idle, false).answered, "facts: answered is the transport's word");
+
+  for (TunnelState state : {TunnelState::Starting, TunnelState::Preparing, TunnelState::Up,
+                            TunnelState::RpcOnly, TunnelState::Stopping}) {
+    TunnelStatus session = idle;
+    session.state = state;
+    Check(ProviderFactsFrom(session, true).tunnelSession,
+          std::string("facts: ") + ToString(state) + " is a tunnel session");
+  }
+  for (TunnelState state : {TunnelState::Stopped, TunnelState::Error}) {
+    TunnelStatus none = idle;
+    none.state = state;
+    Check(!ProviderFactsFrom(none, true).tunnelSession,
+          std::string("facts: ") + ToString(state) + " is no tunnel session");
+  }
+
+  for (const char* wfp : {"armed", "connecting", "connected"}) {
+    TunnelStatus policy = idle;
+    policy.wfp_state = wfp;
+    Check(ProviderFactsFrom(policy, true).killSwitchArmed,
+          std::string("facts: wfp ") + wfp + " is a policy in force");
+  }
+  for (const char* wfp : {"off", ""}) {
+    TunnelStatus open = idle;
+    open.wfp_state = wfp;
+    Check(!ProviderFactsFrom(open, true).killSwitchArmed,
+          std::string("facts: wfp '") + wfp + "' is no policy");
+  }
+
+  TunnelStatus providing = idle;
+  providing.provider_running = true;
+  providing.provider_mode = 3;
+  Check(ProviderFactsFrom(providing, true).providerRunning, "facts: the provider runs");
+  // and the whole chain: an Always user who just disconnected starts providing
+  Check(provide::DisconnectedProviderStep("always", ProviderFactsFrom(idle, true)) ==
+            provide::DisconnectedStep::Start,
+        "facts: Always after a Disconnect starts the provider-only device");
+  TunnelStatus armedAfterDrop = idle;
+  armedAfterDrop.wfp_state = "armed";
+  Check(provide::DisconnectedProviderStep("always", ProviderFactsFrom(armedAfterDrop, true)) ==
+            provide::DisconnectedStep::None,
+        "facts: nothing starts under the armed floor");
+}
+
+// (f) get_provider_stats: the verb, the payload and an older service's silence
+void TestProviderStatsReply() {
+  Check(std::string(msg::kGetProviderStats) == "get_provider_stats", "stats: the tag");
+  Check(TypeOf(Request(msg::kGetProviderStats)) == "get_provider_stats",
+        "stats: the request carries its type");
+
+  ProviderStats sent;
+  sent.available = true;
+  sent.client_id = "018f2b1e-0000-7000-8000-00000000c0de";
+  sent.client_count = 3;
+  sent.window_seconds = 60;
+  sent.has_provider_stats = true;
+  sent.provider_points = nlohmann::json::parse(R"([{"Time":1000,"Local":{"EgressByteCount":5,"IngressByteCount":7}}])");
+  sent.provider_distribution = nlohmann::json::parse(R"({"ByteCount":12,"Active":true})");
+  Reply reply;
+  reply.ok = true;
+  reply.in_reply_to = msg::kGetProviderStats;
+  reply.provider_stats = sent;
+  const Reply back = nlohmann::json::parse(DumpForWire(nlohmann::json(reply))).get<Reply>();
+  Check(back.ok && back.provider_stats.has_value(), "reply: provider_stats round-trips");
+  if (back.provider_stats) {
+    const ProviderStats& got = *back.provider_stats;
+    Check(got.available, "provider stats: available round-trips");
+    Check(got.client_id == sent.client_id, "provider stats: client_id round-trips");
+    Check(got.client_count == 3, "provider stats: client_count round-trips");
+    Check(got.window_seconds == 60, "provider stats: window_seconds round-trips");
+    Check(got.has_provider_stats, "provider stats: has_provider_stats round-trips");
+    Check(got.provider_points == sent.provider_points, "provider stats: the points arrive unchanged");
+    Check(got.provider_distribution == sent.provider_distribution,
+          "provider stats: the distribution arrives unchanged");
+  }
+  Check(!back.status, "reply: get_provider_stats carries no tunnel status");
+
+  // an older service: "unknown request type", and nothing that reads as stats
+  const Reply old = nlohmann::json::parse(
+      R"({"type":"reply","ok":false,"error":"unknown request type: get_provider_stats","in_reply_to":"get_provider_stats"})")
+                        .get<Reply>();
+  Check(!old.ok && !old.provider_stats, "stats: an older service's reply carries no statistics");
+  // nothing runs: unavailable, and every field empty
+  const ProviderStats none = nlohmann::json::parse(DumpForWire(nlohmann::json(ProviderStats{}))).get<ProviderStats>();
+  Check(!none.available && none.client_id.empty() && none.client_count == 0 &&
+            !none.has_provider_stats && none.provider_points.empty() &&
+            none.provider_distribution.is_null(),
+        "stats: no provider-only device reads as unavailable and empty");
+  // a document of the wrong shape reads as none, never as a throw that loses the rest
+  const ProviderStats odd = nlohmann::json::parse(
+      R"({"available":true,"client_count":2,"provider_points":{"Time":1},"provider_distribution":[1,2]})")
+                                .get<ProviderStats>();
+  Check(odd.available && odd.client_count == 2 && odd.provider_points.empty() &&
+            odd.provider_distribution.is_null(),
+        "stats: wrong-shaped sdk documents read as none");
+}
+
+// (g) the readers, on the sdk's own types when built against the header: the
+// service writes them with to_json, the app reads them back with from_json
+void TestProviderStatsReaders() {
+  std::vector<doc::ThroughputPoint> points(2);
+  points[0].Time = 1000;
+  points[1].Time = 2000;
+  doc::ThroughputSample local{};
+  local.EgressByteCount = 5;
+  local.IngressByteCount = 7;
+  points[1].Local = local;
+  doc::TransportDistribution distribution{};
+  distribution.ByteCount = 12;
+  distribution.Active = true;
+
+  ProviderStats stats;
+  stats.available = true;
+  stats.provider_points = points;              // the service's write
+  stats.provider_distribution = distribution;
+  const ProviderStats wire = nlohmann::json::parse(DumpForWire(nlohmann::json(stats))).get<ProviderStats>();
+
+  const std::vector<doc::ThroughputPoint> read = ProviderPointsOf<doc::ThroughputPoint>(wire);
+  Check(read.size() == 2 && read[0].Time == 1000 && read[1].Time == 2000,
+        "readers: the points come back, oldest first");
+  Check(read.size() == 2 && !read[0].Local && read[1].Local &&
+            read[1].Local->EgressByteCount == 5 && read[1].Local->IngressByteCount == 7,
+        "readers: a point's samples come back");
+  const std::optional<doc::TransportDistribution> back =
+      ProviderDistributionOf<doc::TransportDistribution>(wire);
+  Check(back && back->ByteCount == 12 && back->Active, "readers: the distribution comes back");
+
+  ProviderStats empty;
+  Check(ProviderPointsOf<doc::ThroughputPoint>(empty).empty(), "readers: no points read as none");
+  Check(!ProviderDistributionOf<doc::TransportDistribution>(empty),
+        "readers: no distribution reads as none");
+  ProviderStats unreadable;
+  unreadable.provider_points = nlohmann::json::parse(R"([{"Time":"soon"}])");
+  unreadable.provider_distribution = nlohmann::json::parse(R"({"ByteCount":"many"})");
+  Check(ProviderPointsOf<doc::ThroughputPoint>(unreadable).empty(),
+        "readers: points the type cannot read are none, never a partial window");
+  Check(!ProviderDistributionOf<doc::TransportDistribution>(unreadable),
+        "readers: a distribution the type cannot read is none");
+}
+
+// (h) the extender role on the wire: its series, its status and the setting,
+// what a service too old to send them answers, and shapes that are not theirs
+void TestProviderStatsExtender() {
+  ProviderStats sent;
+  sent.available = true;
+  sent.extender_points = nlohmann::json::parse(
+      R"([{"Time":3000,"Remote":{"EgressByteCount":11,"IngressByteCount":13}}])");
+  sent.extender_provide_status = nlohmann::json::parse(
+      R"({"Supported":true,"State":"active","Reason":"","Enabled":true,"ActivatedV4":true})");
+  sent.provide_extender = true;
+  Reply reply;
+  reply.ok = true;
+  reply.in_reply_to = msg::kGetProviderStats;
+  reply.provider_stats = sent;
+  const Reply back = nlohmann::json::parse(DumpForWire(nlohmann::json(reply))).get<Reply>();
+  Check(back.ok && back.provider_stats.has_value(), "extender: the reply carries the statistics");
+  if (back.provider_stats) {
+    const ProviderStats& got = *back.provider_stats;
+    Check(got.extender_points == sent.extender_points,
+          "provider stats: the extender points arrive unchanged");
+    Check(got.extender_provide_status == sent.extender_provide_status,
+          "provider stats: extender_provide_status round-trips");
+    Check(got.provide_extender, "provider stats: provide_extender round-trips");
+    Check(got.provider_points.empty(), "provider stats: the extender series is not the provider's");
+  }
+
+  // a service that knows get_provider_stats but not the extender fields sends
+  // exactly this: no status, no series and the setting off, which the app
+  // reads as the role unsupported (both extender surfaces hidden, as before)
+  const ProviderStats older = nlohmann::json::parse(
+      R"({"available":true,"client_id":"c","client_count":1,"window_seconds":60,"has_provider_stats":true,"provider_points":[],"provider_distribution":null})")
+                                  .get<ProviderStats>();
+  Check(older.available && older.client_count == 1 && older.extender_provide_status.is_null() &&
+            older.extender_points.empty() && !older.provide_extender,
+        "extender: a service without the extender fields reads as no status and no series");
+  Check(!ExtenderProvideStatusOf<doc::ExtenderProvideStatus>(older),
+        "extender: an older service's answer has no status for the app to read");
+  // nothing runs: no role to report
+  const ProviderStats none =
+      nlohmann::json::parse(DumpForWire(nlohmann::json(ProviderStats{}))).get<ProviderStats>();
+  Check(none.extender_provide_status.is_null() && none.extender_points.empty() &&
+            !none.provide_extender,
+        "extender: no provider-only device reports no role");
+  // a document of the wrong shape reads as none, never as a throw that loses the rest
+  const ProviderStats odd = nlohmann::json::parse(
+      R"({"available":true,"client_count":2,"provide_extender":true,"extender_points":{"Time":1},"extender_provide_status":[1,2]})")
+                                .get<ProviderStats>();
+  Check(odd.available && odd.client_count == 2 && odd.provide_extender &&
+            odd.extender_points.empty() && odd.extender_provide_status.is_null(),
+        "extender: wrong-shaped sdk documents read as none");
+}
+
+// (i) the extender readers, on the sdk's own types when built against the
+// header: the service writes them with to_json, the app reads them back with
+// from_json
+void TestExtenderReaders() {
+  std::vector<doc::ThroughputPoint> providerPoints(1);
+  providerPoints[0].Time = 1000;
+  std::vector<doc::ThroughputPoint> extenderPoints(2);
+  extenderPoints[0].Time = 2000;
+  extenderPoints[1].Time = 3000;
+  doc::ThroughputSample relayed{};
+  relayed.EgressByteCount = 11;
+  relayed.IngressByteCount = 13;
+  extenderPoints[1].Remote = relayed;
+  doc::ExtenderProvideStatus status{};
+  status.Supported = true;
+  status.State = "active";
+  status.Reason = "dial tcp6 [2001:db8::1]:443: i/o timeout";
+  status.Enabled = true;
+  status.ActivatedV4 = true;
+
+  ProviderStats stats;
+  stats.available = true;
+  stats.provider_points = providerPoints;  // the service's writes
+  stats.extender_points = extenderPoints;
+  stats.extender_provide_status = status;
+  stats.provide_extender = true;
+  const ProviderStats wire = nlohmann::json::parse(DumpForWire(nlohmann::json(stats))).get<ProviderStats>();
+
+  const std::vector<doc::ThroughputPoint> read = ExtenderPointsOf<doc::ThroughputPoint>(wire);
+  Check(read.size() == 2 && read[0].Time == 2000 && read[1].Time == 3000,
+        "readers: the extender points come back, oldest first");
+  Check(read.size() == 2 && !read[0].Remote && read[1].Remote &&
+            read[1].Remote->EgressByteCount == 11 && read[1].Remote->IngressByteCount == 13,
+        "readers: an extender point's samples come back");
+  const std::vector<doc::ThroughputPoint> provider = ProviderPointsOf<doc::ThroughputPoint>(wire);
+  Check(provider.size() == 1 && provider[0].Time == 1000,
+        "readers: the provider series stays its own beside the extender's");
+  const std::optional<doc::ExtenderProvideStatus> back =
+      ExtenderProvideStatusOf<doc::ExtenderProvideStatus>(wire);
+  Check(back && back->Supported && back->State == "active" && back->Enabled &&
+            back->ActivatedV4 && back->Reason == status.Reason,
+        "readers: the extender status comes back");
+  Check(wire.provide_extender, "readers: the setting comes back beside it");
+
+  ProviderStats empty;
+  Check(ExtenderPointsOf<doc::ThroughputPoint>(empty).empty(),
+        "readers: no extender points read as none");
+  Check(!ExtenderProvideStatusOf<doc::ExtenderProvideStatus>(empty),
+        "readers: no extender status reads as none");
+  ProviderStats unreadable;
+  unreadable.extender_points = nlohmann::json::parse(R"([{"Time":"soon"}])");
+  unreadable.extender_provide_status = nlohmann::json::parse(R"({"Supported":"yes"})");
+  Check(ExtenderPointsOf<doc::ThroughputPoint>(unreadable).empty(),
+        "readers: extender points the type cannot read are none, never a partial window");
+  Check(!ExtenderProvideStatusOf<doc::ExtenderProvideStatus>(unreadable),
+        "readers: an extender status the type cannot read is none");
+}
+
+// (j) the Extender switch while disconnected: the set_provide_extender verb and
+// its request, and the provide_extender_writable field that tells the app the
+// service takes it, with an older service's silence read as no writer
+void TestSetProvideExtender() {
+  Check(std::string(msg::kSetProvideExtender) == "set_provide_extender",
+        "switch: the set_provide_extender tag");
+  for (const bool on : {false, true}) {
+    SetProvideExtender sent;
+    sent.provide_extender = on;
+    const nlohmann::json request = Request(msg::kSetProvideExtender, nlohmann::json(sent));
+    const nlohmann::json wire = nlohmann::json::parse(DumpForWire(request));
+    Check(TypeOf(wire) == "set_provide_extender", "switch: the request carries its type");
+    Check(wire.get<SetProvideExtender>().provide_extender == on,
+          std::string("switch: provide_extender round-trips ") + (on ? "on" : "off"));
+  }
+  // a write whose value did not arrive writes nothing, not a default
+  for (const char* malformed : {R"({})", R"({"provide_extender":null})",
+                                R"({"provide_extender":"false"})", R"({"provide_extender":0})"}) {
+    bool threw = false;
+    try {
+      (void)nlohmann::json::parse(malformed).get<SetProvideExtender>();
+    } catch (const std::exception&) {
+      threw = true;
+    }
+    Check(threw, std::string("switch: a request without a boolean value is refused: ") + malformed);
+  }
+
+  ProviderStats sent;
+  sent.available = true;
+  sent.extender_provide_status = nlohmann::json::parse(
+      R"({"Supported":true,"State":"off","Reason":"","Enabled":false,"ActivatedV4":false})");
+  sent.provide_extender = false;
+  sent.provide_extender_writable = true;
+  Reply reply;
+  reply.ok = true;
+  reply.in_reply_to = msg::kGetProviderStats;
+  reply.provider_stats = sent;
+  const Reply back = nlohmann::json::parse(DumpForWire(nlohmann::json(reply))).get<Reply>();
+  Check(back.provider_stats && back.provider_stats->provide_extender_writable,
+        "provider stats: provide_extender_writable round-trips");
+  Check(back.provider_stats && !back.provider_stats->provide_extender,
+        "switch: the setting beside it stays its own");
+  // a service from before the verb sends the role without the writer: the
+  // switch must stay hidden over it
+  const ProviderStats older = nlohmann::json::parse(
+      R"({"available":true,"client_count":1,"provide_extender":true,"extender_provide_status":{"Supported":true,"State":"active","Reason":"","Enabled":true,"ActivatedV4":true}})")
+                                  .get<ProviderStats>();
+  Check(older.provide_extender && !older.provide_extender_writable,
+        "switch: a service without the field reads as no writer");
+  const ProviderStats none =
+      nlohmann::json::parse(DumpForWire(nlohmann::json(ProviderStats{}))).get<ProviderStats>();
+  Check(!none.provide_extender_writable, "switch: no provider-only device has no writer");
+  Check(kProtocolVersion == 4, "switch: no protocol bump for the verb and its field");
+}
+
+}  // namespace
+
+int main() {
+  TestTags();
+  TestStartProviderJson();
+  TestStatusFields();
+  TestSameProviderDevice();
+  TestProviderFacts();
+  TestProviderStatsReply();
+  TestProviderStatsReaders();
+  TestProviderStatsExtender();
+  TestExtenderReaders();
+  TestSetProvideExtender();
+  std::cout << (gCases - gFailures) << "/" << gCases << " provide protocol checks passed"
+#if defined(URNW_PROVIDE_PROTOCOL_TESTS_SDK)
+            << " (against urnetwork_sdk.hpp)"
+#endif
+            << "\n";
+  return gFailures == 0 ? 0 : 1;
+}
