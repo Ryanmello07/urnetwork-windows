@@ -110,6 +110,30 @@ hstring Missing(std::string_view key, const wchar_t* english) {
   return hstring{value};
 }
 
+// The leading marks of the Account rows this class builds (server
+// session/REVOKE-UI-FINAL.md §1.2: every Account row leads with one, as
+// android's and apple's do). Segoe Fluent Icons; android and apple mark none
+// of these rows, so each is the glyph closest to what the row is.
+// AccountPage.cpp and MainWindow.xaml carry the profile's and the referrals'.
+constexpr wchar_t kSignInMethodGlyph[] = L"\uE8D7";   // Permissions, a key: a way to sign in
+constexpr wchar_t kAuthCodeGlyph[] = L"\uE75F";       // Dialpad: a code typed on another device
+constexpr wchar_t kClientIdGlyph[] = L"\uE8EC";       // Tag: this device's identifier
+constexpr wchar_t kSignOutGlyph[] = L"\uF3B1";        // SignOut
+constexpr wchar_t kDeleteAccountGlyph[] = L"\uE74D";  // Delete, the bin
+
+// The row kit's pane mode for a scope, put back as it was at the end. For a
+// renderer that runs after its section's build, which is where the mode is set.
+class PaneModeScope {
+ public:
+  PaneModeScope() : previous_(rows::PaneMode()) { rows::SetPaneMode(true); }
+  ~PaneModeScope() { rows::SetPaneMode(previous_); }
+  PaneModeScope(PaneModeScope const&) = delete;
+  PaneModeScope& operator=(PaneModeScope const&) = delete;
+
+ private:
+  bool previous_;
+};
+
 }  // namespace
 
 SettingsPage::SettingsPage(winrt::URnetwork::implementation::MainWindow& window)
@@ -232,19 +256,21 @@ void SettingsPage::BuildSecuritySection(Panel const& host) {
   // three other rows when this lived on Settings.
   authMethodsPanel_ = StackPanel();
   card.Children().Append(authMethodsPanel_);
-  auto addAuth = ButtonRow(card, Loc("site_app_login_methods"), hstring{}, Loc("add"));
+  auto addAuth = ButtonRow(card, kit::MakeRowGlyph(kSignInMethodGlyph),
+                           Loc("site_app_login_methods"), hstring{}, Loc("add"));
   addAuth.Click([this](auto const&, auto const&) { ShowAddAuthSheet(); });
   // Nothing has been asked for yet; LoadSettings moves this on.
   RenderAuthMethods(FieldState::NoSession);
 
   // Auth code - a short-lived credential for signing in on another device.
-  auto authCodeButton = ButtonRow(card, Loc("auth_code"),
+  auto authCodeButton = ButtonRow(card, kit::MakeRowGlyph(kAuthCodeGlyph), Loc("auth_code"),
                                   Loc("created_auth_codes_expire_after_5_minutes"),
                                   Loc("site_app_create_auth_code"));
   authCodeButton.Click([this](auto const&, auto const&) { ShowAuthCodeSheet(); });
 
   // Client ID - the identifier support asks for; copy is the only action.
-  clientIdValue_ = ValueActionRow(card, Loc("client_id"), Loc("copy"), clientIdCopy_);
+  clientIdValue_ = ValueActionRow(card, kit::MakeRowGlyph(kClientIdGlyph), Loc("client_id"),
+                                  Loc("copy"), clientIdCopy_);
   clientIdCopy_.IsEnabled(false);
   clientIdCopy_.Click([this](auto const&, auto const&) {
     if (clientId_.empty()) return;
@@ -671,7 +697,7 @@ void SettingsPage::BuildDangerSection() {
   // WHOLE-ROW affordances, not a label with a button beside it repeating the
   // same word. Both rows previously read "Sign out [Sign out]".
   TextBlock unused{nullptr};
-  auto signOut = NavRow(host, Loc("sign_out"), unused);
+  auto signOut = NavRow(host, kit::MakeRowGlyph(kSignOutGlyph), Loc("sign_out"), unused);
   signOut.Click([this](auto const& sender, auto const& args) { OnSignOut(sender, args); });
 
   // NOT red here. The spec is explicit that a destructive command must not be a
@@ -679,7 +705,8 @@ void SettingsPage::BuildDangerSection() {
   // confirmation context - which for this one is DeleteAccountSheet, where the
   // user types the network name back before the button is enabled at all.
   TextBlock unusedDelete{nullptr};
-  deleteAccountButton_ = NavRow(host, Loc("delete_account_2"), unusedDelete);
+  deleteAccountButton_ =
+      NavRow(host, kit::MakeRowGlyph(kDeleteAccountGlyph), Loc("delete_account_2"), unusedDelete);
   deleteAccountButton_.Click([this](auto const&, auto const&) { ShowDeleteAccountSheet(); });
 }
 
@@ -935,6 +962,11 @@ void SettingsPage::LoadPreferences() {
 }
 
 void SettingsPage::RenderAuthMethods(rows::FieldState state) {
+  // The panel is on Account's pane (BuildSecuritySection), so these are pane
+  // rows whenever this runs. A load renders long after the build put the mode
+  // back, and the loaded methods used to come out as card rows there: no fixed
+  // height, no hairline, a red Remove, and now no leading mark.
+  const PaneModeScope paneMode;
   authMethodsPanel_.Children().Clear();
   if (state != FieldState::Loaded || authTypes_.empty()) {
     // Loading / NoSession / Empty / Failed all get a line that SAYS which one
@@ -946,16 +978,12 @@ void SettingsPage::RenderAuthMethods(rows::FieldState state) {
     // In a pane the state line has to sit on the pane's grid like everything
     // else: bare, it read as a caption floating above the row below it, with
     // neither the 12px inset nor the hairline the rows around it carry.
-    if (rows::PaneMode()) {
-      Border box;
-      box.Padding(ThicknessHelper::FromLengths(12, 8, 12, 8));
-      box.BorderBrush(colors::BorderBrush());
-      box.BorderThickness(ThicknessHelper::FromLengths(0, 0, 0, 1));
-      box.Child(note);
-      authMethodsPanel_.Children().Append(box);
-      return;
-    }
-    authMethodsPanel_.Children().Append(note);
+    Border box;
+    box.Padding(ThicknessHelper::FromLengths(12, 8, 12, 8));
+    box.BorderBrush(colors::BorderBrush());
+    box.BorderThickness(ThicknessHelper::FromLengths(0, 0, 0, 1));
+    box.Child(note);
+    authMethodsPanel_.Children().Append(box);
     return;
   }
   for (auto const& authType : authTypes_) {
@@ -965,7 +993,7 @@ void SettingsPage::RenderAuthMethods(rows::FieldState state) {
     // in every default row, and that red belongs to the destructive confirmation
     // context - which for this one is ConfirmRemoveAuth's dialog, where removing
     // the only sign-in method is spelled out.
-    if (!rows::PaneMode()) remove.Foreground(colors::DangerBrush());
+    //
     // A modal confirm, as apple's SettingsView does it - NOT the two-click arm
     // this used to be. That arm had three faults at once: a double-click armed
     // and committed in a single gesture, it never disarmed, and it offered no
@@ -973,7 +1001,8 @@ void SettingsPage::RenderAuthMethods(rows::FieldState state) {
     // out of the network permanently, so the confirmation has to be a distinct
     // deliberate act with an explicit Cancel.
     remove.Click([this, authType](auto const&, auto const&) { ConfirmRemoveAuth(authType); });
-    Row(authMethodsPanel_, winrt::to_hstring(AuthMethodLabel(authType)), hstring{}, remove);
+    Row(authMethodsPanel_, kit::MakeRowGlyph(kSignInMethodGlyph),
+        winrt::to_hstring(AuthMethodLabel(authType)), hstring{}, remove);
   }
 }
 

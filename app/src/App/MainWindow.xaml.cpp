@@ -96,6 +96,7 @@ MainWindow::MainWindow() {
   wallet_ = std::make_unique<urnw::WalletPage>(*this);
   settings_ = std::make_unique<urnw::SettingsPage>(*this);
   referrals_ = std::make_unique<urnw::ReferralsPage>(*this);
+  sessions_ = std::make_unique<urnw::SessionsPage>(*this);
   licenses_ = std::make_unique<urnw::LicensesPage>(*this);
   // Last: its ctor binds SdkHost's mode-notice handler and asks for a refresh,
   // so everything it may paint over must already exist.
@@ -384,6 +385,8 @@ MainWindow::~MainWindow() {
   // relying on member declaration order
   connect_.reset();
   wallet_.reset();
+  // its session controller closes, after the listener is dropped
+  sessions_.reset();
   login_.reset();
   account_.reset();
   settings_.reset();
@@ -402,6 +405,9 @@ void MainWindow::SetPresentationActive(bool active) {
   network_->SetPresentationActive(active);
   // the login carousel's timer: it runs only while the window is on screen
   login_->SetPresentationActive(active);
+  // the Sessions page's controller polls only while the window presents, and
+  // refreshes when it comes back
+  sessions_->SetPresentationActive(active);
 }
 
 // ---- strings -------------------------------------------------------------
@@ -437,6 +443,7 @@ void MainWindow::ApplyStrings() {
   // the rows ApplyStrings builds start hidden: re-apply the plan's store
   settings_->ApplySubscriptionStore(balance_.subscriptionStoreFamily);
   referrals_->ApplyStrings();
+  sessions_->ApplyStrings();
   licenses_->ApplyStrings();
   developer_->ApplyStrings();
 }
@@ -1172,6 +1179,12 @@ void MainWindow::OnNavSelectionChanged(NavigationView const&,
   // Refer and earn page that may have been open in Account's place
   referralsOpen_ = false;
   ReferralsView().Visibility(Visibility::Collapsed);
+  // ...nor on the Sessions page, whose session controller closes with it
+  if (sessionsOpen_) {
+    sessionsOpen_ = false;
+    sessions_->Close();
+  }
+  SessionsView().Visibility(Visibility::Collapsed);
   // ...and never on the Licenses page that may have been open in Settings'
   if (LicensesView().Visibility() == Visibility::Visible) licenses_->OnClosed();
   LicensesView().Visibility(Visibility::Collapsed);
@@ -1292,6 +1305,27 @@ void MainWindow::CloseReferrals() {
   referralsOpen_ = false;
   ReferralsView().Visibility(Visibility::Collapsed);
   AccountView().Visibility(Visibility::Visible);
+}
+
+// ---- the Sessions page (reached from Account's Sessions row) -----------------
+// The page opens its own session controller on the in-process Api (with no
+// session, --preview-ui included, it opens none and says so), and closes it
+// with the page.
+
+void MainWindow::OpenSessions() {
+  sessionsOpen_ = true;
+  AccountView().Visibility(Visibility::Collapsed);
+  SessionsView().Visibility(Visibility::Visible);
+  sessions_->Open();
+}
+
+void MainWindow::CloseSessions() {
+  sessionsOpen_ = false;
+  sessions_->Close();
+  SessionsView().Visibility(Visibility::Collapsed);
+  AccountView().Visibility(Visibility::Visible);
+  // keyboard focus back on the row that opened the page
+  account_->FocusSessionsNav();
 }
 
 // ---- the Licenses page (reached from Settings' Licenses row) -----------------
@@ -2087,6 +2121,9 @@ void MainWindow::ApplyAuthState(urnw::AuthState state, std::string const& error)
     account_->ResetForSignOut();
     referrals_->ResetForSignOut();
     if (referralsOpen_) CloseReferrals();
+    // the departed account's sessions and their controller go
+    sessions_->ResetForSignOut();
+    if (sessionsOpen_) CloseSessions();
   }
 }
 

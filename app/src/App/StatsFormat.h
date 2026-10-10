@@ -35,7 +35,16 @@ bool IsIpAddressValue(const std::string& value);
 // whether the value is an https URL with a host (DoH endpoint)
 bool IsValidDohUrl(const std::string& value);
 
-// "now", "12s ago", "3m ago", "2h ago"
+// "now", "12s ago", "3m ago", "2h ago", "6d ago", then from a week on the
+// localized date (FormatLocalDate). The buckets are RelativeTimeSpan.h's.
 std::string RelativeTime(int64_t thenMillis, int64_t nowMillis);
+
+// A Unix time in milliseconds as the user's short date in the user's time zone
+// (GetDateFormatEx DATE_SHORTDATE, as the update banner's dates); the UTC
+// YYYY-MM-DD when Windows cannot format it.
+std::string FormatLocalDate(int64_t unixMillis);
+// The same time as the user's long date and time ("Friday, October 9, 2026
+// 6:41 PM"): what a relative time or a short date is read out as.
+std::string FormatLocalDateTime(int64_t unixMillis);
 
 }  // namespace urnw

@@ -19,10 +19,12 @@
 
 #include <memory>
 #include <optional>
+#include <string_view>
 #include <vector>
 
 #include <winrt/Microsoft.UI.Dispatching.h>
 #include <winrt/Microsoft.UI.Xaml.Controls.h>
+#include <winrt/Microsoft.UI.Xaml.Media.h>
 #include <winrt/Microsoft.UI.Xaml.Shapes.h>
 
 namespace urnw::kit {
@@ -402,6 +404,35 @@ struct PaneTwoLineRowButton {
 PaneTwoLineRowButton MakePaneTwoLineRowButton(winrt::hstring const& title,
                                               winrt::hstring const& note = {},
                                               double height = 44);
+
+// ---- a row's leading mark --------------------------------------------------
+//
+// The Account list's rows lead with a mark, as android's and apple's Account
+// rows do (server session/REVOKE-UI-FINAL.md §1.2): a Segoe Fluent glyph, or a
+// vector path where Segoe has none (the Sessions row's head, SessionGlyphs.h).
+// Either one is the row icon's size and muted tint (UrRowIconStyle, the mark
+// the markup rows carry) and Raw for automation: the label beside it already
+// says what the row is. The leading overloads below take one, and so do the
+// rows kit's (SettingsSheets.h).
+inline constexpr double kRowIconSize = 16;
+
+winrt::Microsoft::UI::Xaml::Controls::IconElement MakeRowGlyph(winrt::hstring const& glyph);
+
+// One path on a `viewBox`-square box, filled nonzero as the SVG it comes from,
+// drawn `size` square in `brush` (the muted row tint when null). A PathIcon
+// draws its geometry unstretched, so the box is scaled to the size here.
+winrt::Microsoft::UI::Xaml::Controls::PathIcon MakeRowPathIcon(
+    std::wstring_view pathData, double viewBox, double size = kRowIconSize,
+    winrt::Microsoft::UI::Xaml::Media::Brush const& brush = nullptr);
+
+// The two two-line rows with a leading mark: the same metrics, with the mark
+// in a first column ahead of the title.
+PaneTwoLineRow MakePaneTwoLineRow(winrt::Microsoft::UI::Xaml::Controls::IconElement const& leading,
+                                  winrt::hstring const& title, winrt::hstring const& note = {},
+                                  double height = 44);
+PaneTwoLineRowButton MakePaneTwoLineRowButton(
+    winrt::Microsoft::UI::Xaml::Controls::IconElement const& leading, winrt::hstring const& title,
+    winrt::hstring const& note = {}, double height = 44);
 
 // A table row: N cells on one grid, one fixed height, a bottom hairline. The
 // widths are star weights, so the columns narrow rather than clip and the header

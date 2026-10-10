@@ -256,6 +256,7 @@
     <ClCompile Include="AccountPage.cpp" />
     <ClCompile Include="ReferralCard.cpp" />
     <ClCompile Include="ReferralsPage.cpp" />
+    <ClCompile Include="SessionsPage.cpp" />
     <ClCompile Include="LicensesPage.cpp" />
     <ClCompile Include="ConnectCanvas.cpp" />
     <ClCompile Include="ConnectPage.cpp" />
@@ -372,6 +373,11 @@
     <ClInclude Include="ReferralShare.h" />
     <ClInclude Include="ReferralTotalsState.h" />
     <ClInclude Include="ReferralsPage.h" />
+    <ClInclude Include="SessionsPage.h" />
+    <!-- header-only and WinRT-free: tools/sessions-tests.cpp runs them -->
+    <ClInclude Include="SessionsPresentation.h" />
+    <ClInclude Include="SessionGlyphs.h" />
+    <ClInclude Include="RelativeTimeSpan.h" />
     <ClInclude Include="LicensesPage.h" />
     <ClInclude Include="LicensePresentation.h" />
     <ClInclude Include="ConnectPage.h" />

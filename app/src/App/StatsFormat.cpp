@@ -7,15 +7,43 @@
 #include <ws2tcpip.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cstdio>
+#include <format>
 #include <set>
 
 #include "Localization.h"
+#include "RelativeTimeSpan.h"
 #include "Sdk.h"
 #include "Strings.h"  // Narrow: the wide localized strings into these utf-8 values
 
 namespace urnw {
 namespace {
+
+// A Unix time in milliseconds as a SYSTEMTIME in the user's time zone, by
+// Windows' rules for that date (daylight time included); false when Windows
+// cannot convert it.
+bool LocalSystemTime(int64_t unixMillis, SYSTEMTIME& local) {
+  // a FILETIME counts 100 ns ticks from 1601-01-01
+  constexpr int64_t kUnixEpochFileTimeMillis = 11'644'473'600'000;
+  if (unixMillis < -kUnixEpochFileTimeMillis) return false;
+  ULARGE_INTEGER ticks{};
+  ticks.QuadPart = static_cast<ULONGLONG>(unixMillis + kUnixEpochFileTimeMillis) * 10'000;
+  const FILETIME utcFile{ticks.LowPart, ticks.HighPart};
+  SYSTEMTIME utc{};
+  return ::FileTimeToSystemTime(&utcFile, &utc) &&
+         ::SystemTimeToTzSpecificLocalTime(nullptr, &utc, &local);
+}
+
+// "2026-10-09", in UTC: a date that reads unambiguously when Windows cannot
+// format the local one.
+std::string UtcDate(int64_t unixMillis) {
+  const std::chrono::sys_days day = std::chrono::floor<std::chrono::days>(
+      std::chrono::sys_time<std::chrono::milliseconds>{std::chrono::milliseconds{unixMillis}});
+  const std::chrono::year_month_day date{day};
+  return std::format("{:04}-{:02}-{:02}", static_cast<int>(date.year()),
+                     static_cast<unsigned>(date.month()), static_cast<unsigned>(date.day()));
+}
 
 // >=100 -> %.0f, >=10 -> %.1f, else %.2f (matches the macOS formatter)
 std::string FormatMagnitude(double value, const char* unit) {
@@ -163,11 +191,39 @@ bool IsValidDohUrl(const std::string& value) {
 }
 
 std::string RelativeTime(int64_t thenMillis, int64_t nowMillis) {
-  const int64_t seconds = std::max<int64_t>(0, (nowMillis - thenMillis) / 1000);
-  if (seconds < 5) return Narrow(Localized("now"));
-  if (seconds < 60) return Narrow(Format("seconds_ago_abbrev", seconds));
-  if (seconds < 3600) return Narrow(Format("minutes_ago_abbrev", seconds / 60));
-  return Narrow(Format("hours_ago_abbrev", seconds / 3600));
+  const relativetime::Span span = relativetime::SpanFor(thenMillis, nowMillis);
+  switch (span.unit) {
+    case relativetime::Unit::Now:
+      return Narrow(Localized(relativetime::KeyFor(span.unit)));
+    case relativetime::Unit::Date:
+      return FormatLocalDate(thenMillis);
+    default:
+      return Narrow(Format(relativetime::KeyFor(span.unit), span.count));
+  }
+}
+
+std::string FormatLocalDate(int64_t unixMillis) {
+  SYSTEMTIME local{};
+  wchar_t date[128] = {};
+  if (!LocalSystemTime(unixMillis, local) ||
+      !::GetDateFormatEx(LOCALE_NAME_USER_DEFAULT, DATE_SHORTDATE, &local, nullptr, date, 128,
+                         nullptr)) {
+    return UtcDate(unixMillis);
+  }
+  return Narrow(date);
+}
+
+std::string FormatLocalDateTime(int64_t unixMillis) {
+  SYSTEMTIME local{};
+  wchar_t date[128] = {};
+  wchar_t time[64] = {};
+  if (!LocalSystemTime(unixMillis, local) ||
+      !::GetDateFormatEx(LOCALE_NAME_USER_DEFAULT, DATE_LONGDATE, &local, nullptr, date, 128,
+                         nullptr) ||
+      !::GetTimeFormatEx(LOCALE_NAME_USER_DEFAULT, TIME_NOSECONDS, &local, nullptr, time, 64)) {
+    return UtcDate(unixMillis);
+  }
+  return Narrow(std::wstring(date) + L" " + time);
 }
 
 }  // namespace urnw

@@ -131,6 +131,26 @@ winrt::Microsoft::UI::Xaml::Controls::Button NavRow(
     winrt::Microsoft::UI::Xaml::Controls::Panel const& host, winrt::hstring const& label,
     winrt::Microsoft::UI::Xaml::Controls::TextBlock& outValue);
 
+// The same four rows with a leading mark (kit::MakeRowGlyph, kit::MakeRowPathIcon):
+// every row of the Account list carries one, as android's and apple's do. The
+// mark is the row's first column, ahead of the label, in both models.
+winrt::Microsoft::UI::Xaml::Controls::Grid Row(
+    winrt::Microsoft::UI::Xaml::Controls::Panel const& host,
+    winrt::Microsoft::UI::Xaml::Controls::IconElement const& leading, winrt::hstring const& label,
+    winrt::hstring const& note, winrt::Microsoft::UI::Xaml::FrameworkElement const& trailing);
+winrt::Microsoft::UI::Xaml::Controls::Button ButtonRow(
+    winrt::Microsoft::UI::Xaml::Controls::Panel const& host,
+    winrt::Microsoft::UI::Xaml::Controls::IconElement const& leading, winrt::hstring const& label,
+    winrt::hstring const& note, winrt::hstring const& action, bool danger = false);
+winrt::Microsoft::UI::Xaml::Controls::TextBlock ValueActionRow(
+    winrt::Microsoft::UI::Xaml::Controls::Panel const& host,
+    winrt::Microsoft::UI::Xaml::Controls::IconElement const& leading, winrt::hstring const& label,
+    winrt::hstring const& action, winrt::Microsoft::UI::Xaml::Controls::Button& outButton);
+winrt::Microsoft::UI::Xaml::Controls::Button NavRow(
+    winrt::Microsoft::UI::Xaml::Controls::Panel const& host,
+    winrt::Microsoft::UI::Xaml::Controls::IconElement const& leading, winrt::hstring const& label,
+    winrt::Microsoft::UI::Xaml::Controls::TextBlock& outValue);
+
 // The terminal states every asynchronously-filled field on these surfaces must
 // reach. This exists because the alternative keeps shipping: a field that only
 // ever knows "I have a value" renders the SAME em dash whether the call has not

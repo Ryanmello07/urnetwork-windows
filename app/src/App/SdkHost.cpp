@@ -375,6 +375,7 @@ SdkHost::~SdkHost() {
   }
   std::scoped_lock lock(mutex_);
   subs_.clear();
+  apiLogoutSub_.reset();
 }
 
 std::string SdkHost::RandomLoopbackHostPort() {
@@ -534,6 +535,28 @@ std::optional<urnet::NetworkSpaceValues> SdkHost::StoredSpaceValuesLocked(
   return std::nullopt;
 }
 
+namespace {
+// The device type this app reports (sdk ClientInfo, server
+// session/REVOKE-UI-FINAL.md §2).
+constexpr const char* kClientDeviceType = "windows";
+}  // namespace
+
+void SdkHost::BindApiLocked() {
+  // Every request, renewal and connect auth this Api makes carries it; the
+  // sdk fills in its own version.
+  api_->setClientInfo(urnet::newClientInfo(kClientDeviceType, appVersion_));
+  // The sdk drops the account's credential on a confirmed 401 against it, and
+  // after a sign-out of this session from the Sessions page, and tells this
+  // Api's logout listeners. The app then signs out the way it does when the
+  // device's credential is rejected; without this it stayed signed in on a
+  // credential the sdk no longer had. A sign-out already done ignores it. On
+  // an sdk thread: the handler marshals (AppController).
+  apiLogoutSub_.reset();
+  apiLogoutSub_.emplace(api_->addAuthLogoutListener([this] {
+    if (loggedIn_.load(std::memory_order_acquire) && onAuthInvalid_) onAuthInvalid_();
+  }));
+}
+
 bool SdkHost::Initialize() {
   std::scoped_lock lock(mutex_);
   // Advanced Mode, BEFORE anything else here. It is a preference on disk, and
@@ -575,6 +598,7 @@ bool SdkHost::Initialize() {
         },
         [this] { return BuildNetworkSpace(); });
     api_ = networkSpace_->getApi();
+    BindApiLocked();
     asyncLocalState_ = networkSpace_->getAsyncLocalState();
     localState_ = asyncLocalState_->getLocalState();
     // the SDK's client event queue over this network space: it persists,
@@ -1335,6 +1359,7 @@ bool SdkHost::ApplyNetworkServer(const std::string& hostName, const std::string&
       // Everything derived from the space has to be re-derived: the Api talks
       // to the new host, and the LocalState holds the new host's jwt.
       api_ = networkSpace_->getApi();
+      BindApiLocked();
       asyncLocalState_ = networkSpace_->getAsyncLocalState();
       localState_ = asyncLocalState_->getLocalState();
       events_ = std::make_unique<ClientEventQueue>(networkSpace_->handle(), appVersion_,

@@ -223,8 +223,13 @@ void DescribeTrailing(FrameworkElement const& trailing, hstring const& label) {
 
 Grid Row(Panel const& host, hstring const& label, hstring const& note,
          FrameworkElement const& trailing) {
+  return Row(host, IconElement{nullptr}, label, note, trailing);
+}
+
+Grid Row(Panel const& host, IconElement const& leading, hstring const& label,
+         hstring const& note, FrameworkElement const& trailing) {
   if (g_paneMode) {
-    auto pane = kit::MakePaneTwoLineRow(label, note);
+    auto pane = kit::MakePaneTwoLineRow(leading, label, note);
     if (trailing) {
       trailing.VerticalAlignment(VerticalAlignment::Center);
       DescribeTrailing(trailing, label);
@@ -236,6 +241,16 @@ Grid Row(Panel const& host, hstring const& label, hstring const& note,
     return pane.trailing;
   }
   Grid row;
+  // the mark, when there is one, is a column of its own ahead of the label
+  int32_t first = 0;
+  if (leading) {
+    ColumnDefinition mark;
+    mark.Width(GridLength{0, GridUnitType::Auto});
+    row.ColumnDefinitions().Append(mark);
+    leading.VerticalAlignment(VerticalAlignment::Center);
+    row.Children().Append(leading);
+    first = 1;
+  }
   ColumnDefinition left, right;
   left.Width(GridLength{1, GridUnitType::Star});
   right.Width(GridLength{0, GridUnitType::Auto});
@@ -259,10 +274,11 @@ Grid Row(Panel const& host, hstring const& label, hstring const& note,
     noteBlock.Foreground(colors::MutedBrush());
     text.Children().Append(noteBlock);
   }
+  Grid::SetColumn(text, first);
   row.Children().Append(text);
 
   if (trailing) {
-    Grid::SetColumn(trailing, 1);
+    Grid::SetColumn(trailing, first + 1);
     trailing.VerticalAlignment(VerticalAlignment::Center);
     DescribeTrailing(trailing, label);
     row.Children().Append(trailing);
@@ -280,10 +296,15 @@ ToggleSwitch ToggleRow(Panel const& host, hstring const& label, hstring const& n
 
 Button ButtonRow(Panel const& host, hstring const& label, hstring const& note,
                  hstring const& action, bool danger) {
+  return ButtonRow(host, IconElement{nullptr}, label, note, action, danger);
+}
+
+Button ButtonRow(Panel const& host, IconElement const& leading, hstring const& label,
+                 hstring const& note, hstring const& action, bool danger) {
   Button button;
   button.Content(winrt::box_value(action));
   if (danger) button.Foreground(colors::DangerBrush());
-  Row(host, label, note, button);
+  Row(host, leading, label, note, button);
   return button;
 }
 
@@ -300,6 +321,11 @@ TextBlock ValueRow(Panel const& host, hstring const& label) {
 
 TextBlock ValueActionRow(Panel const& host, hstring const& label, hstring const& action,
                          Button& outButton) {
+  return ValueActionRow(host, IconElement{nullptr}, label, action, outButton);
+}
+
+TextBlock ValueActionRow(Panel const& host, IconElement const& leading, hstring const& label,
+                         hstring const& action, Button& outButton) {
   StackPanel trailing;
   trailing.Orientation(Orientation::Horizontal);
   trailing.Spacing(8);
@@ -316,13 +342,18 @@ TextBlock ValueActionRow(Panel const& host, hstring const& label, hstring const&
   outButton.Content(winrt::box_value(action));
   trailing.Children().Append(outButton);
 
-  Row(host, label, hstring{}, trailing);
+  Row(host, leading, label, hstring{}, trailing);
   return value;
 }
 
 Button NavRow(Panel const& host, hstring const& label, TextBlock& outValue) {
+  return NavRow(host, IconElement{nullptr}, label, outValue);
+}
+
+Button NavRow(Panel const& host, IconElement const& leading, hstring const& label,
+              TextBlock& outValue) {
   if (g_paneMode) {
-    auto pane = kit::MakePaneTwoLineRowButton(label);
+    auto pane = kit::MakePaneTwoLineRowButton(leading, label);
     outValue = pane.value;
     host.Children().Append(pane.root);
     return pane.root;
@@ -338,6 +369,16 @@ Button NavRow(Panel const& host, hstring const& label, TextBlock& outValue) {
   button.Margin(ThicknessHelper::FromLengths(-12, 0, -12, 0));
 
   Grid content;
+  // the mark, when there is one, is a column of its own ahead of the label
+  int32_t first = 0;
+  if (leading) {
+    ColumnDefinition mark;
+    mark.Width(GridLength{0, GridUnitType::Auto});
+    content.ColumnDefinitions().Append(mark);
+    leading.VerticalAlignment(VerticalAlignment::Center);
+    content.Children().Append(leading);
+    first = 1;
+  }
   ColumnDefinition c0, c1, c2;
   c0.Width(GridLength{1, GridUnitType::Star});
   c1.Width(GridLength{0, GridUnitType::Auto});
@@ -351,6 +392,7 @@ Button NavRow(Panel const& host, hstring const& label, TextBlock& outValue) {
   labelBlock.Text(label);
   labelBlock.FontSize(14);
   labelBlock.VerticalAlignment(VerticalAlignment::Center);
+  Grid::SetColumn(labelBlock, first);
   content.Children().Append(labelBlock);
 
   outValue = TextBlock();
@@ -359,7 +401,7 @@ Button NavRow(Panel const& host, hstring const& label, TextBlock& outValue) {
   outValue.VerticalAlignment(VerticalAlignment::Center);
   outValue.TextTrimming(TextTrimming::CharacterEllipsis);
   outValue.MaxWidth(200);
-  Grid::SetColumn(outValue, 1);
+  Grid::SetColumn(outValue, first + 1);
   content.Children().Append(outValue);
 
   FontIcon chevron;
@@ -367,7 +409,7 @@ Button NavRow(Panel const& host, hstring const& label, TextBlock& outValue) {
   chevron.FontSize(12);
   chevron.VerticalAlignment(VerticalAlignment::Center);
   chevron.Foreground(colors::MutedBrush());
-  Grid::SetColumn(chevron, 2);
+  Grid::SetColumn(chevron, first + 2);
   content.Children().Append(chevron);
 
   button.Content(content);
