@@ -20,6 +20,7 @@
 #include "StopBudget.h"   // the shutdown budgets and the abandonable teardown
 #include "Strings.h"
 #include "ThreadGuard.h"
+#include "Version.h"
 #include "WintunError.h"
 
 namespace urnw {
@@ -211,6 +212,17 @@ urnet::NetworkSpace TunnelController::ImportNetworkSpaceLocked(
         urnet::newNetworkSpaceManager(Narrow(SdkStorageDir(true).wstring()));
   }
   urnet::NetworkSpace space = spaceManager_->importNetworkSpaceFromJson(networkSpaceJson);
+  // The client info this process's Api for the space carries: every device
+  // built on it signs in and connects with that Api's (server
+  // session/REVOKE-UI-FINAL.md §1.13), and the app's own Api, which the app
+  // sets, is in another process. The service ships with the app, so this
+  // build's version is the app's. Its own best effort: an sdk that refuses it
+  // reports an unknown device, and must not cost the start.
+  try {
+    space.getApi().setClientInfo(urnet::newClientInfo("windows", version::kString));
+  } catch (const std::exception& e) {
+    LogWarn("tunnel: setting the client info failed: {}", e.what());
+  }
   // Where set_provide_extender writes with no device running. Its own best
   // effort: a key that cannot be read costs that write, never this start.
   try {

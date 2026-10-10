@@ -1,6 +1,7 @@
 // The Account destination: profile (network name + auth + password), the
-// redeemed balance-code list, and the Referrals row that opens the "Refer and
-// earn" page (ReferralsPage). macOS AccountRootView and ProfileView parity.
+// Sessions row that opens the Sessions page (SessionsPage), the redeemed
+// balance-code list, and the Referrals row that opens the "Refer and earn"
+// page (ReferralsPage). macOS AccountRootView and ProfileView parity.
 //
 // The plan + usage card that sits above these is NOT here: it is written by the
 // SubscriptionBalanceStore relay in MainWindow, which paints the account panel
@@ -69,6 +70,10 @@ class AccountPage {
   void RenderBalanceCodes(urnet::RedeemedBalanceCodeList const& codes,
                           rows::FieldState state);
 
+  // Keyboard focus onto the Sessions row, as the Sessions page closes: back
+  // where the user left the Account list.
+  void FocusSessionsNav();
+
   // Drop the signed-out account's identity. userAuth_ is the dangerous one:
   // SendPasswordReset mails a link to it, so a leftover value mails the
   // PREVIOUS account's owner. needsNameClaim_ would likewise pick the previous
@@ -81,6 +86,9 @@ class AccountPage {
   void BuildProfileExtra();
   // The Referrals row (pane B) that opens the Refer and earn page.
   void BuildReferralsNav();
+  // The Sessions row (pane B), right after the profile, that opens the
+  // Sessions page (SessionsPage.h).
+  void BuildSessionsNav();
   // ---- pane D: extenders (EXTENDER.md K6, K7) ------------------------------
   // The whole section is built here rather than in markup, for the reason
   // SettingsSheets.h gives about the settings sections: MainWindow.xaml is the
@@ -147,6 +155,8 @@ class AccountPage {
   bool built_ = false;
   bool referralsNavBuilt_ = false;
   winrt::Microsoft::UI::Xaml::Controls::TextBlock referralsNavValue_{nullptr};
+  bool sessionsNavBuilt_ = false;
+  winrt::Microsoft::UI::Xaml::Controls::Button sessionsNavButton_{nullptr};
   // one-shot: the "nothing has been requested yet" states, applied by
   // ApplyStrings so a load is not needed to make the card readable
   bool initialStatesApplied_ = false;

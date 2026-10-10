@@ -150,7 +150,7 @@ var catalogNonLookupLiteralReasons = map[string]string{
 	"key":        "a JSON field (SdkHost.cpp, VlessPresentation.h)",
 	"other":      "a CLDR plural category (Localization.cpp)",
 	"provide":    "an onboarding step id (OnboardingRouting.h)",
-	"seedphrase": "a --preview-ui destination (MainWindow.xaml.cpp)",
+	"seedphrase": "a --preview-ui destination (MainWindow.xaml.cpp) and a session's sign-in kind (SessionsPresentation.h)",
 	"widgets":    "an onboarding link step (OnboardingRouting.h)",
 	"zero":       "a CLDR plural category (Localization.cpp)",
 }

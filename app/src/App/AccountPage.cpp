@@ -12,6 +12,7 @@
 #include "Log.h"
 #include "MainWindow.xaml.h"
 #include "PageContext.h"
+#include "SessionGlyphs.h"
 #include "StatsFormat.h"
 #include "Strings.h"
 #include "UrColors.h"
@@ -41,6 +42,15 @@ std::string MaskSecret(std::string const& secret) {
   if (secret.size() <= keep * 2) return std::string(secret.size(), '.');
   return secret.substr(0, keep) + "..." + secret.substr(secret.size() - keep);
 }
+
+// The leading marks of the Account rows this page builds (server
+// session/REVOKE-UI-FINAL.md §1.2), Segoe Fluent Icons. Referrals is a heart, as
+// android's nav_list_item_refer and apple's ur.symbols.heart are; android and
+// apple keep the password inside Profile with no mark, and a lock says it.
+// MainWindow.xaml carries the profile rows' marks; SessionGlyphs.h the
+// Sessions row's.
+constexpr wchar_t kPasswordGlyph[] = L"\uE72E";   // Lock
+constexpr wchar_t kReferralsGlyph[] = L"\uEB51";  // Heart
 
 // apple AccountNavStackView.needsNameClaim: true when the account carries NONE
 // of the identity methods, i.e. it is still on its auto-generated name.
@@ -90,7 +100,7 @@ void AccountPage::BuildProfileExtra() {
   // The password row is a ROW like every other one in this pane, not a loose
   // button under a card: the label says what it is and the trailing word says
   // what pressing it does.
-  auto row = kit::MakePaneTwoLineRow(Loc("update_password"));
+  auto row = kit::MakePaneTwoLineRow(kit::MakeRowGlyph(kPasswordGlyph), Loc("update_password"));
   changePasswordButton_ = Button();
   changePasswordButton_.Content(winrt::box_value(Loc("send")));
   // No auth to send a link to yet; enabled once the account load says otherwise.
@@ -110,9 +120,33 @@ void AccountPage::BuildReferralsNav() {
   referralsNavBuilt_ = true;
   rows::SetPaneMode(true);
   auto card = rows::Card(w_.AccountReferralsNavHost());
-  auto button = rows::NavRow(card, Loc("referrals"), referralsNavValue_);
+  auto button = rows::NavRow(card, kit::MakeRowGlyph(kReferralsGlyph), Loc("referrals"),
+                             referralsNavValue_);
   button.Click([this](auto const&, auto const&) { w_.OpenReferrals(); });
   rows::SetPaneMode(false);
+}
+
+// The Sessions row (server session/REVOKE-UI-FINAL.md §1.1): directly after the
+// profile, it opens the Sessions page (SessionsPage) in Account's place. It is
+// always there and asks the server nothing; the page says when sessions are
+// not available yet. Its mark is the side-facing head every app gives it.
+void AccountPage::BuildSessionsNav() {
+  if (sessionsNavBuilt_) return;
+  sessionsNavBuilt_ = true;
+  rows::SetPaneMode(true);
+  auto card = rows::Card(w_.AccountSessionsNavHost());
+  TextBlock unused{nullptr};
+  sessionsNavButton_ = rows::NavRow(
+      card, kit::MakeRowPathIcon(glyph::kSessionFaceProfilePath, glyph::kSessionGlyphViewBox),
+      Loc("sessions_title"), unused);
+  Automation::AutomationProperties::SetAutomationId(sessionsNavButton_,
+                                                     L"acceptance.account.sessions");
+  sessionsNavButton_.Click([this](auto const&, auto const&) { w_.OpenSessions(); });
+  rows::SetPaneMode(false);
+}
+
+void AccountPage::FocusSessionsNav() {
+  if (sessionsNavButton_) sessionsNavButton_.Focus(FocusState::Programmatic);
 }
 
 // ---- the profile name's explicit edit mode (R4) ----------------------------
@@ -200,6 +234,7 @@ void AccountPage::ApplyAccountState(rows::FieldState state) {
 
 void AccountPage::ApplyStrings() {
   BuildProfileExtra();  // idempotent
+  BuildSessionsNav();   // idempotent
   BuildReferralsNav();  // idempotent
 
   // the three pane headers
