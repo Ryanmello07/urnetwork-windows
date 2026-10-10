@@ -28,6 +28,7 @@
 #include "ReferralsPage.h"
 #include "SdkHost.h"
 #include "ServiceSetup.h"
+#include "SessionsPage.h"
 #include "SettingsPage.h"
 #include "SubscriptionBalance.h"
 #include "UpdateChecker.h"
@@ -63,6 +64,7 @@ struct MainWindow : MainWindowT<MainWindow> {
   urnw::WalletPage& wallet() { return *wallet_; }
   urnw::SettingsPage& settings() { return *settings_; }
   urnw::ReferralsPage& referrals() { return *referrals_; }
+  urnw::SessionsPage& sessions() { return *sessions_; }
   urnw::LicensesPage& licenses() { return *licenses_; }
   urnw::DeveloperPage& developer() { return *developer_; }
 
@@ -93,6 +95,12 @@ struct MainWindow : MainWindowT<MainWindow> {
   // "‹ Account"; any rail navigation closes it too.
   void OpenReferrals();
   void CloseReferrals();
+  // The Sessions page (server session/REVOKE-UI-FINAL.md): shown in place of
+  // the Account panes the same way, opened from Account's Sessions row and
+  // closed from its own "‹ Account", by any rail navigation and by a sign-out;
+  // its session controller lives exactly as long as it is open.
+  void OpenSessions();
+  void CloseSessions();
   // The Licenses page: shown in place of the Settings panes the same way (no
   // rail item), opened from Settings' Licenses row and closed from its own
   // "‹ Settings"; any rail navigation closes it too.
@@ -487,6 +495,8 @@ struct MainWindow : MainWindowT<MainWindow> {
   std::unique_ptr<urnw::SettingsPage> settings_;
   std::unique_ptr<urnw::ReferralsPage> referrals_;
   bool referralsOpen_ = false;  // the Refer and earn page is up in Account's place
+  std::unique_ptr<urnw::SessionsPage> sessions_;
+  bool sessionsOpen_ = false;  // the Sessions page is up in Account's place
   std::unique_ptr<urnw::LicensesPage> licenses_;
   std::unique_ptr<urnw::DeveloperPage> developer_;
 

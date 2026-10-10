@@ -38,6 +38,7 @@
 #include "ServiceRecoveryPolicy.h"
 #include "SignOut.h"
 #include "VerifySendNotice.h"
+#include "Version.h"
 #include "WalletBridgeRoute.h"
 #include "WalletConnect.h"
 
@@ -1549,9 +1550,10 @@ class SdkHost {
   void UploadFeedbackLogs(const std::string& feedbackId);
   // Account page opens billing/upgrade in the browser at this host.
   std::string linkHostName() const { return "ur.io"; }
-  // The version this app reports to the SDK/server. Settings shows it because
-  // urnet::version() is empty in this SDK build, so it is the only build
-  // identifier the version row can actually display.
+  // The version this app reports to the SDK/server: this build's own
+  // (urnw::version::kString). Settings shows it because urnet::version() is
+  // empty in this SDK build, so it is the only build identifier the version row
+  // can actually display.
   std::string appVersion() const { return appVersion_; }
 
   // ---- start mode ----------------------------------------------------------
@@ -2038,6 +2040,13 @@ class SdkHost {
   // a reconnect with the kill switch on would open the machine for the length
   // of a bring-up. start_tunnel is the reconciler there.
   void TeardownSessionLocked(bool stopTunnel = true);
+  // The Api Initialize created or ApplyNetworkServer replaced: the client info
+  // its requests and connect auths carry, "windows" and this build's version
+  // (server session/REVOKE-UI-FINAL.md §1.13, the last use the Sessions page
+  // lists), and its confirmed rejection of the account's credential routed to
+  // the sign-out the device's rejection takes (onAuthInvalid_). Caller holds
+  // mutex_.
+  void BindApiLocked();
   void SetupWalletCallbacks();
   void RequestWalletChallenge(
       const std::string& blockchain, const std::string& walletAddress,
@@ -2542,7 +2551,12 @@ class SdkHost {
   // anything failed. The worker reads it to log the outcome at INFO and skip
   // the failure notice. Guarded by mutex_ like bootstrapError_.
   bool bootstrapDeclined_ = false;
-  std::string appVersion_ = "0.0.1";
+  // this build's version (Common/Version.h): what the sdk's client info, the
+  // service's devices, the product events and the log uploads report. It was
+  // a hard-coded "0.0.1", which every one of them sent for every build.
+  std::string appVersion_ = urnw::version::kString;
+  // The Api's logout listener (BindApiLocked), replaced with the Api.
+  std::optional<urnet::Sub> apiLogoutSub_;
 
   // Answer and clear whichever wallet-bridge flow is outstanding. Called when a
   // new one starts: the bridge has a single pair of callbacks, so the new flow

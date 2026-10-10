@@ -417,25 +417,87 @@ PaneGroupHeader MakePaneGroupHeader(winrt::hstring const& title, winrt::hstring 
   return out;
 }
 
+IconElement MakeRowGlyph(winrt::hstring const& glyph) {
+  FontIcon icon;
+  if (auto style = StyleByKey(L"UrRowIconStyle")) {
+    icon.Style(style);
+  } else {
+    icon.FontFamily(IconFont());
+    icon.FontSize(kRowIconSize);
+    icon.Foreground(urnw::colors::MutedBrush());
+    icon.VerticalAlignment(VerticalAlignment::Center);
+  }
+  icon.Glyph(glyph);
+  Automation::AutomationProperties::SetAccessibilityView(
+      icon, Automation::Peers::AccessibilityView::Raw);
+  return icon;
+}
+
+PathIcon MakeRowPathIcon(std::wstring_view pathData, double viewBox, double size,
+                         Media::Brush const& brush) {
+  // Path.Data's mini-language has no runtime parser a C++ caller can reach, so
+  // a one-element document goes through XamlReader, as ConnectorPath does. F1:
+  // nonzero, the SVG fill; XAML's default is even-odd.
+  const std::wstring markup =
+      L"<PathIcon xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' Data='F1 " +
+      std::wstring(pathData) + L"'/>";
+  auto icon = Markup::XamlReader::Load(winrt::hstring{markup}).as<PathIcon>();
+  Media::ScaleTransform scale;
+  scale.ScaleX(size / viewBox);
+  scale.ScaleY(size / viewBox);
+  icon.Data().Transform(scale);
+  icon.Width(size);
+  icon.Height(size);
+  icon.Foreground(brush ? brush : Media::Brush(urnw::colors::MutedBrush()));
+  icon.VerticalAlignment(VerticalAlignment::Center);
+  icon.IsHitTestVisible(false);
+  Automation::AutomationProperties::SetAccessibilityView(
+      icon, Automation::Peers::AccessibilityView::Raw);
+  return icon;
+}
+
+namespace {
+// The leading mark's column, ahead of everything else in a row's grid; returns
+// the column the row's own first element goes in. No mark, no column, so a row
+// without one lays out exactly as it always has.
+int32_t AddLeadingColumn(Controls::Grid const& grid, IconElement const& leading) {
+  if (!leading) return 0;
+  Controls::ColumnDefinition leadingColumn;
+  leadingColumn.Width(GridLengthHelper::Auto());
+  grid.ColumnDefinitions().Append(leadingColumn);
+  leading.VerticalAlignment(VerticalAlignment::Center);
+  grid.Children().Append(leading);
+  return 1;
+}
+}  // namespace
+
 PaneTwoLineRow MakePaneTwoLineRow(winrt::hstring const& title, winrt::hstring const& note,
                                   double height) {
+  return MakePaneTwoLineRow(IconElement{nullptr}, title, note, height);
+}
+
+PaneTwoLineRow MakePaneTwoLineRow(IconElement const& leading, winrt::hstring const& title,
+                                  winrt::hstring const& note, double height) {
   PaneTwoLineRow out;
   out.root = MakePaneRow(height);
 
   Controls::Grid grid;
   grid.ColumnSpacing(10);
+  const int32_t first = AddLeadingColumn(grid, leading);
   Controls::ColumnDefinition textColumn, trailingColumn;
   textColumn.Width(GridLengthHelper::FromValueAndType(1, GridUnitType::Star));
   trailingColumn.Width(GridLengthHelper::Auto());
   grid.ColumnDefinitions().Append(textColumn);
   grid.ColumnDefinitions().Append(trailingColumn);
 
-  grid.Children().Append(MakeTwoLineText(out.title, out.note, title, note));
+  auto text = MakeTwoLineText(out.title, out.note, title, note);
+  Controls::Grid::SetColumn(text, first);
+  grid.Children().Append(text);
 
   out.trailing = Controls::Grid();
   out.trailing.VerticalAlignment(VerticalAlignment::Center);
   out.trailing.HorizontalAlignment(HorizontalAlignment::Right);
-  Controls::Grid::SetColumn(out.trailing, 1);
+  Controls::Grid::SetColumn(out.trailing, first + 1);
   grid.Children().Append(out.trailing);
 
   out.root.Child(grid);
@@ -443,6 +505,12 @@ PaneTwoLineRow MakePaneTwoLineRow(winrt::hstring const& title, winrt::hstring co
 }
 
 PaneTwoLineRowButton MakePaneTwoLineRowButton(winrt::hstring const& title,
+                                              winrt::hstring const& note, double height) {
+  return MakePaneTwoLineRowButton(IconElement{nullptr}, title, note, height);
+}
+
+PaneTwoLineRowButton MakePaneTwoLineRowButton(IconElement const& leading,
+                                              winrt::hstring const& title,
                                               winrt::hstring const& note, double height) {
   PaneTwoLineRowButton out;
   out.root = Controls::Button();
@@ -452,6 +520,7 @@ PaneTwoLineRowButton MakePaneTwoLineRowButton(winrt::hstring const& title,
 
   Controls::Grid grid;
   grid.ColumnSpacing(10);
+  const int32_t first = AddLeadingColumn(grid, leading);
   Controls::ColumnDefinition textColumn, valueColumn, chevronColumn;
   textColumn.Width(GridLengthHelper::FromValueAndType(1, GridUnitType::Star));
   valueColumn.Width(GridLengthHelper::Auto());
@@ -460,13 +529,15 @@ PaneTwoLineRowButton MakePaneTwoLineRowButton(winrt::hstring const& title,
   grid.ColumnDefinitions().Append(valueColumn);
   grid.ColumnDefinitions().Append(chevronColumn);
 
-  grid.Children().Append(MakeTwoLineText(out.title, out.note, title, note));
+  auto text = MakeTwoLineText(out.title, out.note, title, note);
+  Controls::Grid::SetColumn(text, first);
+  grid.Children().Append(text);
 
   out.value = TextBlock();
   if (auto style = StyleByKey(L"UrValueTextStyle")) out.value.Style(style);
   out.value.Foreground(urnw::colors::MutedBrush());
   out.value.MaxWidth(240);
-  Controls::Grid::SetColumn(out.value, 1);
+  Controls::Grid::SetColumn(out.value, first + 1);
   grid.Children().Append(out.value);
 
   FontIcon chevron;
@@ -477,7 +548,7 @@ PaneTwoLineRowButton MakePaneTwoLineRowButton(winrt::hstring const& title,
   chevron.VerticalAlignment(VerticalAlignment::Center);
   Automation::AutomationProperties::SetAccessibilityView(
       chevron, Automation::Peers::AccessibilityView::Raw);
-  Controls::Grid::SetColumn(chevron, 2);
+  Controls::Grid::SetColumn(chevron, first + 2);
   grid.Children().Append(chevron);
 
   // A Button whose Content is a Panel gets NO automatic automation name. The

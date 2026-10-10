@@ -1684,6 +1684,10 @@ modo giusto</value>
     <value>Pagamento {}</value>
     <comment>Call to action</comment>
   </data>
+  <data name="days_ago_abbrev" xml:space="preserve">
+    <value>{} g fa</value>
+    <comment>Compact relative-time label with an abbreviated days unit ("3d ago"), shown by the windows and linux relative-time formatters (the Sessions screen's Last used) for events a day to 7 days old; older events show a date. The argument is the elapsed days. Not a plural: the abbreviated unit does not inflect, but the word order and the unit abbreviation localize.</comment>
+  </data>
   <data name="default_daily_data" xml:space="preserve">
     <value>Per impostazione predefinita, ricevi {} ogni giorno.</value>
     <comment>Onboarding data page: the daily free allowance, formatted from the server's balance (pro.yml free.data per data_period).</comment>
@@ -6011,6 +6015,182 @@ contenuti del mondo</value>
   <data name="sent_thanks_for_your_feedback" xml:space="preserve">
     <value>Inviato! Grazie per il feedback.</value>
     <comment>Snackbar shown after feedback is sent successfully. Used in Main/Feedback/FeedbackView.swift.</comment>
+  </data>
+  <data name="sessions_action_failed" xml:space="preserve">
+    <value>Impossibile chiudere questa sessione. Riprova.</value>
+    <comment>Sessions screen (Account &gt; Sessions): shown on a row when signing its session out failed.</comment>
+  </data>
+  <data name="sessions_confirm_body" xml:space="preserve">
+    <value>La sessione {0} ({1}) verrà chiusa.</value>
+    <comment>Sessions screen (Account &gt; Sessions): body of the confirmation before signing another session out. {device} is the row's device label ("Android") and {place} its approximate location ("Chicago, Illinois, United States"), both inserted as they are, so no case ending or article can attach to them.</comment>
+  </data>
+  <data name="sessions_confirm_body_no_place" xml:space="preserve">
+    <value>La sessione {} verrà chiusa.</value>
+    <comment>Sessions screen (Account &gt; Sessions): body of the confirmation before signing another session out, when its location is unknown. {device} is the row's device label ("Android"), inserted as it is.</comment>
+  </data>
+  <data name="sessions_confirm_others_body" xml:space="preserve">
+    <value>Tutte le altre sessioni di questo elenco verranno chiuse. Questa sessione resta attiva. Chiunque conosca i tuoi dati di accesso può comunque accedere di nuovo.</value>
+    <comment>Sessions screen (Account &gt; Sessions): body of the confirmation before Sign out all other sessions. Must not say that every device is signed out: anyone who has the sign-in details can sign in again.</comment>
+  </data>
+  <data name="sessions_confirm_others_title" xml:space="preserve">
+    <value>Uscire da tutte le altre sessioni?</value>
+    <comment>Sessions screen (Account &gt; Sessions): title of the confirmation before Sign out all other sessions. Cancel is the default.</comment>
+  </data>
+  <data name="sessions_confirm_self_body" xml:space="preserve">
+    <value>Questa è la sessione che stai usando. Uscirai da questa app.</value>
+    <comment>Sessions screen (Account &gt; Sessions): body of the confirmation before signing out the session this app is using. Confirming signs this app out.</comment>
+  </data>
+  <data name="sessions_confirm_title" xml:space="preserve">
+    <value>Uscire da questa sessione?</value>
+    <comment>Sessions screen (Account &gt; Sessions): title of the confirmation before signing one session out, this app's own included. Cancel is the default.</comment>
+  </data>
+  <data name="sessions_copy_id" xml:space="preserve">
+    <value>Copia ID sessione</value>
+    <comment>Sessions screen (Account &gt; Sessions): the row's copy action (long-press or context menu item, or a copy button) that puts the full session ID on the clipboard.</comment>
+  </data>
+  <data name="sessions_device_android" xml:space="preserve">
+    <value>Android</value>
+    <comment>Sessions screen (Account &gt; Sessions), row line 1: the device type of a session signed in from the Android app, before its app version ("Android · 2026.10.8-1067"). The operating system's name, unchanged in every language.</comment>
+  </data>
+  <data name="sessions_device_cli" xml:space="preserve">
+    <value>Riga di comando</value>
+    <comment>Sessions screen (Account &gt; Sessions), row line 1: the device type of a session signed in from the command-line tools.</comment>
+  </data>
+  <data name="sessions_device_ios" xml:space="preserve">
+    <value>iOS</value>
+    <comment>Sessions screen (Account &gt; Sessions), row line 1: the device type of a session signed in from the iOS app, before its app version. The operating system's name, unchanged in every language.</comment>
+  </data>
+  <data name="sessions_device_linux" xml:space="preserve">
+    <value>Linux</value>
+    <comment>Sessions screen (Account &gt; Sessions), row line 1: the device type of a session signed in from the Linux app, before its app version. The operating system's name, unchanged in every language.</comment>
+  </data>
+  <data name="sessions_device_macos" xml:space="preserve">
+    <value>macOS</value>
+    <comment>Sessions screen (Account &gt; Sessions), row line 1: the device type of a session signed in from the macOS app, before its app version. The operating system's name, unchanged in every language.</comment>
+  </data>
+  <data name="sessions_device_server" xml:space="preserve">
+    <value>Server</value>
+    <comment>Sessions screen (Account &gt; Sessions), row line 1: the device type of a session that a server signed in with.</comment>
+  </data>
+  <data name="sessions_device_unknown" xml:space="preserve">
+    <value>Dispositivo sconosciuto</value>
+    <comment>Sessions screen (Account &gt; Sessions), row line 1: the device type of a session that reported no device type, or one the app does not know.</comment>
+  </data>
+  <data name="sessions_device_web" xml:space="preserve">
+    <value>Web</value>
+    <comment>Sessions screen (Account &gt; Sessions), row line 1: the device type of a session signed in from the ur.io web app in a browser. Not tagged apple: Apple's catalog is keyed by the English source, and window_type_quality already carries "Web" there, so the apple screen reads that entry. Translated as window_type_quality is, so every platform shows the same words. The exception is Hebrew: window_type_quality's גלישה ("browsing") names the connect drawer's Web mode, so this key says ווב.</comment>
+  </data>
+  <data name="sessions_device_windows" xml:space="preserve">
+    <value>Windows</value>
+    <comment>Sessions screen (Account &gt; Sessions), row line 1: the device type of a session signed in from the Windows app, before its app version. The operating system's name, unchanged in every language.</comment>
+  </data>
+  <data name="sessions_empty" xml:space="preserve">
+    <value>Nessuna sessione attiva</value>
+    <comment>Sessions screen (Account &gt; Sessions): shown in place of the list when it loaded with no sessions.</comment>
+  </data>
+  <data name="sessions_id" xml:space="preserve">
+    <value>ID {}</value>
+    <comment>Sessions screen (Account &gt; Sessions), end of row line 3: the first 8 characters of the session ID, which the user can copy. {id} is that hex text, e.g. "01a1f3c2".</comment>
+  </data>
+  <data name="sessions_kind_api_key_client" xml:space="preserve">
+    <value>Chiave API</value>
+    <comment>Sessions screen (Account &gt; Sessions), row line 3, after the sign-in date: the sign-in method of a session of a client that authenticated with an API key.</comment>
+  </data>
+  <data name="sessions_kind_apple" xml:space="preserve">
+    <value>Apple</value>
+    <comment>Sessions screen (Account &gt; Sessions), row line 3, after the sign-in date: the sign-in method of a session created with Sign in with Apple. Not tagged apple: Apple's catalog is keyed by the English source, and apple already carries "Apple" there, so the apple screen reads that entry. Translated as apple is, so every platform shows the same words.</comment>
+  </data>
+  <data name="sessions_kind_auth_code" xml:space="preserve">
+    <value>Codice di autenticazione</value>
+    <comment>Sessions screen (Account &gt; Sessions), row line 3, after the sign-in date: the sign-in method of a session created with an auth code made on another signed-in device or with the command-line tools. Not tagged apple: Apple's catalog is keyed by the English source, and auth_code already carries "Auth code" there, so the apple screen reads that entry. Translated as auth_code is, so every platform shows the same words.</comment>
+  </data>
+  <data name="sessions_kind_device_adopt" xml:space="preserve">
+    <value>Abbinamento del dispositivo</value>
+    <comment>Sessions screen (Account &gt; Sessions), row line 3, after the sign-in date: the sign-in method of a session created when a signed-in device adopted (paired with) a discoverable device.</comment>
+  </data>
+  <data name="sessions_kind_google" xml:space="preserve">
+    <value>Google</value>
+    <comment>Sessions screen (Account &gt; Sessions), row line 3, after the sign-in date: the sign-in method of a session created with Sign in with Google. Not tagged apple: Apple's catalog is keyed by the English source, and google already carries "Google" there, so the apple screen reads that entry. Translated as google is, so every platform shows the same words.</comment>
+  </data>
+  <data name="sessions_kind_password" xml:space="preserve">
+    <value>Password</value>
+    <comment>Sessions screen (Account &gt; Sessions), row line 3, after the sign-in date: the sign-in method of a session created by signing in with a password. Not tagged apple: Apple's catalog is keyed by the English source, and password_label already carries "Password" there, so the apple screen reads that entry. Translated as password_label is, so every platform shows the same words.</comment>
+  </data>
+  <data name="sessions_kind_seedphrase" xml:space="preserve">
+    <value>Frase seed</value>
+    <comment>Sessions screen (Account &gt; Sessions), row line 3, after the sign-in date: the sign-in method of a session created by signing in with the recovery phrase (an instant account's seedphrase). Each language says it as the store's seedphrase key does, the words its sign-in screen used.</comment>
+  </data>
+  <data name="sessions_kind_signup" xml:space="preserve">
+    <value>Nuovo account</value>
+    <comment>Sessions screen (Account &gt; Sessions), row line 3, after the sign-in date: the sign-in method of a session created when the account itself was created.</comment>
+  </data>
+  <data name="sessions_kind_sso" xml:space="preserve">
+    <value>Single sign-on</value>
+    <comment>Sessions screen (Account &gt; Sessions), row line 3, after the sign-in date: the sign-in method of a session created through single sign-on with another identity provider.</comment>
+  </data>
+  <data name="sessions_kind_verify" xml:space="preserve">
+    <value>Codice di verifica</value>
+    <comment>Sessions screen (Account &gt; Sessions), row line 3, after the sign-in date: the sign-in method of a session created by signing in with a verification code sent by email or SMS. Worded as verify_input_label, except where that reads the same as auth_code (cs, he, ja, ko, th, zh): the list can show both methods, so they must differ in every language.</comment>
+  </data>
+  <data name="sessions_kind_wallet" xml:space="preserve">
+    <value>Portafoglio</value>
+    <comment>Sessions screen (Account &gt; Sessions), row line 3, after the sign-in date: the sign-in method of a session created by signing in with a wallet's signature. Not tagged apple: Apple's catalog is keyed by the English source, and wallet already carries "Wallet" there, so the apple screen reads that entry. Translated as wallet is, so every platform shows the same words.</comment>
+  </data>
+  <data name="sessions_last_use_unavailable" xml:space="preserve">
+    <value>Ultimo utilizzo non disponibile</value>
+    <comment>Sessions screen (Account &gt; Sessions), row line 2: shown instead of the Last used time when the server has no record of the session being used.</comment>
+  </data>
+  <data name="sessions_last_used" xml:space="preserve">
+    <value>Ultimo utilizzo: {}</value>
+    <comment>Sessions screen (Account &gt; Sessions), row line 2, after the location: when the server last saw the session used. {time} is a relative time up to 7 days (the now, seconds_ago_abbrev ... days_ago_abbrev forms, e.g. "5m ago" or "now"), then a date ("Oct 3"), so the wording must read with either.</comment>
+  </data>
+  <data name="sessions_last_used_help" xml:space="preserve">
+    <value>«Ultimo utilizzo» è l’attività di accesso più recente rilevata dal server. Può essere in ritardo di qualche minuto e la posizione è approssimativa.</value>
+    <comment>Sessions screen (Account &gt; Sessions): footer note under the list explaining the Last used time. "Last used" is the label of sessions_last_used; say it with that key's words.</comment>
+  </data>
+  <data name="sessions_legacy_note" xml:space="preserve">
+    <value>Gli accessi dalle versioni precedenti dell’app compaiono qui quando vengono rinnovati. Per chiudere tutti gli accessi, cambia i tuoi dati di accesso.</value>
+    <comment>Sessions screen (Account &gt; Sessions): footer note shown when sign-ins from older app versions are not all listed yet; each appears once its sign-in renews. Must not claim that signing sessions out here ends every sign-in.</comment>
+  </data>
+  <data name="sessions_load_failed" xml:space="preserve">
+    <value>Impossibile caricare le sessioni.</value>
+    <comment>Sessions screen (Account &gt; Sessions): shown when the list failed to load the first time, above the try_again button.</comment>
+  </data>
+  <data name="sessions_refresh_failed" xml:space="preserve">
+    <value>Impossibile aggiornare. Viene mostrato l’ultimo elenco.</value>
+    <comment>Sessions screen (Account &gt; Sessions): non-blocking notice when a refresh failed. The screen keeps showing the list it had.</comment>
+  </data>
+  <data name="sessions_sign_out_accessibility" xml:space="preserve">
+    <value>Esci da {}</value>
+    <comment>Sessions screen (Account &gt; Sessions): the screen-reader action on a row that signs its session out (the row's visible control is the sign_out key). {device} is the row's device label, e.g. "Android" or "Unknown device".</comment>
+  </data>
+  <data name="sessions_sign_out_all_others" xml:space="preserve">
+    <value>Esci da tutte le altre sessioni</value>
+    <comment>Sessions screen (Account &gt; Sessions): the button at the bottom of the list that signs out every session except this one. Shown only when the list has this app's session and at least one other.</comment>
+  </data>
+  <data name="sessions_signed_in" xml:space="preserve">
+    <value>Accesso effettuato il {}</value>
+    <comment>Sessions screen (Account &gt; Sessions), row line 3: when the session was created, i.e. signed in. {date} is a localized date, e.g. "Oct 3". The sign-in method and the short ID follow: "Signed in Oct 3 · Google · ID 01a1f3c2".</comment>
+  </data>
+  <data name="sessions_signed_out_remotely" xml:space="preserve">
+    <value>Questa sessione è stata chiusa da un altro dispositivo.</value>
+    <comment>Shown when this app was signed out because another device signed its session out on the Sessions screen (Account &gt; Sessions). Only when the app knows that was the cause; otherwise the generic sign-in-required wording applies.</comment>
+  </data>
+  <data name="sessions_signing_out" xml:space="preserve">
+    <value>Uscita in corso…</value>
+    <comment>Sessions screen (Account &gt; Sessions): shown on a row, or on the Sign out all other sessions button, while its sign-out is pending. The control stays disabled meanwhile.</comment>
+  </data>
+  <data name="sessions_this_session" xml:space="preserve">
+    <value>Questa sessione</value>
+    <comment>Sessions screen (Account &gt; Sessions): the tag on the row of the session this app is signed in with (always the first row).</comment>
+  </data>
+  <data name="sessions_title" xml:space="preserve">
+    <value>Sessioni</value>
+    <comment>Sessions screen (Account &gt; Sessions): the screen's title, and the label of the Account row after Profile that opens it. The screen lists the account's signed-in sessions, one per signed-in app or device, and signs them out.</comment>
+  </data>
+  <data name="sessions_unsupported" xml:space="preserve">
+    <value>Le sessioni non sono ancora disponibili.</value>
+    <comment>Sessions screen (Account &gt; Sessions): shown in place of the list when the server does not support session management yet.</comment>
   </data>
   <data name="set_coldkey" xml:space="preserve">
     <value>Imposta coldkey</value>

@@ -1798,23 +1798,29 @@
                                                Style="{StaticResource UrGroupHeaderTextStyle}" />
                                 </Border>
                                 <!-- VIEW mode: the name, and the pencil that opens
-                                     the editor. -->
+                                     the editor. Every Account row leads with a
+                                     mark (kit::MakeRowGlyph's look): the
+                                     profile's is Contact, the person android's
+                                     and apple's Profile rows show. -->
                                 <Button x:Name="NetworkNameRow" MinHeight="44"
                                         Style="{StaticResource UrPaneRowButtonStyle}"
                                         Click="OnEditNetworkName">
                                     <Grid ColumnSpacing="10">
                                         <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="Auto" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock x:Name="AccountNetworkNameLabel"
+                                        <FontIcon Glyph="&#xE77B;"
+                                                  Style="{StaticResource UrRowIconStyle}" />
+                                        <TextBlock x:Name="AccountNetworkNameLabel" Grid.Column="1"
                                                    Style="{StaticResource UrRowTitleStyle}"
                                                    AutomationProperties.AccessibilityView="Raw" />
-                                        <TextBlock x:Name="NetworkNameValue" Grid.Column="1"
+                                        <TextBlock x:Name="NetworkNameValue" Grid.Column="2"
                                                    Style="{StaticResource UrValueTextStyle}"
                                                    Foreground="{StaticResource UrTextMutedBrush}" />
-                                        <FontIcon Grid.Column="2" Glyph="&#xE70F;" FontSize="12"
+                                        <FontIcon Grid.Column="3" Glyph="&#xE70F;" FontSize="12"
                                                   Style="{StaticResource UrRowIconStyle}"
                                                   AutomationProperties.AccessibilityView="Raw" />
                                     </Grid>
@@ -1840,12 +1846,27 @@
                                      hole in the middle of the profile group. -->
                                 <Border x:Name="AccountAuthRow" Visibility="Collapsed"
                                         Style="{StaticResource UrPaneRowStyle}" MinHeight="38">
-                                    <TextBlock x:Name="AccountAuthText"
-                                               Style="{StaticResource UrKeyTextStyle}" />
+                                    <!-- the sign-in the account is reached by:
+                                         ContactInfo, a contact card -->
+                                    <Grid ColumnSpacing="10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <FontIcon Glyph="&#xE779;"
+                                                  Style="{StaticResource UrRowIconStyle}" />
+                                        <TextBlock x:Name="AccountAuthText" Grid.Column="1"
+                                                   Style="{StaticResource UrKeyTextStyle}" />
+                                    </Grid>
                                 </Border>
                                 <!-- name-availability line + change password
                                      (AccountPage::BuildProfileExtra) -->
                                 <StackPanel x:Name="AccountProfileExtra" />
+
+                                <!-- sessions: one row, directly after the profile,
+                                     that opens the Sessions page (SessionsView
+                                     below; AccountPage::BuildSessionsNav) -->
+                                <StackPanel x:Name="AccountSessionsNavHost" />
 
                                 <!-- security: login methods, auth code, client id,
                                      all moved out of Settings -->
@@ -1965,6 +1986,64 @@
                                 <StackPanel x:Name="ReferralsNetworkHost" />
                             </StackPanel>
                         </ScrollViewer>
+                    </Grid>
+                </Grid>
+
+                <!-- ============ SESSIONS: Account > Sessions ============
+                     The account's signed-in sessions, and signing them out
+                     (server session/REVOKE-UI-FINAL.md). Reached from Account's
+                     Sessions row; like the Refer and earn page it has no rail
+                     item, so the pane header carries "‹ Account", and its
+                     Refresh asks the sdk's session controller for a fresh list.
+                     The list, its states, the bulk sign-out and the notes are
+                     built by SessionsPage into SessionsHost. -->
+                <Grid x:Name="SessionsView" Visibility="Collapsed"
+                      Style="{StaticResource UrPaneStyle}">
+                    <Grid x:Name="SessionsPane" AutomationProperties.LandmarkType="Main">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <Border Style="{StaticResource UrPaneHeaderStyle}">
+                            <Grid>
+                                <StackPanel Orientation="Horizontal" Spacing="12"
+                                            VerticalAlignment="Center">
+                                    <Button x:Name="SessionsBackButton" Padding="8,4" />
+                                    <TextBlock x:Name="SessionsPaneTitle" VerticalAlignment="Center"
+                                               Style="{StaticResource UrPaneTitleStyle}" />
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Spacing="8"
+                                            HorizontalAlignment="Right"
+                                            VerticalAlignment="Center">
+                                    <!-- the snapshot's Refreshing: a refresh over
+                                         the rows, which stay -->
+                                    <muxc:ProgressRing x:Name="SessionsRefreshRing" Width="14"
+                                                       Height="14" IsActive="False"
+                                                       Visibility="Collapsed" />
+                                    <Button x:Name="SessionsRefreshButton" Padding="8,4"
+                                            AutomationProperties.AutomationId="acceptance.sessions.refresh">
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <FontIcon Glyph="&#xE72C;" FontSize="12"
+                                                      Style="{StaticResource UrRowIconStyle}" />
+                                            <TextBlock x:Name="SessionsRefreshText"
+                                                       VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled"
+                                      VerticalScrollBarVisibility="Auto">
+                            <StackPanel MaxWidth="760" HorizontalAlignment="Stretch">
+                                <StackPanel x:Name="SessionsHost" />
+                            </StackPanel>
+                        </ScrollViewer>
+                        <!-- "Copied!": a copy with no visible result reads as a
+                             copy that did not happen (kit::Snackbar) -->
+                        <muxc:InfoBar x:Name="SessionsInfo" Grid.Row="1"
+                                      Style="{StaticResource UrSnackbarStyle}"
+                                      VerticalAlignment="Bottom" HorizontalAlignment="Center"
+                                      Margin="24" MaxWidth="480" IsOpen="False" />
                     </Grid>
                 </Grid>
 
