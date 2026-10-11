@@ -169,6 +169,14 @@ class AppController {
 
   AuthState authState_ = AuthState::LoggedOut;
   std::string authError_;
+  // True while authError_ has not yet been shown in a PRESENTED window. The
+  // window is told of a push only while it is presented, and replays the
+  // standing state when it next is (ReconcileWindowPresentation) - but an error
+  // that was already delivered must not come back on every later show: it would
+  // put a sentence the user has moved past on whichever step they are on by
+  // then (a sign-in failure inside the password step's bar), and force-scroll
+  // the page to it.
+  bool authErrorUndelivered_ = false;
   // the one sign-out a rejection takes, and the sign-in page's notice for it
   authlogout::SignedOutNotice signedOutNotice_;
   bool connected_ = false;
