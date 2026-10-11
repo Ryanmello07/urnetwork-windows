@@ -151,6 +151,10 @@
     <value>Toujours par le tunnel</value>
     <comment>Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the button that keeps the connection's host inside the VPN tunnel. It adds a rule for a host that bypassed the tunnel, or removes the bypass rule while one is in force.</comment>
   </data>
+  <data name="adv_app_rules_note" xml:space="preserve">
+    <value>Inclure une application fait passer son trafic par le VPN, tandis que l’exclure maintient le trafic de cette application hors du VPN.</value>
+    <comment>Windows split tunnel, App split rules sheet: the line at the top that says what including and excluding an app do.</comment>
+  </data>
   <data name="adv_best_available_note" xml:space="preserve">
     <value>URnetwork choisit pour vous les fournisseurs opérationnels les plus rapides, sans contrainte d'emplacement, et refait ce choix à mesure que le réseau évolue.</value>
     <comment>Network page, selected provider pane: note under the Name row while Best available provider is selected, saying what best available means.</comment>
@@ -158,6 +162,14 @@
   <data name="adv_block_host" xml:space="preserve">
     <value>Bloquer cet hôte</value>
     <comment>Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the button that blocks the connection's host. It adds a blocking rule, or removes the rule allowing the host while one is in force, so the label always names what the press leaves behind.</comment>
+  </data>
+  <data name="adv_browser_sign_in_body" xml:space="preserve">
+    <value>Connectez-vous à ur.io dans votre navigateur — votre gestionnaire de mots de passe et vos sessions Google ou Apple existantes y fonctionnent. Collez ensuite un code d’authentification à usage unique obtenu sur n’importe quel appareil connecté (Compte → Créer un code d’authentification).</value>
+    <comment>Windows sign-in screen, browser sign-in sheet: the text above the auth code field that says how the sheet works. ur.io, Google and Apple are names. The Google or Apple sessions are the sign-ins the browser already holds. 'Account → Create auth code' is the way to the Create auth code button on a signed-in device: use this language's labels of Account (account) and Create auth code (site_app_create_auth_code); right-to-left languages point the arrow the other way.</comment>
+  </data>
+  <data name="adv_browser_sign_in_title" xml:space="preserve">
+    <value>Connexion via le navigateur</value>
+    <comment>Windows sign-in screen: the title of the sheet for signing in through the browser at ur.io with a one-time auth code.</comment>
   </data>
   <data name="adv_bypass_tunnel" xml:space="preserve">
     <value>Contourner le tunnel</value>
@@ -170,6 +182,10 @@
   <data name="adv_clear_selection" xml:space="preserve">
     <value>Effacer la sélection</value>
     <comment>Connection inspector: button that clears the selected connection.</comment>
+  </data>
+  <data name="adv_configured" xml:space="preserve">
+    <value>Configurées</value>
+    <comment>Windows split tunnel, App split rules sheet: the header over the apps that already have a rule (included or excluded). The header of the other list is Apps.</comment>
   </data>
   <data name="adv_connection_count.one" xml:space="preserve">
     <value>{} connexion</value>
@@ -186,6 +202,10 @@
   <data name="adv_details_copied" xml:space="preserve">
     <value>Détails de la connexion copiés</value>
     <comment>Connect page, Advanced Mode, the connection inspector and an Activity row's menu: the confirmation after Copy details put the connection's details on the clipboard.</comment>
+  </data>
+  <data name="adv_earnings_actions" xml:space="preserve">
+    <value>Actions sur les gains</value>
+    <comment>Windows Earnings page, ledger header: the tooltip and screen reader name of the icon-only More button, which holds the earnings actions when the window is too narrow to show them.</comment>
   </data>
   <data name="adv_exit_dial_failures" xml:space="preserve">
     <value>Échecs de connexion</value>
@@ -363,6 +383,10 @@
     <value>ouvrir les règles de séparation</value>
     <comment>Connect page, Advanced Mode, the connection inspector: the end of the Reason value's name for screen readers when a rule decided the connection, because pressing the value opens the Split rules sheet. Lowercase: it follows a comma.</comment>
   </data>
+  <data name="adv_open_ur_io" xml:space="preserve">
+    <value>Ouvrir ur.io</value>
+    <comment>Windows sign-in screen, browser sign-in sheet: the button that opens ur.io in the browser and leaves the sheet open. ur.io is a domain name. Keep it short: three buttons share the sheet's bar.</comment>
+  </data>
   <data name="adv_override_id" xml:space="preserve">
     <value>Remplacement</value>
     <comment>Connection inspector: label of the override id row.</comment>
@@ -467,9 +491,17 @@
     <value>Session</value>
     <comment>Windows and Linux status strip (Advanced Mode): label of the field that shows which kind of session the service granted (tunnel or rpc-only).</comment>
   </data>
+  <data name="adv_sign_in_browser" xml:space="preserve">
+    <value>Se connecter via le navigateur</value>
+    <comment>Windows sign-in screen, first step: the quiet text link at the bottom left, beside Change Network API. It opens a sheet for signing in through the browser at ur.io with a one-time auth code.</comment>
+  </data>
   <data name="adv_split_rules_note" xml:space="preserve">
     <value>Les règles de séparation permettent aux sites que vous choisissez de se connecter directement, hors du VPN, et l'activité ci-dessous montre comment chaque connexion a été acheminée.</value>
     <comment>Split rules sheet: the one-sentence explainer at the top, above the note on network clusters. A split rule sends the chosen sites directly from this device, outside the VPN; the sheet's Activity list shows how each connection was routed.</comment>
+  </data>
+  <data name="adv_sso_not_configured" xml:space="preserve">
+    <value>La connexion avec Google ou Apple n’est pas encore disponible sur ce réseau — utilisez l’e-mail ou la connexion via le navigateur</value>
+    <comment>Windows sign-in screen, error line: a Google or Apple sign-in in the browser was turned back because this network has no such sign-in set up yet. Provider sign-in means signing in with a Google or Apple account, not a URnetwork provider. It points to signing in with email, or through the browser (Sign in with browser), instead.</comment>
   </data>
   <data name="adv_undo" xml:space="preserve">
     <value>Annuler</value>
@@ -2503,6 +2535,10 @@ bonne manière</value>
   <data name="dev_release_stuck_retransmits_detail" xml:space="preserve">
     <value>Combien de temps les retransmissions sont retenues avant d’en libérer une, en ms. Désactivé attend 30 s</value>
     <comment>Developer page: the explanation under the 'Release stuck retransmits' setting.</comment>
+  </data>
+  <data name="dev_reliability_overrides" xml:space="preserve">
+    <value>Remplacements de fiabilité</value>
+    <comment>Windows Developer page: the title of the second pane, which holds the reliability overrides, and its name for screen readers.</comment>
   </data>
   <data name="dev_removal_budget_count" xml:space="preserve">
     <value>Limite de tempête de retraits</value>
@@ -7417,6 +7453,10 @@ comme il devrait être.</value>
     <value>Le programme d’installation n’a pas démarré (il nécessite l’approbation d’un administrateur). Le téléchargement vérifié a été affiché dans l’Explorateur de fichiers — quittez l’application et lancez-le.</value>
     <comment>Windows update banner when the installer could not be started: the user runs it by hand. Explorer is the Windows file manager.</comment>
   </data>
+  <data name="upd_manual_note" xml:space="preserve">
+    <value>Recherche une nouvelle version maintenant ; le résultat s’affiche sur la ligne ci-dessus.</value>
+    <comment>Windows Settings, version section: the note under the Check for updates row. Its button checks for a new release now, and the result shows on the Update row above it.</comment>
+  </data>
   <data name="upd_ready_message" xml:space="preserve">
     <value>La nouvelle AppImage est en place et vérifiée. Redémarrez pour commencer à l’utiliser ; l’ancien fichier est conservé à côté jusque-là.</value>
     <comment>Linux Settings update notice once the update is installed and waiting for a relaunch.</comment>
@@ -7452,6 +7492,30 @@ comme il devrait être.</value>
   <data name="upd_stage_verifying" xml:space="preserve">
     <value>Vérification du téléchargement…</value>
     <comment>Update progress line (Linux Settings, Windows update banner, macOS Settings &gt; Software update) while the downloaded release is checked against its published checksum.</comment>
+  </data>
+  <data name="upd_state_available" xml:space="preserve">
+    <value>mise à jour disponible :</value>
+    <comment>Windows Settings, Update row: a newer release is out. Shown after the app's version and a dash, and the app adds a space, v and the new version right after this text ("1.2.3 — update available: v1.3.0"), so it starts in lowercase where the language allows and must read as a lead-in to that version.</comment>
+  </data>
+  <data name="upd_state_checking" xml:space="preserve">
+    <value>vérification…</value>
+    <comment>Windows Settings, Update row: an update check is running now. Shown after the app's version and a dash ("1.2.3 — checking…"), so it starts in lowercase where the language allows. Keep it short: the row cuts off long values.</comment>
+  </data>
+  <data name="upd_state_current" xml:space="preserve">
+    <value>à jour</value>
+    <comment>Windows Settings, Update row: the last check found no newer release. Shown after the app's version and a dash ("1.2.3 — up to date"), so it starts in lowercase where the language allows. Keep it short: the row cuts off long values.</comment>
+  </data>
+  <data name="upd_state_dev_build" xml:space="preserve">
+    <value>version de développement, jamais mise à jour automatiquement</value>
+    <comment>Windows Settings, Update row: this is a development build, which never updates itself. Shown after the app's version and a dash ("1.2.3 — dev build, never self-updates"), so it starts in lowercase where the language allows. Keep it short: the row cuts off long values.</comment>
+  </data>
+  <data name="upd_state_failed" xml:space="preserve">
+    <value>échec de la vérification</value>
+    <comment>Windows Settings, Update row: the last update check failed (the app log has the details). Shown after the app's version and a dash ("1.2.3 — check failed"), so it starts in lowercase where the language allows. Keep it short: the row cuts off long values.</comment>
+  </data>
+  <data name="upd_state_not_checked" xml:space="preserve">
+    <value>pas encore vérifié</value>
+    <comment>Windows Settings, Update row: no update check has run yet. Shown after the app's version and a dash ("1.2.3 — not checked yet"), so it starts in lowercase where the language allows. Keep it short: the row cuts off long values.</comment>
   </data>
   <data name="update" xml:space="preserve">
     <value>Mettre à jour</value>
