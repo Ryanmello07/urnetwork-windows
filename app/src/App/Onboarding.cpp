@@ -906,7 +906,7 @@ StackPanel Onboarding::BuildBandwidth() {
   daily.ColumnDefinitions().Append(label);
   daily.ColumnDefinitions().Append(value);
   daily.Margin(Thickness{0, 8, 0, 0});
-  daily.Children().Append(MakeText(Loc("daily_data_balance_label"), 14, colors::MutedBrush()));
+  daily.Children().Append(MakeText(Loc("daily_data_balance"), 14, colors::MutedBrush()));
   dailyValue_ = MakeText(hstring{L""}, 14, colors::MutedBrush());
   Grid::SetColumn(dailyValue_, 1);
   daily.Children().Append(dailyValue_);

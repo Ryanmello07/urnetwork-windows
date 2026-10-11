@@ -258,7 +258,7 @@ void AccountPage::ApplyStrings() {
   w_.AccountPlanValueText().Text(Loc("free"));
   w_.AccountUpgradeButton().Content(LocBox("upgrade"));
   w_.AccountUsageGroupLabel().Text(Loc("data_usage"));
-  w_.AccountDailyLabel().Text(Loc("daily_data_balance_label"));
+  w_.AccountDailyLabel().Text(Loc("daily_data_balance"));
   // the usage bar's three figures, labelled with the legend's own keys
   w_.AccountUsedLabel().Text(Loc("used_data_key"));
   w_.AccountPendingLabel().Text(Loc("pending_data_key"));

@@ -497,7 +497,7 @@ void DataInfoSheet::Build(XamlRoot const& root, BalanceSnapshot const& balance) 
   valueColumn.Width(GridLength{0, GridUnitType::Auto});
   daily.ColumnDefinitions().Append(labelColumn);
   daily.ColumnDefinitions().Append(valueColumn);
-  daily.Children().Append(MakeText(Loc("daily_data_balance_label"), 14, colors::MutedBrush()));
+  daily.Children().Append(MakeText(Loc("daily_data_balance"), 14, colors::MutedBrush()));
   auto dailyValue = MakeText(hstring{info.daily}, 14, colors::MutedBrush());
   Grid::SetColumn(dailyValue, 1);
   daily.Children().Append(dailyValue);
