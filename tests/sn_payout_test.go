@@ -11,16 +11,12 @@ import (
 	"testing"
 )
 
-// The SN payout line (App/SnPayoutPresentation.h): the C++ spec, the page's
-// wiring and the en strings.
+// The SN payout line and settlement v2 (App/SnPayoutPresentation.h): the C++
+// spec, the page's wiring and the strings.
 
-// Compile and execute the SN payout line spec (App/SnPayoutPresentation.h):
-// provider payouts moved to the UR subnet, and Earnings says how and when a
-// provider is paid under the points figure, with the current epoch's times
-// from the SDK's epoch schedule, Claim while something is claimable and the
-// coldkey prompt while none is set. The final USDC payout line shows only while
-// USDC is pending.
-func TestSnPayoutLine(t *testing.T) {
+// Builds the C++ spec (tools/sn-payout-tests.cpp) with `extra` arguments.
+func buildSnPayoutTests(t *testing.T, extra ...string) string {
+	t.Helper()
 	compiler, err := exec.LookPath("c++")
 	if err != nil {
 		t.Fatal("sn payout tests require a C++20 compiler: ", err)
@@ -28,20 +24,41 @@ func TestSnPayoutLine(t *testing.T) {
 	root := repositoryRoot(t)
 	appDir := filepath.Join(root, "app", "src", "App")
 	program := filepath.Join(t.TempDir(), "sn-payout-tests")
-	build := exec.Command(compiler, "-std=c++20", "-Wall", "-Wextra", "-Werror",
-		"-I"+appDir,
+	arguments := []string{"-std=c++20", "-Wall", "-Wextra", "-Werror", "-I" + appDir}
+	arguments = append(arguments, extra...)
+	arguments = append(arguments,
 		filepath.Join(root, "app", "tools", "sn-payout-tests.cpp"),
 		filepath.Join(appDir, "SnPayoutPresentation.cpp"),
 		filepath.Join(appDir, "SolanaWalletPresentation.cpp"),
 		"-o", program)
-	if output, err := build.CombinedOutput(); err != nil {
+	if output, err := exec.Command(compiler, arguments...).CombinedOutput(); err != nil {
 		t.Fatalf("build sn payout tests: %v\n%s", err, output)
 	}
+	return program
+}
+
+func runSnPayoutTests(t *testing.T, program string) {
+	t.Helper()
 	if output, err := exec.Command(program).CombinedOutput(); err != nil {
 		t.Fatalf("sn payout: %v\n%s", err, output)
 	} else {
 		t.Logf("%s", output)
 	}
+}
+
+// Compile and execute the SN payout line spec (App/SnPayoutPresentation.h):
+// provider payouts moved to the UR subnet, and Earnings says how and when a
+// provider is paid under the points figure, with the current epoch's times
+// from the SDK's epoch schedule, Claim while something is claimable and the
+// coldkey prompt while none is set. The final USDC payout line shows only while
+// USDC is pending. The same program is settlement v2's spec (APPS-SPEC.md, the
+// UX rules): the section for every state of the read, configured or not,
+// pending as pending and unavailable never as a zero, and the v2 claim
+// dialog's progress.
+func TestSnPayoutLine(t *testing.T) {
+	root := repositoryRoot(t)
+	appDir := filepath.Join(root, "app", "src", "App")
+	runSnPayoutTests(t, buildSnPayoutTests(t))
 
 	// the page draws the decision, with the schedule the claims read carries,
 	// and its actions are the existing claim dialog and coldkey flow
@@ -104,4 +121,31 @@ func TestSnPayoutLine(t *testing.T) {
 	if strings.Contains(resw, `name="payouts_amount_threshold"`) {
 		t.Error("Resources.resw still carries the retired payouts_amount_threshold")
 	}
+}
+
+// The v2 boundary templates against the generated SDK header: WalletPage
+// instantiates snpayout::LedgerAccountFrom with urnet::SnLedgerAccount and
+// snpayout::LedgerClaimCallbackFor with urnet::SnLedgerClaimCallback, so the
+// spec builds both with the header's own types and reads an account from the
+// json the device answers with. The header is git-ignored (fetch-deps unpacks
+// it into app/third_party/urnetwork-sdk/<arch>; URNETWORK_SDK_INCLUDE names
+// another directory) and needs nlohmann/json, so a host without them skips
+// this, and so does a copy from before the v2 claim.
+func TestSnPayoutAgainstSdkHeader(t *testing.T) {
+	root := repositoryRoot(t)
+	sdkDir := sdkHeaderDirWith(t, root, "SnLedgerClaimCallback")
+	if sdkDir == "" {
+		t.Skip("no urnetwork_sdk.hpp with the v2 claim (set URNETWORK_SDK_INCLUDE)")
+	}
+	jsonDir, found := jsonIncludeDir(root)
+	if !found {
+		t.Skip("no nlohmann/json.hpp (set URNETWORK_JSON_INCLUDE)")
+	}
+	// System includes: the generated wrapper does not build with -Wextra -Werror.
+	extra := []string{"-DURNW_SN_PAYOUT_TESTS_SDK", "-isystem", sdkDir}
+	if jsonDir != "" {
+		extra = append(extra, "-isystem", jsonDir)
+	}
+	t.Logf("against %s", filepath.Join(sdkDir, "urnetwork_sdk.hpp"))
+	runSnPayoutTests(t, buildSnPayoutTests(t, extra...))
 }
