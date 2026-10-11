@@ -106,29 +106,35 @@ enum class LedgerFetch {
 // The line under the section's accounts.
 enum class LedgerNote {
   None,
-  Unavailable,   // sn_v2_unavailable: the read failed, so no figure shows, never a zero
-  NeedsSession,  // earnings_claims_need_session, as the v1 tile says it
-  NoAccount,     // sn_v2_no_account: the ledger has no account for the coldkey yet
+  Unavailable,   // the read failed, so no figure shows, never a zero
+  NeedsSession,  // no device session to read with, as the v1 tile says it
+  NoAccount,     // the ledger has no account for the coldkey yet
 };
 
-// One account's block: the claimable figure, Paid and Earned, and the pending
-// line while a root that is not finalized yet raises the account.
+// The store key of the note's line, "" for None. The section's words are the
+// store's sn_ledger_* keys, which the Android and Linux apps look up too; the
+// empty state is the Linux tile's.
+std::string LedgerNoteKey(LedgerNote note);
+
+// One account's block: the claimable figure (sn_ledger_claimable), Paid and
+// Earned (sn_ledger_paid, sn_ledger_earned), and the pending line while a
+// root that is not finalized yet raises the account.
 struct LedgerAccountView {
   int64_t noId = 0;
   int64_t claimableRao = 0;
   int64_t paidRao = 0;
   int64_t earnedRao = 0;     // the finalized cumulative
-  bool showPending = false;  // sn_v2_pending: "Pending: +X, awaiting finalization"
+  bool showPending = false;  // sn_ledger_pending: "Pending: +X, awaiting finalization"
   int64_t pendingRao = 0;    // X, the pending cumulative less the finalized one
 
   bool operator==(const LedgerAccountView&) const = default;
 };
 
-// What the section shows.
+// What the section shows, under its heading (sn_ledger_title).
 struct LedgerSectionView {
   bool shown = false;
   bool loading = false;     // "Loading..." in the section's header
-  bool poolTitles = false;  // more than one account: each block names its pool (sn_v2_pool)
+  bool poolTitles = false;  // more than one account: each block names its pool (sn_ledger_pool)
   std::vector<LedgerAccountView> accounts;
   LedgerNote note = LedgerNote::None;
   bool showClaim = false;  // Claim, which opens the v2 claim dialog

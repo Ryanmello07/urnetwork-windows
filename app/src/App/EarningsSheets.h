@@ -1,11 +1,16 @@
-// The Earnings destination's claim dialog, plus the presentation helpers the
-// destination and the dialog share.
+// The Earnings destination's claim dialogs, plus the presentation helpers the
+// destination and the dialogs share.
 //
 //   ClaimAlphaSheet   the unclaimed SN25a across the finalized epochs since the
 //                     coldkey was attached, the gas key that pays for the claim
 //                     transaction, and the claim itself: sent by the SDK on this
 //                     device straight to the settlement vault contract. No
 //                     URnetwork API is in that path.
+//   ClaimLedgerSheet  the same for settlement v2: the coldkey's claimable v2
+//                     accounts, the same gas key and funding hint, and the
+//                     claim, sent by the SDK on this device to the pinned vault2,
+//                     one transaction per account, each proof verified against
+//                     vault2's root first.
 //
 // Plain C++ helpers like StatsSheets/BalanceSheets: no runtime classes; every
 // method runs on the UI thread. Control handlers capture the sheet WEAKLY: the
@@ -26,6 +31,8 @@
 #include <winrt/Microsoft.UI.Dispatching.h>
 #include <winrt/Microsoft.UI.Xaml.h>
 #include <winrt/Microsoft.UI.Xaml.Controls.h>
+
+#include "SnPayoutPresentation.h"
 
 namespace urnw {
 
@@ -164,6 +171,60 @@ class ClaimAlphaSheet : public std::enable_shared_from_this<ClaimAlphaSheet> {
   winrt::Microsoft::UI::Xaml::Controls::ContentDialog dialog_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::TextBlock totalValue_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::TextBlock acrossText_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::TextBlock gasBalanceValue_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::StackPanel needsGasPanel_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::StackPanel rowsPanel_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::StackPanel progressRow_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::TextBlock errorText_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::Button claimButton_{nullptr};
+};
+
+// ---- the settlement v2 claim dialog --------------------------------------------
+
+// Starts the claim of every claimable v2 account (Device.snLedgerClaim) with
+// the SDK's SnLedgerClaimCallback as snpayout::LedgerClaimEvents, which the
+// page may call from any thread; the page owns the SDK call.
+using LedgerClaimer = std::function<void(snpayout::LedgerClaimEvents events)>;
+
+class ClaimLedgerSheet : public std::enable_shared_from_this<ClaimLedgerSheet> {
+ public:
+  // `accounts` are the v2 accounts as the page last read them; the dialog lists
+  // the claimable ones and moves them along with the claim events
+  // (snpayout::LedgerClaimProgress). `explorerTxUrl` and `allowActions` as for
+  // ClaimAlphaSheet. The page reads the accounts again after the claim's Done,
+  // through its claimer, whether or not the dialog is still up.
+  static std::shared_ptr<ClaimLedgerSheet> Create(
+      winrt::Microsoft::UI::Xaml::XamlRoot const& root,
+      winrt::Microsoft::UI::Dispatching::DispatcherQueue const& queue,
+      std::vector<snpayout::LedgerAccount> const& accounts, GasKeyInfo gas,
+      std::string explorerTxUrl, bool allowActions, LedgerClaimer claimer);
+
+  winrt::Microsoft::UI::Xaml::Controls::ContentDialog Dialog() const { return dialog_; }
+
+ private:
+  ClaimLedgerSheet(winrt::Microsoft::UI::Dispatching::DispatcherQueue const& queue,
+                   std::vector<snpayout::LedgerAccount> const& accounts, GasKeyInfo gas,
+                   std::string explorerTxUrl, bool allowActions, LedgerClaimer claimer);
+
+  void Build(winrt::Microsoft::UI::Xaml::XamlRoot const& root);
+  void StartClaim();
+  void CopyMirrorAddress();
+  // Re-renders the figure, the gas block, the rows, the progress line, the
+  // failure and the button from progress_. Called on every event.
+  void ApplyState();
+  winrt::Microsoft::UI::Xaml::UIElement BuildRow(snpayout::LedgerClaimRow const& row);
+  // opens a claim transaction's page (snpayout::ExplorerTxLink)
+  static void OpenTx(std::string const& url);
+
+  winrt::Microsoft::UI::Dispatching::DispatcherQueue queue_;
+  snpayout::LedgerClaimProgress progress_;
+  GasKeyInfo gas_;
+  std::string explorerTxUrl_;
+  bool allowActions_;
+  LedgerClaimer claimer_;
+
+  winrt::Microsoft::UI::Xaml::Controls::ContentDialog dialog_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::TextBlock totalValue_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::TextBlock gasBalanceValue_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::StackPanel needsGasPanel_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::StackPanel rowsPanel_{nullptr};

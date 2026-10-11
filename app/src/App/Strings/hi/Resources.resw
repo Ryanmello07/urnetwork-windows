@@ -6707,6 +6707,34 @@
     <value>छोड़ें</value>
     <comment>Small muted button at the top of the post-login onboarding flow that leaves the whole flow.</comment>
   </data>
+  <data name="sn_ledger_claimable" xml:space="preserve">
+    <value>दावा योग्य</value>
+    <comment>Settlement v2 tile: label of the SN25α the user can claim now.</comment>
+  </data>
+  <data name="sn_ledger_earned" xml:space="preserve">
+    <value>अर्जित</value>
+    <comment>Settlement v2 tile: label of the SN25α earned so far (finalized: paid plus claimable).</comment>
+  </data>
+  <data name="sn_ledger_paid" xml:space="preserve">
+    <value>भुगतान हो चुका</value>
+    <comment>Settlement v2 tile: label of the SN25α already paid to the user's coldkey.</comment>
+  </data>
+  <data name="sn_ledger_pending" xml:space="preserve">
+    <value>लंबित: +{}, अंतिम रूप दिए जाने की प्रतीक्षा में</value>
+    <comment>Settlement v2 tile: earnings committed but not final yet. {} is an SN25α amount, e.g. "0.7500 SN25α".</comment>
+  </data>
+  <data name="sn_ledger_pool" xml:space="preserve">
+    <value>पूल {}</value>
+    <comment>Settlement v2 tile and claim dialog: names an operator pool. {} is its number.</comment>
+  </data>
+  <data name="sn_ledger_title" xml:space="preserve">
+    <value>सेटलमेंट v2</value>
+    <comment>Title of the settlement v2 tile, and the caption of its claim dialog's total. Keep "v2".</comment>
+  </data>
+  <data name="sn_ledger_unavailable" xml:space="preserve">
+    <value>उपलब्ध नहीं</value>
+    <comment>Settlement v2 tile: shown instead of the balances when they cannot be read, never a zero.</comment>
+  </data>
   <data name="sn_payout_schedule" xml:space="preserve">
     <value>कमाई हर एपोक में तय होती है और जब आप उस पर दावा करते हैं, तो SN25α में आपके Bittensor coldkey पर भुगतान की जाती है।</value>
     <comment>Earnings card: how providers are paid on the UR subnet (WHITEPAPER §5.2, §8.3). Earnings settle per epoch and are paid in SN25α as stake to the provider's Bittensor coldkey once the provider claims them; nothing is paid automatically. Followed by sn_payout_schedule_times when the epoch schedule is known.</comment>

@@ -87,6 +87,20 @@ LedgerSectionView LedgerSectionFor(bool hasColdkey, bool vault2Configured, Ledge
   return view;
 }
 
+std::string LedgerNoteKey(LedgerNote note) {
+  switch (note) {
+    case LedgerNote::Unavailable:
+      return "sn_ledger_unavailable";
+    case LedgerNote::NeedsSession:
+      return "earnings_claims_need_session";
+    case LedgerNote::NoAccount:
+      return "no_claims_yet_linux";
+    case LedgerNote::None:
+      break;
+  }
+  return {};
+}
+
 std::string ExplorerTxLink(const std::string& explorerTxUrl, const std::string& txHash) {
   if (explorerTxUrl.empty() || txHash.empty()) return {};
   std::string url = explorerTxUrl;

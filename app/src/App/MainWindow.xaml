@@ -2356,6 +2356,38 @@
                                     </Border>
                                 </StackPanel>
 
+                                <!-- settlement v2 beside it: the coldkey's v2 accounts, one
+                                     block per pool built in code, the line that says why
+                                     there is no figure, and Claim once vault2 is configured.
+                                     Collapsed until there is something to show
+                                     (WalletPage::RebuildV2Section) -->
+                                <StackPanel x:Name="SettlementV2Panel" Visibility="Collapsed">
+                                    <Border Style="{StaticResource UrGroupHeaderStyle}">
+                                        <Grid>
+                                            <TextBlock x:Name="SettlementV2Heading"
+                                                       Style="{StaticResource UrGroupHeaderTextStyle}" />
+                                            <TextBlock x:Name="SettlementV2StatusText"
+                                                       HorizontalAlignment="Right"
+                                                       Style="{StaticResource UrPaneMetaStyle}" />
+                                        </Grid>
+                                    </Border>
+                                    <Border BorderBrush="{StaticResource UrBorderBrush}"
+                                            BorderThickness="0,0,0,1" Padding="12,10">
+                                        <StackPanel Spacing="6">
+                                            <StackPanel x:Name="SettlementV2AccountsPanel" Spacing="12" />
+                                            <TextBlock x:Name="SettlementV2Note" TextWrapping="Wrap"
+                                                       Style="{StaticResource UrRowNoteStyle}"
+                                                       TextTrimming="None" Visibility="Collapsed" />
+                                            <!-- the v2 claim dialog -->
+                                            <Button x:Name="SettlementV2ClaimButton"
+                                                    Style="{StaticResource UrPaneActionPrimaryStyle}"
+                                                    HorizontalAlignment="Stretch"
+                                                    IsEnabled="False" Visibility="Collapsed"
+                                                    Click="OnClaimV2" />
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+
                                 <!-- top 200: a head mining spot .................. -->
                                 <StackPanel x:Name="Top200Panel" Visibility="Collapsed">
                                     <Border Style="{StaticResource UrGroupHeaderStyle}">

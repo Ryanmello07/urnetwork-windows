@@ -5,9 +5,10 @@
 // decision (App/SolanaWalletPresentation.h) - that the final USDC payout line
 // shows only while USDC is pending. And settlement v2 (APPS-SPEC.md, the UX
 // rules): what the section beside the v1 tile shows for every state of the
-// read, configured or not, pending as pending and unavailable never as a zero;
-// and how the v2 claim dialog moves along with the SDK's claim events. Run
-// against the same sources the app compiles, on any host with a C++20 compiler.
+// read, configured or not, pending as pending and unavailable never as a zero,
+// in the store's words; and how the v2 claim dialog moves along with the SDK's
+// claim events. Run against the same sources the app compiles, on any host
+// with a C++20 compiler.
 //
 // The WinUI half (WalletPage's line and v2 section, their Claim and Set coldkey
 // actions, the claim dialogs) cannot be built off Windows at all; what is
@@ -341,6 +342,18 @@ int main() {
     Check(noDevice.shown && noDevice.note == LedgerNote::NeedsSession, "the session note");
     Check(noDevice.accounts.empty(), "no figure without a read");
     Check(noDevice.showClaim && !noDevice.claimEnabled, "Claim disabled");
+  }
+  {
+    TEST_CASE("v2: each note says it in the store's words");
+    // the words the Android and Linux apps use: unavailable is the shared
+    // sn_ledger_unavailable, the empty state the Linux tile's, and the missing
+    // session the v1 tile's
+    CheckEq("sn_ledger_unavailable", LedgerNoteKey(LedgerNote::Unavailable), "unavailable");
+    CheckEq("earnings_claims_need_session", LedgerNoteKey(LedgerNote::NeedsSession), "no session");
+    CheckEq("no_claims_yet_linux", LedgerNoteKey(LedgerNote::NoAccount), "no account yet");
+    CheckEq("", LedgerNoteKey(LedgerNote::None), "no note: no line");
+    CheckEq("sn_ledger_unavailable", LedgerNoteKey(Section(true, LedgerFetch::Failed, {}).note),
+            "a failed read's line");
   }
   {
     TEST_CASE("v2: before vault2 is configured, balances only and no Claim");

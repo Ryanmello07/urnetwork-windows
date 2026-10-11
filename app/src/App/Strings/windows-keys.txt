@@ -612,6 +612,7 @@ nice_this_network_name_is_available
 no
 no_balance_codes_found
 no_blocked_locations
+no_claims_yet_linux
 no_installed_apps_found
 no_locations_found
 no_log_files_found
@@ -921,6 +922,13 @@ site_subscription_error_no_customer
 site_subscription_error_store_unavailable
 skip
 sn_alpha_symbol
+sn_ledger_claimable
+sn_ledger_earned
+sn_ledger_paid
+sn_ledger_pending
+sn_ledger_pool
+sn_ledger_title
+sn_ledger_unavailable
 sn_payout_schedule
 sn_payout_schedule_times
 sn_status_claimable
