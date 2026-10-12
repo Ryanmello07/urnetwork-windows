@@ -25,10 +25,10 @@ being offered at once. "Later" on the banner hides a release until the app is
 next started.
 
 A release built before the updater polled these releases does not look for
-updates here, and never offers one. If the app has offered nothing while a
-release newer than yours has been listed for three days, install the newest
-release by hand once: it upgrades the installed copy in place, and updates
-itself from then on.
+updates here, and never offers one. The first release that does is
+v2026.10.9-1067985620, published on 2026-10-10. If yours was installed from an
+older release, install the newest release by hand once: it upgrades the
+installed copy in place, and updates itself from then on.
 
 ## Architecture
 
