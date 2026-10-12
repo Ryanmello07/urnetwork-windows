@@ -17,6 +17,7 @@
 #include <utility>
 
 #include "UrColors.h"
+#include "UrComponents.h"  // kit::kIconFontFamily
 
 using namespace winrt;
 using namespace winrt::Windows::Foundation;
@@ -341,7 +342,7 @@ void ConnectCanvas::BuildVisuals(Grid const& host) {
   // Both are a single faint glyph on the bare globe: on iOS these two states
   // REPLACE the canvas rather than overlaying it, so nothing else is drawn.
   glyph_ = FontIcon();
-  glyph_.FontFamily(FontFamily(L"Segoe Fluent Icons"));
+  glyph_.FontFamily(FontFamily(kit::kIconFontFamily));
   glyph_.Glyph(L"\uE7BA");  // Segoe Fluent "Warning" (escaped: private-use area)
   glyph_.Foreground(colors::FaintBrush());
   glyph_.HorizontalAlignment(HorizontalAlignment::Center);

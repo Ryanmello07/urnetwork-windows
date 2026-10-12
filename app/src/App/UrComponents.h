@@ -30,6 +30,17 @@
 
 namespace urnw::kit {
 
+// ---- the one icon font -----------------------------------------------------
+//
+// Every icon the code builds names this family; App.xaml carries the same list
+// under UrIconFontFamily for the markup. Windows 11 ships Segoe Fluent Icons
+// and Windows 10 does not, so the list falls back to Segoe MDL2 Assets, which
+// both ship: naming Segoe Fluent Icons alone drew every icon as an empty box
+// on Windows 10. The same list is WinUI's own FontIcon default and its
+// SymbolThemeFontFamily. tests/icon_font_fallback_test.go holds every source
+// that names an icon font to exactly this list.
+inline constexpr wchar_t kIconFontFamily[] = L"Segoe Fluent Icons,Segoe MDL2 Assets";
+
 // ---- the one desktop breakpoint --------------------------------------------
 //
 // The app has exactly two layouts and this number decides which:

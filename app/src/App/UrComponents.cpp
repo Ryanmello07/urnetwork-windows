@@ -25,11 +25,10 @@ using namespace winrt::Microsoft::UI::Xaml::Controls;
 namespace urnw::kit {
 namespace {
 
-// Segoe Fluent Icons ships with Windows 11. Naming it matters: FontIcon
-// defaults to the older Segoe MDL2 Assets, whose metrics differ, so a screen
-// that mixes the default with an explicit family comes out with two icon
-// weights. App.xaml carries the same family under UrIconFontFamily.
-Media::FontFamily IconFont() { return Media::FontFamily(L"Segoe Fluent Icons"); }
+// The one icon font (kIconFontFamily, UrComponents.h): Segoe Fluent Icons,
+// falling back to Segoe MDL2 Assets where Windows 10 lacks it. App.xaml
+// carries the same list under UrIconFontFamily.
+Media::FontFamily IconFont() { return Media::FontFamily(kIconFontFamily); }
 
 }  // namespace
 

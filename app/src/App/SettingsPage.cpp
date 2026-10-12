@@ -538,7 +538,7 @@ void SettingsPage::BuildConnectionsSection(Panel const& host) {
   killSwitchInfo.BorderThickness(ThicknessHelper::FromUniformLength(0));
   FontIcon killSwitchInfoGlyph;
   killSwitchInfoGlyph.FontFamily(
-      winrt::Microsoft::UI::Xaml::Media::FontFamily(L"Segoe Fluent Icons"));
+      winrt::Microsoft::UI::Xaml::Media::FontFamily(kit::kIconFontFamily));
   killSwitchInfoGlyph.Glyph(L"\uE946");  // Info
   killSwitchInfoGlyph.FontSize(14);
   killSwitchInfoGlyph.Foreground(colors::MutedBrush());
