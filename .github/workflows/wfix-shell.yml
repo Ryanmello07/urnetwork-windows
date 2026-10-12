@@ -1,0 +1,32 @@
+name: Is there a notification area - Windows
+
+# Throwaway (a ci/wfix-shell-* branch of the fork): the app shows no window
+# without a tray icon, and Shell_NotifyIcon(ADD) failed with E_FAIL on
+# windows-11-arm. This lists each image's shell processes and taskbar, tries
+# Shell_NotifyIcon itself, and on windows-11-arm starts explorer.exe when none
+# runs and tries again. Builds nothing. Never merged.
+on:
+  push:
+    branches:
+      - 'ci/wfix-shell-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  shell:
+    name: The shell on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-11-arm]
+    steps:
+      - name: Check out Windows repo
+        uses: actions/checkout@v4
+
+      - name: Probe the shell
+        shell: powershell
+        run: |
+          & "$env:GITHUB_WORKSPACE\.github\wfix\shell_probe.ps1" -StartExplorer
