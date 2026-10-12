@@ -11,16 +11,12 @@ import (
 	"testing"
 )
 
-// The SN payout line (App/SnPayoutPresentation.h): the C++ spec, the page's
-// wiring and the en strings.
+// The SN payout line and settlement v2 (App/SnPayoutPresentation.h): the C++
+// spec, the page's wiring and the strings.
 
-// Compile and execute the SN payout line spec (App/SnPayoutPresentation.h):
-// provider payouts moved to the UR subnet, and Earnings says how and when a
-// provider is paid under the points figure, with the current epoch's times
-// from the SDK's epoch schedule, Claim while something is claimable and the
-// coldkey prompt while none is set. The final USDC payout line shows only while
-// USDC is pending.
-func TestSnPayoutLine(t *testing.T) {
+// Builds the C++ spec (tools/sn-payout-tests.cpp) with `extra` arguments.
+func buildSnPayoutTests(t *testing.T, extra ...string) string {
+	t.Helper()
 	compiler, err := exec.LookPath("c++")
 	if err != nil {
 		t.Fatal("sn payout tests require a C++20 compiler: ", err)
@@ -28,20 +24,41 @@ func TestSnPayoutLine(t *testing.T) {
 	root := repositoryRoot(t)
 	appDir := filepath.Join(root, "app", "src", "App")
 	program := filepath.Join(t.TempDir(), "sn-payout-tests")
-	build := exec.Command(compiler, "-std=c++20", "-Wall", "-Wextra", "-Werror",
-		"-I"+appDir,
+	arguments := []string{"-std=c++20", "-Wall", "-Wextra", "-Werror", "-I" + appDir}
+	arguments = append(arguments, extra...)
+	arguments = append(arguments,
 		filepath.Join(root, "app", "tools", "sn-payout-tests.cpp"),
 		filepath.Join(appDir, "SnPayoutPresentation.cpp"),
 		filepath.Join(appDir, "SolanaWalletPresentation.cpp"),
 		"-o", program)
-	if output, err := build.CombinedOutput(); err != nil {
+	if output, err := exec.Command(compiler, arguments...).CombinedOutput(); err != nil {
 		t.Fatalf("build sn payout tests: %v\n%s", err, output)
 	}
+	return program
+}
+
+func runSnPayoutTests(t *testing.T, program string) {
+	t.Helper()
 	if output, err := exec.Command(program).CombinedOutput(); err != nil {
 		t.Fatalf("sn payout: %v\n%s", err, output)
 	} else {
 		t.Logf("%s", output)
 	}
+}
+
+// Compile and execute the SN payout line spec (App/SnPayoutPresentation.h):
+// provider payouts moved to the UR subnet, and Earnings says how and when a
+// provider is paid under the points figure, with the current epoch's times
+// from the SDK's epoch schedule, Claim while something is claimable and the
+// coldkey prompt while none is set. The final USDC payout line shows only while
+// USDC is pending. The same program is settlement v2's spec (APPS-SPEC.md, the
+// UX rules): the section for every state of the read, configured or not,
+// pending as pending and unavailable never as a zero, and the v2 claim
+// dialog's progress (TestSettlementV2Wiring reads the page that draws it).
+func TestSnPayoutLine(t *testing.T) {
+	root := repositoryRoot(t)
+	appDir := filepath.Join(root, "app", "src", "App")
+	runSnPayoutTests(t, buildSnPayoutTests(t))
 
 	// the page draws the decision, with the schedule the claims read carries,
 	// and its actions are the existing claim dialog and coldkey flow
@@ -103,5 +120,165 @@ func TestSnPayoutLine(t *testing.T) {
 	}
 	if strings.Contains(resw, `name="payouts_amount_threshold"`) {
 		t.Error("Resources.resw still carries the retired payouts_amount_threshold")
+	}
+}
+
+// The v2 boundary templates against the generated SDK header: WalletPage
+// instantiates snpayout::LedgerAccountFrom with urnet::SnLedgerAccount and
+// snpayout::LedgerClaimCallbackFor with urnet::SnLedgerClaimCallback, so the
+// spec builds both with the header's own types and reads an account from the
+// json the device answers with. The header is git-ignored (fetch-deps unpacks
+// it into app/third_party/urnetwork-sdk/<arch>; URNETWORK_SDK_INCLUDE names
+// another directory) and needs nlohmann/json, so a host without them skips
+// this, and so does a copy from before the v2 claim.
+func TestSnPayoutAgainstSdkHeader(t *testing.T) {
+	root := repositoryRoot(t)
+	sdkDir := sdkHeaderDirWith(t, root, "SnLedgerClaimCallback")
+	if sdkDir == "" {
+		t.Skip("no urnetwork_sdk.hpp with the v2 claim (set URNETWORK_SDK_INCLUDE)")
+	}
+	jsonDir, found := jsonIncludeDir(root)
+	if !found {
+		t.Skip("no nlohmann/json.hpp (set URNETWORK_JSON_INCLUDE)")
+	}
+	// System includes: the generated wrapper does not build with -Wextra -Werror.
+	extra := []string{"-DURNW_SN_PAYOUT_TESTS_SDK", "-isystem", sdkDir}
+	if jsonDir != "" {
+		extra = append(extra, "-isystem", jsonDir)
+	}
+	t.Logf("against %s", filepath.Join(sdkDir, "urnetwork_sdk.hpp"))
+	runSnPayoutTests(t, buildSnPayoutTests(t, extra...))
+}
+
+// Settlement v2 on Earnings (APPS-SPEC.md, the UX rules): the page draws the
+// spec's decisions from the SDK's ledger accounts call, claims through the
+// SDK's v2 claim with the dialog the spec moves along, reads the accounts again
+// after Done, offers Claim only toward a configured vault2, sits right after
+// the v1 tile, which keeps its own Claim, and says every new line in every
+// language under the store keys the Android and Linux apps look up
+// (sn_ledger_*).
+func TestSettlementV2Wiring(t *testing.T) {
+	root := repositoryRoot(t)
+	requireAll := func(file string, source string, wants ...string) {
+		t.Helper()
+		for _, want := range wants {
+			if !strings.Contains(source, want) {
+				t.Errorf("%s: missing %s", file, want)
+			}
+		}
+	}
+	walletPage := stripComments(readAppSource(t, "WalletPage.cpp"))
+	requireAll("WalletPage.cpp", walletPage,
+		// the balances: the SDK's ledger accounts call, copied at the boundary,
+		// drawn from the spec's decision
+		"Sdk().device().snLedgerAccounts(",
+		"snpayout::LedgerAccountFrom(account)",
+		"snpayout::LedgerSectionFor(snWallet_.has_value(), Vault2Configured(),",
+		// an answer without its list is unavailable, as an error is: never a zero
+		"else if (!result || !result->accounts)",
+		// read beside the v1 claims once the coldkey is known
+		"self->wallet().LoadV2Accounts();",
+		// Claim only toward a configured vault2
+		"!settings->vault2_address.empty()",
+		"const bool allowActions = CanClaim() && Vault2Configured();",
+		// the claim: the SDK's v2 claim, through the v2 dialog
+		"Sdk().device().snLedgerClaim(",
+		"snpayout::LedgerClaimCallbackFor<urnet::SnLedgerClaimCallback>(events)",
+		"urnw::ClaimLedgerSheet::Create(",
+		// every line of the section: the heading, each account's labels and
+		// pending line, and the note the spec chose (snpayout::LedgerNoteKey)
+		`Loc("sn_ledger_title")`, `"sn_ledger_pool"`, `Loc("sn_ledger_claimable")`,
+		`Loc("sn_ledger_paid")`, `Loc("sn_ledger_earned")`, `"sn_ledger_pending"`,
+		"snpayout::LedgerNoteKey(view.note)",
+	)
+	// After Done the claimer reads the accounts and the gas balance again, so a
+	// dialog closed early does not leave the page stale.
+	if !regexp.MustCompile(`events\.done = \[done, queue, weak\] \{\s*if \(done\) done\(\);\s*` +
+		`queue\.TryEnqueue\(\[weak\] \{\s*if \(auto self = weak\.get\(\)\) \{\s*` +
+		`self->wallet\(\)\.LoadV2Accounts\(\);\s*self->wallet\(\)\.LoadGas\(\);`).MatchString(walletPage) {
+		t.Error("WalletPage.cpp: the v2 claimer does not read the accounts and the gas balance again after Done")
+	}
+
+	// The v2 dialog's own functions (the v1 dialog beside it has its own).
+	sheets := stripComments(readAppSource(t, "EarningsSheets.cpp"))
+	sheet := func(signature string) string {
+		t.Helper()
+		body := functionBody(sheets, signature)
+		if body == "" {
+			t.Fatalf("EarningsSheets.cpp: no %s", signature)
+		}
+		return body
+	}
+	// every event moves the spec's progress, and the dialog redraws from it
+	requireAll("ClaimLedgerSheet::StartClaim", sheet("void ClaimLedgerSheet::StartClaim("),
+		"if (!progress_.Start()) return;",
+		"self->progress_.Sent(noId, index, txHash);",
+		"self->progress_.Confirmed(noId, index, txHash, amountRao);",
+		"self->progress_.Failed(noId, index, message);",
+		"self->progress_.Done();",
+		"claimer_(std::move(events));",
+	)
+	// needs_gas opens the v1 dialog's funding hint, asking for a v2 claim's gas
+	requireAll("ClaimLedgerSheet::Build", sheet("void ClaimLedgerSheet::Build("),
+		`urnw::Format("send_tao_to_mirror", FormatTao(snpayout::kLedgerClaimGasTao),`,
+	)
+	requireAll("ClaimLedgerSheet::ApplyState", sheet("void ClaimLedgerSheet::ApplyState("),
+		"needsGasPanel_.Visibility(progress_.needsGas() ? Visibility::Visible : Visibility::Collapsed);",
+		"claimButton_.IsEnabled(progress_.CanClaim(allowActions_));",
+		"LedgerFailureText(progress_.failure())",
+	)
+	// Sent links the explorer; a failure says the store's sentence or the
+	// message as it came
+	requireAll("ClaimLedgerSheet::BuildRow", sheet("UIElement ClaimLedgerSheet::BuildRow("),
+		`urnw::Format("sn_ledger_pool", row.noId)`,
+		"snpayout::ExplorerTxLink(explorerTxUrl_, row.txHash)",
+		`link.Content(LocBox("earnings_view_transaction"));`,
+		"LedgerFailureText(row.message)",
+	)
+	requireAll("LedgerFailureText", sheet("hstring LedgerFailureText("),
+		"snpayout::ClaimFailureKey(message)",
+	)
+
+	mainWindow := readAppSource(t, "MainWindow.xaml")
+	if !regexp.MustCompile(`x:Name="SettlementV2ClaimButton"[^>]*Click="OnClaimV2"`).MatchString(mainWindow) {
+		t.Error("MainWindow.xaml: SettlementV2ClaimButton does not open the v2 claim dialog")
+	}
+	if !regexp.MustCompile(`x:Name="ClaimButton"[^>]*Click="OnClaimAlpha"`).MatchString(mainWindow) {
+		t.Error("MainWindow.xaml: the v1 tile lost its Claim")
+	}
+	unclaimed := strings.Index(mainWindow, `x:Name="UnclaimedPanel"`)
+	v2 := strings.Index(mainWindow, `x:Name="SettlementV2Panel"`)
+	top200 := strings.Index(mainWindow, `x:Name="Top200Panel"`)
+	if unclaimed < 0 || v2 < unclaimed || top200 < v2 {
+		t.Error("MainWindow.xaml: the settlement v2 section is not right after the v1 unclaimed tile")
+	}
+	requireAll("MainWindow.xaml.cpp", readAppSource(t, "MainWindow.xaml.cpp"), "wallet_->OnClaimV2(s, e);")
+
+	// the en strings, the store's for every app, and every catalog says each
+	// line, with its placeholder
+	english := map[string]string{
+		"sn_ledger_title":       "Settlement v2",
+		"sn_ledger_claimable":   "Claimable",
+		"sn_ledger_paid":        "Paid",
+		"sn_ledger_earned":      "Earned",
+		"sn_ledger_pending":     "Pending: +{}, awaiting finalization",
+		"sn_ledger_pool":        "Pool {}",
+		"sn_ledger_unavailable": "Unavailable",
+	}
+	catalogs, err := filepath.Glob(filepath.Join(root, "app", "src", "App", "Strings", "*", "Resources.resw"))
+	if err != nil || len(catalogs) < 28 {
+		t.Fatalf("catalogs: %v %v", catalogs, err)
+	}
+	for key, want := range english {
+		if got := reswValue(t, root, "en", key); got != want {
+			t.Errorf("%s = %q, want %q", key, got, want)
+		}
+		for _, catalog := range catalogs {
+			locale := filepath.Base(filepath.Dir(catalog))
+			if got := reswValue(t, root, locale, key); got == "" ||
+				strings.Count(got, "{}") != strings.Count(want, "{}") {
+				t.Errorf("%s: %s = %q", locale, key, got)
+			}
+		}
 	}
 }
