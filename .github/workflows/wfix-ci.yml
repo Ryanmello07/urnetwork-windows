@@ -7,9 +7,11 @@ name: wfix build, test and capture - Windows
 # .github/wfix-ui.ps1. Changes from those runs: this trigger; go-test-json
 # prints the lines of the tests named in WFIX_TESTS; no catalogs-from-store job
 # (these branches change no catalog); and the capture job runs the portable
-# zip on three images: windows-2022 (Server 2022, no Segoe Fluent Icons),
-# windows-2025 (Server 2025, which has it) and windows-11-arm (Windows 11, the
-# ARM64 zip). Never merged.
+# zip on two images: windows-2022 (Server 2022, no Segoe Fluent Icons) and
+# windows-2025 (Server 2025, the Windows 11 24H2 code base, which has it).
+# Not windows-11-arm: Shell_NotifyIcon(ADD) fails there with E_FAIL for any
+# process (ci/wfix-shell-2, run 38301720642), and the app shows no window
+# without its tray icon. Never merged.
 on:
   push:
     branches:
@@ -475,7 +477,7 @@ jobs:
   # the signed-in shell with no session), one launch per page; read and
   # pressed through UI Automation only, captured with PrintWindow at the size
   # the window opens with. One leg per runner image: windows-2022 has no Segoe
-  # Fluent Icons, windows-2025 and windows-11-arm have it.
+  # Fluent Icons, windows-2025 has it.
   ui:
     name: The app's pages, captured on ${{ matrix.os }} (${{ matrix.platform }})
     needs: build-windows
@@ -488,8 +490,6 @@ jobs:
             platform: x64
           - os: windows-2025
             platform: x64
-          - os: windows-11-arm
-            platform: ARM64
     steps:
       - name: Check out Windows repo
         uses: actions/checkout@v4
