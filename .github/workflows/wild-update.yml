@@ -1,0 +1,279 @@
+# The first real self-update of the official URnetwork Windows app, as a user
+# meets it: the published release vN, downloaded from urnetwork/build as a
+# browser downloads it and installed as a user installs it, updating itself
+# from urnetwork/build's own feed. Nothing is built, redirected or stood in
+# for: vN is the published MSI, the feed is GitHub's, read without a token as
+# the app reads it, and the release vN installs is the one its own code offers
+# on the day of the run. It publishes nothing and creates no release or tag;
+# URnetwork is installed and updated on disposable windows-2022 runners only.
+#
+# Started from A2b's .github/workflows/vpn-feed.yml (fork branch
+# ci/a2b-runner-6): its plan and build jobs are dropped, and its feed reading,
+# install, UI Automation and log collection are kept, in the same libraries:
+#   .github/vpn-upgrade-lib.ps1, vpn-apply-lib.ps1, vpn-feed-lib.ps1,
+#   vpn-feed-standin.ps1, vpn-feed-ui-lib.ps1   (unchanged)
+#   .github/wild-update-lib.ps1                 (this test's own helpers)
+#   .github/wild-update-window.ps1              (the "window" leg)
+#   .github/wild-update-helper.ps1              (the "helper" leg)
+# The branch is vN's own source, urnetwork/windows at VN_SOURCE, with only
+# these .github files added: the rules the test reads are vN's.
+#
+# Steps, on each leg's own runner:
+#   source     the checkout is vN's source; the lines of it that decide the
+#              offer are printed, each found exactly once
+#   feed       the official feed, read without a token as vN reads it
+#              (/repositories/936244679/releases?per_page=30), recorded whole
+#              (feed-state.txt), and judged by vN's rules for the day of the
+#              list's Date header: the release vN must be offered
+#   download   vN's MSI and the offered release's, as a browser downloads them:
+#              GitHub's own redirect to its release storage, and the SHA-256
+#              each release asset's digest gives in the API
+#   0. install vN with msiexec as a double-click starts it (the package's own
+#              defaults); its ProductVersion, every exe's FileVersion,
+#              urnetworkd and URnetworkUpdate.exe, recorded
+#   window     1. vN's tray app, in its window, makes its own launch check
+#              against GitHub: it names the release vN's rules give, and its
+#              banner offers it (captured)
+#              2. Update, invoked through UI Automation as a click does: the
+#              app's download and check, the elevated helper, the install,
+#              the close, the relaunch; then ProductVersion, every exe's
+#              FileVersion, urnetworkd, the relaunched app and no helper left
+#              3. the app after the update (captured), and 4. its banner
+#   helper     A2b's "real" step 3: vN's tray app running, its helper alone
+#              asked for the offered release, and the same checks after
+#
+# SPDX-License-Identifier: MPL-2.0
+
+name: URnetwork in the wild, the published vN updates itself
+
+on:
+  push:
+    branches:
+      - 'ci/wild-update-*'
+
+permissions:
+  contents: read
+
+env:
+  # The first official release whose app updates itself from urnetwork/build
+  # (windows#8 and windows#7, without windows#9), and the urnetwork/windows
+  # commit urnetwork/build built it from: this branch's base.
+  VN_TAG: 'v2026.10.9-1067985620'
+  VN_SOURCE: 'ebb867a6d8aecde20dd32ff12c01231588932e1e'
+  # What was expected before the run; the run says what vN's rules give.
+  LEAD_EXPECTED: 'v2026.10.10-1068958850'
+
+jobs:
+  wild:
+    name: The published vN updates itself (${{ matrix.leg }})
+    runs-on: windows-2022
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        leg: [window, helper]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Inventory, the session and the source
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\wild-update-lib.ps1"
+          "runner image: $env:ImageOS $env:ImageVersion; $([Environment]::OSVersion.VersionString)"
+          $head = (git -C $env:GITHUB_WORKSPACE rev-parse HEAD).Trim()
+          $base = (git -C $env:GITHUB_WORKSPACE rev-parse 'HEAD^').Trim()
+          "this branch: $head, on $base"
+          if ($base -ne $env:VN_SOURCE) { throw "this branch is not on vN's source $env:VN_SOURCE" }
+          $changed = @(git -C $env:GITHUB_WORKSPACE diff --name-only 'HEAD^' HEAD)
+          $outside = @($changed | Where-Object { $_ -notlike '.github/*' })
+          if ($outside.Count -ne 0) { throw "this branch changes $($outside -join ', ') beyond .github" }
+          "OK: the source checked out is urnetwork/windows $env:VN_SOURCE, vN's own, with only this test's files added: $($changed -join ', ')"
+          if ((Get-UrProducts).Count -ne 0) { throw "a URnetwork product is already installed on this runner" }
+          if (Get-UrServiceInfo) { throw "a urnetworkd service already exists on this runner" }
+          if (Test-Path $UrInstallDir) { throw "$UrInstallDir already exists" }
+          if (Test-Path (Join-Path $env:LOCALAPPDATA 'URnetwork')) { throw "the user's URnetwork folder already exists" }
+          "OK: nothing of URnetwork is on this runner"
+          whoami
+          whoami /groups | Select-String 'Mandatory Label' | ForEach-Object { "session: $_" }
+          "this process: $(Get-WildTokenText $PID)"
+          "session id: $((Get-Process -Id $PID).SessionId); explorer: $(@(Get-Process explorer -ErrorAction SilentlyContinue | ForEach-Object { "pid $($_.Id) session $($_.SessionId), $(Get-WildTokenText $_.Id)" }) -join '; ')"
+          Get-CimInstance Win32_VideoController | ForEach-Object { "display: $($_.Name) $($_.CurrentHorizontalResolution)x$($_.CurrentVerticalResolution)" }
+          $policy = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
+          "UAC: EnableLUA $($policy.EnableLUA), ConsentPromptBehaviorAdmin $($policy.ConsentPromptBehaviorAdmin), PromptOnSecureDesktop $($policy.PromptOnSecureDesktop)"
+          if ((Get-Content $UrHostsFile) -match 'github') { throw "this runner's hosts file names a GitHub host" }
+          "OK: the hosts file redirects no GitHub host: every request below goes to GitHub itself"
+
+      - name: vN's own rules, read from its source
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\wild-update-lib.ps1"
+          Show-WildRules
+
+      - name: The feed, read without a token as vN reads it, and the release vN's rules offer today
+        shell: powershell
+        env:
+          # this test's own reads of urnetwork/build (a release by its tag, the
+          # windows submodule), so the anonymous requests stay the app's
+          WILD_READ_TOKEN: ${{ github.token }}
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\wild-update-lib.ps1"
+          [void](Wait-UrAnonymousRequests 10 45)
+          Wait-WildClearOfMidnight 3600
+          $list = Get-UrFeedList (Join-Path $env:RUNNER_TEMP 'releases.json')
+          $reading = Get-UrFeedReading $list.Releases $list.ServerUnix
+          Save-WildFeedRecord $list $reading
+          $reading | ConvertTo-Json -Depth 4 | Set-Content -Encoding ascii (Join-Path $env:RUNNER_TEMP 'reading.json')
+          [pscustomobject]@{ Date = $list.Date; ServerUnix = $list.ServerUnix; Releases = $list.Releases.Count; Bytes = $list.Bytes } |
+            ConvertTo-Json | Set-Content -Encoding ascii (Join-Path $env:RUNNER_TEMP 'feed-meta.json')
+          if (-not $reading.Offered) { throw "the feed offers nothing today" }
+          # vN as the same list gives it; past its first page, the release by its tag
+          $vnRow = Get-WildReleaseRow $list.Releases $env:VN_TAG
+          if ($null -eq $vnRow) {
+            "$env:VN_TAG is not on the list's first page: reading the release by its tag"
+            $vnRow = Get-WildReleaseRow (Get-WildReleaseByTag $env:VN_TAG) $env:VN_TAG
+          }
+          if ($null -eq $vnRow) { throw "urnetwork/build has no release $env:VN_TAG" }
+          "vN: $($vnRow.Tag), published $($vnRow.PublishedAt), prerelease $($vnRow.Prerelease), immutable $($vnRow.Immutable); $($vnRow.Asset), $($vnRow.Size) bytes, updated $($vnRow.AssetUpdatedAt), digest sha256:$($vnRow.Digest)"
+          $vnRow | ConvertTo-Json | Set-Content -Encoding ascii (Join-Path $env:RUNNER_TEMP 'vn-release.json')
+          if ([uint64]$reading.Offered.Code -le [uint64]$vnRow.Code) { throw "the feed offers $($reading.Offered.Tag), which is not newer than vN" }
+          $vnExpect = Get-UrExpectOfRelease $vnRow 'vn'
+          $vnExpect | ConvertTo-Json | Set-Content -Encoding ascii (Join-Path $UrMsiDir 'vn.json')
+          $offeredExpect = Get-UrExpectOfRelease $reading.Offered 'official'
+          $offeredExpect | ConvertTo-Json | Set-Content -Encoding ascii (Join-Path $UrMsiDir 'official.json')
+          "vN      $($vnExpect.version): code $($vnExpect.code), ProductVersion $($vnExpect.msi_version), exes $($vnExpect.file_version)"
+          "offered $($offeredExpect.version): code $($offeredExpect.code), ProductVersion $($offeredExpect.msi_version), exes $($offeredExpect.file_version)"
+          $vnSource = Get-WildBuildSource $env:VN_TAG
+          "urnetwork/build $env:VN_TAG is built from urnetwork/windows $vnSource"
+          if ($vnSource -and $vnSource -ne $env:VN_SOURCE) { throw "vN is built from $vnSource, not $env:VN_SOURCE" }
+          "urnetwork/build $($reading.Offered.Tag) is built from urnetwork/windows $(Get-WildBuildSource $reading.Offered.Tag)"
+          $lead = $env:LEAD_EXPECTED
+          if ($reading.Offered.Tag -eq $lead) {
+            "the release vN's rules offer today is $lead, the one expected before the run"
+          } else {
+            $leadRows = @($reading.Rows | Where-Object { $_.Tag -eq $lead })
+            if ($leadRows.Count -ne 1) {
+              "NOTE: expected before the run: $lead, which the list does not hold"
+            } elseif ([long]$leadRows[0].CountsFrom -ne 0 -and -not $leadRows[0].Soaked) {
+              $r = $leadRows[0]
+              "NOTE: expected before the run: $lead. vN's rules offer $($reading.Offered.Tag) on the UTC day that began $(Format-UrUnix ([long]$reading.DayStart)): $lead was published $($r.PublishedAt) and last changed $(Format-UrUnix ([long]$r.Since)); 24 h later, $(Format-UrUnix ([long]$r.Since + 86400)), is after this day began, so it counts from $(Format-UrUnix ([long]$r.CountsFrom)) (ReleaseSelection.h HasSoaked)"
+            } else {
+              "NOTE: expected before the run: $lead; vN's rules give: $(if ($leadRows[0].Soaked) { 'it counts, and is not the newest that does' } else { 'skipped: ' + $leadRows[0].Why })"
+            }
+          }
+
+      - name: vN's MSI and the offered release's, downloaded as a browser downloads them
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\wild-update-lib.ps1"
+          $vnRow = Get-Content -Raw (Join-Path $env:RUNNER_TEMP 'vn-release.json') | ConvertFrom-Json
+          $reading = Get-Content -Raw (Join-Path $env:RUNNER_TEMP 'reading.json') | ConvertFrom-Json
+          $vnMsi = Join-Path $UrMsiDir 'vn.msi'
+          [void](Save-UrReleaseMsi $vnRow $vnMsi)
+          $vnExpect = Get-UrExpect 'vn'
+          $vnTraits = Get-UrPackageTraits $vnMsi
+          $vnTraits | ConvertTo-Json | Set-Content -Encoding ascii (Join-Path $env:RUNNER_TEMP 'vn-traits.json')
+          if ($vnTraits.UpgradeCode -ne $UrUpgradeCode -or $vnTraits.ProductVersion -ne $vnExpect.msi_version) {
+            throw "FINDING: $($vnRow.Asset) is UpgradeCode $($vnTraits.UpgradeCode) ProductVersion $($vnTraits.ProductVersion), want $UrUpgradeCode $($vnExpect.msi_version)"
+          }
+          "OK: $($vnRow.Asset) is the published bytes: SHA-256 $($vnRow.Digest), the release asset's digest in the API; UpgradeCode $($vnTraits.UpgradeCode), ProductVersion $($vnTraits.ProductVersion); Authenticode $((Get-AuthenticodeSignature -LiteralPath $vnMsi).Status)"
+          $offered = $reading.Offered
+          $official = Join-Path $UrMsiDir 'official.msi'
+          [void](Save-UrReleaseMsi $offered $official)
+          $expect = Get-UrExpect 'official'
+          $traits = Get-UrPackageTraits $official
+          $traits | ConvertTo-Json | Set-Content -Encoding ascii (Join-Path $env:RUNNER_TEMP 'official-traits.json')
+          if ($traits.UpgradeCode -ne $UrUpgradeCode -or $traits.ProductVersion -ne $expect.msi_version) {
+            throw "FINDING: $($offered.Asset) is UpgradeCode $($traits.UpgradeCode) ProductVersion $($traits.ProductVersion), want $UrUpgradeCode $($expect.msi_version)"
+          }
+          "OK: $($offered.Asset), the offered release's, is this product at the ProductVersion its code derives ($($traits.ProductVersion)); update helper $($traits.Helper), CloseApplication $($traits.CloseApp), RelaunchAfterUpdate $($traits.Relaunch); Authenticode $((Get-AuthenticodeSignature -LiteralPath $official).Status)"
+
+      - name: 0. Install vN as a user would
+        timeout-minutes: 20
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\wild-update-lib.ps1"
+          $run = Invoke-WildMsiexecAsUser (Get-UrMsiPath 'vn') 'vn-install.log'
+          if ($run.ExitCode -ne 0) { throw "vN's install exit code $($run.ExitCode)" }
+          if ($run.Dialogs.Count -ne 0) { "OBSERVED: the install asked $($run.Dialogs.Count) question(s): $($run.Dialogs -join ' // ')" }
+          $product = Assert-UrInstalled (Get-UrExpect 'vn') 'vn-install.log'
+          Set-Content -Encoding ascii (Join-Path $env:RUNNER_TEMP 'vn.productcode') $product.ProductCode
+          Assert-WildExeVersions (Get-UrExpect 'vn')
+          $state = Show-WildInstalled 'vn'
+          if ($null -eq $state.Helper -or $state.Helper.Feed -ne 'official') { throw "the installed URnetworkUpdate.exe is not the official feed's" }
+          "OK: vN is installed: $($product.ProductCode) ProductVersion $($product.Version); urnetworkd $($state.Service.State); $UrHelperPath FileVersion $($state.Helper.FileVersion), the official feed's ('$($state.Helper.Description)')"
+          "URnetwork.exe processes after the install: $((Get-UrAppProcesses).Count) (an install by hand starts nothing; the user starts the app)"
+
+      - name: 1-4. In vN's own window, its check, its banner, Update, and the app after
+        if: matrix.leg == 'window'
+        timeout-minutes: 60
+        shell: powershell
+        run: |
+          & "$env:GITHUB_WORKSPACE\.github\wild-update-window.ps1"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - name: 1-2. vN's tray app checks, and its helper alone installs the offered release
+        if: matrix.leg == 'helper'
+        timeout-minutes: 60
+        shell: powershell
+        run: |
+          & "$env:GITHUB_WORKSPACE\.github\wild-update-helper.ps1"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - name: Collect logs
+        if: always()
+        shell: powershell
+        run: |
+          $dest = Join-Path $env:RUNNER_TEMP 'upgrade-logs'
+          New-Item -ItemType Directory -Force $dest | Out-Null
+          foreach ($name in 'releases.json', 'reading.json', 'feed-state.txt', 'feed-meta.json', 'vn-release.json', 'vn-traits.json', 'official-traits.json', 'vn.productcode') {
+            $file = Join-Path $env:RUNNER_TEMP $name
+            if (Test-Path $file) { Copy-Item $file $dest }
+          }
+          foreach ($name in 'vn.json', 'official.json') {
+            $file = Join-Path $env:RUNNER_TEMP "msis\$name"
+            if (Test-Path $file) { Copy-Item $file (Join-Path $dest "expect-$name") }
+          }
+          if (Test-Path "$env:RUNNER_TEMP\wild") { Copy-Item "$env:RUNNER_TEMP\wild\*" $dest -Force }
+          if (Test-Path "$env:LOCALAPPDATA\URnetwork\app\logs") {
+            Copy-Item "$env:LOCALAPPDATA\URnetwork\app\logs" (Join-Path $dest 'app-logs') -Recurse -Force
+          }
+          if (Test-Path "$env:LOCALAPPDATA\URnetwork\app\app_prefs.json") { Copy-Item "$env:LOCALAPPDATA\URnetwork\app\app_prefs.json" $dest }
+          if (Test-Path "$env:LOCALAPPDATA\URnetwork\updates") {
+            Get-ChildItem -Recurse -Force "$env:LOCALAPPDATA\URnetwork\updates" | ForEach-Object { "$($_.FullName) $($_.Length)" } |
+              Out-File (Join-Path $dest 'tray-updates-listing.txt')
+          }
+          if (Test-Path "$env:ProgramData\URnetwork\service\logs") {
+            Copy-Item "$env:ProgramData\URnetwork\service\logs" (Join-Path $dest 'service-logs') -Recurse -Force
+          }
+          $updates = 'C:\Program Files\URnetwork\updates'
+          if (Test-Path $updates) {
+            Get-ChildItem -Recurse -Force $updates | ForEach-Object { "$($_.FullName) $($_.Length)" } |
+              Out-File (Join-Path $dest 'updates-listing.txt')
+            Get-ChildItem -Recurse -File $updates -Include '*.log', '*.json' | ForEach-Object {
+              $name = 'updates_' + ($_.FullName.Substring($updates.Length).TrimStart('\') -replace '\\', '_')
+              Copy-Item -LiteralPath $_.FullName (Join-Path $dest $name)
+            }
+          }
+          Get-CimInstance Win32_Service | Where-Object { $_.PathName -like '*urnetwork*' } |
+            Format-List Name, State, StartMode, StartName, PathName, ProcessId | Out-File (Join-Path $dest 'services.txt')
+          Get-CimInstance Win32_Process | Where-Object { $_.Name -like 'URnetwork*' } |
+            Format-List ProcessId, Name, CommandLine, CreationDate | Out-File (Join-Path $dest 'processes.txt')
+          Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = 'MsiInstaller' } -ErrorAction SilentlyContinue |
+            Sort-Object TimeCreated | ForEach-Object { "$($_.TimeCreated.ToString('o')) $($_.Id) $($_.Message)" } |
+            Out-File (Join-Path $dest 'msiinstaller-events.txt')
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wild-logs-${{ matrix.leg }}
+          path: ${{ runner.temp }}/upgrade-logs/
+          if-no-files-found: warn
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wild-shots-${{ matrix.leg }}
+          path: ${{ runner.temp }}/ui-shots/
+          if-no-files-found: warn
