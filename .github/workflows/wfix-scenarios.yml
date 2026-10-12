@@ -1,0 +1,84 @@
+name: wfix scenarios on two builds - Windows
+
+# Throwaway (a ci/wfix-scenarios-* branch of the fork): builds nothing. It takes
+# two portable zips from earlier runs - upstream main's (WFIX_BEFORE_RUN, from
+# ci/wfix-icons-before-1) and fix/beta-line-defects-upstream's (WFIX_AFTER_RUN,
+# from ci/wfix-defects-1, whose only commit past the branch head touches
+# .github) - and runs .github/wfix-ui.ps1's scenarios on both: the
+# Advanced-mode fold, and the App split rules sheet with two rules that differ
+# only in case. Pressed and read through UI Automation, captured with
+# PrintWindow. Never merged.
+on:
+  push:
+    branches:
+      - 'ci/wfix-scenarios-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  WFIX_BEFORE_RUN: '38298196529'
+  WFIX_AFTER_RUN: '38301360450'
+
+jobs:
+  scenarios:
+    name: The scenarios on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025]
+    steps:
+      - name: Check out Windows repo
+        uses: actions/checkout@v4
+
+      - name: Download upstream main's portable zip (before)
+        uses: actions/download-artifact@v4
+        with:
+          name: urnetwork-windows-portable-x64
+          path: ${{ runner.temp }}/zip-before
+          run-id: ${{ env.WFIX_BEFORE_RUN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download the fix branch's portable zip (after)
+        uses: actions/download-artifact@v4
+        with:
+          name: urnetwork-windows-portable-x64
+          path: ${{ runner.temp }}/zip
+          run-id: ${{ env.WFIX_AFTER_RUN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run the scenarios on both builds
+        timeout-minutes: 20
+        shell: powershell
+        run: |
+          & "$env:GITHUB_WORKSPACE\.github\wfix-ui.ps1" -ZipDir "$env:RUNNER_TEMP\zip" -BeforeZipDir "$env:RUNNER_TEMP\zip-before" -ScenariosOnly
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - name: Collect the app's logs
+        if: always()
+        shell: powershell
+        run: |
+          $dest = Join-Path $env:RUNNER_TEMP 'ui-logs'
+          New-Item -ItemType Directory -Force $dest | Out-Null
+          $logs = Join-Path $env:LOCALAPPDATA 'URnetwork\app\logs'
+          if (Test-Path $logs) { Copy-Item "$logs\*" $dest -Recurse -Force }
+          Get-ChildItem -Recurse $dest | ForEach-Object { "$($_.FullName) $($_.Length)" }
+
+      - name: Upload the captures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scenario-shots-${{ matrix.os }}
+          path: ${{ runner.temp }}/ui-shots/
+          if-no-files-found: warn
+
+      - name: Upload the app's logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scenario-logs-${{ matrix.os }}
+          path: ${{ runner.temp }}/ui-logs/
+          if-no-files-found: warn

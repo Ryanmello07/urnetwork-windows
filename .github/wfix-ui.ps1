@@ -10,8 +10,10 @@
 # SPDX-License-Identifier: MPL-2.0
 
 # -BeforeZipDir: a second portable zip (upstream main's build). When given, the
-# Advanced-mode fold scenario below runs on both builds after the pages.
-param([Parameter(Mandatory = $true)] [string]$ZipDir, [string]$BeforeZipDir = '')
+# scenarios below (the Advanced-mode fold, the App split rules sheet) run on
+# both builds after the pages. -ScenariosOnly skips the pages.
+param([Parameter(Mandatory = $true)] [string]$ZipDir, [string]$BeforeZipDir = '',
+      [switch]$ScenariosOnly)
 $ErrorActionPreference = 'Stop'
 
 $ShotDir = Join-Path $env:RUNNER_TEMP 'ui-shots'
@@ -205,6 +207,7 @@ $pages = @(
   @{ Name = '10-seedphrase'; Destination = 'seedphrase'; Environment = @{}; Required = $false },
   @{ Name = '11-leaderboard'; Destination = 'leaderboard'; Environment = @{}; Required = $false }
 )
+if ($ScenariosOnly) { $pages = @() }
 
 $results = New-Object System.Collections.Generic.List[string]
 $failed = New-Object System.Collections.Generic.List[string]
@@ -322,10 +325,13 @@ function Test-AdvancedFold([string]$label) {
 }
 
 $verdicts = @{}
+$appDirs = @{}
+$problems = New-Object System.Collections.Generic.List[string]
 foreach ($build in @(@{ Label = 'before'; Zip = $BeforeZipDir }, @{ Label = 'after'; Zip = $ZipDir })) {
   "---- advanced-fold $($build.Label)"
   $script:AppDir = Expand-App $build.Zip "app-$($build.Label)"
   $script:Exe = Join-Path $script:AppDir 'URnetwork.exe'
+  $appDirs[$build.Label] = $script:AppDir
   try {
     $verdicts[$build.Label] = Test-AdvancedFold $build.Label
   } catch {
@@ -335,5 +341,74 @@ foreach ($build in @(@{ Label = 'before'; Zip = $BeforeZipDir }, @{ Label = 'aft
 }
 "==== advanced-fold: before (upstream main): Device pane $($verdicts['before'].Device), fold copy $($verdicts['before'].Fold); after: Device pane $($verdicts['after'].Device), fold copy $($verdicts['after'].Fold)"
 if ($verdicts['after'].Device -ne 'On' -or $verdicts['after'].Fold -ne 'On') {
-  throw "after the fix, the fold copy must read On once the Device pane's switch is flipped On"
+  $problems.Add("after the fix, the fold copy must read On once the Device pane's switch is flipped On")
 }
+
+# ---- the App split rules sheet with two rules differing only in case -------
+# The SDK keeps the app rules in its local state, <space>\.by\.block_action_
+# overrides (sdk local_state.go), a JSON list of BlockActionOverride. Write two
+# rules for one app whose paths differ only in case, open Settings, press
+# "Manage apps" through UI Automation (InvokePattern), and read whether the
+# sheet opened and how many rows name the app.
+function Set-CaseVariantRules {
+  $storage = Join-Path $env:LOCALAPPDATA 'URnetwork\app\storage'
+  $dirs = @(Get-ChildItem -LiteralPath $storage -Recurse -Directory -Force -Filter '.by' -ErrorAction SilentlyContinue)
+  if ($dirs.Count -eq 0) { throw "no SDK local state (.by) under $storage" }
+  $json = '[{"OverrideId":"0b2f6c1e-5d4a-4c3b-9a8e-7f6d5c4b3a21","AppIds":["C:\\Tools\\Demo.exe"],"RouteOverride":{"Local":true}},' +
+          '{"OverrideId":"1c3e7d2f-6e5b-4d4c-8b9f-8e7d6c5b4a32","AppIds":["c:\\tools\\demo.exe"],"RouteOverride":{"Local":false}}]'
+  foreach ($dir in $dirs) {
+    [System.IO.File]::WriteAllText((Join-Path $dir.FullName '.block_action_overrides'), $json)
+  }
+  Write-Host "split-rules: wrote two app rules, C:\Tools\Demo.exe and c:\tools\demo.exe, into $($dirs.Count) local state dir(s): $(($dirs | ForEach-Object { $_.FullName }) -join '; ')"
+}
+
+function Get-Texts($window) {
+  $condition = New-Object System.Windows.Automation.PropertyCondition(
+    [System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Text)
+  $names = New-Object System.Collections.Generic.List[string]
+  foreach ($text in $window.FindAll([System.Windows.Automation.TreeScope]::Descendants, $condition)) {
+    try { $names.Add([string]$text.Current.Name) } catch { }
+  }
+  return ,$names
+}
+
+function Test-SplitRulesSheet([string]$label) {
+  $app = Start-Preview 'settings' @{}
+  try {
+    Start-Sleep -Seconds 2
+    $named = New-Object System.Windows.Automation.PropertyCondition(
+      [System.Windows.Automation.AutomationElement]::NameProperty, 'Manage apps')
+    $button = (Get-MainWindow $app.Id).FindFirst([System.Windows.Automation.TreeScope]::Descendants, $named)
+    if (-not $button) { throw "no 'Manage apps' button on the Settings page" }
+    $button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+    Start-Sleep -Seconds 6
+    $texts = Get-Texts (Get-MainWindow $app.Id)
+    $rows = @($texts | Where-Object { $_ -eq 'Demo.exe' }).Count
+    $configured = @($texts | Where-Object { $_ -eq 'Configured' }).Count
+    $open = $configured -gt 0
+    Write-Host "split-rules ${label}: pressed 'Manage apps' (InvokePattern); sheet open: $open ('Configured' header: $configured); rows named Demo.exe: $rows"
+    [void](Save-Shot $app.Id "split-$label-after-manage-apps")
+    return @{ Open = $open; Rows = $rows }
+  } finally {
+    Stop-App $app
+  }
+}
+
+$split = @{}
+foreach ($label in 'before', 'after') {
+  "---- split-rules $label"
+  $script:AppDir = $appDirs[$label]
+  $script:Exe = Join-Path $script:AppDir 'URnetwork.exe'
+  try {
+    Set-CaseVariantRules
+    $split[$label] = Test-SplitRulesSheet $label
+  } catch {
+    "split-rules $label FAILED: $($_.Exception.Message)"
+    $split[$label] = @{ Open = '?'; Rows = '?' }
+  }
+}
+"==== split-rules: before (upstream main): sheet open $($split['before'].Open), Demo.exe rows $($split['before'].Rows); after: sheet open $($split['after'].Open), Demo.exe rows $($split['after'].Rows)"
+if ($split['after'].Open -ne $true -or $split['after'].Rows -ne 1) {
+  $problems.Add("after the fix, the sheet must open with one row for the app the two rules name")
+}
+if ($problems.Count -gt 0) { throw ($problems -join '; ') }
