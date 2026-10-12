@@ -1411,11 +1411,12 @@ void DnsEditorSheet::BuildResolverSection(StackPanel const& parent) {
     Grid::SetColumn(label, 0);
     row.Children().Append(label);
     toggle = MakeBareToggle();
-    ToggleSwitch captured = toggle;
-    toggle.Toggled([weak, captured, flag](IInspectable const&, RoutedEventArgs const&) {
+    // the switch from the sender: a handler holding it would own its own
+    // switch (tests/handler_self_capture_test.go)
+    toggle.Toggled([weak, flag](IInspectable const& sender, RoutedEventArgs const&) {
       auto self = weak.lock();
       if (!self || self->updating_) return;
-      self->draft_.*flag = captured.IsOn();
+      self->draft_.*flag = sender.as<ToggleSwitch>().IsOn();
       self->OnDraftChanged();
     });
     Grid::SetColumn(toggle, 1);
@@ -1491,13 +1492,12 @@ void DnsEditorSheet::BuildSuggestionSection(StackPanel const& parent) {
     suggestion.toggle = MakeBareToggle();
     {
       std::string ipv4 = server.Ipv4;
-      ToggleSwitch toggle = suggestion.toggle;
-      suggestion.toggle.Toggled([weak, ipv4, toggle](IInspectable const&,
-                                                     RoutedEventArgs const&) {
+      // the switch from the sender, as above
+      suggestion.toggle.Toggled([weak, ipv4](IInspectable const& sender, RoutedEventArgs const&) {
         auto self = weak.lock();
         if (!self || self->updating_) return;
         auto& values = self->draft_.remoteDnsIpv4;
-        if (toggle.IsOn()) {
+        if (sender.as<ToggleSwitch>().IsOn()) {
           // on adds the server to the remote dns list and enables remote dns
           if (std::find(values.begin(), values.end(), ipv4) == values.end()) {
             values.push_back(ipv4);
@@ -1938,16 +1938,17 @@ void TransportSettingsSheet::BuildAutoRow(StackPanel const& parent, std::string 
   {
     std::weak_ptr<TransportSettingsSheet> weak = weak_from_this();
     const std::string captured = mode;
-    ToggleSwitch capturedToggle = toggle;
-    toggle.Toggled([weak, captured, capturedToggle](IInspectable const&, RoutedEventArgs const&) {
+    // the switch from the sender: a handler holding it would own its own
+    // switch (tests/handler_self_capture_test.go)
+    toggle.Toggled([weak, captured](IInspectable const& sender, RoutedEventArgs const&) {
       auto self = weak.lock();
       if (!self || self->updating_) return;
       // through the SDK: a newly enabled carrier takes its default priority so
       // the fixed preference order is preserved, and disabling the LAST enabled
       // carrier is refused (the returned copy equals the input) -- SyncFromDraft
       // then puts the switch back to the truth
-      self->SetDraft(urnet::transportSettingsWithAutoModeEnabled(self->draft_, captured,
-                                                                 capturedToggle.IsOn()));
+      self->SetDraft(urnet::transportSettingsWithAutoModeEnabled(
+          self->draft_, captured, sender.as<ToggleSwitch>().IsOn()));
     });
   }
   Grid::SetColumn(toggle, 1);
