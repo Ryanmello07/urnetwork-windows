@@ -77,9 +77,10 @@ function Save-WildFeedRecord($list, $reading, [string]$name = 'feed-state.txt') 
     $tag = [string]$release.tag_name
     $msi = 'no x64 MSI'
     if ($tag.Length -gt 1) {
-      $name = "URnetwork-$($tag.Substring(1))-x64.msi"
-      $assets = @($release.assets | Where-Object { $_.name -eq $name })
-      if ($assets.Count -eq 1) { $msi = "$name updated_at=$($assets[0].updated_at) digest=$($assets[0].digest)" }
+      # its own variable: $name is the record's file name
+      $asset = "URnetwork-$($tag.Substring(1))-x64.msi"
+      $assets = @($release.assets | Where-Object { $_.name -eq $asset })
+      if ($assets.Count -eq 1) { $msi = "$asset updated_at=$($assets[0].updated_at) digest=$($assets[0].digest)" }
     }
     $verdict = '?'
     $rows = @($reading.Rows | Where-Object { $_.Tag -eq $tag })
@@ -102,6 +103,7 @@ function Save-WildFeedRecord($list, $reading, [string]$name = 'feed-state.txt') 
   $path = Join-Path $env:RUNNER_TEMP $name
   [IO.File]::WriteAllLines($path, $lines.ToArray(), (New-Object Text.UTF8Encoding($false)))
   foreach ($line in $lines) { Write-Host "record: $line" }
+  Write-Host "the record is $path"
 }
 
 # One release of the list by its tag, as a row like Get-UrFeedReading's: its

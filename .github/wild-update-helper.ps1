@@ -70,10 +70,11 @@ try {
   $product = Assert-UrInstalled $expect 'official-apply.log'
   if ($product.ProductCode -eq $productBefore) { throw "vN's product is still registered" }
   Assert-WildExeVersions $expect
-  [void](Show-WildInstalled 'after')
+  $after = Show-WildInstalled 'after'
   $service = Get-UrServiceInfo
   if (-not $service -or $service.State -ne 'Running') { throw "urnetworkd is not running: $($service | Out-String)" }
-  "OK: urnetworkd is $($service.State) from $($service.PathName)"
+  if ($null -eq $after.Service -or $after.Service.RunningImageVersion -ne $expect.file_version) { throw "the running urnetworkd is not the release's: $($after.Service | Out-String)" }
+  "OK: urnetworkd is $($service.State) from $($service.PathName), its running image at $($after.Service.RunningImageVersion)"
 
   $kept = Join-Path $tagDir $offered.Asset
   if (-not (Test-Path $kept)) { throw "the MSI is not kept at $kept" }
