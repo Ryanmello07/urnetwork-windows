@@ -16,7 +16,7 @@
 #   .github/wild-update-window.ps1              (the "window" leg)
 #   .github/wild-update-helper.ps1              (the "helper" leg)
 # The branch is vN's own source, urnetwork/windows at VN_SOURCE, with only
-# these .github files added: the rules the test reads are vN's.
+# these .github files added on top of it: the rules the test reads are vN's.
 #
 # Steps, on each leg's own runner:
 #   source     the checkout is vN's source; the lines of it that decide the
@@ -75,7 +75,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          # deep enough to reach vN's source from this branch's own commits
+          fetch-depth: 20
 
       - name: Inventory, the session and the source
         shell: powershell
@@ -83,10 +84,11 @@ jobs:
           . "$env:GITHUB_WORKSPACE\.github\wild-update-lib.ps1"
           "runner image: $env:ImageOS $env:ImageVersion; $([Environment]::OSVersion.VersionString)"
           $head = (git -C $env:GITHUB_WORKSPACE rev-parse HEAD).Trim()
-          $base = (git -C $env:GITHUB_WORKSPACE rev-parse 'HEAD^').Trim()
-          "this branch: $head, on $base"
-          if ($base -ne $env:VN_SOURCE) { throw "this branch is not on vN's source $env:VN_SOURCE" }
-          $changed = @(git -C $env:GITHUB_WORKSPACE diff --name-only 'HEAD^' HEAD)
+          "this branch: $head"
+          git -C $env:GITHUB_WORKSPACE merge-base --is-ancestor $env:VN_SOURCE HEAD
+          if ($LASTEXITCODE -ne 0) { throw "this branch is not on vN's source $env:VN_SOURCE" }
+          git -C $env:GITHUB_WORKSPACE log --oneline "$env:VN_SOURCE..HEAD" | ForEach-Object { "on vN's source: $_" }
+          $changed = @(git -C $env:GITHUB_WORKSPACE diff --name-only $env:VN_SOURCE HEAD)
           $outside = @($changed | Where-Object { $_ -notlike '.github/*' })
           if ($outside.Count -ne 0) { throw "this branch changes $($outside -join ', ') beyond .github" }
           "OK: the source checked out is urnetwork/windows $env:VN_SOURCE, vN's own, with only this test's files added: $($changed -join ', ')"
