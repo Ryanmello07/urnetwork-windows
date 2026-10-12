@@ -350,16 +350,23 @@ if ($verdicts['after'].Device -ne 'On' -or $verdicts['after'].Fold -ne 'On') {
 # rules for one app whose paths differ only in case, open Settings, press
 # "Manage apps" through UI Automation (InvokePattern), and read whether the
 # sheet opened and how many rows name the app.
-function Set-CaseVariantRules {
+# -Single writes only the first rule: the control, a list the sheet opens on.
+function Set-CaseVariantRules([switch]$Single) {
   $storage = Join-Path $env:LOCALAPPDATA 'URnetwork\app\storage'
   $dirs = @(Get-ChildItem -LiteralPath $storage -Recurse -Directory -Force -Filter '.by' -ErrorAction SilentlyContinue)
   if ($dirs.Count -eq 0) { throw "no SDK local state (.by) under $storage" }
-  $json = '[{"OverrideId":"0b2f6c1e-5d4a-4c3b-9a8e-7f6d5c4b3a21","AppIds":["C:\\Tools\\Demo.exe"],"RouteOverride":{"Local":true}},' +
-          '{"OverrideId":"1c3e7d2f-6e5b-4d4c-8b9f-8e7d6c5b4a32","AppIds":["c:\\tools\\demo.exe"],"RouteOverride":{"Local":false}}]'
+  $first = '{"OverrideId":"0b2f6c1e-5d4a-4c3b-9a8e-7f6d5c4b3a21","AppIds":["C:\\Tools\\Demo.exe"],"RouteOverride":{"Local":true}}'
+  $second = '{"OverrideId":"1c3e7d2f-6e5b-4d4c-8b9f-8e7d6c5b4a32","AppIds":["c:\\tools\\demo.exe"],"RouteOverride":{"Local":false}}'
+  $json = '[' + $first + ']'
+  $what = 'one app rule, C:\Tools\Demo.exe,'
+  if (-not $Single) {
+    $json = '[' + $first + ',' + $second + ']'
+    $what = 'two app rules, C:\Tools\Demo.exe and c:\tools\demo.exe,'
+  }
   foreach ($dir in $dirs) {
     [System.IO.File]::WriteAllText((Join-Path $dir.FullName '.block_action_overrides'), $json)
   }
-  Write-Host "split-rules: wrote two app rules, C:\Tools\Demo.exe and c:\tools\demo.exe, into $($dirs.Count) local state dir(s): $(($dirs | ForEach-Object { $_.FullName }) -join '; ')"
+  Write-Host "split-rules: wrote $what into $($dirs.Count) local state dir(s): $(($dirs | ForEach-Object { $_.FullName }) -join '; ')"
 }
 
 function Get-Texts($window) {
@@ -395,19 +402,25 @@ function Test-SplitRulesSheet([string]$label) {
 }
 
 $split = @{}
-foreach ($label in 'before', 'after') {
-  "---- split-rules $label"
-  $script:AppDir = $appDirs[$label]
+# the control first: upstream main's sheet opens on one rule for the app
+foreach ($case in @(@{ Label = 'before-control'; Build = 'before'; Single = $true },
+                    @{ Label = 'before'; Build = 'before'; Single = $false },
+                    @{ Label = 'after'; Build = 'after'; Single = $false })) {
+  "---- split-rules $($case.Label)"
+  $script:AppDir = $appDirs[$case.Build]
   $script:Exe = Join-Path $script:AppDir 'URnetwork.exe'
   try {
-    Set-CaseVariantRules
-    $split[$label] = Test-SplitRulesSheet $label
+    Set-CaseVariantRules -Single:$case.Single
+    $split[$case.Label] = Test-SplitRulesSheet $case.Label
   } catch {
-    "split-rules $label FAILED: $($_.Exception.Message)"
-    $split[$label] = @{ Open = '?'; Rows = '?' }
+    "split-rules $($case.Label) FAILED: $($_.Exception.Message)"
+    $split[$case.Label] = @{ Open = '?'; Rows = '?' }
   }
 }
-"==== split-rules: before (upstream main): sheet open $($split['before'].Open), Demo.exe rows $($split['before'].Rows); after: sheet open $($split['after'].Open), Demo.exe rows $($split['after'].Rows)"
+"==== split-rules: before (upstream main), one rule (control): sheet open $($split['before-control'].Open), Demo.exe rows $($split['before-control'].Rows); before, the pair: sheet open $($split['before'].Open), Demo.exe rows $($split['before'].Rows); after, the pair: sheet open $($split['after'].Open), Demo.exe rows $($split['after'].Rows)"
+if ($split['before-control'].Open -ne $true) {
+  $problems.Add("control: upstream main's sheet must open on one rule, or 'not open' says nothing about the pair")
+}
 if ($split['after'].Open -ne $true -or $split['after'].Rows -ne 1) {
   $problems.Add("after the fix, the sheet must open with one row for the app the two rules name")
 }
