@@ -1,0 +1,77 @@
+name: Icon fonts on the runners - Windows
+
+# A throwaway ci/wfix-fonts-* branch of the fork: measures, on each Windows
+# runner image, which icon fonts C:\Windows\Fonts holds and which of the app's
+# glyph code points each one maps (two cmap readers: fontTools and WPF's
+# GlyphTypeface). The code points come from the app's own source at this
+# commit (.github/wfix/scan_glyphs.py). Builds nothing. Never merged.
+on:
+  push:
+    branches:
+      - 'ci/wfix-fonts-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fonts:
+    name: Icon fonts on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025, windows-11-arm]
+    steps:
+      - name: Check out Windows repo
+        uses: actions/checkout@v4
+
+      - name: The operating system
+        shell: powershell
+        run: |
+          $os = Get-CimInstance Win32_OperatingSystem
+          "caption: $($os.Caption); version: $($os.Version); build: $($os.BuildNumber); arch: $($os.OSArchitecture)"
+          $cv = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
+          "DisplayVersion: $($cv.DisplayVersion); UBR: $($cv.UBR); EditionID: $($cv.EditionID); InstallationType: $($cv.InstallationType)"
+
+      - name: The icon font files and their registrations
+        shell: powershell
+        run: |
+          "files in $env:windir\Fonts whose name says icon, mdl2 or symbol:"
+          Get-ChildItem "$env:windir\Fonts" -File | Where-Object { $_.Name -match 'icon|mdl2|sym' } |
+            ForEach-Object { "  $($_.Name) $($_.Length) bytes, file version $($_.VersionInfo.FileVersion)" }
+          "registered system fonts (HKLM) naming Icons or MDL2:"
+          $reg = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts'
+          $reg.PSObject.Properties | Where-Object { $_.Name -match 'Icons|MDL2|Symbol' } |
+            ForEach-Object { "  $($_.Name) = $($_.Value)" }
+          $user = Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\Fonts'
+          "per-user fonts in ${user}: $(if (Test-Path $user) { @(Get-ChildItem $user -File).Count } else { 'none (no folder)' })"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install fontTools
+        run: python -m pip install --disable-pip-version-check fonttools==4.63.0
+
+      - name: The app's glyph code points (from this commit's source)
+        run: python -I .github/wfix/scan_glyphs.py "${{ github.workspace }}" "${{ runner.temp }}/glyphs.json"
+
+      - name: Coverage per font (fontTools)
+        run: python -I .github/wfix/font_coverage.py "${{ runner.temp }}/glyphs.json" "C:\Windows\Fonts" "${{ runner.temp }}/coverage-${{ matrix.os }}.json"
+
+      - name: Coverage per font (WPF GlyphTypeface, the second reader)
+        shell: powershell
+        run: |
+          & "$env:GITHUB_WORKSPACE\.github\wfix\glyph_typeface.ps1" -Coverage "$env:RUNNER_TEMP\coverage-${{ matrix.os }}.json"
+
+      - name: Upload the measurements
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fonts-${{ matrix.os }}
+          path: |
+            ${{ runner.temp }}/glyphs.json
+            ${{ runner.temp }}/coverage-${{ matrix.os }}.json
+          if-no-files-found: warn
