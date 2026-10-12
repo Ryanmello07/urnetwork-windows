@@ -21,7 +21,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-2022, windows-11-arm]
+        os: [windows-11-arm]
     steps:
       - name: Check out Windows repo
         uses: actions/checkout@v4

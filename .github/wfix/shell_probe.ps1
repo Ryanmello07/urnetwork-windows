@@ -59,6 +59,13 @@ function Show-Shell([string]$when) {
 $os = Get-CimInstance Win32_OperatingSystem
 "os: $($os.Caption) $($os.Version) $($os.OSArchitecture)"
 Show-Shell 'as the runner starts'
+# the shell may still be coming up when the job starts: try again for 4 minutes
+for ($i = 1; $i -le 16; $i++) {
+  Start-Sleep -Seconds 15
+  $result = [UrShellProbe]::TryTrayIcon()
+  "  +$($i * 15)s: $result"
+  if ($result -like '*succeeded*') { break }
+}
 if ($StartExplorer -and -not (Get-Process -Name explorer -ErrorAction SilentlyContinue)) {
   Start-Process "$env:windir\explorer.exe"
   $deadline = (Get-Date).AddSeconds(60)
