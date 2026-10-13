@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
+#include <stdexcept>
+#include <string>
 
 #include <winrt/Microsoft.UI.Xaml.Automation.h>
 #include <winrt/Windows.Storage.h>
@@ -19,6 +21,7 @@
 #include "LaunchAtStartup.h"
 #include "Localization.h"
 #include "Log.h"
+#include "LogExport.h"
 #include "MainWindow.xaml.h"
 #include "ManageSubscription.h"
 #include "PageContext.h"
@@ -1521,8 +1524,10 @@ winrt::fire_and_forget SettingsPage::SaveLogsToFile() {
 
     auto file = co_await picker.PickSaveFileAsync();
     if (!file) co_return;  // cancelled; not a failure
-    std::filesystem::copy_file(source, std::filesystem::path{std::wstring{file.Path()}},
-                               std::filesystem::copy_options::overwrite_existing);
+    // the log with every link in it reduced (LogExport.h); saving over the log itself is refused
+    if (!logexport::CopyWithoutLinks(source, std::filesystem::path{std::wstring{file.Path()}})) {
+      throw std::runtime_error("the log could not be copied");
+    }
     snackbar_.Show(Loc("save_logs"), InfoBarSeverity::Success);
   } catch (const std::exception& e) {
     LogWarn("settings: save logs failed: {}", e.what());

@@ -15,7 +15,11 @@ import (
 // window, and an autostart shows only the tray icon. What each launch asks is
 // decided by instance::ActionFor (instance_handover_test.go); OnLaunched,
 // AppController and the activation code need Windows and WinRT, so these read
-// their sources with every comment blanked.
+// their sources with every comment blanked. A deep link's handling brings the
+// window forward, except an auth link: it is judged first (HandleAuthLink), and
+// raises the window only for the answer to a sign-in the app started and, once,
+// with a neutral line, for the first launch of a freshly started process
+// (ur_io_approval_wiring_test.go).
 
 // One rule for every launch. AppController::ServeLaunch asks ActionFor and
 // does what it says: route a deep link, open the window for the user's launch,

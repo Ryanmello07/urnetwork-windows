@@ -12,6 +12,7 @@
 #include <format>
 #include <optional>
 
+#include "AuthLink.h"
 #include "Ids.h"
 #include "Localization.h"
 #include "Log.h"
@@ -213,7 +214,11 @@ std::vector<std::wstring> CollectDiagnostics() {
   lines.push_back(std::format(L"  windows          : {}", OsVersion()));
   lines.push_back(std::format(L"  process          : pid {}", ::GetCurrentProcessId()));
   lines.push_back(std::format(L"  executable       : {}{}", exe.wstring(), WriteTime(exe)));
-  lines.push_back(std::format(L"  command line     : {}", ::GetCommandLineW()));
+  // A sign-in return rides on the command line of the process the browser starts,
+  // and every line here goes to the log file. Export logs reduces any link in it again
+  // (an earlier build wrote this line whole), but the file itself is never rewritten.
+  lines.push_back(std::format(L"  command line     : {}",
+                              authlink::RedactCommandLine(::GetCommandLineW())));
   std::wstring logLine = log.empty() ? std::wstring(L"(none — debugger only)") : log.wstring();
   if (g_logOpened && !*g_logOpened)
     logLine += L"  ** COULD NOT BE OPENED — nothing is being written to it **";

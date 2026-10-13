@@ -30,6 +30,12 @@ v2026.10.9-1067985620, published on 2026-10-10. If yours was installed from an
 older release, install the newest release by hand once: it upgrades the
 installed copy in place, and updates itself from then on.
 
+A sign-in through the browser (the login sheet's "Continue in
+browser", built off until the approval page is live) registers the
+`urnetwork://` link for the current Windows user only (`HKCU`); a portable copy
+leaves it behind when it is deleted, and `reg delete HKCU\Software\Classes\urnetwork /f`
+removes it (an MSI uninstall does not).
+
 ## Architecture
 
 ```
