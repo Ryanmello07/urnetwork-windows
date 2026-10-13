@@ -94,6 +94,11 @@ class ServiceClient {
   // for a refusal or a transport failure. Sent only to a service whose
   // get_provider_stats said it takes it (provide_extender_writable).
   bool SetProvideExtender(bool on, std::string* error = nullptr);
+  // The lag.dev speed tests switch's write while there is no session
+  // (set_measurements_enabled). True when the service wrote it; false with
+  // `error` for a refusal or a transport failure. Sent only to a service whose
+  // get_provider_stats said it takes it (measurements_enabled_writable).
+  bool SetMeasurementsEnabled(bool on, std::string* error = nullptr);
   // reset_extenders (Protocol.h ResetExtenders): the service applies a reset
   // the app made in its own space to the space it holds under the same key,
   // which its session's device and its provider-only device run in. Taken when

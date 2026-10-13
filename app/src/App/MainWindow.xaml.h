@@ -363,6 +363,9 @@ struct MainWindow : MainWindowT<MainWindow> {
   // the provider extender switch under the provide group (EXTENDER.md N7)
   void OnExtenderToggled(winrt::Windows::Foundation::IInspectable const&,
                          winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
+  // the lag.dev speed tests switch under it (lag.dev/PLAN.md C4)
+  void OnSpeedTestsToggled(winrt::Windows::Foundation::IInspectable const&,
+                           winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnFixedIpToggled(winrt::Windows::Foundation::IInspectable const&,
                         winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnStrongAnonToggled(winrt::Windows::Foundation::IInspectable const&,

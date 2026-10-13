@@ -92,6 +92,13 @@ namespace urnw::proto {
 //    keeps the Connect page's Extender switch hidden while disconnected, as
 //    before.
 //
+//    Nor for set_measurements_enabled and ProviderStats::measurements_enabled
+//    and measurements_enabled_writable (lag.dev/PLAN.md C4): the same rule. The
+//    app sends the verb only to a service whose get_provider_stats said it
+//    takes it, and a service that does not say so keeps the lag.dev speed
+//    tests switch hidden while disconnected; the setting itself still applies,
+//    since every device reads it from its space.
+//
 //    Nor for reset_extenders, Reply::reset and Reply::reset_busy: a service
 //    that does not know the verb answers "unknown request type" and resets
 //    nothing, which is the behaviour before it existed, and the app then leaves
@@ -123,6 +130,8 @@ inline constexpr const char* kGetProviderStats = "get_provider_stats";  // app -
 inline constexpr const char* kSetNetworkCountry = "set_network_country";  // app -> service
 inline constexpr const char* kUploadLogs = "upload_logs";        // app -> service
 inline constexpr const char* kSetProvideExtender = "set_provide_extender";  // app -> service
+// app -> service
+inline constexpr const char* kSetMeasurementsEnabled = "set_measurements_enabled";
 inline constexpr const char* kResetExtenders = "reset_extenders";  // app -> service
 inline constexpr const char* kReply = "reply";                   // service -> app
 inline constexpr const char* kEvent = "event";                   // service -> app (unsolicited)
@@ -434,6 +443,16 @@ struct SetProvideExtender {
   bool provide_extender = true;
 };
 
+// set_measurements_enabled: the lag.dev speed tests switch while disconnected
+// (lag.dev/PLAN.md C4, decision 18). Like the provide extender setting it
+// belongs to the network space (`.measurements_enabled`), every device reads
+// it from its space when it starts, and it is written through the same
+// targets (provide::ExtenderSettingTargetFor). Sent only over a status whose
+// ProviderStats::measurements_enabled_writable said the service takes it.
+struct SetMeasurementsEnabled {
+  bool measurements_enabled = true;
+};
+
 // reset_extenders: "Reset extenders" in the app's Account > Extenders (connect
 // EXTENDER.md E7). The app has reset its own network space -- everything it
 // learned about extenders is cleared and the extenders a user added are
@@ -647,6 +666,14 @@ struct ProviderStats {
   // service from before the verb never sends it, which the app reads as no
   // writer and keeps the switch hidden while disconnected (N1), as before.
   bool provide_extender_writable = false;
+  // The lag.dev measurements setting (Device::getMeasurementsEnabled), read
+  // beside the provide extender setting: the lag.dev speed tests switch under
+  // the Extender switch. On by default, as the sdk's.
+  bool measurements_enabled = true;
+  // The service takes set_measurements_enabled for that setting. A service
+  // from before the verb never sends it, which the app reads as no writer and
+  // keeps the speed tests switch hidden while disconnected (N1).
+  bool measurements_enabled_writable = false;
 };
 
 struct Reply {
@@ -814,6 +841,20 @@ inline void from_json(const nlohmann::json& j, SetProvideExtender& v) {
   v.provide_extender = it->get<bool>();
 }
 
+inline void to_json(nlohmann::json& j, const SetMeasurementsEnabled& v) {
+  j = {{"measurements_enabled", v.measurements_enabled}};
+}
+
+// Strict, as set_provide_extender's: a write whose value did not arrive must
+// not write a default the user never chose.
+inline void from_json(const nlohmann::json& j, SetMeasurementsEnabled& v) {
+  auto it = j.find("measurements_enabled");
+  if (it == j.end() || !it->is_boolean()) {
+    throw std::runtime_error("set_measurements_enabled requires measurements_enabled (a boolean)");
+  }
+  v.measurements_enabled = it->get<bool>();
+}
+
 inline void to_json(nlohmann::json& j, const ResetExtenders& v) {
   j = {{"host_name", v.host_name},
        {"env_name", v.env_name},
@@ -940,6 +981,8 @@ inline void to_json(nlohmann::json& j, const ProviderStats& v) {
       {"extender_provide_status", v.extender_provide_status},
       {"provide_extender", v.provide_extender},
       {"provide_extender_writable", v.provide_extender_writable},
+      {"measurements_enabled", v.measurements_enabled},
+      {"measurements_enabled_writable", v.measurements_enabled_writable},
   };
 }
 
@@ -954,6 +997,8 @@ inline void from_json(const nlohmann::json& j, ProviderStats& v) {
   get("has_provider_stats", v.has_provider_stats);
   get("provide_extender", v.provide_extender);
   get("provide_extender_writable", v.provide_extender_writable);
+  get("measurements_enabled", v.measurements_enabled);
+  get("measurements_enabled_writable", v.measurements_enabled_writable);
   // The sdk's documents are kept only in the shape they have to have: anything
   // else reads as none, never as a throw that loses the counts above.
   if (auto it = j.find("provider_points"); it != j.end() && it->is_array())

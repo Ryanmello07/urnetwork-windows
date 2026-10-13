@@ -1499,6 +1499,14 @@ class SdkHost {
   // unlike the provide mode: the service owns the setting either way. Callers
   // never write while the row is hidden (N1).
   void SetProvideExtender(bool on);
+  // The lag.dev measurements setting (lag.dev/PLAN.md C4, decision 18), the
+  // speed tests switch under the Extender switch: written as the provide
+  // extender setting is, through the device, which persists it in its space
+  // and applies it at once, or with no session to the service
+  // (set_measurements_enabled) when its status said it takes it
+  // (SpeedTestsWriteRouteFor). No app-side mirror; callers never write while
+  // the switch is hidden (N1).
+  void SetMeasurementsEnabled(bool on);
   void ApplyDnsSettings(const urnet::DnsResolverSettings& settings);
   // Apply a transport policy (client or provider) to the device AND mirror it
   // into the app LocalState. The service's DeviceLocal persists the policy in
@@ -1958,6 +1966,10 @@ class SdkHost {
   // or refused, the next published status replaces the switch's guess.
   void QueueProviderOnlyExtenderWrite(bool on);
   void WriteProviderOnlyExtender(bool on);
+  // The speed tests switch's write with no session, queued and sent the same
+  // way (set_measurements_enabled).
+  void QueueProviderOnlyMeasurementsWrite(bool on);
+  void WriteProviderOnlyMeasurements(bool on);
   // A reset_extenders the service refused as busy (Common/ExtenderReset.h):
   // owed by ResetExtenders, made due by the first pushed status that ends the
   // operation which held the service's lock (the state handler, on the pipe's
@@ -1975,6 +1987,8 @@ class SdkHost {
   bool providerOnlyStatusWanted_ = false;
   // The switch's last write not yet sent; a newer flip replaces it.
   std::optional<bool> providerOnlyExtenderWrite_;
+  // The speed tests switch's last write not yet sent; a newer flip replaces it.
+  std::optional<bool> providerOnlyMeasurementsWrite_;
   // The owed reset made due and not yet sent again.
   std::optional<proto::ResetExtenders> extenderResetResend_;
   // The reset the service last refused as busy, until a pushed status ends

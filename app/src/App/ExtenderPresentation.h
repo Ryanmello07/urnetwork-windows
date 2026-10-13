@@ -426,6 +426,16 @@ inline constexpr const char* kExtenderProvideErrorActivationRefused = "activatio
 //                    (get_provider_stats' provide_extender_writable). A service
 //                    from before the verb does not, and the switch stays
 //                    hidden over its status, never a dead switch (N1).
+//   measurementsEnabled
+//                    Device::getMeasurementsEnabled() read beside the provide
+//                    extender setting: the lag.dev speed tests switch's
+//                    position (lag.dev/PLAN.md C4). On by default, as the sdk's.
+//   measurementsServiceWritable
+//                    providerOnly only: the service said it takes the speed
+//                    tests switch's write too (get_provider_stats'
+//                    measurements_enabled_writable). A service from before
+//                    set_measurements_enabled does not, and that switch stays
+//                    hidden over its status (N1).
 //
 // A default-constructed view is "no session": unsupported, so both rows hide.
 struct ExtenderProvideStatusView {
@@ -440,6 +450,8 @@ struct ExtenderProvideStatusView {
   bool provideExtender = false;
   bool providerOnly = false;
   bool serviceWritable = false;
+  bool measurementsEnabled = true;
+  bool measurementsServiceWritable = false;
 
   // The device pushes a status after any change of the setting, the provide
   // state or the role, coalesced to one status per epoch and never on
@@ -453,19 +465,24 @@ struct ExtenderProvideStatusView {
            reason == o.reason && activatedV4 == o.activatedV4 &&
            activatedV6 == o.activatedV6 && refused == o.refused && enabled == o.enabled &&
            provideExtender == o.provideExtender && providerOnly == o.providerOnly &&
+           measurementsEnabled == o.measurementsEnabled &&
+           measurementsServiceWritable == o.measurementsServiceWritable &&
            serviceWritable == o.serviceWritable;
   }
   bool operator!=(const ExtenderProvideStatusView& o) const { return !(*this == o); }
 };
 
 // The view of the SDK's ExtenderProvideStatus (N7), read from the fields the
-// apps may read and nothing else, with the setting read beside it only when the
-// row will show: a device that reports the role unsupported is never asked for
-// a setting it may not have (N1). Generic over the status type so the host tests
-// hand it every field of urnet::ExtenderProvideStatus by the SDK's names.
-template <typename Status, typename ReadSetting>
+// apps may read and nothing else, with the settings read beside it only when
+// the row will show: a device that reports the role unsupported is never asked
+// for a setting it may not have (N1). Those are the provide extender setting
+// and the lag.dev measurements setting that rides on the role. Generic over the
+// status type so the host tests hand it every field of
+// urnet::ExtenderProvideStatus by the SDK's names.
+template <typename Status, typename ReadSetting, typename ReadMeasurements>
 ExtenderProvideStatusView ExtenderProvideStatusViewOf(const std::optional<Status>& status,
-                                                      const ReadSetting& readSetting) {
+                                                      const ReadSetting& readSetting,
+                                                      const ReadMeasurements& readMeasurements) {
   ExtenderProvideStatusView view;
   if (!status || !status->Supported) return view;
   view.supported = true;
@@ -477,6 +494,7 @@ ExtenderProvideStatusView ExtenderProvideStatusViewOf(const std::optional<Status
   view.refused = status->LastActivationRefused;
   view.enabled = status->Enabled;
   view.provideExtender = readSetting();
+  view.measurementsEnabled = readMeasurements();
   return view;
 }
 
@@ -568,6 +586,39 @@ enum class ExtenderProvideWriteRoute {
 
 ExtenderProvideWriteRoute ExtenderProvideWriteRouteFor(bool sessionDevice,
                                                        const ExtenderProvideStatusView& shown);
+
+// ---- the lag.dev speed tests switch (lag.dev/PLAN.md C4, decision 18) --------
+
+// The switch under the Extender row: whether this device's extender role
+// serves lag.dev's measurement API, so people testing their connection there
+// can measure to it. It rides on the role, so it shows exactly while the
+// Extender switch does, and only where its own write has a taker: a session's
+// device, or for the provider-only device's status the service, when it said
+// it takes this write too (measurementsServiceWritable). Hidden, never
+// disabled (N1).
+struct SpeedTestsRowModel {
+  bool visible = false;
+  // the setting: on by default, as the sdk's
+  bool on = true;
+
+  bool operator==(const SpeedTestsRowModel& o) const {
+    return visible == o.visible && on == o.on;
+  }
+  bool operator!=(const SpeedTestsRowModel& o) const { return !(*this == o); }
+};
+
+SpeedTestsRowModel SpeedTestsRowModelFor(const ExtenderProvideStatusView& view);
+
+// Where the speed tests switch's write goes (SdkHost::SetMeasurementsEnabled):
+// the Extender switch's rule, with the service's own say for this setting. So
+// the switch is written exactly where it shows.
+ExtenderProvideWriteRoute SpeedTestsWriteRouteFor(bool sessionDevice,
+                                                  const ExtenderProvideStatusView& shown);
+
+// The view the speed tests switch paints the moment it is flipped: the shown
+// view with the setting guessed and nothing else changed. The next pushed
+// status replaces it, as it does the Extender switch's guess.
+ExtenderProvideStatusView SpeedTestsGuessFor(const ExtenderProvideStatusView& current, bool on);
 
 // The one line of state text a model reads as. `localized(key)` answers the
 // store's text for a key and `formatted(key, text)` the store's text with its

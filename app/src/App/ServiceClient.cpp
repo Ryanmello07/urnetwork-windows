@@ -166,6 +166,13 @@ bool ServiceClient::SetProvideExtender(bool on, std::string* error) {
   return CallProvider(proto::Request(proto::msg::kSetProvideExtender, body), nullptr, error);
 }
 
+bool ServiceClient::SetMeasurementsEnabled(bool on, std::string* error) {
+  proto::SetMeasurementsEnabled s;
+  s.measurements_enabled = on;
+  nlohmann::json body = s;
+  return CallProvider(proto::Request(proto::msg::kSetMeasurementsEnabled, body), nullptr, error);
+}
+
 extenderreset::ServiceAnswer ServiceClient::ResetExtenders(const proto::ResetExtenders& request,
                                                            bool* reset, std::string* error) {
   if (reset) *reset = false;

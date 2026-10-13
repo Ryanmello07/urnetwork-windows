@@ -9,7 +9,10 @@
 // turn its sdk documents back into the app's types (ProviderPointsOf,
 // ProviderDistributionOf, ExtenderPointsOf, ExtenderProvideStatusOf). And the
 // Extender switch while disconnected: set_provide_extender, its strict
-// request, and provide_extender_writable with an older service's silence. Run
+// request, and provide_extender_writable with an older service's silence. And
+// the lag.dev speed tests switch the same way: set_measurements_enabled, its
+// strict request, and measurements_enabled with measurements_enabled_writable
+// and an older service's silence. Run
 // against the same header the service and the app compile; it needs
 // nlohmann/json, like the app.
 //
@@ -555,6 +558,72 @@ void TestSetProvideExtender() {
   Check(kProtocolVersion == 4, "switch: no protocol bump for the verb and its field");
 }
 
+// (k) the lag.dev speed tests switch while disconnected (lag.dev/PLAN.md C4):
+// the set_measurements_enabled verb and its strict request, and the
+// measurements_enabled setting with the measurements_enabled_writable field
+// beside the role, an older service's silence read as no writer and the
+// setting on
+void TestSetMeasurementsEnabled() {
+  Check(std::string(msg::kSetMeasurementsEnabled) == "set_measurements_enabled",
+        "speed tests: the set_measurements_enabled tag");
+  for (const bool on : {false, true}) {
+    SetMeasurementsEnabled sent;
+    sent.measurements_enabled = on;
+    const nlohmann::json request = Request(msg::kSetMeasurementsEnabled, nlohmann::json(sent));
+    const nlohmann::json wire = nlohmann::json::parse(DumpForWire(request));
+    Check(TypeOf(wire) == "set_measurements_enabled",
+          "speed tests: the request carries its type");
+    Check(wire.get<SetMeasurementsEnabled>().measurements_enabled == on,
+          std::string("speed tests: measurements_enabled round-trips ") + (on ? "on" : "off"));
+  }
+  // a write whose value did not arrive writes nothing, not a default
+  for (const char* malformed :
+       {R"({})", R"({"measurements_enabled":null})", R"({"measurements_enabled":"false"})",
+        R"({"measurements_enabled":0})", R"({"provide_extender":false})"}) {
+    bool threw = false;
+    try {
+      (void)nlohmann::json::parse(malformed).get<SetMeasurementsEnabled>();
+    } catch (const std::exception&) {
+      threw = true;
+    }
+    Check(threw,
+          std::string("speed tests: a request without a boolean value is refused: ") + malformed);
+  }
+
+  ProviderStats sent;
+  sent.available = true;
+  sent.extender_provide_status = nlohmann::json::parse(
+      R"({"Supported":true,"State":"active","Reason":"","Enabled":true,"ActivatedV4":true})");
+  sent.provide_extender = true;
+  sent.provide_extender_writable = true;
+  sent.measurements_enabled = false;
+  sent.measurements_enabled_writable = true;
+  Reply reply;
+  reply.ok = true;
+  reply.in_reply_to = msg::kGetProviderStats;
+  reply.provider_stats = sent;
+  const Reply back = nlohmann::json::parse(DumpForWire(nlohmann::json(reply))).get<Reply>();
+  Check(back.provider_stats && !back.provider_stats->measurements_enabled,
+        "provider stats: measurements_enabled round-trips off");
+  Check(back.provider_stats && back.provider_stats->measurements_enabled_writable,
+        "provider stats: measurements_enabled_writable round-trips");
+  Check(back.provider_stats && back.provider_stats->provide_extender,
+        "speed tests: the provide extender setting beside it stays its own");
+  // a service from before the verb: no writer, and the setting reads as the
+  // sdk's default, on
+  const ProviderStats older = nlohmann::json::parse(
+      R"({"available":true,"client_count":1,"provide_extender":true,"provide_extender_writable":true,"extender_provide_status":{"Supported":true,"State":"active","Reason":"","Enabled":true,"ActivatedV4":true}})")
+                                  .get<ProviderStats>();
+  Check(older.provide_extender_writable && !older.measurements_enabled_writable,
+        "speed tests: a service without the field reads as no writer");
+  Check(older.measurements_enabled, "speed tests: and its setting as the default, on");
+  const ProviderStats none =
+      nlohmann::json::parse(DumpForWire(nlohmann::json(ProviderStats{}))).get<ProviderStats>();
+  Check(!none.measurements_enabled_writable && none.measurements_enabled,
+        "speed tests: no provider-only device has no writer, and the setting on");
+  Check(kProtocolVersion == 4, "speed tests: no protocol bump for the verb and its fields");
+}
+
 }  // namespace
 
 int main() {
@@ -568,6 +637,7 @@ int main() {
   TestProviderStatsExtender();
   TestExtenderReaders();
   TestSetProvideExtender();
+  TestSetMeasurementsEnabled();
   std::cout << (gCases - gFailures) << "/" << gCases << " provide protocol checks passed"
 #if defined(URNW_PROVIDE_PROTOCOL_TESTS_SDK)
             << " (against urnetwork_sdk.hpp)"

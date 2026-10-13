@@ -3643,6 +3643,14 @@
     <value>Настройки экстендера сохранены</value>
     <comment>Confirmation after the extender settings are saved.</comment>
   </data>
+  <data name="extender_speed_tests" xml:space="preserve">
+    <value>Тесты скорости lag.dev</value>
+    <comment>Title of the switch under the Extender setting that lets people on lag.dev run latency and speed tests to this device. lag.dev is a website name and stays as written.</comment>
+  </data>
+  <data name="extender_speed_tests_description" xml:space="preserve">
+    <value>Разрешите людям, проверяющим своё соединение на lag.dev, измерять задержку, скорость загрузки и выгрузки до этого устройства. Во время работы тесты используют часть вашей пропускной способности.</value>
+    <comment>Secondary text under the lag.dev speed tests switch: what turning it on allows, and its cost. lag.dev is a website name and stays as written.</comment>
+  </data>
   <data name="extender_start_failed" xml:space="preserve">
     <value>Не удалось запустить: {}</value>
     <comment>Extender status when the setting is on and the device is providing, but the role could not start in this network space: no extender directory or no identity. The argument is the reason.</comment>
