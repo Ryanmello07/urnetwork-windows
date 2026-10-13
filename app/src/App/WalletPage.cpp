@@ -2002,7 +2002,8 @@ void WalletPage::ShowSolanaCardMenu(FrameworkElement const& anchor) {
 // calls the SAME member handler its pane-A button calls - the fold-doors note's
 // COMMAND-DOOR DUPLICATION: the door is duplicated, the single-instance surface
 // never is. Item states read the pane's own elements (single source): the claim
-// button's enabled, the connected panel's visibility.
+// buttons' enabled, whether settlement v2's section shows its Claim, the
+// connected panel's visibility.
 void WalletPage::ShowEarningsActionsMenu(FrameworkElement const& anchor) {
   MenuFlyout flyout;
   auto weak = w_.get_weak();
@@ -2014,6 +2015,20 @@ void WalletPage::ShowEarningsActionsMenu(FrameworkElement const& anchor) {
     if (auto self = weak.get()) self->wallet().OnClaimAlpha(s, e);
   });
   flyout.Items().Append(claim);
+
+  // settlement v2's Claim, after the v1 tile's as in pane A, under the
+  // button's label: shown while the section shows the button (hiding the
+  // section leaves the button as it was) and enabled while the button is
+  MenuFlyoutItem claimV2;
+  claimV2.Text(Loc("claim"));
+  const bool v2ClaimShown = w_.SettlementV2Panel().Visibility() == Visibility::Visible &&
+                            w_.SettlementV2ClaimButton().Visibility() == Visibility::Visible;
+  claimV2.Visibility(v2ClaimShown ? Visibility::Visible : Visibility::Collapsed);
+  claimV2.IsEnabled(w_.SettlementV2ClaimButton().IsEnabled());
+  claimV2.Click([weak](IInspectable const& s, RoutedEventArgs const& e) {
+    if (auto self = weak.get()) self->wallet().OnClaimV2(s, e);
+  });
+  flyout.Items().Append(claimV2);
 
   MenuFlyoutItem wallet;
   const bool connected =

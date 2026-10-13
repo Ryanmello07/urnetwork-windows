@@ -154,7 +154,8 @@ func TestSnPayoutAgainstSdkHeader(t *testing.T) {
 // spec's decisions from the SDK's ledger accounts call, claims through the
 // SDK's v2 claim with the dialog the spec moves along, reads the accounts again
 // after Done, offers Claim only toward a configured vault2, sits right after
-// the v1 tile, which keeps its own Claim, and says every new line in every
+// the v1 tile, which keeps its own Claim, repeats its Claim in the Earnings
+// actions menu while pane A is folded, and says every new line in every
 // language under the store keys the Android and Linux apps look up
 // (sn_ledger_*).
 func TestSettlementV2Wiring(t *testing.T) {
@@ -260,6 +261,31 @@ func TestSettlementV2Wiring(t *testing.T) {
 		t.Error("MainWindow.xaml: the settlement v2 section is not right after the v1 unclaimed tile")
 	}
 	requireAll("MainWindow.xaml.cpp", readAppSource(t, "MainWindow.xaml.cpp"), "wallet_->OnClaimV2(s, e);")
+
+	// Below 900dip pane A folds and the ledger header's "Earnings actions" menu
+	// is its door: an item there opens the v2 claim dialog under the button's
+	// label key, shown while the section shows the button (hiding the section
+	// leaves the button as it was) and enabled while the button is.
+	label := regexp.MustCompile(`w_\.SettlementV2ClaimButton\(\)\.Content\(LocBox\("(\w+)"\)\);`).FindStringSubmatch(walletPage)
+	if label == nil {
+		t.Fatal("WalletPage.cpp: SettlementV2ClaimButton has no label key")
+	}
+	menu := functionBody(walletPage, "void WalletPage::ShowEarningsActionsMenu(")
+	if !regexp.MustCompile(`claimV2\.Click\(\[weak\]\(IInspectable const& s, RoutedEventArgs const& e\) \{\s*` +
+		`if \(auto self = weak\.get\(\)\) self->wallet\(\)\.OnClaimV2\(s, e\);\s*\}\);\s*` +
+		`flyout\.Items\(\)\.Append\(claimV2\);`).MatchString(menu) {
+		t.Error("WalletPage.cpp: the Earnings actions menu has no item that opens the v2 claim dialog")
+	}
+	if !regexp.MustCompile(`const bool v2ClaimShown =\s*` +
+		`w_\.SettlementV2Panel\(\)\.Visibility\(\) == Visibility::Visible &&\s*` +
+		`w_\.SettlementV2ClaimButton\(\)\.Visibility\(\) == Visibility::Visible;\s*` +
+		`claimV2\.Visibility\(v2ClaimShown \? Visibility::Visible : Visibility::Collapsed\);`).MatchString(menu) {
+		t.Error("WalletPage.cpp: the menu's v2 Claim does not show exactly while the section shows the button")
+	}
+	requireAll("WalletPage::ShowEarningsActionsMenu", menu,
+		"claimV2.IsEnabled(w_.SettlementV2ClaimButton().IsEnabled());",
+		`claimV2.Text(Loc("`+label[1]+`"));`,
+	)
 
 	// the en strings, the store's for every app, and every catalog says each
 	// line, with its placeholder
