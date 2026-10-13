@@ -667,13 +667,15 @@ const (
 // install should prefer a release that has been out for a day (the newest
 // one can be minutes old, and no soak covers a hand install), and that a
 // release built before the updater polled this feed does not update itself
-// from it. Which releases those are it says by the first release that does,
-// named with the day it was published (the two constants above), and by no
-// other date or tag. Until that release existed it gave a rule of thumb
+// from it. Which releases those are it says in one sentence, which names the
+// first release that does and the day it was published (the two constants
+// above); no other sentence of that paragraph gives a date or a tag, the
+// pinned ones included. Until that release existed it gave a rule of thumb
 // instead, nothing offered while a release newer than yours has been listed
-// for three days, and that rule is not brought back: Android pre-releases
-// are listed beside each MSI release under later codes, so it can send a
-// copy that is already current to reinstall.
+// for three days, and that rule is not brought back, in other words or in
+// another section: Android pre-releases are listed beside each MSI release
+// under later codes, so it can send a copy that is already current to
+// reinstall.
 func checkReadmeNamesTheFeed(readme, selection string) []string {
 	var problems []string
 	feed := applyDefinitionUntil(selection, "inline constexpr Feed kOfficialFeed{", "\n};\n")
@@ -704,21 +706,26 @@ func checkReadmeNamesTheFeed(readme, selection string) []string {
 	}
 	// read as one line, so a sentence may wrap anywhere
 	prose := strings.Join(strings.Fields(section), " ")
+	// the sentence that names the first release that updates itself, by its
+	// tag and the day it was published
+	naming := `The first release that does is ` + regexp.QuoteMeta(firstSelfUpdatingRelease) + `, published on ` + regexp.QuoteMeta(firstSelfUpdatingDate) + `\.`
 	for what, pattern := range map[string]string{
 		"that a hand install should prefer a release that has been out for a day": `can be minutes old\. When you install by hand, prefer the newest one that has been out for a day`,
 		"that the updater offers the newest release that has been out for a day":  `It offers the newest release that has been out, unchanged, for a day`,
 		"which releases do not update themselves from this feed":                  `A release built before the updater polled these releases does not look for updates here, and never offers one\.`,
-		"how to tell that a copy is one of them":                                  `The first release that does is ` + regexp.QuoteMeta(firstSelfUpdatingRelease) + `, published on ` + regexp.QuoteMeta(firstSelfUpdatingDate) + `\. If yours was installed from an older release,`,
+		"how to tell that a copy is one of them":                                  naming + ` If yours was installed from an older release,`,
 		"that one install by hand of the newest release is what it takes":         `install the newest release by hand once`,
 	} {
 		if !regexp.MustCompile(pattern).MatchString(prose) {
 			problems = append(problems, "README.md's Download section does not say "+what)
 		}
 	}
-	// Which releases those are is said by the first release that does look
-	// here, by its tag and the day it was published, and by no other date or
-	// tag. The paragraph that says it is read on its own.
-	first := "the first release that updates itself is " + firstSelfUpdatingRelease + ", published on " + firstSelfUpdatingDate
+	// Which releases those are is said by the sentence that names the first
+	// release that does look here, by its tag and the day it was published.
+	// The paragraph that says it is read on its own, with that sentence cut
+	// out: any date or tag left in it, the pinned ones included, is a problem.
+	first := "the first release that updates itself is " + firstSelfUpdatingRelease + ", published on " + firstSelfUpdatingDate +
+		", and only the sentence that names it gives a date or a tag"
 	date := regexp.MustCompile(`\b\d{4}-\d{2}-\d{2}`)
 	tag := regexp.MustCompile(`\bv?\d{4}\.\d{1,2}\.\d{1,2}(-\d+)?`)
 	for _, paragraph := range strings.Split(section, "\n\n") {
@@ -726,26 +733,34 @@ func checkReadmeNamesTheFeed(readme, selection string) []string {
 		if !strings.Contains(text, "look for updates here") {
 			continue
 		}
+		if at := regexp.MustCompile(naming).FindStringIndex(text); at != nil {
+			text = text[:at[0]] + text[at[1]:]
+		}
 		for _, found := range date.FindAllString(text, -1) {
-			if found != firstSelfUpdatingDate {
-				problems = append(problems, "README.md's Download section dates the releases that do not update themselves ("+found+"): "+first)
-			}
+			problems = append(problems, "README.md's Download section dates the releases that do not update themselves ("+found+"): "+first)
 		}
 		for _, found := range tag.FindAllString(text, -1) {
-			if found != firstSelfUpdatingRelease {
-				problems = append(problems, "README.md's Download section names a release ("+found+
-					") where it says which do not update themselves: "+first)
-			}
+			problems = append(problems, "README.md's Download section names a release ("+found+
+				") where it says which do not update themselves: "+first)
 		}
 	}
 	// The rule of thumb that stood in for that name is not brought back:
 	// Android pre-releases are listed beside each MSI release under later
 	// codes, so a copy that is already current sees "a release newer than
-	// yours" listed, is offered nothing, and is sent to reinstall. The rule is
-	// found by what it goes by, whatever number of days it waits.
-	if strings.Contains(prose, "newer than yours has been listed") {
-		problems = append(problems, "README.md's Download section brings back the three-day rule (nothing offered while a release newer than "+
-			"yours has been listed): Android pre-releases are listed beside each MSI release under later codes, so it sends a copy that is "+
+	// yours" listed, is offered nothing, and is sent to reinstall. It is
+	// looked for in the whole README, so a section of its own does not hide
+	// it. It is found by its own words, "newer than yours has been listed",
+	// whatever it waits, and in other words by any sentence that pairs
+	// "newer" with a wait, in either order and with capitals or without: a
+	// number or a number word (seventy-two is found by its two), "several" or
+	// "a few", then hours, days or weeks. A sentence here runs to the next
+	// full stop.
+	wait := `\b(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|` +
+		`eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|several|a few)\s+(?:hours?|days?|weeks?)\b`
+	rule := regexp.MustCompile(`(?i)\bnewer\b[^.]*` + wait + `|` + wait + `[^.]*\bnewer\b|newer than yours has been listed`)
+	for _, found := range rule.FindAllString(strings.Join(strings.Fields(readme), " "), -1) {
+		problems = append(problems, "README.md brings back the three-day rule ("+found+
+			"): Android pre-releases are listed beside each MSI release under later codes, so it sends a copy that is "+
 			"already current to reinstall")
 	}
 	if strings.Contains(prose, "at most once a day") {
@@ -1276,9 +1291,58 @@ func TestUpdateOfferWiringRejectsWeakerSources(t *testing.T) {
 		{"the README gives the first release that updates itself another date", "dates the releases that do not update themselves (2026-10-09): the first release that updates itself is v2026.10.9-1067985620, published on 2026-10-10", func() []string {
 			return checkReadmeNamesTheFeed(replace(readme, "published on 2026-10-10.", "published on 2026-10-09."), selection)
 		}},
-		{"the README brings back the three-day rule", "brings back the three-day rule", func() []string {
+		{"the README gives the first release that updates itself a later date", "dates the releases that do not update themselves (2026-10-11): the first release that updates itself is v2026.10.9-1067985620, published on 2026-10-10", func() []string {
+			return checkReadmeNamesTheFeed(replace(readme, "published on 2026-10-10.", "published on 2026-10-11."), selection)
+		}},
+		{"the README gives the first release that updates itself another date, in words", "does not say how to tell that a copy is one of them", func() []string {
+			return checkReadmeNamesTheFeed(replace(readme, "published on 2026-10-10.", "published on October 9, 2026."), selection)
+		}},
+		{"the README names the first release that updates itself in other words", "does not say how to tell that a copy is one of them", func() []string {
+			return checkReadmeNamesTheFeed(replace(readme, "The first release that does is\n", "The earliest that does is\n"), selection)
+		}},
+		{"the README names the first release that updates itself with a capital V", "does not say how to tell that a copy is one of them", func() []string {
+			return checkReadmeNamesTheFeed(replace(readme, "is\nv2026.10.9-1067985620,", "is\nV2026.10.9-1067985620,"), selection)
+		}},
+		{"the README names the first release that updates itself with dashes for dots", "does not say how to tell that a copy is one of them", func() []string {
+			return checkReadmeNamesTheFeed(replace(readme, "is\nv2026.10.9-1067985620,", "is\nv2026-10-9-1067985620,"), selection)
+		}},
+		{"the README names the first release that updates itself without its v", "names a release (2026.10.9-1067985620) where it says which do not update themselves: the first release that updates itself is v2026.10.9-1067985620, published on 2026-10-10", func() []string {
+			return checkReadmeNamesTheFeed(replace(readme, "is\nv2026.10.9-1067985620,", "is\n2026.10.9-1067985620,"), selection)
+		}},
+		{"the README tells an older copy in other words", "does not say how to tell that a copy is one of them", func() []string {
+			return checkReadmeNamesTheFeed(replace(readme, "If yours was installed from an\nolder release,", "If yours is older than\nthat,"), selection)
+		}},
+		{"the README dates the releases that do not update themselves by the pinned day", "dates the releases that do not update themselves (2026-10-10): the first release that updates itself is v2026.10.9-1067985620, published on 2026-10-10, and only the sentence that names it gives a date or a tag", func() []string {
+			return checkReadmeNamesTheFeed(replace(readme, "and updates itself from then on.\n",
+				"and updates itself from then on. Releases published on or before 2026-10-10 never do.\n"), selection)
+		}},
+		{"the README names the first release that updates itself a second time", "names a release (v2026.10.9-1067985620) where it says which do not update themselves: the first release that updates itself is v2026.10.9-1067985620, published on 2026-10-10, and only the sentence that names it gives a date or a tag", func() []string {
+			return checkReadmeNamesTheFeed(replace(readme, "and updates itself from then on.\n",
+				"and updates itself from then on. Releases up to v2026.10.9-1067985620 never do.\n"), selection)
+		}},
+		{"the README brings back the three-day rule", "brings back the three-day rule (newer than yours has been listed for three days): Android pre-releases are listed beside each MSI release under later codes", func() []string {
 			return checkReadmeNamesTheFeed(replace(readme, "If yours was installed from an\nolder release, install",
 				"If yours was installed from an\nolder release, or if the app has offered nothing while a release newer than\nyours has been listed for three days, install"), selection)
+		}},
+		{"the README brings back the three-day rule in the words this check once used", "brings back the three-day rule (newer release has been listed for three days)", func() []string {
+			return checkReadmeNamesTheFeed(replace(readme, "If yours was installed from an\nolder release, install",
+				"If yours was installed from an\nolder release, or if there is nothing offered while a newer release has been listed for three days, install"), selection)
+		}},
+		{"the README brings back the three-day rule by another wait", "brings back the three-day rule (newer than yours has been out for 72 hours)", func() []string {
+			return checkReadmeNamesTheFeed(replace(readme, "If yours was installed from an\nolder release, install",
+				"If yours was installed from an\nolder release, or if a release newer than yours has been out for 72 hours and nothing was offered, install"), selection)
+		}},
+		{"the README brings back the three-day rule with the wait first", "brings back the three-day rule (Ten days after a newer)", func() []string {
+			return checkReadmeNamesTheFeed(replace(readme, "and updates itself from then on.\n",
+				"and updates itself from then on. Ten days after a newer release is listed, if nothing was offered, install the newest release by hand.\n"), selection)
+		}},
+		{"the README brings back the three-day rule by its own words, with no number", "brings back the three-day rule (newer than yours has been listed)", func() []string {
+			return checkReadmeNamesTheFeed(replace(readme, "If yours was installed from an\nolder release, install",
+				"If yours was installed from an\nolder release, or if a release newer than yours has been listed for a week with nothing offered, install"), selection)
+		}},
+		{"the README brings back the three-day rule in a section of its own", "README.md brings back the three-day rule (newer than yours has been listed for three days)", func() []string {
+			return checkReadmeNamesTheFeed(replace(readme, "\n## Architecture\n", "\n## Troubleshooting\n\nIf the app has offered nothing while a release newer than yours "+
+				"has been listed for three days, install the newest release by hand.\n\n## Architecture\n"), selection)
 		}},
 		{"the README no longer names the first release that updates itself", "does not say how to tell that a copy is one of them", func() []string {
 			return checkReadmeNamesTheFeed(replace(readme, "The first release that does is\nv2026.10.9-1067985620, published on 2026-10-10. ", ""), selection)
