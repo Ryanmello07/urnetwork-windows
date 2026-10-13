@@ -2474,7 +2474,7 @@ void WalletPage::RebuildV2Section() {
     // Claimable is the figure, in the v1 tile's face and its lime while there is some
     block.Children().Append(MakeText(Loc("sn_ledger_claimable"), 12, colors::MutedBrush()));
     auto figure = MakeValue(hstring{FormatAlphaRao(account.claimableRao)}, 32);
-    if (account.claimableRao > 0) figure.Foreground(colors::MakeBrush(colors::kUrGreen));
+    if (account.claimableRao > 0) figure.Foreground(colors::AccentBrush());
     block.Children().Append(figure);
     Grid figures;
     figures.ColumnSpacing(24);

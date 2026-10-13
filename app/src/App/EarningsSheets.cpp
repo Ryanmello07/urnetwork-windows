@@ -649,7 +649,7 @@ void ClaimLedgerSheet::Build(XamlRoot const& root) {
 
   StackPanel content;
   content.Spacing(6);
-  content.MinWidth(460);
+  content.MinWidth(sheetfit::Width(root, 460));
 
   // the figure: what is claimable now, and that it is settlement v2's
   totalValue_ = MakeValue(hstring{}, 36);
@@ -742,7 +742,7 @@ void ClaimLedgerSheet::Build(XamlRoot const& root) {
   ScrollViewer scroll;
   scroll.VerticalScrollBarVisibility(ScrollBarVisibility::Auto);
   scroll.HorizontalScrollBarVisibility(ScrollBarVisibility::Disabled);
-  scroll.MaxHeight(560);
+  scroll.MaxHeight(sheetfit::Height(root, 560));
   scroll.Content(content);
   dialog_.Content(scroll);
 

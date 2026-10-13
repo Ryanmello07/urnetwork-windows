@@ -191,6 +191,10 @@ func TestSettlementV2Wiring(t *testing.T) {
 		`Loc("sn_ledger_paid")`, `Loc("sn_ledger_earned")`, `"sn_ledger_pending"`,
 		"snpayout::LedgerNoteKey(view.note)",
 	)
+	// the claimable figure takes the v1 tile's earnings accent while there is some
+	requireAll("WalletPage::RebuildV2Section", functionBody(walletPage, "void WalletPage::RebuildV2Section("),
+		"if (account.claimableRao > 0) figure.Foreground(colors::AccentBrush());",
+	)
 	// After Done the claimer reads the accounts and the gas balance again, so a
 	// dialog closed early does not leave the page stale.
 	if !regexp.MustCompile(`events\.done = \[done, queue, weak\] \{\s*if \(done\) done\(\);\s*` +
@@ -218,9 +222,12 @@ func TestSettlementV2Wiring(t *testing.T) {
 		"self->progress_.Done();",
 		"claimer_(std::move(events));",
 	)
-	// needs_gas opens the v1 dialog's funding hint, asking for a v2 claim's gas
+	// needs_gas opens the v1 dialog's funding hint, asking for a v2 claim's gas,
+	// and the dialog clamps to its window as the v1 dialog does (SheetFit.h)
 	requireAll("ClaimLedgerSheet::Build", sheet("void ClaimLedgerSheet::Build("),
 		`urnw::Format("send_tao_to_mirror", FormatTao(snpayout::kLedgerClaimGasTao),`,
+		"content.MinWidth(sheetfit::Width(root, 460));",
+		"scroll.MaxHeight(sheetfit::Height(root, 560));",
 	)
 	requireAll("ClaimLedgerSheet::ApplyState", sheet("void ClaimLedgerSheet::ApplyState("),
 		"needsGasPanel_.Visibility(progress_.needsGas() ? Visibility::Visible : Visibility::Collapsed);",
