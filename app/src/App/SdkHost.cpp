@@ -38,6 +38,7 @@
 #include "PeerLocation.h"
 #include "RpcSessionBlob.h"
 #include "SdkErrorId.h"
+#include "SnConsentPresentation.h"
 #include "Strings.h"
 #include "SystemProxy.h"
 #include "VlessPresentation.h"
@@ -1858,10 +1859,9 @@ std::string WalletProofRefusalText(const std::string& code, const std::string& m
   return Narrow(Format(key, Widen(urnet::bittensorWalletDisplayName(bittensorWalletId))));
 }
 
-void SdkHost::BeginBittensorProof(uint64_t flow, const std::string& walletId,
-                                  const std::string& purpose, const std::string& expectedAddress,
-                                  std::function<void(BittensorProofOutcome)> done,
-                                  std::function<void(BittensorManualRequest)> manualHandler) {
+std::shared_ptr<urnet::BittensorWalletSession> SdkHost::BeginBittensorSession(
+    const std::string& walletId, const std::string& purpose,
+    std::function<void(BittensorProofOutcome)> done, uint64_t& serial) {
   std::shared_ptr<urnet::BittensorWalletSession> session;
   try {
     session = std::make_shared<urnet::BittensorWalletSession>(urnet::newBittensorWalletSession(
@@ -1875,15 +1875,24 @@ void SdkHost::BeginBittensorProof(uint64_t flow, const std::string& walletId,
   } catch (std::exception const& e) {
     LogError("sdkhost: no Bittensor wallet session for {}: {}", walletId, e.what());
     done({false, {}, Narrow(Localized("wallet_connect_failed"))});
-    return;
+    return nullptr;
   }
-  uint64_t serial = 0;
   {
     std::scoped_lock lock(bittensorLock_);
     serial = ++bittensorSerial_;
     bittensorSession_ = session;
     bittensorDone_ = std::move(done);
   }
+  return session;
+}
+
+void SdkHost::BeginBittensorProof(uint64_t flow, const std::string& walletId,
+                                  const std::string& purpose, const std::string& expectedAddress,
+                                  std::function<void(BittensorProofOutcome)> done,
+                                  std::function<void(BittensorManualRequest)> manualHandler) {
+  uint64_t serial = 0;
+  auto session = BeginBittensorSession(walletId, purpose, std::move(done), serial);
+  if (!session) return;
   auto args = session->challengeArgs(expectedAddress);
   if (!args) {
     FinishBittensorProof(serial, {false, {}, Narrow(Localized("wallet_connect_failed"))});
@@ -1914,39 +1923,46 @@ void SdkHost::BeginBittensorProof(uint64_t flow, const std::string& walletId,
       FinishBittensorProof(serial, {false, {}, Narrow(Localized("wallet_connect_failed"))});
       return;
     }
-    switch (bittensor::NextStepFor(session->transport())) {
-      case bittensor::NextStep::OpenBrowser: {
-        std::string url;
-        try {
-          url = session->bridgeUrl();
-        } catch (std::exception const& e) {
-          LogError("sdkhost: no Bittensor bridge url: {}", e.what());
-          FinishBittensorProof(serial, {false, {}, Narrow(Localized("wallet_connect_failed"))});
-          return;
-        }
-        wallet_.OpenBittensorBridge(url);
-        return;
-      }
-      case bittensor::NextStep::ManualEntry: {
-        // the add sheet's own form, else the window's
-        std::function<void(BittensorManualRequest)> handler = manualHandler;
-        if (!handler) {
-          std::scoped_lock lock(bittensorLock_);
-          handler = bittensorManualHandler_;
-        }
-        if (!handler) {
-          FinishBittensorProof(serial, {false, {}, Narrow(Localized("wallet_connect_failed"))});
-          return;
-        }
-        handler({walletId, urnet::bittensorWalletDisplayName(walletId), session->message(),
-                 expectedAddress, purpose});
-        return;
-      }
-      case bittensor::NextStep::Unsupported:
-        break;
-    }
-    FinishBittensorProof(serial, {false, {}, Narrow(Localized("wallet_connect_failed"))});
+    OpenBittensorWallet(serial, session, walletId, purpose, expectedAddress, manualHandler);
   });
+}
+
+void SdkHost::OpenBittensorWallet(
+    uint64_t serial, std::shared_ptr<urnet::BittensorWalletSession> const& session,
+    const std::string& walletId, const std::string& purpose, const std::string& expectedAddress,
+    std::function<void(BittensorManualRequest)> const& manualHandler) {
+  switch (bittensor::NextStepFor(session->transport())) {
+    case bittensor::NextStep::OpenBrowser: {
+      std::string url;
+      try {
+        url = session->bridgeUrl();
+      } catch (std::exception const& e) {
+        LogError("sdkhost: no Bittensor bridge url: {}", e.what());
+        FinishBittensorProof(serial, {false, {}, Narrow(Localized("wallet_connect_failed"))});
+        return;
+      }
+      wallet_.OpenBittensorBridge(url);
+      return;
+    }
+    case bittensor::NextStep::ManualEntry: {
+      // the add sheet's own form, else the window's
+      std::function<void(BittensorManualRequest)> handler = manualHandler;
+      if (!handler) {
+        std::scoped_lock lock(bittensorLock_);
+        handler = bittensorManualHandler_;
+      }
+      if (!handler) {
+        FinishBittensorProof(serial, {false, {}, Narrow(Localized("wallet_connect_failed"))});
+        return;
+      }
+      handler({walletId, urnet::bittensorWalletDisplayName(walletId), session->message(),
+               expectedAddress, purpose});
+      return;
+    }
+    case bittensor::NextStep::Unsupported:
+      break;
+  }
+  FinishBittensorProof(serial, {false, {}, Narrow(Localized("wallet_connect_failed"))});
 }
 
 void SdkHost::HandleBittensorReturn(const std::string& url) {
@@ -1978,7 +1994,8 @@ void SdkHost::HandleBittensorReturn(const std::string& url) {
   }
   FinishBittensorProof(serial, {false, {}, BittensorErrorText(result->ErrorCode, result->ErrorMessage,
                                                              result->BridgeErrorCode,
-                                                             session->walletId())});
+                                                             session->walletId()),
+                                result->ErrorCode});
 }
 
 void SdkHost::FinishBittensorProof(uint64_t serial, BittensorProofOutcome outcome) {
@@ -2024,7 +2041,7 @@ SdkHost::BittensorManualAnswer SdkHost::SubmitBittensorManual(const std::string&
   answer.error = BittensorErrorText(code, result ? result->ErrorMessage : std::string());
   if (bittensor::IsCorrectable(code)) return answer;  // the form stays open
   answer.closed = true;
-  FinishBittensorProof(serial, {false, {}, answer.error});
+  FinishBittensorProof(serial, {false, {}, answer.error, code});
   return answer;
 }
 
@@ -2104,6 +2121,43 @@ void SdkHost::SignWithBittensorWallet(
                         done(true, outcome.proof.Address, outcome.proof.Signature,
                              outcome.proof.Message, std::string());
                       });
+}
+
+void SdkHost::SignNetworkConsent(
+    const std::string& walletId, const urnet::SnNetworkConsentChallengeResult& challenge,
+    std::function<void(bool, std::string, std::string, std::string, std::string, std::string)>
+        done) {
+  // Not a sign-in: the auth state does not move (see on_error above). Nothing
+  // asks for a challenge on the way: the wallet signs the server's consent.
+  CancelPendingWalletFlows("superseded by a payout consent signature");
+  const std::string purpose(bittensor::kPurposeConsent);
+  uint64_t serial = 0;
+  auto session = BeginBittensorSession(
+      walletId, purpose,
+      [done = std::move(done)](BittensorProofOutcome outcome) {
+        if (!outcome.ok) {
+          done(false, std::string(), std::string(), std::string(), std::move(outcome.code),
+               std::move(outcome.error));
+          return;
+        }
+        done(true, outcome.proof.Address, outcome.proof.Signature, outcome.proof.Message,
+             std::string(), std::string());
+      },
+      serial);
+  if (!session) return;
+  try {
+    // the message verbatim, bound to its coldkey and expiry; a message that is
+    // not a network consent is refused, and so is one already expired
+    // (challenge_expired)
+    session->setNetworkConsentChallenge(challenge, BittensorNowMillis());
+  } catch (std::exception const& e) {
+    LogError("sdkhost: the payout consent challenge was refused: {}", e.what());
+    FinishBittensorProof(serial,
+                         {false, {}, Narrow(Localized("wallet_connect_failed")), e.what()});
+    return;
+  }
+  OpenBittensorWallet(serial, session, walletId, purpose,
+                      snconsent::ChallengeFrom(challenge).coldkeySs58, nullptr);
 }
 
 void SdkHost::HandleDeepLink(const std::string& url) {

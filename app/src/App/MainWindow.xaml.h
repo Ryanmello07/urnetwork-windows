@@ -334,6 +334,9 @@ struct MainWindow : MainWindowT<MainWindow> {
                     winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnClaimV2(winrt::Windows::Foundation::IInspectable const&,
                  winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
+  // Earnings: the payout consent's button (Sign with wallet, Change wallet)
+  void OnSignConsent(winrt::Windows::Foundation::IInspectable const&,
+                     winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnClaimTop200(winrt::Windows::Foundation::IInspectable const&,
                      winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnWalletLearnMore(winrt::Microsoft::UI::Xaml::Documents::Hyperlink const&,

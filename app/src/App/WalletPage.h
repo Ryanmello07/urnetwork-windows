@@ -43,6 +43,7 @@
 #include "EarningsSheets.h"
 #include "ProviderIdleReason.h"
 #include "ProviderStatusPresentation.h"
+#include "SnConsentPresentation.h"
 #include "SnPayoutPresentation.h"
 #include "SolanaWalletPresentation.h"
 
@@ -141,6 +142,9 @@ class WalletPage {
   // settlement v2's Claim: the v2 claim dialog
   winrt::fire_and_forget OnClaimV2(winrt::Windows::Foundation::IInspectable const&,
                                    winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
+  // the payout consent's button beside it: Sign with wallet, or Change wallet
+  void OnSignConsent(winrt::Windows::Foundation::IInspectable const&,
+                     winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnClaimTop200(winrt::Windows::Foundation::IInspectable const&,
                      winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OpenProtocolSite();  // the "Learn more" link beside the wallet note
@@ -348,6 +352,32 @@ class WalletPage {
   // its Done the page reads the accounts and the gas balance again.
   LedgerClaimer MakeV2Claimer();
 
+  // ---- the payout consent (SnConsentPresentation.h)
+  // The network's consent (Api.snNetworkConsentStatus), and its answer.
+  void LoadConsentStatus();
+  void ApplyConsentStatus(snconsent::Fetch fetch, std::optional<snconsent::Status> const& status);
+  // The panel beside settlement v2 (snconsent::PanelFor).
+  void RebuildConsentPanel();
+  // The server's challenge for `coldkeySs58`, then the signature of
+  // `walletId` over it, then the submission.
+  void StartConsent(std::string const& coldkeySs58, std::string const& walletId);
+  void ApplyConsentChallenge(uint32_t generation, std::string const& walletId,
+                             std::optional<urnet::SnNetworkConsentChallengeResult> const& result,
+                             std::optional<std::string> const& err);
+  // `code` is the refusal's (the session's, or the SDK error that starts with
+  // one); `error` its localized text.
+  void ApplyConsentSigned(uint32_t generation, snconsent::Challenge const& challenge, bool ok,
+                          std::string const& address, std::string const& signature,
+                          std::string const& message, std::string const& code,
+                          std::string const& error);
+  void ApplyConsentSubmitted(uint32_t generation,
+                             std::optional<urnet::SnSetWalletResult> const& result,
+                             std::optional<std::string> const& err);
+  // A refusal: the store's sentence for the three the flow names
+  // (snconsent::RefusalKey), else `fallback`, the page's own words for it.
+  void FailConsent(std::string const& codeOrError, winrt::hstring const& fallback);
+  void EndConsent();
+
   // ---- reliability
   void ApplyReliability(std::optional<urnet::ReliabilityWindow> window, Fetch state);
 
@@ -493,6 +523,12 @@ class WalletPage {
   // settlement v2: the read, and the accounts it answered with
   snpayout::LedgerFetch v2Fetch_ = snpayout::LedgerFetch::Loading;
   std::vector<snpayout::LedgerAccount> v2Accounts_;
+  // the payout consent: the read (Idle until a session asks for it), the
+  // consent it answered with (none before an answer and after a failed read),
+  // and whether a signing is out (the challenge, the wallet, the submission)
+  snconsent::Fetch consentFetch_ = snconsent::Fetch::Idle;
+  std::optional<snconsent::Status> consent_;
+  bool consentSigning_ = false;
 
   int64_t leaderboardRank_ = 0;
   int64_t leaderboardCount_ = 0;
@@ -502,6 +538,7 @@ class WalletPage {
 
   Flow connectFlow_;
   Flow rankingFlow_;
+  Flow consentFlow_;  // the consent signing's three steps, one watchdog each
 
   std::shared_ptr<urnw::ClaimAlphaSheet> claimSheet_;
   std::shared_ptr<urnw::ClaimLedgerSheet> v2ClaimSheet_;

@@ -529,6 +529,7 @@ WalletPage::~WalletPage() {
   if (chartTimer_) chartTimer_.Stop();
   if (connectFlow_.timer) connectFlow_.timer.Stop();
   if (rankingFlow_.timer) rankingFlow_.timer.Stop();
+  if (consentFlow_.timer) consentFlow_.timer.Stop();
   if (pointsPublicFlow_.timer) pointsPublicFlow_.timer.Stop();
   if (legacyFlow_.timer) legacyFlow_.timer.Stop();
   if (removeFlow_.timer) removeFlow_.timer.Stop();
@@ -722,6 +723,7 @@ void WalletPage::ApplyStrings() {
   w_.SnPayoutClaimButton().Content(LocBox("claim"));
   w_.SettlementV2Heading().Text(Loc("sn_ledger_title"));
   w_.SettlementV2ClaimButton().Content(LocBox("claim"));
+  w_.PayoutConsentHeading().Text(Loc("sn_consent_title"));
   w_.Top200Heading().Text(Loc("top200"));
   w_.Top200Button().Content(LocBox("claim_your_spot"));
   w_.Top200Warning().Text(Loc("top200_demotion_warning"));
@@ -777,11 +779,12 @@ void WalletPage::ApplyStrings() {
   // Not part of the Loading seeding above: the Solana card and the waiting line
   // stay collapsed until their reads land. Their formatted text and names are
   // in the language, though, so a strings change redraws them. So do the
-  // payout line, collapsed until the coldkey is known, and settlement v2's
-  // section.
+  // payout line, collapsed until the coldkey is known, settlement v2's
+  // section and the payout consent beside it.
   RebuildSolanaPanel();
   RebuildPayoutLine();
   RebuildV2Section();
+  RebuildConsentPanel();
 }
 
 // The ledger pane shows ONE table at a time; this is the switch in its header.
@@ -813,6 +816,7 @@ void WalletPage::LoadWallet() {
   LoadSnWallet();  // continues into LoadClaims/LoadGas/LoadV2Accounts once the coldkey is known
   LoadHead();
   LoadLegacyWallets();
+  LoadConsentStatus();
 }
 
 void WalletPage::RefreshAfterWalletChange() { LoadWallet(); }
@@ -870,6 +874,16 @@ void WalletPage::ResetForSignOut() {
   RebuildHistory();  // clears the rows; Loading draws nothing over the status line
   w_.PointsStatusText().Text(loading);
   w_.PointsStatusText().Visibility(Visibility::Visible);
+
+  // The payout consent is the network's that left: hidden until the next
+  // account's read, and a challenge or a submission still out for this one is
+  // dropped when it answers (the bridge's own flow is answered by the sign-out).
+  consent_.reset();
+  consentFetch_ = snconsent::Fetch::Idle;
+  ++consentFlow_.generation;
+  if (consentFlow_.timer) consentFlow_.timer.Stop();
+  consentSigning_ = false;
+  RebuildConsentPanel();
 }
 
 void WalletPage::LoadPoints() {
@@ -1307,6 +1321,7 @@ void WalletPage::SetConnectingWallet(bool connecting) {
   // and the app is waiting for it to come back.
   kit::SetTextOrCollapse(w_.WalletConnectStatusText(),
                          connecting ? Loc("opening_wallet_in_browser") : hstring{});
+  RebuildConsentPanel();  // its button waits for the connect too
 }
 
 // Both doors lead here. `pinnedAddress` is the pasted address (the challenge
@@ -2002,8 +2017,8 @@ void WalletPage::ShowSolanaCardMenu(FrameworkElement const& anchor) {
 // calls the SAME member handler its pane-A button calls - the fold-doors note's
 // COMMAND-DOOR DUPLICATION: the door is duplicated, the single-instance surface
 // never is. Item states read the pane's own elements (single source): the claim
-// buttons' enabled, whether settlement v2's section shows its Claim, the
-// connected panel's visibility.
+// buttons' enabled, whether settlement v2's section shows its Claim, whether the
+// payout consent shows its button, the connected panel's visibility.
 void WalletPage::ShowEarningsActionsMenu(FrameworkElement const& anchor) {
   MenuFlyout flyout;
   auto weak = w_.get_weak();
@@ -2030,6 +2045,21 @@ void WalletPage::ShowEarningsActionsMenu(FrameworkElement const& anchor) {
     if (auto self = weak.get()) self->wallet().OnClaimV2(s, e);
   });
   flyout.Items().Append(claimV2);
+
+  // the payout consent's button, after settlement v2's Claim as in pane A,
+  // under the panel's title (its own words, Sign with wallet or Change wallet,
+  // would read as the Bittensor wallet's item below): shown while the panel
+  // shows the button and enabled while the button is
+  MenuFlyoutItem consent;
+  consent.Text(Loc("sn_consent_title"));
+  const bool consentShown = w_.PayoutConsentPanel().Visibility() == Visibility::Visible &&
+                            w_.PayoutConsentButton().Visibility() == Visibility::Visible;
+  consent.Visibility(consentShown ? Visibility::Visible : Visibility::Collapsed);
+  consent.IsEnabled(w_.PayoutConsentButton().IsEnabled());
+  consent.Click([weak](IInspectable const& s, RoutedEventArgs const& e) {
+    if (auto self = weak.get()) self->wallet().OnSignConsent(s, e);
+  });
+  flyout.Items().Append(consent);
 
   MenuFlyoutItem wallet;
   const bool connected =
@@ -2589,6 +2619,261 @@ winrt::fire_and_forget WalletPage::OnClaimV2(IInspectable const&, RoutedEventArg
   self->SetSheetOpen(false);
 }
 
+// ---- the payout consent ------------------------------------------------------
+//
+// Settlement v2 pays this network's app-only providers only to a coldkey the
+// network's owner consented to: one signature by the coldkey over the server's
+// exact message covers every provider client of the network, from the next
+// epoch until it is changed (v2/CONSENT.md). The panel after the v2 section
+// says whether a consent pays this network's earnings and to whom, and its
+// button signs one, as every app does: the wallet (the chooser), the coldkey
+// the consent names (typed, and checked before any request), the server's
+// message for it, the wallet's signature through the coldkey connect's own
+// connector (SdkHost's session helper: the bridge page or the manual form),
+// and the submission. What it shows, which coldkey it takes and what it
+// submits are snconsent's decisions (SnConsentPresentation.h); this section
+// runs the reads and the writes.
+
+void WalletPage::LoadConsentStatus() {
+  if (!Sdk().IsLoggedIn()) return;  // the caller's guard is not the only one
+  consentFetch_ = snconsent::Fetch::Loading;
+  RebuildConsentPanel();
+  auto queue = w_.DispatcherQueue();
+  auto weak = w_.get_weak();
+  Sdk().api().snNetworkConsentStatus(
+      [queue, weak](std::optional<urnet::SnNetworkConsentStatus> result,
+                    std::optional<std::string> err) {
+        const bool ok = result && !err;
+        std::optional<snconsent::Status> status;
+        if (ok) status = snconsent::StatusFrom(*result);
+        if (!ok) {
+          urnw::LogError("earnings: snNetworkConsentStatus failed{}",
+                         err ? (": " + *err) : std::string());
+        }
+        queue.TryEnqueue([weak, status, ok] {
+          if (auto self = weak.get())
+            self->wallet().ApplyConsentStatus(
+                ok ? snconsent::Fetch::Ready : snconsent::Fetch::Failed, status);
+        });
+      });
+}
+
+void WalletPage::ApplyConsentStatus(snconsent::Fetch fetch,
+                                    std::optional<snconsent::Status> const& status) {
+  consentFetch_ = fetch;
+  consent_ = status;
+  RebuildConsentPanel();
+}
+
+// No consent: sn_consent_none, what signing does and Sign with wallet. A
+// consent: whose coldkey it pays, shortened as every coldkey on this page, and
+// Change wallet with the next-epoch note, which is also what a signing a moment
+// ago reads as, since a consent starts next epoch. Waiting for the wallet while
+// a signing is out.
+void WalletPage::RebuildConsentPanel() {
+  const auto view = snconsent::PanelFor(CanCallApi() && !connectingWallet_, consentFetch_,
+                                        consent_, consentSigning_);
+  w_.PayoutConsentPanel().Visibility(view.shown ? Visibility::Visible : Visibility::Collapsed);
+  if (!view.shown) return;
+  kit::SetTextOrCollapse(w_.PayoutConsentStatusText(), view.loading  ? Loc("loading")
+                                                       : view.failed ? Loc("something_went_wrong")
+                                                                     : hstring{});
+  hstring line;
+  if (view.line == snconsent::Line::None) line = Loc("sn_consent_none");
+  if (view.line == snconsent::Line::Active) {
+    line = hstring{urnw::Format("sn_consent_active", ShortAddress(view.coldkeySs58))};
+  }
+  kit::SetTextOrCollapse(w_.PayoutConsentText(), line);
+  kit::SetTextOrCollapse(w_.PayoutConsentNote(),
+                         view.noteKey.empty() ? hstring{} : Loc(view.noteKey));
+  w_.PayoutConsentButton().Visibility(view.buttonKey.empty() ? Visibility::Collapsed
+                                                             : Visibility::Visible);
+  if (!view.buttonKey.empty()) w_.PayoutConsentButton().Content(LocBox(view.buttonKey));
+  w_.PayoutConsentButton().IsEnabled(view.buttonEnabled);
+}
+
+// The panel's button and the Earnings actions menu's item, Sign with wallet
+// and Change wallet alike: the wallet first (the chooser every Bittensor flow
+// opens with), then the coldkey the consent names, typed and checked before
+// any request (EnterConsentColdkey), then the challenge for it.
+void WalletPage::OnSignConsent(IInspectable const&, RoutedEventArgs const&) {
+  if (consentSigning_ || connectingWallet_ || w_.sheetOpen()) return;
+  // before the chooser and the browser: every step of this ends in a server call
+  if (!CanCallApi()) {
+    RefuseNoSession();
+    return;
+  }
+  auto weak = w_.get_weak();
+  ChooseBittensorWallet(w_.get_strong(), [weak](std::string walletId) {
+    auto self = weak.get();
+    if (!self || walletId.empty()) return;
+    EnterConsentColdkey(self, [weak, walletId](std::string coldkeySs58) {
+      auto page = weak.get();
+      if (!page || coldkeySs58.empty()) return;
+      page->wallet().StartConsent(coldkeySs58, walletId);
+    });
+  });
+}
+
+// The server's challenge for the typed coldkey (the SDK picks its epochs: from
+// the next one until changed). From here until the submission answers, the
+// panel says the wallet is awaited.
+void WalletPage::StartConsent(std::string const& coldkeySs58, std::string const& walletId) {
+  if (consentSigning_) return;
+  if (!CanCallApi()) {
+    RefuseNoSession();
+    return;
+  }
+  consentSigning_ = true;
+  RebuildConsentPanel();
+  const uint32_t generation = BeginFlow(consentFlow_, kApiTimeoutMs, [weak = w_.get_weak()] {
+    if (auto self = weak.get()) {
+      self->wallet().EndConsent();
+      self->wallet().Notify(Loc("something_went_wrong"), InfoBarSeverity::Error);
+    }
+  });
+  auto queue = w_.DispatcherQueue();
+  auto weak = w_.get_weak();
+  Sdk().api().snNetworkConsentChallenge(
+      coldkeySs58, [queue, weak, generation, walletId](
+                       std::optional<urnet::SnNetworkConsentChallengeResult> result,
+                       std::optional<std::string> err) {
+        queue.TryEnqueue([weak, generation, walletId, result, err] {
+          if (auto self = weak.get())
+            self->wallet().ApplyConsentChallenge(generation, walletId, result, err);
+        });
+      });
+}
+
+// The challenge goes to the wallet as the server issued it: the SDK's result,
+// whole, which the session takes verbatim. The wallet has until the challenge
+// expires; one that never answers (a closed tab) is an expired request.
+void WalletPage::ApplyConsentChallenge(
+    uint32_t generation, std::string const& walletId,
+    std::optional<urnet::SnNetworkConsentChallengeResult> const& result,
+    std::optional<std::string> const& err) {
+  if (!SettleFlow(consentFlow_, generation)) {
+    urnw::LogWarn("earnings: dropping a payout consent challenge for an abandoned request");
+    return;
+  }
+  if (err || !result) {
+    const std::string error =
+        err ? *err : std::string("snNetworkConsentChallenge returned no result");
+    urnw::LogError("earnings: snNetworkConsentChallenge failed: {}", error);
+    FailConsent(error, SnErrorText(TransportError(error)));
+    return;
+  }
+  const uint32_t signGeneration = BeginFlow(consentFlow_, kBridgeTimeoutMs, [weak = w_.get_weak()] {
+    if (auto self = weak.get()) {
+      self->wallet().EndConsent();
+      self->wallet().Notify(Loc("sn_consent_expired"), InfoBarSeverity::Error);
+    }
+  });
+  const snconsent::Challenge challenge = snconsent::ChallengeFrom(*result);
+  auto queue = w_.DispatcherQueue();
+  auto weak = w_.get_weak();
+  Sdk().SignNetworkConsent(
+      walletId, *result,
+      [queue, weak, signGeneration, challenge](bool ok, std::string address, std::string signature,
+                                               std::string message, std::string code,
+                                               std::string error) {
+        // on whichever thread delivered the hand-back
+        queue.TryEnqueue([weak, signGeneration, challenge, ok, address, signature, message, code,
+                          error] {
+          if (auto self = weak.get()) {
+            self->wallet().ApplyConsentSigned(signGeneration, challenge, ok, address, signature,
+                                              message, code, error);
+          }
+        });
+      });
+}
+
+// The wallet answered. What is submitted is the challenge's own message for the
+// coldkey it names (snconsent::SubmissionFor), never another.
+void WalletPage::ApplyConsentSigned(uint32_t generation, snconsent::Challenge const& challenge,
+                                    bool ok, std::string const& address,
+                                    std::string const& signature, std::string const& message,
+                                    std::string const& code, std::string const& error) {
+  if (!SettleFlow(consentFlow_, generation)) {
+    urnw::LogWarn("earnings: dropping a payout consent signature for an abandoned request (ok={})",
+                  ok);
+    return;
+  }
+  if (!ok) {
+    if (bridge::IsSuperseded(error)) {
+      // another wallet flow started, or the user closed the wallet form: the
+      // panel is simply ready again
+      urnw::LogInfo("earnings: the payout consent signature was superseded ({})", error);
+      EndConsent();
+      return;
+    }
+    urnw::LogError("earnings: the payout consent signature failed: {} {}", code, error);
+    FailConsent(code, error.empty() ? Loc("wallet_connect_failed") : H(error));
+    return;
+  }
+  const auto submission = snconsent::SubmissionFor(challenge, address, message, signature);
+  if (!submission) {
+    urnw::LogError("earnings: the wallet answered for another message or account; not submitting");
+    EndConsent();
+    Notify(Loc("sn_consent_failed"), InfoBarSeverity::Error);
+    return;
+  }
+  const uint32_t submitGeneration = BeginFlow(consentFlow_, kApiTimeoutMs, [weak = w_.get_weak()] {
+    if (auto self = weak.get()) {
+      self->wallet().EndConsent();
+      self->wallet().Notify(Loc("something_went_wrong"), InfoBarSeverity::Error);
+    }
+  });
+  auto queue = w_.DispatcherQueue();
+  auto weak = w_.get_weak();
+  Sdk().api().snNetworkConsentSubmit(
+      submission->coldkeySs58, submission->message, submission->signatureHex,
+      [queue, weak, submitGeneration](std::optional<urnet::SnSetWalletResult> result,
+                                      std::optional<std::string> err) {
+        queue.TryEnqueue([weak, submitGeneration, result, err] {
+          if (auto self = weak.get())
+            self->wallet().ApplyConsentSubmitted(submitGeneration, result, err);
+        });
+      });
+}
+
+// The server stored the consent, or said why not. A stored consent starts next
+// epoch, so the read after it shows the consent active with the next-epoch note.
+void WalletPage::ApplyConsentSubmitted(uint32_t generation,
+                                       std::optional<urnet::SnSetWalletResult> const& result,
+                                       std::optional<std::string> const& err) {
+  if (!SettleFlow(consentFlow_, generation)) {
+    urnw::LogWarn("earnings: dropping a payout consent submission for an abandoned request");
+    return;
+  }
+  if (err || !result) {
+    const std::string error = err ? *err : std::string("snNetworkConsentSubmit returned no result");
+    urnw::LogError("earnings: snNetworkConsentSubmit failed: {}", error);
+    FailConsent(error, SnErrorText(TransportError(error)));
+    return;
+  }
+  if (result->error) {
+    urnw::LogError("earnings: the payout consent was refused: {} {}",
+                   result->error->code.value_or(std::string()), result->error->message);
+    FailConsent(result->error->code.value_or(std::string()),
+                SnErrorText(SetWalletError(*result->error)));
+    return;
+  }
+  EndConsent();
+  LoadConsentStatus();
+}
+
+void WalletPage::FailConsent(std::string const& codeOrError, hstring const& fallback) {
+  EndConsent();
+  const std::string key = snconsent::RefusalKey(codeOrError);
+  Notify(key.empty() ? fallback : Loc(key), InfoBarSeverity::Error);
+}
+
+void WalletPage::EndConsent() {
+  consentSigning_ = false;
+  RebuildConsentPanel();
+}
+
 void WalletPage::OnClaimTop200(IInspectable const&, RoutedEventArgs const&) {
   OpenUrl("https://" + Sdk().linkHostName() + kTop200Path);
 }
@@ -2803,6 +3088,9 @@ void WalletPage::ShowPreviewWalletState() {
     account.pending = true;
     account.pendingRao = 3'861'000'000;
     ApplyV2Accounts(snpayout::LedgerFetch::Ready, {account});
+    // the payout consent beside it: none yet, so the panel asks for one (its
+    // button waits: --preview-ui has no session to sign with)
+    ApplyConsentStatus(snconsent::Fetch::Ready, snconsent::Status{});
     HeadInfo head;
     head.eligible = true;
     head.score = 41.5;

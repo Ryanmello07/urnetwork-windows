@@ -402,6 +402,8 @@
     <ClInclude Include="WalletPage.h" />
     <ClInclude Include="EarningsSheets.h" />
     <ClInclude Include="SnPayoutPresentation.h" />
+    <!-- header-only and WinRT-free: tools/sn-consent-tests.cpp runs it -->
+    <ClInclude Include="SnConsentPresentation.h" />
     <ClInclude Include="SolanaWalletPresentation.h" />
     <ClInclude Include="SolanaWalletSheets.h" />
     <ClInclude Include="AppController.h" />
