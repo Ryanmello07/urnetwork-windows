@@ -2751,9 +2751,12 @@
                                             <TextBlock x:Name="SettlementV2Note" TextWrapping="Wrap"
                                                        Style="{StaticResource UrRowNoteStyle}"
                                                        TextTrimming="None" Visibility="Collapsed" />
-                                            <!-- the v2 claim dialog -->
+                                            <!-- the v2 claim dialog. The same action as the v1
+                                                 tile's Claim above, so the same style: on every
+                                                 platform the two Claims are one button, and here
+                                                 that is the earnings action -->
                                             <Button x:Name="SettlementV2ClaimButton"
-                                                    Style="{StaticResource UrPaneActionPrimaryStyle}"
+                                                    Style="{StaticResource UrPaneActionEarningsStyle}"
                                                     HorizontalAlignment="Stretch"
                                                     IsEnabled="False" Visibility="Collapsed"
                                                     Click="OnClaimV2" />
