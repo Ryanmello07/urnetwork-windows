@@ -185,6 +185,10 @@ void ConnectPage::ApplyStrings() {
   winrt::Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(w_.ExtenderToggle(),
                                                                        Loc("extender"));
   w_.ExtenderDescription().Text(Loc("extender_setting_description"));
+  // the lag.dev speed tests switch under it (lag.dev/PLAN.md C4): its title,
+  // which also names the switch (LabeledBy in the markup), and what it allows
+  w_.SpeedTestsLabel().Text(Loc("extender_speed_tests"));
+  w_.SpeedTestsDescription().Text(Loc("extender_speed_tests_description"));
   ApplyExtenderProvideRow();
   w_.FixedIpLabel().Text(Loc("fixed_ip"));
   w_.FixedIpNote().Text(Loc("fixed_ip_subtitle"));
@@ -1854,6 +1858,37 @@ void ConnectPage::ApplyExtenderProvideRow() {
     w_.ExtenderToggle().IsOn(model.on);
     updatingControls_ = false;
   }
+  ApplySpeedTestsRow();
+}
+
+// ---- the lag.dev speed tests switch (lag.dev/PLAN.md C4, decision 18) ---------
+
+void ConnectPage::ApplySpeedTestsRow() {
+  const urnw::SpeedTestsRowModel model = urnw::SpeedTestsRowModelFor(extenderProvideView_);
+  // Hidden, never disabled (N1): it rides on the role, so it shows only beside
+  // the Extender switch, and over the provider-only device's status only when
+  // the service takes this write too.
+  w_.SpeedTestsRow().Visibility(model.visible ? Visibility::Visible : Visibility::Collapsed);
+  // the switch is the setting, read beside the status; the echo guard keeps the
+  // repaint from writing it back
+  if (w_.SpeedTestsToggle().IsOn() != model.on) {
+    updatingControls_ = true;
+    w_.SpeedTestsToggle().IsOn(model.on);
+    updatingControls_ = false;
+  }
+}
+
+void ConnectPage::OnSpeedTestsToggled(IInspectable const&, RoutedEventArgs const&) {
+  if (updatingControls_) return;
+  // never written while hidden (N1): a device or service that cannot take it
+  // shows no switch
+  if (!urnw::SpeedTestsRowModelFor(extenderProvideView_).visible) return;
+  const bool on = w_.SpeedTestsToggle().IsOn();
+  Sdk().SetMeasurementsEnabled(on);
+  // The switch holds its new position until the next pushed status, which
+  // carries the setting, replaces the guess.
+  extenderProvideView_ = urnw::SpeedTestsGuessFor(extenderProvideView_, on);
+  ApplySpeedTestsRow();
 }
 
 void ConnectPage::OnFixedIpToggled(IInspectable const&, RoutedEventArgs const&) {

@@ -383,6 +383,9 @@ ExtenderProvideStatusView ExtenderProvideGuessFor(const ExtenderProvideStatusVie
   // the role runs exactly when the guess says setting up
   guess.enabled = on && providing;
   guess.provideExtender = on;
+  // the speed tests switch under it keeps its place and its position
+  guess.measurementsEnabled = current.measurementsEnabled;
+  guess.measurementsServiceWritable = current.measurementsServiceWritable;
   return guess;
 }
 
@@ -394,6 +397,35 @@ ExtenderProvideWriteRoute ExtenderProvideWriteRouteFor(bool sessionDevice,
     return ExtenderProvideWriteRoute::Service;
   }
   return ExtenderProvideWriteRoute::None;
+}
+
+// ---- the lag.dev speed tests switch -------------------------------------------
+
+SpeedTestsRowModel SpeedTestsRowModelFor(const ExtenderProvideStatusView& view) {
+  SpeedTestsRowModel model;
+  // beside the Extender switch, and for the provider-only device's status only
+  // when the service takes this setting's write as well
+  model.visible = ExtenderProvideRowModelFor(view).switchVisible &&
+                  (!view.providerOnly || view.measurementsServiceWritable);
+  model.on = view.measurementsEnabled;
+  return model;
+}
+
+ExtenderProvideWriteRoute SpeedTestsWriteRouteFor(bool sessionDevice,
+                                                  const ExtenderProvideStatusView& shown) {
+  if (sessionDevice) return ExtenderProvideWriteRoute::Device;
+  // exactly the status the switch shows over with no session
+  if (shown.supported && shown.providerOnly && shown.serviceWritable &&
+      shown.measurementsServiceWritable) {
+    return ExtenderProvideWriteRoute::Service;
+  }
+  return ExtenderProvideWriteRoute::None;
+}
+
+ExtenderProvideStatusView SpeedTestsGuessFor(const ExtenderProvideStatusView& current, bool on) {
+  ExtenderProvideStatusView guess = current;
+  guess.measurementsEnabled = on;
+  return guess;
 }
 
 // ---- the statistics sections ----------------------------------------------------

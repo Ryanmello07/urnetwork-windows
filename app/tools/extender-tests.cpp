@@ -1146,9 +1146,11 @@ FullStatus BaseStatus() {
   return status;
 }
 
-ExtenderProvideStatusView ViewOf(const FullStatus& status, bool setting = true) {
+ExtenderProvideStatusView ViewOf(const FullStatus& status, bool setting = true,
+                                 bool measurements = true) {
   return ExtenderProvideStatusViewOf(std::optional<FullStatus>(status),
-                                     [setting] { return setting; });
+                                     [setting] { return setting; },
+                                     [measurements] { return measurements; });
 }
 
 void ProvideStatusViewTests() {
@@ -1201,6 +1203,8 @@ void ProvideStatusViewTests() {
             std::string(flip.field) + " alone is a change the feed publishes");
     }
     Check(ViewOf(BaseStatus(), false) != base, "the setting alone is a change");
+    Check(ViewOf(BaseStatus(), true, false) != base,
+          "the measurements setting alone is a change");
     // Supported alone: a device that starts reporting the role with its setting
     // off differs from the unsupported view in nothing else, and the feed must
     // still publish it, or the row would stay hidden
@@ -1208,7 +1212,8 @@ void ProvideStatusViewTests() {
     offStatus.Supported = true;
     offStatus.State = kExtenderProvideStateOff;
     Check(ViewOf(offStatus, false) !=
-              ExtenderProvideStatusViewOf(std::optional<FullStatus>(), [] { return false; }),
+              ExtenderProvideStatusViewOf(std::optional<FullStatus>(), [] { return false; },
+                                          [] { return true; }),
           "Supported alone is a change the feed publishes");
 
     // and each lands where the row reads it
@@ -1240,6 +1245,10 @@ void ProvideStatusViewTests() {
     writable.serviceWritable = true;
     Check(writable != providerOnly, "whether the service writes it alone is a change");
     Check(!providerOnly.serviceWritable, "a status the service did not mark has no writer");
+    ExtenderProvideStatusView measurementsWritable = writable;
+    measurementsWritable.measurementsServiceWritable = true;
+    Check(measurementsWritable != writable,
+          "whether the service writes the measurements setting alone is a change");
   }
   {
     TEST_CASE("aHiddenRowReadsNoSetting");
@@ -1249,22 +1258,30 @@ void ProvideStatusViewTests() {
       return true;
     };
     const ExtenderProvideStatusView none =
-        ExtenderProvideStatusViewOf(std::optional<FullStatus>(), counting);
+        ExtenderProvideStatusViewOf(std::optional<FullStatus>(), counting, counting);
     Check(!ExtenderProvideRowModelFor(none).visible, "no status is hidden");
     FullStatus unsupported = BaseStatus();
     unsupported.Supported = false;
     const ExtenderProvideStatusView hidden =
-        ExtenderProvideStatusViewOf(std::optional<FullStatus>(unsupported), counting);
+        ExtenderProvideStatusViewOf(std::optional<FullStatus>(unsupported), counting, counting);
     Check(!ExtenderProvideRowModelFor(hidden).visible, "an unsupported status is hidden");
-    CheckEq(0, reads, "and neither asks the device for its setting");
+    CheckEq(0, reads, "and neither asks the device for either setting");
     int supportedReads = 0;
+    int measurementsReads = 0;
     const ExtenderProvideStatusView shown = ExtenderProvideStatusViewOf(
-        std::optional<FullStatus>(BaseStatus()), [&supportedReads] {
+        std::optional<FullStatus>(BaseStatus()),
+        [&supportedReads] {
           ++supportedReads;
+          return false;
+        },
+        [&measurementsReads] {
+          ++measurementsReads;
           return false;
         });
     CheckEq(1, supportedReads, "a row that shows reads the setting once");
     Check(!shown.provideExtender, "and its switch is that setting");
+    CheckEq(1, measurementsReads, "and the measurements setting once");
+    Check(!shown.measurementsEnabled, "which the speed tests switch shows");
   }
 }
 
@@ -1376,6 +1393,133 @@ void ProvideWriteRouteTests() {
         if (!view.providerOnly) continue;
         Check(ExtenderProvideRowModelFor(view).switchVisible ==
                   (ExtenderProvideWriteRouteFor(false, view) == ExtenderProvideWriteRoute::Service),
+              "the provider-only switch shows exactly when its write goes to the service");
+      }
+    }
+  }
+}
+
+// ---- ExtenderPresentation.h: the lag.dev speed tests switch -----------------
+
+void SpeedTestsRowTests() {
+  const ExtenderProvideStatusView session = ProvideStatus(kExtenderProvideStateActive);
+  ExtenderProvideStatusView older = session;
+  older.providerOnly = true;
+  ExtenderProvideStatusView extenderOnly = older;
+  extenderOnly.serviceWritable = true;
+  ExtenderProvideStatusView writable = extenderOnly;
+  writable.measurementsServiceWritable = true;
+  {
+    TEST_CASE("onByDefault");
+    Check(ExtenderProvideStatusView{}.measurementsEnabled,
+          "the view starts with the setting on, as the sdk's");
+    Check(SpeedTestsRowModel{}.on, "and so does the row");
+  }
+  {
+    TEST_CASE("hiddenWithoutTheRole");
+    Check(!SpeedTestsRowModelFor(ExtenderProvideStatusView{}).visible, "no status: hidden");
+    ExtenderProvideStatusView unsupported = session;
+    unsupported.supported = false;
+    Check(!SpeedTestsRowModelFor(unsupported).visible, "an unsupported role: hidden");
+  }
+  {
+    TEST_CASE("besideTheExtenderSwitch");
+    Check(SpeedTestsRowModelFor(session).visible, "a session's status shows it");
+    for (bool extenderOn : {false, true}) {
+      ExtenderProvideStatusView view = session;
+      view.provideExtender = extenderOn;
+      view.state = extenderOn ? kExtenderProvideStateActive : kExtenderProvideStateOff;
+      Check(SpeedTestsRowModelFor(view).visible,
+            "it shows whether or not the Extender switch is on: the setting still applies");
+    }
+    // exactly where the Extender switch shows, never without it
+    for (const ExtenderProvideStatusView& view :
+         {session, older, extenderOnly, writable, ExtenderProvideStatusView{}}) {
+      if (SpeedTestsRowModelFor(view).visible) {
+        Check(ExtenderProvideRowModelFor(view).switchVisible,
+              "the speed tests switch never shows without the Extender switch");
+      }
+    }
+  }
+  {
+    TEST_CASE("theProviderOnlyStatusNeedsTheServicesSay");
+    Check(!SpeedTestsRowModelFor(older).visible, "an older service's status: hidden");
+    Check(!SpeedTestsRowModelFor(extenderOnly).visible,
+          "a service that takes only the Extender switch's write: hidden");
+    Check(SpeedTestsRowModelFor(writable).visible, "a service that takes both: shown");
+  }
+  {
+    TEST_CASE("theSwitchIsTheSetting");
+    ExtenderProvideStatusView off = session;
+    off.measurementsEnabled = false;
+    Check(!SpeedTestsRowModelFor(off).on, "off reads off");
+    Check(SpeedTestsRowModelFor(session).on, "on reads on");
+  }
+  {
+    TEST_CASE("itsGuessChangesOnlyTheSetting");
+    const ExtenderProvideStatusView guess = SpeedTestsGuessFor(writable, false);
+    Check(!guess.measurementsEnabled, "the guess holds the new position");
+    ExtenderProvideStatusView expected = writable;
+    expected.measurementsEnabled = false;
+    Check(guess == expected, "and nothing else");
+    Check(SpeedTestsRowModelFor(guess).visible, "so the switch just flipped stays shown");
+  }
+  {
+    TEST_CASE("theExtenderSwitchsGuessKeepsIt");
+    ExtenderProvideStatusView off = writable;
+    off.measurementsEnabled = false;
+    for (bool on : {false, true}) {
+      const ExtenderProvideStatusView guess = ExtenderProvideGuessFor(off, on, true);
+      Check(!guess.measurementsEnabled,
+            "flipping the Extender switch leaves the speed tests switch where it was");
+      Check(guess.measurementsServiceWritable, "and its writer");
+      Check(SpeedTestsRowModelFor(guess).visible, "so it stays shown under the guess");
+    }
+  }
+}
+
+void SpeedTestsWriteRouteTests() {
+  const ExtenderProvideStatusView session = ProvideStatus(kExtenderProvideStateActive);
+  ExtenderProvideStatusView older = session;
+  older.providerOnly = true;
+  ExtenderProvideStatusView extenderOnly = older;
+  extenderOnly.serviceWritable = true;
+  ExtenderProvideStatusView writable = extenderOnly;
+  writable.measurementsServiceWritable = true;
+  {
+    TEST_CASE("aSessionsDeviceTakesEveryWrite");
+    for (const ExtenderProvideStatusView& shown :
+         {session, older, extenderOnly, writable, ExtenderProvideStatusView{}}) {
+      Check(SpeedTestsWriteRouteFor(true, shown) == ExtenderProvideWriteRoute::Device,
+            "with a session the write goes through its device");
+    }
+  }
+  {
+    TEST_CASE("withNoSessionTheServiceTakesItOnlyWhenItSaidSo");
+    Check(SpeedTestsWriteRouteFor(false, writable) == ExtenderProvideWriteRoute::Service,
+          "a service that takes it is written");
+    Check(SpeedTestsWriteRouteFor(false, extenderOnly) == ExtenderProvideWriteRoute::None,
+          "a service that takes only the Extender switch's write is not");
+    Check(SpeedTestsWriteRouteFor(false, older) == ExtenderProvideWriteRoute::None,
+          "an older service is not");
+    Check(SpeedTestsWriteRouteFor(false, session) == ExtenderProvideWriteRoute::None,
+          "a session's status left over with no session is not");
+    Check(SpeedTestsWriteRouteFor(false, ExtenderProvideStatusView{}) ==
+              ExtenderProvideWriteRoute::None,
+          "no status is not");
+    ExtenderProvideStatusView unsupported = writable;
+    unsupported.supported = false;
+    Check(SpeedTestsWriteRouteFor(false, unsupported) == ExtenderProvideWriteRoute::None,
+          "an unsupported role is not");
+  }
+  {
+    TEST_CASE("theServiceIsWrittenExactlyWhereTheSwitchShows");
+    for (const ExtenderProvideStatusView& shown : {older, extenderOnly, writable}) {
+      for (bool supported : {false, true}) {
+        ExtenderProvideStatusView view = shown;
+        view.supported = supported;
+        Check(SpeedTestsRowModelFor(view).visible ==
+                  (SpeedTestsWriteRouteFor(false, view) == ExtenderProvideWriteRoute::Service),
               "the provider-only switch shows exactly when its write goes to the service");
       }
     }
@@ -1606,6 +1750,10 @@ int main() {
   ProvideGuessTests();
   std::cout << "provider extender switch write\n";
   ProvideWriteRouteTests();
+  std::cout << "lag.dev speed tests switch\n";
+  SpeedTestsRowTests();
+  std::cout << "lag.dev speed tests switch write\n";
+  SpeedTestsWriteRouteTests();
   std::cout << "statistics sections\n";
   StatsSectionsTests();
 

@@ -170,6 +170,9 @@ constexpr const char* RefusalReason(ProviderRefusal refusal) {
 // the write goes through the device that runs, which persists it and applies
 // it at once, and with none into the space the last device ran in, which the
 // next start of either imports. The two devices never run side by side.
+// set_measurements_enabled writes the lag.dev measurements setting
+// (`.measurements_enabled`, lag.dev/PLAN.md C4) by the same rule: it belongs to
+// the same space and rides on the same role.
 enum class ExtenderSettingTarget {
   ProviderDevice,  // the provider-only device: the switch's own case
   SessionDevice,   // a session's device that came up after the app asked

@@ -136,6 +136,11 @@ class ConnectPage {
   // row's guess until the next pushed status (N7)
   void OnExtenderToggled(winrt::Windows::Foundation::IInspectable const&,
                          winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
+  // the lag.dev speed tests switch under it (lag.dev/PLAN.md C4): writes the
+  // measurements setting through the device and holds its new position until
+  // the next pushed status
+  void OnSpeedTestsToggled(winrt::Windows::Foundation::IInspectable const&,
+                           winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnFixedIpToggled(winrt::Windows::Foundation::IInspectable const&,
                         winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnStrongAnonToggled(winrt::Windows::Foundation::IInspectable const&,
@@ -220,8 +225,13 @@ class ConnectPage {
   void ApplySplitRuleCount();
   void ApplyBlockerUi(bool on);
   // The extender row, its description and its switch, from extenderProvideView_:
-  // the one writer of all three (N7).
+  // the one writer of all three (N7), and through ApplySpeedTestsRow of the
+  // speed tests row under them.
   void ApplyExtenderProvideRow();
+  // The lag.dev speed tests row and its switch, from extenderProvideView_: shown
+  // only beside the Extender switch, and only where its own write has a taker
+  // (SpeedTestsRowModelFor). Hidden, never disabled (N1).
+  void ApplySpeedTestsRow();
   // R3: the activity pane's list vs its empty state. The empty state is a
   // centred line INSIDE the full-height pane, not a card, so this only swaps
   // which of the two is drawn in that same area.

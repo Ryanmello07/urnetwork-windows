@@ -471,6 +471,8 @@ extender_setting_up
 extender_settings
 extender_settings_next_connect
 extender_settings_saved
+extender_speed_tests
+extender_speed_tests_description
 extender_start_failed
 extender_statistics
 extender_tcp_unavailable

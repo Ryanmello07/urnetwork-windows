@@ -2348,6 +2348,9 @@ void MainWindow::OnProvideModeChanged(SelectorBar const& s,
 void MainWindow::OnExtenderToggled(IInspectable const& s, RoutedEventArgs const& e) {
   connect_->OnExtenderToggled(s, e);
 }
+void MainWindow::OnSpeedTestsToggled(IInspectable const& s, RoutedEventArgs const& e) {
+  connect_->OnSpeedTestsToggled(s, e);
+}
 void MainWindow::OnFixedIpToggled(IInspectable const& s, RoutedEventArgs const& e) {
   connect_->OnFixedIpToggled(s, e);
 }
