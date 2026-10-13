@@ -1199,18 +1199,13 @@ func TestApprovalSheetCoroutinesDoNotLetAnExceptionOut(t *testing.T) {
 		regexp.QuoteMeta("} catch (...) {"), regexp.QuoteMeta("launched = false;"), regexp.QuoteMeta("co_return launched;"))
 }
 
-// The strings: the sheet looks up only what the blueprint lists, so it adds no key to the localization store's backlog
-// beyond the five the sheet already owed and the two retags, which keep their ids. The three adv_ ids the sheet uses are
-// stable, and the Start page's action is the one that says where the browser goes.
+// The strings: the sheet looks up only what the blueprint lists, every one of them a key the localization store tags
+// windows, so it adds nothing to the store's backlog. The Start page's action is the one that says where the browser goes.
 func TestApprovalSheetUsesOnlyTheStringsThatAreListed(t *testing.T) {
 	sheet := stripComments(lf(readAppSource(t, "BrowserApprovalSheet.cpp")))
-	owed := map[string]bool{ // not in the store yet: Adv carries their English
-		"adv_browser_sign_in_title": true, "adv_browser_sign_in_body": true, "adv_open_ur_io": true,
-	}
-	retag := map[string]bool{ // in the catalog, tagged for another app: windows is to be added to them
-		"sso_sign_in_timed_out": true, "sso_browser_open_failed": true,
-	}
 	tagged := map[string]bool{
+		"adv_browser_sign_in_title": true, "adv_browser_sign_in_body": true, "adv_open_ur_io": true,
+		"sso_sign_in_timed_out": true, "sso_browser_open_failed": true,
 		"auth_code": true, "or": true, "waiting_for_approval": true, "copy_to_clipboard": true, "network_name_label": true,
 		"sign_in": true, "cancel": true, "try_again": true, "something_went_wrong": true, "auth_code_error": true,
 	}
@@ -1227,7 +1222,6 @@ func TestApprovalSheetUsesOnlyTheStringsThatAreListed(t *testing.T) {
 		used[match[1]] = true
 		key := match[1]
 		switch {
-		case owed[key], retag[key]:
 		case tagged[key]:
 			if !windows[key] {
 				t.Errorf("the sheet looks up %q, which the store does not tag windows", key)
@@ -1236,13 +1230,8 @@ func TestApprovalSheetUsesOnlyTheStringsThatAreListed(t *testing.T) {
 			t.Errorf("the sheet looks up %q: it is not one of the strings the blueprint lists, and a key the store lacks is the owner's backlog", key)
 		}
 	}
-	for key := range owed {
-		if !used[key] {
-			t.Errorf("the sheet no longer uses %s: the owed key keeps its id, and its English is the store's to adopt", key)
-		}
-	}
 	// the English of the action: where it goes is shown beside it, as plain text from the build constant
-	provideRequire(t, "BrowserApprovalSheet.cpp", sheet, `Adv("adv_open_ur_io", L"Continue in browser")`,
+	provideRequire(t, "BrowserApprovalSheet.cpp", sheet, `Adv("adv_open_ur_io", L"Open ur.io")`,
 		"H(std::string(config::kApprovalHost))", "approvalOffered_ = urnw::App().ApprovalOffered();")
 	if strings.Count(sheet, "config::kApprovalHost") != 2 {
 		t.Error("the Start page and the Waiting page each show the host the browser goes to, from the build constant")

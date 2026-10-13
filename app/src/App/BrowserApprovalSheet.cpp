@@ -45,16 +45,14 @@ constexpr std::chrono::seconds kClipboardLife{60};
 winrt::Windows::Foundation::IAsyncOperation<bool> LaunchInBrowser(hstring url);
 
 // ---- the strings --------------------------------------------------------------
-// Three of these are owed to the localization store (the adv_ ids; their English here is the
-// store's to adopt, and the ids are stable). The rest are keys the store already tags windows,
-// except the two sso_ ones, which are tagged for another app only and need windows added.
-// There is no check code and no string for one.
+// Every one of these is a key the localization store tags windows; the English beside an Adv
+// lookup is the store's. There is no check code and no string for one.
 
 hstring TitleText() { return Adv("adv_browser_sign_in_title", L"Browser sign-in"); }
 
-// "Continue in browser": starts the approval where it is offered, opens the site to sign in at
-// where it is not.
-hstring ActionText() { return Adv("adv_open_ur_io", L"Continue in browser"); }
+// The action ("Continue in browser" in the docs): starts the approval where it is offered, opens
+// the site to sign in at where it is not.
+hstring ActionText() { return Adv("adv_open_ur_io", L"Open ur.io"); }
 
 hstring BodyText() {
   return Adv("adv_browser_sign_in_body",
