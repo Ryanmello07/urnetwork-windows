@@ -20,12 +20,14 @@
 #include <winrt/Microsoft.UI.Xaml.Input.h>
 
 #include "AuthSheets.h"
+#include "BrowserApprovalSheet.h"
 #include "ControlDohSettings.h"
 #include "LoginCarousel.h"
 #include "NetworkNameCheck.h"
 #include "SdkHost.h"
 #include "SettingsSheets.h"
 #include "UrComponents.h"
+#include "UrIoApproval.h"
 #include "VlessSheet.h"
 
 namespace winrt::URnetwork::implementation {
@@ -108,11 +110,37 @@ class LoginPage {
   winrt::fire_and_forget OpenGuestConversion(std::function<void(bool done)> onClosed = {});
 
   // Sign in with a one-time auth code, exactly as if it had been typed into
-  // the auth-code sheet and Sign in pressed. Shared by that sheet (OnUseCode),
-  // the browser sign-in bridge sheet and the urnetwork://auth?code= deep link
-  // (AppController::HandleDeepLink, which has already refused the link when a
-  // session exists). The code is a credential and is never logged.
+  // the auth-code sheet and Sign in pressed. Shared by that sheet (OnUseCode)
+  // and the browser sign-in bridge sheet's field: a code the person typed or
+  // pasted. No link calls it - an auth link is not a code anyone entered
+  // (AppController::HandleAuthLink), and this starts by resetting the screen to
+  // the initial step, which a link nobody asked for must not do. The code is a
+  // credential and is never logged.
   void SignInWithAuthCode(std::string code);
+
+  // ---- a sign-in approved on a web page (UrIoApproval.h) ---------------------
+  // Called by AppController (HandleAuthLink and the attempt's timer), on the UI
+  // thread, after the gate has decided: the window is already raised for the first
+  // two. What the person sees and answers is the browser sign-in sheet's
+  // (BrowserApprovalSheet.h); these hand it what arrived, and nothing here signs
+  // anyone in or redeems a code.
+  //
+  // The page's approved answer, opened: a one-time auth code, which this takes over
+  // and gives to the sheet to redeem and hold until the person confirms which
+  // network they would join. The sheet is the one that was open; or, when a hide to
+  // the tray swept it away while the browser was open (the attempt outlives it), a
+  // new one that opens on the answer. A sheet of another kind that is in the way is
+  // closed first: the answer is the person's own action.
+  void OnApprovedCode(std::string code);
+  // The person cancelled in the browser (access_denied): the sheet, if it is open,
+  // is back at its start.
+  void OnApprovalDenied();
+  // The attempt is over with no answer to come: its five minutes are up (the timer), or the gate found
+  // it expired or superseded when a link arrived. A sheet that is waiting says so.
+  void OnApprovalExpired();
+  // The neutral line for a link that answers nothing, for the first launch of a
+  // freshly started process only (AppController::ShowStrayNotice).
+  void ShowStrayNotice();
 
   // ---- XAML event handlers (forwarded from MainWindow) ----
   void OnGetStarted(winrt::Windows::Foundation::IInspectable const&,
@@ -177,7 +205,8 @@ class LoginPage {
   winrt::fire_and_forget OnChangeNetworkServer(
       winrt::Windows::Foundation::IInspectable const&,
       winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
-  // the bottom-left "Sign in with browser" affordance: the bridge sheet
+  // the bottom-left "Sign in with browser" affordance: the browser sign-in sheet
+  // (ShowApprovalSheet)
   winrt::fire_and_forget OnSignInWithBrowser(
       winrt::Windows::Foundation::IInspectable const&,
       winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
@@ -235,6 +264,17 @@ class LoginPage {
   // process for as long as it holds anything, so nothing may leave a phrase
   // sitting in it.
   void ClearSeedphraseField();
+  // The one place the browser sign-in sheet is shown: for the click that opens it
+  // (`approvedCode` empty) and for an approved answer that finds it gone
+  // (OnApprovedCode), which opens it on the redeem. Holds the single-sheet gate for
+  // as long as the sheet shows, and signs in with the code the person pasted into
+  // its field once the sheet is gone.
+  winrt::fire_and_forget ShowApprovalSheet(std::string approvedCode);
+  // An approved answer waits here for whatever sheet was in the way to finish closing
+  // (a ContentDialog hides asynchronously), then opens its own. The browser sign-in sheet's
+  // own closing calls it the moment the gate is clear; a timer polls as the backstop for any
+  // other sheet.
+  void ContinueApprovedCode();
   // Give the sign-in affordances their height FIRST and the hero carousel
   // whatever is left, so Sign in with Seedphrase / Create Instant Account /
   // Change Network API are never pushed below the fold. Re-run on every size
@@ -301,6 +341,14 @@ class LoginPage {
   std::unique_ptr<urnw::LoginCarousel> carousel_;
   bool presentationActive_ = false;
   std::shared_ptr<urnw::SeedphraseDisplaySheet> seedphraseSheet_;
+  std::shared_ptr<urnw::BrowserApprovalSheet> approvalSheet_;
+  // An approved answer's code, for the moments a sheet in the way takes to close, and the
+  // timer that checks on it (50 ms, for two seconds at most). Wiped as soon as it is used.
+  std::string pendingApprovedCode_;
+  int approvedCodeWaits_ = 0;
+  winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer approvedCodeTimer_{nullptr};
+  // the neutral line for a link that answers nothing, at most once in half a minute
+  approval::NeutralLine strayLine_;
   std::shared_ptr<urnw::NetworkServerSheet> networkServerSheet_;
   std::shared_ptr<urnw::VlessSheet> vlessSheet_;
   std::shared_ptr<urnw::ControlDohSheet> controlDohSheet_;

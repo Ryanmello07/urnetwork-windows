@@ -64,7 +64,9 @@ func TestBothErrorChannelsShareOneMapping(t *testing.T) {
 // auth push (SdkHost::SetAuthState -> AppController::OnAuthState) reaches the
 // window only while it is presented, and the user has just clicked "Open
 // URnetwork?" - there is no reason to keep the window away for a link that turns
-// out not to match.
+// out not to match. The auth host is the one exception: a link there is judged
+// first and raises nothing unless a sign-in this app started is waiting for it
+// (TestAuthLinkIsGatedBeforeTheWindowIsRaised).
 func TestDeepLinkShowsTheWindowBeforeTheSdkHandlesIt(t *testing.T) {
 	source := stripLineComments(lf(readAppSource(t, "AppController.cpp")))
 	handle := definitionBody(t, "AppController.cpp", source, "void AppController::HandleDeepLink(")

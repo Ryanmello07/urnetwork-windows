@@ -6804,11 +6804,11 @@
   </data>
   <data name="sso_browser_open_failed" xml:space="preserve">
     <value>เปิดเบราว์เซอร์ไม่ได้ โปรดลองอีกครั้ง</value>
-    <comment>macOS error when adding a sign-in method could not open the browser for the provider's sign-in page.</comment>
+    <comment>Error when the app could not open the browser for a sign-in page (macOS: adding a sign-in method; Windows: the browser sign-in).</comment>
   </data>
   <data name="sso_sign_in_timed_out" xml:space="preserve">
     <value>การลงชื่อเข้าใช้หมดเวลา โปรดลองอีกครั้ง</value>
-    <comment>Error when a browser sign-in (Google or Apple through the browser) took too long and expired.</comment>
+    <comment>Error when a browser sign-in (Google or Apple through the browser, or a sign-in approved on the web page) took too long and expired.</comment>
   </data>
   <data name="start_earning_join" xml:space="preserve">
     <value>เพื่อเริ่มสร้างรายได้ เข้าร่วมกับระบบเน็ตเวิร์ค</value>

@@ -114,8 +114,11 @@ void App::OnLaunched(LaunchActivatedEventArgs const&) {
   // nothing, which is why users launched again. An autostart at sign-in shows
   // only the tray icon. A deep link (urnetwork://, the ur.io/wallet-connect
   // bridge returning through the browser while the app was not running) is
-  // routed, and its handling brings the window forward. We are on the UI
-  // thread here.
+  // routed, and its handling brings the window forward - except an auth link,
+  // which is judged first (AppController::HandleAuthLink) and raises the window
+  // only for the answer to a sign-in this app started, or, as the first launch
+  // of a freshly started process like this one, once with a neutral line. We are
+  // on the UI thread here.
   try {
     urnw::App().ServeLaunch(urnw::OwnLaunchRequest());
   } catch (winrt::hresult_error const& e) {

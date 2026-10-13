@@ -41,7 +41,10 @@
 // window, whether it starts the app or reaches the instance that runs, and so
 // does one that starts the app after waiting out a quitting instance. An
 // autostart (kAutostartArgument) shows only the tray icon, wherever it lands.
-// A deep link is routed, and its handling brings the window forward.
+// A deep link is routed, and its handling brings the window forward - except a
+// urnetwork://auth link, which is judged first (AppController::HandleAuthLink):
+// it raises the window only for the answer to a sign-in the app started, or, for
+// the instance's own first launch, once with a neutral line when it answers none.
 //
 // No launch starts the app while an update installs (owner decision,
 // 2026-10-05). Every round of a launch asks first whether the updater's
@@ -177,7 +180,8 @@ struct LaunchRequest {
 
 // What the instance does for a launch.
 enum class LaunchAction {
-  // Route the deep link; handling it brings the window forward.
+  // Route the deep link; handling it brings the window forward (an auth link
+  // that answers no sign-in of the app's does not: see the file comment).
   HandleDeepLink,
   // Open the window.
   ShowWindow,

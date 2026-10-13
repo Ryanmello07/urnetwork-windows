@@ -4,19 +4,27 @@
 #include "AppController.h"
 
 #include <algorithm>
+#include <bcrypt.h>
 #include <chrono>
+#include <exception>
 #include <string_view>
+#include <vector>
 
 #include <winrt/Microsoft.UI.Windowing.h>
 #include <winrt/Microsoft.UI.Interop.h>
 #include <winrt/Windows.ApplicationModel.Activation.h>
 
+#include "ApprovalCheck.h"
+#include "ApprovalUnseal.h"
+#include "AuthLink.h"
+#include "Config.h"
 #include "Ids.h"
 #include "LaunchAtStartup.h"
 #include "Localization.h"
 #include "Log.h"
 #include "MainWindow.xaml.h"
 #include "PageContext.h"  // pages::AdvW — the tray tooltip's health words (#27)
+#include "ProtocolHandler.h"
 #include "SingleInstance.h"
 #include "Startup.h"
 #include "Strings.h"
@@ -48,67 +56,28 @@ static_assert(!WindowPresentationShouldRun(false, /*minimized=*/true));
 
 // Pull a urnetwork:// uri out of a command line. The shell appends it as an
 // argument (possibly quoted); the uri itself never contains whitespace because
-// the wallet-connect bridge percent-encodes the query.
+// the wallet-connect bridge percent-encodes the query. The scheme is matched
+// without regard to case, as the router matches the auth host, so a link spelled
+// URNETWORK://... reaches the gate and is judged there. What it returns can
+// carry a credential (a sign-in return), so it never reaches a log or the UI.
 std::wstring DeepLinkFromCommandLine(std::wstring_view commandLine) {
-  const std::wstring prefix = std::wstring(ids::kUriScheme) + L"://";
-  const size_t start = commandLine.find(prefix);
-  if (start == std::wstring_view::npos) return {};
-  size_t end = commandLine.find_first_of(L" \t\"", start);
-  if (end == std::wstring_view::npos) end = commandLine.size();
-  return std::wstring(commandLine.substr(start, end - start));
+  return std::wstring(authlink::LinkInCommandLine(commandLine));
 }
 
-// Exactly the "auth" host - "urnetwork://auth", "urnetwork://auth?..." - so
-// "urnetwork://authenticator/..." cannot match.
-bool IsAuthDeepLink(const std::string& url) {
-  constexpr char kPrefix[] = "urnetwork://auth";
-  constexpr size_t kLen = sizeof(kPrefix) - 1;
-  if (url.rfind(kPrefix, 0) != 0) return false;  // the onboarding check's idiom
-  if (url.size() == kLen) return true;
-  const char next = url[kLen];
-  return next == '?' || next == '/' || next == '#';
+// Why the gate decided what it did, for the log: a closed token. A link that was not
+// even well formed says so with the parser's own reason, which is the more useful
+// word when the gate has only "nothing is waiting" or "this is no answer" to add;
+// anything else is the gate's.
+std::string_view AuthLinkWhy(const authlink::Return& link, const approval::Decision& decision) {
+  const bool parserKnowsBetter = decision.why == approval::Why::NoAttempt || decision.why == approval::Why::InvalidShape;
+  if (link.kind == authlink::Kind::Invalid && parserKnowsBetter) return authlink::ToString(link.reject);
+  return approval::ToString(decision.why);
 }
 
-// One percent-decoded query parameter of a urnetwork:// uri, "" when absent.
-// WalletConnect.cpp has the full parser (ParseQuery/Unesc) but keeps it in its
-// own anonymous namespace; exporting it for a single parameter is worse than
-// these twenty lines.
-std::string DeepLinkQueryParam(const std::string& url, std::string_view name) {
-  auto hexv = [](char c) -> int {
-    if (c >= '0' && c <= '9') return c - '0';
-    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-    return -1;
-  };
-  const size_t q = url.find('?');
-  if (q == std::string::npos) return {};
-  size_t i = q + 1;
-  while (i < url.size()) {
-    const size_t amp = url.find('&', i);
-    const std::string pair =
-        url.substr(i, amp == std::string::npos ? std::string::npos : amp - i);
-    const size_t eq = pair.find('=');
-    if (eq != std::string::npos && pair.compare(0, eq, name) == 0) {
-      const std::string value = pair.substr(eq + 1);
-      std::string out;
-      out.reserve(value.size());
-      for (size_t k = 0; k < value.size(); ++k) {
-        if (value[k] == '%' && k + 2 < value.size()) {
-          const int hi = hexv(value[k + 1]), lo = hexv(value[k + 2]);
-          if (hi >= 0 && lo >= 0) {
-            out.push_back(static_cast<char>((hi << 4) | lo));
-            k += 2;
-            continue;
-          }
-        }
-        out.push_back(value[k] == '+' ? ' ' : value[k]);
-      }
-      return out;
-    }
-    if (amp == std::string::npos) break;
-    i = amp + 1;
-  }
-  return {};
+// The state, from the OS: its entropy is the only thing that makes a link worth acting on. (The
+// key pair is the sdk's, drawn by approval::NewKeyPair.)
+bool RandomBytes(unsigned char* out, std::size_t length) {
+  return ::BCryptGenRandom(nullptr, out, static_cast<ULONG>(length), BCRYPT_USE_SYSTEM_PREFERRED_RNG) >= 0;
 }
 
 }  // namespace
@@ -122,6 +91,7 @@ AppController::AppController() {
 
 AppController::~AppController() {
   if (placementSaveTimer_) placementSaveTimer_.Stop();
+  if (approvalTimer_) approvalTimer_.Stop();
 }
 
 template <class F>
@@ -303,6 +273,14 @@ void AppController::Start() {
     placementSaveTimer_.Tick([this](auto const&, auto const&) {
       if (shell::SaveWindowPlacement(windowHwnd_)) ownPlacement_ = true;
     });
+
+    // A browser approval's five minutes (UrIoApproval.h). One-shot: BeginApproval starts it
+    // and CancelApproval stops it, so the attempt's secret is wiped, and an open sheet told,
+    // when the time is up even though nothing else happens.
+    approvalTimer_ = uiThread_.CreateTimer();
+    approvalTimer_.Interval(approval::kLife);
+    approvalTimer_.IsRepeating(false);
+    approvalTimer_.Tick([this](auto const&, auto const&) { OnApprovalTimer(); });
   }
 
   // The update checker (beta spec §5): its worker owns the launch-delay check
@@ -316,6 +294,10 @@ void AppController::Start() {
   // follows this install (its path, and --autostart), and none is made here
   // (StartupRegistration.h).
   RefreshLaunchAtStartup();
+  // The urnetwork:// handler a browser sign-in wrote for this user follows this install the
+  // same way (ProtocolRegistration.h): refreshed here, never created here - that is for an
+  // attempt to do, when the person clicks.
+  RefreshProtocolHandler();
 
   LogInfo("app: initializing the sdk host");
   if (!sdk_.Initialize()) {
@@ -331,6 +313,12 @@ void AppController::Start() {
         L"SdkHost::Initialize returned false; the SDK's own error is in the log.");
   }
   UpdateTray();
+  // A build that points the approval at a page of its own says so, whatever the flag is: the override is
+  // defined on a compiler's command line (Config.h), where an environment variable left set can reach a build
+  // nobody meant it for, and nothing else would show it. The host only, never a link.
+  if constexpr (config::kApprovalOriginIsATest) {
+    LogWarn("approval: this build talks to a test origin: {}", config::kApprovalHost);
+  }
   LogInfo("app: started");
 }
 
@@ -360,9 +348,10 @@ void AppController::Shutdown(lifetime::Ending ending) {
   // that can produce such a completion is stopped HERE, on the UI thread,
   // before Exit() ends the loop:
   //
-  //   * the two controller-owned DispatcherQueueTimers (placement save,
-  //     balance poll) are stopped — a timer left running keeps a CoreMessaging
-  //     callback registered into the teardown;
+  //   * the controller-owned DispatcherQueueTimers (placement save, the
+  //     browser approval's five minutes, the balance poll) are stopped — a
+  //     timer left running keeps a CoreMessaging callback registered into the
+  //     teardown;
   //   * the window is closed AND RELEASED. The release is the load-bearing
   //     half: window_ used to hold the MainWindow alive until static
   //     destruction, long after the queue was gone, so every page timer
@@ -375,6 +364,8 @@ void AppController::Shutdown(lifetime::Ending ending) {
   // Nothing up to the service stop below waits on anything unbounded:
   // updates_.Stop() above is the only join, and it is bounded by design.
   if (placementSaveTimer_) placementSaveTimer_.Stop();
+  // a browser approval does not outlive the app: its key is wiped and its timer stopped
+  CancelApproval(approval::ClearReason::Shutdown);
   balance_.Stop();
   tray_.Destroy();
   if (window_) window_.Close();
@@ -410,6 +401,27 @@ void AppController::OnAuthState(AuthState state, const std::string& error) {
   authState_ = state;
   authError_ = error;
   authErrorUndelivered_ = !error.empty();
+  // A browser approval is a sign-in this app started and waits on. Any OTHER sign-in
+  // starting (every one pushes Authenticating first) or succeeding, and a sign-out, ends
+  // it, so a late answer from the browser is a stray (UrIoApproval.h). The approval's own
+  // redeem cannot trip this: its attempt is consumed before the redeem, and holding the
+  // redeemed network pushes no state.
+  if (state == AuthState::Authenticating) {
+    CancelApproval(approval::ClearReason::SignInStarted);
+  } else if (state == AuthState::LoggedIn) {
+    CancelApproval(approval::ClearReason::SignedIn);
+  } else if (state == AuthState::LoggedOut && wasLoggedIn) {
+    CancelApproval(approval::ClearReason::SignedOut);
+  } else if (approval_.Live() && approval_.Flow() != sdk_.CurrentBrowserFlow()) {
+    // A server change takes the next flow number and pushes only LoggedOut, which a signed-out app
+    // does not count as a sign-out: what is left behind is an attempt for the other server.
+    CancelApproval(approval::ClearReason::Superseded);
+  }
+  // A person who lands on the sign-in screen with the window already on screen (a sign-out, or a switch to
+  // another network) is who the page check is for, and no window show follows to begin it
+  // (ShowWindowImpl). One check a run, so this is safe to repeat; with no window shown (a launch, an
+  // autostart) it begins nothing.
+  if (state == AuthState::LoggedOut && windowShown_) StartApprovalCheck();
   UpdateTray();
   // balance store lifecycle follows the session. A repeated LoggedIn push is a
   // device re-registration (guest upgrade): restart the store so the plan
@@ -930,6 +942,10 @@ void AppController::ShowWindowImpl(const POINT* anchor) {
   }
   windowShown_ = true;
   SyncWindowMinimized();
+  // The browser approval's page check begins when someone is looking at a signed-out window: that is
+  // when the action could be wanted, and when the network is likely to be up (a check made at launch,
+  // before it was, would keep the action hidden for the whole run).
+  if (!ApprovalContext().signedIn) StartApprovalCheck();
   window_.Activate();
   // Activate() is ShowWindow + SetActiveWindow: it never asks for the foreground,
   // so it leaves the window BEHIND the browser a sign-in just came back from,
@@ -986,6 +1002,9 @@ void AppController::HideWindow() {
   // next tray click - within this session as well as across restarts.
   if (shell::SaveWindowPlacement(windowHwnd_)) ownPlacement_ = true;
   windowShown_ = false;
+  // Counted here, before the sweep below, so that a sheet the sweep closes can tell this from the person
+  // closing it by asking whether the count moved, whenever its own Closed event arrives (WindowHides).
+  ++windowHides_;
   // A sheet may not outlive the surface that feeds it: the window only hides, and
   // a dialog left open would come back on a draft read before the hide, so every
   // open sheet closes here. A minimize reaches only VisibilityChanged, never this,
@@ -1045,6 +1064,12 @@ void AppController::ReconcileWindowPresentation() {
 
 void AppController::ServeLaunch(const instance::LaunchRequest& request) {
   const instance::LaunchAction action = instance::ActionFor(request);
+  // The first launch served is this process's own: App::OnLaunched serves it before the gate
+  // opens to the launches redirected to the instance that runs. A browser's "Open URnetwork?"
+  // that STARTED the app is that launch, and it is the only one whose stray auth link may show
+  // the window (ShowStrayNotice); a link handed to a running instance never does.
+  freshProcessLaunch_ = !launchServed_;
+  launchServed_ = true;
   LogInfo("app: launch{}: {}", request.autostart ? " (autostart)" : "",
           instance::ToString(action));
   switch (action) {
@@ -1062,6 +1087,13 @@ void AppController::ServeLaunch(const instance::LaunchRequest& request) {
 void AppController::HandleDeepLink(const std::string& url) {
   // never log the uri itself: a wallet callback carries the address + signature
   LogInfo("app: deep link received");
+  // urnetwork://auth is judged before anything is raised or shown: the answer to
+  // a sign-in this app started comes back this way, and so does any link anyone
+  // fires at the app, which must not move the window or touch a screen
+  if (authlink::IsAuthHost(url)) {
+    HandleAuthLink(url);
+    return;
+  }
   // the callback comes back through the browser, so the app is in the background
   // (and may be hidden to the tray) — bring the window forward for the result
   ShowWindow(nullptr);
@@ -1072,28 +1104,218 @@ void AppController::HandleDeepLink(const std::string& url) {
     }
     return;
   }
-  // urnetwork://auth?code=<one-time auth code>: the browser sign-in bridge's
-  // handoff (LoginPage::OnSignInWithBrowser; the site builds such urls for its
-  // own app linking - urnetwork/mmm react/src/auth/urlAuthCode.js). A link
-  // must never clobber a session: signed in, it is logged and ignored.
-  if (IsAuthDeepLink(url)) {
-    if (authState_ == AuthState::LoggedIn || sdk_.IsLoggedIn()) {
-      LogWarn("app: auth deep link ignored - a session is signed in");
-      return;
-    }
-    // the code is a credential: its value is never logged
-    const std::string code = DeepLinkQueryParam(url, "code");
-    if (code.empty()) {
-      LogWarn("app: auth deep link carried no code");
-      return;
-    }
-    LogInfo("app: auth deep link routes to the code login");
-    if (auto self = window_.try_as<winrt::URnetwork::implementation::MainWindow>()) {
-      self->login().SignInWithAuthCode(code);
-    }
-    return;
+  try {
+    sdk_.HandleDeepLink(url);
+  } catch (const std::exception&) {
+    // The wallet bridge's crypto throws on a malformed link, and any program can
+    // fire one at the app. The link is dropped and its text is not logged.
+    LogWarn("app: a deep link could not be handled");
   }
-  sdk_.HandleDeepLink(url);
+}
+
+// The gate for urnetwork://auth: every answer to a browser sign-in passes here,
+// on the UI thread, before the window is raised, a screen is touched or a code
+// is used. In this order: the parser (AuthLink.h) says whether the link is a
+// sealed or a denied answer at all; the attempt (UrIoApproval.h) says whether it
+// answers the sign-in this app started; for an approval the box is then opened
+// with the attempt's own key, and only a box that holds the attempt's state is an
+// answer. Only then is the attempt consumed, the window raised and the code
+// handed on. A denial for the live attempt raises the window to say so. Anything
+// else - a link nothing waits for, another attempt's, a box that does not open -
+// raises nothing, resets nothing and disturbs no attempt that is alive (one
+// exception: ShowStrayNotice). The log gets closed tokens, never the link or a
+// value in it.
+//
+// The switch below has no default, and C4062 is an error here, so a verdict added
+// to the model is a build error until this gate has decided what it does.
+#pragma warning(push)
+#pragma warning(error : 4062)
+void AppController::HandleAuthLink(const std::string& url) {
+  if (quitting_.load(std::memory_order_acquire)) return;
+  const authlink::Return link = authlink::Parse(url);
+  approval::Decision decision = approval_.Check(link, approval::Now(), ApprovalContext());
+  std::optional<std::string> code;
+  if (decision.verdict == approval::Verdict::Accepted) {
+    code = approval::Unseal(approval_.SecretKey(), link);
+    if (!code) decision = approval::Decision{approval::Verdict::Stray, approval::Why::BadSeal};
+  }
+  const std::string_view why = AuthLinkWhy(link, decision);
+  LogInfo("app: auth link: {} ({})", approval::ToString(decision.verdict), why);
+  switch (decision.verdict) {
+    case approval::Verdict::Ignored:
+      return;
+    case approval::Verdict::Stray:
+      // An attempt the gate found dead and wiped (its deadline passed on a clock the timer has not
+      // read yet, or another flow took over) leaves a sheet waiting for an answer that cannot come:
+      // it is told, as the timer tells it, and says so only if it is the page that was waiting.
+      if (decision.why == approval::Why::Expired || decision.why == approval::Why::Superseded) {
+        if (LoginPage* login = LoginPageOrNull()) login->OnApprovalExpired();
+      }
+      ShowStrayNotice();
+      return;
+    case approval::Verdict::Denied:
+      ShowWindow(nullptr);
+      if (LoginPage* login = LoginPageOrNull()) login->OnApprovalDenied();
+      return;
+    case approval::Verdict::Accepted:
+      if (!approval_.Consume(link.state)) return;
+      ShowWindow(nullptr);
+      if (LoginPage* login = LoginPageOrNull()) login->OnApprovedCode(std::move(*code));
+      return;
+  }
+}
+#pragma warning(pop)
+
+// A link that answers no attempt raises nothing, resets nothing and shows nothing.
+// The one exception is the first launch of a freshly started process: the browser's
+// "Open URnetwork?" started the app for a link whose attempt cannot have survived the
+// restart (an attempt lives in memory only), and a launch that opened nothing looks as
+// if it did nothing. That launch shows the window once, with a neutral line. A link
+// handed to a running instance never does.
+void AppController::ShowStrayNotice() {
+  if (!freshProcessLaunch_) return;
+  freshProcessLaunch_ = false;
+  if (!neutralLine_.Allow(std::chrono::steady_clock::now())) return;
+  ShowWindow(nullptr);
+  if (LoginPage* login = LoginPageOrNull()) login->ShowStrayNotice();
+}
+
+approval::Context AppController::ApprovalContext() {
+  approval::Context context;
+  context.signedIn = authState_ == AuthState::LoggedIn || sdk_.IsLoggedIn();
+  context.flow = sdk_.CurrentBrowserFlow();
+  return context;
+}
+
+LoginPage* AppController::LoginPageOrNull() {
+  if (!window_) return nullptr;
+  if (auto self = window_.try_as<winrt::URnetwork::implementation::MainWindow>()) return &self->login();
+  return nullptr;
+}
+
+// ---- a sign-in approved on a web page (UrIoApproval.h) ---------------------
+
+bool AppController::ApprovalOffered() {
+  return ApprovalOfferedIn(sdk_.CurrentApprovalNetwork());
+}
+
+// The decision for a network that has been read already: BeginApproval reads it once and uses that one for this and for the
+// request, so an attempt cannot be offered for one network and name another.
+bool AppController::ApprovalOfferedIn(const approval::Network& network) {
+  if (!config::kBrowserApprovalEnabled) return false;
+  if (network.kind == approval::NetworkKind::None) {
+    LogInfo("approval: not offered: this network's API cannot be named in a request");
+    return false;
+  }
+  if (ProcessIsElevated()) {
+    LogInfo("approval: not offered: this process is elevated");
+    return false;
+  }
+  if (ApprovalContext().signedIn) {
+    LogInfo("approval: not offered: the app is signed in");
+    return false;
+  }
+  StartApprovalPageCheck();
+  if (ApprovalPageState() != ApprovalPage::Live) {
+    LogInfo("approval: not offered: the page is not known to be live");
+    return false;
+  }
+  // the official network needs the page to list version 1, another network version 2: a page that lists only 1 is never
+  // sent a request that names a network
+  if (!ApprovalPageLists(approval::ContractFor(network.kind))) {
+    LogInfo("approval: not offered: the page does not list this network's contract version");
+    return false;
+  }
+  // A key that starts something else is left alone, and then there is nothing for the browser to
+  // answer to: the action stays hidden and the paste flow is all there is.
+  switch (ProtocolHandlerStatus()) {
+    case ProtocolHandlerState::Ours:
+    case ProtocolHandlerState::Absent:
+      return true;
+    case ProtocolHandlerState::Foreign:
+      LogInfo("approval: not offered: another program handles urnetwork:// links");
+      return false;
+    case ProtocolHandlerState::Unsafe:
+      LogInfo("approval: not offered: this exe's path cannot be registered as the handler");
+      return false;
+    case ProtocolHandlerState::Failed:
+      LogInfo("approval: not offered: the urnetwork:// handler could not be looked at");
+      return false;
+  }
+  return false;
+}
+
+// The approval page's descriptor is fetched once per run (ApprovalCheck.h), and only where the action could
+// be offered at all, in the official network or in another whose API a request can name: with the build flag
+// off this app makes no request for it.
+void AppController::StartApprovalCheck() {
+  if constexpr (config::kBrowserApprovalEnabled) {
+    if (sdk_.CurrentApprovalNetwork().kind != approval::NetworkKind::None && !ProcessIsElevated()) StartApprovalPageCheck();
+  }
+}
+
+std::optional<approval::Slot::View> AppController::BeginApproval() {
+  // A second click reads the same request back, and does not extend it - unless another flow took the number since
+  // (a server change does, and pushes no sign-in state): that attempt is dead, its answer would be a stray, and
+  // a request for it would send the person to approve something that can never finish. The same goes for a
+  // request the page would refuse as expired by now (kReopenWindow): the click starts a new attempt.
+  const approval::Clocks now = approval::Now();
+  if (std::optional<approval::Slot::View> live = approval_.Peek(now)) {
+    if (approval_.Flow() == sdk_.CurrentBrowserFlow() && approval_.Reopenable(now)) return live;
+    CancelApproval(approval::ClearReason::Superseded);
+  }
+  // read once: the same network decides whether the action is offered and what the request names
+  const approval::Network network = sdk_.CurrentApprovalNetwork();
+  if (!ApprovalOfferedIn(network)) return std::nullopt;
+  // The answer comes back as a urnetwork:// launch, so before the browser is opened the user's
+  // handler for the scheme has to start THIS exe, and the shell has to say so
+  if (!EnsureProtocolHandler()) {
+    LogWarn("approval: the urnetwork:// handler is not this app's; the paste flow stays");
+    return std::nullopt;
+  }
+  std::optional<approval::KeyPair> keys = approval::FreshKeyPair(approval::NewKeyPair);
+  if (!keys) {
+    LogWarn("approval: no usable key pair; the paste flow stays");
+    return std::nullopt;
+  }
+  approval::Slot::Params params;
+  params.publicKey = std::move(keys->publicKey);
+  params.secretKey = std::move(keys->secretKey);
+  // empty for the official network, which makes the request version 1; another network names its API (version 2)
+  params.api = network.api;
+  params.now = approval::Now();
+  // last, so nothing that can still fail has already told the other flows they were superseded
+  params.flow = sdk_.BeginBrowserApproval();
+  std::optional<approval::Slot::View> view = approval_.Begin(std::move(params), RandomBytes);
+  if (!view) {
+    LogWarn("approval: no entropy for a state; the paste flow stays");
+    return std::nullopt;
+  }
+  if (approvalTimer_) {
+    approvalTimer_.Stop();
+    approvalTimer_.Start();
+  }
+  LogInfo("approval: an attempt started (version {})", approval::ContractFor(network.kind));
+  return view;
+}
+
+std::string AppController::ApprovalRequestUrl(const approval::Slot::View& view) const {
+  return approval::BuildRequestUrl(config::kApprovalPageUrl, view);
+}
+
+void AppController::CancelApproval(approval::ClearReason reason) {
+  if (approvalTimer_) approvalTimer_.Stop();
+  if (!approval_.Live()) return;
+  approval_.Clear(reason);
+  LogInfo("approval: the attempt ended: {}", approval::ToString(reason));
+}
+
+void AppController::OnApprovalTimer() {
+  CancelApproval(approval::ClearReason::TimedOut);
+  // An attempt the gate already wiped (it found the deadline passed on the wall clock, or another flow
+  // took over) leaves a sheet waiting for an answer that cannot come, so the sheet is told whether or
+  // not the slot still held the attempt, and only a sheet that is waiting says anything.
+  if (LoginPage* login = LoginPageOrNull()) login->OnApprovalExpired();
 }
 
 std::string DeepLinkFromActivation(
