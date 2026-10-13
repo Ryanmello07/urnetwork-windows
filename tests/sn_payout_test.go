@@ -155,9 +155,9 @@ func TestSnPayoutAgainstSdkHeader(t *testing.T) {
 // SDK's v2 claim with the dialog the spec moves along, reads the accounts again
 // after Done, offers Claim only toward a configured vault2, sits right after
 // the v1 tile, which keeps its own Claim, repeats its Claim in the Earnings
-// actions menu while pane A is folded, and says every new line in every
-// language under the store keys the Android and Linux apps look up
-// (sn_ledger_*).
+// actions menu while pane A is folded, under a label that names settlement v2,
+// and says every new line in every language under the sn_ledger_* store keys,
+// which the Android and Linux apps look up too (all but that menu label).
 func TestSettlementV2Wiring(t *testing.T) {
 	root := repositoryRoot(t)
 	requireAll := func(file string, source string, wants ...string) {
@@ -263,13 +263,12 @@ func TestSettlementV2Wiring(t *testing.T) {
 	requireAll("MainWindow.xaml.cpp", readAppSource(t, "MainWindow.xaml.cpp"), "wallet_->OnClaimV2(s, e);")
 
 	// Below 900dip pane A folds and the ledger header's "Earnings actions" menu
-	// is its door: an item there opens the v2 claim dialog under the button's
-	// label key, shown while the section shows the button (hiding the section
-	// leaves the button as it was) and enabled while the button is.
-	label := regexp.MustCompile(`w_\.SettlementV2ClaimButton\(\)\.Content\(LocBox\("(\w+)"\)\);`).FindStringSubmatch(walletPage)
-	if label == nil {
-		t.Fatal("WalletPage.cpp: SettlementV2ClaimButton has no label key")
-	}
+	// is its door: an item there opens the v2 claim dialog, shown while the
+	// section shows the button (hiding the section leaves the button as it was)
+	// and enabled while the button is. The button says Claim under the section's
+	// title; the item says which claim it is (sn_ledger_claim), since the v1
+	// tile's Claim sits right above it.
+	requireAll("WalletPage.cpp", walletPage, `w_.SettlementV2ClaimButton().Content(LocBox("claim"));`)
 	menu := functionBody(walletPage, "void WalletPage::ShowEarningsActionsMenu(")
 	if !regexp.MustCompile(`claimV2\.Click\(\[weak\]\(IInspectable const& s, RoutedEventArgs const& e\) \{\s*` +
 		`if \(auto self = weak\.get\(\)\) self->wallet\(\)\.OnClaimV2\(s, e\);\s*\}\);\s*` +
@@ -284,7 +283,7 @@ func TestSettlementV2Wiring(t *testing.T) {
 	}
 	requireAll("WalletPage::ShowEarningsActionsMenu", menu,
 		"claimV2.IsEnabled(w_.SettlementV2ClaimButton().IsEnabled());",
-		`claimV2.Text(Loc("`+label[1]+`"));`,
+		`claimV2.Text(Loc("sn_ledger_claim"));`,
 	)
 
 	// the en strings, the store's for every app, and every catalog says each
@@ -297,6 +296,7 @@ func TestSettlementV2Wiring(t *testing.T) {
 		"sn_ledger_pending":     "Pending: +{}, awaiting finalization",
 		"sn_ledger_pool":        "Pool {}",
 		"sn_ledger_unavailable": "Unavailable",
+		"sn_ledger_claim":       "Claim settlement v2",
 	}
 	catalogs, err := filepath.Glob(filepath.Join(root, "app", "src", "App", "Strings", "*", "Resources.resw"))
 	if err != nil || len(catalogs) < 28 {

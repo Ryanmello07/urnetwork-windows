@@ -6878,6 +6878,10 @@ der Welt</value>
     <value>Bereitgestellt</value>
     <comment>App provider: bytes served metric</comment>
   </data>
+  <data name="site_app_settlement_v2" xml:space="preserve">
+    <value>Abrechnung v2</value>
+    <comment>App earnings/claim: label of the settlement v2 card, shown beside the v1 claims</comment>
+  </data>
   <data name="site_app_show_on_leaderboard" xml:space="preserve">
     <value>Mein Netzwerk in der Bestenliste anzeigen</value>
     <comment>App leaderboard: public visibility toggle</comment>
@@ -6997,6 +7001,34 @@ der Welt</value>
   <data name="site_app_unlink" xml:space="preserve">
     <value>Verknüpfung aufheben</value>
     <comment>App settings: unlink referral network</comment>
+  </data>
+  <data name="site_app_v2_claimed_amount" xml:space="preserve">
+    <value>{amount} eingelöst</value>
+    <comment>App claim: a settlement v2 claim confirmed on chain. {amount} is the SN25α amount the vault paid, with its unit.</comment>
+  </data>
+  <data name="site_app_v2_earned" xml:space="preserve">
+    <value>Verdient</value>
+    <comment>App earnings/claim: the settlement v2 amount earned in finalized roots, paid and claimable together</comment>
+  </data>
+  <data name="site_app_v2_paid" xml:space="preserve">
+    <value>Ausgezahlt</value>
+    <comment>App earnings/claim: the settlement v2 amount already paid to the coldkey</comment>
+  </data>
+  <data name="site_app_v2_pending" xml:space="preserve">
+    <value>Ausstehend: +{amount}, wartet auf den Abschluss</value>
+    <comment>App earnings/claim: settlement v2 earnings in a committed root that is not finalized yet. {amount} is an SN25α amount with its unit.</comment>
+  </data>
+  <data name="site_app_v2_pool" xml:space="preserve">
+    <value>Pool {no_id}</value>
+    <comment>App earnings/claim: heads each settlement v2 account when the coldkey has accounts in several operator pools. {no_id} is the pool's operator id.</comment>
+  </data>
+  <data name="site_app_v2_unavailable" xml:space="preserve">
+    <value>Nicht verfügbar</value>
+    <comment>App earnings/claim: shown in place of the settlement v2 amounts when the ledger cannot be read, never a zero</comment>
+  </data>
+  <data name="site_app_v2_unavailable_detail" xml:space="preserve">
+    <value>Die Guthaben der Abrechnung v2 können gerade nicht gelesen werden.</value>
+    <comment>App earnings/claim: the settlement v2 ledger cannot be read; a retry button follows</comment>
   </data>
   <data name="site_app_verified" xml:space="preserve">
     <value>Verifiziert</value>
@@ -7701,6 +7733,10 @@ der Welt</value>
   <data name="skip" xml:space="preserve">
     <value>Überspringen</value>
     <comment>Small muted button at the top of the post-login onboarding flow that leaves the whole flow.</comment>
+  </data>
+  <data name="sn_ledger_claim" xml:space="preserve">
+    <value>Abrechnung v2 einlösen</value>
+    <comment>Windows Earnings page, the ledger header's Earnings actions menu (which repeats the page's actions while the window is too narrow to show them): the item for settlement v2's claim, which opens its claim dialog. Keep "v2".</comment>
   </data>
   <data name="sn_ledger_claimable" xml:space="preserve">
     <value>Einlösbar</value>

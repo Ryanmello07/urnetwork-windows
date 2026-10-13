@@ -2016,11 +2016,12 @@ void WalletPage::ShowEarningsActionsMenu(FrameworkElement const& anchor) {
   });
   flyout.Items().Append(claim);
 
-  // settlement v2's Claim, after the v1 tile's as in pane A, under the
-  // button's label: shown while the section shows the button (hiding the
+  // settlement v2's Claim, after the v1 tile's as in pane A, under a label of
+  // its own that names settlement v2 (the button needs none: it sits under the
+  // section's title): shown while the section shows the button (hiding the
   // section leaves the button as it was) and enabled while the button is
   MenuFlyoutItem claimV2;
-  claimV2.Text(Loc("claim"));
+  claimV2.Text(Loc("sn_ledger_claim"));
   const bool v2ClaimShown = w_.SettlementV2Panel().Visibility() == Visibility::Visible &&
                             w_.SettlementV2ClaimButton().Visibility() == Visibility::Visible;
   claimV2.Visibility(v2ClaimShown ? Visibility::Visible : Visibility::Collapsed);

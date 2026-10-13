@@ -6746,6 +6746,10 @@ inhoud van de wereld</value>
     <value>Overslaan</value>
     <comment>Small muted button at the top of the post-login onboarding flow that leaves the whole flow.</comment>
   </data>
+  <data name="sn_ledger_claim" xml:space="preserve">
+    <value>Afrekening v2 opeisen</value>
+    <comment>Windows Earnings page, the ledger header's Earnings actions menu (which repeats the page's actions while the window is too narrow to show them): the item for settlement v2's claim, which opens its claim dialog. Keep "v2".</comment>
+  </data>
   <data name="sn_ledger_claimable" xml:space="preserve">
     <value>Op te eisen</value>
     <comment>Settlement v2 tile: label of the SN25α the user can claim now.</comment>

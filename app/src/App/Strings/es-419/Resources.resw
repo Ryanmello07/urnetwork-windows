@@ -6746,6 +6746,10 @@ del mundo</value>
     <value>Omitir</value>
     <comment>Small muted button at the top of the post-login onboarding flow that leaves the whole flow.</comment>
   </data>
+  <data name="sn_ledger_claim" xml:space="preserve">
+    <value>Reclamar liquidación v2</value>
+    <comment>Windows Earnings page, the ledger header's Earnings actions menu (which repeats the page's actions while the window is too narrow to show them): the item for settlement v2's claim, which opens its claim dialog. Keep "v2".</comment>
+  </data>
   <data name="sn_ledger_claimable" xml:space="preserve">
     <value>Por reclamar</value>
     <comment>Settlement v2 tile: label of the SN25α the user can claim now.</comment>

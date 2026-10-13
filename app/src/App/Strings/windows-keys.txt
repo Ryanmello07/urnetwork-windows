@@ -959,6 +959,7 @@ site_subscription_error_no_customer
 site_subscription_error_store_unavailable
 skip
 sn_alpha_symbol
+sn_ledger_claim
 sn_ledger_claimable
 sn_ledger_earned
 sn_ledger_paid
