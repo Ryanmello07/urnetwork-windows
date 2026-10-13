@@ -6754,6 +6754,38 @@ del mundo</value>
     <value>Omitir</value>
     <comment>Small muted button at the top of the post-login onboarding flow that leaves the whole flow.</comment>
   </data>
+  <data name="sn_ledger_claim" xml:space="preserve">
+    <value>Reclamar liquidación v2</value>
+    <comment>Windows Earnings page, the ledger header's Earnings actions menu (which repeats the page's actions while the window is too narrow to show them): the item for settlement v2's claim, which opens its claim dialog. Keep "v2".</comment>
+  </data>
+  <data name="sn_ledger_claimable" xml:space="preserve">
+    <value>Por reclamar</value>
+    <comment>Settlement v2 tile: label of the SN25α the user can claim now.</comment>
+  </data>
+  <data name="sn_ledger_earned" xml:space="preserve">
+    <value>Ganado</value>
+    <comment>Settlement v2 tile: label of the SN25α earned so far (finalized: paid plus claimable).</comment>
+  </data>
+  <data name="sn_ledger_paid" xml:space="preserve">
+    <value>Pagado</value>
+    <comment>Settlement v2 tile: label of the SN25α already paid to the user's coldkey.</comment>
+  </data>
+  <data name="sn_ledger_pending" xml:space="preserve">
+    <value>Pendiente: +{}, en espera de finalización</value>
+    <comment>Settlement v2 tile: earnings committed but not final yet. {} is an SN25α amount, e.g. "0.7500 SN25α".</comment>
+  </data>
+  <data name="sn_ledger_pool" xml:space="preserve">
+    <value>Pool {}</value>
+    <comment>Settlement v2 tile and claim dialog: names an operator pool. {} is its number.</comment>
+  </data>
+  <data name="sn_ledger_title" xml:space="preserve">
+    <value>Liquidación v2</value>
+    <comment>Title of the settlement v2 tile, and the caption of its claim dialog's total. Keep "v2".</comment>
+  </data>
+  <data name="sn_ledger_unavailable" xml:space="preserve">
+    <value>No disponible</value>
+    <comment>Settlement v2 tile: shown instead of the balances when they cannot be read, never a zero.</comment>
+  </data>
   <data name="sn_payout_schedule" xml:space="preserve">
     <value>Las ganancias se liquidan cada época y se pagan en SN25α a tu coldkey de Bittensor cuando las reclamas.</value>
     <comment>Earnings card: how providers are paid on the UR subnet (WHITEPAPER §5.2, §8.3). Earnings settle per epoch and are paid in SN25α as stake to the provider's Bittensor coldkey once the provider claims them; nothing is paid automatically. Followed by sn_payout_schedule_times when the epoch schedule is known.</comment>

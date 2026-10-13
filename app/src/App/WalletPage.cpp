@@ -720,6 +720,8 @@ void WalletPage::ApplyStrings() {
   w_.ClaimButton().Content(LocBox("claim"));
   w_.SetColdkeyButton().Content(LocBox("set_coldkey"));
   w_.SnPayoutClaimButton().Content(LocBox("claim"));
+  w_.SettlementV2Heading().Text(Loc("sn_ledger_title"));
+  w_.SettlementV2ClaimButton().Content(LocBox("claim"));
   w_.Top200Heading().Text(Loc("top200"));
   w_.Top200Button().Content(LocBox("claim_your_spot"));
   w_.Top200Warning().Text(Loc("top200_demotion_warning"));
@@ -774,10 +776,12 @@ void WalletPage::ApplyStrings() {
   ShowManualPanel(manualPanelOpen_);
   // Not part of the Loading seeding above: the Solana card and the waiting line
   // stay collapsed until their reads land. Their formatted text and names are
-  // in the language, though, so a strings change redraws them. So does the
-  // payout line, collapsed until the coldkey is known.
+  // in the language, though, so a strings change redraws them. So do the
+  // payout line, collapsed until the coldkey is known, and settlement v2's
+  // section.
   RebuildSolanaPanel();
   RebuildPayoutLine();
+  RebuildV2Section();
 }
 
 // The ledger pane shows ONE table at a time; this is the switch in its header.
@@ -816,7 +820,7 @@ void WalletPage::LoadWallet() {
   LoadPoints();
   LoadReliability();
   LoadEpochs();
-  LoadSnWallet();  // continues into LoadClaims/LoadGas once the coldkey is known
+  LoadSnWallet();  // continues into LoadClaims/LoadGas/LoadV2Accounts once the coldkey is known
   LoadHead();
   LoadLegacyWallets();
   LoadLeaderboardIfShowing();
@@ -1166,6 +1170,46 @@ void WalletPage::LoadGas() {
   });
 }
 
+// The coldkey's settlement v2 accounts, one per pool, read by the SDK on this
+// device from the operator's ledger (GET /sn/ledger/account). A failed read,
+// and an answer without its list (the SDK answers [] for none), leave the
+// balances unavailable, never zero.
+void WalletPage::LoadV2Accounts() {
+  if (!snWallet_) return;
+  if (!Sdk().hasDevice()) {
+    ApplyV2Accounts(snpayout::LedgerFetch::NoDevice, {});
+    return;
+  }
+  v2Fetch_ = snpayout::LedgerFetch::Loading;
+  RebuildV2Section();
+  auto queue = w_.DispatcherQueue();
+  auto weak = w_.get_weak();
+  Sdk().device().snLedgerAccounts([queue, weak](std::optional<urnet::SnLedgerAccountsResult> result,
+                                                std::optional<std::string> err) {
+    std::optional<urnet::SnError> error;
+    if (err) error = TransportError(*err);
+    else if (result && result->error) error = result->error;
+    else if (!result || !result->accounts)
+      error = TransportError("snLedgerAccounts returned no accounts");
+    const bool ok = !error.has_value();
+    std::vector<snpayout::LedgerAccount> accounts;
+    if (ok) {
+      for (auto const& account : *result->accounts) {
+        accounts.push_back(snpayout::LedgerAccountFrom(account));
+      }
+    }
+    if (!ok) {
+      urnw::LogError("earnings: snLedgerAccounts failed: {} {}",
+                     error->code.value_or(std::string()), error->message);
+    }
+    queue.TryEnqueue([weak, accounts = std::move(accounts), ok] {
+      if (auto self = weak.get())
+        self->wallet().ApplyV2Accounts(
+            ok ? snpayout::LedgerFetch::Ready : snpayout::LedgerFetch::Failed, accounts);
+    });
+  });
+}
+
 // ---- points --------------------------------------------------------------
 
 void WalletPage::ApplyPoints(std::vector<urnet::AccountPoint> const& points, Fetch state) {
@@ -1248,14 +1292,18 @@ void WalletPage::ApplySnWallet(std::optional<SnWalletInfo> wallet, Fetch state) 
     totalClaimableRao_ = 0;
     schedule_.reset();
     gas_.reset();
+    v2Fetch_ = snpayout::LedgerFetch::Loading;
+    v2Accounts_.clear();
   }
   RebuildHistory();
   RebuildPayoutLine();
+  RebuildV2Section();
   if (connected && !w_.previewUi()) {
     EnsureChainSettings([weak = w_.get_weak()] {
       if (auto self = weak.get()) {
         self->wallet().LoadClaims();
         self->wallet().LoadGas();
+        self->wallet().LoadV2Accounts();
       }
     });
   }
@@ -1523,7 +1571,7 @@ void WalletPage::ApplyWalletConnectResult(uint32_t generation, bool ok,
   }
   w_.WalletAddressBox().Text(L"");  // clears the verdict through OnWalletAddressChanged
   ShowManualPanel(false);
-  LoadSnWallet();  // the coldkey, then the claims and the gas key behind it
+  LoadSnWallet();  // the coldkey, then the claims, the gas key and the v2 accounts behind it
 }
 
 // ---- the manual address (still signed) --------------------------------------
@@ -1965,7 +2013,8 @@ void WalletPage::ShowSolanaCardMenu(FrameworkElement const& anchor) {
 // calls the SAME member handler its pane-A button calls - the fold-doors note's
 // COMMAND-DOOR DUPLICATION: the door is duplicated, the single-instance surface
 // never is. Item states read the pane's own elements (single source): the claim
-// button's enabled, the connected panel's visibility.
+// buttons' enabled, whether settlement v2's section shows its Claim, the
+// connected panel's visibility.
 void WalletPage::ShowEarningsActionsMenu(FrameworkElement const& anchor) {
   MenuFlyout flyout;
   auto weak = w_.get_weak();
@@ -1977,6 +2026,21 @@ void WalletPage::ShowEarningsActionsMenu(FrameworkElement const& anchor) {
     if (auto self = weak.get()) self->wallet().OnClaimAlpha(s, e);
   });
   flyout.Items().Append(claim);
+
+  // settlement v2's Claim, after the v1 tile's as in pane A, under a label of
+  // its own that names settlement v2 (the button needs none: it sits under the
+  // section's title): shown while the section shows the button (hiding the
+  // section leaves the button as it was) and enabled while the button is
+  MenuFlyoutItem claimV2;
+  claimV2.Text(Loc("sn_ledger_claim"));
+  const bool v2ClaimShown = w_.SettlementV2Panel().Visibility() == Visibility::Visible &&
+                            w_.SettlementV2ClaimButton().Visibility() == Visibility::Visible;
+  claimV2.Visibility(v2ClaimShown ? Visibility::Visible : Visibility::Collapsed);
+  claimV2.IsEnabled(w_.SettlementV2ClaimButton().IsEnabled());
+  claimV2.Click([weak](IInspectable const& s, RoutedEventArgs const& e) {
+    if (auto self = weak.get()) self->wallet().OnClaimV2(s, e);
+  });
+  flyout.Items().Append(claimV2);
 
   MenuFlyoutItem wallet;
   const bool connected =
@@ -2398,6 +2462,144 @@ winrt::fire_and_forget WalletPage::OnClaimAlpha(IInspectable const&, RoutedEvent
   self->SetSheetOpen(false);
 }
 
+// ---- settlement v2 ---------------------------------------------------------
+
+void WalletPage::ApplyV2Accounts(snpayout::LedgerFetch fetch,
+                                 std::vector<snpayout::LedgerAccount> const& accounts) {
+  v2Fetch_ = fetch;
+  v2Accounts_ = accounts;
+  RebuildV2Section();
+}
+
+// Settlement v2, beside the v1 tile: per account Claimable over its figure,
+// Paid and Earned beside each other, and the pending line, or the line that
+// says why there is no figure. The decision is snpayout::LedgerSectionFor's
+// and the words are the store's sn_ledger_* keys, the Android and Linux apps'
+// own. Claim opens the v2 claim dialog, and the app never claims by itself.
+void WalletPage::RebuildV2Section() {
+  const auto view = snpayout::LedgerSectionFor(snWallet_.has_value(), Vault2Configured(),
+                                               v2Fetch_, v2Accounts_, CanClaim());
+  w_.SettlementV2Panel().Visibility(view.shown ? Visibility::Visible : Visibility::Collapsed);
+  if (!view.shown) return;
+  kit::SetTextOrCollapse(w_.SettlementV2StatusText(), view.loading ? Loc("loading") : hstring{});
+  auto panel = w_.SettlementV2AccountsPanel();
+  panel.Children().Clear();
+  // a figure under its label, as the reliability card's two
+  auto figureCell = [](hstring const& label, int64_t rao) {
+    StackPanel cell;
+    cell.Children().Append(MakeText(label, 12, colors::MutedBrush()));
+    cell.Children().Append(MakeValue(hstring{FormatAlphaRao(rao)}));
+    return cell;
+  };
+  for (auto const& account : view.accounts) {
+    StackPanel block;
+    block.Spacing(2);
+    if (view.poolTitles) {
+      block.Children().Append(MakeText(hstring{urnw::Format("sn_ledger_pool", account.noId)}, 13,
+                                       colors::TextBrush()));
+    }
+    // Claimable is the figure, in the v1 tile's face and its lime while there is some
+    block.Children().Append(MakeText(Loc("sn_ledger_claimable"), 12, colors::MutedBrush()));
+    auto figure = MakeValue(hstring{FormatAlphaRao(account.claimableRao)}, 32);
+    if (account.claimableRao > 0) figure.Foreground(colors::AccentBrush());
+    block.Children().Append(figure);
+    Grid figures;
+    figures.ColumnSpacing(24);
+    figures.ColumnDefinitions().Append(StarColumn());
+    figures.ColumnDefinitions().Append(StarColumn());
+    auto paid = figureCell(Loc("sn_ledger_paid"), account.paidRao);
+    Grid::SetColumn(paid, 0);
+    figures.Children().Append(paid);
+    auto earned = figureCell(Loc("sn_ledger_earned"), account.earnedRao);
+    Grid::SetColumn(earned, 1);
+    figures.Children().Append(earned);
+    block.Children().Append(figures);
+    if (account.showPending) {
+      block.Children().Append(MakeText(
+          hstring{urnw::Format("sn_ledger_pending", FormatAlphaRao(account.pendingRao))}, 13,
+          colors::MutedBrush(), true));
+    }
+    panel.Children().Append(block);
+  }
+  const std::string note = snpayout::LedgerNoteKey(view.note);
+  kit::SetTextOrCollapse(w_.SettlementV2Note(), note.empty() ? hstring{} : Loc(note));
+  w_.SettlementV2ClaimButton().Visibility(view.showClaim ? Visibility::Visible
+                                                         : Visibility::Collapsed);
+  w_.SettlementV2ClaimButton().IsEnabled(view.claimEnabled);
+}
+
+// The device's merged chain settings (the defaults and what /sn/epoch synced),
+// which its SnLedgerClaim sends with; the defaults without a device. A v2
+// claim goes only to the pinned vault2, so with none (before v2's activation)
+// there is no v2 Claim.
+bool WalletPage::Vault2Configured() const {
+  try {
+    const auto settings =
+        Sdk().hasDevice() ? Sdk().device().getSnChainSettings() : urnet::defaultSnChainSettings();
+    return settings && !settings->vault2_address.empty();
+  } catch (const std::exception& e) {
+    urnw::LogWarn("earnings: chain settings unavailable: {}", e.what());
+  }
+  return false;
+}
+
+// Device.snLedgerClaim, as the v2 dialog's claimer: the SDK reads the accounts
+// and their proofs, verifies each against vault2's root, preflights, and sends
+// one claim per account to the pinned vault2, signed with the gas key and
+// reported per account. After its Done the page reads the accounts and the gas
+// balance again, whether or not the dialog is still up. Nothing here touches a
+// URnetwork API.
+LedgerClaimer WalletPage::MakeV2Claimer() {
+  auto queue = w_.DispatcherQueue();
+  auto weak = w_.get_weak();
+  return [queue, weak](snpayout::LedgerClaimEvents events) {
+    auto done = events.done;
+    events.done = [done, queue, weak] {
+      if (done) done();
+      queue.TryEnqueue([weak] {
+        if (auto self = weak.get()) {
+          self->wallet().LoadV2Accounts();
+          self->wallet().LoadGas();
+        }
+      });
+    };
+    if (!Sdk().hasDevice()) {
+      if (events.failed) events.failed(0, 0, "no device");
+      events.done();
+      return;
+    }
+    Sdk().device().snLedgerClaim(
+        snpayout::LedgerClaimCallbackFor<urnet::SnLedgerClaimCallback>(events));
+  };
+}
+
+winrt::fire_and_forget WalletPage::OnClaimV2(IInspectable const&, RoutedEventArgs const&) {
+  if (w_.sheetOpen()) co_return;
+  if (!snWallet_) {
+    Notify(Loc("connect_wallet_first"), InfoBarSeverity::Error);
+    co_return;
+  }
+  auto self = w_.get_strong();
+  // Readable with no session but not ACTABLE: its one button sends
+  // transactions, and only to a configured vault2.
+  const bool allowActions = CanClaim() && Vault2Configured();
+  GasKeyInfo gas = gas_.value_or(GasKeyInfo{});
+  self->SetSheetOpen(true);
+  try {
+    v2ClaimSheet_ = urnw::ClaimLedgerSheet::Create(self->Content().XamlRoot(),
+                                                   self->DispatcherQueue(), v2Accounts_, gas,
+                                                   ExplorerTxUrl(), allowActions, MakeV2Claimer());
+    co_await self->wallet().v2ClaimSheet_->Dialog().ShowAsync();
+  } catch (winrt::hresult_error const& e) {
+    urnw::LogError("earnings: the v2 claim sheet failed to open: {}",
+                   urnw::Narrow(std::wstring{e.message()}));
+  } catch (...) {
+    urnw::LogError("earnings: the v2 claim sheet failed to open");
+  }
+  self->wallet().v2ClaimSheet_.reset();
+  self->SetSheetOpen(false);
+}
+
 void WalletPage::OnClaimTop200(IInspectable const&, RoutedEventArgs const&) {
   OpenUrl("https://" + Sdk().linkHostName() + kTop200Path);
 }
@@ -2602,6 +2804,16 @@ void WalletPage::ShowPreviewWalletState() {
     gas.mirrorSs58 = kSampleGasMirror;
     gas.tao = 0.0;  // the funding hint renders
     ApplyGas(gas);
+    // settlement v2: one account, with a pending root over the finalized one
+    snpayout::LedgerAccount account;
+    account.noId = 1;
+    account.index = 42;
+    account.finalizedRao = 3'741'000'000;
+    account.claimableRao = 3'241'000'000;
+    account.paidRao = 500'000'000;
+    account.pending = true;
+    account.pendingRao = 3'861'000'000;
+    ApplyV2Accounts(snpayout::LedgerFetch::Ready, {account});
     HeadInfo head;
     head.eligible = true;
     head.score = 41.5;

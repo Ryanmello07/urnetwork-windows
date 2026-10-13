@@ -145,6 +145,13 @@ hstring FailureText(int64_t epoch, std::string const& message) {
   return H(message);
 }
 
+// A failed v2 claim in the store's words (snpayout::ClaimFailureKey), or the
+// SDK's message as it came for a code the store has no sentence for.
+hstring LedgerFailureText(std::string const& message) {
+  const std::string key = snpayout::ClaimFailureKey(message);
+  return key.empty() ? H(message) : Loc(key);
+}
+
 }  // namespace
 
 // ---- shared presentation -----------------------------------------------------
@@ -610,6 +617,301 @@ void ClaimAlphaSheet::OpenTx(std::string const& txHash) {
     winrt::Windows::System::Launcher::LaunchUriAsync(Uri(H(url)));
   } catch (...) {
     urnw::LogWarn("claim sheet: could not open {}", url);
+  }
+}
+
+// ---- ClaimLedgerSheet --------------------------------------------------------
+
+std::shared_ptr<ClaimLedgerSheet> ClaimLedgerSheet::Create(
+    XamlRoot const& root, winrt::Microsoft::UI::Dispatching::DispatcherQueue const& queue,
+    std::vector<snpayout::LedgerAccount> const& accounts, GasKeyInfo gas,
+    std::string explorerTxUrl, bool allowActions, LedgerClaimer claimer) {
+  auto sheet = std::shared_ptr<ClaimLedgerSheet>(
+      new ClaimLedgerSheet(queue, accounts, std::move(gas), std::move(explorerTxUrl),
+                           allowActions, std::move(claimer)));
+  sheet->Build(root);
+  return sheet;
+}
+
+ClaimLedgerSheet::ClaimLedgerSheet(winrt::Microsoft::UI::Dispatching::DispatcherQueue const& queue,
+                                   std::vector<snpayout::LedgerAccount> const& accounts,
+                                   GasKeyInfo gas, std::string explorerTxUrl, bool allowActions,
+                                   LedgerClaimer claimer)
+    : queue_(queue),
+      progress_(accounts, gas.tao),
+      gas_(std::move(gas)),
+      explorerTxUrl_(std::move(explorerTxUrl)),
+      allowActions_(allowActions),
+      claimer_(std::move(claimer)) {}
+
+void ClaimLedgerSheet::Build(XamlRoot const& root) {
+  dialog_ = MakeDialog(root, Loc("claim_alpha_title"));
+
+  StackPanel content;
+  content.Spacing(6);
+  content.MinWidth(sheetfit::Width(root, 460));
+
+  // the figure: what is claimable now, and that it is settlement v2's
+  totalValue_ = MakeValue(hstring{}, 36);
+  content.Children().Append(totalValue_);
+  content.Children().Append(MakeText(Loc("sn_ledger_title"), 12, colors::MutedBrush(), true));
+
+  // what a claim is, and where it runs: on this device, against the vault
+  content.Children().Append(
+      MakeText(Loc("claim_sends_from_device"), 12, colors::MutedBrush(), true));
+
+  content.Children().Append(HairLine());
+
+  // the gas key, as the v1 dialog shows it: its address, its balance, and the
+  // funding hint while it cannot pay
+  content.Children().Append(MakeLabel(Loc("gas_key")));
+  auto gasAddress = MakeText(hstring{urnw::Widen(gas_.address.empty() ? std::string("-")
+                                                                        : gas_.address)},
+                             13, colors::TextBrush(), true);
+  gasAddress.IsTextSelectionEnabled(true);
+  content.Children().Append(gasAddress);
+
+  Grid balanceRow;
+  balanceRow.ColumnSpacing(12);
+  balanceRow.ColumnDefinitions().Append(StarColumn());
+  balanceRow.ColumnDefinitions().Append(AutoColumn());
+  auto balanceLabel = MakeText(Loc("earnings_gas_balance"), 13, colors::MutedBrush());
+  Grid::SetColumn(balanceLabel, 0);
+  balanceRow.Children().Append(balanceLabel);
+  gasBalanceValue_ = MakeText(hstring{}, 13, colors::TextBrush());
+  Grid::SetColumn(gasBalanceValue_, 1);
+  balanceRow.Children().Append(gasBalanceValue_);
+  content.Children().Append(balanceRow);
+
+  // the v1 dialog's top-up, asking for what a v2 claim's gas limit needs
+  needsGasPanel_ = StackPanel();
+  needsGasPanel_.Spacing(6);
+  needsGasPanel_.Margin(Thickness{0, 6, 0, 0});
+  needsGasPanel_.Children().Append(MakeText(Loc("add_tao_for_gas"), 15, colors::TextBrush()));
+  needsGasPanel_.Children().Append(
+      MakeText(hstring{urnw::Format("send_tao_to_mirror", FormatTao(snpayout::kLedgerClaimGasTao),
+                                    urnw::Widen(gas_.mirrorSs58))},
+               12, colors::MutedBrush(), true));
+  auto mirror = MakeText(hstring{urnw::Widen(gas_.mirrorSs58)}, 13, colors::TextBrush(), true);
+  mirror.IsTextSelectionEnabled(true);
+  needsGasPanel_.Children().Append(mirror);
+  Button copy;
+  copy.Content(LocBox("earnings_copy_address"));
+  copy.HorizontalAlignment(HorizontalAlignment::Left);
+  copy.IsEnabled(!gas_.mirrorSs58.empty());
+  copy.Click([weak = weak_from_this()](auto const&, auto const&) {
+    if (auto self = weak.lock()) self->CopyMirrorAddress();
+  });
+  needsGasPanel_.Children().Append(copy);
+  content.Children().Append(needsGasPanel_);
+
+  content.Children().Append(HairLine());
+
+  // the accounts, one row each, moved along by the claim events
+  rowsPanel_ = StackPanel();
+  content.Children().Append(rowsPanel_);
+
+  // the progress line while the SDK sends and waits for receipts
+  progressRow_ = StackPanel();
+  progressRow_.Orientation(Orientation::Horizontal);
+  progressRow_.Spacing(8);
+  progressRow_.Margin(Thickness{0, 8, 0, 0});
+  ProgressRing ring;
+  ring.Width(16);
+  ring.Height(16);
+  ring.IsActive(true);
+  progressRow_.Children().Append(ring);
+  progressRow_.Children().Append(MakeText(Loc("earnings_claim_sending"), 13, colors::MutedBrush()));
+  progressRow_.Visibility(Visibility::Collapsed);
+  content.Children().Append(progressRow_);
+
+  // A refusal, or a failure of the claim as a whole, renders HERE, on the
+  // sheet, not on the page behind it.
+  errorText_ = MakeText(hstring{}, 12, colors::DangerBrush(), true);
+  errorText_.Visibility(Visibility::Collapsed);
+  content.Children().Append(errorText_);
+
+  claimButton_ = Button();
+  claimButton_.HorizontalAlignment(HorizontalAlignment::Stretch);
+  claimButton_.Margin(Thickness{0, 8, 0, 0});
+  claimButton_.Click([weak = weak_from_this()](auto const&, auto const&) {
+    if (auto self = weak.lock()) self->StartClaim();
+  });
+  content.Children().Append(claimButton_);
+
+  ScrollViewer scroll;
+  scroll.VerticalScrollBarVisibility(ScrollBarVisibility::Auto);
+  scroll.HorizontalScrollBarVisibility(ScrollBarVisibility::Disabled);
+  scroll.MaxHeight(sheetfit::Height(root, 560));
+  scroll.Content(content);
+  dialog_.Content(scroll);
+
+  ApplyState();
+}
+
+UIElement ClaimLedgerSheet::BuildRow(snpayout::LedgerClaimRow const& row) {
+  Grid grid;
+  grid.ColumnSpacing(12);
+  grid.MinHeight(32);
+  grid.ColumnDefinitions().Append(StarColumn(2));
+  grid.ColumnDefinitions().Append(StarColumn(3));
+  grid.ColumnDefinitions().Append(AutoColumn());
+
+  auto pool = MakeText(hstring{urnw::Format("sn_ledger_pool", row.noId)}, 13, colors::TextBrush());
+  pool.VerticalAlignment(VerticalAlignment::Center);
+  Grid::SetColumn(pool, 0);
+  grid.Children().Append(pool);
+
+  auto amount = MakeText(hstring{FormatAlphaRao(row.amountRao)}, 13, colors::TextBrush());
+  amount.VerticalAlignment(VerticalAlignment::Center);
+  Grid::SetColumn(amount, 1);
+  grid.Children().Append(amount);
+
+  // the state cell: a word, coloured by what it means, and the transaction
+  // link once there is a hash to link
+  StackPanel state;
+  state.Orientation(Orientation::Horizontal);
+  state.Spacing(8);
+  state.VerticalAlignment(VerticalAlignment::Center);
+  hstring word;
+  Brush brush = colors::MutedBrush();
+  switch (row.state) {
+    case snpayout::LedgerClaimState::Sending:
+      word = Loc("earnings_claim_sending");
+      break;
+    case snpayout::LedgerClaimState::Sent:
+      word = Loc("claim_sent");
+      brush = colors::TextBrush();
+      break;
+    case snpayout::LedgerClaimState::Confirmed:
+      word = Loc("claim_confirmed");
+      brush = colors::MakeBrush(colors::kUrGreen);
+      break;
+    case snpayout::LedgerClaimState::Failed:
+      word = Loc("claim_failed");
+      brush = colors::DangerBrush();
+      break;
+    case snpayout::LedgerClaimState::Idle:
+      word = Loc("sn_ledger_claimable");
+      brush = colors::MakeBrush(colors::kUrGreen);
+      break;
+  }
+  state.Children().Append(MakeText(word, 13, brush));
+  if (std::string url = snpayout::ExplorerTxLink(explorerTxUrl_, row.txHash); !url.empty()) {
+    HyperlinkButton link;
+    link.Content(LocBox("earnings_view_transaction"));
+    link.Padding(Thickness{0, 0, 0, 0});
+    link.Click([url = std::move(url)](auto const&, auto const&) { OpenTx(url); });
+    state.Children().Append(link);
+  }
+  Grid::SetColumn(state, 2);
+  grid.Children().Append(state);
+
+  StackPanel cell;
+  cell.Children().Append(grid);
+  if (row.state == snpayout::LedgerClaimState::Failed) {
+    cell.Children().Append(
+        MakeText(LedgerFailureText(row.message), 12, colors::DangerBrush(), true));
+  }
+  return cell;
+}
+
+void ClaimLedgerSheet::ApplyState() {
+  const int64_t total = progress_.ClaimableRao();
+  totalValue_.Text(hstring{FormatAlphaRao(total)});
+  gasBalanceValue_.Text(gas_.tao ? hstring{FormatTao(*gas_.tao) + L" TAO"} : hstring{L"-"});
+  needsGasPanel_.Visibility(progress_.needsGas() ? Visibility::Visible : Visibility::Collapsed);
+
+  rowsPanel_.Children().Clear();
+  for (auto const& row : progress_.rows()) rowsPanel_.Children().Append(BuildRow(row));
+
+  progressRow_.Visibility(progress_.sending() ? Visibility::Visible : Visibility::Collapsed);
+  if (!progress_.failure().empty()) {
+    errorText_.Text(LedgerFailureText(progress_.failure()));
+    errorText_.Visibility(Visibility::Visible);
+  }
+
+  claimButton_.Content(winrt::box_value(
+      hstring{urnw::Format("claim_amount_button", FormatAlphaRao(total))}));
+  claimButton_.IsEnabled(progress_.CanClaim(allowActions_));
+}
+
+void ClaimLedgerSheet::StartClaim() {
+  if (progress_.sending() || !claimer_) return;
+  if (!allowActions_) {
+    // Disabled without a session, so reaching this is a bug rather than a
+    // user path: say so instead of returning.
+    urnw::LogError(
+        "v2 claim sheet: refusing a claim - the sheet was opened with no device session");
+    errorText_.Text(Loc("please_login_to_urnetwork"));
+    errorText_.Visibility(Visibility::Visible);
+    return;
+  }
+  if (!progress_.Start()) return;
+  errorText_.Visibility(Visibility::Collapsed);
+  ApplyState();
+
+  // The events arrive on the SDK's thread; each is marshalled here and applied
+  // through a weak reference, so a dismissed sheet drops them on the floor and
+  // the claim itself carries on regardless (it is the chain's, not the
+  // dialog's).
+  auto weak = weak_from_this();
+  auto queue = queue_;
+  snpayout::LedgerClaimEvents events;
+  events.sent = [weak, queue](int64_t noId, int64_t index, std::string txHash) {
+    queue.TryEnqueue([weak, noId, index, txHash] {
+      auto self = weak.lock();
+      if (!self) return;
+      self->progress_.Sent(noId, index, txHash);
+      self->ApplyState();
+    });
+  };
+  events.confirmed = [weak, queue](int64_t noId, int64_t index, std::string txHash,
+                                   int64_t amountRao) {
+    queue.TryEnqueue([weak, noId, index, txHash, amountRao] {
+      auto self = weak.lock();
+      if (!self) return;
+      self->progress_.Confirmed(noId, index, txHash, amountRao);
+      self->ApplyState();
+    });
+  };
+  events.failed = [weak, queue](int64_t noId, int64_t index, std::string message) {
+    urnw::LogError("v2 claim sheet: pool {} account {} failed: {}", noId, index, message);
+    queue.TryEnqueue([weak, noId, index, message] {
+      auto self = weak.lock();
+      if (!self) return;
+      self->progress_.Failed(noId, index, message);
+      self->ApplyState();
+    });
+  };
+  events.done = [weak, queue] {
+    queue.TryEnqueue([weak] {
+      auto self = weak.lock();
+      if (!self) return;
+      self->progress_.Done();
+      self->ApplyState();
+    });
+  };
+  claimer_(std::move(events));
+}
+
+void ClaimLedgerSheet::CopyMirrorAddress() {
+  namespace dt = winrt::Windows::ApplicationModel::DataTransfer;
+  if (gas_.mirrorSs58.empty()) return;
+  try {
+    dt::DataPackage package;
+    package.SetText(H(gas_.mirrorSs58));
+    dt::Clipboard::SetContent(package);
+  } catch (...) {
+    urnw::LogWarn("v2 claim sheet: the clipboard refused the mirror address");
+  }
+}
+
+void ClaimLedgerSheet::OpenTx(std::string const& url) {
+  try {
+    winrt::Windows::System::Launcher::LaunchUriAsync(Uri(H(url)));
+  } catch (...) {
+    urnw::LogWarn("v2 claim sheet: could not open {}", url);
   }
 }
 
