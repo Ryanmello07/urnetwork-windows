@@ -19,9 +19,10 @@ import (
 
 // The wallet bridge's trampoline (App/BridgeTrampoline.h, v2/CONSENT.md §10):
 // a bridge url longer than ShellExecuteW passes on is opened through a page of
-// our own. The C++ spec with negative controls that rewrite a copy of the
-// header, the payout consent's own bridge url measured as the SDK builds it,
-// and WalletConnect's wiring with a negative control for each assertion.
+// our own, in the browser Windows opens https links with. The C++ spec with
+// negative controls that rewrite a copy of the header, the payout consent's own
+// bridge url measured as the SDK builds it, and WalletConnect's wiring with a
+// negative control for each assertion.
 
 // Builds the trampoline spec against a copy of BridgeTrampoline.h, rewritten
 // by `mutation` when it is set.
@@ -58,7 +59,8 @@ func buildBridgeTrampolineTests(t *testing.T, mutation func(string) string) stri
 
 // Compile and execute the trampoline spec: a url within the limit opens as it
 // is, a longer one through the page, the page holds the url verbatim and
-// nothing else, and only an https url of url characters gets one.
+// nothing else, only an https url of url characters gets one, and the page
+// opens in the https program first, then by its own association.
 func TestBridgeTrampoline(t *testing.T) {
 	if output, err := exec.Command(buildBridgeTrampolineTests(t, nil)).CombinedOutput(); err != nil {
 		t.Fatalf("bridge trampoline: %v\n%s", err, output)
@@ -85,6 +87,14 @@ func TestBridgeTrampolineCatchesEachRegression(t *testing.T) {
 			"nothing in the url can end the page's script"},
 		{"a url character is refused", `"-._~:/?#[]@!$&'()*+,;=%"`, `"-._~:/?#%"`,
 			"every url character passes, the fragment's and the query's"},
+		{"the https browser is not tried",
+			"  if (!httpsProgram.empty()) {\n    launches.push_back({std::wstring(httpsProgram), L\"\\\"\" + std::wstring(pagePath) + L\"\\\"\"});\n  }\n",
+			"  (void)httpsProgram;\n",
+			"the page opens in the https browser first, then by its own association"},
+		{"the page's path is not one argument", `L"\"" + std::wstring(pagePath) + L"\""`, `std::wstring(pagePath)`,
+			"the page opens in the https browser first, then by its own association"},
+		{"nothing left when the https program does not start", "  launches.push_back({std::wstring(pagePath), std::wstring()});\n", "",
+			"with no https program the page opens by its own association"},
 	} {
 		t.Run(control.name, func(t *testing.T) {
 			program := buildBridgeTrampolineTests(t, func(source string) string {
@@ -131,8 +141,8 @@ func sdkBridgeUrl(walletId, message, purpose, address string) string {
 // is longer than ShellExecuteW passes on (INTERNET_MAX_URL_LENGTH, 2,083) and
 // than Chromium opens (2,048): cut there it would lose the parameters the page
 // needs, and Talisman and WalletConnect could never answer. Every such url goes
-// through the trampoline, and what reaches ShellExecuteW is the page's path; a
-// login challenge's url still opens as it is.
+// through the trampoline's page, so the url itself never reaches ShellExecuteW;
+// a login challenge's url still opens as it is.
 func TestConsentBridgeUrlOpensThroughTheTrampoline(t *testing.T) {
 	root := repositoryRoot(t)
 	data, err := os.ReadFile(filepath.Join(root, "tests", "testdata", "network-consent-challenge-v1.json"))
@@ -179,15 +189,69 @@ func TestConsentBridgeUrlOpensThroughTheTrampoline(t *testing.T) {
 	} else {
 		t.Logf("%s", output)
 	}
-	for _, miss := range bridgeTrampolineWiringMisses(readAppSource(t, "WalletConnect.cpp"), readAppSource(t, "App.vcxproj")) {
+	for _, miss := range bridgeTrampolinePageMisses(readAppSource(t, "WalletConnect.cpp"), readAppSource(t, "App.vcxproj")) {
 		t.Error(miss)
 	}
 }
 
-// Every way WalletConnect.cpp and App.vcxproj miss the trampoline's wiring, one
-// line each. WalletConnect.cpp is Win32 and does not build here, so these read
-// its source.
-func bridgeTrampolineWiringMisses(walletConnect, project string) []string {
+// The re-review's N2 (windows 01c7381): opened by its .html association, the
+// page shows in whatever opens .html, which on many machines is not the browser
+// that opens https links (Windows keeps .html with Edge, or an editor, unless
+// the user changes it separately), and there the bridge page finds no Talisman
+// extension. The page opens in the program Windows names for https, started on
+// the page's short path, and by its own association only when there is none or
+// it does not start (the spec's LaunchesFor, run by TestBridgeTrampoline).
+func TestTrampolineOpensTheHttpsBrowser(t *testing.T) {
+	for _, miss := range bridgeTrampolineBrowserMisses(readAppSource(t, "WalletConnect.cpp")) {
+		t.Error(miss)
+	}
+}
+
+// Every way WalletConnect.cpp misses opening the page in the https browser, one
+// line each.
+func bridgeTrampolineBrowserMisses(walletConnect string) []string {
+	misses := []string{}
+	source := stripComments(walletConnect)
+	trampoline := functionBody(source, "void WalletConnect::OpenThroughTrampoline(")
+	if trampoline == "" {
+		return append(misses, "WalletConnect.cpp: no OpenThroughTrampoline")
+	}
+	requirePattern := func(pattern, what string) {
+		if !regexp.MustCompile(pattern).MatchString(trampoline) {
+			misses = append(misses, "WalletConnect::OpenThroughTrampoline: "+what)
+		}
+	}
+	// the reviewer's own check: a page opened as a file, with no https program
+	// asked for, shows in the .html association
+	usesHttpsHandler := regexp.MustCompile(`AssocQueryString[AW]?\([^;]*(?:L"https"|L"http")`).MatchString(trampoline)
+	opensThePath := regexp.MustCompile(`ShellExecuteW\(\s*nullptr,\s*L"open",\s*path\.c_str\(\)`).MatchString(trampoline)
+	if opensThePath && !usesHttpsHandler {
+		misses = append(misses, "WalletConnect::OpenThroughTrampoline: the page is opened as a file, so the .html association shows the bridge")
+	}
+	// Windows names the https program, or none
+	requirePattern(`if \(FAILED\(::AssocQueryStringW\(ASSOCF_NONE, ASSOCSTR_EXECUTABLE, L"https", L"open", browser,\s*`+
+		`&browserSize\)\)\) \{\s*browser\[0\] = L'\\0';\s*\}`,
+		"Windows is not asked for the https program, or a failed answer is used")
+	// it is what opens the page, first; the first way that starts is the last tried
+	requirePattern(`for \(const bridge::TrampolineLaunch& launch : bridge::LaunchesFor\(browser, path\.wstring\(\)\)\) \{\s*`+
+		`HINSTANCE h = ShellExecuteW\(nullptr, L"open", launch\.file\.c_str\(\),\s*`+
+		`launch\.parameters\.empty\(\) \? nullptr : launch\.parameters\.c_str\(\),\s*nullptr, SW_SHOWNORMAL\);\s*`+
+		`if \(reinterpret_cast<INT_PTR>\(h\) > 32\) \{\s*opened = true;\s*break;\s*\}\s*\}`,
+		"the https program Windows names is not what opens the page, first and once")
+	requirePattern(`if \(!opened\) \{\s*::DeleteFileW\(path\.c_str\(\)\);\s*return fail\(`,
+		"a page nothing opened stays, or its flow is not told")
+	for _, want := range []string{"#include <shlwapi.h>", `#pragma comment(lib, "shlwapi.lib")`} {
+		if !strings.Contains(source, want) {
+			misses = append(misses, "WalletConnect.cpp: missing "+want)
+		}
+	}
+	return misses
+}
+
+// Every way WalletConnect.cpp and App.vcxproj miss the trampoline page's
+// wiring, one line each. WalletConnect.cpp is Win32 and does not build here, so
+// these read its source.
+func bridgeTrampolinePageMisses(walletConnect, project string) []string {
 	misses := []string{}
 	source := stripComments(walletConnect)
 	require := func(where, body string, wants ...string) {
@@ -229,11 +293,8 @@ func bridgeTrampolineWiringMisses(walletConnect, project string) []string {
 		"kOwnerOnlyFileSddl, SDDL_REVISION_1, &security.lpSecurityDescriptor, nullptr)",
 		"::CreateFileW(path.c_str(), GENERIC_WRITE, 0, &security, CREATE_NEW,")
 	require("WalletConnect.cpp", source, `constexpr wchar_t kOwnerOnlyFileSddl[] = L"D:P(A;;FA;;;OW)";`)
-	// what ShellExecuteW opens is the page's short path, never the url, and the
-	// page goes once the browser has had time to read it
-	requirePattern("WalletConnect::OpenThroughTrampoline", trampoline,
-		`HINSTANCE h = ShellExecuteW\(nullptr, L"open", path\.c_str\(\), nullptr, nullptr, SW_SHOWNORMAL\);`,
-		"ShellExecuteW does not open the page")
+	// the url itself never reaches ShellExecuteW, and the page goes once the
+	// browser has had time to read it
 	if strings.Count(trampoline, "ShellExecuteW(") != 1 || strings.Contains(trampoline, "Widen(url)") {
 		misses = append(misses, "WalletConnect::OpenThroughTrampoline: the url itself reaches ShellExecuteW")
 	}
@@ -268,8 +329,24 @@ func TestBridgeTrampolineWiringCatchesEachRegression(t *testing.T) {
 			"CREATE_NEW,"},
 		{"a guessable name", "WalletConnect.cpp", "  std::random_device random;\n", "  auto random = [] { return 0u; };\n",
 			"missing std::random_device random;"},
-		{"the url reaches ShellExecuteW", "WalletConnect.cpp", "ShellExecuteW(nullptr, L\"open\", path.c_str(), nullptr, nullptr, SW_SHOWNORMAL);",
-			"ShellExecuteW(nullptr, L\"open\", Widen(url).c_str(), nullptr, nullptr, SW_SHOWNORMAL);", "the url itself reaches ShellExecuteW"},
+		{"the url reaches ShellExecuteW", "WalletConnect.cpp", "ShellExecuteW(nullptr, L\"open\", launch.file.c_str(),",
+			"ShellExecuteW(nullptr, L\"open\", Widen(url).c_str(),", "the url itself reaches ShellExecuteW"},
+		{"the page opens by its .html association", "WalletConnect.cpp", "bridge::LaunchesFor(browser, path.wstring())", "bridge::LaunchesFor(L\"\", path.wstring())",
+			"the https program Windows names is not what opens the page, first and once"},
+		{"Windows is asked what opens .html", "WalletConnect.cpp", "ASSOCSTR_EXECUTABLE, L\"https\", L\"open\", browser,", "ASSOCSTR_EXECUTABLE, L\".html\", L\"open\", browser,",
+			"Windows is not asked for the https program, or a failed answer is used"},
+		{"a failed answer is used", "WalletConnect.cpp", "    browser[0] = L'\\0';\n", "",
+			"Windows is not asked for the https program, or a failed answer is used"},
+		{"both ways are started", "WalletConnect.cpp", "      opened = true;\n      break;\n", "      opened = true;\n",
+			"the https program Windows names is not what opens the page, first and once"},
+		{"a page nothing opened stays", "WalletConnect.cpp", "  if (!opened) {\n    ::DeleteFileW(path.c_str());\n", "  if (!opened) {\n",
+			"a page nothing opened stays, or its flow is not told"},
+		{"the page is opened as a file", "WalletConnect.cpp",
+			"  for (const bridge::TrampolineLaunch& launch : bridge::LaunchesFor(browser, path.wstring())) {\n    HINSTANCE h = ShellExecuteW(nullptr, L\"open\", launch.file.c_str(),\n                                launch.parameters.empty() ? nullptr : launch.parameters.c_str(),\n                                nullptr, SW_SHOWNORMAL);",
+			"  {\n    HINSTANCE h = ShellExecuteW(nullptr, L\"open\", path.c_str(), nullptr, nullptr, SW_SHOWNORMAL);",
+			"the https program Windows names is not what opens the page, first and once"},
+		{"shlwapi is not linked", "WalletConnect.cpp", "#pragma comment(lib, \"shlwapi.lib\")\n", "",
+			`missing #pragma comment(lib, "shlwapi.lib")`},
 		{"the page stays", "WalletConnect.cpp", "    ::DeleteFileW(path.c_str());\n  }).detach();", "  }).detach();",
 			"the page is never deleted"},
 		{"a page not written stays", "WalletConnect.cpp", "  if (!wrote) {\n    ::DeleteFileW(path.c_str());\n", "  if (!wrote) {\n",
@@ -283,7 +360,9 @@ func TestBridgeTrampolineWiringCatchesEachRegression(t *testing.T) {
 				t.Fatalf("%s no longer has exactly one %q; update this control", control.file, control.old)
 			}
 			mutated[control.file] = strings.Replace(mutated[control.file], control.old, control.new, 1)
-			for _, miss := range bridgeTrampolineWiringMisses(mutated["WalletConnect.cpp"], mutated["App.vcxproj"]) {
+			misses := append(bridgeTrampolinePageMisses(mutated["WalletConnect.cpp"], mutated["App.vcxproj"]),
+				bridgeTrampolineBrowserMisses(mutated["WalletConnect.cpp"])...)
+			for _, miss := range misses {
 				if strings.Contains(miss, control.want) {
 					return
 				}

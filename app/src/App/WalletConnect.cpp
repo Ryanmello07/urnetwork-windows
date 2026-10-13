@@ -8,6 +8,7 @@
 #include <windows.h>
 #include <sddl.h>
 #include <shellapi.h>
+#include <shlwapi.h>
 #include <wincrypt.h>
 
 #include <cstdint>
@@ -29,6 +30,9 @@
 #include "SolanaWalletPresentation.h"
 #include "Strings.h"
 #include "UrlQuery.h"
+
+// AssocQueryStringW: the program Windows opens https links with
+#pragma comment(lib, "shlwapi.lib")
 
 namespace urnw {
 namespace {
@@ -167,9 +171,10 @@ void WalletConnect::OpenUrl(const std::string& url) {
 
 // A url longer than ShellExecuteW passes on (the payout consent's bridge url):
 // a page in the user's own temp directory that only its owner may open, which
-// replaces itself with the url. ShellExecuteW opens the page's short path, and
-// the page is deleted once the browser has had time to read it; a page an
-// earlier flow left (superseded, or the app quit first) goes with the next.
+// replaces itself with the url. The browser Windows opens https links with is
+// started on the page's short path, and the page is deleted once the browser
+// has had time to read it; a page an earlier flow left (superseded, or the app
+// quit first) goes with the next.
 void WalletConnect::OpenThroughTrampoline(const std::string& url) {
   const auto fail = [this](const char* what) {
     LogError("wallet bridge: {}", what);
@@ -216,8 +221,27 @@ void WalletConnect::OpenThroughTrampoline(const std::string& url) {
     ::DeleteFileW(path.c_str());
     return fail("could not write the bridge page");
   }
-  HINSTANCE h = ShellExecuteW(nullptr, L"open", path.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
-  if (reinterpret_cast<INT_PTR>(h) <= 32) {
+  // In the browser Windows opens https links with, the one that holds the
+  // wallet's extension: what opens .html is often another (Edge, an editor),
+  // and there the bridge page finds no Talisman. The page's own association
+  // only when Windows names no https program, or it does not start.
+  wchar_t browser[MAX_PATH + 1]{};
+  DWORD browserSize = static_cast<DWORD>(std::size(browser));
+  if (FAILED(::AssocQueryStringW(ASSOCF_NONE, ASSOCSTR_EXECUTABLE, L"https", L"open", browser,
+                                 &browserSize))) {
+    browser[0] = L'\0';
+  }
+  bool opened = false;
+  for (const bridge::TrampolineLaunch& launch : bridge::LaunchesFor(browser, path.wstring())) {
+    HINSTANCE h = ShellExecuteW(nullptr, L"open", launch.file.c_str(),
+                                launch.parameters.empty() ? nullptr : launch.parameters.c_str(),
+                                nullptr, SW_SHOWNORMAL);
+    if (reinterpret_cast<INT_PTR>(h) > 32) {
+      opened = true;
+      break;
+    }
+  }
+  if (!opened) {
     ::DeleteFileW(path.c_str());
     return fail("could not open the bridge page");
   }

@@ -9,9 +9,16 @@
 // short, without the parameters the page needs, and the wallet could never
 // answer. A url over kDirectUrlLimit is written instead into a small page in
 // the user's own temp directory, which only its owner may open; the page
-// replaces itself with the url, ShellExecuteW opens the page's short path, and
-// the page is deleted once the browser has had time to read it
-// (WalletConnect::OpenThroughTrampoline).
+// replaces itself with the url, and the page is deleted once the browser has
+// had time to read it (WalletConnect::OpenThroughTrampoline).
+//
+// The page opens in the browser Windows opens https links with, which is the
+// one that holds the user's wallet extension: started by the page's own .html
+// association it would often be another (Windows keeps .html with Edge, or an
+// editor, unless the user changes it separately), and there the bridge page
+// finds no Talisman. So ShellExecuteW starts the https program on the page's
+// short path, and the .html association only when Windows names no https
+// program or it does not start.
 //
 // Pure and header-only, so tools/bridge-trampoline-tests.cpp runs it on any
 // host with a C++20 compiler.
@@ -23,6 +30,7 @@
 #include <cstddef>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace urnw::bridge {
 
@@ -65,6 +73,29 @@ inline std::string TrampolinePage(std::string_view url) {
   page += url;
   page += "\");</script>\n";
   return page;
+}
+
+// One ShellExecuteW "open": the file it starts and that file's parameters
+// ("" for none).
+struct TrampolineLaunch {
+  std::wstring file;
+  std::wstring parameters;
+
+  bool operator==(const TrampolineLaunch&) const = default;
+};
+
+// How the page at `pagePath` is opened, in the order to try: first by
+// `httpsProgram`, the program Windows opens https links with ("" when it names
+// none), given the page's path as its one, quoted argument; then the page
+// itself, which starts whatever opens .html.
+inline std::vector<TrampolineLaunch> LaunchesFor(std::wstring_view httpsProgram,
+                                                 std::wstring_view pagePath) {
+  std::vector<TrampolineLaunch> launches;
+  if (!httpsProgram.empty()) {
+    launches.push_back({std::wstring(httpsProgram), L"\"" + std::wstring(pagePath) + L"\""});
+  }
+  launches.push_back({std::wstring(pagePath), std::wstring()});
+  return launches;
 }
 
 }  // namespace urnw::bridge

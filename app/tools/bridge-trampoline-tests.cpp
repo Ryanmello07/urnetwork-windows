@@ -1,17 +1,19 @@
 // Executable spec for the wallet bridge's trampoline (App/BridgeTrampoline.h):
 // which urls ShellExecuteW opens as they are and which go through a page of our
-// own, what that page holds (the url, verbatim, and nothing else), and that it
-// is made only for an https url of url characters, so nothing in the url can
-// end its script. Run against the same header the app compiles, on any host
-// with a C++20 compiler.
+// own, what that page holds (the url, verbatim, and nothing else), that it is
+// made only for an https url of url characters, so nothing in the url can end
+// its script, and that the page opens in the program Windows opens https links
+// with (the browser that holds the wallet's extension) before whatever opens
+// .html. Run against the same header the app compiles, on any host with a
+// C++20 compiler.
 //
 // Each argument is a bridge url that must go through the page (the payout
 // consent's, which tests/bridge_trampoline_test.go builds from the protocol's
 // own consent fixture as the SDK does).
 //
-// The Win32 half (writing the page for its owner alone, opening it, deleting
-// it) cannot be built off Windows; what is verified here is every decision it
-// makes first.
+// The Win32 half (writing the page for its owner alone, asking Windows for the
+// https program, starting it, deleting the page) cannot be built off Windows;
+// what is verified here is every decision it makes first.
 //
 //   c++ -std=c++20 -Wall -Wextra -Werror -I ../src/App bridge-trampoline-tests.cpp -o /tmp/bridge-trampoline-tests && /tmp/bridge-trampoline-tests [url...]
 //
@@ -20,6 +22,7 @@
 #include <iostream>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "BridgeTrampoline.h"
 
@@ -116,7 +119,8 @@ int main(int argc, char** argv) {
   }
   {
     TEST_CASE("nothing in the url can end the page's script");
-    for (const char breakout : {'"', '<', '>', '\\', ' ', '\n', '\r', '\t', '`', '{', '}', '|', '^'}) {
+    for (const char breakout :
+         {'"', '<', '>', '\\', ' ', '\n', '\r', '\t', '`', '{', '}', '|', '^'}) {
       const std::string url = BridgeUrl(2'100) + breakout + "x";
       Check(TrampolinePage(url).empty(), std::string("character ") + std::to_string(breakout));
     }
@@ -126,6 +130,26 @@ int main(int argc, char** argv) {
     std::string nul = BridgeUrl(2'100);
     nul += '\0';
     Check(TrampolinePage(nul).empty(), "a NUL");
+  }
+  {
+    TEST_CASE("the page opens in the https browser first, then by its own association");
+    const std::wstring chrome = L"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
+    // a profile with a space in its name: the path is one argument
+    const std::wstring page =
+        L"C:\\Users\\Ada Lovelace\\AppData\\Local\\Temp\\urnetwork-bridge-0123456789abcdef.html";
+    const std::vector<TrampolineLaunch> launches = LaunchesFor(chrome, page);
+    Check(launches.size() == 2, "two ways, in order");
+    if (launches.size() == 2) {
+      Check(launches[0] == TrampolineLaunch{chrome, L"\"" + page + L"\""},
+            "first the https program, on the page's quoted path");
+      Check(launches[1] == TrampolineLaunch{page, L""}, "then the page itself");
+    }
+  }
+  {
+    TEST_CASE("with no https program the page opens by its own association");
+    const std::wstring page = L"C:\\Users\\ada\\AppData\\Local\\Temp\\urnetwork-bridge-0.html";
+    const std::vector<TrampolineLaunch> launches = LaunchesFor(L"", page);
+    Check(launches == std::vector<TrampolineLaunch>{{page, L""}}, "the page itself, alone");
   }
   if (argc > 1) {
     TEST_CASE("the payout consent's bridge urls go through the page");
