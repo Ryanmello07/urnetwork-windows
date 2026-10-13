@@ -134,7 +134,7 @@ func TestDataInfoEntryPoints(t *testing.T) {
 		`"data_info_used"`,
 		`"data_info_pending"`,
 		`"data_info_available"`,
-		`"daily_data_balance_label"`,
+		`"daily_data_balance"`,
 		`"data_info_refresh_at"`,
 		"balance.startBalanceByteCount",
 		"datainfo::ShowsFreeRefresh(balance.isPro)",

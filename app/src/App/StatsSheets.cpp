@@ -4,6 +4,7 @@
 #include "StatsSheets.h"
 
 #include <winrt/Windows.ApplicationModel.DataTransfer.h>
+#include <winrt/Windows.UI.ViewManagement.h>  // UISettings: the system animation gate
 #include <winrt/Microsoft.UI.Xaml.Automation.h>  // Narrator names for the constraint warnings
 #include <winrt/Microsoft.UI.Xaml.Documents.h>  // RichTextBlock chip-flow inlines
 #include <winrt/Microsoft.UI.Xaml.Input.h>
@@ -14,16 +15,19 @@
 #include <cmath>
 #include <unordered_set>
 
+#include "AppRuleRows.h"  // the app split rules sheet's list: one row per app
 #include "BlockActionReason.h"  // safety-rule chip + "Route locally" offer
 #include "FastDnsOnConnect.h"
 #include "Localization.h"
-#include "PageContext.h"   // pages::Adv: the transport editor's not-yet-in-store strings
+#include "PageContext.h"   // pages::Adv: the sheets' not-yet-in-store strings
 #include "Sdk.h"   // ReadSdkList: the list-getter null-unwrap guard
+#include "SheetFit.h"  // sheetfit: sheets clamp to the window at open time
 #include "StatsFormat.h"
 #include "Strings.h"  // Widen: the sdk's utf-8 data into the utf-16 ui
 #include "TransportBar.h"  // TransportName / TransportDetail / TransportColor
 #include "TransportStatusPresentation.h"
 #include "UrColors.h"
+#include "UrComponents.h"  // kit::MakePaneSearchRow / kit::MakePaneEmptyLine
 
 using namespace winrt;
 using namespace winrt::Windows::Foundation;
@@ -226,11 +230,14 @@ ContentDialog MakeDialog(XamlRoot const& root, hstring const& title) {
   return dialog;
 }
 
-ScrollViewer MakeSheetScroll(UIElement const& content) {
+// the one scrolling body every sheet here shares: clamped to the window at
+// open (sheetfit) because a ContentDialog clips overflow instead of scrolling
+// it -- a fixed 440x520 sails past the 400x480 window floor
+ScrollViewer MakeSheetScroll(XamlRoot const& root, UIElement const& content) {
   ScrollViewer scroll;
   scroll.Content(content);
-  scroll.MaxHeight(520);
-  scroll.MinWidth(440);
+  scroll.MaxHeight(sheetfit::Height(root, 520));
+  scroll.MinWidth(sheetfit::Width(root, 440));
   return scroll;
 }
 
@@ -283,7 +290,7 @@ void ClientContractsSheet::Build(XamlRoot const& root) {
 
   list_ = StackPanel();
   list_.ChildrenTransitions(RepositionTransitions());  // animate row resort / merge
-  scroll_ = MakeSheetScroll(list_);
+  scroll_ = MakeSheetScroll(root, list_);
   {
     std::weak_ptr<ClientContractsSheet> weak = weak_from_this();
     scroll_.ViewChanged([weak](IInspectable const&, auto const&) {
@@ -343,7 +350,7 @@ void ClientContractsSheet::Build(XamlRoot const& root) {
   }
 
   StackPanel body;
-  body.MinWidth(440);
+  body.MinWidth(sheetfit::Width(root, 440));
   body.Children().Append(scroll_);
   body.Children().Append(empty_);
   body.Children().Append(copiedNote_);
@@ -831,6 +838,14 @@ void SplitRulesSheet::Build(XamlRoot const& root) {
   StackPanel listBody;
   listBody.Spacing(8);
 
+  // plain-language one-liner: what a split rule does, before the how-it-works
+  // banner (store id pending: Adv renders the English until the key lands)
+  listBody.Children().Append(MakeText(
+      pages::Adv("adv_split_rules_note",
+                 L"Split rules let the sites you choose connect directly, outside the VPN, "
+                 L"and the activity below shows how each connection was routed."),
+      12, MutedBrush(), true));
+
   // info banner: how exclusions work
   Border banner;
   banner.CornerRadius(CornerRadius{12, 12, 12, 12});
@@ -855,16 +870,27 @@ void SplitRulesSheet::Build(XamlRoot const& root) {
   activityHeader.Children().Append(countsText_);
   listBody.Children().Append(activityHeader);
 
+  // search-as-you-type over the feed: the SDK window of routing decisions runs
+  // long, so the rows filter by host/ip substring (kit search row = the pane's
+  // 40px search field; store id pending, hence Adv)
+  auto activitySearch = kit::MakePaneSearchRow(
+      pages::Adv("adv_search_activity_placeholder", L"Search activity"));
+  activitySearchBox_ = activitySearch.box;
+  activitySearchBox_.TextChanged([weak](IInspectable const&, auto const&) {
+    if (auto self = weak.lock()) self->RenderActivity();
+  });
+  listBody.Children().Append(activitySearch.root);
+
   activityList_ = StackPanel();
   activityList_.Spacing(4);
   listBody.Children().Append(activityList_);
 
-  listPage_ = MakeSheetScroll(listBody);
+  listPage_ = MakeSheetScroll(root, listBody);
 
   // ---- editor page ----
   editorPage_ = StackPanel();
   editorPage_.Spacing(12);
-  editorPage_.MinWidth(400);
+  editorPage_.MinWidth(sheetfit::Width(root, 400));
   editorPage_.Visibility(Visibility::Collapsed);
   editorPage_.Children().Append(MakeText(Loc("split_rule_description"), 12, MutedBrush(), true));
 
@@ -872,7 +898,7 @@ void SplitRulesSheet::Build(XamlRoot const& root) {
   checklist_.Spacing(2);
   ScrollViewer checklistScroll;
   checklistScroll.Content(checklist_);
-  checklistScroll.MaxHeight(320);
+  checklistScroll.MaxHeight(sheetfit::Height(root, 320));
   editorPage_.Children().Append(checklistScroll);
 
   applyButton_ = Button();
@@ -966,7 +992,9 @@ void SplitRulesSheet::RenderRules() {
     Grid::SetColumn(flow, 0);
     row.Children().Append(flow);
 
-    auto chip = MakeChip(Loc("local"), colors::kUrGreen, true);
+    // Local = bypassed the tunnel: amber, matching the Activity feed's verdict
+    // dots (green there means tunnelled/protected, never bypassed).
+    auto chip = MakeChip(Loc("local"), colors::kUrAmber, true);
     Grid::SetColumn(chip, 1);
     row.Children().Append(chip);
 
@@ -1001,9 +1029,25 @@ void SplitRulesSheet::RenderActivity() {
         MakeText(Loc("split_rules_activity_hint"), 12, FaintBrush(), true));
     return;
   }
+  // the search row's substring filter, matched against every host/ip value the
+  // row can show (case-insensitive; empty query shows the whole feed)
+  const std::string query = ToLower(TrimWhitespace(Narrow(activitySearchBox_.Text().c_str())));
+  auto matches = [&](const BlockActionItem& action) {
+    if (query.empty()) return true;
+    for (const auto* values : {&action.matchedHosts, &action.hosts, &action.matchedIps,
+                               &action.ips}) {
+      for (const auto& value : *values) {
+        if (ToLower(value).find(query) != std::string::npos) return true;
+      }
+    }
+    return false;
+  };
   const int64_t now = NowMillis();
   std::weak_ptr<SplitRulesSheet> weak = weak_from_this();
+  int shown = 0;
   for (const auto& action : actions_) {
+    if (!matches(action)) continue;
+    ++shown;
     Grid row = MakeStarAutoRow();
     row.ColumnSpacing(8);
     row.Padding(Thickness{0, 4, 0, 4});
@@ -1063,8 +1107,10 @@ void SplitRulesSheet::RenderActivity() {
     chips.Children().Append(MakeChip(action.block ? Loc("blocked") : Loc("allowed"),
                                      action.block ? colors::kUrCoral : colors::kTextMuted,
                                      action.hasBlockOverride));
+    // Local chip amber for the same reason as the rule rows above: bypassed,
+    // not protected; green is reserved for tunnelled/allowed readings.
     chips.Children().Append(MakeChip(action.local ? Loc("local") : Loc("remote"),
-                                     action.local ? colors::kUrGreen : colors::kTextMuted,
+                                     action.local ? colors::kUrAmber : colors::kTextMuted,
                                      action.hasRouteOverride));
     // a safety-ruled action a route-local rule can fix, and no rule decided it
     // yet: offer the rule outright. It is the same editor the row tap opens,
@@ -1093,6 +1139,12 @@ void SplitRulesSheet::RenderActivity() {
       });
     }
     activityList_.Children().Append(row);
+  }
+  if (shown == 0) {
+    // a search that matches nothing is one inline empty line (the pane empty
+    // idiom), never a blank dialog (store id pending, hence Adv)
+    activityList_.Children().Append(kit::MakePaneEmptyLine(
+        pages::Adv("adv_no_activity_matches", L"No activity matches this search.")));
   }
 }
 
@@ -1340,7 +1392,7 @@ void DnsEditorSheet::Build(XamlRoot const& root) {
   BuildListSection(body, Loc("local_dns_servers"), ipAddress, false, &Draft::localDnsIpv4,
                    &Draft::localDnsIpv6);
 
-  dialog_.Content(MakeSheetScroll(body));
+  dialog_.Content(MakeSheetScroll(root, body));
   SyncFromDraft();
 }
 
@@ -1359,11 +1411,12 @@ void DnsEditorSheet::BuildResolverSection(StackPanel const& parent) {
     Grid::SetColumn(label, 0);
     row.Children().Append(label);
     toggle = MakeBareToggle();
-    ToggleSwitch captured = toggle;
-    toggle.Toggled([weak, captured, flag](IInspectable const&, RoutedEventArgs const&) {
+    // the switch from the sender: a handler holding it would own its own
+    // switch (tests/handler_self_capture_test.go)
+    toggle.Toggled([weak, flag](IInspectable const& sender, RoutedEventArgs const&) {
       auto self = weak.lock();
       if (!self || self->updating_) return;
-      self->draft_.*flag = captured.IsOn();
+      self->draft_.*flag = sender.as<ToggleSwitch>().IsOn();
       self->OnDraftChanged();
     });
     Grid::SetColumn(toggle, 1);
@@ -1439,13 +1492,12 @@ void DnsEditorSheet::BuildSuggestionSection(StackPanel const& parent) {
     suggestion.toggle = MakeBareToggle();
     {
       std::string ipv4 = server.Ipv4;
-      ToggleSwitch toggle = suggestion.toggle;
-      suggestion.toggle.Toggled([weak, ipv4, toggle](IInspectable const&,
-                                                     RoutedEventArgs const&) {
+      // the switch from the sender, as above
+      suggestion.toggle.Toggled([weak, ipv4](IInspectable const& sender, RoutedEventArgs const&) {
         auto self = weak.lock();
         if (!self || self->updating_) return;
         auto& values = self->draft_.remoteDnsIpv4;
-        if (toggle.IsOn()) {
+        if (sender.as<ToggleSwitch>().IsOn()) {
           // on adds the server to the remote dns list and enables remote dns
           if (std::find(values.begin(), values.end(), ipv4) == values.end()) {
             values.push_back(ipv4);
@@ -1795,7 +1847,7 @@ void TransportSettingsSheet::Build(XamlRoot const& root) {
   }
   body.Children().Append(restoreSection_);
 
-  dialog_.Content(MakeSheetScroll(body));
+  dialog_.Content(MakeSheetScroll(root, body));
   SyncFromDraft();
 }
 
@@ -1886,16 +1938,17 @@ void TransportSettingsSheet::BuildAutoRow(StackPanel const& parent, std::string 
   {
     std::weak_ptr<TransportSettingsSheet> weak = weak_from_this();
     const std::string captured = mode;
-    ToggleSwitch capturedToggle = toggle;
-    toggle.Toggled([weak, captured, capturedToggle](IInspectable const&, RoutedEventArgs const&) {
+    // the switch from the sender: a handler holding it would own its own
+    // switch (tests/handler_self_capture_test.go)
+    toggle.Toggled([weak, captured](IInspectable const& sender, RoutedEventArgs const&) {
       auto self = weak.lock();
       if (!self || self->updating_) return;
       // through the SDK: a newly enabled carrier takes its default priority so
       // the fixed preference order is preserved, and disabling the LAST enabled
       // carrier is refused (the returned copy equals the input) -- SyncFromDraft
       // then puts the switch back to the truth
-      self->SetDraft(urnet::transportSettingsWithAutoModeEnabled(self->draft_, captured,
-                                                                 capturedToggle.IsOn()));
+      self->SetDraft(urnet::transportSettingsWithAutoModeEnabled(
+          self->draft_, captured, sender.as<ToggleSwitch>().IsOn()));
     });
   }
   Grid::SetColumn(toggle, 1);
@@ -1989,11 +2042,9 @@ void TransportSettingsSheet::SyncFromDraft() {
 
 // ---- Per-app split tunnel --------------------------------------------------
 
-static std::string LowerAscii(std::string s) {
-  std::transform(s.begin(), s.end(), s.begin(),
-                 [](unsigned char c) { return (char)std::tolower(c); });
-  return s;
-}
+// The one key for an app on this sheet (AppRuleRows.h): the row cache, the
+// rule lookup and the chips all go through it.
+static std::string LowerAscii(std::string s) { return apprules::RowKey(std::move(s)); }
 
 std::shared_ptr<AppRulesSheet> AppRulesSheet::Create(XamlRoot const& root, SdkHost& sdk) {
   auto sheet = std::shared_ptr<AppRulesSheet>(new AppRulesSheet(sdk));
@@ -2007,6 +2058,14 @@ void AppRulesSheet::Build(XamlRoot const& root) {
 
   StackPanel body;
   body.Spacing(8);
+
+  // plain-language one-liner at the top: what including vs excluding an app
+  // means (store id pending: Adv renders the English until the key lands)
+  body.Children().Append(MakeText(
+      pages::Adv("adv_app_rules_note",
+                 L"Including an app sends its traffic through the VPN, while excluding "
+                 L"it keeps that app's traffic off the VPN."),
+      12, MutedBrush(), true));
 
   // summary card: the active behavior + the include-precedence note (mirrors
   // Android AppSplitSummary)
@@ -2043,117 +2102,168 @@ void AppRulesSheet::Build(XamlRoot const& root) {
   }
   body.Children().Append(banner);
 
+  // search-as-you-type over the app list by name/path substring (the store
+  // carries this field's placeholder key); each keystroke re-runs RenderList,
+  // which reconciles rows instead of rebuilding them
+  auto search = kit::MakePaneSearchRow(Loc("search_apps_placeholder"));
+  searchBox_ = search.box;
+  std::weak_ptr<AppRulesSheet> weak = weak_from_this();
+  searchBox_.TextChanged([weak](IInspectable const&, auto const&) {
+    if (auto self = weak.lock()) self->RenderList();
+  });
+  body.Children().Append(search.root);
+
+  // the group headers + empty-state lines live as long as the sheet: RenderList
+  // moves them in and out of the list rather than recreating them, so a cached
+  // element never replays an entrance fade ("Configured" has no store key yet,
+  // hence Adv)
+  configuredHeader_ = SectionHeader(pages::Adv("adv_configured", L"Configured"));
+  appsHeader_ = SectionHeader(Loc("apps"));
+  searchEmptyLine_ = kit::MakePaneEmptyLine(Loc("no_apps_found"));
+  noAppsLine_ = MakeText(Loc("no_installed_apps_found"), 12, FaintBrush(), true);
+
   appsList_ = StackPanel();
   appsList_.Spacing(2);
+  // search-driven row inserts/removals glide: bounded add/delete + reposition
+  // theme transitions, and only while the system animation setting is on --
+  // the standing motion rule (UISettings::AnimationsEnabled, and theme
+  // transitions are compositor-driven, never idle/repeating)
+  if (winrt::Windows::UI::ViewManagement::UISettings().AnimationsEnabled()) {
+    anim::TransitionCollection transitions;
+    transitions.Append(anim::AddDeleteThemeTransition());
+    transitions.Append(anim::RepositionThemeTransition());
+    appsList_.ChildrenTransitions(transitions);
+  }
   body.Children().Append(appsList_);
 
-  dialog_.Content(MakeSheetScroll(body));
+  dialog_.Content(MakeSheetScroll(root, body));
   RenderList();
 }
 
 void AppRulesSheet::RenderList() {
-  appsList_.Children().Clear();
-  chipSlots_.clear();
-
   // current per-app rules from the SDK, keyed by lowercased image path
   std::vector<AppRule> rules = sdk_.CurrentAppRules();
   std::unordered_map<std::string, bool> ruleFor;  // lower(path) -> includeInTunnel
   for (const auto& r : rules) ruleFor[LowerAscii(r.imagePath)] = r.includeInTunnel;
 
-  // ruled apps pinned on top (rule order), then the remaining installed apps.
-  // A ruled app that wasn't enumerated still gets a row (name = image basename)
-  // so an existing rule stays visible + changeable.
-  std::unordered_map<std::string, const InstalledApp*> installedByPath;
-  for (const auto& a : installed_) installedByPath[LowerAscii(a.exePath)] = &a;
-  std::vector<InstalledApp> ruled;
-  for (const auto& r : rules) {
-    if (auto it = installedByPath.find(LowerAscii(r.imagePath));
-        it != installedByPath.end()) {
-      ruled.push_back(*it->second);
-      continue;
-    }
-    std::string name = r.imagePath;
-    if (auto slash = name.find_last_of("\\/"); slash != std::string::npos)
-      name = name.substr(slash + 1);
-    ruled.push_back({name, r.imagePath});
-  }
-  std::vector<InstalledApp> unruled;
-  for (const auto& a : installed_) {
-    if (!ruleFor.count(LowerAscii(a.exePath))) unruled.push_back(a);
-  }
+  // ruled apps pinned on top (rule order), then the remaining installed apps,
+  // ONE ROW PER APP: two rules whose paths differ only in case are one app's,
+  // and its one cached row wanted twice is what the reconcile below cannot
+  // place (AppRuleRows.h). A ruled app that wasn't enumerated still gets a row
+  // (name = image basename) so an existing rule stays visible + changeable.
+  const std::vector<InstalledApp> ruled = apprules::RuledApps(rules, installed_);
+  const std::vector<InstalledApp> unruled = apprules::UnruledApps(rules, installed_);
 
-  if (ruled.empty() && unruled.empty()) {
-    appsList_.Children().Append(
-        MakeText(Loc("no_installed_apps_found"), 12, FaintBrush(), true));
-    RefreshRuleState();  // the summary still reflects the (empty) rules
-    return;
-  }
-
-  std::weak_ptr<AppRulesSheet> weak = weak_from_this();
-  auto appendRow = [&](const InstalledApp& app, int sel) {
-    Grid row;
-    ColumnDefinition c0, c1, c2;
-    c0.Width(GridLength{1, GridUnitType::Star});
-    c1.Width(GridLength{0, GridUnitType::Auto});
-    c2.Width(GridLength{0, GridUnitType::Auto});
-    row.ColumnDefinitions().Append(c0);
-    row.ColumnDefinitions().Append(c1);
-    row.ColumnDefinitions().Append(c2);
-    row.ColumnSpacing(8);
-    row.Padding(Thickness{0, 4, 0, 4});
-
-    StackPanel labels;
-    labels.Children().Append(MakeText(H(app.name), 13, nullptr, true));
-    labels.Children().Append(MakeText(H(app.exePath), 10, FaintBrush(), true));
-    Grid::SetColumn(labels, 0);
-    row.Children().Append(labels);
-
-    // state chip slot: RefreshRuleState fills it for ruled apps (Included /
-    // Local -- the same Local chip the split rules sheet uses)
-    Border chipSlot;
-    chipSlot.VerticalAlignment(VerticalAlignment::Center);
-    Grid::SetColumn(chipSlot, 1);
-    row.Children().Append(chipSlot);
-    chipSlots_.emplace_back(LowerAscii(app.exePath), chipSlot);
-
-    ComboBox combo;
-    combo.MinWidth(130);
-    combo.VerticalAlignment(VerticalAlignment::Center);
-    combo.Items().Append(LocBox("default_option"));  // 0 = no rule
-    combo.Items().Append(LocBox("include_in_vpn"));  // 1 -> Local=false
-    combo.Items().Append(LocBox("bypass_vpn"));      // 2 -> Local=true
-    combo.SelectedIndex(sel);
-    std::string path = app.exePath;
-    combo.SelectionChanged(
-        [weak, path](IInspectable const& sender, SelectionChangedEventArgs const&) {
-          auto self = weak.lock();
-          if (!self) return;
-          int idx = sender.as<ComboBox>().SelectedIndex();
-          if (idx <= 0) self->sdk_.RemoveAppRule(path);
-          else self->sdk_.SetAppRule(path, idx == 1);  // 1 = include, 2 = bypass
-          self->RefreshRuleState();
-        });
-    Grid::SetColumn(combo, 2);
-    row.Children().Append(combo);
-
-    appsList_.Children().Append(row);
+  // the search row's substring filter over name + path (case-insensitive);
+  // an empty query shows every app
+  const std::string query = LowerAscii(TrimWhitespace(Narrow(searchBox_.Text().c_str())));
+  auto matches = [&](const InstalledApp& app) {
+    return query.empty() || LowerAscii(app.name).find(query) != std::string::npos ||
+           LowerAscii(app.exePath).find(query) != std::string::npos;
   };
 
-  if (!ruled.empty()) {
-    appsList_.Children().Append(SectionHeader(Loc("rules")));
+  // rows are built once per app path and cached (the combo's selection is row
+  // state), so a search re-render reuses them instead of rebuilding
+  auto rowFor = [&](const InstalledApp& app, int sel) -> UIElement {
+    const std::string key = LowerAscii(app.exePath);
+    if (auto it = rowUis_.find(key); it != rowUis_.end()) return it->second;
+    Grid row = BuildRow(app, sel);
+    rowUis_.emplace(key, row);
+    return row;
+  };
+
+  // the wanted children in order: a group header only while its group has a
+  // visible row (a header over nothing reads as a bug), else the one
+  // empty-state line (never a blank dialog)
+  std::vector<UIElement> want;
+  if (ruled.empty() && unruled.empty()) {
+    want.push_back(noAppsLine_);  // no catalog at all: searching cannot help
+  } else {
+    std::vector<InstalledApp> ruledShown, unruledShown;
     for (const auto& app : ruled) {
-      appendRow(app, ruleFor[LowerAscii(app.exePath)] ? 1 : 2);
+      if (matches(app)) ruledShown.push_back(app);
     }
+    for (const auto& app : unruled) {
+      if (matches(app)) unruledShown.push_back(app);
+    }
+    if (!ruledShown.empty()) {
+      want.push_back(configuredHeader_);
+      for (const auto& app : ruledShown) {
+        want.push_back(rowFor(app, ruleFor[LowerAscii(app.exePath)] ? 1 : 2));
+      }
+    }
+    if (!unruledShown.empty()) {
+      want.push_back(appsHeader_);
+      for (const auto& app : unruledShown) want.push_back(rowFor(app, 0));
+    }
+    if (want.empty()) want.push_back(searchEmptyLine_);  // the search matched nothing
   }
-  appsList_.Children().Append(SectionHeader(Loc("apps")));
-  for (const auto& app : unruled) appendRow(app, 0);
+
+  // reconcile the children to `want` instead of rebuilding: drop the rows the
+  // filter hid, insert the ones it admitted, keep the survivors in place (the
+  // ClientContractsSheet move-in-place idiom), so the list's theme transitions
+  // animate the difference. Membership compares the IUIElement pointer: COM QI
+  // determinism makes it stable per object.
+  apprules::Reconcile(appsList_.Children(), want, [](UIElement const& a, UIElement const& b) {
+    return winrt::get_abi(a) == winrt::get_abi(b);
+  });
 
   RefreshRuleState();
 }
 
+Grid AppRulesSheet::BuildRow(const InstalledApp& app, int sel) {
+  Grid row;
+  ColumnDefinition c0, c1, c2;
+  c0.Width(GridLength{1, GridUnitType::Star});
+  c1.Width(GridLength{0, GridUnitType::Auto});
+  c2.Width(GridLength{0, GridUnitType::Auto});
+  row.ColumnDefinitions().Append(c0);
+  row.ColumnDefinitions().Append(c1);
+  row.ColumnDefinitions().Append(c2);
+  row.ColumnSpacing(8);
+  row.Padding(Thickness{0, 4, 0, 4});
+
+  StackPanel labels;
+  labels.Children().Append(MakeText(H(app.name), 13, nullptr, true));
+  labels.Children().Append(MakeText(H(app.exePath), 10, FaintBrush(), true));
+  Grid::SetColumn(labels, 0);
+  row.Children().Append(labels);
+
+  // state chip slot: RefreshRuleState fills it for ruled apps (Included /
+  // Local -- the same Local chip the split rules sheet uses)
+  Border chipSlot;
+  chipSlot.VerticalAlignment(VerticalAlignment::Center);
+  Grid::SetColumn(chipSlot, 1);
+  row.Children().Append(chipSlot);
+  chipSlots_.emplace_back(LowerAscii(app.exePath), chipSlot);
+
+  ComboBox combo;
+  combo.MinWidth(130);
+  combo.VerticalAlignment(VerticalAlignment::Center);
+  combo.Items().Append(LocBox("default_option"));  // 0 = no rule
+  combo.Items().Append(LocBox("include_in_vpn"));  // 1 -> Local=false
+  combo.Items().Append(LocBox("bypass_vpn"));      // 2 -> Local=true
+  combo.SelectedIndex(sel);
+  std::string path = app.exePath;
+  std::weak_ptr<AppRulesSheet> weak = weak_from_this();
+  combo.SelectionChanged(
+      [weak, path](IInspectable const& sender, SelectionChangedEventArgs const&) {
+        auto self = weak.lock();
+        if (!self) return;
+        int idx = sender.as<ComboBox>().SelectedIndex();
+        if (idx <= 0) self->sdk_.RemoveAppRule(path);
+        else self->sdk_.SetAppRule(path, idx == 1);  // 1 = include, 2 = bypass
+        self->RefreshRuleState();
+      });
+  Grid::SetColumn(combo, 2);
+  row.Children().Append(combo);
+  return row;
+}
+
 // Re-derives the summary + row chips from the current rules. The chips and the
-// active-behavior summary track every combo change in place; the pinned order
-// only re-sorts on the next open (rows keep position while the user edits).
+// active-behavior summary track every combo change in place; group membership
+// only re-sorts on the next open or search keystroke (rows keep position while
+// the user edits).
 void AppRulesSheet::RefreshRuleState() {
   std::vector<AppRule> rules = sdk_.CurrentAppRules();
   std::unordered_map<std::string, bool> ruleFor;  // lower(path) -> includeInTunnel
@@ -2166,8 +2276,10 @@ void AppRulesSheet::RefreshRuleState() {
   // allowlist mode and the local rules have no distinct effect
   const bool excludeMode = !includeMode && !rules.empty();
 
-  statusDot_.Background(SolidColorBrush(includeMode   ? colors::kToggleAccent
-                                        : excludeMode ? colors::kUrGreen
+  // palette rule for the whole sheet: urGreen = included in the tunnel
+  // (protected series), amber = excluded / local bypass; muted = none
+  statusDot_.Background(SolidColorBrush(includeMode   ? colors::kUrGreen
+                                        : excludeMode ? colors::kUrAmber
                                                       : colors::kTextMuted));
   statusText_.Text(Loc(includeMode   ? "app_split_active_include"
                        : excludeMode ? "app_split_active_exclude"
@@ -2183,7 +2295,7 @@ void AppRulesSheet::RefreshRuleState() {
     // a local rule has no effect while include mode is active: muted chip
     const bool active = included || !includeMode;
     slot.Child(MakeChip(included ? Loc("included") : Loc("local"),
-                        active ? (included ? colors::kToggleAccent : colors::kUrGreen)
+                        active ? (included ? colors::kUrGreen : colors::kUrAmber)
                                : colors::kTextMuted,
                         active));
   }

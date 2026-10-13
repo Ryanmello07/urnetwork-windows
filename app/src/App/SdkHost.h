@@ -1,4 +1,4 @@
-﻿// SdkHost is the app's DeviceManager equivalent: it owns the NetworkSpace, Api,
+// SdkHost is the app's DeviceManager equivalent: it owns the NetworkSpace, Api,
 // LocalState, and the DeviceRemote, and coordinates the service to bring up the
 // tunnel. Auth results and tunnel/connection state are surfaced to the UI via
 // handlers (invoked on background threads; the UI marshals to its thread).
@@ -321,6 +321,29 @@ inline bool operator==(const SplitRule& a, const SplitRule& b) {
 }
 inline bool operator!=(const SplitRule& a, const SplitRule& b) { return !(a == b); }
 
+// A HOST-keyed override on the shared block-action-overrides list, at full
+// fidelity: SplitRule keeps only what the split-rules sheet prints, but the
+// inspector's quick actions need the KIND (block vs route) and the VALUE
+// (blocking vs allowing, bypass vs tunnel) to render an on/off state. The
+// block action itself cannot answer this - it snapshots the decision as made
+// and does not change when a rule is added afterwards, so the buttons read
+// the live overrides list instead.
+struct HostRule {
+  std::string overrideId;
+  std::vector<std::string> hosts;
+  bool hasBlockOverride = false;
+  bool block = false;  // valid when hasBlockOverride: true blocks, false allows
+  bool hasRouteOverride = false;
+  bool routeLocal = false;  // valid when hasRouteOverride: true bypasses the tunnel
+};
+
+inline bool operator==(const HostRule& a, const HostRule& b) {
+  return a.overrideId == b.overrideId && a.hosts == b.hosts &&
+         a.hasBlockOverride == b.hasBlockOverride && a.block == b.block &&
+         a.hasRouteOverride == b.hasRouteOverride && a.routeLocal == b.routeLocal;
+}
+inline bool operator!=(const HostRule& a, const HostRule& b) { return !(a == b); }
+
 // A per-app split rule (Android parity): a BlockActionOverride keyed by the app's
 // exe IMAGE PATH. includeInTunnel=true routes the app THROUGH the tunnel
 // (RouteOverride.Local=false); false makes it BYPASS the tunnel (Local=true).
@@ -496,10 +519,14 @@ class SdkHost {
  public:
   using AuthStateHandler = std::function<void(AuthState, const std::string& error)>;
   // Fired when the sdk finds the stored auth is no longer valid on the server
-  // (e.g. the client was removed): the sdk has already cleared its local auth
-  // state. Runs on an sdk callback thread and must only marshal -- the ui
-  // marshals onto its thread and calls Logout().
-  using AuthInvalidHandler = std::function<void()>;
+  // (e.g. the client was removed, or another device signed this session out):
+  // the sdk has already cleared its local auth state. `cause` is the sdk's
+  // reason, read in its listener (AuthLogoutCause.h): "session_revoked"
+  // (urnet::AuthLogoutCauseSessionRevoked) or "". The Api's listener and,
+  // with a session up, the device's report one rejection each. Runs on an sdk
+  // callback thread and must only marshal -- the ui marshals onto its thread
+  // and calls Logout() once for them (AuthLogoutNotice.h).
+  using AuthInvalidHandler = std::function<void(std::string cause)>;
   using JwtRefreshedHandler = std::function<void()>;
   using TunnelStateHandler = std::function<void(const proto::TunnelStatus&)>;
   using StatsHandler = std::function<void(const LiveStats&)>;
@@ -1432,9 +1459,28 @@ class SdkHost {
   // queued value when not).
   void ApplyTransportSettings(TransportSettingsKind kind,
                               const urnet::TransportSettings& settings);
-  void CreateSplitRule(const std::vector<std::string>& hosts);
+  // The create wrappers return the new override's id ("" when nothing was
+  // written - no device, empty hosts, or the rpc threw), because the caller's
+  // undo deletes by override id and addBlockActionOverride does not echo it.
+  std::string CreateSplitRule(const std::vector<std::string>& hosts);
   void UpdateSplitRule(const std::string& overrideId, const std::vector<std::string>& hosts);
   void RemoveSplitRule(const std::string& overrideId);
+  // The route pair's other half: RouteOverride{Local=false} forces the hosts
+  // THROUGH the tunnel (a split rule is Local=true, around it). Pin stays
+  // false - a pin is exit placement inside the tunnel, never tunnel membership
+  // (BlockActionViewController.BlockActionOverridesChanged).
+  std::string CreateTunnelRule(const std::vector<std::string>& hosts);
+  // Host BLOCK rules (Portmaster observe-decide-rule parity):
+  // BlockOverride{Block}. block=true blocks the hosts outright; block=false
+  // countermands a default-policy block (the "Allow this host" override).
+  std::string CreateBlockRule(const std::vector<std::string>& hosts, bool block);
+  // Removal from the shared overrides list is by id and kind-agnostic - the
+  // same store backs split, tunnel and block rules, so this forwards to
+  // RemoveSplitRule rather than duplicating it.
+  void RemoveBlockRule(const std::string& overrideId);
+  // The live host-keyed overrides at full fidelity (the quick actions' on/off
+  // state). A cache read like CurrentSplitRules, fed by the same publish.
+  std::vector<HostRule> CurrentHostRules();
 
   // Per-app split tunneling (Android parity). A rule is a BlockActionOverride keyed
   // by the app's exe image path; the SDK persists it and the change listener re-
@@ -2043,9 +2089,9 @@ class SdkHost {
   // The Api Initialize created or ApplyNetworkServer replaced: the client info
   // its requests and connect auths carry, "windows" and this build's version
   // (server session/REVOKE-UI-FINAL.md §1.13, the last use the Sessions page
-  // lists), and its confirmed rejection of the account's credential routed to
-  // the sign-out the device's rejection takes (onAuthInvalid_). Caller holds
-  // mutex_.
+  // lists), and its confirmed rejection of the account's credential routed,
+  // with the rejection's cause, to the sign-out the device's rejection takes
+  // (onAuthInvalid_). Caller holds mutex_.
   void BindApiLocked();
   void SetupWalletCallbacks();
   void RequestWalletChallenge(
@@ -2283,6 +2329,9 @@ class SdkHost {
   int64_t lastAllowedCount_ = 0;
   int64_t lastBlockedCount_ = 0;
   std::vector<SplitRule> lastSplitRules_;
+  // the full-fidelity form of the same overrides list (HostRule.h has the why),
+  // refreshed by the same PublishSplitRules pass so the two can never disagree
+  std::vector<HostRule> lastHostRules_;
   // the dedup baseline for the transport bar feed (PublishThroughput)
   TransportDistributionSnapshot lastTransportDistribution_;
   ExtenderStatusView lastExtenderStatus_;

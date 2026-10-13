@@ -251,9 +251,11 @@ void ReferralCard::Apply() {
     copy.Background(GoldGradient(colors::kReferralGoldPale, colors::kReferralGold));
     copy.Foreground(colors::ReferralGoldInkBrush());
     copy.FontWeight(winrt::Windows::UI::Text::FontWeights::Bold());
-    copy.Click([codeText, copy](auto const&, auto const&) {
+    // the button from the sender: a handler holding `copy` would own its own
+    // button (tests/handler_self_capture_test.go)
+    copy.Click([codeText](winrt::Windows::Foundation::IInspectable const& sender, auto const&) {
       rows::CopyToClipboard(codeText);
-      copy.Content(winrt::box_value(Loc("copied")));
+      sender.as<Button>().Content(winrt::box_value(Loc("copied")));
     });
     pillRow.Children().Append(copy);
     pill.Children().Append(pillRow);
@@ -271,11 +273,11 @@ void ReferralCard::Apply() {
     share.Foreground(colors::ReferralGoldInkBrush());
     share.FontWeight(winrt::Windows::UI::Text::FontWeights::Bold());
     share.Margin(Thickness{0, 6, 0, 0});
-    share.Click([codeText, share](auto const&, auto const&) {
+    share.Click([codeText](winrt::Windows::Foundation::IInspectable const& sender, auto const&) {
       rows::CopyToClipboard(Narrow(ReferralShareText(
           Format("referral_share_message", Widen(codeText)),
           Widen(ReferralLinkUrl(Sdk().linkHostName(), codeText)))));
-      share.Content(winrt::box_value(Loc("copied")));
+      sender.as<Button>().Content(winrt::box_value(Loc("copied")));
     });
     content.Children().Append(share);
   } else if (view == ReferralCodeView::Unavailable) {
