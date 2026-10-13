@@ -3131,6 +3131,9 @@ void MainWindow::OnChangeWallet(IInspectable const& s, RoutedEventArgs const& e)
 void MainWindow::OnClaimAlpha(IInspectable const& s, RoutedEventArgs const& e) {
   wallet_->OnClaimAlpha(s, e);
 }
+void MainWindow::OnClaimV2(IInspectable const& s, RoutedEventArgs const& e) {
+  wallet_->OnClaimV2(s, e);
+}
 void MainWindow::OnClaimTop200(IInspectable const& s, RoutedEventArgs const& e) {
   wallet_->OnClaimTop200(s, e);
 }

@@ -7118,6 +7118,10 @@
     <value>Отдано</value>
     <comment>App provider: bytes served metric</comment>
   </data>
+  <data name="site_app_settlement_v2" xml:space="preserve">
+    <value>Расчёты v2</value>
+    <comment>App earnings/claim: label of the settlement v2 card, shown beside the v1 claims</comment>
+  </data>
   <data name="site_app_show_on_leaderboard" xml:space="preserve">
     <value>Показывать мою сеть в рейтинге</value>
     <comment>App leaderboard: public visibility toggle</comment>
@@ -7237,6 +7241,34 @@
   <data name="site_app_unlink" xml:space="preserve">
     <value>Отвязать</value>
     <comment>App settings: unlink referral network</comment>
+  </data>
+  <data name="site_app_v2_claimed_amount" xml:space="preserve">
+    <value>Получено {amount}</value>
+    <comment>App claim: a settlement v2 claim confirmed on chain. {amount} is the SN25α amount the vault paid, with its unit.</comment>
+  </data>
+  <data name="site_app_v2_earned" xml:space="preserve">
+    <value>Заработано</value>
+    <comment>App earnings/claim: the settlement v2 amount earned in finalized roots, paid and claimable together</comment>
+  </data>
+  <data name="site_app_v2_paid" xml:space="preserve">
+    <value>Выплачено</value>
+    <comment>App earnings/claim: the settlement v2 amount already paid to the coldkey</comment>
+  </data>
+  <data name="site_app_v2_pending" xml:space="preserve">
+    <value>В ожидании: +{amount}, ожидает утверждения</value>
+    <comment>App earnings/claim: settlement v2 earnings in a committed root that is not finalized yet. {amount} is an SN25α amount with its unit.</comment>
+  </data>
+  <data name="site_app_v2_pool" xml:space="preserve">
+    <value>Пул {no_id}</value>
+    <comment>App earnings/claim: heads each settlement v2 account when the coldkey has accounts in several operator pools. {no_id} is the pool's operator id.</comment>
+  </data>
+  <data name="site_app_v2_unavailable" xml:space="preserve">
+    <value>Недоступно</value>
+    <comment>App earnings/claim: shown in place of the settlement v2 amounts when the ledger cannot be read, never a zero</comment>
+  </data>
+  <data name="site_app_v2_unavailable_detail" xml:space="preserve">
+    <value>Сейчас не удаётся прочитать балансы расчётов v2.</value>
+    <comment>App earnings/claim: the settlement v2 ledger cannot be read; a retry button follows</comment>
   </data>
   <data name="site_app_verified" xml:space="preserve">
     <value>Подтверждено</value>
@@ -7965,6 +7997,38 @@
   <data name="skip" xml:space="preserve">
     <value>Пропустить</value>
     <comment>Small muted button at the top of the post-login onboarding flow that leaves the whole flow.</comment>
+  </data>
+  <data name="sn_ledger_claim" xml:space="preserve">
+    <value>Получить по расчётам v2</value>
+    <comment>Windows Earnings page, the ledger header's Earnings actions menu (which repeats the page's actions while the window is too narrow to show them): the item for settlement v2's claim, which opens its claim dialog. Keep "v2".</comment>
+  </data>
+  <data name="sn_ledger_claimable" xml:space="preserve">
+    <value>Можно получить</value>
+    <comment>Settlement v2 tile: label of the SN25α the user can claim now.</comment>
+  </data>
+  <data name="sn_ledger_earned" xml:space="preserve">
+    <value>Заработано</value>
+    <comment>Settlement v2 tile: label of the SN25α earned so far (finalized: paid plus claimable).</comment>
+  </data>
+  <data name="sn_ledger_paid" xml:space="preserve">
+    <value>Выплачено</value>
+    <comment>Settlement v2 tile: label of the SN25α already paid to the user's coldkey.</comment>
+  </data>
+  <data name="sn_ledger_pending" xml:space="preserve">
+    <value>В ожидании: +{}, ждёт утверждения</value>
+    <comment>Settlement v2 tile: earnings committed but not final yet. {} is an SN25α amount, e.g. "0.7500 SN25α".</comment>
+  </data>
+  <data name="sn_ledger_pool" xml:space="preserve">
+    <value>Пул {}</value>
+    <comment>Settlement v2 tile and claim dialog: names an operator pool. {} is its number.</comment>
+  </data>
+  <data name="sn_ledger_title" xml:space="preserve">
+    <value>Расчёты v2</value>
+    <comment>Title of the settlement v2 tile, and the caption of its claim dialog's total. Keep "v2".</comment>
+  </data>
+  <data name="sn_ledger_unavailable" xml:space="preserve">
+    <value>Недоступно</value>
+    <comment>Settlement v2 tile: shown instead of the balances when they cannot be read, never a zero.</comment>
   </data>
   <data name="sn_payout_schedule" xml:space="preserve">
     <value>Заработок рассчитывается каждую эпоху и выплачивается в SN25α на ваш coldkey Bittensor, когда вы его получаете.</value>

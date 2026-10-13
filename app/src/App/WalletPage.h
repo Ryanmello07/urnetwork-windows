@@ -7,17 +7,18 @@
 //           its overflow, "Connect Solana wallet" (SolanaWalletSheets); the
 //           Solana payout wallet that USDC payouts go to until the Bittensor
 //           migration completes, and the USDC still waiting for one; the
-//           unclaimed SN25a tile and the claim dialog; the Top 200 head-spot
-//           tile
+//           unclaimed SN25a tile and the claim dialog; beside it settlement
+//           v2's section, the coldkey's v2 accounts, and their claim dialog;
+//           the Top 200 head-spot tile
 //   pane B  the per-epoch history (points; the alpha column only with a
 //           wallet) and the leaderboard, one at a time
 //   pane C  own ranking, reliability
 //
 // Points are URnetwork's own system and always the headline. Alpha accrues
 // from the first epoch after the wallet was attached, never retroactively.
-// Claims are the SDK's on this device, straight to the settlement vault; no
-// URnetwork API is in that path, and the app only ever sees the gas key's
-// address and its ss58 mirror.
+// Claims are the SDK's on this device, straight to the settlement vault (v1)
+// or vault2 (v2); no URnetwork API is in that path, and the app only ever sees
+// the gas key's address and its ss58 mirror.
 //
 // One unit of the per-page split of MainWindow. It owns the destination's
 // state and the fetches; MainWindow's XAML event handlers forward here.
@@ -141,6 +142,9 @@ class WalletPage {
                           winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   winrt::fire_and_forget OnClaimAlpha(winrt::Windows::Foundation::IInspectable const&,
                                       winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
+  // settlement v2's Claim: the v2 claim dialog
+  winrt::fire_and_forget OnClaimV2(winrt::Windows::Foundation::IInspectable const&,
+                                   winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnClaimTop200(winrt::Windows::Foundation::IInspectable const&,
                      winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OpenProtocolSite();  // the "Learn more" link beside the wallet note
@@ -152,8 +156,8 @@ class WalletPage {
   // The ledger header's "Earnings actions" overflow, shown while pane A is
   // folded (the fold-doors design note's COMMAND-DOOR DUPLICATION): one menu
   // whose items call the SAME member handlers the rail's buttons call - claim,
-  // wallet connect/change, the Solana menu and upgrade - so the door survives
-  // the fold without any element being built twice.
+  // settlement v2's claim, wallet connect/change, the Solana menu and upgrade -
+  // so the door survives the fold without any element being built twice.
   void ShowEarningsActionsMenu(winrt::Microsoft::UI::Xaml::FrameworkElement const& anchor);
 
   void RefreshAfterWalletChange();
@@ -245,6 +249,7 @@ class WalletPage {
   void LoadHead();
   void LoadClaims();
   void LoadGas();
+  void LoadV2Accounts();
 
   // ---- points
   void ApplyPoints(std::vector<urnet::AccountPoint> const& points, Fetch state);
@@ -332,6 +337,20 @@ class WalletPage {
   Claimer MakeClaimer();
   std::string ExplorerTxUrl() const;
   const EpochClaim* ClaimForEpoch(int64_t epoch) const;
+
+  // ---- settlement v2
+  // The read's answer: its state and, when Ready, the accounts (a failed read
+  // and a missing device session leave none).
+  void ApplyV2Accounts(snpayout::LedgerFetch fetch,
+                       std::vector<snpayout::LedgerAccount> const& accounts);
+  // The section beside the v1 tile (snpayout::LedgerSectionFor), from the
+  // coldkey, the chain settings, the read and the device.
+  void RebuildV2Section();
+  // The chain settings name a vault2 (Vault2Address): v2 claims are configured.
+  bool Vault2Configured() const;
+  // The SDK's v2 claim, wrapped for the v2 dialog (Device.snLedgerClaim); after
+  // its Done the page reads the accounts and the gas balance again.
+  LedgerClaimer MakeV2Claimer();
 
   // ---- reliability
   void ApplyReliability(std::optional<urnet::ReliabilityWindow> window, Fetch state);
@@ -475,6 +494,9 @@ class WalletPage {
   std::optional<GasKeyInfo> gas_;
   std::optional<HeadInfo> head_;
   bool chainSynced_ = false;
+  // settlement v2: the read, and the accounts it answered with
+  snpayout::LedgerFetch v2Fetch_ = snpayout::LedgerFetch::Loading;
+  std::vector<snpayout::LedgerAccount> v2Accounts_;
 
   int64_t leaderboardRank_ = 0;
   int64_t leaderboardCount_ = 0;
@@ -486,6 +508,7 @@ class WalletPage {
   Flow rankingFlow_;
 
   std::shared_ptr<urnw::ClaimAlphaSheet> claimSheet_;
+  std::shared_ptr<urnw::ClaimLedgerSheet> v2ClaimSheet_;
 
   // the Solana payout wallet: the view last committed from the three reads, and
   // the load whose answers are still coming in
