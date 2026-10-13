@@ -1070,6 +1070,37 @@
                                                Style="{StaticResource UrRowNoteStyle}"
                                                TextTrimming="None" />
                                 </Border>
+                                <!-- The lag.dev speed tests switch (lag.dev/PLAN.md C4): whether
+                                     the extender role serves lag.dev's measurement API. It rides
+                                     on the role, so it shows only beside the Extender switch,
+                                     hidden, never disabled, and its title starts under the
+                                     Extender title. ConnectPage::ApplySpeedTestsRow is its one
+                                     writer. -->
+                                <Border x:Name="SpeedTestsRow" Visibility="Collapsed"
+                                        Style="{StaticResource UrPaneRowStyle}" MinHeight="44">
+                                    <Grid ColumnSpacing="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <!-- the Extender dot's column, so the titles line up -->
+                                        <Grid Width="12" />
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center"
+                                                    Spacing="1">
+                                            <TextBlock x:Name="SpeedTestsLabel"
+                                                       Style="{StaticResource UrRowTitleStyle}" />
+                                            <TextBlock x:Name="SpeedTestsDescription"
+                                                       TextWrapping="Wrap"
+                                                       Style="{StaticResource UrRowNoteStyle}"
+                                                       TextTrimming="None" />
+                                        </StackPanel>
+                                        <ToggleSwitch x:Name="SpeedTestsToggle" Grid.Column="2" Width="44"
+                                                      Style="{StaticResource UrSwitchToggleStyle}"
+                                                      AutomationProperties.LabeledBy="{Binding ElementName=SpeedTestsLabel}"
+                                                      Toggled="OnSpeedTestsToggled" />
+                                    </Grid>
+                                </Border>
 
                                 <!-- connect options ................................ -->
                                 <Border Style="{StaticResource UrGroupHeaderStyle}">

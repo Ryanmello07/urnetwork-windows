@@ -4152,6 +4152,7 @@ void SdkHost::ProviderOnlyStatsLoop() {
   for (;;) {
     bool wanted = false;
     std::optional<bool> extenderWrite;
+    std::optional<bool> measurementsWrite;
     std::optional<proto::ResetExtenders> extenderReset;
     {
       std::unique_lock lock(providerOnlyMutex_);
@@ -4161,12 +4162,15 @@ void SdkHost::ProviderOnlyStatsLoop() {
       providerOnlyKick_ = false;
       wanted = providerOnlyStatusWanted_;
       extenderWrite = std::exchange(providerOnlyExtenderWrite_, std::nullopt);
+      measurementsWrite = std::exchange(providerOnlyMeasurementsWrite_, std::nullopt);
       extenderReset = std::exchange(extenderResetResend_, std::nullopt);
     }
     try {
       // The Extender switch's write, outside mutex_ like the read below and
       // before it, so this pass's answer already carries it.
       if (extenderWrite) WriteProviderOnlyExtender(*extenderWrite);
+      // The speed tests switch's write, the same way.
+      if (measurementsWrite) WriteProviderOnlyMeasurements(*measurementsWrite);
       // An owed extender reset, sent once more, outside mutex_ too.
       if (extenderReset) ResendExtenderReset(*extenderReset);
       bool presenting = false;
@@ -4280,6 +4284,28 @@ void SdkHost::WriteProviderOnlyExtender(bool on) {
   extenderProvideRepublish_ = true;
 }
 
+void SdkHost::QueueProviderOnlyMeasurementsWrite(bool on) {
+  {
+    std::scoped_lock lock(providerOnlyMutex_);
+    // a flip that has not gone out yet is replaced by the newer one
+    providerOnlyMeasurementsWrite_ = on;
+    providerOnlyKick_ = true;
+  }
+  providerOnlyCv_.notify_all();
+}
+
+void SdkHost::WriteProviderOnlyMeasurements(bool on) {
+  std::string error;
+  const bool written = service_.IsConnected() && service_.SetMeasurementsEnabled(on, &error);
+  if (!written) {
+    LogWarn("sdkhost: provide: the service did not write the measurements setting: {}",
+            error.empty() ? "no control channel" : error);
+  }
+  // Written or refused, the next status replaces the switch's guess.
+  std::scoped_lock lock(drawerMutex_);
+  extenderProvideRepublish_ = true;
+}
+
 void SdkHost::QueueExtenderResetResend(proto::ResetExtenders request) {
   {
     std::scoped_lock lock(providerOnlyMutex_);
@@ -4337,9 +4363,11 @@ void SdkHost::ShowProviderOnlyStatsLocked(const proto::ProviderStats& stats) {
   // all hidden.
   ExtenderProvideStatusView extender = ExtenderProvideStatusViewOf(
       proto::ExtenderProvideStatusOf<urnet::ExtenderProvideStatus>(stats),
-      [&stats] { return stats.provide_extender; });
+      [&stats] { return stats.provide_extender; },
+      [&stats] { return stats.measurements_enabled; });
   extender.providerOnly = true;
   extender.serviceWritable = stats.provide_extender_writable;
+  extender.measurementsServiceWritable = stats.measurements_enabled_writable;
   PublishExtenderProvideView(std::move(extender));
 }
 
@@ -4910,7 +4938,7 @@ void SdkHost::PublishExtenderProvideStatus(std::optional<urnet::ExtenderProvideS
   // deadlock it, and the read is made without mutex_, as every listener callback
   // here reads the device: the subscription is dropped in ClosePresentationLocked
   // before the device is, and mutex_ is held across a whole bootstrap.
-  ExtenderProvideStatusView view = ExtenderProvideStatusViewOf(status, [this] {
+  const auto readSetting = [this] {
     // D4: with the control pipe down the getter is an rpc into a dying service
     // that waits out the transport timeout on the callback goroutine, holding the
     // DeviceRemote lock every UI-thread setter needs. The setting last published
@@ -4918,7 +4946,15 @@ void SdkHost::PublishExtenderProvideStatus(std::optional<urnet::ExtenderProvideS
     if (device_ && service_.IsConnected()) return device_->getProvideExtender();
     std::scoped_lock lock(drawerMutex_);
     return lastExtenderProvideStatus_.provideExtender;
-  });
+  };
+  // the lag.dev measurements setting (the speed tests switch), by the same rule
+  const auto readMeasurements = [this] {
+    if (device_ && service_.IsConnected()) return device_->getMeasurementsEnabled();
+    std::scoped_lock lock(drawerMutex_);
+    return lastExtenderProvideStatus_.measurementsEnabled;
+  };
+  ExtenderProvideStatusView view =
+      ExtenderProvideStatusViewOf(status, readSetting, readMeasurements);
   PublishExtenderProvideView(std::move(view));
 }
 
@@ -5431,6 +5467,32 @@ void SdkHost::SetProvideExtender(bool on) {
   // for the write within its one-second epoch, but two flips inside one epoch
   // can land on the status already published, which the dedup would drop and so
   // leave the guess standing.
+  std::scoped_lock drawerLock(drawerMutex_);
+  extenderProvideRepublish_ = true;
+}
+
+void SdkHost::SetMeasurementsEnabled(bool on) {
+  std::scoped_lock lock(mutex_);
+  ExtenderProvideStatusView shown;
+  {
+    std::scoped_lock drawerLock(drawerMutex_);
+    shown = lastExtenderProvideStatus_;
+  }
+  switch (SpeedTestsWriteRouteFor(device_.has_value(), shown)) {
+    case ExtenderProvideWriteRoute::Device:
+      break;
+    case ExtenderProvideWriteRoute::Service:
+      // Not on this (UI) thread, as the Extender switch's write.
+      QueueProviderOnlyMeasurementsWrite(on);
+      return;
+    case ExtenderProvideWriteRoute::None:
+      return;
+  }
+  // The device persists it in its space and applies it at once; detached, the
+  // DeviceRemote queues it for the next sync.
+  device_->setMeasurementsEnabled(on);
+  // The switch paints its guess after this returns; the device's next status
+  // replaces it, even one equal to the last published.
   std::scoped_lock drawerLock(drawerMutex_);
   extenderProvideRepublish_ = true;
 }

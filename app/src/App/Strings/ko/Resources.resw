@@ -3571,6 +3571,14 @@
     <value>익스텐더 설정을 저장했습니다</value>
     <comment>Confirmation after the extender settings are saved.</comment>
   </data>
+  <data name="extender_speed_tests" xml:space="preserve">
+    <value>lag.dev 속도 테스트</value>
+    <comment>Title of the switch under the Extender setting that lets people on lag.dev run latency and speed tests to this device. lag.dev is a website name and stays as written.</comment>
+  </data>
+  <data name="extender_speed_tests_description" xml:space="preserve">
+    <value>lag.dev에서 연결을 테스트하는 사람들이 이 기기까지의 지연 시간, 다운로드, 업로드를 측정할 수 있도록 합니다. 테스트가 실행되는 동안 대역폭의 일부를 사용합니다.</value>
+    <comment>Secondary text under the lag.dev speed tests switch: what turning it on allows, and its cost. lag.dev is a website name and stays as written.</comment>
+  </data>
   <data name="extender_start_failed" xml:space="preserve">
     <value>시작할 수 없음: {}</value>
     <comment>Extender status when the setting is on and the device is providing, but the role could not start in this network space: no extender directory or no identity. The argument is the reason.</comment>

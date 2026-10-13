@@ -2147,6 +2147,59 @@ bool TunnelController::SetProvideExtender(bool on, std::string& error) {
   return true;
 }
 
+bool TunnelController::SetMeasurementsEnabled(bool on, std::string& error) {
+  // Timed, as SetProvideExtender's: a wedged bring-up must not hold the control
+  // pipe. The app then shows the setting as it stands.
+  std::unique_lock<std::timed_mutex> lock(mutex_, std::defer_lock);
+  if (!lock.try_lock_for(kStopLockBudget)) {
+    error = "a tunnel operation is in progress";
+    LogWarn("provide: set_measurements_enabled refused: the session lock was not free "
+            "within {}ms",
+            kStopLockBudget.count());
+    return false;
+  }
+  // the provide extender setting's rule (Common/ProvideLifecycle.h): the same
+  // space holds both, and the same devices read them
+  const provide::ExtenderSettingTarget target = provide::ExtenderSettingTargetFor(
+      providerDevice_ != nullptr, device_.has_value(), spaceManager_ && lastSpaceKey_);
+  try {
+    switch (target) {
+      case provide::ExtenderSettingTarget::ProviderDevice:
+        // persisted in its space and applied at once: the measurement API starts
+        // or stops, and the operator withdraws or restores the name
+        providerDevice_->setMeasurementsEnabled(on);
+        RefreshProviderMeasurementsLocked();
+        break;
+      case provide::ExtenderSettingTarget::SessionDevice:
+        device_->setMeasurementsEnabled(on);
+        break;
+      case provide::ExtenderSettingTarget::NetworkSpace: {
+        urnet::NetworkSpace space = spaceManager_->getNetworkSpace(lastSpaceKey_);
+        if (!space) {
+          error = "the last device's network space is gone";
+          LogWarn("provide: set_measurements_enabled refused: {}", error);
+          return false;
+        }
+        space.getAsyncLocalState().getLocalState().setMeasurementsEnabled(on);
+        break;
+      }
+      case provide::ExtenderSettingTarget::None:
+        error = "no device has run in this service yet, so there is no network space to keep the "
+                "setting in";
+        LogWarn("provide: set_measurements_enabled refused: {}", error);
+        return false;
+    }
+  } catch (const std::exception&) {
+    error = std::string("the measurements setting could not be written to ") +
+            provide::ToString(target);
+    LogError("provide: stage=set-measurements-enabled outcome=failed target={}",
+             provide::ToString(target));
+    return false;
+  }
+  LogInfo("provide: lag.dev measurements {} ({})", on ? "on" : "off", provide::ToString(target));
+  return true;
+}
+
 TunnelController::ExtenderResetResult TunnelController::ResetExtenders(
     const proto::ResetExtenders& request) {
   ExtenderResetResult result;
@@ -2208,6 +2261,7 @@ void TunnelController::RetireProviderDeviceLocked() {
     providerClientId_.clear();
     providerExtender_.reset();
     providerExtenderSetting_ = false;
+    providerMeasurementsSetting_ = true;
   }
   // The network watch's handlers are dropped on this thread, as
   // TearDownSessionLocked drops the session monitor's, so the monitor the
@@ -2350,6 +2404,9 @@ void TunnelController::OpenProviderStatsLocked() {
   auto extender = std::make_shared<LatestExtenderProvideStatus>();
   urnet::Sub extenderSub;
   bool extenderSetting = false;
+  // the lag.dev measurements setting rides on the role (lag.dev/PLAN.md C4):
+  // read with it, and reported only beside it
+  bool measurementsSetting = true;
   try {
     extenderSub = providerDevice_->addExtenderProvideStatusChangeListener(
         [extender](std::optional<urnet::ExtenderProvideStatus> status) {
@@ -2357,6 +2414,7 @@ void TunnelController::OpenProviderStatsLocked() {
         });
     extender->Store(providerDevice_->getExtenderProvideStatus());
     extenderSetting = providerDevice_->getProvideExtender();
+    measurementsSetting = providerDevice_->getMeasurementsEnabled();
   } catch (const std::exception&) {
     LogWarn("provide: the provider-only device's extender status could not be read; the "
             "app shows no extender row or plot while disconnected");
@@ -2371,6 +2429,7 @@ void TunnelController::OpenProviderStatsLocked() {
   providerExtenderSub_ = std::move(extenderSub);
   providerExtender_ = std::move(extender);
   providerExtenderSetting_ = extenderSetting;
+  providerMeasurementsSetting_ = measurementsSetting;
 }
 
 void TunnelController::RefreshProviderExtenderLocked() {
@@ -2393,6 +2452,21 @@ void TunnelController::RefreshProviderExtenderLocked() {
   if (!providerExtender_) return;
   providerExtender_->Store(std::move(status));
   providerExtenderSetting_ = setting;
+}
+
+void TunnelController::RefreshProviderMeasurementsLocked() {
+  bool setting = true;
+  try {
+    setting = providerDevice_->getMeasurementsEnabled();
+  } catch (const std::exception&) {
+    LogWarn("provide: re-reading the provider-only device's measurements setting failed; "
+            "its next statistics open reports it");
+    return;
+  }
+  std::scoped_lock lock(providerStatsMutex_);
+  // reported only beside the role, as the extender setting is
+  if (!providerExtender_) return;
+  providerMeasurementsSetting_ = setting;
 }
 
 void TunnelController::WatchProviderNetworkLocked() {
@@ -2482,6 +2556,10 @@ proto::ProviderStats TunnelController::ProviderStats() {
     if (auto status = providerExtender_->Load()) stats.extender_provide_status = *status;
     stats.provide_extender = providerExtenderSetting_;
     stats.provide_extender_writable = true;
+    // and the lag.dev measurements setting, which this service writes too
+    // (SetMeasurementsEnabled)
+    stats.measurements_enabled = providerMeasurementsSetting_;
+    stats.measurements_enabled_writable = true;
   }
   return stats;
 }

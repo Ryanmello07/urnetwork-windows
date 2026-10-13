@@ -188,6 +188,15 @@ nlohmann::json ControlServer::Handle(const nlohmann::json& request) {
       std::string error;
       reply.ok = tunnel_.SetProvideExtender(req.provide_extender, error);
       reply.error = error;
+    } else if (type == proto::msg::kSetMeasurementsEnabled) {
+      // The lag.dev speed tests switch while disconnected (TunnelController::
+      // SetMeasurementsEnabled), on this pipe under its access rule like the
+      // Extender switch's. A request without the value throws out of the get<>
+      // as a failed reply; the next get_provider_stats carries the setting.
+      proto::SetMeasurementsEnabled req = request.get<proto::SetMeasurementsEnabled>();
+      std::string error;
+      reply.ok = tunnel_.SetMeasurementsEnabled(req.measurements_enabled, error);
+      reply.error = error;
     } else if (type == proto::msg::kResetExtenders) {
       // "Reset extenders" in the app's Account > Extenders (TunnelController::
       // ResetExtenders), on this pipe under its access rule (kPipeSddl) like

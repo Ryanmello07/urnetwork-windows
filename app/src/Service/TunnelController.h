@@ -213,6 +213,13 @@ class TunnelController {
   // Timed like StartProvider: a bring-up holding the session lock refuses it.
   // False with `error` when nothing took the write.
   bool SetProvideExtender(bool on, std::string& error);
+  // The lag.dev speed tests switch while there is no session
+  // (set_measurements_enabled, lag.dev/PLAN.md C4). Writes the measurements
+  // setting where SetProvideExtender writes the provide extender setting, by
+  // the same rule and under the same budget: the provider-only device (applied
+  // at once, and in the next get_provider_stats), a session's device, or the
+  // space the last device ran in. False with `error` when nothing took it.
+  bool SetMeasurementsEnabled(bool on, std::string& error);
   // reset_extenders (Protocol.h ResetExtenders; connect EXTENDER.md E7): the
   // app reset its own space and hands the reset's id here. Applied to the
   // space spaceManager_ holds under the request's key, which is the one object
@@ -526,6 +533,11 @@ class TunnelController {
   // listener's next push. Nothing when the role's reading never opened. SDK
   // calls; caller holds mutex_.
   void RefreshProviderExtenderLocked();
+  // Read the provider-only device's measurements setting again after
+  // set_measurements_enabled wrote it through this device, into the copy
+  // get_provider_stats answers. Nothing when the role's reading never opened.
+  // An SDK call; caller holds mutex_.
+  void RefreshProviderMeasurementsLocked();
   // Tell the provider-only device the network moved, as the tunnel session's
   // device is told by TunnelWatchdog's sampler, which EgressMonitor feeds. An
   // observe-only EgressMonitor (it binds nothing, so the device's sockets
@@ -691,6 +703,10 @@ class TunnelController {
   urnet::Sub providerExtenderSub_;
   std::shared_ptr<LatestExtenderProvideStatus> providerExtender_;
   bool providerExtenderSetting_ = false;
+  // The lag.dev measurements setting, read beside providerExtenderSetting_ and
+  // again after set_measurements_enabled writes it through this device
+  // (RefreshProviderMeasurementsLocked). On by default, as the sdk's.
+  bool providerMeasurementsSetting_ = true;
   // The standalone log upload device's slot (LogUploadDevice), empty while
   // none was built. A third device slot, never engaged beside device_ or
   // providerDevice_: both are built only after RetireLogUploadDeviceLocked.
