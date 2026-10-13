@@ -99,15 +99,19 @@ class WalletPage {
   // Every Earnings fetch: points, reliability, the epoch history, the coldkey,
   // the head-spot status - and, once the coldkey is known, the claims and the
   // gas key from the chain. Each settles its own panel independently, so one
-  // failing source does not blank the others.
+  // failing source does not blank the others. It also asks the leaderboard's
+  // load gate (LoadLeaderboardIfShowing), for a session that starts with the
+  // Leaderboard tab already selected.
   void LoadWallet();
   void LoadLeaderboard();
+  // The board's one load gate: once per session, signed in, tab selected.
+  void LoadLeaderboardIfShowing();
 
   // Drop everything the leaderboard, the points figure and the history were
   // saying about the account that just signed out, and re-arm the board's
-  // first-show fetch. leaderboardLoaded_ is the dangerous one: it is the only
-  // load trigger the Leaderboard tab has on this destination, so a guard left
-  // set shows the next sign-in the PREVIOUS account's table and own rank.
+  // first-show fetch. leaderboardLoaded_ is the dangerous one: it gates the
+  // board's only load (LoadLeaderboardIfShowing), so a guard left set shows
+  // the next sign-in the PREVIOUS account's table and own rank.
   void ResetForSignOut();
 
   // --preview-ui: settle every panel on its empty state (or, with
@@ -550,14 +554,15 @@ class WalletPage {
   std::optional<urnet::Sub> pointsSub_;
   uint64_t pointsVcDevice_ = 0;  // the device handle the controller was opened on
   bool pointsBoardShowing_ = false;
-  // The Leaderboard tab's first-show fetch guard: nothing else calls
-  // LoadLeaderboard on the wallet load path (MainWindow loads only LoadWallet),
-  // so without it the tab sits on "Loading..." until the ranking toggle is
-  // flipped. Tab flips must not re-fetch - the board is slower-moving than the
-  // ledger - so the load runs once and the ranking toggle's own re-read keeps
-  // its explicit call. ResetForSignOut re-arms it: the guard is per-ACCOUNT,
-  // not per-run - left set, the next sign-in on this app run would keep the
-  // previous account's table and own rank with no fetch ever replacing them.
+  // The Leaderboard's once-per-session fetch guard, read only by
+  // LoadLeaderboardIfShowing, which both ways the board starts showing ask
+  // (the tab's selection, and LoadWallet for a session that starts with the
+  // tab selected). Tab flips must not re-fetch - the board is slower-moving
+  // than the ledger - so the load runs once and the ranking toggle's own
+  // re-read keeps its explicit call. ResetForSignOut re-arms it: the guard is
+  // per-ACCOUNT, not per-run - left set, the next sign-in on this app run would
+  // keep the previous account's table and own rank with no fetch ever
+  // replacing them.
   bool leaderboardLoaded_ = false;
   std::vector<PointsRow> pointsRows_;
   std::string pointsSort_ = urnet::PointsLeaderboardSortPoints;

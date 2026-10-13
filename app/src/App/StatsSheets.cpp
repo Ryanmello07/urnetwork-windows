@@ -15,6 +15,7 @@
 #include <cmath>
 #include <unordered_set>
 
+#include "AppRuleRows.h"  // the app split rules sheet's list: one row per app
 #include "BlockActionReason.h"  // safety-rule chip + "Route locally" offer
 #include "FastDnsOnConnect.h"
 #include "Localization.h"
@@ -1410,11 +1411,12 @@ void DnsEditorSheet::BuildResolverSection(StackPanel const& parent) {
     Grid::SetColumn(label, 0);
     row.Children().Append(label);
     toggle = MakeBareToggle();
-    ToggleSwitch captured = toggle;
-    toggle.Toggled([weak, captured, flag](IInspectable const&, RoutedEventArgs const&) {
+    // the switch from the sender: a handler holding it would own its own
+    // switch (tests/handler_self_capture_test.go)
+    toggle.Toggled([weak, flag](IInspectable const& sender, RoutedEventArgs const&) {
       auto self = weak.lock();
       if (!self || self->updating_) return;
-      self->draft_.*flag = captured.IsOn();
+      self->draft_.*flag = sender.as<ToggleSwitch>().IsOn();
       self->OnDraftChanged();
     });
     Grid::SetColumn(toggle, 1);
@@ -1490,13 +1492,12 @@ void DnsEditorSheet::BuildSuggestionSection(StackPanel const& parent) {
     suggestion.toggle = MakeBareToggle();
     {
       std::string ipv4 = server.Ipv4;
-      ToggleSwitch toggle = suggestion.toggle;
-      suggestion.toggle.Toggled([weak, ipv4, toggle](IInspectable const&,
-                                                     RoutedEventArgs const&) {
+      // the switch from the sender, as above
+      suggestion.toggle.Toggled([weak, ipv4](IInspectable const& sender, RoutedEventArgs const&) {
         auto self = weak.lock();
         if (!self || self->updating_) return;
         auto& values = self->draft_.remoteDnsIpv4;
-        if (toggle.IsOn()) {
+        if (sender.as<ToggleSwitch>().IsOn()) {
           // on adds the server to the remote dns list and enables remote dns
           if (std::find(values.begin(), values.end(), ipv4) == values.end()) {
             values.push_back(ipv4);
@@ -1937,16 +1938,17 @@ void TransportSettingsSheet::BuildAutoRow(StackPanel const& parent, std::string 
   {
     std::weak_ptr<TransportSettingsSheet> weak = weak_from_this();
     const std::string captured = mode;
-    ToggleSwitch capturedToggle = toggle;
-    toggle.Toggled([weak, captured, capturedToggle](IInspectable const&, RoutedEventArgs const&) {
+    // the switch from the sender: a handler holding it would own its own
+    // switch (tests/handler_self_capture_test.go)
+    toggle.Toggled([weak, captured](IInspectable const& sender, RoutedEventArgs const&) {
       auto self = weak.lock();
       if (!self || self->updating_) return;
       // through the SDK: a newly enabled carrier takes its default priority so
       // the fixed preference order is preserved, and disabling the LAST enabled
       // carrier is refused (the returned copy equals the input) -- SyncFromDraft
       // then puts the switch back to the truth
-      self->SetDraft(urnet::transportSettingsWithAutoModeEnabled(self->draft_, captured,
-                                                                 capturedToggle.IsOn()));
+      self->SetDraft(urnet::transportSettingsWithAutoModeEnabled(
+          self->draft_, captured, sender.as<ToggleSwitch>().IsOn()));
     });
   }
   Grid::SetColumn(toggle, 1);
@@ -2040,11 +2042,9 @@ void TransportSettingsSheet::SyncFromDraft() {
 
 // ---- Per-app split tunnel --------------------------------------------------
 
-static std::string LowerAscii(std::string s) {
-  std::transform(s.begin(), s.end(), s.begin(),
-                 [](unsigned char c) { return (char)std::tolower(c); });
-  return s;
-}
+// The one key for an app on this sheet (AppRuleRows.h): the row cache, the
+// rule lookup and the chips all go through it.
+static std::string LowerAscii(std::string s) { return apprules::RowKey(std::move(s)); }
 
 std::shared_ptr<AppRulesSheet> AppRulesSheet::Create(XamlRoot const& root, SdkHost& sdk) {
   auto sheet = std::shared_ptr<AppRulesSheet>(new AppRulesSheet(sdk));
@@ -2146,27 +2146,13 @@ void AppRulesSheet::RenderList() {
   std::unordered_map<std::string, bool> ruleFor;  // lower(path) -> includeInTunnel
   for (const auto& r : rules) ruleFor[LowerAscii(r.imagePath)] = r.includeInTunnel;
 
-  // ruled apps pinned on top (rule order), then the remaining installed apps.
-  // A ruled app that wasn't enumerated still gets a row (name = image basename)
-  // so an existing rule stays visible + changeable.
-  std::unordered_map<std::string, const InstalledApp*> installedByPath;
-  for (const auto& a : installed_) installedByPath[LowerAscii(a.exePath)] = &a;
-  std::vector<InstalledApp> ruled;
-  for (const auto& r : rules) {
-    if (auto it = installedByPath.find(LowerAscii(r.imagePath));
-        it != installedByPath.end()) {
-      ruled.push_back(*it->second);
-      continue;
-    }
-    std::string name = r.imagePath;
-    if (auto slash = name.find_last_of("\\/"); slash != std::string::npos)
-      name = name.substr(slash + 1);
-    ruled.push_back({name, r.imagePath});
-  }
-  std::vector<InstalledApp> unruled;
-  for (const auto& a : installed_) {
-    if (!ruleFor.count(LowerAscii(a.exePath))) unruled.push_back(a);
-  }
+  // ruled apps pinned on top (rule order), then the remaining installed apps,
+  // ONE ROW PER APP: two rules whose paths differ only in case are one app's,
+  // and its one cached row wanted twice is what the reconcile below cannot
+  // place (AppRuleRows.h). A ruled app that wasn't enumerated still gets a row
+  // (name = image basename) so an existing rule stays visible + changeable.
+  const std::vector<InstalledApp> ruled = apprules::RuledApps(rules, installed_);
+  const std::vector<InstalledApp> unruled = apprules::UnruledApps(rules, installed_);
 
   // the search row's substring filter over name + path (case-insensitive);
   // an empty query shows every app
@@ -2218,24 +2204,9 @@ void AppRulesSheet::RenderList() {
   // ClientContractsSheet move-in-place idiom), so the list's theme transitions
   // animate the difference. Membership compares the IUIElement pointer: COM QI
   // determinism makes it stable per object.
-  for (uint32_t i = appsList_.Children().Size(); i > 0; --i) {
-    UIElement child = appsList_.Children().GetAt(i - 1);
-    const bool keep = std::any_of(want.begin(), want.end(), [&](UIElement const& w) {
-      return winrt::get_abi(w) == winrt::get_abi(child);
-    });
-    if (!keep) appsList_.Children().RemoveAt(i - 1);
-  }
-  for (uint32_t i = 0; i < want.size(); ++i) {
-    uint32_t cur = 0;
-    if (appsList_.Children().IndexOf(want[i], cur)) {
-      if (cur != i) {
-        appsList_.Children().RemoveAt(cur);
-        appsList_.Children().InsertAt(i, want[i]);
-      }
-    } else {
-      appsList_.Children().InsertAt(i, want[i]);
-    }
-  }
+  apprules::Reconcile(appsList_.Children(), want, [](UIElement const& a, UIElement const& b) {
+    return winrt::get_abi(a) == winrt::get_abi(b);
+  });
 
   RefreshRuleState();
 }

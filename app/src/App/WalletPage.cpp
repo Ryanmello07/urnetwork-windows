@@ -788,14 +788,24 @@ void WalletPage::OnEarningsTableChanged(SelectorBar const& bar,
   w_.LeaderboardHost().Visibility(leaderboard ? Visibility::Visible : Visibility::Collapsed);
   ApplyLedgerMeta();
   if (leaderboard && pointsBoardShowing_) EnsurePointsBoard();
-  // First show fetches the board (see leaderboardLoaded_): nothing else loads
-  // it on this destination, and the fetch only runs when signed in - signed-out
-  // keeps the guard clear so the post-login show still loads.
-  if (leaderboard && !leaderboardLoaded_ && Sdk().IsLoggedIn()) {
-    leaderboardLoaded_ = true;
-    LoadLeaderboard();
-  }
+  // Selecting the tab shows the board: the first show in a session fetches it.
+  LoadLeaderboardIfShowing();
   UpdatePointsIndicator();
+}
+
+// The board's one load gate: once per session (leaderboardLoaded_), only while
+// signed in, and only while it is showing - its tab is the selected one, which
+// is exactly when its host is visible. That becomes true two ways, and both ask
+// here: the tab is selected (OnEarningsTableChanged), or a session starts with
+// the tab still selected, since a sign-out does not change the selection. The
+// second is this destination's own load, LoadWallet, which MainWindow runs on
+// sign-in and on navigation. Asking only on the first left a re-sign-in with
+// the tab selected on "Loading..." until the user switched tabs.
+void WalletPage::LoadLeaderboardIfShowing() {
+  if (leaderboardLoaded_ || !Sdk().IsLoggedIn()) return;
+  if (w_.LeaderboardHost().Visibility() != Visibility::Visible) return;
+  leaderboardLoaded_ = true;
+  LoadLeaderboard();
 }
 
 // ---- loading ---------------------------------------------------------------
@@ -809,6 +819,7 @@ void WalletPage::LoadWallet() {
   LoadSnWallet();  // continues into LoadClaims/LoadGas once the coldkey is known
   LoadHead();
   LoadLegacyWallets();
+  LoadLeaderboardIfShowing();
 }
 
 void WalletPage::RefreshAfterWalletChange() { LoadWallet(); }

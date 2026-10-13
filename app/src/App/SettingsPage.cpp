@@ -400,9 +400,16 @@ void SettingsPage::BuildGeneralSection(Panel const& host) {
 // came from the toggle below or was restored from disk before any view existed.
 // applyingAdvancedMode_ stops the resulting IsOn write from echoing back out as
 // a user edit.
+//
+// It writes BOTH instances on every apply, and reads neither. A flip of either
+// toggle has already moved that one by the time its value comes back here, so
+// no instance can say whether the other still shows the old value: returning
+// early because the Device pane's copy already read `on` left the fold copy
+// stale, and it showed the old value as soon as the window narrowed. Writing a
+// value a toggle already shows raises no Toggled; the echo guard covers the
+// rest (tests/advanced_mode_twins_test.go).
 void SettingsPage::ApplyAdvancedMode(bool on) {
   if (!advancedMode_) return;  // the section is not built yet
-  if (advancedMode_.IsOn() == on) return;
   applyingAdvancedMode_ = true;
   advancedMode_.IsOn(on);
   // ...and the fold-gated copy (BuildAdvancedFoldSection) under the SAME echo

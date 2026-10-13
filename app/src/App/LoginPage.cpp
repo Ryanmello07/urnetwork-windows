@@ -1616,8 +1616,9 @@ void LoginPage::ShowPreviewSeedphraseSheet() {
   auto root = w_.Content().try_as<FrameworkElement>();
   if (root && !w_.Content().XamlRoot()) {
     auto token = std::make_shared<winrt::event_token>();
-    *token = root.Loaded([weak = w_.get_weak(), root, token](auto const&, auto const&) {
-      root.Loaded(*token);  // once
+    // the sender is `root`: a handler holding root would own its own element
+    *token = root.Loaded([weak = w_.get_weak(), token](IInspectable const& sender, auto const&) {
+      sender.as<FrameworkElement>().Loaded(*token);  // once
       if (auto self = weak.get()) self->login().ShowSeedphraseSheet(kTestVector);
     });
     return;

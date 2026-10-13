@@ -1955,9 +1955,10 @@ void MainWindow::LoadCurrentDestination() {
     // (The leaderboard tag is gone with its destination, so this branch could
     // never run: no NavigationViewItem carries it since Wallet + Leaderboard
     // merged into Earnings, where the leaderboard is a tab on the ledger pane.
-    // WalletPage still owns LoadLeaderboard for its own callers - the tab's
-    // first show loads it, and the ranking toggle re-reads the board when our
-    // row masks or unmasks.)
+    // WalletPage still owns LoadLeaderboard for its own callers - the board's
+    // first show in a session loads it, whether the tab is selected then or was
+    // already selected when LoadWallet ran (LoadLeaderboardIfShowing), and the
+    // ranking toggle re-reads the board when our row masks or unmasks.)
   } else if (tag == L"settings") {
     settings_->LoadSettings();
   }

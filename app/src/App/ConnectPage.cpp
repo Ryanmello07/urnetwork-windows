@@ -2253,15 +2253,16 @@ ConnectPage::ConnectionRowEntry ConnectPage::BuildConnectionRow(
     }
     // Right-tap (or the keyboard's menu key): the row's rule toggles and
     // copy-details. Advanced Mode only - Normal's static rows get no menu, the
-    // same division the click has.
-    const Controls::Button anchor = row.root;
+    // same division the click has. The menu anchors on the sender, which is
+    // the row's button: a handler holding that button keeps it, and itself,
+    // alive after the row leaves the feed (tests/handler_self_capture_test.go).
     row.root.ContextRequested(
-        [weak = w_.get_weak(), key, group, anchor](
-            auto const&,
+        [weak = w_.get_weak(), key, group](
+            IInspectable const& sender,
             winrt::Microsoft::UI::Xaml::Input::ContextRequestedEventArgs const& args) {
           args.Handled(true);
           if (auto self = weak.get()) {
-            self->connect().ShowConnectionRowMenu(anchor, key, group);
+            self->connect().ShowConnectionRowMenu(sender.as<FrameworkElement>(), key, group);
           }
         });
   }
