@@ -3535,6 +3535,14 @@ cách đúng đắn</value>
     <value>Đã lưu cài đặt bộ mở rộng</value>
     <comment>Confirmation after the extender settings are saved.</comment>
   </data>
+  <data name="extender_speed_tests" xml:space="preserve">
+    <value>Kiểm tra tốc độ lag.dev</value>
+    <comment>Title of the switch under the Extender setting that lets people on lag.dev run latency and speed tests to this device. lag.dev is a website name and stays as written.</comment>
+  </data>
+  <data name="extender_speed_tests_description" xml:space="preserve">
+    <value>Cho phép những người đang kiểm tra kết nối trên lag.dev đo độ trễ, tốc độ tải xuống và tải lên tới thiết bị này. Trong khi chạy, các bài kiểm tra sẽ dùng một phần băng thông của bạn.</value>
+    <comment>Secondary text under the lag.dev speed tests switch: what turning it on allows, and its cost. lag.dev is a website name and stays as written.</comment>
+  </data>
   <data name="extender_start_failed" xml:space="preserve">
     <value>Không thể khởi động: {}</value>
     <comment>Extender status when the setting is on and the device is providing, but the role could not start in this network space: no extender directory or no identity. The argument is the reason.</comment>

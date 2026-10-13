@@ -3607,6 +3607,14 @@
     <value>הגדרות המרחיב נשמרו</value>
     <comment>Confirmation after the extender settings are saved.</comment>
   </data>
+  <data name="extender_speed_tests" xml:space="preserve">
+    <value>בדיקות מהירות של lag.dev</value>
+    <comment>Title of the switch under the Extender setting that lets people on lag.dev run latency and speed tests to this device. lag.dev is a website name and stays as written.</comment>
+  </data>
+  <data name="extender_speed_tests_description" xml:space="preserve">
+    <value>אפשרו לאנשים שבודקים את החיבור שלהם ב-lag.dev למדוד השהיה, הורדה והעלאה למכשיר הזה. הבדיקות משתמשות בחלק מרוחב הפס שלכם בזמן שהן פועלות.</value>
+    <comment>Secondary text under the lag.dev speed tests switch: what turning it on allows, and its cost. lag.dev is a website name and stays as written.</comment>
+  </data>
   <data name="extender_start_failed" xml:space="preserve">
     <value>לא ניתן להפעיל: {}</value>
     <comment>Extender status when the setting is on and the device is providing, but the role could not start in this network space: no extender directory or no identity. The argument is the reason.</comment>

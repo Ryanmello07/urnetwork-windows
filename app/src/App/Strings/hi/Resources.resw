@@ -3558,6 +3558,14 @@
     <value>एक्सटेंडर सेटिंग सहेजी गईं</value>
     <comment>Confirmation after the extender settings are saved.</comment>
   </data>
+  <data name="extender_speed_tests" xml:space="preserve">
+    <value>lag.dev स्पीड टेस्ट</value>
+    <comment>Title of the switch under the Extender setting that lets people on lag.dev run latency and speed tests to this device. lag.dev is a website name and stays as written.</comment>
+  </data>
+  <data name="extender_speed_tests_description" xml:space="preserve">
+    <value>lag.dev पर अपने कनेक्शन की जाँच करने वाले लोगों को इस डिवाइस तक लेटेंसी, डाउनलोड और अपलोड मापने दें। चलते समय टेस्ट आपकी बैंडविड्थ का कुछ हिस्सा इस्तेमाल करते हैं।</value>
+    <comment>Secondary text under the lag.dev speed tests switch: what turning it on allows, and its cost. lag.dev is a website name and stays as written.</comment>
+  </data>
   <data name="extender_start_failed" xml:space="preserve">
     <value>शुरू नहीं हो सका: {}</value>
     <comment>Extender status when the setting is on and the device is providing, but the role could not start in this network space: no extender directory or no identity. The argument is the reason.</comment>
