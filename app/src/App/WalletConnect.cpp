@@ -6,18 +6,26 @@
 #include "WalletConnect.h"
 
 #include <windows.h>
+#include <sddl.h>
 #include <shellapi.h>
 #include <wincrypt.h>
 
 #include <cstdint>
+#include <cwchar>
+#include <filesystem>
+#include <iterator>
 #include <map>
+#include <random>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <nlohmann/json.hpp>
 
+#include "BridgeTrampoline.h"
 #include "Config.h"
 #include "Localization.h"
+#include "Log.h"
 #include "SolanaWalletPresentation.h"
 #include "Strings.h"
 #include "UrlQuery.h"
@@ -43,6 +51,9 @@ constexpr const char* kGoogleReturnPath = "/google";
 constexpr const char* kPlatform = "windows";
 constexpr const char* kAppUrl = "https://ur.io";
 constexpr const char* kCluster = "mainnet-beta";
+// A bridge page's DACL (BridgeTrampoline.h): protected, with full control for
+// its owner, the signed-in user who wrote it, and nothing for anyone else.
+constexpr wchar_t kOwnerOnlyFileSddl[] = L"D:P(A;;FA;;;OW)";
 
 std::wstring Widen(const std::string& s) {
   if (s.empty()) return L"";
@@ -145,9 +156,75 @@ std::optional<std::string> WalletConnect::SharedSecretBase58() const {
 }
 
 void WalletConnect::OpenUrl(const std::string& url) {
+  if (bridge::NeedsTrampoline(url)) {
+    OpenThroughTrampoline(url);
+    return;
+  }
   std::wstring w = Widen(url);
   HINSTANCE h = ShellExecuteW(nullptr, L"open", w.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
   if (reinterpret_cast<INT_PTR>(h) <= 32 && on_error) on_error("failed to open browser");
+}
+
+// A url longer than ShellExecuteW passes on (the payout consent's bridge url):
+// a page in the user's own temp directory that only its owner may open, which
+// replaces itself with the url. ShellExecuteW opens the page's short path, and
+// the page is deleted once the browser has had time to read it; a page an
+// earlier flow left (superseded, or the app quit first) goes with the next.
+void WalletConnect::OpenThroughTrampoline(const std::string& url) {
+  const auto fail = [this](const char* what) {
+    LogError("wallet bridge: {}", what);
+    if (on_error) on_error("failed to open browser");
+  };
+  const std::string page = bridge::TrampolinePage(url);
+  if (page.empty()) return fail("not opening a long bridge url that is not a plain https url");
+  wchar_t temp[MAX_PATH + 1]{};
+  const DWORD length = ::GetTempPathW(static_cast<DWORD>(std::size(temp)), temp);
+  if (length == 0 || length >= std::size(temp)) {
+    return fail("no temp directory for the bridge page");
+  }
+  const std::filesystem::path directory(temp);
+  WIN32_FIND_DATAW found{};
+  HANDLE search = ::FindFirstFileW((directory / bridge::kTrampolinePattern).c_str(), &found);
+  if (search != INVALID_HANDLE_VALUE) {
+    do {
+      ::DeleteFileW((directory / found.cFileName).c_str());
+    } while (::FindNextFileW(search, &found));
+    ::FindClose(search);
+  }
+  // 64 random bits name it: created new, never an existing file of that name
+  std::random_device random;
+  wchar_t name[17]{};
+  std::swprintf(name, std::size(name), L"%08x%08x", random(), random());
+  const std::filesystem::path path =
+      directory / (std::wstring(bridge::kTrampolinePrefix) + name + L".html");
+  SECURITY_ATTRIBUTES security{};
+  security.nLength = sizeof(security);
+  if (!::ConvertStringSecurityDescriptorToSecurityDescriptorW(
+          kOwnerOnlyFileSddl, SDDL_REVISION_1, &security.lpSecurityDescriptor, nullptr)) {
+    return fail("no security descriptor for the bridge page");
+  }
+  HANDLE file = ::CreateFileW(path.c_str(), GENERIC_WRITE, 0, &security, CREATE_NEW,
+                              FILE_ATTRIBUTE_TEMPORARY, nullptr);
+  ::LocalFree(security.lpSecurityDescriptor);
+  if (file == INVALID_HANDLE_VALUE) return fail("could not create the bridge page");
+  DWORD written = 0;
+  const bool wrote = ::WriteFile(file, page.data(), static_cast<DWORD>(page.size()), &written,
+                                 nullptr) &&
+                     written == page.size();
+  ::CloseHandle(file);
+  if (!wrote) {
+    ::DeleteFileW(path.c_str());
+    return fail("could not write the bridge page");
+  }
+  HINSTANCE h = ShellExecuteW(nullptr, L"open", path.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+  if (reinterpret_cast<INT_PTR>(h) <= 32) {
+    ::DeleteFileW(path.c_str());
+    return fail("could not open the bridge page");
+  }
+  std::thread([path] {
+    std::this_thread::sleep_for(bridge::kTrampolineLifetime);
+    ::DeleteFileW(path.c_str());
+  }).detach();
 }
 
 void WalletConnect::Connect(Provider p, bool offersManualEntry) {

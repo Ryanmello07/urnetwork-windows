@@ -353,9 +353,11 @@ class WalletPage {
   LedgerClaimer MakeV2Claimer();
 
   // ---- the payout consent (SnConsentPresentation.h)
-  // The network's consent (Api.snNetworkConsentStatus), and its answer.
+  // The network's consent (Api.snNetworkConsentStatus), and the answer to read
+  // number `read`, dropped unless it is the newest read's.
   void LoadConsentStatus();
-  void ApplyConsentStatus(snconsent::Fetch fetch, std::optional<snconsent::Status> const& status);
+  void ApplyConsentStatus(uint32_t read, snconsent::Fetch fetch,
+                          std::optional<snconsent::Status> const& status);
   // The panel beside settlement v2 (snconsent::PanelFor).
   void RebuildConsentPanel();
   // The server's challenge for `coldkeySs58`, then the signature of
@@ -529,6 +531,8 @@ class WalletPage {
   snconsent::Fetch consentFetch_ = snconsent::Fetch::Idle;
   std::optional<snconsent::Status> consent_;
   bool consentSigning_ = false;
+  // the newest read's number (LoadConsentStatus); a sign-out moves it on too
+  uint32_t consentReadGeneration_ = 0;
 
   int64_t leaderboardRank_ = 0;
   int64_t leaderboardCount_ = 0;

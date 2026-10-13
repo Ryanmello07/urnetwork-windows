@@ -876,10 +876,12 @@ void WalletPage::ResetForSignOut() {
   w_.PointsStatusText().Visibility(Visibility::Visible);
 
   // The payout consent is the network's that left: hidden until the next
-  // account's read, and a challenge or a submission still out for this one is
-  // dropped when it answers (the bridge's own flow is answered by the sign-out).
+  // account's read, and a read, a challenge or a submission still out for this
+  // one is dropped when it answers (the bridge's own flow is answered by the
+  // sign-out).
   consent_.reset();
   consentFetch_ = snconsent::Fetch::Idle;
+  ++consentReadGeneration_;
   ++consentFlow_.generation;
   if (consentFlow_.timer) consentFlow_.timer.Stop();
   consentSigning_ = false;
@@ -2636,13 +2638,15 @@ winrt::fire_and_forget WalletPage::OnClaimV2(IInspectable const&, RoutedEventArg
 
 void WalletPage::LoadConsentStatus() {
   if (!Sdk().IsLoggedIn()) return;  // the caller's guard is not the only one
+  // this read's number: a newer read and a sign-out make its answer stale
+  const uint32_t read = ++consentReadGeneration_;
   consentFetch_ = snconsent::Fetch::Loading;
   RebuildConsentPanel();
   auto queue = w_.DispatcherQueue();
   auto weak = w_.get_weak();
   Sdk().api().snNetworkConsentStatus(
-      [queue, weak](std::optional<urnet::SnNetworkConsentStatus> result,
-                    std::optional<std::string> err) {
+      [queue, weak, read](std::optional<urnet::SnNetworkConsentStatus> result,
+                          std::optional<std::string> err) {
         const bool ok = result && !err;
         std::optional<snconsent::Status> status;
         if (ok) status = snconsent::StatusFrom(*result);
@@ -2650,16 +2654,19 @@ void WalletPage::LoadConsentStatus() {
           urnw::LogError("earnings: snNetworkConsentStatus failed{}",
                          err ? (": " + *err) : std::string());
         }
-        queue.TryEnqueue([weak, status, ok] {
+        queue.TryEnqueue([weak, read, status, ok] {
           if (auto self = weak.get())
             self->wallet().ApplyConsentStatus(
-                ok ? snconsent::Fetch::Ready : snconsent::Fetch::Failed, status);
+                read, ok ? snconsent::Fetch::Ready : snconsent::Fetch::Failed, status);
         });
       });
 }
 
-void WalletPage::ApplyConsentStatus(snconsent::Fetch fetch,
+void WalletPage::ApplyConsentStatus(uint32_t read, snconsent::Fetch fetch,
                                     std::optional<snconsent::Status> const& status) {
+  // the answer to a read that a newer read or a sign-out superseded: another
+  // account's consent, or the one from before a submission
+  if (read != consentReadGeneration_) return;
   consentFetch_ = fetch;
   consent_ = status;
   RebuildConsentPanel();
@@ -3090,7 +3097,7 @@ void WalletPage::ShowPreviewWalletState() {
     ApplyV2Accounts(snpayout::LedgerFetch::Ready, {account});
     // the payout consent beside it: none yet, so the panel asks for one (its
     // button waits: --preview-ui has no session to sign with)
-    ApplyConsentStatus(snconsent::Fetch::Ready, snconsent::Status{});
+    ApplyConsentStatus(++consentReadGeneration_, snconsent::Fetch::Ready, snconsent::Status{});
     HeadInfo head;
     head.eligible = true;
     head.score = 41.5;

@@ -710,3 +710,102 @@ func TestSnConsentStringsCatchEachRegression(t *testing.T) {
 		})
 	}
 }
+
+// Every way WalletPage.cpp still applies a consent read's stale answer (the
+// review's W-1, CONSENT.md §10), one line each: the read carries its number,
+// each read takes the next one and a sign-out moves it on, and
+// ApplyConsentStatus refuses an answer that is not the newest read's before it
+// stores anything.
+func snConsentStaleStatusMisses(walletPage string) []string {
+	misses := []string{}
+	page := stripComments(walletPage)
+	load := functionBody(page, "void WalletPage::LoadConsentStatus(")
+	apply := functionBody(page, "void WalletPage::ApplyConsentStatus(")
+	reset := functionBody(page, "void WalletPage::ResetForSignOut(")
+	if load == "" || apply == "" || reset == "" {
+		return append(misses, "WalletPage.cpp: no LoadConsentStatus, ApplyConsentStatus or ResetForSignOut")
+	}
+	// the status callback carries more than the queue and the window: this read's number
+	if capture := regexp.MustCompile(`snNetworkConsentStatus\(\s*\[([^\]]*)\]`).FindStringSubmatch(load); capture == nil {
+		misses = append(misses, "WalletPage::LoadConsentStatus: no snNetworkConsentStatus callback")
+	} else {
+		extra := []string{}
+		for _, name := range strings.Split(capture[1], ",") {
+			if name = strings.TrimSpace(name); name != "" && name != "queue" && name != "weak" {
+				extra = append(extra, name)
+			}
+		}
+		if len(extra) == 0 {
+			misses = append(misses, "WalletPage::LoadConsentStatus: the status callback captures only ["+capture[1]+
+				"]: an earlier read's answer cannot be told from the newest's")
+		}
+	}
+	for _, want := range []string{
+		"const uint32_t read = ++consentReadGeneration_;",
+		"[queue, weak, read](std::optional<urnet::SnNetworkConsentStatus> result,",
+		"queue.TryEnqueue([weak, read, status, ok] {",
+		"read, ok ? snconsent::Fetch::Ready : snconsent::Fetch::Failed, status);",
+	} {
+		if !strings.Contains(load, want) {
+			misses = append(misses, "WalletPage::LoadConsentStatus: missing "+want)
+		}
+	}
+	// ApplyConsentStatus refuses before it stores
+	if store := strings.Index(apply, "consent_ = status;"); store < 0 {
+		misses = append(misses, "WalletPage::ApplyConsentStatus: no consent_ = status;")
+	} else if !strings.Contains(apply[:store], "return") {
+		misses = append(misses, "WalletPage::ApplyConsentStatus: stores every answer unconditionally")
+	}
+	if !regexp.MustCompile(`^\{\s*if \(read != consentReadGeneration_\) return;\s*consentFetch_ = fetch;\s*consent_ = status;`).MatchString(apply) {
+		misses = append(misses, "WalletPage::ApplyConsentStatus: an answer that is not the newest read's is not dropped first")
+	}
+	if !strings.Contains(reset, "\n  ++consentReadGeneration_;\n") {
+		misses = append(misses, "WalletPage::ResetForSignOut: a read from before the sign-out is still the newest")
+	}
+	return misses
+}
+
+// The review's W-1: a consent read's answer from before a sign-out (the
+// network that left: B's owner would be told A's coldkey is paid) or from
+// before a newer read (the read before a submission, answering after the one
+// the submission started: "No payout wallet yet" right after a consent was
+// stored) is dropped.
+func TestSnConsentStatusDropsStaleAnswers(t *testing.T) {
+	for _, miss := range snConsentStaleStatusMisses(readAppSource(t, "WalletPage.cpp")) {
+		t.Error(miss)
+	}
+}
+
+// Each stale-answer assertion, with the change it pins taken out of a copy of
+// WalletPage.cpp, reports exactly that.
+func TestSnConsentStatusDropsStaleAnswersCatchesEachRegression(t *testing.T) {
+	page := readAppSource(t, "WalletPage.cpp")
+	for _, control := range []struct {
+		name, old, new, want string
+	}{
+		{"the read carries no number", "[queue, weak, read](std::optional<urnet::SnNetworkConsentStatus> result,",
+			"[queue, weak](std::optional<urnet::SnNetworkConsentStatus> result,", "the status callback captures only"},
+		{"the answer loses its number", "queue.TryEnqueue([weak, read, status, ok] {", "queue.TryEnqueue([weak, status, ok] {",
+			"missing queue.TryEnqueue([weak, read, status, ok] {"},
+		{"a read takes no new number", "const uint32_t read = ++consentReadGeneration_;", "const uint32_t read = consentReadGeneration_;",
+			"missing const uint32_t read = ++consentReadGeneration_;"},
+		{"every answer is stored", "  if (read != consentReadGeneration_) return;\n", "",
+			"stores every answer unconditionally"},
+		{"a stale answer is dropped after it is stored", "  if (read != consentReadGeneration_) return;\n  consentFetch_ = fetch;\n  consent_ = status;\n",
+			"  consentFetch_ = fetch;\n  consent_ = status;\n  if (read != consentReadGeneration_) return;\n", "is not dropped first"},
+		{"a sign-out keeps the read", "\n  ++consentReadGeneration_;\n", "\n",
+			"a read from before the sign-out is still the newest"},
+	} {
+		t.Run(control.name, func(t *testing.T) {
+			if strings.Count(page, control.old) != 1 {
+				t.Fatalf("WalletPage.cpp no longer has exactly one %q; update this control", control.old)
+			}
+			for _, miss := range snConsentStaleStatusMisses(strings.Replace(page, control.old, control.new, 1)) {
+				if strings.Contains(miss, control.want) {
+					return
+				}
+			}
+			t.Fatalf("negative control was not detected (want %q)", control.want)
+		})
+	}
+}

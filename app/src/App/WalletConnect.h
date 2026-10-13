@@ -103,7 +103,10 @@ class WalletConnect {
   static std::optional<Provider> ProviderForHost(const std::string& host);
   bool NewKeyPair();
   std::optional<std::string> SharedSecretBase58() const;
+  // in the browser: as it is, or through a page of our own when it is longer
+  // than ShellExecuteW passes on (BridgeTrampoline.h)
   void OpenUrl(const std::string& url);
+  void OpenThroughTrampoline(const std::string& url);
   void HandleConnect(Provider p, const std::string& query);
   void HandleSignMessage(Provider p, const std::string& query);
   // urnetwork://oauth/<apple|google>?state=…&id_token=… (or &error=…)
