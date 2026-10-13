@@ -52,6 +52,10 @@ inline constexpr std::string_view kPurposeConnect = "connect";
 // adding the wallet as a sign-in method (Settings' add sheet); a login
 // session refuses its hand-back, so it can never sign in
 inline constexpr std::string_view kPurposeAdd = "add";
+// the network payout consent (Earnings, SnConsentPresentation.h): the session
+// takes the server's consent message instead of fetching a challenge
+// (setNetworkConsentChallenge), and every other purpose refuses its hand-back
+inline constexpr std::string_view kPurposeConsent = "consent";
 
 // The chooser lists kChooserWallets as buttons; the picked index (or -1 for
 // cancel) maps to a wallet id ("" = cancelled).

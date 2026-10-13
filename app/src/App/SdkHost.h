@@ -903,6 +903,23 @@ class SdkHost {
                                                   std::string signature, std::string message,
                                                   std::string error)> done);
 
+  // Sign the network payout consent (Api.snNetworkConsentChallenge's result)
+  // with a Bittensor wallet through the same session helper, bridge page and
+  // manual form as the coldkey connect, under the consent purpose
+  // (bittensor::kPurposeConsent). No challenge is fetched: the session takes
+  // the server's message verbatim, bound to the coldkey and the expiry it names
+  // (setNetworkConsentChallenge), and refuses a hand-back for another message,
+  // another account or after the expiry. `done` gets the address, the hex
+  // sr25519 signature and the exact message signed; or the refusal's code (the
+  // session's, or the SDK error that starts with one: challenge_expired) and a
+  // localized error (a superseded flow's starts with bridge::kSupersededPrefix).
+  // Same single-flow rule and threading caveat as above.
+  void SignNetworkConsent(const std::string& walletId,
+                          const urnet::SnNetworkConsentChallengeResult& challenge,
+                          std::function<void(bool ok, std::string address, std::string signature,
+                                             std::string message, std::string code,
+                                             std::string error)> done);
+
   // Route a urnetwork:// deep link (wallet callback; later OAuth) into the host.
   // Called from the app's protocol-activation handler.
   void HandleDeepLink(const std::string& url);
@@ -2691,6 +2708,9 @@ class SdkHost {
     bool ok = false;
     urnet::BittensorWalletProof proof;
     std::string error;  // localized, or a superseded reason
+    // the refusal's code: the session's (BittensorWalletResult::ErrorCode), or
+    // the SDK error that starts with one; "" when there is none
+    std::string code;
   };
   // Start a proof for `flow` (walletFlows_): fetch the session's challenge,
   // then open the bridge (Talisman) or ask the manual handler (TAO.com).
@@ -2701,6 +2721,21 @@ class SdkHost {
                            const std::string& expectedAddress,
                            std::function<void(BittensorProofOutcome)> done,
                            std::function<void(BittensorManualRequest)> manualHandler = nullptr);
+  // A session for `walletId` under `purpose` (with the app's WalletConnect
+  // project id where the wallet needs it), made the proof in flight, which
+  // `done` answers; `serial` is the proof's. Null, with `done` answered, when
+  // the SDK refuses the wallet or the purpose.
+  std::shared_ptr<urnet::BittensorWalletSession> BeginBittensorSession(
+      const std::string& walletId, const std::string& purpose,
+      std::function<void(BittensorProofOutcome)> done, uint64_t& serial);
+  // The wallet hop once the session holds its message: the bridge page
+  // (Talisman, WalletConnect) or the manual form (TAO.com: `manualHandler`, or
+  // the window's when null), for proof `serial`.
+  void OpenBittensorWallet(uint64_t serial,
+                           std::shared_ptr<urnet::BittensorWalletSession> const& session,
+                           const std::string& walletId, const std::string& purpose,
+                           const std::string& expectedAddress,
+                           std::function<void(BittensorManualRequest)> const& manualHandler);
   // the urnetwork://bittensor-sign-message hand-back (WalletConnect)
   void HandleBittensorReturn(const std::string& url);
   // Answer proof `serial` if it is still the one in flight.

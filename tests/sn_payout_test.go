@@ -315,3 +315,112 @@ func TestSettlementV2Wiring(t *testing.T) {
 		}
 	}
 }
+
+// Every way settlement v2's Claim misses the look of the earnings claim action,
+// one line each (owner decision, 2026-10-13: its colour is consistent with the
+// other platforms). On every other platform the v2 tile's Claim is the very
+// button its v1 tile's Claim is: the primary button in the theme's accent on
+// apple (UrButton .primary, accentColor), the primary button on android
+// (URButton PRIMARY, BlueMedium), the earnings gold button on linux
+// (ur-earn-gold-button), the tile action on ur.io (actionBtn). Here that button
+// is the earnings action, UrPaneActionEarningsStyle, the primary action filled
+// with the UrAccentBrush resource: the v1 tile's Claim wears it, so the v2
+// tile's does, by the style and never by a colour of its own.
+func settlementV2ClaimStyleMisses(mainWindow, appXaml string) []string {
+	misses := []string{}
+	button := func(name string) string {
+		return regexp.MustCompile(`<Button x:Name="` + name + `"[^>]*>`).FindString(mainWindow)
+	}
+	style := func(element string) string {
+		match := regexp.MustCompile(`Style="\{StaticResource (\w+)\}"`).FindStringSubmatch(element)
+		if match == nil {
+			return ""
+		}
+		return match[1]
+	}
+	v1, v2 := button("ClaimButton"), button("SettlementV2ClaimButton")
+	if v1 == "" || v2 == "" {
+		return append(misses, "MainWindow.xaml: no ClaimButton or SettlementV2ClaimButton")
+	}
+	if style(v2) == "" || style(v2) != style(v1) {
+		misses = append(misses, `MainWindow.xaml: settlement v2's Claim wears "`+style(v2)+`" and the v1 tile's Claim "`+
+			style(v1)+`": the two are one button on every platform`)
+	}
+	if style(v2) != "UrPaneActionEarningsStyle" {
+		misses = append(misses, "MainWindow.xaml: settlement v2's Claim is not the earnings action (UrPaneActionEarningsStyle)")
+	}
+	// the colour is the style's, a brush of the app's resources
+	for _, own := range []string{"Background", "Foreground", "BorderBrush"} {
+		if strings.Contains(v2, own+"=") {
+			misses = append(misses, "MainWindow.xaml: settlement v2's Claim sets a "+own+" of its own")
+		}
+	}
+	if !regexp.MustCompile(`<Style x:Key="UrPaneActionEarningsStyle" TargetType="Button" BasedOn="\{StaticResource UrPaneActionPrimaryStyle\}">\s*` +
+		`<Setter Property="Background" Value="\{StaticResource UrAccentBrush\}" />\s*</Style>`).MatchString(appXaml) {
+		misses = append(misses, "App.xaml: the earnings action is no longer the primary action filled with the UrAccentBrush resource")
+	}
+	return misses
+}
+
+// Settlement v2's Claim wears the earnings claim action, as the v1 tile's Claim
+// above it does.
+func TestSettlementV2ClaimWearsTheEarningsAction(t *testing.T) {
+	for _, miss := range settlementV2ClaimStyleMisses(readAppSource(t, "MainWindow.xaml"), readAppSource(t, "App.xaml")) {
+		t.Error(miss)
+	}
+}
+
+// Each of those assertions, with the change it pins taken out of a copy of the
+// markup, reports exactly that.
+func TestSettlementV2ClaimWearsTheEarningsActionCatchesEachRegression(t *testing.T) {
+	sources := map[string]string{
+		"MainWindow.xaml": readAppSource(t, "MainWindow.xaml"),
+		"App.xaml":        readAppSource(t, "App.xaml"),
+	}
+	const v2Button = "<Button x:Name=\"SettlementV2ClaimButton\"\n" +
+		"                                                    Style=\"{StaticResource UrPaneActionEarningsStyle}\""
+	const v1Button = "<Button x:Name=\"ClaimButton\"\n" +
+		"                                                    Style=\"{StaticResource UrPaneActionEarningsStyle}\""
+	for _, control := range []struct {
+		name, file, old, new, want string
+	}{
+		{"the v2 Claim is the plain action blue", "MainWindow.xaml", v2Button,
+			strings.Replace(v2Button, "UrPaneActionEarningsStyle", "UrPaneActionPrimaryStyle", 1),
+			"the two are one button on every platform"},
+		{"the v1 Claim moves on alone", "MainWindow.xaml", v1Button,
+			strings.Replace(v1Button, "UrPaneActionEarningsStyle", "UrPaneActionSecondaryStyle", 1),
+			"the two are one button on every platform"},
+		{"both Claims leave the earnings action", "MainWindow.xaml", "UrPaneActionEarningsStyle}\"\n                                                    HorizontalAlignment=\"Stretch\"\n                                                    IsEnabled=\"False\"",
+			"UrPaneActionPrimaryStyle}\"\n                                                    HorizontalAlignment=\"Stretch\"\n                                                    IsEnabled=\"False\"",
+			"settlement v2's Claim is not the earnings action"},
+		{"a colour of its own", "MainWindow.xaml", v2Button, v2Button + "\n                                                    Background=\"#EFF7BB\"",
+			"settlement v2's Claim sets a Background of its own"},
+		{"the earnings action's fill is written out", "App.xaml",
+			"BasedOn=\"{StaticResource UrPaneActionPrimaryStyle}\">\n                <Setter Property=\"Background\" Value=\"{StaticResource UrAccentBrush}\" />",
+			"BasedOn=\"{StaticResource UrPaneActionPrimaryStyle}\">\n                <Setter Property=\"Background\" Value=\"#EFF7BB\" />",
+			"the earnings action is no longer the primary action filled with the UrAccentBrush resource"},
+	} {
+		t.Run(control.name, func(t *testing.T) {
+			mutated := map[string]string{"MainWindow.xaml": sources["MainWindow.xaml"], "App.xaml": sources["App.xaml"]}
+			count := strings.Count(mutated[control.file], control.old)
+			if control.name == "both Claims leave the earnings action" {
+				// the two Claims share these lines: both change
+				if count != 2 {
+					t.Fatalf("%s no longer has exactly two %q; update this control", control.file, control.old)
+				}
+				mutated[control.file] = strings.ReplaceAll(mutated[control.file], control.old, control.new)
+			} else {
+				if count != 1 {
+					t.Fatalf("%s no longer has exactly one %q; update this control", control.file, control.old)
+				}
+				mutated[control.file] = strings.Replace(mutated[control.file], control.old, control.new, 1)
+			}
+			for _, miss := range settlementV2ClaimStyleMisses(mutated["MainWindow.xaml"], mutated["App.xaml"]) {
+				if strings.Contains(miss, control.want) {
+					return
+				}
+			}
+			t.Fatalf("negative control was not detected (want %q)", control.want)
+		})
+	}
+}
