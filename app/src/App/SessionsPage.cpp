@@ -437,7 +437,7 @@ void SessionsPage::AppendRow(Panel const& host, sessions::Row const& row) {
   copy.Style(rows::Lookup(L"UrPaneActionButtonStyle"));
   copy.HorizontalAlignment(HorizontalAlignment::Left);
   FontIcon copyGlyph;
-  copyGlyph.FontFamily(Media::FontFamily(L"Segoe Fluent Icons"));
+  copyGlyph.FontFamily(Media::FontFamily(kit::kIconFontFamily));
   copyGlyph.Glyph(kCopyGlyph);
   copyGlyph.FontSize(12);
   copyGlyph.Foreground(colors::MutedBrush());

@@ -28,6 +28,7 @@
 #include "StatsFormat.h"
 #include "Strings.h"
 #include "UrColors.h"
+#include "UrComponents.h"  // kit::kIconFontFamily
 #include "UrlQuery.h"
 
 using namespace winrt;
@@ -757,7 +758,7 @@ void UpgradeSheet::Build(XamlRoot const& root) {
   timeoutPanel_.Visibility(Visibility::Collapsed);
   timeoutPanel_.Margin(Thickness{0, 24, 0, 24});
   auto clock = MakeText(hstring{L"\uE823"}, 32, colors::MutedBrush());  // Segoe clock glyph
-  clock.FontFamily(FontFamily(L"Segoe MDL2 Assets"));
+  clock.FontFamily(FontFamily(kit::kIconFontFamily));
   clock.HorizontalAlignment(HorizontalAlignment::Center);
   timeoutPanel_.Children().Append(clock);
   auto timeoutBody =

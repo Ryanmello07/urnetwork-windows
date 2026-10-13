@@ -146,9 +146,9 @@ void Heading(Panel const& host, hstring const& text, hstring const& glyph) {
   row.Orientation(Orientation::Horizontal);
   row.Spacing(8);
   FontIcon icon;
-  // Segoe Fluent Icons by name: FontIcon otherwise defaults to the older Segoe
-  // MDL2 Assets and the screen ends up with two icon weights on it.
-  icon.FontFamily(Media::FontFamily(L"Segoe Fluent Icons"));
+  // the one icon font: Segoe Fluent Icons, falling back to Segoe MDL2 Assets
+  // on Windows 10, which lacks it (kit::kIconFontFamily)
+  icon.FontFamily(Media::FontFamily(kit::kIconFontFamily));
   icon.Glyph(glyph);
   icon.FontSize(16);
   icon.Foreground(urnw::colors::MutedBrush());

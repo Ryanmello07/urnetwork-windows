@@ -179,7 +179,7 @@ void SeedphraseDisplaySheet::Build(XamlRoot const& root) {
   copyContent.Spacing(8);
   copyContent.HorizontalAlignment(HorizontalAlignment::Center);
   FontIcon copyGlyph;
-  copyGlyph.FontFamily(Media::FontFamily(L"Segoe Fluent Icons"));
+  copyGlyph.FontFamily(Media::FontFamily(kit::kIconFontFamily));
   copyGlyph.Glyph(L"\uE8C8");  // Copy
   copyGlyph.FontSize(16);
   copyGlyph.VerticalAlignment(VerticalAlignment::Center);
