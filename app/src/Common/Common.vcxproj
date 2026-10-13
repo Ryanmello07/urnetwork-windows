@@ -64,6 +64,7 @@
     <ClInclude Include="PipeClient.h" />
     <ClInclude Include="PipeServer.h" />
     <ClInclude Include="Protocol.h" />
+    <ClInclude Include="ProtocolRegistration.h" />
     <ClInclude Include="ProvideLifecycle.h" />
     <ClInclude Include="ReleaseJson.h" />
     <ClInclude Include="ReleaseSelection.h" />

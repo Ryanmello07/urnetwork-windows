@@ -22,12 +22,15 @@
 #include "SubscriptionBalance.h"
 #include "TrayIcon.h"
 #include "UpdateChecker.h"
+#include "UrIoApproval.h"
 
 namespace winrt::URnetwork::implementation {
 struct MainWindow;
 }
 
 namespace urnw {
+
+class LoginPage;
 
 class AppController {
  public:
@@ -50,8 +53,13 @@ class AppController {
   // and the window that renders the banner may not exist yet.
   UpdateChecker& updates() { return updates_; }
 
-  // Route a urnetwork:// URI (the wallet-connect callback) into the SdkHost and
-  // bring the app forward so the sign-in result is visible. UI thread only.
+  // Route a urnetwork:// URI: the wallet-connect callback and the Google and
+  // Apple returns into the SdkHost, the campaign emails' links into the window.
+  // All but the auth host bring the app forward so the result is visible; the
+  // auth host (whatever the case of its spelling) is judged first
+  // (HandleAuthLink), and a link that answers no sign-in this app started raises
+  // nothing, except for the first launch of a freshly started process. UI
+  // thread only.
   void HandleDeepLink(const std::string& url);
 
   // Act on a launch, this instance's own or one redirected to it: route its
@@ -76,7 +84,68 @@ class AppController {
   // so a window opened after the sign-out still says it. UI thread.
   authlogout::Notice TakeSignedOutNotice() { return signedOutNotice_.Take(); }
 
+  // ---- a sign-in approved on a web page (UrIoApproval.h) ---------------------
+  // "Continue in browser" in the browser sign-in sheet. The attempt lives here, not
+  // in the sheet: a hide to the tray closes the sheet and the browser may still
+  // answer. UI thread only, all of it.
+
+  // Whether the action is offered at all: the build flag (config::kBrowserApprovalEnabled,
+  // off), a network the request can name (the official one, or another whose API url is
+  // https://host[:port]: ApprovalNetwork.h), a process that is not elevated, an app
+  // that is signed out, the approval page live in this run and listing the contract version
+  // that network needs (ApprovalCheck.h: 1 for the official network, 2 for another), and no
+  // other program holding the urnetwork:// scheme for this user (ProtocolHandlerStatus).
+  // Anything else and the sheet is what it always was. Logs a closed word for why not.
+  bool ApprovalOffered();
+  // Starts an attempt, or, with one live, reads the same request back (a second click
+  // re-opens it; it is not extended, and an attempt that another flow has superseded
+  // since, or whose request the page would refuse as expired by now, is ended and
+  // replaced, not read back). Before anything starts the user's urnetwork://
+  // handler is made to start THIS exe and read back (EnsureProtocolHandler), and the
+  // flows waiting for the browser or a wallet are superseded. In the official network
+  // the request is version 1; in another it is version 2 and names the API this app
+  // talks to, and the attempt belongs to that network (a network change ends it).
+  // nullopt when the action is not offered or any of that fails, and the paste flow
+  // stays. The View is a secret until the request it builds is opened.
+  std::optional<approval::Slot::View> BeginApproval();
+  // The request for a View: config::kApprovalPageUrl and the fragment the page expects
+  // (approval::BuildRequestUrl). Empty if anything is off, and then nothing is opened.
+  std::string ApprovalRequestUrl(const approval::Slot::View& view) const;
+  // Ends the attempt, whatever its state, wiping its secrets, and stops its timer. The
+  // sheet's cancel passes ClearReason::Cancel; the auth-state hooks, the timer, a quit
+  // and the gate pass theirs.
+  void CancelApproval(approval::ClearReason reason);
+  // The window is between ShowWindow and HideWindow: false while it is hidden to the tray.
+  bool WindowShown() const { return windowShown_; }
+  // How many times the window has been hidden to the tray, counted by HideWindow before it
+  // sweeps the sheets. A sheet takes it when it is built and asks again when it closes: a
+  // hide keeps the attempt (the browser may still answer) and the person closing the sheet
+  // cancels it, and the count says which, as soon as the hide happens. A dialog's Closed event
+  // comes after its popup's closing transition, so what the window is doing by then is no
+  // answer to what closed the sheet.
+  std::uint64_t WindowHides() const { return windowHides_; }
+
  private:
+  // The gate for urnetwork://auth: the parser, then the verdict on whether a
+  // sign-in this app started is waiting for the link. UI thread only.
+  void HandleAuthLink(const std::string& url);
+  // What a link that answers no attempt earns: nothing, except that the first launch of
+  // a freshly started process shows the window once with a neutral line.
+  void ShowStrayNotice();
+  approval::Context ApprovalContext();
+  // ApprovalOffered for a network that has been read already: BeginApproval reads it once and
+  // uses that one for the decision and for the request, so an attempt cannot be offered for one
+  // network and name another.
+  bool ApprovalOfferedIn(const approval::Network& network);
+  // The five minutes are up.
+  void OnApprovalTimer();
+  // Begins the approval page's one check of this run where the action could be offered at all
+  // (nothing, with the build flag off). Called wherever a person lands on a signed-out window:
+  // when one is shown, and when the app signs out or switches network under a window that is
+  // already on screen.
+  void StartApprovalCheck();
+  // The login page of the open window, or null while there is no window.
+  LoginPage* LoginPageOrNull();
   void ShowWindowImpl(const POINT* anchor);
   // AppWindow.Changed relay: notices a move or resize the user made.
   void OnWindowPlacementChanged();
@@ -167,6 +236,21 @@ class AppController {
   // This fires shortly after the user stops moving.
   winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer placementSaveTimer_{nullptr};
 
+  // The browser approval's one attempt, the neutral line a stray may earn, and the
+  // one-shot timer that ends the attempt five minutes after it began (restarted by
+  // BeginApproval, stopped by CancelApproval), so the secret is wiped and an open sheet
+  // told even when nothing else happens.
+  approval::Slot approval_;
+  approval::NeutralLine neutralLine_;
+  winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer approvalTimer_{nullptr};
+  // ServeLaunch has served a launch. The first is this process's own (App::OnLaunched
+  // serves it before the gate opens to the launches redirected to this instance), and
+  // freshProcessLaunch_ is true from the moment ServeLaunch begins serving it until a stray
+  // has used it or the next launch is served: the only launch whose stray auth link may show
+  // the window.
+  bool launchServed_ = false;
+  bool freshProcessLaunch_ = false;
+
   AuthState authState_ = AuthState::LoggedOut;
   std::string authError_;
   // True while authError_ has not yet been shown in a PRESENTED window. The
@@ -205,6 +289,7 @@ class AppController {
   // The one exception is the purchase-confirmation poll, which also pauses on
   // focus loss (Window.Activated -> SubscriptionBalanceStore::SetFocused).
   bool windowShown_ = false;      // between ShowWindow and HideWindow (tray-level intent)
+  std::uint64_t windowHides_ = 0;  // how many HideWindow calls there have been (WindowHides)
   bool windowMinimized_ = false;  // IsIconic, synced by SyncWindowMinimized
   bool windowVisible_ = false;    // the reconciled result: the presentation is running
   std::optional<proto::TunnelStatus> lastTunnelStatus_;
@@ -230,7 +315,10 @@ void SetApp(std::unique_ptr<AppController> app);
 // ---- urnetwork:// protocol activation --------------------------------------
 // The MSI registers the scheme (installer/Package.wxs) as
 // `"URnetwork.exe" "%1"`, so the shell hands the callback uri to the app as a
-// launch argument. Launches while the app is already running are redirected to
+// launch argument. A portable copy or a development build has no such key; a
+// browser sign-in that is about to start writes the same command for the current
+// user (ProtocolHandler.h, HKEY_CURRENT_USER only) and refreshes it at each launch.
+// Launches while the app is already running are redirected to
 // it by AppInstance (see main.cpp), arrive on AppInstance::Activated and go
 // through the activation gate (SingleInstance.h), which App::OnLaunched opens.
 // Each is served as its LaunchRequest says (AppController::ServeLaunch).

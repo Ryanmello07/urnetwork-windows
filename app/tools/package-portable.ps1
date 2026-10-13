@@ -118,6 +118,16 @@ Open URnetwork.exe. The app offers to set up the VPN service -- one
 click, one administrator prompt. The service (urnetworkd) is what moves
 the traffic; the app is the window onto it. Then log in and connect.
 
+If this build offers "Continue in browser" on the sign-in sheet (it is
+switched off until the approval page is live), the browser asks
+"Open URnetwork?" the first time; allow it. If the browser did not open,
+the sheet's Copy button puts the link on the clipboard to open by hand.
+If nothing happens after you approve, paste an auth code in the same
+window instead. For that button the app registers urnetwork:// for the
+current Windows user only. To remove it (deleting this folder does not),
+run this from any prompt:
+  reg delete HKCU\Software\Classes\urnetwork /f
+
 Updating
 --------
 The app checks this project's releases and offers updates. Applying one

@@ -1546,6 +1546,10 @@ func stripComments(source string) string {
 	return string(out)
 }
 
+// A closing brace in the first column, then the end of its line. stripComments leaves blanks where a
+// trailing comment was, so "}  // end" and "}  " end a definition too.
+var definitionEnd = regexp.MustCompile(`\n\}[ \t]*\n`)
+
 // definitionBody is the source of the top-level definition that starts at
 // signature, through the closing brace in its first column.
 func definitionBody(t *testing.T, name, source, signature string) string {
@@ -1554,11 +1558,11 @@ func definitionBody(t *testing.T, name, source, signature string) string {
 	if start < 0 {
 		t.Fatalf("%s no longer defines %s; update this contract", name, signature)
 	}
-	end := strings.Index(source[start:], "\n}\n")
-	if end < 0 {
+	end := definitionEnd.FindStringIndex(source[start:])
+	if end == nil {
 		t.Fatalf("cannot find the end of %s in %s", signature, name)
 	}
-	return source[start : start+end+2]
+	return source[start : start+end[0]+2]
 }
 
 // handlerSource is the source of the handler registered at opener, through the

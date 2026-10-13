@@ -279,6 +279,7 @@
     <ClCompile Include="SolanaWalletSheets.cpp" />
     <ClCompile Include="AppController.cpp" />
     <ClCompile Include="AuthSheets.cpp" />
+    <ClCompile Include="BrowserApprovalSheet.cpp" />
     <ClCompile Include="LoginCarousel.cpp" />
     <ClCompile Include="BalanceSheets.cpp" />
     <ClCompile Include="FreeRefreshTicker.cpp" />
@@ -356,6 +357,16 @@
          no WinRT, so no pch). Its decisions are Common/StartupRegistration.h,
          which tools/startup-registration-tests.cpp runs on any host. -->
     <ClCompile Include="LaunchAtStartup.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <!-- The per-user urnetwork:// handler a browser sign-in comes back through
+         (HKEY_CURRENT_USER only; plain Win32, no WinRT, so no pch). Its decisions
+         are Common/ProtocolRegistration.h, which tools/protocol-registration-tests.cpp
+         runs on any host. -->
+    <ClCompile Include="ProtocolHandler.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <!-- The checks before "Continue in browser" is offered: the approval page's
+         descriptor (one WinHTTP GET) and this process's elevation. Plain Win32, no
+         WinRT, so no pch. The judgment of the descriptor is ApprovalDescriptor.h,
+         which tools/approval-descriptor-tests.cpp runs on any host. -->
+    <ClCompile Include="ApprovalCheck.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
     <ClCompile Include="ServiceClient.cpp" />
     <ClCompile Include="ServiceSetup.cpp" />
     <ClCompile Include="TrayIcon.cpp" />
@@ -405,7 +416,14 @@
     <ClInclude Include="SolanaWalletPresentation.h" />
     <ClInclude Include="SolanaWalletSheets.h" />
     <ClInclude Include="AppController.h" />
+    <!-- header-only and WinRT-free: tools/auth-link-tests.cpp runs it -->
+    <ClInclude Include="AuthLink.h" />
+    <!-- header-only and WinRT-free: tools/ur-io-approval-tests.cpp runs it -->
+    <ClInclude Include="UrIoApproval.h" />
+    <!-- header-only and WinRT-free: tools/log-export-tests.cpp runs it -->
+    <ClInclude Include="LogExport.h" />
     <ClInclude Include="AuthSheets.h" />
+    <ClInclude Include="BrowserApprovalSheet.h" />
     <ClInclude Include="BalanceSheets.h" />
     <!-- header-only and WinRT-free: tools/data-info-tests.cpp runs it -->
     <ClInclude Include="DataInfo.h" />
@@ -490,6 +508,14 @@
     <ClInclude Include="SystemProxy.h" />
     <ClInclude Include="SingleInstance.h" />
     <ClInclude Include="LaunchAtStartup.h" />
+    <ClInclude Include="ProtocolHandler.h" />
+    <!-- header-only and WinRT-free: tools/approval-network-tests.cpp runs it -->
+    <ClInclude Include="ApprovalNetwork.h" />
+    <!-- header-only and WinRT-free (needs nlohmann/json): tools/approval-descriptor-tests.cpp runs it -->
+    <ClInclude Include="ApprovalDescriptor.h" />
+    <!-- header-only, WinRT-free, needs the sdk: tools/approval-interop-tests.cpp runs it against the page's vector -->
+    <ClInclude Include="ApprovalUnseal.h" />
+    <ClInclude Include="ApprovalCheck.h" />
     <ClInclude Include="ServiceClient.h" />
     <ClInclude Include="ServiceSetup.h" />
     <ClInclude Include="TrayIcon.h" />

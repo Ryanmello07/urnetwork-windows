@@ -9,6 +9,7 @@
 #include <winrt/Microsoft.UI.Xaml.Automation.h>
 #include <winrt/Windows.System.h>
 
+#include "AppController.h"
 #include "BittensorWalletDialogs.h"
 #include "Log.h"
 #include "MainWindow.xaml.h"
@@ -18,6 +19,7 @@
 #include "Strings.h"
 #include "UrColors.h"
 #include "UrComponents.h"
+#include "UrIoApproval.h"
 #include "WalletBridgeRoute.h"
 #include "WalletConnect.h"
 
@@ -92,6 +94,8 @@ LoginPage::~LoginPage() {
   if (bonusCheckTimer_) bonusCheckTimer_.Stop();
   if (resendCooldownTimer_) resendCooldownTimer_.Stop();
   if (rateLimitTimer_) rateLimitTimer_.Stop();
+  if (approvedCodeTimer_) approvedCodeTimer_.Stop();
+  approval::Wipe(pendingApprovedCode_);
 }
 
 void LoginPage::Initialize() {
@@ -139,6 +143,14 @@ void LoginPage::Initialize() {
   rateLimitTimer_.IsRepeating(true);
   rateLimitTimer_.Tick([weak = w_.get_weak()](auto const&, auto const&) {
     if (auto self = weak.get()) self->login().RefreshRateLimits();
+  });
+
+  // an approved answer that found another sheet open waits for it to close (ContinueApprovedCode)
+  approvedCodeTimer_ = queue.CreateTimer();
+  approvedCodeTimer_.Interval(std::chrono::milliseconds(50));
+  approvedCodeTimer_.IsRepeating(true);
+  approvedCodeTimer_.Tick([weak = w_.get_weak()](auto const&, auto const&) {
+    if (auto self = weak.get()) self->login().ContinueApprovedCode();
   });
 
   // window-level acknowledgements (the account menu's referral copy)
@@ -1151,11 +1163,11 @@ winrt::fire_and_forget LoginPage::OnUseCode(IInspectable const&, RoutedEventArgs
 }
 
 // The submit half of the auth-code sheet, shared with the browser sign-in
-// bridge sheet and the urnetwork://auth?code= deep link: every path that holds
-// a one-time code ends here. The SDK applies the auth state on success and the
-// auth-state relay swaps the panel for the home view; a failure surfaces on
-// the initial step, so make sure that is the step on screen (a no-op for the
-// sheets, which only open from it).
+// bridge sheet's field: every path that holds a one-time code the person
+// entered ends here (a deep link never does). The SDK applies the auth state on
+// success and the auth-state relay swaps the panel for the home view; a failure
+// surfaces on the initial step, so make sure that is the step on screen (a
+// no-op for the sheets, which only open from it).
 void LoginPage::SignInWithAuthCode(std::string code) {
   code = TrimWhitespace(code);
   if (code.empty()) return;
@@ -1179,92 +1191,125 @@ void LoginPage::SignInWithAuthCode(std::string code) {
   });
 }
 
-// ---- sign in with browser (the bridge sheet) -------------------------------
-// Google through the system browser is blocked upstream for now: the production
-// api vault lacks sign_in_oauth, so its callback answers error=not_configured.
-// Apple is NOT blocked - its callback needs no vault config and the Services ID
-// does carry the api's callback url (a real Apple sign-in completed end to end
-// on 2026-10-09). A provider token can never be forwarded to a local page: the
-// providers pin their redirect uris to ur.io, and /auth/login pins the accepted
-// token audiences to URnetwork's own client ids. So for Google what works TODAY
-// is the api's one-time auth codes (/auth/code-login): sign in at ur.io in the
-// real browser, where password managers and existing Google / Apple sessions
-// live, then hand the app a code from any signed-in surface (Account -> Create
-// auth code).
+// ---- a sign-in approved on a web page (UrIoApproval.h) ----------------------
+// The hooks AppController::HandleAuthLink and the attempt's timer call once the gate has
+// decided. The person sees and answers all of it in the browser sign-in sheet
+// (BrowserApprovalSheet.h); these only hand the sheet what arrived, and open one when there
+// is none. Nothing here signs anyone in, redeems a code or registers a device.
+
+void LoginPage::OnApprovedCode(std::string code) {
+  // The sheet that is open was waiting for exactly this.
+  if (approvalSheet_ && approvalSheet_->Open()) {
+    approvalSheet_->BeginRedeem(std::move(code));
+    return;
+  }
+  // No sheet: a hide to the tray closed it while the browser was open (the attempt outlives it,
+  // AppController), or it was never open. The answer opens one, on the redeem. A sheet of
+  // another kind that is in the way is closed first, because the answer is the person's own
+  // action and the page they approved it on is waiting; it hides asynchronously, so the code
+  // waits for it (ContinueApprovedCode) and does not race its coroutine for the sheet gate.
+  approval::Wipe(pendingApprovedCode_);
+  pendingApprovedCode_ = std::move(code);
+  approvedCodeWaits_ = 0;
+  if (w_.sheetOpen()) w_.CloseSheetsForHide();
+  ContinueApprovedCode();
+}
+
+void LoginPage::ContinueApprovedCode() {
+  constexpr int kMaxWaits = 40;  // 50 ms each: two seconds for a sheet to close
+  if (w_.sheetOpen() && ++approvedCodeWaits_ <= kMaxWaits) {
+    if (!approvedCodeTimer_.IsRunning()) approvedCodeTimer_.Start();
+    return;
+  }
+  approvedCodeTimer_.Stop();
+  std::string code = std::move(pendingApprovedCode_);
+  pendingApprovedCode_.clear();
+  if (code.empty()) return;
+  if (w_.sheetOpen()) {
+    // A sheet that refuses to close keeps the screen (the seedphrase sheet shows the only copy of a
+    // new network's credential and closes for nothing but its confirm). The code is dropped, and
+    // the person approves again once that sheet is done.
+    approval::Wipe(code);
+    LogWarn("login: an approved sign-in arrived while a sheet that cannot be closed was open; it was dropped");
+    // The person saw "Approved" in the browser, so the app says that nothing came of it: the line a stray
+    // earns, informational like it, because no sheet is free to say anything.
+    if (snackbar_) snackbar_->Show(Loc("auth_code_error"), InfoBarSeverity::Informational, 15000);
+    return;
+  }
+  ShowApprovalSheet(std::move(code));
+}
+
+void LoginPage::OnApprovalDenied() {
+  LogInfo("login: the browser sign-in was cancelled in the browser");
+  if (approvalSheet_) approvalSheet_->ShowDenied();
+}
+
+void LoginPage::OnApprovalExpired() {
+  // told on every tick of the attempt's timer and whenever the gate finds one dead, whether or not
+  // the sheet was waiting on it, so the line that says it timed out is the sheet's (ShowTimedOut)
+  if (approvalSheet_) approvalSheet_->ShowTimedOut();
+}
+
+void LoginPage::ShowStrayNotice() {
+  // Informational and non-modal, like the mode notice: it never touches the step on screen,
+  // and never the red line under the buttons, which could be showing a real error. Only a
+  // signed-out window that is on screen says it, and not twice within half a minute (AppController
+  // asks as much of its own caller; this is the page's own say, for whoever calls it next).
+  if (!snackbar_ || w_.LoginRoot().Visibility() != Visibility::Visible) return;
+  if (!urnw::App().WindowShown()) return;
+  if (!strayLine_.Allow(std::chrono::steady_clock::now())) return;
+  snackbar_->Show(Loc("auth_code_error"), InfoBarSeverity::Informational, 15000);
+}
+
+// ---- sign in with browser (the browser sign-in sheet) ----------------------
+// The sheet's Start page leads with "Continue in browser" where the approval is offered (the
+// sign-in is approved on a web page the person is signed in to, and the app waits for its
+// answer), and is what it has always been where it is not: Google through the system browser
+// is blocked upstream for now (the production api vault lacks sign_in_oauth, so its callback
+// answers error=not_configured), Apple is NOT blocked (its callback needs no vault config and
+// the Services ID does carry the api's callback url; a real Apple sign-in completed end to end
+// on 2026-10-09), and a provider token can never be forwarded to a local page: the providers
+// pin their redirect uris to ur.io, and /auth/login pins the accepted token audiences to
+// URnetwork's own client ids. So what works for every provider is the api's one-time auth
+// codes (/auth/code-login): sign in at ur.io in the real browser, where password managers and
+// existing Google / Apple sessions live, then hand the app a code from any signed-in surface
+// (Account -> Create auth code).
 winrt::fire_and_forget LoginPage::OnSignInWithBrowser(IInspectable const&,
                                                       RoutedEventArgs const&) {
-  if (w_.sheetOpen()) co_return;  // only one ContentDialog can show at a time
-  auto self = w_.get_strong();    // keeps the window — and so this page — alive
   SetInitialLoginError(hstring());
+  return ShowApprovalSheet(std::string());
+}
 
-  StackPanel content;
-  content.MinWidth(sheetfit::Width(self->Content().XamlRoot(), 400));
-  content.Spacing(12);
-
-  // wrapped, muted, small - NetworkServerSheet's description is the reference
-  TextBlock body;
-  body.Text(Adv("adv_browser_sign_in_body",
-                L"Sign in at ur.io in your browser — your password manager and existing "
-                L"Google or Apple sessions work there. Then paste a one-time auth code "
-                L"from any signed-in device (Account → Create auth code)."));
-  body.FontSize(12);
-  body.TextWrapping(TextWrapping::Wrap);
-  body.Foreground(colors::MutedBrush());
-  content.Children().Append(body);
-
-  TextBox field;
-  field.PlaceholderText(Loc("auth_code"));
-  if (auto style = Application::Current()
-                       .Resources()
-                       .TryLookup(winrt::box_value(L"UrTextInputStyle"))
-                       .try_as<Style>()) {
-    field.Style(style);
+// The one place the sheet is shown, for the click above and for an answer that finds it gone.
+winrt::fire_and_forget LoginPage::ShowApprovalSheet(std::string approvedCode) {
+  if (w_.sheetOpen()) {  // only one ContentDialog can show at a time
+    approval::Wipe(approvedCode);
+    co_return;
   }
-  content.Children().Append(field);
-
-  ContentDialog dialog;
-  dialog.XamlRoot(self->Content().XamlRoot());
-  dialog.Title(winrt::box_value(Adv("adv_browser_sign_in_title", L"Browser sign-in")));
-  dialog.Content(content);
-  dialog.PrimaryButtonText(Adv("adv_open_ur_io", L"Open ur.io"));
-  // NOT auth_code_login_button_text ("Log in with Auth Code"): three command
-  // bar buttons split the bar evenly and a 21-character middle one clips
-  // (the trap NetworkServerSheet's comment records). "Sign in" fits anywhere.
-  dialog.SecondaryButtonText(Loc("sign_in"));
-  dialog.CloseButtonText(Loc("cancel"));
-  // Enter in the code field submits the code rather than relaunching the browser
-  dialog.DefaultButton(ContentDialogButton::Secondary);
-
-  // "Open ur.io" launches the system browser but must NOT dismiss the sheet:
-  // the code the browser session produces is pasted into the field that has
-  // to still be open (the idiom every sheet here uses).
-  dialog.PrimaryButtonClick([](auto const&, ContentDialogButtonClickEventArgs const& args) {
-    args.Cancel(true);
-    try {
-      winrt::Windows::System::Launcher::LaunchUriAsync(
-          winrt::Windows::Foundation::Uri(L"https://ur.io"));
-    } catch (winrt::hresult_error const& e) {
-      urnw::LogError("browser sign-in: open ur.io: {} (0x{:08x})",
-                     urnw::Narrow(std::wstring{e.message()}),
-                     static_cast<uint32_t>(e.code()));
-    }
-  });
-
+  auto self = w_.get_strong();  // keeps the window — and so this page — alive
   w_.SetSheetOpen(true);
-  ContentDialogResult result{ContentDialogResult::None};
+  std::string pasted;
   try {
-    result = co_await dialog.ShowAsync();
+    approvalSheet_ = urnw::BrowserApprovalSheet::Create(self->Content().XamlRoot());
+    // an approved answer opens the sheet on its redeem
+    if (!approvedCode.empty()) approvalSheet_->BeginRedeem(std::move(approvedCode));
+    co_await approvalSheet_->Dialog().ShowAsync();
+    pasted = approvalSheet_->TakePastedCode();
   } catch (winrt::hresult_error const& e) {
-    urnw::LogError("browser sign-in sheet: {} (0x{:08x})",
-                   urnw::Narrow(std::wstring{e.message()}),
+    urnw::LogError("browser sign-in sheet: {} (0x{:08x})", urnw::Narrow(std::wstring{e.message()}),
                    static_cast<uint32_t>(e.code()));
   } catch (std::exception const& e) {
     urnw::LogError("browser sign-in sheet: {}", e.what());
   }
+  approvalSheet_.reset();
   w_.SetSheetOpen(false);
-  if (result != ContentDialogResult::Secondary) co_return;
-
-  SignInWithAuthCode(urnw::Narrow(field.Text().c_str()));
+  // An approved answer that came while this sheet was closing (a hide to the tray swept it) is waiting for
+  // the gate that has just been cleared: it goes on now, and the timer that polls for the gate stays as the
+  // backstop.
+  if (!pendingApprovedCode_.empty()) ContinueApprovedCode();
+  approval::Wipe(approvedCode);
+  // The paste flow, as ever: Sign in closed the sheet on the code in its field.
+  if (!pasted.empty()) SignInWithAuthCode(std::move(pasted));
 }
 
 // ---- wallet sign in ------------------------------------------------------
