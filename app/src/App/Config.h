@@ -71,7 +71,7 @@ inline constexpr bool kBrowserApprovalEnabled = false;
 #define URN_APPROVAL_ORIGIN URN_APPROVAL_TEST_ORIGIN
 inline constexpr bool kApprovalOriginIsATest = true;
 #else
-#define URN_APPROVAL_ORIGIN "https://manager.bringyour.com"
+#define URN_APPROVAL_ORIGIN "https://beta.app.ur.network"
 inline constexpr bool kApprovalOriginIsATest = false;
 #endif
 
@@ -96,14 +96,14 @@ constexpr std::string_view HostOfUrl(std::string_view url) {
 
 inline constexpr std::string_view kApprovalHost = HostOfUrl(kApprovalPageUrl);
 
-static_assert(HostOfUrl("https://manager.bringyour.com/login-app") == "manager.bringyour.com");
+static_assert(HostOfUrl("https://beta.app.ur.network/login-app") == "beta.app.ur.network");
 static_assert(HostOfUrl("http://localhost:5173") == "localhost:5173");
 static_assert(HostOfUrl("no scheme").empty());
 #if !defined(URN_APPROVAL_TEST_ORIGIN)
 static_assert(!kApprovalOriginIsATest);
-static_assert(std::string_view(kApprovalPageUrl) == "https://manager.bringyour.com/login-app");
-static_assert(std::string_view(kApprovalDescriptorUrl) == "https://manager.bringyour.com/approval-contract.json");
-static_assert(kApprovalHost == "manager.bringyour.com");
+static_assert(std::string_view(kApprovalPageUrl) == "https://beta.app.ur.network/login-app");
+static_assert(std::string_view(kApprovalDescriptorUrl) == "https://beta.app.ur.network/approval-contract.json");
+static_assert(kApprovalHost == "beta.app.ur.network");
 #endif
 
 }  // namespace urnw::config

@@ -536,20 +536,20 @@ func TestBrowserApprovalIsOffByDefaultAndItsOriginIsABuildConstant(t *testing.T)
 	provideRequire(t, "Config.h", config,
 		"inline constexpr bool kBrowserApprovalEnabled = false;",
 		"#if defined(URN_APPROVAL_TEST_ORIGIN)", "#define URN_APPROVAL_ORIGIN URN_APPROVAL_TEST_ORIGIN",
-		`#define URN_APPROVAL_ORIGIN "https://manager.bringyour.com"`,
+		`#define URN_APPROVAL_ORIGIN "https://beta.app.ur.network"`,
 		`inline constexpr char kApprovalPageUrl[] = URN_APPROVAL_ORIGIN "/login-app";`,
 		`inline constexpr char kApprovalDescriptorUrl[] = URN_APPROVAL_ORIGIN "/approval-contract.json";`,
 		"#undef URN_APPROVAL_ORIGIN",
 		"inline constexpr std::string_view kApprovalHost = HostOfUrl(kApprovalPageUrl);",
-		`static_assert(std::string_view(kApprovalPageUrl) == "https://manager.bringyour.com/login-app");`,
-		`static_assert(std::string_view(kApprovalDescriptorUrl) == "https://manager.bringyour.com/approval-contract.json");`)
+		`static_assert(std::string_view(kApprovalPageUrl) == "https://beta.app.ur.network/login-app");`,
+		`static_assert(std::string_view(kApprovalDescriptorUrl) == "https://beta.app.ur.network/approval-contract.json");`)
 	if strings.Count(config, "kBrowserApprovalEnabled") != 1 {
 		t.Error("Config.h names kBrowserApprovalEnabled more than once; it is one constant")
 	}
 	// A build that has the override says so: true only on its branch, false on the real page's. An environment variable can
 	// carry the override into a build nobody meant it for, and the app's log at start is where that shows.
 	signOutRequireInOrder(t, "Config.h", config,
-		`#if defined\(URN_APPROVAL_TEST_ORIGIN\)\s*#define URN_APPROVAL_ORIGIN URN_APPROVAL_TEST_ORIGIN\s*inline constexpr bool kApprovalOriginIsATest = true;\s*#else\s*#define URN_APPROVAL_ORIGIN "https://manager\.bringyour\.com"\s*inline constexpr bool kApprovalOriginIsATest = false;\s*#endif`,
+		`#if defined\(URN_APPROVAL_TEST_ORIGIN\)\s*#define URN_APPROVAL_ORIGIN URN_APPROVAL_TEST_ORIGIN\s*inline constexpr bool kApprovalOriginIsATest = true;\s*#else\s*#define URN_APPROVAL_ORIGIN "https://beta\.app\.ur\.network"\s*inline constexpr bool kApprovalOriginIsATest = false;\s*#endif`,
 		regexp.QuoteMeta("static_assert(!kApprovalOriginIsATest);"))
 	if strings.Count(config, "kApprovalOriginIsATest") != 3 { // each branch sets it, and the real page's is asserted false
 		t.Error("Config.h names kApprovalOriginIsATest other than where it is set on each branch and asserted false for the real page")
