@@ -786,6 +786,10 @@
     <value>餘額碼</value>
     <comment>Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.</comment>
   </data>
+  <data name="battery_optimization_settings_hint" xml:space="preserve">
+    <value>輕按即可開啟 Android 的電池優化清單。如果清單中沒有 URnetwork，請將篩選條件切換為「所有應用程式」，然後選擇 URnetwork 並選擇「不要優化」。</value>
+    <comment>Hint under the Ignore battery optimizations row in the Google Play build. Tapping the row opens Android's system battery optimization list, which by default shows only apps that are not optimized; the quoted labels are Android's own labels for the list filter and the per-app choice.</comment>
+  </data>
   <data name="become_supporter" xml:space="preserve">
     <value>獲取 UR Pro</value>
     <comment>Settings</comment>
@@ -3068,9 +3072,9 @@
     <value>URnetwork 已是最新版本。</value>
     <comment>macOS Settings &gt; Software update status when no newer release exists.</comment>
   </data>
-  <data name="disable_ignore_battery_hint" xml:space="preserve">
-    <value>若要停用，請前往系統設定中的應用程式電池用量</value>
-    <comment>Call to action</comment>
+  <data name="disable_ignore_battery_settings_hint" xml:space="preserve">
+    <value>如要關閉，請輕按開關以開啟 Android 的電池優化清單，將篩選條件切換為「所有應用程式」，然後選擇 URnetwork 並選擇「優化」。</value>
+    <comment>Hint under the Ignore battery optimizations row in builds that can ask for the exemption directly. Once the exemption is on, tapping the row opens Android's system battery optimization list, which by default shows only apps that are not optimized; the quoted labels are Android's own labels for the list filter and the per-app choice.</comment>
   </data>
   <data name="disconnect" xml:space="preserve">
     <value>斷開連接</value>

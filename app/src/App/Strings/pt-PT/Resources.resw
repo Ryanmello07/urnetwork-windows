@@ -798,6 +798,10 @@
     <value>Códigos de saldo</value>
     <comment>Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.</comment>
   </data>
+  <data name="battery_optimization_settings_hint" xml:space="preserve">
+    <value>Toque para abrir a lista de otimização da bateria do Android. Se a URnetwork não aparecer, mude o filtro para "Todas as apps" e, em seguida, escolha URnetwork e "Não otimizar".</value>
+    <comment>Hint under the Ignore battery optimizations row in the Google Play build. Tapping the row opens Android's system battery optimization list, which by default shows only apps that are not optimized; the quoted labels are Android's own labels for the list filter and the per-app choice.</comment>
+  </data>
   <data name="become_supporter" xml:space="preserve">
     <value>Obter UR Pro</value>
     <comment>Settings</comment>
@@ -3092,9 +3096,9 @@ maneira certa</value>
     <value>A URnetwork está atualizada.</value>
     <comment>macOS Settings &gt; Software update status when no newer release exists.</comment>
   </data>
-  <data name="disable_ignore_battery_hint" xml:space="preserve">
-    <value>Para desativar, vá a Utilização de Bateria da App nas Definições do Sistema</value>
-    <comment>Call to action</comment>
+  <data name="disable_ignore_battery_settings_hint" xml:space="preserve">
+    <value>Para desativar, toque no interruptor para abrir a lista de otimização da bateria do Android, mude o filtro para "Todas as apps" e, em seguida, escolha URnetwork e "Otimizar".</value>
+    <comment>Hint under the Ignore battery optimizations row in builds that can ask for the exemption directly. Once the exemption is on, tapping the row opens Android's system battery optimization list, which by default shows only apps that are not optimized; the quoted labels are Android's own labels for the list filter and the per-app choice.</comment>
   </data>
   <data name="disconnect" xml:space="preserve">
     <value>Desligar</value>

@@ -786,6 +786,10 @@
     <value>잔액 코드</value>
     <comment>Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.</comment>
   </data>
+  <data name="battery_optimization_settings_hint" xml:space="preserve">
+    <value>탭하여 Android의 배터리 최적화 목록을 엽니다. URnetwork가 목록에 없으면 필터를 '모든 앱'으로 바꾼 다음 URnetwork를 선택하고 '최적화 안함'을 선택하세요.</value>
+    <comment>Hint under the Ignore battery optimizations row in the Google Play build. Tapping the row opens Android's system battery optimization list, which by default shows only apps that are not optimized; the quoted labels are Android's own labels for the list filter and the per-app choice.</comment>
+  </data>
   <data name="become_supporter" xml:space="preserve">
     <value>UR Pro로 업그레이드</value>
     <comment>Settings</comment>
@@ -3068,9 +3072,9 @@
     <value>URnetwork가 최신 상태입니다.</value>
     <comment>macOS Settings &gt; Software update status when no newer release exists.</comment>
   </data>
-  <data name="disable_ignore_battery_hint" xml:space="preserve">
-    <value>비활성화하려면 시스템 설정의 앱 배터리 사용으로 이동하세요</value>
-    <comment>Call to action</comment>
+  <data name="disable_ignore_battery_settings_hint" xml:space="preserve">
+    <value>끄려면 스위치를 탭하여 Android의 배터리 최적화 목록을 열고 필터를 '모든 앱'으로 바꾼 다음 URnetwork를 선택하고 '최적화'를 선택하세요.</value>
+    <comment>Hint under the Ignore battery optimizations row in builds that can ask for the exemption directly. Once the exemption is on, tapping the row opens Android's system battery optimization list, which by default shows only apps that are not optimized; the quoted labels are Android's own labels for the list filter and the per-app choice.</comment>
   </data>
   <data name="disconnect" xml:space="preserve">
     <value>연결 해제</value>
