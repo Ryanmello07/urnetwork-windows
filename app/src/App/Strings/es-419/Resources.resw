@@ -6754,6 +6754,50 @@ del mundo</value>
     <value>Omitir</value>
     <comment>Small muted button at the top of the post-login onboarding flow that leaves the whole flow.</comment>
   </data>
+  <data name="sn_consent_active" xml:space="preserve">
+    <value>Las ganancias se pagan a {}</value>
+    <comment>Payout consent section, beside the settlement v2 tile and claim: the status while a consent covers the current epoch. The placeholder is the consented Bittensor coldkey, shortened to its first and last four characters around an ellipsis (5F3s…kQ9v); keep it as is.</comment>
+  </data>
+  <data name="sn_consent_body" xml:space="preserve">
+    <value>Firma una vez con tu billetera de Bittensor para que las ganancias de esta red se paguen en ella.</value>
+    <comment>Payout consent section, beside the settlement v2 tile and claim: the explanation under the status. One signature with the Bittensor wallet's coldkey covers every provider client of the network.</comment>
+  </data>
+  <data name="sn_consent_change" xml:space="preserve">
+    <value>Cambiar billetera</value>
+    <comment>Payout consent section, beside the settlement v2 tile and claim: the button shown while a consent is active. It reruns the signing with another Bittensor wallet.</comment>
+  </data>
+  <data name="sn_consent_change_note" xml:space="preserve">
+    <value>Una billetera nueva se aplica a partir de la próxima época.</value>
+    <comment>Payout consent section, beside the settlement v2 tile and claim: the note with Change wallet (sn_consent_change) while a consent is active. An epoch is the settlement period, about 7 days.</comment>
+  </data>
+  <data name="sn_consent_expired" xml:space="preserve">
+    <value>La solicitud venció. Inténtalo de nuevo.</value>
+    <comment>Payout consent section, beside the settlement v2 tile and claim: the error when the consent message expired (300 seconds after the server issued it) before the signed consent reached the server. Trying again requests a new message.</comment>
+  </data>
+  <data name="sn_consent_failed" xml:space="preserve">
+    <value>La firma no coincide con esta billetera. Inténtalo de nuevo.</value>
+    <comment>Payout consent section, beside the settlement v2 tile and claim: the error when the server refused the signature because it does not verify for the wallet's coldkey (SnErrorCodeSignatureMismatch).</comment>
+  </data>
+  <data name="sn_consent_none" xml:space="preserve">
+    <value>Todavía no hay billetera de pago. Las ganancias no se pagan hasta que firmes.</value>
+    <comment>Payout consent section, beside the settlement v2 tile and claim: the status while no consent covers the current epoch, so the network's earnings are not paid. The Sign with wallet button (sn_consent_sign) follows.</comment>
+  </data>
+  <data name="sn_consent_owner_only" xml:space="preserve">
+    <value>Solo el propietario de la red puede elegir la billetera de pago.</value>
+    <comment>Payout consent section, beside the settlement v2 tile and claim: the error when the signed-in session is not the network owner's. Only the owner chooses where the network's earnings are paid.</comment>
+  </data>
+  <data name="sn_consent_sign" xml:space="preserve">
+    <value>Firmar con la billetera</value>
+    <comment>Payout consent section, beside the settlement v2 tile and claim: the button shown while no consent is active. It connects the Bittensor wallet, which then signs the consent message the server issued.</comment>
+  </data>
+  <data name="sn_consent_signing" xml:space="preserve">
+    <value>Esperando la firma de tu billetera…</value>
+    <comment>Payout consent section, beside the settlement v2 tile and claim: the progress line while the Bittensor wallet is asked to sign the consent message.</comment>
+  </data>
+  <data name="sn_consent_title" xml:space="preserve">
+    <value>Consentimiento de pago</value>
+    <comment>Payout consent section, beside the settlement v2 tile and claim: its title. The network owner signs once with a Bittensor wallet, and that coldkey is paid the earnings of every provider client of the network.</comment>
+  </data>
   <data name="sn_ledger_claim" xml:space="preserve">
     <value>Reclamar liquidación v2</value>
     <comment>Windows Earnings page, the ledger header's Earnings actions menu (which repeats the page's actions while the window is too narrow to show them): the item for settlement v2's claim, which opens its claim dialog. Keep "v2".</comment>

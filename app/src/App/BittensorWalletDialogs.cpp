@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include <winrt/Microsoft.UI.Xaml.Automation.h>
 #include <winrt/Windows.ApplicationModel.DataTransfer.h>
 
 #include "BittensorWalletFlow.h"
@@ -14,6 +15,7 @@
 #include "Log.h"
 #include "MainWindow.xaml.h"
 #include "PageContext.h"
+#include "SnConsentPresentation.h"
 #include "Strings.h"
 #include "UrColors.h"
 
@@ -172,6 +174,69 @@ winrt::fire_and_forget ShowBittensorManualForm(
   }
   window->SetSheetOpen(false);
   if (!*settled) Sdk().CancelBittensorProof();
+}
+
+winrt::fire_and_forget EnterConsentColdkey(
+    winrt::com_ptr<winrt::URnetwork::implementation::MainWindow> window,
+    std::function<void(std::string coldkeySs58)> next) {
+  if (!window || window->sheetOpen()) co_return;  // one ContentDialog at a time
+
+  StackPanel content;
+  content.MinWidth(380);
+  content.Spacing(8);
+
+  TextBlock body;
+  body.TextWrapping(TextWrapping::Wrap);
+  body.Text(Loc("sn_consent_body"));
+  content.Children().Append(body);
+
+  // empty on purpose: the coldkey earnings are paid to is the user's to choose
+  TextBox addressBox;
+  addressBox.PlaceholderText(Loc("earnings_address_placeholder"));
+  winrt::Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(
+      addressBox, Loc("earnings_address_placeholder"));
+  content.Children().Append(addressBox);
+
+  TextBlock errorText;
+  errorText.FontSize(12);
+  errorText.TextWrapping(TextWrapping::Wrap);
+  errorText.Foreground(colors::DangerBrush());
+  errorText.Visibility(Visibility::Collapsed);
+  content.Children().Append(errorText);
+
+  ContentDialog dialog;
+  dialog.XamlRoot(window->Content().XamlRoot());
+  dialog.Title(winrt::box_value(Loc("sn_consent_title")));
+  dialog.Content(content);
+  dialog.PrimaryButtonText(Loc("continue_txt"));
+  dialog.CloseButtonText(Loc("cancel"));
+  dialog.DefaultButton(ContentDialogButton::Primary);
+  dialog.Background(colors::SheetBrush());
+
+  // the SDK's own ss58 rule, before any request is made for the address
+  auto coldkey = std::make_shared<std::string>();
+  dialog.PrimaryButtonClick([addressBox, errorText, coldkey](
+                                auto const&, ContentDialogButtonClickEventArgs const& args) {
+    const auto valid = snconsent::ColdkeyFrom(
+        Narrow(addressBox.Text().c_str()),
+        [](std::string const& address) { return urnet::validateSs58(address); });
+    if (!valid) {
+      args.Cancel(true);  // keep the form, say what is wrong
+      errorText.Text(Loc("invalid_ss58_address"));
+      errorText.Visibility(Visibility::Visible);
+      return;
+    }
+    *coldkey = *valid;
+  });
+
+  window->SetSheetOpen(true);
+  try {
+    co_await dialog.ShowAsync();
+  } catch (...) {
+    urnw::LogError("payout consent coldkey form failed to open");
+  }
+  window->SetSheetOpen(false);
+  if (next) next(*coldkey);  // "" when cancelled
 }
 
 }  // namespace urnw::pages

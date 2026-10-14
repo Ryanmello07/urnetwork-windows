@@ -961,6 +961,17 @@ site_subscription_error_no_customer
 site_subscription_error_store_unavailable
 skip
 sn_alpha_symbol
+sn_consent_active
+sn_consent_body
+sn_consent_change
+sn_consent_change_note
+sn_consent_expired
+sn_consent_failed
+sn_consent_none
+sn_consent_owner_only
+sn_consent_sign
+sn_consent_signing
+sn_consent_title
 sn_ledger_claim
 sn_ledger_claimable
 sn_ledger_earned

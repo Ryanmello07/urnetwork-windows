@@ -2782,12 +2782,51 @@
                                             <TextBlock x:Name="SettlementV2Note" TextWrapping="Wrap"
                                                        Style="{StaticResource UrRowNoteStyle}"
                                                        TextTrimming="None" Visibility="Collapsed" />
-                                            <!-- the v2 claim dialog -->
+                                            <!-- the v2 claim dialog. The same action as the v1
+                                                 tile's Claim above, so the same style: on every
+                                                 platform the two Claims are one button, and here
+                                                 that is the earnings action -->
                                             <Button x:Name="SettlementV2ClaimButton"
-                                                    Style="{StaticResource UrPaneActionPrimaryStyle}"
+                                                    Style="{StaticResource UrPaneActionEarningsStyle}"
                                                     HorizontalAlignment="Stretch"
                                                     IsEnabled="False" Visibility="Collapsed"
                                                     Click="OnClaimV2" />
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+
+                                <!-- the payout consent beside it: whether a coldkey
+                                     consent pays this network's earnings, the note under
+                                     it, and the button that signs one with the Bittensor
+                                     wallet (Sign with wallet, or Change wallet). Collapsed
+                                     until the coldkey is known
+                                     (WalletPage::RebuildConsentPanel) -->
+                                <StackPanel x:Name="PayoutConsentPanel" Visibility="Collapsed">
+                                    <Border Style="{StaticResource UrGroupHeaderStyle}">
+                                        <Grid>
+                                            <TextBlock x:Name="PayoutConsentHeading"
+                                                       Style="{StaticResource UrGroupHeaderTextStyle}" />
+                                            <TextBlock x:Name="PayoutConsentStatusText"
+                                                       HorizontalAlignment="Right"
+                                                       Style="{StaticResource UrPaneMetaStyle}" />
+                                        </Grid>
+                                    </Border>
+                                    <Border BorderBrush="{StaticResource UrBorderBrush}"
+                                            BorderThickness="0,0,0,1" Padding="12,10">
+                                        <StackPanel Spacing="6">
+                                            <TextBlock x:Name="PayoutConsentText"
+                                                       Style="{StaticResource UrKeyTextStyle}"
+                                                       TextWrapping="Wrap" TextTrimming="None"
+                                                       Visibility="Collapsed" />
+                                            <TextBlock x:Name="PayoutConsentNote" TextWrapping="Wrap"
+                                                       Style="{StaticResource UrRowNoteStyle}"
+                                                       TextTrimming="None" Visibility="Collapsed" />
+                                            <!-- the wallet chooser, then the wallet's signature -->
+                                            <Button x:Name="PayoutConsentButton"
+                                                    Style="{StaticResource UrPaneActionPrimaryStyle}"
+                                                    HorizontalAlignment="Stretch"
+                                                    IsEnabled="False" Visibility="Collapsed"
+                                                    Click="OnSignConsent" />
                                         </StackPanel>
                                     </Border>
                                 </StackPanel>
