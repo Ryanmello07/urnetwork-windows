@@ -7422,7 +7422,7 @@
     <comment>App top200: hotkey input label</comment>
   </data>
   <data name="site_app_top200_hotkey_sign_hint" xml:space="preserve">
-    <value>الأمر provider fleet bind يوقّع باستخدام hotkey نيابةً عنك. أما لبيانات الربط الملصقة، فوقّع كل ملخص ربط باستخدام hotkey عبر أدواتك الخاصة والصق التوقيع هنا.</value>
+    <value>مع --hotkey_seed_file تتضمن بيانات الربط التي يطبعها provider fleet sign توقيع hotkey مسبقًا. أو، حيث تحتفظ ببذرة hotkey، شغّل provider fleet sign مع --client_id الخاص بالجهاز و --hotkey_seed_file والصق هنا توقيع 0x الذي يطبعه. الأمر provider fleet bind يوقّع باستخدام hotkey نيابةً عنك.</value>
     <comment>App top200: how to produce the hotkey signature</comment>
   </data>
   <data name="site_app_top200_hotkey_signature" xml:space="preserve">
@@ -7442,7 +7442,7 @@
     <comment>App top200: progress</comment>
   </data>
   <data name="site_app_top200_step_bind" xml:space="preserve">
-    <value>لا تستطيع التطبيقات توقيع ربط الأجهزة بعد. من سطر الأوامر، اربط كل جهاز باستخدام provider fleet bind مع بيان أسطولك وبذرة مفتاح العميل للجهاز (~/.urnetwork/.provider.key) وبذرة hotkey. يوقّع الأمر الربط ويرسله من مفتاح EVM الخاص بك. يمكنك لصق بيانات الربط المُنشأة بأدوات أخرى هنا، جهازًا تلو الآخر.</value>
+    <value>لا تستطيع التطبيقات توقيع ربط الأجهزة بعد. على كل جهاز مزوّد، شغّل provider fleet sign مع بيان أسطولك وبذرة مفتاح العميل للجهاز (~/.urnetwork/.provider.key) وحقب الصلاحية، ثم الصق هنا JSON الذي يطبعه، جهازًا تلو الآخر. لا يرسل الأمر أي شيء وتبقى البذور على الجهاز. أما provider fleet bind فيوقّع ويرسل في خطوة واحدة من مفتاح EVM الخاص بك.</value>
     <comment>App top200: step 2</comment>
   </data>
   <data name="site_app_top200_step_register" xml:space="preserve">

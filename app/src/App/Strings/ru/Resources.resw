@@ -7191,7 +7191,7 @@
     <comment>App top200: hotkey input label</comment>
   </data>
   <data name="site_app_top200_hotkey_sign_hint" xml:space="preserve">
-    <value>provider fleet bind подписывает ключом hotkey за вас. Для вставленных данных привязки подпишите каждый дайджест привязки ключом hotkey с помощью собственных инструментов и вставьте подпись сюда.</value>
+    <value>С --hotkey_seed_file данные от provider fleet sign уже содержат подпись hotkey. Или там, где хранится seed hotkey, выполните provider fleet sign с --client_id устройства и --hotkey_seed_file и вставьте сюда выведенную подпись 0x. provider fleet bind подписывает ключом hotkey за вас.</value>
     <comment>App top200: how to produce the hotkey signature</comment>
   </data>
   <data name="site_app_top200_hotkey_signature" xml:space="preserve">
@@ -7211,7 +7211,7 @@
     <comment>App top200: progress</comment>
   </data>
   <data name="site_app_top200_step_bind" xml:space="preserve">
-    <value>Приложения пока не умеют подписывать привязки устройств. В CLI привяжите каждое устройство командой provider fleet bind, указав манифест парка, seed клиентского ключа устройства (~/.urnetwork/.provider.key) и seed ключа hotkey. Команда подписывает привязку и отправляет её с вашего собственного EVM-ключа. Данные привязки из других инструментов можно вставлять сюда по одному устройству.</value>
+    <value>Приложения пока не умеют подписывать привязки устройств. На каждом устройстве-провайдере выполните provider fleet sign, указав манифест парка, seed клиентского ключа устройства (~/.urnetwork/.provider.key) и эпохи действия, и вставьте сюда выведенный JSON, по одному устройству. Команда ничего не отправляет, а seed остаются на устройстве. provider fleet bind, напротив, подписывает и отправляет за один шаг с вашего собственного EVM-ключа.</value>
     <comment>App top200: step 2</comment>
   </data>
   <data name="site_app_top200_step_register" xml:space="preserve">

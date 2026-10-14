@@ -6959,7 +6959,7 @@ del mundo</value>
     <comment>App top200: hotkey input label</comment>
   </data>
   <data name="site_app_top200_hotkey_sign_hint" xml:space="preserve">
-    <value>provider fleet bind firma con la hotkey por ti. Para una carga útil pegada, firma cada resumen de vinculación con la hotkey usando tus propias herramientas y pega la firma aquí.</value>
+    <value>Con --hotkey_seed_file, la carga útil de provider fleet sign ya incluye la firma de la hotkey. O bien, donde guardes la semilla de la hotkey, ejecuta provider fleet sign con el --client_id del dispositivo y --hotkey_seed_file, y pega aquí la firma 0x que imprime. provider fleet bind firma con la hotkey por ti.</value>
     <comment>App top200: how to produce the hotkey signature</comment>
   </data>
   <data name="site_app_top200_hotkey_signature" xml:space="preserve">
@@ -6979,7 +6979,7 @@ del mundo</value>
     <comment>App top200: progress</comment>
   </data>
   <data name="site_app_top200_step_bind" xml:space="preserve">
-    <value>Las apps aún no pueden firmar vinculaciones de dispositivos. Desde la CLI, vincula cada dispositivo con provider fleet bind, usando tu manifiesto de flota, la semilla de la clave de cliente del dispositivo (~/.urnetwork/.provider.key) y la semilla de la hotkey. Firma la vinculación y la envía desde tu propia clave EVM. Puedes pegar aquí cargas útiles creadas con otras herramientas, de una en una.</value>
+    <value>Las apps aún no pueden firmar vinculaciones de dispositivos. En cada dispositivo proveedor, ejecuta provider fleet sign con tu manifiesto de flota, la semilla de la clave de cliente del dispositivo (~/.urnetwork/.provider.key) y las épocas de validez, y pega aquí el JSON que imprime, un dispositivo a la vez. No envía nada y las semillas se quedan en el dispositivo. En cambio, provider fleet bind firma y envía en un solo paso desde tu propia clave EVM.</value>
     <comment>App top200: step 2</comment>
   </data>
   <data name="site_app_top200_step_register" xml:space="preserve">
