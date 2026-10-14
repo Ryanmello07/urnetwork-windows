@@ -7461,7 +7461,7 @@ world's content</value>
     <comment>App top200: hotkey input label</comment>
   </data>
   <data name="site_app_top200_hotkey_sign_hint" xml:space="preserve">
-    <value>provider fleet bind signs with the hotkey for you. For a pasted payload, sign each binding digest with the hotkey using your own tooling and paste the signature here.</value>
+    <value>With --hotkey_seed_file, the payload from provider fleet sign already carries the hotkey signature. Or, where the hotkey seed is kept, run provider fleet sign with the device's --client_id and --hotkey_seed_file and paste the 0x signature it prints here. provider fleet bind signs with the hotkey for you.</value>
     <comment>App top200: how to produce the hotkey signature</comment>
   </data>
   <data name="site_app_top200_hotkey_signature" xml:space="preserve">
@@ -7481,7 +7481,7 @@ world's content</value>
     <comment>App top200: progress</comment>
   </data>
   <data name="site_app_top200_step_bind" xml:space="preserve">
-    <value>Device signing is not in the apps yet. From the CLI, bind each device with provider fleet bind, using your fleet manifest, the device's client key seed (~/.urnetwork/.provider.key) and the hotkey seed. It signs the binding and submits it from your own EVM key. Payloads from other tooling can be pasted here, one device at a time.</value>
+    <value>Device signing is not in the apps yet. On each provider device, run provider fleet sign with your fleet manifest, the device's client key seed (~/.urnetwork/.provider.key) and the validity epochs, and paste the JSON it prints here, one device at a time. It sends nothing and the seeds stay on the device. provider fleet bind instead signs and submits in one step from your own EVM key.</value>
     <comment>App top200: step 2</comment>
   </data>
   <data name="site_app_top200_step_register" xml:space="preserve">

@@ -6959,7 +6959,7 @@ der Welt</value>
     <comment>App top200: hotkey input label</comment>
   </data>
   <data name="site_app_top200_hotkey_sign_hint" xml:space="preserve">
-    <value>provider fleet bind signiert für dich mit dem Hotkey. Für eine eingefügte Payload signiere jeden Bindungs-Digest mit dem Hotkey über deine eigenen Tools und füge die Signatur hier ein.</value>
+    <value>Mit --hotkey_seed_file enthält die Payload von provider fleet sign bereits die Hotkey-Signatur. Oder führe dort, wo der Hotkey-Seed liegt, provider fleet sign mit der --client_id des Geräts und --hotkey_seed_file aus und füge die ausgegebene 0x-Signatur hier ein. provider fleet bind signiert für dich mit dem Hotkey.</value>
     <comment>App top200: how to produce the hotkey signature</comment>
   </data>
   <data name="site_app_top200_hotkey_signature" xml:space="preserve">
@@ -6979,7 +6979,7 @@ der Welt</value>
     <comment>App top200: progress</comment>
   </data>
   <data name="site_app_top200_step_bind" xml:space="preserve">
-    <value>Die Apps können Gerätebindungen noch nicht signieren. Binde jedes Gerät über die CLI mit provider fleet bind, mit deinem Flotten-Manifest, dem Client-Key-Seed des Geräts (~/.urnetwork/.provider.key) und dem Hotkey-Seed. Der Befehl signiert die Bindung und sendet sie von deinem eigenen EVM-Schlüssel. Payloads aus anderen Tools kannst du hier einfügen, ein Gerät nach dem anderen.</value>
+    <value>Die Apps können Gerätebindungen noch nicht signieren. Führe auf jedem Provider-Gerät provider fleet sign mit deinem Flotten-Manifest, dem Client-Key-Seed des Geräts (~/.urnetwork/.provider.key) und den Gültigkeitsepochen aus und füge das ausgegebene JSON hier ein, ein Gerät nach dem anderen. Der Befehl sendet nichts, und die Seeds bleiben auf dem Gerät. provider fleet bind signiert und sendet dagegen in einem Schritt von deinem eigenen EVM-Schlüssel.</value>
     <comment>App top200: step 2</comment>
   </data>
   <data name="site_app_top200_step_register" xml:space="preserve">
