@@ -6931,7 +6931,7 @@ der Welt</value>
     <comment>App top200: re-check every device with the hotkey signature</comment>
   </data>
   <data name="site_app_top200_bad_signature" xml:space="preserve">
-    <value>Füge die Bindungs-Payload genau so ein, wie die App sie anzeigt.</value>
+    <value>Füge die ganze Bindungs-Payload ein: JSON mit binding und client_signature.</value>
     <comment>App top200: unparseable paste</comment>
   </data>
   <data name="site_app_top200_binding_incomplete" xml:space="preserve">
@@ -6959,7 +6959,7 @@ der Welt</value>
     <comment>App top200: hotkey input label</comment>
   </data>
   <data name="site_app_top200_hotkey_sign_hint" xml:space="preserve">
-    <value>Signiere jeden Bindungs-Digest mit dem Hotkey über deine eigenen Tools (snclaim bind-head) und füge die Signatur hier ein.</value>
+    <value>provider fleet bind signiert für dich mit dem Hotkey. Für eine eingefügte Payload signiere jeden Bindungs-Digest mit dem Hotkey über deine eigenen Tools und füge die Signatur hier ein.</value>
     <comment>App top200: how to produce the hotkey signature</comment>
   </data>
   <data name="site_app_top200_hotkey_signature" xml:space="preserve">
@@ -6979,7 +6979,7 @@ der Welt</value>
     <comment>App top200: progress</comment>
   </data>
   <data name="site_app_top200_step_bind" xml:space="preserve">
-    <value>Jedes Anbietergerät signiert seine Flotten-Bindung in seiner App unter Konto › Top 200. Füge hier die Bindungs-Payload jedes Geräts ein, ein Gerät nach dem anderen.</value>
+    <value>Die Apps können Gerätebindungen noch nicht signieren. Binde jedes Gerät über die CLI mit provider fleet bind, mit deinem Flotten-Manifest, dem Client-Key-Seed des Geräts (~/.urnetwork/.provider.key) und dem Hotkey-Seed. Der Befehl signiert die Bindung und sendet sie von deinem eigenen EVM-Schlüssel. Payloads aus anderen Tools kannst du hier einfügen, ein Gerät nach dem anderen.</value>
     <comment>App top200: step 2</comment>
   </data>
   <data name="site_app_top200_step_register" xml:space="preserve">

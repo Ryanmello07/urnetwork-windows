@@ -7163,7 +7163,7 @@
     <comment>App top200: re-check every device with the hotkey signature</comment>
   </data>
   <data name="site_app_top200_bad_signature" xml:space="preserve">
-    <value>Вставьте данные привязки точно в том виде, в каком их показывает приложение.</value>
+    <value>Вставьте данные привязки целиком: JSON с полями binding и client_signature.</value>
     <comment>App top200: unparseable paste</comment>
   </data>
   <data name="site_app_top200_binding_incomplete" xml:space="preserve">
@@ -7191,7 +7191,7 @@
     <comment>App top200: hotkey input label</comment>
   </data>
   <data name="site_app_top200_hotkey_sign_hint" xml:space="preserve">
-    <value>Подпишите каждый дайджест привязки ключом hotkey с помощью собственных инструментов (snclaim bind-head) и вставьте подпись сюда.</value>
+    <value>provider fleet bind подписывает ключом hotkey за вас. Для вставленных данных привязки подпишите каждый дайджест привязки ключом hotkey с помощью собственных инструментов и вставьте подпись сюда.</value>
     <comment>App top200: how to produce the hotkey signature</comment>
   </data>
   <data name="site_app_top200_hotkey_signature" xml:space="preserve">
@@ -7211,7 +7211,7 @@
     <comment>App top200: progress</comment>
   </data>
   <data name="site_app_top200_step_bind" xml:space="preserve">
-    <value>Каждое устройство-провайдер подписывает привязку своего парка в приложении в разделе Аккаунт › Топ-200. Вставляйте сюда данные привязки каждого устройства по одному.</value>
+    <value>Приложения пока не умеют подписывать привязки устройств. В CLI привяжите каждое устройство командой provider fleet bind, указав манифест парка, seed клиентского ключа устройства (~/.urnetwork/.provider.key) и seed ключа hotkey. Команда подписывает привязку и отправляет её с вашего собственного EVM-ключа. Данные привязки из других инструментов можно вставлять сюда по одному устройству.</value>
     <comment>App top200: step 2</comment>
   </data>
   <data name="site_app_top200_step_register" xml:space="preserve">
