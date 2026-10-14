@@ -611,7 +611,7 @@ bool PageAccepts(const std::string& url, std::string_view page) {
 void TestTheRequestIsExactlyWhatThePageExpects() {
   // the page's own vector: the request its fixture builds for its fixed keys (the
   // manager's tests/fixtures/app-auth-vector.json, "request"), with this app's page url
-  constexpr std::string_view kPage = "https://manager.bringyour.com/login-app";
+  constexpr std::string_view kPage = "https://beta.app.ur.network/login-app";
   Slot::View view;
   view.state = StateOf('S');
   view.publicKey = "WpSggvhoqoVW4XJvfjsB52dvVunYSQWrz6XiuMQVsCf";
@@ -710,7 +710,7 @@ void TestTheRequestIsExactlyWhatThePageExpects() {
 
 // ---- the request of version 2 (contract section 11) ---------------------------------------
 
-constexpr std::string_view kPageUrl = "https://manager.bringyour.com/login-app";
+constexpr std::string_view kPageUrl = "https://beta.app.ur.network/login-app";
 
 // The view of the page's conformance vector: its state, its key, its second. `api` is the caller's to set.
 Slot::View VectorView() {
