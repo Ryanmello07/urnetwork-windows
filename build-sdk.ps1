@@ -63,6 +63,8 @@ $buildDir = Join-Path $SdkDir "build"
 foreach ($architecture in $Architectures) {
   Require $cc[$architecture]
 }
+# llvm-mingw ships it; it reads the DLL's imports for the C runtime check below.
+Require 'llvm-readobj'
 
 # Start from a clean windows/ tree so a partial/previous run can't leak stale
 # DLLs into the zip.
@@ -88,6 +90,17 @@ foreach ($arch in $Architectures) {
   }
   if (-not (Test-Path (Join-Path $outDir "URnetworkSdk.dll"))) {
     throw "URnetworkSdk.dll missing for windows/$arch after build"
+  }
+
+  # One C runtime per process. The app and urnetworkd link the UCRT
+  # (MultiThreadedDLL), and the ucrt llvm-mingw links the DLL to it too. A DLL
+  # from an msvcrt toolchain keeps a second heap in the same process, and a
+  # block freed across the two corrupts both (windows#17: urnetworkd died in
+  # RtlFreeHeap). Refuse it here rather than ship it.
+  $imports = & llvm-readobj --coff-imports (Join-Path $outDir "URnetworkSdk.dll")
+  if ($LASTEXITCODE -ne 0) { throw "llvm-readobj failed for windows/$arch" }
+  if ($imports | Select-String -Pattern '^\s*Name:\s*msvcrt\.dll\s*$' -Quiet) {
+    throw "URnetworkSdk.dll for windows/$arch imports msvcrt.dll; build it with the ucrt llvm-mingw ($($cc[$arch]))"
   }
 }
 
