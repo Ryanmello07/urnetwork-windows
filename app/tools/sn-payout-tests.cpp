@@ -571,7 +571,7 @@ int main() {
     const double preflightTao = 2'510'000.0 * 1.25 * 1.1 * 5e9 / 1e18;
     Check(preflightTao <= kLedgerClaimGasTao,
           "covers one claim's " + std::to_string(preflightTao) + " TAO");
-    Check(kLedgerClaimGasTao > 0.01, "more than the v1 dialog's 0.01 TAO");
+    Check(kLedgerClaimGasTao == 0.02, "0.02 TAO, which the v1 dialog asks for too");
   }
 
   {
