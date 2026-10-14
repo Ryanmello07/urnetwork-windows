@@ -7394,7 +7394,7 @@
     <comment>App top200: re-check every device with the hotkey signature</comment>
   </data>
   <data name="site_app_top200_bad_signature" xml:space="preserve">
-    <value>الصق بيانات الربط تمامًا كما يعرضها التطبيق.</value>
+    <value>الصق بيانات الربط كاملة: JSON يحتوي على binding و client_signature.</value>
     <comment>App top200: unparseable paste</comment>
   </data>
   <data name="site_app_top200_binding_incomplete" xml:space="preserve">
@@ -7422,7 +7422,7 @@
     <comment>App top200: hotkey input label</comment>
   </data>
   <data name="site_app_top200_hotkey_sign_hint" xml:space="preserve">
-    <value>وقّع كل ملخص ربط باستخدام hotkey عبر أدواتك الخاصة (snclaim bind-head) والصق التوقيع هنا.</value>
+    <value>الأمر provider fleet bind يوقّع باستخدام hotkey نيابةً عنك. أما لبيانات الربط الملصقة، فوقّع كل ملخص ربط باستخدام hotkey عبر أدواتك الخاصة والصق التوقيع هنا.</value>
     <comment>App top200: how to produce the hotkey signature</comment>
   </data>
   <data name="site_app_top200_hotkey_signature" xml:space="preserve">
@@ -7442,7 +7442,7 @@
     <comment>App top200: progress</comment>
   </data>
   <data name="site_app_top200_step_bind" xml:space="preserve">
-    <value>يوقّع كل جهاز مزود على ربط أسطوله من تطبيقه ضمن الحساب › أفضل 200. الصق هنا بيانات الربط لكل جهاز، جهازًا تلو الآخر.</value>
+    <value>لا تستطيع التطبيقات توقيع ربط الأجهزة بعد. من سطر الأوامر، اربط كل جهاز باستخدام provider fleet bind مع بيان أسطولك وبذرة مفتاح العميل للجهاز (~/.urnetwork/.provider.key) وبذرة hotkey. يوقّع الأمر الربط ويرسله من مفتاح EVM الخاص بك. يمكنك لصق بيانات الربط المُنشأة بأدوات أخرى هنا، جهازًا تلو الآخر.</value>
     <comment>App top200: step 2</comment>
   </data>
   <data name="site_app_top200_step_register" xml:space="preserve">

@@ -6931,7 +6931,7 @@ del mundo</value>
     <comment>App top200: re-check every device with the hotkey signature</comment>
   </data>
   <data name="site_app_top200_bad_signature" xml:space="preserve">
-    <value>Pega la carga útil de vinculación exactamente como la muestra la app.</value>
+    <value>Pega la carga útil de vinculación completa: JSON con binding y client_signature.</value>
     <comment>App top200: unparseable paste</comment>
   </data>
   <data name="site_app_top200_binding_incomplete" xml:space="preserve">
@@ -6959,7 +6959,7 @@ del mundo</value>
     <comment>App top200: hotkey input label</comment>
   </data>
   <data name="site_app_top200_hotkey_sign_hint" xml:space="preserve">
-    <value>Firma cada resumen de vinculación con la hotkey usando tus propias herramientas (snclaim bind-head) y pega la firma aquí.</value>
+    <value>provider fleet bind firma con la hotkey por ti. Para una carga útil pegada, firma cada resumen de vinculación con la hotkey usando tus propias herramientas y pega la firma aquí.</value>
     <comment>App top200: how to produce the hotkey signature</comment>
   </data>
   <data name="site_app_top200_hotkey_signature" xml:space="preserve">
@@ -6979,7 +6979,7 @@ del mundo</value>
     <comment>App top200: progress</comment>
   </data>
   <data name="site_app_top200_step_bind" xml:space="preserve">
-    <value>Cada dispositivo proveedor firma su vinculación de flota desde su app en Cuenta › Top 200. Pega aquí la carga útil de vinculación de cada dispositivo, de uno en uno.</value>
+    <value>Las apps aún no pueden firmar vinculaciones de dispositivos. Desde la CLI, vincula cada dispositivo con provider fleet bind, usando tu manifiesto de flota, la semilla de la clave de cliente del dispositivo (~/.urnetwork/.provider.key) y la semilla de la hotkey. Firma la vinculación y la envía desde tu propia clave EVM. Puedes pegar aquí cargas útiles creadas con otras herramientas, de una en una.</value>
     <comment>App top200: step 2</comment>
   </data>
   <data name="site_app_top200_step_register" xml:space="preserve">
