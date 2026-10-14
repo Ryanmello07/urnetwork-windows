@@ -169,8 +169,8 @@ LedgerSectionView LedgerSectionFor(bool hasColdkey, bool vault2Configured, Ledge
 // The TAO the funding hint asks for. The SDK sends a v2 claim only when the gas
 // key holds its gas limit (eth_estimateGas, about 2.51M on runtime 475 for
 // about 236k used, plus a quarter) times 1.1 x the gas price: about 0.017 TAO
-// at the plan's 5 gwei, more than the v1 dialog's 0.01. Whether the key can pay
-// stays the SDK's preflight (needs_gas), never this figure.
+// at the plan's 5 gwei. The v1 dialog asks for the same. Whether the key can
+// pay stays the SDK's preflight (needs_gas), never this figure.
 inline constexpr double kLedgerClaimGasTao = 0.02;
 
 // The explorer page of a claim transaction: the chain settings' ExplorerTxUrl

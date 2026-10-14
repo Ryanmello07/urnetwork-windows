@@ -36,10 +36,13 @@ using namespace urnw::pages;
 namespace urnw {
 namespace {
 
-// The gas a claim needs is a fraction of a cent of TAO on the subtensor EVM.
-// The SDK reports "needs gas" rather than an estimate, so the funding hint
-// names a round amount that covers many claims.
-constexpr double kSuggestedGasTao = 0.01;
+// The TAO the funding hint asks for, a v2 claim's (snpayout::kLedgerClaimGasTao).
+// The SDK signs a v1 claim with its estimate plus a quarter and at least
+// 2,700,000 gas (below that the vault defers the payment), and sends it only
+// when the gas key holds that limit at 1.1 x the gas price: about 0.0149 TAO at
+// 5 gwei. Whether the key can pay stays the SDK's preflight (needs_gas), never
+// this figure.
+constexpr double kSuggestedGasTao = 0.02;
 
 TextBlock MakeText(hstring const& text, double fontSize, Brush const& brush = nullptr,
                    bool wrap = false) {
