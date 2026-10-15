@@ -111,9 +111,10 @@ class ConnectPage {
   // evidence means no claim.
   void ApplyServiceSetup(urnw::ServiceSetup::Snapshot const& snap);
 
-  // The update banner (beta spec §5): UpdateBar, stacked directly under
-  // ServiceSetupBar with the same one-writer discipline — MainWindow owns the
-  // snapshot copy and pushes every change through here, to RenderUpdateBanner.
+  // The update banner (beta spec §5): UpdateBar, pinned under the connect
+  // pane's scroller, with ServiceSetupBar's one-writer discipline — MainWindow
+  // owns the snapshot copy and pushes every change through here, to
+  // RenderUpdateBanner. Collapsed while closed.
   void ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap);
   // The one renderer of both update banners: the connect screen's UpdateBar
   // (above) and the sign-in screen's SignedOutUpdateBar (MainWindow's update

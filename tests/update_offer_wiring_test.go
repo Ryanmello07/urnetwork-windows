@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -774,8 +775,11 @@ func checkUpdateOfferedWhileSignedOut(markup, window, connect string) []string {
 	}
 	// one renderer for both banners
 	const applyOpener = "void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) {"
-	body := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(applyDefinition(connect, applyOpener), applyOpener), "\n}"))
-	if body != "RenderUpdateBanner(w_.UpdateBar(), snap);" {
+	// the body, with its whitespace folded: the connect screen's banner by the
+	// shared renderer, then collapsed while closed (pinned under the
+	// scroller, checkUpdateBannerRowStaysOnScreen), and nothing else
+	body := strings.Join(strings.Fields(strings.TrimSuffix(strings.TrimPrefix(applyDefinition(connect, applyOpener), applyOpener), "\n}")), " ")
+	if body != "auto bar = w_.UpdateBar(); RenderUpdateBanner(bar, snap); bar.Visibility(bar.IsOpen() ? winrt::Microsoft::UI::Xaml::Visibility::Visible : winrt::Microsoft::UI::Xaml::Visibility::Collapsed);" {
 		problems = append(problems, fmt.Sprintf("ConnectPage::ApplyUpdateChecker is %q, want the connect screen's banner by the shared renderer alone", body))
 	}
 	if count := strings.Count(connect, "RenderUpdateBanner("); count != 2 {
@@ -821,6 +825,131 @@ func checkUpdateOfferedWhileSignedOut(markup, window, connect string) []string {
 	if strings.Contains(window, "signedOutBar.ActionButton(") {
 		problems = append(problems, "MainWindow puts a control in the sign-in screen banner's own action slot, which the renderer never writes")
 	}
+	return problems
+}
+
+// An element of a XAML document: its type's local name, its x:Name, its
+// attributes outside any namespace (Grid.Row, Height, Visibility), and its
+// place in the tree.
+type xamlElement struct {
+	local    string
+	name     string
+	attrs    map[string]string
+	parent   *xamlElement
+	children []*xamlElement
+}
+
+// The elements of a XAML document that have an x:Name, by name.
+func xamlNamedElements(markup string) (map[string]*xamlElement, error) {
+	decoder := xml.NewDecoder(strings.NewReader(markup))
+	named := map[string]*xamlElement{}
+	var open []*xamlElement
+	for {
+		token, err := decoder.Token()
+		if err == io.EOF {
+			return named, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		switch t := token.(type) {
+		case xml.StartElement:
+			element := &xamlElement{local: t.Name.Local, attrs: map[string]string{}}
+			for _, attribute := range t.Attr {
+				if attribute.Name.Local == "Name" && strings.HasSuffix(attribute.Name.Space, "/xaml") {
+					element.name = attribute.Value
+				} else if attribute.Name.Space == "" {
+					element.attrs[attribute.Name.Local] = attribute.Value
+				}
+			}
+			if len(open) > 0 {
+				element.parent = open[len(open)-1]
+				element.parent.children = append(element.parent.children, element)
+			}
+			if element.name != "" {
+				named[element.name] = element
+			}
+			open = append(open, element)
+		case xml.EndElement:
+			open = open[:len(open)-1]
+		}
+	}
+}
+
+// The connect screen's update banner keeps its Update and Later row on the
+// screen at every height the window allows (fold-in iii). In the connect
+// pane's scrolling column it sat below the hero, the location, the Connect
+// button and the peers line, and a window shorter than 760 put the row under
+// the status strip and the pane's bottom fade: 480x728, the size the window
+// opens with on a 1024x768 screen (fork run 38294750901). So the banner is in
+// no ScrollViewer. It has a row of its own in the connect pane's grid, sized
+// to it (Auto), under the scroller's row (*), and nothing else shares it. It
+// is closed and collapsed until it has something to say, and the connect page
+// collapses it again whenever it closes, so the column keeps its height then.
+func checkUpdateBannerRowStaysOnScreen(markup, connect string) []string {
+	var problems []string
+	named, err := xamlNamedElements(markup)
+	if err != nil {
+		return append(problems, "MainWindow.xaml does not parse: "+err.Error())
+	}
+	bar := named["UpdateBar"]
+	if bar == nil {
+		return append(problems, "MainWindow.xaml has no UpdateBar")
+	}
+	for up := bar.parent; up != nil; up = up.parent {
+		if up.local == "ScrollViewer" {
+			problems = append(problems, fmt.Sprintf("UpdateBar is inside the ScrollViewer %q: a window short enough scrolls its row under the status strip", up.name))
+		}
+	}
+	pane := bar.parent
+	if pane == nil || pane.local != "Grid" || pane.name != "ConnectPaneA" {
+		return append(problems, "UpdateBar is not in a row of the connect pane's grid (ConnectPaneA)")
+	}
+	var rows []string
+	for _, child := range pane.children {
+		if child.local != "Grid.RowDefinitions" {
+			continue
+		}
+		for _, row := range child.children {
+			if row.local == "RowDefinition" {
+				height := row.attrs["Height"]
+				if height == "" {
+					height = "*"
+				}
+				rows = append(rows, height)
+			}
+		}
+	}
+	rowOf := func(element *xamlElement) int {
+		row, err := strconv.Atoi(element.attrs["Grid.Row"])
+		if err != nil {
+			return 0
+		}
+		return row
+	}
+	barRow := rowOf(bar)
+	if barRow >= len(rows) || rows[barRow] != "Auto" {
+		problems = append(problems, fmt.Sprintf("UpdateBar is in row %d of ConnectPaneA's rows %v: want a row of its own, sized to it (Auto)", barRow, rows))
+	}
+	scroll := named["PaneAScroll"]
+	if scroll == nil || scroll.parent != pane {
+		problems = append(problems, "PaneAScroll is no longer a row of ConnectPaneA: this check no longer reads the pane")
+	} else if scrollRow := rowOf(scroll); scrollRow >= barRow || scrollRow >= len(rows) || rows[scrollRow] != "*" {
+		problems = append(problems, fmt.Sprintf("UpdateBar's row %d is not under the scroller's row %d, the pane's one that takes what is left (*), in %v", barRow, scrollRow, rows))
+	}
+	for _, child := range pane.children {
+		if child != bar && !strings.Contains(child.local, ".") && rowOf(child) == barRow {
+			problems = append(problems, fmt.Sprintf("%s %q shares the update banner's row %d", child.local, child.name, barRow))
+		}
+	}
+	if bar.attrs["IsOpen"] != "False" || bar.attrs["Visibility"] != "Collapsed" {
+		problems = append(problems, "UpdateBar is not closed and collapsed until it has something to say: the pane would lose its margins")
+	}
+	apply := applyDefinition(connect, "void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) {")
+	problems = append(problems, applyOrderProblems("ConnectPage::ApplyUpdateChecker", apply,
+		regexp.QuoteMeta("auto bar = w_.UpdateBar();"),
+		regexp.QuoteMeta("RenderUpdateBanner(bar, snap);"),
+		`bar\.Visibility\(bar\.IsOpen\(\)\s*\?\s*winrt::Microsoft::UI::Xaml::Visibility::Visible\s*:\s*winrt::Microsoft::UI::Xaml::Visibility::Collapsed\);`)...)
 	return problems
 }
 
@@ -1104,11 +1233,11 @@ func TestUpdateOfferWhileSignedOutRejectsWeakerSources(t *testing.T) {
 		{"a closed banner that keeps its room after the fan-out", `MainWindow::ApplyUpdateChecker is missing signedOutBar\.Visibility`,
 			signedOut(markup, replace(window, "  signedOutBar.Visibility(signedOutBar.IsOpen() ? Visibility::Visible : Visibility::Collapsed);\n", ""), connect)},
 		{"the connect screen's banner by a renderer of its own", "ConnectPage::ApplyUpdateChecker is",
-			signedOut(markup, window, replace(connect, "  RenderUpdateBanner(w_.UpdateBar(), snap);\n",
-				"  auto bar = w_.UpdateBar();\n  bar.IsOpen(snap.phase != urnw::UpdateChecker::Phase::None);\n"))},
+			signedOut(markup, window, replace(connect, "  RenderUpdateBanner(bar, snap);\n",
+				"  bar.IsOpen(snap.phase != urnw::UpdateChecker::Phase::None);\n"))},
 		{"the sign-in screen's banner written by the connect page", "ConnectPage.cpp writes the sign-in screen's banner",
-			signedOut(markup, window, replace(connect, "  RenderUpdateBanner(w_.UpdateBar(), snap);\n",
-				"  RenderUpdateBanner(w_.UpdateBar(), snap);\n  RenderUpdateBanner(w_.SignedOutUpdateBar(), snap);\n"))},
+			signedOut(markup, window, replace(connect, "  RenderUpdateBanner(bar, snap);\n",
+				"  RenderUpdateBanner(bar, snap);\n  RenderUpdateBanner(w_.SignedOutUpdateBar(), snap);\n"))},
 		{"an action that does nothing", "the sign-in screen update banner's action is missing",
 			signedOut(markup, replace(window, "      signedOutUpdate.Click([weak = get_weak()](auto const&, auto const&) {\n        if (auto self = weak.get()) self->OnUpdateBannerAction();\n      });\n",
 				"      signedOutUpdate.Click([weak = get_weak()](auto const&, auto const&) {\n      });\n"), connect)},
@@ -1140,6 +1269,68 @@ func TestUpdateOfferWhileSignedOutRejectsWeakerSources(t *testing.T) {
 		{"one automation id on both banners' actions", `want exactly one L"acceptance.update.action"`, func() []string {
 			return checkUpdateBannerAutomationIds(xaml, replace(window, `L"acceptance.update.signed-out-action"`, `L"acceptance.update.action"`), developer)
 		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			problems := strings.Join(tc.check(), "\n")
+			if tc.want == "" {
+				if problems != "" {
+					t.Fatalf("a source that is no weaker was reported:\n%s", problems)
+				}
+				return
+			}
+			if !strings.Contains(problems, tc.want) && !regexp.MustCompile(tc.want).MatchString(problems) {
+				t.Fatalf("negative control was not detected by %q; the check reported:\n%s", tc.want, problems)
+			}
+			t.Logf("fires: %s", tc.name)
+		})
+	}
+}
+
+func TestUpdateOfferBannerRowStaysOnScreen(t *testing.T) {
+	reportProblems(t, checkUpdateBannerRowStaysOnScreen(readAppSource(t, "MainWindow.xaml"),
+		stripComments(readAppSource(t, "ConnectPage.cpp"))))
+}
+
+// Each way the banner's row can be scrolled away, or the pane lose its room,
+// fails the check for the reason it names.
+func TestUpdateOfferBannerRowRejectsWeakerSources(t *testing.T) {
+	markup := readAppSource(t, "MainWindow.xaml")
+	connect := stripComments(readAppSource(t, "ConnectPage.cpp"))
+	replace := func(text, old, replacement string) string {
+		if strings.Count(text, old) != 1 {
+			t.Fatalf("negative control: %q is not in the source exactly once", old)
+		}
+		return strings.Replace(text, old, replacement, 1)
+	}
+	start := strings.Index(markup, `<InfoBar x:Name="UpdateBar"`)
+	if start < 0 {
+		t.Fatal("MainWindow.xaml has no UpdateBar element to move")
+	}
+	element := markup[start : start+strings.Index(markup[start:], "/>")+2]
+	column := "                                <!-- provide ....................................... -->\n"
+	row := func(markup, connect string) func() []string {
+		return func() []string { return checkUpdateBannerRowStaysOnScreen(markup, connect) }
+	}
+	for _, tc := range []struct {
+		name, want string
+		check      func() []string
+	}{
+		{"the sources as they are", "", row(markup, connect)},
+		{"the banner back in the scrolling column", `UpdateBar is inside the ScrollViewer "PaneAScroll"`,
+			row(replace(replace(markup, element, ""), column, strings.Replace(element, ` Grid.Row="2"`, "", 1)+"\n"+column), connect)},
+		{"the banner in the scroller's row", `ScrollViewer "PaneAScroll" shares the update banner's row 1`,
+			row(replace(markup, element, strings.Replace(element, `Grid.Row="2"`, `Grid.Row="1"`, 1)), connect)},
+		{"the banner over the pane's header", "is not under the scroller's row",
+			row(replace(markup, element, strings.Replace(element, `Grid.Row="2"`, `Grid.Row="0"`, 1)), connect)},
+		{"the banner's row taking what is left", "want a row of its own, sized to it (Auto)",
+			row(replace(markup, "                            <!-- the update banner, under the scroller (UpdateBar) -->\n                            <RowDefinition Height=\"Auto\" />\n",
+				"                            <RowDefinition Height=\"*\" />\n"), connect)},
+		{"the banner without its row", "want a row of its own, sized to it (Auto)",
+			row(replace(markup, "                            <!-- the update banner, under the scroller (UpdateBar) -->\n                            <RowDefinition Height=\"Auto\" />\n", ""), connect)},
+		{"a closed banner that keeps its margins", "is not closed and collapsed until it has something to say",
+			row(replace(markup, element, strings.Replace(element, `Visibility="Collapsed" `, "", 1)), connect)},
+		{"a banner the connect page leaves showing once closed", `ConnectPage::ApplyUpdateChecker is missing bar\\.Visibility`,
+			row(markup, replace(connect, "  bar.Visibility(bar.IsOpen() ? winrt::Microsoft::UI::Xaml::Visibility::Visible\n                              : winrt::Microsoft::UI::Xaml::Visibility::Collapsed);\n", ""))},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			problems := strings.Join(tc.check(), "\n")

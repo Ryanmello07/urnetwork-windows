@@ -623,10 +623,15 @@ void ConnectPage::ApplyServiceSetup(urnw::ServiceSetup::Snapshot const& snap) {
 }
 
 // The update banner (beta spec §5): MainWindow's snapshot copy, rendered onto
-// UpdateBar, directly under the service bar, by the renderer both update
-// banners share.
+// UpdateBar by the renderer both update banners share. The bar is pinned
+// under the pane's scroller, so its row is never under the status strip; it
+// is collapsed while closed, so with nothing to say it takes no room from the
+// column above it.
 void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) {
-  RenderUpdateBanner(w_.UpdateBar(), snap);
+  auto bar = w_.UpdateBar();
+  RenderUpdateBanner(bar, snap);
+  bar.Visibility(bar.IsOpen() ? winrt::Microsoft::UI::Xaml::Visibility::Visible
+                              : winrt::Microsoft::UI::Xaml::Visibility::Collapsed);
 }
 
 // An update banner (beta spec §5), the connect screen's UpdateBar or the
