@@ -185,11 +185,15 @@ void TestTheMarkerSaysWhetherAVpnWasConnected() {
   }
 }
 
-// The report of an update says the VPN was disconnected for it unless the
-// record of that update says no VPN was connected. Not telling someone their
-// VPN is off is worse than telling someone who had none, so a record an older
-// build wrote, no record, and a record of another update all keep the line.
-void TestTheReportSaysTheVpnWasDisconnectedUnlessNoneWas() {
+// The report of an update says the VPN was disconnected for it as the record
+// this launch took says. A record of its update decides: 1 keeps the line and
+// 0 leaves it out. Not telling someone their VPN is off is worse than telling
+// someone who had none, so a record an older build wrote, which does not say,
+// keeps the line, and so does a record of another update. No record leaves the
+// line out: the record is taken once, by the first launch after its update, so
+// a launch without one shows the report again, and its first showing said
+// what its record said.
+void TestTheRecordThisLaunchTookDecidesTheLine() {
   const std::optional<std::int64_t> after = kWrittenAt + 60;
   UpdateMarker connected = kMarker;
   connected.vpn = VpnAtStart::Connected;
@@ -207,9 +211,9 @@ void TestTheReportSaysTheVpnWasDisconnectedUnlessNoneWas() {
   Check(SaysVpnDisconnected(
             VpnOfReport(ParseUpdateMarker("4321 133000000000000000 1900000000\n"), after)),
         "report: an older build's record, read from its file, keeps the line");
-  Check(VpnOfReport(std::nullopt, after) == VpnAtStart::Unknown &&
-            SaysVpnDisconnected(VpnOfReport(std::nullopt, after)),
-        "report: no record keeps the line");
+  Check(!SaysVpnDisconnected(VpnOfReport(std::nullopt, after)) &&
+            !SaysVpnDisconnected(VpnOfReport(std::nullopt, std::nullopt)),
+        "report: no record taken by this launch leaves the line out: the report is shown again");
   Check(VpnOfReport(kMarker, kWrittenAt - 1) == VpnAtStart::Unknown &&
             SaysVpnDisconnected(VpnOfReport(kMarker, kWrittenAt - 1)),
         "report: a report that finished before the record was written is another update's, "
@@ -229,7 +233,7 @@ int main() {
   TestTheMarkerSurvivesItsFile();
   TestNames();
   TestTheMarkerSaysWhetherAVpnWasConnected();
-  TestTheReportSaysTheVpnWasDisconnectedUnlessNoneWas();
+  TestTheRecordThisLaunchTookDecidesTheLine();
   std::cout << (gCases - gFailures) << "/" << gCases << " update marker checks passed\n";
   return gFailures == 0 ? 0 : 1;
 }

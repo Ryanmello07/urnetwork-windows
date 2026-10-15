@@ -99,6 +99,7 @@
 #include <filesystem>
 #include <functional>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <thread>
 
@@ -172,12 +173,13 @@ class UpdateChecker {
     // What the banner says about it for this build (never Hidden here: a
     // hidden report is no Result).
     update::ReportView view = update::ReportView::Hidden;
-    // Whether a VPN was connected when the update began. Known while this app
-    // waits on the helper, and after it from the update-in-progress record
-    // of that update (Common/UpdateMarker.h VpnOfReport); Unknown on every
-    // other road. The banner says the VPN was disconnected for the update
-    // unless it is NotConnected (SaysVpnDisconnected).
-    update::VpnAtStart vpn = update::VpnAtStart::Unknown;
+    // Whether a VPN was connected when the update began, as this launch knows
+    // it: from the note while this app waits on the helper, and after it from
+    // the update-in-progress record this launch took (Common/UpdateMarker.h
+    // VpnOfReport), nullopt when it took none and so shows the report again.
+    // Unknown on any other road. The banner says the VPN was disconnected for
+    // the update unless it is NotConnected or nullopt (SaysVpnDisconnected).
+    std::optional<update::VpnAtStart> vpn = update::VpnAtStart::Unknown;
   };
 
   struct Snapshot {

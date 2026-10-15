@@ -1,0 +1,82 @@
+name: PR F spec pre-check - the update marker and the VPN line
+
+# Throwaway, on ci/prf-spec-* branches of the fork only: the head under test
+# plus this file, whose parent is the commit before it. It runs the tests about
+# the update's record and the reconnect line, the C++ spec and its negative
+# controls among them, which need a C++20 compiler the writer's machine does
+# not have. Never merged.
+on:
+  push:
+    branches:
+      - 'ci/prf-spec-*'
+
+permissions:
+  contents: read
+
+jobs:
+  spec:
+    name: the update marker spec and the VPN line's checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Windows repo
+        uses: actions/checkout@v4
+        with:
+          # the commit before this one, for the spec's red against its header
+          fetch-depth: 2
+
+      - name: The commit under test
+        run: |
+          echo "checked out: $(git rev-parse HEAD)"
+          echo "its parent:  $(git rev-parse HEAD~1)"
+          c++ --version | head -1
+
+      - name: The spec as it is, against the parent's header, and with designs put back by hand
+        run: |
+          d="$RUNNER_TEMP/spec"
+          mkdir -p "$d/as-is" "$d/parent" "$d/defect" "$d/g8"
+          build() { c++ -std=c++20 -Wall -Wextra -Werror -I"$1" app/tools/update-marker-tests.cpp -o "$2"; }
+          must_fail() {
+            if "$1"; then
+              echo "::error::$2: the spec passed"
+              exit 1
+            else
+              echo "$2: the spec failed, as it must (exit $?)"
+            fi
+          }
+          echo "== the spec against the header as it is"
+          build app/src/Common "$d/as-is/t"
+          "$d/as-is/t"
+          echo "== this spec against the parent's header ($(git rev-parse --short HEAD~1))"
+          git show HEAD~1:app/src/Common/UpdateMarker.h > "$d/parent/UpdateMarker.h"
+          build "$d/parent" "$d/parent/t"
+          must_fail "$d/parent/t" "the parent's header"
+          echo "== the line said whatever the VPN (the defect)"
+          sed 's/  return vpn.has_value() && \*vpn != VpnAtStart::NotConnected;/  (void)vpn;\n  return true;/' \
+            app/src/Common/UpdateMarker.h > "$d/defect/UpdateMarker.h"
+          diff app/src/Common/UpdateMarker.h "$d/defect/UpdateMarker.h" || true
+          build "$d/defect" "$d/defect/t"
+          must_fail "$d/defect/t" "the defect"
+          echo "== no record read as unknown (G8's road back to the defect at the second launch)"
+          sed 's/  if (!record) return std::nullopt;/  if (!record) return VpnAtStart::Unknown;/' \
+            app/src/Common/UpdateMarker.h > "$d/g8/UpdateMarker.h"
+          diff app/src/Common/UpdateMarker.h "$d/g8/UpdateMarker.h" || true
+          build "$d/g8" "$d/g8/t"
+          must_fail "$d/g8/t" "G8's road"
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: go test -v the record's and the line's tests
+        run: |
+          out="$RUNNER_TEMP/go-test.txt"
+          status=0
+          go test -count=1 -timeout 20m -v \
+            -run 'TestUpdateMarker|TestUpdateApplyTrayRemembersTheVpn|TestUpdateApplyTraySaysWhatTheUpdateDoes|TestUpdateRefusalTheHandoffRecordsTheInstaller' \
+            ./tests > "$out" 2>&1 || status=$?
+          cat "$out"
+          echo "top-level tests: $(grep -c '^=== RUN   Test[A-Za-z0-9_]*$' "$out") run," \
+            "$(grep -c '^--- PASS' "$out") passed, $(grep -c '^--- SKIP' "$out") skipped," \
+            "$(grep -c '^--- FAIL' "$out") failed; negative controls passed: $(grep -c '^    --- PASS' "$out")"
+          exit $status
