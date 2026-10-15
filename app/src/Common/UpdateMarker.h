@@ -39,6 +39,14 @@
 // instance::kAfterUpdateArgument, and waits for this marker to go stale before
 // it asks (main.cpp), so it starts the app once the update has ended.
 //
+// The marker also says whether a VPN was connected when the update began. The
+// installer stops the VPN service, and the app does not connect by itself, so
+// the report of the update tells the user to connect again only when there was
+// a VPN to lose. The launch that finds the update over keeps the marker it
+// deletes for that report (SingleInstance.cpp TakeEndedUpdate). A marker
+// written before this field existed has three numbers, still refuses launches
+// as it did, and says no VPN was connected: it cannot say one was.
+//
 // Pure, header-only and free of Windows headers: tools/update-marker-tests.cpp
 // runs it on any host, and App/SingleInstance.cpp binds the file and the
 // process.
@@ -74,16 +82,20 @@ struct UpdateMarker {
   std::uint64_t installerCreationTime = 0;
   // When the marker was written, in seconds since the Unix epoch.
   std::int64_t writtenAt = 0;
+  // A VPN was connected when the update began, so the update disconnected it.
+  bool vpnConnected = false;
 };
 
-// The file's text: "<process id> <creation time> <written at>\n".
+// The file's text: "<process id> <creation time> <written at> <vpn>\n", the
+// last 1 when a VPN was connected and 0 when not.
 inline std::string FormatUpdateMarker(const UpdateMarker& marker) {
   return std::to_string(marker.installerProcessId) + " " +
          std::to_string(marker.installerCreationTime) + " " +
-         std::to_string(marker.writtenAt) + "\n";
+         std::to_string(marker.writtenAt) + " " + (marker.vpnConnected ? "1" : "0") + "\n";
 }
 
-// The marker a file holds, or nullopt when the text is not exactly one.
+// The marker a file holds, or nullopt when the text is not exactly one. The
+// three numbers of a marker written before the VPN's field are still one.
 inline std::optional<UpdateMarker> ParseUpdateMarker(std::string_view text) {
   if (!text.empty() && text.back() == '\n') text.remove_suffix(1);
   UpdateMarker marker;
@@ -98,9 +110,15 @@ inline std::optional<UpdateMarker> ParseUpdateMarker(std::string_view text) {
     ++at;
     return true;
   };
-  if (!field(marker.installerProcessId, false) || !field(marker.installerCreationTime, false) ||
-      !field(marker.writtenAt, true)) {
+  if (!field(marker.installerProcessId, false) || !field(marker.installerCreationTime, false)) {
     return std::nullopt;
+  }
+  if (!field(marker.writtenAt, true)) {
+    // the VPN's field, after a space: exactly 0 or 1, and the end
+    if (at == end || *at != ' ') return std::nullopt;
+    ++at;
+    if (end - at != 1 || (*at != '0' && *at != '1')) return std::nullopt;
+    marker.vpnConnected = *at == '1';
   }
   if (marker.installerProcessId == 0 || marker.installerCreationTime == 0) return std::nullopt;
   return marker;

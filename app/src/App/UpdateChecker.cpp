@@ -658,6 +658,8 @@ std::wstring UpdateChecker::LocalDateTime(std::int64_t unixSeconds) {
   return LocalDate(unixSeconds) + L" " + time;
 }
 
+void UpdateChecker::SetVpnConnected(bool connected) { vpnConnected_.store(connected); }
+
 bool UpdateChecker::AutoCheckEnabled() {
   return LoadAppPrefs().value(kAutoCheckPrefKey, true);
 }
@@ -855,6 +857,19 @@ void UpdateChecker::ShowLastResult() {
   }
   LogInfo("update: the update helper's last report: {} ended with {} at {}", result->tag,
           result->exitCode, result->finishedUtc);
+  // Whether a VPN was connected when that update began: the record of the
+  // update this launch found over (SingleInstance.cpp TakeEndedUpdate). It
+  // is written as the installer closes the app, before the helper ends, so a
+  // report that finished before it was written is another update's.
+  const std::optional<update::UpdateMarker> began = TakeEndedUpdate();
+  const bool ours = began && finished && *finished >= began->writtenAt;
+  const bool vpnWasConnected = ours && began->vpnConnected;
+  if (began) {
+    LogInfo("update: the record of the update that ended says a VPN was {}connected when it "
+            "began; {}",
+            began->vpnConnected ? "" : "not ",
+            ours ? "that update is the report's" : "the report is another update's");
+  }
   const std::wstring version = VersionOfTag(result->tag);
   Mutate([&](Snapshot& s) {
     s.phase = Phase::Result;
@@ -868,6 +883,7 @@ void UpdateChecker::ShowLastResult() {
                       .logPath = ResultLogPath(installFolder_, *result),
                       .finishedUtc = Widen(result->finishedUtc),
                       .view = view};
+    s.result.vpnWasConnected = vpnWasConnected;
   });
 }
 
@@ -1387,6 +1403,12 @@ void UpdateChecker::RunApply(std::uint64_t generation, bool manual) {
   DWORD refusal = ERROR_SUCCESS;
   std::string launchError;
   const std::int64_t started = NowUnixSeconds();
+  // Whether a VPN is connected as the update begins. The installer stops the
+  // VPN service and the app does not connect by itself, so the report says to
+  // connect again only when there was a VPN to lose: noted here, while this
+  // app runs, and recorded with the marker if the installer closes it.
+  const bool vpnConnected = vpnConnected_.load();
+  LogInfo("update: a VPN is {}connected as the update begins", vpnConnected ? "" : "not ");
   if (!LaunchUpdateHelper(installFolder_ / kHelperName, offer.tag, &helper, &refusal,
                           launchError)) {
     LogWarn("update: the update helper did not start ({}); nothing was installed", launchError);
@@ -1411,7 +1433,7 @@ void UpdateChecker::RunApply(std::uint64_t generation, bool manual) {
     // over the files the installer replaces (UpdateMarker.h). Recorded before
     // this thread ends, and so before the process does (AppController's
     // Shutdown joins it); until now every launch reached this app.
-    RecordUpdateInProgress(helper);
+    RecordUpdateInProgress(helper, vpnConnected);
     ::CloseHandle(helper);
     return;
   }
@@ -1425,6 +1447,7 @@ void UpdateChecker::RunApply(std::uint64_t generation, bool manual) {
   const std::int64_t ended = read ? static_cast<std::int64_t>(exitCode) : 1603;
   update::UpdateResult outcome{.tag = Narrow(offer.tag), .code = offer.code, .exitCode = ended};
   Result result{.version = offer.version, .exitCode = ended};
+  result.vpnWasConnected = vpnConnected;
   const std::optional<update::UpdateResult> report =
       ReadResult(installFolder_ / L"updates" / L"last-result.json");
   if (report && update::IsReportOfRun(*report, outcome.tag, ended, started)) {

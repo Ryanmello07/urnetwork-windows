@@ -132,3 +132,28 @@ func TestUpdateMarkerRejectsAMarkerWithoutTheInstallersCreationTime(t *testing.T
 			"  if (marker.installerProcessId == 0) return std::nullopt;\n")
 	}, "file: '4321 0 1900000000' is not a marker")
 }
+
+// The marker says whether a VPN was connected when the update began, and a
+// marker an older build wrote, three numbers, is still one. Write the VPN
+// without its field, read every VPN as none, refuse an older build's marker,
+// or take any digit for the VPN, and the spec must fail.
+func TestUpdateMarkerRejectsAMarkerThatLosesTheVpn(t *testing.T) {
+	requireUpdateMarkerFailure(t, func(source string) string {
+		return updateMarkerReplace(t, source,
+			`std::to_string(marker.writtenAt) + " " + (marker.vpnConnected ? "1" : "0") + "\n";`,
+			`std::to_string(marker.writtenAt) + "\n";`)
+	}, "vpn: an update that began with a VPN connected is written with 1")
+	requireUpdateMarkerFailure(t, func(source string) string {
+		return updateMarkerReplace(t, source,
+			"    marker.vpnConnected = *at == '1';\n", "    marker.vpnConnected = false;\n")
+	}, "vpn: a connected VPN reads back")
+	requireUpdateMarkerFailure(t, func(source string) string {
+		return updateMarkerReplace(t, source,
+			"  if (!field(marker.writtenAt, true)) {\n",
+			"  if (field(marker.writtenAt, true)) return std::nullopt;\n  {\n")
+	}, "vpn: an older build's marker of three numbers is still a marker")
+	requireUpdateMarkerFailure(t, func(source string) string {
+		return updateMarkerReplace(t, source,
+			"(*at != '0' && *at != '1')", "(*at < '0' || *at > '9')")
+	}, "vpn: '4321 133000000000000000 1900000000 2' is not a marker")
+}

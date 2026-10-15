@@ -92,6 +92,7 @@
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
 
+#include <atomic>
 #include <condition_variable>
 #include <chrono>
 #include <cstdint>
@@ -170,6 +171,11 @@ class UpdateChecker {
     // What the banner says about it for this build (never Hidden here: a
     // hidden report is no Result).
     update::ReportView view = update::ReportView::Hidden;
+    // A VPN was connected when the update began, so the installer's stop of
+    // the VPN service disconnected it, and the banner says to connect again.
+    // Known while this app waits on the helper, and after it from the update
+    // in progress record (Common/UpdateMarker.h); otherwise false.
+    bool vpnWasConnected = false;
   };
 
   struct Snapshot {
@@ -273,6 +279,11 @@ class UpdateChecker {
   // offer and its banner are dropped (the helper's report stays), and a check
   // is queued.
   void ChannelChanged();
+
+  // Whether a VPN is connected now (AppController, from each tunnel status).
+  // An update notes it when it begins. Kept in memory and never saved. Safe
+  // from any thread.
+  void SetVpnConnected(bool connected);
 
   // The "Check for updates automatically" preference (Settings): persisted in
   // app_prefs.json beside Advanced Mode, default ON. The static read exists so
@@ -388,6 +399,8 @@ class UpdateChecker {
   // run unless the user asks for a check. A member and nothing else, so the
   // next launch offers it again.
   std::uint64_t laterCode_ = 0;
+  // Whether a VPN is connected now (SetVpnConnected).
+  std::atomic<bool> vpnConnected_{false};
 
   // The handler's own lock, on SdkHost's advancedMutex_ reasoning: never held
   // across an invocation, never taken together with mutex_.

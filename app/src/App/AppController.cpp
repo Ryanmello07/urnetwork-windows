@@ -509,6 +509,9 @@ void AppController::OnTunnelState(const proto::TunnelStatus& status) {
                   L"to try again."));
   }
   connected_ = isUp;
+  // an update notes it as it begins: its report says to connect again only
+  // when there was a VPN to lose
+  updates_.SetVpnConnected(isUp);
   lastTunnelStatus_ = status;
   UpdateTray();
   if (windowVisible_ && window_) {

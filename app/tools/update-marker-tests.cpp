@@ -106,11 +106,11 @@ void TestAStaleMarkerFromADeadUpdateDoesNotBlock() {
 
 void TestTheMarkerSurvivesItsFile() {
   const std::string text = FormatUpdateMarker(kMarker);
-  Check(text == "4321 133000000000000000 1900000000\n", "file: the text is the three numbers");
+  Check(text == "4321 133000000000000000 1900000000 0\n", "file: the text is the four numbers");
   const std::optional<UpdateMarker> parsed = ParseUpdateMarker(text);
   Check(parsed && parsed->installerProcessId == kMarker.installerProcessId &&
             parsed->installerCreationTime == kMarker.installerCreationTime &&
-            parsed->writtenAt == kMarker.writtenAt,
+            parsed->writtenAt == kMarker.writtenAt && parsed->vpnConnected == kMarker.vpnConnected,
         "file: a marker reads back as written");
   Check(ParseUpdateMarker("4321 133000000000000000 1900000000").has_value(),
         "file: the final newline is optional");
@@ -141,6 +141,44 @@ void TestNames() {
   }
 }
 
+// The marker says whether a VPN was connected when the update began, and the
+// report of the update says to connect again only when one was. A marker an
+// older build wrote has three numbers: it still refuses launches while its
+// installer runs, and says no VPN was connected, since it cannot say one was.
+void TestTheMarkerSaysWhetherAVpnWasConnected() {
+  UpdateMarker connected = kMarker;
+  connected.vpnConnected = true;
+  Check(FormatUpdateMarker(connected) == "4321 133000000000000000 1900000000 1\n",
+        "vpn: an update that began with a VPN connected is written with 1");
+  Check(FormatUpdateMarker(kMarker) == "4321 133000000000000000 1900000000 0\n",
+        "vpn: an update that began with none is written with 0");
+  const std::optional<UpdateMarker> back = ParseUpdateMarker(FormatUpdateMarker(connected));
+  Check(back && back->vpnConnected && back->writtenAt == kWrittenAt,
+        "vpn: a connected VPN reads back");
+  const std::optional<UpdateMarker> none = ParseUpdateMarker(FormatUpdateMarker(kMarker));
+  Check(none && !none->vpnConnected, "vpn: no VPN reads back as none");
+  const std::optional<UpdateMarker> older = ParseUpdateMarker("4321 133000000000000000 1900000000\n");
+  Check(older && older->installerProcessId == 4321 && older->writtenAt == kWrittenAt &&
+            !older->vpnConnected,
+        "vpn: an older build's marker of three numbers is still a marker, with no VPN");
+  FakeProbe running{.state = InstallerState::Running};
+  Check(VerdictFor(std::string("4321 133000000000000000 1900000000\n"), running, kWrittenAt + 30) ==
+            Verdict::Updating,
+        "vpn: an older build's marker still refuses a launch while its installer runs");
+  const std::string_view broken[] = {
+      "4321 133000000000000000 1900000000 2",
+      "4321 133000000000000000 1900000000 01",
+      "4321 133000000000000000 1900000000 x",
+      "4321 133000000000000000 1900000000 ",
+      "4321 133000000000000000 1900000000 1 1",
+      "4321 133000000000000000 1900000000  1",
+      "4321 133000000000000000 1900000000 -1",
+  };
+  for (std::string_view text : broken) {
+    Check(!ParseUpdateMarker(text).has_value(), "vpn: '" + std::string(text) + "' is not a marker");
+  }
+}
+
 }  // namespace
 
 int main() {
@@ -149,6 +187,7 @@ int main() {
   TestAStaleMarkerFromADeadUpdateDoesNotBlock();
   TestTheMarkerSurvivesItsFile();
   TestNames();
+  TestTheMarkerSaysWhetherAVpnWasConnected();
   std::cout << (gCases - gFailures) << "/" << gCases << " update marker checks passed\n";
   return gFailures == 0 ? 0 : 1;
 }
