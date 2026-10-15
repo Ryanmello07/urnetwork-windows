@@ -156,7 +156,8 @@ void RecordUpdateInProgress(void* installerProcess, bool vpnConnected) {
   const update::UpdateMarker marker{.installerProcessId = ::GetProcessId(process),
                                     .installerCreationTime = CreationTime(process),
                                     .writtenAt = NowSeconds(),
-                                    .vpnConnected = vpnConnected};
+                                    .vpn = vpnConnected ? update::VpnAtStart::Connected
+                                                        : update::VpnAtStart::NotConnected};
   if (marker.installerProcessId == 0 || marker.installerCreationTime == 0) {
     LogWarn("update: the installer's process could not be read ({}); launches during the "
             "update are not refused",
@@ -182,7 +183,7 @@ void RecordUpdateInProgress(void* installerProcess, bool vpnConnected) {
   }
   LogInfo("update: launches are refused until installer process {} ends; a VPN was {}connected "
           "when the update began",
-          marker.installerProcessId, marker.vpnConnected ? "" : "not ");
+          marker.installerProcessId, vpnConnected ? "" : "not ");
 }
 
 bool LaunchedAfterUpdate() {

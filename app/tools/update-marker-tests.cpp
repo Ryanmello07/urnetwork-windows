@@ -34,11 +34,13 @@ void Check(bool condition, const std::string& what) {
   }
 }
 
-// A marker written at a fixed time, synthetic.
+// A marker written at a fixed time, of an update that began with no VPN
+// connected, synthetic.
 constexpr std::int64_t kWrittenAt = 1900000000;
 const UpdateMarker kMarker{.installerProcessId = 4321,
                            .installerCreationTime = 133000000000000000ULL,
-                           .writtenAt = kWrittenAt};
+                           .writtenAt = kWrittenAt,
+                           .vpn = VpnAtStart::NotConnected};
 
 // The pure check, under a name the harness's own Check does not hide.
 template <class Probe>
@@ -110,7 +112,7 @@ void TestTheMarkerSurvivesItsFile() {
   const std::optional<UpdateMarker> parsed = ParseUpdateMarker(text);
   Check(parsed && parsed->installerProcessId == kMarker.installerProcessId &&
             parsed->installerCreationTime == kMarker.installerCreationTime &&
-            parsed->writtenAt == kMarker.writtenAt && parsed->vpnConnected == kMarker.vpnConnected,
+            parsed->writtenAt == kMarker.writtenAt && parsed->vpn == kMarker.vpn,
         "file: a marker reads back as written");
   Check(ParseUpdateMarker("4321 133000000000000000 1900000000").has_value(),
         "file: the final newline is optional");
@@ -141,26 +143,30 @@ void TestNames() {
   }
 }
 
-// The marker says whether a VPN was connected when the update began, and the
-// report of the update says to connect again only when one was. A marker an
-// older build wrote has three numbers: it still refuses launches while its
-// installer runs, and says no VPN was connected, since it cannot say one was.
+// The marker says whether a VPN was connected when the update began. A marker
+// an older build wrote has three numbers: it still refuses launches while its
+// installer runs, and does not say whether a VPN was connected.
 void TestTheMarkerSaysWhetherAVpnWasConnected() {
   UpdateMarker connected = kMarker;
-  connected.vpnConnected = true;
+  connected.vpn = VpnAtStart::Connected;
   Check(FormatUpdateMarker(connected) == "4321 133000000000000000 1900000000 1\n",
         "vpn: an update that began with a VPN connected is written with 1");
   Check(FormatUpdateMarker(kMarker) == "4321 133000000000000000 1900000000 0\n",
         "vpn: an update that began with none is written with 0");
+  UpdateMarker unsaid = kMarker;
+  unsaid.vpn = VpnAtStart::Unknown;
+  Check(FormatUpdateMarker(unsaid) == "4321 133000000000000000 1900000000\n",
+        "vpn: a marker that does not say is written as an older build wrote it, three numbers");
   const std::optional<UpdateMarker> back = ParseUpdateMarker(FormatUpdateMarker(connected));
-  Check(back && back->vpnConnected && back->writtenAt == kWrittenAt,
+  Check(back && back->vpn == VpnAtStart::Connected && back->writtenAt == kWrittenAt,
         "vpn: a connected VPN reads back");
   const std::optional<UpdateMarker> none = ParseUpdateMarker(FormatUpdateMarker(kMarker));
-  Check(none && !none->vpnConnected, "vpn: no VPN reads back as none");
+  Check(none && none->vpn == VpnAtStart::NotConnected, "vpn: no VPN reads back as none");
   const std::optional<UpdateMarker> older = ParseUpdateMarker("4321 133000000000000000 1900000000\n");
   Check(older && older->installerProcessId == 4321 && older->writtenAt == kWrittenAt &&
-            !older->vpnConnected,
-        "vpn: an older build's marker of three numbers is still a marker, with no VPN");
+            older->vpn == VpnAtStart::Unknown,
+        "vpn: an older build's marker of three numbers is still a marker, and does not say "
+        "whether a VPN was connected");
   FakeProbe running{.state = InstallerState::Running};
   Check(VerdictFor(std::string("4321 133000000000000000 1900000000\n"), running, kWrittenAt + 30) ==
             Verdict::Updating,
@@ -179,6 +185,41 @@ void TestTheMarkerSaysWhetherAVpnWasConnected() {
   }
 }
 
+// The report of an update says the VPN was disconnected for it unless the
+// record of that update says no VPN was connected. Not telling someone their
+// VPN is off is worse than telling someone who had none, so a record an older
+// build wrote, no record, and a record of another update all keep the line.
+void TestTheReportSaysTheVpnWasDisconnectedUnlessNoneWas() {
+  const std::optional<std::int64_t> after = kWrittenAt + 60;
+  UpdateMarker connected = kMarker;
+  connected.vpn = VpnAtStart::Connected;
+  UpdateMarker unsaid = kMarker;
+  unsaid.vpn = VpnAtStart::Unknown;
+  Check(VpnOfReport(kMarker, after) == VpnAtStart::NotConnected &&
+            !SaysVpnDisconnected(VpnOfReport(kMarker, after)),
+        "report: a record of its update that says no VPN was connected leaves the line out");
+  Check(VpnOfReport(connected, after) == VpnAtStart::Connected &&
+            SaysVpnDisconnected(VpnOfReport(connected, after)),
+        "report: a record that says a VPN was connected keeps the line");
+  Check(VpnOfReport(unsaid, after) == VpnAtStart::Unknown &&
+            SaysVpnDisconnected(VpnOfReport(unsaid, after)),
+        "report: a record that does not say keeps the line");
+  Check(SaysVpnDisconnected(
+            VpnOfReport(ParseUpdateMarker("4321 133000000000000000 1900000000\n"), after)),
+        "report: an older build's record, read from its file, keeps the line");
+  Check(VpnOfReport(std::nullopt, after) == VpnAtStart::Unknown &&
+            SaysVpnDisconnected(VpnOfReport(std::nullopt, after)),
+        "report: no record keeps the line");
+  Check(VpnOfReport(kMarker, kWrittenAt - 1) == VpnAtStart::Unknown &&
+            SaysVpnDisconnected(VpnOfReport(kMarker, kWrittenAt - 1)),
+        "report: a report that finished before the record was written is another update's, "
+        "and keeps the line");
+  Check(SaysVpnDisconnected(VpnOfReport(kMarker, std::nullopt)),
+        "report: a report with no time keeps the line");
+  Check(VpnOfReport(kMarker, kWrittenAt) == VpnAtStart::NotConnected,
+        "report: a report that finished the second its record was written is of its update");
+}
+
 }  // namespace
 
 int main() {
@@ -188,6 +229,7 @@ int main() {
   TestTheMarkerSurvivesItsFile();
   TestNames();
   TestTheMarkerSaysWhetherAVpnWasConnected();
+  TestTheReportSaysTheVpnWasDisconnectedUnlessNoneWas();
   std::cout << (gCases - gFailures) << "/" << gCases << " update marker checks passed\n";
   return gFailures == 0 ? 0 : 1;
 }
