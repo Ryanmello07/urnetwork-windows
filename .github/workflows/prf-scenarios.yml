@@ -1,0 +1,287 @@
+# PR F's runner legs: the official update banner's three defects that the
+# in-the-wild self-update run (fork run 38294750901) found, on GitHub's
+# windows-2022 and windows-2025 runners. Throwaway: it lives on ci/prf-*
+# branches of the fork only, each the head under test plus these files, and
+# is never merged. It publishes nothing and creates no release or tag: the
+# real feed is read without a token, as the app reads it, and the one leg
+# that installs a newer build serves it from a stand-in on its own runner.
+#
+#   ci/prf-before-*   upstream main's build: the controls
+#   ci/prf-after-*    PR F's build
+#
+# Builds, both with app\build.ps1 under Windows PowerShell 5.1, the official
+# helper and no test feed, as A2b's runner did (ci/a2b-runner-6):
+#   vN      this head at a release code six hours before the release the real
+#           feed offers today, so that release is an update for it
+#   vNext   this head at the run's own instant, newer than every release
+#
+# Legs, each on its own runner, on both images:
+#   window       (iii) the connect screen's banner row, as the window opens on
+#                the runner's 1024x768 screen, at 480x760 and at 400x480
+#   signed-out   (i) vN started signed out on a fresh profile: is the update
+#                offered?
+#   self-update  (ii) vN updates itself to vNext with no VPN connected: does
+#                the report say the VPN was disconnected?
+#
+# SPDX-License-Identifier: MPL-2.0
+
+name: PR F scenarios - the update banner
+
+on:
+  push:
+    branches:
+      - 'ci/prf-before-*'
+      - 'ci/prf-after-*'
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  PRF_MODE: ${{ startsWith(github.ref_name, 'ci/prf-before-') && 'before' || 'after' }}
+
+jobs:
+  # The SDK DLLs, cross-built from linux as the fork's CI builds them
+  # (ci/wfix-defects-2's wfix-ci.yml), from sdk@main and its siblings.
+  build-sdk:
+    name: Build SDK DLLs (windows/amd64 + arm64)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out forked SDK
+        uses: actions/checkout@v4
+        with:
+          repository: urnetwork/sdk
+          ref: main
+          path: sdk
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: Check out the SDK's siblings
+        run: |
+          git clone --depth 1 --branch main https://github.com/urnetwork/connect.git connect
+          git clone --depth 1 https://github.com/urnetwork/gvisor.git gvisor
+          git clone --depth 1 https://github.com/urnetwork/glog.git glog
+          git clone --depth 1 https://github.com/urnetwork/goidenticons.git goidenticons
+          for repo in sdk connect gvisor glog goidenticons; do echo "$repo $(git -C $repo rev-parse HEAD)"; done
+          if ! grep -qR '^func RenderPngV2(' goidenticons/; then
+            echo 'package goidenticons' > goidenticons/render_v2_ci_shim.go
+            echo 'func RenderPngV2(data []byte, size int) ([]byte, error) { return RenderPng(data, size) }' >> goidenticons/render_v2_ci_shim.go
+          fi
+
+      - name: Install mingw-w64 and llvm-mingw
+        run: |
+          sudo apt-get update && sudo apt-get install -y mingw-w64 zip
+          version=20250709
+          curl -fsSL "https://github.com/mstorsjo/llvm-mingw/releases/download/${version}/llvm-mingw-${version}-ucrt-ubuntu-22.04-x86_64.tar.xz" -o /tmp/llvm-mingw.tar.xz
+          sudo mkdir -p /opt/llvm-mingw
+          sudo tar -xf /tmp/llvm-mingw.tar.xz -C /opt/llvm-mingw --strip-components=1
+          echo "/opt/llvm-mingw/bin" >> "$GITHUB_PATH"
+
+      - name: Build the SDK Windows DLLs
+        working-directory: sdk/cgo
+        run: |
+          now=$(date -u +%s)
+          export WARP_VERSION="$(date -u +%Y.%-m.%-d)-$(( (now - 1684800000) * 10 ))"
+          echo "WARP_VERSION=$WARP_VERSION"
+          if [ ! -f go.sum ]; then go mod download all; fi
+          make build_windows
+          fail=0
+          for arch in amd64 arm64; do
+            dll="build/windows/$arch/URnetworkSdk.dll"
+            if [ ! -f "$dll" ]; then echo "::error::$dll was not produced"; fail=1; continue; fi
+            echo "$dll: $(stat -c %s "$dll") bytes"
+            unzip -l build/URnetworkSdkWindows.zip | grep -q "windows/$arch/URnetworkSdk.dll" || { echo "::error::the zip lacks $arch"; fail=1; }
+          done
+          # build-sdk.ps1 refuses an msvcrt-linked DLL since b80a31ba (windows#17)
+          imports=$(llvm-readobj --coff-imports build/windows/amd64/URnetworkSdk.dll | grep 'Name: ' | sort -u)
+          echo "$imports"
+          if echo "$imports" | grep -qi 'msvcrt.dll'; then echo "::error::the amd64 DLL imports msvcrt.dll"; fail=1; fi
+          exit $fail
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: urnetwork-sdk-windows
+          path: sdk/cgo/build/URnetworkSdkWindows.zip
+          if-no-files-found: error
+
+  plan:
+    name: Read the feed and choose vN and vNext
+    runs-on: windows-2022
+    outputs:
+      vn: ${{ steps.plan.outputs.vn }}
+      vnext: ${{ steps.plan.outputs.vnext }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: The head under test
+        shell: powershell
+        run: |
+          "branch $env:GITHUB_REF_NAME at $(git rev-parse HEAD), mode $env:PRF_MODE"
+          git log --oneline -5 | ForEach-Object { "  $_" }
+
+      - name: Read the feed as the app does
+        id: plan
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-feed-lib.ps1"
+          [void](Wait-UrAnonymousRequests 4)
+          $list = Get-UrFeedNow (Join-Path $env:RUNNER_TEMP 'releases.json')
+          $reading = Get-UrFeedReading $list.Releases $list.ServerUnix
+          if (-not $reading.Offered) { throw "the feed offers nothing today" }
+          $code = [uint64]$reading.Offered.Code - 216000
+          $instant = [DateTimeOffset]::FromUnixTimeSeconds($UrFoundedUnix + [long][math]::Floor([decimal]$code / 10)).UtcDateTime
+          $vnVersion = '{0}.{1}.{2}-{3}' -f $instant.Year, $instant.Month, $instant.Day, $code
+          $now = [DateTimeOffset]::UtcNow
+          $nextCode = [uint64][math]::Floor(($now.ToUnixTimeSeconds() - $UrFoundedUnix)) * 10
+          $vnextVersion = '{0}.{1}.{2}-{3}' -f $now.Year, $now.Month, $now.Day, $nextCode
+          $vn = & .\app\tools\UrVersion.ps1 -Version $vnVersion
+          $vnext = & .\app\tools\UrVersion.ps1 -Version $vnextVersion
+          foreach ($row in @($reading.Rows)) { if ([uint64]$row.Code -ge $nextCode) { throw "the feed lists $($row.Tag), not older than vNext" } }
+          "offered: $($reading.Offered.Tag)"
+          "vN    {0}: code {1}, msi {2}" -f $vn.UrVersion, $vn.UrVersionCode, $vn.UrMsiVersion
+          "vNext {0}: code {1}, msi {2}" -f $vnext.UrVersion, $vnext.UrVersionCode, $vnext.UrMsiVersion
+          if ([version]$vn.UrMsiVersion -ge [version]$vnext.UrMsiVersion) { throw "vN must have the lower ProductVersion" }
+          "vn=$vnVersion", "vnext=$vnextVersion" | ForEach-Object {
+            Write-Host $_
+            Add-Content -Encoding ascii -Path $env:GITHUB_OUTPUT -Value $_
+          }
+
+  build:
+    name: Build ${{ matrix.key }} with build.ps1 under Windows PowerShell 5.1
+    needs: [build-sdk, plan]
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        key: [vn, vnext]
+    env:
+      VERSION: ${{ matrix.key == 'vn' && needs.plan.outputs.vn || needs.plan.outputs.vnext }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: urnetwork-sdk-windows
+          path: sdk-zip
+
+      - name: app\build.ps1 -Version ${{ env.VERSION }}
+        shell: cmd
+        run: >-
+          powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass
+          -File app\build.ps1 -Version %VERSION%
+          -SdkZip "%GITHUB_WORKSPACE%\sdk-zip\URnetworkSdkWindows.zip" -Platforms x64
+
+      - name: Check the build and stage the MSI
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\vpn-feed-lib.ps1"
+          $ur = & .\app\tools\UrVersion.ps1 -Version $env:VERSION
+          $fileVersion = '{0}.{1}.{2}.{3}' -f $ur.UrVersionMajor, $ur.UrVersionMinor, $ur.UrVersionPatch, $ur.UrVersionBuild
+          $bin = Join-Path $env:GITHUB_WORKSPACE 'app\build\x64\Release'
+          foreach ($exe in 'URnetwork.exe', 'urnetworkd.exe', 'URnetworkUpdate.exe') {
+            $actual = Get-UrFileVersion (Join-Path $bin $exe)
+            if ($actual -ne $fileVersion) { throw "$exe file version $actual, want $fileVersion" }
+          }
+          if ((Get-UrHelperFeed (Join-Path $bin 'URnetworkUpdate.exe')) -ne 'official') { throw "build.ps1 built a helper with a test feed" }
+          $out = New-Item -ItemType Directory -Force (Join-Path $env:GITHUB_WORKSPACE 'staged')
+          $msi = Join-Path $env:GITHUB_WORKSPACE "app\build\out\URnetwork-$($env:VERSION)-x64.msi"
+          Copy-Item $msi (Join-Path $out "$env:KEY.msi")
+          $productVersion = Get-UrMsiProductVersion (Join-Path $out "$env:KEY.msi")
+          if ($productVersion -ne $ur.UrMsiVersion) { throw "MSI ProductVersion $productVersion, want $($ur.UrMsiVersion)" }
+          [pscustomobject]@{ key = $env:KEY; version = $env:VERSION; code = [string]$ur.UrVersionCode;
+            msi_version = $ur.UrMsiVersion; file_version = $fileVersion } |
+            ConvertTo-Json | Set-Content -Encoding ascii (Join-Path $out "$env:KEY.json")
+          "staged $env:KEY $env:VERSION from $(git rev-parse HEAD): ProductVersion $productVersion, files $fileVersion, SHA-256 $((Get-FileHash -Algorithm SHA256 (Join-Path $out "$env:KEY.msi")).Hash)"
+        env:
+          KEY: ${{ matrix.key }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: msi-${{ matrix.key }}
+          path: staged/
+          if-no-files-found: error
+
+  legs:
+    name: ${{ matrix.leg }} on ${{ matrix.os }} (${{ github.ref_name }})
+    needs: [plan, build]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025]
+        leg: [window, signed-out, self-update]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: msi-vn
+          path: ${{ runner.temp }}/msis
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: msi-vnext
+          path: ${{ runner.temp }}/msis
+
+      - name: Inventory, the head and install vN
+        timeout-minutes: 15
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\prf-lib.ps1"
+          "head under test: $(git -C $env:GITHUB_WORKSPACE rev-parse HEAD) ($env:GITHUB_REF_NAME)"
+          Show-PrfInventory
+          Get-ChildItem $UrMsiDir | ForEach-Object { "msi dir: $($_.Name) $($_.Length)" }
+          if ((Get-Content $UrHostsFile) -match 'github') { throw "this runner's hosts file names a GitHub host" }
+          Install-PrfVn
+
+      - name: The leg
+        timeout-minutes: 60
+        shell: powershell
+        run: |
+          & "$env:GITHUB_WORKSPACE\.github\prf-$env:LEG.ps1"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+        env:
+          LEG: ${{ matrix.leg }}
+
+      - name: Collect logs
+        if: always()
+        shell: powershell
+        run: |
+          $dest = Join-Path $env:RUNNER_TEMP 'prf-logs'
+          New-Item -ItemType Directory -Force $dest | Out-Null
+          foreach ($name in 'releases.json', 'standin-releases.json', 'vn.productcode') {
+            $file = Join-Path $env:RUNNER_TEMP $name
+            if (Test-Path $file) { Copy-Item $file $dest }
+          }
+          $standin = Join-Path $env:RUNNER_TEMP 'feed-standin\server.log'
+          if (Test-Path $standin) { Copy-Item $standin (Join-Path $dest 'standin-server.log') }
+          if (Test-Path "$env:RUNNER_TEMP\upgrade-logs") { Copy-Item "$env:RUNNER_TEMP\upgrade-logs\*" $dest -Force }
+          if (Test-Path "$env:LOCALAPPDATA\URnetwork\app\logs") { Copy-Item "$env:LOCALAPPDATA\URnetwork\app\logs" (Join-Path $dest 'app-logs') -Recurse -Force }
+          if (Test-Path "$env:LOCALAPPDATA\URnetwork\app\app_prefs.json") { Copy-Item "$env:LOCALAPPDATA\URnetwork\app\app_prefs.json" $dest }
+          if (Test-Path "$env:ProgramData\URnetwork\service\logs") { Copy-Item "$env:ProgramData\URnetwork\service\logs" (Join-Path $dest 'service-logs') -Recurse -Force }
+          $updates = 'C:\Program Files\URnetwork\updates'
+          if (Test-Path $updates) {
+            Get-ChildItem -Recurse -Force $updates | ForEach-Object { "$($_.FullName) $($_.Length)" } | Out-File (Join-Path $dest 'updates-listing.txt')
+            Get-ChildItem -Recurse -File $updates -Include '*.log', '*.json' | ForEach-Object {
+              $name = 'updates_' + ($_.FullName.Substring($updates.Length).TrimStart('\') -replace '\\', '_')
+              Copy-Item -LiteralPath $_.FullName (Join-Path $dest $name)
+            }
+          }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: prf-logs-${{ matrix.leg }}-${{ matrix.os }}
+          path: ${{ runner.temp }}/prf-logs/
+          if-no-files-found: warn
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: prf-shots-${{ matrix.leg }}-${{ matrix.os }}
+          path: ${{ runner.temp }}/ui-shots/
+          if-no-files-found: warn
