@@ -1208,6 +1208,14 @@ func checkTrayRemembersTheVpn(controller, checker, header, glue, connect, marker
 		regexp.QuoteMeta(": update::VpnAtStart::NotConnected};"),
 		regexp.QuoteMeta("file << update::FormatUpdateMarker(marker);"))...)
 	check := applyDefinition(glue, "bool UpdateInProgress() {")
+	// every record it takes is kept for the report, whatever it says: the
+	// statement whole, followed directly by the lock and the store (the lead's
+	// G11). An older build's three-field record must keep the line (G8).
+	keeps := regexp.QuoteMeta("if (const std::optional<update::UpdateMarker> ended = update::ParseUpdateMarker(*text)) {") + `\s*` +
+		regexp.QuoteMeta("std::lock_guard lock(g_endedUpdateMutex);") + `\s*` + regexp.QuoteMeta("g_endedUpdate = ended;")
+	if !regexp.MustCompile(keeps).MatchString(check) {
+		problems = append(problems, "UpdateInProgress does not keep every record it takes, whatever it says: a record it drops leaves its report with no record, and an older build's would lose the line")
+	}
 	problems = append(problems, applyOrderProblems("UpdateInProgress", check,
 		regexp.QuoteMeta("if (verdict == update::Verdict::Stale) {"),
 		regexp.QuoteMeta("update::ParseUpdateMarker(*text)"),
@@ -1298,6 +1306,9 @@ func TestUpdateApplyTrayRemembersTheVpnRejectsWeakerSources(t *testing.T) {
 			controller, checker, header, replace(glue, ".writtenAt = NowSeconds(),\n                                    .vpn = vpnConnected ? update::VpnAtStart::Connected\n"+
 				"                                                        : update::VpnAtStart::NotConnected};",
 				".writtenAt = NowSeconds()};"), connect, marker},
+		{"an older build's record dropped as the launch takes it", "UpdateInProgress does not keep every record it takes",
+			controller, checker, header, replace(glue, "if (const std::optional<update::UpdateMarker> ended = update::ParseUpdateMarker(*text)) {",
+				"if (const std::optional<update::UpdateMarker> ended = update::ParseUpdateMarker(*text);\n        ended && ended->vpn != update::VpnAtStart::Unknown) {"), connect, marker},
 		{"the ended update's record not kept", "UpdateInProgress is missing g_endedUpdate = ended;",
 			controller, checker, header, replace(glue, "      g_endedUpdate = ended;\n", ""), connect, marker},
 		{"the record taken twice", "TakeEndedUpdate is missing return std::exchange",
