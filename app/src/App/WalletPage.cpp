@@ -726,6 +726,7 @@ void WalletPage::ApplyStrings() {
   w_.PayoutConsentHeading().Text(Loc("sn_consent_title"));
   w_.Top200Heading().Text(Loc("top200"));
   w_.Top200Button().Content(LocBox("claim_your_spot"));
+  w_.Top200SignButton().Content(LocBox("top200_sign_binding"));
   w_.Top200Warning().Text(Loc("top200_demotion_warning"));
   w_.UpgradeButton().Content(LocBox("upgrade_with_stripe"));
 
@@ -2894,6 +2895,35 @@ void WalletPage::EndConsent() {
 
 void WalletPage::OnClaimTop200(IInspectable const&, RoutedEventArgs const&) {
   OpenUrl("https://" + Sdk().linkHostName() + kTop200Path);
+}
+
+void WalletPage::OnSignTop200(IInspectable const&, RoutedEventArgs const&) {
+  ShowTop200Sign(std::string(), /*linkInvalid=*/false);
+}
+
+winrt::fire_and_forget WalletPage::ShowTop200Sign(std::string prefill, bool linkInvalid) {
+  if (top200SignSheet_) {
+    top200SignSheet_->Prefill(prefill, linkInvalid);
+    co_return;
+  }
+  if (w_.sheetOpen()) {
+    urnw::LogInfo("top200 sign: another sheet is open; not opened");
+    co_return;
+  }
+  auto self = w_.get_strong();
+  self->SetSheetOpen(true);
+  try {
+    self->wallet().top200SignSheet_ = urnw::Top200SignSheet::Create(
+        self->Content().XamlRoot(), self->DispatcherQueue(), std::move(prefill), linkInvalid);
+    co_await self->wallet().top200SignSheet_->Dialog().ShowAsync();
+  } catch (winrt::hresult_error const& e) {
+    urnw::LogError("top200 sign: the sheet failed to open: {}",
+                   urnw::Narrow(std::wstring{e.message()}));
+  } catch (...) {
+    urnw::LogError("top200 sign: the sheet failed to open");
+  }
+  self->wallet().top200SignSheet_.reset();
+  self->SetSheetOpen(false);
 }
 
 void WalletPage::OpenProtocolSite() { OpenUrl(kUrXyzUrl); }

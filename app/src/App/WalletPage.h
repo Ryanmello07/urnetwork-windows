@@ -9,7 +9,8 @@
 //           migration completes, and the USDC still waiting for one; the
 //           unclaimed SN25a tile and the claim dialog; beside it settlement
 //           v2's section, the coldkey's v2 accounts, and their claim dialog;
-//           the Top 200 head-spot tile
+//           the Top 200 head-spot tile, and its Sign fleet binding sheet
+//           (Top200SignSheet)
 //   pane B  the per-epoch history (points; the alpha column only with a
 //           wallet) and the leaderboard, one at a time
 //   pane C  own ranking, reliability
@@ -46,6 +47,7 @@
 #include "SnConsentPresentation.h"
 #include "SnPayoutPresentation.h"
 #include "SolanaWalletPresentation.h"
+#include "Top200SignSheet.h"
 
 namespace urnw {
 struct LiveStats;
@@ -151,6 +153,14 @@ class WalletPage {
                      winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnClaimTop200(winrt::Windows::Foundation::IInspectable const&,
                      winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
+  // the Top 200 card's Sign fleet binding (eligible and bound): the sign sheet
+  void OnSignTop200(winrt::Windows::Foundation::IInspectable const&,
+                    winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
+  // Opens the sign sheet with `prefill` in its box (Top200SignSheet::Create),
+  // or pre-fills the one already open. A urnetwork://top200/sign link lands here
+  // through MainWindow::HandleTop200SignLink whatever the Top 200 card shows; it
+  // only fills the box, never signs. Dropped while another sheet is open.
+  winrt::fire_and_forget ShowTop200Sign(std::string prefill, bool linkInvalid);
   void OpenProtocolSite();  // the "Learn more" link beside the wallet note
   void OnEarningsTableChanged(
       winrt::Microsoft::UI::Xaml::Controls::SelectorBar const&,
@@ -671,6 +681,8 @@ class WalletPage {
   uint64_t ownFlagsAppliedAt_ = 0;
   Flow pointsPublicFlow_;
   std::shared_ptr<urnw::EmojiTagSheet> emojiSheet_;
+  // the Top 200 sign sheet while it is open
+  std::shared_ptr<urnw::Top200SignSheet> top200SignSheet_;
 
   // pane C's block (BuildPointsNetworkHost)
   winrt::Microsoft::UI::Xaml::Controls::TextBlock pointsGroupMeta_{nullptr};

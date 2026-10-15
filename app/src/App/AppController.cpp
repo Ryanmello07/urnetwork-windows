@@ -28,6 +28,7 @@
 #include "SingleInstance.h"
 #include "Startup.h"
 #include "Strings.h"
+#include "Top200Binding.h"
 #include "WindowShell.h"
 
 using namespace winrt;
@@ -1101,6 +1102,13 @@ void AppController::HandleDeepLink(const std::string& url) {
   if (url.rfind("urnetwork://onboarding/", 0) == 0) {
     if (auto self = window_.try_as<winrt::URnetwork::implementation::MainWindow>()) {
       self->HandleOnboardingLink(url);
+    }
+    return;
+  }
+  // the ur.io Top 200 page's "Open in the app": the sign sheet, pre-filled only
+  if (top200sign::ParseSignLink(url).sign) {
+    if (auto self = window_.try_as<winrt::URnetwork::implementation::MainWindow>()) {
+      self->HandleTop200SignLink(url);
     }
     return;
   }
