@@ -1262,19 +1262,9 @@
                              theirs, as one row in this bar's content: the bar's own
                              action slot has room for one control. Severity is set in
                              code - Informational normally, Error when an apply
-                             failed.
-
-                             UNDER the scroller, in a row of its own, not in the
-                             column. In the column it sat below the hero, the
-                             location, the Connect button and the peers line, and a
-                             window shorter than 760 put its Update and Later row
-                             under the status strip: 480x728, the size the window
-                             opens with on a 1024x768 screen, cut the row and laid
-                             the pane's bottom fade over it. Here the row is whole at
-                             every height the window allows, and the column scrolls
-                             above it. Collapsed while closed (ApplyUpdateChecker),
-                             so with nothing to say it takes no room from the
-                             column. -->
+                             failed. Under the scroller, in a row of its own, so the
+                             row is whole at any window height; collapsed while
+                             closed. -->
                         <InfoBar x:Name="UpdateBar" Grid.Row="2" IsOpen="False" IsClosable="False"
                                  Visibility="Collapsed" Margin="12,8" Severity="Informational"
                                  AutomationProperties.AutomationId="acceptance.update.banner" />
