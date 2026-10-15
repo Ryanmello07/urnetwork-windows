@@ -1,0 +1,63 @@
+name: PR F spec pre-check - the update marker and the VPN line
+
+# Throwaway, on ci/prf-spec-* branches of the fork only: the head under test
+# plus this file. It runs the tests about the update's record and the
+# reconnect line, the C++ spec and its negative controls among them, which
+# need a C++20 compiler the writer's machine does not have. Never merged.
+on:
+  push:
+    branches:
+      - 'ci/prf-spec-*'
+
+permissions:
+  contents: read
+
+jobs:
+  spec:
+    name: the update marker spec and the VPN line's checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Windows repo
+        uses: actions/checkout@v4
+
+      - name: The commit under test
+        run: |
+          echo "checked out: $(git rev-parse HEAD)"
+          c++ --version | head -1
+
+      - name: The spec as it is, and with the defect put back by hand
+        run: |
+          d="$RUNNER_TEMP/spec"
+          mkdir -p "$d/as-is" "$d/defect"
+          c++ -std=c++20 -Wall -Wextra -Werror -Iapp/src/Common app/tools/update-marker-tests.cpp -o "$d/as-is/t"
+          echo "== the spec against the header as it is"
+          "$d/as-is/t"
+          sed 's/{ return vpn != VpnAtStart::NotConnected; }/{ (void)vpn; return true; }/' \
+            app/src/Common/UpdateMarker.h > "$d/defect/UpdateMarker.h"
+          echo "== the header with the line said whatever the VPN (the defect): $(diff app/src/Common/UpdateMarker.h "$d/defect/UpdateMarker.h" | grep -c '^>') line(s) changed"
+          diff app/src/Common/UpdateMarker.h "$d/defect/UpdateMarker.h" || true
+          c++ -std=c++20 -Wall -Wextra -Werror -I"$d/defect" app/tools/update-marker-tests.cpp -o "$d/defect/t"
+          if "$d/defect/t"; then
+            echo "::error::the spec passed with the line said whatever the VPN"
+            exit 1
+          else
+            echo "the spec failed on the defect, as it must (exit $?)"
+          fi
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: go test -v the record's and the line's tests
+        run: |
+          out="$RUNNER_TEMP/go-test.txt"
+          status=0
+          go test -count=1 -timeout 20m -v \
+            -run 'TestUpdateMarker|TestUpdateApplyTrayRemembersTheVpn|TestUpdateApplyTraySaysWhatTheUpdateDoes|TestUpdateRefusalTheHandoffRecordsTheInstaller' \
+            ./tests > "$out" 2>&1 || status=$?
+          cat "$out"
+          echo "top-level tests: $(grep -c '^=== RUN   Test[A-Za-z0-9_]*$' "$out") run," \
+            "$(grep -c '^--- PASS' "$out") passed, $(grep -c '^--- SKIP' "$out") skipped," \
+            "$(grep -c '^--- FAIL' "$out") failed; negative controls passed: $(grep -c '^    --- PASS' "$out")"
+          exit $status

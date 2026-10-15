@@ -134,18 +134,23 @@ func TestUpdateMarkerRejectsAMarkerWithoutTheInstallersCreationTime(t *testing.T
 }
 
 // The marker says whether a VPN was connected when the update began, and a
-// marker an older build wrote, three numbers, is still one. Write the VPN
-// without its field, read every VPN as none, refuse an older build's marker,
-// or take any digit for the VPN, and the spec must fail.
+// marker an older build wrote, three numbers, is still one, and does not say.
+// Write the VPN without its field, read every VPN as none, refuse an older
+// build's marker, or take any digit for the VPN, and the spec must fail.
+// And the report leaves out "The VPN was disconnected for the update" only
+// when the record of its update says no VPN was connected: say the line
+// whatever the VPN (the defect), read an older build's record as no VPN,
+// leave the line out when the VPN is not known, or take another update's
+// record for the report's, and the spec must fail.
 func TestUpdateMarkerRejectsAMarkerThatLosesTheVpn(t *testing.T) {
 	requireUpdateMarkerFailure(t, func(source string) string {
 		return updateMarkerReplace(t, source,
-			`std::to_string(marker.writtenAt) + " " + (marker.vpnConnected ? "1" : "0") + "\n";`,
-			`std::to_string(marker.writtenAt) + "\n";`)
+			"  if (marker.vpn == VpnAtStart::Connected) text += \" 1\";\n", "")
 	}, "vpn: an update that began with a VPN connected is written with 1")
 	requireUpdateMarkerFailure(t, func(source string) string {
 		return updateMarkerReplace(t, source,
-			"    marker.vpnConnected = *at == '1';\n", "    marker.vpnConnected = false;\n")
+			"    marker.vpn = *at == '1' ? VpnAtStart::Connected : VpnAtStart::NotConnected;\n",
+			"    marker.vpn = VpnAtStart::NotConnected;\n")
 	}, "vpn: a connected VPN reads back")
 	requireUpdateMarkerFailure(t, func(source string) string {
 		return updateMarkerReplace(t, source,
@@ -156,4 +161,22 @@ func TestUpdateMarkerRejectsAMarkerThatLosesTheVpn(t *testing.T) {
 		return updateMarkerReplace(t, source,
 			"(*at != '0' && *at != '1')", "(*at < '0' || *at > '9')")
 	}, "vpn: '4321 133000000000000000 1900000000 2' is not a marker")
+	requireUpdateMarkerFailure(t, func(source string) string {
+		return updateMarkerReplace(t, source,
+			"{ return vpn != VpnAtStart::NotConnected; }", "{ (void)vpn; return true; }")
+	}, "report: a record of its update that says no VPN was connected leaves the line out")
+	requireUpdateMarkerFailure(t, func(source string) string {
+		return updateMarkerReplace(t, source,
+			"  if (!field(marker.writtenAt, true)) {\n",
+			"  marker.vpn = VpnAtStart::NotConnected;\n  if (!field(marker.writtenAt, true)) {\n")
+	}, "report: an older build's record, read from its file, keeps the line")
+	requireUpdateMarkerFailure(t, func(source string) string {
+		return updateMarkerReplace(t, source,
+			"{ return vpn != VpnAtStart::NotConnected; }", "{ return vpn == VpnAtStart::Connected; }")
+	}, "report: a record that does not say keeps the line")
+	requireUpdateMarkerFailure(t, func(source string) string {
+		return updateMarkerReplace(t, source,
+			"  if (!record || !finished || *finished < record->writtenAt) return VpnAtStart::Unknown;\n",
+			"  (void)finished;\n  if (!record) return VpnAtStart::Unknown;\n")
+	}, "report: a report that finished before the record was written is another update's")
 }

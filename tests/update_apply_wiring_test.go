@@ -1114,7 +1114,7 @@ func checkTraySaysWhatTheUpdateDoes(connect string) []string {
 	result := applyDefinition(connect, "winrt::Microsoft::UI::Xaml::Controls::InfoBarSeverity ConnectPage::ApplyUpdateResult(")
 	problems = append(problems, applyOrderProblems("ConnectPage::ApplyUpdateResult", result,
 		regexp.QuoteMeta(`L"The VPN was disconnected for the update; connect again to protect this device.";`),
-		regexp.QuoteMeta("const bool reconnect = result.vpnWasConnected;"),
+		regexp.QuoteMeta("const bool reconnect = urnw::update::SaysVpnDisconnected(result.vpn);"),
 		regexp.QuoteMeta("switch (result.view) {"),
 		regexp.QuoteMeta("case ReportView::Installed:"),
 		regexp.QuoteMeta("if (reconnect) message = kReconnect;"),
@@ -1130,19 +1130,23 @@ func TestUpdateApplyTraySaysWhatTheUpdateDoes(t *testing.T) {
 	reportProblems(t, checkTraySaysWhatTheUpdateDoes(stripComments(readAppSource(t, "ConnectPage.cpp"))))
 }
 
-// The report says the VPN was disconnected for the update only when one was
-// connected as the update began (fold-in ii). The tray learns whether a VPN is
-// connected from each tunnel status (AppController::OnTunnelState), and notes
-// it once, at the hand-off to the helper, while the app runs: as the app exits
-// its teardown may already have changed it. A helper that ends while the app
-// still runs has its report read with that note; when the installer closes
-// the app, the note goes into the update-in-progress record
-// (Common/UpdateMarker.h, update_marker_test.go), the launch that finds that
-// update over keeps the record it deletes, and the report of that update reads
-// it, unless the report finished before the record was written and so is
-// another update's. No preference holds it: checkNothingSavedDecidesTheOffer
-// pins three. And the line is named only where it is asked for.
-func checkTrayRemembersTheVpn(controller, checker, glue, connect string) []string {
+// The report leaves out "The VPN was disconnected for the update" only when it
+// is known that no VPN was connected as the update began (fold-in ii, and the
+// lead's G8: not telling someone their VPN is off is worse than telling
+// someone who had none). The tray learns whether a VPN is connected from each
+// tunnel status (AppController::OnTunnelState), and notes it once, at the
+// hand-off to the helper, while the app runs: as the app exits its teardown may
+// already have changed it. A helper that ends while the app still runs has its
+// report read with that note. When the installer closes the app, the note goes
+// into the update-in-progress record (Common/UpdateMarker.h,
+// update_marker_test.go), the launch that finds that update over keeps the
+// record it deletes, and the report of that update reads it (VpnOfReport). On
+// every other road the VPN is not known, and the line stays: a record an older
+// build wrote (three numbers), no record, or another update's record. So the
+// record's VPN and the report's start unknown, the one decision is
+// SaysVpnDisconnected, and the line is named only where it is asked for. No
+// preference holds it: checkNothingSavedDecidesTheOffer pins three.
+func checkTrayRemembersTheVpn(controller, checker, header, glue, connect, marker string) []string {
 	var problems []string
 	tunnel := applyDefinition(controller, "void AppController::OnTunnelState(const proto::TunnelStatus& status) {")
 	problems = append(problems, applyOrderProblems("AppController::OnTunnelState", tunnel,
@@ -1155,6 +1159,17 @@ func checkTrayRemembersTheVpn(controller, checker, glue, connect string) []strin
 	if !strings.Contains(checker, "void UpdateChecker::SetVpnConnected(bool connected) { vpnConnected_.store(connected); }") {
 		problems = append(problems, "UpdateChecker::SetVpnConnected does not keep what it is told")
 	}
+	// what is not known keeps the line
+	if !strings.Contains(marker, "VpnAtStart vpn = VpnAtStart::Unknown;") {
+		problems = append(problems, "UpdateMarker.h does not keep the VPN unknown until a record says it: "+
+			"an older build's three-field record reads as no VPN, and its report drops the line")
+	}
+	if !strings.Contains(marker, "inline bool SaysVpnDisconnected(VpnAtStart vpn) { return vpn != VpnAtStart::NotConnected; }") {
+		problems = append(problems, "UpdateMarker.h's SaysVpnDisconnected does not keep the line for every VPN but a recorded none")
+	}
+	if !strings.Contains(header, "update::VpnAtStart vpn = update::VpnAtStart::Unknown;") {
+		problems = append(problems, "UpdateChecker.h's Result does not start with the VPN unknown: a report no record speaks for would drop the line")
+	}
 	apply := applyDefinition(checker, "void UpdateChecker::RunApply(std::uint64_t generation, bool manual) {")
 	problems = append(problems, applyOrderProblems("UpdateChecker::RunApply", apply,
 		regexp.QuoteMeta("const std::int64_t started = NowUnixSeconds();"),
@@ -1163,7 +1178,7 @@ func checkTrayRemembersTheVpn(controller, checker, glue, connect string) []strin
 		regexp.QuoteMeta("if (waited == update::HelperWait::AppExiting) {"),
 		regexp.QuoteMeta("RecordUpdateInProgress(helper, vpnConnected);"),
 		regexp.QuoteMeta("Result result{.version = offer.version, .exitCode = ended};"),
-		regexp.QuoteMeta("result.vpnWasConnected = vpnConnected;"),
+		regexp.QuoteMeta("result.vpn = vpnConnected ? update::VpnAtStart::Connected : update::VpnAtStart::NotConnected;"),
 		regexp.QuoteMeta("s.result = result;"))...)
 	if count := strings.Count(checker, "vpnConnected_.load()"); count != 1 {
 		problems = append(problems, fmt.Sprintf("UpdateChecker.cpp reads the VPN %d times, want once, as the update begins", count))
@@ -1171,7 +1186,8 @@ func checkTrayRemembersTheVpn(controller, checker, glue, connect string) []strin
 	record := applyDefinition(glue, "void RecordUpdateInProgress(void* installerProcess, bool vpnConnected) {")
 	problems = append(problems, applyOrderProblems("RecordUpdateInProgress", record,
 		regexp.QuoteMeta(".writtenAt = NowSeconds(),"),
-		regexp.QuoteMeta(".vpnConnected = vpnConnected};"),
+		regexp.QuoteMeta(".vpn = vpnConnected ? update::VpnAtStart::Connected"),
+		regexp.QuoteMeta(": update::VpnAtStart::NotConnected};"),
 		regexp.QuoteMeta("file << update::FormatUpdateMarker(marker);"))...)
 	check := applyDefinition(glue, "bool UpdateInProgress() {")
 	problems = append(problems, applyOrderProblems("UpdateInProgress", check,
@@ -1188,10 +1204,9 @@ func checkTrayRemembersTheVpn(controller, checker, glue, connect string) []strin
 	problems = append(problems, applyOrderProblems("UpdateChecker::ShowLastResult", show,
 		regexp.QuoteMeta("const std::optional<std::int64_t> finished = update::ParseUtcSecond(result->finishedUtc);"),
 		regexp.QuoteMeta("const std::optional<update::UpdateMarker> began = TakeEndedUpdate();"),
-		regexp.QuoteMeta("const bool ours = began && finished && *finished >= began->writtenAt;"),
-		regexp.QuoteMeta("const bool vpnWasConnected = ours && began->vpnConnected;"),
+		regexp.QuoteMeta("const update::VpnAtStart vpn = update::VpnOfReport(began, finished);"),
 		regexp.QuoteMeta(".view = view};"),
-		regexp.QuoteMeta("s.result.vpnWasConnected = vpnWasConnected;"))...)
+		regexp.QuoteMeta("s.result.vpn = vpn;"))...)
 	if count := strings.Count(checker, "TakeEndedUpdate()"); count != 1 {
 		problems = append(problems, fmt.Sprintf("UpdateChecker.cpp takes the ended update's record %d times, want once, for the report it shows at launch", count))
 	}
@@ -1199,7 +1214,7 @@ func checkTrayRemembersTheVpn(controller, checker, glue, connect string) []strin
 	result := applyDefinition(connect, "winrt::Microsoft::UI::Xaml::Controls::InfoBarSeverity ConnectPage::ApplyUpdateResult(")
 	problems = append(problems, applyOrderProblems("ConnectPage::ApplyUpdateResult", result,
 		regexp.QuoteMeta("const auto& result = snap.result;"),
-		regexp.QuoteMeta("const bool reconnect = result.vpnWasConnected;"),
+		regexp.QuoteMeta("const bool reconnect = urnw::update::SaysVpnDisconnected(result.vpn);"),
 		regexp.QuoteMeta("const std::wstring vpn = reconnect ? std::wstring{L\" \"} + kReconnect : std::wstring{};"),
 		regexp.QuoteMeta("if (reconnect) message = kReconnect;"))...)
 	var unasked []string
@@ -1222,15 +1237,20 @@ func checkTrayRemembersTheVpn(controller, checker, glue, connect string) []strin
 
 func TestUpdateApplyTrayRemembersTheVpn(t *testing.T) {
 	reportProblems(t, checkTrayRemembersTheVpn(appControllerSource(t), stripComments(readAppSource(t, "UpdateChecker.cpp")),
-		stripComments(readAppSource(t, "SingleInstance.cpp")), stripComments(readAppSource(t, "ConnectPage.cpp"))))
+		stripComments(readAppSource(t, "UpdateChecker.h")), stripComments(readAppSource(t, "SingleInstance.cpp")),
+		stripComments(readAppSource(t, "ConnectPage.cpp")), stripComments(readCommonSource(t, "UpdateMarker.h"))))
 }
 
-// Each part of the note about the VPN, taken away, fails the check.
+// Each part of the note about the VPN, taken away, fails the check, and so do
+// the line said whatever the VPN and each road back to leaving the line out
+// when the VPN is not known.
 func TestUpdateApplyTrayRemembersTheVpnRejectsWeakerSources(t *testing.T) {
 	controller := appControllerSource(t)
 	checker := stripComments(readAppSource(t, "UpdateChecker.cpp"))
+	header := stripComments(readAppSource(t, "UpdateChecker.h"))
 	glue := stripComments(readAppSource(t, "SingleInstance.cpp"))
 	connect := stripComments(readAppSource(t, "ConnectPage.cpp"))
+	marker := stripComments(readCommonSource(t, "UpdateMarker.h"))
 	replace := func(text, old, replacement string) string {
 		if strings.Count(text, old) != 1 {
 			t.Fatalf("negative control: %q is not in the source exactly once", old)
@@ -1238,41 +1258,57 @@ func TestUpdateApplyTrayRemembersTheVpnRejectsWeakerSources(t *testing.T) {
 		return strings.Replace(text, old, replacement, 1)
 	}
 	for _, tc := range []struct {
-		name, want                         string
-		controller, checker, glue, connect string
+		name, want                                         string
+		controller, checker, header, glue, connect, marker string
 	}{
-		{"the sources as they are", "", controller, checker, glue, connect},
+		{"the sources as they are", "", controller, checker, header, glue, connect, marker},
 		{"the tunnel's state never reaches the checker", "AppController::OnTunnelState is missing updates_\\.SetVpnConnected",
-			replace(controller, "  updates_.SetVpnConnected(isUp);\n", ""), checker, glue, connect},
+			replace(controller, "  updates_.SetVpnConnected(isUp);\n", ""), checker, header, glue, connect, marker},
 		{"the checker told the VPN is always up", "AppController::OnTunnelState is missing updates_\\.SetVpnConnected\\(isUp\\)",
-			replace(controller, "  updates_.SetVpnConnected(isUp);\n", "  updates_.SetVpnConnected(true);\n"), checker, glue, connect},
+			replace(controller, "  updates_.SetVpnConnected(isUp);\n", "  updates_.SetVpnConnected(true);\n"), checker, header, glue, connect, marker},
 		{"the VPN read as the app exits", "reads the VPN 2 times",
-			controller, replace(checker, "RecordUpdateInProgress(helper, vpnConnected);", "RecordUpdateInProgress(helper, vpnConnected_.load());"), glue, connect},
+			controller, replace(checker, "RecordUpdateInProgress(helper, vpnConnected);", "RecordUpdateInProgress(helper, vpnConnected_.load());"),
+			header, glue, connect, marker},
 		{"the VPN never noted", "UpdateChecker::RunApply is missing const bool vpnConnected",
-			controller, replace(checker, "  const bool vpnConnected = vpnConnected_.load();\n", "  const bool vpnConnected = false;\n"), glue, connect},
-		{"the live report without the VPN", `UpdateChecker::RunApply is missing result\.vpnWasConnected = vpnConnected;`,
-			controller, replace(checker, "  result.vpnWasConnected = vpnConnected;\n", ""), glue, connect},
+			controller, replace(checker, "  const bool vpnConnected = vpnConnected_.load();\n", "  const bool vpnConnected = false;\n"),
+			header, glue, connect, marker},
+		{"the live report without the VPN", `UpdateChecker::RunApply is missing result\.vpn = vpnConnected`,
+			controller, replace(checker, "  result.vpn = vpnConnected ? update::VpnAtStart::Connected : update::VpnAtStart::NotConnected;\n", ""),
+			header, glue, connect, marker},
 		{"the record without the VPN", "RecordUpdateInProgress is missing",
-			controller, checker, replace(glue, ".writtenAt = NowSeconds(),\n                                    .vpnConnected = vpnConnected};",
-				".writtenAt = NowSeconds()};"), connect},
+			controller, checker, header, replace(glue, ".writtenAt = NowSeconds(),\n                                    .vpn = vpnConnected ? update::VpnAtStart::Connected\n"+
+				"                                                        : update::VpnAtStart::NotConnected};",
+				".writtenAt = NowSeconds()};"), connect, marker},
 		{"the ended update's record not kept", "UpdateInProgress is missing g_endedUpdate = ended;",
-			controller, checker, replace(glue, "      g_endedUpdate = ended;\n", ""), connect},
+			controller, checker, header, replace(glue, "      g_endedUpdate = ended;\n", ""), connect, marker},
 		{"the record taken twice", "TakeEndedUpdate is missing return std::exchange",
-			controller, checker, replace(glue, "return std::exchange(g_endedUpdate, std::nullopt);", "return g_endedUpdate;"), connect},
-		{"another update's record read for this report", "UpdateChecker::ShowLastResult is missing const bool ours = began && finished",
-			controller, replace(checker, "const bool ours = began && finished && *finished >= began->writtenAt;", "const bool ours = began.has_value();"), glue, connect},
-		{"the report at launch without the VPN", `UpdateChecker::ShowLastResult is missing s\.result\.vpnWasConnected = vpnWasConnected;`,
-			controller, replace(checker, "    s.result.vpnWasConnected = vpnWasConnected;\n", ""), glue, connect},
-		{"the line shown whatever the VPN", "ConnectPage::ApplyUpdateResult is missing const bool reconnect = result\\.vpnWasConnected;",
-			controller, checker, glue, replace(connect, "  const bool reconnect = result.vpnWasConnected;\n", "  const bool reconnect = true;\n")},
+			controller, checker, header, replace(glue, "return std::exchange(g_endedUpdate, std::nullopt);", "return g_endedUpdate;"), connect, marker},
+		{"the record's word taken for any report", `UpdateChecker::ShowLastResult is missing const update::VpnAtStart vpn = update::VpnOfReport\(began, finished\);`,
+			controller, replace(checker, "const update::VpnAtStart vpn = update::VpnOfReport(began, finished);",
+				"const update::VpnAtStart vpn = began ? began->vpn : update::VpnAtStart::NotConnected;"), header, glue, connect, marker},
+		{"the report at launch without the VPN", `UpdateChecker::ShowLastResult is missing s\.result\.vpn = vpn;`,
+			controller, replace(checker, "    s.result.vpn = vpn;\n", ""), header, glue, connect, marker},
+		{"the line shown whatever the VPN", "ConnectPage::ApplyUpdateResult is missing const bool reconnect = urnw::update::SaysVpnDisconnected",
+			controller, checker, header, glue, replace(connect, "  const bool reconnect = urnw::update::SaysVpnDisconnected(result.vpn);\n",
+				"  const bool reconnect = true;\n"), marker},
+		{"the line left out whenever a VPN is not known to have been connected", "ConnectPage::ApplyUpdateResult is missing const bool reconnect = urnw::update::SaysVpnDisconnected",
+			controller, checker, header, glue, replace(connect, "  const bool reconnect = urnw::update::SaysVpnDisconnected(result.vpn);\n",
+				"  const bool reconnect = result.vpn == urnw::update::VpnAtStart::Connected;\n"), marker},
+		{"an older build's record read as no VPN", "an older build's three-field record reads as no VPN",
+			controller, checker, header, glue, connect, replace(marker, "VpnAtStart vpn = VpnAtStart::Unknown;", "VpnAtStart vpn = VpnAtStart::NotConnected;")},
+		{"the line left out when the VPN is not known", "SaysVpnDisconnected does not keep the line",
+			controller, checker, header, glue, connect, replace(marker, "{ return vpn != VpnAtStart::NotConnected; }", "{ return vpn == VpnAtStart::Connected; }")},
+		{"a report that starts as no VPN", "UpdateChecker.h's Result does not start with the VPN unknown",
+			controller, checker, replace(header, "update::VpnAtStart vpn = update::VpnAtStart::Unknown;", "update::VpnAtStart vpn = update::VpnAtStart::NotConnected;"),
+			glue, connect, marker},
 		{"an install's message with the line unasked", "names kReconnect without asking whether a VPN was connected",
-			controller, checker, glue, replace(connect, "      if (reconnect) message = kReconnect;\n", "      message = kReconnect;\n")},
+			controller, checker, header, glue, replace(connect, "      if (reconnect) message = kReconnect;\n", "      message = kReconnect;\n"), marker},
 		{"a restart's message with the line unasked", "names kReconnect without asking whether a VPN was connected",
-			controller, checker, glue, replace(connect, `current + L". Quit URnetwork from its tray icon and start it again." + vpn;`,
-				`current + L". Quit URnetwork from its tray icon and start it again. " + kReconnect;`)},
+			controller, checker, header, glue, replace(connect, `current + L". Quit URnetwork from its tray icon and start it again." + vpn;`,
+				`current + L". Quit URnetwork from its tray icon and start it again. " + kReconnect;`), marker},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			problems := strings.Join(checkTrayRemembersTheVpn(tc.controller, tc.checker, tc.glue, tc.connect), "\n")
+			problems := strings.Join(checkTrayRemembersTheVpn(tc.controller, tc.checker, tc.header, tc.glue, tc.connect, tc.marker), "\n")
 			if tc.want == "" {
 				if problems != "" {
 					t.Fatalf("a source that is no weaker was reported:\n%s", problems)

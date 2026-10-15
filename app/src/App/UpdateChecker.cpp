@@ -858,18 +858,23 @@ void UpdateChecker::ShowLastResult() {
   LogInfo("update: the update helper's last report: {} ended with {} at {}", result->tag,
           result->exitCode, result->finishedUtc);
   // Whether a VPN was connected when that update began: the record of the
-  // update this launch found over (SingleInstance.cpp TakeEndedUpdate). It
-  // is written as the installer closes the app, before the helper ends, so a
-  // report that finished before it was written is another update's.
+  // update this launch found over (SingleInstance.cpp TakeEndedUpdate), when
+  // it is of this report's update. It is written as the installer closes the
+  // app, before the helper ends, so a report that finished before it was
+  // written is another update's. Unknown on every other road: a record an
+  // older build wrote, no record (a later launch, after this one read it), or
+  // another update's (UpdateMarker.h VpnOfReport).
   const std::optional<update::UpdateMarker> began = TakeEndedUpdate();
-  const bool ours = began && finished && *finished >= began->writtenAt;
-  const bool vpnWasConnected = ours && began->vpnConnected;
-  if (began) {
-    LogInfo("update: the record of the update that ended says a VPN was {}connected when it "
-            "began; {}",
-            began->vpnConnected ? "" : "not ",
-            ours ? "that update is the report's" : "the report is another update's");
-  }
+  const update::VpnAtStart vpn = update::VpnOfReport(began, finished);
+  LogInfo("update: {}; the report {} the line about the VPN",
+          !began ? "no record of the update that ended"
+          : vpn == update::VpnAtStart::Connected
+              ? "the record of the update that ended says a VPN was connected when it began"
+          : vpn == update::VpnAtStart::NotConnected
+              ? "the record of the update that ended says a VPN was not connected when it began"
+              : "the record of the update that ended does not say whether a VPN was connected, "
+                "or is another update's",
+          update::SaysVpnDisconnected(vpn) ? "keeps" : "leaves out");
   const std::wstring version = VersionOfTag(result->tag);
   Mutate([&](Snapshot& s) {
     s.phase = Phase::Result;
@@ -883,7 +888,7 @@ void UpdateChecker::ShowLastResult() {
                       .logPath = ResultLogPath(installFolder_, *result),
                       .finishedUtc = Widen(result->finishedUtc),
                       .view = view};
-    s.result.vpnWasConnected = vpnWasConnected;
+    s.result.vpn = vpn;
   });
 }
 
@@ -1447,7 +1452,7 @@ void UpdateChecker::RunApply(std::uint64_t generation, bool manual) {
   const std::int64_t ended = read ? static_cast<std::int64_t>(exitCode) : 1603;
   update::UpdateResult outcome{.tag = Narrow(offer.tag), .code = offer.code, .exitCode = ended};
   Result result{.version = offer.version, .exitCode = ended};
-  result.vpnWasConnected = vpnConnected;
+  result.vpn = vpnConnected ? update::VpnAtStart::Connected : update::VpnAtStart::NotConnected;
   const std::optional<update::UpdateResult> report =
       ReadResult(installFolder_ / L"updates" / L"last-result.json");
   if (report && update::IsReportOfRun(*report, outcome.tag, ended, started)) {
