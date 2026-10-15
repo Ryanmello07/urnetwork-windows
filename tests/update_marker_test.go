@@ -133,6 +133,42 @@ func TestUpdateMarkerRejectsAMarkerWithoutTheInstallersCreationTime(t *testing.T
 	}, "file: '4321 0 1900000000' is not a marker")
 }
 
+// The app's note of the VPN for an update (UpdateMarker.h VpnNote, the lead's
+// G10 and G10a) starts at the hand-off from the last push, else the service's
+// answer, else nothing, and a VPN up at any moment from there counts: a
+// teardown does not clear it. Read it once at the hand-off, let a teardown
+// clear it, know it only from pushes, let the service's answer beat a push,
+// or never leave it unknown, and the spec must fail.
+func TestUpdateMarkerRejectsANoteThatForgetsTheVpn(t *testing.T) {
+	requireUpdateMarkerFailure(t, func(source string) string {
+		return updateMarkerReplace(t, source,
+			"    upSinceHandOff = upSinceHandOff || up;\n", "    (void)up;\n")
+	}, "note: a VPN that comes up after the hand-off is connected")
+	requireUpdateMarkerFailure(t, func(source string) string {
+		return updateMarkerReplace(t, source,
+			"    upSinceHandOff = upSinceHandOff || up;\n", "    upSinceHandOff = up;\n")
+	}, "note: a VPN up since the hand-off and then torn down is still connected")
+	requireUpdateMarkerFailure(t, func(source string) string {
+		return updateMarkerReplace(t, source,
+			"answered ? VpnSource::Answered : VpnSource::Unknown;", "VpnSource::Unknown;")
+	}, "note: with nothing pushed, the service's answer that no VPN is up is not connected")
+	requireUpdateMarkerFailure(t, func(source string) string {
+		return updateMarkerReplace(t, source,
+			"const std::optional<bool> state = pushed ? pushed : answered;",
+			"const std::optional<bool> state = pushed;")
+	}, "note: with nothing pushed, the service's answer that a VPN is up is connected")
+	requireUpdateMarkerFailure(t, func(source string) string {
+		return updateMarkerReplace(t, source,
+			"const std::optional<bool> state = pushed ? pushed : answered;",
+			"const std::optional<bool> state = answered ? answered : pushed;")
+	}, "note: a pushed status wins over the service's answer")
+	requireUpdateMarkerFailure(t, func(source string) string {
+		return updateMarkerReplace(t, source,
+			"return source == VpnSource::Unknown ? VpnAtStart::Unknown : VpnAtStart::NotConnected;",
+			"return VpnAtStart::NotConnected;")
+	}, "note: with nothing pushed or answered, it is not known")
+}
+
 // The marker says whether a VPN was connected when the update began, and a
 // marker an older build wrote, three numbers, is still one, and does not say.
 // Write the VPN without its field, read every VPN as none, refuse an older

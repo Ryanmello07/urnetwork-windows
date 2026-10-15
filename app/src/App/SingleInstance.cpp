@@ -151,13 +151,12 @@ bool LaunchedByAutostart() {
   return instance::HasArgument(::GetCommandLineW(), instance::kAutostartArgument);
 }
 
-void RecordUpdateInProgress(void* installerProcess, bool vpnConnected) {
+void RecordUpdateInProgress(void* installerProcess, update::VpnAtStart vpn) {
   const auto process = static_cast<HANDLE>(installerProcess);
   const update::UpdateMarker marker{.installerProcessId = ::GetProcessId(process),
                                     .installerCreationTime = CreationTime(process),
                                     .writtenAt = NowSeconds(),
-                                    .vpn = vpnConnected ? update::VpnAtStart::Connected
-                                                        : update::VpnAtStart::NotConnected};
+                                    .vpn = vpn};
   if (marker.installerProcessId == 0 || marker.installerCreationTime == 0) {
     LogWarn("update: the installer's process could not be read ({}); launches during the "
             "update are not refused",
@@ -181,9 +180,13 @@ void RecordUpdateInProgress(void* installerProcess, bool vpnConnected) {
             "not refused");
     return;
   }
-  LogInfo("update: launches are refused until installer process {} ends; a VPN was {}connected "
-          "when the update began",
-          marker.installerProcessId, vpnConnected ? "" : "not ");
+  LogInfo("update: launches are refused until installer process {} ends; {}",
+          marker.installerProcessId,
+          vpn == update::VpnAtStart::Connected
+              ? "a VPN was connected at some moment since the update began"
+          : vpn == update::VpnAtStart::NotConnected
+              ? "no VPN was connected since the update began"
+              : "whether a VPN was connected since the update began is not known");
 }
 
 bool LaunchedAfterUpdate() {

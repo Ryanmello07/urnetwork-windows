@@ -289,6 +289,17 @@ void AppController::Start() {
   // it. The app does not quit for the installer: the MSI closes it before it
   // replaces its files (WM_CLOSE, a close request, through CloseApplication)
   // and stops the service itself.
+  //
+  // What the service last told this process of the tunnel, pushed or
+  // answered: an update whose hand-off finds no status pushed starts its note
+  // of the VPN from it (UpdateMarker.h VpnNote, the lead's G10a). The
+  // service's word, not the sign-in state: a tunnel from another session on
+  // this machine is still the VPN's state.
+  updates_.SetVpnAnswerProbe([this]() -> std::optional<bool> {
+    const std::optional<proto::TunnelState> state = sdk_.AdoptedServiceState();
+    if (!state) return std::nullopt;
+    return *state == proto::TunnelState::Up;
+  });
   updates_.Start();
 
   // "Launch URnetwork on system startup": a registration the user turned on

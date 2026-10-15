@@ -39,12 +39,13 @@
 // instance::kAfterUpdateArgument, and waits for this marker to go stale before
 // it asks (main.cpp), so it starts the app once the update has ended.
 //
-// The marker also says whether a VPN was connected when the update began. The
-// installer stops the VPN service, and the app does not connect by itself, so
-// the report of the update tells the user to connect again. The launch that
-// finds the update over keeps the marker it deletes for that report
-// (SingleInstance.cpp TakeEndedUpdate), and the marker it took decides: the
-// line stays unless the marker says no VPN was connected. A marker written
+// The marker also says whether a VPN was connected at any moment from the
+// update's hand-off until the marker was written, or that this is not known
+// (VpnNote). The installer stops the VPN service, and the app does not connect
+// by itself, so the report of the update tells the user to connect again. The
+// launch that finds the update over keeps the marker it deletes for that
+// report (SingleInstance.cpp TakeEndedUpdate), and the marker it took decides:
+// the line stays unless the marker says no VPN was connected. A marker written
 // before this field existed has three numbers. It still refuses launches as it
 // did, and does not say whether a VPN was connected, so its report keeps the
 // line, as before: not telling someone their VPN is off is worse than telling
@@ -175,6 +176,52 @@ inline std::optional<VpnAtStart> VpnOfReport(const std::optional<UpdateMarker>& 
 inline bool SaysVpnDisconnected(std::optional<VpnAtStart> vpn) {
   return vpn.has_value() && *vpn != VpnAtStart::NotConnected;
 }
+
+// Where the app's note of the VPN starts from at an update's hand-off.
+enum class VpnSource : std::uint8_t {
+  // the last tunnel status the service pushed
+  Pushed,
+  // none pushed: the state the service answered when the app asked
+  Answered,
+  // neither: the service has told the app nothing yet
+  Unknown,
+};
+
+// The app's note of the VPN for an update (the lead's G10 and G10a). The
+// service pushes a tunnel status on every change (StatusPushed) and answers
+// when it is asked, and a copy that is signed out may have had no push at
+// all. At the hand-off to the update helper (HandOff), the note starts from
+// the last push, else the service's answer, else nothing. A VPN up at any
+// moment from there counts, and nothing clears it: the note is connected if
+// one was up, not connected only if the state was known at the hand-off and
+// never up since, and unknown otherwise (Note), which is written as three
+// numbers. Not safe across threads by itself: UpdateChecker guards it.
+struct VpnNote {
+  // the last status the service pushed, up or not
+  std::optional<bool> pushed;
+  // where the hand-off's state came from
+  VpnSource source = VpnSource::Unknown;
+  // a VPN was up at the hand-off, or at any moment since
+  bool upSinceHandOff = false;
+
+  void StatusPushed(bool up) {
+    pushed = up;
+    upSinceHandOff = upSinceHandOff || up;
+  }
+
+  // `answered`: the tunnel's state as the service answered it, up or not, or
+  // nullopt when it has answered nothing.
+  void HandOff(std::optional<bool> answered) {
+    source = pushed ? VpnSource::Pushed : answered ? VpnSource::Answered : VpnSource::Unknown;
+    const std::optional<bool> state = pushed ? pushed : answered;
+    upSinceHandOff = state.value_or(false);
+  }
+
+  VpnAtStart Note() const {
+    if (upSinceHandOff) return VpnAtStart::Connected;
+    return source == VpnSource::Unknown ? VpnAtStart::Unknown : VpnAtStart::NotConnected;
+  }
+};
 
 // What became of the installer a marker names.
 enum class InstallerState {
