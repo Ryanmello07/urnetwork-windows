@@ -7181,6 +7181,86 @@
     <value>ความหลากหลายของ IP ที่กำหนดเส้นทางได้ของเครือข่ายคุณอยู่ราวอันดับ #{0} จาก {1} ที่นั่งชั้นนำ นักขุดชั้นนำได้รับ SN25α โดยตรงทุก tempo</value>
     <comment>Detail of the Top 200 tile when eligible.</comment>
   </data>
+  <data name="top200_sign_action" xml:space="preserve">
+    <value>ลงนามด้วยอุปกรณ์นี้</value>
+    <comment>Top 200 sign screen: the button that signs the reviewed binding with this device's client key (local only).</comment>
+  </data>
+  <data name="top200_sign_binding" xml:space="preserve">
+    <value>ลงนามการผูกฟลีต</value>
+    <comment>Top 200: the button that opens the screen where this device signs its fleet binding, and that screen's title. The ur.io Top 200 page names it in its steps (Earnings › Top 200 › Sign fleet binding).</comment>
+  </data>
+  <data name="top200_sign_binding_label" xml:space="preserve">
+    <value>การผูกที่จะลงนาม</value>
+    <comment>Top 200 sign screen: label of the field where the binding JSON from the ur.io Top 200 page is pasted.</comment>
+  </data>
+  <data name="top200_sign_chain" xml:space="preserve">
+    <value>เชน {0} · ซับเน็ต {1}</value>
+    <comment>Top 200 sign screen: the binding's EVM chain id and Bittensor subnet (netuid).</comment>
+  </data>
+  <data name="top200_sign_client_key" xml:space="preserve">
+    <value>คีย์ไคลเอ็นต์</value>
+    <comment>Top 200 sign screen: label of this device's Ed25519 client public key (0x hex).</comment>
+  </data>
+  <data name="top200_sign_copy_member" xml:space="preserve">
+    <value>คัดลอกรายการสมาชิก</value>
+    <comment>Top 200 sign screen: button that copies this device's fleet manifest member entry {"client_id":"0x…","client_key":"0x…"}.</comment>
+  </data>
+  <data name="top200_sign_copy_payload" xml:space="preserve">
+    <value>คัดลอกข้อมูล</value>
+    <comment>Top 200 sign screen: button that copies the signed {binding, client_signature} payload.</comment>
+  </data>
+  <data name="top200_sign_done" xml:space="preserve">
+    <value>ลงนามแล้ว คัดลอกข้อมูลแล้ววางในหน้า Top 200 ที่ช่องลายเซ็นของอุปกรณ์</value>
+    <comment>Top 200 sign screen: shown with the signed {binding, client_signature} payload. 'Device signature' is the ur.io page's field label (site_app_top200_device_signature).</comment>
+  </data>
+  <data name="top200_sign_epochs" xml:space="preserve">
+    <value>ใช้ได้ตั้งแต่ epoch {0} ถึง {1}</value>
+    <comment>Top 200 sign screen: the binding's validity window (valid_from_epoch, valid_to_epoch), both inclusive.</comment>
+  </data>
+  <data name="top200_sign_error_failed" xml:space="preserve">
+    <value>ไม่สามารถลงนามการผูกได้: {}</value>
+    <comment>Top 200 sign screen: SignSnFleetBinding returned an error; {detail} is the SDK's error text.</comment>
+  </data>
+  <data name="top200_sign_error_invalid" xml:space="preserve">
+    <value>นี่ไม่ใช่การผูกฟลีต คัดลอกการผูกทั้งหมดจากหน้า Top 200</value>
+    <comment>Top 200 sign screen: the pasted text is not a fleet binding JSON (or the app link's binding did not decode).</comment>
+  </data>
+  <data name="top200_sign_error_no_key" xml:space="preserve">
+    <value>คีย์ไคลเอ็นต์ของอุปกรณ์นี้ยังใช้ไม่ได้ในขณะนี้ เปิด URnetwork บนอุปกรณ์นี้ แล้วลองอีกครั้ง</value>
+    <comment>Top 200 sign screen: GetSnClientKey returned nothing (no client key, or the desktop/extension service that holds it is not running).</comment>
+  </data>
+  <data name="top200_sign_error_other_device" xml:space="preserve">
+    <value>การผูกนี้เป็นของอุปกรณ์อื่น อุปกรณ์จะลงนามเฉพาะการผูกที่มี ID ไคลเอ็นต์และคีย์ไคลเอ็นต์ของตัวเองเท่านั้น</value>
+    <comment>Top 200 sign screen: the binding's client_id or client_key is not this device's; the app refuses to sign it.</comment>
+  </data>
+  <data name="top200_sign_fleet_id" xml:space="preserve">
+    <value>ID ฟลีต</value>
+    <comment>Top 200 sign screen: label of the binding's fleet_id (0x hex).</comment>
+  </data>
+  <data name="top200_sign_hotkey" xml:space="preserve">
+    <value>ฮอตคีย์</value>
+    <comment>Top 200 sign screen: label of the binding's hotkey (0x hex public key). Hotkey is the Bittensor term.</comment>
+  </data>
+  <data name="top200_sign_intro" xml:space="preserve">
+    <value>ผู้ดูแลฟลีตของคุณสร้างการผูกของอุปกรณ์นี้ในหน้า Top 200 บน ur.io วางที่นี่เพื่อลงนามด้วยคีย์ไคลเอ็นต์ของอุปกรณ์นี้ ไม่มีการส่งข้อมูลใดๆ คุณคัดลอกข้อมูลที่ลงนามแล้วกลับไปยังหน้าเว็บด้วยตัวเอง</value>
+    <comment>Top 200 sign screen: intro. The binding is built on the ur.io Top 200 page; the app signs it locally and sends nothing.</comment>
+  </data>
+  <data name="top200_sign_member_hint" xml:space="preserve">
+    <value>แมนิเฟสต์ของฟลีตระบุอุปกรณ์นี้ด้วย ID ไคลเอ็นต์และคีย์ไคลเอ็นต์ คัดลอกรายการสมาชิกของอุปกรณ์แล้วส่งให้ผู้ดูแลฟลีตของคุณ</value>
+    <comment>Top 200 sign screen: why the operator needs this device's member entry (client ID and client key) for the fleet manifest.</comment>
+  </data>
+  <data name="top200_sign_paste" xml:space="preserve">
+    <value>วาง</value>
+    <comment>Top 200 sign screen: button that pastes the binding from the clipboard.</comment>
+  </data>
+  <data name="top200_sign_review" xml:space="preserve">
+    <value>ก่อนลงนาม ตรวจสอบว่า ID ฟลีต ฮอตคีย์ และ epoch ตรงกับหน้า Top 200</value>
+    <comment>Top 200 sign screen: shown above the parsed binding's values before the Sign button.</comment>
+  </data>
+  <data name="top200_sign_this_device" xml:space="preserve">
+    <value>อุปกรณ์นี้</value>
+    <comment>Top 200 sign screen: label of the section showing this device's client ID and client key.</comment>
+  </data>
   <data name="top200_you_qualify" xml:space="preserve">
     <value>คุณมีคุณสมบัติ</value>
     <comment>Headline of the Top 200 tile when eligible.</comment>

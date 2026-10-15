@@ -7297,6 +7297,86 @@
     <value>आपके नेटवर्क के रूट करने योग्य IP का दायरा {1} शीर्ष स्थानों में लगभग #{0} पर है। शीर्ष माइनर हर tempo में सीधे SN25α कमाते हैं।</value>
     <comment>Detail of the Top 200 tile when eligible.</comment>
   </data>
+  <data name="top200_sign_action" xml:space="preserve">
+    <value>इस डिवाइस से हस्ताक्षर करें</value>
+    <comment>Top 200 sign screen: the button that signs the reviewed binding with this device's client key (local only).</comment>
+  </data>
+  <data name="top200_sign_binding" xml:space="preserve">
+    <value>फ़्लीट बाइंडिंग पर हस्ताक्षर करें</value>
+    <comment>Top 200: the button that opens the screen where this device signs its fleet binding, and that screen's title. The ur.io Top 200 page names it in its steps (Earnings › Top 200 › Sign fleet binding).</comment>
+  </data>
+  <data name="top200_sign_binding_label" xml:space="preserve">
+    <value>हस्ताक्षर के लिए बाइंडिंग</value>
+    <comment>Top 200 sign screen: label of the field where the binding JSON from the ur.io Top 200 page is pasted.</comment>
+  </data>
+  <data name="top200_sign_chain" xml:space="preserve">
+    <value>चेन {0} · सबनेट {1}</value>
+    <comment>Top 200 sign screen: the binding's EVM chain id and Bittensor subnet (netuid).</comment>
+  </data>
+  <data name="top200_sign_client_key" xml:space="preserve">
+    <value>क्लाइंट कुंजी</value>
+    <comment>Top 200 sign screen: label of this device's Ed25519 client public key (0x hex).</comment>
+  </data>
+  <data name="top200_sign_copy_member" xml:space="preserve">
+    <value>सदस्य प्रविष्टि कॉपी करें</value>
+    <comment>Top 200 sign screen: button that copies this device's fleet manifest member entry {"client_id":"0x…","client_key":"0x…"}.</comment>
+  </data>
+  <data name="top200_sign_copy_payload" xml:space="preserve">
+    <value>डेटा कॉपी करें</value>
+    <comment>Top 200 sign screen: button that copies the signed {binding, client_signature} payload.</comment>
+  </data>
+  <data name="top200_sign_done" xml:space="preserve">
+    <value>हस्ताक्षरित। डेटा कॉपी करें और टॉप 200 पेज पर डिवाइस हस्ताक्षर के अंतर्गत पेस्ट करें।</value>
+    <comment>Top 200 sign screen: shown with the signed {binding, client_signature} payload. 'Device signature' is the ur.io page's field label (site_app_top200_device_signature).</comment>
+  </data>
+  <data name="top200_sign_epochs" xml:space="preserve">
+    <value>एपॉक {0} से {1} तक मान्य</value>
+    <comment>Top 200 sign screen: the binding's validity window (valid_from_epoch, valid_to_epoch), both inclusive.</comment>
+  </data>
+  <data name="top200_sign_error_failed" xml:space="preserve">
+    <value>बाइंडिंग पर हस्ताक्षर नहीं हो सके: {}</value>
+    <comment>Top 200 sign screen: SignSnFleetBinding returned an error; {detail} is the SDK's error text.</comment>
+  </data>
+  <data name="top200_sign_error_invalid" xml:space="preserve">
+    <value>यह फ़्लीट बाइंडिंग नहीं है। टॉप 200 पेज से पूरी बाइंडिंग कॉपी करें।</value>
+    <comment>Top 200 sign screen: the pasted text is not a fleet binding JSON (or the app link's binding did not decode).</comment>
+  </data>
+  <data name="top200_sign_error_no_key" xml:space="preserve">
+    <value>इस डिवाइस की क्लाइंट कुंजी अभी उपलब्ध नहीं है। इस डिवाइस पर URnetwork शुरू करें, फिर दोबारा कोशिश करें।</value>
+    <comment>Top 200 sign screen: GetSnClientKey returned nothing (no client key, or the desktop/extension service that holds it is not running).</comment>
+  </data>
+  <data name="top200_sign_error_other_device" xml:space="preserve">
+    <value>यह बाइंडिंग किसी दूसरे डिवाइस की है। डिवाइस केवल अपनी क्लाइंट ID और क्लाइंट कुंजी वाली बाइंडिंग पर हस्ताक्षर करता है।</value>
+    <comment>Top 200 sign screen: the binding's client_id or client_key is not this device's; the app refuses to sign it.</comment>
+  </data>
+  <data name="top200_sign_fleet_id" xml:space="preserve">
+    <value>फ़्लीट ID</value>
+    <comment>Top 200 sign screen: label of the binding's fleet_id (0x hex).</comment>
+  </data>
+  <data name="top200_sign_hotkey" xml:space="preserve">
+    <value>हॉटकी</value>
+    <comment>Top 200 sign screen: label of the binding's hotkey (0x hex public key). Hotkey is the Bittensor term.</comment>
+  </data>
+  <data name="top200_sign_intro" xml:space="preserve">
+    <value>आपके फ़्लीट का संचालक ur.io पर टॉप 200 पेज पर इस डिवाइस की बाइंडिंग बनाता है। इसे इस डिवाइस की क्लाइंट कुंजी से हस्ताक्षरित करने के लिए यहाँ पेस्ट करें। कुछ भी भेजा नहीं जाता: हस्ताक्षरित डेटा आप स्वयं पेज पर वापस कॉपी करते हैं।</value>
+    <comment>Top 200 sign screen: intro. The binding is built on the ur.io Top 200 page; the app signs it locally and sends nothing.</comment>
+  </data>
+  <data name="top200_sign_member_hint" xml:space="preserve">
+    <value>आपका फ़्लीट मैनिफ़ेस्ट इस डिवाइस को उसकी क्लाइंट ID और क्लाइंट कुंजी से सूचीबद्ध करता है। इसकी सदस्य प्रविष्टि कॉपी करें और अपने फ़्लीट के संचालक को भेजें।</value>
+    <comment>Top 200 sign screen: why the operator needs this device's member entry (client ID and client key) for the fleet manifest.</comment>
+  </data>
+  <data name="top200_sign_paste" xml:space="preserve">
+    <value>पेस्ट करें</value>
+    <comment>Top 200 sign screen: button that pastes the binding from the clipboard.</comment>
+  </data>
+  <data name="top200_sign_review" xml:space="preserve">
+    <value>हस्ताक्षर करने से पहले जाँच लें कि फ़्लीट ID, हॉटकी और एपॉक टॉप 200 पेज से मेल खाते हैं।</value>
+    <comment>Top 200 sign screen: shown above the parsed binding's values before the Sign button.</comment>
+  </data>
+  <data name="top200_sign_this_device" xml:space="preserve">
+    <value>यह डिवाइस</value>
+    <comment>Top 200 sign screen: label of the section showing this device's client ID and client key.</comment>
+  </data>
   <data name="top200_you_qualify" xml:space="preserve">
     <value>आप योग्य हैं</value>
     <comment>Headline of the Top 200 tile when eligible.</comment>

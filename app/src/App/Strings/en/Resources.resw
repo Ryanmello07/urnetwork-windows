@@ -7436,6 +7436,14 @@ world's content</value>
     <value>Apply hotkey signature</value>
     <comment>App top200: re-check every device with the hotkey signature</comment>
   </data>
+  <data name="site_app_top200_bad_epochs" xml:space="preserve">
+    <value>Enter the validity epochs as whole numbers, the last one no earlier than the first.</value>
+    <comment>App top200: validity epochs missing, not whole numbers, or reversed</comment>
+  </data>
+  <data name="site_app_top200_bad_manifest" xml:space="preserve">
+    <value>This is not a valid fleet manifest. Paste the JSON that provider fleet manifest prints.</value>
+    <comment>App top200: the pasted fleet manifest does not parse or validate</comment>
+  </data>
   <data name="site_app_top200_bad_signature" xml:space="preserve">
     <value>Paste the whole binding payload: JSON with binding and client_signature.</value>
     <comment>App top200: unparseable paste</comment>
@@ -7444,9 +7452,17 @@ world's content</value>
     <value>Calldata appears once the device signature and the hotkey signature both verify.</value>
     <comment>App top200: binding not complete</comment>
   </data>
+  <data name="site_app_top200_build_bindings" xml:space="preserve">
+    <value>Build bindings</value>
+    <comment>App top200: build each manifest member's binding</comment>
+  </data>
   <data name="site_app_top200_calldata" xml:space="preserve">
     <value>Binding calldata</value>
     <comment>App top200: calldata label</comment>
+  </data>
+  <data name="site_app_top200_current_epoch" xml:space="preserve">
+    <value>The current epoch is {}.</value>
+    <comment>App top200: the current epoch, from GET /sn/head</comment>
   </data>
   <data name="site_app_top200_device" xml:space="preserve">
     <value>Device</value>
@@ -7472,20 +7488,44 @@ world's content</value>
     <value>Hotkey signature (hex)</value>
     <comment>App top200: hotkey signature input</comment>
   </data>
+  <data name="site_app_top200_in_app" xml:space="preserve">
+    <value>In the URnetwork app: {}</value>
+    <comment>App top200: where the app signs a binding; {path} is Earnings › Top 200 › Sign fleet binding in the reader's language</comment>
+  </data>
   <data name="site_app_top200_intro" xml:space="preserve">
     <value>Head miners are the top {cutoff} networks by routable egress IP breadth. A head spot is paid natively by the subnet every tempo, straight to your coldkey.</value>
     <comment>App top200: intro</comment>
   </data>
+  <data name="site_app_top200_manifest" xml:space="preserve">
+    <value>Fleet manifest</value>
+    <comment>App top200: fleet manifest textarea label</comment>
+  </data>
+  <data name="site_app_top200_manifest_hash_mismatch" xml:space="preserve">
+    <value>This manifest does not match the commitment_sha256 pasted with it.</value>
+    <comment>App top200: the manifest's SHA-256 is not the commitment_sha256 line pasted with it</comment>
+  </data>
+  <data name="site_app_top200_manifest_hint" xml:space="preserve">
+    <value>Paste your fleet manifest (the JSON that provider fleet manifest prints) and the validity epochs to build each device's binding. The app shows its device's member entry for the manifest under Earnings › Top 200 › Sign fleet binding.</value>
+    <comment>App top200: how to get the fleet manifest and where an app shows its member entry</comment>
+  </data>
+  <data name="site_app_top200_manifest_hotkey_mismatch" xml:space="preserve">
+    <value>The manifest's hotkey is not the hotkey entered in step 1.</value>
+    <comment>App top200: the manifest's hotkey is not the ss58 hotkey entered in step 1</comment>
+  </data>
   <data name="site_app_top200_not_eligible" xml:space="preserve">
     <value>Not eligible yet. Your score is {score} and the eviction floor is {floor}.</value>
     <comment>App top200: status when not eligible</comment>
+  </data>
+  <data name="site_app_top200_open_in_app" xml:space="preserve">
+    <value>Open in the app</value>
+    <comment>App top200: link that opens the app's Sign fleet binding screen with this binding filled in</comment>
   </data>
   <data name="site_app_top200_signatures_added" xml:space="preserve">
     <value>{count} devices added</value>
     <comment>App top200: progress</comment>
   </data>
   <data name="site_app_top200_step_bind" xml:space="preserve">
-    <value>Device signing is not in the apps yet. On each provider device, run provider fleet sign with your fleet manifest, the device's client key seed (~/.urnetwork/.provider.key) and the validity epochs, and paste the JSON it prints here, one device at a time. It sends nothing and the seeds stay on the device. provider fleet bind instead signs and submits in one step from your own EVM key.</value>
+    <value>Each provider device signs its own binding. Build the bindings below from your fleet manifest and copy each one to its device. In the URnetwork app, open Earnings › Top 200 › Sign fleet binding, paste the binding, check the fleet ID, hotkey and epochs, sign, and paste the payload the app shows here. On a CLI provider, run provider fleet sign with the fleet manifest, the device's client key seed (~/.urnetwork/.provider.key) and the validity epochs instead, and paste the JSON it prints. Neither sends anything and the seeds stay on the device. provider fleet bind instead signs and submits in one step from your own EVM key.</value>
     <comment>App top200: step 2</comment>
   </data>
   <data name="site_app_top200_step_register" xml:space="preserve">
@@ -7503,6 +7543,14 @@ world's content</value>
   <data name="site_app_top200_unavailable" xml:space="preserve">
     <value>Head spot status is not available right now.</value>
     <comment>App top200: GET /sn/head unavailable</comment>
+  </data>
+  <data name="site_app_top200_valid_from" xml:space="preserve">
+    <value>Valid from epoch</value>
+    <comment>App top200: first epoch the bindings are valid for (input label)</comment>
+  </data>
+  <data name="site_app_top200_valid_to" xml:space="preserve">
+    <value>Valid to epoch</value>
+    <comment>App top200: last epoch the bindings are valid for (input label)</comment>
   </data>
   <data name="site_app_total_referrals" xml:space="preserve">
     <value>Total referrals</value>
@@ -8886,6 +8934,86 @@ as it should be.</value>
   <data name="top200_detail" xml:space="preserve">
     <value>Your network's routable IP breadth ranks about #{0} of {1} head spots. Head miners earn SN25α natively, every tempo.</value>
     <comment>Detail of the Top 200 tile when eligible.</comment>
+  </data>
+  <data name="top200_sign_action" xml:space="preserve">
+    <value>Sign with this device</value>
+    <comment>Top 200 sign screen: the button that signs the reviewed binding with this device's client key (local only).</comment>
+  </data>
+  <data name="top200_sign_binding" xml:space="preserve">
+    <value>Sign fleet binding</value>
+    <comment>Top 200: the button that opens the screen where this device signs its fleet binding, and that screen's title. The ur.io Top 200 page names it in its steps (Earnings › Top 200 › Sign fleet binding).</comment>
+  </data>
+  <data name="top200_sign_binding_label" xml:space="preserve">
+    <value>Binding to sign</value>
+    <comment>Top 200 sign screen: label of the field where the binding JSON from the ur.io Top 200 page is pasted.</comment>
+  </data>
+  <data name="top200_sign_chain" xml:space="preserve">
+    <value>Chain {0} · subnet {1}</value>
+    <comment>Top 200 sign screen: the binding's EVM chain id and Bittensor subnet (netuid).</comment>
+  </data>
+  <data name="top200_sign_client_key" xml:space="preserve">
+    <value>Client key</value>
+    <comment>Top 200 sign screen: label of this device's Ed25519 client public key (0x hex).</comment>
+  </data>
+  <data name="top200_sign_copy_member" xml:space="preserve">
+    <value>Copy member entry</value>
+    <comment>Top 200 sign screen: button that copies this device's fleet manifest member entry {"client_id":"0x…","client_key":"0x…"}.</comment>
+  </data>
+  <data name="top200_sign_copy_payload" xml:space="preserve">
+    <value>Copy payload</value>
+    <comment>Top 200 sign screen: button that copies the signed {binding, client_signature} payload.</comment>
+  </data>
+  <data name="top200_sign_done" xml:space="preserve">
+    <value>Signed. Copy the payload and paste it on the Top 200 page under Device signature.</value>
+    <comment>Top 200 sign screen: shown with the signed {binding, client_signature} payload. 'Device signature' is the ur.io page's field label (site_app_top200_device_signature).</comment>
+  </data>
+  <data name="top200_sign_epochs" xml:space="preserve">
+    <value>Valid from epoch {0} to {1}</value>
+    <comment>Top 200 sign screen: the binding's validity window (valid_from_epoch, valid_to_epoch), both inclusive.</comment>
+  </data>
+  <data name="top200_sign_error_failed" xml:space="preserve">
+    <value>The binding could not be signed: {}</value>
+    <comment>Top 200 sign screen: SignSnFleetBinding returned an error; {detail} is the SDK's error text.</comment>
+  </data>
+  <data name="top200_sign_error_invalid" xml:space="preserve">
+    <value>This is not a fleet binding. Copy the whole binding from the Top 200 page.</value>
+    <comment>Top 200 sign screen: the pasted text is not a fleet binding JSON (or the app link's binding did not decode).</comment>
+  </data>
+  <data name="top200_sign_error_no_key" xml:space="preserve">
+    <value>This device's client key is not available right now. Start URnetwork on this device, then try again.</value>
+    <comment>Top 200 sign screen: GetSnClientKey returned nothing (no client key, or the desktop/extension service that holds it is not running).</comment>
+  </data>
+  <data name="top200_sign_error_other_device" xml:space="preserve">
+    <value>This binding is for another device. A device signs only the binding with its own client ID and client key.</value>
+    <comment>Top 200 sign screen: the binding's client_id or client_key is not this device's; the app refuses to sign it.</comment>
+  </data>
+  <data name="top200_sign_fleet_id" xml:space="preserve">
+    <value>Fleet ID</value>
+    <comment>Top 200 sign screen: label of the binding's fleet_id (0x hex).</comment>
+  </data>
+  <data name="top200_sign_hotkey" xml:space="preserve">
+    <value>Hotkey</value>
+    <comment>Top 200 sign screen: label of the binding's hotkey (0x hex public key). Hotkey is the Bittensor term.</comment>
+  </data>
+  <data name="top200_sign_intro" xml:space="preserve">
+    <value>Your fleet operator builds this device's binding on the Top 200 page at ur.io. Paste it here to sign it with this device's client key. Nothing is sent: you copy the signed payload back to the page yourself.</value>
+    <comment>Top 200 sign screen: intro. The binding is built on the ur.io Top 200 page; the app signs it locally and sends nothing.</comment>
+  </data>
+  <data name="top200_sign_member_hint" xml:space="preserve">
+    <value>Your fleet manifest lists this device by its client ID and client key. Copy its member entry and send it to your fleet operator.</value>
+    <comment>Top 200 sign screen: why the operator needs this device's member entry (client ID and client key) for the fleet manifest.</comment>
+  </data>
+  <data name="top200_sign_paste" xml:space="preserve">
+    <value>Paste</value>
+    <comment>Top 200 sign screen: button that pastes the binding from the clipboard.</comment>
+  </data>
+  <data name="top200_sign_review" xml:space="preserve">
+    <value>Check that the fleet ID, hotkey and epochs match the Top 200 page before you sign.</value>
+    <comment>Top 200 sign screen: shown above the parsed binding's values before the Sign button.</comment>
+  </data>
+  <data name="top200_sign_this_device" xml:space="preserve">
+    <value>This device</value>
+    <comment>Top 200 sign screen: label of the section showing this device's client ID and client key.</comment>
   </data>
   <data name="top200_you_qualify" xml:space="preserve">
     <value>You qualify</value>
