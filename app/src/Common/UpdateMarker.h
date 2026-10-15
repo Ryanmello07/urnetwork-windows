@@ -132,9 +132,11 @@ inline std::optional<UpdateMarker> ParseUpdateMarker(std::string_view text) {
   if (!field(marker.installerProcessId, false) || !field(marker.installerCreationTime, false)) {
     return std::nullopt;
   }
+  const char* const written = at;
   if (!field(marker.writtenAt, true)) {
-    // the VPN's field, after a space: exactly 0 or 1, and the end
-    if (at == end || *at != ' ') return std::nullopt;
+    // the VPN's field, after the time and a space: exactly 0 or 1, and the
+    // end. No time at all is no marker, as before the VPN's field.
+    if (at == written || at == end || *at != ' ') return std::nullopt;
     ++at;
     if (end - at != 1 || (*at != '0' && *at != '1')) return std::nullopt;
     marker.vpn = *at == '1' ? VpnAtStart::Connected : VpnAtStart::NotConnected;
