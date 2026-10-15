@@ -270,6 +270,7 @@
     <ClCompile Include="SettingsSheets.cpp" />
     <ClCompile Include="WalletPage.cpp" />
     <ClCompile Include="EarningsSheets.cpp" />
+    <ClCompile Include="Top200SignSheet.cpp" />
     <!-- The Solana payout wallet's decisions (address check, payout wallet,
          USDC waiting, the connect sheet's state machine) are WinRT-free (no
          pch) so tools/solana-wallet-tests.cpp runs them on any host; the page
@@ -412,6 +413,9 @@
     <ClInclude Include="LeaderboardIndicator.h" />
     <ClInclude Include="WalletPage.h" />
     <ClInclude Include="EarningsSheets.h" />
+    <ClInclude Include="Top200SignSheet.h" />
+    <!-- header-only and WinRT-free: tools/top200-sign-tests.cpp runs it -->
+    <ClInclude Include="Top200Binding.h" />
     <ClInclude Include="SnPayoutPresentation.h" />
     <!-- header-only and WinRT-free: tools/sn-consent-tests.cpp runs it -->
     <ClInclude Include="SnConsentPresentation.h" />

@@ -7397,6 +7397,14 @@
     <value>تطبيق توقيع hotkey</value>
     <comment>App top200: re-check every device with the hotkey signature</comment>
   </data>
+  <data name="site_app_top200_bad_epochs" xml:space="preserve">
+    <value>أدخل حقب الصلاحية كأعداد صحيحة، على ألّا تسبق الأخيرةُ الأولى.</value>
+    <comment>App top200: validity epochs missing, not whole numbers, or reversed</comment>
+  </data>
+  <data name="site_app_top200_bad_manifest" xml:space="preserve">
+    <value>هذا ليس بيان أسطول صالحًا. الصق JSON الذي يطبعه provider fleet manifest.</value>
+    <comment>App top200: the pasted fleet manifest does not parse or validate</comment>
+  </data>
   <data name="site_app_top200_bad_signature" xml:space="preserve">
     <value>الصق بيانات الربط كاملة: JSON يحتوي على binding و client_signature.</value>
     <comment>App top200: unparseable paste</comment>
@@ -7405,9 +7413,17 @@
     <value>تظهر بيانات calldata بعد التحقق من توقيع الجهاز وتوقيع hotkey كليهما.</value>
     <comment>App top200: binding not complete</comment>
   </data>
+  <data name="site_app_top200_build_bindings" xml:space="preserve">
+    <value>إنشاء الروابط</value>
+    <comment>App top200: build each manifest member's binding</comment>
+  </data>
   <data name="site_app_top200_calldata" xml:space="preserve">
     <value>بيانات calldata للربط</value>
     <comment>App top200: calldata label</comment>
+  </data>
+  <data name="site_app_top200_current_epoch" xml:space="preserve">
+    <value>الحقبة الحالية هي {}.</value>
+    <comment>App top200: the current epoch, from GET /sn/head</comment>
   </data>
   <data name="site_app_top200_device" xml:space="preserve">
     <value>الجهاز</value>
@@ -7433,20 +7449,44 @@
     <value>توقيع hotkey (hex)</value>
     <comment>App top200: hotkey signature input</comment>
   </data>
+  <data name="site_app_top200_in_app" xml:space="preserve">
+    <value>في تطبيق URnetwork: {}</value>
+    <comment>App top200: where the app signs a binding; {path} is Earnings › Top 200 › Sign fleet binding in the reader's language</comment>
+  </data>
   <data name="site_app_top200_intro" xml:space="preserve">
     <value>كبار المعدِّنين هم أفضل {cutoff} شبكة من حيث تنوّع عناوين IP الخروج القابلة للتوجيه. تدفع الشبكة الفرعية مقابل المقعد الرئيسي بشكل أصلي في كل tempo، مباشرةً إلى coldkey الخاص بك.</value>
     <comment>App top200: intro</comment>
   </data>
+  <data name="site_app_top200_manifest" xml:space="preserve">
+    <value>بيان الأسطول</value>
+    <comment>App top200: fleet manifest textarea label</comment>
+  </data>
+  <data name="site_app_top200_manifest_hash_mismatch" xml:space="preserve">
+    <value>هذا البيان لا يطابق قيمة commitment_sha256 الملصقة معه.</value>
+    <comment>App top200: the manifest's SHA-256 is not the commitment_sha256 line pasted with it</comment>
+  </data>
+  <data name="site_app_top200_manifest_hint" xml:space="preserve">
+    <value>الصق بيان أسطولك (JSON الذي يطبعه provider fleet manifest) وحقب الصلاحية لإنشاء ربط كل جهاز. يعرض التطبيق إدخال العضو الخاص بجهازه للبيان في الأرباح › أفضل 200 › توقيع ربط الأسطول.</value>
+    <comment>App top200: how to get the fleet manifest and where an app shows its member entry</comment>
+  </data>
+  <data name="site_app_top200_manifest_hotkey_mismatch" xml:space="preserve">
+    <value>المفتاح الساخن في البيان ليس المفتاح الساخن الذي أُدخل في الخطوة 1.</value>
+    <comment>App top200: the manifest's hotkey is not the ss58 hotkey entered in step 1</comment>
+  </data>
   <data name="site_app_top200_not_eligible" xml:space="preserve">
     <value>غير مؤهل بعد. نتيجتك {score} وحد الإقصاء {floor}.</value>
     <comment>App top200: status when not eligible</comment>
+  </data>
+  <data name="site_app_top200_open_in_app" xml:space="preserve">
+    <value>افتح في التطبيق</value>
+    <comment>App top200: link that opens the app's Sign fleet binding screen with this binding filled in</comment>
   </data>
   <data name="site_app_top200_signatures_added" xml:space="preserve">
     <value>الأجهزة المضافة: {count}</value>
     <comment>App top200: progress</comment>
   </data>
   <data name="site_app_top200_step_bind" xml:space="preserve">
-    <value>لا تستطيع التطبيقات توقيع ربط الأجهزة بعد. على كل جهاز مزوّد، شغّل provider fleet sign مع بيان أسطولك وبذرة مفتاح العميل للجهاز (~/.urnetwork/.provider.key) وحقب الصلاحية، ثم الصق هنا JSON الذي يطبعه، جهازًا تلو الآخر. لا يرسل الأمر أي شيء وتبقى البذور على الجهاز. أما provider fleet bind فيوقّع ويرسل في خطوة واحدة من مفتاح EVM الخاص بك.</value>
+    <value>يوقّع كل جهاز مزوّد ربطه الخاص. أنشئ الروابط أدناه من بيان أسطولك وانسخ كل ربط إلى جهازه. في تطبيق URnetwork، افتح الأرباح › أفضل 200 › توقيع ربط الأسطول، والصق الربط، وتحقّق من معرّف الأسطول والمفتاح الساخن والحِقَب، ثم وقّع والصق هنا البيانات التي يعرضها التطبيق. أما على مزوّد يعمل بسطر الأوامر، فشغّل بدلًا من ذلك provider fleet sign مع بيان الأسطول وبذرة مفتاح العميل للجهاز (~/.urnetwork/.provider.key) وحقب الصلاحية، والصق JSON الذي يطبعه. لا يرسل أيّ منهما شيئًا وتبقى البذور على الجهاز. أما provider fleet bind فيوقّع ويرسل في خطوة واحدة من مفتاح EVM الخاص بك.</value>
     <comment>App top200: step 2</comment>
   </data>
   <data name="site_app_top200_step_register" xml:space="preserve">
@@ -7464,6 +7504,14 @@
   <data name="site_app_top200_unavailable" xml:space="preserve">
     <value>حالة المقعد الرئيسي غير متاحة الآن.</value>
     <comment>App top200: GET /sn/head unavailable</comment>
+  </data>
+  <data name="site_app_top200_valid_from" xml:space="preserve">
+    <value>صالح من الحقبة</value>
+    <comment>App top200: first epoch the bindings are valid for (input label)</comment>
+  </data>
+  <data name="site_app_top200_valid_to" xml:space="preserve">
+    <value>صالح حتى الحقبة</value>
+    <comment>App top200: last epoch the bindings are valid for (input label)</comment>
   </data>
   <data name="site_app_total_referrals" xml:space="preserve">
     <value>إجمالي الإحالات</value>
@@ -8815,6 +8863,86 @@
   <data name="top200_detail" xml:space="preserve">
     <value>يحتل تنوّع عناوين IP القابلة للتوجيه في شبكتك المرتبة #{0} تقريبًا من بين {1} من المقاعد الرئيسية. يكسب كبار المعدِّنين SN25α بشكل أصلي في كل tempo.</value>
     <comment>Detail of the Top 200 tile when eligible.</comment>
+  </data>
+  <data name="top200_sign_action" xml:space="preserve">
+    <value>وقّع بهذا الجهاز</value>
+    <comment>Top 200 sign screen: the button that signs the reviewed binding with this device's client key (local only).</comment>
+  </data>
+  <data name="top200_sign_binding" xml:space="preserve">
+    <value>توقيع ربط الأسطول</value>
+    <comment>Top 200: the button that opens the screen where this device signs its fleet binding, and that screen's title. The ur.io Top 200 page names it in its steps (Earnings › Top 200 › Sign fleet binding).</comment>
+  </data>
+  <data name="top200_sign_binding_label" xml:space="preserve">
+    <value>الربط المطلوب توقيعه</value>
+    <comment>Top 200 sign screen: label of the field where the binding JSON from the ur.io Top 200 page is pasted.</comment>
+  </data>
+  <data name="top200_sign_chain" xml:space="preserve">
+    <value>السلسلة {0} · الشبكة الفرعية {1}</value>
+    <comment>Top 200 sign screen: the binding's EVM chain id and Bittensor subnet (netuid).</comment>
+  </data>
+  <data name="top200_sign_client_key" xml:space="preserve">
+    <value>مفتاح العميل</value>
+    <comment>Top 200 sign screen: label of this device's Ed25519 client public key (0x hex).</comment>
+  </data>
+  <data name="top200_sign_copy_member" xml:space="preserve">
+    <value>انسخ إدخال العضو</value>
+    <comment>Top 200 sign screen: button that copies this device's fleet manifest member entry {"client_id":"0x…","client_key":"0x…"}.</comment>
+  </data>
+  <data name="top200_sign_copy_payload" xml:space="preserve">
+    <value>انسخ الحمولة</value>
+    <comment>Top 200 sign screen: button that copies the signed {binding, client_signature} payload.</comment>
+  </data>
+  <data name="top200_sign_done" xml:space="preserve">
+    <value>تم التوقيع. انسخ الحمولة والصقها في صفحة أفضل 200 تحت توقيع الجهاز.</value>
+    <comment>Top 200 sign screen: shown with the signed {binding, client_signature} payload. 'Device signature' is the ur.io page's field label (site_app_top200_device_signature).</comment>
+  </data>
+  <data name="top200_sign_epochs" xml:space="preserve">
+    <value>صالح من الحقبة {0} إلى {1}</value>
+    <comment>Top 200 sign screen: the binding's validity window (valid_from_epoch, valid_to_epoch), both inclusive.</comment>
+  </data>
+  <data name="top200_sign_error_failed" xml:space="preserve">
+    <value>تعذّر توقيع الربط: {}</value>
+    <comment>Top 200 sign screen: SignSnFleetBinding returned an error; {detail} is the SDK's error text.</comment>
+  </data>
+  <data name="top200_sign_error_invalid" xml:space="preserve">
+    <value>هذا ليس ربط أسطول. انسخ الربط كاملًا من صفحة أفضل 200.</value>
+    <comment>Top 200 sign screen: the pasted text is not a fleet binding JSON (or the app link's binding did not decode).</comment>
+  </data>
+  <data name="top200_sign_error_no_key" xml:space="preserve">
+    <value>مفتاح العميل لهذا الجهاز غير متاح الآن. شغّل URnetwork على هذا الجهاز، ثم حاول مرة أخرى.</value>
+    <comment>Top 200 sign screen: GetSnClientKey returned nothing (no client key, or the desktop/extension service that holds it is not running).</comment>
+  </data>
+  <data name="top200_sign_error_other_device" xml:space="preserve">
+    <value>هذا الربط لجهاز آخر. لا يوقّع الجهاز إلا الربط الذي يحمل معرّف العميل ومفتاح العميل الخاصين به.</value>
+    <comment>Top 200 sign screen: the binding's client_id or client_key is not this device's; the app refuses to sign it.</comment>
+  </data>
+  <data name="top200_sign_fleet_id" xml:space="preserve">
+    <value>معرّف الأسطول</value>
+    <comment>Top 200 sign screen: label of the binding's fleet_id (0x hex).</comment>
+  </data>
+  <data name="top200_sign_hotkey" xml:space="preserve">
+    <value>المفتاح الساخن (hotkey)</value>
+    <comment>Top 200 sign screen: label of the binding's hotkey (0x hex public key). Hotkey is the Bittensor term.</comment>
+  </data>
+  <data name="top200_sign_intro" xml:space="preserve">
+    <value>يُعِدّ مشغّل أسطولك ربط هذا الجهاز في صفحة أفضل 200 على ur.io. الصقه هنا لتوقيعه بمفتاح العميل لهذا الجهاز. لا يُرسَل أي شيء: أنت من ينسخ الحمولة الموقّعة إلى الصفحة.</value>
+    <comment>Top 200 sign screen: intro. The binding is built on the ur.io Top 200 page; the app signs it locally and sends nothing.</comment>
+  </data>
+  <data name="top200_sign_member_hint" xml:space="preserve">
+    <value>يُدرج بيان أسطولك هذا الجهاز بمعرّف العميل ومفتاح العميل الخاصين به. انسخ إدخال العضو الخاص به وأرسله إلى مشغّل أسطولك.</value>
+    <comment>Top 200 sign screen: why the operator needs this device's member entry (client ID and client key) for the fleet manifest.</comment>
+  </data>
+  <data name="top200_sign_paste" xml:space="preserve">
+    <value>لصق</value>
+    <comment>Top 200 sign screen: button that pastes the binding from the clipboard.</comment>
+  </data>
+  <data name="top200_sign_review" xml:space="preserve">
+    <value>تأكّد من أن معرّف الأسطول والمفتاح الساخن والحِقَب تطابق صفحة أفضل 200 قبل التوقيع.</value>
+    <comment>Top 200 sign screen: shown above the parsed binding's values before the Sign button.</comment>
+  </data>
+  <data name="top200_sign_this_device" xml:space="preserve">
+    <value>هذا الجهاز</value>
+    <comment>Top 200 sign screen: label of the section showing this device's client ID and client key.</comment>
   </data>
   <data name="top200_you_qualify" xml:space="preserve">
     <value>أنت مؤهل</value>

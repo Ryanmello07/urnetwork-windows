@@ -339,6 +339,8 @@ struct MainWindow : MainWindowT<MainWindow> {
                      winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnClaimTop200(winrt::Windows::Foundation::IInspectable const&,
                      winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
+  void OnSignTop200(winrt::Windows::Foundation::IInspectable const&,
+                    winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   void OnWalletLearnMore(winrt::Microsoft::UI::Xaml::Documents::Hyperlink const&,
                          winrt::Microsoft::UI::Xaml::Documents::HyperlinkClickEventArgs const&);
   void OnWalletProvideMode(winrt::Windows::Foundation::IInspectable const&,
@@ -417,6 +419,10 @@ struct MainWindow : MainWindowT<MainWindow> {
   // offer page on its own (the upgrade sheet when no offer is active), the
   // feedback form pre-filled from the link's token. UI thread.
   void HandleOnboardingLink(std::string const& url);
+  // urnetwork://top200/sign?binding=<base64url> (the ur.io Top 200 page's
+  // "Open in the app"): Earnings, with the sign sheet's box pre-filled. Never
+  // signs. Dropped while signed out. Public: AppController invokes it.
+  void HandleTop200SignLink(std::string const& url);
 
  private:
   // ---- referral crowning overlay ----

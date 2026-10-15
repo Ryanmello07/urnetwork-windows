@@ -2860,6 +2860,15 @@
                                                     Style="{StaticResource UrPaneActionSecondaryStyle}"
                                                     HorizontalAlignment="Stretch"
                                                     Click="OnClaimTop200" />
+                                            <!-- Sign fleet binding: in the
+                                                 eligible tile under the ur.io
+                                                 link and in the bound card
+                                                 alike (bindings renew per epoch
+                                                 window; new devices join) -->
+                                            <Button x:Name="Top200SignButton"
+                                                    Style="{StaticResource UrPaneActionSecondaryStyle}"
+                                                    HorizontalAlignment="Stretch"
+                                                    Click="OnSignTop200" />
                                         </StackPanel>
                                     </Border>
                                 </StackPanel>

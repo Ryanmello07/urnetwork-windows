@@ -7300,6 +7300,86 @@ kama inavyopaswa kuwa.</value>
     <value>Upana wa IP zinazoweza kupitishwa za mtandao wako uko karibu na nafasi #{0} kati ya nafasi {1} za juu. Wachimbaji wa juu hupata SN25α moja kwa moja, kila tempo.</value>
     <comment>Detail of the Top 200 tile when eligible.</comment>
   </data>
+  <data name="top200_sign_action" xml:space="preserve">
+    <value>Saini kwa kifaa hiki</value>
+    <comment>Top 200 sign screen: the button that signs the reviewed binding with this device's client key (local only).</comment>
+  </data>
+  <data name="top200_sign_binding" xml:space="preserve">
+    <value>Saini ufungaji wa kundi</value>
+    <comment>Top 200: the button that opens the screen where this device signs its fleet binding, and that screen's title. The ur.io Top 200 page names it in its steps (Earnings › Top 200 › Sign fleet binding).</comment>
+  </data>
+  <data name="top200_sign_binding_label" xml:space="preserve">
+    <value>Ufungaji wa kusaini</value>
+    <comment>Top 200 sign screen: label of the field where the binding JSON from the ur.io Top 200 page is pasted.</comment>
+  </data>
+  <data name="top200_sign_chain" xml:space="preserve">
+    <value>Mnyororo {0} · subnet {1}</value>
+    <comment>Top 200 sign screen: the binding's EVM chain id and Bittensor subnet (netuid).</comment>
+  </data>
+  <data name="top200_sign_client_key" xml:space="preserve">
+    <value>Ufunguo wa mteja</value>
+    <comment>Top 200 sign screen: label of this device's Ed25519 client public key (0x hex).</comment>
+  </data>
+  <data name="top200_sign_copy_member" xml:space="preserve">
+    <value>Nakili ingizo la mwanachama</value>
+    <comment>Top 200 sign screen: button that copies this device's fleet manifest member entry {"client_id":"0x…","client_key":"0x…"}.</comment>
+  </data>
+  <data name="top200_sign_copy_payload" xml:space="preserve">
+    <value>Nakili data</value>
+    <comment>Top 200 sign screen: button that copies the signed {binding, client_signature} payload.</comment>
+  </data>
+  <data name="top200_sign_done" xml:space="preserve">
+    <value>Imesainiwa. Nakili data na uibandike kwenye ukurasa wa Top 200 chini ya Sahihi ya kifaa.</value>
+    <comment>Top 200 sign screen: shown with the signed {binding, client_signature} payload. 'Device signature' is the ur.io page's field label (site_app_top200_device_signature).</comment>
+  </data>
+  <data name="top200_sign_epochs" xml:space="preserve">
+    <value>Halali kuanzia epoch {0} hadi {1}</value>
+    <comment>Top 200 sign screen: the binding's validity window (valid_from_epoch, valid_to_epoch), both inclusive.</comment>
+  </data>
+  <data name="top200_sign_error_failed" xml:space="preserve">
+    <value>Ufungaji haukuweza kusainiwa: {}</value>
+    <comment>Top 200 sign screen: SignSnFleetBinding returned an error; {detail} is the SDK's error text.</comment>
+  </data>
+  <data name="top200_sign_error_invalid" xml:space="preserve">
+    <value>Huu si ufungaji wa kundi. Nakili ufungaji wote kutoka ukurasa wa Top 200.</value>
+    <comment>Top 200 sign screen: the pasted text is not a fleet binding JSON (or the app link's binding did not decode).</comment>
+  </data>
+  <data name="top200_sign_error_no_key" xml:space="preserve">
+    <value>Ufunguo wa mteja wa kifaa hiki haupatikani kwa sasa. Anzisha URnetwork kwenye kifaa hiki, kisha ujaribu tena.</value>
+    <comment>Top 200 sign screen: GetSnClientKey returned nothing (no client key, or the desktop/extension service that holds it is not running).</comment>
+  </data>
+  <data name="top200_sign_error_other_device" xml:space="preserve">
+    <value>Ufungaji huu ni wa kifaa kingine. Kifaa husaini tu ufungaji wenye kitambulisho chake cha mteja na ufunguo wake wa mteja.</value>
+    <comment>Top 200 sign screen: the binding's client_id or client_key is not this device's; the app refuses to sign it.</comment>
+  </data>
+  <data name="top200_sign_fleet_id" xml:space="preserve">
+    <value>Kitambulisho cha kundi</value>
+    <comment>Top 200 sign screen: label of the binding's fleet_id (0x hex).</comment>
+  </data>
+  <data name="top200_sign_hotkey" xml:space="preserve">
+    <value>Hotkey</value>
+    <comment>Top 200 sign screen: label of the binding's hotkey (0x hex public key). Hotkey is the Bittensor term.</comment>
+  </data>
+  <data name="top200_sign_intro" xml:space="preserve">
+    <value>Mwendeshaji wa kundi lako huandaa ufungaji wa kifaa hiki kwenye ukurasa wa Top 200 katika ur.io. Ibandike hapa ili uisaini kwa ufunguo wa mteja wa kifaa hiki. Hakuna kinachotumwa: wewe mwenyewe unanakili data iliyosainiwa kurudi kwenye ukurasa.</value>
+    <comment>Top 200 sign screen: intro. The binding is built on the ur.io Top 200 page; the app signs it locally and sends nothing.</comment>
+  </data>
+  <data name="top200_sign_member_hint" xml:space="preserve">
+    <value>Orodha ya kundi lako inaorodhesha kifaa hiki kwa kitambulisho cha mteja na ufunguo wa mteja wake. Nakili ingizo lake la mwanachama na umtumie mwendeshaji wa kundi lako.</value>
+    <comment>Top 200 sign screen: why the operator needs this device's member entry (client ID and client key) for the fleet manifest.</comment>
+  </data>
+  <data name="top200_sign_paste" xml:space="preserve">
+    <value>Bandika</value>
+    <comment>Top 200 sign screen: button that pastes the binding from the clipboard.</comment>
+  </data>
+  <data name="top200_sign_review" xml:space="preserve">
+    <value>Kabla ya kusaini, hakikisha kitambulisho cha kundi, hotkey na epoch zinalingana na ukurasa wa Top 200.</value>
+    <comment>Top 200 sign screen: shown above the parsed binding's values before the Sign button.</comment>
+  </data>
+  <data name="top200_sign_this_device" xml:space="preserve">
+    <value>Kifaa hiki</value>
+    <comment>Top 200 sign screen: label of the section showing this device's client ID and client key.</comment>
+  </data>
   <data name="top200_you_qualify" xml:space="preserve">
     <value>Unastahili</value>
     <comment>Headline of the Top 200 tile when eligible.</comment>

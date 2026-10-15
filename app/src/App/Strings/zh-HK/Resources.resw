@@ -7181,6 +7181,86 @@
     <value>按可路由 IP 廣度計算，你的網絡在 {1} 個頭部席位中約排第 {0} 名。頭部礦工在每個 tempo 原生賺取 SN25α。</value>
     <comment>Detail of the Top 200 tile when eligible.</comment>
   </data>
+  <data name="top200_sign_action" xml:space="preserve">
+    <value>用這部裝置簽署</value>
+    <comment>Top 200 sign screen: the button that signs the reviewed binding with this device's client key (local only).</comment>
+  </data>
+  <data name="top200_sign_binding" xml:space="preserve">
+    <value>簽署裝置群綁定</value>
+    <comment>Top 200: the button that opens the screen where this device signs its fleet binding, and that screen's title. The ur.io Top 200 page names it in its steps (Earnings › Top 200 › Sign fleet binding).</comment>
+  </data>
+  <data name="top200_sign_binding_label" xml:space="preserve">
+    <value>待簽署的綁定</value>
+    <comment>Top 200 sign screen: label of the field where the binding JSON from the ur.io Top 200 page is pasted.</comment>
+  </data>
+  <data name="top200_sign_chain" xml:space="preserve">
+    <value>鏈 {0} · 子網 {1}</value>
+    <comment>Top 200 sign screen: the binding's EVM chain id and Bittensor subnet (netuid).</comment>
+  </data>
+  <data name="top200_sign_client_key" xml:space="preserve">
+    <value>客戶端金鑰</value>
+    <comment>Top 200 sign screen: label of this device's Ed25519 client public key (0x hex).</comment>
+  </data>
+  <data name="top200_sign_copy_member" xml:space="preserve">
+    <value>複製成員項目</value>
+    <comment>Top 200 sign screen: button that copies this device's fleet manifest member entry {"client_id":"0x…","client_key":"0x…"}.</comment>
+  </data>
+  <data name="top200_sign_copy_payload" xml:space="preserve">
+    <value>複製資料</value>
+    <comment>Top 200 sign screen: button that copies the signed {binding, client_signature} payload.</comment>
+  </data>
+  <data name="top200_sign_done" xml:space="preserve">
+    <value>已簽署。複製資料，並貼到前 200 名頁面的「裝置簽名」中。</value>
+    <comment>Top 200 sign screen: shown with the signed {binding, client_signature} payload. 'Device signature' is the ur.io page's field label (site_app_top200_device_signature).</comment>
+  </data>
+  <data name="top200_sign_epochs" xml:space="preserve">
+    <value>有效期：紀元 {0} 至 {1}</value>
+    <comment>Top 200 sign screen: the binding's validity window (valid_from_epoch, valid_to_epoch), both inclusive.</comment>
+  </data>
+  <data name="top200_sign_error_failed" xml:space="preserve">
+    <value>無法簽署綁定：{}</value>
+    <comment>Top 200 sign screen: SignSnFleetBinding returned an error; {detail} is the SDK's error text.</comment>
+  </data>
+  <data name="top200_sign_error_invalid" xml:space="preserve">
+    <value>這不是裝置群綁定。請從前 200 名頁面複製完整的綁定。</value>
+    <comment>Top 200 sign screen: the pasted text is not a fleet binding JSON (or the app link's binding did not decode).</comment>
+  </data>
+  <data name="top200_sign_error_no_key" xml:space="preserve">
+    <value>這部裝置的客戶端金鑰暫時無法使用。請在這部裝置上啟動 URnetwork，然後再試一次。</value>
+    <comment>Top 200 sign screen: GetSnClientKey returned nothing (no client key, or the desktop/extension service that holds it is not running).</comment>
+  </data>
+  <data name="top200_sign_error_other_device" xml:space="preserve">
+    <value>此綁定屬於另一部裝置。裝置只會簽署包含其自身客戶端 ID 和客戶端金鑰的綁定。</value>
+    <comment>Top 200 sign screen: the binding's client_id or client_key is not this device's; the app refuses to sign it.</comment>
+  </data>
+  <data name="top200_sign_fleet_id" xml:space="preserve">
+    <value>裝置群 ID</value>
+    <comment>Top 200 sign screen: label of the binding's fleet_id (0x hex).</comment>
+  </data>
+  <data name="top200_sign_hotkey" xml:space="preserve">
+    <value>Hotkey</value>
+    <comment>Top 200 sign screen: label of the binding's hotkey (0x hex public key). Hotkey is the Bittensor term.</comment>
+  </data>
+  <data name="top200_sign_intro" xml:space="preserve">
+    <value>你的裝置群營運者會在 ur.io 的前 200 名頁面為這部裝置產生綁定。將其貼到此處，即可用這部裝置的客戶端金鑰簽署。不會傳送任何內容：簽署後的資料由你自己複製回該頁面。</value>
+    <comment>Top 200 sign screen: intro. The binding is built on the ur.io Top 200 page; the app signs it locally and sends nothing.</comment>
+  </data>
+  <data name="top200_sign_member_hint" xml:space="preserve">
+    <value>你的裝置群清單以客戶端 ID 和客戶端金鑰列出這部裝置。複製它的成員項目並傳送給你的裝置群營運者。</value>
+    <comment>Top 200 sign screen: why the operator needs this device's member entry (client ID and client key) for the fleet manifest.</comment>
+  </data>
+  <data name="top200_sign_paste" xml:space="preserve">
+    <value>貼上</value>
+    <comment>Top 200 sign screen: button that pastes the binding from the clipboard.</comment>
+  </data>
+  <data name="top200_sign_review" xml:space="preserve">
+    <value>簽署前，請確認裝置群 ID、hotkey 和紀元與前 200 名頁面一致。</value>
+    <comment>Top 200 sign screen: shown above the parsed binding's values before the Sign button.</comment>
+  </data>
+  <data name="top200_sign_this_device" xml:space="preserve">
+    <value>這部裝置</value>
+    <comment>Top 200 sign screen: label of the section showing this device's client ID and client key.</comment>
+  </data>
   <data name="top200_you_qualify" xml:space="preserve">
     <value>你符合資格</value>
     <comment>Headline of the Top 200 tile when eligible.</comment>
