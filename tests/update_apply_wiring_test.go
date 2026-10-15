@@ -914,7 +914,7 @@ func checkTrayRunsTheHelper(checker string) []string {
 		regexp.QuoteMeta("fail(refusal == kElevationRefusedUnsigned ? Failure::Unsigned : Failure::Elevation);"),
 		regexp.QuoteMeta("[helper] { return ::WaitForSingleObject(helper, 250) == WAIT_OBJECT_0; }, cancelled);"),
 		regexp.QuoteMeta("if (waited == update::HelperWait::AppExiting) {"),
-		regexp.QuoteMeta("RecordUpdateInProgress(helper, vpnConnected);"),
+		regexp.QuoteMeta("RecordUpdateInProgress(helper, NoteVpn());"),
 		regexp.QuoteMeta("::CloseHandle(helper);"),
 		regexp.QuoteMeta("return;"),
 		regexp.QuoteMeta(`ReadResult(installFolder_ / L"updates" / L"last-result.json");`),
@@ -1131,12 +1131,16 @@ func TestUpdateApplyTraySaysWhatTheUpdateDoes(t *testing.T) {
 }
 
 // The report says "The VPN was disconnected for the update" as the note or the
-// record of its update says (fold-in ii, and the lead's G8 and G8a). The tray
-// learns whether a VPN is connected from each tunnel status
-// (AppController::OnTunnelState), and notes it once, at the hand-off to the
-// helper, while the app runs: as the app exits its teardown may already have
-// changed it. A helper that ends while the app still runs has its report read
-// with that note. When the installer closes the app, the note goes into the
+// record of its update says (fold-in ii, and the lead's G8, G8a, G10 and
+// G10a). The tray learns whether a VPN is connected from each tunnel status
+// the service pushes (AppController::OnTunnelState), and the update checker
+// keeps a note of it (UpdateMarker.h VpnNote). At the hand-off to the helper
+// the note starts from the last status pushed, else the state the service
+// answered (SdkHost::AdoptedServiceState, through the probe AppController
+// hands it, never the sign-in state), else nothing; a VPN up at any moment
+// from there counts, and a teardown does not clear it. It is read where it is
+// used: a helper that ends while the app still runs has its report read with
+// it, and when the installer closes the app, the note goes into the
 // update-in-progress record (Common/UpdateMarker.h, update_marker_test.go),
 // the launch that finds that update over takes the record it deletes, and the
 // report of that update reads it (VpnOfReport). A record that does not say (an
@@ -1158,9 +1162,39 @@ func checkTrayRemembersTheVpn(controller, checker, header, glue, connect, marker
 	if count := strings.Count(controller, "SetVpnConnected("); count != 1 {
 		problems = append(problems, fmt.Sprintf("AppController.cpp tells the update checker about the VPN in %d places, want the tunnel status's one", count))
 	}
-	if !strings.Contains(checker, "void UpdateChecker::SetVpnConnected(bool connected) { vpnConnected_.store(connected); }") {
-		problems = append(problems, "UpdateChecker::SetVpnConnected does not keep what it is told")
+	pushed := applyDefinition(checker, "void UpdateChecker::SetVpnConnected(bool connected) {")
+	problems = append(problems, applyOrderProblems("UpdateChecker::SetVpnConnected", pushed,
+		regexp.QuoteMeta("std::lock_guard lock(vpnMutex_);"),
+		regexp.QuoteMeta("vpn_.StatusPushed(connected);"))...)
+	// at the hand-off, the service's answer, for when nothing was pushed (G10a)
+	handOffVpn := applyDefinition(checker, "update::VpnNote UpdateChecker::HandOffVpn() {")
+	problems = append(problems, applyOrderProblems("UpdateChecker::HandOffVpn", handOffVpn,
+		regexp.QuoteMeta("const std::optional<bool> answered = vpnAnswer_ ? vpnAnswer_() : std::nullopt;"),
+		regexp.QuoteMeta("std::lock_guard lock(vpnMutex_);"),
+		regexp.QuoteMeta("vpn_.HandOff(answered);"))...)
+	noteVpn := applyDefinition(checker, "update::VpnAtStart UpdateChecker::NoteVpn() {")
+	problems = append(problems, applyOrderProblems("UpdateChecker::NoteVpn", noteVpn,
+		regexp.QuoteMeta("std::lock_guard lock(vpnMutex_);"),
+		regexp.QuoteMeta("return vpn_.Note();"))...)
+	// the service's word, not the sign-in state (G10a)
+	probe := applyDefinitionUntil(controller, "updates_.SetVpnAnswerProbe(", "});")
+	problems = append(problems, applyOrderProblems("AppController's probe of the service's answer", probe,
+		regexp.QuoteMeta("const std::optional<proto::TunnelState> state = sdk_.AdoptedServiceState();"),
+		regexp.QuoteMeta("if (!state) return std::nullopt;"),
+		regexp.QuoteMeta("return *state == proto::TunnelState::Up;"))...)
+	if count := strings.Count(controller, "SetVpnAnswerProbe("); count != 1 {
+		problems = append(problems, fmt.Sprintf("AppController.cpp hands the update checker the service's answer in %d places, want one", count))
 	}
+	// the sticky note: a VPN up at any moment from the hand-off counts (G10);
+	// update_marker_test.go runs it
+	vpnNote := applyDefinitionUntil(marker, "struct VpnNote {", "\n};\n")
+	problems = append(problems, applyOrderProblems("UpdateMarker.h VpnNote", vpnNote,
+		regexp.QuoteMeta("upSinceHandOff = upSinceHandOff || up;"),
+		regexp.QuoteMeta("source = pushed ? VpnSource::Pushed : answered ? VpnSource::Answered : VpnSource::Unknown;"),
+		regexp.QuoteMeta("const std::optional<bool> state = pushed ? pushed : answered;"),
+		regexp.QuoteMeta("upSinceHandOff = state.value_or(false);"),
+		regexp.QuoteMeta("if (upSinceHandOff) return VpnAtStart::Connected;"),
+		regexp.QuoteMeta("return source == VpnSource::Unknown ? VpnAtStart::Unknown : VpnAtStart::NotConnected;"))...)
 	// what a record this launch took does not say keeps the line
 	if !strings.Contains(marker, "VpnAtStart vpn = VpnAtStart::Unknown;") {
 		problems = append(problems, "UpdateMarker.h does not keep the VPN unknown until a record says it: "+
@@ -1191,21 +1225,25 @@ func checkTrayRemembersTheVpn(controller, checker, header, glue, connect, marker
 	apply := applyDefinition(checker, "void UpdateChecker::RunApply(std::uint64_t generation, bool manual) {")
 	problems = append(problems, applyOrderProblems("UpdateChecker::RunApply", apply,
 		regexp.QuoteMeta("const std::int64_t started = NowUnixSeconds();"),
-		regexp.QuoteMeta("const bool vpnConnected = vpnConnected_.load();"),
+		regexp.QuoteMeta("const update::VpnNote handOff = HandOffVpn();"),
 		regexp.QuoteMeta("LaunchUpdateHelper(installFolder_ / kHelperName, offer.tag, &helper, &refusal,"),
 		regexp.QuoteMeta("if (waited == update::HelperWait::AppExiting) {"),
-		regexp.QuoteMeta("RecordUpdateInProgress(helper, vpnConnected);"),
+		regexp.QuoteMeta("RecordUpdateInProgress(helper, NoteVpn());"),
 		regexp.QuoteMeta("Result result{.version = offer.version, .exitCode = ended};"),
-		regexp.QuoteMeta("result.vpn = vpnConnected ? update::VpnAtStart::Connected : update::VpnAtStart::NotConnected;"),
+		regexp.QuoteMeta("result.vpn = NoteVpn();"),
 		regexp.QuoteMeta("s.result = result;"))...)
-	if count := strings.Count(checker, "vpnConnected_.load()"); count != 1 {
-		problems = append(problems, fmt.Sprintf("UpdateChecker.cpp reads the VPN %d times, want once, as the update begins", count))
+	// handed off once, and read where it is used, not once at the hand-off (G10)
+	if calls := strings.Count(checker, "= HandOffVpn();"); calls != 1 {
+		problems = append(problems, fmt.Sprintf("UpdateChecker.cpp hands the VPN's note off %d times, want once, as the update begins", calls))
 	}
-	record := applyDefinition(glue, "void RecordUpdateInProgress(void* installerProcess, bool vpnConnected) {")
+	if calls := strings.Count(checker, "NoteVpn())") + strings.Count(checker, "= NoteVpn();"); calls != 2 {
+		problems = append(problems, fmt.Sprintf("UpdateChecker.cpp reads the VPN's note in %d places, want two: the record and the report", calls))
+	}
+	// the note as it is, so one not known is written as three numbers (G10)
+	record := applyDefinition(glue, "void RecordUpdateInProgress(void* installerProcess, update::VpnAtStart vpn) {")
 	problems = append(problems, applyOrderProblems("RecordUpdateInProgress", record,
 		regexp.QuoteMeta(".writtenAt = NowSeconds(),"),
-		regexp.QuoteMeta(".vpn = vpnConnected ? update::VpnAtStart::Connected"),
-		regexp.QuoteMeta(": update::VpnAtStart::NotConnected};"),
+		regexp.QuoteMeta(".vpn = vpn};"),
 		regexp.QuoteMeta("file << update::FormatUpdateMarker(marker);"))...)
 	check := applyDefinition(glue, "bool UpdateInProgress() {")
 	// every record it takes is kept for the report, whatever it says: the
@@ -1293,19 +1331,33 @@ func TestUpdateApplyTrayRemembersTheVpnRejectsWeakerSources(t *testing.T) {
 			replace(controller, "  updates_.SetVpnConnected(isUp);\n", ""), checker, header, glue, connect, marker},
 		{"the checker told the VPN is always up", "AppController::OnTunnelState is missing updates_\\.SetVpnConnected\\(isUp\\)",
 			replace(controller, "  updates_.SetVpnConnected(isUp);\n", "  updates_.SetVpnConnected(true);\n"), checker, header, glue, connect, marker},
-		{"the VPN read as the app exits", "reads the VPN 2 times",
-			controller, replace(checker, "RecordUpdateInProgress(helper, vpnConnected);", "RecordUpdateInProgress(helper, vpnConnected_.load());"),
+		{"read once at the hand-off, for the record", `UpdateChecker::RunApply is missing RecordUpdateInProgress\(helper, NoteVpn\(\)\);`,
+			controller, replace(checker, "RecordUpdateInProgress(helper, NoteVpn());", "RecordUpdateInProgress(helper, handOff.Note());"),
 			header, glue, connect, marker},
-		{"the VPN never noted", "UpdateChecker::RunApply is missing const bool vpnConnected",
-			controller, replace(checker, "  const bool vpnConnected = vpnConnected_.load();\n", "  const bool vpnConnected = false;\n"),
+		{"read once at the hand-off, for the report", `UpdateChecker::RunApply is missing result\.vpn = NoteVpn\(\);`,
+			controller, replace(checker, "  result.vpn = NoteVpn();\n", "  result.vpn = handOff.Note();\n"),
 			header, glue, connect, marker},
-		{"the live report without the VPN", `UpdateChecker::RunApply is missing result\.vpn = vpnConnected`,
-			controller, replace(checker, "  result.vpn = vpnConnected ? update::VpnAtStart::Connected : update::VpnAtStart::NotConnected;\n", ""),
+		{"known only from pushes", "UpdateChecker::HandOffVpn is missing",
+			controller, replace(checker, "const std::optional<bool> answered = vpnAnswer_ ? vpnAnswer_() : std::nullopt;",
+				"const std::optional<bool> answered = std::nullopt;"), header, glue, connect, marker},
+		{"the sign-in state used as the VPN's state", "AppController's probe of the service's answer is missing",
+			replace(controller, "    const std::optional<proto::TunnelState> state = sdk_.AdoptedServiceState();\n"+
+				"    if (!state) return std::nullopt;\n    return *state == proto::TunnelState::Up;\n",
+				"    return sdk_.HasSession();\n"), checker, header, glue, connect, marker},
+		{"a teardown clears the note", "UpdateMarker.h VpnNote is missing",
+			controller, checker, header, glue, connect, replace(marker, "upSinceHandOff = upSinceHandOff || up;", "upSinceHandOff = up;")},
+		{"the VPN never noted", `UpdateChecker::RunApply is missing const update::VpnNote handOff = HandOffVpn\(\);`,
+			controller, replace(checker, "  const update::VpnNote handOff = HandOffVpn();\n", "  const update::VpnNote handOff;\n"),
+			header, glue, connect, marker},
+		{"the live report without the VPN", `UpdateChecker::RunApply is missing result\.vpn = NoteVpn\(\);`,
+			controller, replace(checker, "  result.vpn = NoteVpn();\n", ""),
 			header, glue, connect, marker},
 		{"the record without the VPN", "RecordUpdateInProgress is missing",
-			controller, checker, header, replace(glue, ".writtenAt = NowSeconds(),\n                                    .vpn = vpnConnected ? update::VpnAtStart::Connected\n"+
-				"                                                        : update::VpnAtStart::NotConnected};",
+			controller, checker, header, replace(glue, ".writtenAt = NowSeconds(),\n                                    .vpn = vpn};",
 				".writtenAt = NowSeconds()};"), connect, marker},
+		{"the writer reads a note not known as no VPN", "RecordUpdateInProgress is missing",
+			controller, checker, header, replace(glue, ".vpn = vpn};",
+				".vpn = vpn == update::VpnAtStart::Unknown ? update::VpnAtStart::NotConnected : vpn};"), connect, marker},
 		{"an older build's record dropped as the launch takes it", "UpdateInProgress does not keep every record it takes",
 			controller, checker, header, replace(glue, "if (const std::optional<update::UpdateMarker> ended = update::ParseUpdateMarker(*text)) {",
 				"if (const std::optional<update::UpdateMarker> ended = update::ParseUpdateMarker(*text);\n        ended && ended->vpn != update::VpnAtStart::Unknown) {"), connect, marker},
@@ -1356,6 +1408,69 @@ func TestUpdateApplyTrayRemembersTheVpnRejectsWeakerSources(t *testing.T) {
 				return
 			}
 			if !strings.Contains(problems, tc.want) && !regexp.MustCompile(tc.want).MatchString(problems) {
+				t.Fatalf("negative control was not detected by %q; the check reported:\n%s", tc.want, problems)
+			}
+			t.Logf("fires: %s", tc.name)
+		})
+	}
+}
+
+// What the service tells this process of the tunnel, by a push or by an
+// answer, is what an update's note of the VPN starts from when no status was
+// pushed (the lead's G10a): SdkHost marks the state known as it adopts one
+// (AdoptServiceFacts), and hands it on only then (AdoptedServiceState).
+func checkTheServiceAnswersTheVpn(sdkHeader, sdkSource string) []string {
+	var problems []string
+	adopt := applyDefinition(sdkSource, "void SdkHost::AdoptServiceFacts(const proto::TunnelStatus& st) {")
+	problems = append(problems, applyOrderProblems("SdkHost::AdoptServiceFacts", adopt,
+		regexp.QuoteMeta("lastServiceState_.store(st.state);"),
+		regexp.QuoteMeta("serviceStateKnown_.store(true, std::memory_order_release);"))...)
+	if count := strings.Count(sdkSource, "serviceStateKnown_.store("); count != 1 {
+		problems = append(problems, fmt.Sprintf("SdkHost.cpp marks the service's state known in %d places, want one, as it adopts a status", count))
+	}
+	answered := applyDefinitionUntil(sdkHeader, "std::optional<proto::TunnelState> AdoptedServiceState() const {", "\n  }\n")
+	problems = append(problems, applyOrderProblems("SdkHost::AdoptedServiceState", answered,
+		regexp.QuoteMeta("if (!serviceStateKnown_.load(std::memory_order_acquire)) return std::nullopt;"),
+		regexp.QuoteMeta("return lastServiceState_.load();"))...)
+	return problems
+}
+
+func TestUpdateApplyTheServiceAnswersTheVpn(t *testing.T) {
+	reportProblems(t, checkTheServiceAnswersTheVpn(stripComments(readAppSource(t, "SdkHost.h")),
+		stripComments(readAppSource(t, "SdkHost.cpp"))))
+}
+
+// An answer never marked known, none handed on, or a state handed on before
+// the service said any, fails the check.
+func TestUpdateApplyTheServiceAnswersTheVpnRejectsWeakerSources(t *testing.T) {
+	sdkHeader := stripComments(readAppSource(t, "SdkHost.h"))
+	sdkSource := stripComments(readAppSource(t, "SdkHost.cpp"))
+	replace := func(text, old, replacement string) string {
+		if strings.Count(text, old) != 1 {
+			t.Fatalf("negative control: %q is not in the source exactly once", old)
+		}
+		return strings.Replace(text, old, replacement, 1)
+	}
+	for _, tc := range []struct {
+		name, want, sdkHeader, sdkSource string
+	}{
+		{"the sources as they are", "", sdkHeader, sdkSource},
+		{"an answer never marked known: known only from pushes", "SdkHost::AdoptServiceFacts is missing",
+			sdkHeader, replace(sdkSource, "  serviceStateKnown_.store(true, std::memory_order_release);\n", "")},
+		{"no answer handed on", "SdkHost::AdoptedServiceState is missing",
+			replace(sdkHeader, "return lastServiceState_.load();", "return std::nullopt;"), sdkSource},
+		{"a state handed on before the service said any", "SdkHost::AdoptedServiceState is missing",
+			replace(sdkHeader, "    if (!serviceStateKnown_.load(std::memory_order_acquire)) return std::nullopt;\n", ""), sdkSource},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			problems := strings.Join(checkTheServiceAnswersTheVpn(tc.sdkHeader, tc.sdkSource), "\n")
+			if tc.want == "" {
+				if problems != "" {
+					t.Fatalf("a source that is no weaker was reported:\n%s", problems)
+				}
+				return
+			}
+			if !strings.Contains(problems, tc.want) {
 				t.Fatalf("negative control was not detected by %q; the check reported:\n%s", tc.want, problems)
 			}
 			t.Logf("fires: %s", tc.name)
@@ -1465,7 +1580,7 @@ func TestUpdateApplyWiringRejectsWeakerTrays(t *testing.T) {
 			return runs("    *helper = sei.hProcess;\n", "    RecordUpdateInProgress(sei.hProcess);\n    *helper = sei.hProcess;\n")
 		}},
 		{"no marker when the app exits for the installer", func() []string {
-			return runs("    RecordUpdateInProgress(helper, vpnConnected);\n", "")
+			return runs("    RecordUpdateInProgress(helper, NoteVpn());\n", "")
 		}},
 		{"an unsigned helper taken for a declined prompt", func() []string {
 			return runs("fail(refusal == kElevationRefusedUnsigned ? Failure::Unsigned : Failure::Elevation);",

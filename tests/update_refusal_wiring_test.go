@@ -43,7 +43,7 @@ func TestUpdateRefusalTheHandoffRecordsTheInstaller(t *testing.T) {
 		regexp.QuoteMeta("update::AwaitHelper("),
 		regexp.QuoteMeta("::WaitForSingleObject(helper, 250)"),
 		regexp.QuoteMeta("if (waited == update::HelperWait::AppExiting) {"),
-		regexp.QuoteMeta("RecordUpdateInProgress(helper, vpnConnected);"),
+		regexp.QuoteMeta("RecordUpdateInProgress(helper, NoteVpn());"),
 		regexp.QuoteMeta("::CloseHandle(helper);"),
 		regexp.QuoteMeta("return;"),
 		regexp.QuoteMeta("::CloseHandle(helper);"))
@@ -54,13 +54,12 @@ func TestUpdateRefusalTheHandoffRecordsTheInstaller(t *testing.T) {
 		regexp.QuoteMeta("updates_.Stop();"))
 
 	glue := stripComments(readAppSource(t, "SingleInstance.cpp"))
-	record := definitionBody(t, "SingleInstance.cpp", glue, "void RecordUpdateInProgress(void* installerProcess, bool vpnConnected) {")
+	record := definitionBody(t, "SingleInstance.cpp", glue, "void RecordUpdateInProgress(void* installerProcess, update::VpnAtStart vpn) {")
 	signOutRequireInOrder(t, "RecordUpdateInProgress", record,
 		regexp.QuoteMeta(".installerProcessId = ::GetProcessId(process),"),
 		regexp.QuoteMeta(".installerCreationTime = CreationTime(process),"),
 		regexp.QuoteMeta(".writtenAt = NowSeconds(),"),
-		regexp.QuoteMeta(".vpn = vpnConnected ? update::VpnAtStart::Connected"),
-		regexp.QuoteMeta(": update::VpnAtStart::NotConnected};"),
+		regexp.QuoteMeta(".vpn = vpn};"),
 		regexp.QuoteMeta("const std::filesystem::path path = UpdateInProgressFile();"),
 		regexp.QuoteMeta("std::ofstream file(written, std::ios::binary | std::ios::trunc);"),
 		regexp.QuoteMeta("file << update::FormatUpdateMarker(marker);"),

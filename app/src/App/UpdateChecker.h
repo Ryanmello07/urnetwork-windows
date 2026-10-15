@@ -284,10 +284,16 @@ class UpdateChecker {
   // is queued.
   void ChannelChanged();
 
-  // Whether a VPN is connected now (AppController, from each tunnel status).
-  // An update notes it when it begins. Kept in memory and never saved. Safe
+  // Whether a VPN is connected now, as each tunnel status the service pushes
+  // says (AppController). An update's note of the VPN follows it from the
+  // hand-off on (UpdateMarker.h VpnNote). Kept in memory and never saved. Safe
   // from any thread.
   void SetVpnConnected(bool connected);
+  // The tunnel's state as the service last told this app, pushed or answered:
+  // up or not, or nullopt before it has told it anything (AppController binds
+  // SdkHost::AdoptedServiceState). An update whose hand-off finds no status
+  // pushed starts its note from it (the lead's G10a). Call before Start.
+  void SetVpnAnswerProbe(std::function<std::optional<bool>()> probe);
 
   // The "Check for updates automatically" preference (Settings): persisted in
   // app_prefs.json beside Advanced Mode, default ON. The static read exists so
@@ -344,6 +350,10 @@ class UpdateChecker {
   // change of channel says false.
   bool RunCheck(std::uint64_t generation);
   void RunApply(std::uint64_t generation, bool manual);
+  // The note of the VPN at the hand-off to the helper, and as it stands when
+  // it goes into the record or the report (UpdateMarker.h VpnNote).
+  update::VpnNote HandOffVpn();
+  update::VpnAtStart NoteVpn();
   void RunReveal(std::uint64_t generation);
   // Removes the download folders of every release but `keepTag` from the
   // tray app's own updates folder: the installer of a release that is no
@@ -403,8 +413,15 @@ class UpdateChecker {
   // run unless the user asks for a check. A member and nothing else, so the
   // next launch offers it again.
   std::uint64_t laterCode_ = 0;
-  // Whether a VPN is connected now (SetVpnConnected).
-  std::atomic<bool> vpnConnected_{false};
+  // The note of the VPN for the update this app hands off: every tunnel
+  // status feeds it (SetVpnConnected), and the hand-off and the record and
+  // report read it (HandOffVpn, NoteVpn). Its own lock, never held across a
+  // call out and never taken together with mutex_.
+  std::mutex vpnMutex_;
+  update::VpnNote vpn_;
+  // The service's answer, for a hand-off with no status pushed
+  // (SetVpnAnswerProbe). Set before Start, read by the worker.
+  std::function<std::optional<bool>()> vpnAnswer_;
 
   // The handler's own lock, on SdkHost's advancedMutex_ reasoning: never held
   // across an invocation, never taken together with mutex_.

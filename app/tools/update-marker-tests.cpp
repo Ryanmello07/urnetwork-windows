@@ -225,6 +225,74 @@ void TestTheRecordThisLaunchTookDecidesTheLine() {
         "report: a report that finished the second its record was written is of its update");
 }
 
+// The app's note of the VPN for an update (VpnNote, the lead's G10 and G10a).
+// At the hand-off it starts from the last status the service pushed, else the
+// state the service answered, else nothing. A VPN up at any moment from there
+// counts, and nothing clears it. A note that is not known is written as three
+// numbers, as an older build wrote its record.
+void TestTheNoteOfTheVpn() {
+  // a note handed off after a push of `pushed` (none when nullopt), with the
+  // service's answer `answered`
+  const auto handedOff = [](std::optional<bool> pushed, std::optional<bool> answered) {
+    VpnNote note;
+    if (pushed) note.StatusPushed(*pushed);
+    note.HandOff(answered);
+    return note;
+  };
+  const VpnNote pushedDown = handedOff(false, std::nullopt);
+  Check(pushedDown.Note() == VpnAtStart::NotConnected && pushedDown.source == VpnSource::Pushed,
+        "note: a pushed status that says no VPN, at the hand-off, is not connected");
+  Check(handedOff(true, std::nullopt).Note() == VpnAtStart::Connected,
+        "note: a pushed status that says a VPN is up, at the hand-off, is connected");
+  const VpnNote answeredDown = handedOff(std::nullopt, false);
+  Check(answeredDown.Note() == VpnAtStart::NotConnected &&
+            answeredDown.source == VpnSource::Answered,
+        "note: with nothing pushed, the service's answer that no VPN is up is not connected");
+  Check(handedOff(std::nullopt, true).Note() == VpnAtStart::Connected,
+        "note: with nothing pushed, the service's answer that a VPN is up is connected");
+  Check(handedOff(false, true).Note() == VpnAtStart::NotConnected &&
+            handedOff(true, false).Note() == VpnAtStart::Connected,
+        "note: a pushed status wins over the service's answer");
+  const VpnNote untold = handedOff(std::nullopt, std::nullopt);
+  Check(untold.Note() == VpnAtStart::Unknown && untold.source == VpnSource::Unknown,
+        "note: with nothing pushed or answered, it is not known");
+
+  VpnNote later = handedOff(false, std::nullopt);
+  later.StatusPushed(true);
+  Check(later.Note() == VpnAtStart::Connected,
+        "note: a VPN that comes up after the hand-off is connected");
+  later.StatusPushed(false);
+  Check(later.Note() == VpnAtStart::Connected,
+        "note: a VPN up since the hand-off and then torn down is still connected");
+
+  VpnNote lateStatus = handedOff(std::nullopt, std::nullopt);
+  lateStatus.StatusPushed(false);
+  Check(lateStatus.Note() == VpnAtStart::Unknown,
+        "note: a first status after the hand-off that says no VPN leaves it not known");
+  lateStatus.StatusPushed(true);
+  Check(lateStatus.Note() == VpnAtStart::Connected,
+        "note: a status after the hand-off that says a VPN is up makes it connected");
+
+  VpnNote before;
+  before.StatusPushed(true);
+  before.StatusPushed(false);
+  before.HandOff(std::nullopt);
+  Check(before.Note() == VpnAtStart::NotConnected,
+        "note: a VPN that was up before the hand-off, and down at it, is not connected");
+
+  VpnNote twice = handedOff(false, std::nullopt);
+  twice.StatusPushed(true);
+  twice.StatusPushed(false);
+  twice.HandOff(std::nullopt);
+  Check(twice.Note() == VpnAtStart::NotConnected,
+        "note: each hand-off starts afresh from the state at it");
+
+  UpdateMarker unknown = kMarker;
+  unknown.vpn = untold.Note();
+  Check(FormatUpdateMarker(unknown) == "4321 133000000000000000 1900000000\n",
+        "note: a note that is not known is written as three numbers, as an older build wrote it");
+}
+
 }  // namespace
 
 int main() {
@@ -235,6 +303,7 @@ int main() {
   TestNames();
   TestTheMarkerSaysWhetherAVpnWasConnected();
   TestTheRecordThisLaunchTookDecidesTheLine();
+  TestTheNoteOfTheVpn();
   std::cout << (gCases - gFailures) << "/" << gCases << " update marker checks passed\n";
   return gFailures == 0 ? 0 : 1;
 }

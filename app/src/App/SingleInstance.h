@@ -48,10 +48,11 @@ bool LaunchedByAutostart();
 // (a process handle with PROCESS_QUERY_LIMITED_INFORMATION), still runs: the
 // installer is closing it. Until the helper ends, a launch exits instead of
 // starting the app over the files the installer replaces. Before this app
-// exits, a launch reaches it as any launch does. `vpnConnected`: a VPN was
-// connected when the update began, which the update's report reads
-// (TakeEndedUpdate).
-void RecordUpdateInProgress(void* installerProcess, bool vpnConnected);
+// exits, a launch reaches it as any launch does. `vpn`: the app's note of the
+// VPN since the update's hand-off (UpdateMarker.h VpnNote), which the
+// update's report reads (TakeEndedUpdate); one not known is written as three
+// numbers, as an older build wrote it.
+void RecordUpdateInProgress(void* installerProcess, update::VpnAtStart vpn);
 
 // This process is the installer's relaunch after an update: its command line
 // has instance::kAfterUpdateArgument.
