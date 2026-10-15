@@ -127,6 +127,23 @@
                                   IsOpen="False" IsClosable="True"
                                   Visibility="Collapsed" />
 
+                    <!-- The update banner of a copy that is signed out. The
+                         connect screen's (UpdateBar) is inside HomeNav, which
+                         is collapsed while signed out, so a signed-out copy was
+                         offered no update and shown no report of one. This is
+                         the same banner: ConnectPage::RenderUpdateBanner, the
+                         renderer of both, writes it from the window's update
+                         fan-out (MainWindow::ApplyUpdateChecker), and its
+                         action and Later row is built in the MainWindow ctor
+                         beside the connect screen's. Collapsed, not only
+                         closed, while it says nothing, so ApplyLoginLayout
+                         keeps no gap for it; open, it takes its height from
+                         the carousel, as the notice above does. -->
+                    <muxc:InfoBar x:Name="SignedOutUpdateBar" Severity="Informational"
+                                  IsOpen="False" IsClosable="False"
+                                  Visibility="Collapsed"
+                                  AutomationProperties.AutomationId="acceptance.update.signed-out-banner" />
+
                     <!-- The carousel (iOS LoginCarousel). Three brand images
                          crossfading inside the ur globe silhouette, with the
                          headline that belongs to each sliding through. This is

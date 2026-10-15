@@ -622,21 +622,29 @@ void ConnectPage::ApplyServiceSetup(urnw::ServiceSetup::Snapshot const& snap) {
   bar.IsOpen(true);
 }
 
-// The update banner (beta spec §5). Renders MainWindow's snapshot copy onto
-// UpdateBar, directly under the service bar — same shape, same one-writer
-// rule. Labels go through Adv() with `upd_` store ids, as the service bar's
-// use `svc_`. The version is data (release grammar, never translated) and goes
-// in through the title's placeholder; paths and exit codes are appended as
-// data. The sentences the elevated update and the official feed added have no
-// store ids yet, so they are English here until the store carries them for
-// windows; each is one format string, so its key takes its place as written.
+// The update banner (beta spec §5): MainWindow's snapshot copy, rendered onto
+// UpdateBar, directly under the service bar, by the renderer both update
+// banners share.
 void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) {
+  RenderUpdateBanner(w_.UpdateBar(), snap);
+}
+
+// An update banner (beta spec §5), the connect screen's UpdateBar or the
+// sign-in screen's SignedOutUpdateBar: one renderer for both, so a signed-out
+// copy is offered what a signed-in one is — same shape as the service bar,
+// same one-writer rule. Labels go through Adv() with `upd_` store ids, as the
+// service bar's use `svc_`. The version is data (release grammar, never
+// translated) and goes in through the title's placeholder; paths and exit
+// codes are appended as data. The sentences the elevated update and the
+// official feed added have no store ids yet, so they are English here until
+// the store carries them for windows; each is one format string, so its key
+// takes its place as written.
+void ConnectPage::RenderUpdateBanner(InfoBar const& bar, urnw::UpdateChecker::Snapshot const& snap) {
   using Phase = urnw::UpdateChecker::Phase;
   using Stage = urnw::UpdateChecker::Stage;
   using Failure = urnw::UpdateChecker::Failure;
   using CheckOutcome = urnw::UpdateChecker::CheckOutcome;
   using InfoBarSeverity = winrt::Microsoft::UI::Xaml::Controls::InfoBarSeverity;
-  auto bar = w_.UpdateBar();
   // The bar's two controls are one row, its content, which MainWindow
   // builds: the action button first, then Later.
   winrt::Microsoft::UI::Xaml::Controls::Button actionButton{nullptr};

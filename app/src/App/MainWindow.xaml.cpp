@@ -396,6 +396,45 @@ MainWindow::MainWindow() {
             urnw::pages::Updates().DismissResult();
           }
         });
+    // The same row and the same close on the sign-in screen's banner
+    // (MainWindow.xaml SignedOutUpdateBar), with ids of their own: the banner
+    // above is inside HomeNav, collapsed while signed out, so a signed-out
+    // copy is offered the update there. ApplyUpdateChecker renders both.
+    {
+      auto signedOutBar = SignedOutUpdateBar();
+      Button signedOutUpdate;
+      solidBannerAction(signedOutUpdate);
+      signedOutUpdate.Click([weak = get_weak()](auto const&, auto const&) {
+        if (auto self = weak.get()) self->OnUpdateBannerAction();
+      });
+      Automation::AutomationProperties::SetAutomationId(signedOutUpdate,
+                                                        L"acceptance.update.signed-out-action");
+      HyperlinkButton signedOutLater;
+      signedOutLater.Content(winrt::box_value(L"Later"));
+      Automation::AutomationProperties::SetAutomationId(signedOutLater,
+                                                        L"acceptance.update.signed-out-later");
+      signedOutLater.Visibility(Visibility::Collapsed);
+      signedOutLater.Click([](auto const&, auto const&) { urnw::pages::Updates().Later(); });
+      StackPanel signedOutActions;
+      signedOutActions.Orientation(winrt::Microsoft::UI::Xaml::Controls::Orientation::Horizontal);
+      signedOutActions.Spacing(8);
+      signedOutActions.Margin(Thickness{0, 0, 0, 16});
+      signedOutActions.Children().Append(signedOutUpdate);
+      signedOutActions.Children().Append(signedOutLater);
+      signedOutBar.Content(signedOutActions);
+      // Closed, it takes no room in the sign-in column; closing a report is
+      // its dismissal, as on the banner above.
+      signedOutBar.Closed(
+          [weak = get_weak()](Microsoft::UI::Xaml::Controls::InfoBar const& sender,
+                              Microsoft::UI::Xaml::Controls::InfoBarClosedEventArgs const& args) {
+            sender.Visibility(Visibility::Collapsed);
+            if (args.Reason() != Microsoft::UI::Xaml::Controls::InfoBarCloseReason::CloseButton) return;
+            auto self = weak.get();
+            if (self && self->updateSnapshot_.phase == urnw::UpdateChecker::Phase::Result) {
+              urnw::pages::Updates().DismissResult();
+            }
+          });
+    }
 
     auto queue = DispatcherQueue();
     urnw::pages::Updates().SetHandler(
@@ -2556,6 +2595,13 @@ void MainWindow::ApplyUpdateChecker() {
   // Same guard as ApplyServiceSetup: the replay runs in the ctor, and in
   // principle before the pages exist.
   if (connect_) connect_->ApplyUpdateChecker(updateSnapshot_);
+  // The sign-in screen's banner, by the same renderer from the same snapshot.
+  // This runs for every snapshot, signed in or out; a screen hook would not
+  // (LoadCurrentDestination returns while signed out). Collapsed while
+  // closed, so the sign-in column keeps no gap for it.
+  auto signedOutBar = SignedOutUpdateBar();
+  urnw::ConnectPage::RenderUpdateBanner(signedOutBar, updateSnapshot_);
+  signedOutBar.Visibility(signedOutBar.IsOpen() ? Visibility::Visible : Visibility::Collapsed);
   if (developer_) developer_->ApplyUpdateCheck(updateSnapshot_);
   if (settings_) settings_->ApplyUpdateCheck(updateSnapshot_);
 }

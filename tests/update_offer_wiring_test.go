@@ -3,7 +3,9 @@
 package tests
 
 import (
+	"encoding/xml"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -39,6 +41,9 @@ const (
 	offerRunCheck  = "bool UpdateChecker::RunCheck(std::uint64_t generation) {"
 	offerRunApply  = "void UpdateChecker::RunApply(std::uint64_t generation, bool manual) {"
 	offerRunReveal = "void UpdateChecker::RunReveal(std::uint64_t generation) {"
+	// The one renderer of both update banners, the connect screen's and the
+	// sign-in screen's: what either banner says is pinned in its body.
+	offerBannerRenderer = "void ConnectPage::RenderUpdateBanner(InfoBar const& bar, urnw::UpdateChecker::Snapshot const& snap) {"
 )
 
 // The tray app's check and the helper's own fetch ask for one URL, built in
@@ -278,8 +283,8 @@ func checkTrayLater(checker, header, window, connect string) []string {
 		problems = append(problems, "MainWindow puts a control in the update banner's own action slot: "+
 			"Later would then be on a row of its own under it, which the window cuts off at the size it opens with")
 	}
-	banner := applyDefinition(connect, "void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) {")
-	problems = append(problems, applyOrderProblems("ConnectPage::ApplyUpdateChecker", banner,
+	banner := applyDefinition(connect, offerBannerRenderer)
+	problems = append(problems, applyOrderProblems("ConnectPage::RenderUpdateBanner", banner,
 		regexp.QuoteMeta("if (const auto row = bar.Content().try_as<winrt::Microsoft::UI::Xaml::Controls::Panel>()) {"),
 		regexp.QuoteMeta("actionButton = controls.GetAt(0).try_as<winrt::Microsoft::UI::Xaml::Controls::Button>();"),
 		regexp.QuoteMeta("later = controls.GetAt(1);"),
@@ -289,10 +294,10 @@ func checkTrayLater(checker, header, window, connect string) []string {
 	// The banner's button is written through that row. The bar's own action
 	// slot is empty: a label or a state written to it reaches no control.
 	if strings.Contains(banner, "bar.ActionButton()") {
-		problems = append(problems, "ConnectPage::ApplyUpdateChecker writes the banner's button through the bar's action slot, which is empty")
+		problems = append(problems, "ConnectPage::RenderUpdateBanner writes the banner's button through the bar's action slot, which is empty")
 	}
 	if count := strings.Count(banner, "if (auto button = actionButton) {"); count != 2 {
-		problems = append(problems, fmt.Sprintf("ConnectPage::ApplyUpdateChecker writes the banner's button in %d places, want its two: "+
+		problems = append(problems, fmt.Sprintf("ConnectPage::RenderUpdateBanner writes the banner's button in %d places, want its two: "+
 			"the warning that checks have not worked, and every other banner", count))
 	}
 	return problems
@@ -494,8 +499,8 @@ func checkTrayChecksAgainBeforeItActs(checker, window, connect string) []string 
 		regexp.QuoteMeta("snapshot.replacedByCode == snapshot.code && !snapshot.replacedVersion.empty();"))...)
 
 	// What the banner and its button do with the new stage and the new failure.
-	banner := applyDefinition(connect, "void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) {")
-	problems = append(problems, applyOrderProblems("ConnectPage::ApplyUpdateChecker", banner,
+	banner := applyDefinition(connect, offerBannerRenderer)
+	problems = append(problems, applyOrderProblems("ConnectPage::RenderUpdateBanner", banner,
 		regexp.QuoteMeta("case Phase::Available:"),
 		regexp.QuoteMeta("if (urnw::UpdateChecker::SaysReplaced(snap)) {"),
 		regexp.QuoteMeta("snap.replacedVersion) +"),
@@ -631,8 +636,23 @@ func checkUpdateBannerAutomationIds(xaml map[string]string, window, developer st
 		regexp.QuoteMeta("urnw::pages::Updates().CheckNow();"),
 		regexp.QuoteMeta("Automation::AutomationProperties::SetAutomationId(updateCheckText_,"),
 		regexp.QuoteMeta(`L"acceptance.update.check-line");`))...)
+	// The sign-in screen's banner and its row have ids of their own: the two
+	// banners are never on the screen together, and a driver reads each by its
+	// own.
+	if got := xaml["SignedOutUpdateBar"]; got != "acceptance.update.signed-out-banner" {
+		problems = append(problems, fmt.Sprintf("SignedOutUpdateBar: AutomationProperties.AutomationId = %q, want %q", got, "acceptance.update.signed-out-banner"))
+	}
+	problems = append(problems, applyOrderProblems("MainWindow's sign-in screen update banner", window,
+		regexp.QuoteMeta("Automation::AutomationProperties::SetAutomationId(signedOutUpdate,"),
+		regexp.QuoteMeta(`L"acceptance.update.signed-out-action");`),
+		regexp.QuoteMeta("Automation::AutomationProperties::SetAutomationId(signedOutLater,"),
+		regexp.QuoteMeta(`L"acceptance.update.signed-out-later");`),
+		regexp.QuoteMeta("signedOutActions.Children().Append(signedOutUpdate);"),
+		regexp.QuoteMeta("signedOutActions.Children().Append(signedOutLater);"),
+		regexp.QuoteMeta("signedOutBar.Content(signedOutActions);"))...)
 	for source, ids := range map[string][]string{
-		window:    {`L"acceptance.update.action"`, `L"acceptance.update.later"`},
+		window: {`L"acceptance.update.action"`, `L"acceptance.update.later"`,
+			`L"acceptance.update.signed-out-action"`, `L"acceptance.update.signed-out-later"`},
 		developer: {`L"acceptance.update.check-now"`, `L"acceptance.update.check-line"`},
 	} {
 		for _, id := range ids {
@@ -640,6 +660,166 @@ func checkUpdateBannerAutomationIds(xaml map[string]string, window, developer st
 				problems = append(problems, "want exactly one "+id)
 			}
 		}
+	}
+	return problems
+}
+
+// Each x:Name in a XAML document, with the x:Names of the elements around it,
+// outermost first.
+func xamlNamedAncestors(markup string) (map[string][]string, error) {
+	decoder := xml.NewDecoder(strings.NewReader(markup))
+	ancestors := map[string][]string{}
+	var open []string // the x:Name of each open element, "" for none
+	for {
+		token, err := decoder.Token()
+		if err == io.EOF {
+			return ancestors, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		switch element := token.(type) {
+		case xml.StartElement:
+			name := ""
+			for _, attribute := range element.Attr {
+				if attribute.Name.Local == "Name" && strings.HasSuffix(attribute.Name.Space, "/xaml") {
+					name = attribute.Value
+				}
+			}
+			if name != "" {
+				var around []string
+				for _, outer := range open {
+					if outer != "" {
+						around = append(around, outer)
+					}
+				}
+				ancestors[name] = around
+			}
+			open = append(open, name)
+		case xml.EndElement:
+			open = open[:len(open)-1]
+		}
+	}
+}
+
+// A copy that is signed out is offered the update (fold-in i). The connect
+// screen's banner is inside HomeNav, which is collapsed while signed out, so
+// the sign-in screen has a banner of its own, SignedOutUpdateBar: in the
+// initial step's column under the signed-out notice, outside HomeNav, closed
+// and collapsed until it has something to say. It is fed from the window's
+// update fan-out, which runs for every snapshot, signed in or out, and not
+// from a screen hook: LoadCurrentDestination returns while signed out. One
+// renderer writes both banners, so the same rules hold for both; the sign-in
+// screen's is collapsed while closed, so the column LoginPage measures keeps
+// no gap for it. Its row is the connect screen's: the same action, Later,
+// and a close that dismisses a report.
+func checkUpdateOfferedWhileSignedOut(markup, window, connect string) []string {
+	var problems []string
+	ancestors, err := xamlNamedAncestors(markup)
+	if err != nil {
+		return append(problems, "MainWindow.xaml does not parse: "+err.Error())
+	}
+	around, ok := ancestors["SignedOutUpdateBar"]
+	if !ok {
+		return append(problems, "MainWindow.xaml has no SignedOutUpdateBar: a signed-out copy is offered no update")
+	}
+	has := func(names []string, want string) bool {
+		for _, name := range names {
+			if name == want {
+				return true
+			}
+		}
+		return false
+	}
+	if !has(ancestors["UpdateBar"], "HomeNav") {
+		problems = append(problems, "UpdateBar is no longer inside HomeNav: this check's reason for a second banner is gone")
+	}
+	if has(around, "HomeNav") {
+		problems = append(problems, "SignedOutUpdateBar is inside HomeNav, which is collapsed while signed out")
+	}
+	if !has(around, "LoginRoot") || !has(around, "LoginPanel") {
+		problems = append(problems, fmt.Sprintf("SignedOutUpdateBar is not in the sign-in screen's initial column (around it: %v)", around))
+	}
+	notice := strings.Index(markup, `x:Name="LoginNotice"`)
+	banner := strings.Index(markup, `x:Name="SignedOutUpdateBar"`)
+	carousel := strings.Index(markup, `x:Name="LoginCarouselHost"`)
+	if !(notice >= 0 && notice < banner && banner < carousel) {
+		problems = append(problems, "SignedOutUpdateBar is not between the signed-out notice and the carousel, at the top of the column")
+	}
+	if end := strings.Index(markup[banner:], "/>"); end >= 0 {
+		element := markup[banner : banner+end]
+		for _, want := range []string{`IsOpen="False"`, `Visibility="Collapsed"`} {
+			if !strings.Contains(element, want) {
+				problems = append(problems, "SignedOutUpdateBar is missing "+want+": it would hold a gap in the column while it says nothing")
+			}
+		}
+	}
+	// the fan-out renders it, at the top level of the function, beside the
+	// connect screen's banner
+	fan := applyDefinition(window, "void MainWindow::ApplyUpdateChecker() {")
+	problems = append(problems, applyOrderProblems("MainWindow::ApplyUpdateChecker", fan,
+		regexp.QuoteMeta("if (connect_) connect_->ApplyUpdateChecker(updateSnapshot_);"),
+		regexp.QuoteMeta("auto signedOutBar = SignedOutUpdateBar();"),
+		regexp.QuoteMeta("urnw::ConnectPage::RenderUpdateBanner(signedOutBar, updateSnapshot_);"),
+		regexp.QuoteMeta("signedOutBar.Visibility(signedOutBar.IsOpen() ? Visibility::Visible : Visibility::Collapsed);"),
+		regexp.QuoteMeta("if (developer_) developer_->ApplyUpdateCheck(updateSnapshot_);"))...)
+	if !strings.Contains(fan, "\n  urnw::ConnectPage::RenderUpdateBanner(signedOutBar, updateSnapshot_);\n") {
+		problems = append(problems, "MainWindow::ApplyUpdateChecker renders the sign-in screen's banner under a condition: it must for every snapshot")
+	}
+	if count := strings.Count(window, "RenderUpdateBanner("); count != 1 {
+		problems = append(problems, fmt.Sprintf("MainWindow renders an update banner in %d places, want the fan-out's one", count))
+	}
+	if count := strings.Count(window, "SignedOutUpdateBar()"); count != 2 {
+		problems = append(problems, fmt.Sprintf("MainWindow names SignedOutUpdateBar %d times, want twice: its row in the ctor and its rendering in the fan-out", count))
+	}
+	// one renderer for both banners
+	const applyOpener = "void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) {"
+	body := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(applyDefinition(connect, applyOpener), applyOpener), "\n}"))
+	if body != "RenderUpdateBanner(w_.UpdateBar(), snap);" {
+		problems = append(problems, fmt.Sprintf("ConnectPage::ApplyUpdateChecker is %q, want the connect screen's banner by the shared renderer alone", body))
+	}
+	if count := strings.Count(connect, "RenderUpdateBanner("); count != 2 {
+		problems = append(problems, fmt.Sprintf("ConnectPage.cpp names RenderUpdateBanner %d times, want its definition and the connect screen's call", count))
+	}
+	if strings.Contains(connect, "SignedOutUpdateBar") {
+		problems = append(problems, "ConnectPage.cpp writes the sign-in screen's banner: the window's fan-out does")
+	}
+	// the row: the same action, Later, the content, and a close
+	problems = append(problems, applyOrderProblems("MainWindow's sign-in screen update banner", window,
+		regexp.QuoteMeta("auto signedOutBar = SignedOutUpdateBar();"),
+		regexp.QuoteMeta("Button signedOutUpdate;"),
+		regexp.QuoteMeta("signedOutUpdate.Click([weak = get_weak()](auto const&, auto const&) {"),
+		regexp.QuoteMeta("HyperlinkButton signedOutLater;"),
+		regexp.QuoteMeta("signedOutLater.Visibility(Visibility::Collapsed);"),
+		regexp.QuoteMeta("signedOutLater.Click([](auto const&, auto const&) { urnw::pages::Updates().Later(); });"),
+		regexp.QuoteMeta("signedOutActions.Orientation(winrt::Microsoft::UI::Xaml::Controls::Orientation::Horizontal);"),
+		regexp.QuoteMeta("signedOutActions.Children().Append(signedOutUpdate);"),
+		regexp.QuoteMeta("signedOutActions.Children().Append(signedOutLater);"),
+		regexp.QuoteMeta("signedOutBar.Content(signedOutActions);"),
+		regexp.QuoteMeta("signedOutBar.Closed("))...)
+	// each handler, read alone: the action does what the connect screen's
+	// does, and the close gives the column its room back and dismisses a
+	// report
+	handler := func(opener string) string {
+		at := strings.Index(window, opener)
+		if at < 0 {
+			return ""
+		}
+		end := strings.Index(window[at:], "});")
+		if end < 0 {
+			return ""
+		}
+		return window[at : at+end]
+	}
+	problems = append(problems, applyOrderProblems("the sign-in screen update banner's action", handler("signedOutUpdate.Click("),
+		regexp.QuoteMeta("if (auto self = weak.get()) self->OnUpdateBannerAction();"))...)
+	problems = append(problems, applyOrderProblems("the sign-in screen update banner's close", handler("signedOutBar.Closed("),
+		regexp.QuoteMeta("sender.Visibility(Visibility::Collapsed);"),
+		regexp.QuoteMeta("if (args.Reason() != Microsoft::UI::Xaml::Controls::InfoBarCloseReason::CloseButton) return;"),
+		regexp.QuoteMeta("self->updateSnapshot_.phase == urnw::UpdateChecker::Phase::Result"),
+		regexp.QuoteMeta("urnw::pages::Updates().DismissResult();"))...)
+	if strings.Contains(window, "signedOutBar.ActionButton(") {
+		problems = append(problems, "MainWindow puts a control in the sign-in screen banner's own action slot, which the renderer never writes")
 	}
 	return problems
 }
@@ -869,6 +1049,114 @@ func TestUpdateOfferBannerAutomationIds(t *testing.T) {
 		stripComments(readAppSource(t, "DeveloperPage.cpp"))))
 }
 
+func TestUpdateOfferIsMadeWhileSignedOut(t *testing.T) {
+	reportProblems(t, checkUpdateOfferedWhileSignedOut(readAppSource(t, "MainWindow.xaml"),
+		stripComments(readAppSource(t, "MainWindow.xaml.cpp")), stripComments(readAppSource(t, "ConnectPage.cpp"))))
+}
+
+// Each part of the signed-out offer, taken away, fails its check for the
+// reason it names.
+func TestUpdateOfferWhileSignedOutRejectsWeakerSources(t *testing.T) {
+	markup := readAppSource(t, "MainWindow.xaml")
+	window := stripComments(readAppSource(t, "MainWindow.xaml.cpp"))
+	connect := stripComments(readAppSource(t, "ConnectPage.cpp"))
+	developer := stripComments(readAppSource(t, "DeveloperPage.cpp"))
+	xaml := xamlAutomationIds(t, filepath.Join(repositoryRoot(t), "app", "src", "App", "MainWindow.xaml"))
+	replace := func(text, old, replacement string) string {
+		if strings.Count(text, old) != 1 {
+			t.Fatalf("negative control: %q is not in the source exactly once", old)
+		}
+		return strings.Replace(text, old, replacement, 1)
+	}
+	start := strings.Index(markup, `<muxc:InfoBar x:Name="SignedOutUpdateBar"`)
+	if start < 0 {
+		t.Fatal("MainWindow.xaml has no SignedOutUpdateBar element to take away")
+	}
+	element := markup[start : start+strings.Index(markup[start:], "/>")+2]
+	signedOut := func(markup, window, connect string) func() []string {
+		return func() []string { return checkUpdateOfferedWhileSignedOut(markup, window, connect) }
+	}
+	render := "  urnw::ConnectPage::RenderUpdateBanner(signedOutBar, updateSnapshot_);\n"
+	for _, tc := range []struct {
+		name, want string
+		check      func() []string
+	}{
+		{"the sources as they are", "", signedOut(markup, window, connect)},
+		{"no banner while signed out", "has no SignedOutUpdateBar", signedOut(replace(markup, element, ""), window, connect)},
+		{"the banner inside HomeNav", "SignedOutUpdateBar is inside HomeNav", signedOut(replace(replace(markup, element, ""),
+			`AutomationProperties.AutomationId="acceptance.update.banner" />`,
+			`AutomationProperties.AutomationId="acceptance.update.banner" />`+"\n"+element), window, connect)},
+		{"the banner at the foot of the sign-in column", "is not between the signed-out notice and the carousel", signedOut(replace(replace(markup, element, ""),
+			"                                         Click=\"OnChangeNetworkServer\" />\n                    </StackPanel>\n",
+			"                                         Click=\"OnChangeNetworkServer\" />\n                    </StackPanel>\n"+element+"\n"), window, connect)},
+		{"a closed banner that keeps its gap in the column", `SignedOutUpdateBar is missing Visibility="Collapsed"`,
+			signedOut(replace(markup, element, strings.Replace(element, `Visibility="Collapsed"`, `Visibility="Visible"`, 1)), window, connect)},
+		{"the banner left out of the fan-out", `MainWindow::ApplyUpdateChecker is missing urnw::ConnectPage::RenderUpdateBanner`,
+			signedOut(markup, replace(window, render, ""), connect)},
+		{"the banner fed from a screen hook", `MainWindow::ApplyUpdateChecker is missing urnw::ConnectPage::RenderUpdateBanner`,
+			signedOut(markup, replace(replace(window, render, ""), "void MainWindow::LoadCurrentDestination() {\n",
+				"void MainWindow::LoadCurrentDestination() {\n  auto hooked = SignedOutUpdateBar();\n  urnw::ConnectPage::RenderUpdateBanner(hooked, updateSnapshot_);\n"), connect)},
+		{"the banner rendered only while signed in", "renders the sign-in screen's banner under a condition",
+			signedOut(markup, replace(window, render, "  if (HomeNav().Visibility() == Visibility::Visible)\n  "+render), connect)},
+		{"a second update banner rendered elsewhere in the window", "renders an update banner in 2 places",
+			signedOut(markup, replace(window, "void MainWindow::LoadCurrentDestination() {\n",
+				"void MainWindow::LoadCurrentDestination() {\n  urnw::ConnectPage::RenderUpdateBanner(UpdateBar(), updateSnapshot_);\n"), connect)},
+		{"a closed banner that keeps its room after the fan-out", `MainWindow::ApplyUpdateChecker is missing signedOutBar\.Visibility`,
+			signedOut(markup, replace(window, "  signedOutBar.Visibility(signedOutBar.IsOpen() ? Visibility::Visible : Visibility::Collapsed);\n", ""), connect)},
+		{"the connect screen's banner by a renderer of its own", "ConnectPage::ApplyUpdateChecker is",
+			signedOut(markup, window, replace(connect, "  RenderUpdateBanner(w_.UpdateBar(), snap);\n",
+				"  auto bar = w_.UpdateBar();\n  bar.IsOpen(snap.phase != urnw::UpdateChecker::Phase::None);\n"))},
+		{"the sign-in screen's banner written by the connect page", "ConnectPage.cpp writes the sign-in screen's banner",
+			signedOut(markup, window, replace(connect, "  RenderUpdateBanner(w_.UpdateBar(), snap);\n",
+				"  RenderUpdateBanner(w_.UpdateBar(), snap);\n  RenderUpdateBanner(w_.SignedOutUpdateBar(), snap);\n"))},
+		{"an action that does nothing", "the sign-in screen update banner's action is missing",
+			signedOut(markup, replace(window, "      signedOutUpdate.Click([weak = get_weak()](auto const&, auto const&) {\n        if (auto self = weak.get()) self->OnUpdateBannerAction();\n      });\n",
+				"      signedOutUpdate.Click([weak = get_weak()](auto const&, auto const&) {\n      });\n"), connect)},
+		{"a row without Later", `MainWindow's sign-in screen update banner is missing signedOutActions\.Children\(\)\.Append\(signedOutLater\);`,
+			signedOut(markup, replace(window, "      signedOutActions.Children().Append(signedOutLater);\n", ""), connect)},
+		{"a Later that hides nothing", `MainWindow's sign-in screen update banner is missing signedOutLater\.Click`,
+			signedOut(markup, replace(window, "signedOutLater.Click([](auto const&, auto const&) { urnw::pages::Updates().Later(); });", ""), connect)},
+		{"a row that is not on the banner", `MainWindow's sign-in screen update banner is missing signedOutBar\.Content\(signedOutActions\);`,
+			signedOut(markup, replace(window, "      signedOutBar.Content(signedOutActions);\n", ""), connect)},
+		{"the action in the bar's own slot", "puts a control in the sign-in screen banner's own action slot",
+			signedOut(markup, replace(window, "      signedOutBar.Content(signedOutActions);\n",
+				"      signedOutBar.Content(signedOutActions);\n      signedOutBar.ActionButton(signedOutUpdate);\n"), connect)},
+		{"a closed report not dismissed", "the sign-in screen update banner's close is missing urnw::pages::Updates",
+			signedOut(markup, replace(window, "              urnw::pages::Updates().DismissResult();\n", ""), connect)},
+		{"a closed banner that keeps its room in the column", "the sign-in screen update banner's close is missing sender",
+			signedOut(markup, replace(window, "            sender.Visibility(Visibility::Collapsed);\n", ""), connect)},
+		{"the sign-in screen's banner without its automation id", "SignedOutUpdateBar: AutomationProperties.AutomationId", func() []string {
+			ids := map[string]string{}
+			for name, id := range xaml {
+				if name != "SignedOutUpdateBar" {
+					ids[name] = id
+				}
+			}
+			return checkUpdateBannerAutomationIds(ids, window, developer)
+		}},
+		{"the sign-in screen's action without its automation id", `MainWindow's sign-in screen update banner is missing L"acceptance\.update\.signed-out-action"\);`, func() []string {
+			return checkUpdateBannerAutomationIds(xaml, replace(window, `L"acceptance.update.signed-out-action"`, `L"acceptance.update.signed-out-button"`), developer)
+		}},
+		{"one automation id on both banners' actions", `want exactly one L"acceptance.update.action"`, func() []string {
+			return checkUpdateBannerAutomationIds(xaml, replace(window, `L"acceptance.update.signed-out-action"`, `L"acceptance.update.action"`), developer)
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			problems := strings.Join(tc.check(), "\n")
+			if tc.want == "" {
+				if problems != "" {
+					t.Fatalf("a source that is no weaker was reported:\n%s", problems)
+				}
+				return
+			}
+			if !strings.Contains(problems, tc.want) && !regexp.MustCompile(tc.want).MatchString(problems) {
+				t.Fatalf("negative control was not detected by %q; the check reported:\n%s", tc.want, problems)
+			}
+			t.Logf("fires: %s", tc.name)
+		})
+	}
+}
+
 func TestUpdateOfferTheReadmeNamesTheFeed(t *testing.T) {
 	reportProblems(t, checkReadmeNamesTheFeed(readRepositoryFile(t, "README.md"),
 		stripComments(readCommonSource(t, "ReleaseSelection.h"))))
@@ -1059,16 +1347,16 @@ func TestUpdateOfferWiringRejectsWeakerSources(t *testing.T) {
 				"    if (auto button = actionButton) {\n      button.Content(winrt::box_value(Adv(\"dev_check_updates\", L\"Check for updates\")));\n",
 				"    if (false) {\n      auto button = w_.UpdateBar();\n"))
 		}},
-		{"the action and Later taken in the other order", "ConnectPage::ApplyUpdateChecker is missing actionButton = controls", func() []string {
+		{"the action and Later taken in the other order", "ConnectPage::RenderUpdateBanner is missing actionButton = controls", func() []string {
 			return checkTrayLater(checker, header, window, replace(connect,
 				"      actionButton = controls.GetAt(0).try_as<winrt::Microsoft::UI::Xaml::Controls::Button>();\n      later = controls.GetAt(1);\n",
 				"      actionButton = controls.GetAt(1).try_as<winrt::Microsoft::UI::Xaml::Controls::Button>();\n      later = controls.GetAt(0);\n"))
 		}},
-		{"a Later link that is always shown", "ConnectPage::ApplyUpdateChecker is missing later", func() []string {
+		{"a Later link that is always shown", "ConnectPage::RenderUpdateBanner is missing later", func() []string {
 			return checkTrayLater(checker, header, window, replace(connect,
 				"later.Visibility(urnw::UpdateChecker::OffersLater(snap)", "later.Visibility(true"))
 		}},
-		{"a Later link left up when the banner closes", `ConnectPage::ApplyUpdateChecker is missing if \(snap\.phase == Phase::None\)`, func() []string {
+		{"a Later link left up when the banner closes", `ConnectPage::RenderUpdateBanner is missing if \(snap\.phase == Phase::None\)`, func() []string {
 			moved := replace(connect, "  if (later) {\n"+
 				"    later.Visibility(urnw::UpdateChecker::OffersLater(snap)\n"+
 				"                         ? winrt::Microsoft::UI::Xaml::Visibility::Visible\n"+
@@ -1185,11 +1473,11 @@ func TestUpdateOfferWiringRejectsWeakerSources(t *testing.T) {
 			return again(replace(checker, "snapshot.replacedByCode == snapshot.code && !snapshot.replacedVersion.empty();",
 				"!snapshot.replacedVersion.empty();"))
 		}},
-		{"a changed version with nothing said", `ConnectPage::ApplyUpdateChecker is missing if \(urnw::UpdateChecker::SaysReplaced\(snap\)\)`, func() []string {
+		{"a changed version with nothing said", `ConnectPage::RenderUpdateBanner is missing if \(urnw::UpdateChecker::SaysReplaced\(snap\)\)`, func() []string {
 			return checkTrayChecksAgainBeforeItActs(checker, window,
 				replace(connect, "if (urnw::UpdateChecker::SaysReplaced(snap)) {", "if (false) {"))
 		}},
-		{"the check shown as starting the installer", "ConnectPage::ApplyUpdateChecker is missing case Stage::Checking:", func() []string {
+		{"the check shown as starting the installer", "ConnectPage::RenderUpdateBanner is missing case Stage::Checking:", func() []string {
 			return checkTrayChecksAgainBeforeItActs(checker, window, replace(connect, "        case Stage::Checking:\n", ""))
 		}},
 		{"an installer that could not be confirmed retried through the helper", `MainWindow::OnUpdateBannerAction is missing updateSnapshot_\.failure == Failure::Unconfirmed\)`, func() []string {

@@ -1084,8 +1084,8 @@ func checkTrayShowsTheInstaller(checker, window, connect string) []string {
 		regexp.QuoteMeta("if (args.Reason() != Microsoft::UI::Xaml::Controls::InfoBarCloseReason::CloseButton) return;"),
 		regexp.QuoteMeta("self->updateSnapshot_.phase == urnw::UpdateChecker::Phase::Result"),
 		regexp.QuoteMeta("urnw::pages::Updates().DismissResult();"))...)
-	banner := applyDefinition(connect, "void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) {")
-	problems = append(problems, applyOrderProblems("ConnectPage::ApplyUpdateChecker", banner,
+	banner := applyDefinition(connect, offerBannerRenderer)
+	problems = append(problems, applyOrderProblems("ConnectPage::RenderUpdateBanner", banner,
 		regexp.QuoteMeta("bar.IsClosable(urnw::UpdateChecker::OffersInstaller(snap));"),
 		regexp.QuoteMeta(`action = urnw::UpdateChecker::OffersInstaller(snap) ? winrt::hstring{L"Show the installer"}`),
 		regexp.QuoteMeta("case Failure::Unsigned:"),
@@ -1104,8 +1104,8 @@ func TestUpdateApplyTrayShowsTheInstallerWhenTheHelperCannot(t *testing.T) {
 // and how it went, as the report reads for this build.
 func checkTraySaysWhatTheUpdateDoes(connect string) []string {
 	var problems []string
-	banner := applyDefinition(connect, "void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) {")
-	problems = append(problems, applyOrderProblems("ConnectPage::ApplyUpdateChecker", banner,
+	banner := applyDefinition(connect, offerBannerRenderer)
+	problems = append(problems, applyOrderProblems("ConnectPage::RenderUpdateBanner", banner,
 		regexp.QuoteMeta(`message += L" The VPN disconnects while it installs; connect again once URnetwork is back.";`),
 		regexp.QuoteMeta(`message = L"This copy of URnetwork is not installed in Program Files, so it does not "`),
 		regexp.QuoteMeta("case Stage::Helper:"),
@@ -1471,8 +1471,8 @@ func checkTraySaysWhenChecksFail(checker, connect, window, developer string) []s
 		regexp.QuoteMeta("autoCheck_ = on;"),
 		regexp.QuoteMeta("Mutate([now, on](Snapshot& s) {"),
 		regexp.QuoteMeta("s.checkStale = update::CheckIsStale(now, s.lastSuccessUnix, on && version::kCode != 0);"))...)
-	banner := applyDefinition(connect, "void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) {")
-	problems = append(problems, applyOrderProblems("ConnectPage::ApplyUpdateChecker", banner,
+	banner := applyDefinition(connect, offerBannerRenderer)
+	problems = append(problems, applyOrderProblems("ConnectPage::RenderUpdateBanner", banner,
 		regexp.QuoteMeta("const bool held = snap.holdUntilUnix > nowUnix;"),
 		regexp.QuoteMeta("if (snap.phase == Phase::None) {"),
 		regexp.QuoteMeta("if (!snap.checkStale) {"),
