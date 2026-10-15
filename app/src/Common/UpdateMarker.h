@@ -41,11 +41,14 @@
 //
 // The marker also says whether a VPN was connected when the update began. The
 // installer stops the VPN service, and the app does not connect by itself, so
-// the report of the update tells the user to connect again only when there was
-// a VPN to lose. The launch that finds the update over keeps the marker it
-// deletes for that report (SingleInstance.cpp TakeEndedUpdate). A marker
-// written before this field existed has three numbers, still refuses launches
-// as it did, and says no VPN was connected: it cannot say one was.
+// the report of the update tells the user to connect again. It leaves that out
+// only when the record of its update says no VPN was connected. The launch
+// that finds the update over keeps the marker it deletes for that report
+// (SingleInstance.cpp TakeEndedUpdate). A marker written before this field
+// existed has three numbers. It still refuses launches as it did, and does not
+// say whether a VPN was connected, so its report keeps the line, as before:
+// not telling someone their VPN is off is worse than telling someone who had
+// none. So does every report whose update no record speaks for.
 //
 // Pure, header-only and free of Windows headers: tools/update-marker-tests.cpp
 // runs it on any host, and App/SingleInstance.cpp binds the file and the
@@ -74,6 +77,14 @@ inline constexpr std::chrono::seconds kUpdateMarkerLifetime{20 * 60};
 // since) and still be trusted.
 inline constexpr std::chrono::seconds kUpdateMarkerClockSkew{5 * 60};
 
+// Whether a VPN was connected when an update began, as its record says it.
+enum class VpnAtStart : std::uint8_t {
+  // Not said: a record an older build wrote, or no record of that update.
+  Unknown,
+  NotConnected,
+  Connected,
+};
+
 // The installer an update started, as the updater recorded it.
 struct UpdateMarker {
   std::uint32_t installerProcessId = 0;
@@ -82,20 +93,25 @@ struct UpdateMarker {
   std::uint64_t installerCreationTime = 0;
   // When the marker was written, in seconds since the Unix epoch.
   std::int64_t writtenAt = 0;
-  // A VPN was connected when the update began, so the update disconnected it.
-  bool vpnConnected = false;
+  // Whether a VPN was connected when the update began.
+  VpnAtStart vpn = VpnAtStart::Unknown;
 };
 
 // The file's text: "<process id> <creation time> <written at> <vpn>\n", the
-// last 1 when a VPN was connected and 0 when not.
+// last 1 when a VPN was connected and 0 when not. A marker that does not say
+// has the first three alone, as older builds wrote it.
 inline std::string FormatUpdateMarker(const UpdateMarker& marker) {
-  return std::to_string(marker.installerProcessId) + " " +
-         std::to_string(marker.installerCreationTime) + " " +
-         std::to_string(marker.writtenAt) + " " + (marker.vpnConnected ? "1" : "0") + "\n";
+  std::string text = std::to_string(marker.installerProcessId) + " " +
+                     std::to_string(marker.installerCreationTime) + " " +
+                     std::to_string(marker.writtenAt);
+  if (marker.vpn == VpnAtStart::Connected) text += " 1";
+  if (marker.vpn == VpnAtStart::NotConnected) text += " 0";
+  return text + "\n";
 }
 
 // The marker a file holds, or nullopt when the text is not exactly one. The
-// three numbers of a marker written before the VPN's field are still one.
+// three numbers of a marker written before the VPN's field are still one, and
+// do not say whether a VPN was connected.
 inline std::optional<UpdateMarker> ParseUpdateMarker(std::string_view text) {
   if (!text.empty() && text.back() == '\n') text.remove_suffix(1);
   UpdateMarker marker;
@@ -118,11 +134,28 @@ inline std::optional<UpdateMarker> ParseUpdateMarker(std::string_view text) {
     if (at == end || *at != ' ') return std::nullopt;
     ++at;
     if (end - at != 1 || (*at != '0' && *at != '1')) return std::nullopt;
-    marker.vpnConnected = *at == '1';
+    marker.vpn = *at == '1' ? VpnAtStart::Connected : VpnAtStart::NotConnected;
   }
   if (marker.installerProcessId == 0 || marker.installerCreationTime == 0) return std::nullopt;
   return marker;
 }
+
+// What the record of an update says of the VPN, for the report of an update
+// that finished at `finished` (seconds since the Unix epoch): the record's own
+// word when the report finished after the record was written, so that both
+// are of one update. Unknown when there is no record, no time, or the report
+// finished before the record and so is another update's.
+inline VpnAtStart VpnOfReport(const std::optional<UpdateMarker>& record,
+                              std::optional<std::int64_t> finished) {
+  if (!record || !finished || *finished < record->writtenAt) return VpnAtStart::Unknown;
+  return record->vpn;
+}
+
+// Whether the report of an update says the VPN was disconnected for it: unless
+// it is known that no VPN was connected when the update began. Not telling
+// someone their VPN is off is worse than telling someone who had none, so a
+// VPN that is not known says it, as every build before the record's field did.
+inline bool SaysVpnDisconnected(VpnAtStart vpn) { return vpn != VpnAtStart::NotConnected; }
 
 // What became of the installer a marker names.
 enum class InstallerState {

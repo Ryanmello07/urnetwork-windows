@@ -102,6 +102,7 @@
 #include <string>
 #include <thread>
 
+#include "UpdateMarker.h"
 #include "UpdateResult.h"
 
 namespace urnw {
@@ -171,11 +172,12 @@ class UpdateChecker {
     // What the banner says about it for this build (never Hidden here: a
     // hidden report is no Result).
     update::ReportView view = update::ReportView::Hidden;
-    // A VPN was connected when the update began, so the installer's stop of
-    // the VPN service disconnected it, and the banner says to connect again.
-    // Known while this app waits on the helper, and after it from the update
-    // in progress record (Common/UpdateMarker.h); otherwise false.
-    bool vpnWasConnected = false;
+    // Whether a VPN was connected when the update began. Known while this app
+    // waits on the helper, and after it from the update-in-progress record
+    // of that update (Common/UpdateMarker.h VpnOfReport); Unknown on every
+    // other road. The banner says the VPN was disconnected for the update
+    // unless it is NotConnected (SaysVpnDisconnected).
+    update::VpnAtStart vpn = update::VpnAtStart::Unknown;
   };
 
   struct Snapshot {
