@@ -833,9 +833,10 @@ void ConnectPage::RenderUpdateBanner(InfoBar const& bar, urnw::UpdateChecker::Sn
 // that were in use are replaced when Windows restarts. Whenever msiexec ran,
 // it stopped the VPN session with the service, and the app does not connect
 // by itself: the banner says so, unless it is known that no VPN was connected
-// as the update began (UpdateChecker::Result::vpn, UpdateMarker.h
-// SaysVpnDisconnected). A copy that had none is not told it lost one; where
-// it is not known, the line stays, as before.
+// as the update began, or the report is shown again
+// (UpdateChecker::Result::vpn, UpdateMarker.h SaysVpnDisconnected). A copy
+// that had none is not told it lost one; where the record this launch took
+// does not say, the line stays, as before.
 winrt::Microsoft::UI::Xaml::Controls::InfoBarSeverity ConnectPage::ApplyUpdateResult(
     urnw::UpdateChecker::Snapshot const& snap, winrt::hstring& title, std::wstring& message) {
   using InfoBarSeverity = winrt::Microsoft::UI::Xaml::Controls::InfoBarSeverity;
