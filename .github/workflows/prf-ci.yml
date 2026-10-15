@@ -12,6 +12,7 @@ on:
   push:
     branches:
       - 'ci/prf-ci-*'
+      - 'ci/prf-main-*'
   workflow_dispatch:
 
 env:
@@ -107,8 +108,10 @@ jobs:
         with:
           go-version: stable
 
-      - name: Build and installer contract regression
-        run: go test ./tests
+      # windows#13's run had `go test ./tests` here, under Go's default ten
+      # minutes. The suite no longer fits them on this runner (run
+      # 38722027197 timed out at 600 s), and the go-test-json job runs the
+      # whole suite with an hour, so the SDK is built without it.
 
       # Same version scheme as the android and apple beta lines: the official
       # date format with warpctl's counter (seconds since the company founding
