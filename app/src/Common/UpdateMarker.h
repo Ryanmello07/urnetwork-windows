@@ -53,6 +53,12 @@
 // and leaves the line out: the report's first showing said what its marker
 // said.
 //
+// The other way round does not hold. A build from before the VPN's field reads
+// a marker of four numbers as none, deletes it, and does not refuse a launch
+// while its installer runs. Only an in-app downgrade starts such a build during
+// an update, from a build with this field to one without it, and the official
+// feed never offers one.
+//
 // Pure, header-only and free of Windows headers: tools/update-marker-tests.cpp
 // runs it on any host, and App/SingleInstance.cpp binds the file and the
 // process.
