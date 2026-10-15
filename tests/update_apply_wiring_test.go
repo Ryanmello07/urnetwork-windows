@@ -1162,10 +1162,13 @@ func checkTrayRemembersTheVpn(controller, checker, header, glue, connect, marker
 	if count := strings.Count(controller, "SetVpnConnected("); count != 1 {
 		problems = append(problems, fmt.Sprintf("AppController.cpp tells the update checker about the VPN in %d places, want the tunnel status's one", count))
 	}
-	pushed := applyDefinition(checker, "void UpdateChecker::SetVpnConnected(bool connected) {")
-	problems = append(problems, applyOrderProblems("UpdateChecker::SetVpnConnected", pushed,
-		regexp.QuoteMeta("std::lock_guard lock(vpnMutex_);"),
-		regexp.QuoteMeta("vpn_.StatusPushed(connected);"))...)
+	// each status into the note, under its lock, and nothing else: the whole
+	// body, with its whitespace folded (the lead's G16)
+	const pushedOpener = "void UpdateChecker::SetVpnConnected(bool connected) {"
+	pushed := strings.Join(strings.Fields(strings.TrimSuffix(strings.TrimPrefix(applyDefinition(checker, pushedOpener), pushedOpener), "\n}")), " ")
+	if pushed != "std::lock_guard lock(vpnMutex_); vpn_.StatusPushed(connected);" {
+		problems = append(problems, fmt.Sprintf("UpdateChecker::SetVpnConnected is %q, want each status into the note, under its lock, and nothing else", pushed))
+	}
 	// at the hand-off, the service's answer, for when nothing was pushed (G10a)
 	handOffVpn := applyDefinition(checker, "update::VpnNote UpdateChecker::HandOffVpn() {")
 	problems = append(problems, applyOrderProblems("UpdateChecker::HandOffVpn", handOffVpn,
@@ -1176,12 +1179,13 @@ func checkTrayRemembersTheVpn(controller, checker, header, glue, connect, marker
 	problems = append(problems, applyOrderProblems("UpdateChecker::NoteVpn", noteVpn,
 		regexp.QuoteMeta("std::lock_guard lock(vpnMutex_);"),
 		regexp.QuoteMeta("return vpn_.Note();"))...)
-	// the service's word, not the sign-in state (G10a)
-	probe := applyDefinitionUntil(controller, "updates_.SetVpnAnswerProbe(", "});")
-	problems = append(problems, applyOrderProblems("AppController's probe of the service's answer", probe,
-		regexp.QuoteMeta("const std::optional<proto::TunnelState> state = sdk_.AdoptedServiceState();"),
-		regexp.QuoteMeta("if (!state) return std::nullopt;"),
-		regexp.QuoteMeta("return *state == proto::TunnelState::Up;"))...)
+	// the service's word, not the sign-in state (G10a): the probe's whole body,
+	// with its whitespace folded (the lead's G16)
+	const probeOpener = "updates_.SetVpnAnswerProbe([this]() -> std::optional<bool> {"
+	probe := strings.Join(strings.Fields(strings.TrimSuffix(strings.TrimPrefix(applyDefinitionUntil(controller, probeOpener, "});"), probeOpener), "});")), " ")
+	if probe != "const std::optional<proto::TunnelState> state = sdk_.AdoptedServiceState(); if (!state) return std::nullopt; return *state == proto::TunnelState::Up;" {
+		problems = append(problems, fmt.Sprintf("AppController's probe of the service's answer is %q, want the state the service told this process and nothing else, never the sign-in state", probe))
+	}
 	if count := strings.Count(controller, "SetVpnAnswerProbe("); count != 1 {
 		problems = append(problems, fmt.Sprintf("AppController.cpp hands the update checker the service's answer in %d places, want one", count))
 	}
@@ -1232,9 +1236,10 @@ func checkTrayRemembersTheVpn(controller, checker, header, glue, connect, marker
 		regexp.QuoteMeta("Result result{.version = offer.version, .exitCode = ended};"),
 		regexp.QuoteMeta("result.vpn = NoteVpn();"),
 		regexp.QuoteMeta("s.result = result;"))...)
-	// handed off once, and read where it is used, not once at the hand-off (G10)
-	if calls := strings.Count(checker, "= HandOffVpn();"); calls != 1 {
-		problems = append(problems, fmt.Sprintf("UpdateChecker.cpp hands the VPN's note off %d times, want once, as the update begins", calls))
+	// handed off once, and read where it is used, not once at the hand-off (G10):
+	// every call counts, a bare one too (the lead's G16)
+	if calls := strings.Count(checker, "HandOffVpn(") - strings.Count(checker, "UpdateChecker::HandOffVpn("); calls != 1 {
+		problems = append(problems, fmt.Sprintf("UpdateChecker.cpp calls HandOffVpn %d times, want once, as the update begins", calls))
 	}
 	if calls := strings.Count(checker, "NoteVpn())") + strings.Count(checker, "= NoteVpn();"); calls != 2 {
 		problems = append(problems, fmt.Sprintf("UpdateChecker.cpp reads the VPN's note in %d places, want two: the record and the report", calls))
@@ -1340,10 +1345,22 @@ func TestUpdateApplyTrayRemembersTheVpnRejectsWeakerSources(t *testing.T) {
 		{"known only from pushes", "UpdateChecker::HandOffVpn is missing",
 			controller, replace(checker, "const std::optional<bool> answered = vpnAnswer_ ? vpnAnswer_() : std::nullopt;",
 				"const std::optional<bool> answered = std::nullopt;"), header, glue, connect, marker},
-		{"the sign-in state used as the VPN's state", "AppController's probe of the service's answer is missing",
+		{"the sign-in state used as the VPN's state", "AppController's probe of the service's answer is",
 			replace(controller, "    const std::optional<proto::TunnelState> state = sdk_.AdoptedServiceState();\n"+
 				"    if (!state) return std::nullopt;\n    return *state == proto::TunnelState::Up;\n",
 				"    return sdk_.HasSession();\n"), checker, header, glue, connect, marker},
+		{"the probe guarded by the sign-in state", "AppController's probe of the service's answer is",
+			replace(controller, "    const std::optional<proto::TunnelState> state = sdk_.AdoptedServiceState();\n",
+				"    if (!sdk_.HasSession()) return false;\n    const std::optional<proto::TunnelState> state = sdk_.AdoptedServiceState();\n"),
+			checker, header, glue, connect, marker},
+		{"a teardown clears the note in the checker", "UpdateChecker::SetVpnConnected is",
+			controller, replace(checker, "  vpn_.StatusPushed(connected);\n",
+				"  vpn_.StatusPushed(connected);\n  if (!connected) vpn_.upSinceHandOff = false;\n"),
+			header, glue, connect, marker},
+		{"a second hand-off as the app exits", "UpdateChecker.cpp calls HandOffVpn 2 times",
+			controller, replace(checker, "    RecordUpdateInProgress(helper, NoteVpn());\n",
+				"    HandOffVpn();\n    RecordUpdateInProgress(helper, NoteVpn());\n"),
+			header, glue, connect, marker},
 		{"a teardown clears the note", "UpdateMarker.h VpnNote is missing",
 			controller, checker, header, glue, connect, replace(marker, "upSinceHandOff = upSinceHandOff || up;", "upSinceHandOff = up;")},
 		{"the VPN never noted", `UpdateChecker::RunApply is missing const update::VpnNote handOff = HandOffVpn\(\);`,

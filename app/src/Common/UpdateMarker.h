@@ -179,7 +179,8 @@ inline bool SaysVpnDisconnected(std::optional<VpnAtStart> vpn) {
 
 // Where the app's note of the VPN starts from at an update's hand-off.
 enum class VpnSource : std::uint8_t {
-  // the last tunnel status the service pushed
+  // the last tunnel status pushed: the service's, or one the app makes itself
+  // (UpdateChecker::SetVpnConnected)
   Pushed,
   // none pushed: the state the service answered when the app asked
   Answered,
@@ -188,16 +189,17 @@ enum class VpnSource : std::uint8_t {
 };
 
 // The app's note of the VPN for an update (the lead's G10 and G10a). The
-// service pushes a tunnel status on every change (StatusPushed) and answers
-// when it is asked, and a copy that is signed out may have had no push at
-// all. At the hand-off to the update helper (HandOff), the note starts from
-// the last push, else the service's answer, else nothing. A VPN up at any
-// moment from there counts, and nothing clears it: the note is connected if
-// one was up, not connected only if the state was known at the hand-off and
-// never up since, and unknown otherwise (Note), which is written as three
-// numbers. Not safe across threads by itself: UpdateChecker guards it.
+// service pushes a tunnel status on every change, and the app makes a few of
+// its own; both come to StatusPushed. The service also answers when it is
+// asked, and a copy that is signed out may have had no push at all. At the
+// hand-off to the update helper (HandOff), the note starts from the last
+// push, else the service's answer, else nothing. A VPN up at any moment from
+// there counts, and nothing clears it: the note is connected if one was up,
+// not connected only if the state was known at the hand-off and never up
+// since, and unknown otherwise (Note), which is written as three numbers. Not
+// safe across threads by itself: UpdateChecker guards it.
 struct VpnNote {
-  // the last status the service pushed, up or not
+  // the last status pushed, up or not
   std::optional<bool> pushed;
   // where the hand-off's state came from
   VpnSource source = VpnSource::Unknown;

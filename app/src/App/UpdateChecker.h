@@ -284,10 +284,13 @@ class UpdateChecker {
   // is queued.
   void ChannelChanged();
 
-  // Whether a VPN is connected now, as each tunnel status the service pushes
-  // says (AppController). An update's note of the VPN follows it from the
-  // hand-off on (UpdateMarker.h VpnNote). Kept in memory and never saved. Safe
-  // from any thread.
+  // Whether a VPN is connected now, as each tunnel status the app gets says
+  // (AppController::OnTunnelState): the statuses the service pushes, and those
+  // the app makes itself, which take the same road (a dropped control
+  // channel's Stopped, the session's own statuses, the reply to the tray's
+  // force-stop). An update's note of the VPN follows it from the hand-off on
+  // (UpdateMarker.h VpnNote), and all of them count there as pushed. Kept in
+  // memory and never saved. Safe from any thread.
   void SetVpnConnected(bool connected);
   // The tunnel's state as the service last told this app, pushed or answered:
   // up or not, or nullopt before it has told it anything (AppController binds
