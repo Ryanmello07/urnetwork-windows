@@ -6934,6 +6934,14 @@ del mundo</value>
     <value>Aplicar la firma de la hotkey</value>
     <comment>App top200: re-check every device with the hotkey signature</comment>
   </data>
+  <data name="site_app_top200_bad_epochs" xml:space="preserve">
+    <value>Introduce las épocas de validez como números enteros, la última no anterior a la primera.</value>
+    <comment>App top200: validity epochs missing, not whole numbers, or reversed</comment>
+  </data>
+  <data name="site_app_top200_bad_manifest" xml:space="preserve">
+    <value>Esto no es un manifiesto de flota válido. Pega el JSON que imprime provider fleet manifest.</value>
+    <comment>App top200: the pasted fleet manifest does not parse or validate</comment>
+  </data>
   <data name="site_app_top200_bad_signature" xml:space="preserve">
     <value>Pega la carga útil de vinculación completa: JSON con binding y client_signature.</value>
     <comment>App top200: unparseable paste</comment>
@@ -6942,9 +6950,17 @@ del mundo</value>
     <value>El calldata aparece cuando se verifican tanto la firma del dispositivo como la firma de la hotkey.</value>
     <comment>App top200: binding not complete</comment>
   </data>
+  <data name="site_app_top200_build_bindings" xml:space="preserve">
+    <value>Generar vinculaciones</value>
+    <comment>App top200: build each manifest member's binding</comment>
+  </data>
   <data name="site_app_top200_calldata" xml:space="preserve">
     <value>Calldata de vinculación</value>
     <comment>App top200: calldata label</comment>
+  </data>
+  <data name="site_app_top200_current_epoch" xml:space="preserve">
+    <value>La época actual es {}.</value>
+    <comment>App top200: the current epoch, from GET /sn/head</comment>
   </data>
   <data name="site_app_top200_device" xml:space="preserve">
     <value>Dispositivo</value>
@@ -6970,20 +6986,44 @@ del mundo</value>
     <value>Firma de la hotkey (hex)</value>
     <comment>App top200: hotkey signature input</comment>
   </data>
+  <data name="site_app_top200_in_app" xml:space="preserve">
+    <value>En la app URnetwork: {}</value>
+    <comment>App top200: where the app signs a binding; {path} is Earnings › Top 200 › Sign fleet binding in the reader's language</comment>
+  </data>
   <data name="site_app_top200_intro" xml:space="preserve">
     <value>Los mineros principales son las {cutoff} mejores redes según la variedad de IP de salida enrutables. La subred paga un puesto principal de forma nativa en cada tempo, directamente a tu coldkey.</value>
     <comment>App top200: intro</comment>
   </data>
+  <data name="site_app_top200_manifest" xml:space="preserve">
+    <value>Manifiesto de flota</value>
+    <comment>App top200: fleet manifest textarea label</comment>
+  </data>
+  <data name="site_app_top200_manifest_hash_mismatch" xml:space="preserve">
+    <value>Este manifiesto no coincide con el commitment_sha256 pegado con él.</value>
+    <comment>App top200: the manifest's SHA-256 is not the commitment_sha256 line pasted with it</comment>
+  </data>
+  <data name="site_app_top200_manifest_hint" xml:space="preserve">
+    <value>Pega tu manifiesto de flota (el JSON que imprime provider fleet manifest) y las épocas de validez para generar la vinculación de cada dispositivo. La app muestra la entrada de miembro de su dispositivo para el manifiesto en Ganancias › Top 200 › Firmar vinculación de flota.</value>
+    <comment>App top200: how to get the fleet manifest and where an app shows its member entry</comment>
+  </data>
+  <data name="site_app_top200_manifest_hotkey_mismatch" xml:space="preserve">
+    <value>La hotkey del manifiesto no es la hotkey introducida en el paso 1.</value>
+    <comment>App top200: the manifest's hotkey is not the ss58 hotkey entered in step 1</comment>
+  </data>
   <data name="site_app_top200_not_eligible" xml:space="preserve">
     <value>Aún no cumples los requisitos. Tu puntuación es {score} y el umbral de expulsión es {floor}.</value>
     <comment>App top200: status when not eligible</comment>
+  </data>
+  <data name="site_app_top200_open_in_app" xml:space="preserve">
+    <value>Abrir en la app</value>
+    <comment>App top200: link that opens the app's Sign fleet binding screen with this binding filled in</comment>
   </data>
   <data name="site_app_top200_signatures_added" xml:space="preserve">
     <value>Dispositivos añadidos: {count}</value>
     <comment>App top200: progress</comment>
   </data>
   <data name="site_app_top200_step_bind" xml:space="preserve">
-    <value>Las apps aún no pueden firmar vinculaciones de dispositivos. En cada dispositivo proveedor, ejecuta provider fleet sign con tu manifiesto de flota, la semilla de la clave de cliente del dispositivo (~/.urnetwork/.provider.key) y las épocas de validez, y pega aquí el JSON que imprime, un dispositivo a la vez. No envía nada y las semillas se quedan en el dispositivo. En cambio, provider fleet bind firma y envía en un solo paso desde tu propia clave EVM.</value>
+    <value>Cada dispositivo proveedor firma su propia vinculación. Genera abajo las vinculaciones a partir de tu manifiesto de flota y copia cada una a su dispositivo. En la app URnetwork, abre Ganancias › Top 200 › Firmar vinculación de flota, pega la vinculación, comprueba el ID de flota, la hotkey y las épocas, fírmala y pega aquí los datos que muestra la app. En un proveedor de CLI, ejecuta en su lugar provider fleet sign con el manifiesto de flota, la semilla de la clave de cliente del dispositivo (~/.urnetwork/.provider.key) y las épocas de validez, y pega el JSON que imprime. Ninguno de los dos envía nada y las semillas se quedan en el dispositivo. En cambio, provider fleet bind firma y envía en un solo paso desde tu propia clave EVM.</value>
     <comment>App top200: step 2</comment>
   </data>
   <data name="site_app_top200_step_register" xml:space="preserve">
@@ -7001,6 +7041,14 @@ del mundo</value>
   <data name="site_app_top200_unavailable" xml:space="preserve">
     <value>El estado del puesto principal no está disponible en este momento.</value>
     <comment>App top200: GET /sn/head unavailable</comment>
+  </data>
+  <data name="site_app_top200_valid_from" xml:space="preserve">
+    <value>Válida desde la época</value>
+    <comment>App top200: first epoch the bindings are valid for (input label)</comment>
+  </data>
+  <data name="site_app_top200_valid_to" xml:space="preserve">
+    <value>Válida hasta la época</value>
+    <comment>App top200: last epoch the bindings are valid for (input label)</comment>
   </data>
   <data name="site_app_total_referrals" xml:space="preserve">
     <value>Total de referidos</value>
@@ -8288,6 +8336,86 @@ como debería ser.</value>
   <data name="top200_detail" xml:space="preserve">
     <value>La variedad de IP enrutables de tu red ocupa aproximadamente el puesto #{0} de {1} puestos principales. Los mineros principales ganan SN25α de forma nativa en cada tempo.</value>
     <comment>Detail of the Top 200 tile when eligible.</comment>
+  </data>
+  <data name="top200_sign_action" xml:space="preserve">
+    <value>Firmar con este dispositivo</value>
+    <comment>Top 200 sign screen: the button that signs the reviewed binding with this device's client key (local only).</comment>
+  </data>
+  <data name="top200_sign_binding" xml:space="preserve">
+    <value>Firmar vinculación de flota</value>
+    <comment>Top 200: the button that opens the screen where this device signs its fleet binding, and that screen's title. The ur.io Top 200 page names it in its steps (Earnings › Top 200 › Sign fleet binding).</comment>
+  </data>
+  <data name="top200_sign_binding_label" xml:space="preserve">
+    <value>Vinculación para firmar</value>
+    <comment>Top 200 sign screen: label of the field where the binding JSON from the ur.io Top 200 page is pasted.</comment>
+  </data>
+  <data name="top200_sign_chain" xml:space="preserve">
+    <value>Cadena {0} · subred {1}</value>
+    <comment>Top 200 sign screen: the binding's EVM chain id and Bittensor subnet (netuid).</comment>
+  </data>
+  <data name="top200_sign_client_key" xml:space="preserve">
+    <value>Clave de cliente</value>
+    <comment>Top 200 sign screen: label of this device's Ed25519 client public key (0x hex).</comment>
+  </data>
+  <data name="top200_sign_copy_member" xml:space="preserve">
+    <value>Copiar entrada de miembro</value>
+    <comment>Top 200 sign screen: button that copies this device's fleet manifest member entry {"client_id":"0x…","client_key":"0x…"}.</comment>
+  </data>
+  <data name="top200_sign_copy_payload" xml:space="preserve">
+    <value>Copiar datos</value>
+    <comment>Top 200 sign screen: button that copies the signed {binding, client_signature} payload.</comment>
+  </data>
+  <data name="top200_sign_done" xml:space="preserve">
+    <value>Firmada. Copia los datos y pégalos en la página Top 200, en Firma del dispositivo.</value>
+    <comment>Top 200 sign screen: shown with the signed {binding, client_signature} payload. 'Device signature' is the ur.io page's field label (site_app_top200_device_signature).</comment>
+  </data>
+  <data name="top200_sign_epochs" xml:space="preserve">
+    <value>Válida de la época {0} a la {1}</value>
+    <comment>Top 200 sign screen: the binding's validity window (valid_from_epoch, valid_to_epoch), both inclusive.</comment>
+  </data>
+  <data name="top200_sign_error_failed" xml:space="preserve">
+    <value>No se pudo firmar la vinculación: {}</value>
+    <comment>Top 200 sign screen: SignSnFleetBinding returned an error; {detail} is the SDK's error text.</comment>
+  </data>
+  <data name="top200_sign_error_invalid" xml:space="preserve">
+    <value>Esto no es una vinculación de flota. Copia la vinculación completa de la página Top 200.</value>
+    <comment>Top 200 sign screen: the pasted text is not a fleet binding JSON (or the app link's binding did not decode).</comment>
+  </data>
+  <data name="top200_sign_error_no_key" xml:space="preserve">
+    <value>La clave de cliente de este dispositivo no está disponible ahora. Inicia URnetwork en este dispositivo y vuelve a intentarlo.</value>
+    <comment>Top 200 sign screen: GetSnClientKey returned nothing (no client key, or the desktop/extension service that holds it is not running).</comment>
+  </data>
+  <data name="top200_sign_error_other_device" xml:space="preserve">
+    <value>Esta vinculación es de otro dispositivo. Un dispositivo solo firma la vinculación con su propio ID de cliente y su propia clave de cliente.</value>
+    <comment>Top 200 sign screen: the binding's client_id or client_key is not this device's; the app refuses to sign it.</comment>
+  </data>
+  <data name="top200_sign_fleet_id" xml:space="preserve">
+    <value>ID de flota</value>
+    <comment>Top 200 sign screen: label of the binding's fleet_id (0x hex).</comment>
+  </data>
+  <data name="top200_sign_hotkey" xml:space="preserve">
+    <value>Hotkey</value>
+    <comment>Top 200 sign screen: label of the binding's hotkey (0x hex public key). Hotkey is the Bittensor term.</comment>
+  </data>
+  <data name="top200_sign_intro" xml:space="preserve">
+    <value>El operador de tu flota prepara la vinculación de este dispositivo en la página Top 200 de ur.io. Pégala aquí para firmarla con la clave de cliente de este dispositivo. No se envía nada: tú copias de vuelta a la página los datos firmados.</value>
+    <comment>Top 200 sign screen: intro. The binding is built on the ur.io Top 200 page; the app signs it locally and sends nothing.</comment>
+  </data>
+  <data name="top200_sign_member_hint" xml:space="preserve">
+    <value>El manifiesto de tu flota identifica este dispositivo por su ID de cliente y su clave de cliente. Copia su entrada de miembro y envíasela al operador de tu flota.</value>
+    <comment>Top 200 sign screen: why the operator needs this device's member entry (client ID and client key) for the fleet manifest.</comment>
+  </data>
+  <data name="top200_sign_paste" xml:space="preserve">
+    <value>Pegar</value>
+    <comment>Top 200 sign screen: button that pastes the binding from the clipboard.</comment>
+  </data>
+  <data name="top200_sign_review" xml:space="preserve">
+    <value>Antes de firmar, comprueba que el ID de flota, la hotkey y las épocas coinciden con la página Top 200.</value>
+    <comment>Top 200 sign screen: shown above the parsed binding's values before the Sign button.</comment>
+  </data>
+  <data name="top200_sign_this_device" xml:space="preserve">
+    <value>Este dispositivo</value>
+    <comment>Top 200 sign screen: label of the section showing this device's client ID and client key.</comment>
   </data>
   <data name="top200_you_qualify" xml:space="preserve">
     <value>Cumples los requisitos</value>

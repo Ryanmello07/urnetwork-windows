@@ -7301,6 +7301,86 @@ zoals het hoort te zijn.</value>
     <value>De breedte aan routeerbare IP's van je netwerk staat ongeveer op plaats #{0} van {1} topplekken. Topminers verdienen SN25α rechtstreeks, elke tempo.</value>
     <comment>Detail of the Top 200 tile when eligible.</comment>
   </data>
+  <data name="top200_sign_action" xml:space="preserve">
+    <value>Ondertekenen met dit apparaat</value>
+    <comment>Top 200 sign screen: the button that signs the reviewed binding with this device's client key (local only).</comment>
+  </data>
+  <data name="top200_sign_binding" xml:space="preserve">
+    <value>Vlootkoppeling ondertekenen</value>
+    <comment>Top 200: the button that opens the screen where this device signs its fleet binding, and that screen's title. The ur.io Top 200 page names it in its steps (Earnings › Top 200 › Sign fleet binding).</comment>
+  </data>
+  <data name="top200_sign_binding_label" xml:space="preserve">
+    <value>Te ondertekenen koppeling</value>
+    <comment>Top 200 sign screen: label of the field where the binding JSON from the ur.io Top 200 page is pasted.</comment>
+  </data>
+  <data name="top200_sign_chain" xml:space="preserve">
+    <value>Chain {0} · subnet {1}</value>
+    <comment>Top 200 sign screen: the binding's EVM chain id and Bittensor subnet (netuid).</comment>
+  </data>
+  <data name="top200_sign_client_key" xml:space="preserve">
+    <value>Clientsleutel</value>
+    <comment>Top 200 sign screen: label of this device's Ed25519 client public key (0x hex).</comment>
+  </data>
+  <data name="top200_sign_copy_member" xml:space="preserve">
+    <value>Ledenvermelding kopiëren</value>
+    <comment>Top 200 sign screen: button that copies this device's fleet manifest member entry {"client_id":"0x…","client_key":"0x…"}.</comment>
+  </data>
+  <data name="top200_sign_copy_payload" xml:space="preserve">
+    <value>Gegevens kopiëren</value>
+    <comment>Top 200 sign screen: button that copies the signed {binding, client_signature} payload.</comment>
+  </data>
+  <data name="top200_sign_done" xml:space="preserve">
+    <value>Ondertekend. Kopieer de gegevens en plak ze op de Top 200-pagina onder Apparaathandtekening.</value>
+    <comment>Top 200 sign screen: shown with the signed {binding, client_signature} payload. 'Device signature' is the ur.io page's field label (site_app_top200_device_signature).</comment>
+  </data>
+  <data name="top200_sign_epochs" xml:space="preserve">
+    <value>Geldig van epoch {0} tot en met {1}</value>
+    <comment>Top 200 sign screen: the binding's validity window (valid_from_epoch, valid_to_epoch), both inclusive.</comment>
+  </data>
+  <data name="top200_sign_error_failed" xml:space="preserve">
+    <value>De koppeling kon niet worden ondertekend: {}</value>
+    <comment>Top 200 sign screen: SignSnFleetBinding returned an error; {detail} is the SDK's error text.</comment>
+  </data>
+  <data name="top200_sign_error_invalid" xml:space="preserve">
+    <value>Dit is geen vlootkoppeling. Kopieer de hele koppeling van de Top 200-pagina.</value>
+    <comment>Top 200 sign screen: the pasted text is not a fleet binding JSON (or the app link's binding did not decode).</comment>
+  </data>
+  <data name="top200_sign_error_no_key" xml:space="preserve">
+    <value>De clientsleutel van dit apparaat is nu niet beschikbaar. Start URnetwork op dit apparaat en probeer het opnieuw.</value>
+    <comment>Top 200 sign screen: GetSnClientKey returned nothing (no client key, or the desktop/extension service that holds it is not running).</comment>
+  </data>
+  <data name="top200_sign_error_other_device" xml:space="preserve">
+    <value>Deze koppeling is voor een ander apparaat. Een apparaat ondertekent alleen de koppeling met zijn eigen client-ID en clientsleutel.</value>
+    <comment>Top 200 sign screen: the binding's client_id or client_key is not this device's; the app refuses to sign it.</comment>
+  </data>
+  <data name="top200_sign_fleet_id" xml:space="preserve">
+    <value>Vloot-ID</value>
+    <comment>Top 200 sign screen: label of the binding's fleet_id (0x hex).</comment>
+  </data>
+  <data name="top200_sign_hotkey" xml:space="preserve">
+    <value>Hotkey</value>
+    <comment>Top 200 sign screen: label of the binding's hotkey (0x hex public key). Hotkey is the Bittensor term.</comment>
+  </data>
+  <data name="top200_sign_intro" xml:space="preserve">
+    <value>De beheerder van je vloot maakt de koppeling van dit apparaat op de Top 200-pagina op ur.io. Plak hem hier om hem te ondertekenen met de clientsleutel van dit apparaat. Er wordt niets verzonden: je kopieert de ondertekende gegevens zelf terug naar de pagina.</value>
+    <comment>Top 200 sign screen: intro. The binding is built on the ur.io Top 200 page; the app signs it locally and sends nothing.</comment>
+  </data>
+  <data name="top200_sign_member_hint" xml:space="preserve">
+    <value>Je vlootmanifest vermeldt dit apparaat met zijn client-ID en clientsleutel. Kopieer de ledenvermelding en stuur die naar de beheerder van je vloot.</value>
+    <comment>Top 200 sign screen: why the operator needs this device's member entry (client ID and client key) for the fleet manifest.</comment>
+  </data>
+  <data name="top200_sign_paste" xml:space="preserve">
+    <value>Plakken</value>
+    <comment>Top 200 sign screen: button that pastes the binding from the clipboard.</comment>
+  </data>
+  <data name="top200_sign_review" xml:space="preserve">
+    <value>Controleer voor het ondertekenen of de vloot-ID, hotkey en epochs overeenkomen met de Top 200-pagina.</value>
+    <comment>Top 200 sign screen: shown above the parsed binding's values before the Sign button.</comment>
+  </data>
+  <data name="top200_sign_this_device" xml:space="preserve">
+    <value>Dit apparaat</value>
+    <comment>Top 200 sign screen: label of the section showing this device's client ID and client key.</comment>
+  </data>
   <data name="top200_you_qualify" xml:space="preserve">
     <value>Je komt in aanmerking</value>
     <comment>Headline of the Top 200 tile when eligible.</comment>

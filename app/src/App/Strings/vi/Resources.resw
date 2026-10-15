@@ -7181,6 +7181,86 @@ như nó vốn phải thế.</value>
     <value>Độ đa dạng IP có thể định tuyến của mạng bạn xếp khoảng hạng #{0} trong {1} vị trí dẫn đầu. Các thợ đào dẫn đầu kiếm SN25α trực tiếp, mỗi tempo.</value>
     <comment>Detail of the Top 200 tile when eligible.</comment>
   </data>
+  <data name="top200_sign_action" xml:space="preserve">
+    <value>Ký bằng thiết bị này</value>
+    <comment>Top 200 sign screen: the button that signs the reviewed binding with this device's client key (local only).</comment>
+  </data>
+  <data name="top200_sign_binding" xml:space="preserve">
+    <value>Ký liên kết đội máy</value>
+    <comment>Top 200: the button that opens the screen where this device signs its fleet binding, and that screen's title. The ur.io Top 200 page names it in its steps (Earnings › Top 200 › Sign fleet binding).</comment>
+  </data>
+  <data name="top200_sign_binding_label" xml:space="preserve">
+    <value>Liên kết cần ký</value>
+    <comment>Top 200 sign screen: label of the field where the binding JSON from the ur.io Top 200 page is pasted.</comment>
+  </data>
+  <data name="top200_sign_chain" xml:space="preserve">
+    <value>Chuỗi {0} · mạng con {1}</value>
+    <comment>Top 200 sign screen: the binding's EVM chain id and Bittensor subnet (netuid).</comment>
+  </data>
+  <data name="top200_sign_client_key" xml:space="preserve">
+    <value>Khóa máy khách</value>
+    <comment>Top 200 sign screen: label of this device's Ed25519 client public key (0x hex).</comment>
+  </data>
+  <data name="top200_sign_copy_member" xml:space="preserve">
+    <value>Sao chép mục thành viên</value>
+    <comment>Top 200 sign screen: button that copies this device's fleet manifest member entry {"client_id":"0x…","client_key":"0x…"}.</comment>
+  </data>
+  <data name="top200_sign_copy_payload" xml:space="preserve">
+    <value>Sao chép dữ liệu</value>
+    <comment>Top 200 sign screen: button that copies the signed {binding, client_signature} payload.</comment>
+  </data>
+  <data name="top200_sign_done" xml:space="preserve">
+    <value>Đã ký. Sao chép dữ liệu và dán vào trang Top 200 ở mục Chữ ký thiết bị.</value>
+    <comment>Top 200 sign screen: shown with the signed {binding, client_signature} payload. 'Device signature' is the ur.io page's field label (site_app_top200_device_signature).</comment>
+  </data>
+  <data name="top200_sign_epochs" xml:space="preserve">
+    <value>Hiệu lực từ epoch {0} đến {1}</value>
+    <comment>Top 200 sign screen: the binding's validity window (valid_from_epoch, valid_to_epoch), both inclusive.</comment>
+  </data>
+  <data name="top200_sign_error_failed" xml:space="preserve">
+    <value>Không thể ký liên kết: {}</value>
+    <comment>Top 200 sign screen: SignSnFleetBinding returned an error; {detail} is the SDK's error text.</comment>
+  </data>
+  <data name="top200_sign_error_invalid" xml:space="preserve">
+    <value>Đây không phải là liên kết đội máy. Hãy sao chép toàn bộ liên kết từ trang Top 200.</value>
+    <comment>Top 200 sign screen: the pasted text is not a fleet binding JSON (or the app link's binding did not decode).</comment>
+  </data>
+  <data name="top200_sign_error_no_key" xml:space="preserve">
+    <value>Khóa máy khách của thiết bị này hiện không khả dụng. Hãy khởi động URnetwork trên thiết bị này rồi thử lại.</value>
+    <comment>Top 200 sign screen: GetSnClientKey returned nothing (no client key, or the desktop/extension service that holds it is not running).</comment>
+  </data>
+  <data name="top200_sign_error_other_device" xml:space="preserve">
+    <value>Liên kết này dành cho thiết bị khác. Thiết bị chỉ ký liên kết có ID máy khách và khóa máy khách của chính nó.</value>
+    <comment>Top 200 sign screen: the binding's client_id or client_key is not this device's; the app refuses to sign it.</comment>
+  </data>
+  <data name="top200_sign_fleet_id" xml:space="preserve">
+    <value>ID đội máy</value>
+    <comment>Top 200 sign screen: label of the binding's fleet_id (0x hex).</comment>
+  </data>
+  <data name="top200_sign_hotkey" xml:space="preserve">
+    <value>Hotkey</value>
+    <comment>Top 200 sign screen: label of the binding's hotkey (0x hex public key). Hotkey is the Bittensor term.</comment>
+  </data>
+  <data name="top200_sign_intro" xml:space="preserve">
+    <value>Người vận hành đội máy của bạn tạo liên kết cho thiết bị này trên trang Top 200 tại ur.io. Dán vào đây để ký bằng khóa máy khách của thiết bị này. Không có gì được gửi đi: bạn tự sao chép dữ liệu đã ký trở lại trang.</value>
+    <comment>Top 200 sign screen: intro. The binding is built on the ur.io Top 200 page; the app signs it locally and sends nothing.</comment>
+  </data>
+  <data name="top200_sign_member_hint" xml:space="preserve">
+    <value>Bản kê khai đội máy liệt kê thiết bị này theo ID máy khách và khóa máy khách của nó. Sao chép mục thành viên của thiết bị và gửi cho người vận hành đội máy của bạn.</value>
+    <comment>Top 200 sign screen: why the operator needs this device's member entry (client ID and client key) for the fleet manifest.</comment>
+  </data>
+  <data name="top200_sign_paste" xml:space="preserve">
+    <value>Dán</value>
+    <comment>Top 200 sign screen: button that pastes the binding from the clipboard.</comment>
+  </data>
+  <data name="top200_sign_review" xml:space="preserve">
+    <value>Trước khi ký, hãy kiểm tra ID đội máy, hotkey và các epoch khớp với trang Top 200.</value>
+    <comment>Top 200 sign screen: shown above the parsed binding's values before the Sign button.</comment>
+  </data>
+  <data name="top200_sign_this_device" xml:space="preserve">
+    <value>Thiết bị này</value>
+    <comment>Top 200 sign screen: label of the section showing this device's client ID and client key.</comment>
+  </data>
   <data name="top200_you_qualify" xml:space="preserve">
     <value>Bạn đủ điều kiện</value>
     <comment>Headline of the Top 200 tile when eligible.</comment>

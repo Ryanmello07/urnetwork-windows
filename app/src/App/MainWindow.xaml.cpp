@@ -25,6 +25,7 @@
 #include "Paths.h"
 #include "ReferralShare.h"
 #include "StatsFormat.h"
+#include "Top200Binding.h"
 #include "UrColors.h"
 
 using namespace winrt;
@@ -2259,6 +2260,16 @@ void MainWindow::HandleOnboardingLink(std::string const& url) {
   }
 }
 
+void MainWindow::HandleTop200SignLink(std::string const& url) {
+  if (!Sdk().IsLoggedIn()) return;
+  const urnw::top200sign::Link link = urnw::top200sign::ParseSignLink(url);
+  if (!link.sign) return;
+  HomeNav().SelectedItem(WalletNavItem());
+  // never the binding in the log
+  urnw::LogInfo("top200 sign: link {}", link.ok ? "pre-fills the sheet" : "is not a binding");
+  wallet_->ShowTop200Sign(link.ok ? link.binding : std::string(), /*linkInvalid=*/!link.ok);
+}
+
 void MainWindow::NoteConnected() {
   // connect.first: once per network. The network id keys the memory, so a
   // second account on the same machine gets its own first connect.
@@ -3139,6 +3150,9 @@ void MainWindow::OnSignConsent(IInspectable const& s, RoutedEventArgs const& e) 
 }
 void MainWindow::OnClaimTop200(IInspectable const& s, RoutedEventArgs const& e) {
   wallet_->OnClaimTop200(s, e);
+}
+void MainWindow::OnSignTop200(IInspectable const& s, RoutedEventArgs const& e) {
+  wallet_->OnSignTop200(s, e);
 }
 void MainWindow::OnWalletLearnMore(
     winrt::Microsoft::UI::Xaml::Documents::Hyperlink const&,
