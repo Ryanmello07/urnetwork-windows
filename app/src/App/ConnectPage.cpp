@@ -623,10 +623,15 @@ void ConnectPage::ApplyServiceSetup(urnw::ServiceSetup::Snapshot const& snap) {
 }
 
 // The update banner (beta spec §5): MainWindow's snapshot copy, rendered onto
-// UpdateBar, directly under the service bar, by the renderer both update
-// banners share.
+// UpdateBar by the renderer both update banners share. The bar is pinned
+// under the pane's scroller, so its row is never under the status strip; it
+// is collapsed while closed, so with nothing to say it takes no room from the
+// column above it.
 void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) {
-  RenderUpdateBanner(w_.UpdateBar(), snap);
+  auto bar = w_.UpdateBar();
+  RenderUpdateBanner(bar, snap);
+  bar.Visibility(bar.IsOpen() ? winrt::Microsoft::UI::Xaml::Visibility::Visible
+                              : winrt::Microsoft::UI::Xaml::Visibility::Collapsed);
 }
 
 // An update banner (beta spec §5), the connect screen's UpdateBar or the
@@ -827,7 +832,9 @@ void ConnectPage::RenderUpdateBanner(InfoBar const& bar, urnw::UpdateChecker::Sn
 // failure: the new product is registered and its service runs, and the files
 // that were in use are replaced when Windows restarts. Whenever msiexec ran,
 // it stopped the VPN session with the service, and the app does not connect
-// by itself, so the banner says so.
+// by itself: the banner says so when a VPN was connected as the update began
+// (UpdateChecker::Result::vpnWasConnected), and says nothing of a VPN to a
+// copy that had none.
 winrt::Microsoft::UI::Xaml::Controls::InfoBarSeverity ConnectPage::ApplyUpdateResult(
     urnw::UpdateChecker::Snapshot const& snap, winrt::hstring& title, std::wstring& message) {
   using InfoBarSeverity = winrt::Microsoft::UI::Xaml::Controls::InfoBarSeverity;
@@ -838,21 +845,24 @@ winrt::Microsoft::UI::Xaml::Controls::InfoBarSeverity ConnectPage::ApplyUpdateRe
   const std::wstring log = result.logPath.empty() ? std::wstring{} : L", log: " + result.logPath;
   constexpr wchar_t kReconnect[] =
       L"The VPN was disconnected for the update; connect again to protect this device.";
+  // The line about the VPN, after a sentence of the message, or nothing.
+  const bool reconnect = result.vpnWasConnected;
+  const std::wstring vpn = reconnect ? std::wstring{L" "} + kReconnect : std::wstring{};
   switch (result.view) {
     case ReportView::Installed:
       title = winrt::hstring{L"Updated to v" + result.version};
-      message = kReconnect;
+      if (reconnect) message = kReconnect;
       return InfoBarSeverity::Success;
     case ReportView::RestartApp:
       title = winrt::hstring{L"Restart URnetwork to finish the update to v" + result.version};
       message = std::wstring{L"The new version is installed, and the one running is still v"} +
-                current + L". Quit URnetwork from its tray icon and start it again. " + kReconnect;
+                current + L". Quit URnetwork from its tray icon and start it again." + vpn;
       return InfoBarSeverity::Warning;
     case ReportView::RestartWindows:
       title = winrt::hstring{L"Restart Windows to finish the update to v" + result.version};
       message = std::wstring{L"The new version is installed and its service is running. Files "
-                             L"that were in use are replaced when Windows restarts. "} +
-                kReconnect;
+                             L"that were in use are replaced when Windows restarts."} +
+                vpn;
       return InfoBarSeverity::Warning;
     default:  // NotInstalled; a Hidden report is never a Result
       break;
@@ -862,8 +872,8 @@ winrt::Microsoft::UI::Xaml::Controls::InfoBarSeverity ConnectPage::ApplyUpdateRe
                                    ? L" Show the installer to install it yourself."
                                    : L"";
   if (urnw::update::OutcomeOf(result.exitCode) != urnw::update::Outcome::Refused) {
-    message = std::format(L"Windows Installer ended with error {}{}. You are still on v{}. {}{}",
-                          result.exitCode, log, current, kReconnect, instead);
+    message = std::format(L"Windows Installer ended with error {}{}. You are still on v{}.{}{}",
+                          result.exitCode, log, current, vpn, instead);
     return InfoBarSeverity::Error;
   }
   std::wstring why;

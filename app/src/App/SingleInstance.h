@@ -19,6 +19,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <optional>
 
 #include "InstanceHandover.h"
 #include "UpdateMarker.h"
@@ -47,8 +48,10 @@ bool LaunchedByAutostart();
 // (a process handle with PROCESS_QUERY_LIMITED_INFORMATION), still runs: the
 // installer is closing it. Until the helper ends, a launch exits instead of
 // starting the app over the files the installer replaces. Before this app
-// exits, a launch reaches it as any launch does.
-void RecordUpdateInProgress(void* installerProcess);
+// exits, a launch reaches it as any launch does. `vpnConnected`: a VPN was
+// connected when the update began, which the update's report reads
+// (TakeEndedUpdate).
+void RecordUpdateInProgress(void* installerProcess, bool vpnConnected);
 
 // This process is the installer's relaunch after an update: its command line
 // has instance::kAfterUpdateArgument.
@@ -64,6 +67,12 @@ void AwaitUpdateEnd();
 // is too old, it does not parse) is deleted on the way, so it never refuses a
 // later launch.
 bool UpdateInProgress();
+
+// The marker this process deleted as stale, once: the record of an update
+// that is over, with whether a VPN was connected when it began. The update
+// checker reads it with the helper's report; nullopt when this process
+// deleted none, or it was read already.
+std::optional<update::UpdateMarker> TakeEndedUpdate();
 
 // Tells the user that the app is updating and this launch will not start it.
 // Blocks until dismissed, or at most kUpdatingNoticeMs: this process runs

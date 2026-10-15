@@ -825,6 +825,8 @@
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
+                            <!-- the update banner, under the scroller (UpdateBar) -->
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
                         <Border Style="{StaticResource UrPaneHeaderStyle}">
                             <Grid>
@@ -980,23 +982,10 @@
                                      ConnectPage::ApplyServiceSetup (one writer, like the
                                      balance bar above); the action button is built in the
                                      MainWindow ctor beside the balance bar's. Package D's
-                                     update-available banner stacks directly BELOW this one. -->
+                                     update-available banner is under this column, not in
+                                     it (UpdateBar, below the scroller). -->
                                 <InfoBar x:Name="ServiceSetupBar" IsOpen="False" IsClosable="False"
                                          Margin="12,8" Severity="Warning" />
-                                <!-- a newer release exists (beta spec §5): one click downloads
-                                     the official MSI, verifies it against the asset's SHA-256
-                                     digest from the releases API, starts the installer and
-                                     quits. Same bar shape and one-writer discipline as the two
-                                     above: everything is written by
-                                     ConnectPage::ApplyUpdateChecker, and the action button and
-                                     the Later link are built in the MainWindow ctor beside
-                                     theirs, as one row in this bar's content: the bar's own
-                                     action slot has room for one control. Severity is set in
-                                     code - Informational normally, Error when an apply
-                                     failed. -->
-                                <InfoBar x:Name="UpdateBar" IsOpen="False" IsClosable="False"
-                                         Margin="12,8" Severity="Informational"
-                                         AutomationProperties.AutomationId="acceptance.update.banner" />
 
                                 <!-- provide ....................................... -->
                                 <Border Style="{StaticResource UrGroupHeaderStyle}">
@@ -1263,6 +1252,32 @@
                                 </LinearGradientBrush>
                             </Border.Background>
                         </Border>
+                        <!-- a newer release exists (beta spec §5): one click downloads
+                             the official MSI, verifies it against the asset's SHA-256
+                             digest from the releases API, starts the installer and
+                             quits. Same bar shape and one-writer discipline as the
+                             service and balance bars: everything is written by
+                             ConnectPage::ApplyUpdateChecker, and the action button and
+                             the Later link are built in the MainWindow ctor beside
+                             theirs, as one row in this bar's content: the bar's own
+                             action slot has room for one control. Severity is set in
+                             code - Informational normally, Error when an apply
+                             failed.
+
+                             UNDER the scroller, in a row of its own, not in the
+                             column. In the column it sat below the hero, the
+                             location, the Connect button and the peers line, and a
+                             window shorter than 760 put its Update and Later row
+                             under the status strip: 480x728, the size the window
+                             opens with on a 1024x768 screen, cut the row and laid
+                             the pane's bottom fade over it. Here the row is whole at
+                             every height the window allows, and the column scrolls
+                             above it. Collapsed while closed (ApplyUpdateChecker),
+                             so with nothing to say it takes no room from the
+                             column. -->
+                        <InfoBar x:Name="UpdateBar" Grid.Row="2" IsOpen="False" IsClosable="False"
+                                 Visibility="Collapsed" Margin="12,8" Severity="Informational"
+                                 AutomationProperties.AutomationId="acceptance.update.banner" />
                     </Grid>
 
                     <Border x:Name="ConnectPaneBRule" Grid.Column="1"

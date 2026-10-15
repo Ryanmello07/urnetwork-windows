@@ -14,11 +14,13 @@
 #include <format>
 #include <fstream>
 #include <iterator>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <system_error>
 #include <thread>
+#include <utility>
 
 #include "Ids.h"
 #include "Log.h"
@@ -31,6 +33,11 @@ namespace {
 // could not be created. Written once, on the launch thread, before the App
 // SDK can raise anything that reads it.
 HANDLE g_exitingSignal = nullptr;
+
+// The marker this process deleted as stale (TakeEndedUpdate): written by a
+// launch on its own thread, read once by the update checker's worker.
+std::mutex g_endedUpdateMutex;
+std::optional<update::UpdateMarker> g_endedUpdate;
 
 // The one name the instance creates and a launch opens.
 std::wstring ExitingSignalName(std::uint32_t processId) {
@@ -144,11 +151,12 @@ bool LaunchedByAutostart() {
   return instance::HasArgument(::GetCommandLineW(), instance::kAutostartArgument);
 }
 
-void RecordUpdateInProgress(void* installerProcess) {
+void RecordUpdateInProgress(void* installerProcess, bool vpnConnected) {
   const auto process = static_cast<HANDLE>(installerProcess);
   const update::UpdateMarker marker{.installerProcessId = ::GetProcessId(process),
                                     .installerCreationTime = CreationTime(process),
-                                    .writtenAt = NowSeconds()};
+                                    .writtenAt = NowSeconds(),
+                                    .vpnConnected = vpnConnected};
   if (marker.installerProcessId == 0 || marker.installerCreationTime == 0) {
     LogWarn("update: the installer's process could not be read ({}); launches during the "
             "update are not refused",
@@ -172,8 +180,9 @@ void RecordUpdateInProgress(void* installerProcess) {
             "not refused");
     return;
   }
-  LogInfo("update: launches are refused until installer process {} ends",
-          marker.installerProcessId);
+  LogInfo("update: launches are refused until installer process {} ends; a VPN was {}connected "
+          "when the update began",
+          marker.installerProcessId, marker.vpnConnected ? "" : "not ");
 }
 
 bool LaunchedAfterUpdate() {
@@ -203,6 +212,11 @@ bool UpdateInProgress() {
   }
   const update::Verdict verdict = update::Check(text, ProbeInstaller, NowSeconds());
   if (verdict == update::Verdict::Stale) {
+    // the record of an update that is over, kept for its report
+    if (const std::optional<update::UpdateMarker> ended = update::ParseUpdateMarker(*text)) {
+      std::lock_guard lock(g_endedUpdateMutex);
+      g_endedUpdate = ended;
+    }
     std::error_code error;
     std::filesystem::remove(path, error);
     LogInfo("update: removed a stale update marker{}", error ? " (it could not be deleted)" : "");
@@ -210,6 +224,11 @@ bool UpdateInProgress() {
     LogInfo("update: {}", update::ToString(verdict));
   }
   return verdict == update::Verdict::Updating;
+}
+
+std::optional<update::UpdateMarker> TakeEndedUpdate() {
+  std::lock_guard lock(g_endedUpdateMutex);
+  return std::exchange(g_endedUpdate, std::nullopt);
 }
 
 void ShowUpdatingNotice() {
