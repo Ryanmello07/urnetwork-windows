@@ -861,13 +861,14 @@ void UpdateChecker::ShowLastResult() {
   // update this launch found over (SingleInstance.cpp TakeEndedUpdate), when
   // it is of this report's update. It is written as the installer closes the
   // app, before the helper ends, so a report that finished before it was
-  // written is another update's. Unknown on every other road: a record an
-  // older build wrote, no record (a later launch, after this one read it), or
-  // another update's (UpdateMarker.h VpnOfReport).
+  // written is another update's, and Unknown, as is a record an older build
+  // wrote. The record is taken once, by the first launch after its update: a
+  // launch that took none shows the report again, and leaves the line out
+  // (UpdateMarker.h VpnOfReport, SaysVpnDisconnected).
   const std::optional<update::UpdateMarker> began = TakeEndedUpdate();
-  const update::VpnAtStart vpn = update::VpnOfReport(began, finished);
+  const std::optional<update::VpnAtStart> vpn = update::VpnOfReport(began, finished);
   LogInfo("update: {}; the report {} the line about the VPN",
-          !began ? "no record of the update that ended"
+          !began ? "this launch took no record of the update that ended"
           : vpn == update::VpnAtStart::Connected
               ? "the record of the update that ended says a VPN was connected when it began"
           : vpn == update::VpnAtStart::NotConnected
