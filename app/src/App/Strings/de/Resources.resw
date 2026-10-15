@@ -798,6 +798,10 @@
     <value>Guthabencodes</value>
     <comment>Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.</comment>
   </data>
+  <data name="battery_optimization_settings_hint" xml:space="preserve">
+    <value>Tippe, um die Akku-Optimierungsliste von Android zu öffnen. Wenn URnetwork nicht aufgeführt ist, stelle den Filter auf „Alle Apps“ und wähle dann URnetwork und „Nicht optimieren“.</value>
+    <comment>Hint under the Ignore battery optimizations row in the Google Play build. Tapping the row opens Android's system battery optimization list, which by default shows only apps that are not optimized; the quoted labels are Android's own labels for the list filter and the per-app choice.</comment>
+  </data>
   <data name="become_supporter" xml:space="preserve">
     <value>UR Pro holen</value>
     <comment>Settings</comment>
@@ -3092,9 +3096,9 @@ richtig auf</value>
     <value>URnetwork ist auf dem neuesten Stand.</value>
     <comment>macOS Settings &gt; Software update status when no newer release exists.</comment>
   </data>
-  <data name="disable_ignore_battery_hint" xml:space="preserve">
-    <value>Zum Deaktivieren gehe bitte zu App-Akkuverbrauch in den Systemeinstellungen</value>
-    <comment>Call to action</comment>
+  <data name="disable_ignore_battery_settings_hint" xml:space="preserve">
+    <value>Zum Ausschalten tippe auf den Schalter, um die Akku-Optimierungsliste von Android zu öffnen, stelle den Filter auf „Alle Apps“ und wähle dann URnetwork und „Optimieren“.</value>
+    <comment>Hint under the Ignore battery optimizations row in builds that can ask for the exemption directly. Once the exemption is on, tapping the row opens Android's system battery optimization list, which by default shows only apps that are not optimized; the quoted labels are Android's own labels for the list filter and the per-app choice.</comment>
   </data>
   <data name="disconnect" xml:space="preserve">
     <value>Trennen</value>
@@ -6931,7 +6935,7 @@ der Welt</value>
     <comment>App top200: re-check every device with the hotkey signature</comment>
   </data>
   <data name="site_app_top200_bad_signature" xml:space="preserve">
-    <value>Füge die Bindungs-Payload genau so ein, wie die App sie anzeigt.</value>
+    <value>Füge die ganze Bindungs-Payload ein: JSON mit binding und client_signature.</value>
     <comment>App top200: unparseable paste</comment>
   </data>
   <data name="site_app_top200_binding_incomplete" xml:space="preserve">
@@ -6959,7 +6963,7 @@ der Welt</value>
     <comment>App top200: hotkey input label</comment>
   </data>
   <data name="site_app_top200_hotkey_sign_hint" xml:space="preserve">
-    <value>Signiere jeden Bindungs-Digest mit dem Hotkey über deine eigenen Tools (snclaim bind-head) und füge die Signatur hier ein.</value>
+    <value>Mit --hotkey_seed_file enthält die Payload von provider fleet sign bereits die Hotkey-Signatur. Oder führe dort, wo der Hotkey-Seed liegt, provider fleet sign mit der --client_id des Geräts und --hotkey_seed_file aus und füge die ausgegebene 0x-Signatur hier ein. provider fleet bind signiert für dich mit dem Hotkey.</value>
     <comment>App top200: how to produce the hotkey signature</comment>
   </data>
   <data name="site_app_top200_hotkey_signature" xml:space="preserve">
@@ -6979,7 +6983,7 @@ der Welt</value>
     <comment>App top200: progress</comment>
   </data>
   <data name="site_app_top200_step_bind" xml:space="preserve">
-    <value>Jedes Anbietergerät signiert seine Flotten-Bindung in seiner App unter Konto › Top 200. Füge hier die Bindungs-Payload jedes Geräts ein, ein Gerät nach dem anderen.</value>
+    <value>Die Apps können Gerätebindungen noch nicht signieren. Führe auf jedem Provider-Gerät provider fleet sign mit deinem Flotten-Manifest, dem Client-Key-Seed des Geräts (~/.urnetwork/.provider.key) und den Gültigkeitsepochen aus und füge das ausgegebene JSON hier ein, ein Gerät nach dem anderen. Der Befehl sendet nichts, und die Seeds bleiben auf dem Gerät. provider fleet bind signiert und sendet dagegen in einem Schritt von deinem eigenen EVM-Schlüssel.</value>
     <comment>App top200: step 2</comment>
   </data>
   <data name="site_app_top200_step_register" xml:space="preserve">

@@ -846,6 +846,10 @@
     <value>رموز الرصيد</value>
     <comment>Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.</comment>
   </data>
+  <data name="battery_optimization_settings_hint" xml:space="preserve">
+    <value>اضغط لفتح قائمة تحسين البطارية في Android. إذا لم يظهر URnetwork، فغيّر عامل التصفية إلى «كل التطبيقات»، ثم اختر URnetwork و«عدم التحسين».</value>
+    <comment>Hint under the Ignore battery optimizations row in the Google Play build. Tapping the row opens Android's system battery optimization list, which by default shows only apps that are not optimized; the quoted labels are Android's own labels for the list filter and the per-app choice.</comment>
+  </data>
   <data name="become_supporter" xml:space="preserve">
     <value>احصل على UR Pro</value>
     <comment>Settings</comment>
@@ -3188,9 +3192,9 @@
     <value>URnetwork محدَّث.</value>
     <comment>macOS Settings &gt; Software update status when no newer release exists.</comment>
   </data>
-  <data name="disable_ignore_battery_hint" xml:space="preserve">
-    <value>لتعطيل ذلك، يرجى الانتقال إلى استخدام بطارية التطبيق في إعدادات النظام</value>
-    <comment>Call to action</comment>
+  <data name="disable_ignore_battery_settings_hint" xml:space="preserve">
+    <value>لإيقاف ذلك، اضغط على المفتاح لفتح قائمة تحسين البطارية في Android، وغيّر عامل التصفية إلى «كل التطبيقات»، ثم اختر URnetwork و«تحسين».</value>
+    <comment>Hint under the Ignore battery optimizations row in builds that can ask for the exemption directly. Once the exemption is on, tapping the row opens Android's system battery optimization list, which by default shows only apps that are not optimized; the quoted labels are Android's own labels for the list filter and the per-app choice.</comment>
   </data>
   <data name="disconnect" xml:space="preserve">
     <value>قطع الاتصال</value>
@@ -7394,7 +7398,7 @@
     <comment>App top200: re-check every device with the hotkey signature</comment>
   </data>
   <data name="site_app_top200_bad_signature" xml:space="preserve">
-    <value>الصق بيانات الربط تمامًا كما يعرضها التطبيق.</value>
+    <value>الصق بيانات الربط كاملة: JSON يحتوي على binding و client_signature.</value>
     <comment>App top200: unparseable paste</comment>
   </data>
   <data name="site_app_top200_binding_incomplete" xml:space="preserve">
@@ -7422,7 +7426,7 @@
     <comment>App top200: hotkey input label</comment>
   </data>
   <data name="site_app_top200_hotkey_sign_hint" xml:space="preserve">
-    <value>وقّع كل ملخص ربط باستخدام hotkey عبر أدواتك الخاصة (snclaim bind-head) والصق التوقيع هنا.</value>
+    <value>مع --hotkey_seed_file تتضمن بيانات الربط التي يطبعها provider fleet sign توقيع hotkey مسبقًا. أو، حيث تحتفظ ببذرة hotkey، شغّل provider fleet sign مع --client_id الخاص بالجهاز و --hotkey_seed_file والصق هنا توقيع 0x الذي يطبعه. الأمر provider fleet bind يوقّع باستخدام hotkey نيابةً عنك.</value>
     <comment>App top200: how to produce the hotkey signature</comment>
   </data>
   <data name="site_app_top200_hotkey_signature" xml:space="preserve">
@@ -7442,7 +7446,7 @@
     <comment>App top200: progress</comment>
   </data>
   <data name="site_app_top200_step_bind" xml:space="preserve">
-    <value>يوقّع كل جهاز مزود على ربط أسطوله من تطبيقه ضمن الحساب › أفضل 200. الصق هنا بيانات الربط لكل جهاز، جهازًا تلو الآخر.</value>
+    <value>لا تستطيع التطبيقات توقيع ربط الأجهزة بعد. على كل جهاز مزوّد، شغّل provider fleet sign مع بيان أسطولك وبذرة مفتاح العميل للجهاز (~/.urnetwork/.provider.key) وحقب الصلاحية، ثم الصق هنا JSON الذي يطبعه، جهازًا تلو الآخر. لا يرسل الأمر أي شيء وتبقى البذور على الجهاز. أما provider fleet bind فيوقّع ويرسل في خطوة واحدة من مفتاح EVM الخاص بك.</value>
     <comment>App top200: step 2</comment>
   </data>
   <data name="site_app_top200_step_register" xml:space="preserve">

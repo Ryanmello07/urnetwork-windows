@@ -786,6 +786,10 @@
     <value>余额码</value>
     <comment>Guidance for someone who has no code yet. Deliberately PLAIN TEXT with no link and no button: app store rules forbid steering a user to an external purchase, but nothing stops us saying where codes come from. Without this, the sheet asks for a code and gives no way to obtain one.</comment>
   </data>
+  <data name="battery_optimization_settings_hint" xml:space="preserve">
+    <value>点按即可打开 Android 的电池优化列表。如果列表中没有 URnetwork，请将筛选条件切换为“所有应用”，然后选择 URnetwork 并选择“不优化”。</value>
+    <comment>Hint under the Ignore battery optimizations row in the Google Play build. Tapping the row opens Android's system battery optimization list, which by default shows only apps that are not optimized; the quoted labels are Android's own labels for the list filter and the per-app choice.</comment>
+  </data>
   <data name="become_supporter" xml:space="preserve">
     <value>升级为 UR Pro</value>
     <comment>Settings</comment>
@@ -3068,9 +3072,9 @@
     <value>URnetwork 已是最新版本。</value>
     <comment>macOS Settings &gt; Software update status when no newer release exists.</comment>
   </data>
-  <data name="disable_ignore_battery_hint" xml:space="preserve">
-    <value>若要禁用，请前往系统设置中的应用电池使用情况</value>
-    <comment>Call to action</comment>
+  <data name="disable_ignore_battery_settings_hint" xml:space="preserve">
+    <value>如需关闭，请点按开关打开 Android 的电池优化列表，将筛选条件切换为“所有应用”，然后选择 URnetwork 并选择“优化”。</value>
+    <comment>Hint under the Ignore battery optimizations row in builds that can ask for the exemption directly. Once the exemption is on, tapping the row opens Android's system battery optimization list, which by default shows only apps that are not optimized; the quoted labels are Android's own labels for the list filter and the per-app choice.</comment>
   </data>
   <data name="disconnect" xml:space="preserve">
     <value>断开连接</value>
@@ -6815,7 +6819,7 @@
     <comment>App top200: re-check every device with the hotkey signature</comment>
   </data>
   <data name="site_app_top200_bad_signature" xml:space="preserve">
-    <value>请完全按照应用显示的内容粘贴绑定数据。</value>
+    <value>请粘贴完整的绑定数据：包含 binding 和 client_signature 的 JSON。</value>
     <comment>App top200: unparseable paste</comment>
   </data>
   <data name="site_app_top200_binding_incomplete" xml:space="preserve">
@@ -6843,7 +6847,7 @@
     <comment>App top200: hotkey input label</comment>
   </data>
   <data name="site_app_top200_hotkey_sign_hint" xml:space="preserve">
-    <value>请使用您自己的工具（snclaim bind-head）以 hotkey 为每个绑定摘要签名，然后将签名粘贴到此处。</value>
+    <value>加上 --hotkey_seed_file 后，provider fleet sign 输出的绑定数据已包含 hotkey 签名。或者，在保存 hotkey 种子的设备上，使用该设备的 --client_id 和 --hotkey_seed_file 运行 provider fleet sign，并将其输出的 0x 签名粘贴到此处。provider fleet bind 会替您用 hotkey 签名。</value>
     <comment>App top200: how to produce the hotkey signature</comment>
   </data>
   <data name="site_app_top200_hotkey_signature" xml:space="preserve">
@@ -6863,7 +6867,7 @@
     <comment>App top200: progress</comment>
   </data>
   <data name="site_app_top200_step_bind" xml:space="preserve">
-    <value>每台提供商设备都在其应用的“帐户 › 前 200 名”中为设备群绑定签名。请在此处逐台粘贴每台设备的绑定数据。</value>
+    <value>应用暂时还不能为设备绑定签名。请在每台提供者设备上运行 provider fleet sign，并提供您的设备群清单、该设备的客户端密钥种子（~/.urnetwork/.provider.key）和有效纪元，然后将其输出的 JSON 逐台粘贴到此处。该命令不发送任何内容，种子始终留在设备上。provider fleet bind 则会一步完成签名，并从您自己的 EVM 密钥提交。</value>
     <comment>App top200: step 2</comment>
   </data>
   <data name="site_app_top200_step_register" xml:space="preserve">
