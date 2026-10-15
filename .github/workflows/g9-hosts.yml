@@ -1,0 +1,168 @@
+name: G9 hosts - the log export spec on main and on this head
+
+# G9 (fix/log-export-directory-source-upstream): the log export spec
+# (app/tools/log-export-tests.cpp against App/LogExport.h) at upstream main
+# 79de3d14 and at the head d8f3027f, each from its own git worktree:
+#   ubuntu-latest      the image's c++ as tests/log_export_test.go builds it,
+#                      strace of the directory case, and the Go tests that build
+#                      it (go test -run '^TestLogExport')
+#   windows-2022/2025  MSVC, the app's compiler and STL; and the image's c++
+#                      (MinGW-w64) through the same Go tests
+# Each step states what it expects of each tree and fails when a tree does
+# otherwise: on ubuntu main must fail and the head pass; on windows both pass.
+# Throwaway: it lives on ci/g9-hosts-* branches of the fork only, each the head
+# plus this file. Never merged. It runs no app and publishes nothing.
+on:
+  push:
+    branches:
+      - 'ci/g9-hosts-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  MAIN_SHA: 79de3d149be69dd8e63ef414eed4d98cb9977b84
+  HEAD_SHA: d8f3027f3b3c96c3146a4ba781d4b39982c52df8
+
+jobs:
+  ubuntu:
+    name: ubuntu-latest, the image's c++ - main and head
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Windows repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: The runner's C++ toolchain
+        run: |
+          echo "c++ -> $(readlink -f "$(command -v c++)")"
+          c++ --version | head -1
+          dpkg-query -W -f='${Package} ${Version}\n' libstdc++6 libc6 'g++-*' 'libstdc++-*-dev' 2>/dev/null | grep -v '^\S* $' || true
+          lib=$(readlink -f "$(c++ -print-file-name=libstdc++.so.6)")
+          echo "libstdc++.so.6 the compiler links: $lib, newest $(strings "$lib" | grep -E '^GLIBCXX_[0-9.]+$' | sort -V | tail -1)"
+
+      - name: The two trees
+        run: |
+          test "$(git rev-parse HEAD~1)" = "$HEAD_SHA" || { echo "::error::HEAD~1 is not $HEAD_SHA"; exit 1; }
+          git worktree add -q "$RUNNER_TEMP/tree-main" "$MAIN_SHA"
+          git worktree add -q "$RUNNER_TEMP/tree-head" "$HEAD_SHA"
+          for t in main head; do echo "tree-$t: $(git -C "$RUNNER_TEMP/tree-$t" log -1 --format='%H %s')"; done
+
+      - name: The spec on each tree, with strace on the directory case
+        run: |
+          sudo apt-get install -y strace > /dev/null 2>&1 || { sudo apt-get update > /dev/null && sudo apt-get install -y strace > /dev/null; }
+          fail=0
+          for t in main head; do
+            tree="$RUNNER_TEMP/tree-$t"
+            work="$RUNNER_TEMP/spec-$t"
+            mkdir -p "$work/inc"
+            cp "$tree/app/src/App/AuthLink.h" "$tree/app/src/App/LogExport.h" "$work/inc/"
+            echo "=== $t: c++ -std=c++20 -Wall -Wextra -Werror (as tests/log_export_test.go builds it)"
+            c++ -std=c++20 -Wall -Wextra -Werror -I"$work/inc" "$tree/app/tools/log-export-tests.cpp" -o "$work/spec"
+            status=0
+            "$work/spec" "$work/scratch" > "$work/out.txt" || status=$?
+            cat "$work/out.txt"
+            echo "$t: spec exit $status"
+            strace -f -e trace=openat,read -o "$work/strace.txt" "$work/spec" "$work/scratch-strace" > /dev/null || true
+            echo "$t: strace, the directory case (sub, out2.log):"
+            grep -E '/sub"|out2\.log|EISDIR' "$work/strace.txt" | sed -E 's/^[0-9]+ +//' || true
+            if [ "$t" = main ]; then
+              if [ "$status" -ne 1 ] || ! grep -q 'FAIL directory: a directory is not copied as a log' "$work/out.txt"; then
+                echo "::error::main was expected to fail the directory check here"; fail=1
+              fi
+            elif [ "$status" -ne 0 ]; then
+              echo "::error::the head was expected to pass every check"; fail=1
+            fi
+          done
+          exit $fail
+
+      - name: go test -run '^TestLogExport' on each tree
+        run: |
+          fail=0
+          for t in main head; do
+            echo "=== $t"
+            status=0
+            (cd "$RUNNER_TEMP/tree-$t" && go test -count=1 -run '^TestLogExport' -v ./tests) || status=$?
+            echo "$t: go test exit $status"
+            if [ "$t" = main ] && [ "$status" -eq 0 ]; then echo "::error::main was expected to fail TestLogExport here"; fail=1; fi
+            if [ "$t" = head ] && [ "$status" -ne 0 ]; then echo "::error::the head was expected to pass"; fail=1; fi
+          done
+          exit $fail
+
+  windows:
+    name: ${{ matrix.os }}, MSVC and the image's c++ - main and head
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025]
+    steps:
+      - name: Check out Windows repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: The two trees
+        shell: pwsh
+        run: |
+          $parent = git rev-parse HEAD~1
+          if ($parent -ne $env:HEAD_SHA) { throw "HEAD~1 is $parent, not $env:HEAD_SHA" }
+          git worktree add -q "$env:RUNNER_TEMP\tree-main" $env:MAIN_SHA
+          git worktree add -q "$env:RUNNER_TEMP\tree-head" $env:HEAD_SHA
+          foreach ($t in 'main', 'head') { "tree-${t}: $(git -C "$env:RUNNER_TEMP\tree-$t" log -1 --format='%H %s')" }
+
+      - name: The spec under MSVC on each tree
+        shell: pwsh
+        run: |
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" `
+            -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          Import-Module "$vs\Common7\Tools\Microsoft.VisualStudio.DevShell.dll"
+          Enter-VsDevShell -VsInstallPath $vs -SkipAutomaticLocation -DevCmdArguments '-arch=x64 -host_arch=x64'
+          "Visual Studio: $vs"
+          "MSVC: $(cmd /c 'cl 2>&1' | Select-Object -First 1)"
+          $fail = $false
+          foreach ($t in 'main', 'head') {
+            $tree = "$env:RUNNER_TEMP\tree-$t"
+            $work = "$env:RUNNER_TEMP\msvc-$t"
+            New-Item -ItemType Directory -Force $work | Out-Null
+            "=== ${t}: cl /std:c++20 /EHsc /W4"
+            cl /nologo /std:c++20 /EHsc /W4 /I "$tree\app\src\App" "$tree\app\tools\log-export-tests.cpp" "/Fe$work\spec.exe" "/Fo$work\spec.obj"
+            if ($LASTEXITCODE -ne 0) { throw "MSVC could not build the spec at $t" }
+            & "$work\spec.exe" "$work\scratch"
+            $status = $LASTEXITCODE
+            "${t}: spec exit $status"
+            if ($status -ne 0) { "::error::the spec was expected to pass at $t under MSVC"; $fail = $true }
+          }
+          if ($fail) { exit 1 }
+
+      - name: The image's c++ and go test -run '^TestLogExport' on each tree
+        shell: pwsh
+        run: |
+          $cxx = Get-Command c++ -ErrorAction SilentlyContinue
+          if (-not $cxx -and (Test-Path 'C:\mingw64\bin\c++.exe')) { $env:PATH = "C:\mingw64\bin;$env:PATH"; $cxx = Get-Command c++ }
+          if (-not $cxx) { throw "no c++ on this image" }
+          "c++: $($cxx.Source)"
+          & $cxx.Source --version | Select-Object -First 1
+          $fail = $false
+          foreach ($t in 'main', 'head') {
+            "=== $t"
+            Push-Location "$env:RUNNER_TEMP\tree-$t"
+            go test -count=1 -run '^TestLogExport' -v ./tests
+            $status = $LASTEXITCODE
+            Pop-Location
+            "${t}: go test exit $status"
+            if ($status -ne 0) { "::error::go test was expected to pass at $t here"; $fail = $true }
+          }
+          if ($fail) { exit 1 }
