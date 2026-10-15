@@ -179,6 +179,7 @@ void TestTheMarkerSaysWhetherAVpnWasConnected() {
       "4321 133000000000000000 1900000000 1 1",
       "4321 133000000000000000 1900000000  1",
       "4321 133000000000000000 1900000000 -1",
+      "4321 133000000000000000  1",
   };
   for (std::string_view text : broken) {
     Check(!ParseUpdateMarker(text).has_value(), "vpn: '" + std::string(text) + "' is not a marker");
