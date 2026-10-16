@@ -19,7 +19,10 @@
 #include "BalanceGate.h"
 #include "InstanceHandover.h"
 #include "SdkHost.h"
+#include "StatsReadOrder.h"
+#include "TapHold.h"
 #include "SubscriptionBalance.h"
+#include "TrayConnectionState.h"
 #include "TrayIcon.h"
 #include "UpdateChecker.h"
 #include "UrIoApproval.h"
@@ -190,6 +193,10 @@ class AppController {
   // show through OnStats).
   void PublishBalanceRecovery();
   void UpdateTray();
+  // A tap the session slot recorded (SdkHost::SetGestureHandler): the tray and
+  // the window hold its state until a snapshot read after it settled. UI
+  // thread.
+  void OnTapRecorded(std::uint64_t gesture, taphold::Kind kind);
   // THE LAST STATUS THE SERVICE PUSHED, in the vocabulary of the shared
   // decision table (Common/ConnectAction.h). The tray reads this rather than
   // any app-side belief for the reason its recovery items exist at all: they
@@ -201,6 +208,12 @@ class AppController {
   // claim when no stats have ever flowed (the feed is presentation-scoped, so a
   // window that has never been shown has no evidence either way).
   health::State TrayHealth() const;
+  // What the tray decides its status, icon and Connect/Disconnect item on
+  // (TrayConnectionState.h): the sign-in, the service's last status and the
+  // last stats push's health. The wfp state points into lastTunnelStatus_.
+  tray::Facts CurrentTrayFacts() const;
+  // The held tap's health, while one is held and the app is signed in.
+  std::optional<health::State> HeldTrayHealth() const;
   void ReconcileWindowPresentation();
   template <class F>
   void OnUi(F&& f);  // marshal onto the UI thread
@@ -272,6 +285,10 @@ class AppController {
   // cleared on any tunnel transition, because exit evidence is only valid
   // within the tunnel session that produced it (see OnTunnelState).
   std::optional<health::State> trayHealth_;
+  // The tap the tray holds (TapHold.h): its health stands in for the pushed
+  // one until a snapshot read after the tap settled ends it. Signed out it
+  // holds nothing.
+  std::optional<taphold::Hold> trayTap_;
   // Set when the app ends (Shutdown: the tray "Quit", a close request, the
   // end of the Windows session), so the window's Closing handler lets it close instead
   // of hiding to tray (macOS parity: X/close hides, tray Quit exits). Atomic
@@ -292,6 +309,8 @@ class AppController {
   std::uint64_t windowHides_ = 0;  // how many HideWindow calls there have been (WindowHides)
   bool windowMinimized_ = false;  // IsIconic, synced by SyncWindowMinimized
   bool windowVisible_ = false;    // the reconciled result: the presentation is running
+  // which stats snapshots OnStats still applies: the newest read wins
+  urnw::StatsReadOrder statsReadOrder_;
   std::optional<proto::TunnelStatus> lastTunnelStatus_;
   // the out-of-balance state, latched (OutOfBalanceLatch) because the contract
   // status is reset with the destination and the raw push alone forgets it on

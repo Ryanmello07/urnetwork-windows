@@ -15,6 +15,7 @@
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -66,6 +67,9 @@ class SettingsPage {
   // Licenses row lives there, and moves to the foot of General while About is
   // folded (see BuildLicensesRows).
   void ApplyAboutPaneVisible(bool visible);
+  // A sign-out's tail runs off the UI thread (SdkHost::Logout): Sign out stays
+  // disabled until it ends, so the click that started it is the only one.
+  void SetSigningOut(bool signingOut);
   // Manage Subscription shows only for a Stripe subscription
   // (ShowsManageSubscription): the store family from the balance snapshot.
   void ApplySubscriptionStore(std::string const& storeFamily);
@@ -230,6 +234,9 @@ class SettingsPage {
   winrt::Microsoft::UI::Xaml::Controls::StackPanel authMethodsPanel_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::TextBlock deviceNameValue_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::TextBlock deviceSpecValue_{nullptr};
+  // the danger section's Sign out row, and whether a sign-out is ending
+  winrt::Microsoft::UI::Xaml::Controls::Button signOutRow_{nullptr};
+  bool signingOut_ = false;
   winrt::Microsoft::UI::Xaml::Controls::ToggleSwitch advancedMode_{nullptr};
   // IsOn assignment raises Toggled, so a push from the apply path would be
   // written straight back through SdkHost without this. Same guard, same reason,
@@ -297,6 +304,8 @@ class SettingsPage {
   bool preferencesLoaded_ = false;
   // same echo guard for the kill switch, whose value is written by the load
   bool applyingKillSwitch_ = false;
+  // the kill switch writes made, so only the last one's answer is shown
+  uint64_t killSwitchWrites_ = 0;
   // and for the launch-on-startup toggle, written whenever Windows is read
   bool applyingLaunchAtStartup_ = false;
 

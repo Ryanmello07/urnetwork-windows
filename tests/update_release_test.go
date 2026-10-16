@@ -369,7 +369,9 @@ func TestUpdateReleaseRejectsWeakerDecisions(t *testing.T) {
 			"an offer is taken as fresh for five minutes"},
 		{"a second check before every click", "ReleaseSelection.h",
 			"if (secondsSince < 0 || secondsSince > kOfferFreshSeconds) return true;",
-			"if (secondsSince < 0 || secondsSince >= 0) return true;",
+			// The mutant must reach the assertion under -Werror, without a
+			// compiler diagnostic for overlapping comparisons stopping it first.
+			"return true;",
 			"a fresh offer made the same day needs no second check"},
 		{"a feed without a soak never checked again", "ReleaseSelection.h",
 			"  if (secondsSince < 0 || secondsSince > kOfferFreshSeconds) return true;\n  if (feed.soakSeconds <= 0 || serverUnixSecondsAtCheck <= 0) return false;\n",

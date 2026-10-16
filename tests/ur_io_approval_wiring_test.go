@@ -166,12 +166,12 @@ func TestApprovalAttemptRidesTheFlowSerial(t *testing.T) {
 		t.Error("approvalFlow_ is not written by BeginBrowserApproval and read by RedeemApprovedCode")
 	}
 
-	logout := definitionBody(t, "SdkHost.cpp", host, "void SdkHost::Logout() {")
+	logout := signOutSource(t, host)
 	signOutRequireInOrder(t, "SdkHost::Logout", logout,
 		regexp.QuoteMeta(`CancelPendingWalletFlows("superseded by signing out");`),
 		regexp.QuoteMeta("pendingInstantJwt_.reset();"),
 		regexp.QuoteMeta("pendingApprovedJwt_.reset();"),
-		regexp.QuoteMeta("asyncLocalState_->logout("))
+		regexp.QuoteMeta("localState_->logout();"))
 
 	// the network of the space: the official one is the operator's host and no url of the user's own, any other is named by the API
 	// url the client really uses (what getApiUrl answers: what Change Network API typed, or what the host derives), and one whose url
@@ -221,7 +221,7 @@ func TestApprovalAttemptRidesTheFlowSerial(t *testing.T) {
 		"void SdkHost::SignInWithSso(",
 	} {
 		body := definitionBody(t, "SdkHost.cpp", host, signature)
-		if !strings.Contains(body, "SetAuthState(AuthState::Authenticating);") {
+		if !strings.Contains(body, "SetRegistrationAuthState(authEpoch, AuthState::Authenticating);") {
 			t.Errorf("%s no longer pushes AuthState::Authenticating when it starts: that push is what ends a browser approval that is waiting", signature)
 		}
 	}
@@ -247,8 +247,10 @@ func TestRedeemHoldsTheCredentialUntilConfirmed(t *testing.T) {
 		regexp.QuoteMeta("ApprovedNetwork::Failure::Refused"),
 		regexp.QuoteMeta(`JwtClaimString(result->by_jwt, "network_name")`),
 		regexp.QuoteMeta("if (!networkName || networkName->empty()) {"),
-		regexp.QuoteMeta("superseded = flow == 0 || !walletFlows_.IsCurrent(flow);"),
-		regexp.QuoteMeta("if (!superseded) pendingApprovedJwt_ = result->by_jwt;"),
+		regexp.QuoteMeta("superseded = flow == 0 || !walletFlows_.IsCurrent(flow) || !AuthEventIsCurrent(authEpoch);"),
+		regexp.QuoteMeta("if (!superseded) {"),
+		regexp.QuoteMeta("pendingApprovedJwt_ = result->by_jwt;"),
+		regexp.QuoteMeta("pendingApprovedEpoch_ = authEpoch;"),
 		regexp.QuoteMeta("out.ok = true;"),
 		`std::scoped_lock lock\(mutex_\);\s*if \(api_\) \{\s*superseded = flow == 0 \|\| !walletFlows_\.IsCurrent\(flow\);\s*if \(!superseded\) \{\s*api_->authCodeLogin\(args, answer\);\s*return;\s*\}\s*\}`)
 	if count := strings.Count(redeem, "authCodeLogin("); count != 1 {
@@ -272,10 +274,10 @@ func TestRedeemHoldsTheCredentialUntilConfirmed(t *testing.T) {
 		regexp.QuoteMeta("jwt = std::move(*pendingApprovedJwt_);"),
 		regexp.QuoteMeta("pendingApprovedJwt_.reset();"),
 		regexp.QuoteMeta(`done({false, false, "no approved sign-in is pending"});`),
-		regexp.QuoteMeta("SetAuthState(AuthState::Authenticating);"),
-		regexp.QuoteMeta("RegisterNetworkClient(jwt, [this, done](AuthResult r) {"),
+		regexp.QuoteMeta("SetRegistrationAuthState(authEpoch, AuthState::Authenticating);"),
+		regexp.QuoteMeta("RegisterNetworkClient(jwt, [this, done, authEpoch](AuthResult r) {"),
 		regexp.QuoteMeta("if (!r.ok) {"),
-		regexp.QuoteMeta(`if (api_) api_->setByJwt("");`),
+		regexp.QuoteMeta(`if (AuthEventIsCurrent(authEpoch) && api_) api_->setByJwt("");`),
 		regexp.QuoteMeta("if (done) done(r);"))
 	if count := strings.Count(confirm, "RegisterNetworkClient("); count != 1 {
 		t.Errorf("ConfirmApprovedNetwork registers %d times; once, with the credential it took out of the hold", count)
@@ -287,7 +289,7 @@ func TestRedeemHoldsTheCredentialUntilConfirmed(t *testing.T) {
 	holders := 0
 	for _, signature := range []string{
 		"void SdkHost::RedeemApprovedCode(", "void SdkHost::ConfirmApprovedNetwork(", "void SdkHost::DiscardApprovedNetwork(",
-		"bool SdkHost::ApplyNetworkServer(", "void SdkHost::Logout() {",
+		"bool SdkHost::ApplyNetworkServer(", "void SdkHost::SignOutTailLocked() {",
 	} {
 		holders += strings.Count(definitionBody(t, "SdkHost.cpp", host, signature), "pendingApprovedJwt_")
 	}

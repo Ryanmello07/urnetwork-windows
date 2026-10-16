@@ -190,10 +190,11 @@ LoginPage* AppController::LoginPageOrNull() {
 	// and the number is judged under the lock the handle is read under
 	{"SdkHost.cpp", urIoHost, "SdkHost::RedeemApprovedCode", "void SdkHost::RedeemApprovedCode(const std::string& code, std::function<void(ApprovedNetwork)> done) {", `
 void SdkHost::RedeemApprovedCode(const std::string& code, std::function<void(ApprovedNetwork)> done) {
+  const std::uint64_t authEpoch = signOutRun_.Epoch();
   urnet::AuthCodeLoginArgs args;
   args.auth_code = code;
   const std::uint64_t flow = approvalFlow_.load(std::memory_order_acquire);
-  const auto answer = [this, done, flow](std::optional<urnet::AuthCodeLoginResult> result,
+  const auto answer = [this, done, flow, authEpoch](std::optional<urnet::AuthCodeLoginResult> result,
                                          std::optional<std::string> err) {
     ApprovedNetwork out;
     if (err || !result) {
@@ -222,8 +223,11 @@ void SdkHost::RedeemApprovedCode(const std::string& code, std::function<void(App
     bool superseded = false;
     {
       std::scoped_lock lock(mutex_);
-      superseded = flow == 0 || !walletFlows_.IsCurrent(flow);
-      if (!superseded) pendingApprovedJwt_ = result->by_jwt;
+      superseded = flow == 0 || !walletFlows_.IsCurrent(flow) || !AuthEventIsCurrent(authEpoch);
+      if (!superseded) {
+        pendingApprovedJwt_ = result->by_jwt;
+        pendingApprovedEpoch_ = authEpoch;
+      }
     }
     if (superseded) {
       out.failure = ApprovedNetwork::Failure::Refused;
@@ -263,10 +267,12 @@ void SdkHost::RedeemApprovedCode(const std::string& code, std::function<void(App
 	{"SdkHost.cpp", urIoHost, "SdkHost::ConfirmApprovedNetwork", "void SdkHost::ConfirmApprovedNetwork(std::function<void(AuthResult)> done) {", `
 void SdkHost::ConfirmApprovedNetwork(std::function<void(AuthResult)> done) {
   std::string jwt;
+  std::uint64_t authEpoch = 0;
   {
     std::scoped_lock lock(mutex_);
     if (pendingApprovedJwt_) {
       jwt = std::move(*pendingApprovedJwt_);
+      authEpoch = pendingApprovedEpoch_;
       pendingApprovedJwt_.reset();
     }
   }
@@ -274,14 +280,14 @@ void SdkHost::ConfirmApprovedNetwork(std::function<void(AuthResult)> done) {
     if (done) done({false, false, "no approved sign-in is pending"});
     return;
   }
-  SetAuthState(AuthState::Authenticating);
-  RegisterNetworkClient(jwt, [this, done](AuthResult r) {
+  SetRegistrationAuthState(authEpoch, AuthState::Authenticating);
+  RegisterNetworkClient(jwt, [this, done, authEpoch](AuthResult r) {
     if (!r.ok) {
       std::scoped_lock lock(mutex_);
-      if (api_) api_->setByJwt("");
+      if (AuthEventIsCurrent(authEpoch) && api_) api_->setByJwt("");
     }
     if (done) done(r);
-  });
+  }, authEpoch);
 }`},
 	// the held credential is dropped
 	{"SdkHost.cpp", urIoHost, "SdkHost::DiscardApprovedNetwork", "void SdkHost::DiscardApprovedNetwork() {", `

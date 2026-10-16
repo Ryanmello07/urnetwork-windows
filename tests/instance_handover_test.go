@@ -239,7 +239,9 @@ func TestInstanceHandoverRejectsARelaunchThatDoesNotWaitOutTheUpdate(t *testing.
 		return handoverReplace(t, source, "  while (updating()) {\n", "  if (updating()) {\n")
 	}, "after update: the relaunch waits while the update runs, and goes when it ends")
 	requireInstanceHandoverFailure(t, func(source string) string {
-		return handoverReplace(t, source, "    if (now() >= deadline) return false;\n", "    if (true) return false;\n")
+		// Keep the deliberately weakened mutant compilable under -Werror so
+		// the runtime assertion, rather than an unused-variable warning, fails.
+		return handoverReplace(t, source, "    if (now() >= deadline) return false;\n", "    (void)deadline;\n    return false;\n")
 	}, "after update: the relaunch waits while the update runs, and goes when it ends")
 	requireInstanceHandoverFailure(t, func(source string) string {
 		return handoverReplace(t, source, "    if (now() >= deadline) return false;\n",

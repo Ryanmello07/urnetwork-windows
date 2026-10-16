@@ -231,12 +231,18 @@ func TestProvideWiringAppReconcilesOnModePolicyAndKillSwitch(t *testing.T) {
 	provideRequireOrder(t, "ApplyTransportSettings", transport,
 		"localState_->setProviderTransportSettings(settings);",
 		"if (provider && !device_) RequestProviderReconcile(")
-	killSwitch := definitionBody(t, "SdkHost.cpp", source, "bool SdkHost::SetKillSwitch(bool on)")
+	killSwitch := definitionBody(t, "SdkHost.cpp", source, "void SdkHost::SetKillSwitch(bool on,")
 	provideRequireOrder(t, "SetKillSwitch", killSwitch, "service_.SetKillSwitch(on)",
 		"if (!on && !device_) RequestProviderReconcile(")
 	register := definitionBody(t, "SdkHost.cpp", source, "void SdkHost::RegisterNetworkClient(")
 	provideRequireOrder(t, "RegisterNetworkClient", register,
-		"localState_->setByClientJwt(*result->by_client_jwt);", `RequestProviderReconcile("signed in");`)
+		"SetRegistrationAuthState(signOutEpoch,", "} else if (r.ok) {")
+	provideRequireOrder(t, "RegisterNetworkClient", register,
+		"} else if (r.ok) {", `RequestProviderReconcile("signed in");`)
+	provideRequireOrder(t, "RegisterNetworkClient", register,
+		"localState_->setByClientJwt(*result->by_client_jwt);", "if (!persistenceError.empty())")
+	provideRequireOrder(t, "RegisterNetworkClient", register,
+		`complete(AuthResult{false, false, persistenceError});`, "LogInfo(\"sdkhost: signed in;")
 	server := definitionBody(t, "SdkHost.cpp", source, "bool SdkHost::ApplyNetworkServer(")
 	provideRequire(t, "ApplyNetworkServer", server, `EnsureSession("network server change");`,
 		`RequestProviderReconcile("network server change, signed out");`)
@@ -301,7 +307,7 @@ func TestProvideWiringIndicatorShowsTheProvider(t *testing.T) {
 	provideRequire(t, "AdoptServiceFacts", adopt,
 		"serviceProviderRunning_.exchange(st.provider_running);",
 		"serviceProviderKnown_.store(true);")
-	for _, name := range []string{"void SdkHost::OnServiceDisconnected()", "void SdkHost::Logout()"} {
+	for _, name := range []string{"void SdkHost::OnServiceDisconnected()", "void SdkHost::SignOutTailLocked()"} {
 		body := definitionBody(t, "SdkHost.cpp", source, name)
 		provideRequire(t, name, body, "serviceProviderRunning_.store(false);")
 	}

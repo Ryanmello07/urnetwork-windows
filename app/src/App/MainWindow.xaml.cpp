@@ -2973,6 +2973,18 @@ void MainWindow::CloseSheetsForHide() {
   for (auto const& dialog : openDialogs) dialog.Hide();
 }
 
+void MainWindow::OnStartWaitChanged(urnw::StartWaitChange change) {
+  connect_->OnStartWaitChanged(change);
+}
+
+void MainWindow::SetSigningOut(bool signingOut) {
+  if (settings_) settings_->SetSigningOut(signingOut);
+}
+
+void MainWindow::OnTapRecorded(std::uint64_t gesture, urnw::taphold::Kind kind) {
+  connect_->OnTapRecorded(gesture, kind);
+}
+
 void MainWindow::OnStatsChanged(urnw::LiveStats const& stats) {
   connect_->ApplyStats(stats);
   if (wallet_) wallet_->ApplyProvideState(stats);  // the Earnings provide row + gate
