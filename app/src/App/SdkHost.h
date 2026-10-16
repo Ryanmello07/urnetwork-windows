@@ -24,6 +24,8 @@
 #include "BalanceGate.h"
 #include "ClientEvents.h"
 #include "CoalescedWorker.h"
+#include "EditorApply.h"
+#include "OrderedWorker.h"
 #include "ConnectAction.h"
 #include "ConnectionHealth.h"
 #include "ExitDrain.h"
@@ -1595,7 +1597,12 @@ class SdkHost {
   std::optional<urnet::TransportStatus> CurrentTransportStatus(TransportSettingsKind kind);
   PerformanceSettings CurrentPerformanceSettings();
 
-  // Drawer mutations (called from the UI thread).
+  // Drawer mutations, called from the UI thread. Each returns at once: the
+  // write runs on this object's write worker (OrderedWorker.h), after every
+  // write made before it, because it takes mutex_ (held across whole
+  // bootstraps and connect passes) and a DeviceRemote setter holds the
+  // device's state lock through its rpc, up to the rpc timeout. What a write
+  // changes comes back through the handlers below, from that worker.
   // Connection mode / fixed ip / strong anonymization / post quantum -> device
   // performance profile. Always writes a profile — Auto carries window_type
   // "auto" with no window size — so the orthogonal settings (allowDirect,
@@ -1614,10 +1621,11 @@ class SdkHost {
   // with no service session still sees and sets the real value. Without the
   // LocalState leg this control would be permanently dead outside a live tunnel.
   bool CurrentKillSwitch();
-  // Returns false when the setting did NOT fully apply. Callers must read
-  // CurrentKillSwitch() back and show the real state: a toggle left On over a
-  // setting that did not take is the one failure mode here that costs privacy.
-  bool SetKillSwitch(bool on);
+  // `done` hears whether the setting fully applied and the value read back
+  // after the write, on the write worker. Callers must show that value: a
+  // toggle left On over a setting that did not take is the one failure mode
+  // here that costs privacy.
+  void SetKillSwitch(bool on, std::function<void(bool applied, bool actual)> done = {});
   // Provide/earn control mode: "never"|"always"|"network"|"auto"|"manual".
   // "network" is the private provider: the provider is always on, but provides
   // ONLY to same-network peers — never publicly. Persisted in LocalState like
@@ -1643,7 +1651,11 @@ class SdkHost {
   // (SpeedTestsWriteRouteFor). No app-side mirror; callers never write while
   // the switch is hidden (N1).
   void SetMeasurementsEnabled(bool on);
-  void ApplyDnsSettings(const urnet::DnsResolverSettings& settings);
+  // The DNS editor's Update: written only while the device's settings are
+  // still `opened`, the reading the editor opened on (EditorApply.h); the
+  // views take the device's reading either way.
+  void ApplyDnsSettings(const std::optional<urnet::DnsResolverSettings>& opened,
+                        const urnet::DnsResolverSettings& settings);
   // Apply a transport policy (client or provider) to the device AND mirror it
   // into the app LocalState. The service's DeviceLocal persists the policy in
   // ITS local state and restores it at creation, so a policy set while the
@@ -1655,7 +1667,11 @@ class SdkHost {
   // from it (apple DeviceManager.initDevice parity). The applied policy comes
   // back through the change listener (the service's truth when attached, the
   // queued value when not).
+  // Written only while the policy in force is still `opened`, the reading the
+  // editor opened on (EditorApply.h); otherwise nothing is written and the
+  // views take the policy in force.
   void ApplyTransportSettings(TransportSettingsKind kind,
+                              const std::optional<urnet::TransportSettings>& opened,
                               const urnet::TransportSettings& settings);
   // The create wrappers return the new override's id ("" when nothing was
   // written - no device, empty hosts, or the rpc threw), because the caller's
@@ -2078,8 +2094,9 @@ class SdkHost {
   // and for every RequestProviderReconcile.
   void ReconcileProviderLocked(const char* reason);
   // Queue that reconcile on the session worker, off the calling thread — the
-  // UI thread for a mode, policy or kill-switch change: start_provider builds a
-  // DeviceLocal in the service, and a click must not wait on it.
+  // write worker for a mode, policy or kill-switch change: start_provider
+  // builds a DeviceLocal in the service, and the writes behind it must not
+  // wait on it.
   void RequestProviderReconcile(const char* reason);
   // The provide fields of a snapshot with no DeviceRemote: the provider-only
   // device as the service's last status said, and its client count as the
@@ -2127,7 +2144,7 @@ class SdkHost {
   void ResetProviderOnlyStatus();
   void ProviderOnlyStatusUnavailable();
   // The Extender switch's write with no session: queued by SetProvideExtender
-  // (the UI thread) and sent by ProviderOnlyStatsLoop, outside mutex_. Written
+  // (the write worker) and sent by ProviderOnlyStatsLoop, outside mutex_. Written
   // or refused, the next published status replaces the switch's guess.
   void QueueProviderOnlyExtenderWrite(bool on);
   void WriteProviderOnlyExtender(bool on);
@@ -2804,6 +2821,17 @@ class SdkHost {
   // EnsureLocationsLocked under mutex_, as locationsOpener_'s job: a throw is
   // logged, not propagated.
   void EnsureLocationsOnWorker();
+  // The drawer mutations' writes, in the order made (OrderedWorker.h). Stopped
+  // with the stats publisher, above mutex_: the writes still queued run first.
+  OrderedWorker writer_;
+  // Queues a drawer mutation's write on writer_; `what` names it in the log.
+  void PostWrite(const char* what, std::function<void()> job);
+  // The three rule creates: the id at once, the write on writer_; `shape` sets
+  // the override's kind on it.
+  std::string PostRuleCreate(const char* what, const std::vector<std::string>& hosts,
+                             std::function<void(urnet::BlockActionOverride&)> shape);
+  // RemoveSplitRule's write, also UpdateSplitRule's with no hosts. writer_ only.
+  void RemoveSplitRuleOnWriter(const std::string& overrideId);
   // The egress binding currently in force on THIS process's SDK instance, as a
   // packed (index4, index6) pair, and the lock that keeps the compare and the
   // SDK call together.

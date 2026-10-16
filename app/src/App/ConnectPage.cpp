@@ -3406,9 +3406,9 @@ void ConnectPage::RunBlockQuickAction(InspectorQuickAction const& state,
               : Adv("adv_host_allowed", L"This host will be allowed"),
         overrideId);
   }
-  // Re-derive now: CreateBlockRule/RemoveBlockRule republish the overrides
-  // synchronously (the handler push lands after this click returns), so the
-  // buttons flip with the click rather than a beat later.
+  // Re-derive now; the write runs on SdkHost's write worker, and its republish
+  // of the overrides re-renders the buttons when it lands (the split rules
+  // handler calls ApplyInspector).
   ApplyInspector();
 }
 
