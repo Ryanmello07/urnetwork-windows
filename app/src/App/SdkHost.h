@@ -559,7 +559,10 @@ struct ReliabilityActionResult {
 
 class SdkHost {
  public:
-  using AuthStateHandler = std::function<void(AuthState, const std::string& error)>;
+  // The epoch follows the event through UI dispatch, so an old queued
+  // registration result cannot alter the account signed in after a logout.
+  using AuthStateHandler = std::function<void(AuthState, const std::string& error,
+                                              std::uint64_t epoch)>;
   // Fired when the sdk finds the stored auth is no longer valid on the server
   // (e.g. the client was removed, or another device signed this session out):
   // the sdk has already cleared its local auth state. `cause` is the sdk's
@@ -1349,6 +1352,7 @@ class SdkHost {
   void SetPresentationActive(bool active);
 
   void SetAuthStateHandler(AuthStateHandler h) { onAuth_ = std::move(h); }
+  bool AuthEventIsCurrent(std::uint64_t epoch) const { return signOutRun_.Epoch() == epoch; }
   void SetAuthInvalidHandler(AuthInvalidHandler h) { onAuthInvalid_ = std::move(h); }
   void SetJwtRefreshedHandler(JwtRefreshedHandler h) { onJwtRefreshed_ = std::move(h); }
   void SetTunnelStateHandler(TunnelStateHandler h) { onTunnel_ = std::move(h); }
@@ -2378,8 +2382,10 @@ class SdkHost {
   std::mutex rpcPersistenceMutex_;
   // After obtaining a network JWT, register this device and store the client JWT.
   // A live session (guest upgrade) is torn down first: the new jwt invalidates
-  // the running device, and BootstrapSession rebuilds under the new auth.
-  void RegisterNetworkClient(const std::string& byJwt, std::function<void(AuthResult)> done);
+  // the running device, and the next Connect rebuilds under the new auth.
+  // The epoch comes from before the first auth API call and is never recaptured here.
+  void RegisterNetworkClient(const std::string& byJwt, std::function<void(AuthResult)> done,
+                             std::uint64_t authEpoch);
   // Tear down the live session — listeners, view controllers, drawer caches,
   // the device, the service tunnel, and the saved RPC session — without
   // touching the stored auth or the service-persisted device identity (the
@@ -2417,19 +2423,21 @@ class SdkHost {
   void SubmitCreateNetwork(const CreateNetworkParams& params,
                            std::optional<urnet::WalletAuthArgs> walletAuth,
                            std::function<void(AuthResult)> done,
+                           std::uint64_t authEpoch,
                            const std::string& bittensorWalletId = std::string());
   // The wallet signed the challenge: authLogin{wallet_auth}. `signature` is what
   // the chain's verifier expects (base64 for SOL, hex for TAO).
   // `bittensorWalletId` is the Bittensor wallet that signed ("" for Solana).
   void AuthLoginWithWallet(const std::string& address, const std::string& signature,
                            const std::string& message, WalletConnect::Provider provider,
+                           std::uint64_t authEpoch,
                            const std::string& bittensorWalletId = std::string());
   // The bridge returned an identity token: authLogin{auth_jwt_type:provider}.
   // An identity with no network yet is retained in pendingAuthJwt_ (with its
   // provider in pendingAuthJwtType_) and the UI routes to the create-network
   // step, exactly as the wallet path does.
   void AuthLoginWithSso(const std::string& provider, const std::string& idToken,
-                        std::function<void(AuthResult)> done);
+                        std::function<void(AuthResult)> done, std::uint64_t authEpoch);
   // Bring up the controlling DeviceRemote — by reattaching to a session the
   // service already holds (the saved-blob path), or by asking the service to
   // start one. `reason` is the gesture's static reason string; the one
@@ -2456,6 +2464,9 @@ class SdkHost {
   // took the branch that starts a tunnel.) Caller holds mutex_.
   proto::TunnelStatus CurrentServiceStatusLocked(bool& answered);
   void SetAuthState(AuthState s, const std::string& error = {});
+  bool SetRegistrationAuthState(std::uint64_t epoch, AuthState s,
+                                const std::string& error = {});
+  bool ContinueAuthAttempt(std::uint64_t epoch, const std::function<void(AuthResult)>& done);
   void SubscribeStats();          // caller holds mutex_; opens presentation controllers
   LiveStats ReadStats();          // read the current snapshot from the SDK getters
   void PublishStats();            // ReadStats() -> onStats_
@@ -2871,6 +2882,7 @@ class SdkHost {
   struct DeferredSignIn {
     std::string byJwt;
     std::function<void(AuthResult)> done;
+    std::uint64_t epoch;
   };
   signoutrun::SignOutRun<DeferredSignIn> signOutRun_;
   std::function<void(bool)> onSignOutProgress_;
@@ -2998,6 +3010,7 @@ class SdkHost {
 
   WalletConnect wallet_;
   std::function<void(AuthResult)> walletAuthDone_;
+  std::uint64_t walletAuthEpoch_ = 0;
 
   // ---- the Bittensor proof in flight (one at a time, like every bridge flow)
   struct BittensorProofOutcome {
@@ -3067,10 +3080,12 @@ class SdkHost {
   // the instant network's jwt, held between CreateInstantAccount and
   // ConfirmInstantAccount so the seedphrase is read before the session exists
   std::optional<std::string> pendingInstantJwt_;
+  std::uint64_t pendingInstantEpoch_ = 0;
   // the network a ur.io approval redeemed, held between RedeemApprovedCode and
   // ConfirmApprovedNetwork so the person sees which network this computer would join
   // before the device registers under it (guarded by mutex_)
   std::optional<std::string> pendingApprovedJwt_;
+  std::uint64_t pendingApprovedEpoch_ = 0;
   // the number of the flow the last browser approval began in (BeginBrowserApproval). Its code is for the network that was
   // active then, and every flow that starts after it, a network change among them, takes the next number: so
   // RedeemApprovedCode sends the code, and keeps what comes back, only while this is still the number of the flow that
@@ -3089,6 +3104,7 @@ class SdkHost {
   // create-network step (the auth-jwt analogue of pendingWalletAuth_), with
   // the provider it came from ("google" | "apple") for auth_jwt_type
   std::optional<std::string> pendingAuthJwt_;
+  std::uint64_t pendingAuthEpoch_ = 0;
   std::string pendingAuthJwtType_;
   // The Google / Apple sign-in attempt in flight: its provider, the state the
   // api's callback must echo and the nonce the returned token must carry.
@@ -3112,6 +3128,7 @@ class SdkHost {
   // already been consumed; create-network always requests a fresh bound
   // challenge before this value can be submitted.
   std::optional<urnet::WalletAuthArgs> pendingWalletAuth_;
+  std::uint64_t pendingWalletEpoch_ = 0;
 
   AuthStateHandler onAuth_;
   AuthInvalidHandler onAuthInvalid_;

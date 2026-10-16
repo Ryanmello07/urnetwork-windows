@@ -262,7 +262,7 @@ func TestProviderOnlyStatsAppWiring(t *testing.T) {
 	provideRequire(t, "AdoptServiceFacts", adopt,
 		"if (!st.provider_running) serviceProviderClients_.store(-1);",
 		"if (providerWasRunning != st.provider_running) KickProviderOnlyStats();")
-	for _, name := range []string{"void SdkHost::OnServiceDisconnected()", "void SdkHost::Logout()"} {
+	for _, name := range []string{"void SdkHost::OnServiceDisconnected()", "void SdkHost::SignOutTailLocked()"} {
 		provideRequire(t, name, definitionBody(t, "SdkHost.cpp", source, name),
 			"serviceProviderClients_.store(-1);")
 	}

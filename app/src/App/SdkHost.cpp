@@ -768,20 +768,41 @@ bool SdkHost::Initialize() {
 //
 // loggedIn_ is written wherever the stored client jwt changes: Initialize,
 // RegisterNetworkClient's success, ApplyNetworkServer's re-derive, and Logout.
-// Note that Logout's own commit is asynchronous (asyncLocalState_->logout),
-// so the old lock-taking version ALSO returned stale-true for a while after a
-// sign-out; the flag is if anything the more accurate of the two.
+// Logout clears this flag on the click. Its worker clears local state
+// synchronously before releasing any sign-in waiting for that logout.
 bool SdkHost::IsLoggedIn() { return loggedIn_.load(std::memory_order_acquire); }
 
 void SdkHost::SetAuthState(AuthState s, const std::string& error) {
-  authState_ = s;
-  if (onAuth_) onAuth_(s, error);
+  const std::uint64_t epoch = signOutRun_.Epoch();
+  if (!signOutRun_.ApplyIfCurrent(epoch, [&] { authState_ = s; })) return;
+  if (onAuth_) onAuth_(s, error, epoch);
+}
+
+// Auth state belongs to the attempt's original epoch, including its errors.
+// Commit only atomic flags against Logout's Begin; storage stays
+// under mutex_, and UI callbacks run after releasing the short epoch lock.
+bool SdkHost::SetRegistrationAuthState(std::uint64_t epoch, AuthState s,
+                                      const std::string& error) {
+  if (!signOutRun_.ApplyIfCurrent(epoch, [&] {
+        authState_ = s;
+        if (s == AuthState::LoggedIn) loggedIn_.store(true, std::memory_order_release);
+      })) return false;
+  if (onAuth_) onAuth_(s, error, epoch);
+  return true;
+}
+
+bool SdkHost::ContinueAuthAttempt(std::uint64_t epoch,
+                                const std::function<void(AuthResult)>& done) {
+  if (AuthEventIsCurrent(epoch)) return true;
+  if (done) done(AuthResult{false, false, "signed out while this sign-in was pending"});
+  return false;
 }
 
 void SdkHost::LoginWithPassword(const std::string& userAuth,
                                 const std::string& password,
                                 std::function<void(AuthResult)> done) {
-  SetAuthState(AuthState::Authenticating);
+  const std::uint64_t authEpoch = signOutRun_.Epoch();
+  SetRegistrationAuthState(authEpoch, AuthState::Authenticating);
   urnet::AuthLoginWithPasswordArgs args;
   args.user_auth = userAuth;
   args.password = password;
@@ -790,32 +811,33 @@ void SdkHost::LoginWithPassword(const std::string& userAuth,
   args.verify_otp_numeric = true;
 
   api_->authLoginWithPassword(
-      args, [this, done](std::optional<urnet::AuthLoginWithPasswordResult> result,
+      args, [this, done, authEpoch](std::optional<urnet::AuthLoginWithPasswordResult> result,
                          std::optional<std::string> err) {
+        if (!ContinueAuthAttempt(authEpoch, done)) return;
         if (err || !result) {
           AuthResult r{false, false, err ? *err : "no result"};
-          SetAuthState(AuthState::Error, r.error);
+          SetRegistrationAuthState(authEpoch, AuthState::Error, r.error);
           if (done) done(r);
           return;
         }
         if (result->error && !result->error->message.empty()) {
           AuthResult r{false, false, result->error->message};
-          SetAuthState(AuthState::Error, r.error);
+          SetRegistrationAuthState(authEpoch, AuthState::Error, r.error);
           if (done) done(r);
           return;
         }
         if (result->verification_required) {
           AuthResult r{false, true, ""};
           r.verify_send = VerifySendNoticeOf(result->verification_required->send_error);
-          SetAuthState(AuthState::LoggedOut);
+          SetRegistrationAuthState(authEpoch, AuthState::LoggedOut);
           if (done) done(r);  // UI routes to the verify screen
           return;
         }
         if (result->network && result->network->by_jwt) {
-          RegisterNetworkClient(*result->network->by_jwt, done);
+          RegisterNetworkClient(*result->network->by_jwt, done, authEpoch);
         } else {
           AuthResult r{false, false, "login returned no network"};
-          SetAuthState(AuthState::Error, r.error);
+          SetRegistrationAuthState(authEpoch, AuthState::Error, r.error);
           if (done) done(r);
         }
       });
@@ -823,28 +845,30 @@ void SdkHost::LoginWithPassword(const std::string& userAuth,
 
 void SdkHost::LoginWithCode(const std::string& authCode,
                             std::function<void(AuthResult)> done) {
-  SetAuthState(AuthState::Authenticating);
+  const std::uint64_t authEpoch = signOutRun_.Epoch();
+  SetRegistrationAuthState(authEpoch, AuthState::Authenticating);
   urnet::AuthCodeLoginArgs args;
   args.auth_code = authCode;
-  api_->authCodeLogin(args, [this, done](std::optional<urnet::AuthCodeLoginResult> result,
+  api_->authCodeLogin(args, [this, done, authEpoch](std::optional<urnet::AuthCodeLoginResult> result,
                                          std::optional<std::string> err) {
+    if (!ContinueAuthAttempt(authEpoch, done)) return;
     if (err || !result) {
       AuthResult r{false, false, err ? *err : "no result"};
-      SetAuthState(AuthState::Error, r.error);
+      SetRegistrationAuthState(authEpoch, AuthState::Error, r.error);
       if (done) done(r);
       return;
     }
     if (result->error && !result->error->message.empty()) {
       AuthResult r{false, false, result->error->message};
-      SetAuthState(AuthState::Error, r.error);
+      SetRegistrationAuthState(authEpoch, AuthState::Error, r.error);
       if (done) done(r);
       return;
     }
     if (!result->by_jwt.empty()) {
-      RegisterNetworkClient(result->by_jwt, done);
+      RegisterNetworkClient(result->by_jwt, done, authEpoch);
     } else {
       AuthResult r{false, false, "code login returned no jwt"};
-      SetAuthState(AuthState::Error, r.error);
+      SetRegistrationAuthState(authEpoch, AuthState::Error, r.error);
       if (done) done(r);
     }
   });
@@ -856,12 +880,19 @@ void SdkHost::LoginWithCode(const std::string& authCode,
 
 void SdkHost::StartLogin(const std::string& userAuth,
                          std::function<void(LoginRouting)> done) {
+  const std::uint64_t authEpoch = signOutRun_.Epoch();
   urnet::AuthLoginArgs args;
   args.user_auth = userAuth;
 
-  api_->authLogin(args, [this, userAuth, done](std::optional<urnet::AuthLoginResult> result,
+  api_->authLogin(args, [this, userAuth, done, authEpoch](std::optional<urnet::AuthLoginResult> result,
                                                std::optional<std::string> err) {
     LoginRouting routing;
+    if (!AuthEventIsCurrent(authEpoch)) {
+      routing.route = LoginRoute::Error;
+      routing.error = "signed out while this sign-in was pending";
+      if (done) done(routing);
+      return;
+    }
     routing.userAuth = userAuth;
     if (err || !result) {
       routing.route = LoginRoute::Error;
@@ -885,7 +916,7 @@ void SdkHost::StartLogin(const std::string& userAuth,
         routed.route = r.ok ? LoginRoute::Login : LoginRoute::Error;
         routed.error = r.error;
         if (done) done(routed);
-      });
+      }, authEpoch);
       return;
     }
     if (result->auth_allowed && !result->auth_allowed->empty()) {
@@ -911,7 +942,13 @@ void SdkHost::StartLogin(const std::string& userAuth,
 
 void SdkHost::CreateNetwork(const CreateNetworkParams& params,
                             std::function<void(AuthResult)> done) {
-  SetAuthState(AuthState::Authenticating);
+  std::uint64_t authEpoch = signOutRun_.Epoch();
+  if (params.useWalletAuth || params.useAuthJwt) {
+    std::scoped_lock lock(mutex_);
+    authEpoch = params.useWalletAuth ? pendingWalletEpoch_ : pendingAuthEpoch_;
+  }
+  if (!ContinueAuthAttempt(authEpoch, done)) return;
+  SetRegistrationAuthState(authEpoch, AuthState::Authenticating);
   if (params.useWalletAuth) {
     std::optional<urnet::WalletAuthArgs> identity;
     {
@@ -920,7 +957,7 @@ void SdkHost::CreateNetwork(const CreateNetworkParams& params,
     }
     if (!identity) {
       AuthResult r{false, false, "no wallet sign-in is pending"};
-      SetAuthState(AuthState::Error, r.error);
+      SetRegistrationAuthState(authEpoch, AuthState::Error, r.error);
       if (done) done(r);
       return;
     }
@@ -939,7 +976,7 @@ void SdkHost::CreateNetwork(const CreateNetworkParams& params,
                                        : pendingBittensorWalletId_;
       BeginBittensorProof(
           flow, walletId, std::string(bittensor::kPurposeCreate), expectedAddress,
-          [this, params, identity = *identity, flow, walletId,
+          [this, params, identity = *identity, flow, walletId, authEpoch,
            done = std::move(done)](BittensorProofOutcome outcome) mutable {
             if (!outcome.ok) {
               if (!walletFlows_.IsCurrent(flow)) {
@@ -948,7 +985,7 @@ void SdkHost::CreateNetwork(const CreateNetworkParams& params,
                 return;
               }
               AuthResult r{false, false, outcome.error};
-              SetAuthState(AuthState::LoggedOut, r.error);
+              SetRegistrationAuthState(authEpoch, AuthState::LoggedOut, r.error);
               if (done) done(r);
               return;
             }
@@ -956,13 +993,13 @@ void SdkHost::CreateNetwork(const CreateNetworkParams& params,
             createAuth.wallet_address = outcome.proof.Address;
             createAuth.wallet_message = outcome.proof.Message;
             createAuth.wallet_signature = outcome.proof.Signature;
-            SubmitCreateNetwork(params, std::move(createAuth), std::move(done), walletId);
+            SubmitCreateNetwork(params, std::move(createAuth), std::move(done), authEpoch, walletId);
           });
       return;
     }
     RequestWalletChallenge(
         blockchain, expectedAddress,
-        [this, params, identity = *identity, expectedAddress, blockchain, flow,
+        [this, params, identity = *identity, expectedAddress, blockchain, flow, authEpoch,
          done = std::move(done)](std::optional<std::string> message,
                                  std::string error) mutable {
       if (!walletFlows_.IsCurrent(flow)) {
@@ -976,28 +1013,28 @@ void SdkHost::CreateNetwork(const CreateNetworkParams& params,
       if (!message) {
         AuthResult r{false, false,
                      error.empty() ? "could not fetch wallet challenge" : error};
-        SetAuthState(AuthState::LoggedOut, r.error);
+        SetRegistrationAuthState(authEpoch, AuthState::LoggedOut, r.error);
         if (done) done(r);
         return;
       }
 
       walletSignMessage_ = *message;
       walletSignDone_ =
-          [this, params, identity, expectedAddress, message = *message,
+          [this, params, identity, expectedAddress, message = *message, authEpoch,
            done = std::move(done)](bool ok, std::string publicKey,
                                    std::string signature,
                                    std::string signError) mutable {
         if (!ok) {
           AuthResult r{false, false,
                        signError.empty() ? "wallet signing failed" : signError};
-          SetAuthState(AuthState::LoggedOut, r.error);
+          SetRegistrationAuthState(authEpoch, AuthState::LoggedOut, r.error);
           if (done) done(r);
           return;
         }
         if (publicKey != expectedAddress) {
           AuthResult r{false, false,
                        "wallet account changed; use the same account to create the network"};
-          SetAuthState(AuthState::LoggedOut, r.error);
+          SetRegistrationAuthState(authEpoch, AuthState::LoggedOut, r.error);
           if (done) done(r);
           return;
         }
@@ -1006,7 +1043,7 @@ void SdkHost::CreateNetwork(const CreateNetworkParams& params,
         createAuth.wallet_address = publicKey;
         createAuth.wallet_message = message;
         createAuth.wallet_signature = signature;
-        SubmitCreateNetwork(params, std::move(createAuth), std::move(done));
+        SubmitCreateNetwork(params, std::move(createAuth), std::move(done), authEpoch);
       };
 
       wallet_.SignMessage(*message);
@@ -1014,13 +1051,15 @@ void SdkHost::CreateNetwork(const CreateNetworkParams& params,
     return;
   }
 
-  SubmitCreateNetwork(params, std::nullopt, std::move(done));
+  SubmitCreateNetwork(params, std::nullopt, std::move(done), authEpoch);
 }
 
 void SdkHost::SubmitCreateNetwork(const CreateNetworkParams& params,
                                   std::optional<urnet::WalletAuthArgs> walletAuth,
                                   std::function<void(AuthResult)> done,
+                                  std::uint64_t authEpoch,
                                   const std::string& bittensorWalletId) {
+  if (!ContinueAuthAttempt(authEpoch, done)) return;
   urnet::NetworkCreateArgs args;
   ApplySignupPreferences(args);
   args.user_name = std::string();
@@ -1030,7 +1069,7 @@ void SdkHost::SubmitCreateNetwork(const CreateNetworkParams& params,
   if (params.useWalletAuth) {
     if (!walletAuth) {
       AuthResult r{false, false, "no wallet sign-in is pending"};
-      SetAuthState(AuthState::Error, r.error);
+      SetRegistrationAuthState(authEpoch, AuthState::Error, r.error);
       if (done) done(r);
       return;
     }
@@ -1042,7 +1081,7 @@ void SdkHost::SubmitCreateNetwork(const CreateNetworkParams& params,
     std::scoped_lock lock(mutex_);
     if (!pendingAuthJwt_) {
       AuthResult r{false, false, "no SSO sign-in is pending"};
-      SetAuthState(AuthState::Error, r.error);
+      SetRegistrationAuthState(authEpoch, AuthState::Error, r.error);
       if (done) done(r);
       return;
     }
@@ -1054,12 +1093,13 @@ void SdkHost::SubmitCreateNetwork(const CreateNetworkParams& params,
   }
   if (!params.referralCode.empty()) args.referral_code = params.referralCode;
 
-  api_->networkCreate(args, [this, done, bittensorWalletId](
+  api_->networkCreate(args, [this, done, bittensorWalletId, authEpoch](
                                 std::optional<urnet::NetworkCreateResult> result,
                                 std::optional<std::string> err) {
+    if (!ContinueAuthAttempt(authEpoch, done)) return;
     if (err || !result) {
       AuthResult r{false, false, err ? *err : "no result"};
-      SetAuthState(AuthState::Error, r.error);
+      SetRegistrationAuthState(authEpoch, AuthState::Error, r.error);
       if (done) done(r);
       return;
     }
@@ -1067,61 +1107,71 @@ void SdkHost::SubmitCreateNetwork(const CreateNetworkParams& params,
       AuthResult r{false, false,
                    WalletProofRefusalText(result->error->code.value_or(std::string()),
                                           result->error->message, bittensorWalletId)};
-      SetAuthState(AuthState::LoggedOut);  // a form error, not a session error
+      SetRegistrationAuthState(authEpoch, AuthState::LoggedOut);  // a form error, not a session error
       if (done) done(r);
       return;
     }
     if (result->verification_required) {
       AuthResult r{false, true, ""};
       r.verify_send = VerifySendNoticeOf(result->verification_required->send_error);
-      SetAuthState(AuthState::LoggedOut);
+      SetRegistrationAuthState(authEpoch, AuthState::LoggedOut);
       if (done) done(r);  // the UI routes to the verify step
       return;
     }
     if (result->network && result->network->by_jwt && !result->network->by_jwt->empty()) {
+      bool current = false;
       {
         std::scoped_lock lock(mutex_);
+        current = AuthEventIsCurrent(authEpoch);
         // consumed by this create, or unused by it
-        pendingWalletAuth_.reset();
-        pendingAuthJwt_.reset();
-        pendingAuthJwtType_.clear();
+        if (current) {
+          pendingWalletAuth_.reset();
+          pendingAuthJwt_.reset();
+          pendingAuthJwtType_.clear();
+        }
       }
-      RegisterNetworkClient(*result->network->by_jwt, done);
+      if (!current) {
+        ContinueAuthAttempt(authEpoch, done);
+        return;
+      }
+      RegisterNetworkClient(*result->network->by_jwt, done, authEpoch);
       return;
     }
     AuthResult r{false, false, "create network returned no network"};
-    SetAuthState(AuthState::Error, r.error);
+    SetRegistrationAuthState(authEpoch, AuthState::Error, r.error);
     if (done) done(r);
   });
 }
 
 void SdkHost::VerifyCode(const std::string& userAuth, const std::string& code,
                          std::function<void(AuthResult)> done) {
-  SetAuthState(AuthState::Authenticating);
+  const std::uint64_t authEpoch = signOutRun_.Epoch();
+  SetRegistrationAuthState(authEpoch, AuthState::Authenticating);
   urnet::AuthVerifyArgs args;
   args.user_auth = userAuth;
   args.verify_code = code;
 
-  api_->authVerify(args, [this, done](std::optional<urnet::AuthVerifyResult> result,
+  api_->authVerify(args, [this, done, authEpoch](std::optional<urnet::AuthVerifyResult> result,
                                       std::optional<std::string> err) {
+    if (!ContinueAuthAttempt(authEpoch, done)) return;
     if (err || !result) {
       AuthResult r{false, false, err ? *err : "no result"};
-      SetAuthState(AuthState::Error, r.error);
+      SetRegistrationAuthState(authEpoch, AuthState::Error, r.error);
       if (done) done(r);
       return;
     }
     if (result->error && !result->error->message.empty()) {
       AuthResult r{false, false, result->error->message};
-      SetAuthState(AuthState::LoggedOut);  // a wrong code, not a session error
+      SetRegistrationAuthState(authEpoch, AuthState::LoggedOut);  // a wrong code, not a session error
       if (done) done(r);
       return;
     }
     if (result->network && !result->network->by_jwt.empty()) {
-      RegisterNetworkClient(result->network->by_jwt, done);
+      RegisterNetworkClient(result->network->by_jwt, done, authEpoch);
       return;
     }
     AuthResult r{false, false, "verify returned no network"};
-    SetAuthState(AuthState::Error, r.error);
+    SetRegistrationAuthState(authEpoch, AuthState::Error, r.error);
     if (done) done(r);
   });
 }
@@ -1196,47 +1246,55 @@ std::string NormalizeSeedphrase(const std::string& raw) {
 
 void SdkHost::LoginWithSeedphrase(const std::string& seedphrase,
                                   std::function<void(AuthResult)> done) {
-  SetAuthState(AuthState::Authenticating);
+  const std::uint64_t authEpoch = signOutRun_.Epoch();
+  SetRegistrationAuthState(authEpoch, AuthState::Authenticating);
   urnet::AuthLoginArgs args;
   args.seedphrase = NormalizeSeedphrase(seedphrase);
 
   // NOTE: nothing on any path below may echo the args. An error log that
   // included the request would put the credential in a file on disk.
-  api_->authLogin(args, [this, done](std::optional<urnet::AuthLoginResult> result,
+  api_->authLogin(args, [this, done, authEpoch](std::optional<urnet::AuthLoginResult> result,
                                      std::optional<std::string> err) {
+    if (!ContinueAuthAttempt(authEpoch, done)) return;
     if (err || !result) {
       AuthResult r{false, false, err ? *err : "no result"};
-      SetAuthState(AuthState::Error, r.error);
+      SetRegistrationAuthState(authEpoch, AuthState::Error, r.error);
       if (done) done(r);
       return;
     }
     if (result->error && !result->error->message.empty()) {
       // a wrong phrase is a form error, not a session error
       AuthResult r{false, false, result->error->message};
-      SetAuthState(AuthState::LoggedOut);
+      SetRegistrationAuthState(authEpoch, AuthState::LoggedOut);
       if (done) done(r);
       return;
     }
     if (result->network && !result->network->by_jwt.empty()) {
-      RegisterNetworkClient(result->network->by_jwt, done);
+      RegisterNetworkClient(result->network->by_jwt, done, authEpoch);
       return;
     }
     AuthResult r{false, false, "seedphrase login returned no network"};
-    SetAuthState(AuthState::LoggedOut);
+    SetRegistrationAuthState(authEpoch, AuthState::LoggedOut);
     if (done) done(r);
   });
 }
 
 void SdkHost::CreateInstantAccount(std::function<void(InstantAccount)> done) {
+  const std::uint64_t authEpoch = signOutRun_.Epoch();
   // NO user_auth, password, auth_jwt or wallet_auth: that combination is what
   // makes the server mint a seedphrase-secured network and return the phrase.
   urnet::NetworkCreateArgs args;
   ApplySignupPreferences(args);
   args.terms = true;  // the form's button is gated on the terms consent
 
-  api_->networkCreate(args, [this, done](std::optional<urnet::NetworkCreateResult> result,
+  api_->networkCreate(args, [this, done, authEpoch](std::optional<urnet::NetworkCreateResult> result,
                                          std::optional<std::string> err) {
     InstantAccount out;
+    if (!AuthEventIsCurrent(authEpoch)) {
+      out.error = "signed out while this sign-in was pending";
+      if (done) done(out);
+      return;
+    }
     if (err || !result) {
       out.error = err ? *err : "no result";
       if (done) done(out);
@@ -1267,9 +1325,19 @@ void SdkHost::CreateInstantAccount(std::function<void(InstantAccount)> done) {
       if (done) done(out);
       return;
     }
+    bool current = false;
     {
       std::scoped_lock lock(mutex_);
-      pendingInstantJwt_ = *result->network->by_jwt;
+      current = AuthEventIsCurrent(authEpoch);
+      if (current) {
+        pendingInstantJwt_ = *result->network->by_jwt;
+        pendingInstantEpoch_ = authEpoch;
+      }
+    }
+    if (!current) {
+      out.error = "signed out while this sign-in was pending";
+      if (done) done(out);
+      return;
     }
     out.ok = true;
     out.seedphrase = *result->seedphrase;
@@ -1279,6 +1347,7 @@ void SdkHost::CreateInstantAccount(std::function<void(InstantAccount)> done) {
 
 void SdkHost::ConfirmInstantAccount(std::function<void(AuthResult)> done) {
   std::string jwt;
+  std::uint64_t authEpoch = 0;
   {
     std::scoped_lock lock(mutex_);
     if (!pendingInstantJwt_) {
@@ -1286,10 +1355,11 @@ void SdkHost::ConfirmInstantAccount(std::function<void(AuthResult)> done) {
       return;
     }
     jwt = *pendingInstantJwt_;
+    authEpoch = pendingInstantEpoch_;
     pendingInstantJwt_.reset();
   }
-  SetAuthState(AuthState::Authenticating);
-  RegisterNetworkClient(jwt, done);
+  SetRegistrationAuthState(authEpoch, AuthState::Authenticating);
+  RegisterNetworkClient(jwt, done, authEpoch);
 }
 
 void SdkHost::DiscardInstantAccount() {
@@ -1301,13 +1371,14 @@ void SdkHost::DiscardInstantAccount() {
 // Nothing here logs a code, a credential or a network name: the lines are closed.
 
 void SdkHost::RedeemApprovedCode(const std::string& code, std::function<void(ApprovedNetwork)> done) {
+  const std::uint64_t authEpoch = signOutRun_.Epoch();
   urnet::AuthCodeLoginArgs args;
   args.auth_code = code;
   // The flow the approval began in (BeginBrowserApproval). The code was minted for the network that was active then, and a
   // network change takes the next flow number, like every other flow that starts: so the code goes out, and the credential it
   // returns is kept, only while this is still the number of the flow that started last. Read once, for both.
   const std::uint64_t flow = approvalFlow_.load(std::memory_order_acquire);
-  const auto answer = [this, done, flow](std::optional<urnet::AuthCodeLoginResult> result,
+  const auto answer = [this, done, flow, authEpoch](std::optional<urnet::AuthCodeLoginResult> result,
                                          std::optional<std::string> err) {
     ApprovedNetwork out;
     // never retried: the server answers an invalid, an expired and a spent code the same way, as
@@ -1341,8 +1412,11 @@ void SdkHost::RedeemApprovedCode(const std::string& code, std::function<void(App
       std::scoped_lock lock(mutex_);
       // a flow that began while the code was out left api_ on another network (a switch replaces it), and what the old
       // network answered is not that network's to confirm
-      superseded = flow == 0 || !walletFlows_.IsCurrent(flow);
-      if (!superseded) pendingApprovedJwt_ = result->by_jwt;
+      superseded = flow == 0 || !walletFlows_.IsCurrent(flow) || !AuthEventIsCurrent(authEpoch);
+      if (!superseded) {
+        pendingApprovedJwt_ = result->by_jwt;
+        pendingApprovedEpoch_ = authEpoch;
+      }
     }
     if (superseded) {
       out.failure = ApprovedNetwork::Failure::Refused;
@@ -1390,10 +1464,12 @@ void SdkHost::RedeemApprovedCode(const std::string& code, std::function<void(App
 
 void SdkHost::ConfirmApprovedNetwork(std::function<void(AuthResult)> done) {
   std::string jwt;
+  std::uint64_t authEpoch = 0;
   {
     std::scoped_lock lock(mutex_);
     if (pendingApprovedJwt_) {
       jwt = std::move(*pendingApprovedJwt_);
+      authEpoch = pendingApprovedEpoch_;
       pendingApprovedJwt_.reset();
     }
   }
@@ -1401,17 +1477,17 @@ void SdkHost::ConfirmApprovedNetwork(std::function<void(AuthResult)> done) {
     if (done) done({false, false, "no approved sign-in is pending"});
     return;
   }
-  SetAuthState(AuthState::Authenticating);
-  RegisterNetworkClient(jwt, [this, done](AuthResult r) {
+  SetRegistrationAuthState(authEpoch, AuthState::Authenticating);
+  RegisterNetworkClient(jwt, [this, done, authEpoch](AuthResult r) {
     if (!r.ok) {
       // RegisterNetworkClient hands the api the network credential before it registers the
       // device, and its failures leave it there: a refused registration (a client limit, a
       // plan gate) must not leave a signed-out app calling the api as that network
       std::scoped_lock lock(mutex_);
-      if (api_) api_->setByJwt("");
+      if (AuthEventIsCurrent(authEpoch) && api_) api_->setByJwt("");
     }
     if (done) done(r);
-  });
+  }, authEpoch);
 }
 
 void SdkHost::DiscardApprovedNetwork() {
@@ -1662,13 +1738,15 @@ void SdkHost::RefreshJwt() {
 }
 
 void SdkHost::RegisterNetworkClient(const std::string& byJwt,
-                                    std::function<void(AuthResult)> done) {
+                                     std::function<void(AuthResult)> done,
+                                     std::uint64_t authEpoch) {
   // A sign-out still running: this sign-in waits for its tail and runs after it
   // (SignOutRun.h), so the tail never logs out, or clears the credential of, an
   // account that signed in after it began. An older one waiting is told.
+  const std::uint64_t signOutEpoch = authEpoch;
   {
     std::optional<DeferredSignIn> replaced;
-    if (signOutRun_.Defer(DeferredSignIn{byJwt, done}, replaced)) {
+    if (signOutRun_.Defer(DeferredSignIn{byJwt, done, signOutEpoch}, replaced, signOutEpoch)) {
       LogInfo("sdkhost: sign-in: waits for the sign-out running to end");
       if (replaced && replaced->done) {
         replaced->done(AuthResult{false, false, "a newer sign-in replaced this one"});
@@ -1678,24 +1756,31 @@ void SdkHost::RegisterNetworkClient(const std::string& byJwt,
   }
   // A sign-out that begins after this moves the epoch: the callback then
   // installs nothing for an account the user signed out of.
-  const std::uint64_t signOutEpoch = signOutRun_.Epoch();
+  bool signedOutBeforeDispatch = false;
   {
     // A new network jwt invalidates a running session (guest upgrade, verify
     // after an upgrade): tear the device + tunnel down so the registration
     // below rebuilds them under the new auth (linux SdkHost parity). Fresh
     // sign-ins have no device and skip this.
     std::scoped_lock lock(mutex_);
-    if (device_) {
+    signedOutBeforeDispatch = signOutRun_.Epoch() != signOutEpoch;
+    if (!signedOutBeforeDispatch && device_) {
       try {
         TeardownSessionLocked();
       } catch (const std::exception& e) {
         LogWarn("sdkhost: pre-registration teardown failed: {}", e.what());
       }
     }
+    // Teardown can wait for an RPC while Logout advances the epoch. The
+    // tail takes this same session lock, so an old registration never writes
+    // its API credential after that tail released the next account.
+    signedOutBeforeDispatch = signOutRun_.Epoch() != signOutEpoch;
+    if (!signedOutBeforeDispatch) api_->setByJwt(byJwt);
   }
-  // Persist the network JWT, then register this device to obtain a client JWT.
-  localState_->getByJwt();  // touch
-  api_->setByJwt(byJwt);
+  if (signedOutBeforeDispatch) {
+    if (done) done(AuthResult{false, false, "signed out while this sign-in registered"});
+    return;
+  }
 
   urnet::AuthNetworkClientArgs args;
   args.description = DeviceDescription();
@@ -1704,20 +1789,28 @@ void SdkHost::RegisterNetworkClient(const std::string& byJwt,
   AuthNetworkClientWithLocale(args, [this, byJwt, done, signOutEpoch](
                                         std::optional<urnet::AuthNetworkClientResult> result,
                                         std::optional<std::string> err) {
+    const auto complete = [this, done, signOutEpoch](AuthResult r) {
+      if (!SetRegistrationAuthState(signOutEpoch, r.ok ? AuthState::LoggedIn : AuthState::Error,
+                                   r.error)) {
+        r = AuthResult{false, false, "signed out while this sign-in registered"};
+      } else if (r.ok) {
+        RequestProviderReconcile("signed in");
+      }
+      if (done) done(r);
+    };
     if (err || !result) {
       AuthResult r{false, false, err ? *err : "no result"};
-      SetAuthState(AuthState::Error, r.error);
-      if (done) done(r);
+      complete(r);
       return;
     }
     if (result->error && !result->error->message.empty()) {
       AuthResult r{false, false, result->error->message};
-      SetAuthState(AuthState::Error, r.error);
-      if (done) done(r);
+      complete(r);
       return;
     }
     if (result->by_client_jwt) {
       bool signedOutMeanwhile = false;
+      std::string persistenceError;
       {
         std::scoped_lock lock(mutex_);
         // Under the lock the tail's logout takes: a sign-out that began after
@@ -1741,9 +1834,9 @@ void SdkHost::RegisterNetworkClient(const std::string& byJwt,
             // synchronous.
             localState_->setByJwt(byJwt);
             localState_->setByClientJwt(*result->by_client_jwt);
-            loggedIn_.store(true, std::memory_order_release);
           } catch (const std::exception& e) {
             LogWarn("sdkhost: persist jwt failed: {}", e.what());
+            persistenceError = "could not store the device credentials";
           }
         }
       }
@@ -1754,6 +1847,10 @@ void SdkHost::RegisterNetworkClient(const std::string& byJwt,
         if (done) done(r);
         return;
       }
+      if (!persistenceError.empty()) {
+        complete(AuthResult{false, false, persistenceError});
+        return;
+      }
       // THE SIGN-IN SUCCEEDED, AND THAT IS ALL THAT HAPPENED. D8, owner
       // decision: signing in does not start the tunnel. BootstrapSession used
       // to run right here — the unlogged session start the forensics found
@@ -1762,27 +1859,23 @@ void SdkHost::RegisterNetworkClient(const std::string& byJwt,
       // session now exists only when a Connect gesture asks for one, and the
       // one start_tunnel call site logs its reason every time.
       //
-      // Auth state goes LoggedIn unconditionally: a sign-in with the service
-      // down is still a successful sign-in, and reporting anything else here
-      // used to dump a user with a perfectly valid credential onto the
+      // A sign-in with the service down is still a successful sign-in, and
+      // reporting anything else here used to dump a user with a valid credential onto the
       // sign-in screen (the seedphrase step rendered it as "your phrase is
       // wrong" — the most alarming sentence this app can say to somebody
       // whose credential has no reset path).
       LogInfo("sdkhost: signed in; no session started — the tunnel starts "
               "only on a Connect gesture");
-      SetAuthState(AuthState::LoggedIn);
       // ...but a stored provide mode that provides while disconnected starts
       // the provider-only device, under the new client jwt (the service
       // replaces one built from an older jwt: the request differs). It installs
       // nothing on this machine, so this is not the session start D8 forbids
       // here.
-      RequestProviderReconcile("signed in");
       AuthResult r{true, false, ""};
-      if (done) done(r);
+      complete(r);
     } else {
       AuthResult r{false, false, "device registration returned no client jwt"};
-      SetAuthState(AuthState::Error, r.error);
-      if (done) done(r);
+      complete(r);
     }
   });
 }
@@ -1855,7 +1948,7 @@ void SdkHost::SetupWalletCallbacks() {
       case bridge::SignatureRoute::SignIn:
         break;
     }
-    AuthLoginWithWallet(publicKey, signature, walletAuthMessage_, provider);
+    AuthLoginWithWallet(publicKey, signature, walletAuthMessage_, provider, walletAuthEpoch_);
   };
   wallet_.on_sso = [this](std::string provider, std::string authJwt, std::string state,
                           std::string error) {
@@ -1878,6 +1971,7 @@ void SdkHost::SetupWalletCallbacks() {
       return;
     }
     const SsoAttempt attempt = *ssoAttempt_;
+    const std::uint64_t authEpoch = walletAuthEpoch_;
     ssoAttempt_.reset();
     // Matched: say so. The drops above warn and the flow's own answer is
     // silent, so without this line a CONSUMED attempt reads in the log as if
@@ -1905,7 +1999,7 @@ void SdkHost::SetupWalletCallbacks() {
         break;
     }
     auto done = std::exchange(walletAuthDone_, nullptr);
-    AuthLoginWithSso(attempt.provider, authJwt, done ? done : [](AuthResult) {});
+    AuthLoginWithSso(attempt.provider, authJwt, done ? done : [](AuthResult) {}, authEpoch);
   };
   // Bittensor hand-backs go to the session helper, never through the routes
   // above: it decides whether the link belongs to the proof in flight.
@@ -2010,47 +2104,51 @@ uint64_t SdkHost::CancelPendingWalletFlows(const char* reason) {
 
 void SdkHost::SignInWithSolana(WalletConnect::Provider provider,
                                std::function<void(AuthResult)> done) {
-  SetAuthState(AuthState::Authenticating);
+  const std::uint64_t authEpoch = signOutRun_.Epoch();
+  SetRegistrationAuthState(authEpoch, AuthState::Authenticating);
   {
     std::scoped_lock lock(mutex_);
     pendingWalletAuth_.reset();  // a fresh sign-in supersedes any retained auth
   }
   // ...and any pending bare signature request, which is TOLD it was superseded
   CancelPendingWalletFlows("superseded by a wallet sign-in");
+  walletAuthEpoch_ = authEpoch;
   walletAuthDone_ = std::move(done);
   wallet_.Connect(provider);  // opens the browser; the rest continues on the deep-link callback
 }
 
 void SdkHost::SignInWithBittensor(const std::string& walletId,
                                   std::function<void(AuthResult)> done) {
-  SetAuthState(AuthState::Authenticating);
+  const std::uint64_t authEpoch = signOutRun_.Epoch();
+  SetRegistrationAuthState(authEpoch, AuthState::Authenticating);
   {
     std::scoped_lock lock(mutex_);
     pendingWalletAuth_.reset();  // a fresh sign-in supersedes any retained auth
   }
   const uint64_t flow = CancelPendingWalletFlows("superseded by a wallet sign-in");
+  walletAuthEpoch_ = authEpoch;
   walletAuthDone_ = std::move(done);
   pendingBittensorWalletId_ = walletId;
   BeginBittensorProof(
       flow, walletId, std::string(bittensor::kPurposeLogin), std::string(),
-      [this, flow, walletId](BittensorProofOutcome outcome) {
+      [this, flow, walletId, authEpoch](BittensorProofOutcome outcome) {
         // A newer flow superseded this sign-in and has answered it already.
-        if (!walletFlows_.IsCurrent(flow)) return;
+        if (!walletFlows_.IsCurrent(flow) || !AuthEventIsCurrent(authEpoch)) return;
         if (!outcome.ok) {
           auto authDone = std::exchange(walletAuthDone_, nullptr);
           if (!authDone) return;
           if (bridge::IsSuperseded(outcome.error)) {
             // the user closed the wallet form: back to the sign-in buttons
-            SetAuthState(AuthState::LoggedOut);
+            SetRegistrationAuthState(authEpoch, AuthState::LoggedOut);
             authDone({false, false, std::string()});
             return;
           }
-          SetAuthState(AuthState::Error, outcome.error);
+          SetRegistrationAuthState(authEpoch, AuthState::Error, outcome.error);
           authDone({false, false, outcome.error});
           return;
         }
         AuthLoginWithWallet(outcome.proof.Address, outcome.proof.Signature,
-                            outcome.proof.Message, WalletConnect::Provider::Bittensor, walletId);
+                            outcome.proof.Message, WalletConnect::Provider::Bittensor, authEpoch, walletId);
       });
 }
 
@@ -2437,7 +2535,8 @@ void SdkHost::SignInWithSso(const std::string& provider, std::function<void(Auth
     if (done) done({false, false, "unknown sign-in provider"});
     return;
   }
-  SetAuthState(AuthState::Authenticating);
+  const std::uint64_t authEpoch = signOutRun_.Epoch();
+  SetRegistrationAuthState(authEpoch, AuthState::Authenticating);
   {
     std::scoped_lock lock(mutex_);
     // a fresh sign-in supersedes any retained token or wallet auth
@@ -2447,6 +2546,7 @@ void SdkHost::SignInWithSso(const std::string& provider, std::function<void(Auth
   }
   // the browser round trip has ONE pair of callbacks: whatever was waiting is TOLD
   CancelPendingWalletFlows("superseded by a sign-in");
+  walletAuthEpoch_ = authEpoch;
   walletAuthDone_ = std::move(done);
   OpenSsoAttempt(provider, add_sign_in::SsoPurpose::SignIn);
 }
@@ -2547,7 +2647,8 @@ void SdkHost::CancelAddSignIn() {
 }
 
 void SdkHost::AuthLoginWithSso(const std::string& provider, const std::string& idToken,
-                               std::function<void(AuthResult)> done) {
+                               std::function<void(AuthResult)> done, std::uint64_t authEpoch) {
+  if (!ContinueAuthAttempt(authEpoch, done)) return;
   urnet::AuthLoginArgs args;
   args.auth_jwt_type = provider;
   args.auth_jwt = idToken;
@@ -2561,41 +2662,51 @@ void SdkHost::AuthLoginWithSso(const std::string& provider, const std::string& i
   std::scoped_lock lock(mutex_);
   if (!api_) {
     AuthResult r{false, false, "the network session went away during sign-in"};
-    SetAuthState(AuthState::Error, r.error);
+    SetRegistrationAuthState(authEpoch, AuthState::Error, r.error);
     if (done) done(r);
     return;
   }
   // The identity token is a bearer credential; nothing below logs the args.
-  api_->authLogin(args, [this, provider, idToken, done](std::optional<urnet::AuthLoginResult> result,
+  api_->authLogin(args, [this, provider, idToken, done, authEpoch](std::optional<urnet::AuthLoginResult> result,
                                                         std::optional<std::string> err) {
+    if (!ContinueAuthAttempt(authEpoch, done)) return;
     if (err || !result) {
       AuthResult r{false, false, err ? *err : "no result"};
-      SetAuthState(AuthState::Error, r.error);
+      SetRegistrationAuthState(authEpoch, AuthState::Error, r.error);
       if (done) done(r);
       return;
     }
     if (result->error && !result->error->message.empty()) {
       AuthResult r{false, false, result->error->message};
-      SetAuthState(AuthState::LoggedOut);
+      SetRegistrationAuthState(authEpoch, AuthState::LoggedOut);
       if (done) done(r);
       return;
     }
     if (result->network && !result->network->by_jwt.empty()) {
-      RegisterNetworkClient(result->network->by_jwt, done ? done : [](AuthResult) {});
+      RegisterNetworkClient(result->network->by_jwt, done ? done : [](AuthResult) {}, authEpoch);
       return;
     }
     // Authenticated, but this identity has no network yet: retain the token
     // (and which provider issued it) and let the UI route to the
     // create-network step (name + terms, no password), the same shape the
     // wallet path uses.
+    bool current = false;
     {
       std::scoped_lock lock(mutex_);
-      pendingAuthJwt_ = idToken;
-      pendingAuthJwtType_ = provider;
+      current = AuthEventIsCurrent(authEpoch);
+      if (current) {
+        pendingAuthJwt_ = idToken;
+        pendingAuthJwtType_ = provider;
+        pendingAuthEpoch_ = authEpoch;
+      }
+    }
+    if (!current) {
+      ContinueAuthAttempt(authEpoch, done);
+      return;
     }
     AuthResult r;
     r.auth_needs_network = true;
-    SetAuthState(AuthState::LoggedOut);
+    SetRegistrationAuthState(authEpoch, AuthState::LoggedOut);
     if (done) done(r);
   });
 }
@@ -2603,7 +2714,10 @@ void SdkHost::AuthLoginWithSso(const std::string& provider, const std::string& i
 void SdkHost::AuthLoginWithWallet(const std::string& address, const std::string& signature,
                                   const std::string& message,
                                   WalletConnect::Provider provider,
+                                  std::uint64_t authEpoch,
                                   const std::string& bittensorWalletId) {
+  if (!AuthEventIsCurrent(authEpoch)) return;
+  const std::uint64_t flow = walletFlows_.Current();
   urnet::WalletAuthArgs w;
   w.wallet_address = address;
   w.wallet_signature = signature;
@@ -2615,13 +2729,17 @@ void SdkHost::AuthLoginWithWallet(const std::string& address, const std::string&
   // a signature from another account than the address comes back as
   // result.error.code (a 401 error otherwise)
   args.result_errors = true;
-  api_->authLogin(args, [this, w, bittensorWalletId](std::optional<urnet::AuthLoginResult> result,
+  api_->authLogin(args, [this, w, bittensorWalletId, authEpoch, flow](std::optional<urnet::AuthLoginResult> result,
                                                      std::optional<std::string> err) {
-    auto done = walletAuthDone_;
-    walletAuthDone_ = nullptr;
+    std::function<void(AuthResult)> done;
+    // Logout invalidates the epoch before answering this slot. An older API
+    // response must not take the callback of a newer wallet sign-in.
+    if (!signOutRun_.ApplyIfCurrent(authEpoch, [&] {
+          if (walletFlows_.IsCurrent(flow)) done = std::exchange(walletAuthDone_, nullptr);
+        }) || !done) return;
     if (err || !result) {
       AuthResult r{false, false, err ? *err : "no result"};
-      SetAuthState(AuthState::Error, r.error);
+      SetRegistrationAuthState(authEpoch, AuthState::Error, r.error);
       if (done) done(r);
       return;
     }
@@ -2629,24 +2747,33 @@ void SdkHost::AuthLoginWithWallet(const std::string& address, const std::string&
       AuthResult r{false, false,
                    WalletProofRefusalText(result->error->code.value_or(std::string()),
                                           result->error->message, bittensorWalletId)};
-      SetAuthState(AuthState::Error, r.error);
+      SetRegistrationAuthState(authEpoch, AuthState::Error, r.error);
       if (done) done(r);
       return;
     }
     if (result->network && !result->network->by_jwt.empty()) {
-      RegisterNetworkClient(result->network->by_jwt, done ? done : [](AuthResult) {});
+      RegisterNetworkClient(result->network->by_jwt, done, authEpoch);
       return;
     }
     // The wallet authenticated but isn't linked to a network yet: retain the
     // signed wallet auth and let the UI route to the create-network step, which
     // calls CreateNetwork{useWalletAuth} (name + terms, no password).
+    bool current = false;
     {
       std::scoped_lock lock(mutex_);
-      pendingWalletAuth_ = w;
+      current = AuthEventIsCurrent(authEpoch);
+      if (current) {
+        pendingWalletAuth_ = w;
+        pendingWalletEpoch_ = authEpoch;
+      }
+    }
+    if (!current) {
+      ContinueAuthAttempt(authEpoch, done);
+      return;
     }
     AuthResult r;
     r.wallet_needs_network = true;
-    SetAuthState(AuthState::LoggedOut);
+    SetRegistrationAuthState(authEpoch, AuthState::LoggedOut);
     if (done) done(r);
   });
 }
@@ -8208,7 +8335,7 @@ void SdkHost::SignOutTail() {
   if (onSignOutProgress_) onSignOutProgress_(false);
   if (next) {
     LogInfo("sdkhost: sign-in: the sign-out has ended; the sign-in that waited for it runs");
-    RegisterNetworkClient(next->byJwt, std::move(next->done));
+    RegisterNetworkClient(next->byJwt, std::move(next->done), next->epoch);
   }
 }
 
@@ -8228,7 +8355,10 @@ void SdkHost::SignOutTailLocked() {
     // The local credentials first, because nothing can hold them up: the app
     // is signed out on disk even if it is ended while the service half below
     // waits on the pipe.
-    if (asyncLocalState_) asyncLocalState_->logout([](bool) {});
+    // This tail already runs off the UI thread. Queueing the destructive
+    // write would let Finish release a new sign-in before the old logout
+    // erased its freshly stored credentials.
+    if (localState_) localState_->logout();
     // and the credential the api attaches to its calls, which the next
     // sign-in's own calls would otherwise carry until it installs its own
     if (api_) api_->setByJwt("");

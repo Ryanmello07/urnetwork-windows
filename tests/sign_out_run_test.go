@@ -95,6 +95,12 @@ func TestSignOutRunRejectsAnEpochThatDoesNotMove(t *testing.T) {
 		"a registration that began before the sign-out does not install its credential")
 }
 
+func TestSignOutRunRejectsAnOldAttemptReplacingTheWaitingSignIn(t *testing.T) {
+	requireSignOutRunFailure(t, "    if (epoch != epoch_) return false;\n    if (!running_)",
+		"    (void)epoch;\n    if (!running_)",
+		"an old auth response cannot displace the newer account waiting for logout")
+}
+
 // The sign-in that waited is never run.
 func TestSignOutRunRejectsATailThatDropsTheWaitingSignIn(t *testing.T) {
 	requireSignOutRunFailure(t, "next = std::exchange(deferred_, std::nullopt);",
@@ -146,15 +152,30 @@ func TestSignOutRunWiring(t *testing.T) {
 		`onSignOutProgress_\(false\)`, `RegisterNetworkClient\(next->byJwt`)
 	tailLocked := functionBody(host, "void SdkHost::SignOutTailLocked(")
 	quitRequireSequence(t, "SdkHost::SignOutTailLocked", tailLocked,
-		`asyncLocalState_->logout\(`, `api_->setByJwt\(""\)`, `signOut_\.Begin\(SignOutServiceLocked\(\)\)`,
+		`localState_->logout\(\)`, `api_->setByJwt\(""\)`, `signOut_\.Begin\(SignOutServiceLocked\(\)\)`,
 		`device_->close\(\)`, `TeardownSessionLocked\(`, `SetAuthState\(AuthState::LoggedOut\)`)
+	quitForbid(t, "SdkHost::SignOutTailLocked", tailLocked,
+		"the old account's credential deletion must finish before a deferred sign-in is released", "asyncLocalState_->logout(")
 
 	register := functionBody(host, "void SdkHost::RegisterNetworkClient(")
-	quitRequireSequence(t, "SdkHost::RegisterNetworkClient", register,
-		`signOutRun_\.Defer\(DeferredSignIn\{byJwt, done\}, replaced\)`, `return;`,
-		`const std::uint64_t signOutEpoch = signOutRun_\.Epoch\(\);`, `api_->setByJwt\(byJwt\)`,
+	signOutRequireInOrder(t, "SdkHost::RegisterNetworkClient", register,
+		`signOutRun_\.Defer\(DeferredSignIn\{byJwt, done, signOutEpoch\}, replaced, signOutEpoch\)`, `return;`,
+		`std::scoped_lock lock\(mutex_\);`, `signedOutBeforeDispatch = signOutRun_\.Epoch\(\) != signOutEpoch;`,
+		`TeardownSessionLocked\(\)`, `signedOutBeforeDispatch = signOutRun_\.Epoch\(\) != signOutEpoch;`,
+		`if \(!signedOutBeforeDispatch\) api_->setByJwt\(byJwt\)`, `if \(signedOutBeforeDispatch\)`,
+		`return;`, `AuthNetworkClientWithLocale\(`,
+		`SetRegistrationAuthState\(signOutEpoch, r.ok \? AuthState::LoggedIn : AuthState::Error,`,
 		`std::scoped_lock lock\(mutex_\);\s*signedOutMeanwhile = signOutRun_\.Epoch\(\) != signOutEpoch;`,
-		`localState_->setByJwt\(byJwt\)`, `if \(signedOutMeanwhile\)`, `SetAuthState\(AuthState::LoggedIn\)`)
+		`localState_->setByJwt\(byJwt\)`, `if \(signedOutMeanwhile\)`, `complete\(r\)`)
+	quitForbid(t, "SdkHost::RegisterNetworkClient", register,
+		"admission owns the epoch and every terminal state commits against it",
+		"const std::uint64_t signOutEpoch = signOutRun_.Epoch();", "SetAuthState(", "loggedIn_.store(true")
+	commit := functionBody(host, "bool SdkHost::SetRegistrationAuthState(")
+	quitRequireSequence(t, "SdkHost::SetRegistrationAuthState", commit,
+		`signOutRun_\.ApplyIfCurrent\(epoch,`, `authState_ = s;`, `loggedIn_\.store\(true`,
+		`\}\)\) return false;`, `onAuth_\(s, error, epoch\)`)
+	quitForbid(t, "SdkHost::SetRegistrationAuthState", commit,
+		"the epoch lock must cover only fast in-memory flags", "localState_", "api_->", "service_.")
 
 	network := functionBody(host, "bool SdkHost::ApplyNetworkServer(")
 	quitRequireSequence(t, "SdkHost::ApplyNetworkServer", network,
@@ -176,9 +197,16 @@ func TestSignOutRunWiring(t *testing.T) {
 // and an exit waits for the tail.
 func TestSignOutRunViewWiring(t *testing.T) {
 	controller := stripComments(readAppSource(t, "AppController.cpp"))
+
+	auth := handlerSource(t, "AppController.cpp", controller, "sdk_.SetAuthStateHandler(")
+	quitRequireSequence(t, "the auth state handler", auth,
+		`std::uint64_t epoch`, `OnUi\(`, `if \(!sdk_\.AuthEventIsCurrent\(epoch\)\) return;`, `OnAuthState\(s, e\)`)
+	header := stripComments(readAppSource(t, "SdkHost.h"))
+	quitRequireSequence(t, "SdkHost::AuthEventIsCurrent", header,
+		`bool AuthEventIsCurrent\(std::uint64_t epoch\) const`, `return signOutRun_\.Epoch\(\) == epoch;`)
 	handler := handlerSource(t, "AppController.cpp", controller, "sdk_.SetSignOutProgressHandler(")
 	quitRequireSequence(t, "the sign-out progress handler", handler,
-		`OnUi\(`, `UpdateTray\(\)`, `SetSigningOut\(signingOut\)`)
+		`OnUi\(`, `UpdateTray\(\)`, `SetSigningOut\(sdk_\.SigningOut\(\)\)`)
 	reconcile := functionBody(controller, "void AppController::ReconcileWindowPresentation(")
 	quitRequireSequence(t, "ReconcileWindowPresentation", reconcile, `SetSigningOut\(sdk_\.SigningOut\(\)\)`)
 	facts := functionBody(controller, "tray::Facts AppController::CurrentTrayFacts(")

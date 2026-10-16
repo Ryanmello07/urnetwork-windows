@@ -45,7 +45,7 @@ func TestSignOutWiringLogoutStopsAsQuitThenForgets(t *testing.T) {
 		regexp.QuoteMeta("pendingCv_.notify_all();"),
 		regexp.QuoteMeta("loggedIn_.store(false, std::memory_order_release);"),
 		regexp.QuoteMeta("std::scoped_lock lock(mutex_);"),
-		regexp.QuoteMeta("asyncLocalState_->logout("),
+		regexp.QuoteMeta("localState_->logout();"),
 		regexp.QuoteMeta("signOut_.Begin(SignOutServiceLocked());"),
 		regexp.QuoteMeta("device_->close();"),
 		`TeardownSessionLocked\(\s*false\);`,

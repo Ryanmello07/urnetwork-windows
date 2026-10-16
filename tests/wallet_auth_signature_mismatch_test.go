@@ -31,11 +31,11 @@ func TestWalletAuthSignatureMismatchWiring(t *testing.T) {
 		}
 	}
 	signIn := definitionBody(t, "SdkHost.cpp", host, "void SdkHost::SignInWithBittensor(")
-	if !strings.Contains(signIn, "WalletConnect::Provider::Bittensor, walletId)") {
+	if !strings.Contains(signIn, "WalletConnect::Provider::Bittensor, authEpoch, walletId)") {
 		t.Error("SdkHost.cpp: SignInWithBittensor does not tell the sign-in which wallet signed")
 	}
 	create := definitionBody(t, "SdkHost.cpp", host, "void SdkHost::CreateNetwork(")
-	if !strings.Contains(create, "SubmitCreateNetwork(params, std::move(createAuth), std::move(done), walletId)") {
+	if !strings.Contains(create, "SubmitCreateNetwork(params, std::move(createAuth), std::move(done), authEpoch, walletId)") {
 		t.Error("SdkHost.cpp: the Bittensor create does not tell the create which wallet signed")
 	}
 	for _, signature := range []string{"void SdkHost::AuthLoginWithWallet(", "void SdkHost::SubmitCreateNetwork("} {

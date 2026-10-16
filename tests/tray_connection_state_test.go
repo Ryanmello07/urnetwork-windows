@@ -292,7 +292,7 @@ func TestTrayConnectionStateWiring(t *testing.T) {
 
 	facts := definitionBody(t, "AppController.cpp", app, "tray::Facts AppController::CurrentTrayFacts() const")
 	for _, want := range []string{
-		"facts.signedIn = authState_ == AuthState::LoggedIn;",
+		"facts.signedIn = authState_ == AuthState::LoggedIn && sdk_.IsLoggedIn();",
 		"facts.statusKnown = lastTunnelStatus_.has_value();",
 		"facts.tunnel = tray::TunnelOf(lastTunnelStatus_->state);",
 		"facts.routesInstalled = lastTunnelStatus_->routes_installed;",

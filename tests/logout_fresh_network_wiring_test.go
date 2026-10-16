@@ -27,7 +27,7 @@ func TestLogoutFreshNetworkWiringEndsTheAccountsFlowsAndApiCredential(t *testing
 		regexp.QuoteMeta("std::scoped_lock lock(mutex_);"),
 		regexp.QuoteMeta("pendingAuthJwt_.reset();"),
 		regexp.QuoteMeta("pendingInstantJwt_.reset();"),
-		regexp.QuoteMeta("asyncLocalState_->logout("),
+		regexp.QuoteMeta("localState_->logout();"),
 		regexp.QuoteMeta(`if (api_) api_->setByJwt("");`),
 		regexp.QuoteMeta("signOut_.Begin(SignOutServiceLocked());"))
 

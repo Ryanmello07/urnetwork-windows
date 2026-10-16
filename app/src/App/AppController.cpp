@@ -232,12 +232,12 @@ void AppController::Start() {
   // upgrade path it opens (ShowUpgradeForBlockedConnect queues after it).
   // A sign-out's tail runs off this thread (SdkHost::Logout): the window shows
   // it running, and the tray offers no action meanwhile.
-  sdk_.SetSignOutProgressHandler([this](bool signingOut) {
-    OnUi([this, signingOut] {
+  sdk_.SetSignOutProgressHandler([this](bool) {
+    OnUi([this] {
       UpdateTray();
       if (!windowVisible_ || !window_) return;  // resynced on show
       if (auto self = window_.try_as<winrt::URnetwork::implementation::MainWindow>())
-        self->SetSigningOut(signingOut);
+        self->SetSigningOut(sdk_.SigningOut());
     });
   });
   // A connect or disconnect tap shows its state at once and holds it until the
@@ -260,8 +260,11 @@ void AppController::Start() {
   });
 
   // SDK state -> tray + window (marshaled onto the UI thread).
-  sdk_.SetAuthStateHandler([this](AuthState s, const std::string& e) {
-    OnUi([this, s, e] { OnAuthState(s, e); });
+  sdk_.SetAuthStateHandler([this](AuthState s, const std::string& e, std::uint64_t epoch) {
+    OnUi([this, s, e, epoch] {
+      if (!sdk_.AuthEventIsCurrent(epoch)) return;
+      OnAuthState(s, e);
+    });
   });
   // The server rejected the stored auth (e.g. the client was removed, or
   // another device signed this session out): log out and return to the login

@@ -88,12 +88,13 @@ struct Host {
   // epoch its callback compares.
   std::optional<std::uint64_t> BeginRegister(const std::string& credential) {
     std::optional<SignIn> replaced;
-    if (run.Defer(SignIn{credential}, replaced)) {
+    std::uint64_t epoch = run.Epoch();
+    if (run.Defer(SignIn{credential}, replaced, epoch)) {
       if (replaced) events.push_back("told " + replaced->credential + " it was replaced");
       events.push_back(credential + " waits");
       return std::nullopt;
     }
-    return run.Epoch();
+    return epoch;
   }
 
   // The registration's callback, under the session lock.
@@ -168,13 +169,26 @@ void TestARegistrationAfterTheTailInstalls() {
         "the next sign-in after the tail installs: " + Join(host.events));
 }
 
+void TestAnOldAttemptCannotReplaceTheSignInWaitingForLogout() {
+  SignOutRun<SignIn> run;
+  const auto oldEpoch = run.Epoch();
+  run.Begin();
+  std::optional<SignIn> replaced;
+  Check(run.Defer(SignIn{"next"}, replaced, run.Epoch()), "the new account waits for the logout");
+  Check(!run.Defer(SignIn{"old"}, replaced, oldEpoch), "the logout rejects an older attempt before it can replace the waiting sign-in");
+  const auto next = run.Finish();
+  Check(next && next->credential == "next" && !replaced,
+        "an old auth response cannot displace the newer account waiting for logout");
+}
+
 void TestFinishAndDeferNeverLoseTheSignIn() {
   // Defer first: the tail hands it back.
   {
     SignOutRun<SignIn> run;
     run.Begin();
     std::optional<SignIn> replaced;
-    Check(run.Defer(SignIn{"a"}, replaced), "a sign-in during the tail waits");
+    std::uint64_t epoch = run.Epoch();
+    Check(run.Defer(SignIn{"a"}, replaced, epoch), "a sign-in during the tail waits");
     const auto next = run.Finish();
     Check(next && next->credential == "a", "the tail hands back the sign-in that waited");
   }
@@ -184,7 +198,8 @@ void TestFinishAndDeferNeverLoseTheSignIn() {
     run.Begin();
     run.Finish();
     std::optional<SignIn> replaced;
-    Check(!run.Defer(SignIn{"a"}, replaced), "a sign-in after the tail goes ahead itself");
+    std::uint64_t epoch = run.Epoch();
+    Check(!run.Defer(SignIn{"a"}, replaced, epoch), "a sign-in after the tail goes ahead itself");
   }
   // Released together: whichever order the two take, the sign-in is run once.
   for (int round = 0; round < 200; ++round) {
@@ -197,7 +212,8 @@ void TestFinishAndDeferNeverLoseTheSignIn() {
       ready.fetch_add(1);
       while (!go.load()) std::this_thread::yield();
       std::optional<SignIn> replaced;
-      if (!run.Defer(SignIn{"a"}, replaced)) ran.fetch_add(1);
+      std::uint64_t epoch = run.Epoch();
+      if (!run.Defer(SignIn{"a"}, replaced, epoch)) ran.fetch_add(1);
     });
     std::thread tail([&] {
       ready.fetch_add(1);
@@ -239,6 +255,7 @@ int main() {
   TestANewerSignInReplacesAnOlderOneWaiting();
   TestARegistrationFromBeforeTheSignOutDoesNotInstall();
   TestARegistrationAfterTheTailInstalls();
+  TestAnOldAttemptCannotReplaceTheSignInWaitingForLogout();
   TestFinishAndDeferNeverLoseTheSignIn();
   TestAnExitWaitsForTheTailBounded();
   std::cout << (gCases - gFailures) << "/" << gCases << " sign-out run checks passed\n";
