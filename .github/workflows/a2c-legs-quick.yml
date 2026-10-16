@@ -1,0 +1,121 @@
+# A2c's runner legs again, on the MSIs an earlier a2c-legs.yml run built: for
+# a change to the legs alone, without three new builds. The run is named in
+# .github/a2c-legs-reuse.txt: its builds are of the same product tree, and a
+# change to the product needs a2c-legs.yml again. The legs to run
+# are named in .github/a2c-legs-only.txt (feeds, channel, markers), every one
+# when it is empty. Throwaway: ci/a2c-legsq-* branches of the fork only.
+#
+# SPDX-License-Identifier: MPL-2.0
+
+name: A2c legs, quick - the developer update channel
+
+on:
+  push:
+    branches:
+      - 'ci/a2c-legsq-*'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  pick:
+    name: The builds and legs to run
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.pick.outputs.run }}
+      legs: ${{ steps.pick.outputs.legs }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: pick
+        run: |
+          run=$(tr -d ' \r\n' < .github/a2c-legs-reuse.txt)
+          legs=$(tr -d '\r' < .github/a2c-legs-only.txt 2>/dev/null | tr -s ' \n' ' ' | sed 's/^ *//;s/ *$//')
+          if [ -z "$legs" ]; then legs='feeds channel markers'; fi
+          json=$(printf '%s\n' $legs | jq -R . | jq -sc .)
+          echo "the MSIs of run $run; legs $json"
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          echo "legs=$json" >> "$GITHUB_OUTPUT"
+
+  legs:
+    name: ${{ matrix.leg }} on ${{ matrix.os }} (${{ github.ref_name }})
+    needs: [pick]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025]
+        leg: ${{ fromJson(needs.pick.outputs.legs) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: The MSIs of run ${{ needs.pick.outputs.run }}
+        uses: actions/download-artifact@v4
+        with:
+          pattern: msi-*
+          merge-multiple: true
+          run-id: ${{ needs.pick.outputs.run }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/msis
+
+      - name: Inventory, the head and install vN
+        timeout-minutes: 15
+        shell: powershell
+        run: |
+          . "$env:GITHUB_WORKSPACE\.github\a2c-lib.ps1"
+          "head under test: $(git -C $env:GITHUB_WORKSPACE rev-parse HEAD) ($env:GITHUB_REF_NAME); MSIs of run $env:REUSE"
+          Show-PrfInventory
+          [void](Get-A2cUac)
+          Get-ChildItem $UrMsiDir | ForEach-Object { "msi dir: $($_.Name) $($_.Length)" }
+          if ((Get-Content $UrHostsFile) -match 'github') { throw "this runner's hosts file names a GitHub host" }
+          Install-PrfVn
+        env:
+          REUSE: ${{ needs.pick.outputs.run }}
+
+      - name: The leg
+        timeout-minutes: 100
+        shell: powershell
+        run: |
+          & "$env:GITHUB_WORKSPACE\.github\a2c-leg-$env:LEG.ps1"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+        env:
+          LEG: ${{ matrix.leg }}
+
+      - name: Collect logs
+        if: always()
+        shell: powershell
+        run: |
+          $dest = Join-Path $env:RUNNER_TEMP 'a2c-logs'
+          New-Item -ItemType Directory -Force $dest | Out-Null
+          foreach ($name in 'releases.json', 'vn.productcode') {
+            $file = Join-Path $env:RUNNER_TEMP $name
+            if (Test-Path $file) { Copy-Item $file $dest }
+          }
+          if (Test-Path "$env:RUNNER_TEMP\a2c") { Copy-Item "$env:RUNNER_TEMP\a2c\*" $dest -Recurse -Force }
+          $dir = Join-Path $env:RUNNER_TEMP 'a2c-standin'
+          if (Test-Path $dir) { Get-ChildItem $dir -File | ForEach-Object { Copy-Item $_.FullName (Join-Path $dest "a2c-standin-$($_.Name)") } }
+          if (Test-Path "$env:RUNNER_TEMP\upgrade-logs") { Copy-Item "$env:RUNNER_TEMP\upgrade-logs\*" $dest -Force }
+          if (Test-Path "$env:LOCALAPPDATA\URnetwork\app\logs") { Copy-Item "$env:LOCALAPPDATA\URnetwork\app\logs" (Join-Path $dest 'app-logs') -Recurse -Force }
+          $updates = 'C:\Program Files\URnetwork\updates'
+          if (Test-Path $updates) {
+            Get-ChildItem -Recurse -Force $updates | ForEach-Object { "$($_.FullName) $($_.Length) $($_.Attributes)" } | Out-File (Join-Path $dest 'updates-listing.txt')
+            Get-ChildItem -Recurse -File $updates -Include '*.log', '*.json' | ForEach-Object {
+              $name = 'updates_' + ($_.FullName.Substring($updates.Length).TrimStart('\') -replace '\\', '_')
+              Copy-Item -LiteralPath $_.FullName (Join-Path $dest $name)
+            }
+          }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: a2c-logs-${{ matrix.leg }}-${{ matrix.os }}
+          path: ${{ runner.temp }}/a2c-logs/
+          if-no-files-found: warn
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: a2c-shots-${{ matrix.leg }}-${{ matrix.os }}
+          path: ${{ runner.temp }}/ui-shots/
+          if-no-files-found: warn
