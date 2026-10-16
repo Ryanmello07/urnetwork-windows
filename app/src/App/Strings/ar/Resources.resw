@@ -6983,7 +6983,7 @@
   </data>
   <data name="site_app_connecting" xml:space="preserve">
     <value>جارٍ الاتصال…</value>
-    <comment>App connect screen: connecting state</comment>
+    <comment>App connect screen and macOS menu bar: status while a connect is in progress, before the connection is up.</comment>
   </data>
   <data name="site_app_connections" xml:space="preserve">
     <value>الاتصالات</value>
