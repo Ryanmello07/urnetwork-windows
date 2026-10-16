@@ -59,8 +59,8 @@ namespace urnw::update {
 
 // One release feed.
 struct Feed {
-  // The channel's name: "official". The opt-in developer channel joins the
-  // table with its own feed.
+  // The channel's name: "official", or "developer" for the opt-in developer
+  // channel (UpdateChannel.h).
   std::string_view id;
   // GitHub's repository id, the path of the release list.
   std::uint64_t numericRepoId = 0;
@@ -111,8 +111,38 @@ inline constexpr Feed kOfficialFeed{
     .acceptAnyPrerelease = false,
 };
 
-// Every feed this build knows. The update channel names one of them.
-inline constexpr Feed kFeeds[] = {kOfficialFeed};
+// The opt-in developer channel's feed: Ryanmello07/urnetwork-windows, the
+// fork whose beta line is where this app's changes run before they come here,
+// published by that repository's own workflow as -beta pre-releases. An
+// administrator turns it on for a PC (UpdateChannel.h). Nothing reaches this
+// row but FeedById("developer"), so taking it out is deleting it and its entry
+// in kFeeds: a trusted marker is then the official feed again.
+//   - The numeric id is the one GitHub assigned the repository, and the owner
+//     and name are spelled as GitHub spells them, compared whole: a rename or
+//     a transfer of the repository ends the channel and does not move its
+//     trust.
+//   - Immutable releases are required. Until the repository turns them on, no
+//     release it has published can be offered; once they are on, a release's
+//     bytes cannot be replaced and its tag cannot be used again.
+//   - Only -beta tags count, so nothing there passes for an official release.
+//   - There is no soak: the channel exists to run a build minutes after it is
+//     pushed.
+inline constexpr Feed kDeveloperFeed{
+    .id = "developer",
+    .numericRepoId = 1324127805,
+    .owner = "Ryanmello07",
+    .repo = "urnetwork-windows",
+    .acceptBetaPrereleases = true,
+    .requireImmutable = true,
+    .soakSeconds = 0,
+    .tagPrefix = "",
+    .acceptAnyPrerelease = false,
+};
+
+// Every feed this build knows, the official one first. The update channel
+// names one of them. The table holds copies, so code compares feeds by id,
+// never by address.
+inline constexpr Feed kFeeds[] = {kOfficialFeed, kDeveloperFeed};
 
 // The feed named `id`, or null.
 inline const Feed* FeedById(std::string_view id) {

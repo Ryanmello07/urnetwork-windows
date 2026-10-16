@@ -186,8 +186,8 @@ func TestUpdateReleaseRejectsOtherFeeds(t *testing.T) {
 			"urnetwork/build's own id"},
 		{"another repository of the organisation", `.repo = "build",`, `.repo = "windows",`,
 			"polls urnetwork/build's published releases"},
-		{"mutable releases", ".requireImmutable = true,", ".requireImmutable = false,",
-			"requires immutable releases"},
+		{"mutable releases", ".requireImmutable = true,\n    .soakSeconds = 24 * 60 * 60,",
+			".requireImmutable = false,\n    .soakSeconds = 24 * 60 * 60,", "requires immutable releases"},
 		{"prereleases", `.id = "official",
     .numericRepoId = 936244679,
     .owner = "urnetwork",
@@ -206,6 +206,118 @@ func TestUpdateReleaseRejectsOtherFeeds(t *testing.T) {
 			t.Parallel()
 			requireUpdateReleaseFailure(t, "ReleaseSelection.h", updateReleaseReplace(tc.old, tc.replacement), tc.want)
 		})
+	}
+}
+
+// The developer feed must be Ryanmello07/urnetwork-windows's -beta releases,
+// addressed by that repository's own id and spelled as GitHub spells it,
+// immutable, with no other prerelease, no prefix and no soak, and the second
+// row of a table of two: pointing it elsewhere, loosening it or adding a row
+// fails the suite.
+func TestUpdateReleaseRejectsAnotherDeveloperFeed(t *testing.T) {
+	for _, tc := range []struct {
+		name, header, old, replacement, want string
+	}{
+		{"a third row", "ReleaseSelection.h", "inline constexpr Feed kFeeds[] = {kOfficialFeed, kDeveloperFeed};",
+			`inline constexpr Feed kFeeds[] = {kOfficialFeed, kDeveloperFeed, Feed{.id = "third", .numericRepoId = 4, ` +
+				`.owner = "example", .repo = "example", .acceptBetaPrereleases = false, .requireImmutable = true, ` +
+				`.soakSeconds = 0, .tagPrefix = "", .acceptAnyPrerelease = false}};`,
+			"the table holds the official and the developer feed alone"},
+		{"the row under another id", "ReleaseSelection.h", `.id = "developer",`, `.id = "developer-builds",`,
+			"the developer feed is in the table"},
+		{"another repository's id", "ReleaseSelection.h", ".numericRepoId = 1324127805,", ".numericRepoId = 1324127806,",
+			"the developer feed is repository 1324127805"},
+		{"urnetwork/build", "ReleaseSelection.h", `.numericRepoId = 1324127805,
+    .owner = "Ryanmello07",
+    .repo = "urnetwork-windows",`, `.numericRepoId = 936244679,
+    .owner = "urnetwork",
+    .repo = "build",`, "the developer feed is repository 1324127805"},
+		{"the owner in lower case", "ReleaseSelection.h", `.owner = "Ryanmello07",`, `.owner = "ryanmello07",`,
+			"Ryanmello07/urnetwork-windows's, spelled as GitHub spells it"},
+		{"no -beta prereleases", "ReleaseSelection.h", `.repo = "urnetwork-windows",
+    .acceptBetaPrereleases = true,`, `.repo = "urnetwork-windows",
+    .acceptBetaPrereleases = false,`, "the developer feed takes -beta prereleases"},
+		{"any prerelease", "ReleaseSelection.h", `.soakSeconds = 0,
+    .tagPrefix = "",
+    .acceptAnyPrerelease = false,`, `.soakSeconds = 0,
+    .tagPrefix = "",
+    .acceptAnyPrerelease = true,`, "the developer feed takes no other prerelease"},
+		{"a tag prefix", "ReleaseSelection.h", `.soakSeconds = 0,
+    .tagPrefix = "",`, `.soakSeconds = 0,
+    .tagPrefix = "beta-",`, "the developer feed's tags carry no prefix"},
+		{"mutable releases", "ReleaseSelection.h", ".requireImmutable = true,\n    .soakSeconds = 0,",
+			".requireImmutable = false,\n    .soakSeconds = 0,", "the developer feed requires immutable releases"},
+		{"a day's soak", "ReleaseSelection.h", ".requireImmutable = true,\n    .soakSeconds = 0,",
+			".requireImmutable = true,\n    .soakSeconds = 24 * 60 * 60,", "the developer feed does not soak"},
+		{"any tag read", "ReleaseSelection.h",
+			"    if (feed.acceptBetaPrereleases && !selection_detail::EndsWith(rel.tag, \"-beta\")) continue;\n", "",
+			"the developer feed reads only tags that end -beta"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			requireUpdateReleaseFailure(t, tc.header, updateReleaseReplace(tc.old, tc.replacement), tc.want)
+		})
+	}
+}
+
+// ReleaseSelection.h without the developer feed, as the revert of the commit
+// that added it leaves it: no row, no comment above it, and no entry in kFeeds.
+func withoutDeveloperFeed(t *testing.T) func(string) string {
+	return func(source string) string {
+		row := regexp.MustCompile(`(?s)// The opt-in developer channel's feed: .*?\ninline constexpr Feed kDeveloperFeed\{\n.*?\n\};\n\n`)
+		if found := len(row.FindAllStringIndex(source, -1)); found != 1 {
+			t.Fatalf("ReleaseSelection.h has %d kDeveloperFeed rows to take out, want one", found)
+		}
+		source = row.ReplaceAllString(source, "")
+		const entry = "inline constexpr Feed kFeeds[] = {kOfficialFeed, kDeveloperFeed};"
+		if strings.Count(source, entry) != 1 {
+			t.Fatalf("ReleaseSelection.h's kFeeds is not %q", entry)
+		}
+		source = strings.Replace(source, entry, "inline constexpr Feed kFeeds[] = {kOfficialFeed};", 1)
+		if strings.Contains(source, "kDeveloperFeed") {
+			t.Fatal("ReleaseSelection.h names kDeveloperFeed outside its row and its entry in kFeeds")
+		}
+		return source
+	}
+}
+
+// The developer feed comes out in one change, the revert of the commit that
+// added it: its row and its entry in kFeeds (SPEC-A2c 3.1). Nothing else names
+// the row, so the program built from a ReleaseSelection.h without them, and
+// run with --feed-taken-out, which leaves out the row's own checks, passes.
+// It names each check it made of what is left: a trusted marker is the
+// official channel, "developer" is no channel argument, and "official" still
+// is one and still deletes a marker. Both other ways round fail: that program
+// run as if the table had the row, and the table as it is run as if the row
+// were out.
+func TestUpdateReleaseTheFeedTakenOut(t *testing.T) {
+	takenOut := updateReleaseTestProgram(t, "ReleaseSelection.h", withoutDeveloperFeed(t))
+	output, err := exec.Command(takenOut, "--feed-taken-out").CombinedOutput()
+	if err != nil {
+		t.Fatalf("the program without the developer feed failed: %v\n%s", err, output)
+	}
+	for _, checked := range []string{
+		"the developer row is taken out of the table, and the official row is left",
+		"a trusted marker is the official channel while the table has no developer row",
+		"official is a channel argument",
+		"developer is a channel argument exactly while the table has its row",
+		"official deletes a trusted marker",
+	} {
+		if !regexp.MustCompile(`(?m)^  taken out: ` + regexp.QuoteMeta(checked) + `\r?$`).Match(output) {
+			t.Errorf("the program without the developer feed did not check that %s:\n%s", checked, output)
+		}
+	}
+	t.Logf("%s", output)
+	if output, err := exec.Command(takenOut).CombinedOutput(); err == nil ||
+		!strings.Contains(string(output), "FAIL the developer feed is in the table") {
+		t.Errorf("the program without the developer feed passed as if the table had the row, "+
+			"want a failure naming the developer feed: %v\n%s", err, output)
+	}
+	full := updateReleaseTestProgram(t, "", nil)
+	if output, err := exec.Command(full, "--feed-taken-out").CombinedOutput(); err == nil ||
+		!strings.Contains(string(output), "FAIL the developer row is taken out of the table") {
+		t.Errorf("the program with the developer feed passed as if it were taken out, "+
+			"want a failure naming the row: %v\n%s", err, output)
 	}
 }
 

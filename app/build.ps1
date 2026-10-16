@@ -183,10 +183,11 @@ foreach ($platform in $Platforms) {
   $bin = "$PSScriptRoot\build\$platform\$Configuration"
 
   # The update helper installs releases with administrator rights, from the
-  # official feed alone. One built with a runner test's feed (the four
-  # properties src\Updater\Updater.vcxproj takes for it, which nothing here
-  # passes) says so in its FileDescription (Updater.rc), and is never
-  # packaged, whatever passed those properties to this build.
+  # feeds compiled into it: the official one, or the developer one on a PC
+  # an administrator has switched to it. One built with a runner test's feed
+  # (the four properties src\Updater\Updater.vcxproj takes for it, which
+  # nothing here passes) says so in its FileDescription (Updater.rc), and is
+  # never packaged, whatever passed those properties to this build.
   $helper = Join-Path $bin "URnetworkUpdate.exe"
   if (-not (Test-Path $helper)) { throw "the update helper was not built: no $helper" }
   $helperDescription = [Diagnostics.FileVersionInfo]::GetVersionInfo($helper).FileDescription

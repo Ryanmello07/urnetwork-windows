@@ -666,7 +666,7 @@ func checkRunnerFeedIsTestOnly(inputs map[string]string, project, resources, app
 		}
 		for _, setting := range []string{"UrnUpdateRunnerTest", "URN_UPDATE_RUNNER_TEST"} {
 			if strings.Contains(text, setting) {
-				problems = append(problems, name+" sets "+setting+": official builds must poll the official feed")
+				problems = append(problems, name+" sets "+setting+": official builds never poll a runner test's feed")
 			}
 		}
 	}
@@ -691,7 +691,7 @@ func checkRunnerFeedIsTestOnly(inputs map[string]string, project, resources, app
 	if marked := strings.Index(build, `$helperDescription = [Diagnostics.FileVersionInfo]::GetVersionInfo($helper).FileDescription`); marked < 0 ||
 		!strings.Contains(build, `if ($helperDescription -ne "URnetwork update") {`) ||
 		strings.Index(build, "dotnet @wixArgs") < marked {
-		problems = append(problems, "app/build.ps1 packages an update helper without checking that it is the official feed's")
+		problems = append(problems, "app/build.ps1 packages an update helper without checking that it was built without a runner test's feed")
 	}
 	verify := inputs["app/tools/verify-msi-payload.ps1"]
 	if !strings.Contains(verify, `$description = [Diagnostics.FileVersionInfo]::GetVersionInfo($extracted).FileDescription`) ||

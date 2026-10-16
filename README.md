@@ -36,6 +36,28 @@ browser", built off until the approval page is live) registers the
 leaves it behind when it is deleted, and `reg delete HKCU\Software\Classes\urnetwork /f`
 removes it (an MSI uninstall does not).
 
+## Developer builds
+
+URnetwork can take its updates from developer builds instead: the beta builds
+of `Ryanmello07/urnetwork-windows`, a URnetwork developer's personal
+repository (`app/src/Common/ReleaseSelection.h`, `kDeveloperFeed`). They are
+test builds, not official releases. Only that repository's immutable releases
+are offered, each as soon as it is published. An administrator turns them on
+in the Developer screen (behind Advanced Mode, "Developer builds" under
+Updates), for the whole PC: Windows asks for administrator permission, and the
+updater then asks to confirm. While they are on, official releases are not
+offered. Nothing published in this repository or in the official releases can
+switch a PC back. Its administrator does, with the same switch or with "Switch
+to official releases" in Settings.
+
+Switching back does not undo it at once. The PC keeps the developer build it
+has until a newer official release has been out for a day. That can take
+several days. To go back sooner, uninstall URnetwork and install an official
+release. An official MSI installed over a developer build keeps the channel:
+only the switch, or an uninstall, ends it. Developer builds leave out the
+split-tunnel driver that official releases install. Report problems with a
+developer build in that repository's issues, not here.
+
 ## Architecture
 
 ```
