@@ -1653,9 +1653,10 @@ void ConnectPage::ApplyPaneCFolded(bool folded) {
 }
 
 void ConnectPage::WireDrawerFeeds() {
-  // SdkHost handlers fire on SDK callback threads. Capture the (agile)
-  // DispatcherQueue here on the UI thread and hop through it, resolving the
-  // weak window ref only on the UI side.
+  // SdkHost handlers fire on SDK callback threads, or inside an SdkHost call
+  // that holds its lock (the blocker handler, from SetBlockerEnabled on this
+  // thread). Capture the (agile) DispatcherQueue here on the UI thread and hop
+  // through it, resolving the weak window ref only on the UI side.
   auto queue = w_.DispatcherQueue();
   auto weak = w_.get_weak();
   auto& sdk = Sdk();
