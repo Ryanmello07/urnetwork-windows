@@ -1238,8 +1238,13 @@ class SdkHost {
   // service's device: while this is false the peer count is unavailable
   // (not zero) and the peers status line shows a disabled-discovery state.
   bool RemoteConnected();
-  // The selected connect location (the chooser's selection check + the drawer's
-  // selected-peer name resolution).
+  // The selected connect location (the chooser's and the Network pane's check
+  // glyphs, the provider-locations sheet). The presented controller's
+  // selection as its listener last reported it (selectedLocation_), taken
+  // under a leaf lock: the sheets read it on every render, on the UI thread,
+  // and the controller and the device sat behind mutex_, which the session
+  // worker holds through a whole connect. Best available (nullopt) before the
+  // first presentation and once the session ends.
   std::optional<urnet::ConnectLocation> SelectedLocation();
   // Connect to a chosen provider location as-is: the chooser holds the typed
   // ConnectLocation (an SDK one, or one it built from a peer), so skip the json
@@ -2760,6 +2765,12 @@ class SdkHost {
   // EnsureLocations' work, off the caller's thread, stopped with
   // statsPublisher_ for the same reason.
   CoalescedWorker locationsOpener_{[this] { EnsureLocationsOnWorker(); }};
+  // SelectedLocation's value: kept by the presented controller's selection
+  // listener and seeded as it opens (SubscribeStats), cleared when the session
+  // ends (ClosePresentationLocked). A leaf, held across nothing.
+  std::mutex selectedLocationMutex_;
+  std::optional<urnet::ConnectLocation> selectedLocation_;
+  void KeepSelectedLocation(std::optional<urnet::ConnectLocation> location);
   // EnsureLocationsLocked under mutex_, as locationsOpener_'s job: a throw is
   // logged, not propagated.
   void EnsureLocationsOnWorker();

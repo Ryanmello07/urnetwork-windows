@@ -3598,13 +3598,18 @@ void SdkHost::SubscribeStats() {
   if (!device_ || connectVc_) return;
   connectVc_ = device_->openConnectViewController();
   connectVc_->start();
+  // the selection the sheets read, kept by the listener below from here on
+  KeepSelectedLocation(connectVc_->getSelectedLocation());
   contractVc_ = device_->openContractViewController();  // live throughput feed
   auto pub = [this] { PublishStats(); };
   // ConnectViewController: status, provider grid/window size, selected location.
   presentationSubs_.push_back(connectVc_->addConnectionStatusListener(pub));
   presentationSubs_.push_back(connectVc_->addGridListener(pub));
   presentationSubs_.push_back(connectVc_->addSelectedLocationListener(
-      [this](std::optional<urnet::ConnectLocation>) { PublishStats(); }));
+      [this](std::optional<urnet::ConnectLocation> location) {
+        KeepSelectedLocation(std::move(location));
+        PublishStats();
+      }));
   presentationSubs_.push_back(device_->addConnectLocationChangeListener(
       [this](std::optional<urnet::ConnectLocation>) { PublishStats(); }));
   // ContractViewController: throughput points (bytes/bit rate up/down).
@@ -6412,10 +6417,13 @@ bool SdkHost::RemoteConnected() {
 }
 
 std::optional<urnet::ConnectLocation> SdkHost::SelectedLocation() {
-  std::scoped_lock lock(mutex_);
-  if (connectVc_) return connectVc_->getSelectedLocation();
-  if (device_) return device_->getConnectLocation();
-  return std::nullopt;
+  std::scoped_lock lock(selectedLocationMutex_);
+  return selectedLocation_;
+}
+
+void SdkHost::KeepSelectedLocation(std::optional<urnet::ConnectLocation> location) {
+  std::scoped_lock lock(selectedLocationMutex_);
+  selectedLocation_ = std::move(location);
 }
 
 // ---- selection identity (shared: sheet, Network pane, row coalescer) -------
@@ -7673,6 +7681,9 @@ proto::TunnelStatus SdkHost::StopServiceTunnel() {
 
 void SdkHost::ClosePresentationLocked(bool sessionEnding) {
   presentationSubs_.clear();
+  // A hide keeps the selection for the window that comes back; the session's
+  // end takes it with the session.
+  if (sessionEnding || !device_) KeepSelectedLocation(std::nullopt);
   // Released here rather than beside each locationsVc_.reset() below, so the two
   // exit paths cannot disagree. Once it is clear the api path may write again.
   deviceFeedOpen_.store(false, std::memory_order_release);
