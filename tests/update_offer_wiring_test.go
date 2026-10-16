@@ -36,8 +36,7 @@ import (
 // anything else, on every path, and goes on only for the release it was on;
 // the tray app keeps the download of the release it offers and of no other;
 // the developer line names the release held back without promising it; and
-// the README sends people to the official feed's releases, and tells of the
-// developer feed without a link to its own.
+// the README sends people to the feed the code polls.
 
 const (
 	offerRunCheck  = "bool UpdateChecker::RunCheck(std::uint64_t generation) {"
@@ -1257,8 +1256,7 @@ const (
 )
 
 // The README's Download section sends people to the releases the updater
-// polls by default: the official feed's own repository, by the owner and name
-// compiled in, and every releases link of the README is that one. It
+// polls: the feed's own repository, by the owner and name compiled in. It
 // says what the updater offers without promising every release, that a hand
 // install should prefer a release that has been out for a day (the newest
 // one can be minutes old, and no soak covers a hand install), and that a
@@ -1297,7 +1295,7 @@ func checkReadmeNamesTheFeed(readme, selection string) []string {
 	}
 	for _, link := range regexp.MustCompile(`github\.com/([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)/releases`).FindAllStringSubmatch(readme, -1) {
 		if link[1] != owner[1]+"/"+repo[1] {
-			problems = append(problems, "README.md sends people to "+link[1]+"'s releases: it links the official feed's releases alone")
+			problems = append(problems, "README.md sends people to "+link[1]+"'s releases, which the updater does not poll")
 		}
 	}
 	// read as one line, so a sentence may wrap anywhere
@@ -1394,66 +1392,6 @@ func checkReadmeNamesTheFeed(readme, selection string) []string {
 	if strings.Contains(prose, "at most once a day") {
 		problems = append(problems, "README.md's Download section says the offer changes at most once a day: "+
 			"it moves on when the UTC day does, and a withdrawn release leaves it at once")
-	}
-	sort.Strings(problems)
-	return problems
-}
-
-// The README's Developer builds section, the one after Download, tells of the
-// developer feed: by its constant and by its repository as the row spells it,
-// with no link to that repository's releases (checkReadmeNamesTheFeed). It
-// says that developer builds are not official releases and which of that
-// repository's releases are offered; that an administrator turns them on, for
-// the whole PC; that official releases are not offered meanwhile, and that
-// nothing published here or in the official releases switches a PC back; how
-// long switching back takes, in two sentences as the helper's question has
-// it, and the sooner way; that an official MSI installed over a developer
-// build keeps the channel; that developer builds leave out the split-tunnel
-// driver; and where their problems are reported.
-func checkReadmeNamesTheDeveloperFeed(readme, selection string) []string {
-	var problems []string
-	feed := applyDefinitionUntil(selection, "inline constexpr Feed kDeveloperFeed{", "\n};\n")
-	owner := regexp.MustCompile(`\.owner = "([^"]+)",`).FindStringSubmatch(feed)
-	repo := regexp.MustCompile(`\.repo = "([^"]+)",`).FindStringSubmatch(feed)
-	if owner == nil || repo == nil {
-		return append(problems, "ReleaseSelection.h's kDeveloperFeed no longer names its owner and repo")
-	}
-	download := strings.Index(readme, "\n## Download\n")
-	start := strings.Index(readme, "\n## Developer builds\n")
-	if download < 0 || start < 0 {
-		return append(problems, "README.md has no Developer builds section after its Download section")
-	}
-	if next := strings.Index(readme[download+1:], "\n## "); next < 0 || download+1+next != start {
-		problems = append(problems, "README.md's Developer builds section is not the one after Download")
-	}
-	section := readme[start+1:]
-	if end := strings.Index(section[1:], "\n## "); end >= 0 {
-		section = section[:end+1]
-	}
-	// read as one line, so a sentence may wrap anywhere
-	prose := strings.Join(strings.Fields(section), " ")
-	if repository := owner[1] + "/" + repo[1]; !strings.Contains(prose, "`"+repository+"`") {
-		problems = append(problems, "README.md's Developer builds section does not name "+repository+", as kDeveloperFeed spells it")
-	}
-	if !strings.Contains(prose, "`kDeveloperFeed`") {
-		problems = append(problems, "README.md's Developer builds section does not name kDeveloperFeed")
-	}
-	for what, pattern := range map[string]string{
-		"that developer builds are not official releases":                         `They are test builds, not official releases\.`,
-		"which of that repository's releases are offered":                         `Only that repository's immutable releases are offered, each as soon as it is published\.`,
-		"that an administrator turns them on, for the whole PC":                   `An administrator turns them on in the Developer screen \([^)]*\), for the whole PC`,
-		"that official releases are not offered meanwhile":                        `While they are on, official releases are not offered\.`,
-		"that nothing published here switches a PC back":                          `Nothing published in this repository or in the official releases can switch a PC back\.`,
-		"how long switching back takes, in two sentences":                         `until a newer official release has been out for a day\. That can take several days\.`,
-		"the sooner way back":                                                     `To go back sooner, uninstall URnetwork and install an official release\.`,
-		"that an official MSI installed over a developer build keeps the channel": `An official MSI installed over a developer build keeps the channel`,
-		"that an uninstall ends the channel only from its default folder":         `only the switch, or an uninstall from its default folder, ends it\.`,
-		"that developer builds leave out the split-tunnel driver":                 `Developer builds leave out the split-tunnel driver`,
-		"where problems with a developer build are reported":                      `Report problems with a developer build to that repository's owner, not here\.`,
-	} {
-		if !regexp.MustCompile(pattern).MatchString(prose) {
-			problems = append(problems, "README.md's Developer builds section does not say "+what)
-		}
 	}
 	sort.Strings(problems)
 	return problems
@@ -1702,72 +1640,6 @@ func TestUpdateOfferBannerRowRejectsWeakerSources(t *testing.T) {
 func TestUpdateOfferTheReadmeNamesTheFeed(t *testing.T) {
 	reportProblems(t, checkReadmeNamesTheFeed(readRepositoryFile(t, "README.md"),
 		stripComments(readCommonSource(t, "ReleaseSelection.h"))))
-}
-
-func TestUpdateOfferTheReadmeNamesTheDeveloperFeed(t *testing.T) {
-	reportProblems(t, checkReadmeNamesTheDeveloperFeed(readRepositoryFile(t, "README.md"),
-		stripComments(readCommonSource(t, "ReleaseSelection.h"))))
-}
-
-// Each part of the README's Developer builds section, taken away, is reported
-// for its reason, and so is a link to the developer feed's releases.
-func TestUpdateOfferTheReadmeNamesTheDeveloperFeedRejectsWeakerSources(t *testing.T) {
-	readme := readRepositoryFile(t, "README.md")
-	selection := stripComments(readCommonSource(t, "ReleaseSelection.h"))
-	replace := func(text, old, replacement string) string {
-		if strings.Count(text, old) != 1 {
-			t.Fatalf("negative control: %q is not in the source exactly once", old)
-		}
-		return strings.Replace(text, old, replacement, 1)
-	}
-	developer := func(readme string) []string { return checkReadmeNamesTheDeveloperFeed(readme, selection) }
-	for _, tc := range []struct {
-		name, want string
-		check      func() []string
-	}{
-		{"no Developer builds section", "README.md has no Developer builds section", func() []string {
-			return developer(replace(readme, "\n## Developer builds\n", "\n## Test builds\n"))
-		}},
-		{"the section after another one", "is not the one after Download", func() []string {
-			return developer(replace(readme, "\n## Developer builds\n", "\n## Elsewhere\n\nText.\n\n## Developer builds\n"))
-		}},
-		{"the repository spelled another way", "does not name Ryanmello07/urnetwork-windows, as kDeveloperFeed spells it", func() []string {
-			return developer(replace(readme, "`Ryanmello07/urnetwork-windows`", "`ryanmello07/urnetwork-windows`"))
-		}},
-		{"the constant left unnamed", "does not name kDeveloperFeed", func() []string {
-			return developer(replace(readme, "`kDeveloperFeed`", "`kFeeds`"))
-		}},
-		{"the wait in one sentence", "does not say how long switching back takes, in two sentences", func() []string {
-			return developer(replace(readme, "for a day. That can take", "for a day, which can take"))
-		}},
-		{"no sooner way back", "does not say the sooner way back", func() []string {
-			return developer(replace(readme, "To go back sooner,", "To go back,"))
-		}},
-		{"the channel said to end with an official MSI", "keeps the channel", func() []string {
-			return developer(replace(readme, "build keeps the channel:", "build ends the channel:"))
-		}},
-		// the fork's issues are off (the lead's G19, the review's C2 and N2): reports
-		// go to the repository's owner until they are on
-		{"problems sent to the repository's issues while they are off", "does not say where problems with a developer build are reported", func() []string {
-			return developer(replace(readme, "to that repository's owner, not here.", "in that repository's issues, not here."))
-		}},
-		// the A2c review's C12: the installer removes updates\ from its default
-		// folder alone (Package.wxs URNETWORK_UPDATES_FOLDER)
-		{"an uninstall said to end the channel from any folder", "does not say that an uninstall ends the channel only from its default folder", func() []string {
-			return developer(replace(readme, "or an uninstall from its default folder, ends it.", "or an uninstall, ends it."))
-		}},
-		{"the README links the developer feed's releases", "README.md sends people to Ryanmello07/urnetwork-windows's releases", func() []string {
-			return checkReadmeNamesTheFeed(replace(readme, "owner, not here.",
-				"owner, not here, and download them from https://github.com/Ryanmello07/urnetwork-windows/releases."), selection)
-		}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			problems := strings.Join(tc.check(), "\n")
-			if !strings.Contains(problems, tc.want) {
-				t.Fatalf("negative control was not detected by %q; the check reported:\n%s", tc.want, problems)
-			}
-		})
-	}
 }
 
 // Each check above fails on a source that drops what it pins, and for that
