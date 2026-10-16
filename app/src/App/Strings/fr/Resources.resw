@@ -1844,6 +1844,14 @@ bonne manière</value>
     <value>{0} envoyées / {1} acquittées</value>
     <comment>Developer tools screen: formatted value readout for 'busy probes'.</comment>
   </data>
+  <data name="dev_channel_switch" xml:space="preserve">
+    <value>Versions de développeur</value>
+    <comment>Developer page (Windows): label of the switch that moves this PC's updates from official releases to developer builds, the test builds of a URnetwork developer's personal repository.</comment>
+  </data>
+  <data name="dev_channel_switch_note" xml:space="preserve">
+    <value>Recevoir les mises à jour depuis {}, le dépôt personnel d’un développeur, et non depuis les versions officielles. Pour l’activer, Windows demande l’autorisation d’un administrateur, puis le programme de mise à jour vous demande de confirmer.</value>
+    <comment>Developer page (Windows): note under the developer builds switch. {repo} is a GitHub repository as owner/name, for example Ryanmello07/urnetwork-windows; keep it as written.</comment>
+  </data>
   <data name="dev_check_updates" xml:space="preserve">
     <value>Rechercher des mises à jour</value>
     <comment>Developer page: button that checks for a new release now. Linux Settings &gt; General: the title of the row whose button does the same.</comment>
@@ -2900,9 +2908,25 @@ bonne manière</value>
     <value>Pas de mise à jour : cette version est à jour</value>
     <comment>Developer page (Windows): update check result on the newest release; the version details follow in parentheses.</comment>
   </data>
+  <data name="dev_update_none_developer" xml:space="preserve">
+    <value>Aucune version de développeur n’est plus récente que celle-ci</value>
+    <comment>Developer page (Windows): update check result on developer builds when none is newer than the running build; the version details follow in parentheses.</comment>
+  </data>
+  <data name="dev_update_none_listed" xml:space="preserve">
+    <value>Aucune version de développeur installable sur ce PC n’est répertoriée</value>
+    <comment>Developer page (Windows): update check result on developer builds when the list has no build this PC can install (none published as immutable, or none for this processor); the version details follow in parentheses.</comment>
+  </data>
+  <data name="dev_update_none_official" xml:space="preserve">
+    <value>Aucune version officielle n’est encore proposée à cette version de développeur</value>
+    <comment>Developer page (Windows): update check result on a developer build that follows official releases, when no official release is offered yet; the version details follow in parentheses.</comment>
+  </data>
   <data name="dev_update_up_to_date" xml:space="preserve">
     <value>À jour. Dernière version : v{}</value>
     <comment>Developer page, and the line under Linux Settings &gt; Check for updates: update check result on the newest release. {version} is the release version.</comment>
+  </data>
+  <data name="dev_updates_heading" xml:space="preserve">
+    <value>Mises à jour</value>
+    <comment>Developer page (Windows): heading of the card that holds the update check and the switch for developer builds.</comment>
   </data>
   <data name="dev_uplink_gate" xml:space="preserve">
     <value>Filtre de silence montant</value>
@@ -7581,6 +7605,70 @@ comme il devrait être.</value>
     <value>Mise à jour disponible : v{}</value>
     <comment>Update notice title (Linux Settings, Windows update banner): a newer release is available. {version} is the release version, for example 2026.10.5-1024555910; keep the "v" before it.</comment>
   </data>
+  <data name="upd_channel_asking" xml:space="preserve">
+    <value>En attente de l’approbation d’un administrateur…</value>
+    <comment>Update channel (Windows): a change of the update channel waits for Windows' administrator prompt or the updater's own question.</comment>
+  </data>
+  <data name="upd_channel_busy" xml:space="preserve">
+    <value>Une mise à jour est en cours. Modifiez le canal de mise à jour une fois qu’elle est terminée.</value>
+    <comment>Update channel (Windows): a change of channel was asked for while an update installs.</comment>
+  </data>
+  <data name="upd_channel_dev_build" xml:space="preserve">
+    <value>Une version de développement (code 0) ne se met jamais à jour elle-même : elle n’a donc pas de canal de mise à jour.</value>
+    <comment>Update channel (Windows): a local development build, which has release code 0 and never updates.</comment>
+  </data>
+  <data name="upd_channel_developer" xml:space="preserve">
+    <value>Canal de mise à jour : versions de développeur depuis {}. Tant que c’est activé, les versions officielles ne sont pas proposées. Ce réglage s’applique à tous les utilisateurs de ce PC.</value>
+    <comment>Update channel line (Windows Developer page): an administrator has moved this PC to developer builds. {repo} is a GitHub repository as owner/name, for example Ryanmello07/urnetwork-windows; keep it as written.</comment>
+  </data>
+  <data name="upd_channel_developer_build" xml:space="preserve">
+    <value>Ceci est une version de développeur. Elle suit les versions officielles : rien ne lui est donc proposé tant qu’une version officielle plus récente n’est pas sortie depuis un jour.</value>
+    <comment>Update channel (Windows): the running app is a developer build, but this PC takes official releases.</comment>
+  </data>
+  <data name="upd_channel_developer_note" xml:space="preserve">
+    <value>Versions de développeur depuis {}. Tant que c’est activé, les versions officielles ne sont pas proposées.</value>
+    <comment>Settings (Windows): the update channel row's note when this PC takes developer builds. {repo} is a GitHub repository as owner/name, for example Ryanmello07/urnetwork-windows; keep it as written.</comment>
+  </data>
+  <data name="upd_channel_failed" xml:space="preserve">
+    <value>Le canal de mise à jour n’a pas pu être modifié ({}).</value>
+    <comment>Update channel (Windows): the change failed. {code} is an error code such as 0x2000000B; keep it as written.</comment>
+  </data>
+  <data name="upd_channel_label" xml:space="preserve">
+    <value>Canal de mise à jour</value>
+    <comment>Settings (Windows): label of the row that says which update channel this PC is on.</comment>
+  </data>
+  <data name="upd_channel_not_installed" xml:space="preserve">
+    <value>Cette copie de URnetwork n’est pas installée dans Program Files. Elle suit les versions officielles. Installez URnetwork pour choisir un canal.</value>
+    <comment>Update channel (Windows): this copy runs from a folder outside Program Files (a portable copy), so it has no channel to choose.</comment>
+  </data>
+  <data name="upd_channel_official" xml:space="preserve">
+    <value>Canal de mise à jour : versions officielles ({}).</value>
+    <comment>Update channel line (Windows Developer page): this PC takes official releases. {repo} is the official releases' GitHub repository as owner/name, urnetwork/build; keep it as written.</comment>
+  </data>
+  <data name="upd_channel_official_note" xml:space="preserve">
+    <value>Versions officielles.</value>
+    <comment>Settings (Windows): the update channel row's note when this PC takes official releases.</comment>
+  </data>
+  <data name="upd_channel_switch_official" xml:space="preserve">
+    <value>Passer aux versions officielles</value>
+    <comment>Settings and Developer page (Windows): button that moves this PC back to official releases; Windows asks for administrator permission.</comment>
+  </data>
+  <data name="upd_channel_unchanged" xml:space="preserve">
+    <value>Le canal de mise à jour n’a pas été modifié.</value>
+    <comment>Update channel (Windows): the change was declined, at Windows' prompt or at the updater's question.</comment>
+  </data>
+  <data name="upd_channel_unsigned" xml:space="preserve">
+    <value>Ici, Windows n’exécute en tant qu’administrateur que des programmes signés, et l’assistant de mise à jour de URnetwork n’est pas signé : le canal de mise à jour ne peut donc pas être modifié depuis l’application sur ce PC. Désinstaller URnetwork puis installer une version officielle remet ce PC sur les versions officielles.</value>
+    <comment>Update channel (Windows): this PC's policy elevates only signed programs, and the updater is unsigned, so the channel cannot be changed from the app.</comment>
+  </data>
+  <data name="upd_channel_untrusted" xml:space="preserve">
+    <value>Le canal de mise à jour enregistré n’est pas fiable, donc les versions officielles sont utilisées. Passer aux versions officielles le supprime.</value>
+    <comment>Update channel (Windows): the stored choice of developer builds failed its checks, so it is ignored.</comment>
+  </data>
+  <data name="upd_channel_where" xml:space="preserve">
+    <value>Les versions de développeur s’activent dans l’écran Développeur.</value>
+    <comment>Settings (Windows): where developer builds are turned on; follows the line saying this is a developer build.</comment>
+  </data>
   <data name="upd_check_held_message" xml:space="preserve">
     <value>GitHub a demandé à ce réseau d’attendre jusqu’au {} avant de l’interroger à nouveau, et l’app attend jusque-là.</value>
     <comment>Linux Settings &gt; General, the line under Check for updates: GitHub refused the update check with its rate limit (requests are anonymous and shared by everyone behind the same address) and said when it may be asked again; no check is sent before then, and the Check now button waits too. {time} is that local date and time.</comment>
@@ -7596,6 +7684,14 @@ comme il devrait être.</value>
   <data name="upd_check_stale_title" xml:space="preserve">
     <value>Impossible de rechercher des mises à jour depuis le {}</value>
     <comment>Linux Settings &gt; General, the line under Check for updates, and the developer page's update line: shown while automatic checks are on and no update check has reached GitHub for more than 72 hours, because a release the app cannot see may be out. {date} is the local short date of the last check that did (or of the first launch that tried).</comment>
+  </data>
+  <data name="upd_developer_message" xml:space="preserve">
+    <value>Ceci est une version de développeur issue de {}, pas une version officielle.</value>
+    <comment>Windows update banner: the first sentence of the message for a developer build. {repo} is a GitHub repository as owner/name, for example Ryanmello07/urnetwork-windows; keep it as written.</comment>
+  </data>
+  <data name="upd_developer_title_version" xml:space="preserve">
+    <value>Version de développeur disponible : v{}</value>
+    <comment>Windows update banner title: a newer developer build is available. {version} is the build's version, for example 2026.10.9-1067431400-beta; keep the "v" before it.</comment>
   </data>
   <data name="upd_downloaded_message" xml:space="preserve">
     <value>Le dossier de cette AppImage n’est pas accessible en écriture, le téléchargement vérifié a donc été enregistré ci-dessous. Remplacez l’AppImage par celui-ci manuellement.</value>

@@ -1884,6 +1884,14 @@
     <value>Надіслано: {0} / виправдано: {1}</value>
     <comment>Developer tools screen: formatted value readout for 'busy probes'.</comment>
   </data>
+  <data name="dev_channel_switch" xml:space="preserve">
+    <value>Збірки розробника</value>
+    <comment>Developer page (Windows): label of the switch that moves this PC's updates from official releases to developer builds, the test builds of a URnetwork developer's personal repository.</comment>
+  </data>
+  <data name="dev_channel_switch_note" xml:space="preserve">
+    <value>Отримувати оновлення з {}, особистого репозиторію розробника, а не офіційні випуски. Щоб увімкнути це, Windows попросить дозвіл адміністратора, а потім програма оновлення попросить вас підтвердити.</value>
+    <comment>Developer page (Windows): note under the developer builds switch. {repo} is a GitHub repository as owner/name, for example Ryanmello07/urnetwork-windows; keep it as written.</comment>
+  </data>
   <data name="dev_check_updates" xml:space="preserve">
     <value>Перевірити оновлення</value>
     <comment>Developer page: button that checks for a new release now. Linux Settings &gt; General: the title of the row whose button does the same.</comment>
@@ -2948,9 +2956,25 @@
     <value>Оновлень немає: це актуальна збірка</value>
     <comment>Developer page (Windows): update check result on the newest release; the version details follow in parentheses.</comment>
   </data>
+  <data name="dev_update_none_developer" xml:space="preserve">
+    <value>Немає збірки розробника, новішої за цю</value>
+    <comment>Developer page (Windows): update check result on developer builds when none is newer than the running build; the version details follow in parentheses.</comment>
+  </data>
+  <data name="dev_update_none_listed" xml:space="preserve">
+    <value>Немає збірки розробника, яку можна встановити на цей комп’ютер</value>
+    <comment>Developer page (Windows): update check result on developer builds when the list has no build this PC can install (none published as immutable, or none for this processor); the version details follow in parentheses.</comment>
+  </data>
+  <data name="dev_update_none_official" xml:space="preserve">
+    <value>Цій збірці розробника ще не пропонується офіційний випуск</value>
+    <comment>Developer page (Windows): update check result on a developer build that follows official releases, when no official release is offered yet; the version details follow in parentheses.</comment>
+  </data>
   <data name="dev_update_up_to_date" xml:space="preserve">
     <value>Оновлень немає. Найновіший випуск: v{}</value>
     <comment>Developer page, and the line under Linux Settings &gt; Check for updates: update check result on the newest release. {version} is the release version.</comment>
+  </data>
+  <data name="dev_updates_heading" xml:space="preserve">
+    <value>Оновлення</value>
+    <comment>Developer page (Windows): heading of the card that holds the update check and the switch for developer builds.</comment>
   </data>
   <data name="dev_uplink_gate" xml:space="preserve">
     <value>Поріг тиші висхідного каналу</value>
@@ -7829,6 +7853,70 @@
     <value>Доступне оновлення: v{}</value>
     <comment>Update notice title (Linux Settings, Windows update banner): a newer release is available. {version} is the release version, for example 2026.10.5-1024555910; keep the "v" before it.</comment>
   </data>
+  <data name="upd_channel_asking" xml:space="preserve">
+    <value>Очікування дозволу адміністратора…</value>
+    <comment>Update channel (Windows): a change of the update channel waits for Windows' administrator prompt or the updater's own question.</comment>
+  </data>
+  <data name="upd_channel_busy" xml:space="preserve">
+    <value>Триває оновлення. Змініть канал оновлень, коли воно завершиться.</value>
+    <comment>Update channel (Windows): a change of channel was asked for while an update installs.</comment>
+  </data>
+  <data name="upd_channel_dev_build" xml:space="preserve">
+    <value>Збірка для розробки (код 0) ніколи не оновлюється сама, тому не має каналу оновлень.</value>
+    <comment>Update channel (Windows): a local development build, which has release code 0 and never updates.</comment>
+  </data>
+  <data name="upd_channel_developer" xml:space="preserve">
+    <value>Канал оновлень: збірки розробника з {}. Поки це ввімкнено, офіційні випуски не пропонуються. Це діє для всіх користувачів цього комп’ютера.</value>
+    <comment>Update channel line (Windows Developer page): an administrator has moved this PC to developer builds. {repo} is a GitHub repository as owner/name, for example Ryanmello07/urnetwork-windows; keep it as written.</comment>
+  </data>
+  <data name="upd_channel_developer_build" xml:space="preserve">
+    <value>Це збірка розробника. Вона отримує офіційні випуски, тому їй нічого не пропонується, доки новіший офіційний випуск не буде доступний протягом доби.</value>
+    <comment>Update channel (Windows): the running app is a developer build, but this PC takes official releases.</comment>
+  </data>
+  <data name="upd_channel_developer_note" xml:space="preserve">
+    <value>Збірки розробника з {}. Поки це ввімкнено, офіційні випуски не пропонуються.</value>
+    <comment>Settings (Windows): the update channel row's note when this PC takes developer builds. {repo} is a GitHub repository as owner/name, for example Ryanmello07/urnetwork-windows; keep it as written.</comment>
+  </data>
+  <data name="upd_channel_failed" xml:space="preserve">
+    <value>Не вдалося змінити канал оновлень ({}).</value>
+    <comment>Update channel (Windows): the change failed. {code} is an error code such as 0x2000000B; keep it as written.</comment>
+  </data>
+  <data name="upd_channel_label" xml:space="preserve">
+    <value>Канал оновлень</value>
+    <comment>Settings (Windows): label of the row that says which update channel this PC is on.</comment>
+  </data>
+  <data name="upd_channel_not_installed" xml:space="preserve">
+    <value>Ця копія URnetwork не встановлена в Program Files. Вона отримує офіційні випуски. Установіть URnetwork, щоб вибрати канал.</value>
+    <comment>Update channel (Windows): this copy runs from a folder outside Program Files (a portable copy), so it has no channel to choose.</comment>
+  </data>
+  <data name="upd_channel_official" xml:space="preserve">
+    <value>Канал оновлень: офіційні випуски ({}).</value>
+    <comment>Update channel line (Windows Developer page): this PC takes official releases. {repo} is the official releases' GitHub repository as owner/name, urnetwork/build; keep it as written.</comment>
+  </data>
+  <data name="upd_channel_official_note" xml:space="preserve">
+    <value>Офіційні випуски.</value>
+    <comment>Settings (Windows): the update channel row's note when this PC takes official releases.</comment>
+  </data>
+  <data name="upd_channel_switch_official" xml:space="preserve">
+    <value>Перейти на офіційні випуски</value>
+    <comment>Settings and Developer page (Windows): button that moves this PC back to official releases; Windows asks for administrator permission.</comment>
+  </data>
+  <data name="upd_channel_unchanged" xml:space="preserve">
+    <value>Канал оновлень не змінено.</value>
+    <comment>Update channel (Windows): the change was declined, at Windows' prompt or at the updater's question.</comment>
+  </data>
+  <data name="upd_channel_unsigned" xml:space="preserve">
+    <value>Тут Windows запускає від імені адміністратора лише підписані програми, а помічник оновлення URnetwork не підписаний, тому на цьому комп’ютері канал оновлень не можна змінити із застосунку. Якщо видалити URnetwork і встановити офіційний випуск, цей комп’ютер знову отримуватиме офіційні випуски.</value>
+    <comment>Update channel (Windows): this PC's policy elevates only signed programs, and the updater is unsigned, so the channel cannot be changed from the app.</comment>
+  </data>
+  <data name="upd_channel_untrusted" xml:space="preserve">
+    <value>Збереженому каналу оновлень не можна довіряти, тому використовуються офіційні випуски. Перехід на офіційні випуски видалить його.</value>
+    <comment>Update channel (Windows): the stored choice of developer builds failed its checks, so it is ignored.</comment>
+  </data>
+  <data name="upd_channel_where" xml:space="preserve">
+    <value>Збірки розробника вмикаються на екрані «Розробник».</value>
+    <comment>Settings (Windows): where developer builds are turned on; follows the line saying this is a developer build.</comment>
+  </data>
   <data name="upd_check_held_message" xml:space="preserve">
     <value>GitHub попросив цю мережу зачекати до {}, перш ніж звертатися знову, і застосунок чекає до того часу.</value>
     <comment>Linux Settings &gt; General, the line under Check for updates: GitHub refused the update check with its rate limit (requests are anonymous and shared by everyone behind the same address) and said when it may be asked again; no check is sent before then, and the Check now button waits too. {time} is that local date and time.</comment>
@@ -7844,6 +7932,14 @@
   <data name="upd_check_stale_title" xml:space="preserve">
     <value>Не вдається перевірити оновлення з {}</value>
     <comment>Linux Settings &gt; General, the line under Check for updates, and the developer page's update line: shown while automatic checks are on and no update check has reached GitHub for more than 72 hours, because a release the app cannot see may be out. {date} is the local short date of the last check that did (or of the first launch that tried).</comment>
+  </data>
+  <data name="upd_developer_message" xml:space="preserve">
+    <value>Це збірка розробника з {}, а не офіційний випуск.</value>
+    <comment>Windows update banner: the first sentence of the message for a developer build. {repo} is a GitHub repository as owner/name, for example Ryanmello07/urnetwork-windows; keep it as written.</comment>
+  </data>
+  <data name="upd_developer_title_version" xml:space="preserve">
+    <value>Доступна збірка розробника: v{}</value>
+    <comment>Windows update banner title: a newer developer build is available. {version} is the build's version, for example 2026.10.9-1067431400-beta; keep the "v" before it.</comment>
   </data>
   <data name="upd_downloaded_message" xml:space="preserve">
     <value>Папка цього AppImage недоступна для запису, тож перевірений файл збережено нижче. Замініть ним AppImage вручну.</value>

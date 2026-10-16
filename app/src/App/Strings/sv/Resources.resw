@@ -1844,6 +1844,14 @@ rätt sätt</value>
     <value>{0} skickade / {1} frikända</value>
     <comment>Developer tools screen: formatted value readout for 'busy probes'.</comment>
   </data>
+  <data name="dev_channel_switch" xml:space="preserve">
+    <value>Utvecklarversioner</value>
+    <comment>Developer page (Windows): label of the switch that moves this PC's updates from official releases to developer builds, the test builds of a URnetwork developer's personal repository.</comment>
+  </data>
+  <data name="dev_channel_switch_note" xml:space="preserve">
+    <value>Hämta uppdateringar från {}, en utvecklares personliga kodförråd, i stället för officiella versioner. För att slå på det ber Windows om administratörsbehörighet, och sedan ber uppdateraren dig att bekräfta.</value>
+    <comment>Developer page (Windows): note under the developer builds switch. {repo} is a GitHub repository as owner/name, for example Ryanmello07/urnetwork-windows; keep it as written.</comment>
+  </data>
   <data name="dev_check_updates" xml:space="preserve">
     <value>Sök efter uppdateringar</value>
     <comment>Developer page: button that checks for a new release now. Linux Settings &gt; General: the title of the row whose button does the same.</comment>
@@ -2900,9 +2908,25 @@ rätt sätt</value>
     <value>Ingen uppdatering: den här versionen är aktuell</value>
     <comment>Developer page (Windows): update check result on the newest release; the version details follow in parentheses.</comment>
   </data>
+  <data name="dev_update_none_developer" xml:space="preserve">
+    <value>Ingen utvecklarversion är nyare än den här versionen</value>
+    <comment>Developer page (Windows): update check result on developer builds when none is newer than the running build; the version details follow in parentheses.</comment>
+  </data>
+  <data name="dev_update_none_listed" xml:space="preserve">
+    <value>Ingen utvecklarversion som den här datorn kan installera finns i listan</value>
+    <comment>Developer page (Windows): update check result on developer builds when the list has no build this PC can install (none published as immutable, or none for this processor); the version details follow in parentheses.</comment>
+  </data>
+  <data name="dev_update_none_official" xml:space="preserve">
+    <value>Ingen officiell version erbjuds ännu till den här utvecklarversionen</value>
+    <comment>Developer page (Windows): update check result on a developer build that follows official releases, when no official release is offered yet; the version details follow in parentheses.</comment>
+  </data>
   <data name="dev_update_up_to_date" xml:space="preserve">
     <value>Aktuell. Senaste version: v{}</value>
     <comment>Developer page, and the line under Linux Settings &gt; Check for updates: update check result on the newest release. {version} is the release version.</comment>
+  </data>
+  <data name="dev_updates_heading" xml:space="preserve">
+    <value>Uppdateringar</value>
+    <comment>Developer page (Windows): heading of the card that holds the update check and the switch for developer builds.</comment>
   </data>
   <data name="dev_uplink_gate" xml:space="preserve">
     <value>Tystnadsspärr för upplänk</value>
@@ -7581,6 +7605,70 @@ som det borde vara.</value>
     <value>Uppdatering tillgänglig: v{}</value>
     <comment>Update notice title (Linux Settings, Windows update banner): a newer release is available. {version} is the release version, for example 2026.10.5-1024555910; keep the "v" before it.</comment>
   </data>
+  <data name="upd_channel_asking" xml:space="preserve">
+    <value>Väntar på godkännande från en administratör…</value>
+    <comment>Update channel (Windows): a change of the update channel waits for Windows' administrator prompt or the updater's own question.</comment>
+  </data>
+  <data name="upd_channel_busy" xml:space="preserve">
+    <value>En uppdatering pågår. Ändra uppdateringskanalen när den är klar.</value>
+    <comment>Update channel (Windows): a change of channel was asked for while an update installs.</comment>
+  </data>
+  <data name="upd_channel_dev_build" xml:space="preserve">
+    <value>En utvecklingsversion (kod 0) uppdaterar aldrig sig själv och har därför ingen uppdateringskanal.</value>
+    <comment>Update channel (Windows): a local development build, which has release code 0 and never updates.</comment>
+  </data>
+  <data name="upd_channel_developer" xml:space="preserve">
+    <value>Uppdateringskanal: utvecklarversioner från {}. Så länge det är på erbjuds inga officiella versioner. Det gäller alla användare av den här datorn.</value>
+    <comment>Update channel line (Windows Developer page): an administrator has moved this PC to developer builds. {repo} is a GitHub repository as owner/name, for example Ryanmello07/urnetwork-windows; keep it as written.</comment>
+  </data>
+  <data name="upd_channel_developer_build" xml:space="preserve">
+    <value>Det här är en utvecklarversion. Den följer officiella versioner, så den erbjuds inget förrän en nyare officiell version har funnits ute i en dag.</value>
+    <comment>Update channel (Windows): the running app is a developer build, but this PC takes official releases.</comment>
+  </data>
+  <data name="upd_channel_developer_note" xml:space="preserve">
+    <value>Utvecklarversioner från {}. Så länge det är på erbjuds inga officiella versioner.</value>
+    <comment>Settings (Windows): the update channel row's note when this PC takes developer builds. {repo} is a GitHub repository as owner/name, for example Ryanmello07/urnetwork-windows; keep it as written.</comment>
+  </data>
+  <data name="upd_channel_failed" xml:space="preserve">
+    <value>Uppdateringskanalen kunde inte ändras ({}).</value>
+    <comment>Update channel (Windows): the change failed. {code} is an error code such as 0x2000000B; keep it as written.</comment>
+  </data>
+  <data name="upd_channel_label" xml:space="preserve">
+    <value>Uppdateringskanal</value>
+    <comment>Settings (Windows): label of the row that says which update channel this PC is on.</comment>
+  </data>
+  <data name="upd_channel_not_installed" xml:space="preserve">
+    <value>Den här kopian av URnetwork är inte installerad i Program Files. Den följer officiella versioner. Installera URnetwork för att välja kanal.</value>
+    <comment>Update channel (Windows): this copy runs from a folder outside Program Files (a portable copy), so it has no channel to choose.</comment>
+  </data>
+  <data name="upd_channel_official" xml:space="preserve">
+    <value>Uppdateringskanal: officiella versioner ({}).</value>
+    <comment>Update channel line (Windows Developer page): this PC takes official releases. {repo} is the official releases' GitHub repository as owner/name, urnetwork/build; keep it as written.</comment>
+  </data>
+  <data name="upd_channel_official_note" xml:space="preserve">
+    <value>Officiella versioner.</value>
+    <comment>Settings (Windows): the update channel row's note when this PC takes official releases.</comment>
+  </data>
+  <data name="upd_channel_switch_official" xml:space="preserve">
+    <value>Byt till officiella versioner</value>
+    <comment>Settings and Developer page (Windows): button that moves this PC back to official releases; Windows asks for administrator permission.</comment>
+  </data>
+  <data name="upd_channel_unchanged" xml:space="preserve">
+    <value>Uppdateringskanalen ändrades inte.</value>
+    <comment>Update channel (Windows): the change was declined, at Windows' prompt or at the updater's question.</comment>
+  </data>
+  <data name="upd_channel_unsigned" xml:space="preserve">
+    <value>Här kör Windows bara signerade program som administratör, och uppdateringshjälpen för URnetwork är inte signerad, så uppdateringskanalen kan inte ändras från appen på den här datorn. Om du avinstallerar URnetwork och installerar en officiell version får den här datorn officiella versioner igen.</value>
+    <comment>Update channel (Windows): this PC's policy elevates only signed programs, and the updater is unsigned, so the channel cannot be changed from the app.</comment>
+  </data>
+  <data name="upd_channel_untrusted" xml:space="preserve">
+    <value>Den sparade uppdateringskanalen är inte betrodd, så officiella versioner används. Om du byter till officiella versioner tas den bort.</value>
+    <comment>Update channel (Windows): the stored choice of developer builds failed its checks, so it is ignored.</comment>
+  </data>
+  <data name="upd_channel_where" xml:space="preserve">
+    <value>Utvecklarversioner slås på på skärmen Utvecklare.</value>
+    <comment>Settings (Windows): where developer builds are turned on; follows the line saying this is a developer build.</comment>
+  </data>
   <data name="upd_check_held_message" xml:space="preserve">
     <value>GitHub har bett det här nätverket att vänta till {} innan det frågar igen, och appen väntar till dess.</value>
     <comment>Linux Settings &gt; General, the line under Check for updates: GitHub refused the update check with its rate limit (requests are anonymous and shared by everyone behind the same address) and said when it may be asked again; no check is sent before then, and the Check now button waits too. {time} is that local date and time.</comment>
@@ -7596,6 +7684,14 @@ som det borde vara.</value>
   <data name="upd_check_stale_title" xml:space="preserve">
     <value>Det har inte gått att söka efter uppdateringar sedan {}</value>
     <comment>Linux Settings &gt; General, the line under Check for updates, and the developer page's update line: shown while automatic checks are on and no update check has reached GitHub for more than 72 hours, because a release the app cannot see may be out. {date} is the local short date of the last check that did (or of the first launch that tried).</comment>
+  </data>
+  <data name="upd_developer_message" xml:space="preserve">
+    <value>Det här är en utvecklarversion från {}, inte en officiell version.</value>
+    <comment>Windows update banner: the first sentence of the message for a developer build. {repo} is a GitHub repository as owner/name, for example Ryanmello07/urnetwork-windows; keep it as written.</comment>
+  </data>
+  <data name="upd_developer_title_version" xml:space="preserve">
+    <value>Utvecklarversion tillgänglig: v{}</value>
+    <comment>Windows update banner title: a newer developer build is available. {version} is the build's version, for example 2026.10.9-1067431400-beta; keep the "v" before it.</comment>
   </data>
   <data name="upd_downloaded_message" xml:space="preserve">
     <value>Den här AppImage-filens mapp är inte skrivbar, så den verifierade nedladdningen sparades nedan. Ersätt AppImage-filen med den manuellt.</value>

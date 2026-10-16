@@ -1824,6 +1824,14 @@
     <value>{0}회 전송 / {1}회 무혐의</value>
     <comment>Developer tools screen: formatted value readout for 'busy probes'.</comment>
   </data>
+  <data name="dev_channel_switch" xml:space="preserve">
+    <value>개발자 빌드</value>
+    <comment>Developer page (Windows): label of the switch that moves this PC's updates from official releases to developer builds, the test builds of a URnetwork developer's personal repository.</comment>
+  </data>
+  <data name="dev_channel_switch_note" xml:space="preserve">
+    <value>공식 릴리스 대신 개발자의 개인 저장소인 {}에서 업데이트를 받습니다. 켜려면 Windows가 관리자 권한을 요청하고, 이어서 업데이트 프로그램이 확인을 요청합니다.</value>
+    <comment>Developer page (Windows): note under the developer builds switch. {repo} is a GitHub repository as owner/name, for example Ryanmello07/urnetwork-windows; keep it as written.</comment>
+  </data>
   <data name="dev_check_updates" xml:space="preserve">
     <value>업데이트 확인</value>
     <comment>Developer page: button that checks for a new release now. Linux Settings &gt; General: the title of the row whose button does the same.</comment>
@@ -2876,9 +2884,25 @@
     <value>업데이트 없음: 이 빌드가 최신입니다</value>
     <comment>Developer page (Windows): update check result on the newest release; the version details follow in parentheses.</comment>
   </data>
+  <data name="dev_update_none_developer" xml:space="preserve">
+    <value>이 빌드보다 새로운 개발자 빌드가 없습니다</value>
+    <comment>Developer page (Windows): update check result on developer builds when none is newer than the running build; the version details follow in parentheses.</comment>
+  </data>
+  <data name="dev_update_none_listed" xml:space="preserve">
+    <value>이 PC에 설치할 수 있는 개발자 빌드가 목록에 없습니다</value>
+    <comment>Developer page (Windows): update check result on developer builds when the list has no build this PC can install (none published as immutable, or none for this processor); the version details follow in parentheses.</comment>
+  </data>
+  <data name="dev_update_none_official" xml:space="preserve">
+    <value>이 개발자 빌드에 아직 제공되는 공식 릴리스가 없습니다</value>
+    <comment>Developer page (Windows): update check result on a developer build that follows official releases, when no official release is offered yet; the version details follow in parentheses.</comment>
+  </data>
   <data name="dev_update_up_to_date" xml:space="preserve">
     <value>최신 상태입니다. 최신 릴리스: v{}</value>
     <comment>Developer page, and the line under Linux Settings &gt; Check for updates: update check result on the newest release. {version} is the release version.</comment>
+  </data>
+  <data name="dev_updates_heading" xml:space="preserve">
+    <value>업데이트</value>
+    <comment>Developer page (Windows): heading of the card that holds the update check and the switch for developer builds.</comment>
   </data>
   <data name="dev_uplink_gate" xml:space="preserve">
     <value>업링크 무응답 게이트</value>
@@ -7456,6 +7480,70 @@
     <value>업데이트 사용 가능: v{}</value>
     <comment>Update notice title (Linux Settings, Windows update banner): a newer release is available. {version} is the release version, for example 2026.10.5-1024555910; keep the "v" before it.</comment>
   </data>
+  <data name="upd_channel_asking" xml:space="preserve">
+    <value>관리자 승인을 기다리는 중…</value>
+    <comment>Update channel (Windows): a change of the update channel waits for Windows' administrator prompt or the updater's own question.</comment>
+  </data>
+  <data name="upd_channel_busy" xml:space="preserve">
+    <value>업데이트가 진행 중입니다. 완료된 후 업데이트 채널을 변경하세요.</value>
+    <comment>Update channel (Windows): a change of channel was asked for while an update installs.</comment>
+  </data>
+  <data name="upd_channel_dev_build" xml:space="preserve">
+    <value>개발 빌드(코드 0)는 스스로 업데이트되지 않으므로 업데이트 채널이 없습니다.</value>
+    <comment>Update channel (Windows): a local development build, which has release code 0 and never updates.</comment>
+  </data>
+  <data name="upd_channel_developer" xml:space="preserve">
+    <value>업데이트 채널: {}의 개발자 빌드. 켜져 있는 동안에는 공식 릴리스가 제공되지 않습니다. 이 PC의 모든 사용자에게 적용됩니다.</value>
+    <comment>Update channel line (Windows Developer page): an administrator has moved this PC to developer builds. {repo} is a GitHub repository as owner/name, for example Ryanmello07/urnetwork-windows; keep it as written.</comment>
+  </data>
+  <data name="upd_channel_developer_build" xml:space="preserve">
+    <value>이 빌드는 개발자 빌드입니다. 공식 릴리스를 따르므로, 더 새로운 공식 릴리스가 나온 지 하루가 지나기 전에는 아무것도 제공되지 않습니다.</value>
+    <comment>Update channel (Windows): the running app is a developer build, but this PC takes official releases.</comment>
+  </data>
+  <data name="upd_channel_developer_note" xml:space="preserve">
+    <value>{}의 개발자 빌드. 켜져 있는 동안에는 공식 릴리스가 제공되지 않습니다.</value>
+    <comment>Settings (Windows): the update channel row's note when this PC takes developer builds. {repo} is a GitHub repository as owner/name, for example Ryanmello07/urnetwork-windows; keep it as written.</comment>
+  </data>
+  <data name="upd_channel_failed" xml:space="preserve">
+    <value>업데이트 채널을 변경할 수 없습니다({}).</value>
+    <comment>Update channel (Windows): the change failed. {code} is an error code such as 0x2000000B; keep it as written.</comment>
+  </data>
+  <data name="upd_channel_label" xml:space="preserve">
+    <value>업데이트 채널</value>
+    <comment>Settings (Windows): label of the row that says which update channel this PC is on.</comment>
+  </data>
+  <data name="upd_channel_not_installed" xml:space="preserve">
+    <value>이 URnetwork 사본은 Program Files에 설치되어 있지 않습니다. 공식 릴리스를 따릅니다. 채널을 선택하려면 URnetwork를 설치하세요.</value>
+    <comment>Update channel (Windows): this copy runs from a folder outside Program Files (a portable copy), so it has no channel to choose.</comment>
+  </data>
+  <data name="upd_channel_official" xml:space="preserve">
+    <value>업데이트 채널: 공식 릴리스({}).</value>
+    <comment>Update channel line (Windows Developer page): this PC takes official releases. {repo} is the official releases' GitHub repository as owner/name, urnetwork/build; keep it as written.</comment>
+  </data>
+  <data name="upd_channel_official_note" xml:space="preserve">
+    <value>공식 릴리스.</value>
+    <comment>Settings (Windows): the update channel row's note when this PC takes official releases.</comment>
+  </data>
+  <data name="upd_channel_switch_official" xml:space="preserve">
+    <value>공식 릴리스로 전환</value>
+    <comment>Settings and Developer page (Windows): button that moves this PC back to official releases; Windows asks for administrator permission.</comment>
+  </data>
+  <data name="upd_channel_unchanged" xml:space="preserve">
+    <value>업데이트 채널이 변경되지 않았습니다.</value>
+    <comment>Update channel (Windows): the change was declined, at Windows' prompt or at the updater's question.</comment>
+  </data>
+  <data name="upd_channel_unsigned" xml:space="preserve">
+    <value>이 Windows는 서명된 프로그램만 관리자 권한으로 실행하는데 URnetwork의 업데이트 도우미는 서명되지 않았으므로, 이 PC에서는 앱에서 업데이트 채널을 변경할 수 없습니다. URnetwork를 제거하고 공식 릴리스를 설치하면 이 PC가 공식 릴리스로 돌아갑니다.</value>
+    <comment>Update channel (Windows): this PC's policy elevates only signed programs, and the updater is unsigned, so the channel cannot be changed from the app.</comment>
+  </data>
+  <data name="upd_channel_untrusted" xml:space="preserve">
+    <value>저장된 업데이트 채널을 신뢰할 수 없어 공식 릴리스를 사용합니다. 공식 릴리스로 전환하면 삭제됩니다.</value>
+    <comment>Update channel (Windows): the stored choice of developer builds failed its checks, so it is ignored.</comment>
+  </data>
+  <data name="upd_channel_where" xml:space="preserve">
+    <value>개발자 빌드는 개발자 화면에서 켭니다.</value>
+    <comment>Settings (Windows): where developer builds are turned on; follows the line saying this is a developer build.</comment>
+  </data>
   <data name="upd_check_held_message" xml:space="preserve">
     <value>GitHub에서 이 네트워크에 {}까지 다시 요청하지 말라고 했으며, 앱은 그때까지 기다립니다.</value>
     <comment>Linux Settings &gt; General, the line under Check for updates: GitHub refused the update check with its rate limit (requests are anonymous and shared by everyone behind the same address) and said when it may be asked again; no check is sent before then, and the Check now button waits too. {time} is that local date and time.</comment>
@@ -7471,6 +7559,14 @@
   <data name="upd_check_stale_title" xml:space="preserve">
     <value>{} 이후로 업데이트를 확인하지 못했습니다</value>
     <comment>Linux Settings &gt; General, the line under Check for updates, and the developer page's update line: shown while automatic checks are on and no update check has reached GitHub for more than 72 hours, because a release the app cannot see may be out. {date} is the local short date of the last check that did (or of the first launch that tried).</comment>
+  </data>
+  <data name="upd_developer_message" xml:space="preserve">
+    <value>이것은 공식 릴리스가 아닌 {}의 개발자 빌드입니다.</value>
+    <comment>Windows update banner: the first sentence of the message for a developer build. {repo} is a GitHub repository as owner/name, for example Ryanmello07/urnetwork-windows; keep it as written.</comment>
+  </data>
+  <data name="upd_developer_title_version" xml:space="preserve">
+    <value>개발자 빌드 사용 가능: v{}</value>
+    <comment>Windows update banner title: a newer developer build is available. {version} is the build's version, for example 2026.10.9-1067431400-beta; keep the "v" before it.</comment>
   </data>
   <data name="upd_downloaded_message" xml:space="preserve">
     <value>이 AppImage의 폴더에 쓸 수 없어 확인된 다운로드를 아래에 저장했습니다. 직접 AppImage를 이 파일로 교체하세요.</value>

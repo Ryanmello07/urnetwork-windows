@@ -1935,6 +1935,14 @@ right way</value>
     <value>{0} sent / {1} acquitted</value>
     <comment>Developer tools screen: formatted value readout for 'busy probes'.</comment>
   </data>
+  <data name="dev_channel_switch" xml:space="preserve">
+    <value>Developer builds</value>
+    <comment>Developer page (Windows): label of the switch that moves this PC's updates from official releases to developer builds, the test builds of a URnetwork developer's personal repository.</comment>
+  </data>
+  <data name="dev_channel_switch_note" xml:space="preserve">
+    <value>Take updates from {}, a developer's personal repository, and not from official releases. To turn this on, Windows asks for administrator permission, and the updater then asks you to confirm.</value>
+    <comment>Developer page (Windows): note under the developer builds switch. {repo} is a GitHub repository as owner/name, for example Ryanmello07/urnetwork-windows; keep it as written.</comment>
+  </data>
   <data name="dev_check_updates" xml:space="preserve">
     <value>Check for updates</value>
     <comment>Developer page: button that checks for a new release now. Linux Settings &gt; General: the title of the row whose button does the same.</comment>
@@ -3019,9 +3027,25 @@ right way</value>
     <value>No update: this build is current</value>
     <comment>Developer page (Windows): update check result on the newest release; the version details follow in parentheses.</comment>
   </data>
+  <data name="dev_update_none_developer" xml:space="preserve">
+    <value>No developer build is newer than this build</value>
+    <comment>Developer page (Windows): update check result on developer builds when none is newer than the running build; the version details follow in parentheses.</comment>
+  </data>
+  <data name="dev_update_none_listed" xml:space="preserve">
+    <value>No developer build that this PC can install is listed</value>
+    <comment>Developer page (Windows): update check result on developer builds when the list has no build this PC can install (none published as immutable, or none for this processor); the version details follow in parentheses.</comment>
+  </data>
+  <data name="dev_update_none_official" xml:space="preserve">
+    <value>No official release is offered to this developer build yet</value>
+    <comment>Developer page (Windows): update check result on a developer build that follows official releases, when no official release is offered yet; the version details follow in parentheses.</comment>
+  </data>
   <data name="dev_update_up_to_date" xml:space="preserve">
     <value>Up to date. Newest release: v{}</value>
     <comment>Developer page, and the line under Linux Settings &gt; Check for updates: update check result on the newest release. {version} is the release version.</comment>
+  </data>
+  <data name="dev_updates_heading" xml:space="preserve">
+    <value>Updates</value>
+    <comment>Developer page (Windows): heading of the card that holds the update check and the switch for developer builds.</comment>
   </data>
   <data name="dev_uplink_gate" xml:space="preserve">
     <value>Uplink silence gate</value>
@@ -9251,6 +9275,70 @@ as it should be.</value>
     <value>Update available: v{}</value>
     <comment>Update notice title (Linux Settings, Windows update banner): a newer release is available. {version} is the release version, for example 2026.10.5-1024555910; keep the "v" before it.</comment>
   </data>
+  <data name="upd_channel_asking" xml:space="preserve">
+    <value>Waiting for administrator approval…</value>
+    <comment>Update channel (Windows): a change of the update channel waits for Windows' administrator prompt or the updater's own question.</comment>
+  </data>
+  <data name="upd_channel_busy" xml:space="preserve">
+    <value>An update is in progress. Change the update channel when it is done.</value>
+    <comment>Update channel (Windows): a change of channel was asked for while an update installs.</comment>
+  </data>
+  <data name="upd_channel_dev_build" xml:space="preserve">
+    <value>A dev build (code 0) never updates itself, so it has no update channel.</value>
+    <comment>Update channel (Windows): a local development build, which has release code 0 and never updates.</comment>
+  </data>
+  <data name="upd_channel_developer" xml:space="preserve">
+    <value>Update channel: developer builds from {}. Official releases are not offered while this is on. This is set for every user of this PC.</value>
+    <comment>Update channel line (Windows Developer page): an administrator has moved this PC to developer builds. {repo} is a GitHub repository as owner/name, for example Ryanmello07/urnetwork-windows; keep it as written.</comment>
+  </data>
+  <data name="upd_channel_developer_build" xml:space="preserve">
+    <value>This is a developer build. It follows official releases, so it is offered nothing until a newer official release has been out for a day.</value>
+    <comment>Update channel (Windows): the running app is a developer build, but this PC takes official releases.</comment>
+  </data>
+  <data name="upd_channel_developer_note" xml:space="preserve">
+    <value>Developer builds from {}. Official releases are not offered while this is on.</value>
+    <comment>Settings (Windows): the update channel row's note when this PC takes developer builds. {repo} is a GitHub repository as owner/name, for example Ryanmello07/urnetwork-windows; keep it as written.</comment>
+  </data>
+  <data name="upd_channel_failed" xml:space="preserve">
+    <value>The update channel could not be changed ({}).</value>
+    <comment>Update channel (Windows): the change failed. {code} is an error code such as 0x2000000B; keep it as written.</comment>
+  </data>
+  <data name="upd_channel_label" xml:space="preserve">
+    <value>Update channel</value>
+    <comment>Settings (Windows): label of the row that says which update channel this PC is on.</comment>
+  </data>
+  <data name="upd_channel_not_installed" xml:space="preserve">
+    <value>This copy of URnetwork is not installed in Program Files. It follows official releases. Install URnetwork to choose a channel.</value>
+    <comment>Update channel (Windows): this copy runs from a folder outside Program Files (a portable copy), so it has no channel to choose.</comment>
+  </data>
+  <data name="upd_channel_official" xml:space="preserve">
+    <value>Update channel: official releases ({}).</value>
+    <comment>Update channel line (Windows Developer page): this PC takes official releases. {repo} is the official releases' GitHub repository as owner/name, urnetwork/build; keep it as written.</comment>
+  </data>
+  <data name="upd_channel_official_note" xml:space="preserve">
+    <value>Official releases.</value>
+    <comment>Settings (Windows): the update channel row's note when this PC takes official releases.</comment>
+  </data>
+  <data name="upd_channel_switch_official" xml:space="preserve">
+    <value>Switch to official releases</value>
+    <comment>Settings and Developer page (Windows): button that moves this PC back to official releases; Windows asks for administrator permission.</comment>
+  </data>
+  <data name="upd_channel_unchanged" xml:space="preserve">
+    <value>The update channel was not changed.</value>
+    <comment>Update channel (Windows): the change was declined, at Windows' prompt or at the updater's question.</comment>
+  </data>
+  <data name="upd_channel_unsigned" xml:space="preserve">
+    <value>Windows here runs only signed programs as administrator, and URnetwork's update helper is not signed, so the update channel cannot be changed from the app on this PC. Uninstalling URnetwork and installing an official release puts this PC on official releases.</value>
+    <comment>Update channel (Windows): this PC's policy elevates only signed programs, and the updater is unsigned, so the channel cannot be changed from the app.</comment>
+  </data>
+  <data name="upd_channel_untrusted" xml:space="preserve">
+    <value>The saved update channel is not trusted, so official releases are used. Switching to official releases removes it.</value>
+    <comment>Update channel (Windows): the stored choice of developer builds failed its checks, so it is ignored.</comment>
+  </data>
+  <data name="upd_channel_where" xml:space="preserve">
+    <value>Developer builds are turned on in the Developer screen.</value>
+    <comment>Settings (Windows): where developer builds are turned on; follows the line saying this is a developer build.</comment>
+  </data>
   <data name="upd_check_held_message" xml:space="preserve">
     <value>GitHub asked this network to wait until {} before it is asked again, and the app waits until then.</value>
     <comment>Linux Settings &gt; General, the line under Check for updates: GitHub refused the update check with its rate limit (requests are anonymous and shared by everyone behind the same address) and said when it may be asked again; no check is sent before then, and the Check now button waits too. {time} is that local date and time.</comment>
@@ -9266,6 +9354,14 @@ as it should be.</value>
   <data name="upd_check_stale_title" xml:space="preserve">
     <value>Couldn't check for updates since {}</value>
     <comment>Linux Settings &gt; General, the line under Check for updates, and the developer page's update line: shown while automatic checks are on and no update check has reached GitHub for more than 72 hours, because a release the app cannot see may be out. {date} is the local short date of the last check that did (or of the first launch that tried).</comment>
+  </data>
+  <data name="upd_developer_message" xml:space="preserve">
+    <value>This is a developer build from {}, not an official release.</value>
+    <comment>Windows update banner: the first sentence of the message for a developer build. {repo} is a GitHub repository as owner/name, for example Ryanmello07/urnetwork-windows; keep it as written.</comment>
+  </data>
+  <data name="upd_developer_title_version" xml:space="preserve">
+    <value>Developer build available: v{}</value>
+    <comment>Windows update banner title: a newer developer build is available. {version} is the build's version, for example 2026.10.9-1067431400-beta; keep the "v" before it.</comment>
   </data>
   <data name="upd_downloaded_message" xml:space="preserve">
     <value>This AppImage's folder is not writable, so the verified download was saved below. Replace the AppImage with it by hand.</value>

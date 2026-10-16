@@ -1884,6 +1884,14 @@
     <value>{0} נשלחו / {1} זוכו</value>
     <comment>Developer tools screen: formatted value readout for 'busy probes'.</comment>
   </data>
+  <data name="dev_channel_switch" xml:space="preserve">
+    <value>גרסאות מפתחים</value>
+    <comment>Developer page (Windows): label of the switch that moves this PC's updates from official releases to developer builds, the test builds of a URnetwork developer's personal repository.</comment>
+  </data>
+  <data name="dev_channel_switch_note" xml:space="preserve">
+    <value>קבלת עדכונים מ-{}, מאגר אישי של מפתח, ולא מהגרסאות הרשמיות. כדי להפעיל זאת, Windows מבקש הרשאת מנהל, ולאחר מכן תוכנית העדכון מבקשת ממך לאשר.</value>
+    <comment>Developer page (Windows): note under the developer builds switch. {repo} is a GitHub repository as owner/name, for example Ryanmello07/urnetwork-windows; keep it as written.</comment>
+  </data>
   <data name="dev_check_updates" xml:space="preserve">
     <value>בדיקת עדכונים</value>
     <comment>Developer page: button that checks for a new release now. Linux Settings &gt; General: the title of the row whose button does the same.</comment>
@@ -2948,9 +2956,25 @@
     <value>אין עדכון: הגרסה הזו עדכנית</value>
     <comment>Developer page (Windows): update check result on the newest release; the version details follow in parentheses.</comment>
   </data>
+  <data name="dev_update_none_developer" xml:space="preserve">
+    <value>אין גרסת מפתחים חדשה יותר מהגרסה הזו</value>
+    <comment>Developer page (Windows): update check result on developer builds when none is newer than the running build; the version details follow in parentheses.</comment>
+  </data>
+  <data name="dev_update_none_listed" xml:space="preserve">
+    <value>לא רשומה גרסת מפתחים שהמחשב הזה יכול להתקין</value>
+    <comment>Developer page (Windows): update check result on developer builds when the list has no build this PC can install (none published as immutable, or none for this processor); the version details follow in parentheses.</comment>
+  </data>
+  <data name="dev_update_none_official" xml:space="preserve">
+    <value>עדיין לא מוצעת גרסה רשמית לגרסת המפתחים הזו</value>
+    <comment>Developer page (Windows): update check result on a developer build that follows official releases, when no official release is offered yet; the version details follow in parentheses.</comment>
+  </data>
   <data name="dev_update_up_to_date" xml:space="preserve">
     <value>מעודכן. הגרסה האחרונה: v{}</value>
     <comment>Developer page, and the line under Linux Settings &gt; Check for updates: update check result on the newest release. {version} is the release version.</comment>
+  </data>
+  <data name="dev_updates_heading" xml:space="preserve">
+    <value>עדכונים</value>
+    <comment>Developer page (Windows): heading of the card that holds the update check and the switch for developer builds.</comment>
   </data>
   <data name="dev_uplink_gate" xml:space="preserve">
     <value>שער שקט של הערוץ העולה</value>
@@ -7829,6 +7853,70 @@
     <value>יש עדכון זמין: v{}</value>
     <comment>Update notice title (Linux Settings, Windows update banner): a newer release is available. {version} is the release version, for example 2026.10.5-1024555910; keep the "v" before it.</comment>
   </data>
+  <data name="upd_channel_asking" xml:space="preserve">
+    <value>ממתין לאישור מנהל…</value>
+    <comment>Update channel (Windows): a change of the update channel waits for Windows' administrator prompt or the updater's own question.</comment>
+  </data>
+  <data name="upd_channel_busy" xml:space="preserve">
+    <value>מתבצע עדכון. שנה את ערוץ העדכונים כשהוא יסתיים.</value>
+    <comment>Update channel (Windows): a change of channel was asked for while an update installs.</comment>
+  </data>
+  <data name="upd_channel_dev_build" xml:space="preserve">
+    <value>גרסת פיתוח (קוד 0) אף פעם לא מעדכנת את עצמה, ולכן אין לה ערוץ עדכונים.</value>
+    <comment>Update channel (Windows): a local development build, which has release code 0 and never updates.</comment>
+  </data>
+  <data name="upd_channel_developer" xml:space="preserve">
+    <value>ערוץ העדכונים: גרסאות מפתחים מ-{}. כל עוד זה מופעל, גרסאות רשמיות אינן מוצעות. ההגדרה חלה על כל המשתמשים במחשב הזה.</value>
+    <comment>Update channel line (Windows Developer page): an administrator has moved this PC to developer builds. {repo} is a GitHub repository as owner/name, for example Ryanmello07/urnetwork-windows; keep it as written.</comment>
+  </data>
+  <data name="upd_channel_developer_build" xml:space="preserve">
+    <value>זוהי גרסת מפתחים. היא עוקבת אחר הגרסאות הרשמיות, ולכן לא יוצע לה דבר עד שגרסה רשמית חדשה יותר תהיה זמינה במשך יום.</value>
+    <comment>Update channel (Windows): the running app is a developer build, but this PC takes official releases.</comment>
+  </data>
+  <data name="upd_channel_developer_note" xml:space="preserve">
+    <value>גרסאות מפתחים מ-{}. כל עוד זה מופעל, גרסאות רשמיות אינן מוצעות.</value>
+    <comment>Settings (Windows): the update channel row's note when this PC takes developer builds. {repo} is a GitHub repository as owner/name, for example Ryanmello07/urnetwork-windows; keep it as written.</comment>
+  </data>
+  <data name="upd_channel_failed" xml:space="preserve">
+    <value>לא ניתן היה לשנות את ערוץ העדכונים ({}).</value>
+    <comment>Update channel (Windows): the change failed. {code} is an error code such as 0x2000000B; keep it as written.</comment>
+  </data>
+  <data name="upd_channel_label" xml:space="preserve">
+    <value>ערוץ עדכונים</value>
+    <comment>Settings (Windows): label of the row that says which update channel this PC is on.</comment>
+  </data>
+  <data name="upd_channel_not_installed" xml:space="preserve">
+    <value>העותק הזה של URnetwork אינו מותקן ב-Program Files. הוא עוקב אחר הגרסאות הרשמיות. התקן את URnetwork כדי לבחור ערוץ.</value>
+    <comment>Update channel (Windows): this copy runs from a folder outside Program Files (a portable copy), so it has no channel to choose.</comment>
+  </data>
+  <data name="upd_channel_official" xml:space="preserve">
+    <value>ערוץ העדכונים: גרסאות רשמיות ({}).</value>
+    <comment>Update channel line (Windows Developer page): this PC takes official releases. {repo} is the official releases' GitHub repository as owner/name, urnetwork/build; keep it as written.</comment>
+  </data>
+  <data name="upd_channel_official_note" xml:space="preserve">
+    <value>גרסאות רשמיות.</value>
+    <comment>Settings (Windows): the update channel row's note when this PC takes official releases.</comment>
+  </data>
+  <data name="upd_channel_switch_official" xml:space="preserve">
+    <value>מעבר לגרסאות הרשמיות</value>
+    <comment>Settings and Developer page (Windows): button that moves this PC back to official releases; Windows asks for administrator permission.</comment>
+  </data>
+  <data name="upd_channel_unchanged" xml:space="preserve">
+    <value>ערוץ העדכונים לא שונה.</value>
+    <comment>Update channel (Windows): the change was declined, at Windows' prompt or at the updater's question.</comment>
+  </data>
+  <data name="upd_channel_unsigned" xml:space="preserve">
+    <value>כאן Windows מפעיל כמנהל רק תוכניות חתומות, ותוכנית העזר לעדכון של URnetwork אינה חתומה, ולכן אי אפשר לשנות את ערוץ העדכונים מהאפליקציה במחשב הזה. הסרת URnetwork והתקנת גרסה רשמית מחזירות את המחשב הזה לגרסאות הרשמיות.</value>
+    <comment>Update channel (Windows): this PC's policy elevates only signed programs, and the updater is unsigned, so the channel cannot be changed from the app.</comment>
+  </data>
+  <data name="upd_channel_untrusted" xml:space="preserve">
+    <value>ערוץ העדכונים השמור אינו מהימן, ולכן נעשה שימוש בגרסאות הרשמיות. מעבר לגרסאות הרשמיות מסיר אותו.</value>
+    <comment>Update channel (Windows): the stored choice of developer builds failed its checks, so it is ignored.</comment>
+  </data>
+  <data name="upd_channel_where" xml:space="preserve">
+    <value>גרסאות מפתחים מופעלות במסך המפתחים.</value>
+    <comment>Settings (Windows): where developer builds are turned on; follows the line saying this is a developer build.</comment>
+  </data>
   <data name="upd_check_held_message" xml:space="preserve">
     <value>GitHub ביקש מהרשת הזו להמתין עד {} לפני שתפנה אליו שוב, והאפליקציה ממתינה עד אז.</value>
     <comment>Linux Settings &gt; General, the line under Check for updates: GitHub refused the update check with its rate limit (requests are anonymous and shared by everyone behind the same address) and said when it may be asked again; no check is sent before then, and the Check now button waits too. {time} is that local date and time.</comment>
@@ -7844,6 +7932,14 @@
   <data name="upd_check_stale_title" xml:space="preserve">
     <value>לא ניתן היה לבדוק עדכונים מאז {}</value>
     <comment>Linux Settings &gt; General, the line under Check for updates, and the developer page's update line: shown while automatic checks are on and no update check has reached GitHub for more than 72 hours, because a release the app cannot see may be out. {date} is the local short date of the last check that did (or of the first launch that tried).</comment>
+  </data>
+  <data name="upd_developer_message" xml:space="preserve">
+    <value>זוהי גרסת מפתחים מ-{}, לא גרסה רשמית.</value>
+    <comment>Windows update banner: the first sentence of the message for a developer build. {repo} is a GitHub repository as owner/name, for example Ryanmello07/urnetwork-windows; keep it as written.</comment>
+  </data>
+  <data name="upd_developer_title_version" xml:space="preserve">
+    <value>גרסת מפתחים זמינה: v{}</value>
+    <comment>Windows update banner title: a newer developer build is available. {version} is the build's version, for example 2026.10.9-1067431400-beta; keep the "v" before it.</comment>
   </data>
   <data name="upd_downloaded_message" xml:space="preserve">
     <value>אין הרשאת כתיבה לתיקייה של ה-AppImage הזה, ולכן ההורדה שאומתה נשמרה למטה. החליפו בה את ה-AppImage ידנית.</value>

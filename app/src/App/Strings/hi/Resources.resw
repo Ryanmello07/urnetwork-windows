@@ -1843,6 +1843,14 @@
     <value>{0} भेजे / {1} बरी</value>
     <comment>Developer tools screen: formatted value readout for 'busy probes'.</comment>
   </data>
+  <data name="dev_channel_switch" xml:space="preserve">
+    <value>डेवलपर बिल्ड</value>
+    <comment>Developer page (Windows): label of the switch that moves this PC's updates from official releases to developer builds, the test builds of a URnetwork developer's personal repository.</comment>
+  </data>
+  <data name="dev_channel_switch_note" xml:space="preserve">
+    <value>आधिकारिक रिलीज़ के बजाय {} से अपडेट लें, जो एक डेवलपर की निजी रिपॉज़िटरी है। इसे चालू करने के लिए Windows व्यवस्थापक की अनुमति माँगता है, और फिर अपडेटर आपसे पुष्टि करने को कहता है।</value>
+    <comment>Developer page (Windows): note under the developer builds switch. {repo} is a GitHub repository as owner/name, for example Ryanmello07/urnetwork-windows; keep it as written.</comment>
+  </data>
   <data name="dev_check_updates" xml:space="preserve">
     <value>अपडेट जाँचें</value>
     <comment>Developer page: button that checks for a new release now. Linux Settings &gt; General: the title of the row whose button does the same.</comment>
@@ -2899,9 +2907,25 @@
     <value>कोई अपडेट नहीं: यह बिल्ड नवीनतम है</value>
     <comment>Developer page (Windows): update check result on the newest release; the version details follow in parentheses.</comment>
   </data>
+  <data name="dev_update_none_developer" xml:space="preserve">
+    <value>इस बिल्ड से नया कोई डेवलपर बिल्ड नहीं है</value>
+    <comment>Developer page (Windows): update check result on developer builds when none is newer than the running build; the version details follow in parentheses.</comment>
+  </data>
+  <data name="dev_update_none_listed" xml:space="preserve">
+    <value>ऐसा कोई डेवलपर बिल्ड सूचीबद्ध नहीं है जिसे यह PC इंस्टॉल कर सके</value>
+    <comment>Developer page (Windows): update check result on developer builds when the list has no build this PC can install (none published as immutable, or none for this processor); the version details follow in parentheses.</comment>
+  </data>
+  <data name="dev_update_none_official" xml:space="preserve">
+    <value>इस डेवलपर बिल्ड के लिए अभी कोई आधिकारिक रिलीज़ उपलब्ध नहीं है</value>
+    <comment>Developer page (Windows): update check result on a developer build that follows official releases, when no official release is offered yet; the version details follow in parentheses.</comment>
+  </data>
   <data name="dev_update_up_to_date" xml:space="preserve">
     <value>अपडेट है। नवीनतम रिलीज़: v{}</value>
     <comment>Developer page, and the line under Linux Settings &gt; Check for updates: update check result on the newest release. {version} is the release version.</comment>
+  </data>
+  <data name="dev_updates_heading" xml:space="preserve">
+    <value>अपडेट</value>
+    <comment>Developer page (Windows): heading of the card that holds the update check and the switch for developer builds.</comment>
   </data>
   <data name="dev_uplink_gate" xml:space="preserve">
     <value>अपलिंक चुप्पी गेट</value>
@@ -7577,6 +7601,70 @@
     <value>अपडेट उपलब्ध है: v{}</value>
     <comment>Update notice title (Linux Settings, Windows update banner): a newer release is available. {version} is the release version, for example 2026.10.5-1024555910; keep the "v" before it.</comment>
   </data>
+  <data name="upd_channel_asking" xml:space="preserve">
+    <value>व्यवस्थापक की स्वीकृति की प्रतीक्षा है…</value>
+    <comment>Update channel (Windows): a change of the update channel waits for Windows' administrator prompt or the updater's own question.</comment>
+  </data>
+  <data name="upd_channel_busy" xml:space="preserve">
+    <value>एक अपडेट चल रहा है। उसके पूरा होने पर अपडेट चैनल बदलें।</value>
+    <comment>Update channel (Windows): a change of channel was asked for while an update installs.</comment>
+  </data>
+  <data name="upd_channel_dev_build" xml:space="preserve">
+    <value>डेवलपमेंट बिल्ड (कोड 0) कभी खुद अपडेट नहीं होता, इसलिए उसका कोई अपडेट चैनल नहीं है।</value>
+    <comment>Update channel (Windows): a local development build, which has release code 0 and never updates.</comment>
+  </data>
+  <data name="upd_channel_developer" xml:space="preserve">
+    <value>अपडेट चैनल: {} से डेवलपर बिल्ड। जब तक यह चालू है, आधिकारिक रिलीज़ की पेशकश नहीं की जाती। यह इस PC के हर उपयोगकर्ता के लिए सेट है।</value>
+    <comment>Update channel line (Windows Developer page): an administrator has moved this PC to developer builds. {repo} is a GitHub repository as owner/name, for example Ryanmello07/urnetwork-windows; keep it as written.</comment>
+  </data>
+  <data name="upd_channel_developer_build" xml:space="preserve">
+    <value>यह एक डेवलपर बिल्ड है। यह आधिकारिक रिलीज़ का पालन करता है, इसलिए जब तक कोई नई आधिकारिक रिलीज़ एक दिन तक उपलब्ध न रहे, इसे कुछ भी पेश नहीं किया जाता।</value>
+    <comment>Update channel (Windows): the running app is a developer build, but this PC takes official releases.</comment>
+  </data>
+  <data name="upd_channel_developer_note" xml:space="preserve">
+    <value>{} से डेवलपर बिल्ड। जब तक यह चालू है, आधिकारिक रिलीज़ की पेशकश नहीं की जाती।</value>
+    <comment>Settings (Windows): the update channel row's note when this PC takes developer builds. {repo} is a GitHub repository as owner/name, for example Ryanmello07/urnetwork-windows; keep it as written.</comment>
+  </data>
+  <data name="upd_channel_failed" xml:space="preserve">
+    <value>अपडेट चैनल नहीं बदला जा सका ({})।</value>
+    <comment>Update channel (Windows): the change failed. {code} is an error code such as 0x2000000B; keep it as written.</comment>
+  </data>
+  <data name="upd_channel_label" xml:space="preserve">
+    <value>अपडेट चैनल</value>
+    <comment>Settings (Windows): label of the row that says which update channel this PC is on.</comment>
+  </data>
+  <data name="upd_channel_not_installed" xml:space="preserve">
+    <value>URnetwork की यह कॉपी Program Files में इंस्टॉल नहीं है। यह आधिकारिक रिलीज़ का पालन करती है। चैनल चुनने के लिए URnetwork इंस्टॉल करें।</value>
+    <comment>Update channel (Windows): this copy runs from a folder outside Program Files (a portable copy), so it has no channel to choose.</comment>
+  </data>
+  <data name="upd_channel_official" xml:space="preserve">
+    <value>अपडेट चैनल: आधिकारिक रिलीज़ ({})।</value>
+    <comment>Update channel line (Windows Developer page): this PC takes official releases. {repo} is the official releases' GitHub repository as owner/name, urnetwork/build; keep it as written.</comment>
+  </data>
+  <data name="upd_channel_official_note" xml:space="preserve">
+    <value>आधिकारिक रिलीज़।</value>
+    <comment>Settings (Windows): the update channel row's note when this PC takes official releases.</comment>
+  </data>
+  <data name="upd_channel_switch_official" xml:space="preserve">
+    <value>आधिकारिक रिलीज़ पर स्विच करें</value>
+    <comment>Settings and Developer page (Windows): button that moves this PC back to official releases; Windows asks for administrator permission.</comment>
+  </data>
+  <data name="upd_channel_unchanged" xml:space="preserve">
+    <value>अपडेट चैनल नहीं बदला गया।</value>
+    <comment>Update channel (Windows): the change was declined, at Windows' prompt or at the updater's question.</comment>
+  </data>
+  <data name="upd_channel_unsigned" xml:space="preserve">
+    <value>यहाँ Windows व्यवस्थापक के रूप में केवल हस्ताक्षरित प्रोग्राम चलाता है, और URnetwork का अपडेट हेल्पर हस्ताक्षरित नहीं है, इसलिए इस PC पर ऐप से अपडेट चैनल नहीं बदला जा सकता। URnetwork को अनइंस्टॉल करके कोई आधिकारिक रिलीज़ इंस्टॉल करने से यह PC आधिकारिक रिलीज़ पर आ जाता है।</value>
+    <comment>Update channel (Windows): this PC's policy elevates only signed programs, and the updater is unsigned, so the channel cannot be changed from the app.</comment>
+  </data>
+  <data name="upd_channel_untrusted" xml:space="preserve">
+    <value>सहेजा गया अपडेट चैनल भरोसेमंद नहीं है, इसलिए आधिकारिक रिलीज़ उपयोग की जाती हैं। आधिकारिक रिलीज़ पर स्विच करने से यह हट जाता है।</value>
+    <comment>Update channel (Windows): the stored choice of developer builds failed its checks, so it is ignored.</comment>
+  </data>
+  <data name="upd_channel_where" xml:space="preserve">
+    <value>डेवलपर बिल्ड डेवलपर स्क्रीन में चालू किए जाते हैं।</value>
+    <comment>Settings (Windows): where developer builds are turned on; follows the line saying this is a developer build.</comment>
+  </data>
   <data name="upd_check_held_message" xml:space="preserve">
     <value>GitHub ने इस नेटवर्क से {} तक दोबारा न पूछने को कहा है, और ऐप तब तक इंतज़ार करता है।</value>
     <comment>Linux Settings &gt; General, the line under Check for updates: GitHub refused the update check with its rate limit (requests are anonymous and shared by everyone behind the same address) and said when it may be asked again; no check is sent before then, and the Check now button waits too. {time} is that local date and time.</comment>
@@ -7592,6 +7680,14 @@
   <data name="upd_check_stale_title" xml:space="preserve">
     <value>{} से अपडेट की जाँच नहीं हो सकी</value>
     <comment>Linux Settings &gt; General, the line under Check for updates, and the developer page's update line: shown while automatic checks are on and no update check has reached GitHub for more than 72 hours, because a release the app cannot see may be out. {date} is the local short date of the last check that did (or of the first launch that tried).</comment>
+  </data>
+  <data name="upd_developer_message" xml:space="preserve">
+    <value>यह {} से एक डेवलपर बिल्ड है, आधिकारिक रिलीज़ नहीं।</value>
+    <comment>Windows update banner: the first sentence of the message for a developer build. {repo} is a GitHub repository as owner/name, for example Ryanmello07/urnetwork-windows; keep it as written.</comment>
+  </data>
+  <data name="upd_developer_title_version" xml:space="preserve">
+    <value>डेवलपर बिल्ड उपलब्ध है: v{}</value>
+    <comment>Windows update banner title: a newer developer build is available. {version} is the build's version, for example 2026.10.9-1067431400-beta; keep the "v" before it.</comment>
   </data>
   <data name="upd_downloaded_message" xml:space="preserve">
     <value>इस AppImage के फ़ोल्डर में लिखा नहीं जा सकता, इसलिए सत्यापित डाउनलोड नीचे सहेजा गया है। AppImage को इससे मैन्युअल रूप से बदलें।</value>
