@@ -5610,24 +5610,80 @@ void SdkHost::SetMeasurementsEnabled(bool on) {
   });
 }
 
-void SdkHost::ApplyDnsSettings(const urnet::DnsResolverSettings& settings) {
-  PostWrite("apply dns settings", [this, settings] {
+void SdkHost::ApplyDnsSettings(const std::optional<urnet::DnsResolverSettings>& opened,
+                               const urnet::DnsResolverSettings& settings) {
+  PostWrite("apply dns settings", [this, opened, settings] {
     std::scoped_lock lock(mutex_);
     if (!device_) return;
+    // compare and set (EditorApply.h): only over the reading the editor opened
+    // on, still the device's now
+    const std::optional<urnet::DnsResolverSettings> current = CurrentDnsSettings();
+    bool write = false;
     try {
-      device_->setDnsResolverSettings(settings);
+      write = editorapply::Decide(opened, current, editorapply::DnsReadingKnown(current),
+                                  [](const urnet::DnsResolverSettings& a,
+                                     const urnet::DnsResolverSettings& b) {
+                                    return nlohmann::json(a) == nlohmann::json(b);
+                                  }) == editorapply::Step::Write;
     } catch (const std::exception& e) {
-      LogWarn("sdkhost: set dns settings failed: {}", e.what());
+      LogWarn("sdkhost: comparing dns settings failed: {}", e.what());
     }
+    if (write) {
+      try {
+        device_->setDnsResolverSettings(settings);
+      } catch (const std::exception& e) {
+        LogWarn("sdkhost: set dns settings failed: {}", e.what());
+      }
+    } else {
+      LogWarn("sdkhost: dns settings not written: they changed since the editor opened, "
+              "or are unknown");
+    }
+    // the views take the device's reading either way, the editor's next seed
     if (onDnsSettings_) onDnsSettings_(CurrentDnsSettings());
   });
 }
 
 void SdkHost::ApplyTransportSettings(TransportSettingsKind kind,
+                                     const std::optional<urnet::TransportSettings>& opened,
                                      const urnet::TransportSettings& settings) {
-  PostWrite("apply transport settings", [this, kind, settings] {
+  PostWrite("apply transport settings", [this, kind, opened, settings] {
     std::scoped_lock lock(mutex_);
     const bool provider = kind == TransportSettingsKind::Provider;
+    // Compare and set (EditorApply.h): only over the reading the editor opened
+    // on, still the policy in force now. None is the default in force when the
+    // device says so over an attached rpc, or the mirror does with no session;
+    // from a detached device it is a fallback, and a write over it would be
+    // queued and replayed over the service's real policy.
+    bool write = false;
+    try {
+      std::optional<urnet::TransportSettings> current;
+      bool known = false;
+      if (device_) {
+        current = provider ? device_->getProviderTransportSettings()
+                           : device_->getTransportSettings();
+        known = current.has_value() || device_->getRemoteConnected();
+      } else if (localState_) {
+        current = provider ? localState_->getProviderTransportSettings()
+                           : localState_->getTransportSettings();
+        known = true;
+      }
+      write = editorapply::Decide(opened, current, known,
+                                  [](const urnet::TransportSettings& a,
+                                     const urnet::TransportSettings& b) {
+                                    return urnet::transportSettingsEqual(a, b);
+                                  }) == editorapply::Step::Write;
+    } catch (const std::exception& e) {
+      LogWarn("sdkhost: reading the {} transport settings failed: {}",
+              provider ? "provider" : "client", e.what());
+    }
+    if (!write) {
+      LogWarn("sdkhost: {} transport settings not written: they changed since the editor "
+              "opened, or are unknown",
+              provider ? "provider" : "client");
+      // the editor's next seed
+      if (onTransportSettings_) onTransportSettings_(kind, CurrentTransportSettings(kind));
+      return;
+    }
     // the device first: attached, the service applies it (make-before-break
     // migration of the live window) and persists it; detached, the DeviceRemote
     // queues it for the next sync. Both fire the change listener.

@@ -24,6 +24,7 @@
 #include "BalanceGate.h"
 #include "ClientEvents.h"
 #include "CoalescedWorker.h"
+#include "EditorApply.h"
 #include "OrderedWorker.h"
 #include "ConnectAction.h"
 #include "ConnectionHealth.h"
@@ -1604,7 +1605,11 @@ class SdkHost {
   // (SpeedTestsWriteRouteFor). No app-side mirror; callers never write while
   // the switch is hidden (N1).
   void SetMeasurementsEnabled(bool on);
-  void ApplyDnsSettings(const urnet::DnsResolverSettings& settings);
+  // The DNS editor's Update: written only while the device's settings are
+  // still `opened`, the reading the editor opened on (EditorApply.h); the
+  // views take the device's reading either way.
+  void ApplyDnsSettings(const std::optional<urnet::DnsResolverSettings>& opened,
+                        const urnet::DnsResolverSettings& settings);
   // Apply a transport policy (client or provider) to the device AND mirror it
   // into the app LocalState. The service's DeviceLocal persists the policy in
   // ITS local state and restores it at creation, so a policy set while the
@@ -1616,7 +1621,11 @@ class SdkHost {
   // from it (apple DeviceManager.initDevice parity). The applied policy comes
   // back through the change listener (the service's truth when attached, the
   // queued value when not).
+  // Written only while the policy in force is still `opened`, the reading the
+  // editor opened on (EditorApply.h); otherwise nothing is written and the
+  // views take the policy in force.
   void ApplyTransportSettings(TransportSettingsKind kind,
+                              const std::optional<urnet::TransportSettings>& opened,
                               const urnet::TransportSettings& settings);
   // The create wrappers return the new override's id ("" when nothing was
   // written - no device, empty hosts, or the rpc threw), because the caller's
