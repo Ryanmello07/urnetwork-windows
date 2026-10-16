@@ -13,6 +13,7 @@
 #include <string>
 
 #include "InstallLocation.h"
+#include "UpdateChannel.h"
 
 namespace urnw::install {
 
@@ -36,5 +37,25 @@ bool AdminOnlyLocation(const std::filesystem::path& executable, std::string& why
 // file or a folder (InstallLocation.h kWriteRights). `why` says what it gets,
 // or what could not be read.
 bool AdminOnlyPath(const std::filesystem::path& path, std::string& why);
+
+// What `path` is, read without following a link: absent, its attributes and
+// size, or unreadable (UpdateChannel.h PathFacts).
+update::PathFacts ReadPathFacts(const std::filesystem::path& path);
+
+// The owner and the DACL of `path` (UpdateChannel.h DescriptorFacts); `read`
+// is false when they could not be read.
+update::DescriptorFacts ReadDescriptorFacts(const std::filesystem::path& path);
+
+// The update channel's marker of the install in `installFolder`,
+// <installFolder>\updates\developer-channel: the one place its name is
+// spelled.
+std::filesystem::path ChannelMarkerPath(const std::filesystem::path& installFolder);
+
+// That marker, its facts read in order and judged (UpdateChannel.h
+// JudgeMarker). `why` says why one is not trusted.
+// The tray app and the update helper both read the channel here and nowhere
+// else, so the two follow one feed. It reads nothing but those two names'
+// attributes and descriptors: no file's data, no registry, no environment.
+update::ChannelMarker ReadChannelMarker(const std::filesystem::path& installFolder, std::string& why);
 
 }  // namespace urnw::install

@@ -5,6 +5,12 @@
 //                          starts it with "runas" from the admin-only install
 //                          folder, and it fetches, checks and installs the
 //                          release itself.
+//   --set-update-channel <channel>
+//                          The elevated helper again, for the machine's update
+//                          channel (ApplyUpdate.h SetUpdateChannel): official
+//                          or developer, an id of the feed table and never a
+//                          repository. The tray app starts it the same way,
+//                          shown, since the developer channel asks first.
 //   (none)                 The relaunch. After an update the helper ran, the
 //                          MSI starts this unelevated, with no arguments
 //                          (WixUnelevatedShellExec passes none), once its files
@@ -47,7 +53,8 @@ namespace fs = std::filesystem;
 // Drops every URNETWORK_* variable from this process's environment
 // (UpdateApply.h IsAppOverrideName), so nothing the elevated helper does, and
 // nothing it starts, can read one: those overrides belong to the user's app
-// and say nothing to an elevated process. Only --apply-update calls it.
+// and say nothing to an elevated process. Both elevated verbs call it,
+// before anything else they do; the relaunch does not.
 void DropAppOverrides() {
   wchar_t* block = ::GetEnvironmentStringsW();
   if (!block) return;
@@ -105,9 +112,11 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
   std::vector<std::wstring> args(argv, argv + argc);
   ::LocalFree(argv);
 
-  if (args.size() == 3 && args[1] == L"--apply-update") {
+  const bool apply = args.size() == 3 && args[1] == L"--apply-update";
+  const bool setChannel = args.size() == 3 && args[1] == L"--set-update-channel";
+  if (apply || setChannel) {
     DropAppOverrides();
-    return urnw::updater::ApplyUpdate(args[2]);
+    return apply ? urnw::updater::ApplyUpdate(args[2]) : urnw::updater::SetUpdateChannel(args[2]);
   }
   // the user's own relaunch, in the user's own environment
   if (args.size() == 1) return RelaunchApp();

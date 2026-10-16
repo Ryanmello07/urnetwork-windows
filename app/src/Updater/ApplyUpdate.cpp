@@ -25,6 +25,7 @@
 #include "ReleaseSelection.h"
 #include "ShellStart.h"
 #include "UpdateApply.h"
+#include "UpdateChannel.h"
 #include "UpdateFormats.h"
 #include "UpdateResult.h"
 #include "UpdateResultJson.h"
@@ -69,28 +70,33 @@ constexpr update::Feed kRunnerTestFeed{
 };
 #endif
 
-// The feed of the update channel, which the arguments never name.
-//
-// TODO(opt-in channel): read the machine-wide channel here. It decides which
-// repository's releases this process installs with administrator rights, so
-// the invariant holds only while all of these do (update_apply_wiring_test.go
-// checks the first two today):
-//   - the channel is only a feed id, resolved to one of the feeds compiled in
-//     (ReleaseSelection.h kFeeds, FeedById); never a repository id, owner,
-//     name or URL read at run time;
-//   - it is read only here, and never from the arguments, the environment, the
-//     user's registry hive or anything under the user's profile;
-//   - it is stored where only an administrator can write: a value under an
-//     HKLM key whose ACL grants no one else write, or a file in the admin-only
-//     install folder, checked the way InstallLocationWin32.h AdminOnlyPath
-//     checks the package, before it is read;
-//   - only this elevated helper writes it.
-// Until then the channel is official.
-const update::Feed& ChannelFeed() {
+// The feed of the update channel, which the arguments never name. It decides
+// which repository's releases this process installs with administrator
+// rights, and each of the four conditions that keeps that so is met here:
+//   - the channel is no more than a feed id: the marker's existence selects
+//     the table's developer row, through FeedById (UpdateChannel.h
+//     FeedOfMarker), and no repository, owner, name or URL is read at run
+//     time;
+//   - it is read from the marker alone, never from the arguments, the
+//     environment, the user's registry hive or anything under the user's
+//     profile (InstallLocationWin32.h ReadChannelMarker builds its two paths
+//     from this install's folder and two literals);
+//   - the marker is trusted only where only an administrator can write: in
+//     updates\ with the helper's descriptor, and with its own, compared with
+//     constants (UpdateChannel.h JudgeMarker);
+//   - only this elevated helper writes it (SetUpdateChannel).
+// Read under the helper's lock, so a switch back that has reported success is
+// never followed by an install from the feed it left. A marker that is there
+// and not trusted is the official feed, and the log says why.
+const update::Feed& ChannelFeed([[maybe_unused]] const fs::path& installFolder,
+                                [[maybe_unused]] HelperLog& log) {
 #if defined(URN_UPDATE_RUNNER_TEST_REPO_ID)
   return kRunnerTestFeed;
 #else
-  return update::kOfficialFeed;
+  std::string why;
+  const update::ChannelMarker marker = install::ReadChannelMarker(installFolder, why);
+  if (marker == update::ChannelMarker::Rejected) log.Line("the channel marker is not trusted: {}", why);
+  return update::FeedOfMarker(marker);
 #endif
 }
 
@@ -113,6 +119,16 @@ constexpr wchar_t kAdminOnlyFileSddl[] = L"O:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FR
 // to hold it, nor create it first, because updates\ grants it no right to add
 // a file.
 constexpr wchar_t kLockFileSddl[] = L"O:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)";
+
+// What the update channel's marker carries (UpdateChannel.h
+// HasMarkerDescriptor): owned by Administrators, a protected DACL, full
+// control for SYSTEM and Administrators, and for Users READ_CONTROL,
+// SYNCHRONIZE and FILE_READ_ATTRIBUTES alone. Users can see that it is there
+// and read its descriptor, so their tray follows the channel, and cannot open
+// it for its data, so no process of theirs can hold it against a delete.
+// Neither the lock file's security nor the helper's other files' passes for
+// it.
+constexpr wchar_t kChannelMarkerSddl[] = L"O:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;0x120080;;;BU)";
 
 class Security {
  public:
@@ -275,6 +291,41 @@ bool PrepareFolder(const fs::path& folder, Security& security, std::string& erro
   return true;
 }
 
+// Removes whatever lies under the channel marker's name, `marker`: a file, an
+// empty folder or a link, the link itself and never what it names. Nothing is
+// removed recursively, so a folder with something in it stays, and so does
+// whatever cannot be removed: false, with `error`. `removed` says whether
+// something was there.
+bool RemoveMarkerName(const fs::path& marker, bool& removed, std::string& error) {
+  removed = false;
+  const DWORD attributes = ::GetFileAttributesW(marker.c_str());
+  if (attributes == INVALID_FILE_ATTRIBUTES) {
+    const DWORD missing = ::GetLastError();
+    if (missing == ERROR_FILE_NOT_FOUND || missing == ERROR_PATH_NOT_FOUND) return true;
+    error = std::format("{} could not be read: {}", Utf8(marker.native()), missing);
+    return false;
+  }
+  // a folder, or a link to one, goes with RemoveDirectoryW, which removes an
+  // empty folder or the link itself and nothing more
+  const BOOL gone = (attributes & FILE_ATTRIBUTE_DIRECTORY) ? ::RemoveDirectoryW(marker.c_str())
+                                                            : ::DeleteFileW(marker.c_str());
+  if (!gone) {
+    error = std::format("{} could not be removed: {}", Utf8(marker.native()), ::GetLastError());
+    return false;
+  }
+  removed = true;
+  return true;
+}
+
+// Whether updates\ is, as it is found, absent or the helper's own: a plain
+// folder with the helper's descriptor (UpdateChannel.h IsHelpersFolder).
+// Anything else was open to others, or may have been.
+bool FoundAsTheHelpers(const fs::path& updates) {
+  const update::PathFacts folder = install::ReadPathFacts(updates);
+  if (folder.found == update::PathFacts::Found::Absent) return true;
+  return update::IsHelpersFolder(folder, install::ReadDescriptorFacts(updates));
+}
+
 // Takes the machine-wide lock that lets one helper run at a time:
 // updates\helper.lock, opened for its data and shared with nobody, and kept
 // open (through `lock`) for the life of the process. A process without
@@ -294,8 +345,16 @@ bool PrepareFolder(const fs::path& folder, Security& security, std::string& erro
 // leaves an admin-only updates\ behind. A sharing violation is Busy; anything
 // else, or a thing there that is not a plain file, is Staging. Returns an empty
 // optional once the lock is held.
+//
+// The update channel's marker is trusted only in a folder that was never open
+// to others. So the folder is judged as it is found, before PrepareFolder
+// gives it its security again, which would otherwise turn a marker someone
+// put in an open folder into one that passes; and when it was found open,
+// whatever lies under the marker's name goes once the lock is held, before
+// either verb reads the channel.
 std::optional<Refusal> TakeHelperLock(const fs::path& updates, Security& folderSecurity,
                                       Handle& lock, HelperLog& log) {
+  const bool foundOpen = !FoundAsTheHelpers(updates);
   std::string error;
   if (!PrepareFolder(updates, folderSecurity, error)) {
     log.Line("refused: {}", error);
@@ -355,6 +414,17 @@ std::optional<Refusal> TakeHelperLock(const fs::path& updates, Security& folderS
       log.Line("refused: {}'s security could not be set: {}", Utf8(lockPath.native()), reapplied);
       lock.Close();
       return Refusal::Staging;
+    }
+  }
+  if (foundOpen) {
+    bool removed = false;
+    if (!RemoveMarkerName(install::ChannelMarkerPath(updates.parent_path()), removed, error)) {
+      log.Line("refused: updates\\ was found open to others, and {}", error);
+      lock.Close();
+      return Refusal::Staging;
+    }
+    if (removed) {
+      log.Line("removed what lay under the channel marker's name: updates\\ was found open to others");
     }
   }
   return std::nullopt;
@@ -493,6 +563,55 @@ bool WriteResult(const fs::path& updates, const update::UpdateResult& result, Se
   return true;
 }
 
+// The helper's own question before the developer channel (SPEC-A2c 4.3): its
+// caption, and its text, one format string whose {0} is the repository of the
+// row the argument resolved to, so that the question cannot name one
+// repository while the helper trusts another. English: the helper loads no
+// catalog (Updater.vcxproj).
+constexpr wchar_t kChannelCaption[] = L"URnetwork: update channel";
+constexpr wchar_t kChannelQuestion[] =
+    L"Switch this PC to URnetwork developer builds?\n\n"
+    L"URnetwork on this PC will then take its updates from github.com/{0}. That is a URnetwork "
+    L"developer's personal repository. It is not URnetwork's official releases.\n\n"
+    L"\u2022 Developer builds are test builds. Each one is offered as soon as it is published, "
+    L"without the day's wait that official releases get.\n"
+    L"\u2022 Official releases are not offered while developer builds are on.\n"
+    L"\u2022 Developer builds leave out the split-tunnel driver that official releases install.\n"
+    L"\u2022 Whoever can publish in that repository decides what is installed on this PC with "
+    L"administrator rights: the app, the VPN service and the updater itself.\n"
+    L"\u2022 This applies to every user of this PC.\n"
+    L"\u2022 Switching back does not undo it at once. This PC keeps the developer build it has "
+    L"until a newer official release has been out for a day. That can take several days. To go "
+    L"back sooner, uninstall URnetwork and install an official release.\n\n"
+    L"Choose OK only if you turned this on yourself in URnetwork's Developer settings.";
+
+// Whether the administrator confirms the developer channel at the helper's
+// question. Cancel is the default button, and Enter, Esc, the close box and a
+// box that could not be shown are all no. A window station nobody sees
+// (session 0, a management tool) is not asked at all: a box there could wait
+// for ever. So the answer there is no, and a switch to developer builds is
+// never made unattended.
+bool AdministratorConfirms(const update::Feed& feed, HelperLog& log) {
+  USEROBJECTFLAGS station{};
+  if (!::GetUserObjectInformationW(::GetProcessWindowStation(), UOI_FLAGS, &station,
+                                   sizeof(station), nullptr) ||
+      !(station.dwFlags & WSF_VISIBLE)) {
+    log.Line("declined: this window station is not visible, so nobody can be asked");
+    return false;
+  }
+  const std::wstring repository = WidenAscii(feed.owner) + L"/" + WidenAscii(feed.repo);
+  const std::wstring text = std::vformat(kChannelQuestion, std::make_wformat_args(repository));
+  const int answer = ::MessageBoxW(nullptr, text.c_str(), kChannelCaption,
+                                   MB_OKCANCEL | MB_DEFBUTTON2 | MB_ICONWARNING | MB_SETFOREGROUND |
+                                       MB_TOPMOST);
+  if (answer == IDOK) {
+    log.Line("confirmed: the administrator chose OK for the {} channel", feed.id);
+    return true;
+  }
+  log.Line("declined: the question for the {} channel was answered {}", feed.id, answer);
+  return false;
+}
+
 }  // namespace
 
 int ApplyUpdate(std::wstring_view tagArgument) {
@@ -535,7 +654,7 @@ int ApplyUpdate(std::wstring_view tagArgument) {
     return static_cast<int>(*refusal);
   }
 
-  const update::Feed& feed = ChannelFeed();
+  const update::Feed& feed = ChannelFeed(installFolder, log);
   const std::string tag = AsciiTag(tagArgument);
   if (!update::IsTagArgument(feed, tag)) {
     log.Line("refused: {} is not a tag of the {} feed", Utf8(tagArgument), feed.id);
@@ -814,6 +933,100 @@ int ApplyUpdate(std::wstring_view tagArgument) {
     log.Line("the relaunch could not be started: {}", shellError);
   }
   return ended;
+}
+
+int SetUpdateChannel(std::wstring_view channelArgument) {
+  // To the debugger only: this verb writes no report and opens no log file.
+  HelperLog log;
+  log.Line("update helper {} (code {}): the update channel, {}", version::kString, version::kCode,
+           Utf8(channelArgument));
+
+  // ---- 1. who and where, as for an update --------------------------------------
+  if (!IsElevated()) {
+    log.Line("refused: not elevated");
+    return static_cast<int>(Refusal::NotElevated);
+  }
+  const fs::path executable = install::OwnExecutablePath();
+  std::string why;
+  if (executable.empty() || !install::AdminOnlyLocation(executable, why)) {
+    log.Line("refused: {} {}", Utf8(executable.native()), why);
+    return static_cast<int>(Refusal::NotInstalled);
+  }
+  if (version::kCode == 0) {
+    log.Line("refused: a dev build (code 0) has no update channel");
+    return static_cast<int>(Refusal::DevBuild);
+  }
+
+  // ---- 2. the channel: an id of the table, never a repository --------------------
+  const update::Feed* asked = update::FeedOfChannelArgument(AsciiTag(channelArgument));
+  if (!asked) {
+    log.Line("refused: {} is not an update channel", Utf8(channelArgument));
+    return static_cast<int>(Refusal::BadArguments);
+  }
+
+  // ---- 3. what is to be done, as the marker is now ---------------------------------
+  const fs::path installFolder = executable.parent_path();
+  const fs::path updates = installFolder / L"updates";
+  const fs::path marker = install::ChannelMarkerPath(installFolder);
+  update::ChannelPlan plan = update::PlanOf(*asked, install::ReadChannelMarker(installFolder, why));
+  if (plan == update::ChannelPlan::Nothing) {
+    log.Line("the update channel is {} already", asked->id);
+    return 0;
+  }
+
+  // ---- 4. the question, for the developer channel, before anything is written -----
+  if (plan == update::ChannelPlan::AskThenCreate && !AdministratorConfirms(*asked, log)) {
+    return static_cast<int>(Refusal::Declined);
+  }
+
+  // ---- 5. the lock, taken after the question, so an unanswered one blocks no update
+  Security folderSecurity(kAdminOnlyFolderSddl);
+  Security markerSecurity(kChannelMarkerSddl);
+  if (!folderSecurity.valid() || !markerSecurity.valid()) {
+    log.Line("refused: the admin-only security descriptors could not be built: {}", ::GetLastError());
+    return static_cast<int>(Refusal::Staging);
+  }
+  Handle helperLock;
+  if (const std::optional<Refusal> refusal = TakeHelperLock(updates, folderSecurity, helperLock, log)) {
+    return static_cast<int>(*refusal);
+  }
+
+  // ---- 6. the marker again, under the lock: another helper may have got there first
+  plan = update::PlanOf(*asked, install::ReadChannelMarker(installFolder, why));
+  if (plan == update::ChannelPlan::Nothing) {
+    log.Line("the update channel is {} already", asked->id);
+    return 0;
+  }
+
+  // ---- 7. what lies under the marker's name goes; for the developer channel, a new one
+  std::string error;
+  bool removed = false;
+  if (!RemoveMarkerName(marker, removed, error)) {
+    log.Line("refused: {}", error);
+    return static_cast<int>(Refusal::Staging);
+  }
+  if (removed) log.Line("removed what lay under the channel marker's name");
+  if (plan == update::ChannelPlan::AskThenCreate) {
+    const Handle created(::CreateFileW(marker.c_str(), FILE_READ_ATTRIBUTES, 0,
+                                       markerSecurity.attributes(), CREATE_NEW,
+                                       FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
+    if (!created.valid()) {
+      log.Line("refused: the channel marker could not be created: {}", ::GetLastError());
+      return static_cast<int>(Refusal::Staging);
+    }
+  }
+
+  // ---- 8. read back through the reader the tray app uses -----------------------------
+  if (update::PlanOf(*asked, install::ReadChannelMarker(installFolder, why)) !=
+      update::ChannelPlan::Nothing) {
+    log.Line("refused: the channel marker does not read back as the {} channel: {}", asked->id, why);
+    RemoveMarkerName(marker, removed, error);
+    return static_cast<int>(Refusal::Staging);
+  }
+
+  // ---- 9. done; no report: last-result.json is about a release ------------------------
+  log.Line("the update channel is {}", asked->id);
+  return 0;
 }
 
 }  // namespace urnw::updater

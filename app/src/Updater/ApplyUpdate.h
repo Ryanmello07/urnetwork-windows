@@ -53,4 +53,30 @@ namespace urnw::updater {
 
 int ApplyUpdate(std::wstring_view tag);
 
+// The machine's update channel, set on an administrator's word:
+// URnetworkUpdate.exe --set-update-channel <channel>. In order:
+//   1. Elevated, from an admin-only install location, a release build, as for
+//      an update.
+//   2. <channel> is an id of the feed table (UpdateChannel.h
+//      FeedOfChannelArgument): official, or developer while the table has
+//      that row. A repository, a number or anything else is BadArguments,
+//      before anything is shown or written.
+//   3. The marker as it is decides what is to be done (UpdateChannel.h
+//      PlanOf): nothing, a delete, or, for the developer channel, the
+//      helper's own question and then the marker.
+//   4. The question, for the developer channel alone, naming the row's
+//      repository, with Cancel the default. Any answer but OK, or a window
+//      station nobody sees, is Declined, and nothing is written.
+//   5. The lock (TakeHelperLock), after the question, so a question left
+//      open blocks no update.
+//   6. The marker read again under the lock, and planned again.
+//   7. Whatever lies under the marker's name goes (a file, an empty folder or
+//      a link, nothing recursively), and for the developer channel the marker
+//      is created new, with its own descriptor. Nothing is ever replaced.
+//   8. The marker read back through the reader the tray app uses; a marker
+//      that does not say what was asked is removed, and the verb is Staging.
+// It exits 0 when the marker says what was asked, or with a refusal
+// (UpdateResult.h). It writes no last-result.json, which is about a release.
+int SetUpdateChannel(std::wstring_view channel);
+
 }  // namespace urnw::updater

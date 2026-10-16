@@ -5,10 +5,13 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>
+#include <sddl.h>
 #include <shlobj.h>
 
+#include <cstdint>
 #include <format>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #pragma comment(lib, "advapi32.lib")
@@ -21,6 +24,13 @@ static_assert(kWriteData == FILE_WRITE_DATA && kAppendData == FILE_APPEND_DATA &
               kWriteEa == FILE_WRITE_EA && kDeleteChild == FILE_DELETE_CHILD &&
               kWriteAttributes == FILE_WRITE_ATTRIBUTES && kDelete == DELETE &&
               kWriteDac == WRITE_DAC && kWriteOwner == WRITE_OWNER);
+static_assert(update::kAttributeDirectory == FILE_ATTRIBUTE_DIRECTORY &&
+              update::kAttributeReparsePoint == FILE_ATTRIBUTE_REPARSE_POINT &&
+              update::kAllowAceType == ACCESS_ALLOWED_ACE_TYPE &&
+              update::kInheritedByFilesAndFolders == (OBJECT_INHERIT_ACE | CONTAINER_INHERIT_ACE) &&
+              update::kFileAllAccess == FILE_ALL_ACCESS &&
+              update::kFileReadAndExecute == (FILE_GENERIC_READ | FILE_GENERIC_EXECUTE) &&
+              update::kMarkerUsersAccess == (READ_CONTROL | SYNCHRONIZE | FILE_READ_ATTRIBUTES));
 
 namespace {
 
@@ -264,6 +274,101 @@ bool AdminOnlyPath(const fs::path& path, std::string& why) {
   if ((rights & kWriteRights) == 0) return true;
   why = std::format("a token without admin rights gets 0x{:x} on it", rights);
   return false;
+}
+
+update::PathFacts ReadPathFacts(const fs::path& path) {
+  WIN32_FILE_ATTRIBUTE_DATA data{};
+  if (!::GetFileAttributesExW(path.c_str(), GetFileExInfoStandard, &data)) {
+    const DWORD error = ::GetLastError();
+    return {.found = error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND
+                         ? update::PathFacts::Found::Absent
+                         : update::PathFacts::Found::Unreadable};
+  }
+  return {.found = update::PathFacts::Found::Present,
+          .attributes = data.dwFileAttributes,
+          .size = (static_cast<std::uint64_t>(data.nFileSizeHigh) << 32) | data.nFileSizeLow};
+}
+
+namespace {
+
+std::string SidText(PSID sid) {
+  LPWSTR text = nullptr;
+  if (!sid || !::ConvertSidToStringSidW(sid, &text)) return {};
+  std::string ascii;
+  for (const wchar_t* c = text; *c; ++c) ascii.push_back(static_cast<char>(*c));
+  ::LocalFree(text);
+  return ascii;
+}
+
+}  // namespace
+
+update::DescriptorFacts ReadDescriptorFacts(const fs::path& path) {
+  update::DescriptorFacts facts;
+  constexpr SECURITY_INFORMATION kInfo = OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION;
+  DWORD needed = 0;
+  ::GetFileSecurityW(path.c_str(), kInfo, nullptr, 0, &needed);
+  if (needed == 0) return facts;
+  std::vector<BYTE> buffer(needed);
+  const PSECURITY_DESCRIPTOR descriptor = buffer.data();
+  SECURITY_DESCRIPTOR_CONTROL control = 0;
+  DWORD revision = 0;
+  PSID owner = nullptr;
+  BOOL ownerDefaulted = FALSE;
+  BOOL present = FALSE;
+  PACL dacl = nullptr;
+  BOOL daclDefaulted = FALSE;
+  if (!::GetFileSecurityW(path.c_str(), kInfo, descriptor, needed, &needed) ||
+      !::GetSecurityDescriptorControl(descriptor, &control, &revision) ||
+      !::GetSecurityDescriptorOwner(descriptor, &owner, &ownerDefaulted) ||
+      !::GetSecurityDescriptorDacl(descriptor, &present, &dacl, &daclDefaulted)) {
+    return facts;
+  }
+  facts.owner = SidText(owner);
+  facts.daclPresent = present && dacl;
+  facts.daclProtected = (control & SE_DACL_PROTECTED) != 0;
+  if (facts.daclPresent) {
+    ACL_SIZE_INFORMATION size{};
+    if (!::GetAclInformation(dacl, &size, sizeof(size), AclSizeInformation)) return facts;
+    for (DWORD i = 0; i < size.AceCount; ++i) {
+      void* raw = nullptr;
+      if (!::GetAce(dacl, i, &raw)) return facts;
+      const auto* header = static_cast<const ACE_HEADER*>(raw);
+      update::AceFacts ace{.type = header->AceType, .flags = header->AceFlags};
+      // the allow and the deny ACE share one layout: a mask, then the SID
+      if (header->AceType == ACCESS_ALLOWED_ACE_TYPE || header->AceType == ACCESS_DENIED_ACE_TYPE) {
+        const auto* allowed = static_cast<const ACCESS_ALLOWED_ACE*>(raw);
+        ace.mask = allowed->Mask;
+        ace.sid = SidText(const_cast<DWORD*>(&allowed->SidStart));
+      }
+      facts.aces.push_back(std::move(ace));
+    }
+  }
+  facts.read = !facts.owner.empty();
+  return facts;
+}
+
+fs::path ChannelMarkerPath(const fs::path& installFolder) {
+  return installFolder / L"updates" / L"developer-channel";
+}
+
+update::ChannelMarker ReadChannelMarker(const fs::path& installFolder, std::string& why) {
+  const fs::path updates = installFolder / L"updates";
+  const fs::path marker = ChannelMarkerPath(installFolder);
+  update::PathFacts folderFacts = ReadPathFacts(updates);
+  update::DescriptorFacts folderDescriptor;
+  update::PathFacts markerFacts;
+  update::DescriptorFacts markerDescriptor;
+  if (folderFacts.found == update::PathFacts::Found::Present) {
+    folderDescriptor = ReadDescriptorFacts(updates);
+    markerFacts = ReadPathFacts(marker);
+    if (markerFacts.found == update::PathFacts::Found::Present) {
+      markerDescriptor = ReadDescriptorFacts(marker);
+    }
+  }
+  const update::MarkerJudgement judged =
+      update::JudgeMarker(folderFacts, folderDescriptor, markerFacts, markerDescriptor);
+  why.assign(judged.why);
+  return judged.marker;
 }
 
 bool AdminOnlyLocation(const fs::path& executable, std::string& why) {

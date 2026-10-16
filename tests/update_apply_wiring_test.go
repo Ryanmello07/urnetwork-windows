@@ -117,28 +117,31 @@ func TestUpdateApplyHelperIsItsOwnProgram(t *testing.T) {
 	}
 }
 
-// Before anything else the helper limits where libraries load from. Only the
-// elevated mode drops the app's URNETWORK_* overrides (UpdateApply.h
-// IsAppOverrideName decides which); the relaunch is the user's app, in the
-// user's environment, and keeps them. It starts the app only when it is not
-// itself the elevated half of a split token. Nothing in it reads the
+// Before anything else the helper limits where libraries load from. Its two
+// elevated verbs, the update and the update channel, each take exactly one
+// argument, and both drop the app's URNETWORK_* overrides first (UpdateApply.h
+// IsAppOverrideName decides which), in one place; the relaunch is the user's
+// app, in the user's environment, and keeps them. It starts the app only when
+// it is not itself the elevated half of a split token. Nothing in it reads the
 // environment or the user's storage.
 func checkUpdaterEntry(main string, sources map[string]string) []string {
 	entry := applyDefinition(main, "int WINAPI wWinMain(")
 	problems := applyOrderProblems("wWinMain", entry,
 		regexp.QuoteMeta("::SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_SYSTEM32 | LOAD_LIBRARY_SEARCH_APPLICATION_DIR);"),
 		regexp.QuoteMeta("::CommandLineToArgvW("),
-		regexp.QuoteMeta(`if (args.size() == 3 && args[1] == L"--apply-update") {`),
+		regexp.QuoteMeta(`const bool apply = args.size() == 3 && args[1] == L"--apply-update";`),
+		regexp.QuoteMeta(`const bool setChannel = args.size() == 3 && args[1] == L"--set-update-channel";`),
+		regexp.QuoteMeta("if (apply || setChannel) {"),
 		regexp.QuoteMeta("DropAppOverrides();"),
-		regexp.QuoteMeta("return urnw::updater::ApplyUpdate(args[2]);"),
+		regexp.QuoteMeta("return apply ? urnw::updater::ApplyUpdate(args[2]) : urnw::updater::SetUpdateChannel(args[2]);"),
 		regexp.QuoteMeta("if (args.size() == 1) return RelaunchApp();"),
 		regexp.QuoteMeta("return static_cast<int>(urnw::update::Refusal::BadArguments);"))
 	if strings.Index(entry, "SetDefaultDllDirectories") > strings.Index(entry, "CommandLineToArgvW") {
 		problems = append(problems, "wWinMain loads shell32 before it limits the library search")
 	}
 	if count := strings.Count(entry, "DropAppOverrides();"); count != 1 {
-		problems = append(problems, fmt.Sprintf("wWinMain drops the app's overrides %d times, want once, for --apply-update", count))
-	} else if branch := strings.Index(entry, `if (args.size() == 3 && args[1] == L"--apply-update") {`); branch < 0 ||
+		problems = append(problems, fmt.Sprintf("wWinMain drops the app's overrides %d times, want once, before either elevated verb", count))
+	} else if branch := strings.Index(entry, "if (apply || setChannel) {"); branch < 0 ||
 		strings.Index(entry, "DropAppOverrides();") < branch {
 		problems = append(problems, "wWinMain drops the app's overrides before it knows the mode: the relaunch would start the app without the user's")
 	}
@@ -160,7 +163,7 @@ func checkUpdaterEntry(main string, sources map[string]string) []string {
 		regexp.QuoteMeta("::CreateProcessW(app.c_str(), command.data(),"))...)
 	for name, source := range sources {
 		for _, forbidden := range []string{"GetEnvironmentVariable", "getenv", "StorageRoot(", "Paths.h",
-			"LoadAppPrefs", "SHGetKnownFolderPath(FOLDERID_LocalAppData"} {
+			"LoadAppPrefs", "SHGetKnownFolderPath(FOLDERID_LocalAppData", "ExpandEnvironmentStrings", "LOCALAPPDATA"} {
 			if strings.Contains(source, forbidden) {
 				problems = append(problems, "the helper's "+name+" reads "+forbidden+
 					": nothing a user can set may steer the elevated helper")
@@ -206,7 +209,7 @@ func checkApplyUpdate(apply string) []string {
 		regexp.QuoteMeta("Security folderSecurity(kAdminOnlyFolderSddl);"),
 		regexp.QuoteMeta("Security fileSecurity(kAdminOnlyFileSddl);"),
 		regexp.QuoteMeta("TakeHelperLock(updates, folderSecurity, helperLock, log)"),
-		regexp.QuoteMeta("const update::Feed& feed = ChannelFeed();"),
+		regexp.QuoteMeta("const update::Feed& feed = ChannelFeed(installFolder, log);"),
 		regexp.QuoteMeta("if (!update::IsTagArgument(feed, tag)) {"),
 		regexp.QuoteMeta(`const fs::path tagFolder = updates / WidenAscii(tag);`),
 		regexp.QuoteMeta("if (!PrepareFolder(tagFolder, folderSecurity, error)) {"),
@@ -251,6 +254,9 @@ func checkApplyUpdate(apply string) []string {
 		regexp.QuoteMeta("::GetExitCodeProcess(installer.get(), &exitCode);"),
 		regexp.QuoteMeta("held.Close();"),
 		regexp.QuoteMeta("if (update::KeepsPackage(exitCode)) {"),
+		// the earlier downloads, folders alone: a file there, the channel's
+		// marker among them, stays
+		regexp.QuoteMeta("if (folder.is_directory(ec) && folder.path().filename() != tagFolder.filename())"),
 		regexp.QuoteMeta("return finish(exitCode);"),
 		regexp.QuoteMeta("::DeleteFileW(package.c_str());"),
 		regexp.QuoteMeta("const int ended = finish(exitCode);"),
@@ -264,18 +270,24 @@ func checkApplyUpdate(apply string) []string {
 		`constexpr wchar_t kAdminOnlyFolderSddl[] = L"O:BAD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FRFX;;;BU)";`,
 		`constexpr wchar_t kAdminOnlyFileSddl[] = L"O:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FRFX;;;BU)";`,
 		`constexpr wchar_t kLockFileSddl[] = L"O:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)";`,
+		`constexpr wchar_t kChannelMarkerSddl[] = L"O:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;0x120080;;;BU)";`,
 	} {
 		if !strings.Contains(apply, want) {
 			problems = append(problems, "ApplyUpdate.cpp does not create what it writes under updates\\ with "+want)
 		}
 	}
-	// The lock: updates\ prepared first, then helper.lock opened for its data,
+	// The lock: updates\ judged as it is found, before anything gives it its
+	// security again, then prepared, then helper.lock opened for its data,
 	// shared with nobody (the 0 share mode), without following a link, created
 	// admin-only; a sharing violation is Busy; a thing there that is not a plain
-	// file is refused; a lock already there is given its security again.
+	// file is refused; a lock already there is given its security again; and
+	// when the folder was found open to others, whatever lies under the
+	// channel marker's name goes before either verb reads the channel.
 	lockFn := applyDefinition(apply, "std::optional<Refusal> TakeHelperLock(const fs::path& updates, Security& folderSecurity,")
 	problems = append(problems, applyOrderProblems("TakeHelperLock", lockFn,
+		regexp.QuoteMeta("const bool foundOpen = !FoundAsTheHelpers(updates);"),
 		regexp.QuoteMeta("if (!PrepareFolder(updates, folderSecurity, error)) {"),
+		regexp.QuoteMeta("Security lockSecurity(kLockFileSddl);"),
 		regexp.QuoteMeta(`const fs::path lockPath = updates / L"helper.lock";`),
 		regexp.QuoteMeta("FILE_READ_DATA | READ_CONTROL | WRITE_DAC | WRITE_OWNER | FILE_READ_ATTRIBUTES, 0,"),
 		regexp.QuoteMeta("lockSecurity.attributes(), OPEN_ALWAYS, FILE_FLAG_OPEN_REPARSE_POINT, nullptr);"),
@@ -283,7 +295,15 @@ func checkApplyUpdate(apply string) []string {
 		regexp.QuoteMeta("return Refusal::Busy;"),
 		regexp.QuoteMeta("(info.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT))) {"),
 		regexp.QuoteMeta("::SetSecurityInfo("),
+		regexp.QuoteMeta("if (foundOpen) {"),
+		regexp.QuoteMeta("if (!RemoveMarkerName(install::ChannelMarkerPath(updates.parent_path()), removed, error)) {"),
+		regexp.QuoteMeta("return Refusal::Staging;"),
 		regexp.QuoteMeta("return std::nullopt;"))...)
+	found := applyDefinition(apply, "bool FoundAsTheHelpers(const fs::path& updates) {")
+	problems = append(problems, applyOrderProblems("FoundAsTheHelpers", found,
+		regexp.QuoteMeta("install::ReadPathFacts(updates);"),
+		regexp.QuoteMeta("if (folder.found == update::PathFacts::Found::Absent) return true;"),
+		regexp.QuoteMeta("return update::IsHelpersFolder(folder, install::ReadDescriptorFacts(updates));"))...)
 	// The lock is kept until the helper exits. TakeHelperLock closes the handle
 	// only where it then refuses, and ApplyUpdate declares the handle in its own
 	// scope and names it nowhere else but to take the lock: closed, moved or
@@ -412,8 +432,9 @@ func TestUpdateApplyHelperRelaunchesThroughTheShell(t *testing.T) {
 // feed alone, and that feed is one compiled in: the channel may at most name
 // an id in ReleaseSelection.h's table (FeedById), never a repository, owner,
 // name or URL read at run time, and nothing in the user's registry hive can
-// choose it. ApplyUpdate.cpp's ChannelFeed says what the opt-in channel's
-// machine-wide store must be; this pins what holds until it lands.
+// choose it. ChannelFeed reads the machine-wide marker through the one reader
+// and resolves it through FeedOfMarker, which reaches the developer row by
+// its id alone.
 func checkChannelIsAnIndex(apply string, sources map[string]string) []string {
 	var problems []string
 	runner := regexp.MustCompile(`(?s)#if defined\(URN_UPDATE_RUNNER_TEST_REPO_ID\)\n#define URN_UPDATER_STRINGIZE_.*?#endif\n`)
@@ -427,10 +448,14 @@ func checkChannelIsAnIndex(apply string, sources map[string]string) []string {
 				"): the channel may only name one compiled in")
 		}
 	}
-	channel := applyDefinition(apply, "const update::Feed& ChannelFeed() {")
-	if !regexp.MustCompile(`^const update::Feed& ChannelFeed\(\) \{\s*#if defined\(URN_UPDATE_RUNNER_TEST_REPO_ID\)\s*return kRunnerTestFeed;\s*#else\s*return update::kOfficialFeed;\s*#endif\s*\}\s*$`).MatchString(channel) {
-		problems = append(problems, "ChannelFeed returns something other than the compiled-in official feed: "+
-			"the opt-in channel must resolve an admin-only store's id through FeedById (see its comment)")
+	channel := applyDefinition(apply, "const update::Feed& ChannelFeed(")
+	if !regexp.MustCompile(`^const update::Feed& ChannelFeed\(\[\[maybe_unused\]\] const fs::path& installFolder,\s*` +
+		`\[\[maybe_unused\]\] HelperLog& log\) \{\s*#if defined\(URN_UPDATE_RUNNER_TEST_REPO_ID\)\s*return kRunnerTestFeed;\s*` +
+		`#else\s*std::string why;\s*const update::ChannelMarker marker = install::ReadChannelMarker\(installFolder, why\);\s*` +
+		`if \(marker == update::ChannelMarker::Rejected\) log\.Line\("the channel marker is not trusted: \{\}", why\);\s*` +
+		`return update::FeedOfMarker\(marker\);\s*#endif\s*\}\s*$`).MatchString(channel) {
+		problems = append(problems, "ChannelFeed is not the marker, read through ReadChannelMarker and resolved by FeedOfMarker: "+
+			"the channel may name only a row of the table, read where only an administrator can write")
 	}
 	for name, source := range sources {
 		for _, user := range []string{"HKEY_CURRENT_USER", "HKCU", "HKEY_USERS", "RegOpenCurrentUser"} {
@@ -441,6 +466,126 @@ func checkChannelIsAnIndex(apply string, sources map[string]string) []string {
 		}
 	}
 	return problems
+}
+
+// The update channel's verb, in SPEC-A2c 4.2's order: who and where, as for an
+// update; the argument, an id of the table; the plan from the marker as it
+// is; the question, for the developer channel, before anything is written;
+// the lock, after the question; the marker read and planned again under the
+// lock; the write; and the marker read back through the tray's own reader.
+// Its lock is held for the verb's whole scope, as the apply's is. What it
+// removes is a file, an empty folder or a link, and nothing recursively; the
+// marker is created nowhere else, with its own security, and the cleanup after
+// an install removes folders alone, so the first developer update keeps it.
+func checkChannelVerb(apply, location string) []string {
+	verb := applyDefinition(apply, "int SetUpdateChannel(std::wstring_view channelArgument) {")
+	problems := applyOrderProblems("SetUpdateChannel", verb,
+		regexp.QuoteMeta("if (!IsElevated()) {"),
+		regexp.QuoteMeta("return static_cast<int>(Refusal::NotElevated);"),
+		regexp.QuoteMeta("const fs::path executable = install::OwnExecutablePath();"),
+		regexp.QuoteMeta("!install::AdminOnlyLocation(executable, why)"),
+		regexp.QuoteMeta("return static_cast<int>(Refusal::NotInstalled);"),
+		regexp.QuoteMeta("if (version::kCode == 0) {"),
+		regexp.QuoteMeta("return static_cast<int>(Refusal::DevBuild);"),
+		// the channel verb takes an id of the table
+		regexp.QuoteMeta("const update::Feed* asked = update::FeedOfChannelArgument(AsciiTag(channelArgument));"),
+		regexp.QuoteMeta("return static_cast<int>(Refusal::BadArguments);"),
+		regexp.QuoteMeta("const fs::path marker = install::ChannelMarkerPath(installFolder);"),
+		regexp.QuoteMeta("update::ChannelPlan plan = update::PlanOf(*asked, install::ReadChannelMarker(installFolder, why));"),
+		regexp.QuoteMeta("if (plan == update::ChannelPlan::Nothing) {"),
+		regexp.QuoteMeta("return 0;"),
+		regexp.QuoteMeta("if (plan == update::ChannelPlan::AskThenCreate && !AdministratorConfirms(*asked, log)) {"),
+		regexp.QuoteMeta("return static_cast<int>(Refusal::Declined);"),
+		regexp.QuoteMeta("Security markerSecurity(kChannelMarkerSddl);"),
+		regexp.QuoteMeta("TakeHelperLock(updates, folderSecurity, helperLock, log)"),
+		regexp.QuoteMeta("plan = update::PlanOf(*asked, install::ReadChannelMarker(installFolder, why));"),
+		regexp.QuoteMeta("if (plan == update::ChannelPlan::Nothing) {"),
+		regexp.QuoteMeta("return 0;"),
+		regexp.QuoteMeta("if (!RemoveMarkerName(marker, removed, error)) {"),
+		regexp.QuoteMeta("return static_cast<int>(Refusal::Staging);"),
+		regexp.QuoteMeta("if (plan == update::ChannelPlan::AskThenCreate) {"),
+		regexp.QuoteMeta("markerSecurity.attributes(), CREATE_NEW,"),
+		regexp.QuoteMeta("if (update::PlanOf(*asked, install::ReadChannelMarker(installFolder, why)) !="),
+		regexp.QuoteMeta("RemoveMarkerName(marker, removed, error);"),
+		regexp.QuoteMeta("return static_cast<int>(Refusal::Staging);"),
+		regexp.QuoteMeta("return 0;"))
+	if !strings.Contains(verb, "\n  Handle helperLock;\n") {
+		problems = append(problems, "SetUpdateChannel does not declare helperLock in its own scope: the lock is to be held until the verb ends")
+	}
+	if named := strings.Count(verb, "helperLock"); named != 2 {
+		problems = append(problems, fmt.Sprintf("SetUpdateChannel names helperLock %d times, want twice, where it declares it and where it takes the lock", named))
+	}
+	for _, owned := range []string{"remove_all", "MoveFile", "ReplaceFile", "TRUNCATE_EXISTING", "CREATE_ALWAYS", "OPEN_ALWAYS"} {
+		if strings.Contains(verb, owned) || strings.Contains(applyDefinition(apply, "bool RemoveMarkerName("), owned) {
+			problems = append(problems, "the channel verb uses "+owned+
+				": the channel verb removes a file, an empty folder or a link, and nothing else, and never replaces the marker")
+		}
+	}
+	remove := applyDefinition(apply, "bool RemoveMarkerName(const fs::path& marker, bool& removed, std::string& error) {")
+	problems = append(problems, applyOrderProblems("RemoveMarkerName", remove,
+		regexp.QuoteMeta("const DWORD attributes = ::GetFileAttributesW(marker.c_str());"),
+		regexp.QuoteMeta("if (missing == ERROR_FILE_NOT_FOUND || missing == ERROR_PATH_NOT_FOUND) return true;"),
+		regexp.QuoteMeta("const BOOL gone = (attributes & FILE_ATTRIBUTE_DIRECTORY) ? ::RemoveDirectoryW(marker.c_str())"),
+		regexp.QuoteMeta(": ::DeleteFileW(marker.c_str());"),
+		regexp.QuoteMeta("removed = true;"))...)
+	// the marker is created by the channel verb alone, with its own security,
+	// and its name is spelled in one place
+	if count := strings.Count(apply, "kChannelMarkerSddl"); count != 2 {
+		problems = append(problems, fmt.Sprintf("ApplyUpdate.cpp names kChannelMarkerSddl %d times, want twice: "+
+			"its definition and the channel verb's, which alone creates the marker", count))
+	}
+	if count := strings.Count(apply, "install::ChannelMarkerPath("); count != 2 {
+		problems = append(problems, fmt.Sprintf("ApplyUpdate.cpp reaches the channel marker %d times, want twice: the lock's removal and the channel verb", count))
+	}
+	// the question
+	ask := applyDefinition(apply, "bool AdministratorConfirms(const update::Feed& feed, HelperLog& log) {")
+	problems = append(problems, applyOrderProblems("AdministratorConfirms", ask,
+		regexp.QuoteMeta("if (!::GetUserObjectInformationW(::GetProcessWindowStation(), UOI_FLAGS, &station,"),
+		regexp.QuoteMeta("!(station.dwFlags & WSF_VISIBLE)) {"),
+		regexp.QuoteMeta("return false;"),
+		regexp.QuoteMeta(`const std::wstring repository = WidenAscii(feed.owner) + L"/" + WidenAscii(feed.repo);`),
+		regexp.QuoteMeta("const std::wstring text = std::vformat(kChannelQuestion, std::make_wformat_args(repository));"),
+		regexp.QuoteMeta("::MessageBoxW(nullptr, text.c_str(), kChannelCaption,"),
+		regexp.QuoteMeta("MB_OKCANCEL | MB_DEFBUTTON2 | MB_ICONWARNING | MB_SETFOREGROUND |"),
+		regexp.QuoteMeta("if (answer == IDOK) {"),
+		regexp.QuoteMeta("return true;"),
+		regexp.QuoteMeta("return false;"))...)
+	if count := strings.Count(apply, "github.com/{0}"); count != 1 {
+		problems = append(problems, fmt.Sprintf("the question names github.com/{0} %d times, want once: the repository is the row's", count))
+	}
+	for _, literal := range []string{"Ryanmello07", "urnetwork-windows", "1324127805"} {
+		if strings.Contains(apply, literal) {
+			problems = append(problems, "ApplyUpdate.cpp names "+literal+": the question names the row's repository, never one of its own")
+		}
+	}
+	// the reader: its two paths from its parameter and two literals, and its
+	// facts in order
+	problems = append(problems, applyOrderProblems("ChannelMarkerPath",
+		applyDefinition(location, "fs::path ChannelMarkerPath(const fs::path& installFolder) {"),
+		regexp.QuoteMeta(`return installFolder / L"updates" / L"developer-channel";`))...)
+	reader := applyDefinition(location, "update::ChannelMarker ReadChannelMarker(const fs::path& installFolder, std::string& why) {")
+	problems = append(problems, applyOrderProblems("ReadChannelMarker", reader,
+		regexp.QuoteMeta(`const fs::path updates = installFolder / L"updates";`),
+		regexp.QuoteMeta("const fs::path marker = ChannelMarkerPath(installFolder);"),
+		regexp.QuoteMeta("update::PathFacts folderFacts = ReadPathFacts(updates);"),
+		regexp.QuoteMeta("folderDescriptor = ReadDescriptorFacts(updates);"),
+		regexp.QuoteMeta("markerFacts = ReadPathFacts(marker);"),
+		regexp.QuoteMeta("markerDescriptor = ReadDescriptorFacts(marker);"),
+		regexp.QuoteMeta("update::JudgeMarker(folderFacts, folderDescriptor, markerFacts, markerDescriptor);"),
+		regexp.QuoteMeta("return judged.marker;"))...)
+	problems = append(problems, applyOrderProblems("ReadPathFacts", applyDefinition(location, "update::PathFacts ReadPathFacts(const fs::path& path) {"),
+		regexp.QuoteMeta("::GetFileAttributesExW(path.c_str(), GetFileExInfoStandard, &data)"),
+		regexp.QuoteMeta("error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND"))...)
+	problems = append(problems, applyOrderProblems("ReadDescriptorFacts", applyDefinition(location, "update::DescriptorFacts ReadDescriptorFacts(const fs::path& path) {"),
+		regexp.QuoteMeta("constexpr SECURITY_INFORMATION kInfo = OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION;"),
+		regexp.QuoteMeta("facts.daclProtected = (control & SE_DACL_PROTECTED) != 0;"),
+		regexp.QuoteMeta("facts.read = !facts.owner.empty();"))...)
+	return problems
+}
+
+func TestUpdateApplyTheChannelVerbChecksInOrder(t *testing.T) {
+	sources := updaterSources(t)
+	reportProblems(t, checkChannelVerb(sources["ApplyUpdate.cpp"], sources["InstallLocationWin32.cpp"]))
 }
 
 func TestUpdateApplyTheChannelIsOnlyAnIndex(t *testing.T) {
@@ -667,6 +812,14 @@ func TestUpdateApplyWiringRejectsWeakerHelpers(t *testing.T) {
 	apply := func(old, replacement string) []string {
 		return checkApplyUpdate(replace(sources["ApplyUpdate.cpp"], old, replacement))
 	}
+	// Rewrites `old` inside the definition that starts at `opener`.
+	inside := func(source, opener, old, replacement string) string {
+		definition := applyDefinition(source, opener)
+		if definition == "" {
+			t.Fatalf("negative control: %q is not defined", opener)
+		}
+		return replace(source, definition, replace(definition, old, replacement))
+	}
 	helper := helperFiles(t)
 	mutexIn := func(name, old, replacement string) []string {
 		changed := map[string]string{}
@@ -700,7 +853,8 @@ func TestUpdateApplyWiringRejectsWeakerHelpers(t *testing.T) {
 			return apply("::MoveFileExW(executable.c_str(), running.c_str(), MOVEFILE_WRITE_THROUGH)", "false")
 		}},
 		{"a user-writable location", func() []string {
-			return apply("!install::AdminOnlyLocation(executable, why)", "false")
+			return checkApplyUpdate(inside(sources["ApplyUpdate.cpp"], "int ApplyUpdate(std::wstring_view tagArgument) {",
+				"!install::AdminOnlyLocation(executable, why)", "false"))
 		}},
 		{"GitHub's limit taken for a broken list", func() []string {
 			return apply("if (list.status == 403 || list.status == 429) {", "if (false) {")
@@ -760,8 +914,9 @@ func TestUpdateApplyWiringRejectsWeakerHelpers(t *testing.T) {
 				"  helperLock.Close();\n  ::WaitForSingleObject(installer.get(), INFINITE);\n")
 		}},
 		{"the lock's handle ending before the helper does", func() []string {
-			return apply("  Handle helperLock;\n  if (const std::optional<Refusal> refusal = TakeHelperLock(updates, folderSecurity, helperLock, log)) {\n    return static_cast<int>(*refusal);\n  }\n",
-				"  {\n    Handle helperLock;\n    if (const std::optional<Refusal> refusal = TakeHelperLock(updates, folderSecurity, helperLock, log)) {\n      return static_cast<int>(*refusal);\n    }\n  }\n")
+			return checkApplyUpdate(inside(sources["ApplyUpdate.cpp"], "int ApplyUpdate(std::wstring_view tagArgument) {",
+				"  Handle helperLock;\n  if (const std::optional<Refusal> refusal = TakeHelperLock(updates, folderSecurity, helperLock, log)) {\n    return static_cast<int>(*refusal);\n  }\n",
+				"  {\n    Handle helperLock;\n    if (const std::optional<Refusal> refusal = TakeHelperLock(updates, folderSecurity, helperLock, log)) {\n      return static_cast<int>(*refusal);\n    }\n  }\n"))
 		}},
 		{"the rights not checked before msiexec", func() []string {
 			return apply("!CheckAdminOnly({updates, tagFolder, package, installLog}, error)", "false")
@@ -812,7 +967,8 @@ func TestUpdateApplyWiringRejectsWeakerHelpers(t *testing.T) {
 			return checkUpdaterEntry(main, with("main.cpp", main))
 		}},
 		{"an app override read", func() []string {
-			changed := replace(sources["ApplyUpdate.cpp"], "  const fs::path installFolder = executable.parent_path();",
+			changed := inside(sources["ApplyUpdate.cpp"], "int ApplyUpdate(std::wstring_view tagArgument) {",
+				"  const fs::path installFolder = executable.parent_path();",
 				"  const fs::path installFolder = _wgetenv(L\"URNETWORK_APP_ROOT\");")
 			return checkUpdaterEntry(sources["main.cpp"], with("ApplyUpdate.cpp", changed))
 		}},
@@ -831,13 +987,13 @@ func TestUpdateApplyWiringRejectsWeakerHelpers(t *testing.T) {
 			return checkUpdaterEntry(main, with("main.cpp", main))
 		}},
 		{"a channel read from the user's registry", func() []string {
-			changed := replace(sources["ApplyUpdate.cpp"], "#else\n  return update::kOfficialFeed;\n#endif",
-				"#else\n  ::RegGetValueW(HKEY_CURRENT_USER, L\"Software\\\\URnetwork\", L\"Channel\", RRF_RT_REG_SZ, nullptr, nullptr, nullptr);\n  return update::kOfficialFeed;\n#endif")
+			changed := replace(sources["ApplyUpdate.cpp"], "#else\n  std::string why;\n",
+				"#else\n  ::RegGetValueW(HKEY_CURRENT_USER, L\"Software\\\\URnetwork\", L\"Channel\", RRF_RT_REG_SZ, nullptr, nullptr, nullptr);\n  std::string why;\n")
 			return checkChannelIsAnIndex(changed, with("ApplyUpdate.cpp", changed))
 		}},
 		{"a feed built at run time", func() []string {
-			changed := replace(sources["ApplyUpdate.cpp"], "#else\n  return update::kOfficialFeed;\n#endif",
-				"#else\n  static const update::Feed stored{.id = \"stored\", .numericRepoId = 1, .owner = \"someone\", .repo = \"else\"};\n  return stored;\n#endif")
+			changed := replace(sources["ApplyUpdate.cpp"], "  return update::FeedOfMarker(marker);\n#endif",
+				"  static const update::Feed stored{.id = \"stored\", .numericRepoId = 1, .owner = \"someone\", .repo = \"else\"};\n  return stored;\n#endif")
 			return checkChannelIsAnIndex(changed, with("ApplyUpdate.cpp", changed))
 		}},
 		{"build.ps1 passes a runner feed", func() []string {
@@ -899,13 +1055,145 @@ func TestUpdateApplyWiringRejectsWeakerHelpers(t *testing.T) {
 				resources, sources["ApplyUpdate.cpp"], sources)
 		}},
 		{"the runner feed as the default", func() []string {
-			changed := replace(sources["ApplyUpdate.cpp"], "  return update::kOfficialFeed;\n", "  return kRunnerTestFeed;\n")
+			changed := replace(sources["ApplyUpdate.cpp"], "  return update::FeedOfMarker(marker);\n", "  return kRunnerTestFeed;\n")
 			return checkRunnerFeedIsTestOnly(inputs, project, resources, changed, sources)
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if problems := tc.check(); len(problems) == 0 {
 				t.Fatal("negative control was not detected")
+			}
+		})
+	}
+}
+
+// The update channel's verb, its question and its reader: each control puts
+// back one rejected design, and must be reported for that reason.
+func TestUpdateApplyTheChannelVerbRejectsWeakerHelpers(t *testing.T) {
+	sources := updaterSources(t)
+	apply := sources["ApplyUpdate.cpp"]
+	location := sources["InstallLocationWin32.cpp"]
+	main := sources["main.cpp"]
+	replace := func(text, old, replacement string) string {
+		if strings.Count(text, old) != 1 {
+			t.Fatalf("negative control: %q is not in the source exactly once", old)
+		}
+		return strings.Replace(text, old, replacement, 1)
+	}
+	inside := func(source, opener, old, replacement string) string {
+		definition := applyDefinition(source, opener)
+		if definition == "" {
+			t.Fatalf("negative control: %q is not defined", opener)
+		}
+		return replace(source, definition, replace(definition, old, replacement))
+	}
+	verb := func(old, replacement string) []string {
+		return checkChannelVerb(replace(apply, old, replacement), location)
+	}
+	reader := func(old, replacement string) []string {
+		return checkChannelVerb(apply, replace(location, old, replacement))
+	}
+	const opener = "int SetUpdateChannel(std::wstring_view channelArgument) {"
+	question := "  if (plan == update::ChannelPlan::AskThenCreate && !AdministratorConfirms(*asked, log)) {\n" +
+		"    return static_cast<int>(Refusal::Declined);\n  }\n"
+	for _, tc := range []struct {
+		name, want string
+		check      func() []string
+	}{
+		// the feed named by the caller
+		{"an apply that takes a feed id after its tag", "wWinMain is missing const bool apply", func() []string {
+			changed := replace(main, `const bool apply = args.size() == 3 && args[1] == L"--apply-update";`,
+				`const bool apply = args.size() == 4 && args[1] == L"--apply-update";`)
+			changed = replace(changed, "urnw::updater::ApplyUpdate(args[2])", "urnw::updater::ApplyUpdate(args[2], args[3])")
+			return checkUpdaterEntry(changed, sources)
+		}},
+		{"the channel resolved by its owner and its repository", "SetUpdateChannel is missing const update::Feed", func() []string {
+			return verb("const update::Feed* asked = update::FeedOfChannelArgument(AsciiTag(channelArgument));",
+				"const update::Feed* asked = nullptr;\n  for (const update::Feed& row : update::kFeeds) {\n"+
+					"    if (WidenAscii(row.owner) + L\"/\" + WidenAscii(row.repo) == channelArgument) asked = &row;\n  }")
+		}},
+		// the channel read from a store the user can write
+		{"the marker's path from the user's profile", "ChannelMarkerPath is missing", func() []string {
+			return reader(`return installFolder / L"updates" / L"developer-channel";`,
+				`return fs::path(_wgetenv(L"LOCALAPPDATA")) / L"URnetwork" / L"developer-channel";`)
+		}},
+		{"the reader skipping the folder's descriptor", "ReadChannelMarker is missing folderDescriptor = ReadDescriptorFacts", func() []string {
+			return reader("    folderDescriptor = ReadDescriptorFacts(updates);\n", "")
+		}},
+		{"the reader skipping the marker's descriptor", "ReadChannelMarker is missing markerDescriptor = ReadDescriptorFacts", func() []string {
+			return reader("      markerDescriptor = ReadDescriptorFacts(marker);\n", "")
+		}},
+		{"the reader trusting a marker by its name", "ReadChannelMarker is missing update::JudgeMarker", func() []string {
+			return reader("update::JudgeMarker(folderFacts, folderDescriptor, markerFacts, markerDescriptor);",
+				"update::MarkerJudgement{markerFacts.found == update::PathFacts::Found::Present ? "+
+					"update::ChannelMarker::Trusted : update::ChannelMarker::Absent, {}};")
+		}},
+		// a lock anybody can hold, or a marker it keeps
+		{"the channel verb writing without its second read", "SetUpdateChannel is missing plan = update::PlanOf", func() []string {
+			return verb("  plan = update::PlanOf(*asked, install::ReadChannelMarker(installFolder, why));\n", "")
+		}},
+		{"the channel verb's lock let go before it writes", "SetUpdateChannel does not declare helperLock in its own scope", func() []string {
+			return checkChannelVerb(inside(apply, opener,
+				"  Handle helperLock;\n  if (const std::optional<Refusal> refusal = TakeHelperLock(updates, folderSecurity, helperLock, log)) {\n"+
+					"    return static_cast<int>(*refusal);\n  }\n",
+				"  {\n    Handle helperLock;\n    if (const std::optional<Refusal> refusal = TakeHelperLock(updates, folderSecurity, helperLock, log)) {\n"+
+					"      return static_cast<int>(*refusal);\n    }\n  }\n"), location)
+		}},
+		{"the folder's descriptor noted after PrepareFolder has set it", `TakeHelperLock is missing if \(!PrepareFolder`, func() []string {
+			moved := replace(apply, "  const bool foundOpen = !FoundAsTheHelpers(updates);\n", "")
+			moved = replace(moved, "    log.Line(\"refused: {}\", error);\n    return Refusal::Staging;\n  }\n  Security lockSecurity(kLockFileSddl);\n",
+				"    log.Line(\"refused: {}\", error);\n    return Refusal::Staging;\n  }\n  const bool foundOpen = !FoundAsTheHelpers(updates);\n  Security lockSecurity(kLockFileSddl);\n")
+			return checkApplyUpdate(moved)
+		}},
+		{"the marker kept when the folder was found open", `TakeHelperLock is missing if \(foundOpen\)`, func() []string {
+			return checkApplyUpdate(replace(apply, "  if (foundOpen) {\n", "  if (false) {\n"))
+		}},
+		{"the lock file made with the marker's security", "TakeHelperLock is missing Security lockSecurity", func() []string {
+			return checkApplyUpdate(replace(apply, "  Security lockSecurity(kLockFileSddl);\n", "  Security lockSecurity(kChannelMarkerSddl);\n"))
+		}},
+		// the fork accepted while the channel says official
+		{"ChannelFeed giving the developer row whatever the marker", "ChannelFeed is not the marker", func() []string {
+			changed := replace(apply, "  return update::FeedOfMarker(marker);\n", "  return *update::FeedById(update::kDeveloperChannelId);\n")
+			return checkChannelIsAnIndex(changed, sources)
+		}},
+		// the question weakened
+		{"OK the default button", `AdministratorConfirms is missing MB_OKCANCEL \| MB_DEFBUTTON2`, func() []string {
+			return verb("MB_OKCANCEL | MB_DEFBUTTON2 |", "MB_OKCANCEL | MB_DEFBUTTON1 |")
+		}},
+		{"the question skipped for the developer channel", `SetUpdateChannel is missing if \(plan == update::ChannelPlan::AskThenCreate && !AdministratorConfirms`, func() []string {
+			return verb(question, "")
+		}},
+		{"the marker written before the question", "SetUpdateChannel is missing Security markerSecurity", func() []string {
+			moved := replace(apply, question, "")
+			moved = replace(moved, "  if (update::PlanOf(*asked, install::ReadChannelMarker(installFolder, why)) !=\n",
+				question+"  if (update::PlanOf(*asked, install::ReadChannelMarker(installFolder, why)) !=\n")
+			return checkChannelVerb(moved, location)
+		}},
+		{"the question asked with no look at the window station", `AdministratorConfirms is missing !\(station\.dwFlags & WSF_VISIBLE\)`, func() []string {
+			return verb("      !(station.dwFlags & WSF_VISIBLE)) {", "      false) {")
+		}},
+		{"the question naming a repository of its own", "never one of its own", func() []string {
+			return verb(`const std::wstring repository = WidenAscii(feed.owner) + L"/" + WidenAscii(feed.repo);`,
+				`const std::wstring repository = L"Ryanmello07/urnetwork-windows";`)
+		}},
+		// an elevated delete without a bound
+		{"the channel verb removing recursively", "removes a file, an empty folder or a link, and nothing else", func() []string {
+			return verb(": ::DeleteFileW(marker.c_str());", ": (std::filesystem::remove_all(marker), TRUE);")
+		}},
+		{"the cleanup after an install removing files too", `ApplyUpdate is missing if \(folder\.is_directory\(ec\)`, func() []string {
+			return checkApplyUpdate(replace(apply, "if (folder.is_directory(ec) && folder.path().filename() != tagFolder.filename())",
+				"if (folder.path().filename() != tagFolder.filename())"))
+		}},
+		{"the marker made by the apply too", "names kChannelMarkerSddl 3 times", func() []string {
+			return checkChannelVerb(inside(apply, "int ApplyUpdate(std::wstring_view tagArgument) {",
+				"  const update::Feed& feed = ChannelFeed(installFolder, log);\n",
+				"  Security markerSecurity(kChannelMarkerSddl);\n  const update::Feed& feed = ChannelFeed(installFolder, log);\n"), location)
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			problems := strings.Join(tc.check(), "\n")
+			if !strings.Contains(problems, tc.want) && !regexp.MustCompile(tc.want).MatchString(problems) {
+				t.Fatalf("negative control was not detected by %q; the check reported:\n%s", tc.want, problems)
 			}
 		})
 	}

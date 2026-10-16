@@ -40,7 +40,8 @@ enum class Refusal : std::uint32_t {
   NotInstalled = 0x20000002,
   // A dev build (code 0), which never updates itself.
   DevBuild = 0x20000003,
-  // The arguments are not --apply-update and a tag of the channel's feed.
+  // The arguments are not --apply-update and a tag of the channel's feed,
+  // nor --set-update-channel and a channel of the feed table.
   BadArguments = 0x20000004,
   // Another update helper is running.
   Busy = 0x20000005,

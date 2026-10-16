@@ -60,7 +60,7 @@ func checkBothAskForTheSameList(checker, apply, selection string) []string {
 		`url, L"application/vnd\.github\+json", kMaxJsonBytes,\s*false,`)...)
 	problems = append(problems, applyOrderProblems("ApplyUpdate",
 		applyDefinition(apply, "int ApplyUpdate(std::wstring_view tagArgument) {"),
-		regexp.QuoteMeta("const update::Feed& feed = ChannelFeed();"),
+		regexp.QuoteMeta("const update::Feed& feed = ChannelFeed(installFolder, log);"),
 		regexp.QuoteMeta("const std::wstring listUrl = WidenAscii(update::ReleaseListUrl(feed));"),
 		regexp.QuoteMeta("HttpGet("),
 		regexp.QuoteMeta(`listUrl, L"application/vnd.github+json", kMaxListBytes,`))...)
