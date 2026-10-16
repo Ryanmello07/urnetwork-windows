@@ -86,9 +86,10 @@ func TestLogExportHeaderIsPureAndOnlyReadsTheLog(t *testing.T) {
 	code := stripComments(source)
 	quitForbid(t, "LogExport.h", code, "the log itself is read and never written, renamed, resized or removed",
 		"std::ofstream out(source", "std::filesystem::remove(", "resize_file(", "rename(", "copy_file(", "winrt::", "windows.h", "std::ios::app", "std::fstream")
-	// the destination is opened for writing once, after the source has been opened and found not to be it
+	// the destination is opened for writing once, after the source has been found to be a file, opened and found not to be it
 	copyBody := definitionBody(t, "LogExport.h", code, "inline bool CopyWithoutLinks(const std::filesystem::path& source, const std::filesystem::path& destination) {")
 	signOutRequireInOrder(t, "CopyWithoutLinks", copyBody,
+		regexp.QuoteMeta("if (!std::filesystem::is_regular_file(source, unknown)) return false;"),
 		regexp.QuoteMeta("std::ifstream in(source, std::ios::binary);"),
 		regexp.QuoteMeta("if (!in) return false;"),
 		regexp.QuoteMeta("std::filesystem::equivalent(source, destination, unknown)"),
@@ -100,13 +101,16 @@ func TestLogExportHeaderIsPureAndOnlyReadsTheLog(t *testing.T) {
 	}
 }
 
-// Each defect below puts one thing back that an export has gone wrong with. The spec must fail naming the check.
+// Each defect below puts one thing back that an export has gone wrong with. The spec must fail naming the check. A
+// defect that only a host's C++ library can show names the line the spec prints on such a host, and is skipped, saying
+// what the spec said instead, on any other.
 func TestLogExportSpecDetectsEachDefectPutBack(t *testing.T) {
 	cases := []struct {
 		name string
 		old  string
 		new  string
 		want string
+		host string
 	}{
 		{
 			name: "saving over the log is allowed, and empties it",
@@ -116,8 +120,8 @@ func TestLogExportSpecDetectsEachDefectPutBack(t *testing.T) {
 		},
 		{
 			name: "the destination is opened before the source",
-			old:  "  std::ifstream in(source, std::ios::binary);\n  if (!in) return false;\n  std::error_code unknown;\n  if (std::filesystem::equivalent(source, destination, unknown)) return false;\n  std::ofstream out(destination, std::ios::binary | std::ios::trunc);\n  if (!out) return false;\n",
-			new:  "  std::ofstream out(destination, std::ios::binary | std::ios::trunc);\n  std::ifstream in(source, std::ios::binary);\n  if (!in || !out) return false;\n  std::error_code unknown;\n  if (std::filesystem::equivalent(source, destination, unknown)) return false;\n",
+			old:  "  std::error_code unknown;\n  if (!std::filesystem::is_regular_file(source, unknown)) return false;\n  std::ifstream in(source, std::ios::binary);\n  if (!in) return false;\n  if (std::filesystem::equivalent(source, destination, unknown)) return false;\n  std::ofstream out(destination, std::ios::binary | std::ios::trunc);\n  if (!out) return false;\n",
+			new:  "  std::ofstream out(destination, std::ios::binary | std::ios::trunc);\n  std::error_code unknown;\n  if (!std::filesystem::is_regular_file(source, unknown)) return false;\n  std::ifstream in(source, std::ios::binary);\n  if (!in || !out) return false;\n  if (std::filesystem::equivalent(source, destination, unknown)) return false;\n",
 			want: "an export that was already there is as it was",
 		},
 		{
@@ -145,11 +149,21 @@ func TestLogExportSpecDetectsEachDefectPutBack(t *testing.T) {
 			want: "an earlier export is replaced whole",
 		},
 		{
-			// a source that merely exists is taken for a log: a directory exists, and nothing opens it to be read
+			// a source that merely exists is taken for a log: a directory exists, whether this host opens it or not
 			name: "a directory is copied as a log",
-			old:  "  std::ifstream in(source, std::ios::binary);\n  if (!in) return false;\n",
-			new:  "  std::ifstream in(source, std::ios::binary);\n  std::error_code gone;\n  if (!std::filesystem::exists(source, gone)) return false;\n",
+			old:  "  if (!std::filesystem::is_regular_file(source, unknown)) return false;\n  std::ifstream in(source, std::ios::binary);\n  if (!in) return false;\n",
+			new:  "  if (!std::filesystem::exists(source, unknown)) return false;\n  std::ifstream in(source, std::ios::binary);\n",
 			want: "directory: a directory is not copied as a log, and nothing is made of the copy",
+		},
+		{
+			// a source taken for a file because it opened, as before the kind was asked: Linux opens a directory for
+			// reading, and the copy has been made by the time the read fails. Windows does not open one, so there the
+			// open refuses it and this cannot show
+			name: "a source that opens is taken for a file",
+			old:  "  if (!std::filesystem::is_regular_file(source, unknown)) return false;\n",
+			new:  "",
+			want: "directory: a directory is not copied as a log, and nothing is made of the copy",
+			host: "host: a directory opens for reading here",
 		},
 	}
 	for _, c := range cases {
@@ -162,6 +176,13 @@ func TestLogExportSpecDetectsEachDefectPutBack(t *testing.T) {
 				return strings.Replace(source, c.old, c.new, 1)
 			})
 			output, err := runLogExport(t, program)
+			if c.host != "" && !strings.Contains(string(output), c.host) {
+				said := regexp.MustCompile(`(?m)^  host: .*$`).FindString(string(output))
+				if said == "" {
+					t.Fatalf("the spec does not say what this host does (want %q):\n%s", c.host, output)
+				}
+				t.Skipf("SKIPPING, NOT PASSING: the spec says %q here, not %q", strings.TrimSpace(said), c.host)
+			}
 			if err == nil || !strings.Contains(string(output), c.want) {
 				t.Fatalf("negative control was not detected (want %q): %v\n%s", c.want, err, output)
 			}
