@@ -633,7 +633,7 @@ class SdkHost {
   // tunnel or restarting it). Call once at startup.
   bool Initialize();
 
-  bool IsLoggedIn();
+  bool IsLoggedIn() const;
 
   // Auth (async; result delivered on the SDK callback thread).
   void LoginWithPassword(const std::string& userAuth, const std::string& password,

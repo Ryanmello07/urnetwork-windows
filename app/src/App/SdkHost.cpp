@@ -770,7 +770,7 @@ bool SdkHost::Initialize() {
 // RegisterNetworkClient's success, ApplyNetworkServer's re-derive, and Logout.
 // Logout clears this flag on the click. Its worker clears local state
 // synchronously before releasing any sign-in waiting for that logout.
-bool SdkHost::IsLoggedIn() { return loggedIn_.load(std::memory_order_acquire); }
+bool SdkHost::IsLoggedIn() const { return loggedIn_.load(std::memory_order_acquire); }
 
 void SdkHost::SetAuthState(AuthState s, const std::string& error) {
   const std::uint64_t epoch = signOutRun_.Epoch();
