@@ -1,0 +1,110 @@
+name: A2c catalogs - generated from the localization store
+
+# Regenerates the Windows app's string catalogs for the A2c branch
+# (feat/update-developer-channel-upstream), on throwaway ci/a2c-gen-*
+# branches of the fork: each is a head of that branch plus the rig, and
+# .github/a2c-gen-localizations.txt names the commit of
+# Ryanmello07/urnetwork-localizations to generate from. As the release
+# pipeline does (urnetwork/build all/run.sh): npm ci, then
+# URNETWORK_ROOT=<the parent of both checkouts> npm run gen:windows.
+# First the store's own tests run on that commit. Then a control: the
+# generator run on the store's main must reproduce the catalogs the branch
+# holds, byte for byte, so the regenerated diff is the branch's keys alone.
+# The generated files are the artifact, and the A2c commit takes them as
+# they are. Never merged.
+on:
+  push:
+    branches:
+      - 'ci/a2c-gen-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    name: npm run gen:windows from the localization store
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the Windows repo
+        uses: actions/checkout@v4
+        with:
+          path: windows
+
+      - name: Read the store's commit
+        id: store
+        run: |
+          sha="$(head -n 1 windows/.github/a2c-gen-localizations.txt)"
+          echo "store commit: $sha"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Check out the store's main
+        uses: actions/checkout@v4
+        with:
+          repository: urnetwork/localizations
+          ref: main
+          path: store-main
+
+      - name: Check out the store at that commit
+        uses: actions/checkout@v4
+        with:
+          repository: Ryanmello07/urnetwork-localizations
+          ref: ${{ steps.store.outputs.sha }}
+          path: localizations
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # npm test also runs generate.mjs --check, which compares every
+      # platform's outputs with the app repositories checked out beside the
+      # store; only the Windows one is here, so its unit tests run alone
+      - name: The store's own tests, at that commit
+        working-directory: localizations
+        run: |
+          echo "HEAD: $(git rev-parse HEAD)"
+          npm ci --silent
+          node --test gen/*.test.mjs
+
+      - name: Control - the store's main reproduces the branch's catalogs
+        run: |
+          echo "store main: $(git -C store-main rev-parse HEAD)"
+          (cd store-main && npm ci --silent)
+          # the generator writes into $URNETWORK_ROOT/windows; this root holds
+          # the store's main as "localizations" and the Windows repo
+          mkdir -p "$RUNNER_TEMP/control"
+          cp -r windows "$RUNNER_TEMP/control/windows"
+          cp -r store-main "$RUNNER_TEMP/control/localizations"
+          (cd "$RUNNER_TEMP/control/localizations" && URNETWORK_ROOT="$RUNNER_TEMP/control" npm run gen:windows)
+          cd "$RUNNER_TEMP/control/windows"
+          git status --short -- app/src/App/Strings
+          if [ -n "$(git status --porcelain -- app/src/App/Strings)" ]; then
+            echo "::error::the store's main does not reproduce the catalogs this branch holds"
+            git diff --stat -- app/src/App/Strings
+            exit 1
+          fi
+          echo "OK: the store's main reproduces the branch's catalogs byte for byte"
+
+      - name: Generate the catalogs from that commit
+        run: |
+          (cd localizations && URNETWORK_ROOT="$GITHUB_WORKSPACE" npm run gen:windows)
+          cd windows
+          git status --short
+          git diff --stat
+          echo "keys added to windows-keys.txt:"
+          git diff -U0 -- app/src/App/Strings/windows-keys.txt | grep -E '^\+[a-z]' || true
+          echo "keys removed from windows-keys.txt:"
+          git diff -U0 -- app/src/App/Strings/windows-keys.txt | grep -E '^-[a-z]' || true
+          mkdir -p "$RUNNER_TEMP/out"
+          git diff --binary -- app/src/App/Strings > "$RUNNER_TEMP/out/strings.patch"
+          cp -r app/src/App/Strings "$RUNNER_TEMP/out/Strings"
+          git rev-parse HEAD > "$RUNNER_TEMP/out/windows-head.txt"
+          git -C ../localizations rev-parse HEAD > "$RUNNER_TEMP/out/store-head.txt"
+
+      - name: Upload the generated catalogs
+        uses: actions/upload-artifact@v4
+        with:
+          name: a2c-generated-strings
+          path: ${{ runner.temp }}/out
+          if-no-files-found: error
