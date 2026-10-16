@@ -561,6 +561,9 @@ void AppController::OnTunnelState(const proto::TunnelStatus& status) {
 }
 
 void AppController::OnStats(const LiveStats& stats) {
+  // Reads on different threads finish out of order: one older than a snapshot
+  // already applied would roll the tray and the window back (StatsReadOrder.h).
+  if (!statsReadOrder_.Admit(stats.readSequence)) return;
   // #27: the tray is a stats consumer now — the aggregate health rides every
   // snapshot. Change-gated: stats push on every throughput tick, and a
   // Shell_NotifyIcon per second for an unchanged icon is churn for nothing.
@@ -1074,7 +1077,11 @@ void AppController::ReconcileWindowPresentation() {
 
     // Re-apply the current state after the hidden/inactive interval. The stats
     // snapshot goes through OnStats (#27), not straight to the window, so the
-    // tray's health reading refreshes at the same instant the window's does.
+    // tray's health reading refreshes at the same instant the window's does,
+    // and it is read on SdkHost's publish worker: its DeviceRemote getters wait
+    // on the device's state lock, which a connect write holds through its rpc
+    // for up to the rpc timeout, and a show must not freeze this thread for
+    // that long. It arrives through the stats handler, in read order.
     // The standing ERROR is replayed only while no presented window has seen it
     // (authErrorUndelivered_): a failure that landed while the window was hidden
     // is delivered once on the next show, never again after that.
@@ -1082,7 +1089,7 @@ void AppController::ReconcileWindowPresentation() {
                              authErrorUndelivered_ ? authError_ : std::string());
     authErrorUndelivered_ = false;
     if (lastTunnelStatus_) self->OnTunnelStateChanged(*lastTunnelStatus_);
-    OnStats(sdk_.CurrentStats());
+    sdk_.RepublishStats();
     self->OnBalanceChanged(balance_.Current(), balance_.CurrentPoll());
     // a start that began waiting on its balance while the window was hidden
     self->OnStartWaitChanged(sdk_.StartConnectWaiting() ? StartWaitChange::Waiting

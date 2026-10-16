@@ -23,6 +23,7 @@
 #include "ApprovalNetwork.h"
 #include "BalanceGate.h"
 #include "ClientEvents.h"
+#include "CoalescedWorker.h"
 #include "ConnectAction.h"
 #include "ConnectionHealth.h"
 #include "ExitDrain.h"
@@ -113,6 +114,10 @@ struct CreateNetworkParams {
 // Snapshot of live connection / throughput / provide stats. Pushed to the UI on
 // SDK listener callbacks (macOS parity: listener-push, not polling).
 struct LiveStats {
+  // The read's place in the order reads began (SdkHost::ReadStats), from 1:
+  // the UI applies a snapshot only when it is newer than every one it applied
+  // (StatsReadOrder.h), since reads on different threads finish out of order.
+  std::uint64_t readSequence = 0;
   // getConnectionStatus() (CONNECTED/CONNECTING/DESTINATION_SET/DISCONNECTED)
   // -- EXCEPT in an rpc-only session, where it is forced to the deliberately
   // unrecognised "RPC_ONLY" so the connect page renders as disconnected. There
@@ -148,7 +153,15 @@ struct LiveStats {
   // service does not answer and which is read while the window presents
   // (SdkHost::ProviderOnlyStatsLoop).
   bool provideClientsUnknown = false;
-  std::string locationName;       // selected connect location (empty = best available)
+  // selected connect location (empty = best available); a selected network
+  // peer by its device's name (PeerLocation.h SelectedLocationName)
+  std::string locationName;
+  // The connect page's peers line (req1), read here so a stats push makes no
+  // SdkHost read on the UI thread: the device's rpc to the service is
+  // attached (RemoteConnected), and how many devices are connected, providing
+  // or not (ConnectedPeerCount's figure, from the device itself).
+  bool remoteConnected = false;
+  int64_t connectedPeerCount = 0;
   std::string countryCode;        // selected location country code (dns recommendations)
   std::string countryName;
 
@@ -973,8 +986,9 @@ class SdkHost {
   //      (StopServiceWithoutLock), and the locked stop below follows if the
   //      pass returns before the process ends;
   //   3. this object's own threads are stopped and joined: the service
-  //      watchdog, the presentation worker, the rpc-sync watchdog and the
-  //      provider-only statistics loop with its provider status poll;
+  //      watchdog, the presentation worker, the rpc-sync watchdog, the
+  //      provider-only statistics loop with its provider status poll, and the
+  //      stats publish worker;
   //   4. under mutex_, so after any pass in flight: stop_tunnel, which ends
   //      the session (tunnel or rpc-only) and lifts any firewall policy, the
   //      kill switch's armed floor included, as Disconnect does; then
@@ -1265,15 +1279,20 @@ class SdkHost {
   void SetJwtRefreshedHandler(JwtRefreshedHandler h) { onJwtRefreshed_ = std::move(h); }
   void SetTunnelStateHandler(TunnelStateHandler h) { onTunnel_ = std::move(h); }
   // Live stats push (connection/throughput/provide). Fired on SDK listener
-  // callbacks; the UI marshals to its thread and applies visibility gating.
+  // callbacks and on this object's own threads, never on the UI thread; the UI
+  // marshals to its thread, applies the snapshots in read order
+  // (LiveStats::readSequence) and applies visibility gating.
   void SetStatsHandler(StatsHandler h) { onStats_ = std::move(h); }
-  LiveStats CurrentStats();  // snapshot on demand (e.g. resync when window shows)
   // Read a fresh snapshot and push it through the stats handler, exactly like
-  // an SDK listener firing. For LiveStats::healthReevalAtMillis: the degrade
-  // hold expires on the clock, and this is the clock's way to reach every
-  // consumer (window AND tray) through the one existing path instead of a
-  // side-channel that could disagree with it.
-  void RepublishStats() { PublishStats(); }
+  // an SDK listener firing, and return at once: the read runs on the stats
+  // publish worker, since its DeviceRemote getters wait on the device's state
+  // lock, which a connect write holds through its rpc for up to the rpc
+  // timeout. Requests while a read runs fold into one more read. For the
+  // window's resync when it shows, and for LiveStats::healthReevalAtMillis:
+  // the degrade hold expires on the clock, and this is the clock's way to reach
+  // every consumer (window AND tray) through the one existing path instead of a
+  // side-channel that could disagree with it. Any thread.
+  void RepublishStats() { statsPublisher_.Request(); }
 
   // ---- connect drawer (stats cards + sheets) -------------------------------
   // Push handlers, set once by the window; fired on SDK callback threads, and
@@ -2315,6 +2334,8 @@ class SdkHost {
   void SubscribeStats();          // caller holds mutex_; opens presentation controllers
   LiveStats ReadStats();          // read the current snapshot from the SDK getters
   void PublishStats();            // ReadStats() -> onStats_
+  // PublishStats as statsPublisher_'s job: a throw is logged, not propagated
+  void PublishStatsOnWorker();
   void ClampCaptureStats(LiveStats& stats) const;
   // Drawer feeds: subscribe listeners (in BootstrapSession) and publish
   // snapshots, only on change (block actions storm per routing decision).
@@ -2699,15 +2720,21 @@ class SdkHost {
   std::string lastServiceWfpState_ = "off";
   // ---- aggregate connection health (#27) ------------------------------------
   // The one Tracker (ConnectionHealth.h) behind its own SMALL lock, never
-  // mutex_: ReadStats is deliberately lock-free against mutex_ (it runs on the
-  // UI thread and on SDK callback threads while a bootstrap can hold mutex_
-  // for seconds, and with mutex_ already held, for SubscribeStats' snapshot
+  // mutex_: ReadStats is deliberately lock-free against mutex_ (it runs on SDK
+  // callback threads and the stats publish worker while a bootstrap can hold
+  // mutex_ for seconds, and with mutex_ already held, for SubscribeStats' snapshot
   // and for the listeners ConnectLocked's write tells inline on the session
   // worker), and the tracker is folded in at the end of ReadStats. The
   // lock covers Update/ReevalAtMillis as one unit and NoteNewAttempt from the
   // session worker; it is held across nothing else.
   mutable std::mutex healthMutex_;
   health::Tracker healthTracker_;
+  // The last read sequence ReadStats handed out (LiveStats::readSequence).
+  std::atomic<std::uint64_t> statsReadSequence_{0};
+  // RepublishStats' reads, off the caller's thread (CoalescedWorker.h). Stopped
+  // with this object's other threads, above mutex_, by Quit and the destructor:
+  // a read in flight is waited out, and none starts after.
+  CoalescedWorker statsPublisher_{[this] { PublishStatsOnWorker(); }};
   // The egress binding currently in force on THIS process's SDK instance, as a
   // packed (index4, index6) pair, and the lock that keeps the compare and the
   // SDK call together.

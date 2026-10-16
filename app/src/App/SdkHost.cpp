@@ -358,6 +358,9 @@ SdkHost::~SdkHost() {
   // The presentation worker takes mutex_ too (D4), so it is stopped under the
   // same rule: outside the lock, joined.
   StopPresentationWorker();
+  // The stats publish worker reads the device and this host's state: stopped,
+  // and a read in flight waited out, before any of it goes.
+  statsPublisher_.Stop();
   // Same rule, same reason: the rpc-sync watchdog takes mutex_ to look at the
   // device, so it is stopped and JOINED here, above the lock.
   StopSyncWatchdog();
@@ -3631,14 +3634,21 @@ void SdkHost::SubscribeStats() {
 
 LiveStats SdkHost::ReadStats() {
   LiveStats s;
+  // Taken before any read below: the UI orders snapshots by when their read
+  // began (StatsReadOrder.h).
+  s.readSequence = statsReadSequence_.fetch_add(1, std::memory_order_relaxed) + 1;
   // D4: the DeviceRemote getters below are NOT cached reads. While the rpc
   // transport thinks it is attached, every one of them is a synchronous
   // DeviceLocalRpc.Get* call (device_rpc.go), and against a service that is
   // DYING — socket open, process gone — each blocks until the transport's
-  // write timeout tears it down. ReadStats runs on the UI thread (ConnectPage's
-  // 1s health tick via RepublishStats, and window activation), and the friend's
-  // app glog ends mid Get* burst 4-5s before Windows recorded AppHangB1. The
-  // pipe drop is this process's EARLY notice of the death — Go's transport
+  // write timeout tears it down, and each waits on the device's state lock
+  // while a connect write holds it through its rpc, up to the rpc timeout.
+  // ReadStats used to run on the UI thread (ConnectPage's 1s health tick via
+  // RepublishStats, and window activation), and the friend's app glog ended
+  // mid Get* burst 4-5s before Windows recorded AppHangB1; it now runs only on
+  // SDK callback threads, the session worker and the stats publish worker
+  // (RepublishStats), never on the UI thread. The pipe drop is this process's
+  // EARLY notice of the death — Go's transport
   // needs seconds more to notice — so with the channel down the device getters
   // are skipped outright. Nothing rendered is lost: the SERVICE_DOWN clamp at
   // the end of this function already replaces everything they would produce.
@@ -3707,15 +3717,30 @@ LiveStats SdkHost::ReadStats() {
     s.providePaused = device_->getProvidePaused();
     s.provideMode = static_cast<int64_t>(device_->getProvideMode());
     s.provideHasNetworkKey = provideHasNetworkKey_.load();
+    std::optional<urnet::NetworkPeerList> connectedPeers;
     if (auto np = device_->getNetworkPeers(); np && np->Connected) {
       s.provideClients = static_cast<int64_t>(np->Connected->size());
+      s.connectedPeerCount = s.provideClients;
+      connectedPeers = std::move(np->Connected);
     }
+    // the peers line's other reading, which RemoteConnected() would take
+    // mutex_ for on the UI thread
+    s.remoteConnected = device_->getRemoteConnected();
     // selected provider (read-only row + dns regional recommendations)
-    if (auto loc = device_->getConnectLocation()) {
+    const std::optional<urnet::ConnectLocation> loc = device_->getConnectLocation();
+    if (loc) {
       if (loc->name) s.locationName = *loc->name;
       if (loc->country_code) s.countryCode = *loc->country_code;
       if (loc->country) s.countryName = *loc->country;
     }
+    // A selected network peer is named after its device (req4), here rather
+    // than in ConnectPage::ApplyStats, whose two reads took mutex_ on the UI
+    // thread. The selection is what SelectedLocation answers, without its lock:
+    // the presented controller's, read lock-free like its status above, else
+    // the device's location.
+    s.locationName = SelectedLocationName(
+        std::move(s.locationName), connectVc_ ? connectVc_->getSelectedLocation() : loc,
+        connectedPeers);
     // The window honesty diagnosis (track 2): the SDK's stall reason and the
     // terminal failed latch. One more rpc getter under the same serviceUp
     // gate as the five above; an old service simply omits the JSON keys and
@@ -3897,7 +3922,13 @@ void SdkHost::PublishStats() {
   if (onStats_) onStats_(ReadStats());
 }
 
-LiveStats SdkHost::CurrentStats() { return ReadStats(); }
+void SdkHost::PublishStatsOnWorker() {
+  try {
+    PublishStats();
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: a stats publish failed: {}", e.what());
+  }
+}
 
 // ---- connect drawer feeds (macOS ThroughputStore/ContractDetailsStore/
 // BlockActionsStore/DnsSettingsStore parity) --------------------------------
@@ -5806,7 +5837,7 @@ ReliabilitySnapshot SdkHost::ReadReliability() {
   // either side of a session teardown and disagree about which session they
   // describe. The cost is that a slow or unreachable service holds mutex_ for
   // the whole batch, and mutex_ is taken by UI-thread readers (RemoteConnected,
-  // CurrentStats, SelectedLocation, ...). That is the shape the rest of this
+  // SelectedLocation, ...). That is the shape the rest of this
   // class already has — those readers hold it across rpcs too — but this is the
   // biggest single hold in it, so it is the first thing to revisit if the
   // window is ever seen to stall while the developer screen is open.
@@ -6504,7 +6535,8 @@ void SdkHost::Connect(const std::string& connectLocationJson) {
     LogWarn("sdkhost: connect parse failed: {}", e.what());
     std::scoped_lock lock(mutex_);
     PublishSessionFailure("that provider location could not be read");
-    PublishStats();
+    // read on the publish worker: this is the caller's thread, the UI's
+    RepublishStats();
     return;
   }
   r.kind = ConnectKind::Location;
@@ -8150,6 +8182,8 @@ void SdkHost::QuitInOrder(std::chrono::steady_clock::time_point start) {
   StopPresentationWorker();
   StopSyncWatchdog();
   StopProviderOnlyStats();
+  // it reads the device the teardown below closes
+  statsPublisher_.Stop();
   // 4. The service, under mutex_: after any pass in flight (a Connect's
   // bootstrap, a reconcile, the user's Disconnect), and with none able to
   // follow it.

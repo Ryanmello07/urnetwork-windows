@@ -19,6 +19,7 @@
 #include "BalanceGate.h"
 #include "InstanceHandover.h"
 #include "SdkHost.h"
+#include "StatsReadOrder.h"
 #include "SubscriptionBalance.h"
 #include "TrayConnectionState.h"
 #include "TrayIcon.h"
@@ -297,6 +298,8 @@ class AppController {
   std::uint64_t windowHides_ = 0;  // how many HideWindow calls there have been (WindowHides)
   bool windowMinimized_ = false;  // IsIconic, synced by SyncWindowMinimized
   bool windowVisible_ = false;    // the reconciled result: the presentation is running
+  // which stats snapshots OnStats still applies: the newest read wins
+  urnw::StatsReadOrder statsReadOrder_;
   std::optional<proto::TunnelStatus> lastTunnelStatus_;
   // the out-of-balance state, latched (OutOfBalanceLatch) because the contract
   // status is reset with the destination and the raw push alone forgets it on

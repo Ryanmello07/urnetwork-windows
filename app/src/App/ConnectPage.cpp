@@ -1292,26 +1292,13 @@ void ConnectPage::ApplyStats(urnw::LiveStats const& stats) {
   // the operator asked for a few hundred milliseconds after they appear. Same
   // gate, same reason, as PreviewHeroActive on the canvas.
   if (PreviewSampleActive()) return;
-  // Selected provider row. When the selected location is a connected network
-  // peer, show its device name instead of the raw client id (req4): resolve it
-  // from the live peer list by client id, like the linux drawer does.
-  // The provider name is an external string: filtered where it enters the
-  // page, so the row AND the automation name built from it stay shapeable.
-  std::string locationName = urnw::kit::SanitizeExternalDisplayText(stats.locationName);
-  const auto peers = Sdk().ConnectedProvidePeers();
-  if (auto selected = Sdk().SelectedLocation();
-      peers && selected && selected->connect_location_id &&
-      selected->connect_location_id->client_id &&
-      !selected->connect_location_id->client_id->empty()) {
-    const auto& clientId = *selected->connect_location_id->client_id;
-    for (const auto& peer : *peers) {
-      if (peer.ClientId && *peer.ClientId == clientId) {
-        // a peer's device name is off the wire too: same filter, same reason
-        locationName = urnw::kit::SanitizeExternalDisplayText(urnw::PeerDisplayName(peer));
-        break;
-      }
-    }
-  }
+  // Selected provider row. A selected network peer arrives named after its
+  // device (req4): SdkHost::ReadStats resolves it off this thread, since the
+  // selection and peer reads made here took mutex_, which the session worker
+  // holds through a whole connect. The name, a peer's device name included, is
+  // an external string: filtered where it enters the page, so the row AND the
+  // automation name built from it stay shapeable.
+  const std::string locationName = urnw::kit::SanitizeExternalDisplayText(stats.locationName);
   w_.LocationText().Text(locationName.empty() ? Loc("best_available_provider")
                                               : H(locationName));
   ApplyLocationRowName();  // the row's name carries the provider, not just the label
@@ -1320,6 +1307,9 @@ void ConnectPage::ApplyStats(urnw::LiveStats const& stats) {
   // waiting on its balance keeps showing connecting (OnStartWaitChanged).
   reportedConnectStatus_ = ParseConnectStatus(stats.connectionStatus);
   connectStatus_ = startWaiting_ ? ConnectStatus::Connecting : reportedConnectStatus_;
+  // the inspector's pre-clamp reading (D5): only an rpc-only session fills
+  // rawConnectionStatus, and in every other the clamped value is the raw one
+  rawConnectionStatus_ = stats.rpcOnly ? stats.rawConnectionStatus : stats.connectionStatus;
   // the stall diagnosis rides the same snapshot (track 2); rendered by
   // ApplyConnectStatus as the reason line under the hero
   windowStallReason_ = stats.windowStallReason;
@@ -1343,7 +1333,11 @@ void ConnectPage::ApplyStats(urnw::LiveStats const& stats) {
     ipFamilyStatusRow_->SetGrid(stats.gridPoints);
   }
   ApplyConnectStatus();
-  ApplyPeerCount(peers);  // the peers status line below the connect button (req1)
+  // the peers status line below the connect button (req1), from this snapshot;
+  // the list itself stays the peers push's (OnPeers), so this re-renders it
+  ApplyPeerCount(std::nullopt,
+                 PeerLineReading{.remoteConnected = stats.remoteConnected,
+                                 .connectedPeerCount = stats.connectedPeerCount});
   // the connected country drives the dns-card recommendation pill; only refresh
   // it when the country actually changes (stats push on every throughput tick).
   const bool countryChanged =
@@ -2879,9 +2873,10 @@ void ConnectPage::ApplySessionRows() {
   //
   // `exits` is how many exits the reliability stack currently holds, which is
   // the denominator for every "via" line the inspector prints.
-  const std::string raw = Sdk().CurrentStats().rpcOnly
-                              ? Sdk().CurrentStats().rawConnectionStatus
-                              : Sdk().CurrentStats().connectionStatus;
+  //
+  // `raw` is the last applied push's (ApplyStats): a snapshot read here ran the
+  // DeviceRemote getters on this thread, three times per render.
+  const std::string& raw = rawConnectionStatus_;
   host.Children().Append(
       urnw::kit::MakePaneKeyValueRow(Adv("adv_raw_status", L"Raw status"),
                                      raw.empty() ? Adv("adv_none", L"none") : H(raw))
@@ -3892,7 +3887,8 @@ void ConnectPage::OnChartTick() {
   // per-pane gate below on purpose: the status strip renders health on every
   // destination, not only Home. One nudge per deadline (the push re-arms it if
   // the hold is still running), through the ordinary stats path so the window
-  // AND the tray both hear the answer.
+  // AND the tray both hear the answer. The read runs on SdkHost's publish
+  // worker, not on this thread.
   if (healthReevalAtMillis_ > 0) {
     const int64_t nowMillis =
         std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -4344,7 +4340,8 @@ winrt::fire_and_forget ConnectPage::ShowProviderLocationsSheet() {
   w_.SetSheetOpen(false);
 }
 
-void ConnectPage::ApplyPeerCount(std::optional<urnet::NetworkPeerList> const& peers) {
+void ConnectPage::ApplyPeerCount(std::optional<urnet::NetworkPeerList> const& peers,
+                                 std::optional<PeerLineReading> reading) {
   // ALL connected devices (online, provide or not); the chooser's peers
   // section stays provide-filtered (connectable only). The list argument is
   // the update trigger; the count reads the unfiltered value.
@@ -4359,7 +4356,7 @@ void ConnectPage::ApplyPeerCount(std::optional<urnet::NetworkPeerList> const& pe
   // (service not running) a zero here would be a stale claim presented as
   // fact, so the line goes gray and says discovery is disabled (apple
   // ConnectActions parity).
-  if (!Sdk().RemoteConnected()) {
+  if (!(reading ? reading->remoteConnected : Sdk().RemoteConnected())) {
     const hstring disabled = Loc("peer_discovery_disabled");
     w_.PeerCountText().Text(disabled);
     // the row's automation name IS its text, and its text changes: set both
@@ -4369,7 +4366,7 @@ void ConnectPage::ApplyPeerCount(std::optional<urnet::NetworkPeerList> const& pe
     w_.PeerDot().Fill(urnw::colors::MutedBrush());
     return;
   }
-  const int64_t count = Sdk().ConnectedPeerCount();
+  const int64_t count = reading ? reading->connectedPeerCount : Sdk().ConnectedPeerCount();
   // the standalone peers status line below the connect button, always shown:
   // "{n} peers" + a filled dot, green when providing peers are online and amber
   // at zero (apple ConnectActions parity)

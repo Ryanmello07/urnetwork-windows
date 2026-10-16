@@ -539,8 +539,15 @@ class ConnectPage {
   // "Connected to N providers" row (android ProviderLocationsScreen parity).
   winrt::fire_and_forget ShowProviderLocationsSheet();
   // drawer "N network peers" sub-label (req1); space-preserved (blank + Opacity
-  // 0 when there are none) so the location row never jumps
-  void ApplyPeerCount(std::optional<urnet::NetworkPeerList> const& peers);
+  // 0 when there are none) so the location row never jumps. A stats push hands
+  // over its own readings (LiveStats::remoteConnected, connectedPeerCount);
+  // without them the line asks SdkHost, whose reads take mutex_.
+  struct PeerLineReading {
+    bool remoteConnected = false;
+    int64_t connectedPeerCount = 0;
+  };
+  void ApplyPeerCount(std::optional<urnet::NetworkPeerList> const& peers,
+                      std::optional<PeerLineReading> reading = std::nullopt);
 
   winrt::URnetwork::implementation::MainWindow& w_;
 
@@ -644,6 +651,9 @@ class ConnectPage {
   // off LiveStats for the reason line ApplyConnectStatus renders. Empty means
   // nothing to say (idle, or a service that predates the field).
   std::string windowStallReason_;
+  // The last applied push's pre-clamp connection status, for the inspector's
+  // raw-status row (D5).
+  std::string rawConnectionStatus_;
   // ---- D5: Advanced Mode ----
   // Pushed from MainWindow::ApplyAdvancedMode, which is itself driven by
   // SdkHost's standing value — this page never reads the preference itself, so
