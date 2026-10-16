@@ -125,7 +125,7 @@ foreach ($name in $RequireNames) {
   }
 }
 
-# --- assert: the packaged update helper polls the official feed ---------------
+# --- assert: the packaged update helper polls no runner test's feed -----------
 # The helper installs releases with administrator rights. One built with a
 # runner test's feed says so in its FileDescription (src\Updater\Updater.rc)
 # and must never ship. The packaged copy is taken out of the MSI's embedded
@@ -202,7 +202,7 @@ if ($helperKey) {
         $failures += "the packaged URnetworkUpdate.exe describes itself as '$description', not " +
           "'URnetwork update': it was built with a test feed and must not ship"
       } else {
-        Write-Host "packaged URnetworkUpdate.exe: '$description' (the official feed)"
+        Write-Host "packaged URnetworkUpdate.exe: '$description' (no runner test's feed)"
       }
     }
   } finally {

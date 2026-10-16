@@ -29,7 +29,12 @@
 //     the channel (Common/UpdateChannel.h).
 //
 //   c++ -std=c++20 -I ../src/Common update-release-tests.cpp -o /tmp/update-release-tests
-//   /tmp/update-release-tests [<file of "code msi-version" lines>]
+//   /tmp/update-release-tests [--feed-taken-out] [<file of "code msi-version" lines>]
+//
+// --feed-taken-out: the program was built from a ReleaseSelection.h without
+// the developer feed's row and its entry in kFeeds (SPEC-A2c 3.1). It leaves
+// out that row's own checks, requires the row gone, and names each check of
+// what is left as it passes.
 //
 // SPDX-License-Identifier: MPL-2.0
 
@@ -55,6 +60,8 @@ namespace {
 
 int gFailures = 0;
 int gCases = 0;
+// --feed-taken-out (main)
+bool gFeedTakenOut = false;
 
 void Check(bool condition, const std::string& what) {
   ++gCases;
@@ -66,6 +73,13 @@ void Check(bool condition, const std::string& what) {
 
 void CheckEq(const std::string& expected, const std::string& actual, const std::string& what) {
   Check(expected == actual, what + ": expected \"" + expected + "\", got \"" + actual + "\"");
+}
+
+// A check of what is left once the developer feed is taken out: run with
+// --feed-taken-out, it is named as it passes, so the run shows it was made.
+void TakenOut(bool condition, const std::string& what) {
+  Check(condition, what);
+  if (gFeedTakenOut && condition) std::cout << "  taken out: " << what << "\n";
 }
 
 // The release list's Date header in every selection below, unless the test
@@ -212,12 +226,50 @@ void FeedTable() {
   Check(official->requireImmutable, "the official feed requires immutable releases");
   Check(official->soakSeconds == kDay, "the official feed soaks a release for 24 hours");
   Check(official->tagPrefix.empty(), "the official feed's tags carry no prefix");
-  Check(std::size(kFeeds) == 1, "the table holds the official feed alone");
   Check(FeedById("beta") == nullptr && FeedById("") == nullptr, "no other channel resolves");
+  for (const char* other : {"runner-test", "Developer", "official "}) {
+    Check(FeedById(other) == nullptr, std::string("no other channel resolves: '") + other + "'");
+  }
   Check(kFeeds[0].numericRepoId == kOfficialFeed.numericRepoId &&
             kFeeds[0].owner == kOfficialFeed.owner && kFeeds[0].repo == kOfficialFeed.repo &&
             kFeeds[0].soakSeconds == kOfficialFeed.soakSeconds,
         "the table's official row is kOfficialFeed");
+
+  // The opt-in developer channel's feed: Ryanmello07/urnetwork-windows, the
+  // fork whose beta line is where this app's changes run before they come
+  // here, addressed by the id GitHub gave it. Only its -beta releases count,
+  // immutable ones, from the moment they are published. Nothing but
+  // FeedById("developer") reaches the row, so this program never names it.
+  std::vector<std::string_view> ids;
+  for (const Feed& row : kFeeds) ids.push_back(row.id);
+  const Feed* developer = FeedById("developer");
+  if (gFeedTakenOut) {
+    TakenOut(developer == nullptr && ids == std::vector<std::string_view>{"official"},
+             "the developer row is taken out of the table, and the official row is left");
+  } else {
+    Check(ids == std::vector<std::string_view>{"official", "developer"},
+          "the table holds the official and the developer feed alone, the official one first");
+    Check(developer != nullptr, "the developer feed is in the table");
+  }
+  if (developer) {
+    Check(developer->numericRepoId == 1324127805,
+          "the developer feed is repository 1324127805, Ryanmello07/urnetwork-windows's own id");
+    Check(developer->owner == "Ryanmello07" && developer->repo == "urnetwork-windows",
+          "the developer feed's download URLs are Ryanmello07/urnetwork-windows's, spelled as GitHub spells it");
+    Check(developer->acceptBetaPrereleases, "the developer feed takes -beta prereleases");
+    Check(!developer->acceptAnyPrerelease, "the developer feed takes no other prerelease");
+    Check(developer->requireImmutable, "the developer feed requires immutable releases");
+    Check(developer->soakSeconds == 0, "the developer feed does not soak");
+    Check(developer->tagPrefix.empty(), "the developer feed's tags carry no prefix");
+    CheckEq("https://api.github.com/repositories/1324127805/releases?per_page=30", ReleaseListUrl(*developer),
+            "the developer feed's release list, by the repository's id");
+  }
+  for (std::size_t i = 0; i < std::size(kFeeds); ++i) {
+    for (std::size_t j = i + 1; j < std::size(kFeeds); ++j) {
+      Check(kFeeds[i].id != kFeeds[j].id && kFeeds[i].numericRepoId != kFeeds[j].numericRepoId,
+            "no two rows of the table share an id or a repository");
+    }
+  }
 
   // The list both the tray app and the update helper ask for.
   CheckEq("https://api.github.com/repositories/936244679/releases?per_page=30",
@@ -264,6 +316,169 @@ void RealReleaseList() {
     CheckEq("URnetwork-2026.9.22-1053244730-arm64.msi", s.assetName, "arm64 picks its own MSI");
     CheckEq(std::string(64, 'c'), s.digestHex, "arm64 digest");
   }
+}
+
+// One of the fork's releases as its beta workflow publishes them
+// (Ryanmello07/urnetwork-windows, .github/workflows/beta-build.yml): a
+// prerelease tagged v<version>, not immutable, published by
+// github-actions[bot] 17 to 21 minutes after the instant its code names, with
+// the x64 MSI under the grammar's name (a bare URnetwork.msi on its older
+// branch) and two portable zips, at the fork's own download URLs.
+Release ForkBeta(const Feed& feed, const std::string& version, const char* publishedAt, bool namedMsi = true) {
+  const std::string tag = "v" + version;
+  const std::string uploaded = FormatUtcSecond(*ParseUtcSecond(publishedAt) - 60);
+  const auto asset = [&](const std::string& name, char digest) {
+    return ReleaseAsset{
+        .name = name, .url = FeedAssetUrl(feed, tag, name), .digest = Digest(digest), .updatedAt = uploaded};
+  };
+  return {.tag = tag,
+          .draft = false,
+          .prerelease = true,
+          .immutable = false,
+          .publishedAt = publishedAt,
+          .updatedAt = publishedAt,
+          .assets = {asset(namedMsi ? "URnetwork-" + version + "-x64.msi" : std::string("URnetwork.msi"), 'e'),
+                     asset("URnetwork-" + tag + "-windows-x64-portable.zip", 'f'),
+                     asset("URnetwork-" + tag + "-windows-arm64-portable.zip", 'f')}};
+}
+
+// The ten newest releases of the fork's page as it was listed on 2026-10-09,
+// newest first: seven from beta/custom-server, the MSI under the grammar's
+// name, and three from another branch, a bare URnetwork.msi.
+std::vector<Release> ForkPage(const Feed& feed) {
+  return {ForkBeta(feed, "2026.10.9-1067431400-beta", "2026-10-09T11:12:51Z"),
+          ForkBeta(feed, "2026.10.9-1067413860-beta", "2026-10-09T10:43:17Z"),
+          ForkBeta(feed, "2026.10.9-1067127790-beta", "2026-10-09T02:43:29Z"),
+          ForkBeta(feed, "2026.10.9-1067086610-beta", "2026-10-09T01:37:09Z"),
+          ForkBeta(feed, "2026.10.7-1065541340-beta", "2026-10-07T06:42:38Z"),
+          ForkBeta(feed, "2026.10.3-1062717970-beta", "2026-10-04T00:16:31Z"),
+          ForkBeta(feed, "2026.10.3-1061967120-beta", "2026-10-03T03:24:49Z"),
+          ForkBeta(feed, "2026.8.14-1018990750-beta", "2026-08-14T09:29:17Z", false),
+          ForkBeta(feed, "2026.8.14-1018967610-beta", "2026-08-14T08:50:37Z", false),
+          ForkBeta(feed, "2026.8.14-1018712140-beta", "2026-08-14T01:43:30Z", false)};
+}
+
+// The developer feed over the fork's page (SPEC-A2c 3). It is reached the
+// way the app and the helper reach it, by its id; with the row taken out
+// there is nothing to check here, and FeedTable says whether there should be.
+void DeveloperFeed() {
+  const Feed* developer = FeedById("developer");
+  if (!developer) return;
+  const Feed& feed = *developer;
+  // the page's own Date header
+  const std::int64_t listed = *ParseUtcSecond("2026-10-09T14:46:58Z");
+  const std::vector<Release> page = ForkPage(feed);
+  {
+    const Selection s = SelectRelease(page, "x64", feed, listed);
+    Check(s.code == 0 && s.newestCode == 0 && s.waitingCode == 0,
+          "the fork's page as listed offers and names nothing: none of its releases is immutable");
+    bool notImmutable = s.skipped.size() == page.size();
+    for (const Selection::Skip& skip : s.skipped) {
+      notImmutable = notImmutable && skip.reason == "is not an immutable release" && !skip.soaking;
+    }
+    Check(notImmutable, "and every release there is skipped as one that is not an immutable release");
+  }
+  std::vector<Release> live = page;
+  live[0].immutable = true;
+  const std::int64_t published = *ParseUtcSecond(live[0].publishedAt);
+  {
+    const Selection s = SelectRelease(live, "x64", feed, published + 60);
+    Check(s.code == 1067431400 && s.newestCode == 1067431400 && s.waitingCode == 0,
+          "with its newest release immutable, the developer feed offers it a minute after it is published");
+    CheckEq("v2026.10.9-1067431400-beta", s.tag, "the developer offer's tag");
+    CheckEq("2026.10.9-1067431400-beta", s.version, "the developer offer's version keeps its -beta");
+    CheckEq("https://github.com/Ryanmello07/urnetwork-windows/releases/download/v2026.10.9-1067431400-beta/"
+            "URnetwork-2026.10.9-1067431400-beta-x64.msi",
+            s.assetUrl, "the developer offer is downloaded from the fork's own release");
+    CheckEq(std::string(64, 'e'), s.digestHex, "the developer offer's digest is its MSI's");
+  }
+  {
+    // A newer release there whose tag does not end -beta could pass for an
+    // official one by its tag and its MSI's name, a full release or not.
+    Release full = ForkBeta(feed, "2026.10.9-1067500000", "2026-10-09T13:00:00Z");
+    full.prerelease = false;
+    full.immutable = true;
+    Release pre = full;
+    pre.prerelease = true;
+    Release draft = ForkBeta(feed, "2026.10.9-1067500010-beta", "2026-10-09T13:00:01Z");
+    draft.immutable = true;
+    draft.draft = true;
+    const Selection s = SelectRelease({full, pre, draft, live[0]}, "x64", feed, listed);
+    Check(s.code == 1067431400 && s.newestCode == 1067431400,
+          "the developer feed reads only tags that end -beta, a full release's or a prerelease's, and no draft");
+    Check(s.skipped.empty(), "and names none of them");
+  }
+  {
+    const std::vector<Release> official = {AndroidPrerelease("2026.9.22-1053244733"),
+                                           AndroidPrerelease("2026.9.22-1053244732"),
+                                           Official("2026.9.22-1053244730"),
+                                           AndroidPrerelease("2026.8.28-1031763443"),
+                                           Official("2026.8.28-1031763440")};
+    const Selection s = SelectRelease(official, "x64", feed, kServerUnix);
+    Check(s.code == 0 && s.newestCode == 0 && s.waitingCode == 0 && s.skipped.empty(),
+          "the official page offers and names nothing on the developer feed");
+  }
+  {
+    std::vector<Release> immutable = page;
+    for (Release& release : immutable) release.immutable = true;
+    const Selection s = SelectRelease(immutable, "x64", kOfficialFeed, listed);
+    Check(s.code == 0 && s.newestCode == 0 && s.waitingCode == 0 && s.skipped.empty(),
+          "the fork's page offers and names nothing on the official feed, immutable or not");
+  }
+  {
+    const Selection s = SelectRelease(live, "arm64", feed, published + 60);
+    Check(s.code == 0 && s.newestCode == 0,
+          "an arm64 PC is offered nothing on the developer feed: the fork publishes no arm64 MSI");
+    Check(!s.skipped.empty() && s.skipped[0].reason == "lacks URnetwork-2026.10.9-1067431400-beta-arm64.msi",
+          "and its newest release is skipped for lacking one");
+  }
+  {
+    // A row without a soak reads no time of a release (HasSoaked): one with
+    // none counts, and so does one published before the instant its code
+    // names.
+    Release timeless = live[0];
+    timeless.publishedAt.clear();
+    timeless.updatedAt.clear();
+    for (ReleaseAsset& asset : timeless.assets) asset.updatedAt.clear();
+    Check(SelectRelease({timeless}, "x64", feed, published + 60).code == 1067431400,
+          "a developer release with no times counts: the feed does not soak, so it reads none");
+    Release early = live[0];
+    early.publishedAt = early.updatedAt = FormatUtcSecond(CodeUnixSeconds(1067431400) - 60 * 60);
+    for (ReleaseAsset& asset : early.assets) asset.updatedAt = early.publishedAt;
+    Check(SelectRelease({early}, "x64", feed, published + 60).code == 1067431400,
+          "and so does one published an hour before the instant its code names");
+  }
+
+  // What the helper asks of the package it downloads (UpdateApply.h): the
+  // fork's newest MSI is release 1067431400, and one of its older scheme
+  // (ProductVersion yy.M.d) is no release at all, so every build the fork
+  // publishes must be stamped by UrVersion.ps1.
+  CheckEq("26.10.17311", UrMsiVersion(1067431400), "the MSI version release 1067431400 carries");
+  Check(PackageMatches(kUpgradeCode, "26.10.17311", 1067431400), "the fork's newest package is release 1067431400");
+  Check(!PackageMatches(kUpgradeCode, "26.10.9", 1067127790),
+        "a package of the fork's older scheme is not the release its code names: the fork's builds must be stamped");
+
+  // The download URL, compared whole.
+  const std::string tag = "v2026.10.9-1067431400-beta";
+  const std::string asset = "URnetwork-2026.10.9-1067431400-beta-x64.msi";
+  const std::string path = "/releases/download/" + tag + "/" + asset;
+  Check(IsFeedAssetUrl(feed, tag, asset, "https://github.com/Ryanmello07/urnetwork-windows" + path),
+        "the developer feed takes its own download URL");
+  Check(!IsFeedAssetUrl(feed, tag, asset, "https://github.com/ryanmello07/urnetwork-windows" + path),
+        "and refuses its owner in lower case: the URL is compared whole");
+  Check(!IsFeedAssetUrl(feed, tag, asset, "https://github.com/urnetwork/build" + path),
+        "and refuses the official feed's");
+  Check(!IsFeedAssetUrl(kOfficialFeed, tag, asset, "https://github.com/Ryanmello07/urnetwork-windows" + path),
+        "the official feed refuses the developer feed's download URL");
+
+  // An offer is checked again after five minutes. A new UTC day counts
+  // nothing new on a feed that does not soak.
+  Check(!OfferMayHaveChanged(feed, published, 4 * 60), "a developer offer is fresh four minutes after its check");
+  Check(OfferMayHaveChanged(feed, published, 6 * 60), "and is checked again after six");
+  const std::int64_t beforeMidnight = UtcDayStart(published) + kDay - 60;
+  Check(!OfferMayHaveChanged(feed, beforeMidnight, 2 * 60),
+        "and midnight UTC within five minutes changes nothing on the developer feed");
+  Check(OfferMayHaveChanged(kOfficialFeed, beforeMidnight, 2 * 60), "where it does on the official feed");
 }
 
 void NotOffered() {
@@ -1586,16 +1801,16 @@ void Channel() {
     Check(FeedOfMarker(ChannelMarker::Trusted).id == kDeveloperChannelId,
           "a trusted marker is the developer channel");
   } else {
-    Check(FeedOfMarker(ChannelMarker::Trusted).id == kOfficialFeed.id,
-          "a trusted marker is the official channel while the table has no developer row");
+    TakenOut(FeedOfMarker(ChannelMarker::Trusted).id == kOfficialFeed.id,
+             "a trusted marker is the official channel while the table has no developer row");
   }
 
   // ---- the helper's argument
-  Check(FeedOfChannelArgument("official") != nullptr &&
-            FeedOfChannelArgument("official")->id == kOfficialFeed.id,
-        "official is a channel argument");
-  Check((FeedOfChannelArgument("developer") != nullptr) == (developer != nullptr),
-        "developer is a channel argument exactly while the table has its row");
+  TakenOut(FeedOfChannelArgument("official") != nullptr &&
+               FeedOfChannelArgument("official")->id == kOfficialFeed.id,
+           "official is a channel argument");
+  TakenOut((FeedOfChannelArgument("developer") != nullptr) == (developer != nullptr),
+           "developer is a channel argument exactly while the table has its row");
   for (const std::string& bad : {std::string(), std::string("beta"), std::string("runner-test"),
                                 std::string("Developer"), std::string("OFFICIAL"), std::string("developer "),
                                 std::string(" official"), std::string("official\n"),
@@ -1620,7 +1835,7 @@ void Channel() {
   }
   Check(PlanOf(kOfficialFeed, ChannelMarker::Absent) == ChannelPlan::Nothing,
         "official with no marker has nothing to do");
-  Check(PlanOf(kOfficialFeed, ChannelMarker::Trusted) == ChannelPlan::Delete, "official deletes a trusted marker");
+  TakenOut(PlanOf(kOfficialFeed, ChannelMarker::Trusted) == ChannelPlan::Delete, "official deletes a trusted marker");
   Check(PlanOf(kOfficialFeed, ChannelMarker::Rejected) == ChannelPlan::Delete,
         "official deletes a marker that is not trusted");
 
@@ -1773,9 +1988,15 @@ void Channel() {
 }  // namespace
 
 int main(int argc, char** argv) {
+  int arg = 1;
+  if (arg < argc && std::string_view(argv[arg]) == "--feed-taken-out") {
+    gFeedTakenOut = true;
+    ++arg;
+  }
   FeedTable();
   AssetNames();
   RealReleaseList();
+  DeveloperFeed();
   NotOffered();
   ImmutableRequired();
   Prereleases();
@@ -1787,7 +2008,7 @@ int main(int argc, char** argv) {
   TheFeedAsListed();
   OneOfferADay();
   ClickAfterTheCheck();
-  MsiVersions(argc > 1 ? argv[1] : nullptr);
+  MsiVersions(arg < argc ? argv[arg] : nullptr);
   DownloadUrls();
   Redirects();
   InstallLocations();
