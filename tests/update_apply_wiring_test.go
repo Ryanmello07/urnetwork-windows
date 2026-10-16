@@ -498,23 +498,30 @@ func TestUpdateApplyUpgradeCodeIsThePackages(t *testing.T) {
 // project, props, targets and response file, and workflow. A helper built
 // with it says so in its FileDescription, and the release build and the
 // payload check refuse to package one, whatever passed the properties.
+//
+// No build has a default update channel either: every build follows the
+// official feed until an administrator turns the developer one on, for the
+// whole PC. A default would be a second thing that picks the feed, set where
+// a build host's environment reaches it (MSBuild reads variables as
+// properties), and the tray app and the helper are two projects that would
+// both have to get it. So no build input names one, whatever its value and
+// in any case, the helper's own project included.
 func checkRunnerFeedIsTestOnly(inputs map[string]string, project, resources, apply string,
 	sources map[string]string) []string {
 	var problems []string
-	feedDefault := regexp.MustCompile(`UrnUpdateFeedDefault=["']?([A-Za-z0-9_-]*)`)
 	for name, text := range inputs {
+		for _, setting := range []string{"URN_UPDATE_FEED_DEFAULT", "UrnUpdateFeedDefault", "UrnUpdateChannelDefault"} {
+			if strings.Contains(strings.ToLower(text), strings.ToLower(setting)) {
+				problems = append(problems, name+" names "+setting+
+					": no build picks the update channel, an administrator does")
+			}
+		}
 		if name == "app/src/Updater/Updater.vcxproj" {
 			continue
 		}
-		for _, setting := range []string{"UrnUpdateRunnerTest", "URN_UPDATE_RUNNER_TEST", "URN_UPDATE_FEED_DEFAULT_BETA"} {
+		for _, setting := range []string{"UrnUpdateRunnerTest", "URN_UPDATE_RUNNER_TEST"} {
 			if strings.Contains(text, setting) {
 				problems = append(problems, name+" sets "+setting+": official builds must poll the official feed")
-			}
-		}
-		for _, match := range feedDefault.FindAllStringSubmatch(text, -1) {
-			if match[1] != "official" {
-				problems = append(problems, name+" passes UrnUpdateFeedDefault="+match[1]+
-					": official builds must poll the official feed")
 			}
 		}
 	}
@@ -838,6 +845,26 @@ func TestUpdateApplyWiringRejectsWeakerHelpers(t *testing.T) {
 		}},
 		{"build.ps1 passes another feed", func() []string {
 			return runnerFeed(withInput("app/build.ps1", inputs["app/build.ps1"]+"\n/p:UrnUpdateFeedDefault=beta\n"))
+		}},
+		// No build-time default channel, each way the rejected design could
+		// come back (DESIGN-v2's /p:UrnUpdateFeedDefault=beta).
+		{"a props file names the official feed as the default", func() []string {
+			return runnerFeed(withInput("app/Directory.Build.props", inputs["app/Directory.Build.props"]+
+				"\n<PropertyGroup><UrnUpdateFeedDefault>official</UrnUpdateFeedDefault></PropertyGroup>\n"))
+		}},
+		{"the helper's project maps a feed default", func() []string {
+			return runnerFeed(withInput("app/src/Updater/Updater.vcxproj", replace(inputs["app/src/Updater/Updater.vcxproj"],
+				"  <Target Name=\"UrnCheckRunnerTestFeed\" BeforeTargets=\"ClCompile\">\n",
+				"  <ItemDefinitionGroup Condition=\"'$(UrnUpdateFeedDefault)'!=''\">\n"+
+					"    <ClCompile>\n      <PreprocessorDefinitions>URN_UPDATE_FEED_DEFAULT_DEVELOPER;%(PreprocessorDefinitions)</PreprocessorDefinitions>\n    </ClCompile>\n"+
+					"  </ItemDefinitionGroup>\n"+
+					"  <Target Name=\"UrnCheckRunnerTestFeed\" BeforeTargets=\"ClCompile\">\n")))
+		}},
+		{"a workflow passes a channel default in another case", func() []string {
+			return runnerFeed(withInput(".github/workflows/extra.yml", "run: msbuild /p:urnupdatechanneldefault=developer"))
+		}},
+		{"build.ps1 sets a feed default in the environment", func() []string {
+			return runnerFeed(withInput("app/build.ps1", inputs["app/build.ps1"]+"\n$env:UrnUpdateFeedDefault = 'developer'\n"))
 		}},
 		{"a workflow passes a runner feed", func() []string {
 			return runnerFeed(withInput(".github/workflows/extra.yml", "run: msbuild /p:UrnUpdateRunnerTestRepoId=1"))
