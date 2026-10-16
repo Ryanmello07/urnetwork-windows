@@ -52,10 +52,13 @@ update::DescriptorFacts ReadDescriptorFacts(const std::filesystem::path& path);
 std::filesystem::path ChannelMarkerPath(const std::filesystem::path& installFolder);
 
 // That marker, its facts read in order and judged (UpdateChannel.h
-// JudgeMarker). `why` says why one is not trusted.
+// JudgeMarker). `why` says why one is not trusted, and `present`, when given,
+// whether something lies under its name that switching to official removes
+// (MarkerJudgement::present).
 // The tray app and the update helper both read the channel here and nowhere
 // else, so the two follow one feed. It reads nothing but those two names'
 // attributes and descriptors: no file's data, no registry, no environment.
-update::ChannelMarker ReadChannelMarker(const std::filesystem::path& installFolder, std::string& why);
+update::ChannelMarker ReadChannelMarker(const std::filesystem::path& installFolder, std::string& why,
+                                        bool* present = nullptr);
 
 }  // namespace urnw::install

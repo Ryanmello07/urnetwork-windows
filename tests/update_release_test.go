@@ -708,6 +708,16 @@ func TestUpdateReleaseRejectsWeakerDecisions(t *testing.T) {
 			"return marker == ChannelMarker::Absent ? ChannelPlan::Nothing : ChannelPlan::Delete;",
 			"return marker != ChannelMarker::Trusted ? ChannelPlan::Nothing : ChannelPlan::Delete;",
 			"official deletes a marker that is not trusted"},
+		// S14 where one of its sentences is untrue (the A2c review's C1 and B5):
+		// for any marker that is not trusted, or for one under a junction
+		{"S14 for any marker that is not trusted", "UpdateChannel.h",
+			"  } else if (marker == ChannelMarker::Rejected && view.markerPresent && canChange) {",
+			"  } else if (marker == ChannelMarker::Rejected) {",
+			"S14 only with something not trusted under the marker's name and the button that removes it"},
+		{"a marker under a junction said to be there to remove", "UpdateChannel.h",
+			`  if (!IsPlainFolder(folder)) return {ChannelMarker::Rejected, "updates\\ is not a plain folder"};`,
+			`  if (!IsPlainFolder(folder)) return {ChannelMarker::Rejected, "updates\\ is not a plain folder", marker.found == Found::Present};`,
+			"nothing under a junction or a file named updates is there to remove"},
 		{"exit 0 taken for a change", "UpdateChannel.h",
 			"  // a request this app refused at once started nothing\n",
 			"  if (change.startError == 0 && change.exitCode == 0) return ChangeLine::None;\n  // a request this app refused at once started nothing\n",

@@ -1722,7 +1722,7 @@ std::string Describe(const ChannelView& view) {
   constexpr const char* kChanges[] = {"none", "asking", "unchanged", "unsigned", "busy", "failed"};
   return std::string(view.installed ? "installed" : "portable") + (view.codeZero ? ", code 0" : "") +
          (view.developerBuild ? ", a developer build" : "") + ", marker " +
-         kMarkers[static_cast<int>(view.marker)] +
+         kMarkers[static_cast<int>(view.marker)] + (view.markerPresent ? " (something under its name)" : "") +
          (view.developerRow ? ", the row in the table" : ", no row") + ", change " +
          kChanges[static_cast<int>(view.change)] + (view.foundNothingNewer ? ", nothing newer" : "") +
          (view.releaseCounts ? ", a release counts" : "") + (view.releaseWaiting ? ", one waiting" : "");
@@ -1744,6 +1744,10 @@ void Channel() {
         JudgeMarker(FolderFacts(), FolderDescriptor(), MarkerFacts(), MarkerDescriptor());
     const MarkerJudgement none = JudgeMarker(FolderFacts(), FolderDescriptor(), absent, {});
     Check(trusted.why.empty() && none.why.empty(), "a marker trusted or absent gives no reason");
+    // what lies under the marker's name in a plain updates\ is there to be
+    // removed, and nothing else is (S14, MarkerJudgement::present)
+    Check(trusted.present && !none.present && !JudgeMarker(absent, {}, absent, {}).present,
+          "the helper's marker is there to remove, and no marker or no folder is not");
   }
   for (const PathFacts& folder :
        {PathFacts{.found = Found::Present, .attributes = kAttributeDirectory | kAttributeReparsePoint, .size = 0},
@@ -1752,6 +1756,9 @@ void Channel() {
       const MarkerJudgement judged = JudgeMarker(folder, FolderDescriptor(), marker, MarkerDescriptor());
       Check(judged.marker == ChannelMarker::Rejected && !judged.why.empty(),
             "a marker in a folder that is not the helper's is not trusted: a reparse point or a file");
+      // the helper refuses an updates\ that is no plain folder, so it removes
+      // nothing through it: S14 would promise what the button cannot do
+      Check(!judged.present, "nothing under a junction or a file named updates is there to remove");
     }
   }
   for (const auto& [what, descriptor] : NotTheHelpers(FolderDescriptor(), /*inheritable=*/true)) {
@@ -1759,6 +1766,10 @@ void Channel() {
       const MarkerJudgement judged = JudgeMarker(FolderFacts(), descriptor, marker, MarkerDescriptor());
       Check(judged.marker == ChannelMarker::Rejected && !judged.why.empty(),
             "a marker in a folder that is not the helper's is not trusted: " + what);
+      // the helper takes an open plain folder back and removes what lies
+      // under the marker's name in it (TakeHelperLock)
+      Check(judged.present == (marker.found == Found::Present),
+            "a marker in an open plain folder is there to remove, and no marker is not: " + what);
     }
     Check(!IsHelpersFolder(FolderFacts(), descriptor), "a folder with " + what + " is not the helper's");
   }
@@ -1769,15 +1780,21 @@ void Channel() {
         PathFacts{.found = Found::Present, .attributes = 0x20, .size = 1}}) {
     Check(Judge(FolderFacts(), FolderDescriptor(), marker, MarkerDescriptor()) == ChannelMarker::Rejected,
           "a marker that is not an empty plain file is not trusted: a folder, a link or bytes");
+    Check(JudgeMarker(FolderFacts(), FolderDescriptor(), marker, MarkerDescriptor()).present,
+          "a folder, a link or bytes under the marker's name is there to remove");
   }
   for (const auto& [what, descriptor] : NotTheHelpers(MarkerDescriptor(), /*inheritable=*/false)) {
     Check(Judge(FolderFacts(), FolderDescriptor(), MarkerFacts(), descriptor) == ChannelMarker::Rejected,
           "a marker with any ACE but its three is not trusted: " + what);
+    Check(JudgeMarker(FolderFacts(), FolderDescriptor(), MarkerFacts(), descriptor).present,
+          "a marker with any ACE but its three is there to remove: " + what);
   }
   for (const auto& [folder, marker] : {std::pair{PathFacts{.found = Found::Unreadable}, absent},
                                        std::pair{FolderFacts(), PathFacts{.found = Found::Unreadable}}}) {
     Check(Judge(folder, FolderDescriptor(), marker, MarkerDescriptor()) == ChannelMarker::Rejected,
           "a fact that could not be read is not trusted");
+    Check(!JudgeMarker(folder, FolderDescriptor(), marker, MarkerDescriptor()).present,
+          "what could not be read is not said to be there");
   }
   // What else the helper writes cannot pass for the marker: the lock file
   // lets Users do nothing, and its other files let Users read.
@@ -1892,7 +1909,11 @@ void Channel() {
   for (const bool installed : {false, true}) {
     for (const bool codeZero : {false, true}) {
       for (const bool developerBuild : {false, true}) {
-        for (const ChannelMarker marker : {ChannelMarker::Absent, ChannelMarker::Trusted, ChannelMarker::Rejected}) {
+        // each marker, with something under its name or not
+        for (const auto& [marker, present] :
+             {std::pair{ChannelMarker::Absent, false}, std::pair{ChannelMarker::Absent, true},
+              std::pair{ChannelMarker::Trusted, false}, std::pair{ChannelMarker::Trusted, true},
+              std::pair{ChannelMarker::Rejected, false}, std::pair{ChannelMarker::Rejected, true}}) {
           for (const bool developerRow : {false, true}) {
             for (const ChangeLine asked : {ChangeLine::None, ChangeLine::Asking, ChangeLine::Unchanged,
                                            ChangeLine::Unsigned, ChangeLine::Busy, ChangeLine::Failed}) {
@@ -1904,6 +1925,7 @@ void Channel() {
                                            .codeZero = codeZero,
                                            .developerBuild = developerBuild,
                                            .marker = marker,
+                                           .markerPresent = present,
                                            .developerRow = developerRow,
                                            .change = asked,
                                            .foundNothingNewer = nothingNewer,
@@ -1914,13 +1936,27 @@ void Channel() {
                     const bool readsMarker = installed && !codeZero;
                     const bool onDeveloper = readsMarker && marker == ChannelMarker::Trusted && developerRow;
                     const bool canChange = readsMarker && developerRow;
+                    // S14's two sentences: a marker there and not trusted, and
+                    // the button that removes it built
+                    const bool untrusted = marker == ChannelMarker::Rejected && present && canChange;
                     const ChannelSentence first =
                         codeZero                                         ? ChannelSentence::DevBuild
                         : !installed                                     ? ChannelSentence::NotInstalled
-                        : marker == ChannelMarker::Rejected              ? ChannelSentence::Untrusted
+                        : untrusted                                      ? ChannelSentence::Untrusted
                         : onDeveloper                                    ? ChannelSentence::Developer
                                                                          : ChannelSentence::Official;
                     Check(lines.channel == first, "the channel's sentence is the first that holds: " + where);
+                    Check((lines.channel == ChannelSentence::Untrusted) == untrusted &&
+                              (lines.channel != ChannelSentence::Untrusted || lines.repairButton),
+                          "S14 only with something not trusted under the marker's name and the button that "
+                          "removes it: " +
+                              where);
+                    if (readsMarker && marker == ChannelMarker::Rejected && !untrusted) {
+                      Check(lines.channel == ChannelSentence::Official && !lines.repairButton,
+                            "a marker that is not trusted and that no button here removes says what the official "
+                            "channel says: " +
+                                where);
+                    }
                     Check((lines.channel == ChannelSentence::Developer) == onDeveloper &&
                               lines.switchOn == onDeveloper,
                           "S5 only with a trusted marker, and the switch on exactly then: " + where);
@@ -1969,8 +2005,10 @@ void Channel() {
                     Check(lines.settingsBuildSentence == (lines.settingsRow && lines.buildSentence) &&
                               lines.settingsWhere == (lines.settingsBuildSentence && canChange),
                           "Settings says S15, and then S13 where the channel can be changed: " + where);
-                    Check(lines.settingsButton == (canChange && marker != ChannelMarker::Absent),
-                          "Settings offers the way off the channel under any marker: " + where);
+                    Check(lines.settingsButton == (canChange && (marker == ChannelMarker::Trusted || untrusted)),
+                          "Settings offers the way off the channel, or off a marker it can remove: " + where);
+                    Check(!lines.settingsRow || lines.settingsNote != ChannelNote::Untrusted || lines.settingsButton,
+                          "Settings says S14 only beside the button that removes the marker: " + where);
                     Check(lines.aboutUpToDate == (!onDeveloper && !developerBuild),
                           "About never says up to date on the developer feed or for a developer build: " + where);
                   }
@@ -1982,7 +2020,7 @@ void Channel() {
       }
     }
   }
-  Check(views == 2 * 2 * 2 * 3 * 2 * 6 * 2 * 2 * 2, "every state a copy can be in is judged");
+  Check(views == 2 * 2 * 2 * (3 * 2) * 2 * 6 * 2 * 2 * 2, "every state a copy can be in is judged");
 }
 
 }  // namespace

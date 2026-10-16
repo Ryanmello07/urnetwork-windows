@@ -582,7 +582,7 @@ func checkChannelVerb(apply, location string) []string {
 	problems = append(problems, applyOrderProblems("ChannelMarkerPath",
 		applyDefinition(location, "fs::path ChannelMarkerPath(const fs::path& installFolder) {"),
 		regexp.QuoteMeta(`return installFolder / L"updates" / L"developer-channel";`))...)
-	reader := applyDefinition(location, "update::ChannelMarker ReadChannelMarker(const fs::path& installFolder, std::string& why) {")
+	reader := applyDefinition(location, "update::ChannelMarker ReadChannelMarker(const fs::path& installFolder, std::string& why, bool* present) {")
 	problems = append(problems, applyOrderProblems("ReadChannelMarker", reader,
 		regexp.QuoteMeta(`const fs::path updates = installFolder / L"updates";`),
 		regexp.QuoteMeta("const fs::path marker = ChannelMarkerPath(installFolder);"),
@@ -591,6 +591,7 @@ func checkChannelVerb(apply, location string) []string {
 		regexp.QuoteMeta("markerFacts = ReadPathFacts(marker);"),
 		regexp.QuoteMeta("markerDescriptor = ReadDescriptorFacts(marker);"),
 		regexp.QuoteMeta("update::JudgeMarker(folderFacts, folderDescriptor, markerFacts, markerDescriptor);"),
+		regexp.QuoteMeta("if (present) *present = judged.present;"),
 		regexp.QuoteMeta("return judged.marker;"))...)
 	problems = append(problems, applyOrderProblems("ReadPathFacts", applyDefinition(location, "update::PathFacts ReadPathFacts(const fs::path& path) {"),
 		regexp.QuoteMeta("::GetFileAttributesExW(path.c_str(), GetFileExInfoStandard, &data)"),
@@ -2150,14 +2151,14 @@ func checkTrayFollowsTheChannel(checker, window string, appSources map[string]st
 	problems = append(problems, applyOrderProblems("UpdateChecker::Start", applyDefinition(checker, "void UpdateChecker::Start() {"),
 		regexp.QuoteMeta("installed_ = !exe.empty() && install::AdminOnlyLocation(installFolder_ / kHelperName, why);"),
 		regexp.QuoteMeta("if (installed_ && version::kCode != 0) {"),
-		regexp.QuoteMeta("install::ReadChannelMarker(installFolder_, channelWhy);"),
+		regexp.QuoteMeta("install::ReadChannelMarker(installFolder_, channelWhy, &markerPresent);"),
 		regexp.QuoteMeta("feed_ = &update::FeedOfMarker(marker);"),
 		regexp.QuoteMeta("snapshot_.feed = feed_;"),
 		regexp.QuoteMeta("worker_ = std::thread("))...)
 	sync := applyDefinition(checker, "void UpdateChecker::SyncChannel() {")
 	problems = append(problems, applyOrderProblems("UpdateChecker::SyncChannel", sync,
 		regexp.QuoteMeta("if (!installed_ || version::kCode == 0) return;"),
-		regexp.QuoteMeta("install::ReadChannelMarker(installFolder_, why);"),
+		regexp.QuoteMeta("install::ReadChannelMarker(installFolder_, why, &markerPresent);"),
 		regexp.QuoteMeta("const update::Feed& feed = update::FeedOfMarker(marker);"),
 		regexp.QuoteMeta("std::lock_guard lock(mutex_);"),
 		regexp.QuoteMeta("changed = feed.id != feed_->id;"),
@@ -2248,7 +2249,8 @@ func checkTrayFollowsTheChannel(checker, window string, appSources map[string]st
 		problems = append(problems, fmt.Sprintf("UpdateChecker.cpp builds a snapshot from scratch %d times, want the two that keep the channel", len(rebuilds)))
 	}
 	for _, rebuild := range rebuilds {
-		if !strings.Contains(rebuild, ".feed = feed_,") || !strings.Contains(rebuild, ".marker = snapshot_.marker") {
+		if !strings.Contains(rebuild, ".feed = feed_,") || !strings.Contains(rebuild, ".marker = snapshot_.marker,") ||
+			!strings.Contains(rebuild, ".markerPresent = snapshot_.markerPresent") {
 			problems = append(problems, "a snapshot built from scratch drops the update channel: "+rebuild)
 		}
 	}
@@ -2276,28 +2278,30 @@ func checkTrayFollowsTheChannel(checker, window string, appSources map[string]st
 	}
 	// What every surface draws is the marker as read (the lead's G17):
 	// ChannelLinesOf's whole body, its whitespace folded, and the snapshot's
-	// marker written where it is read, in Start and in SyncChannel, and nowhere
-	// else. A write elsewhere would show what was asked.
-	if body := foldedBody(checker, "update::ChannelLines UpdateChecker::ChannelLinesOf(Snapshot const& snapshot) {"); body != "return update::LinesOf( {.installed = snapshot.installed, .codeZero = version::kCode == 0, .developerBuild = update::IsBetaVersion(version::kString), .marker = snapshot.marker, .developerRow = update::FeedById(update::kDeveloperChannelId) != nullptr, .change = snapshot.change, .foundNothingNewer = snapshot.lastCheck == CheckOutcome::NoUpdate, .releaseCounts = snapshot.newestCode != 0, .releaseWaiting = NamesWaiting(snapshot)});" {
+	// marker, and whether something lies under its name, written where they
+	// are read, in Start and in SyncChannel, and nowhere else. A write
+	// elsewhere would show what was asked.
+	if body := foldedBody(checker, "update::ChannelLines UpdateChecker::ChannelLinesOf(Snapshot const& snapshot) {"); body != "return update::LinesOf( {.installed = snapshot.installed, .codeZero = version::kCode == 0, .developerBuild = update::IsBetaVersion(version::kString), .marker = snapshot.marker, .markerPresent = snapshot.markerPresent, .developerRow = update::FeedById(update::kDeveloperChannelId) != nullptr, .change = snapshot.change, .foundNothingNewer = snapshot.lastCheck == CheckOutcome::NoUpdate, .releaseCounts = snapshot.newestCode != 0, .releaseWaiting = NamesWaiting(snapshot)});" {
 		problems = append(problems, fmt.Sprintf("UpdateChecker::ChannelLinesOf is %q, want LinesOf's view of the snapshot, its marker as read", body))
 	}
 	start := applyDefinition(checker, "void UpdateChecker::Start() {")
-	for _, write := range regexp.MustCompile(`(\w*)(?:\.|->)marker\s*=([^=][^;,}]*)`).FindAllStringSubmatch(checker, -1) {
-		switch to, from := write[1], strings.TrimSpace(write[2]); {
-		case to == "snapshot_" && from == "marker":
+	for _, write := range regexp.MustCompile(`(\w*)(?:\.|->)(marker(?:Present)?)\s*=([^=][^;,}]*)`).FindAllStringSubmatch(checker, -1) {
+		switch to, field, from := write[1], write[2], strings.TrimSpace(write[3]); {
+		case to == "snapshot_" && from == field:
 			// as read, in Start and SyncChannel (counted below)
-		case to == "" && from == "snapshot_.marker":
+		case to == "" && from == "snapshot_."+field:
 			// a snapshot rebuilt from scratch keeps the one it had
-		case to == "" && from == "snapshot.marker":
+		case to == "" && from == "snapshot."+field:
 			// ChannelLinesOf's view, pinned whole above
 		default:
 			problems = append(problems, fmt.Sprintf("UpdateChecker.cpp sets a marker as %q: the snapshot's marker is written where Start "+
 				"and SyncChannel read it and copied as it is, so a screen shows the marker as read, never what was asked", write[0]))
 		}
 	}
-	if strings.Count(checker, "snapshot_.marker = marker;") != 2 || strings.Count(start, "snapshot_.marker = marker;") != 1 ||
-		strings.Count(sync, "snapshot_.marker = marker;") != 1 {
-		problems = append(problems, "UpdateChecker.cpp does not write the snapshot's marker exactly where Start and SyncChannel read it")
+	for _, write := range []string{"snapshot_.marker = marker;", "snapshot_.markerPresent = markerPresent;"} {
+		if strings.Count(checker, write) != 2 || strings.Count(start, write) != 1 || strings.Count(sync, write) != 1 {
+			problems = append(problems, "UpdateChecker.cpp does not write "+write+" exactly where Start and SyncChannel read the marker")
+		}
 	}
 	return problems
 }
@@ -2377,7 +2381,16 @@ func TestUpdateApplyTrayFollowsTheChannelRejectsWeakerSources(t *testing.T) {
 				"    const bool ownUpdate = false;\n"))
 		}},
 		{"a snapshot built from scratch without the channel", "a snapshot built from scratch drops the update channel", func() []string {
-			return follows(replace(checker, "                           .feed = feed_,\n                           .marker = snapshot_.marker};", "};"))
+			return follows(replace(checker, "                           .feed = feed_,\n                           .marker = snapshot_.marker,\n"+
+				"                           .markerPresent = snapshot_.markerPresent};", "};"))
+		}},
+		{"a snapshot built from scratch without what lies under the marker's name", "a snapshot built from scratch drops the update channel", func() []string {
+			return follows(replace(checker, "                             .markerPresent = snapshot_.markerPresent,\n", ""))
+		}},
+		// S14 said whatever the reader found under the marker's name
+		{"the screens told something lies under the marker's name, always", `UpdateChecker.cpp sets a marker as "snapshot_.markerPresent = true`, func() []string {
+			return follows(replace(checker, "    snapshot_.markerPresent = markerPresent;\n    changed = feed.id != feed_->id;\n",
+				"    snapshot_.markerPresent = true;\n    changed = feed.id != feed_->id;\n"))
 		}},
 		{"a report's banner left on the old feed", `UpdateChecker::ChannelChanged is missing snapshot_\.feed = feed_;`, func() []string {
 			return follows(replace(checker, "    snapshot_.feed = feed_;\n    snapshot_.change = update::ChangeLine::None;\n", "    snapshot_.change = update::ChangeLine::None;\n"))

@@ -514,9 +514,11 @@ void UpdateChecker::Start() {
   // the official feed, reading no marker (UpdateChannel.h).
   if (installed_ && version::kCode != 0) {
     std::string channelWhy;
-    const update::ChannelMarker marker = install::ReadChannelMarker(installFolder_, channelWhy);
+    bool markerPresent = false;
+    const update::ChannelMarker marker = install::ReadChannelMarker(installFolder_, channelWhy, &markerPresent);
     feed_ = &update::FeedOfMarker(marker);
     snapshot_.marker = marker;
+    snapshot_.markerPresent = markerPresent;
     if (marker == update::ChannelMarker::Rejected) {
       LogWarn("update: the update channel's marker is not trusted ({}); official releases are followed",
               channelWhy);
@@ -672,7 +674,8 @@ void UpdateChecker::ChannelChanged() {
                            .checkStale = snapshot_.checkStale,
                            .holdUntilUnix = snapshot_.holdUntilUnix,
                            .feed = feed_,
-                           .marker = snapshot_.marker};
+                           .marker = snapshot_.marker,
+                           .markerPresent = snapshot_.markerPresent};
     }
     // a report's banner keeps its snapshot, and follows the new feed too;
     // a change seen is the end of any line about the last one asked for
@@ -828,6 +831,7 @@ update::ChannelLines UpdateChecker::ChannelLinesOf(Snapshot const& snapshot) {
        .codeZero = version::kCode == 0,
        .developerBuild = update::IsBetaVersion(version::kString),
        .marker = snapshot.marker,
+       .markerPresent = snapshot.markerPresent,
        .developerRow = update::FeedById(update::kDeveloperChannelId) != nullptr,
        .change = snapshot.change,
        .foundNothingNewer = snapshot.lastCheck == CheckOutcome::NoUpdate,
@@ -1140,7 +1144,8 @@ void UpdateChecker::SyncChannel() {
   // other copy follows the official feed and reads nothing (Start)
   if (!installed_ || version::kCode == 0) return;
   std::string why;
-  const update::ChannelMarker marker = install::ReadChannelMarker(installFolder_, why);
+  bool markerPresent = false;
+  const update::ChannelMarker marker = install::ReadChannelMarker(installFolder_, why, &markerPresent);
   const update::Feed& feed = update::FeedOfMarker(marker);
   bool changed = false;
   bool newlyRejected = false;
@@ -1149,6 +1154,7 @@ void UpdateChecker::SyncChannel() {
     std::lock_guard lock(mutex_);
     newlyRejected = marker == update::ChannelMarker::Rejected && snapshot_.marker != marker;
     snapshot_.marker = marker;
+    snapshot_.markerPresent = markerPresent;
     changed = feed.id != feed_->id;
     if (changed) feed_ = &feed;
     copy = snapshot_;
@@ -1420,6 +1426,7 @@ bool UpdateChecker::RunCheck(std::uint64_t generation) {
                              .newestCode = newestCode,
                              .feed = feed_,
                              .marker = snapshot_.marker,
+                             .markerPresent = snapshot_.markerPresent,
                              .change = snapshot_.change,
                              .changeCode = snapshot_.changeCode};
       }

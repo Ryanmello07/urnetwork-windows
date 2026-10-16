@@ -351,7 +351,7 @@ fs::path ChannelMarkerPath(const fs::path& installFolder) {
   return installFolder / L"updates" / L"developer-channel";
 }
 
-update::ChannelMarker ReadChannelMarker(const fs::path& installFolder, std::string& why) {
+update::ChannelMarker ReadChannelMarker(const fs::path& installFolder, std::string& why, bool* present) {
   const fs::path updates = installFolder / L"updates";
   const fs::path marker = ChannelMarkerPath(installFolder);
   update::PathFacts folderFacts = ReadPathFacts(updates);
@@ -368,6 +368,7 @@ update::ChannelMarker ReadChannelMarker(const fs::path& installFolder, std::stri
   const update::MarkerJudgement judged =
       update::JudgeMarker(folderFacts, folderDescriptor, markerFacts, markerDescriptor);
   why.assign(judged.why);
+  if (present) *present = judged.present;
   return judged.marker;
 }
 

@@ -250,6 +250,9 @@ class UpdateChecker {
     // The update channel's marker as last read: Absent on a copy that reads
     // none (a portable copy, a dev build).
     update::ChannelMarker marker = update::ChannelMarker::Absent;
+    // ...and whether something lay under its name that switching to official
+    // removes (UpdateChannel.h MarkerJudgement::present), read with it.
+    bool markerPresent = false;
     // A change of channel this app asked for: Asking while Windows' prompt
     // or the helper's question is up, then the line ChangeLineOf gave, until
     // the next request or the next change of channel this app sees.

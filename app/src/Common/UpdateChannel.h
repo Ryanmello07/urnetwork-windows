@@ -28,9 +28,11 @@
 // consulted, so every account on the PC reads the same answer.
 //
 // A marker that is there and not trusted is the official channel, with the
-// reason logged; switching to official removes it. Nothing here reads a
-// clock, a file or the environment: tools/update-release-tests.cpp runs it on
-// any host.
+// reason logged. Where updates\ is a plain folder, switching to official
+// removes what lies under the marker's name, and the surfaces say so (S14);
+// anywhere else they say what the official channel says. Nothing here reads
+// a clock, a file or the environment: tools/update-release-tests.cpp runs it
+// on any host.
 //
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
@@ -161,6 +163,12 @@ struct MarkerJudgement {
   ChannelMarker marker = ChannelMarker::Absent;
   // Why a marker was rejected, for the log; empty otherwise.
   std::string_view why;
+  // Something lies under the marker's name in a plain updates\ folder,
+  // trusted or not: what `--set-update-channel official` removes (a folder
+  // with files in it excepted, since the helper removes nothing
+  // recursively). The surfaces say S14 only then (LinesOf); the feed is the
+  // verdict's alone (FeedOfMarker).
+  bool present = false;
 };
 
 // What the facts say, judged in the reader's order: updates\, then the
@@ -175,20 +183,23 @@ inline MarkerJudgement JudgeMarker(const PathFacts& folder, const DescriptorFact
     return {ChannelMarker::Rejected, "updates\\ could not be read"};
   }
   if (!IsPlainFolder(folder)) return {ChannelMarker::Rejected, "updates\\ is not a plain folder"};
+  // updates\ is a plain folder from here on: what lies under the marker's
+  // name in it, the helper can remove
+  const bool present = marker.found == Found::Present;
   if (!HasFolderDescriptor(folderDescriptor)) {
-    return {ChannelMarker::Rejected, "updates\\ does not carry the update helper's security"};
+    return {ChannelMarker::Rejected, "updates\\ does not carry the update helper's security", present};
   }
   if (marker.found == Found::Absent) return {ChannelMarker::Absent, {}};
   if (marker.found == Found::Unreadable) {
     return {ChannelMarker::Rejected, "the channel marker could not be read"};
   }
   if (!IsPlainEmptyFile(marker)) {
-    return {ChannelMarker::Rejected, "the channel marker is not an empty plain file"};
+    return {ChannelMarker::Rejected, "the channel marker is not an empty plain file", present};
   }
   if (!HasMarkerDescriptor(markerDescriptor)) {
-    return {ChannelMarker::Rejected, "the channel marker does not carry the update helper's security"};
+    return {ChannelMarker::Rejected, "the channel marker does not carry the update helper's security", present};
   }
-  return {ChannelMarker::Trusted, {}};
+  return {ChannelMarker::Trusted, {}, present};
 }
 
 // The feed a marker selects: the developer row for a trusted one, while the
@@ -320,6 +331,9 @@ struct ChannelView {
   // The marker as read. A copy reads one only when installed with a code
   // that is not 0; any other copy is on the official feed whatever this says.
   ChannelMarker marker = ChannelMarker::Absent;
+  // ...and whether something lies under its name that switching to official
+  // removes (MarkerJudgement::present).
+  bool markerPresent = false;
   bool developerRow = false;    // FeedById(kDeveloperChannelId) resolves
   ChangeLine change = ChangeLine::None;
   // The last check found nothing newer than this build.
@@ -334,7 +348,7 @@ struct ChannelView {
 enum class ChannelSentence {
   DevBuild,      // S12: code 0 has no channel
   NotInstalled,  // S11: a portable copy follows official releases
-  Untrusted,     // S14: the marker is there and not trusted
+  Untrusted,     // S14: a marker there, not trusted, and the button that removes it
   Developer,     // S5: on the developer feed
   Official,      // S4: on the official feed
 };
@@ -397,7 +411,11 @@ inline ChannelLines LinesOf(const ChannelView& view) {
     lines.channel = ChannelSentence::DevBuild;
   } else if (!view.installed) {
     lines.channel = ChannelSentence::NotInstalled;
-  } else if (marker == ChannelMarker::Rejected) {
+  } else if (marker == ChannelMarker::Rejected && view.markerPresent && canChange) {
+    // S14 says both of its sentences only where both are true: something
+    // not trusted lies under the marker's name, and the button that removes
+    // it is built. Any other marker that is not trusted says what the
+    // official channel says, as its feed is official's (the lead's G17).
     lines.channel = ChannelSentence::Untrusted;
   } else if (onDeveloper) {
     lines.channel = ChannelSentence::Developer;
