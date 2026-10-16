@@ -622,21 +622,34 @@ void ConnectPage::ApplyServiceSetup(urnw::ServiceSetup::Snapshot const& snap) {
   bar.IsOpen(true);
 }
 
-// The update banner (beta spec §5). Renders MainWindow's snapshot copy onto
-// UpdateBar, directly under the service bar — same shape, same one-writer
-// rule. Labels go through Adv() with `upd_` store ids, as the service bar's
-// use `svc_`. The version is data (release grammar, never translated) and goes
-// in through the title's placeholder; paths and exit codes are appended as
-// data. The sentences the elevated update and the official feed added have no
-// store ids yet, so they are English here until the store carries them for
-// windows; each is one format string, so its key takes its place as written.
+// The update banner (beta spec §5): MainWindow's snapshot copy, rendered onto
+// UpdateBar by the renderer both update banners share. The bar is pinned
+// under the pane's scroller, so its row is never under the status strip; it
+// is collapsed while closed, so with nothing to say it takes no room from the
+// column above it.
 void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) {
+  auto bar = w_.UpdateBar();
+  RenderUpdateBanner(bar, snap);
+  bar.Visibility(bar.IsOpen() ? winrt::Microsoft::UI::Xaml::Visibility::Visible
+                              : winrt::Microsoft::UI::Xaml::Visibility::Collapsed);
+}
+
+// An update banner (beta spec §5), the connect screen's UpdateBar or the
+// sign-in screen's SignedOutUpdateBar: one renderer for both, so a signed-out
+// copy is offered what a signed-in one is — same shape as the service bar,
+// same one-writer rule. Labels go through Adv() with `upd_` store ids, as the
+// service bar's use `svc_`. The version is data (release grammar, never
+// translated) and goes in through the title's placeholder; paths and exit
+// codes are appended as data. The sentences the elevated update and the
+// official feed added have no store ids yet, so they are English here until
+// the store carries them for windows; each is one format string, so its key
+// takes its place as written.
+void ConnectPage::RenderUpdateBanner(InfoBar const& bar, urnw::UpdateChecker::Snapshot const& snap) {
   using Phase = urnw::UpdateChecker::Phase;
   using Stage = urnw::UpdateChecker::Stage;
   using Failure = urnw::UpdateChecker::Failure;
   using CheckOutcome = urnw::UpdateChecker::CheckOutcome;
   using InfoBarSeverity = winrt::Microsoft::UI::Xaml::Controls::InfoBarSeverity;
-  auto bar = w_.UpdateBar();
   // The bar's two controls are one row, its content, which MainWindow
   // builds: the action button first, then Later.
   winrt::Microsoft::UI::Xaml::Controls::Button actionButton{nullptr};
@@ -819,7 +832,11 @@ void ConnectPage::ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap) 
 // failure: the new product is registered and its service runs, and the files
 // that were in use are replaced when Windows restarts. Whenever msiexec ran,
 // it stopped the VPN session with the service, and the app does not connect
-// by itself, so the banner says so.
+// by itself: the banner says so, unless it is known that no VPN was connected
+// as the update began, or the report is shown again
+// (UpdateChecker::Result::vpn, UpdateMarker.h SaysVpnDisconnected). A copy
+// that had none is not told it lost one; where the record this launch took
+// does not say, the line stays, as before.
 winrt::Microsoft::UI::Xaml::Controls::InfoBarSeverity ConnectPage::ApplyUpdateResult(
     urnw::UpdateChecker::Snapshot const& snap, winrt::hstring& title, std::wstring& message) {
   using InfoBarSeverity = winrt::Microsoft::UI::Xaml::Controls::InfoBarSeverity;
@@ -830,21 +847,24 @@ winrt::Microsoft::UI::Xaml::Controls::InfoBarSeverity ConnectPage::ApplyUpdateRe
   const std::wstring log = result.logPath.empty() ? std::wstring{} : L", log: " + result.logPath;
   constexpr wchar_t kReconnect[] =
       L"The VPN was disconnected for the update; connect again to protect this device.";
+  // The line about the VPN, after a sentence of the message, or nothing.
+  const bool reconnect = urnw::update::SaysVpnDisconnected(result.vpn);
+  const std::wstring vpn = reconnect ? std::wstring{L" "} + kReconnect : std::wstring{};
   switch (result.view) {
     case ReportView::Installed:
       title = winrt::hstring{L"Updated to v" + result.version};
-      message = kReconnect;
+      if (reconnect) message = kReconnect;
       return InfoBarSeverity::Success;
     case ReportView::RestartApp:
       title = winrt::hstring{L"Restart URnetwork to finish the update to v" + result.version};
       message = std::wstring{L"The new version is installed, and the one running is still v"} +
-                current + L". Quit URnetwork from its tray icon and start it again. " + kReconnect;
+                current + L". Quit URnetwork from its tray icon and start it again." + vpn;
       return InfoBarSeverity::Warning;
     case ReportView::RestartWindows:
       title = winrt::hstring{L"Restart Windows to finish the update to v" + result.version};
       message = std::wstring{L"The new version is installed and its service is running. Files "
-                             L"that were in use are replaced when Windows restarts. "} +
-                kReconnect;
+                             L"that were in use are replaced when Windows restarts."} +
+                vpn;
       return InfoBarSeverity::Warning;
     default:  // NotInstalled; a Hidden report is never a Result
       break;
@@ -854,8 +874,8 @@ winrt::Microsoft::UI::Xaml::Controls::InfoBarSeverity ConnectPage::ApplyUpdateRe
                                    ? L" Show the installer to install it yourself."
                                    : L"";
   if (urnw::update::OutcomeOf(result.exitCode) != urnw::update::Outcome::Refused) {
-    message = std::format(L"Windows Installer ended with error {}{}. You are still on v{}. {}{}",
-                          result.exitCode, log, current, kReconnect, instead);
+    message = std::format(L"Windows Installer ended with error {}{}. You are still on v{}.{}{}",
+                          result.exitCode, log, current, vpn, instead);
     return InfoBarSeverity::Error;
   }
   std::wstring why;

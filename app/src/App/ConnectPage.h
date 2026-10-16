@@ -111,13 +111,20 @@ class ConnectPage {
   // evidence means no claim.
   void ApplyServiceSetup(urnw::ServiceSetup::Snapshot const& snap);
 
-  // The update banner (beta spec §5): the one writer of UpdateBar, stacked
-  // directly under ServiceSetupBar with the same one-writer discipline —
-  // MainWindow owns the snapshot copy and pushes every change through here.
-  // Phase::None closes the bar, unless no check has worked for 72 hours, which
-  // it says; everything else renders one of the five standing states (offer /
-  // in-flight / manual finish / failure / the update helper's report).
+  // The update banner (beta spec §5): UpdateBar, pinned under the connect
+  // pane's scroller, with ServiceSetupBar's one-writer discipline — MainWindow
+  // owns the snapshot copy and pushes every change through here, to
+  // RenderUpdateBanner. Collapsed while closed.
   void ApplyUpdateChecker(urnw::UpdateChecker::Snapshot const& snap);
+  // The one renderer of both update banners: the connect screen's UpdateBar
+  // (above) and the sign-in screen's SignedOutUpdateBar (MainWindow's update
+  // fan-out), so the two never say different things. Phase::None closes the
+  // bar, unless no check has worked for 72 hours, which it says; everything
+  // else renders one of the five standing states (offer / in-flight / manual
+  // finish / failure / the update helper's report). The bar's content is its
+  // row, which MainWindow builds: the action button, then Later.
+  static void RenderUpdateBanner(winrt::Microsoft::UI::Xaml::Controls::InfoBar const& bar,
+                                 urnw::UpdateChecker::Snapshot const& snap);
   // The report's title, message and severity.
   static winrt::Microsoft::UI::Xaml::Controls::InfoBarSeverity ApplyUpdateResult(
       urnw::UpdateChecker::Snapshot const& snap, winrt::hstring& title, std::wstring& message);

@@ -658,6 +658,28 @@ std::wstring UpdateChecker::LocalDateTime(std::int64_t unixSeconds) {
   return LocalDate(unixSeconds) + L" " + time;
 }
 
+void UpdateChecker::SetVpnConnected(bool connected) {
+  std::lock_guard lock(vpnMutex_);
+  vpn_.StatusPushed(connected);
+}
+
+void UpdateChecker::SetVpnAnswerProbe(std::function<std::optional<bool>()> probe) {
+  vpnAnswer_ = std::move(probe);
+}
+
+update::VpnNote UpdateChecker::HandOffVpn() {
+  // asked before the lock: the probe reads the sdk host's own state
+  const std::optional<bool> answered = vpnAnswer_ ? vpnAnswer_() : std::nullopt;
+  std::lock_guard lock(vpnMutex_);
+  vpn_.HandOff(answered);
+  return vpn_;
+}
+
+update::VpnAtStart UpdateChecker::NoteVpn() {
+  std::lock_guard lock(vpnMutex_);
+  return vpn_.Note();
+}
+
 bool UpdateChecker::AutoCheckEnabled() {
   return LoadAppPrefs().value(kAutoCheckPrefKey, true);
 }
@@ -855,6 +877,25 @@ void UpdateChecker::ShowLastResult() {
   }
   LogInfo("update: the update helper's last report: {} ended with {} at {}", result->tag,
           result->exitCode, result->finishedUtc);
+  // Whether a VPN was connected when that update began: the record of the
+  // update this launch found over (SingleInstance.cpp TakeEndedUpdate), when
+  // it is of this report's update. It is written as the installer closes the
+  // app, before the helper ends, so a report that finished before it was
+  // written is another update's, and Unknown, as is a record an older build
+  // wrote. The record is taken once, by the first launch after its update: a
+  // launch that took none shows the report again, and leaves the line out
+  // (UpdateMarker.h VpnOfReport, SaysVpnDisconnected).
+  const std::optional<update::UpdateMarker> began = TakeEndedUpdate();
+  const std::optional<update::VpnAtStart> vpn = update::VpnOfReport(began, finished);
+  LogInfo("update: {}; the report {} the line about the VPN",
+          !began ? "this launch took no record of the update that ended"
+          : vpn == update::VpnAtStart::Connected
+              ? "the record of the update that ended says a VPN was connected when it began"
+          : vpn == update::VpnAtStart::NotConnected
+              ? "the record of the update that ended says a VPN was not connected when it began"
+              : "the record of the update that ended does not say whether a VPN was connected, "
+                "or is another update's",
+          update::SaysVpnDisconnected(vpn) ? "keeps" : "leaves out");
   const std::wstring version = VersionOfTag(result->tag);
   Mutate([&](Snapshot& s) {
     s.phase = Phase::Result;
@@ -868,6 +909,7 @@ void UpdateChecker::ShowLastResult() {
                       .logPath = ResultLogPath(installFolder_, *result),
                       .finishedUtc = Widen(result->finishedUtc),
                       .view = view};
+    s.result.vpn = vpn;
   });
 }
 
@@ -1387,6 +1429,22 @@ void UpdateChecker::RunApply(std::uint64_t generation, bool manual) {
   DWORD refusal = ERROR_SUCCESS;
   std::string launchError;
   const std::int64_t started = NowUnixSeconds();
+  // The VPN from here on (UpdateMarker.h VpnNote, the lead's G10 and G10a).
+  // The installer stops the VPN service and the app does not connect by
+  // itself, so the report says to connect again when there was a VPN to lose.
+  // Its state here is the last status the service pushed, else the state the
+  // service answered, else not known; and a VPN up at any moment from here
+  // until the note goes into the record or the report counts.
+  const update::VpnNote handOff = HandOffVpn();
+  if (handOff.source == update::VpnSource::Unknown) {
+    LogInfo("update: whether a VPN is connected as the update begins is not known: the "
+            "service has told this app nothing");
+  } else {
+    LogInfo("update: a VPN is {}connected as the update begins, as the service {}",
+            handOff.upSinceHandOff ? "" : "not ",
+            handOff.source == update::VpnSource::Pushed ? "last pushed"
+                                                        : "answered (it has pushed no status)");
+  }
   if (!LaunchUpdateHelper(installFolder_ / kHelperName, offer.tag, &helper, &refusal,
                           launchError)) {
     LogWarn("update: the update helper did not start ({}); nothing was installed", launchError);
@@ -1411,7 +1469,7 @@ void UpdateChecker::RunApply(std::uint64_t generation, bool manual) {
     // over the files the installer replaces (UpdateMarker.h). Recorded before
     // this thread ends, and so before the process does (AppController's
     // Shutdown joins it); until now every launch reached this app.
-    RecordUpdateInProgress(helper);
+    RecordUpdateInProgress(helper, NoteVpn());
     ::CloseHandle(helper);
     return;
   }
@@ -1425,6 +1483,7 @@ void UpdateChecker::RunApply(std::uint64_t generation, bool manual) {
   const std::int64_t ended = read ? static_cast<std::int64_t>(exitCode) : 1603;
   update::UpdateResult outcome{.tag = Narrow(offer.tag), .code = offer.code, .exitCode = ended};
   Result result{.version = offer.version, .exitCode = ended};
+  result.vpn = NoteVpn();
   const std::optional<update::UpdateResult> report =
       ReadResult(installFolder_ / L"updates" / L"last-result.json");
   if (report && update::IsReportOfRun(*report, outcome.tag, ended, started)) {

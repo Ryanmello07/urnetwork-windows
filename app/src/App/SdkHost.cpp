@@ -2800,6 +2800,7 @@ void SdkHost::PublishSessionFailure(const std::string& why) {
 
 void SdkHost::AdoptServiceFacts(const proto::TunnelStatus& st) {
   lastServiceState_.store(st.state);
+  serviceStateKnown_.store(true, std::memory_order_release);
   lastServiceDnsApplied_.store(st.dns_applied);
   // The third service-owned fact, adopted here for the same reason as the other
   // two: this process cannot observe it, and inferring it from a mode flag is

@@ -1100,6 +1100,16 @@ class SdkHost {
   // apart. PipeClient's flag is atomic; this takes no lock of ours.
   bool ServiceConnected() const { return service_.IsConnected(); }
 
+  // The tunnel's state as the service last told this process, by a push or by
+  // an answer to a query (AdoptServiceFacts), or nullopt before it has told it
+  // anything. A copy that is signed out may get no push at all; an update's
+  // note of the VPN starts from this then (UpdateMarker.h VpnNote). Any
+  // thread.
+  std::optional<proto::TunnelState> AdoptedServiceState() const {
+    if (!serviceStateKnown_.load(std::memory_order_acquire)) return std::nullopt;
+    return lastServiceState_.load();
+  }
+
   // ---- location/provider chooser -------------------------------------------
   // THE PROVIDER LIST IS ALWAYS AVAILABLE. It does not need a tunnel, a service
   // session, a DeviceRemote or elevation - GET /network/provider-locations is a
@@ -2587,6 +2597,9 @@ class SdkHost {
   // two neighbours instead; the service is the process that owns the routes.
   std::atomic<bool> lastServiceRoutesInstalled_{false};
   std::atomic<proto::TunnelState> lastServiceState_{proto::TunnelState::Stopped};
+  // Whether lastServiceState_ is the service's word: set, after it, by the
+  // first status adopted (AdoptedServiceState).
+  std::atomic<bool> serviceStateKnown_{false};
   // "THE LAST THING THE USER ASKED FOR WAS OFF." Written by the session worker
   // from the gesture it just dequeued, read by gesture::Decide for EnsureSession
   // alone (see AppFacts::userDisconnected).
