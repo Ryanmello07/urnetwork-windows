@@ -38,6 +38,7 @@
 #include "ServiceClient.h"
 #include "ServiceRecoveryPolicy.h"
 #include "SignOut.h"
+#include "SignOutConnectFence.h"
 #include "StartConnectWait.h"
 #include "VerifySendNotice.h"
 #include "Version.h"
@@ -1908,6 +1909,17 @@ class SdkHost {
   // this one" and the coalesced row click: they reach the same worker and want
   // the same plan, and the table pins them as separate rows so that a future
   // divergence has to be a deliberate one.
+  // The request in the sign-out fence's terms (SignOutConnectFence.h).
+  static constexpr signoutfence::Work FenceWorkOf(ConnectKind kind) {
+    switch (kind) {
+      case ConnectKind::BestAvailable: return signoutfence::Work::Connect;
+      case ConnectKind::Location:      return signoutfence::Work::Connect;
+      case ConnectKind::Disconnect:    return signoutfence::Work::Disconnect;
+      case ConnectKind::Provider:      return signoutfence::Work::Provider;
+      case ConnectKind::None:          break;
+    }
+    return signoutfence::Work::Ensure;
+  }
   static constexpr gesture::Gesture GestureOf(ConnectKind kind) {
     switch (kind) {
       case ConnectKind::BestAvailable: return gesture::Gesture::Connect;

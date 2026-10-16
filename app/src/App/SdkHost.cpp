@@ -6637,6 +6637,13 @@ void SdkHost::RequestSession(SessionRequest request) {
     LogInfo("sdkhost: '{}' dropped: the app is quitting", request.reason);
     return;
   }
+  // Signing out or signed out: no connect of that account reaches the sdk
+  // (SignOutConnectFence.h). The next sign-in sets the flag again.
+  if (!signoutfence::Admits(FenceWorkOf(request.kind),
+                            loggedIn_.load(std::memory_order_acquire))) {
+    LogInfo("sdkhost: '{}' dropped: signed out", request.reason);
+    return;
+  }
   // LAST REQUEST WINS. Two presses in a row, or a press while a bootstrap is
   // running, must not queue two start_tunnels — they must land on one session
   // and the destination the user chose most recently.
@@ -6879,7 +6886,13 @@ void SdkHost::SessionWorkerLoop() {
       if (ok) {
         serviceRecoveryNeeded_.store(false, std::memory_order_release);
         watchdogCv_.notify_all();
-        if (plan.sdkConnect && req.kind != ConnectKind::None) ConnectLocked(req);
+        // A sign-out that began after this pass took its request: the pass
+        // still ends what it built, but connects nothing for the account.
+        if (plan.sdkConnect && req.kind != ConnectKind::None &&
+            signoutfence::Admits(FenceWorkOf(req.kind),
+                                 loggedIn_.load(std::memory_order_acquire))) {
+          ConnectLocked(req);
+        }
         // An rpc-only session is live and driveable and carries NOTHING. On a
         // Connect press that is the answer to "why did pressing this change
         // nothing", so re-raise the standing notice rather than let the press
