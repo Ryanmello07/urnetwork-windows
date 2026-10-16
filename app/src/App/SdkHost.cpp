@@ -6661,6 +6661,8 @@ void SdkHost::SessionWorkerLoop() {
       }
       if (!pendingRequested_) {
         sessionWorkerAlive_ = false;
+        // an ending waits for this (SettleCommandsForExit)
+        pendingCv_.notify_all();
         return;
       }
       req = std::move(pending_);
@@ -7988,17 +7990,101 @@ signout::Marker SdkHost::SignOutMarker() {
 
 // See the contract in the header.
 void SdkHost::Quit() {
-  // 1. Nothing new, and nothing queued. A worker sleeping out a row click's
-  // settle wakes to the empty slot and exits; one in the middle of a pass
-  // finds nothing after it.
+  const auto start = std::chrono::steady_clock::now();
+  // 1. Nothing new from here: RequestSession records nothing once the latch is
+  // set, so the slot holds at most what was queued before (QuitInOrder keeps
+  // only the user's Disconnect of it).
   {
     std::scoped_lock lock(pendingMutex_);
     quitting_.store(true);
-    pending_ = SessionRequest{};
-    pendingRequested_ = false;
   }
-  pendingCv_.notify_all();
-  // 2. The threads that act on their own, joined outside mutex_ because each
+  // The steps wait on the session worker, its lock and the pipe, each of which
+  // a pass inside an rpc can hold far longer than a sign-out of Windows may
+  // wait, so they run on a thread of their own and this waits at most the
+  // quit's cap (ExitDrain.h). What is still running then is left to the
+  // process exit, which ExitSettled tells the app.
+  auto completion = std::make_shared<exitdrain::Completion>();
+  quitCompletion_ = completion;
+  std::thread([this, completion, start] {
+    try {
+      QuitInOrder(start);
+    } catch (const std::exception& e) {
+      LogError("sdkhost: quit failed: {}", e.what());
+    }
+    completion->Finish();
+  }).detach();
+  if (!completion->WaitUntil(start + exitdrain::kQuitCap)) {
+    LogWarn("sdkhost: quit: still stopping after {}ms; the rest is left to the process exit",
+            static_cast<long long>(exitdrain::kQuitCap.count()));
+  }
+}
+
+bool SdkHost::SettleCommandsForExit(std::chrono::steady_clock::time_point deadline) {
+  // The slot under its own lock, as RequestSession and the worker see it.
+  struct Slot {
+    SdkHost& host;
+    bool Requested() { return host.pendingRequested_; }
+    exitdrain::Queued Kind() { return QueuedOf(host.pending_.kind); }
+    void Drop() {
+      LogInfo("sdkhost: exit: '{}' dropped: the app is exiting", host.pending_.reason);
+      host.pending_ = SessionRequest{};
+      host.pendingRequested_ = false;
+    }
+    bool WorkerAlive() { return host.sessionWorkerAlive_; }
+  } slot{*this};
+  std::unique_lock<std::mutex> lock(pendingMutex_);
+  if (pendingRequested_ && exitdrain::KeepsQueued(QueuedOf(pending_.kind))) {
+    LogInfo("sdkhost: exit: '{}' runs before the app exits", pending_.reason);
+  }
+  const bool settled = exitdrain::SettleQueued(slot, lock, pendingCv_, deadline);
+  if (!settled) {
+    LogWarn("sdkhost: exit: the session worker is still in a pass at the cap; what it "
+            "holds is left to the process exit");
+  }
+  return settled;
+}
+
+bool SdkHost::ExitSettled() {
+  bool workerIdle = false;
+  {
+    std::scoped_lock lock(pendingMutex_);
+    workerIdle = !sessionWorkerAlive_;
+  }
+  const bool quitFinished = !quitCompletion_ || quitCompletion_->Finished();
+  return exitdrain::HostDestroyableAtExit(workerIdle, quitFinished);
+}
+
+void SdkHost::StopServiceWithoutLock() {
+  // Not dialled when down: the pass may be dialling it itself, and a dropped
+  // channel is the pass's to find. The locked stop below dials it.
+  if (!service_.IsConnected()) {
+    LogWarn("sdkhost: quit: a pass holds the session lock and there is no control "
+            "channel; the stop waits for the lock");
+    return;
+  }
+  LogWarn("sdkhost: quit: a pass still holds the session lock inside an rpc; stopping "
+          "the service without it");
+  const proto::TunnelStatus stopped = service_.StopTunnel();
+  AdoptServiceFacts(stopped);
+  std::optional<proto::TunnelStatus> after;
+  std::string error;
+  if (!service_.StopProvider(&after, &error)) {
+    LogWarn("sdkhost: quit: stop_provider failed: {}", error.empty() ? "no detail" : error);
+  }
+  if (after) AdoptServiceFacts(*after);
+}
+
+void SdkHost::QuitInOrder(std::chrono::steady_clock::time_point start) {
+  // 1. The user's Disconnect still queued runs first, so it is saved, and
+  // everything else queued goes; a worker sleeping out a row click's settle
+  // wakes to the empty slot and exits. Bounded: a pass inside an rpc the
+  // service does not answer is not waited out.
+  const bool settled = SettleCommandsForExit(start + exitdrain::kCommandsCap);
+  // 2. That pass holds mutex_, and the machine comes first.
+  if (exitdrain::StopRouteFor(settled) == exitdrain::StopRoute::Unlocked) {
+    StopServiceWithoutLock();
+  }
+  // 3. The threads that act on their own, joined outside mutex_ because each
   // of them takes it (the destructor's rule; its own calls then find them
   // stopped). The watchdog first: its recovery pass is the one that dials the
   // service and ends in a provider reconcile.
@@ -8006,8 +8092,9 @@ void SdkHost::Quit() {
   StopPresentationWorker();
   StopSyncWatchdog();
   StopProviderOnlyStats();
-  // 3. The service, under mutex_: after any pass in flight (a Connect's
-  // bootstrap, a reconcile), and with none able to follow it.
+  // 4. The service, under mutex_: after any pass in flight (a Connect's
+  // bootstrap, a reconcile, the user's Disconnect), and with none able to
+  // follow it.
   std::scoped_lock lock(mutex_);
   try {
     // A dropped channel is not a stopped service, and one that is still

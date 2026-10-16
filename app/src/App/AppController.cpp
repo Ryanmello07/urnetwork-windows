@@ -38,6 +38,16 @@ namespace urnw {
 namespace {
 std::unique_ptr<AppController> g_app;
 
+// The controller, and the SdkHost in it, outlive a thread still running inside
+// them at exit: released, never destroyed, so the process exit ends that
+// thread rather than a destructor freeing what it uses
+// (exitdrain::HostDestroyableAtExit).
+void LeaveAppToProcessExit() {
+  LogWarn("app: a session pass or the quit is still running; the app is left to the "
+          "process exit");
+  (void)g_app.release();
+}
+
 // The presentation gate. `shown` is the tray-level intent (between ShowWindow
 // and HideWindow); `minimized` is the taskbar state. Focus is deliberately
 // absent: this used to be `shown && activated`, and stopping on mere
@@ -385,16 +395,23 @@ void AppController::Shutdown(lifetime::Ending ending) {
   windowHwnd_ = nullptr;
   // The user's Quit ends the tunnel and the provider too (owner decision,
   // 2026-10-05). Last before the exit, with the window and the tray already
-  // gone, because it blocks this thread: it joins SdkHost's own threads, waits
-  // out a session pass in flight and makes two pipe calls, each bounded by the
-  // pipe's timeout and in the service by StopBudget.h. Nothing on screen is
-  // left to freeze while it does. Nothing it throws may keep the app from
-  // exiting: the tray, its only way out, is already gone.
+  // gone, because it holds this thread: the user's Disconnect still queued
+  // runs first, then the service stops, and none of it holds the exit past
+  // exitdrain::kQuitCap, a sign-out of Windows waiting in WM_ENDSESSION
+  // included (ExitDrain.h). Every other ending leaves the service as it is,
+  // but the user's Disconnect still reaches it first, for at most the
+  // commands' cap, so the next launch does not reattach to a connection the
+  // user ended. Nothing on screen is left to freeze meanwhile. Nothing it
+  // throws may keep the app from exiting: the tray, its only way out, is
+  // already gone.
   try {
     if (plan.stopService) sdk_.Quit();
+    else sdk_.SettleCommandsForExit(std::chrono::steady_clock::now() + exitdrain::kCommandsCap);
   } catch (const std::exception& e) {
     LogError("app: stopping the service on quit failed: {}", e.what());
   }
+  // A pass or the quit still inside an rpc owns the host
+  if (!sdk_.ExitSettled()) LeaveAppToProcessExit();
   if (auto app = Application::Current()) app.Exit();
 }
 
