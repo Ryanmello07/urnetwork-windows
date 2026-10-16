@@ -237,6 +237,17 @@ struct PerformanceSettings {
   bool postQuantum = false;   // "Post Quantum Encryption" toggle (not inverted)
 };
 
+// The connect drawer's settings that only the device knows, read off the UI
+// thread for a window that is built or signed in (SdkHost::RequestDrawerSeed):
+// each getter can wait on the device's state lock behind a held command for
+// the rpc timeout. Their listeners push later changes (SeedOrder.h).
+struct DrawerSeed {
+  std::optional<urnet::DnsResolverSettings> dns;
+  std::optional<urnet::TransportSettings> clientTransport;
+  std::optional<urnet::TransportSettings> providerTransport;
+  bool blockerEnabled = false;
+};
+
 // One contract, un-aggregated: its own used/total byte counts and bit rate.
 // Contracts are never paired -- a peer's send and receive contracts are
 // fundamentally many-to-many, so each is presented on its own (SDK
@@ -1327,6 +1338,21 @@ class SdkHost {
   void SetSplitRulesHandler(SplitRulesHandler h) { onSplitRules_ = std::move(h); }
   void SetDnsSettingsHandler(DnsSettingsHandler h) { onDnsSettings_ = std::move(h); }
   void SetBlockerEnabledHandler(BlockerEnabledHandler h) { onBlockerEnabled_ = std::move(h); }
+  // RequestDrawerSeed's answer, on the seed reader's thread; it only marshals.
+  using DrawerSeedHandler = std::function<void(DrawerSeed)>;
+  void SetDrawerSeedHandler(DrawerSeedHandler h) { onDrawerSeed_ = std::move(h); }
+  // Reads the DrawerSeed off the caller's thread and hands it to the handler;
+  // returns at once. Requests coalesce into one read, which answers the last.
+  void RequestDrawerSeed() { drawerSeedReader_.Request(); }
+  // The kill switch, the provide control mode and the performance settings as
+  // the app last stored them: its own setters keep LocalState first, and the
+  // session bootstrap restores the device from it, so a window that shows
+  // reads them here instead of from the device (CurrentKillSwitch and its
+  // siblings ask the DeviceRemote, which a held command keeps for the rpc
+  // timeout). No rpc, no mutex_: safe on the UI thread.
+  bool StoredKillSwitch();
+  std::string StoredProvideControlMode();
+  PerformanceSettings StoredPerformanceSettings();
   void SetExtenderStatusHandler(ExtenderStatusHandler h) {
     onExtenderStatus_ = std::move(h);
   }
@@ -2765,6 +2791,10 @@ class SdkHost {
   // EnsureLocations' work, off the caller's thread, stopped with
   // statsPublisher_ for the same reason.
   CoalescedWorker locationsOpener_{[this] { EnsureLocationsOnWorker(); }};
+  // RequestDrawerSeed's reads, stopped with statsPublisher_ for the same reason.
+  DrawerSeedHandler onDrawerSeed_;
+  CoalescedWorker drawerSeedReader_{[this] { ReadDrawerSeedOnWorker(); }};
+  void ReadDrawerSeedOnWorker();
   // SelectedLocation's value: kept by the presented controller's selection
   // listener and seeded as it opens (SubscribeStats), cleared when the session
   // ends (ClosePresentationLocked). A leaf, held across nothing.

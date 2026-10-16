@@ -1778,6 +1778,7 @@ void ConnectPage::WireDrawerFeeds() {
     queue.TryEnqueue([weak, settings = std::move(settings)] {
       if (auto self = weak.get()) {
         auto& page = self->connect();
+        page.dnsOrder_.Pushed();  // newer than a seed read still out
         page.dnsSettled_ = true;  // a push is a reading, present or not
         page.dnsSettings_ = settings;
         page.ApplyDnsCard(settings);
@@ -1814,8 +1815,10 @@ void ConnectPage::WireDrawerFeeds() {
       if (auto self = weak.get()) {
         auto& page = self->connect();
         if (kind == urnw::TransportSettingsKind::Provider) {
+          page.providerTransportOrder_.Pushed();
           page.providerTransportSettings_ = settings;
         } else {
+          page.clientTransportOrder_.Pushed();
           page.clientTransportSettings_ = settings;
         }
       }
@@ -1823,7 +1826,33 @@ void ConnectPage::WireDrawerFeeds() {
   });
   sdk.SetBlockerEnabledHandler([queue, weak](bool on) {
     queue.TryEnqueue([weak, on] {
-      if (auto self = weak.get()) self->connect().ApplyBlockerUi(on);
+      if (auto self = weak.get()) {
+        auto& page = self->connect();
+        page.blockerOrder_.Pushed();
+        page.ApplyBlockerUi(on);
+      }
+    });
+  });
+  // The device-only settings a built or signed-in window shows, read off this
+  // thread (ResyncDrawer): each applies unless its listener pushed a newer
+  // value since the read was asked for (SeedOrder.h).
+  sdk.SetDrawerSeedHandler([queue, weak](urnw::DrawerSeed seed) {
+    queue.TryEnqueue([weak, seed = std::move(seed)] {
+      auto self = weak.get();
+      if (!self) return;
+      auto& page = self->connect();
+      if (page.dnsOrder_.Admits()) {
+        page.dnsSettled_ = true;
+        page.dnsSettings_ = seed.dns;
+        page.ApplyDnsCard(page.dnsSettings_);
+      }
+      if (page.clientTransportOrder_.Admits()) {
+        page.clientTransportSettings_ = seed.clientTransport;
+      }
+      if (page.providerTransportOrder_.Admits()) {
+        page.providerTransportSettings_ = seed.providerTransport;
+      }
+      if (page.blockerOrder_.Admits()) page.ApplyBlockerUi(seed.blockerEnabled);
     });
   });
   // location/provider chooser: the bucketed locations feed the open sheet; the
@@ -1928,13 +1957,20 @@ void ConnectPage::ResyncDrawer() {
   blockActions_ = sdk.CurrentBlockActions();
   sdk.CurrentBlockCounts(allowedCount_, blockedCount_);
   splitRules_ = sdk.CurrentSplitRules();
-  dnsSettings_ = sdk.CurrentDnsSettings();
+  // The device-only settings are read off this thread: each getter can wait
+  // on the device's state lock behind a held command for the rpc timeout.
+  // Unknown until the read or their listener answers (DrawerSeed).
+  dnsSettings_.reset();
+  clientTransportSettings_.reset();
+  providerTransportSettings_.reset();
+  dnsOrder_.Asked();
+  clientTransportOrder_.Asked();
+  providerTransportOrder_.Asked();
+  blockerOrder_.Asked();
+  sdk.RequestDrawerSeed();
   if (transportBar_) transportBar_->SetDistribution(sdk.CurrentTransportDistribution());
   if (extenderPanel_) extenderPanel_->SetStatus(sdk.CurrentExtenderStatus());
   ApplyExtenderProvideState(sdk.CurrentExtenderProvideStatus());
-  clientTransportSettings_ = sdk.CurrentTransportSettings(urnw::TransportSettingsKind::Client);
-  providerTransportSettings_ =
-      sdk.CurrentTransportSettings(urnw::TransportSettingsKind::Provider);
   ApplySplitRuleCount();  // also rebuilds the split-rules list
   ApplyDnsCard(dnsSettings_);
   ApplyConnectionsList();
@@ -1987,7 +2023,9 @@ void ConnectPage::SettlePlaceholders() {
 
 void ConnectPage::SeedConnectControls() {
   updatingControls_ = true;
-  const urnw::PerformanceSettings settings = Sdk().CurrentPerformanceSettings();
+  // as the app stored them, which the device is restored from: no device read
+  // on this thread (SdkHost::StoredPerformanceSettings)
+  const urnw::PerformanceSettings settings = Sdk().StoredPerformanceSettings();
   switch (settings.mode) {
     case urnw::ConnectionMode::Auto:
       w_.ConnectionModeBar().SelectedItem(w_.ModeAutoItem());
@@ -2004,10 +2042,10 @@ void ConnectPage::SeedConnectControls() {
   // "Strong Anonymization" is the inverse of allowDirect
   w_.StrongAnonToggle().IsOn(!settings.allowDirect);
   w_.PostQuantumToggle().IsOn(settings.postQuantum);
-  w_.BlockerToggle().IsOn(Sdk().CurrentBlockerEnabled());
+  // the blocker is the device's alone: the drawer seed sets it (ResyncDrawer)
   // provide control mode ("manual"/unknown land on Never, the SDK's
   // conservative default case)
-  const std::string provideMode = Sdk().CurrentProvideControlMode();
+  const std::string provideMode = Sdk().StoredProvideControlMode();
   if (provideMode == "auto") {
     w_.ProvideModeBar().SelectedItem(w_.ProvideAutoItem());
   } else if (provideMode == "always") {

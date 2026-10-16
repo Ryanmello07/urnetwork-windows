@@ -363,6 +363,7 @@ SdkHost::~SdkHost() {
   // opener the same.
   statsPublisher_.Stop();
   locationsOpener_.Stop();
+  drawerSeedReader_.Stop();
   // Same rule, same reason: the rpc-sync watchdog takes mutex_ to look at the
   // device, so it is stopped and JOINED here, above the lock.
   StopSyncWatchdog();
@@ -5390,18 +5391,11 @@ std::optional<urnet::TransportStatus> SdkHost::CurrentTransportStatus(
   return std::nullopt;
 }
 
-PerformanceSettings SdkHost::CurrentPerformanceSettings() {
+namespace {
+// A profile in the drawer's terms.
+PerformanceSettings PerformanceSettingsFrom(
+    const std::optional<urnet::PerformanceProfile>& profile) {
   PerformanceSettings s;
-  std::optional<urnet::PerformanceProfile> profile;
-  try {
-    if (device_) {
-      profile = device_->getPerformanceProfile();
-    } else if (localState_) {
-      profile = localState_->getPerformanceProfile();
-    }
-  } catch (const std::exception& e) {
-    LogWarn("sdkhost: get performance profile failed: {}", e.what());
-  }
   if (!profile) return s;  // nil profile â‰¡ window type auto, everything off
   // a nil profile and window type "auto" mean the same thing (macOS
   // loadPerformanceProfileFromDevice parity)
@@ -5417,6 +5411,63 @@ PerformanceSettings SdkHost::CurrentPerformanceSettings() {
   s.fixedIp = profile->window_size && profile->window_size->window_size_min == 1 &&
               profile->window_size->window_size_max == 1;
   return s;
+}
+}  // namespace
+
+PerformanceSettings SdkHost::CurrentPerformanceSettings() {
+  std::optional<urnet::PerformanceProfile> profile;
+  try {
+    if (device_) {
+      profile = device_->getPerformanceProfile();
+    } else if (localState_) {
+      profile = localState_->getPerformanceProfile();
+    }
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: get performance profile failed: {}", e.what());
+  }
+  return PerformanceSettingsFrom(profile);
+}
+
+PerformanceSettings SdkHost::StoredPerformanceSettings() {
+  std::optional<urnet::PerformanceProfile> profile;
+  try {
+    if (localState_) profile = localState_->getPerformanceProfile();
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: get the stored performance profile failed: {}", e.what());
+  }
+  return PerformanceSettingsFrom(profile);
+}
+
+bool SdkHost::StoredKillSwitch() {
+  try {
+    // kill switch == !routeLocal (SdkHost.h)
+    if (localState_) return !localState_->getRouteLocal();
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: get the stored route local failed: {}", e.what());
+  }
+  return false;  // no state at all: claim the permissive default, not the strict one
+}
+
+std::string SdkHost::StoredProvideControlMode() {
+  try {
+    if (localState_) return localState_->getProvideControlMode();
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: get the stored provide control mode failed: {}", e.what());
+  }
+  return "never";
+}
+
+void SdkHost::ReadDrawerSeedOnWorker() {
+  try {
+    DrawerSeed seed;
+    seed.dns = CurrentDnsSettings();
+    seed.clientTransport = CurrentTransportSettings(TransportSettingsKind::Client);
+    seed.providerTransport = CurrentTransportSettings(TransportSettingsKind::Provider);
+    seed.blockerEnabled = CurrentBlockerEnabled();
+    if (onDrawerSeed_) onDrawerSeed_(std::move(seed));
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: reading the drawer's settings failed: {}", e.what());
+  }
 }
 
 void SdkHost::SetPerformanceSettings(const PerformanceSettings& settings) {
@@ -8236,6 +8287,7 @@ void SdkHost::QuitInOrder(std::chrono::steady_clock::time_point start) {
   // they read the device the teardown below closes
   statsPublisher_.Stop();
   locationsOpener_.Stop();
+  drawerSeedReader_.Stop();
   // 4. The service, under mutex_: after any pass in flight (a Connect's
   // bootstrap, a reconcile, the user's Disconnect), and with none able to
   // follow it.

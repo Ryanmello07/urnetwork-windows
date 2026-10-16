@@ -33,6 +33,7 @@
 #include "SdkHost.h"
 #include "ServiceSetup.h"
 #include "StatsSheets.h"
+#include "SeedOrder.h"
 #include "TapSequenceGate.h"
 #include "TransferChart.h"
 #include "TransportBar.h"
@@ -555,6 +556,11 @@ class ConnectPage {
   // The locations feed's last push, for the chooser sheet as it opens and for
   // a peers push (SdkHost's getter takes mutex_).
   std::optional<urnet::FilteredLocations> locations_;
+  // The drawer seed's reads against their listeners' pushes (SeedOrder.h).
+  urnw::SeedOrder dnsOrder_;
+  urnw::SeedOrder clientTransportOrder_;
+  urnw::SeedOrder providerTransportOrder_;
+  urnw::SeedOrder blockerOrder_;
 
   winrt::URnetwork::implementation::MainWindow& w_;
 
