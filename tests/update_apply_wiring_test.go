@@ -641,6 +641,78 @@ func TestUpdateApplyTheMarkerSelectsTheFeedAlone(t *testing.T) {
 	}
 }
 
+// No build may judge or read the marker its own way (the lead's G19, the
+// review's N1): UpdateChannel.h holds no preprocessor conditional, and
+// InstallLocationWin32.cpp none but its WIN32_LEAN_AND_MEAN guard. So a
+// default under any name, read by an #if in JudgeMarker or in
+// ReadChannelMarker, which the tray and the helper both call, fails here.
+// FeedOfMarker is pinned whole besides (checkMarkerSelectsTheFeedAlone), and
+// commit 2's test refuses three spellings of a default in the build inputs.
+var preprocessorConditional = regexp.MustCompile(`(?m)^[ \t]*(?:#|%:)[ \t]*(?:if|ifdef|ifndef|elif|elifdef|elifndef|else|endif)\b.*$`)
+
+// InstallLocationWin32.cpp's one conditional, before it includes windows.h.
+const leanAndMeanGuard = "#ifndef WIN32_LEAN_AND_MEAN\n#define WIN32_LEAN_AND_MEAN\n#endif\n"
+
+func checkTheChannelBuildsAlike(channel, location string) []string {
+	var problems []string
+	for _, line := range preprocessorConditional.FindAllString(channel, -1) {
+		problems = append(problems, fmt.Sprintf("UpdateChannel.h has a preprocessor conditional, %q: "+
+			"no build may judge the marker its own way", strings.TrimSpace(line)))
+	}
+	if strings.Count(location, leanAndMeanGuard) != 1 {
+		problems = append(problems, fmt.Sprintf("InstallLocationWin32.cpp does not hold its WIN32_LEAN_AND_MEAN guard "+
+			"exactly once, as %q", leanAndMeanGuard))
+	}
+	for _, line := range preprocessorConditional.FindAllString(strings.Replace(location, leanAndMeanGuard, "", 1), -1) {
+		problems = append(problems, fmt.Sprintf("InstallLocationWin32.cpp has a preprocessor conditional besides its "+
+			"WIN32_LEAN_AND_MEAN guard, %q: no build may read the marker its own way", strings.TrimSpace(line)))
+	}
+	return problems
+}
+
+func TestUpdateApplyTheChannelBuildsAlike(t *testing.T) {
+	channel := stripComments(readCommonSource(t, "UpdateChannel.h"))
+	location := stripComments(readCommonSource(t, "InstallLocationWin32.cpp"))
+	reportProblems(t, checkTheChannelBuildsAlike(channel, location))
+	replace := func(t *testing.T, text, old, replacement string) string {
+		t.Helper()
+		if strings.Count(text, old) != 1 {
+			t.Fatalf("negative control: %q is not in the source exactly once", old)
+		}
+		return strings.Replace(text, old, replacement, 1)
+	}
+	const absent = "  if (marker.found == Found::Absent) return {ChannelMarker::Absent, {}};\n"
+	const reader = "update::ChannelMarker ReadChannelMarker(const fs::path& installFolder, std::string& why, bool* present) {\n"
+	for _, tc := range []struct {
+		name, want string
+		check      func(t *testing.T) []string
+	}{
+		// the review's X1: a default inside JudgeMarker
+		{"a default inside JudgeMarker", "UpdateChannel.h has a preprocessor conditional", func(t *testing.T) []string {
+			return checkTheChannelBuildsAlike(replace(t, channel, absent, "#if defined(URN_DEVELOPER_BY_DEFAULT)\n"+
+				"  if (marker.found == Found::Absent) return {ChannelMarker::Trusted, {}, false};\n#endif\n"+absent), location)
+		}},
+		// the review's X2: a default at the top of ReadChannelMarker
+		{"a default at the top of ReadChannelMarker", "InstallLocationWin32.cpp has a preprocessor conditional besides", func(t *testing.T) []string {
+			return checkTheChannelBuildsAlike(channel, replace(t, location, reader, reader+"#if defined(URN_DEVELOPER_BY_DEFAULT)\n"+
+				"  if (::GetFileAttributesW((installFolder / L\"updates\").c_str()) == INVALID_FILE_ATTRIBUTES) return update::ChannelMarker::Trusted;\n"+
+				"#endif\n"))
+		}},
+		// the guard made to carry a default of its own
+		{"a guard that defines more than WIN32_LEAN_AND_MEAN", "does not hold its WIN32_LEAN_AND_MEAN guard exactly once", func(t *testing.T) []string {
+			return checkTheChannelBuildsAlike(channel, replace(t, location, leanAndMeanGuard,
+				"#ifndef WIN32_LEAN_AND_MEAN\n#define WIN32_LEAN_AND_MEAN\n#define URN_DEVELOPER_BY_DEFAULT\n#endif\n"))
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			problems := strings.Join(tc.check(t), "\n")
+			if !strings.Contains(problems, tc.want) {
+				t.Fatalf("negative control was not detected by %q; the check reported:\n%s", tc.want, problems)
+			}
+		})
+	}
+}
+
 // Every response the helper reads came with redirects refused and a
 // certificate the machine's own trust accepts for the host.
 func checkUpdaterHttp(http string) []string {
