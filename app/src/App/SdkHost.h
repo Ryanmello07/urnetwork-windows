@@ -237,6 +237,17 @@ struct PerformanceSettings {
   bool postQuantum = false;   // "Post Quantum Encryption" toggle (not inverted)
 };
 
+// The connect drawer's settings that only the device knows, read off the UI
+// thread for a window that is built or signed in (SdkHost::RequestDrawerSeed):
+// each getter can wait on the device's state lock behind a held command for
+// the rpc timeout. Their listeners push later changes (SeedOrder.h).
+struct DrawerSeed {
+  std::optional<urnet::DnsResolverSettings> dns;
+  std::optional<urnet::TransportSettings> clientTransport;
+  std::optional<urnet::TransportSettings> providerTransport;
+  bool blockerEnabled = false;
+};
+
 // One contract, un-aggregated: its own used/total byte counts and bit rate.
 // Contracts are never paired -- a peer's send and receive contracts are
 // fundamentally many-to-many, so each is presented on its own (SDK
@@ -1050,6 +1061,15 @@ class SdkHost {
   // that runs out of balance is never dropped by this.
   void ConnectBestAvailable();
   void Connect(const std::string& connectLocationJson);
+  // Connect to what the user picked: the presented controller's selection,
+  // else the device's location, best available when that is none or flagged
+  // so (IsBestAvailableSelected). Resolved on the session worker, because
+  // SelectedLocation takes mutex_ (held across whole bootstraps) and, with no
+  // presented controller, reads the device: the connect button and the
+  // balance recovery's rebuild read nothing on the caller's thread. With no
+  // session nothing is selected, so it is best available, as SelectedLocation
+  // answered then.
+  void ConnectSelected();
   void Disconnect();
   // The start-connect gate. facts gives urnw::balance::StartConnectFacts for
   // this instant; upgrade shows the upgrade path in place of a blocked
@@ -1193,6 +1213,12 @@ class SdkHost {
   // torn-down feed that nothing puts back, and the snapshot getters CANNOT
   // recover from that on their own (both the SDK's initial load and the api
   // fetch are async; a read taken right after either starts is always empty).
+  //
+  // Returns at once: the work runs on locationsOpener_, because it takes
+  // mutex_, which the session worker holds across whole bootstraps, and opens
+  // the device's view controllers, whose rpcs wait behind a held command. Its
+  // callers are on the UI thread (a window built, a sheet opened, the Network
+  // destination shown); what it opens reaches them through the handlers.
   void EnsureLocations();
   // Set the provider-list search query. Proxies to the view controller when one
   // exists; otherwise runs the SAME two-endpoint dispatch the view controller
@@ -1223,8 +1249,13 @@ class SdkHost {
   // service's device: while this is false the peer count is unavailable
   // (not zero) and the peers status line shows a disabled-discovery state.
   bool RemoteConnected();
-  // The selected connect location (the chooser's selection check + the drawer's
-  // selected-peer name resolution).
+  // The selected connect location (the chooser's and the Network pane's check
+  // glyphs, the provider-locations sheet). The presented controller's
+  // selection as its listener last reported it (selectedLocation_), taken
+  // under a leaf lock: the sheets read it on every render, on the UI thread,
+  // and the controller and the device sat behind mutex_, which the session
+  // worker holds through a whole connect. Best available (nullopt) before the
+  // first presentation and once the session ends.
   std::optional<urnet::ConnectLocation> SelectedLocation();
   // Connect to a chosen provider location as-is: the chooser holds the typed
   // ConnectLocation (an SDK one, or one it built from a peer), so skip the json
@@ -1307,6 +1338,21 @@ class SdkHost {
   void SetSplitRulesHandler(SplitRulesHandler h) { onSplitRules_ = std::move(h); }
   void SetDnsSettingsHandler(DnsSettingsHandler h) { onDnsSettings_ = std::move(h); }
   void SetBlockerEnabledHandler(BlockerEnabledHandler h) { onBlockerEnabled_ = std::move(h); }
+  // RequestDrawerSeed's answer, on the seed reader's thread; it only marshals.
+  using DrawerSeedHandler = std::function<void(DrawerSeed)>;
+  void SetDrawerSeedHandler(DrawerSeedHandler h) { onDrawerSeed_ = std::move(h); }
+  // Reads the DrawerSeed off the caller's thread and hands it to the handler;
+  // returns at once. Requests coalesce into one read, which answers the last.
+  void RequestDrawerSeed() { drawerSeedReader_.Request(); }
+  // The kill switch, the provide control mode and the performance settings as
+  // the app last stored them: its own setters keep LocalState first, and the
+  // session bootstrap restores the device from it, so a window that shows
+  // reads them here instead of from the device (CurrentKillSwitch and its
+  // siblings ask the DeviceRemote, which a held command keeps for the rpc
+  // timeout). No rpc, no mutex_: safe on the UI thread.
+  bool StoredKillSwitch();
+  std::string StoredProvideControlMode();
+  PerformanceSettings StoredPerformanceSettings();
   void SetExtenderStatusHandler(ExtenderStatusHandler h) {
     onExtenderStatus_ = std::move(h);
   }
@@ -1931,7 +1977,10 @@ class SdkHost {
   // step" (ReconcileProviderLocked), with no gesture, no bootstrap and no attach.
   // Every pass of the worker that leaves no session ends with that reconcile, so
   // a Provider request is covered by whatever else is pending.
-  enum class ConnectKind { None, BestAvailable, Location, Disconnect, Provider };
+  //
+  // Selected is the connect button's "what the user picked", resolved by the
+  // worker under mutex_ (ConnectLocked): the press itself reads nothing.
+  enum class ConnectKind { None, BestAvailable, Location, Selected, Disconnect, Provider };
   struct SessionRequest {
     ConnectKind kind = ConnectKind::None;
     std::optional<urnet::ConnectLocation> location;
@@ -1960,6 +2009,7 @@ class SdkHost {
     switch (kind) {
       case ConnectKind::BestAvailable: return signoutfence::Work::Connect;
       case ConnectKind::Location:      return signoutfence::Work::Connect;
+      case ConnectKind::Selected:      return signoutfence::Work::Connect;
       case ConnectKind::Disconnect:    return signoutfence::Work::Disconnect;
       case ConnectKind::Provider:      return signoutfence::Work::Provider;
       case ConnectKind::None:          break;
@@ -1970,6 +2020,7 @@ class SdkHost {
     switch (kind) {
       case ConnectKind::BestAvailable: return gesture::Gesture::Connect;
       case ConnectKind::Location:      return gesture::Gesture::ConnectRow;
+      case ConnectKind::Selected:      return gesture::Gesture::Connect;
       case ConnectKind::Disconnect:    return gesture::Gesture::Disconnect;
       case ConnectKind::None:          break;
       case ConnectKind::Provider:      break;  // never reaches the table
@@ -1982,6 +2033,7 @@ class SdkHost {
       case ConnectKind::Disconnect:    return exitdrain::Queued::Disconnect;
       case ConnectKind::BestAvailable: return exitdrain::Queued::Connect;
       case ConnectKind::Location:      return exitdrain::Queued::Connect;
+      case ConnectKind::Selected:      return exitdrain::Queued::Connect;
       case ConnectKind::Provider:      return exitdrain::Queued::Provider;
       case ConnectKind::None:          break;
     }
@@ -1996,7 +2048,8 @@ class SdkHost {
   // producer holds while it tests it, so a request that lands as the worker is
   // finishing cannot be dropped.
   void SessionWorkerLoop();
-  // Apply the request's connect intent. Caller holds mutex_.
+  // Apply the request's connect intent, reading the selection for a Selected
+  // one (ConnectSelected). Caller holds mutex_.
   void ConnectLocked(const SessionRequest& request);
   // Row-click support (see ConnectFromRow). Whether the session is already
   // driving at the clicked target: `matches` is handed the SDK's own selected
@@ -2735,6 +2788,22 @@ class SdkHost {
   // with this object's other threads, above mutex_, by Quit and the destructor:
   // a read in flight is waited out, and none starts after.
   CoalescedWorker statsPublisher_{[this] { PublishStatsOnWorker(); }};
+  // EnsureLocations' work, off the caller's thread, stopped with
+  // statsPublisher_ for the same reason.
+  CoalescedWorker locationsOpener_{[this] { EnsureLocationsOnWorker(); }};
+  // RequestDrawerSeed's reads, stopped with statsPublisher_ for the same reason.
+  DrawerSeedHandler onDrawerSeed_;
+  CoalescedWorker drawerSeedReader_{[this] { ReadDrawerSeedOnWorker(); }};
+  void ReadDrawerSeedOnWorker();
+  // SelectedLocation's value: kept by the presented controller's selection
+  // listener and seeded as it opens (SubscribeStats), cleared when the session
+  // ends (ClosePresentationLocked). A leaf, held across nothing.
+  std::mutex selectedLocationMutex_;
+  std::optional<urnet::ConnectLocation> selectedLocation_;
+  void KeepSelectedLocation(std::optional<urnet::ConnectLocation> location);
+  // EnsureLocationsLocked under mutex_, as locationsOpener_'s job: a throw is
+  // logged, not propagated.
+  void EnsureLocationsOnWorker();
   // The egress binding currently in force on THIS process's SDK instance, as a
   // packed (index4, index6) pair, and the lock that keeps the compare and the
   // SDK call together.

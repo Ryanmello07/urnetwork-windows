@@ -986,7 +986,9 @@ void SettingsPage::ApplyLocalDeviceState() {
   clientIdCopy_.IsEnabled(!clientId_.empty());
 
   applyingKillSwitch_ = true;
-  killSwitch_.IsOn(Sdk().CurrentKillSwitch());
+  // as stored, which the device is restored from: no device read on this
+  // thread (SdkHost::StoredKillSwitch)
+  killSwitch_.IsOn(Sdk().StoredKillSwitch());
   applyingKillSwitch_ = false;
   ApplyLaunchAtStartup();
 }

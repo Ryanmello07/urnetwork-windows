@@ -359,8 +359,11 @@ SdkHost::~SdkHost() {
   // same rule: outside the lock, joined.
   StopPresentationWorker();
   // The stats publish worker reads the device and this host's state: stopped,
-  // and a read in flight waited out, before any of it goes.
+  // and a read in flight waited out, before any of it goes. The locations
+  // opener the same.
   statsPublisher_.Stop();
+  locationsOpener_.Stop();
+  drawerSeedReader_.Stop();
   // Same rule, same reason: the rpc-sync watchdog takes mutex_ to look at the
   // device, so it is stopped and JOINED here, above the lock.
   StopSyncWatchdog();
@@ -3596,13 +3599,18 @@ void SdkHost::SubscribeStats() {
   if (!device_ || connectVc_) return;
   connectVc_ = device_->openConnectViewController();
   connectVc_->start();
+  // the selection the sheets read, kept by the listener below from here on
+  KeepSelectedLocation(connectVc_->getSelectedLocation());
   contractVc_ = device_->openContractViewController();  // live throughput feed
   auto pub = [this] { PublishStats(); };
   // ConnectViewController: status, provider grid/window size, selected location.
   presentationSubs_.push_back(connectVc_->addConnectionStatusListener(pub));
   presentationSubs_.push_back(connectVc_->addGridListener(pub));
   presentationSubs_.push_back(connectVc_->addSelectedLocationListener(
-      [this](std::optional<urnet::ConnectLocation>) { PublishStats(); }));
+      [this](std::optional<urnet::ConnectLocation> location) {
+        KeepSelectedLocation(std::move(location));
+        PublishStats();
+      }));
   presentationSubs_.push_back(device_->addConnectLocationChangeListener(
       [this](std::optional<urnet::ConnectLocation>) { PublishStats(); }));
   // ContractViewController: throughput points (bytes/bit rate up/down).
@@ -5383,18 +5391,11 @@ std::optional<urnet::TransportStatus> SdkHost::CurrentTransportStatus(
   return std::nullopt;
 }
 
-PerformanceSettings SdkHost::CurrentPerformanceSettings() {
+namespace {
+// A profile in the drawer's terms.
+PerformanceSettings PerformanceSettingsFrom(
+    const std::optional<urnet::PerformanceProfile>& profile) {
   PerformanceSettings s;
-  std::optional<urnet::PerformanceProfile> profile;
-  try {
-    if (device_) {
-      profile = device_->getPerformanceProfile();
-    } else if (localState_) {
-      profile = localState_->getPerformanceProfile();
-    }
-  } catch (const std::exception& e) {
-    LogWarn("sdkhost: get performance profile failed: {}", e.what());
-  }
   if (!profile) return s;  // nil profile â‰¡ window type auto, everything off
   // a nil profile and window type "auto" mean the same thing (macOS
   // loadPerformanceProfileFromDevice parity)
@@ -5410,6 +5411,63 @@ PerformanceSettings SdkHost::CurrentPerformanceSettings() {
   s.fixedIp = profile->window_size && profile->window_size->window_size_min == 1 &&
               profile->window_size->window_size_max == 1;
   return s;
+}
+}  // namespace
+
+PerformanceSettings SdkHost::CurrentPerformanceSettings() {
+  std::optional<urnet::PerformanceProfile> profile;
+  try {
+    if (device_) {
+      profile = device_->getPerformanceProfile();
+    } else if (localState_) {
+      profile = localState_->getPerformanceProfile();
+    }
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: get performance profile failed: {}", e.what());
+  }
+  return PerformanceSettingsFrom(profile);
+}
+
+PerformanceSettings SdkHost::StoredPerformanceSettings() {
+  std::optional<urnet::PerformanceProfile> profile;
+  try {
+    if (localState_) profile = localState_->getPerformanceProfile();
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: get the stored performance profile failed: {}", e.what());
+  }
+  return PerformanceSettingsFrom(profile);
+}
+
+bool SdkHost::StoredKillSwitch() {
+  try {
+    // kill switch == !routeLocal (SdkHost.h)
+    if (localState_) return !localState_->getRouteLocal();
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: get the stored route local failed: {}", e.what());
+  }
+  return false;  // no state at all: claim the permissive default, not the strict one
+}
+
+std::string SdkHost::StoredProvideControlMode() {
+  try {
+    if (localState_) return localState_->getProvideControlMode();
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: get the stored provide control mode failed: {}", e.what());
+  }
+  return "never";
+}
+
+void SdkHost::ReadDrawerSeedOnWorker() {
+  try {
+    DrawerSeed seed;
+    seed.dns = CurrentDnsSettings();
+    seed.clientTransport = CurrentTransportSettings(TransportSettingsKind::Client);
+    seed.providerTransport = CurrentTransportSettings(TransportSettingsKind::Provider);
+    seed.blockerEnabled = CurrentBlockerEnabled();
+    if (onDrawerSeed_) onDrawerSeed_(std::move(seed));
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: reading the drawer's settings failed: {}", e.what());
+  }
 }
 
 void SdkHost::SetPerformanceSettings(const PerformanceSettings& settings) {
@@ -6165,9 +6223,15 @@ std::vector<urnet::ProbeResult> SdkHost::GetProbeResults() {
 // WHICH SOURCE WINS: the view controller, always, whenever it exists. It pushes
 // live updates and owns server-side search; the api path is a cold snapshot.
 // deviceFeedOpen_ is the gate, checked by the api path before every push.
-void SdkHost::EnsureLocations() {
-  std::scoped_lock lock(mutex_);
-  EnsureLocationsLocked();
+void SdkHost::EnsureLocations() { locationsOpener_.Request(); }
+
+void SdkHost::EnsureLocationsOnWorker() {
+  try {
+    std::scoped_lock lock(mutex_);
+    EnsureLocationsLocked();
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: opening the locations feeds failed: {}", e.what());
+  }
 }
 
 void SdkHost::EnsureLocationsLocked() {
@@ -6404,10 +6468,13 @@ bool SdkHost::RemoteConnected() {
 }
 
 std::optional<urnet::ConnectLocation> SdkHost::SelectedLocation() {
-  std::scoped_lock lock(mutex_);
-  if (connectVc_) return connectVc_->getSelectedLocation();
-  if (device_) return device_->getConnectLocation();
-  return std::nullopt;
+  std::scoped_lock lock(selectedLocationMutex_);
+  return selectedLocation_;
+}
+
+void SdkHost::KeepSelectedLocation(std::optional<urnet::ConnectLocation> location) {
+  std::scoped_lock lock(selectedLocationMutex_);
+  selectedLocation_ = std::move(location);
 }
 
 // ---- selection identity (shared: sheet, Network pane, row coalescer) -------
@@ -6516,6 +6583,14 @@ void SdkHost::ConnectBestAvailable() {
   SessionRequest r;
   r.kind = ConnectKind::BestAvailable;
   r.reason = "connect (best available)";
+  RequestSession(std::move(r));
+}
+
+void SdkHost::ConnectSelected() {
+  if (!AdmitStartConnect("connect (selection)", [this] { ConnectSelected(); })) return;
+  SessionRequest r;
+  r.kind = HasSession() ? ConnectKind::Selected : ConnectKind::BestAvailable;
+  r.reason = "connect (selection)";
   RequestSession(std::move(r));
 }
 
@@ -6916,7 +6991,8 @@ void SdkHost::SessionWorkerLoop() {
       }
 
       const bool connecting = req.kind == ConnectKind::BestAvailable ||
-                              req.kind == ConnectKind::Location;
+                              req.kind == ConnectKind::Location ||
+                              req.kind == ConnectKind::Selected;
       if (ok) {
         serviceRecoveryNeeded_.store(false, std::memory_order_release);
         watchdogCv_.notify_all();
@@ -7270,8 +7346,31 @@ void SdkHost::FollowServiceLogUpload(const proto::TunnelStatus& st) {
   }
 }
 
-void SdkHost::ConnectLocked(const SessionRequest& request) {
+void SdkHost::ConnectLocked(const SessionRequest& requested) {
   // caller holds mutex_
+  //
+  // The connect button's selection is read here, on the worker: the
+  // presented controller's own selection, else the device's location
+  // (ConnectSelected).
+  SessionRequest request = requested;
+  if (request.kind == ConnectKind::Selected) {
+    std::optional<urnet::ConnectLocation> selected;
+    try {
+      if (connectVc_) {
+        selected = connectVc_->getSelectedLocation();
+      } else if (device_) {
+        selected = device_->getConnectLocation();
+      }
+    } catch (const std::exception& e) {
+      LogWarn("sdkhost: reading the selection for '{}' failed: {}", request.reason, e.what());
+    }
+    if (IsBestAvailableSelected(selected)) {
+      request.kind = ConnectKind::BestAvailable;
+    } else {
+      request.kind = ConnectKind::Location;
+      request.location = std::move(selected);
+    }
+  }
   //
   // #27: a DELIBERATE connect/disconnect starts a new health attempt. Proof
   // earned by the previous target must not survive into the new window, or a
@@ -7633,6 +7732,9 @@ proto::TunnelStatus SdkHost::StopServiceTunnel() {
 
 void SdkHost::ClosePresentationLocked(bool sessionEnding) {
   presentationSubs_.clear();
+  // A hide keeps the selection for the window that comes back; the session's
+  // end takes it with the session.
+  if (sessionEnding || !device_) KeepSelectedLocation(std::nullopt);
   // Released here rather than beside each locationsVc_.reset() below, so the two
   // exit paths cannot disagree. Once it is clear the api path may write again.
   deviceFeedOpen_.store(false, std::memory_order_release);
@@ -8182,8 +8284,10 @@ void SdkHost::QuitInOrder(std::chrono::steady_clock::time_point start) {
   StopPresentationWorker();
   StopSyncWatchdog();
   StopProviderOnlyStats();
-  // it reads the device the teardown below closes
+  // they read the device the teardown below closes
   statsPublisher_.Stop();
+  locationsOpener_.Stop();
+  drawerSeedReader_.Stop();
   // 4. The service, under mutex_: after any pass in flight (a Connect's
   // bootstrap, a reconcile, the user's Disconnect), and with none able to
   // follow it.

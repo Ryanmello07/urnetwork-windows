@@ -269,7 +269,8 @@ func TestBalanceRecoveryWiring(t *testing.T) {
 	}
 	// every retry goes past the gate, never through a gated entry point directly
 	if strings.Count(observe, "sdk_.RetryRefusedConnect(") != 2 ||
-		strings.Count(observe, "sdk_.Connect") != strings.Count(observe, "sdk_.Connect(*location);")+strings.Count(observe, "sdk_.ConnectBestAvailable();") {
+		strings.Count(observe, "sdk_.Connect") != strings.Count(observe, "sdk_.Connect(*location);")+
+			strings.Count(observe, "sdk_.ConnectBestAvailable();")+strings.Count(observe, "sdk_.ConnectSelected();") {
 		t.Error("AppController::ObserveBalanceRecovery: a retry does not go through RetryRefusedConnect")
 	}
 	auth := definitionBody(t, "AppController.cpp", app, "void AppController::OnAuthState(AuthState state, const std::string& error)")
