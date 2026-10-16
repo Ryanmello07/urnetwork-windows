@@ -388,11 +388,7 @@ void ConnectPage::OnConnectToggle(IInspectable const&, RoutedEventArgs const&) {
   // (OnStartWaitChanged).
   if (!Sdk().AdmitStartConnect("connect button", [retry] {
         if (retry) Sdk().Disconnect();
-        const auto selected = Sdk().SelectedLocation();
-        if (IsBestAvailableSelected(selected))
-          Sdk().ConnectBestAvailable();
-        else
-          Sdk().Connect(*selected);
+        Sdk().ConnectSelected();
       })) {
     return;
   }
@@ -406,12 +402,13 @@ void ConnectPage::OnConnectToggle(IInspectable const&, RoutedEventArgs const&) {
   // best-available on the selection itself -- IsBestAvailableSelected, the
   // same test the chooser's check glyphs use).
   //
-  // Deliberately the IMMEDIATE entry points, not the coalesced row variants
+  // Deliberately an IMMEDIATE entry point, not the coalesced row variants
   // (SdkHost::ConnectFromRow): this is a single explicit press of THE connect
   // button, not a hunt through a list, and it also supersedes any row intent
-  // still settling.
-  const auto selected = Sdk().SelectedLocation();
-  const bool bestAvailable = IsBestAvailableSelected(selected);
+  // still settling. The selection is read by the session worker
+  // (SdkHost::ConnectSelected): read here it took mutex_, which the worker
+  // holds through a whole connect, so a press behind a held command froze the
+  // window.
   if (retry) {
     // The Retry contract: the disconnect tears down the failed session (multi
     // client, routes, window) and the connect below builds a fresh one — the
@@ -430,10 +427,7 @@ void ConnectPage::OnConnectToggle(IInspectable const&, RoutedEventArgs const&) {
   // health value — keep the two telling the same story from the same instant.
   health_ = urnw::health::State::Connecting;
   ApplyConnectStatus();
-  if (bestAvailable)
-    Sdk().ConnectBestAvailable();
-  else
-    Sdk().Connect(*selected);
+  Sdk().ConnectSelected();
 }
 
 // A tap on Connect whose balance is stale waits for the gate's fetch, for up

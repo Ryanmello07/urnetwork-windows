@@ -1050,6 +1050,15 @@ class SdkHost {
   // that runs out of balance is never dropped by this.
   void ConnectBestAvailable();
   void Connect(const std::string& connectLocationJson);
+  // Connect to what the user picked: the presented controller's selection,
+  // else the device's location, best available when that is none or flagged
+  // so (IsBestAvailableSelected). Resolved on the session worker, because
+  // SelectedLocation takes mutex_ (held across whole bootstraps) and, with no
+  // presented controller, reads the device: the connect button and the
+  // balance recovery's rebuild read nothing on the caller's thread. With no
+  // session nothing is selected, so it is best available, as SelectedLocation
+  // answered then.
+  void ConnectSelected();
   void Disconnect();
   // The start-connect gate. facts gives urnw::balance::StartConnectFacts for
   // this instant; upgrade shows the upgrade path in place of a blocked
@@ -1931,7 +1940,10 @@ class SdkHost {
   // step" (ReconcileProviderLocked), with no gesture, no bootstrap and no attach.
   // Every pass of the worker that leaves no session ends with that reconcile, so
   // a Provider request is covered by whatever else is pending.
-  enum class ConnectKind { None, BestAvailable, Location, Disconnect, Provider };
+  //
+  // Selected is the connect button's "what the user picked", resolved by the
+  // worker under mutex_ (ConnectLocked): the press itself reads nothing.
+  enum class ConnectKind { None, BestAvailable, Location, Selected, Disconnect, Provider };
   struct SessionRequest {
     ConnectKind kind = ConnectKind::None;
     std::optional<urnet::ConnectLocation> location;
@@ -1960,6 +1972,7 @@ class SdkHost {
     switch (kind) {
       case ConnectKind::BestAvailable: return signoutfence::Work::Connect;
       case ConnectKind::Location:      return signoutfence::Work::Connect;
+      case ConnectKind::Selected:      return signoutfence::Work::Connect;
       case ConnectKind::Disconnect:    return signoutfence::Work::Disconnect;
       case ConnectKind::Provider:      return signoutfence::Work::Provider;
       case ConnectKind::None:          break;
@@ -1970,6 +1983,7 @@ class SdkHost {
     switch (kind) {
       case ConnectKind::BestAvailable: return gesture::Gesture::Connect;
       case ConnectKind::Location:      return gesture::Gesture::ConnectRow;
+      case ConnectKind::Selected:      return gesture::Gesture::Connect;
       case ConnectKind::Disconnect:    return gesture::Gesture::Disconnect;
       case ConnectKind::None:          break;
       case ConnectKind::Provider:      break;  // never reaches the table
@@ -1982,6 +1996,7 @@ class SdkHost {
       case ConnectKind::Disconnect:    return exitdrain::Queued::Disconnect;
       case ConnectKind::BestAvailable: return exitdrain::Queued::Connect;
       case ConnectKind::Location:      return exitdrain::Queued::Connect;
+      case ConnectKind::Selected:      return exitdrain::Queued::Connect;
       case ConnectKind::Provider:      return exitdrain::Queued::Provider;
       case ConnectKind::None:          break;
     }
@@ -1996,7 +2011,8 @@ class SdkHost {
   // producer holds while it tests it, so a request that lands as the worker is
   // finishing cannot be dropped.
   void SessionWorkerLoop();
-  // Apply the request's connect intent. Caller holds mutex_.
+  // Apply the request's connect intent, reading the selection for a Selected
+  // one (ConnectSelected). Caller holds mutex_.
   void ConnectLocked(const SessionRequest& request);
   // Row-click support (see ConnectFromRow). Whether the session is already
   // driving at the clicked target: `matches` is handed the SDK's own selected

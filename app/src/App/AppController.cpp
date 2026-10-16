@@ -679,13 +679,8 @@ void AppController::ObserveBalanceRecovery() {
   if (step.kind == urnw::balance::RecoveryStepKind::Start) {
     sdk_.RetryRefusedConnect(step.target);
   } else {
-    sdk_.RetryRefusedConnect([this] {
-      if (auto location = sdk_.SelectedLocation()) {
-        sdk_.Connect(*location);
-      } else {
-        sdk_.ConnectBestAvailable();
-      }
-    });
+    // the held connection's selection, read on the session worker
+    sdk_.RetryRefusedConnect([this] { sdk_.ConnectSelected(); });
   }
   tray_.ShowBalloon(Localized("app_name"), Localized("insufficient_balance_reconnecting"));
 }

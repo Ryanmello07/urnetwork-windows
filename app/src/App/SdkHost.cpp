@@ -6519,6 +6519,14 @@ void SdkHost::ConnectBestAvailable() {
   RequestSession(std::move(r));
 }
 
+void SdkHost::ConnectSelected() {
+  if (!AdmitStartConnect("connect (selection)", [this] { ConnectSelected(); })) return;
+  SessionRequest r;
+  r.kind = HasSession() ? ConnectKind::Selected : ConnectKind::BestAvailable;
+  r.reason = "connect (selection)";
+  RequestSession(std::move(r));
+}
+
 void SdkHost::Connect(const std::string& connectLocationJson) {
   if (!AdmitStartConnect("connect (location)",
                          [this, connectLocationJson] { Connect(connectLocationJson); })) {
@@ -6916,7 +6924,8 @@ void SdkHost::SessionWorkerLoop() {
       }
 
       const bool connecting = req.kind == ConnectKind::BestAvailable ||
-                              req.kind == ConnectKind::Location;
+                              req.kind == ConnectKind::Location ||
+                              req.kind == ConnectKind::Selected;
       if (ok) {
         serviceRecoveryNeeded_.store(false, std::memory_order_release);
         watchdogCv_.notify_all();
@@ -7270,8 +7279,31 @@ void SdkHost::FollowServiceLogUpload(const proto::TunnelStatus& st) {
   }
 }
 
-void SdkHost::ConnectLocked(const SessionRequest& request) {
+void SdkHost::ConnectLocked(const SessionRequest& requested) {
   // caller holds mutex_
+  //
+  // The connect button's selection is read here, on the worker: the
+  // presented controller's own selection, else the device's location
+  // (ConnectSelected).
+  SessionRequest request = requested;
+  if (request.kind == ConnectKind::Selected) {
+    std::optional<urnet::ConnectLocation> selected;
+    try {
+      if (connectVc_) {
+        selected = connectVc_->getSelectedLocation();
+      } else if (device_) {
+        selected = device_->getConnectLocation();
+      }
+    } catch (const std::exception& e) {
+      LogWarn("sdkhost: reading the selection for '{}' failed: {}", request.reason, e.what());
+    }
+    if (IsBestAvailableSelected(selected)) {
+      request.kind = ConnectKind::BestAvailable;
+    } else {
+      request.kind = ConnectKind::Location;
+      request.location = std::move(selected);
+    }
+  }
   //
   // #27: a DELIBERATE connect/disconnect starts a new health attempt. Proof
   // earned by the previous target must not survive into the new window, or a
