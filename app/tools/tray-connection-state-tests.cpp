@@ -167,6 +167,31 @@ void TestAConnectInProgressReadsConnecting() {
   }
 }
 
+// A connect tap held until its pass publishes (TapHold.h) reads like a start
+// in progress from the tap on, over a tunnel that is not up yet, whatever the
+// machine's state: the stats have not caught up with the tap.
+void TestAHeldConnectReadsConnecting() {
+  for (Tunnel tunnel : {Tunnel::Down, Tunnel::Starting, Tunnel::Failed}) {
+    for (std::string_view wfp : kEveryWfpState) {
+      for (bool routes : {false, true}) {
+        tray::Facts facts = Known(tunnel, Health::Connecting);
+        facts.connectHeld = true;
+        facts.wfpState = wfp;
+        facts.routesInstalled = routes;
+        const tray::View view = tray::Decide(facts);
+        Check(view.status == Status::Connecting && !view.connectedIcon,
+              std::string("a held connect reads connecting: wfp \"") + std::string(wfp) + "\"" +
+                  (routes ? ", routes" : "") + " reads " + Name(view.status));
+      }
+    }
+  }
+  // the tunnel up: its health, which the held tap makes connecting
+  tray::Facts up = Known(Tunnel::Up, Health::Connecting);
+  up.connectHeld = true;
+  Check(tray::Decide(up).status == Status::Connecting && !tray::Decide(up).connectedIcon,
+        "a held connect over an up tunnel reads connecting, not connected");
+}
+
 // A start the service could not finish says "Couldn't connect", as the connect
 // page does, unless the machine's own state is the more urgent line.
 void TestAFailedStartSaysCouldNotConnect() {
@@ -306,6 +331,7 @@ int main() {
       {"connected needs the tunnel up", TestConnectedNeedsTheTunnelUp},
       {"the tunnel up reads its health", TestTheTunnelUpReadsItsHealth},
       {"a connect in progress reads connecting", TestAConnectInProgressReadsConnecting},
+      {"a held connect reads connecting", TestAHeldConnectReadsConnecting},
       {"a failed start says couldn't connect", TestAFailedStartSaysCouldNotConnect},
       {"the tunnel-down lines keep their order", TestTheTunnelDownLinesKeepTheirOrder},
       {"no status claims nothing", TestNoStatusClaimsNothing},

@@ -240,6 +240,17 @@ void AppController::Start() {
         self->SetSigningOut(signingOut);
     });
   });
+  // A connect or disconnect tap shows its state at once and holds it until the
+  // pass that ran it has published (TapHold.h). Inside the gesture, on this
+  // thread, so no push queued before the tap renders over it; marshalled only
+  // if a gesture ever comes from another thread.
+  sdk_.SetGestureHandler([this](std::uint64_t gesture, taphold::Kind kind) {
+    if (uiThread_ && uiThread_.HasThreadAccess()) {
+      OnTapRecorded(gesture, kind);
+    } else {
+      OnUi([this, gesture, kind] { OnTapRecorded(gesture, kind); });
+    }
+  });
   sdk_.SetStartWaitHandler([this](StartWaitChange change) {
     OnUi([this, change] {
       if (!windowVisible_ || !window_) return;  // resynced on show
@@ -583,7 +594,11 @@ void AppController::OnStats(const LiveStats& stats) {
   // #27: the tray is a stats consumer now — the aggregate health rides every
   // snapshot. Change-gated: stats push on every throughput tick, and a
   // Shell_NotifyIcon per second for an unchanged icon is churn for nothing.
-  if (trayHealth_ != std::optional<health::State>{stats.health}) {
+  // A read that began after the held tap settled says what it left.
+  const bool tapHeld = trayTap_.has_value();
+  trayTap_ = taphold::AfterSnapshot(trayTap_, stats.gestureSettled);
+  if (trayHealth_ != std::optional<health::State>{stats.health} ||
+      tapHeld != trayTap_.has_value()) {
     trayHealth_ = stats.health;
     UpdateTray();
   }
@@ -723,7 +738,22 @@ gesture::ServiceFacts AppController::CurrentServiceFacts() const {
   return f;
 }
 
+std::optional<health::State> AppController::HeldTrayHealth() const {
+  if (!trayTap_ || authState_ != AuthState::LoggedIn) return std::nullopt;
+  return trayTap_->kind == taphold::Kind::Connect ? health::State::Connecting
+                                                  : health::State::Disconnected;
+}
+
+void AppController::OnTapRecorded(std::uint64_t gesture, taphold::Kind kind) {
+  trayTap_ = taphold::AfterTap(trayTap_, taphold::Hold{.gesture = gesture, .kind = kind});
+  UpdateTray();
+  if (!windowVisible_ || !window_) return;  // forwarded on show
+  if (auto self = window_.try_as<winrt::URnetwork::implementation::MainWindow>())
+    self->OnTapRecorded(gesture, kind);
+}
+
 health::State AppController::TrayHealth() const {
+  if (const auto held = HeldTrayHealth()) return *held;
   if (trayHealth_) return *trayHealth_;
   return connected_ ? health::State::Connected : health::State::Disconnected;
 }
@@ -739,7 +769,10 @@ tray::Facts AppController::CurrentTrayFacts() const {
     facts.wfpState = lastTunnelStatus_->wfp_state;
     facts.failsafeStop = proto::IsFailsafeStop(lastTunnelStatus_->stop_reason);
   }
-  facts.health = trayHealth_;
+  // a held tap's own state, connecting or disconnected, until it settles
+  const std::optional<health::State> held = HeldTrayHealth();
+  facts.health = held ? held : trayHealth_;
+  facts.connectHeld = held == health::State::Connecting;
   facts.actionIsDisconnect = gesture::ActionIsDisconnect(CurrentServiceFacts(), TrayHealth());
   return facts;
 }
@@ -1103,6 +1136,8 @@ void AppController::ReconcileWindowPresentation() {
     if (lastTunnelStatus_) self->OnTunnelStateChanged(*lastTunnelStatus_);
     sdk_.RepublishStats();
     self->OnBalanceChanged(balance_.Current(), balance_.CurrentPoll());
+    // a tap the tray holds, made while the window was hidden
+    if (trayTap_) self->OnTapRecorded(trayTap_->gesture, trayTap_->kind);
     // a start that began waiting on its balance while the window was hidden
     // a sign-out that began while the window was hidden
     self->SetSigningOut(sdk_.SigningOut());

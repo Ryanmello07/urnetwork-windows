@@ -156,7 +156,8 @@ func TestTrayConnectionStateRejectsThePreviousMapping(t *testing.T) {
 // or blocked again.
 func TestTrayConnectionStateRejectsAConnectReadAsTunnelDown(t *testing.T) {
 	requireTrayStateFailure(t, func(source string) string {
-		return replaceTrayStateOnce(t, source, "  if (facts.tunnel == Tunnel::Starting) {\n",
+		return replaceTrayStateOnce(t, source,
+			"  if (facts.tunnel == Tunnel::Starting || facts.connectHeld) {\n",
 			"  if (false) {\n")
 	}, "FAIL a connect in progress reads connecting")
 }
@@ -297,7 +298,7 @@ func TestTrayConnectionStateWiring(t *testing.T) {
 		"facts.routesInstalled = lastTunnelStatus_->routes_installed;",
 		"facts.wfpState = lastTunnelStatus_->wfp_state;",
 		"facts.failsafeStop = proto::IsFailsafeStop(lastTunnelStatus_->stop_reason);",
-		"facts.health = trayHealth_;",
+		"facts.health = held ? held : trayHealth_;",
 		"facts.actionIsDisconnect = gesture::ActionIsDisconnect(CurrentServiceFacts(), TrayHealth());",
 	} {
 		if !strings.Contains(facts, want) {

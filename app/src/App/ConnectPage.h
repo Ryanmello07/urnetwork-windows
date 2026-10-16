@@ -84,6 +84,9 @@ class ConnectPage {
   // it (StartConnectWait.h): Admitted keeps that state into its connect, Ended
   // goes back to the last reported status.
   void OnStartWaitChanged(urnw::StartWaitChange change);
+  // A connect or disconnect tap the session slot recorded shows its state at
+  // once, held until a stats push read after it settled (TapHold.h).
+  void OnTapRecorded(std::uint64_t gesture, urnw::taphold::Kind kind);
   // The provider extender row under the provide group (connect/EXTENDER.md N7).
   // MainWindow hands every pushed status here and to the Earnings page, as it
   // hands the live stats to both.
@@ -577,6 +580,12 @@ class ConnectPage {
   bool startWaiting_ = false;
   ConnectStatus reportedConnectStatus_ = ConnectStatus::Disconnected;
   urnw::health::State reportedHealth_ = urnw::health::State::NoService;
+  // The tap held over the reported status (OnTapRecorded), until a push read
+  // after its gesture settled.
+  std::optional<urnw::taphold::Hold> tapHold_;
+  // connectStatus_ and health_ from the start wait, the held tap and the
+  // reported values (taphold::Shown).
+  void ShowTapState();
   // the easter egg's five-tap count on the status dot (Initialize wires it)
   TapSequenceGate connectedIconTaps_;
   // ---- #27: the aggregate connection health ----

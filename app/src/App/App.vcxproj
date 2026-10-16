@@ -458,6 +458,7 @@
     <ClInclude Include="SignOutConnectFence.h" />
     <ClInclude Include="SignOutRun.h" />
     <ClInclude Include="StartConnectWait.h" />
+    <ClInclude Include="TapHold.h" />
     <ClInclude Include="VerifySendNotice.h" />
     <ClInclude Include="GuestConversion.h" />
     <ClInclude Include="StatsFormat.h" />

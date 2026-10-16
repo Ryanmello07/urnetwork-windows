@@ -440,21 +440,40 @@ void ConnectPage::OnStartWaitChanged(urnw::StartWaitChange change) {
   switch (change) {
     case urnw::StartWaitChange::Waiting:
       startWaiting_ = true;
-      connectStatus_ = ConnectStatus::Connecting;
-      health_ = urnw::health::State::Connecting;
       break;
     case urnw::StartWaitChange::Admitted:
+      // its connect is a held tap by now (OnTapRecorded, from inside the
+      // gesture), so the view keeps connecting with no step back
       if (!startWaiting_) return;
       startWaiting_ = false;
       break;
     case urnw::StartWaitChange::Ended:
       if (!startWaiting_) return;
       startWaiting_ = false;
-      connectStatus_ = reportedConnectStatus_;
-      health_ = reportedHealth_;
       break;
   }
+  ShowTapState();
   ApplyConnectStatus();
+}
+
+// A tap shows the sdk controller's own first status for it at once: connecting
+// for a connect, disconnected for a disconnect. The session worker runs it
+// later, maybe behind a pass held in an rpc, and every push read before then
+// carries the older status; held, they cannot flip the view back. The push
+// whose read began after the tap settled replaces it with what the tap left.
+void ConnectPage::OnTapRecorded(std::uint64_t gesture, urnw::taphold::Kind kind) {
+  tapHold_ = urnw::taphold::AfterTap(tapHold_,
+                                     urnw::taphold::Hold{.gesture = gesture, .kind = kind});
+  ShowTapState();
+  ApplyConnectStatus();
+}
+
+void ConnectPage::ShowTapState() {
+  connectStatus_ = urnw::taphold::Shown(startWaiting_, tapHold_, reportedConnectStatus_,
+                                        ConnectStatus::Connecting, ConnectStatus::Disconnected);
+  health_ = urnw::taphold::Shown(startWaiting_, tapHold_, reportedHealth_,
+                                 urnw::health::State::Connecting,
+                                 urnw::health::State::Disconnected);
 }
 
 // ---- state relay ---------------------------------------------------------
@@ -1298,9 +1317,11 @@ void ConnectPage::ApplyStats(urnw::LiveStats const& stats) {
   ApplyLocationRowName();  // the row's name carries the provider, not just the label
   // The SDK's connection status: the only signal in the client that carries a
   // CONNECTING state. It was read into LiveStats and never used. A start
-  // waiting on its balance keeps showing connecting (OnStartWaitChanged).
+  // waiting on its balance, or a held tap, keeps showing its own state
+  // (ShowTapState below).
   reportedConnectStatus_ = ParseConnectStatus(stats.connectionStatus);
-  connectStatus_ = startWaiting_ ? ConnectStatus::Connecting : reportedConnectStatus_;
+  // a held tap ends only with a read that began after its gesture settled
+  tapHold_ = urnw::taphold::AfterSnapshot(tapHold_, stats.gestureSettled);
   // the inspector's pre-clamp reading (D5): only an rpc-only session fills
   // rawConnectionStatus, and in every other the clamped value is the raw one
   rawConnectionStatus_ = stats.rpcOnly ? stats.rawConnectionStatus : stats.connectionStatus;
@@ -1310,7 +1331,7 @@ void ConnectPage::ApplyStats(urnw::LiveStats const& stats) {
   // #27: the aggregate health, derived in the SAME ReadStats as every other
   // field of this snapshot — the status line renders THIS, not the raw status.
   reportedHealth_ = stats.health;
-  health_ = startWaiting_ ? urnw::health::State::Connecting : reportedHealth_;
+  ShowTapState();
   healthReevalAtMillis_ = stats.healthReevalAtMillis;
   // The provider grid, into the hero. This is the first consumer
   // getProviderGridPointList() has ever had in this client. An empty list is
