@@ -55,6 +55,14 @@ func applyDefinition(source, opener string) string {
 	return source[start : start+end+2]
 }
 
+// The body of the definition at `opener`, its whitespace folded to single
+// spaces: what a whole-body pin compares. An order pin lets lines in between,
+// and an early return inserted there keeps every pattern in place (the lead's
+// G16 and G17).
+func foldedBody(source, opener string) string {
+	return strings.Join(strings.Fields(strings.TrimSuffix(strings.TrimPrefix(applyDefinition(source, opener), opener), "\n}")), " ")
+}
+
 func reportProblems(t *testing.T, problems []string) {
 	t.Helper()
 	for _, problem := range problems {
@@ -304,6 +312,11 @@ func checkApplyUpdate(apply string) []string {
 		regexp.QuoteMeta("install::ReadPathFacts(updates);"),
 		regexp.QuoteMeta("if (folder.found == update::PathFacts::Found::Absent) return true;"),
 		regexp.QuoteMeta("return update::IsHelpersFolder(folder, install::ReadDescriptorFacts(updates));"))...)
+	// and nothing else: updates\ as it is found, judged by its descriptor alone
+	if body := foldedBody(apply, "bool FoundAsTheHelpers(const fs::path& updates) {"); body != "const update::PathFacts folder = install::ReadPathFacts(updates); if (folder.found == update::PathFacts::Found::Absent) return true; return update::IsHelpersFolder(folder, install::ReadDescriptorFacts(updates));" {
+		problems = append(problems, fmt.Sprintf("FoundAsTheHelpers is %q, want updates\\ as it is found judged by its descriptor alone, "+
+			"or absent: a folder that was open to others is never taken for the helper's own", body))
+	}
 	// The lock is kept until the helper exits. TakeHelperLock closes the handle
 	// only where it then refuses, and ApplyUpdate declares the handle in its own
 	// scope and names it nowhere else but to take the lock: closed, moved or
@@ -550,6 +563,12 @@ func checkChannelVerb(apply, location string) []string {
 		regexp.QuoteMeta("if (answer == IDOK) {"),
 		regexp.QuoteMeta("return true;"),
 		regexp.QuoteMeta("return false;"))...)
+	// and nothing else: no answer but OK says yes, a box that could not be shown
+	// included, and nothing returns early
+	if body := foldedBody(apply, "bool AdministratorConfirms(const update::Feed& feed, HelperLog& log) {"); body != "USEROBJECTFLAGS station{}; if (!::GetUserObjectInformationW(::GetProcessWindowStation(), UOI_FLAGS, &station, sizeof(station), nullptr) || !(station.dwFlags & WSF_VISIBLE)) { log.Line(\"declined: this window station is not visible, so nobody can be asked\"); return false; } const std::wstring repository = WidenAscii(feed.owner) + L\"/\" + WidenAscii(feed.repo); const std::wstring text = std::vformat(kChannelQuestion, std::make_wformat_args(repository)); const int answer = ::MessageBoxW(nullptr, text.c_str(), kChannelCaption, MB_OKCANCEL | MB_DEFBUTTON2 | MB_ICONWARNING | MB_SETFOREGROUND | MB_TOPMOST); if (answer == IDOK) { log.Line(\"confirmed: the administrator chose OK for the {} channel\", feed.id); return true; } log.Line(\"declined: the question for the {} channel was answered {}\", feed.id, answer); return false;" {
+		problems = append(problems, fmt.Sprintf("AdministratorConfirms is %q, want the window station checked first, the row's repository "+
+			"asked about, and OK alone taken for yes", body))
+	}
 	if count := strings.Count(apply, "github.com/{0}"); count != 1 {
 		problems = append(problems, fmt.Sprintf("the question names github.com/{0} %d times, want once: the repository is the row's", count))
 	}
@@ -591,6 +610,34 @@ func TestUpdateApplyTheChannelVerbChecksInOrder(t *testing.T) {
 func TestUpdateApplyTheChannelIsOnlyAnIndex(t *testing.T) {
 	sources := updaterSources(t)
 	reportProblems(t, checkChannelIsAnIndex(sources["ApplyUpdate.cpp"], sources))
+}
+
+// The marker alone selects the feed: FeedOfMarker, which the tray (Start,
+// SyncChannel) and the helper (ChannelFeed) both call, is pinned whole, its
+// whitespace folded (the lead's G17). A conditional inside it, a build-time
+// default under any name among them, is reported here; update_release_test.go
+// runs what it does, with controls.
+func checkMarkerSelectsTheFeedAlone(channel string) []string {
+	if body := foldedBody(channel, "inline const Feed& FeedOfMarker(ChannelMarker marker) {"); body != "if (marker == ChannelMarker::Trusted) { if (const Feed* developer = FeedById(kDeveloperChannelId)) return *developer; } return kOfficialFeed;" {
+		return []string{fmt.Sprintf("UpdateChannel.h's FeedOfMarker is %q, want the developer row for a trusted marker alone, "+
+			"while the table has it, and the official feed for anything else", body)}
+	}
+	return nil
+}
+
+func TestUpdateApplyTheMarkerSelectsTheFeedAlone(t *testing.T) {
+	channel := stripComments(readCommonSource(t, "UpdateChannel.h"))
+	reportProblems(t, checkMarkerSelectsTheFeedAlone(channel))
+	// the review's A1: a default under a name no list knows, inside the function
+	const first = "  if (marker == ChannelMarker::Trusted) {\n    if (const Feed* developer = FeedById(kDeveloperChannelId)) return *developer;\n"
+	if strings.Count(channel, first) != 1 {
+		t.Fatalf("negative control: %q is not in UpdateChannel.h exactly once", first)
+	}
+	changed := strings.Replace(channel, first, "#if defined(URN_DEVELOPER_BY_DEFAULT)\n"+
+		"  if (marker == ChannelMarker::Absent) marker = ChannelMarker::Trusted;\n#endif\n"+first, 1)
+	if problems := strings.Join(checkMarkerSelectsTheFeedAlone(changed), "\n"); !strings.Contains(problems, "FeedOfMarker is") {
+		t.Fatalf("negative control was not detected: a default inside FeedOfMarker; the check reported:\n%s", problems)
+	}
 }
 
 // Every response the helper reads came with redirects refused and a
@@ -649,8 +696,12 @@ func TestUpdateApplyUpgradeCodeIsThePackages(t *testing.T) {
 // whole PC. A default would be a second thing that picks the feed, set where
 // a build host's environment reaches it (MSBuild reads variables as
 // properties), and the tray app and the helper are two projects that would
-// both have to get it. So no build input names one, whatever its value and
-// in any case, the helper's own project included.
+// both have to get it. What this refuses is three spellings of one:
+// URN_UPDATE_FEED_DEFAULT, UrnUpdateFeedDefault and UrnUpdateChannelDefault,
+// whatever the value and in any case, in every build input below, the
+// helper's own project included. A default under another name is not
+// refused here; FeedOfMarker, the one function that turns the marker into a
+// feed, is pinned whole instead (checkMarkerSelectsTheFeedAlone).
 func checkRunnerFeedIsTestOnly(inputs map[string]string, project, resources, apply string,
 	sources map[string]string) []string {
 	var problems []string
@@ -1171,6 +1222,15 @@ func TestUpdateApplyTheChannelVerbRejectsWeakerHelpers(t *testing.T) {
 		}},
 		{"the question asked with no look at the window station", `AdministratorConfirms is missing !\(station\.dwFlags & WSF_VISIBLE\)`, func() []string {
 			return verb("      !(station.dwFlags & WSF_VISIBLE)) {", "      false) {")
+		}},
+		// the review's M1: a box that could not be shown taken for OK
+		{"an answer that is not OK taken for yes", `AdministratorConfirms is "`, func() []string {
+			return verb("  if (answer == IDOK) {\n", "  if (answer == 0) return true;\n  if (answer == IDOK) {\n")
+		}},
+		// the review's M3: an open plain updates\ taken for the helper's own
+		{"a plain folder taken for the helper's own, whatever its descriptor", `FoundAsTheHelpers is "`, func() []string {
+			return checkApplyUpdate(replace(apply, "  if (folder.found == update::PathFacts::Found::Absent) return true;\n  return update::IsHelpersFolder(",
+				"  if (folder.found == update::PathFacts::Found::Absent) return true;\n  if (update::IsPlainFolder(folder)) return true;\n  return update::IsHelpersFolder("))
 		}},
 		{"the question naming a repository of its own", "never one of its own", func() []string {
 			return verb(`const std::wstring repository = WidenAscii(feed.owner) + L"/" + WidenAscii(feed.repo);`,
@@ -2207,6 +2267,37 @@ func checkTrayFollowsTheChannel(checker, window string, appSources map[string]st
 				problems = append(problems, "App/"+name+" names "+named+": the app reaches the developer row through FeedById alone")
 			}
 		}
+		// the tray reads the marker through the one reader and never reaches its
+		// path: the helper alone makes or removes it (SPEC-A2c 8.3)
+		if strings.Contains(source, "ChannelMarkerPath(") {
+			problems = append(problems, "App/"+name+" names ChannelMarkerPath(: the tray reads the marker through ReadChannelMarker "+
+				"alone, and only the elevated helper makes or removes it")
+		}
+	}
+	// What every surface draws is the marker as read (the lead's G17):
+	// ChannelLinesOf's whole body, its whitespace folded, and the snapshot's
+	// marker written where it is read, in Start and in SyncChannel, and nowhere
+	// else. A write elsewhere would show what was asked.
+	if body := foldedBody(checker, "update::ChannelLines UpdateChecker::ChannelLinesOf(Snapshot const& snapshot) {"); body != "return update::LinesOf( {.installed = snapshot.installed, .codeZero = version::kCode == 0, .developerBuild = update::IsBetaVersion(version::kString), .marker = snapshot.marker, .developerRow = update::FeedById(update::kDeveloperChannelId) != nullptr, .change = snapshot.change, .foundNothingNewer = snapshot.lastCheck == CheckOutcome::NoUpdate, .releaseCounts = snapshot.newestCode != 0, .releaseWaiting = NamesWaiting(snapshot)});" {
+		problems = append(problems, fmt.Sprintf("UpdateChecker::ChannelLinesOf is %q, want LinesOf's view of the snapshot, its marker as read", body))
+	}
+	start := applyDefinition(checker, "void UpdateChecker::Start() {")
+	for _, write := range regexp.MustCompile(`(\w*)(?:\.|->)marker\s*=([^=][^;,}]*)`).FindAllStringSubmatch(checker, -1) {
+		switch to, from := write[1], strings.TrimSpace(write[2]); {
+		case to == "snapshot_" && from == "marker":
+			// as read, in Start and SyncChannel (counted below)
+		case to == "" && from == "snapshot_.marker":
+			// a snapshot rebuilt from scratch keeps the one it had
+		case to == "" && from == "snapshot.marker":
+			// ChannelLinesOf's view, pinned whole above
+		default:
+			problems = append(problems, fmt.Sprintf("UpdateChecker.cpp sets a marker as %q: the snapshot's marker is written where Start "+
+				"and SyncChannel read it and copied as it is, so a screen shows the marker as read, never what was asked", write[0]))
+		}
+	}
+	if strings.Count(checker, "snapshot_.marker = marker;") != 2 || strings.Count(start, "snapshot_.marker = marker;") != 1 ||
+		strings.Count(sync, "snapshot_.marker = marker;") != 1 {
+		problems = append(problems, "UpdateChecker.cpp does not write the snapshot's marker exactly where Start and SyncChannel read it")
 	}
 	return problems
 }
@@ -2300,6 +2391,29 @@ func TestUpdateApplyTrayFollowsTheChannelRejectsWeakerSources(t *testing.T) {
 				changed[name] = source
 			}
 			changed["UpdateChecker.cpp"] += "\nconst urnw::update::Feed& kChannel = urnw::update::kDeveloperFeed;\n"
+			return checkTrayFollowsTheChannel(checker, window, changed)
+		}},
+		// the review's M2: every screen told what was asked
+		{"the screens told what was asked, not what the marker says", `UpdateChecker.cpp sets a marker as "s.marker = asked.id`, func() []string {
+			return follows(replace(checker, "  Mutate([line, &code](Snapshot& s) {\n    s.change = line;\n    s.changeCode = code;\n  });",
+				"  Mutate([line, &code, exitCode, &asked](Snapshot& s) {\n    s.change = line;\n    s.changeCode = code;\n"+
+					"    if (exitCode == 0) s.marker = asked.id == update::kOfficialFeed.id ? update::ChannelMarker::Absent : update::ChannelMarker::Trusted;\n  });"))
+		}},
+		// the review's M4 and M4d: every screen blind to the marker
+		{"the screens blind to the marker", `UpdateChecker::ChannelLinesOf is "`, func() []string {
+			return follows(replace(checker, "       .marker = snapshot.marker,\n", "       .marker = update::ChannelMarker::Absent,\n"))
+		}},
+		{"the marker's line dropped from the screens' view", `UpdateChecker::ChannelLinesOf is "`, func() []string {
+			return follows(replace(checker, "       .marker = snapshot.marker,\n", ""))
+		}},
+		// the review's B9: the tray deleting the marker itself
+		{"the tray reaching the marker's path", "names ChannelMarkerPath(", func() []string {
+			changed := map[string]string{}
+			for name, source := range appSources {
+				changed[name] = source
+			}
+			changed["UpdateChecker.cpp"] = replace(changed["UpdateChecker.cpp"], "void UpdateChecker::SyncChannel() {\n",
+				"void UpdateChecker::SyncChannel() {\n  if (false) ::DeleteFileW(install::ChannelMarkerPath(installFolder_).c_str());\n")
 			return checkTrayFollowsTheChannel(checker, window, changed)
 		}},
 	} {

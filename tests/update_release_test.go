@@ -252,6 +252,17 @@ func TestUpdateReleaseRejectsAnotherDeveloperFeed(t *testing.T) {
 		{"any tag read", "ReleaseSelection.h",
 			"    if (feed.acceptBetaPrereleases && !selection_detail::EndsWith(rel.tag, \"-beta\")) continue;\n", "",
 			"the developer feed reads only tags that end -beta"},
+		// SPEC-A2c 8.2: FeedOfMarker giving the developer row for a marker that is
+		// not trusted, or for every marker (the review's B3); `marker` stays in use,
+		// since the program is built with -Werror
+		{"the row for a marker that is not trusted", "UpdateChannel.h",
+			"  if (marker == ChannelMarker::Trusted) {\n    if (const Feed* developer = FeedById(kDeveloperChannelId)) return *developer;",
+			"  if (marker != ChannelMarker::Absent) {\n    if (const Feed* developer = FeedById(kDeveloperChannelId)) return *developer;",
+			"a marker that is not trusted is the official channel"},
+		{"the row for every marker", "UpdateChannel.h",
+			"  if (marker == ChannelMarker::Trusted) {\n    if (const Feed* developer = FeedById(kDeveloperChannelId)) return *developer;",
+			"  if (marker == ChannelMarker::Trusted || true) {\n    if (const Feed* developer = FeedById(kDeveloperChannelId)) return *developer;",
+			"an absent marker is the official channel"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
