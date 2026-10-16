@@ -1202,6 +1202,12 @@ class SdkHost {
   // torn-down feed that nothing puts back, and the snapshot getters CANNOT
   // recover from that on their own (both the SDK's initial load and the api
   // fetch are async; a read taken right after either starts is always empty).
+  //
+  // Returns at once: the work runs on locationsOpener_, because it takes
+  // mutex_, which the session worker holds across whole bootstraps, and opens
+  // the device's view controllers, whose rpcs wait behind a held command. Its
+  // callers are on the UI thread (a window built, a sheet opened, the Network
+  // destination shown); what it opens reaches them through the handlers.
   void EnsureLocations();
   // Set the provider-list search query. Proxies to the view controller when one
   // exists; otherwise runs the SAME two-endpoint dispatch the view controller
@@ -2751,6 +2757,12 @@ class SdkHost {
   // with this object's other threads, above mutex_, by Quit and the destructor:
   // a read in flight is waited out, and none starts after.
   CoalescedWorker statsPublisher_{[this] { PublishStatsOnWorker(); }};
+  // EnsureLocations' work, off the caller's thread, stopped with
+  // statsPublisher_ for the same reason.
+  CoalescedWorker locationsOpener_{[this] { EnsureLocationsOnWorker(); }};
+  // EnsureLocationsLocked under mutex_, as locationsOpener_'s job: a throw is
+  // logged, not propagated.
+  void EnsureLocationsOnWorker();
   // The egress binding currently in force on THIS process's SDK instance, as a
   // packed (index4, index6) pair, and the lock that keeps the compare and the
   // SDK call together.

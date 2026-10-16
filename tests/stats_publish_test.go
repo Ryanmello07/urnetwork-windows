@@ -310,14 +310,14 @@ func TestStatsPushReadsNothingOnTheUiThread(t *testing.T) {
 	if statsIndex(apply, `ApplyPeerCount\(std::nullopt,\s*PeerLineReading\{\.remoteConnected = stats\.remoteConnected,\s*\.connectedPeerCount = stats\.connectedPeerCount\}\);`) < 0 {
 		t.Error("ConnectPage::ApplyStats does not hand the peers line the snapshot's readings")
 	}
+	// the line keeps the snapshot's reading for the pushes that carry none,
+	// and reads no getter of its own (drawer_push_reads_test.go)
 	peerCount := definitionBody(t, "ConnectPage.cpp", page, "void ConnectPage::ApplyPeerCount(")
-	for _, reading := range []string{
-		"reading ? reading->remoteConnected : Sdk().RemoteConnected()",
-		"reading ? reading->connectedPeerCount : Sdk().ConnectedPeerCount()",
-	} {
-		if !strings.Contains(peerCount, reading) {
-			t.Errorf("ApplyPeerCount reads SdkHost over a stats push's reading (%s)", reading)
-		}
+	if !strings.Contains(peerCount, "if (reading) peerLine_ = *reading;") {
+		t.Error("ApplyPeerCount does not keep a stats push's reading")
+	}
+	if strings.Contains(peerCount, "Sdk()") {
+		t.Error("ApplyPeerCount reads SdkHost on the UI thread")
 	}
 
 	sdkHost := stripComments(readAppSource(t, "SdkHost.cpp"))

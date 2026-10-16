@@ -1828,11 +1828,18 @@ void ConnectPage::WireDrawerFeeds() {
   });
   // location/provider chooser: the bucketed locations feed the open sheet; the
   // peers feed both the sheet's pinned section and the drawer's peer-count label
+  //
+  // Each push renders from what pushes carried (locations_, peers_, the
+  // peers line's reading), never from SdkHost's getters: those take mutex_,
+  // which the session worker holds through a whole connect, so a push behind
+  // a held command froze the window.
   sdk.SetLocationsHandler([queue, weak](std::optional<urnet::FilteredLocations> locations,
                                         std::string) {
     queue.TryEnqueue([weak, locations = std::move(locations)] {
-      if (auto self = weak.get(); self && self->connect().locationSheet_) {
-        self->connect().locationSheet_->Update(locations, Sdk().ConnectedProvidePeers());
+      if (auto self = weak.get()) {
+        auto& page = self->connect();
+        page.locations_ = locations;
+        if (page.locationSheet_) page.locationSheet_->Update(locations, page.peers_);
       }
     });
   });
@@ -1841,9 +1848,10 @@ void ConnectPage::WireDrawerFeeds() {
       if (auto self = weak.get()) {
         auto& page = self->connect();
         page.ApplyPeerCount(peers);
-        if (page.locationSheet_) {
-          page.locationSheet_->Update(Sdk().CurrentFilteredLocations(), peers);
-        }
+        // the line's count of every connected device comes with the next
+        // stats snapshot, read off this thread
+        Sdk().RepublishStats();
+        if (page.locationSheet_) page.locationSheet_->Update(page.locations_, peers);
       }
     });
   });
@@ -1856,7 +1864,7 @@ void ConnectPage::WireDrawerFeeds() {
         auto& page = self->connect();
         page.providerLocations_ = rows;
         if (page.providerLocationsSheet_) {
-          page.providerLocationsSheet_->Update(rows, Sdk().RemoteConnected());
+          page.providerLocationsSheet_->Update(rows, page.peerLine_.remoteConnected);
         }
       }
     });
@@ -1886,18 +1894,19 @@ void ConnectPage::WireDrawerFeeds() {
       }
     });
   });
-  sdk.SetRemoteChangedHandler([queue, weak](bool) {
-    queue.TryEnqueue([weak] {
+  sdk.SetRemoteChangedHandler([queue, weak](bool remoteConnected) {
+    queue.TryEnqueue([weak, remoteConnected] {
       if (auto self = weak.get()) {
         auto& page = self->connect();
-        // remote attach/detach flips the peers line's disabled state; the
-        // nullopt trigger leaves the chooser's peer rows untouched
+        // remote attach/detach flips the peers line's disabled state, as the
+        // push says; the nullopt trigger leaves the chooser's peer rows
+        // untouched
+        page.peerLine_.remoteConnected = remoteConnected;
         page.ApplyPeerCount(std::nullopt);
         // the same fact grays the provider-locations list: while the rpc is
         // down an empty window is unavailable, not "no providers"
         if (page.providerLocationsSheet_) {
-          page.providerLocationsSheet_->Update(page.providerLocations_,
-                                               Sdk().RemoteConnected());
+          page.providerLocationsSheet_->Update(page.providerLocations_, remoteConnected);
         }
       }
     });
@@ -4303,7 +4312,8 @@ winrt::fire_and_forget ConnectPage::ShowLocationChooserSheet() {
   Sdk().EnsureLocations();
   try {
     locationSheet_ = urnw::LocationChooserSheet::Create(self->Content().XamlRoot(), Sdk());
-    locationSheet_->Update(Sdk().CurrentFilteredLocations(), Sdk().ConnectedProvidePeers());
+    // what the feeds last pushed; EnsureLocations' own pushes follow
+    locationSheet_->Update(locations_, peers_);
     co_await locationSheet_->Dialog().ShowAsync();
   } catch (...) {
   }
@@ -4322,7 +4332,7 @@ winrt::fire_and_forget ConnectPage::ShowProviderLocationsSheet() {
         urnw::ProviderLocationsSheet::Create(self->Content().XamlRoot(), Sdk());
     // seeded from the CACHE, not a getter: the locations feed is signal-only, so
     // the rows the sheet should open on are the ones the last push left here
-    providerLocationsSheet_->Update(providerLocations_, Sdk().RemoteConnected());
+    providerLocationsSheet_->Update(providerLocations_, peerLine_.remoteConnected);
     // seed the badge set from the current snapshot so open-while-connected shows
     // badges immediately, not only after the next identity change
     providerIdentities_ = Sdk().CurrentProviderIdentities();
@@ -4345,12 +4355,14 @@ void ConnectPage::ApplyPeerCount(std::optional<urnet::NetworkPeerList> const& pe
   // means "re-render what you have", not "there are no peers" - so the cache is
   // only replaced when a real list arrives.
   if (peers) peers_ = peers;
+  // the reading a stats snapshot carried, kept for the pushes that carry none
+  if (reading) peerLine_ = *reading;
   ApplyPeersList();
   // The peers state lives in the service's device: while the rpc is down
   // (service not running) a zero here would be a stale claim presented as
   // fact, so the line goes gray and says discovery is disabled (apple
   // ConnectActions parity).
-  if (!(reading ? reading->remoteConnected : Sdk().RemoteConnected())) {
+  if (!peerLine_.remoteConnected) {
     const hstring disabled = Loc("peer_discovery_disabled");
     w_.PeerCountText().Text(disabled);
     // the row's automation name IS its text, and its text changes: set both
@@ -4360,7 +4372,7 @@ void ConnectPage::ApplyPeerCount(std::optional<urnet::NetworkPeerList> const& pe
     w_.PeerDot().Fill(urnw::colors::MutedBrush());
     return;
   }
-  const int64_t count = reading ? reading->connectedPeerCount : Sdk().ConnectedPeerCount();
+  const int64_t count = peerLine_.connectedPeerCount;
   // the standalone peers status line below the connect button, always shown:
   // "{n} peers" + a filled dot, green when providing peers are online and amber
   // at zero (apple ConnectActions parity)

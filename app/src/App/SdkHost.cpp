@@ -359,8 +359,10 @@ SdkHost::~SdkHost() {
   // same rule: outside the lock, joined.
   StopPresentationWorker();
   // The stats publish worker reads the device and this host's state: stopped,
-  // and a read in flight waited out, before any of it goes.
+  // and a read in flight waited out, before any of it goes. The locations
+  // opener the same.
   statsPublisher_.Stop();
+  locationsOpener_.Stop();
   // Same rule, same reason: the rpc-sync watchdog takes mutex_ to look at the
   // device, so it is stopped and JOINED here, above the lock.
   StopSyncWatchdog();
@@ -6165,9 +6167,15 @@ std::vector<urnet::ProbeResult> SdkHost::GetProbeResults() {
 // WHICH SOURCE WINS: the view controller, always, whenever it exists. It pushes
 // live updates and owns server-side search; the api path is a cold snapshot.
 // deviceFeedOpen_ is the gate, checked by the api path before every push.
-void SdkHost::EnsureLocations() {
-  std::scoped_lock lock(mutex_);
-  EnsureLocationsLocked();
+void SdkHost::EnsureLocations() { locationsOpener_.Request(); }
+
+void SdkHost::EnsureLocationsOnWorker() {
+  try {
+    std::scoped_lock lock(mutex_);
+    EnsureLocationsLocked();
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: opening the locations feeds failed: {}", e.what());
+  }
 }
 
 void SdkHost::EnsureLocationsLocked() {
@@ -8214,8 +8222,9 @@ void SdkHost::QuitInOrder(std::chrono::steady_clock::time_point start) {
   StopPresentationWorker();
   StopSyncWatchdog();
   StopProviderOnlyStats();
-  // it reads the device the teardown below closes
+  // they read the device the teardown below closes
   statsPublisher_.Stop();
+  locationsOpener_.Stop();
   // 4. The service, under mutex_: after any pass in flight (a Connect's
   // bootstrap, a reconcile, the user's Disconnect), and with none able to
   // follow it.

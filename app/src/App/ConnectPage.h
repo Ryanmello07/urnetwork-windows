@@ -548,6 +548,13 @@ class ConnectPage {
   };
   void ApplyPeerCount(std::optional<urnet::NetworkPeerList> const& peers,
                       std::optional<PeerLineReading> reading = std::nullopt);
+  // The peers line's last reading: a stats snapshot's, with the remote half
+  // updated by the remote-changed push. Unknown reads as detached, which the
+  // line shows as discovery disabled until the first snapshot.
+  PeerLineReading peerLine_;
+  // The locations feed's last push, for the chooser sheet as it opens and for
+  // a peers push (SdkHost's getter takes mutex_).
+  std::optional<urnet::FilteredLocations> locations_;
 
   winrt::URnetwork::implementation::MainWindow& w_;
 
