@@ -253,7 +253,9 @@ function Invoke-UrHelperPatiently([string]$tag, [int]$timeoutSeconds = 900, $app
 function Wait-UrTrayCheck([int]$from, [int]$seconds = 150) {
   $deadline = (Get-Date).AddSeconds($seconds)
   do {
-    $done = Get-UrAppLogLines 'update: check complete' $from
+    # "update: check complete" up to PR F, "update: check of the <id> feed
+    # complete" from A2c on: a leg here reads either build
+    $done = Get-UrAppLogLines 'update: check (?:of the \S+ feed )?complete' $from
     if ($done.Count -gt 0) {
       $line = $done[-1]
       Write-Host "app log: $line"
