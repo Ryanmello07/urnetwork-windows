@@ -1,0 +1,65 @@
+name: A2c quick tests - Linux
+
+# A fast loop for the A2c branch (feat/update-developer-channel-upstream), on
+# throwaway ci/a2c-quick-* branches of the fork: each is a head of that branch
+# plus the rig. It runs only the Go tests whose names match the pattern in
+# .github/a2c-quick-run.txt, on ubuntu with g++ and nlohmann/json, so a C++
+# harness change is known in minutes. It is a narrowing: the full suite runs
+# in a2c-ci.yml, and only that run is evidence. Never merged.
+on:
+  push:
+    branches:
+      - 'ci/a2c-quick-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  go-test-quick:
+    name: go test -run (the pattern of .github/a2c-quick-run.txt)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Windows repo
+        uses: actions/checkout@v4
+
+      - name: The tree is the named commit's
+        shell: bash
+        run: bash .github/a2c-tree-proof.sh
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: Install nlohmann/json
+        run: sudo apt-get update && sudo apt-get install -y nlohmann-json3-dev
+
+      - name: go test -v -run
+        run: |
+          pattern="$(head -n 1 .github/a2c-quick-run.txt)"
+          echo "HEAD: $(git rev-parse HEAD)"
+          echo "pattern: $pattern"
+          out="$RUNNER_TEMP/go-test.txt"
+          status=0
+          go test -count=1 -timeout 50m -v -run "$pattern" ./tests > "$out" 2>&1 || status=$?
+          echo "top-level tests: $(grep -c '^=== RUN   Test[A-Za-z0-9_]*$' "$out") run," \
+            "$(grep -c '^--- PASS' "$out") passed, $(grep -c '^--- SKIP' "$out") skipped," \
+            "$(grep -c '^--- FAIL' "$out") failed; subtests passed: $(grep -c '^    --- PASS' "$out")," \
+            "failed: $(grep -c '^    --- FAIL' "$out")"
+          grep -E '^(--- (PASS|FAIL|SKIP)|    --- FAIL|FAIL|ok|panic:)' "$out" || true
+          echo "the update harnesses:"
+          grep -E 'update-(release|json|marker)-tests: |oracle vectors' "$out" || true
+          if [ "$status" -ne 0 ]; then
+            echo "---- the failures, with what came before them"
+            grep -E -B40 '^(--- FAIL|    --- FAIL)' "$out" | tail -400 || true
+          fi
+          exit $status
+
+      - name: Upload the Go test output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-test-quick-output
+          path: ${{ runner.temp }}/go-test.txt
+          if-no-files-found: warn
