@@ -29,10 +29,11 @@
 //
 // A marker that is there and not trusted is the official channel, with the
 // reason logged. Where updates\ is a plain folder, switching to official
-// removes what lies under the marker's name, and the surfaces say so (S14);
-// anywhere else they say what the official channel says. Nothing here reads
-// a clock, a file or the environment: tools/update-release-tests.cpp runs it
-// on any host.
+// removes what lies under the marker's name, but for what the helper cannot
+// remove (MarkerJudgement::present), and the surfaces say so (S14); anywhere
+// else they say what the official channel says. Nothing here reads a clock,
+// a file or the environment: tools/update-release-tests.cpp runs it on any
+// host.
 //
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
@@ -164,10 +165,13 @@ struct MarkerJudgement {
   // Why a marker was rejected, for the log; empty otherwise.
   std::string_view why;
   // Something lies under the marker's name in a plain updates\ folder,
-  // trusted or not: what `--set-update-channel official` removes (a folder
-  // with files in it excepted, since the helper removes nothing
-  // recursively). The surfaces say S14 only then (LinesOf); the feed is the
-  // verdict's alone (FeedOfMarker).
+  // trusted or not: what `--set-update-channel official` removes, except
+  // whatever the helper cannot remove: a folder with something in it (it
+  // removes nothing recursively), or an object someone holds open without
+  // FILE_SHARE_DELETE. Either needs an updates\ that an administrator opened
+  // to others, or an administrator's own act. The surfaces say S14 only
+  // when this is set (LinesOf); the feed is the verdict's alone
+  // (FeedOfMarker).
   bool present = false;
 };
 
@@ -412,10 +416,11 @@ inline ChannelLines LinesOf(const ChannelView& view) {
   } else if (!view.installed) {
     lines.channel = ChannelSentence::NotInstalled;
   } else if (marker == ChannelMarker::Rejected && view.markerPresent && canChange) {
-    // S14 says both of its sentences only where both are true: something
-    // not trusted lies under the marker's name, and the button that removes
-    // it is built. Any other marker that is not trusted says what the
-    // official channel says, as its feed is official's (the lead's G17).
+    // S14 is said only where something not trusted lies under the marker's
+    // name in a plain updates\ and the button that removes it is built, but
+    // for what the helper cannot remove (MarkerJudgement::present). Any other
+    // marker that is not trusted says what the official channel says, as
+    // its feed is official's (the lead's G17).
     lines.channel = ChannelSentence::Untrusted;
   } else if (onDeveloper) {
     lines.channel = ChannelSentence::Developer;

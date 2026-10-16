@@ -1449,7 +1449,7 @@ func checkReadmeNamesTheDeveloperFeed(readme, selection string) []string {
 		"that an official MSI installed over a developer build keeps the channel": `An official MSI installed over a developer build keeps the channel`,
 		"that an uninstall ends the channel only from its default folder":         `only the switch, or an uninstall from its default folder, ends it\.`,
 		"that developer builds leave out the split-tunnel driver":                 `Developer builds leave out the split-tunnel driver`,
-		"where problems with a developer build are reported":                      `Report problems with a developer build in that repository's issues`,
+		"where problems with a developer build are reported":                      `Report problems with a developer build to that repository's owner, not here\.`,
 	} {
 		if !regexp.MustCompile(pattern).MatchString(prose) {
 			problems = append(problems, "README.md's Developer builds section does not say "+what)
@@ -1746,14 +1746,19 @@ func TestUpdateOfferTheReadmeNamesTheDeveloperFeedRejectsWeakerSources(t *testin
 		{"the channel said to end with an official MSI", "keeps the channel", func() []string {
 			return developer(replace(readme, "build keeps the channel:", "build ends the channel:"))
 		}},
+		// the fork's issues are off (the lead's G19, the review's C2 and N2): reports
+		// go to the repository's owner until they are on
+		{"problems sent to the repository's issues while they are off", "does not say where problems with a developer build are reported", func() []string {
+			return developer(replace(readme, "to that repository's owner, not here.", "in that repository's issues, not here."))
+		}},
 		// the A2c review's C12: the installer removes updates\ from its default
 		// folder alone (Package.wxs URNETWORK_UPDATES_FOLDER)
 		{"an uninstall said to end the channel from any folder", "does not say that an uninstall ends the channel only from its default folder", func() []string {
 			return developer(replace(readme, "or an uninstall from its default folder, ends it.", "or an uninstall, ends it."))
 		}},
 		{"the README links the developer feed's releases", "README.md sends people to Ryanmello07/urnetwork-windows's releases", func() []string {
-			return checkReadmeNamesTheFeed(replace(readme, "issues, not here.",
-				"issues, not here, and download them from https://github.com/Ryanmello07/urnetwork-windows/releases."), selection)
+			return checkReadmeNamesTheFeed(replace(readme, "owner, not here.",
+				"owner, not here, and download them from https://github.com/Ryanmello07/urnetwork-windows/releases."), selection)
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
