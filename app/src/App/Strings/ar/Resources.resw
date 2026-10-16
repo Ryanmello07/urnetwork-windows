@@ -7369,6 +7369,10 @@
     <value>التوقيع والربط</value>
     <comment>App earnings: manual address entry button (the wallet still signs the challenge)</comment>
   </data>
+  <data name="site_app_stale_sign_in" xml:space="preserve">
+    <value>تم تسجيل الدخول في هذا المتصفح إلى شبكة أخرى من علامة تبويب أخرى. حدّث هذه الصفحة للمتابعة.</value>
+    <comment>ur.io: notice over the page when another tab signs in to another network; this page stops its work until the visitor refreshes it.</comment>
+  </data>
   <data name="site_app_stay_in_touch" xml:space="preserve">
     <value>ابقَ على تواصل</value>
     <comment>App settings: stay in touch section</comment>

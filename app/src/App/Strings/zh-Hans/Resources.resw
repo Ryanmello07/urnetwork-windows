@@ -6790,6 +6790,10 @@
     <value>签名并连接</value>
     <comment>App earnings: manual address entry button (the wallet still signs the challenge)</comment>
   </data>
+  <data name="site_app_stale_sign_in" xml:space="preserve">
+    <value>此浏览器已在另一个标签页中登录了其他网络。请刷新此页面以继续。</value>
+    <comment>ur.io: notice over the page when another tab signs in to another network; this page stops its work until the visitor refreshes it.</comment>
+  </data>
   <data name="site_app_stay_in_touch" xml:space="preserve">
     <value>保持联系</value>
     <comment>App settings: stay in touch section</comment>

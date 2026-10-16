@@ -7138,6 +7138,10 @@
     <value>Подписать и подключить</value>
     <comment>App earnings: manual address entry button (the wallet still signs the challenge)</comment>
   </data>
+  <data name="site_app_stale_sign_in" xml:space="preserve">
+    <value>В этом браузере выполнен вход в другую сеть на другой вкладке. Обновите эту страницу, чтобы продолжить.</value>
+    <comment>ur.io: notice over the page when another tab signs in to another network; this page stops its work until the visitor refreshes it.</comment>
+  </data>
   <data name="site_app_stay_in_touch" xml:space="preserve">
     <value>Оставайтесь на связи</value>
     <comment>App settings: stay in touch section</comment>
