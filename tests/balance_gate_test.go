@@ -199,14 +199,21 @@ func TestBalanceRecoveryWiring(t *testing.T) {
 	ticker := stripLineComments(readAppSource(t, "FreeRefreshTicker.cpp"))
 
 	admit := definitionBody(t, "SdkHost.cpp", host, "bool SdkHost::AdmitStartConnect(const char* what, std::function<void()> again)")
+	// the retry passes the gate; a start that waited on its balance is told
+	// its outcome there too (start_connect_wait_test.go)
 	for _, want := range []string{
-		"if (!startConnectFacts_ || retryingRefusedConnect_) return true;",
+		"if (!startConnectFacts_ || retryingRefusedConnect_) {",
+		"return true;",
 		"host.startConnectUpgrade_(again);",
-		"if (admitted && connectAdmitted_) connectAdmitted_();",
+		"if (connectAdmitted_) connectAdmitted_();",
 	} {
 		if !strings.Contains(admit, want) {
 			t.Errorf("SdkHost::AdmitStartConnect: missing %s", want)
 		}
+	}
+	if decided := strings.Index(admit, "AdmitStartConnect(startConnectFacts_(), sinks)"); decided < 0 ||
+		!strings.Contains(admit[decided:], "if (admitted) {") {
+		t.Errorf("SdkHost::AdmitStartConnect: the observer must hear only an admitted gesture")
 	}
 	retry := definitionBody(t, "SdkHost.cpp", host, "void SdkHost::RetryRefusedConnect(const std::function<void()>& connect)")
 	set := strings.Index(retry, "retryingRefusedConnect_ = true;")
