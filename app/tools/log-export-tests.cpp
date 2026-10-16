@@ -137,7 +137,9 @@ void TestAnExistingExportSurvivesWhatCannotBeCopied() {
   Check(!CopyWithoutLinks(gDir / "urnetwork-app.log", gDir / "no-such-directory" / "out.log"),
         "missing: a destination in a directory that is not there cannot be written");
   Check(!fs::exists(gDir / "no-such-directory"), "missing: and nothing is made of it");
-  // a directory is no log and no destination: refused, and nothing is made of the copy
+  // a directory is no log and no destination: refused, and nothing is made of the copy. Linux opens a directory for
+  // reading and Windows does not, so where it opens only its kind refuses it: say which this host does
+  std::cout << "  host: a directory " << (std::ifstream(gDir / "sub") ? "opens" : "does not open") << " for reading here\n";
   Check(!CopyWithoutLinks(gDir / "sub", gDir / "out2.log") && !fs::exists(gDir / "out2.log"),
         "directory: a directory is not copied as a log, and nothing is made of the copy");
   const std::string log = Read(gDir / "urnetwork-app.log");

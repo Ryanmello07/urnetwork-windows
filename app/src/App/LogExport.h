@@ -23,14 +23,17 @@ namespace urnw::logexport {
 // The log, line by line, through authlink::RedactLogText, written to `destination`. False when
 // either file could not be used.
 //
-// Nothing is opened for writing before the source has been read open and `destination` has been
-// found not to be the source: the picker suggests the log's own name, a file opened to be written
-// is emptied first, and saving over the log would then empty the live log and say it had saved.
-// A source that cannot be opened leaves an existing destination as it was.
+// Nothing is opened for writing before the source has been found to be a regular file and read
+// open, and `destination` has been found not to be the source: the picker suggests the log's own
+// name, a file opened to be written is emptied first, and saving over the log would then empty the
+// live log and say it had saved. A source that is not a regular file or cannot be opened leaves an
+// existing destination as it was. That it opens does not make it a file: Linux opens a directory
+// for reading, and only the read fails.
 inline bool CopyWithoutLinks(const std::filesystem::path& source, const std::filesystem::path& destination) {
+  std::error_code unknown;
+  if (!std::filesystem::is_regular_file(source, unknown)) return false;
   std::ifstream in(source, std::ios::binary);
   if (!in) return false;
-  std::error_code unknown;
   if (std::filesystem::equivalent(source, destination, unknown)) return false;
   std::ofstream out(destination, std::ios::binary | std::ios::trunc);
   if (!out) return false;

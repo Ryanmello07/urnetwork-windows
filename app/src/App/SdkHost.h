@@ -531,8 +531,9 @@ class SdkHost {
   using JwtRefreshedHandler = std::function<void()>;
   using TunnelStateHandler = std::function<void(const proto::TunnelStatus&)>;
   using StatsHandler = std::function<void(const LiveStats&)>;
-  // Connect drawer feeds (invoked on SDK callback threads; payloads by value so
-  // the UI can marshal them onto its thread).
+  // Connect drawer feeds (invoked on SDK callback threads, or with mutex_ held
+  // on the thread of a seed or a write, see SetThroughputHandler; payloads by
+  // value so the UI can marshal them onto its thread).
   using ThroughputHandler =
       std::function<void(std::vector<urnet::ThroughputPoint>, int64_t windowSeconds)>;
   using ContractRowsHandler = std::function<void(std::vector<ContractPeerRow>)>;
@@ -1099,6 +1100,16 @@ class SdkHost {
   // apart. PipeClient's flag is atomic; this takes no lock of ours.
   bool ServiceConnected() const { return service_.IsConnected(); }
 
+  // The tunnel's state as the service last told this process, by a push or by
+  // an answer to a query (AdoptServiceFacts), or nullopt before it has told it
+  // anything. A copy that is signed out may get no push at all; an update's
+  // note of the VPN starts from this then (UpdateMarker.h VpnNote). Any
+  // thread.
+  std::optional<proto::TunnelState> AdoptedServiceState() const {
+    if (!serviceStateKnown_.load(std::memory_order_acquire)) return std::nullopt;
+    return lastServiceState_.load();
+  }
+
   // ---- location/provider chooser -------------------------------------------
   // THE PROVIDER LIST IS ALWAYS AVAILABLE. It does not need a tunnel, a service
   // session, a DeviceRemote or elevation - GET /network/provider-locations is a
@@ -1226,7 +1237,11 @@ class SdkHost {
   void RepublishStats() { PublishStats(); }
 
   // ---- connect drawer (stats cards + sheets) -------------------------------
-  // Push handlers, set once by the window; fired on SDK callback threads.
+  // Push handlers, set once by the window; fired on SDK callback threads, and
+  // with mutex_ held on the caller's thread for SubscribeDrawer's seeds and for
+  // a write the caller made: a DeviceRemote tells a write's listeners from the
+  // setter (sdk device_remote_setting_state.go), so SetBlockerEnabled fires the
+  // blocker handler on the UI thread. A handler only marshals.
   void SetThroughputHandler(ThroughputHandler h) { onThroughput_ = std::move(h); }
   void SetContractRowsHandler(ContractRowsHandler h) { onContractRows_ = std::move(h); }
   void SetBlockActionsHandler(BlockActionsHandler h) { onBlockActions_ = std::move(h); }
@@ -2560,9 +2575,10 @@ class SdkHost {
   // RPC field read "none" for the whole life of a healthy session, because the
   // only statuses that ever carried a host:port were the ones the service sent.
   //
-  // Guarded by wfpStateMutex_, NOT mutex_: SessionStatus() is called from SDK
-  // listener callbacks that do not hold mutex_, and this is already the lock
-  // over "the last facts we know about the session".
+  // Guarded by wfpStateMutex_, not mutex_: SessionStatus() runs both with
+  // mutex_ held and without it (a listener callback can be either, see there),
+  // and this is already the lock over "the last facts we know about the
+  // session".
   std::string sessionRpcHostPort_;
   // The last values the SERVICE reported for the two facts only it can observe:
   // whether the tun's resolvers actually took, and whether the WFP
@@ -2581,6 +2597,9 @@ class SdkHost {
   // two neighbours instead; the service is the process that owns the routes.
   std::atomic<bool> lastServiceRoutesInstalled_{false};
   std::atomic<proto::TunnelState> lastServiceState_{proto::TunnelState::Stopped};
+  // Whether lastServiceState_ is the service's word: set, after it, by the
+  // first status adopted (AdoptedServiceState).
+  std::atomic<bool> serviceStateKnown_{false};
   // "THE LAST THING THE USER ASKED FOR WAS OFF." Written by the session worker
   // from the gesture it just dequeued, read by gesture::Decide for EnsureSession
   // alone (see AppFacts::userDisconnected).
@@ -2599,7 +2618,9 @@ class SdkHost {
   // The one Tracker (ConnectionHealth.h) behind its own SMALL lock, never
   // mutex_: ReadStats is deliberately lock-free against mutex_ (it runs on the
   // UI thread and on SDK callback threads while a bootstrap can hold mutex_
-  // for seconds), and the tracker is folded in at the end of ReadStats. The
+  // for seconds, and with mutex_ already held, for SubscribeStats' snapshot
+  // and for the listeners ConnectLocked's write tells inline on the session
+  // worker), and the tracker is folded in at the end of ReadStats. The
   // lock covers Update/ReevalAtMillis as one unit and NoteNewAttempt from the
   // session worker; it is held across nothing else.
   mutable std::mutex healthMutex_;
