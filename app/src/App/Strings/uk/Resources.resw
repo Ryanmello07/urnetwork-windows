@@ -6654,6 +6654,10 @@
     <value>Підключіться, щоб бачити активність у реальному часі</value>
     <comment>Disabled stat cards: connect-to-view hint</comment>
   </data>
+  <data name="site_app_connecting" xml:space="preserve">
+    <value>Підключення…</value>
+    <comment>App connect screen and macOS menu bar: status while a connect is in progress, before the connection is up.</comment>
+  </data>
   <data name="site_app_connections" xml:space="preserve">
     <value>З’єднання</value>
     <comment>App settings: connections section</comment>

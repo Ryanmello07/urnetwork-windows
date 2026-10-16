@@ -6422,6 +6422,10 @@ innehåll i världen</value>
     <value>Anslut för att se aktivitet i realtid</value>
     <comment>Disabled stat cards: connect-to-view hint</comment>
   </data>
+  <data name="site_app_connecting" xml:space="preserve">
+    <value>Ansluter…</value>
+    <comment>App connect screen and macOS menu bar: status while a connect is in progress, before the connection is up.</comment>
+  </data>
   <data name="site_app_connections" xml:space="preserve">
     <value>Anslutningar</value>
     <comment>App settings: connections section</comment>

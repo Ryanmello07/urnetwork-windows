@@ -6419,6 +6419,10 @@
     <value>लाइव गतिविधि देखने के लिए कनेक्ट करें</value>
     <comment>Disabled stat cards: connect-to-view hint</comment>
   </data>
+  <data name="site_app_connecting" xml:space="preserve">
+    <value>कनेक्ट हो रहा है…</value>
+    <comment>App connect screen and macOS menu bar: status while a connect is in progress, before the connection is up.</comment>
+  </data>
   <data name="site_app_connections" xml:space="preserve">
     <value>कनेक्शन</value>
     <comment>App settings: connections section</comment>

@@ -6303,6 +6303,10 @@
     <value>接続するとリアルタイムのアクティビティが表示されます</value>
     <comment>Disabled stat cards: connect-to-view hint</comment>
   </data>
+  <data name="site_app_connecting" xml:space="preserve">
+    <value>接続中…</value>
+    <comment>App connect screen and macOS menu bar: status while a connect is in progress, before the connection is up.</comment>
+  </data>
   <data name="site_app_connections" xml:space="preserve">
     <value>接続</value>
     <comment>App settings: connections section</comment>
