@@ -1226,7 +1226,7 @@ func checkTrayRunsTheHelper(checker string) []string {
 		regexp.QuoteMeta("RevealInExplorer(msiW);"),
 		regexp.QuoteMeta("return;"),
 		regexp.QuoteMeta("LaunchUpdateHelper(installFolder_ / kHelperName, offer.tag, &helper, &refusal,"),
-		regexp.QuoteMeta("fail(refusal == kElevationRefusedUnsigned ? Failure::Unsigned : Failure::Elevation);"),
+		`fail\(refusal == kElevationRefusedUnsigned && update::HandsOverInstaller\(\*offer\.feed\)\s+\? Failure::Unsigned\s+: Failure::Elevation\);`,
 		regexp.QuoteMeta("[helper] { return ::WaitForSingleObject(helper, 250) == WAIT_OBJECT_0; }, cancelled);"),
 		regexp.QuoteMeta("if (waited == update::HelperWait::AppExiting) {"),
 		regexp.QuoteMeta("RecordUpdateInProgress(helper, NoteVpn());"),
@@ -1346,7 +1346,7 @@ func checkTrayShowsTheInstaller(checker, window, connect string) []string {
 	problems = append(problems, applyOrderProblems("UpdateChecker::OffersInstaller", offers,
 		regexp.QuoteMeta("return snapshot.phase == Phase::Result &&"),
 		regexp.QuoteMeta("snapshot.result.view == update::ReportView::NotInstalled && snapshot.offeredCode != 0 &&"),
-		regexp.QuoteMeta("snapshot.offeredCode == snapshot.code;"))...)
+		regexp.QuoteMeta("snapshot.offeredCode == snapshot.code && update::HandsOverInstaller(*snapshot.feed);"))...)
 	worker := applyDefinition(checker, "void UpdateChecker::WorkerLoop() {")
 	problems = append(problems, applyOrderProblems("UpdateChecker::WorkerLoop", worker,
 		regexp.QuoteMeta("if (applyRequested_ || manualRequested_) {"),
@@ -1372,7 +1372,7 @@ func checkTrayShowsTheInstaller(checker, window, connect string) []string {
 	}
 	reveal := applyDefinition(checker, "void UpdateChecker::RunReveal(std::uint64_t generation) {")
 	problems = append(problems, applyOrderProblems("UpdateChecker::RunReveal", reveal,
-		regexp.QuoteMeta("feedGeneration_ != generation || offer_.code != snapshot_.code) {"),
+		regexp.QuoteMeta("feedGeneration_ != generation || offer_.code != snapshot_.code ||"),
 		regexp.QuoteMeta("digest = offer_.digestHex;"),
 		regexp.QuoteMeta("const std::string actual = Sha256File(installer);"),
 		regexp.QuoteMeta("if (digest.empty() || actual.empty() || !update::EqualsAsciiCaseless(actual, digest)) {"),
@@ -1905,17 +1905,21 @@ func TestUpdateApplyWiringRejectsWeakerTrays(t *testing.T) {
 				"  const auto cancelled = [this] {\n    std::lock_guard lock(mutex_);\n    return false;\n  };")
 		}},
 		{"a wait that never looks at the app's exit", func() []string {
-			return runs("[helper] { return ::WaitForSingleObject(helper, 250) == WAIT_OBJECT_0; }, cancelled);",
-				"[helper] { return ::WaitForSingleObject(helper, 250) == WAIT_OBJECT_0; }, [] { return false; });")
+			apply := applyDefinition(checker, "void UpdateChecker::RunApply(std::uint64_t generation, bool manual) {")
+			return checkTrayRunsTheHelper(replace(checker, apply, replace(apply,
+				"[helper] { return ::WaitForSingleObject(helper, 250) == WAIT_OBJECT_0; }, cancelled);",
+				"[helper] { return ::WaitForSingleObject(helper, 250) == WAIT_OBJECT_0; }, [] { return false; });")))
 		}},
 		{"the marker written as the helper starts", func() []string {
-			return runs("    *helper = sei.hProcess;\n", "    RecordUpdateInProgress(sei.hProcess);\n    *helper = sei.hProcess;\n")
+			launch := applyDefinition(checker, "bool LaunchUpdateHelper(fs::path const& helperPath, std::wstring const& tag, HANDLE* helper,")
+			return checkTrayRunsTheHelper(replace(checker, launch, replace(launch,
+				"    *helper = sei.hProcess;\n", "    RecordUpdateInProgress(sei.hProcess);\n    *helper = sei.hProcess;\n")))
 		}},
 		{"no marker when the app exits for the installer", func() []string {
 			return runs("    RecordUpdateInProgress(helper, NoteVpn());\n", "")
 		}},
 		{"an unsigned helper taken for a declined prompt", func() []string {
-			return runs("fail(refusal == kElevationRefusedUnsigned ? Failure::Unsigned : Failure::Elevation);",
+			return runs("fail(refusal == kElevationRefusedUnsigned && update::HandsOverInstaller(*offer.feed)\n             ? Failure::Unsigned\n             : Failure::Elevation);",
 				"fail(Failure::Elevation);")
 		}},
 		{"a report read on a portable copy", func() []string {
@@ -1938,7 +1942,7 @@ func TestUpdateApplyWiringRejectsWeakerTrays(t *testing.T) {
 				"if (report && report->tag == outcome.tag) {")
 		}},
 		{"a release that did not install with no way out", func() []string {
-			return shows("snapshot.offeredCode == snapshot.code;", "false;")
+			return shows("snapshot.offeredCode == snapshot.code && update::HandsOverInstaller(*snapshot.feed);", "false;")
 		}},
 		{"the checked download deleted as the helper starts", func() []string {
 			return shows("  if (!helper) return;\n", "  if (!helper) return;\n  fs::remove_all(dir, ec);\n")
@@ -2065,6 +2069,247 @@ func checkTrayFollowsTheFeed(checker string) []string {
 		problems = append(problems, "UpdateChecker::RunReveal changes the snapshot without its generation")
 	}
 	return problems
+}
+
+// The tray app follows the machine's update channel. Start reads the marker
+// before the worker exists, on an installed copy with a code alone; SyncChannel
+// reads it again on the worker, and nothing else, a feed other than the one
+// followed, by id, being a change of channel (ChannelChanged), taken with the
+// generation; every check and every apply reads it first, and a check takes
+// its feed under the lock that judges its generation; the Developer and the
+// Settings screens ask for a read as they are shown. RunCheck, RunApply and
+// RunReveal name no feed: an offer carries its own, and is asked about it. A
+// developer build's installer is never handed over to run, and an unsigned
+// helper offers no installer for one. A change of channel is the helper's:
+// this app starts it elevated and shown, from an installed copy with a code
+// alone, with an id of the table, records no update and hands off no VPN, and
+// then says what the marker says. Both snapshots built from scratch keep the
+// channel.
+func checkTrayFollowsTheChannel(checker, window string, appSources map[string]string) []string {
+	var problems []string
+	problems = append(problems, applyOrderProblems("UpdateChecker::Start", applyDefinition(checker, "void UpdateChecker::Start() {"),
+		regexp.QuoteMeta("installed_ = !exe.empty() && install::AdminOnlyLocation(installFolder_ / kHelperName, why);"),
+		regexp.QuoteMeta("if (installed_ && version::kCode != 0) {"),
+		regexp.QuoteMeta("install::ReadChannelMarker(installFolder_, channelWhy);"),
+		regexp.QuoteMeta("feed_ = &update::FeedOfMarker(marker);"),
+		regexp.QuoteMeta("snapshot_.feed = feed_;"),
+		regexp.QuoteMeta("worker_ = std::thread("))...)
+	sync := applyDefinition(checker, "void UpdateChecker::SyncChannel() {")
+	problems = append(problems, applyOrderProblems("UpdateChecker::SyncChannel", sync,
+		regexp.QuoteMeta("if (!installed_ || version::kCode == 0) return;"),
+		regexp.QuoteMeta("install::ReadChannelMarker(installFolder_, why);"),
+		regexp.QuoteMeta("const update::Feed& feed = update::FeedOfMarker(marker);"),
+		regexp.QuoteMeta("std::lock_guard lock(mutex_);"),
+		regexp.QuoteMeta("changed = feed.id != feed_->id;"),
+		regexp.QuoteMeta("if (changed) feed_ = &feed;"),
+		regexp.QuoteMeta("ChannelChanged();"))...)
+	change := applyDefinition(checker, "void UpdateChecker::RunChannelChange(const update::Feed& asked) {")
+	problems = append(problems, applyOrderProblems("UpdateChecker::RunChannelChange", change,
+		regexp.QuoteMeta("if (!installed_ || version::kCode == 0) {"),
+		regexp.QuoteMeta("return;"),
+		regexp.QuoteMeta("LaunchChannelHelper(installFolder_ / kHelperName, asked, &helper, &refusal, launchError);"),
+		regexp.QuoteMeta("update::AwaitHelper("),
+		regexp.QuoteMeta("if (waited == update::HelperWait::AppExiting) {"),
+		regexp.QuoteMeta(".markerAfter = install::ReadChannelMarker(installFolder_, why),"),
+		regexp.QuoteMeta("const update::ChangeLine line = update::ChangeLineOf(change);"),
+		regexp.QuoteMeta("SyncChannel();"),
+		regexp.QuoteMeta("s.change = line;"))...)
+	for where, body := range map[string]string{"UpdateChecker::SyncChannel": sync, "UpdateChecker::RunChannelChange": change} {
+		for _, forbidden := range []string{"LoadAppPrefs", "SaveAppPref", "app_prefs", "HandOffVpn", "NoteVpn",
+			"RecordUpdateInProgress", "LaunchUpdateHelper", "--apply-update"} {
+			if strings.Contains(body, forbidden) {
+				problems = append(problems, where+" names "+forbidden+
+					": the channel is read from the marker alone, and a change of channel installs nothing")
+			}
+		}
+	}
+	launch := applyDefinition(checker, "bool LaunchChannelHelper(fs::path const& helperPath, update::Feed const& feed, HANDLE* helper,")
+	problems = append(problems, applyOrderProblems("LaunchChannelHelper", launch,
+		regexp.QuoteMeta(`const std::wstring params = L"--set-update-channel " + Widen(feed.id);`),
+		regexp.QuoteMeta("sei.fMask = SEE_MASK_NOASYNC | SEE_MASK_NOCLOSEPROCESS;"),
+		regexp.QuoteMeta(`sei.lpVerb = L"runas";`),
+		regexp.QuoteMeta("sei.lpFile = helperPath.c_str();"),
+		regexp.QuoteMeta("sei.lpParameters = params.c_str();"),
+		regexp.QuoteMeta("sei.nShow = SW_SHOWNORMAL;"),
+		regexp.QuoteMeta("*refusal = ::GetLastError();"),
+		regexp.QuoteMeta("*helper = sei.hProcess;"))...)
+	check := applyDefinition(checker, "bool UpdateChecker::RunCheck(std::uint64_t generation) {")
+	problems = append(problems, applyOrderProblems("UpdateChecker::RunCheck", check,
+		regexp.QuoteMeta("SyncChannel();"),
+		regexp.QuoteMeta("std::lock_guard lock(mutex_);"),
+		regexp.QuoteMeta("if (feedGeneration_ != generation) return false;"),
+		regexp.QuoteMeta("followed = feed_;"),
+		regexp.QuoteMeta("const update::Feed& feed = *followed;"),
+		regexp.QuoteMeta("sel.assetName, &feed};"))...)
+	apply := applyDefinition(checker, "void UpdateChecker::RunApply(std::uint64_t generation, bool manual) {")
+	if !strings.HasPrefix(strings.TrimSpace(strings.TrimPrefix(apply, "void UpdateChecker::RunApply(std::uint64_t generation, bool manual) {")), "SyncChannel();") {
+		problems = append(problems, "UpdateChecker::RunApply does not read the update channel first")
+	}
+	reveal := applyDefinition(checker, "void UpdateChecker::RunReveal(std::uint64_t generation) {")
+	for where, body := range map[string]string{"UpdateChecker::RunCheck": check, "UpdateChecker::RunApply": apply,
+		"UpdateChecker::RunReveal": reveal} {
+		for _, feed := range []string{"kOfficialFeed", "FeedById(", "kDeveloperChannelId", "FeedOfMarker("} {
+			if strings.Contains(body, feed) {
+				problems = append(problems, where+" names "+feed+": it acts on the feed it follows, and an offer on its own")
+			}
+		}
+	}
+	// a developer build is installed through the helper alone
+	for where, pattern := range map[string]string{
+		"UpdateChecker::OffersInstaller": `snapshot\.offeredCode == snapshot\.code && update::HandsOverInstaller\(\*snapshot\.feed\);`,
+		"UpdateChecker::RunApply":        `if \(!viaHelper\) \{\s+if \(!update::HandsOverInstaller\(\*offer\.feed\)\) \{`,
+		"UpdateChecker::RunReveal":       `offer_\.code != snapshot_\.code \|\|\s+!update::HandsOverInstaller\(\*offer_\.feed\)\) \{`,
+	} {
+		if !regexp.MustCompile(pattern).MatchString(map[string]string{
+			"UpdateChecker::OffersInstaller": applyDefinition(checker, "bool UpdateChecker::OffersInstaller(Snapshot const& snapshot) {"),
+			"UpdateChecker::RunApply":        apply, "UpdateChecker::RunReveal": reveal}[where]) {
+			problems = append(problems, where+" may hand a developer build over as an installer to run: only an official release is")
+		}
+	}
+	// the channel requested, refused at once during this app's own update
+	problems = append(problems, applyOrderProblems("UpdateChecker::RequestChannel",
+		applyDefinition(checker, "void UpdateChecker::RequestChannel(const update::Feed& feed) {"),
+		regexp.QuoteMeta("std::lock_guard lock(mutex_);"),
+		regexp.QuoteMeta("const bool ownUpdate = snapshot_.phase == Phase::Applying || applyRequested_ || manualRequested_;"),
+		regexp.QuoteMeta(".ownUpdateRunning = true};"),
+		regexp.QuoteMeta("snapshot_.change = update::ChangeLineOf(refused);"),
+		regexp.QuoteMeta("channelRequested_ = &feed;"),
+		regexp.QuoteMeta("snapshot_.change = update::ChangeLine::Asking;"))...)
+	worker := applyDefinition(checker, "void UpdateChecker::WorkerLoop() {")
+	problems = append(problems, applyOrderProblems("UpdateChecker::WorkerLoop", worker,
+		regexp.QuoteMeta("if (channelRequested_) {"),
+		regexp.QuoteMeta("RunChannelChange(*asked);"),
+		regexp.QuoteMeta("if (syncRequested_) {"),
+		regexp.QuoteMeta("SyncChannel();"))...)
+	// both snapshots built from scratch keep the channel, and every snapshot
+	// takes the feed when it changes
+	rebuilds := regexp.MustCompile(`snapshot_ = Snapshot\{[^}]*\};`).FindAllString(checker, -1)
+	if len(rebuilds) != 2 {
+		problems = append(problems, fmt.Sprintf("UpdateChecker.cpp builds a snapshot from scratch %d times, want the two that keep the channel", len(rebuilds)))
+	}
+	for _, rebuild := range rebuilds {
+		if !strings.Contains(rebuild, ".feed = feed_,") || !strings.Contains(rebuild, ".marker = snapshot_.marker") {
+			problems = append(problems, "a snapshot built from scratch drops the update channel: "+rebuild)
+		}
+	}
+	problems = append(problems, applyOrderProblems("UpdateChecker::ChannelChanged", applyDefinition(checker, "void UpdateChecker::ChannelChanged() {"),
+		regexp.QuoteMeta("if (snapshot_.phase != Phase::Result) {"),
+		regexp.QuoteMeta("snapshot_.feed = feed_;"),
+		regexp.QuoteMeta("snapshot_.change = update::ChangeLine::None;"))...)
+	// the screens that show the channel ask for it to be read
+	if !strings.Contains(window, `if (tag == L"developer" || tag == L"settings") urnw::pages::Updates().RequestChannelSync();`) {
+		problems = append(problems, "MainWindow does not ask for the update channel as the Developer or the Settings screen is shown")
+	}
+	// the developer row is reached by its id alone
+	for name, source := range appSources {
+		for _, named := range []string{"kDeveloperFeed", "Ryanmello07", "1324127805"} {
+			if strings.Contains(source, named) {
+				problems = append(problems, "App/"+name+" names "+named+": the app reaches the developer row through FeedById alone")
+			}
+		}
+	}
+	return problems
+}
+
+func TestUpdateApplyTrayFollowsTheChannel(t *testing.T) {
+	appSources := map[string]string{}
+	for name, source := range appSourceFiles(t, ".cpp", ".h") {
+		appSources[name] = stripComments(source)
+	}
+	reportProblems(t, checkTrayFollowsTheChannel(stripComments(readAppSource(t, "UpdateChecker.cpp")),
+		stripComments(readAppSource(t, "MainWindow.xaml.cpp")), appSources))
+}
+
+// Each part of the tray's channel, taken away, is reported for its reason.
+func TestUpdateApplyTrayFollowsTheChannelRejectsWeakerSources(t *testing.T) {
+	checker := stripComments(readAppSource(t, "UpdateChecker.cpp"))
+	window := stripComments(readAppSource(t, "MainWindow.xaml.cpp"))
+	appSources := map[string]string{}
+	for name, source := range appSourceFiles(t, ".cpp", ".h") {
+		appSources[name] = stripComments(source)
+	}
+	replace := func(text, old, replacement string) string {
+		if strings.Count(text, old) != 1 {
+			t.Fatalf("negative control: %q is not in the source exactly once", old)
+		}
+		return strings.Replace(text, old, replacement, 1)
+	}
+	follows := func(changed string) []string { return checkTrayFollowsTheChannel(changed, window, appSources) }
+	for _, tc := range []struct {
+		name, want string
+		check      func() []string
+	}{
+		{"a marker read on a portable copy", `UpdateChecker::SyncChannel is missing if \(!installed_`, func() []string {
+			return follows(replace(checker, "  if (!installed_ || version::kCode == 0) return;\n  std::string why;\n", "  std::string why;\n"))
+		}},
+		{"the channel read from app_prefs.json", "UpdateChecker::SyncChannel names LoadAppPrefs", func() []string {
+			return follows(replace(checker, "  const update::Feed& feed = update::FeedOfMarker(marker);\n",
+				"  const update::Feed& feed = update::FeedOfMarker(marker);\n  (void)LoadAppPrefs();\n"))
+		}},
+		{"a feed changed without its generation", "UpdateChecker::SyncChannel is missing ChannelChanged", func() []string {
+			return follows(replace(checker, "    ChannelChanged();\n    return;\n", "    return;\n"))
+		}},
+		{"a check that names its feed", "UpdateChecker::RunCheck names kOfficialFeed", func() []string {
+			return follows(replace(checker, "  const update::Feed& feed = *followed;\n", "  const update::Feed& feed = update::kOfficialFeed;\n"))
+		}},
+		{"a check that takes its feed outside the lock", `UpdateChecker::RunCheck is missing followed = feed_;`, func() []string {
+			return follows(replace(checker, "    followed = feed_;\n", ""))
+		}},
+		{"an apply that does not read the channel first", "UpdateChecker::RunApply does not read the update channel first", func() []string {
+			return follows(replace(checker, "  SyncChannel();\n  Offer offer;\n", "  Offer offer;\n"))
+		}},
+		{"a developer build handed over as an installer", "UpdateChecker::RunApply may hand a developer build over", func() []string {
+			return follows(replace(checker, "    if (!update::HandsOverInstaller(*offer.feed)) {\n", "    if (false) {\n"))
+		}},
+		{"a developer build's installer shown again", "UpdateChecker::RunReveal may hand a developer build over", func() []string {
+			return follows(replace(checker, " ||\n          !update::HandsOverInstaller(*offer_.feed)) {", ") {"))
+		}},
+		{"a developer build's report offering its installer", "UpdateChecker::OffersInstaller may hand a developer build over", func() []string {
+			return follows(replace(checker, " && update::HandsOverInstaller(*snapshot.feed);", ";"))
+		}},
+		{"a channel change from a portable copy", `UpdateChecker::RunChannelChange is missing if \(!installed_`, func() []string {
+			return follows(replace(checker, "  if (!installed_ || version::kCode == 0) {\n    LogWarn(\"update: this copy has no update channel; the helper is not started\");",
+				"  if (false) {\n    LogWarn(\"update: this copy has no update channel; the helper is not started\");"))
+		}},
+		{"the line said from the exit code", `UpdateChecker::RunChannelChange is missing \.markerAfter = install::ReadChannelMarker`, func() []string {
+			return follows(replace(checker, ".markerAfter = install::ReadChannelMarker(installFolder_, why),", ".markerAfter = asked.id == update::kOfficialFeed.id ? update::ChannelMarker::Absent : update::ChannelMarker::Trusted,"))
+		}},
+		{"a change of channel that hands off the VPN", "UpdateChecker::RunChannelChange names HandOffVpn", func() []string {
+			return follows(replace(checker, "  LogInfo(\"update: asking the update helper for the {} channel\", asked.id);\n",
+				"  LogInfo(\"update: asking the update helper for the {} channel\", asked.id);\n  (void)HandOffVpn();\n"))
+		}},
+		{"the channel's question started hidden", `LaunchChannelHelper is missing sei\.nShow = SW_SHOWNORMAL;`, func() []string {
+			return follows(replace(checker, "  sei.nShow = SW_SHOWNORMAL;\n", "  sei.nShow = SW_HIDE;\n"))
+		}},
+		{"a channel request queued during this app's own update", `UpdateChecker::RequestChannel is missing const bool ownUpdate`, func() []string {
+			return follows(replace(checker, "    const bool ownUpdate = snapshot_.phase == Phase::Applying || applyRequested_ || manualRequested_;\n",
+				"    const bool ownUpdate = false;\n"))
+		}},
+		{"a snapshot built from scratch without the channel", "a snapshot built from scratch drops the update channel", func() []string {
+			return follows(replace(checker, "                           .feed = feed_,\n                           .marker = snapshot_.marker};", "};"))
+		}},
+		{"a report's banner left on the old feed", `UpdateChecker::ChannelChanged is missing snapshot_\.feed = feed_;`, func() []string {
+			return follows(replace(checker, "    snapshot_.feed = feed_;\n    snapshot_.change = update::ChangeLine::None;\n", "    snapshot_.change = update::ChangeLine::None;\n"))
+		}},
+		{"the screens that show the channel never asking for it", "MainWindow does not ask for the update channel", func() []string {
+			return checkTrayFollowsTheChannel(checker, replace(window, `  if (tag == L"developer" || tag == L"settings") urnw::pages::Updates().RequestChannelSync();`+"\n", ""), appSources)
+		}},
+		{"the developer row named in the app", "names kDeveloperFeed", func() []string {
+			changed := map[string]string{}
+			for name, source := range appSources {
+				changed[name] = source
+			}
+			changed["UpdateChecker.cpp"] += "\nconst urnw::update::Feed& kChannel = urnw::update::kDeveloperFeed;\n"
+			return checkTrayFollowsTheChannel(checker, window, changed)
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			problems := strings.Join(tc.check(), "\n")
+			if !strings.Contains(problems, tc.want) && !regexp.MustCompile(tc.want).MatchString(problems) {
+				t.Fatalf("negative control was not detected by %q; the check reported:\n%s", tc.want, problems)
+			}
+		})
+	}
 }
 
 func TestUpdateApplyTrayFollowsTheFeed(t *testing.T) {
@@ -2220,7 +2465,8 @@ func TestUpdateApplyWiringRejectsWeakerWorkers(t *testing.T) {
 				"if (true) {\n      snapshot_ = Snapshot{"))
 		}},
 		{"a generation-blind MutateFor", func() []string {
-			return follows(replace(checker, "if (feedGeneration_ != generation) return false;", "if (false) return false;"))
+			return follows(within("bool UpdateChecker::MutateFor(std::uint64_t generation,",
+				"if (feedGeneration_ != generation) return false;", "if (false) return false;"))
 		}},
 		{"a check of the old feed published", func() []string {
 			return follows(within("bool UpdateChecker::RunCheck(std::uint64_t generation) {",

@@ -54,7 +54,7 @@ const (
 func checkBothAskForTheSameList(checker, apply, selection string) []string {
 	var problems []string
 	problems = append(problems, applyOrderProblems("UpdateChecker::RunCheck", applyDefinition(checker, offerRunCheck),
-		regexp.QuoteMeta("const update::Feed& feed = update::kOfficialFeed;"),
+		regexp.QuoteMeta("const update::Feed& feed = *followed;"),
 		regexp.QuoteMeta("const std::wstring url = Widen(update::ReleaseListUrl(feed));"),
 		regexp.QuoteMeta("FetchUrl("),
 		`url, L"application/vnd\.github\+json", kMaxJsonBytes,\s*false,`)...)
@@ -355,7 +355,7 @@ func checkTrayChecksAgainBeforeItActs(checker, window, connect string) []string 
 		regexp.QuoteMeta("if (snapshot_.code != offer_.code) return;"),
 		regexp.QuoteMeta("offer = offer_;"),
 		regexp.QuoteMeta("std::chrono::duration_cast<std::chrono::seconds>(steady_clock::now() - offerCheckedAt_)"),
-		regexp.QuoteMeta("stale = update::OfferMayHaveChanged(update::kOfficialFeed, offerServerUnix_, sinceCheck);"),
+		regexp.QuoteMeta("stale = update::OfferMayHaveChanged(*offer.feed, offerServerUnix_, sinceCheck);"),
 		regexp.QuoteMeta("snapshot_.phase = Phase::Applying;"),
 		regexp.QuoteMeta("snapshot_.stage = stale ? Stage::Checking : Stage::Downloading;"),
 		regexp.QuoteMeta("claimed = snapshot_;"),
@@ -456,7 +456,7 @@ func checkTrayChecksAgainBeforeItActs(checker, window, connect string) []string 
 	problems = append(problems, applyOrderProblems("UpdateChecker::RunReveal", reveal,
 		regexp.QuoteMeta("std::chrono::duration_cast<std::chrono::seconds>(steady_clock::now() - offerCheckedAt_)"),
 		regexp.QuoteMeta("stale = !asked &&"),
-		regexp.QuoteMeta("update::OfferMayHaveChanged(update::kOfficialFeed, offerServerUnix_, sinceCheck);"),
+		regexp.QuoteMeta("update::OfferMayHaveChanged(*offer_.feed, offerServerUnix_, sinceCheck);"),
 		regexp.QuoteMeta("if (!stale) break;"),
 		regexp.QuoteMeta("if (!RunCheck(generation)) {"),
 		regexp.QuoteMeta("s.failure = Failure::Unconfirmed;"),
@@ -1441,8 +1441,8 @@ func TestUpdateOfferWiringRejectsWeakerSources(t *testing.T) {
 				`return "https://api.github.com/repositories/" + std::to_string(feed.numericRepoId) +`,
 				`return "https://api.github.com/repos/" + std::string(feed.owner) + "/" + std::string(feed.repo) +`))
 		}},
-		{"the tray polls another feed than the official one", "UpdateChecker::RunCheck is missing const update::Feed& feed = update::kOfficialFeed;", func() []string {
-			return checkBothAskForTheSameList(replace(checker, "const update::Feed& feed = update::kOfficialFeed;",
+		{"the tray takes its feed from app_prefs.json", `UpdateChecker::RunCheck is missing const update::Feed& feed = \*followed;`, func() []string {
+			return checkBothAskForTheSameList(replace(checker, "const update::Feed& feed = *followed;",
 				"const update::Feed& feed = *update::FeedById(Narrow(LoadAppPrefs().value(\"update_feed\", std::string{\"official\"})));"),
 				apply, selection)
 		}},
@@ -1612,8 +1612,8 @@ func TestUpdateOfferWiringRejectsWeakerSources(t *testing.T) {
 		}},
 		{"Later can be chosen between the click and its claim", "lets go of the lock between judging the click", func() []string {
 			return again(within(offerRunApply,
-				"    stale = update::OfferMayHaveChanged(update::kOfficialFeed, offerServerUnix_, sinceCheck);\n",
-				"    stale = update::OfferMayHaveChanged(update::kOfficialFeed, offerServerUnix_, sinceCheck);\n  }\n  {\n    std::lock_guard lock(mutex_);\n"))
+				"    stale = update::OfferMayHaveChanged(*offer.feed, offerServerUnix_, sinceCheck);\n",
+				"    stale = update::OfferMayHaveChanged(*offer.feed, offerServerUnix_, sinceCheck);\n  }\n  {\n    std::lock_guard lock(mutex_);\n"))
 		}},
 		{"the banner keeps its button while the check runs", `UpdateChecker::RunApply is missing snapshot_\.stage = stale \? Stage::Checking`, func() []string {
 			return again(within(offerRunApply, "    snapshot_.stage = stale ? Stage::Checking : Stage::Downloading;\n", ""))
@@ -1675,9 +1675,17 @@ func TestUpdateOfferWiringRejectsWeakerSources(t *testing.T) {
 		{"Show file without asking GitHub", `UpdateChecker::RunReveal is missing if \(!RunCheck\(generation\)\)`, func() []string {
 			return again(within(offerRunReveal, "    if (!RunCheck(generation)) {", "    if (false) {"))
 		}},
+		{"the click asked about the official feed whatever the offer's", `UpdateChecker::RunApply is missing stale = update::OfferMayHaveChanged\(\*offer\.feed`, func() []string {
+			return again(within(offerRunApply, "stale = update::OfferMayHaveChanged(*offer.feed,",
+				"stale = update::OfferMayHaveChanged(update::kOfficialFeed,"))
+		}},
+		{"Show file asked about the official feed whatever the offer's", `UpdateChecker::RunReveal is missing update::OfferMayHaveChanged\(\*offer_\.feed`, func() []string {
+			return again(within(offerRunReveal, "update::OfferMayHaveChanged(*offer_.feed,",
+				"update::OfferMayHaveChanged(update::kOfficialFeed,"))
+		}},
 		{"Show file never taken for an old offer", "UpdateChecker::RunReveal is missing stale = !asked &&", func() []string {
 			return again(within(offerRunReveal,
-				"      stale = !asked &&\n              update::OfferMayHaveChanged(update::kOfficialFeed, offerServerUnix_, sinceCheck);\n",
+				"      stale = !asked && update::OfferMayHaveChanged(*offer_.feed, offerServerUnix_, sinceCheck);\n",
 				"      stale = false;\n"))
 		}},
 		{"Show file after a check, without reading the banner again", "does not read the banner again after its check", func() []string {

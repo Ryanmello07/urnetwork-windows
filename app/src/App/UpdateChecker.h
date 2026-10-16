@@ -73,10 +73,24 @@
 // not started before then either. When no check has succeeded for 72 hours,
 // the banner and the developer line say since when.
 //
-// The feed can change under a check or an apply in flight (the opt-in
-// developer channel switches it): each carries the feed generation it started
-// under, a check's result from an older one is dropped, and an apply stops
-// before it starts the helper.
+// The feed is the machine's update channel's (Common/UpdateChannel.h): the
+// official feed above, unless an administrator has turned the opt-in
+// developer channel on for this PC, whose feed is the table's developer row.
+// The channel is one file in the admin-only install folder, which the
+// elevated helper alone writes and both read through one reader
+// (InstallLocationWin32.h ReadChannelMarker); this app reads it on an
+// installed copy with a code, and any other copy follows the official feed.
+// It reads it when it starts, before every check and every apply, after a
+// change it asked for, and when the Developer or the Settings screen is
+// shown, so another user's change shows there. A change of channel is the
+// helper's (RequestChannel): this app starts it, as for an update, and then
+// shows what the marker says, never what it asked for. A developer build is
+// installed only through the helper: its installer is never handed over to
+// run (UpdateChannel.h HandsOverInstaller).
+//
+// The feed can change under a check or an apply in flight: each carries the
+// feed generation it started under, a check's result from an older one is
+// dropped, and an apply stops before it starts the helper.
 //
 // A dev build (urnw::version::kCode == 0) never self-updates: every release
 // would outrank it forever. The periodic checker is fully disabled there; the
@@ -103,6 +117,7 @@
 #include <string>
 #include <thread>
 
+#include "UpdateChannel.h"
 #include "UpdateMarker.h"
 #include "UpdateResult.h"
 
@@ -228,6 +243,19 @@ class UpdateChecker {
     // it offers that release (SaysReplaced). Empty when there is none.
     std::wstring replacedVersion;
     std::uint64_t replacedByCode = 0;
+    // The feed this copy follows, never null: the official row, or the
+    // developer row while a trusted marker selects it (UpdateChannel.h
+    // FeedOfMarker). The offer and every line about it are this feed's.
+    const update::Feed* feed = &update::kOfficialFeed;
+    // The update channel's marker as last read: Absent on a copy that reads
+    // none (a portable copy, a dev build).
+    update::ChannelMarker marker = update::ChannelMarker::Absent;
+    // A change of channel this app asked for: Asking while Windows' prompt
+    // or the helper's question is up, then the line ChangeLineOf gave, until
+    // the next request or the next change of channel this app sees.
+    update::ChangeLine change = update::ChangeLine::None;
+    // The code a change that failed is reported with (ChangeCodeText).
+    std::wstring changeCode;
   };
 
   using Handler = std::function<void(Snapshot const&)>;
@@ -278,11 +306,20 @@ class UpdateChecker {
   // saved, and a newer release is shown. Ignored unless the banner offers
   // Later (OffersLater). Safe from the UI thread.
   void Later();
-  // The update channel changed (the opt-in developer channel calls this): a
-  // check or an apply still running under the old feed is abandoned, the
-  // offer and its banner are dropped (the helper's report stays), and a check
-  // is queued.
+  // The update channel changed (SyncChannel calls this once it follows the
+  // new feed): a check or an apply still running under the old feed is
+  // abandoned, the offer and its banner are dropped (the helper's report
+  // stays), and a check is queued.
   void ChannelChanged();
+  // Ask the elevated helper to set the machine's update channel to `feed`,
+  // a row of the table (FeedById): queued for the worker, as an apply is. A
+  // request made while this app's own update runs is refused at once, and
+  // says so: its prompt would come minutes later. Safe from the UI thread.
+  void RequestChannel(const update::Feed& feed);
+  // Read the machine's channel again, on the worker, as the Developer and
+  // Settings screens are shown: another user's change shows there without a
+  // check. Safe from the UI thread.
+  void RequestChannelSync();
 
   // Whether a VPN is connected now, as each tunnel status the app gets says
   // (AppController::OnTunnelState): the statuses the service pushes, and those
@@ -343,6 +380,10 @@ class UpdateChecker {
     // that changes mid-flight cannot pair this hash with a different download.
     std::string digestHex;
     std::string msiName;   // the exact asset filename, names the file on disk
+    // The feed the release came from: what is asked about it later
+    // (OfferMayHaveChanged), and whether its installer may be handed over
+    // (HandsOverInstaller).
+    const update::Feed* feed = &update::kOfficialFeed;
   };
 
   void WorkerLoop();
@@ -358,6 +399,15 @@ class UpdateChecker {
   update::VpnNote HandOffVpn();
   update::VpnAtStart NoteVpn();
   void RunReveal(std::uint64_t generation);
+  // The machine's channel, read again: an installed copy with a code takes
+  // the feed its marker selects, and a feed other than the one it follows,
+  // by id, is a change of channel (ChannelChanged). Any other copy reads
+  // nothing. On the worker.
+  void SyncChannel();
+  // A change of channel to `asked`: the helper, elevated and shown, then the
+  // marker read again, which decides what is said (ChangeLineOf). On the
+  // worker.
+  void RunChannelChange(const update::Feed& asked);
   // Removes the download folders of every release but `keepTag` from the
   // tray app's own updates folder: the installer of a release that is no
   // longer offered is not left there to be run.
@@ -405,6 +455,14 @@ class UpdateChecker {
   std::int64_t holdUntilUnix_ = 0;
   // Bumped by ChannelChanged; see the header comment.
   std::uint64_t feedGeneration_ = 0;
+  // The feed this copy follows, never null; set by Start before the worker
+  // exists and by SyncChannel after, under mutex_, the generation moving
+  // with it (ChannelChanged).
+  const update::Feed* feed_ = &update::kOfficialFeed;
+  // A change of channel the user asked for, and a read of the channel the
+  // screens asked for, both for the worker.
+  const update::Feed* channelRequested_ = nullptr;
+  bool syncRequested_ = false;
   Snapshot snapshot_;
   Offer offer_;
   // GitHub's clock at the check that made offer_ (the list's Date header),

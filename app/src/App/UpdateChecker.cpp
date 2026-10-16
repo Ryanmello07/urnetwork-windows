@@ -22,6 +22,7 @@
 #include "SingleInstance.h"
 #include "Strings.h"
 #include "UpdateApply.h"
+#include "UpdateChannel.h"
 #include "UpdateFormats.h"
 #include "UpdateResult.h"
 #include "UpdateResultJson.h"
@@ -355,6 +356,8 @@ std::string Sha256File(fs::path const& file) {
 // elevate executables that are signed and validated" is on and the program is
 // not signed: "A referral was returned from the server".
 constexpr DWORD kElevationRefusedUnsigned = ERROR_DS_REFERRAL;
+static_assert(update::kStartCancelled == ERROR_CANCELLED &&
+              update::kStartUnsigned == kElevationRefusedUnsigned);
 
 // Starts the update helper for `tag`: the installed, admin-owned
 // URnetworkUpdate.exe beside this exe, elevated up front with the "runas"
@@ -393,6 +396,41 @@ bool LaunchUpdateHelper(fs::path const& helperPath, std::wstring const& tag, HAN
   } else {
     LogWarn("update: the update helper's process was not returned; this app cannot wait on it, "
             "and launches during the update are not refused");
+  }
+  return true;
+}
+
+// Starts the update helper for a change of the machine's update channel to
+// `feed`, a row of the table: the installed URnetworkUpdate.exe beside this
+// exe with --set-update-channel and the row's id, elevated with "runas" as
+// for an update, and shown, since the developer channel asks first. Nothing
+// else is passed: the helper reads and writes the channel's marker itself.
+// `*helper` is its process, for the caller to wait on and close; null when
+// the shell returned none. `*refusal` is the Win32 error of a start that
+// failed.
+bool LaunchChannelHelper(fs::path const& helperPath, update::Feed const& feed, HANDLE* helper,
+                         DWORD* refusal, std::string& error) {
+  *helper = nullptr;
+  *refusal = ERROR_SUCCESS;
+  const std::wstring params = L"--set-update-channel " + Widen(feed.id);
+  const std::wstring folder = helperPath.parent_path().wstring();
+  SHELLEXECUTEINFOW sei{};
+  sei.cbSize = sizeof(sei);
+  sei.fMask = SEE_MASK_NOASYNC | SEE_MASK_NOCLOSEPROCESS;
+  sei.lpVerb = L"runas";
+  sei.lpFile = helperPath.c_str();
+  sei.lpParameters = params.c_str();
+  sei.lpDirectory = folder.c_str();
+  sei.nShow = SW_SHOWNORMAL;
+  if (!::ShellExecuteExW(&sei)) {
+    *refusal = ::GetLastError();
+    error = std::format("ShellExecuteEx(update helper, channel) failed: {}", *refusal);
+    return false;
+  }
+  if (sei.hProcess) {
+    *helper = sei.hProcess;
+  } else {
+    LogWarn("update: the update helper's process was not returned; the channel is read again later");
   }
   return true;
 }
@@ -470,6 +508,21 @@ void UpdateChecker::Start() {
             Narrow(installFolder_.wstring()), why);
   }
   snapshot_.installed = installed_;
+  // The machine's update channel, read before the worker exists: an installed
+  // copy with a code follows the feed its marker selects, and any other copy
+  // the official feed, reading no marker (UpdateChannel.h).
+  if (installed_ && version::kCode != 0) {
+    std::string channelWhy;
+    const update::ChannelMarker marker = install::ReadChannelMarker(installFolder_, channelWhy);
+    feed_ = &update::FeedOfMarker(marker);
+    snapshot_.marker = marker;
+    if (marker == update::ChannelMarker::Rejected) {
+      LogWarn("update: the update channel's marker is not trusted ({}); official releases are followed",
+              channelWhy);
+    }
+  }
+  snapshot_.feed = feed_;
+  LogInfo("update: this copy follows the {} feed", feed_->id);
   // When a check last succeeded; before any has, this first launch is when
   // checks began, so 72 hours of failures from now are reported too.
   const nlohmann::json prefs = LoadAppPrefs();
@@ -616,8 +669,15 @@ void UpdateChecker::ChannelChanged() {
       snapshot_ = Snapshot{.installed = installed_,
                            .lastSuccessUnix = snapshot_.lastSuccessUnix,
                            .checkStale = snapshot_.checkStale,
-                           .holdUntilUnix = snapshot_.holdUntilUnix};
+                           .holdUntilUnix = snapshot_.holdUntilUnix,
+                           .feed = feed_,
+                           .marker = snapshot_.marker};
     }
+    // a report's banner keeps its snapshot, and follows the new feed too;
+    // a change seen is the end of any line about the last one asked for
+    snapshot_.feed = feed_;
+    snapshot_.change = update::ChangeLine::None;
+    snapshot_.changeCode.clear();
     snapshot_.offeredCode = 0;
     checkRequested_ = true;
     copy = snapshot_;
@@ -625,6 +685,40 @@ void UpdateChecker::ChannelChanged() {
   cv_.notify_all();
   LogInfo("update: the update channel changed; work for the previous feed is abandoned");
   if (auto handler = HandlerCopy()) handler(copy);
+}
+
+void UpdateChecker::RequestChannel(const update::Feed& feed) {
+  Snapshot copy;
+  {
+    std::lock_guard lock(mutex_);
+    const bool ownUpdate = snapshot_.phase == Phase::Applying || applyRequested_ || manualRequested_;
+    if (ownUpdate) {
+      // refused now: queued, Windows' prompt would come minutes later
+      const update::ChannelChange refused{.asked = &feed,
+                                          .markerAfter = snapshot_.marker,
+                                          .ownUpdateRunning = true};
+      snapshot_.change = update::ChangeLineOf(refused);
+    } else {
+      channelRequested_ = &feed;
+      snapshot_.change = update::ChangeLine::Asking;
+    }
+    snapshot_.changeCode.clear();
+    copy = snapshot_;
+  }
+  cv_.notify_all();
+  LogInfo("update: the update channel {} asked for: {}", copy.change == update::ChangeLine::Asking
+                                                              ? "is"
+                                                              : "was not",
+          feed.id);
+  if (auto handler = HandlerCopy()) handler(copy);
+}
+
+void UpdateChecker::RequestChannelSync() {
+  {
+    std::lock_guard lock(mutex_);
+    syncRequested_ = true;
+  }
+  cv_.notify_all();
 }
 
 std::wstring UpdateChecker::LocalDate(std::int64_t unixSeconds) {
@@ -702,9 +796,11 @@ void UpdateChecker::SetAutoCheckEnabled(bool on) {
 }
 
 bool UpdateChecker::OffersInstaller(Snapshot const& snapshot) {
+  // a developer build installs only through the helper's own checks, so a
+  // release the helper refused is never offered again as a file
   return snapshot.phase == Phase::Result &&
          snapshot.result.view == update::ReportView::NotInstalled && snapshot.offeredCode != 0 &&
-         snapshot.offeredCode == snapshot.code;
+         snapshot.offeredCode == snapshot.code && update::HandsOverInstaller(*snapshot.feed);
 }
 
 bool UpdateChecker::OffersLater(Snapshot const& snapshot) {
@@ -822,6 +918,33 @@ void UpdateChecker::WorkerLoop() {
         LogError("update: showing the installer threw: {}", e.what());
       } catch (...) {
         LogError("update: showing the installer threw (unknown)");
+      }
+      lock.lock();
+      continue;
+    }
+    if (channelRequested_) {
+      const update::Feed* asked = channelRequested_;
+      channelRequested_ = nullptr;
+      lock.unlock();
+      try {
+        RunChannelChange(*asked);
+      } catch (std::exception const& e) {
+        LogError("update: the change of channel threw: {}", e.what());
+      } catch (...) {
+        LogError("update: the change of channel threw (unknown)");
+      }
+      lock.lock();
+      continue;
+    }
+    if (syncRequested_) {
+      syncRequested_ = false;
+      lock.unlock();
+      try {
+        SyncChannel();
+      } catch (std::exception const& e) {
+        LogError("update: reading the update channel threw: {}", e.what());
+      } catch (...) {
+        LogError("update: reading the update channel threw (unknown)");
       }
       lock.lock();
       continue;
@@ -951,12 +1074,117 @@ void UpdateChecker::CleanupStaleFiles() {
   }
 }
 
+// ---- the update channel ------------------------------------------------------
+
+void UpdateChecker::SyncChannel() {
+  // an installed copy with a code is the only one that has a channel; any
+  // other copy follows the official feed and reads nothing (Start)
+  if (!installed_ || version::kCode == 0) return;
+  std::string why;
+  const update::ChannelMarker marker = install::ReadChannelMarker(installFolder_, why);
+  const update::Feed& feed = update::FeedOfMarker(marker);
+  bool changed = false;
+  bool newlyRejected = false;
+  Snapshot copy;
+  {
+    std::lock_guard lock(mutex_);
+    newlyRejected = marker == update::ChannelMarker::Rejected && snapshot_.marker != marker;
+    snapshot_.marker = marker;
+    changed = feed.id != feed_->id;
+    if (changed) feed_ = &feed;
+    copy = snapshot_;
+  }
+  if (newlyRejected) {
+    LogWarn("update: the update channel's marker is not trusted ({}); official releases are followed", why);
+  }
+  if (changed) {
+    LogInfo("update: the update channel is now the {} feed", feed.id);
+    ChannelChanged();
+    return;
+  }
+  if (auto handler = HandlerCopy()) handler(copy);
+}
+
+void UpdateChecker::RunChannelChange(const update::Feed& asked) {
+  // As for an update, a copy that is not an installed one with a code asks
+  // for no elevation: it has no channel to change.
+  if (!installed_ || version::kCode == 0) {
+    LogWarn("update: this copy has no update channel; the helper is not started");
+    Mutate([](Snapshot& s) {
+      s.change = update::ChangeLine::None;
+      s.changeCode.clear();
+    });
+    return;
+  }
+  LogInfo("update: asking the update helper for the {} channel", asked.id);
+  HANDLE helper = nullptr;
+  DWORD refusal = ERROR_SUCCESS;
+  std::string launchError;
+  const bool started =
+      LaunchChannelHelper(installFolder_ / kHelperName, asked, &helper, &refusal, launchError);
+  std::int64_t exitCode = 0;
+  if (!started) {
+    LogWarn("update: the update helper did not start ({}); the update channel is as it was",
+            launchError);
+  } else if (!helper) {
+    // nothing to wait on: no line is said, and the channel's own line
+    // shows what the marker says
+    SyncChannel();
+    Mutate([](Snapshot& s) {
+      s.change = update::ChangeLine::None;
+      s.changeCode.clear();
+    });
+    return;
+  } else {
+    const auto cancelled = [this] {
+      std::lock_guard lock(mutex_);
+      return stop_;
+    };
+    const update::HelperWait waited = update::AwaitHelper(
+        [helper] { return ::WaitForSingleObject(helper, 250) == WAIT_OBJECT_0; }, cancelled);
+    if (waited == update::HelperWait::AppExiting) {
+      // nothing is being installed: no update is recorded, and the helper
+      // ends on its own
+      ::CloseHandle(helper);
+      return;
+    }
+    DWORD code = 0;
+    exitCode = ::GetExitCodeProcess(helper, &code) ? static_cast<std::int64_t>(code)
+                                                   : std::int64_t{0xFFFFFFFF};
+    ::CloseHandle(helper);
+    LogInfo("update: the update helper ended the change of channel with {}", exitCode);
+  }
+  // Whatever the helper answered, the marker says what happened: read again,
+  // it decides the line (ChangeLineOf), and this copy follows it.
+  std::string why;
+  const update::ChannelChange change{.asked = &asked,
+                                     .markerAfter = install::ReadChannelMarker(installFolder_, why),
+                                     .startError = started ? 0u : static_cast<std::uint32_t>(refusal),
+                                     .exitCode = exitCode};
+  const update::ChangeLine line = update::ChangeLineOf(change);
+  const std::wstring code =
+      line == update::ChangeLine::Failed ? Widen(update::ChangeCodeText(change)) : std::wstring{};
+  SyncChannel();
+  Mutate([line, &code](Snapshot& s) {
+    s.change = line;
+    s.changeCode = code;
+  });
+  LogInfo("update: the change of channel to {} {}", asked.id,
+          line == update::ChangeLine::None ? "is what the marker says" : "did not happen");
+}
+
 // ---- the check ---------------------------------------------------------------
 
 bool UpdateChecker::RunCheck(std::uint64_t generation) {
+  // The machine's channel first: a change since this check was asked for
+  // drops it, and ChannelChanged has queued one of the new feed.
+  SyncChannel();
   bool held = false;
+  const update::Feed* followed = nullptr;
   {
     std::lock_guard lock(mutex_);
+    if (feedGeneration_ != generation) return false;
+    followed = feed_;
     held = steady_clock::now() < holdUntil_;
   }
   if (held) {
@@ -971,7 +1199,7 @@ bool UpdateChecker::RunCheck(std::uint64_t generation) {
   // can move the feed, and with redirects refused for the same reason. The
   // same request the update helper makes (ReleaseListUrl), so the two judge
   // the same page of releases.
-  const update::Feed& feed = update::kOfficialFeed;
+  const update::Feed& feed = *followed;
   const std::wstring url = Widen(update::ReleaseListUrl(feed));
   std::string body;
   std::string error;
@@ -1050,12 +1278,12 @@ bool UpdateChecker::RunCheck(std::uint64_t generation) {
             sel.assetUrl);
   } else if (sel.code != 0) {
     LogDebug("update: release {} digest ok ({})", sel.tag, sel.digestHex);
-    offer = Offer{Widen(sel.version), sel.code,  Widen(sel.tag),
-                  Widen(sel.assetUrl), sel.digestHex, sel.assetName};
+    offer = Offer{Widen(sel.version), sel.code,     Widen(sel.tag),
+                  Widen(sel.assetUrl),  sel.digestHex, sel.assetName, &feed};
   }
 
-  LogInfo("update: check complete — own code {}, newest release {} (code {}){}",
-          static_cast<unsigned long long>(version::kCode),
+  LogInfo("update: check of the {} feed complete — own code {}, newest release {} (code {}){}",
+          feed.id, static_cast<unsigned long long>(version::kCode),
           newestVersion.empty() ? "none" : newestVersion,
           static_cast<unsigned long long>(newestCode),
           sel.waitingCode == 0
@@ -1130,7 +1358,11 @@ bool UpdateChecker::RunCheck(std::uint64_t generation) {
                              .lastSuccessUnix = succeeded,
                              .lastCheck = CheckOutcome::NoUpdate,
                              .newestVersion = Widen(newestVersion),
-                             .newestCode = newestCode};
+                             .newestCode = newestCode,
+                             .feed = feed_,
+                             .marker = snapshot_.marker,
+                             .change = snapshot_.change,
+                             .changeCode = snapshot_.changeCode};
       }
       offer_ = Offer{};
     }
@@ -1191,6 +1423,8 @@ void UpdateChecker::NoteReplaced(std::uint64_t generation, std::wstring const& r
 // ---- the apply ---------------------------------------------------------------
 
 void UpdateChecker::RunApply(std::uint64_t generation, bool manual) {
+  // The machine's channel first: a change since the click drops it below.
+  SyncChannel();
   Offer offer;
   bool stale = false;
   Snapshot claimed;
@@ -1212,9 +1446,10 @@ void UpdateChecker::RunApply(std::uint64_t generation, bool manual) {
     const std::int64_t sinceCheck =
         std::chrono::duration_cast<std::chrono::seconds>(steady_clock::now() - offerCheckedAt_)
             .count();
-    stale = update::OfferMayHaveChanged(update::kOfficialFeed, offerServerUnix_, sinceCheck);
+    stale = update::OfferMayHaveChanged(*offer.feed, offerServerUnix_, sinceCheck);
     // The click is taken under the lock that judged it. From here the banner
-    // shows no action and no Later, so nothing the user does crosses it.
+    // shows its action disabled and no Later, so nothing the user does
+    // crosses it.
     snapshot_.phase = Phase::Applying;
     snapshot_.stage = stale ? Stage::Checking : Stage::Downloading;
     snapshot_.failure = Failure::None;
@@ -1402,6 +1637,15 @@ void UpdateChecker::RunApply(std::uint64_t generation, bool manual) {
   // ---- (c) the install: the helper on an installed copy, the user elsewhere ---
   const std::wstring msiW = msiPath.wstring();
   if (!viaHelper) {
+    // A developer build installs only through the helper's own checks: its
+    // installer is never handed over to run.
+    if (!update::HandsOverInstaller(*offer.feed)) {
+      LogWarn("update: v{} is a release of the {} feed; its installer is not handed over",
+              Narrow(offer.version), offer.feed->id);
+      fs::remove_all(dir, ec);
+      fail(Failure::Elevation);
+      return;
+    }
     // A portable or dev copy elevates nothing, and neither does a user who
     // asked for the installer. The checked MSI is the user's to run as an
     // installer, and the banner says what it was checked against.
@@ -1448,7 +1692,10 @@ void UpdateChecker::RunApply(std::uint64_t generation, bool manual) {
   if (!LaunchUpdateHelper(installFolder_ / kHelperName, offer.tag, &helper, &refusal,
                           launchError)) {
     LogWarn("update: the update helper did not start ({}); nothing was installed", launchError);
-    fail(refusal == kElevationRefusedUnsigned ? Failure::Unsigned : Failure::Elevation);
+    // the installer is offered instead only for an official release
+    fail(refusal == kElevationRefusedUnsigned && update::HandsOverInstaller(*offer.feed)
+             ? Failure::Unsigned
+             : Failure::Elevation);
     return;
   }
   LogInfo("update: the update helper is installing v{}; the installer closes this app before "
@@ -1551,7 +1798,8 @@ void UpdateChecker::RunReveal(std::uint64_t generation) {
     {
       std::lock_guard lock(mutex_);
       if (snapshot_.phase != Phase::ManualInstall || snapshot_.installerPath.empty() ||
-          feedGeneration_ != generation || offer_.code != snapshot_.code) {
+          feedGeneration_ != generation || offer_.code != snapshot_.code ||
+          !update::HandsOverInstaller(*offer_.feed)) {
         return;
       }
       installer = snapshot_.installerPath;
@@ -1559,8 +1807,7 @@ void UpdateChecker::RunReveal(std::uint64_t generation) {
       const std::int64_t sinceCheck =
           std::chrono::duration_cast<std::chrono::seconds>(steady_clock::now() - offerCheckedAt_)
               .count();
-      stale = !asked &&
-              update::OfferMayHaveChanged(update::kOfficialFeed, offerServerUnix_, sinceCheck);
+      stale = !asked && update::OfferMayHaveChanged(*offer_.feed, offerServerUnix_, sinceCheck);
     }
     if (!stale) break;
     if (!RunCheck(generation)) {

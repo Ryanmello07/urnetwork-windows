@@ -1898,6 +1898,9 @@ void MainWindow::OnNavSelectionChanged(NavigationView const&,
   // it runs only while this destination is selected AND the window is
   // presenting (SetPresentationActive supplies the other half).
   developer_->SetSelected(tag == L"developer");
+  // The machine's update channel, read again as either screen that shows it
+  // comes up: another user's change shows there without a check.
+  if (tag == L"developer" || tag == L"settings") urnw::pages::Updates().RequestChannelSync();
   // R4: opening Network opens the SDK's locations/peer view controllers and
   // re-renders from whatever snapshot exists now. Same shape as the developer
   // poll above - a destination that is not on screen does not hold a feed open.
