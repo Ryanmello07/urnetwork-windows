@@ -526,6 +526,7 @@
     <ClInclude Include="ApprovalCheck.h" />
     <ClInclude Include="ServiceClient.h" />
     <ClInclude Include="ServiceSetup.h" />
+    <ClInclude Include="TrayConnectionState.h" />
     <ClInclude Include="TrayIcon.h" />
     <ClInclude Include="UpdateChecker.h" />
     <ClInclude Include="resource.h" />
