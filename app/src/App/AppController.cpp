@@ -134,8 +134,12 @@ void AppController::Start() {
   // to DO.
   //
   // Out of balance the tray's Connect starts nothing and opens the upgrade path
-  // (BalanceGate.h, start connect); its Disconnect always works.
+  // (BalanceGate.h, start connect); its Disconnect always works. Neither is
+  // offered without a status to act on (TrayConnectionState.h), and a click
+  // that finds none since the menu opened does nothing.
   cb.onConnectToggle = [this] {
+    const tray::Action action = tray::ActionFor(CurrentTrayFacts());
+    if (action == tray::Action::None) return;
     struct Sinks {
       AppController& app;
       void Connect() { app.sdk_.ConnectBestAvailable(); }
@@ -147,12 +151,10 @@ void AppController::Start() {
         app.ShowUpgradeForBlockedConnect();
       }
     } sinks{*this};
-    urnw::balance::RouteConnectGesture(
-        gesture::ActionIsDisconnect(CurrentServiceFacts(), TrayHealth()), OutOfBalance(), sinks);
+    urnw::balance::RouteConnectGesture(action == tray::Action::Disconnect, OutOfBalance(),
+                                       sinks);
   };
-  cb.isConnected = [this] {
-    return gesture::ActionIsDisconnect(CurrentServiceFacts(), TrayHealth());
-  };
+  cb.connectAction = [this] { return tray::ActionFor(CurrentTrayFacts()); };
   // The two recovery items. Both read the LAST STATUS THE SERVICE PUSHED rather
   // than any app-side belief: the whole point is that they are reachable when
   // the app's own view of the world is the thing that has gone wrong (the window
@@ -712,96 +714,80 @@ health::State AppController::TrayHealth() const {
   return connected_ ? health::State::Connected : health::State::Disconnected;
 }
 
+tray::Facts AppController::CurrentTrayFacts() const {
+  tray::Facts facts;
+  facts.signedIn = authState_ == AuthState::LoggedIn;
+  facts.statusKnown = lastTunnelStatus_.has_value();
+  if (lastTunnelStatus_) {
+    facts.tunnel = tray::TunnelOf(lastTunnelStatus_->state);
+    facts.routesInstalled = lastTunnelStatus_->routes_installed;
+    facts.wfpState = lastTunnelStatus_->wfp_state;
+    facts.failsafeStop = proto::IsFailsafeStop(lastTunnelStatus_->stop_reason);
+  }
+  facts.health = trayHealth_;
+  facts.actionIsDisconnect = gesture::ActionIsDisconnect(CurrentServiceFacts(), TrayHealth());
+  return facts;
+}
+
 void AppController::UpdateTray() {
-  // v1 maps provide=false; connect reflects the tunnel AND (#27) the aggregate
-  // health: the connected icon means "proven working", so Evaluating/Degraded
-  // map to the existing not-connected art rather than claiming green. With no
-  // evidence at all (window never shown: the stats feed is presentation-scoped)
-  // the tunnel's own claim stands, which is exactly the old behaviour.
-  using Health = health::State;
-  const Health h = trayHealth_.value_or(Health::Connected);
-  const bool verified = connected_ && h == Health::Connected;
-  tray_.SetState(verified ? TrayState::NoProvideConnect
-                          : TrayState::NoProvideNoConnect);
+  // v1 maps provide=false. The icon shows connected, and the status says so,
+  // only with the tunnel up and (#27) the aggregate health connected: "proven
+  // working", so Evaluating/Degraded keep the not-connected art. With no stats
+  // since the tunnel came up its own claim stands (TrayConnectionState.h).
+  const tray::View view = tray::Decide(CurrentTrayFacts());
+  tray_.SetState(view.connectedIcon ? TrayState::NoProvideConnect
+                                    : TrayState::NoProvideNoConnect);
   // "URnetwork — Connected": the app name, then the status. The em dash is
   // punctuation, not text. The health words reuse the connect page's exact
-  // strings (same Adv ids), so the tooltip and the status line can never name
-  // the same state differently.
+  // strings (same ids), so the tooltip and the status line can never name the
+  // same state differently.
+  std::wstring status;
+  switch (view.status) {
+    case tray::Status::None:
+      break;
+    case tray::Status::Connected:
+      status = Localized("connected");
+      break;
+    case tray::Status::FindingProviders:
+      status = pages::AdvW("conn_finding_providers", L"Finding providers…");
+      break;
+    case tray::Status::Degraded:
+      status = pages::AdvW("conn_degraded", L"Connection degraded — reconnecting");
+      break;
+    case tray::Status::Connecting:
+      // a connect in progress, the tunnel starting or up with no provider yet
+      status = Localized("connecting_status_indicator");
+      break;
+    case tray::Status::Failed:
+      // a start the service could not finish, or the window honesty layer's
+      // terminal outcome (track 2): the page shows the reason and a Retry
+      status = pages::AdvW("conn_failed", L"Couldn't connect");
+      break;
+    // #41: states that are not "disconnected" though no tunnel is up, which the
+    // app name alone would render as an idle machine. The icon keeps the
+    // ordinary not-connected art, so the tooltip carries the distinction.
+    case tray::Status::Disconnecting:
+      // routes still installed with nothing carrying them (the owner's bug A):
+      // the transient word, as the stop is in flight
+      status = pages::AdvW("conn_tray_disconnecting",
+                           L"Disconnecting — traffic is still going through the tunnel");
+      break;
+    case tray::Status::BlockedKillSwitch:
+      // blocked on purpose and nothing is leaking; the menu's lift item undoes it
+      status = pages::AdvW("conn_tray_blocked_kill_switch", L"Blocked (kill switch on)");
+      break;
+    case tray::Status::BlockedNoTunnel:
+      // a policy the kill switch did not put there, outliving its tunnel: blocked,
+      // and the honest word for it is not "kill switch"
+      status = pages::AdvW("conn_tray_blocked_no_tunnel",
+                           L"Blocked — leak protection is still in force with no tunnel up");
+      break;
+    case tray::Status::FailsafeStopped:
+      status = pages::AdvW("conn_tray_failsafe_stopped", L"Disconnected (the tunnel failed)");
+      break;
+  }
   std::wstring tip = Localized("app_name");
-  // #41: two states that are NOT "disconnected" even though no tunnel is up, and
-  // that a bare app name would render as an idle machine. The icon is shared
-  // with the ordinary not-connected art on purpose — a third asset would be a
-  // new symbol to learn for a state that lasts until the next click — so the
-  // tooltip is what carries the distinction.
-  if (!connected_ && lastTunnelStatus_) {
-    // ROUTES FIRST, and this row is the tooltip half of the owner's bug A. A
-    // machine whose capture routes are still installed with nothing carrying
-    // them has no internet — and the app used to render that as "Blocked (kill
-    // switch on)" with the kill switch OFF, which is the sentence that got the
-    // behaviour reported as a kill switch. After the fix this state is a
-    // fraction of a second wide (the stop is in flight), so the word is the
-    // transient one rather than an alarm.
-    if (lastTunnelStatus_->routes_installed) {
-      tray_.SetTooltip(tip + L" — " +
-                       pages::AdvW("conn_tray_disconnecting",
-                                   L"Disconnecting — traffic is still going "
-                                   L"through the tunnel"));
-      return;
-    }
-    if (lastTunnelStatus_->wfp_state == "armed") {
-      // The one the owner has to be able to read at a glance: the machine is
-      // blocked ON PURPOSE and nothing is leaking, which is a completely
-      // different situation from a tunnel that failed open. Gated on "armed"
-      // rather than on "not off" — that is the only state the kill switch put
-      // this machine in, and the only one the menu's lift item can undo.
-      tray_.SetTooltip(tip + L" — " +
-                       pages::AdvW("conn_tray_blocked_kill_switch",
-                                   L"Blocked (kill switch on)"));
-      return;
-    }
-    if (lastTunnelStatus_->wfp_state != "off") {
-      // A policy in force that the kill switch did not put there: a connect
-      // attempt in flight, or a connected policy outliving its tunnel. Blocked
-      // either way, and the honest word for it is not "kill switch".
-      tray_.SetTooltip(tip + L" — " +
-                       pages::AdvW("conn_tray_blocked_no_tunnel",
-                                   L"Blocked — leak protection is still in "
-                                   L"force with no tunnel up"));
-      return;
-    }
-    if (proto::IsFailsafeStop(lastTunnelStatus_->stop_reason)) {
-      tray_.SetTooltip(tip + L" — " +
-                       pages::AdvW("conn_tray_failsafe_stopped",
-                                   L"Disconnected (the tunnel failed)"));
-      return;
-    }
-  }
-  if (connected_) {
-    switch (h) {
-      case Health::Connected:
-        tip += L" — " + Localized("connected");
-        break;
-      case Health::Evaluating:
-        tip += L" — " + pages::AdvW("conn_finding_providers", L"Finding providers…");
-        break;
-      case Health::Degraded:
-        tip += L" — " +
-               pages::AdvW("conn_degraded", L"Connection degraded — reconnecting");
-        break;
-      case Health::Connecting:
-        tip += L" — " + Localized("connecting_status_indicator");
-        break;
-      case Health::Failed:
-        // the window honesty layer's terminal outcome (track 2): the page
-        // shows the reason and a Retry; the tray says the same headline
-        tip += L" — " + pages::AdvW("conn_failed", L"Couldn't connect");
-        break;
-      default:
-        // NoService/Disconnected under a tunnel that reports Up: a transient
-        // disagreement between the two feeds — claim nothing extra.
-        break;
-    }
-  }
+  if (!status.empty()) tip += L" — " + status;
   tray_.SetTooltip(tip);
 }
 

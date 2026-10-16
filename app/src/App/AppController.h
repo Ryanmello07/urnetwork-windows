@@ -20,6 +20,7 @@
 #include "InstanceHandover.h"
 #include "SdkHost.h"
 #include "SubscriptionBalance.h"
+#include "TrayConnectionState.h"
 #include "TrayIcon.h"
 #include "UpdateChecker.h"
 #include "UrIoApproval.h"
@@ -201,6 +202,10 @@ class AppController {
   // claim when no stats have ever flowed (the feed is presentation-scoped, so a
   // window that has never been shown has no evidence either way).
   health::State TrayHealth() const;
+  // What the tray decides its status, icon and Connect/Disconnect item on
+  // (TrayConnectionState.h): the sign-in, the service's last status and the
+  // last stats push's health. The wfp state points into lastTunnelStatus_.
+  tray::Facts CurrentTrayFacts() const;
   void ReconcileWindowPresentation();
   template <class F>
   void OnUi(F&& f);  // marshal onto the UI thread

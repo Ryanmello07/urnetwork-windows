@@ -72,7 +72,7 @@ func TestConnectEntryPointsAdmitStartConnect(t *testing.T) {
 
 	app := stripLineComments(readAppSource(t, "AppController.cpp"))
 	start := strings.Index(app, "cb.onConnectToggle = [this] {")
-	end := strings.Index(app, "cb.isConnected = ")
+	end := strings.Index(app, "cb.connectAction = ")
 	if start < 0 || end < start {
 		t.Fatal("AppController.cpp: no tray connect toggle; update this contract")
 	}
@@ -239,7 +239,7 @@ func TestBalanceRecoveryWiring(t *testing.T) {
 	if !strings.Contains(app, "sdk_.SetConnectGestureObserver([this] { ClearBalanceRecovery(); },") {
 		t.Error("AppController.cpp: an admitted connect or the user's Disconnect does not end the wait")
 	}
-	tray := app[strings.Index(app, "cb.onConnectToggle = [this] {"):strings.Index(app, "cb.isConnected = ")]
+	tray := app[strings.Index(app, "cb.onConnectToggle = [this] {"):strings.Index(app, "cb.connectAction = ")]
 	if !strings.Contains(tray, "app.WaitOnBalance(") {
 		t.Error("AppController.cpp: the tray's refused Connect does not wait on the balance")
 	}
