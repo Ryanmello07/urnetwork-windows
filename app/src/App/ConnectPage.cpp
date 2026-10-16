@@ -1290,6 +1290,9 @@ void ConnectPage::ApplyStats(urnw::LiveStats const& stats) {
   // The SDK's connection status: the only signal in the client that carries a
   // CONNECTING state. It was read into LiveStats and never used.
   connectStatus_ = ParseConnectStatus(stats.connectionStatus);
+  // the inspector's pre-clamp reading (D5): only an rpc-only session fills
+  // rawConnectionStatus, and in every other the clamped value is the raw one
+  rawConnectionStatus_ = stats.rpcOnly ? stats.rawConnectionStatus : stats.connectionStatus;
   // the stall diagnosis rides the same snapshot (track 2); rendered by
   // ApplyConnectStatus as the reason line under the hero
   windowStallReason_ = stats.windowStallReason;
@@ -2848,9 +2851,10 @@ void ConnectPage::ApplySessionRows() {
   //
   // `exits` is how many exits the reliability stack currently holds, which is
   // the denominator for every "via" line the inspector prints.
-  const std::string raw = Sdk().CurrentStats().rpcOnly
-                              ? Sdk().CurrentStats().rawConnectionStatus
-                              : Sdk().CurrentStats().connectionStatus;
+  //
+  // `raw` is the last applied push's (ApplyStats): a snapshot read here ran the
+  // DeviceRemote getters on this thread, three times per render.
+  const std::string& raw = rawConnectionStatus_;
   host.Children().Append(
       urnw::kit::MakePaneKeyValueRow(Adv("adv_raw_status", L"Raw status"),
                                      raw.empty() ? Adv("adv_none", L"none") : H(raw))
@@ -3861,7 +3865,8 @@ void ConnectPage::OnChartTick() {
   // per-pane gate below on purpose: the status strip renders health on every
   // destination, not only Home. One nudge per deadline (the push re-arms it if
   // the hold is still running), through the ordinary stats path so the window
-  // AND the tray both hear the answer.
+  // AND the tray both hear the answer. The read runs on SdkHost's publish
+  // worker, not on this thread.
   if (healthReevalAtMillis_ > 0) {
     const int64_t nowMillis =
         std::chrono::duration_cast<std::chrono::milliseconds>(

@@ -634,6 +634,9 @@ class ConnectPage {
   // off LiveStats for the reason line ApplyConnectStatus renders. Empty means
   // nothing to say (idle, or a service that predates the field).
   std::string windowStallReason_;
+  // The last applied push's pre-clamp connection status, for the inspector's
+  // raw-status row (D5).
+  std::string rawConnectionStatus_;
   // ---- D5: Advanced Mode ----
   // Pushed from MainWindow::ApplyAdvancedMode, which is itself driven by
   // SdkHost's standing value — this page never reads the preference itself, so

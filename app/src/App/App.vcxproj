@@ -459,8 +459,9 @@
     <ClInclude Include="StatsFormat.h" />
     <ClInclude Include="BlockActionReason.h" />
     <ClInclude Include="StatsSheets.h" />
-    <!-- header-only and WinRT-free: tools/stats-publish-tests.cpp runs it -->
+    <!-- header-only and WinRT-free: tools/stats-publish-tests.cpp runs them -->
     <ClInclude Include="StatsReadOrder.h" />
+    <ClInclude Include="CoalescedWorker.h" />
     <!-- header-only and WinRT-free: tools/app-rule-rows-tests.cpp runs it -->
     <ClInclude Include="AppRuleRows.h" />
     <ClInclude Include="Startup.h" />

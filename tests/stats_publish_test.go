@@ -11,14 +11,15 @@ import (
 	"testing"
 )
 
-// How the app publishes and applies live stats snapshots: in the order their
-// reads began (App/StatsReadOrder.h) as a C++ spec with negative controls
-// that rewrite a copy of a header, and the wiring in SdkHost, AppController
-// and ConnectPage, which need Windows and WinRT, read with every comment
-// blanked so prose cannot satisfy a contract.
+// How the app publishes and applies live stats snapshots: read on a worker of
+// their own, never on the caller's thread (App/CoalescedWorker.h), and applied
+// in the order their reads began (App/StatsReadOrder.h), as a C++ spec with
+// negative controls that rewrite a copy of a header; and the wiring in
+// SdkHost, AppController and ConnectPage, which need Windows and WinRT, read
+// with every comment blanked so prose cannot satisfy a contract.
 
 // The headers the spec compiles against.
-var statsPublishHeaders = []string{"StatsReadOrder.h"}
+var statsPublishHeaders = []string{"StatsReadOrder.h", "CoalescedWorker.h"}
 
 // Compile the spec (app/tools/stats-publish-tests.cpp) against copies of its
 // headers. `mutate`, when set, rewrites the copy of the header `name`.
@@ -55,7 +56,9 @@ func statsPublishTestProgram(t *testing.T, name string, mutate func(string) stri
 	return program
 }
 
-// Execute the spec: snapshots apply in the order their reads began.
+// Execute the spec: a stats read runs on the publish worker, requests during
+// one fold into one more, nothing runs after Stop, and snapshots apply in the
+// order their reads began.
 func TestStatsPublish(t *testing.T) {
 	vcxproj := readAppSource(t, "App.vcxproj")
 	for _, header := range statsPublishHeaders {
@@ -90,6 +93,92 @@ func replaceStatsPublishOnce(t *testing.T, source, old, replacement string) stri
 		t.Fatalf("the header no longer has exactly one %q; update this control", old)
 	}
 	return strings.Replace(source, old, replacement, 1)
+}
+
+// The defect: the read ran on the caller's thread, the UI thread on a window
+// show and on the health re-check, and waited there on the device's lock.
+func TestCoalescedWorkerRejectsRunningOnTheCaller(t *testing.T) {
+	requireStatsPublishFailure(t, "CoalescedWorker.h", func(source string) string {
+		return replaceStatsPublishOnce(t, source, "    thread_ = std::thread([this] { Loop(); });\n",
+			"    thread_ = std::thread([] {});\n    running_ = false;\n    dirty_ = false;\n    job_();\n")
+	}, "the job ran on the caller's thread")
+}
+
+// A request while a read waits on a getter must still be read after it, or the
+// window keeps the state from before the request.
+func TestCoalescedWorkerRejectsLosingARequestDuringARun(t *testing.T) {
+	requireStatsPublishFailure(t, "CoalescedWorker.h", func(source string) string {
+		return replaceStatsPublishOnce(t, source, "    dirty_ = true;\n    if (running_) return;\n",
+			"    if (running_) return;\n    dirty_ = true;\n")
+	}, "a request during a run was lost")
+}
+
+// After Stop the owner tears down what the job reads. The control is a Stop
+// that only joins: it neither refuses the next request nor drops a pending one.
+func TestCoalescedWorkerRejectsRunningAfterStop(t *testing.T) {
+	requireStatsPublishFailure(t, "CoalescedWorker.h", func(source string) string {
+		source = replaceStatsPublishOnce(t, source, "    if (stopped_) return;\n", "")
+		source = replaceStatsPublishOnce(t, source, "      stopped_ = true;\n      dirty_ = false;\n",
+			"      stopped_ = true;\n")
+		return replaceStatsPublishOnce(t, source, "if (stopped_ || !dirty_) {", "if (!dirty_) {")
+	}, "a request after Stop ran the job against a stopped owner")
+}
+
+// A getter that throws must not take the worker, or the process, down.
+func TestCoalescedWorkerRejectsDyingOnAThrow(t *testing.T) {
+	requireStatsPublishFailure(t, "CoalescedWorker.h", func(source string) string {
+		source = replaceStatsPublishOnce(t, source, "      try {\n        job_();\n      } catch (...) {\n      }\n",
+			"      job_();\n")
+		return source
+	}, "a getter failed")
+}
+
+// No UI-thread path reads a stats snapshot: the window's show resync and the
+// health re-check ask SdkHost's publish worker, the inspector reads the last
+// applied push, and the publish worker stops above mutex_ in Quit and in the
+// destructor, before what it reads is torn down.
+func TestStatsReadsRunOffTheUiThread(t *testing.T) {
+	controller := stripComments(readAppSource(t, "AppController.cpp"))
+	reconcile := definitionBody(t, "AppController.cpp", controller,
+		"void AppController::ReconcileWindowPresentation()")
+	if !strings.Contains(reconcile, "sdk_.RepublishStats();") {
+		t.Error("ReconcileWindowPresentation does not ask for the show's stats snapshot off the UI thread")
+	}
+	for _, name := range []string{"AppController.cpp", "ConnectPage.cpp", "MainWindow.xaml.cpp",
+		"LocationSheets.cpp", "TrayIcon.cpp", "SettingsPage.cpp", "AccountPage.cpp", "WalletPage.cpp"} {
+		source := stripComments(readAppSource(t, name))
+		for _, read := range []string{"CurrentStats(", "ReadStats(", "PublishStats();"} {
+			if strings.Contains(source, read) {
+				t.Errorf("%s reads a stats snapshot on the UI thread (%s)", name, read)
+			}
+		}
+	}
+
+	header := stripComments(readAppSource(t, "SdkHost.h"))
+	if !strings.Contains(header, "void RepublishStats() { statsPublisher_.Request(); }") {
+		t.Error("RepublishStats does not hand the read to the publish worker")
+	}
+	if strings.Contains(header, "CurrentStats(") {
+		t.Error("SdkHost still offers a synchronous stats read (CurrentStats)")
+	}
+	if !strings.Contains(header, "CoalescedWorker statsPublisher_{[this] { PublishStatsOnWorker(); }};") {
+		t.Error("the publish worker does not run PublishStatsOnWorker")
+	}
+
+	sdkHost := stripComments(readAppSource(t, "SdkHost.cpp"))
+	onWorker := definitionBody(t, "SdkHost.cpp", sdkHost, "void SdkHost::PublishStatsOnWorker()")
+	quitRequireSequence(t, "PublishStatsOnWorker", onWorker, `try \{`, `PublishStats\(\);`, `catch`)
+	destructor := definitionBody(t, "SdkHost.cpp", sdkHost, "SdkHost::~SdkHost()")
+	quitRequireSequence(t, "SdkHost's destructor", destructor,
+		`statsPublisher_\.Stop\(\);`, `std::scoped_lock lock\(mutex_\);`)
+	quit := definitionBody(t, "SdkHost.cpp", sdkHost, "void SdkHost::Quit()")
+	quitRequireSequence(t, "SdkHost::Quit", quit,
+		`statsPublisher_\.Stop\(\);`, `std::scoped_lock lock\(mutex_\);`)
+	connectJson := definitionBody(t, "SdkHost.cpp", sdkHost,
+		"void SdkHost::Connect(const std::string& connectLocationJson)")
+	if strings.Contains(connectJson, "PublishStats();") {
+		t.Error("Connect's parse failure reads a stats snapshot on the caller's thread")
+	}
 }
 
 // The defect: every snapshot was applied in the order it arrived, so a read

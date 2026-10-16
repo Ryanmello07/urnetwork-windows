@@ -358,6 +358,9 @@ SdkHost::~SdkHost() {
   // The presentation worker takes mutex_ too (D4), so it is stopped under the
   // same rule: outside the lock, joined.
   StopPresentationWorker();
+  // The stats publish worker reads the device and this host's state: stopped,
+  // and a read in flight waited out, before any of it goes.
+  statsPublisher_.Stop();
   // Same rule, same reason: the rpc-sync watchdog takes mutex_ to look at the
   // device, so it is stopped and JOINED here, above the lock.
   StopSyncWatchdog();
@@ -3638,10 +3641,14 @@ LiveStats SdkHost::ReadStats() {
   // transport thinks it is attached, every one of them is a synchronous
   // DeviceLocalRpc.Get* call (device_rpc.go), and against a service that is
   // DYING — socket open, process gone — each blocks until the transport's
-  // write timeout tears it down. ReadStats runs on the UI thread (ConnectPage's
-  // 1s health tick via RepublishStats, and window activation), and the friend's
-  // app glog ends mid Get* burst 4-5s before Windows recorded AppHangB1. The
-  // pipe drop is this process's EARLY notice of the death — Go's transport
+  // write timeout tears it down, and each waits on the device's state lock
+  // while a connect write holds it through its rpc, up to the rpc timeout.
+  // ReadStats used to run on the UI thread (ConnectPage's 1s health tick via
+  // RepublishStats, and window activation), and the friend's app glog ended
+  // mid Get* burst 4-5s before Windows recorded AppHangB1; it now runs only on
+  // SDK callback threads, the session worker and the stats publish worker
+  // (RepublishStats), never on the UI thread. The pipe drop is this process's
+  // EARLY notice of the death — Go's transport
   // needs seconds more to notice — so with the channel down the device getters
   // are skipped outright. Nothing rendered is lost: the SERVICE_DOWN clamp at
   // the end of this function already replaces everything they would produce.
@@ -3900,7 +3907,13 @@ void SdkHost::PublishStats() {
   if (onStats_) onStats_(ReadStats());
 }
 
-LiveStats SdkHost::CurrentStats() { return ReadStats(); }
+void SdkHost::PublishStatsOnWorker() {
+  try {
+    PublishStats();
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: a stats publish failed: {}", e.what());
+  }
+}
 
 // ---- connect drawer feeds (macOS ThroughputStore/ContractDetailsStore/
 // BlockActionsStore/DnsSettingsStore parity) --------------------------------
@@ -5809,7 +5822,7 @@ ReliabilitySnapshot SdkHost::ReadReliability() {
   // either side of a session teardown and disagree about which session they
   // describe. The cost is that a slow or unreachable service holds mutex_ for
   // the whole batch, and mutex_ is taken by UI-thread readers (RemoteConnected,
-  // CurrentStats, SelectedLocation, ...). That is the shape the rest of this
+  // SelectedLocation, ...). That is the shape the rest of this
   // class already has — those readers hold it across rpcs too — but this is the
   // biggest single hold in it, so it is the first thing to revisit if the
   // window is ever seen to stall while the developer screen is open.
@@ -6467,7 +6480,8 @@ void SdkHost::Connect(const std::string& connectLocationJson) {
     LogWarn("sdkhost: connect parse failed: {}", e.what());
     std::scoped_lock lock(mutex_);
     PublishSessionFailure("that provider location could not be read");
-    PublishStats();
+    // read on the publish worker: this is the caller's thread, the UI's
+    RepublishStats();
     return;
   }
   r.kind = ConnectKind::Location;
@@ -8009,6 +8023,8 @@ void SdkHost::Quit() {
   StopPresentationWorker();
   StopSyncWatchdog();
   StopProviderOnlyStats();
+  // it reads the device the teardown below closes
+  statsPublisher_.Stop();
   // 3. The service, under mutex_: after any pass in flight (a Connect's
   // bootstrap, a reconcile), and with none able to follow it.
   std::scoped_lock lock(mutex_);
