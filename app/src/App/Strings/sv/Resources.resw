@@ -7622,7 +7622,7 @@ som det borde vara.</value>
     <comment>Update channel line (Windows Developer page): an administrator has moved this PC to developer builds. {repo} is a GitHub repository as owner/name, for example Ryanmello07/urnetwork-windows; keep it as written.</comment>
   </data>
   <data name="upd_channel_developer_build" xml:space="preserve">
-    <value>Det här är en utvecklarversion. Den följer officiella versioner, så den erbjuds inget förrän en nyare officiell version har funnits ute i en dag.</value>
+    <value>Det här är en utvecklarversion, så den erbjuds inget förrän en nyare officiell version har funnits ute i en dag.</value>
     <comment>Update channel (Windows): the running app is a developer build, but this PC takes official releases.</comment>
   </data>
   <data name="upd_channel_developer_note" xml:space="preserve">
@@ -7666,8 +7666,8 @@ som det borde vara.</value>
     <comment>Update channel (Windows): the stored choice of developer builds failed its checks, so it is ignored.</comment>
   </data>
   <data name="upd_channel_where" xml:space="preserve">
-    <value>Utvecklarversioner slås på på skärmen Utvecklare.</value>
-    <comment>Settings (Windows): where developer builds are turned on; follows the line saying this is a developer build.</comment>
+    <value>Utvecklarversioner slås på på skärmen Utvecklare, som Avancerat läge visar.</value>
+    <comment>Settings (Windows): where developer builds are turned on, and that Advanced mode shows that screen; follows the line saying this is a developer build.</comment>
   </data>
   <data name="upd_check_held_message" xml:space="preserve">
     <value>GitHub har bett det här nätverket att vänta till {} innan det frågar igen, och appen väntar till dess.</value>

@@ -8658,7 +8658,7 @@ wie es sein sollte.</value>
     <comment>Update channel line (Windows Developer page): an administrator has moved this PC to developer builds. {repo} is a GitHub repository as owner/name, for example Ryanmello07/urnetwork-windows; keep it as written.</comment>
   </data>
   <data name="upd_channel_developer_build" xml:space="preserve">
-    <value>Dies ist ein Entwickler-Build. Er folgt den offiziellen Versionen und bekommt daher nichts angeboten, bis eine neuere offizielle Version einen Tag lang verfügbar ist.</value>
+    <value>Dies ist ein Entwickler-Build, daher bekommt er nichts angeboten, bis eine neuere offizielle Version einen Tag lang verfügbar ist.</value>
     <comment>Update channel (Windows): the running app is a developer build, but this PC takes official releases.</comment>
   </data>
   <data name="upd_channel_developer_note" xml:space="preserve">
@@ -8702,8 +8702,8 @@ wie es sein sollte.</value>
     <comment>Update channel (Windows): the stored choice of developer builds failed its checks, so it is ignored.</comment>
   </data>
   <data name="upd_channel_where" xml:space="preserve">
-    <value>Entwickler-Builds schaltest du auf der Seite „Entwickler“ ein.</value>
-    <comment>Settings (Windows): where developer builds are turned on; follows the line saying this is a developer build.</comment>
+    <value>Entwickler-Builds schaltest du auf der Seite „Entwickler“ ein, die „Erweiterter Modus“ einblendet.</value>
+    <comment>Settings (Windows): where developer builds are turned on, and that Advanced mode shows that screen; follows the line saying this is a developer build.</comment>
   </data>
   <data name="upd_check_held_message" xml:space="preserve">
     <value>GitHub hat dieses Netzwerk gebeten, bis {} mit der nächsten Anfrage zu warten, und die App wartet bis dahin.</value>

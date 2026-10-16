@@ -7498,7 +7498,7 @@ sebagaimana mestinya.</value>
     <comment>Update channel line (Windows Developer page): an administrator has moved this PC to developer builds. {repo} is a GitHub repository as owner/name, for example Ryanmello07/urnetwork-windows; keep it as written.</comment>
   </data>
   <data name="upd_channel_developer_build" xml:space="preserve">
-    <value>Ini adalah build pengembang. Build ini mengikuti rilis resmi, jadi tidak ada yang ditawarkan sampai rilis resmi yang lebih baru sudah tersedia selama satu hari.</value>
+    <value>Ini adalah build pengembang, jadi tidak ada yang ditawarkan sampai rilis resmi yang lebih baru sudah tersedia selama satu hari.</value>
     <comment>Update channel (Windows): the running app is a developer build, but this PC takes official releases.</comment>
   </data>
   <data name="upd_channel_developer_note" xml:space="preserve">
@@ -7542,8 +7542,8 @@ sebagaimana mestinya.</value>
     <comment>Update channel (Windows): the stored choice of developer builds failed its checks, so it is ignored.</comment>
   </data>
   <data name="upd_channel_where" xml:space="preserve">
-    <value>Build pengembang diaktifkan di layar Pengembang.</value>
-    <comment>Settings (Windows): where developer builds are turned on; follows the line saying this is a developer build.</comment>
+    <value>Build pengembang diaktifkan di layar Pengembang, yang ditampilkan oleh Mode lanjutan.</value>
+    <comment>Settings (Windows): where developer builds are turned on, and that Advanced mode shows that screen; follows the line saying this is a developer build.</comment>
   </data>
   <data name="upd_check_held_message" xml:space="preserve">
     <value>GitHub meminta jaringan ini menunggu hingga {} sebelum bertanya lagi, dan aplikasi menunggu sampai saat itu.</value>

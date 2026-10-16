@@ -7495,7 +7495,7 @@
     <comment>Update channel line (Windows Developer page): an administrator has moved this PC to developer builds. {repo} is a GitHub repository as owner/name, for example Ryanmello07/urnetwork-windows; keep it as written.</comment>
   </data>
   <data name="upd_channel_developer_build" xml:space="preserve">
-    <value>これは開発者ビルドです。公式リリースに従うため、新しい公式リリースが公開から 1 日経つまでは何も提供されません。</value>
+    <value>これは開発者ビルドのため、新しい公式リリースが公開から 1 日経つまでは何も提供されません。</value>
     <comment>Update channel (Windows): the running app is a developer build, but this PC takes official releases.</comment>
   </data>
   <data name="upd_channel_developer_note" xml:space="preserve">
@@ -7539,8 +7539,8 @@
     <comment>Update channel (Windows): the stored choice of developer builds failed its checks, so it is ignored.</comment>
   </data>
   <data name="upd_channel_where" xml:space="preserve">
-    <value>開発者ビルドは「開発者」画面でオンにします。</value>
-    <comment>Settings (Windows): where developer builds are turned on; follows the line saying this is a developer build.</comment>
+    <value>開発者ビルドは、「詳細モード」で表示される「開発者」画面でオンにします。</value>
+    <comment>Settings (Windows): where developer builds are turned on, and that Advanced mode shows that screen; follows the line saying this is a developer build.</comment>
   </data>
   <data name="upd_check_held_message" xml:space="preserve">
     <value>GitHub から、このネットワークは {} まで再度問い合わせないよう求められています。アプリはそれまで待機します。</value>

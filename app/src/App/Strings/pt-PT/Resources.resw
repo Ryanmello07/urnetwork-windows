@@ -7621,7 +7621,7 @@ como ela deveria ser.</value>
     <comment>Update channel line (Windows Developer page): an administrator has moved this PC to developer builds. {repo} is a GitHub repository as owner/name, for example Ryanmello07/urnetwork-windows; keep it as written.</comment>
   </data>
   <data name="upd_channel_developer_build" xml:space="preserve">
-    <value>Esta é uma versão de programador. Segue as versões oficiais, pelo que nada lhe é oferecido até que uma versão oficial mais recente esteja disponível há um dia.</value>
+    <value>Esta é uma versão de programador, pelo que nada lhe é oferecido até que uma versão oficial mais recente esteja disponível há um dia.</value>
     <comment>Update channel (Windows): the running app is a developer build, but this PC takes official releases.</comment>
   </data>
   <data name="upd_channel_developer_note" xml:space="preserve">
@@ -7665,8 +7665,8 @@ como ela deveria ser.</value>
     <comment>Update channel (Windows): the stored choice of developer builds failed its checks, so it is ignored.</comment>
   </data>
   <data name="upd_channel_where" xml:space="preserve">
-    <value>As versões de programador são ativadas no ecrã Programador.</value>
-    <comment>Settings (Windows): where developer builds are turned on; follows the line saying this is a developer build.</comment>
+    <value>As versões de programador são ativadas no ecrã Programador, que o Modo avançado apresenta.</value>
+    <comment>Settings (Windows): where developer builds are turned on, and that Advanced mode shows that screen; follows the line saying this is a developer build.</comment>
   </data>
   <data name="upd_check_held_message" xml:space="preserve">
     <value>O GitHub pediu a esta rede que aguarde até {} antes de voltar a consultá-lo, e a app aguarda até lá.</value>

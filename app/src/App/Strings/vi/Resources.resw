@@ -7498,7 +7498,7 @@ như nó vốn phải thế.</value>
     <comment>Update channel line (Windows Developer page): an administrator has moved this PC to developer builds. {repo} is a GitHub repository as owner/name, for example Ryanmello07/urnetwork-windows; keep it as written.</comment>
   </data>
   <data name="upd_channel_developer_build" xml:space="preserve">
-    <value>Đây là bản dành cho nhà phát triển. Bản này theo bản phát hành chính thức nên sẽ không được cung cấp gì cho đến khi một bản phát hành chính thức mới hơn đã ra mắt được một ngày.</value>
+    <value>Đây là bản dành cho nhà phát triển nên sẽ không được cung cấp gì cho đến khi một bản phát hành chính thức mới hơn đã ra mắt được một ngày.</value>
     <comment>Update channel (Windows): the running app is a developer build, but this PC takes official releases.</comment>
   </data>
   <data name="upd_channel_developer_note" xml:space="preserve">
@@ -7542,8 +7542,8 @@ như nó vốn phải thế.</value>
     <comment>Update channel (Windows): the stored choice of developer builds failed its checks, so it is ignored.</comment>
   </data>
   <data name="upd_channel_where" xml:space="preserve">
-    <value>Bạn bật bản dành cho nhà phát triển trong màn hình Nhà phát triển.</value>
-    <comment>Settings (Windows): where developer builds are turned on; follows the line saying this is a developer build.</comment>
+    <value>Bạn bật bản dành cho nhà phát triển trong màn hình Nhà phát triển, được hiển thị trong Chế độ nâng cao.</value>
+    <comment>Settings (Windows): where developer builds are turned on, and that Advanced mode shows that screen; follows the line saying this is a developer build.</comment>
   </data>
   <data name="upd_check_held_message" xml:space="preserve">
     <value>GitHub đã yêu cầu mạng này chờ đến {} trước khi hỏi lại, và ứng dụng sẽ chờ đến lúc đó.</value>

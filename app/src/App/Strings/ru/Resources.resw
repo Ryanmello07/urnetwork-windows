@@ -8930,7 +8930,7 @@
     <comment>Update channel line (Windows Developer page): an administrator has moved this PC to developer builds. {repo} is a GitHub repository as owner/name, for example Ryanmello07/urnetwork-windows; keep it as written.</comment>
   </data>
   <data name="upd_channel_developer_build" xml:space="preserve">
-    <value>Это сборка разработчика. Она получает официальные выпуски, поэтому ей ничего не предлагается, пока более новый официальный выпуск не будет доступен в течение суток.</value>
+    <value>Это сборка разработчика, поэтому ей ничего не предлагается, пока более новый официальный выпуск не будет доступен в течение суток.</value>
     <comment>Update channel (Windows): the running app is a developer build, but this PC takes official releases.</comment>
   </data>
   <data name="upd_channel_developer_note" xml:space="preserve">
@@ -8974,8 +8974,8 @@
     <comment>Update channel (Windows): the stored choice of developer builds failed its checks, so it is ignored.</comment>
   </data>
   <data name="upd_channel_where" xml:space="preserve">
-    <value>Сборки разработчика включаются на экране «Разработчик».</value>
-    <comment>Settings (Windows): where developer builds are turned on; follows the line saying this is a developer build.</comment>
+    <value>Сборки разработчика включаются на экране «Разработчик», который виден, когда включён «Расширенный режим».</value>
+    <comment>Settings (Windows): where developer builds are turned on, and that Advanced mode shows that screen; follows the line saying this is a developer build.</comment>
   </data>
   <data name="upd_check_held_message" xml:space="preserve">
     <value>GitHub попросил эту сеть подождать до {}, прежде чем обращаться снова, и приложение ждёт до этого времени.</value>

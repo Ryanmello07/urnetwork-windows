@@ -7869,7 +7869,7 @@ takiego, jakim powinien być.</value>
     <comment>Update channel line (Windows Developer page): an administrator has moved this PC to developer builds. {repo} is a GitHub repository as owner/name, for example Ryanmello07/urnetwork-windows; keep it as written.</comment>
   </data>
   <data name="upd_channel_developer_build" xml:space="preserve">
-    <value>To jest kompilacja deweloperska. Korzysta z oficjalnych wydań, więc nic nie zostanie jej zaoferowane, dopóki nowsze oficjalne wydanie nie będzie dostępne od jednego dnia.</value>
+    <value>To jest kompilacja deweloperska, więc nic nie zostanie jej zaoferowane, dopóki nowsze oficjalne wydanie nie będzie dostępne od jednego dnia.</value>
     <comment>Update channel (Windows): the running app is a developer build, but this PC takes official releases.</comment>
   </data>
   <data name="upd_channel_developer_note" xml:space="preserve">
@@ -7913,8 +7913,8 @@ takiego, jakim powinien być.</value>
     <comment>Update channel (Windows): the stored choice of developer builds failed its checks, so it is ignored.</comment>
   </data>
   <data name="upd_channel_where" xml:space="preserve">
-    <value>Kompilacje deweloperskie włącza się na ekranie Deweloper.</value>
-    <comment>Settings (Windows): where developer builds are turned on; follows the line saying this is a developer build.</comment>
+    <value>Kompilacje deweloperskie włącza się na ekranie Deweloper, widocznym po włączeniu opcji Tryb zaawansowany.</value>
+    <comment>Settings (Windows): where developer builds are turned on, and that Advanced mode shows that screen; follows the line saying this is a developer build.</comment>
   </data>
   <data name="upd_check_held_message" xml:space="preserve">
     <value>GitHub poprosił tę sieć, by poczekała do {}, zanim zapyta ponownie, i aplikacja czeka do tego czasu.</value>

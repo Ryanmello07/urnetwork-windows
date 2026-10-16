@@ -9201,7 +9201,7 @@
     <comment>Update channel line (Windows Developer page): an administrator has moved this PC to developer builds. {repo} is a GitHub repository as owner/name, for example Ryanmello07/urnetwork-windows; keep it as written.</comment>
   </data>
   <data name="upd_channel_developer_build" xml:space="preserve">
-    <value>هذا إصدار مطوّر. وهو يتبع الإصدارات الرسمية، لذا لن يُعرض عليه شيء حتى يمضي يوم على صدور إصدار رسمي أحدث.</value>
+    <value>هذا إصدار مطوّر، لذا لن يُعرض عليه شيء حتى يمضي يوم على صدور إصدار رسمي أحدث.</value>
     <comment>Update channel (Windows): the running app is a developer build, but this PC takes official releases.</comment>
   </data>
   <data name="upd_channel_developer_note" xml:space="preserve">
@@ -9245,8 +9245,8 @@
     <comment>Update channel (Windows): the stored choice of developer builds failed its checks, so it is ignored.</comment>
   </data>
   <data name="upd_channel_where" xml:space="preserve">
-    <value>تُفعَّل إصدارات المطوّر من شاشة المطوّر.</value>
-    <comment>Settings (Windows): where developer builds are turned on; follows the line saying this is a developer build.</comment>
+    <value>تُفعَّل إصدارات المطوّر من شاشة المطوّر، التي يُظهرها الوضع المتقدم.</value>
+    <comment>Settings (Windows): where developer builds are turned on, and that Advanced mode shows that screen; follows the line saying this is a developer build.</comment>
   </data>
   <data name="upd_check_held_message" xml:space="preserve">
     <value>طلب GitHub من هذه الشبكة الانتظار حتى {} قبل سؤاله مرة أخرى، وسينتظر التطبيق حتى ذلك الحين.</value>

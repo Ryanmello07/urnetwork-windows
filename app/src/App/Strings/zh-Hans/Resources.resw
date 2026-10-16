@@ -8522,7 +8522,7 @@
     <comment>Update channel line (Windows Developer page): an administrator has moved this PC to developer builds. {repo} is a GitHub repository as owner/name, for example Ryanmello07/urnetwork-windows; keep it as written.</comment>
   </data>
   <data name="upd_channel_developer_build" xml:space="preserve">
-    <value>这是开发者版本。它跟随正式版本，因此在更新的正式版本发布满一天之前，不会提供任何更新。</value>
+    <value>这是开发者版本，因此在更新的正式版本发布满一天之前，不会提供任何更新。</value>
     <comment>Update channel (Windows): the running app is a developer build, but this PC takes official releases.</comment>
   </data>
   <data name="upd_channel_developer_note" xml:space="preserve">
@@ -8566,8 +8566,8 @@
     <comment>Update channel (Windows): the stored choice of developer builds failed its checks, so it is ignored.</comment>
   </data>
   <data name="upd_channel_where" xml:space="preserve">
-    <value>开发者版本可在“开发者”页面中开启。</value>
-    <comment>Settings (Windows): where developer builds are turned on; follows the line saying this is a developer build.</comment>
+    <value>开发者版本可在“高级模式”下显示的“开发者”页面中开启。</value>
+    <comment>Settings (Windows): where developer builds are turned on, and that Advanced mode shows that screen; follows the line saying this is a developer build.</comment>
   </data>
   <data name="upd_check_held_message" xml:space="preserve">
     <value>GitHub 要求此网络在 {} 之前不要再次请求，应用会等到那时。</value>

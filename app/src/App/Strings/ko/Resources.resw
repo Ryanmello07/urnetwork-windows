@@ -7497,7 +7497,7 @@
     <comment>Update channel line (Windows Developer page): an administrator has moved this PC to developer builds. {repo} is a GitHub repository as owner/name, for example Ryanmello07/urnetwork-windows; keep it as written.</comment>
   </data>
   <data name="upd_channel_developer_build" xml:space="preserve">
-    <value>이 빌드는 개발자 빌드입니다. 공식 릴리스를 따르므로, 더 새로운 공식 릴리스가 나온 지 하루가 지나기 전에는 아무것도 제공되지 않습니다.</value>
+    <value>이 빌드는 개발자 빌드이므로, 더 새로운 공식 릴리스가 나온 지 하루가 지나기 전에는 아무것도 제공되지 않습니다.</value>
     <comment>Update channel (Windows): the running app is a developer build, but this PC takes official releases.</comment>
   </data>
   <data name="upd_channel_developer_note" xml:space="preserve">
@@ -7541,8 +7541,8 @@
     <comment>Update channel (Windows): the stored choice of developer builds failed its checks, so it is ignored.</comment>
   </data>
   <data name="upd_channel_where" xml:space="preserve">
-    <value>개발자 빌드는 개발자 화면에서 켭니다.</value>
-    <comment>Settings (Windows): where developer builds are turned on; follows the line saying this is a developer build.</comment>
+    <value>개발자 빌드는 고급 모드에서 표시되는 개발자 화면에서 켭니다.</value>
+    <comment>Settings (Windows): where developer builds are turned on, and that Advanced mode shows that screen; follows the line saying this is a developer build.</comment>
   </data>
   <data name="upd_check_held_message" xml:space="preserve">
     <value>GitHub에서 이 네트워크에 {}까지 다시 요청하지 말라고 했으며, 앱은 그때까지 기다립니다.</value>

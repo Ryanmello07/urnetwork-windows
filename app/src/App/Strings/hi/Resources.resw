@@ -7618,7 +7618,7 @@
     <comment>Update channel line (Windows Developer page): an administrator has moved this PC to developer builds. {repo} is a GitHub repository as owner/name, for example Ryanmello07/urnetwork-windows; keep it as written.</comment>
   </data>
   <data name="upd_channel_developer_build" xml:space="preserve">
-    <value>यह एक डेवलपर बिल्ड है। यह आधिकारिक रिलीज़ का पालन करता है, इसलिए जब तक कोई नई आधिकारिक रिलीज़ एक दिन तक उपलब्ध न रहे, इसे कुछ भी पेश नहीं किया जाता।</value>
+    <value>यह एक डेवलपर बिल्ड है, इसलिए जब तक कोई नई आधिकारिक रिलीज़ एक दिन तक उपलब्ध न रहे, इसे कुछ भी पेश नहीं किया जाता।</value>
     <comment>Update channel (Windows): the running app is a developer build, but this PC takes official releases.</comment>
   </data>
   <data name="upd_channel_developer_note" xml:space="preserve">
@@ -7662,8 +7662,8 @@
     <comment>Update channel (Windows): the stored choice of developer builds failed its checks, so it is ignored.</comment>
   </data>
   <data name="upd_channel_where" xml:space="preserve">
-    <value>डेवलपर बिल्ड डेवलपर स्क्रीन में चालू किए जाते हैं।</value>
-    <comment>Settings (Windows): where developer builds are turned on; follows the line saying this is a developer build.</comment>
+    <value>डेवलपर बिल्ड डेवलपर स्क्रीन में चालू किए जाते हैं, जिसे उन्नत मोड दिखाता है।</value>
+    <comment>Settings (Windows): where developer builds are turned on, and that Advanced mode shows that screen; follows the line saying this is a developer build.</comment>
   </data>
   <data name="upd_check_held_message" xml:space="preserve">
     <value>GitHub ने इस नेटवर्क से {} तक दोबारा न पूछने को कहा है, और ऐप तब तक इंतज़ार करता है।</value>
