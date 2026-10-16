@@ -239,3 +239,94 @@ func TestStatsSnapshotsApplyInReadOrder(t *testing.T) {
 		}
 	}
 }
+
+// Compile the peer location spec (app/tools/peer-location-tests.cpp) against a
+// copy of PeerLocation.h rewritten by mutate, run it on the app directory, and
+// require that it fails, naming want.
+func requirePeerLocationFailure(t *testing.T, mutate func(string) string, want string) {
+	t.Helper()
+	compiler, err := exec.LookPath("c++")
+	if err != nil {
+		t.Fatal("peer location tests require a C++20 compiler: ", err)
+	}
+	appDir := filepath.Join(repositoryRoot(t), "app")
+	source, err := os.ReadFile(filepath.Join(appDir, "src", "App", "PeerLocation.h"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := mutate(string(source))
+	if content == string(source) {
+		t.Fatal("negative control did not change the production PeerLocation.h")
+	}
+	includeDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(includeDir, "PeerLocation.h"), []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+	program := filepath.Join(includeDir, "peer-location-tests")
+	build := exec.Command(compiler, "-std=c++20", "-Wall", "-Wextra", "-Werror", "-I"+includeDir,
+		filepath.Join(appDir, "tools", "peer-location-tests.cpp"), "-o", program)
+	if output, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build peer location tests: %v\n%s", err, output)
+	}
+	output, err := exec.Command(program, appDir).CombinedOutput()
+	if err == nil || !strings.Contains(string(output), want) {
+		t.Fatalf("negative control was not detected (want %q): %v\n%s", want, err, output)
+	}
+}
+
+// The label names only a peer the peer list would name: connected and
+// providing, as PeerViewController.getPeers filters them.
+func TestSelectedLocationNameRejectsAPeerThatDoesNotProvide(t *testing.T) {
+	requirePeerLocationFailure(t, func(source string) string {
+		return replaceStatsPublishOnce(t, source,
+			"if (peer.ProvideEnabled && peer.ClientId && *peer.ClientId == *clientId) {",
+			"if (peer.ClientId && *peer.ClientId == *clientId) {")
+	}, "a peer that does not provide is not one the peer list names")
+}
+
+// A selected peer is named after its device, not the name it was connected
+// under.
+func TestSelectedLocationNameRejectsKeepingTheConnectedName(t *testing.T) {
+	requirePeerLocationFailure(t, func(source string) string {
+		return replaceStatsPublishOnce(t, source, "      return PeerDisplayName(peer);\n", "      return name;\n")
+	}, "the drawer does not name the selected peer after its device")
+}
+
+// A stats push makes no SdkHost read on the UI thread: ConnectPage::ApplyStats
+// renders the snapshot's fields, the selected peer's name and the peers line's
+// two readings among them, which ReadStats takes off the UI thread. Before,
+// ApplyStats took mutex_ three or four times per push (SelectedLocation,
+// ConnectedProvidePeers, and through ApplyPeerCount RemoteConnected and
+// ConnectedPeerCount), and mutex_ is held by the session worker through a
+// whole connect.
+func TestStatsPushReadsNothingOnTheUiThread(t *testing.T) {
+	page := stripComments(readAppSource(t, "ConnectPage.cpp"))
+	apply := definitionBody(t, "ConnectPage.cpp", page, "void ConnectPage::ApplyStats(urnw::LiveStats const& stats)")
+	if strings.Contains(apply, "Sdk()") {
+		t.Error("ConnectPage::ApplyStats reads SdkHost on the UI thread")
+	}
+	if statsIndex(apply, `ApplyPeerCount\(std::nullopt,\s*PeerLineReading\{\.remoteConnected = stats\.remoteConnected,\s*\.connectedPeerCount = stats\.connectedPeerCount\}\);`) < 0 {
+		t.Error("ConnectPage::ApplyStats does not hand the peers line the snapshot's readings")
+	}
+	peerCount := definitionBody(t, "ConnectPage.cpp", page, "void ConnectPage::ApplyPeerCount(")
+	for _, reading := range []string{
+		"reading ? reading->remoteConnected : Sdk().RemoteConnected()",
+		"reading ? reading->connectedPeerCount : Sdk().ConnectedPeerCount()",
+	} {
+		if !strings.Contains(peerCount, reading) {
+			t.Errorf("ApplyPeerCount reads SdkHost over a stats push's reading (%s)", reading)
+		}
+	}
+
+	sdkHost := stripComments(readAppSource(t, "SdkHost.cpp"))
+	read := definitionBody(t, "SdkHost.cpp", sdkHost, "LiveStats SdkHost::ReadStats()")
+	for _, pattern := range []string{
+		`s\.locationName = SelectedLocationName\(\s*std::move\(s\.locationName\), connectVc_ \? connectVc_->getSelectedLocation\(\) : loc,\s*connectedPeers\);`,
+		`s\.remoteConnected = device_->getRemoteConnected\(\);`,
+		`s\.connectedPeerCount = `,
+	} {
+		if statsIndex(read, pattern) < 0 {
+			t.Errorf("ReadStats does not read the drawer's %s", pattern)
+		}
+	}
+}

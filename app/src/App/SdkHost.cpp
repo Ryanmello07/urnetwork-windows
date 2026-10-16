@@ -3717,15 +3717,30 @@ LiveStats SdkHost::ReadStats() {
     s.providePaused = device_->getProvidePaused();
     s.provideMode = static_cast<int64_t>(device_->getProvideMode());
     s.provideHasNetworkKey = provideHasNetworkKey_.load();
+    std::optional<urnet::NetworkPeerList> connectedPeers;
     if (auto np = device_->getNetworkPeers(); np && np->Connected) {
       s.provideClients = static_cast<int64_t>(np->Connected->size());
+      s.connectedPeerCount = s.provideClients;
+      connectedPeers = std::move(np->Connected);
     }
+    // the peers line's other reading, which RemoteConnected() would take
+    // mutex_ for on the UI thread
+    s.remoteConnected = device_->getRemoteConnected();
     // selected provider (read-only row + dns regional recommendations)
-    if (auto loc = device_->getConnectLocation()) {
+    const std::optional<urnet::ConnectLocation> loc = device_->getConnectLocation();
+    if (loc) {
       if (loc->name) s.locationName = *loc->name;
       if (loc->country_code) s.countryCode = *loc->country_code;
       if (loc->country) s.countryName = *loc->country;
     }
+    // A selected network peer is named after its device (req4), here rather
+    // than in ConnectPage::ApplyStats, whose two reads took mutex_ on the UI
+    // thread. The selection is what SelectedLocation answers, without its lock:
+    // the presented controller's, read lock-free like its status above, else
+    // the device's location.
+    s.locationName = SelectedLocationName(
+        std::move(s.locationName), connectVc_ ? connectVc_->getSelectedLocation() : loc,
+        connectedPeers);
     // The window honesty diagnosis (track 2): the SDK's stall reason and the
     // terminal failed latch. One more rpc getter under the same serviceUp
     // gate as the five above; an old service simply omits the JSON keys and

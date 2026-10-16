@@ -150,7 +150,15 @@ struct LiveStats {
   // service does not answer and which is read while the window presents
   // (SdkHost::ProviderOnlyStatsLoop).
   bool provideClientsUnknown = false;
-  std::string locationName;       // selected connect location (empty = best available)
+  // selected connect location (empty = best available); a selected network
+  // peer by its device's name (PeerLocation.h SelectedLocationName)
+  std::string locationName;
+  // The connect page's peers line (req1), read here so a stats push makes no
+  // SdkHost read on the UI thread: the device's rpc to the service is
+  // attached (RemoteConnected), and how many devices are connected, providing
+  // or not (ConnectedPeerCount's figure, from the device itself).
+  bool remoteConnected = false;
+  int64_t connectedPeerCount = 0;
   std::string countryCode;        // selected location country code (dns recommendations)
   std::string countryName;
 
