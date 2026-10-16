@@ -188,16 +188,24 @@ func TestStartConnectWaitViewWiring(t *testing.T) {
 
 	page := stripComments(readAppSource(t, "ConnectPage.cpp"))
 	apply := functionBody(page, "void ConnectPage::ApplyStats(")
+	// the wait overlays every push through ShowTapState, with a held tap
+	// (tap_hold_test.go): connecting while it waits, else the hold or the
+	// reported status
 	quitRequireSequence(t, "ConnectPage::ApplyStats", apply,
 		`reportedConnectStatus_ = ParseConnectStatus\(stats\.connectionStatus\)`,
-		`connectStatus_ = startWaiting_ \? ConnectStatus::Connecting : reportedConnectStatus_`,
-		`reportedHealth_ = stats\.health`,
-		`health_ = startWaiting_ \? urnw::health::State::Connecting : reportedHealth_`)
+		`reportedHealth_ = stats\.health`, `ShowTapState\(\);`)
 	changed := functionBody(page, "void ConnectPage::OnStartWaitChanged(")
 	quitRequireSequence(t, "ConnectPage::OnStartWaitChanged", changed,
 		`case urnw::StartWaitChange::Waiting:`, `startWaiting_ = true;`,
-		`case urnw::StartWaitChange::Ended:`, `connectStatus_ = reportedConnectStatus_;`,
-		`health_ = reportedHealth_;`, `ApplyConnectStatus\(\);`)
+		`case urnw::StartWaitChange::Ended:`, `ShowTapState\(\);`, `ApplyConnectStatus\(\);`)
+	if ended := strings.Index(changed, "case urnw::StartWaitChange::Ended:"); ended < 0 ||
+		!strings.Contains(changed[ended:], "startWaiting_ = false;") {
+		t.Error("ConnectPage::OnStartWaitChanged: Ended must end the wait")
+	}
+	show := functionBody(page, "void ConnectPage::ShowTapState(")
+	quitRequireSequence(t, "ConnectPage::ShowTapState", show,
+		`connectStatus_ = urnw::taphold::Shown\(startWaiting_,`,
+		`health_ = urnw::taphold::Shown\(startWaiting_,`)
 
 	window := stripComments(readAppSource(t, "MainWindow.xaml.cpp"))
 	forward := functionBody(window, "void MainWindow::OnStartWaitChanged(")

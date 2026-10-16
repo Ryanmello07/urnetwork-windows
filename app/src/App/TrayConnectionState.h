@@ -76,6 +76,9 @@ struct Facts {
   // gesture::ActionIsDisconnect over the same status and health, the rule the
   // connect page's button shares
   bool actionIsDisconnect = false;
+  // a connect tap held until the pass that runs it has published (TapHold.h):
+  // the tray says connecting from the tap on, as it does for a starting tunnel
+  bool connectHeld = false;
 };
 
 // The tooltip's status after the app name. Each one is a line the connect page
@@ -141,7 +144,7 @@ inline constexpr View Decide(const Facts& facts) {
     }
     return view;
   }
-  if (facts.tunnel == Tunnel::Starting) {
+  if (facts.tunnel == Tunnel::Starting || facts.connectHeld) {
     // the page's words for the same attempt: health::WithCapture keeps a
     // finding or failed window while preparing, and reads anything else as
     // connecting

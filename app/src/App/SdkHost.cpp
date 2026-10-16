@@ -3648,6 +3648,15 @@ LiveStats SdkHost::ReadStats() {
   // Taken before any read below: the UI orders snapshots by when their read
   // began (StatsReadOrder.h).
   s.readSequence = statsReadSequence_.fetch_add(1, std::memory_order_relaxed) + 1;
+  // ...and so is how far the user's gestures had settled: a snapshot read from
+  // here on carries what every gesture through it left (TapHold.h). The slot's
+  // lock is a leaf, taken inside mutex_ by a read the session worker's write
+  // tells inline.
+  {
+    std::scoped_lock lock(pendingMutex_);
+    s.gestureSettled = taphold::SettledThrough(
+        gestureIssued_, pendingRequested_ ? pending_.gesture : 0, gestureInFlight_);
+  }
   // D4: the DeviceRemote getters below are NOT cached reads. While the rpc
   // transport thinks it is attached, every one of them is a synchronous
   // DeviceLocalRpc.Get* call (device_rpc.go), and against a service that is
@@ -6822,71 +6831,82 @@ void SdkHost::EnsureSession(const char* reason, bool automaticRecovery) {
 // ---- the session worker ----------------------------------------------------
 
 void SdkHost::RequestSession(SessionRequest request) {
-  // ONLY pendingMutex_ HERE. This runs on the UI thread (a Connect press) and
-  // mutex_ is held by the worker across a whole BootstrapSession — service
-  // connect, hello, start_tunnel, up to the 30 s pipe timeout. A press that
-  // waited on that is a frozen window, which is the failure this app has
-  // already paid for twice (see IsLoggedIn's comment).
-  std::scoped_lock lock(pendingMutex_);
-  // The tray's Quit closed the slot (Quit). What it stopped in the service
-  // must not be started again by a request that lands after it: the failsafe
-  // edge, a pipe drop's recovery, a setting saved on the way out.
-  if (quitting_.load()) {
-    LogInfo("sdkhost: '{}' dropped: the app is quitting", request.reason);
-    return;
-  }
-  // Signing out or signed out: no connect of that account reaches the sdk
-  // (SignOutConnectFence.h). The next sign-in sets the flag again.
-  if (!signoutfence::Admits(FenceWorkOf(request.kind),
-                            loggedIn_.load(std::memory_order_acquire))) {
-    LogInfo("sdkhost: '{}' dropped: signed out", request.reason);
-    return;
-  }
-  // LAST REQUEST WINS. Two presses in a row, or a press while a bootstrap is
-  // running, must not queue two start_tunnels — they must land on one session
-  // and the destination the user chose most recently.
-  //
-  // ONE exception, born with the row-click settle window: a bare "make sure a
-  // session exists" (kind None — the resume path, a network-server change, the
-  // service watchdog) must not REPLACE a pending connect. Every connect
-  // creates the session it needs, so the ensure is already implied by what is
-  // sitting in the slot, and replacing would throw the user's destination
-  // choice away for a request that wanted strictly less. Before the settle
-  // window this race was microseconds wide; at 1.2s of deliberate delay it
-  // would be a click the watchdog eats.
-  //
-  // A provider reconcile (kind Provider) wants less still, and is covered by
-  // any pending request: every pass that leaves no session ends with the same
-  // reconcile, and a pass that builds one hands providing to its device. It
-  // never covers anything itself — an ensure replaces it.
-  const bool covered =
-      pendingRequested_ &&
-      ((request.kind == ConnectKind::None && pending_.kind != ConnectKind::None &&
-        pending_.kind != ConnectKind::Provider) ||
-       (request.kind == ConnectKind::Provider && pending_.kind != ConnectKind::Provider));
-  if (covered) {
-    LogInfo("sdkhost: '{}' is covered by the pending '{}'", request.reason,
-            pending_.reason);
-  } else {
-    pending_ = std::move(request);
-  }
-  pendingRequested_ = true;
-  // Wake a worker that is sleeping out a settle deadline: the replacement may
-  // be IMMEDIATE (a Disconnect, an explicit connect) and must not wait behind
-  // the deadline of the row click it just superseded.
-  pendingCv_.notify_all();
-  // sessionWorkerAlive_ is read and written ONLY under this lock, by both the
-  // producer here and the worker as it exits, so a request that arrives while
-  // the worker is finishing cannot fall between them.
-  if (sessionWorkerAlive_) {
-    if (!covered) {
-      LogInfo("sdkhost: '{}' folded into the session start already in flight",
-              pending_.reason);
+  // The gesture the slot records, told to the views below, outside the lock.
+  const taphold::Kind tapKind = request.kind == ConnectKind::Disconnect
+                                    ? taphold::Kind::Disconnect
+                                    : taphold::Kind::Connect;
+  std::uint64_t recordedGesture = 0;
+  [&] {
+    // ONLY pendingMutex_ HERE. This runs on the UI thread (a Connect press) and
+    // mutex_ is held by the worker across a whole BootstrapSession — service
+    // connect, hello, start_tunnel, up to the 30 s pipe timeout. A press that
+    // waited on that is a frozen window, which is the failure this app has
+    // already paid for twice (see IsLoggedIn's comment).
+    std::scoped_lock lock(pendingMutex_);
+    // The tray's Quit closed the slot (Quit). What it stopped in the service
+    // must not be started again by a request that lands after it: the failsafe
+    // edge, a pipe drop's recovery, a setting saved on the way out.
+    if (quitting_.load()) {
+      LogInfo("sdkhost: '{}' dropped: the app is quitting", request.reason);
+      return;
     }
-    return;
-  }
-  sessionWorkerAlive_ = true;
-  std::thread([this] { SessionWorkerLoop(); }).detach();
+    // Signing out or signed out: no connect of that account reaches the sdk
+    // (SignOutConnectFence.h). The next sign-in sets the flag again.
+    if (!signoutfence::Admits(FenceWorkOf(request.kind),
+                              loggedIn_.load(std::memory_order_acquire))) {
+      LogInfo("sdkhost: '{}' dropped: signed out", request.reason);
+      return;
+    }
+    // LAST REQUEST WINS. Two presses in a row, or a press while a bootstrap is
+    // running, must not queue two start_tunnels — they must land on one session
+    // and the destination the user chose most recently.
+    //
+    // ONE exception, born with the row-click settle window: a bare "make sure a
+    // session exists" (kind None — the resume path, a network-server change, the
+    // service watchdog) must not REPLACE a pending connect. Every connect
+    // creates the session it needs, so the ensure is already implied by what is
+    // sitting in the slot, and replacing would throw the user's destination
+    // choice away for a request that wanted strictly less. Before the settle
+    // window this race was microseconds wide; at 1.2s of deliberate delay it
+    // would be a click the watchdog eats.
+    //
+    // A provider reconcile (kind Provider) wants less still, and is covered by
+    // any pending request: every pass that leaves no session ends with the same
+    // reconcile, and a pass that builds one hands providing to its device. It
+    // never covers anything itself — an ensure replaces it.
+    const bool covered =
+        pendingRequested_ &&
+        ((request.kind == ConnectKind::None && pending_.kind != ConnectKind::None &&
+          pending_.kind != ConnectKind::Provider) ||
+         (request.kind == ConnectKind::Provider && pending_.kind != ConnectKind::Provider));
+    if (covered) {
+      LogInfo("sdkhost: '{}' is covered by the pending '{}'", request.reason,
+              pending_.reason);
+    } else {
+      // A tap holds its state until the pass that runs it, or a newer one, has
+      // published (TapHold.h); the request it replaces goes with it.
+      if (IsGesture(request.kind)) recordedGesture = request.gesture = ++gestureIssued_;
+      pending_ = std::move(request);
+    }
+    pendingRequested_ = true;
+    // Wake a worker that is sleeping out a settle deadline: the replacement may
+    // be IMMEDIATE (a Disconnect, an explicit connect) and must not wait behind
+    // the deadline of the row click it just superseded.
+    pendingCv_.notify_all();
+    // sessionWorkerAlive_ is read and written ONLY under this lock, by both the
+    // producer here and the worker as it exits, so a request that arrives while
+    // the worker is finishing cannot fall between them.
+    if (sessionWorkerAlive_) {
+      if (!covered) {
+        LogInfo("sdkhost: '{}' folded into the session start already in flight",
+                pending_.reason);
+      }
+      return;
+    }
+    sessionWorkerAlive_ = true;
+    std::thread([this] { SessionWorkerLoop(); }).detach();
+  }();
+  if (recordedGesture != 0 && onGesture_) onGesture_(recordedGesture, tapKind);
 }
 
 void SdkHost::SessionWorkerLoop() {
@@ -6913,6 +6933,8 @@ void SdkHost::SessionWorkerLoop() {
       req = std::move(pending_);
       pending_ = SessionRequest{};
       pendingRequested_ = false;
+      // the tap it carries stays held until this pass has published (TapHold.h)
+      gestureInFlight_ = req.gesture;
     }
 
     // Not a session request: keep the provider-only device in step and nothing
@@ -7155,6 +7177,12 @@ void SdkHost::SessionWorkerLoop() {
       // service's provider-only device, which installs nothing on this machine
       // (ReconcileProviderLocked). With a session, its own device provides.
       if (!device_) ReconcileProviderLocked(req.reason);
+    }
+    // The pass's gesture has settled, so the read below, which begins after
+    // this, carries what it left and ends the views' hold (TapHold.h).
+    {
+      std::scoped_lock lock(pendingMutex_);
+      gestureInFlight_ = 0;
     }
     // OUTSIDE the lock. On failure this is what takes the connect button off
     // "Connecting": with no session there is no listener to push a correcting

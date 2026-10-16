@@ -44,6 +44,7 @@
 #include "SignOut.h"
 #include "SignOutConnectFence.h"
 #include "StartConnectWait.h"
+#include "TapHold.h"
 #include "VerifySendNotice.h"
 #include "Version.h"
 #include "WalletBridgeRoute.h"
@@ -120,6 +121,16 @@ struct LiveStats {
   // the UI applies a snapshot only when it is newer than every one it applied
   // (StatsReadOrder.h), since reads on different threads finish out of order.
   std::uint64_t readSequence = 0;
+  // The newest user gesture through which every gesture had run or gone when
+  // this read began (TapHold.h SettledThrough): a view holding a tap's state
+  // lets it go only for a snapshot with this at or past the tap's number.
+  std::uint64_t gestureSettled = 0;
+  // connectionStatus is the device's location alone, a destination set no
+  // presented controller has reported on: the window is hidden, so no
+  // controller is open (ReadStats). The health tracker reads a location so set
+  // over an active capture as connected (ConnectionHealth.h), as the tray
+  // always meant to.
+  bool statusFromLocation = false;
   // getConnectionStatus() (CONNECTED/CONNECTING/DESTINATION_SET/DISCONNECTED)
   // -- EXCEPT in an rpc-only session, where it is forced to the deliberately
   // unrecognised "RPC_ONLY" so the connect page renders as disconnected. There
@@ -1108,6 +1119,13 @@ class SdkHost {
   // Whether a start waits on its balance now, for a window that shows after
   // it began. UI thread.
   bool StartConnectWaiting() const { return startWait_.Waiting(); }
+  // A user gesture the session-request slot recorded (TapHold.h): its number,
+  // and whether it connects or disconnects. Called on the caller's thread as
+  // the gesture is recorded, outside every lock: the UI thread for every
+  // connect entry point and Disconnect.
+  void SetGestureHandler(std::function<void(std::uint64_t, taphold::Kind)> handler) {
+    onGesture_ = std::move(handler);
+  }
   // Whether a connect gesture may start now; when not, shows the upgrade path,
   // or, on a stale balance, fetches it and runs `again` (the same gesture,
   // asked anew) once the fetch settles, unless a newer tap, a disconnect or a
@@ -2014,7 +2032,15 @@ class SdkHost {
     // Watchdog retries retain the already-published standing failure instead
     // of re-publishing it on every backoff attempt.
     bool automaticRecovery = false;
+    // The user gesture's number (TapHold.h), given as the slot records it; 0
+    // for an ensure or a provider reconcile.
+    std::uint64_t gesture = 0;
   };
+  // A connect of any kind or a Disconnect: what a tap's state is held for.
+  static constexpr bool IsGesture(ConnectKind kind) {
+    return kind == ConnectKind::BestAvailable || kind == ConnectKind::Location ||
+           kind == ConnectKind::Selected || kind == ConnectKind::Disconnect;
+  }
   // The queued intent in the vocabulary the pure decision table speaks
   // (Common/ConnectAction.h). Location covers both the immediate "connect to
   // this one" and the coalesced row click: they reach the same worker and want
@@ -2189,6 +2215,12 @@ class SdkHost {
   SessionRequest pending_;
   bool pendingRequested_ = false;
   bool sessionWorkerAlive_ = false;
+  // The last gesture number handed out, and the gesture of the pass the worker
+  // runs now (0 for none or a request that is no gesture). Under pendingMutex_,
+  // with pending_, so SettledThrough reads the three at one instant.
+  std::uint64_t gestureIssued_ = 0;
+  std::uint64_t gestureInFlight_ = 0;
+  std::function<void(std::uint64_t, taphold::Kind)> onGesture_;
   // Set once by Quit, under pendingMutex_, and never cleared: from then on
   // RequestSession records nothing and ReconcileProviderLocked asks the service
   // nothing. Atomic because the reconcile reads it under mutex_ alone.
