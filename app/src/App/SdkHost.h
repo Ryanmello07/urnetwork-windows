@@ -932,12 +932,15 @@ class SdkHost {
   // network starts fresh). In order:
   //   0. the browser and wallet flows the account started are answered and
   //      forgotten (CancelPendingWalletFlows), so a late add-sign-in return
-  //      cannot add a method to the next account signed in;
+  //      cannot add a method to the next account signed in, and a start
+  //      waiting on its balance is cancelled (StartConnectWait.h);
   //   1. the session-request slot is emptied: a connect, a settling row click
   //      or a reconcile queued for the signed-out account never runs;
   //   2. the app is signed out (loggedIn_) before the lock, so a pass that
   //      takes mutex_ first starts nothing for the account: BootstrapSession
-  //      and ReconcileProviderLocked read it before the stored jwt;
+  //      and ReconcileProviderLocked read it before the stored jwt, a pass
+  //      that took a connect skips it, and a connect request is refused
+  //      (SignOutConnectFence.h) until the next sign-in;
   //   3. under mutex_, so after any pass in flight: the local credentials are
   //      logged out and the api's credential cleared (the next sign-in's calls
   //      would otherwise carry it), then the sign-out is recorded as owed
@@ -1049,7 +1052,9 @@ class SdkHost {
   bool StartConnectWaiting() const { return startWait_.Waiting(); }
   // Whether a connect gesture may start now; when not, shows the upgrade path,
   // or, on a stale balance, fetches it and runs `again` (the same gesture,
-  // asked anew) once the fetch settles. `what` names the entry point in the log.
+  // asked anew) once the fetch settles, unless a newer tap, a disconnect or a
+  // sign-out came first (StartConnectWait.h). `what` names the entry point in
+  // the log.
   bool AdmitStartConnect(const char* what, std::function<void()> again);
   // Runs a connect gesture the gate refused earlier (the one upgrade was
   // handed) past the gate, and not as a new gesture: the balance recovery

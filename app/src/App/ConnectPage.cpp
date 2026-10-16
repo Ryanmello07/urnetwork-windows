@@ -384,7 +384,8 @@ void ConnectPage::OnConnectToggle(IInspectable const&, RoutedEventArgs const&) {
   // On a stale balance the gate fetches it first and then asks again; that
   // second ask connects to the selection directly through the SdkHost entry
   // points (process lifetime, and gated themselves), never through this page,
-  // which may be gone by then.
+  // which may be gone by then. The wait shows as connecting meanwhile
+  // (OnStartWaitChanged).
   if (!Sdk().AdmitStartConnect("connect button", [retry] {
         if (retry) Sdk().Disconnect();
         const auto selected = Sdk().SelectedLocation();
