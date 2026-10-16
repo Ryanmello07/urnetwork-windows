@@ -3713,6 +3713,9 @@ LiveStats SdkHost::ReadStats() {
   } else if (device_ && serviceUp) {  // getConnectLocation is an rpc — see above
     s.connected = device_->getConnectLocation().has_value();
     s.connectionStatus = s.connected ? "DESTINATION_SET" : "DISCONNECTED";
+    // no controller reports on it: the health tracker reads it over an active
+    // capture as the connection asked for (ConnectionHealth.h)
+    s.statusFromLocation = s.connected;
   }
   if (contractVc_) {
     // Most recent throughput point that has a Remote (tunneled) sample.
@@ -3810,6 +3813,7 @@ LiveStats SdkHost::ReadStats() {
     s.rawConnectionStatus = s.connectionStatus;
     s.rawConnected = s.connected;
     s.connectionStatus = "RPC_ONLY";
+    s.statusFromLocation = false;
     s.connected = false;  // gates "Connected to N providers" and the rate line
     s.providerCount = 0;
     s.downBitsPerSecond = 0;
@@ -3847,6 +3851,7 @@ LiveStats SdkHost::ReadStats() {
     s.rawConnectionStatus = s.connectionStatus;
     s.rawConnected = s.connected;
     s.connectionStatus = "SERVICE_DOWN";
+    s.statusFromLocation = false;
     s.connected = false;
     s.providerCount = 0;
     s.downBitsPerSecond = 0;
@@ -3886,6 +3891,8 @@ LiveStats SdkHost::ReadStats() {
     hs.provenCount = proven;
     // the SDK's terminal verdict (already clamped above with everything else)
     hs.windowFailed = s.windowFailed;
+    // a hidden window's destination set from the location alone
+    hs.statusFromLocation = s.statusFromLocation;
     const int64_t nowMillis =
         std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now().time_since_epoch())
