@@ -63,6 +63,10 @@ enum class Refusal : std::uint32_t {
   // GitHub refused the release list (403 or 429): it limits the requests
   // each network may make, and this one has spent them for now.
   RateLimited = 0x2000000D,
+  // A change of the update channel that the administrator did not confirm
+  // at the helper's question, or that it could not ask on this desktop.
+  // Nothing was written.
+  Declined = 0x2000000E,
 };
 
 // The Win32 customer bit: set on every Refusal, never on a msiexec code.

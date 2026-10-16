@@ -22,7 +22,11 @@
 //   - when the tray app asks GitHub again after a refusal, when it says its
 //     checks have not worked, which release the banner's Later holds back, and
 //     what becomes of a click once the check before it has returned
-//     (Common/UpdateSchedule.h).
+//     (Common/UpdateSchedule.h);
+//   - the update channel: when the channel marker is trusted and which feed
+//     it selects, which argument names a channel, what the helper does for a
+//     request and what the app then says, and what each surface says about
+//     the channel (Common/UpdateChannel.h).
 //
 //   c++ -std=c++20 -I ../src/Common update-release-tests.cpp -o /tmp/update-release-tests
 //   /tmp/update-release-tests [<file of "code msi-version" lines>]
@@ -35,11 +39,13 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "InstallLocation.h"
 #include "ReleaseSelection.h"
 #include "UpdateApply.h"
+#include "UpdateChannel.h"
 #include "UpdateResult.h"
 #include "UpdateSchedule.h"
 
@@ -276,7 +282,8 @@ void NotOffered() {
   Check(s.newestCode == 1058000000,
         "newest names the newest release carrying this product's MSI, offerable or not");
   Check(s.skipped.size() == 3, "the three unverifiable releases are reported as skipped");
-  Check(!s.skipped[0].soaking && !s.skipped[1].soaking && !s.skipped[2].soaking,
+  Check(s.skipped.size() == 3 && !s.skipped[0].soaking && !s.skipped[1].soaking &&
+            !s.skipped[2].soaking,
         "and none of them as only waiting for its day");
 
   const Selection empty = SelectRelease({}, "x64", kOfficialFeed, kServerUnix);
@@ -299,7 +306,9 @@ void ImmutableRequired() {
             s.skipped[0].reason.find("immutable") != std::string::npos,
         "and it is reported as not immutable");
 
-  const Selection beta = SelectRelease({mutableRelease}, "x64", kBetaLikeFeed, kServerUnix);
+  Release mutableBeta = Official("2026.10.1-1060587890-beta");
+  mutableBeta.immutable = false;
+  const Selection beta = SelectRelease({mutableBeta}, "x64", kBetaLikeFeed, kServerUnix);
   Check(beta.code == 1060587890, "a feed that does not require it offers a mutable release");
 }
 
@@ -319,6 +328,16 @@ void Prereleases() {
                                       kBetaLikeFeed, kServerUnix);
     Check(s.code == 1062717970, "a beta feed offers a -beta prerelease");
     Check(s.newestCode == 1062717970, "and skips any other prerelease");
+  }
+  {
+    // A release there whose tag does not end -beta could pass for an official
+    // one by its tag and its asset's name: a full release is skipped too.
+    Release fullBeta = Official("2026.10.2-1061000000-beta");
+    const Selection s = SelectRelease({Official("2026.10.3-1062717990"), fullBeta}, "x64",
+                                      kBetaLikeFeed, kServerUnix);
+    Check(s.code == 1061000000 && s.newestCode == 1061000000,
+          "a feed that takes -beta prereleases reads only tags that end -beta, a full release's too");
+    Check(s.skipped.empty(), "and says nothing of a release that is not its own");
   }
   {
     Release prefixed = Official("2026.10.3-1062717990");
@@ -1090,7 +1109,7 @@ void Outcomes() {
        {Refusal::NotElevated, Refusal::NotInstalled, Refusal::DevBuild, Refusal::BadArguments,
         Refusal::Busy, Refusal::ReleaseList, Refusal::NotOffered, Refusal::Download,
         Refusal::Digest, Refusal::Package, Refusal::Staging, Refusal::InstallerNotStarted,
-        Refusal::RateLimited}) {
+        Refusal::RateLimited, Refusal::Declined}) {
     const auto code = static_cast<std::int64_t>(refusal);
     Check(IsRefusal(code) && OutcomeOf(code) == Outcome::Refused,
           "helper refusal " + std::to_string(code) + " is a refusal");
@@ -1388,6 +1407,369 @@ void Schedule() {
   Check(!HiddenByLater(0, 0), "and no Later hides no offer");
 }
 
+// ---- the update channel (Common/UpdateChannel.h) ----------------------------
+
+// A feed shaped like the opt-in developer feed, for the rules that hold for
+// any feed but the official one: this build's table need not have the row.
+constexpr Feed kDeveloperLikeFeed{.id = "developer-like",
+                                  .numericRepoId = 3,
+                                  .owner = "example",
+                                  .repo = "example-windows",
+                                  .acceptBetaPrereleases = true,
+                                  .requireImmutable = true,
+                                  .soakSeconds = 0,
+                                  .tagPrefix = "",
+                                  .acceptAnyPrerelease = false};
+
+// A user's own account, as an owner or an ACE would name it.
+constexpr std::string_view kUserSid = "S-1-5-21-1004336348-1177238915-682003330-1001";
+
+AceFacts Ace(std::uint8_t flags, std::uint32_t mask, std::string_view sid) {
+  return {.type = kAllowAceType, .flags = flags, .mask = mask, .sid = std::string(sid)};
+}
+
+// A descriptor as the helper writes it: owned by Administrators, protected,
+// and SYSTEM full, Administrators full and Users `usersMask`, each ACE with
+// `flags`.
+DescriptorFacts HelpersDescriptor(std::uint8_t flags, std::uint32_t usersMask) {
+  return {.read = true,
+          .owner = std::string(kAdministratorsSid),
+          .daclPresent = true,
+          .daclProtected = true,
+          .aces = {Ace(flags, kFileAllAccess, kLocalSystemSid), Ace(flags, kFileAllAccess, kAdministratorsSid),
+                   Ace(flags, usersMask, kUsersSid)}};
+}
+
+// updates\ and the marker as the helper makes them (ApplyUpdate.cpp
+// kAdminOnlyFolderSddl, kChannelMarkerSddl).
+DescriptorFacts FolderDescriptor() {
+  return HelpersDescriptor(kInheritedByFilesAndFolders, kFileReadAndExecute);
+}
+DescriptorFacts MarkerDescriptor() { return HelpersDescriptor(0, kMarkerUsersAccess); }
+PathFacts FolderFacts() {
+  return {.found = PathFacts::Found::Present, .attributes = kAttributeDirectory, .size = 0};
+}
+// FILE_ATTRIBUTE_ARCHIVE, as a file created new reads back
+PathFacts MarkerFacts() { return {.found = PathFacts::Found::Present, .attributes = 0x20, .size = 0}; }
+
+ChannelMarker Judge(const PathFacts& folder, const DescriptorFacts& folderDescriptor,
+                    const PathFacts& marker, const DescriptorFacts& markerDescriptor) {
+  return JudgeMarker(folder, folderDescriptor, marker, markerDescriptor).marker;
+}
+
+// Every way a descriptor can differ from `helpers`, the helper's own, each
+// with its name. `inheritable`: the ACEs the helper writes are inherited by
+// files and folders (updates\), or by nothing (the marker).
+std::vector<std::pair<std::string, DescriptorFacts>> NotTheHelpers(const DescriptorFacts& helpers,
+                                                                     bool inheritable) {
+  std::vector<std::pair<std::string, DescriptorFacts>> out;
+  const auto with = [&](std::string what, auto change) {
+    DescriptorFacts changed = helpers;
+    change(changed);
+    out.emplace_back(std::move(what), std::move(changed));
+  };
+  with("not read", [](DescriptorFacts& d) { d.read = false; });
+  with("owned by a user", [](DescriptorFacts& d) { d.owner = std::string(kUserSid); });
+  with("owned by SYSTEM", [](DescriptorFacts& d) { d.owner = std::string(kLocalSystemSid); });
+  with("an unprotected DACL", [](DescriptorFacts& d) { d.daclProtected = false; });
+  with("no DACL", [](DescriptorFacts& d) {
+    d.daclPresent = false;
+    d.aces.clear();
+  });
+  with("a fourth ACE that names one user",
+       [](DescriptorFacts& d) { d.aces.push_back(Ace(d.aces[0].flags, kFileAllAccess, kUserSid)); });
+  with("a deny ACE", [](DescriptorFacts& d) { d.aces[2].type = 0x01; });
+  with("one ACE missing", [](DescriptorFacts& d) { d.aces.pop_back(); });
+  with("SYSTEM's mask", [](DescriptorFacts& d) { d.aces[0].mask = kFileReadAndExecute; });
+  with("Administrators' mask", [](DescriptorFacts& d) { d.aces[1].mask = kFileReadAndExecute; });
+  with("Users' mask", [](DescriptorFacts& d) { d.aces[2].mask = kFileAllAccess; });
+  with("Users writing", [](DescriptorFacts& d) { d.aces[2].mask |= 0x0002; });  // FILE_WRITE_DATA
+  if (!inheritable) {
+    // updates\ lets Users read what is in it; the marker lets them read nothing
+    with("Users reading data", [](DescriptorFacts& d) { d.aces[2].mask |= 0x0001; });  // FILE_READ_DATA
+  }
+  with("an ACE inherited from above", [](DescriptorFacts& d) { d.aces[0].flags |= 0x10; });  // INHERITED_ACE
+  with("the Users ACE naming Everyone", [](DescriptorFacts& d) { d.aces[2].sid = "S-1-1-0"; });
+  if (inheritable) {
+    with("ACEs that nothing inherits", [](DescriptorFacts& d) {
+      for (AceFacts& ace : d.aces) ace.flags = 0;
+    });
+  } else {
+    with("ACEs that files and folders inherit", [](DescriptorFacts& d) {
+      for (AceFacts& ace : d.aces) ace.flags = kInheritedByFilesAndFolders;
+    });
+  }
+  return out;
+}
+
+std::string Describe(const ChannelView& view) {
+  constexpr const char* kMarkers[] = {"absent", "trusted", "rejected"};
+  constexpr const char* kChanges[] = {"none", "asking", "unchanged", "unsigned", "busy", "failed"};
+  return std::string(view.installed ? "installed" : "portable") + (view.codeZero ? ", code 0" : "") +
+         (view.developerBuild ? ", a developer build" : "") + ", marker " +
+         kMarkers[static_cast<int>(view.marker)] +
+         (view.developerRow ? ", the row in the table" : ", no row") + ", change " +
+         kChanges[static_cast<int>(view.change)] + (view.foundNothingNewer ? ", nothing newer" : "") +
+         (view.releaseCounts ? ", a release counts" : "") + (view.releaseWaiting ? ", one waiting" : "");
+}
+
+void Channel() {
+  using Found = PathFacts::Found;
+  const PathFacts absent{};
+  const Feed* developer = FeedById(kDeveloperChannelId);
+
+  // ---- the marker, as SPEC-A2c 2.2's table reads it
+  Check(Judge(absent, {}, absent, {}) == ChannelMarker::Absent, "no updates folder is the official channel");
+  Check(Judge(FolderFacts(), FolderDescriptor(), absent, {}) == ChannelMarker::Absent,
+        "no marker is the official channel");
+  Check(Judge(FolderFacts(), FolderDescriptor(), MarkerFacts(), MarkerDescriptor()) == ChannelMarker::Trusted,
+        "the helper's marker in the helper's folder is the developer channel");
+  {
+    const MarkerJudgement trusted =
+        JudgeMarker(FolderFacts(), FolderDescriptor(), MarkerFacts(), MarkerDescriptor());
+    const MarkerJudgement none = JudgeMarker(FolderFacts(), FolderDescriptor(), absent, {});
+    Check(trusted.why.empty() && none.why.empty(), "a marker trusted or absent gives no reason");
+  }
+  for (const PathFacts& folder :
+       {PathFacts{.found = Found::Present, .attributes = kAttributeDirectory | kAttributeReparsePoint, .size = 0},
+        PathFacts{.found = Found::Present, .attributes = 0x20, .size = 0}}) {
+    for (const PathFacts& marker : {absent, MarkerFacts()}) {
+      const MarkerJudgement judged = JudgeMarker(folder, FolderDescriptor(), marker, MarkerDescriptor());
+      Check(judged.marker == ChannelMarker::Rejected && !judged.why.empty(),
+            "a marker in a folder that is not the helper's is not trusted: a reparse point or a file");
+    }
+  }
+  for (const auto& [what, descriptor] : NotTheHelpers(FolderDescriptor(), /*inheritable=*/true)) {
+    for (const PathFacts& marker : {absent, MarkerFacts()}) {
+      const MarkerJudgement judged = JudgeMarker(FolderFacts(), descriptor, marker, MarkerDescriptor());
+      Check(judged.marker == ChannelMarker::Rejected && !judged.why.empty(),
+            "a marker in a folder that is not the helper's is not trusted: " + what);
+    }
+    Check(!IsHelpersFolder(FolderFacts(), descriptor), "a folder with " + what + " is not the helper's");
+  }
+  Check(IsHelpersFolder(FolderFacts(), FolderDescriptor()), "the helper's folder is the helper's");
+  for (const PathFacts& marker :
+       {PathFacts{.found = Found::Present, .attributes = kAttributeDirectory, .size = 0},
+        PathFacts{.found = Found::Present, .attributes = 0x20 | kAttributeReparsePoint, .size = 0},
+        PathFacts{.found = Found::Present, .attributes = 0x20, .size = 1}}) {
+    Check(Judge(FolderFacts(), FolderDescriptor(), marker, MarkerDescriptor()) == ChannelMarker::Rejected,
+          "a marker that is not an empty plain file is not trusted: a folder, a link or bytes");
+  }
+  for (const auto& [what, descriptor] : NotTheHelpers(MarkerDescriptor(), /*inheritable=*/false)) {
+    Check(Judge(FolderFacts(), FolderDescriptor(), MarkerFacts(), descriptor) == ChannelMarker::Rejected,
+          "a marker with any ACE but its three is not trusted: " + what);
+  }
+  for (const auto& [folder, marker] : {std::pair{PathFacts{.found = Found::Unreadable}, absent},
+                                       std::pair{FolderFacts(), PathFacts{.found = Found::Unreadable}}}) {
+    Check(Judge(folder, FolderDescriptor(), marker, MarkerDescriptor()) == ChannelMarker::Rejected,
+          "a fact that could not be read is not trusted");
+  }
+  // What else the helper writes cannot pass for the marker: the lock file
+  // lets Users do nothing, and its other files let Users read.
+  Check(Judge(FolderFacts(), FolderDescriptor(), MarkerFacts(),
+              {.read = true,
+               .owner = std::string(kAdministratorsSid),
+               .daclPresent = true,
+               .daclProtected = true,
+               .aces = {Ace(0, kFileAllAccess, kLocalSystemSid), Ace(0, kFileAllAccess, kAdministratorsSid)}}) ==
+            ChannelMarker::Rejected,
+        "the lock file cannot pass for the marker");
+  Check(Judge(FolderFacts(), FolderDescriptor(), MarkerFacts(), HelpersDescriptor(0, kFileReadAndExecute)) ==
+            ChannelMarker::Rejected,
+        "a file the helper writes for something else cannot pass for the marker");
+
+  // ---- the feed a marker selects
+  Check(FeedOfMarker(ChannelMarker::Absent).id == kOfficialFeed.id, "an absent marker is the official channel");
+  Check(FeedOfMarker(ChannelMarker::Rejected).id == kOfficialFeed.id,
+        "a marker that is not trusted is the official channel");
+  if (developer) {
+    Check(FeedOfMarker(ChannelMarker::Trusted).id == kDeveloperChannelId,
+          "a trusted marker is the developer channel");
+  } else {
+    Check(FeedOfMarker(ChannelMarker::Trusted).id == kOfficialFeed.id,
+          "a trusted marker is the official channel while the table has no developer row");
+  }
+
+  // ---- the helper's argument
+  Check(FeedOfChannelArgument("official") != nullptr &&
+            FeedOfChannelArgument("official")->id == kOfficialFeed.id,
+        "official is a channel argument");
+  Check((FeedOfChannelArgument("developer") != nullptr) == (developer != nullptr),
+        "developer is a channel argument exactly while the table has its row");
+  for (const std::string& bad : {std::string(), std::string("beta"), std::string("runner-test"),
+                                std::string("Developer"), std::string("OFFICIAL"), std::string("developer "),
+                                std::string(" official"), std::string("official\n"),
+                                std::string("developerdevelope"), std::string("d") + "\xd0\xb5" + "veloper"}) {
+    Check(FeedOfChannelArgument(bad) == nullptr, "an argument that is not a row's id is refused: '" + bad + "'");
+  }
+  for (const char* repository : {"Ryanmello07/urnetwork-windows", "urnetwork/build", "1324127805", "936244679",
+                                 "https://github.com/Ryanmello07/urnetwork-windows"}) {
+    Check(FeedOfChannelArgument(repository) == nullptr,
+          std::string("an argument that names a repository is refused: '") + repository + "'");
+  }
+
+  // ---- what the helper does, and what the app says after
+  for (const Feed* asked : {&kDeveloperLikeFeed, developer}) {
+    if (!asked) continue;
+    Check(PlanOf(*asked, ChannelMarker::Absent) == ChannelPlan::AskThenCreate,
+          "the developer channel asks, then creates the marker");
+    Check(PlanOf(*asked, ChannelMarker::Trusted) == ChannelPlan::Nothing,
+          "the developer channel under a trusted marker has nothing to do");
+    Check(PlanOf(*asked, ChannelMarker::Rejected) == ChannelPlan::AskThenCreate,
+          "a marker that is not trusted is created again");
+  }
+  Check(PlanOf(kOfficialFeed, ChannelMarker::Absent) == ChannelPlan::Nothing,
+        "official with no marker has nothing to do");
+  Check(PlanOf(kOfficialFeed, ChannelMarker::Trusted) == ChannelPlan::Delete, "official deletes a trusted marker");
+  Check(PlanOf(kOfficialFeed, ChannelMarker::Rejected) == ChannelPlan::Delete,
+        "official deletes a marker that is not trusted");
+
+  const auto change = [](const Feed& asked, ChannelMarker after, std::uint32_t start, std::int64_t exit,
+                         bool ownUpdate = false) {
+    return ChannelChange{.asked = &asked,
+                         .markerAfter = after,
+                         .startError = start,
+                         .exitCode = exit,
+                         .ownUpdateRunning = ownUpdate};
+  };
+  const auto declined = static_cast<std::int64_t>(Refusal::Declined);
+  const auto busy = static_cast<std::int64_t>(Refusal::Busy);
+  const auto staging = static_cast<std::int64_t>(Refusal::Staging);
+  Check(ChangeLineOf(change(kOfficialFeed, ChannelMarker::Absent, 0, 0)) == ChangeLine::None &&
+            ChangeLineOf(change(kDeveloperLikeFeed, ChannelMarker::Trusted, 0, 0)) == ChangeLine::None,
+        "a change the marker shows needs no line");
+  Check(ChangeLineOf(change(kDeveloperLikeFeed, ChannelMarker::Absent, 0, 0)) == ChangeLine::Failed,
+        "the marker decides whether the change happened: exit 0 under a marker that says otherwise is a failure");
+  Check(ChangeLineOf(change(kOfficialFeed, ChannelMarker::Absent, 0, busy)) == ChangeLine::None,
+        "the marker decides whether the change happened: a failure under a marker that says what was asked is none");
+  Check(ChangeLineOf(change(kDeveloperLikeFeed, ChannelMarker::Absent, kStartCancelled, 0)) ==
+            ChangeLine::Unchanged,
+        "Windows' prompt declined leaves the channel as it was");
+  Check(ChangeLineOf(change(kDeveloperLikeFeed, ChannelMarker::Rejected, 0, declined)) == ChangeLine::Unchanged,
+        "the helper's question declined leaves the channel as it was");
+  Check(ChangeLineOf(change(kDeveloperLikeFeed, ChannelMarker::Absent, kStartUnsigned, 0)) ==
+            ChangeLine::Unsigned,
+        "a Windows that elevates only signed programs is said so");
+  Check(ChangeLineOf(change(kOfficialFeed, ChannelMarker::Trusted, 0, busy)) == ChangeLine::Busy,
+        "another helper running is an update in progress");
+  Check(ChangeLineOf(change(kOfficialFeed, ChannelMarker::Trusted, 0, 0, /*ownUpdate=*/true)) == ChangeLine::Busy,
+        "this app's own update running is an update in progress");
+  Check(ChangeLineOf(change(kOfficialFeed, ChannelMarker::Trusted, 5, 0)) == ChangeLine::Failed &&
+            ChangeLineOf(change(kOfficialFeed, ChannelMarker::Rejected, 0, staging)) == ChangeLine::Failed,
+        "any other start error or exit is a failure");
+  CheckEq("0x2000000B", ChangeCodeText(change(kOfficialFeed, ChannelMarker::Rejected, 0, staging)),
+          "a failure's code is the helper's exit code");
+  CheckEq("0x5", ChangeCodeText(change(kOfficialFeed, ChannelMarker::Rejected, 5, 0)),
+          "or the error its start ended with");
+  CheckEq("0x0", ChangeCodeText(change(kOfficialFeed, ChannelMarker::Rejected, 0, 0)), "and 0 reads 0x0");
+
+  // ---- an installer, and a developer build
+  Check(HandsOverInstaller(kOfficialFeed) && !HandsOverInstaller(kDeveloperLikeFeed) &&
+            !HandsOverInstaller(kBetaLikeFeed) && (!developer || !HandsOverInstaller(*developer)),
+        "only an official release is handed over as an installer");
+  Check(IsBetaVersion("2026.10.9-1067431400-beta"), "a -beta release version is a developer build");
+  Check(!IsBetaVersion("2026.10.8-1066946420") && !IsBetaVersion("0.0.0-dev") && !IsBetaVersion("x-beta") &&
+            !IsBetaVersion("v2026.10.9-1067431400-beta-beta"),
+        "an official release, a dev build or anything else is no developer build: x-beta");
+
+  // ---- what each surface says, in every state a copy can be in
+  int views = 0;
+  for (const bool installed : {false, true}) {
+    for (const bool codeZero : {false, true}) {
+      for (const bool developerBuild : {false, true}) {
+        for (const ChannelMarker marker : {ChannelMarker::Absent, ChannelMarker::Trusted, ChannelMarker::Rejected}) {
+          for (const bool developerRow : {false, true}) {
+            for (const ChangeLine asked : {ChangeLine::None, ChangeLine::Asking, ChangeLine::Unchanged,
+                                           ChangeLine::Unsigned, ChangeLine::Busy, ChangeLine::Failed}) {
+              for (const bool nothingNewer : {false, true}) {
+                for (const bool counts : {false, true}) {
+                  for (const bool waiting : {false, true}) {
+                    ++views;
+                    const ChannelView view{.installed = installed,
+                                           .codeZero = codeZero,
+                                           .developerBuild = developerBuild,
+                                           .marker = marker,
+                                           .developerRow = developerRow,
+                                           .change = asked,
+                                           .foundNothingNewer = nothingNewer,
+                                           .releaseCounts = counts,
+                                           .releaseWaiting = waiting};
+                    const ChannelLines lines = LinesOf(view);
+                    const std::string where = Describe(view);
+                    const bool readsMarker = installed && !codeZero;
+                    const bool onDeveloper = readsMarker && marker == ChannelMarker::Trusted && developerRow;
+                    const bool canChange = readsMarker && developerRow;
+                    const ChannelSentence first =
+                        codeZero                                         ? ChannelSentence::DevBuild
+                        : !installed                                     ? ChannelSentence::NotInstalled
+                        : marker == ChannelMarker::Rejected              ? ChannelSentence::Untrusted
+                        : onDeveloper                                    ? ChannelSentence::Developer
+                                                                         : ChannelSentence::Official;
+                    Check(lines.channel == first, "the channel's sentence is the first that holds: " + where);
+                    Check((lines.channel == ChannelSentence::Developer) == onDeveloper &&
+                              lines.switchOn == onDeveloper,
+                          "S5 only with a trusted marker, and the switch on exactly then: " + where);
+                    Check(!(lines.buildSentence && (lines.channel == ChannelSentence::Developer ||
+                                                    lines.channel == ChannelSentence::DevBuild)),
+                          "S15 never with S5 or S12: " + where);
+                    Check(lines.buildSentence == (developerBuild && (first == ChannelSentence::Official ||
+                                                                     first == ChannelSentence::NotInstalled ||
+                                                                     first == ChannelSentence::Untrusted)),
+                          "S15 for a developer build that follows official releases: " + where);
+                    if (nothingNewer && onDeveloper) {
+                      Check(lines.check == (counts ? CheckLine::NoneDeveloper : CheckLine::NoneListed),
+                            "on the developer feed, never today's 'this build is current': " + where);
+                    } else if (nothingNewer && developerBuild) {
+                      Check(lines.check == CheckLine::NoneOfficial,
+                            "a developer build on the official feed is told no official release is offered "
+                            "to it yet (S16): " +
+                                where);
+                    } else {
+                      Check(lines.check == CheckLine::AsToday, "every other check line is today's: " + where);
+                    }
+                    Check(lines.switchShown == developerRow,
+                          "the switch is built only while the table has the developer row: " + where);
+                    if (canChange) {
+                      Check(lines.change == asked, "the change's line is said as it is: " + where);
+                    } else {
+                      Check(!lines.switchEnabled && !lines.repairButton && !lines.settingsButton &&
+                                !lines.buttonsEnabled && !lines.settingsWhere && lines.change == ChangeLine::None,
+                            "no button on a copy that cannot change the channel: " + where);
+                    }
+                    if (lines.change == ChangeLine::Asking) {
+                      Check(!lines.switchEnabled && !lines.buttonsEnabled,
+                            "while a change waits for approval the switch and the buttons are disabled: " + where);
+                    }
+                    Check(lines.repairButton == (canChange && first == ChannelSentence::Untrusted),
+                          "the developer screen offers the way off a marker that is not trusted: " + where);
+                    Check(lines.settingsRow == (first == ChannelSentence::Developer ||
+                                                first == ChannelSentence::Untrusted || developerBuild ||
+                                                lines.change != ChangeLine::None),
+                          "Settings has a channel row exactly when it has something to say: " + where);
+                    Check(!lines.settingsRow ||
+                              lines.settingsNote == (first == ChannelSentence::Developer ? ChannelNote::Developer
+                                                     : first == ChannelSentence::Untrusted ? ChannelNote::Untrusted
+                                                                                          : ChannelNote::Official),
+                          "Settings' note says which channel: " + where);
+                    Check(lines.settingsBuildSentence == (lines.settingsRow && lines.buildSentence) &&
+                              lines.settingsWhere == (lines.settingsBuildSentence && canChange),
+                          "Settings says S15, and then S13 where the channel can be changed: " + where);
+                    Check(lines.settingsButton == (canChange && marker != ChannelMarker::Absent),
+                          "Settings offers the way off the channel under any marker: " + where);
+                    Check(lines.aboutUpToDate == (!onDeveloper && !developerBuild),
+                          "About never says up to date on the developer feed or for a developer build: " + where);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  Check(views == 2 * 2 * 2 * 3 * 2 * 6 * 2 * 2 * 2, "every state a copy can be in is judged");
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -1414,6 +1796,7 @@ int main(int argc, char** argv) {
   Reports();
   HelperProcess();
   Schedule();
+  Channel();
 
   std::cout << (gFailures == 0 ? "PASS" : "FAIL") << " update-release-tests: " << gCases
             << " checks, " << gFailures << " failures\n";

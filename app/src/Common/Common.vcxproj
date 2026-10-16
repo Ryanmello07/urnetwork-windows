@@ -76,6 +76,7 @@
     <ClInclude Include="ThreadGuard.h" />
     <ClInclude Include="UpdateFormats.h" />
     <ClInclude Include="UpdateApply.h" />
+    <ClInclude Include="UpdateChannel.h" />
     <ClInclude Include="UpdateMarker.h" />
     <ClInclude Include="UpdateResult.h" />
     <ClInclude Include="UpdateResultJson.h" />

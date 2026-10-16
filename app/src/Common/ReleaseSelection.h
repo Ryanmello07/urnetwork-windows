@@ -13,6 +13,9 @@
 // build/all/run.sh mints (require_windows_artifacts + the github_release_upload
 // loop). SelectRelease skips, before anything else is read:
 //   - drafts;
+//   - on a feed that takes `-beta` prereleases, every release whose tag does
+//     not end `-beta`, prerelease or not: one there could pass for an official
+//     release by its tag and its asset's name;
 //   - prereleases, except a `-beta` one on a feed that takes them: a
 //     prerelease that outranks the stable release by code (the pipeline's
 //     android-only F-Droid variants at code+2 / code+3 are the model) must not
@@ -64,8 +67,8 @@ struct Feed {
   // How GitHub spells the repository in its download URLs.
   std::string_view owner;
   std::string_view repo;
-  // A prerelease whose tag ends in -beta counts; every other prerelease is
-  // skipped.
+  // Only tags that end in -beta count, a prerelease among them; every other
+  // release, and every other prerelease, is skipped.
   bool acceptBetaPrereleases = false;
   // Only immutable releases count.
   bool requireImmutable = false;
@@ -362,6 +365,7 @@ inline Selection SelectRelease(std::vector<Release> const& releases, std::string
   Selection s;
   for (auto const& rel : releases) {
     if (rel.draft) continue;
+    if (feed.acceptBetaPrereleases && !selection_detail::EndsWith(rel.tag, "-beta")) continue;
     if (rel.prerelease && !feed.acceptAnyPrerelease &&
         !(feed.acceptBetaPrereleases && selection_detail::EndsWith(rel.tag, "-beta"))) {
       continue;
