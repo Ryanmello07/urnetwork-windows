@@ -233,7 +233,8 @@ void TrayIcon::ShowContextMenu(POINT pt) {
   // AppendMenuW copies the item text, so the temporaries are fine.
   HMENU menu = ::CreatePopupMenu();
   ::AppendMenuW(menu, MF_STRING, kMenuOpen, Localized("open_urnetwork").c_str());
-  // Connect or Disconnect, as the tray decision says (TrayConnectionState.h).
+  // Connect or Disconnect, and neither without a status to act on: signed out,
+  // or before the service's first status (TrayConnectionState.h).
   const tray::Action action = cb_.connectAction ? cb_.connectAction() : tray::Action::None;
   if (action != tray::Action::None) {
     ::AppendMenuW(menu, MF_STRING, kMenuConnect,

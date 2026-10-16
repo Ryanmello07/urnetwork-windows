@@ -1,8 +1,10 @@
 // Executable spec for what the tray says about the connection (App/
 // TrayConnectionState.h): Connected, in words and in the icon, only with the
-// tunnel up and the health connected; with the tunnel up the health says how
-// far the connection got; and with it down the machine's own state comes first.
-// Run against the header the app compiles, on any host with a C++20 compiler.
+// tunnel up and the health connected; a connect in progress reads as the
+// connect page's connecting line and a failed start as its "Couldn't connect";
+// the tunnel-down lines keep the machine's own state first; and the menu offers
+// Connect or Disconnect only with a status to act on. Run against the header the
+// app compiles, on any host with a C++20 compiler.
 //
 //   c++ -std=c++20 -I ../src/App -I ../src/Common tray-connection-state-tests.cpp -o /tmp/tray-tests && /tmp/tray-tests
 //
@@ -137,6 +139,53 @@ void TestTheTunnelUpReadsItsHealth() {
   }
 }
 
+// A connect in progress reads as the connect page's connecting line, whatever
+// the firewall and the routes say while it starts. It read as the app name
+// alone (the kill switch off) or as a blocked or disconnecting line.
+void TestAConnectInProgressReadsConnecting() {
+  for (const auto& health : kEveryHealth) {
+    for (std::string_view wfp : kEveryWfpState) {
+      for (bool routes : {false, true}) {
+        for (bool failsafe : {false, true}) {
+          tray::Facts facts = Known(Tunnel::Starting, health);
+          facts.wfpState = wfp;
+          facts.routesInstalled = routes;
+          facts.failsafeStop = failsafe;
+          const Status status = tray::Decide(facts).status;
+          // the stats clamp keeps a finding or failed window while preparing
+          const Status want = health == Health::Evaluating ? Status::FindingProviders
+                              : health == Health::Failed   ? Status::Failed
+                                                           : Status::Connecting;
+          Check(status == want, std::string("a connect in progress reads connecting: ") +
+                                    Name(health) + ", wfp \"" + std::string(wfp) + "\"" +
+                                    (routes ? ", routes" : "") +
+                                    (failsafe ? ", after a failsafe stop" : "") + " reads " +
+                                    Name(status) + ", not " + Name(want));
+        }
+      }
+    }
+  }
+}
+
+// A start the service could not finish says "Couldn't connect", as the connect
+// page does, unless the machine's own state is the more urgent line.
+void TestAFailedStartSaysCouldNotConnect() {
+  Check(tray::Decide(Known(Tunnel::Failed)).status == Status::Failed,
+        "a failed start says couldn't connect");
+  Check(tray::Decide(Known(Tunnel::Failed, Health::Failed)).status == Status::Failed,
+        "a failed start says couldn't connect with the failed health");
+  tray::Facts armed = Known(Tunnel::Failed);
+  armed.wfpState = "armed";
+  Check(tray::Decide(armed).status == Status::BlockedKillSwitch,
+        "a failed start under the armed kill switch says the kill switch holds the machine");
+  tray::Facts routes = Known(Tunnel::Failed);
+  routes.routesInstalled = true;
+  Check(tray::Decide(routes).status == Status::Disconnecting,
+        "a failed start with routes installed says the traffic still goes to the tunnel");
+  Check(!tray::Decide(Known(Tunnel::Failed, Health::Connected)).connectedIcon,
+        "a failed start never shows the connected icon");
+}
+
 // With the tunnel down, the machine's own state first (#41), in its order:
 // routes, the armed kill switch, another policy, the failsafe stop.
 void TestTheTunnelDownLinesKeepTheirOrder() {
@@ -168,10 +217,14 @@ void TestTheTunnelDownLinesKeepTheirOrder() {
             where + "a \"" + std::string(wfp) + "\" policy with no tunnel reads as blocked");
     }
 
-    tray::Facts failsafe = Known(tunnel);
-    failsafe.failsafeStop = true;
-    Check(tray::Decide(failsafe).status == Status::FailsafeStopped,
-          where + "the failsafe stop says the tunnel failed");
+    for (std::string_view wfp : {"off", ""}) {
+      tray::Facts failsafe = Known(tunnel);
+      failsafe.wfpState = wfp;
+      failsafe.failsafeStop = true;
+      Check(tray::Decide(failsafe).status == Status::FailsafeStopped,
+            where + "the failsafe stop with the policy \"" + std::string(wfp) +
+                "\" says the tunnel failed");
+    }
   }
 }
 
@@ -188,6 +241,32 @@ void TestNoStatusClaimsNothing() {
       Check(view.status == Status::None && !view.connectedIcon,
             std::string("no status claims nothing: tunnel ") + Name(tunnel) + ", " +
                 Name(health) + " reads " + Name(view.status));
+    }
+  }
+}
+
+// Connect or Disconnect only with a status to act on: signed in, and once the
+// service has said what its tunnel is doing. Then the shared rule decides which.
+void TestNoActionWithoutAStatus() {
+  for (bool signedIn : {false, true}) {
+    for (bool statusKnown : {false, true}) {
+      for (bool disconnect : {false, true}) {
+        tray::Facts facts = Known(Tunnel::Up, Health::Connected);
+        facts.signedIn = signedIn;
+        facts.statusKnown = statusKnown;
+        facts.actionIsDisconnect = disconnect;
+        const Action want = !signedIn || !statusKnown ? Action::None
+                            : disconnect               ? Action::Disconnect
+                                                       : Action::Connect;
+        const Action action = tray::ActionFor(facts);
+        const char* names[] = {"none", "connect", "disconnect"};
+        Check(action == want, std::string("no action without a status: ") +
+                                  (signedIn ? "signed in" : "signed out") + ", " +
+                                  (statusKnown ? "a status" : "no status") + ", the rule says " +
+                                  (disconnect ? "disconnect" : "connect") + ": offers " +
+                                  names[static_cast<int>(action)] + ", not " +
+                                  names[static_cast<int>(want)]);
+      }
     }
   }
 }
@@ -226,8 +305,11 @@ int main() {
   } tests[] = {
       {"connected needs the tunnel up", TestConnectedNeedsTheTunnelUp},
       {"the tunnel up reads its health", TestTheTunnelUpReadsItsHealth},
+      {"a connect in progress reads connecting", TestAConnectInProgressReadsConnecting},
+      {"a failed start says couldn't connect", TestAFailedStartSaysCouldNotConnect},
       {"the tunnel-down lines keep their order", TestTheTunnelDownLinesKeepTheirOrder},
       {"no status claims nothing", TestNoStatusClaimsNothing},
+      {"no action without a status", TestNoActionWithoutAStatus},
       {"the service states fold", TestTheServiceStatesFold},
   };
   for (const auto& test : tests) {

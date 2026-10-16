@@ -124,8 +124,9 @@ void AppController::Start() {
   // to DO.
   //
   // Out of balance the tray's Connect starts nothing and opens the upgrade path
-  // (BalanceGate.h, start connect); its Disconnect always works. The item is
-  // the tray decision's (TrayConnectionState.h), read again at the click.
+  // (BalanceGate.h, start connect); its Disconnect always works. Neither is
+  // offered without a status to act on (TrayConnectionState.h), and a click
+  // that finds none since the menu opened does nothing.
   cb.onConnectToggle = [this] {
     const tray::Action action = tray::ActionFor(CurrentTrayFacts());
     if (action == tray::Action::None) return;
@@ -727,11 +728,12 @@ void AppController::UpdateTray() {
       status = pages::AdvW("conn_degraded", L"Connection degraded — reconnecting");
       break;
     case tray::Status::Connecting:
+      // a connect in progress, the tunnel starting or up with no provider yet
       status = Localized("connecting_status_indicator");
       break;
     case tray::Status::Failed:
-      // the window honesty layer's terminal outcome (track 2): the page shows
-      // the reason and a Retry; the tray says the same headline
+      // a start the service could not finish, or the window honesty layer's
+      // terminal outcome (track 2): the page shows the reason and a Retry
       status = pages::AdvW("conn_failed", L"Couldn't connect");
       break;
     // #41: states that are not "disconnected" though no tunnel is up, which the

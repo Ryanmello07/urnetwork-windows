@@ -50,8 +50,35 @@ func trayStateTestProgram(t *testing.T, mutate func(string) string) string {
 	return program
 }
 
-// Execute the spec: Connected only with the tunnel up, the tunnel up reads its
-// health, and the tunnel-down lines keep their order.
+// Run the spec against a rewritten copy of the header and require that it
+// fails, naming each of wants.
+func requireTrayStateFailure(t *testing.T, mutate func(string) string, wants ...string) {
+	t.Helper()
+	program := trayStateTestProgram(t, mutate)
+	output, err := exec.Command(program).CombinedOutput()
+	if err == nil {
+		t.Fatalf("negative control was not detected:\n%s", output)
+	}
+	for _, want := range wants {
+		if !strings.Contains(string(output), want) {
+			t.Errorf("negative control did not fail %q:\n%s", want, output)
+		}
+	}
+}
+
+// The source with the one occurrence of old rewritten; the control fails when
+// the header no longer has exactly one.
+func replaceTrayStateOnce(t *testing.T, source, old, replacement string) string {
+	t.Helper()
+	if strings.Count(source, old) != 1 {
+		t.Fatalf("TrayConnectionState.h no longer has exactly one %q; update this control", old)
+	}
+	return strings.Replace(source, old, replacement, 1)
+}
+
+// Execute the spec: Connected only with the tunnel up, a connect in progress
+// reads connecting, a failed start says couldn't connect, the tunnel-down lines
+// keep their order, and no action is offered without a status.
 func TestTrayConnectionState(t *testing.T) {
 	if !strings.Contains(readAppSource(t, "App.vcxproj"), `<ClInclude Include="TrayConnectionState.h" />`) {
 		t.Error("App.vcxproj does not list TrayConnectionState.h")
@@ -62,6 +89,118 @@ func TestTrayConnectionState(t *testing.T) {
 	} else {
 		t.Logf("%s", output)
 	}
+}
+
+// The tray as it decided before this header, rebuilt over the same facts: every
+// status but the tunnel up's from the #41 lines (a connect in progress read as
+// the app name alone, or as blocked), no "Couldn't connect" for a failed start,
+// an empty wfp state read as a policy in force, and Connect or Disconnect
+// offered with no status at all.
+func TestTrayConnectionStateRejectsThePreviousMapping(t *testing.T) {
+	requireTrayStateFailure(t, func(source string) string {
+		start := strings.Index(source, "inline constexpr View Decide(const Facts& facts) {")
+		end := strings.Index(source, "// The menu's item: none without a status to act on.")
+		if start < 0 || end < start {
+			t.Fatal("TrayConnectionState.h no longer has Decide before ActionFor; update this control")
+		}
+		previous := `inline constexpr View Decide(const Facts& facts) {
+  View view;
+  const health::State shown = facts.health.value_or(health::State::Connected);
+  const bool connected = facts.statusKnown && facts.tunnel == Tunnel::Up;
+  view.connectedIcon = connected && shown == health::State::Connected;
+  if (!connected && facts.statusKnown) {
+    if (facts.routesInstalled) {
+      view.status = Status::Disconnecting;
+      return view;
+    }
+    if (facts.wfpState == "armed") {
+      view.status = Status::BlockedKillSwitch;
+      return view;
+    }
+    if (facts.wfpState != "off") {
+      view.status = Status::BlockedNoTunnel;
+      return view;
+    }
+    if (facts.failsafeStop) {
+      view.status = Status::FailsafeStopped;
+      return view;
+    }
+  }
+  if (connected) {
+    switch (shown) {
+      case health::State::Connected: view.status = Status::Connected; break;
+      case health::State::Evaluating: view.status = Status::FindingProviders; break;
+      case health::State::Degraded: view.status = Status::Degraded; break;
+      case health::State::Connecting: view.status = Status::Connecting; break;
+      case health::State::Failed: view.status = Status::Failed; break;
+      default: break;
+    }
+  }
+  return view;
+}
+
+`
+		source = source[:start] + previous + source[end:]
+		return replaceTrayStateOnce(t, source,
+			"  if (!facts.signedIn || !facts.statusKnown) return Action::None;\n", "")
+	},
+		"FAIL a connect in progress reads connecting",
+		"FAIL a failed start says couldn't connect",
+		"FAIL the tunnel-down lines keep their order",
+		"FAIL no action without a status",
+		"no action without a status: signed out",
+		"no action without a status: signed in, no status")
+}
+
+// Read a connect in progress through the tunnel-down lines and it is named idle
+// or blocked again.
+func TestTrayConnectionStateRejectsAConnectReadAsTunnelDown(t *testing.T) {
+	requireTrayStateFailure(t, func(source string) string {
+		return replaceTrayStateOnce(t, source, "  if (facts.tunnel == Tunnel::Starting) {\n",
+			"  if (false) {\n")
+	}, "FAIL a connect in progress reads connecting")
+}
+
+// Read a connect in progress as the tunnel up and it claims Connected, and the
+// connected icon, before there is a tunnel.
+func TestTrayConnectionStateRejectsConnectedBeforeTheTunnel(t *testing.T) {
+	requireTrayStateFailure(t, func(source string) string {
+		return replaceTrayStateOnce(t, source, "  if (facts.tunnel == Tunnel::Up) {\n",
+			"  if (facts.tunnel == Tunnel::Up || facts.tunnel == Tunnel::Starting) {\n")
+	}, "FAIL connected needs the tunnel up", "connected only with the tunnel up: tunnel starting")
+}
+
+// A failed start with nothing else to say read as the app name alone.
+func TestTrayConnectionStateRejectsAFailedStartReadAsIdle(t *testing.T) {
+	requireTrayStateFailure(t, func(source string) string {
+		return replaceTrayStateOnce(t, source,
+			"  } else if (facts.tunnel == Tunnel::Failed) {\n    view.status = Status::Failed;\n", "")
+	}, "FAIL a failed start says couldn't connect")
+}
+
+// Signed out, the menu's Connect reached a bootstrap that declines it.
+func TestTrayConnectionStateRejectsAnActionWhileSignedOut(t *testing.T) {
+	requireTrayStateFailure(t, func(source string) string {
+		return replaceTrayStateOnce(t, source, "  if (!facts.signedIn || !facts.statusKnown) return Action::None;\n",
+			"  if (!facts.statusKnown) return Action::None;\n")
+	}, "FAIL no action without a status", "no action without a status: signed out, a status")
+}
+
+// The routes still installed come before the armed kill switch: the reverse
+// called a machine with no internet "Blocked (kill switch on)" with the kill
+// switch off, the owner's bug A.
+func TestTrayConnectionStateRejectsTheKillSwitchBeforeTheRoutes(t *testing.T) {
+	requireTrayStateFailure(t, func(source string) string {
+		return replaceTrayStateOnce(t, source, `  if (facts.routesInstalled) {
+    view.status = Status::Disconnecting;
+  } else if (facts.wfpState == "armed") {
+    view.status = Status::BlockedKillSwitch;
+  }`, `  if (facts.wfpState == "armed") {
+    view.status = Status::BlockedKillSwitch;
+  } else if (facts.routesInstalled) {
+    view.status = Status::Disconnecting;
+  }`)
+	}, "FAIL the tunnel-down lines keep their order", "routes still installed come first")
 }
 
 // The spec folds a stand-in for proto::TunnelState by its enumerators' names:

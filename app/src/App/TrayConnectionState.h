@@ -1,19 +1,26 @@
 // What the tray says about the connection: the status in its tooltip, whether
 // its icon shows connected, and its one Connect/Disconnect menu item. Read from
 // the service's last tunnel status and the health the last stats push carried
-// (AppController holds both).
+// (AppController holds both), so the tray never claims more of a connection
+// than the connect page does (ConnectPage::ApplyConnectStatus).
 //
 // Connected, in words and in the icon, only with the tunnel up and the health
 // connected. The health is held across a hide and dropped on every tunnel
 // transition; with none since the last one (the stats feed is
-// presentation-scoped) the tunnel's own claim stands. With the tunnel up the
-// health says how far the connection got. With it down the machine's own state
-// is the line (#41): routes still installed, the kill switch's armed policy,
-// another policy left in force, then the service's own failsafe stop; anything
-// else is the app name alone.
+// presentation-scoped) the tunnel's own claim stands, as it always has.
 //
-// The menu offers Disconnect whenever the rule the connect page's button shares
-// says so (gesture::ActionIsDisconnect), and Connect otherwise.
+// A connect in progress, the service starting or preparing the tunnel, reads as
+// the page's connecting line, not as the tunnel-down lines below, which named
+// it idle (the kill switch off) or blocked (on). A start the service could not
+// finish reads as the page's "Couldn't connect". With the tunnel otherwise
+// down the machine's own state comes first (#41): routes still installed, the
+// kill switch's armed policy, another policy left in force, then the service's
+// own failsafe stop.
+//
+// The menu offers Connect or Disconnect only with a status to act on: signed in,
+// and once the service has told this process its tunnel's state. Without one a
+// Connect reached a bootstrap that declines it (signed out,
+// SdkHost::BootstrapSession) or that finds no service to start a session on.
 //
 // Pure: no Windows headers, no clock, no allocation. The build host runs it
 // (tools/tray-connection-state-tests.cpp).
@@ -99,29 +106,21 @@ struct View {
   bool connectedIcon = false;
 };
 
+// Empty reads as off, as gesture::WfpInForce reads it.
+inline constexpr bool PolicyInForce(std::string_view wfpState) {
+  return !wfpState.empty() && wfpState != "off";
+}
+
 // The tooltip's status and the icon.
 inline constexpr View Decide(const Facts& facts) {
   View view;
-  // no stats since the tunnel came up: its own claim stands
-  const health::State shown = facts.health.value_or(health::State::Connected);
-  const bool up = facts.statusKnown && facts.tunnel == Tunnel::Up;
-  view.connectedIcon = up && shown == health::State::Connected;
-  if (!up && facts.statusKnown) {
-    if (facts.routesInstalled) {
-      view.status = Status::Disconnecting;
-    } else if (facts.wfpState == "armed") {
-      view.status = Status::BlockedKillSwitch;
-    } else if (facts.wfpState != "off") {
-      view.status = Status::BlockedNoTunnel;
-    } else if (facts.failsafeStop) {
-      view.status = Status::FailsafeStopped;
-    }
-    return view;
-  }
-  if (up) {
-    switch (shown) {
+  if (!facts.statusKnown) return view;
+  if (facts.tunnel == Tunnel::Up) {
+    // no stats since the tunnel came up: its own claim stands
+    switch (facts.health.value_or(health::State::Connected)) {
       case health::State::Connected:
         view.status = Status::Connected;
+        view.connectedIcon = true;
         break;
       case health::State::Evaluating:
         view.status = Status::FindingProviders;
@@ -140,12 +139,35 @@ inline constexpr View Decide(const Facts& facts) {
         // a transient disagreement between the two feeds: claim nothing more
         break;
     }
+    return view;
+  }
+  if (facts.tunnel == Tunnel::Starting) {
+    // the page's words for the same attempt: health::WithCapture keeps a
+    // finding or failed window while preparing, and reads anything else as
+    // connecting
+    const health::State attempt = facts.health.value_or(health::State::Connecting);
+    view.status = attempt == health::State::Evaluating ? Status::FindingProviders
+                  : attempt == health::State::Failed   ? Status::Failed
+                                                       : Status::Connecting;
+    return view;
+  }
+  if (facts.routesInstalled) {
+    view.status = Status::Disconnecting;
+  } else if (facts.wfpState == "armed") {
+    view.status = Status::BlockedKillSwitch;
+  } else if (PolicyInForce(facts.wfpState)) {
+    view.status = Status::BlockedNoTunnel;
+  } else if (facts.failsafeStop) {
+    view.status = Status::FailsafeStopped;
+  } else if (facts.tunnel == Tunnel::Failed) {
+    view.status = Status::Failed;
   }
   return view;
 }
 
-// The menu's item.
+// The menu's item: none without a status to act on.
 inline constexpr Action ActionFor(const Facts& facts) {
+  if (!facts.signedIn || !facts.statusKnown) return Action::None;
   return facts.actionIsDisconnect ? Action::Disconnect : Action::Connect;
 }
 
