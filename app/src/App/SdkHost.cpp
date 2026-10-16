@@ -361,6 +361,9 @@ SdkHost::~SdkHost() {
   // The stats publish worker reads the device and this host's state: stopped,
   // and a read in flight waited out, before any of it goes.
   statsPublisher_.Stop();
+  // The user's writes still queued run, then the worker stops: each takes
+  // mutex_, so above the lock.
+  writer_.Stop();
   // Same rule, same reason: the rpc-sync watchdog takes mutex_ to look at the
   // device, so it is stopped and JOINED here, above the lock.
   StopSyncWatchdog();
@@ -5413,41 +5416,45 @@ PerformanceSettings SdkHost::CurrentPerformanceSettings() {
 }
 
 void SdkHost::SetPerformanceSettings(const PerformanceSettings& settings) {
-  std::scoped_lock lock(mutex_);
-  // always a profile, even for window type auto, so the orthogonal settings
-  // (allow direct, post quantum encryption) persist and apply in every mode
-  // (macOS DeviceManager createPerformanceProfile parity)
-  urnet::PerformanceProfile p;
-  p.allow_direct = settings.allowDirect;
-  p.post_quantum_encryption = settings.postQuantum;
-  if (settings.mode == ConnectionMode::Auto) {
-    // no fixed window type or size
-    p.window_type = urnet::WindowTypeAuto;
-  } else {
-    p.window_type = settings.mode == ConnectionMode::Web ? urnet::WindowTypeQuality
-                                                         : urnet::WindowTypeSpeed;
-    urnet::WindowSizeSettings ws;
-    ws.window_size_min = settings.fixedIp ? 1 : 2;
-    ws.window_size_max = settings.fixedIp ? 1 : 4;
-    p.window_size = ws;
-  }
-  const std::optional<urnet::PerformanceProfile> profile = std::move(p);
-  try {
-    if (localState_) localState_->setPerformanceProfile(profile);  // persistence
-    if (device_) device_->setPerformanceProfile(profile);          // live device
-  } catch (const std::exception& e) {
-    LogWarn("sdkhost: set performance profile failed: {}", e.what());
-  }
+  PostWrite("set performance settings", [this, settings] {
+    std::scoped_lock lock(mutex_);
+    // always a profile, even for window type auto, so the orthogonal settings
+    // (allow direct, post quantum encryption) persist and apply in every mode
+    // (macOS DeviceManager createPerformanceProfile parity)
+    urnet::PerformanceProfile p;
+    p.allow_direct = settings.allowDirect;
+    p.post_quantum_encryption = settings.postQuantum;
+    if (settings.mode == ConnectionMode::Auto) {
+      // no fixed window type or size
+      p.window_type = urnet::WindowTypeAuto;
+    } else {
+      p.window_type = settings.mode == ConnectionMode::Web ? urnet::WindowTypeQuality
+                                                           : urnet::WindowTypeSpeed;
+      urnet::WindowSizeSettings ws;
+      ws.window_size_min = settings.fixedIp ? 1 : 2;
+      ws.window_size_max = settings.fixedIp ? 1 : 4;
+      p.window_size = ws;
+    }
+    const std::optional<urnet::PerformanceProfile> profile = std::move(p);
+    try {
+      if (localState_) localState_->setPerformanceProfile(profile);  // persistence
+      if (device_) device_->setPerformanceProfile(profile);          // live device
+    } catch (const std::exception& e) {
+      LogWarn("sdkhost: set performance profile failed: {}", e.what());
+    }
+  });
 }
 
 void SdkHost::SetBlockerEnabled(bool on) {
-  std::scoped_lock lock(mutex_);
-  if (!device_) return;
-  try {
-    device_->setBlockerEnabled(on);  // the device persists and restores this
-  } catch (const std::exception& e) {
-    LogWarn("sdkhost: set blocker failed: {}", e.what());
-  }
+  PostWrite("set blocker", [this, on] {
+    std::scoped_lock lock(mutex_);
+    if (!device_) return;
+    try {
+      device_->setBlockerEnabled(on);  // the device persists and restores this
+    } catch (const std::exception& e) {
+      LogWarn("sdkhost: set blocker failed: {}", e.what());
+    }
+  });
 }
 
 bool SdkHost::CurrentKillSwitch() {
@@ -5462,46 +5469,55 @@ bool SdkHost::CurrentKillSwitch() {
   return false;  // no state at all: claim the permissive default, not the strict one
 }
 
-bool SdkHost::SetKillSwitch(bool on) {
-  std::scoped_lock lock(mutex_);
-  // A kill switch stuck in the WRONG state is a privacy failure, not a cosmetic
-  // one, so this reports whether it took instead of swallowing the throw.
-  //
-  // The order is deliberate too. LocalState is the persistent truth the session
-  // bootstrap restores from, so it is written FIRST: if the device write then
-  // throws, the two disagree only until the next session and the value that
-  // survives is the one the user asked for. Writing the device first lost the
-  // LocalState write entirely whenever it threw, leaving device and LocalState
-  // silently disagreeing with nothing to notice it.
-  bool ok = true;
-  try {
-    if (localState_) localState_->setRouteLocal(!on);
-  } catch (const std::exception& e) {
-    LogWarn("sdkhost: persist route local failed: {}", e.what());
-    ok = false;
-  }
-  try {
-    if (device_) device_->setRouteLocal(!on);
-  } catch (const std::exception& e) {
-    LogWarn("sdkhost: set route local on device failed: {}", e.what());
-    ok = false;
-  }
-  // ...and the leg that actually enforces it. routeLocal is a branch DOWNSTREAM
-  // of the OS routing decision — it only sees packets the kernel already routed
-  // into the tun — so it cannot cover IPv6, the LAN, another adapter's
-  // resolver, a split-tunnel exclusion, or a dead service, which is the case a
-  // kill switch exists for. The service's WFP policy is what covers those. Kept
-  // alongside rather than instead of: the two legs disagreeing is a privacy
-  // failure, so both are written and both report.
-  if (service_.IsConnected() && !service_.SetKillSwitch(on)) {
-    LogWarn("sdkhost: the service did not accept the kill-switch change; the "
-            "firewall policy may not match the setting");
-    ok = false;
-  }
-  // Turning it off with no session lifts the armed floor, the one state that
-  // holds the provider-only device off (ProvideLifecycle.h): providing resumes.
-  if (!on && !device_) RequestProviderReconcile("kill switch turned off");
-  return ok;
+void SdkHost::SetKillSwitch(bool on, std::function<void(bool applied, bool actual)> done) {
+  PostWrite("set kill switch", [this, on, done = std::move(done)] {
+    bool applied = true;
+    bool actual = false;
+    {
+      std::scoped_lock lock(mutex_);
+      // A kill switch stuck in the WRONG state is a privacy failure, not a cosmetic
+      // one, so this reports whether it took instead of swallowing the throw.
+      //
+      // The order is deliberate too. LocalState is the persistent truth the session
+      // bootstrap restores from, so it is written FIRST: if the device write then
+      // throws, the two disagree only until the next session and the value that
+      // survives is the one the user asked for. Writing the device first lost the
+      // LocalState write entirely whenever it threw, leaving device and LocalState
+      // silently disagreeing with nothing to notice it.
+      bool ok = true;
+      try {
+        if (localState_) localState_->setRouteLocal(!on);
+      } catch (const std::exception& e) {
+        LogWarn("sdkhost: persist route local failed: {}", e.what());
+        ok = false;
+      }
+      try {
+        if (device_) device_->setRouteLocal(!on);
+      } catch (const std::exception& e) {
+        LogWarn("sdkhost: set route local on device failed: {}", e.what());
+        ok = false;
+      }
+      // ...and the leg that actually enforces it. routeLocal is a branch DOWNSTREAM
+      // of the OS routing decision — it only sees packets the kernel already routed
+      // into the tun — so it cannot cover IPv6, the LAN, another adapter's
+      // resolver, a split-tunnel exclusion, or a dead service, which is the case a
+      // kill switch exists for. The service's WFP policy is what covers those. Kept
+      // alongside rather than instead of: the two legs disagreeing is a privacy
+      // failure, so both are written and both report.
+      if (service_.IsConnected() && !service_.SetKillSwitch(on)) {
+        LogWarn("sdkhost: the service did not accept the kill-switch change; the "
+                "firewall policy may not match the setting");
+        ok = false;
+      }
+      // Turning it off with no session lifts the armed floor, the one state that
+      // holds the provider-only device off (ProvideLifecycle.h): providing resumes.
+      if (!on && !device_) RequestProviderReconcile("kill switch turned off");
+      applied = ok;
+      // read back on the same worker, after the write: what the caller shows
+      actual = CurrentKillSwitch();
+    }
+    if (done) done(applied, actual);
+  });
 }
 
 std::string SdkHost::CurrentProvideControlMode() {
@@ -5516,190 +5532,201 @@ std::string SdkHost::CurrentProvideControlMode() {
 }
 
 void SdkHost::SetProvideControlMode(const std::string& mode) {
-  std::scoped_lock lock(mutex_);
-  try {
-    if (device_) device_->setProvideControlMode(mode);
-    // Persist alongside the device write (macOS handleProvideControlModeUpdate
-    // parity) â€” DeviceLocal.SetProvideControlMode alone does not persist, and
-    // the session bootstrap restores the persisted mode.
-    if (localState_) localState_->setProvideControlMode(mode);
-  } catch (const std::exception& e) {
-    LogWarn("sdkhost: set provide control mode failed: {}", e.what());
-  }
-  // No session: the provider-only device follows the new mode — started for a
-  // mode that provides while disconnected, stopped for one that does not. Off
-  // this (UI) thread: starting one builds a DeviceLocal in the service.
-  if (!device_) RequestProviderReconcile("provide mode changed");
+  PostWrite("set provide control mode", [this, mode] {
+    std::scoped_lock lock(mutex_);
+    try {
+      if (device_) device_->setProvideControlMode(mode);
+      // Persist alongside the device write (macOS handleProvideControlModeUpdate
+      // parity) â€” DeviceLocal.SetProvideControlMode alone does not persist, and
+      // the session bootstrap restores the persisted mode.
+      if (localState_) localState_->setProvideControlMode(mode);
+    } catch (const std::exception& e) {
+      LogWarn("sdkhost: set provide control mode failed: {}", e.what());
+    }
+    // No session: the provider-only device follows the new mode — started for a
+    // mode that provides while disconnected, stopped for one that does not. On
+    // the session worker: starting one builds a DeviceLocal in the service.
+    if (!device_) RequestProviderReconcile("provide mode changed");
+  });
 }
 
 void SdkHost::SetProvideExtender(bool on) {
-  std::scoped_lock lock(mutex_);
-  ExtenderProvideStatusView shown;
-  {
+  PostWrite("set provide extender", [this, on] {
+    std::scoped_lock lock(mutex_);
+    ExtenderProvideStatusView shown;
+    {
+      std::scoped_lock drawerLock(drawerMutex_);
+      shown = lastExtenderProvideStatus_;
+    }
+    switch (ExtenderProvideWriteRouteFor(device_.has_value(), shown)) {
+      case ExtenderProvideWriteRoute::Device:
+        break;
+      case ExtenderProvideWriteRoute::Service:
+        // Not on this worker: the pipe serializes calls, and this one can
+        // wait behind a start_tunnel.
+        QueueProviderOnlyExtenderWrite(on);
+        return;
+      case ExtenderProvideWriteRoute::None:
+        return;
+    }
+    // The device persists it in its space and applies it at once (N4); detached,
+    // the DeviceRemote queues it for the next sync, and a device process with no
+    // setter drops it rather than replaying it on every reconnect.
+    device_->setProvideExtender(on);
+    // The row paints its guess after this returns (N7). The device emits a status
+    // for the write within its one-second epoch, but two flips inside one epoch
+    // can land on the status already published, which the dedup would drop and so
+    // leave the guess standing.
     std::scoped_lock drawerLock(drawerMutex_);
-    shown = lastExtenderProvideStatus_;
-  }
-  switch (ExtenderProvideWriteRouteFor(device_.has_value(), shown)) {
-    case ExtenderProvideWriteRoute::Device:
-      break;
-    case ExtenderProvideWriteRoute::Service:
-      // Not on this (UI) thread: the pipe serializes calls, and this one can
-      // wait behind a start_tunnel.
-      QueueProviderOnlyExtenderWrite(on);
-      return;
-    case ExtenderProvideWriteRoute::None:
-      return;
-  }
-  // The device persists it in its space and applies it at once (N4); detached,
-  // the DeviceRemote queues it for the next sync, and a device process with no
-  // setter drops it rather than replaying it on every reconnect.
-  device_->setProvideExtender(on);
-  // The row paints its guess after this returns (N7). The device emits a status
-  // for the write within its one-second epoch, but two flips inside one epoch
-  // can land on the status already published, which the dedup would drop and so
-  // leave the guess standing.
-  std::scoped_lock drawerLock(drawerMutex_);
-  extenderProvideRepublish_ = true;
+    extenderProvideRepublish_ = true;
+  });
 }
 
 void SdkHost::SetMeasurementsEnabled(bool on) {
-  std::scoped_lock lock(mutex_);
-  ExtenderProvideStatusView shown;
-  {
+  PostWrite("set measurements", [this, on] {
+    std::scoped_lock lock(mutex_);
+    ExtenderProvideStatusView shown;
+    {
+      std::scoped_lock drawerLock(drawerMutex_);
+      shown = lastExtenderProvideStatus_;
+    }
+    switch (SpeedTestsWriteRouteFor(device_.has_value(), shown)) {
+      case ExtenderProvideWriteRoute::Device:
+        break;
+      case ExtenderProvideWriteRoute::Service:
+        // Not on this worker either, as the Extender switch's write.
+        QueueProviderOnlyMeasurementsWrite(on);
+        return;
+      case ExtenderProvideWriteRoute::None:
+        return;
+    }
+    // The device persists it in its space and applies it at once; detached, the
+    // DeviceRemote queues it for the next sync.
+    device_->setMeasurementsEnabled(on);
+    // The switch paints its guess after this returns; the device's next status
+    // replaces it, even one equal to the last published.
     std::scoped_lock drawerLock(drawerMutex_);
-    shown = lastExtenderProvideStatus_;
-  }
-  switch (SpeedTestsWriteRouteFor(device_.has_value(), shown)) {
-    case ExtenderProvideWriteRoute::Device:
-      break;
-    case ExtenderProvideWriteRoute::Service:
-      // Not on this (UI) thread, as the Extender switch's write.
-      QueueProviderOnlyMeasurementsWrite(on);
-      return;
-    case ExtenderProvideWriteRoute::None:
-      return;
-  }
-  // The device persists it in its space and applies it at once; detached, the
-  // DeviceRemote queues it for the next sync.
-  device_->setMeasurementsEnabled(on);
-  // The switch paints its guess after this returns; the device's next status
-  // replaces it, even one equal to the last published.
-  std::scoped_lock drawerLock(drawerMutex_);
-  extenderProvideRepublish_ = true;
+    extenderProvideRepublish_ = true;
+  });
 }
 
 void SdkHost::ApplyDnsSettings(const urnet::DnsResolverSettings& settings) {
-  std::scoped_lock lock(mutex_);
-  if (!device_) return;
-  try {
-    device_->setDnsResolverSettings(settings);
-  } catch (const std::exception& e) {
-    LogWarn("sdkhost: set dns settings failed: {}", e.what());
-  }
-  if (onDnsSettings_) onDnsSettings_(CurrentDnsSettings());
+  PostWrite("apply dns settings", [this, settings] {
+    std::scoped_lock lock(mutex_);
+    if (!device_) return;
+    try {
+      device_->setDnsResolverSettings(settings);
+    } catch (const std::exception& e) {
+      LogWarn("sdkhost: set dns settings failed: {}", e.what());
+    }
+    if (onDnsSettings_) onDnsSettings_(CurrentDnsSettings());
+  });
 }
 
 void SdkHost::ApplyTransportSettings(TransportSettingsKind kind,
                                      const urnet::TransportSettings& settings) {
-  std::scoped_lock lock(mutex_);
-  const bool provider = kind == TransportSettingsKind::Provider;
-  // the device first: attached, the service applies it (make-before-break
-  // migration of the live window) and persists it; detached, the DeviceRemote
-  // queues it for the next sync. Both fire the change listener.
-  if (device_) {
-    try {
-      if (provider) {
-        device_->setProviderTransportSettings(settings);
-      } else {
-        device_->setTransportSettings(settings);
+  PostWrite("apply transport settings", [this, kind, settings] {
+    std::scoped_lock lock(mutex_);
+    const bool provider = kind == TransportSettingsKind::Provider;
+    // the device first: attached, the service applies it (make-before-break
+    // migration of the live window) and persists it; detached, the DeviceRemote
+    // queues it for the next sync. Both fire the change listener.
+    if (device_) {
+      try {
+        if (provider) {
+          device_->setProviderTransportSettings(settings);
+        } else {
+          device_->setTransportSettings(settings);
+        }
+      } catch (const std::exception& e) {
+        LogWarn("sdkhost: set {} transport settings failed: {}",
+                provider ? "provider" : "client", e.what());
       }
-    } catch (const std::exception& e) {
-      LogWarn("sdkhost: set {} transport settings failed: {}",
-              provider ? "provider" : "client", e.what());
     }
-  }
-  // then the app-side mirror, with or without a device: it seeds the device on
-  // the next bootstrap and answers the offline reads (see the header note)
-  if (localState_) {
-    try {
-      if (provider) {
-        localState_->setProviderTransportSettings(settings);
-      } else {
-        localState_->setTransportSettings(settings);
+    // then the app-side mirror, with or without a device: it seeds the device on
+    // the next bootstrap and answers the offline reads (see the header note)
+    if (localState_) {
+      try {
+        if (provider) {
+          localState_->setProviderTransportSettings(settings);
+        } else {
+          localState_->setTransportSettings(settings);
+        }
+      } catch (const std::exception& e) {
+        LogWarn("sdkhost: persist {} transport settings failed: {}",
+                provider ? "provider" : "client", e.what());
       }
-    } catch (const std::exception& e) {
-      LogWarn("sdkhost: persist {} transport settings failed: {}",
-              provider ? "provider" : "client", e.what());
     }
-  }
-  // No session: a provider-only device runs on the policy it was built with.
-  // The reconcile's request now carries the new one, so the service builds a
-  // new device for it.
-  if (provider && !device_) RequestProviderReconcile("provider transport policy changed");
-  if (onTransportSettings_) onTransportSettings_(kind, CurrentTransportSettings(kind));
+    // No session: a provider-only device runs on the policy it was built with.
+    // The reconcile's request now carries the new one, so the service builds a
+    // new device for it.
+    if (provider && !device_) RequestProviderReconcile("provider transport policy changed");
+    if (onTransportSettings_) onTransportSettings_(kind, CurrentTransportSettings(kind));
+  });
 }
 
 std::string SdkHost::CreateSplitRule(const std::vector<std::string>& hosts) {
-  std::scoped_lock lock(mutex_);
-  if (!device_ || hosts.empty()) return {};
-  std::string overrideId;
-  try {
-    urnet::BlockActionOverride over;
-    over.OverrideId = urnet::newId();
-    over.Hosts = hosts;
-    urnet::RouteOverride route;
-    route.Local = true;
+  urnet::RouteOverride route;
+  route.Local = true;
+  return PostRuleCreate("create split rule", hosts, [route](urnet::BlockActionOverride& over) {
     over.RouteOverride = route;
-    device_->addBlockActionOverride(over);
-    overrideId = *over.OverrideId;
-  } catch (const std::exception& e) {
-    LogWarn("sdkhost: create split rule failed: {}", e.what());
-  }
-  PublishSplitRules();
-  return overrideId;
+  });
 }
 
 std::string SdkHost::CreateTunnelRule(const std::vector<std::string>& hosts) {
-  std::scoped_lock lock(mutex_);
-  if (!device_ || hosts.empty()) return {};
-  std::string overrideId;
-  try {
-    // CreateSplitRule's mirror: Local=false keeps the hosts INSIDE the tunnel.
-    // Pin=false, because a pin is exit placement, not membership (see the
-    // header) - a pinned "rule" would not answer "why is this not tunnelled".
-    urnet::BlockActionOverride over;
-    over.OverrideId = urnet::newId();
-    over.Hosts = hosts;
-    urnet::RouteOverride route;
-    route.Local = false;
-    route.Pin = false;
+  // CreateSplitRule's mirror: Local=false keeps the hosts INSIDE the tunnel.
+  // Pin=false, because a pin is exit placement, not membership (see the
+  // header) - a pinned "rule" would not answer "why is this not tunnelled".
+  urnet::RouteOverride route;
+  route.Local = false;
+  route.Pin = false;
+  return PostRuleCreate("create tunnel rule", hosts, [route](urnet::BlockActionOverride& over) {
     over.RouteOverride = route;
-    device_->addBlockActionOverride(over);
-    overrideId = *over.OverrideId;
-  } catch (const std::exception& e) {
-    LogWarn("sdkhost: create tunnel rule failed: {}", e.what());
-  }
-  PublishSplitRules();
-  return overrideId;
+  });
 }
 
 std::string SdkHost::CreateBlockRule(const std::vector<std::string>& hosts, bool block) {
-  std::scoped_lock lock(mutex_);
-  if (!device_ || hosts.empty()) return {};
+  urnet::BlockOverride blockOverride;
+  blockOverride.Block = block;
+  return PostRuleCreate("create block rule", hosts,
+                        [blockOverride](urnet::BlockActionOverride& over) {
+                          over.BlockOverride = blockOverride;
+                        });
+}
+
+void SdkHost::PostWrite(const char* what, std::function<void()> job) {
+  // refused only once the quit or the destructor stopped the worker
+  if (!writer_.Post(std::move(job))) LogInfo("sdkhost: '{}' dropped: the app is quitting", what);
+}
+
+std::string SdkHost::PostRuleCreate(const char* what, const std::vector<std::string>& hosts,
+                                    std::function<void(urnet::BlockActionOverride&)> shape) {
+  // The id is the caller's at once, for its undo, which removes by id: it is
+  // minted here, not by the device. With no session or no hosts nothing is
+  // written, as before; a write that throws later leaves no rule, and an undo
+  // of it removes nothing.
+  if (!HasSession() || hosts.empty()) return {};
   std::string overrideId;
   try {
-    urnet::BlockActionOverride over;
-    over.OverrideId = urnet::newId();
-    over.Hosts = hosts;
-    urnet::BlockOverride blockOverride;
-    blockOverride.Block = block;
-    over.BlockOverride = blockOverride;
-    device_->addBlockActionOverride(over);
-    overrideId = *over.OverrideId;
+    overrideId = urnet::newId();
   } catch (const std::exception& e) {
-    LogWarn("sdkhost: create block rule failed: {}", e.what());
+    LogWarn("sdkhost: {} failed: {}", what, e.what());
+    return {};
   }
-  PublishSplitRules();
+  PostWrite(what, [this, what, hosts, overrideId, shape = std::move(shape)] {
+    std::scoped_lock lock(mutex_);
+    if (!device_) return;
+    try {
+      urnet::BlockActionOverride over;
+      over.OverrideId = overrideId;
+      over.Hosts = hosts;
+      shape(over);
+      device_->addBlockActionOverride(over);
+    } catch (const std::exception& e) {
+      LogWarn("sdkhost: {} failed: {}", what, e.what());
+    }
+    PublishSplitRules();
+  });
   return overrideId;
 }
 
@@ -5710,35 +5737,39 @@ void SdkHost::RemoveBlockRule(const std::string& overrideId) {
 
 void SdkHost::UpdateSplitRule(const std::string& overrideId,
                               const std::vector<std::string>& hosts) {
-  {
-    std::scoped_lock lock(mutex_);
-    if (!device_) return;
-    if (!hosts.empty()) {
-      try {
-        // rebuild the full override list with the rule's hosts replaced
-        auto list = device_->getBlockActionOverrides();
-        if (!list) return;
-        bool found = false;
-        for (auto& over : *list) {
-          if (over.OverrideId && *over.OverrideId == overrideId) {
-            over.Hosts = hosts;
-            found = true;
-            break;
-          }
-        }
-        if (found) device_->setBlockActionOverrides(list);
-      } catch (const std::exception& e) {
-        LogWarn("sdkhost: update split rule failed: {}", e.what());
-      }
-      PublishSplitRules();
+  PostWrite("update split rule", [this, overrideId, hosts] {
+    // empty selection removes the rule
+    if (hosts.empty()) {
+      RemoveSplitRuleOnWriter(overrideId);
       return;
     }
-  }
-  // empty selection removes the rule (RemoveSplitRule takes the lock itself)
-  RemoveSplitRule(overrideId);
+    std::scoped_lock lock(mutex_);
+    if (!device_) return;
+    try {
+      // rebuild the full override list with the rule's hosts replaced
+      auto list = device_->getBlockActionOverrides();
+      if (!list) return;
+      bool found = false;
+      for (auto& over : *list) {
+        if (over.OverrideId && *over.OverrideId == overrideId) {
+          over.Hosts = hosts;
+          found = true;
+          break;
+        }
+      }
+      if (found) device_->setBlockActionOverrides(list);
+    } catch (const std::exception& e) {
+      LogWarn("sdkhost: update split rule failed: {}", e.what());
+    }
+    PublishSplitRules();
+  });
 }
 
 void SdkHost::RemoveSplitRule(const std::string& overrideId) {
+  PostWrite("remove split rule", [this, overrideId] { RemoveSplitRuleOnWriter(overrideId); });
+}
+
+void SdkHost::RemoveSplitRuleOnWriter(const std::string& overrideId) {
   std::scoped_lock lock(mutex_);
   if (!device_) return;
   try {
@@ -5750,49 +5781,53 @@ void SdkHost::RemoveSplitRule(const std::string& overrideId) {
 }
 
 void SdkHost::SetAppRule(const std::string& imagePath, bool includeInTunnel) {
-  std::scoped_lock lock(mutex_);
-  if (imagePath.empty()) return;
-  try {
-    // localState_ is the OFFLINE source of truth (persists, readable while
-    // disconnected). device_ drives the LIVE tunnel when connected -
-    // setBlockActionOverrides fires the change listener -> re-drives the driver.
-    // Write both so the config is durable and applies immediately when up.
-    if (localState_) {
-      auto list = localState_->getBlockActionOverrides();
-      if (!list) list = urnet::BlockActionOverrideList{};
-      UrstUpsertAppRule(*list, imagePath, includeInTunnel);
-      localState_->setBlockActionOverrides(list);
+  PostWrite("set app rule", [this, imagePath, includeInTunnel] {
+    std::scoped_lock lock(mutex_);
+    if (imagePath.empty()) return;
+    try {
+      // localState_ is the OFFLINE source of truth (persists, readable while
+      // disconnected). device_ drives the LIVE tunnel when connected -
+      // setBlockActionOverrides fires the change listener -> re-drives the driver.
+      // Write both so the config is durable and applies immediately when up.
+      if (localState_) {
+        auto list = localState_->getBlockActionOverrides();
+        if (!list) list = urnet::BlockActionOverrideList{};
+        UrstUpsertAppRule(*list, imagePath, includeInTunnel);
+        localState_->setBlockActionOverrides(list);
+      }
+      if (device_) {
+        auto list = device_->getBlockActionOverrides();
+        if (!list) list = urnet::BlockActionOverrideList{};
+        UrstUpsertAppRule(*list, imagePath, includeInTunnel);
+        device_->setBlockActionOverrides(list);
+      }
+    } catch (const std::exception& e) {
+      LogWarn("sdkhost: set app rule failed: {}", e.what());
     }
-    if (device_) {
-      auto list = device_->getBlockActionOverrides();
-      if (!list) list = urnet::BlockActionOverrideList{};
-      UrstUpsertAppRule(*list, imagePath, includeInTunnel);
-      device_->setBlockActionOverrides(list);
-    }
-  } catch (const std::exception& e) {
-    LogWarn("sdkhost: set app rule failed: {}", e.what());
-  }
+  });
 }
 
 void SdkHost::RemoveAppRule(const std::string& imagePath) {
-  std::scoped_lock lock(mutex_);
-  if (imagePath.empty()) return;
-  try {
-    if (localState_) {
-      if (auto list = localState_->getBlockActionOverrides()) {
-        UrstRemoveAppRule(*list, imagePath);
-        localState_->setBlockActionOverrides(list);
+  PostWrite("remove app rule", [this, imagePath] {
+    std::scoped_lock lock(mutex_);
+    if (imagePath.empty()) return;
+    try {
+      if (localState_) {
+        if (auto list = localState_->getBlockActionOverrides()) {
+          UrstRemoveAppRule(*list, imagePath);
+          localState_->setBlockActionOverrides(list);
+        }
       }
-    }
-    if (device_) {
-      if (auto list = device_->getBlockActionOverrides()) {
-        UrstRemoveAppRule(*list, imagePath);
-        device_->setBlockActionOverrides(list);
+      if (device_) {
+        if (auto list = device_->getBlockActionOverrides()) {
+          UrstRemoveAppRule(*list, imagePath);
+          device_->setBlockActionOverrides(list);
+        }
       }
+    } catch (const std::exception& e) {
+      LogWarn("sdkhost: remove app rule failed: {}", e.what());
     }
-  } catch (const std::exception& e) {
-    LogWarn("sdkhost: remove app rule failed: {}", e.what());
-  }
+  });
 }
 
 std::vector<AppRule> SdkHost::CurrentAppRules() {
@@ -8184,6 +8219,8 @@ void SdkHost::QuitInOrder(std::chrono::steady_clock::time_point start) {
   StopProviderOnlyStats();
   // it reads the device the teardown below closes
   statsPublisher_.Stop();
+  // the user's writes still queued run first; each takes mutex_
+  writer_.Stop();
   // 4. The service, under mutex_: after any pass in flight (a Connect's
   // bootstrap, a reconcile, the user's Disconnect), and with none able to
   // follow it.

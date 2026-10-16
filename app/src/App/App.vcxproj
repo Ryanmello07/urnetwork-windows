@@ -464,6 +464,7 @@
     <!-- header-only and WinRT-free: tools/stats-publish-tests.cpp runs them -->
     <ClInclude Include="StatsReadOrder.h" />
     <ClInclude Include="CoalescedWorker.h" />
+    <ClInclude Include="OrderedWorker.h" />
     <!-- header-only and WinRT-free: tools/app-rule-rows-tests.cpp runs it -->
     <ClInclude Include="AppRuleRows.h" />
     <ClInclude Include="Startup.h" />
