@@ -2605,6 +2605,7 @@ void MainWindow::ApplyUpdateChecker() {
   auto signedOutBar = SignedOutUpdateBar();
   urnw::ConnectPage::RenderUpdateBanner(signedOutBar, updateSnapshot_);
   signedOutBar.Visibility(signedOutBar.IsOpen() ? Visibility::Visible : Visibility::Collapsed);
+  if (settings_) settings_->ApplyUpdateChannel(updateSnapshot_);
   if (developer_) developer_->ApplyUpdateCheck(updateSnapshot_);
   if (settings_) settings_->ApplyUpdateCheck(updateSnapshot_);
 }

@@ -705,6 +705,13 @@ void ConnectPage::RenderUpdateBanner(InfoBar const& bar, urnw::UpdateChecker::Sn
   // what is happening to it. The version goes in through the key's
   // placeholder, so a translation places it.
   winrt::hstring title{urnw::Format("upd_available_title_version", snap.version)};
+  // An offer of the developer feed is never put under the official title,
+  // and its message says whose build it is first (UpdateChannel.h). The
+  // helper's report keeps its own words, which carry the -beta version.
+  const bool developerOffer = snap.feed->id != urnw::update::kOfficialFeed.id;
+  if (developerOffer) {
+    title = winrt::hstring{urnw::Format("upd_developer_title_version", snap.version)};
+  }
   winrt::hstring action = Loc("update");
   bool enabled = true;
   std::wstring message;
@@ -816,6 +823,10 @@ void ConnectPage::RenderUpdateBanner(InfoBar const& bar, urnw::UpdateChecker::Sn
     }
   }
 
+  if (developerOffer && snap.phase != Phase::Result) {
+    message = urnw::Format("upd_developer_message", urnw::UpdateChecker::RepositoryOf(*snap.feed)) +
+              L" " + message;
+  }
   bar.Severity(severity);
   bar.Title(title);
   bar.Message(winrt::hstring{message});

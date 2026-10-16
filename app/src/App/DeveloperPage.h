@@ -132,6 +132,9 @@ class DeveloperPage {
 
   void OnBoolToggled(size_t index);
   void OnNumChanged(size_t index);
+  // The developer builds switch, flipped by the user: the request goes to the
+  // update checker, and the switch then shows what the marker says.
+  void OnChannelToggled();
   void SetLastAction(std::wstring const& text);
 
   // ---- the update checker (beta spec §5) -------------------------------------
@@ -281,6 +284,16 @@ class DeveloperPage {
   // member: it is never gated — the check is an unauthenticated HTTP GET that
   // works with no session and no device.
   TextBlock updateCheckText_{nullptr};
+  // The update channel in the Updates card: the developer builds switch,
+  // built only while the feed table has the developer row; the channel's
+  // line; and the way back to official releases from a marker that is not
+  // trusted. ApplyUpdateCheck writes all three from the checker's snapshot.
+  ToggleSwitch channelSwitch_{nullptr};
+  TextBlock channelLine_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::Button channelRepair_{nullptr};
+  // Set while ApplyUpdateCheck writes the switch, so its Toggled handler can
+  // tell the marker's state from a request (WinUI raises Toggled for both).
+  bool applyingChannel_ = false;
   // The two intro-card actions that touch the device. Held because they are the
   // only action buttons OUTSIDE liveCards_, so they cannot be hidden wholesale
   // and are enabled/disabled instead.

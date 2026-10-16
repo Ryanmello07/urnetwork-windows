@@ -15,6 +15,7 @@
 #include <nlohmann/json.hpp>
 
 #include "InstallLocationWin32.h"
+#include "Localization.h"
 #include "Log.h"
 #include "Paths.h"
 #include "ReleaseJson.h"
@@ -819,6 +820,64 @@ bool UpdateChecker::SaysReplaced(Snapshot const& snapshot) {
 bool UpdateChecker::NamesWaiting(Snapshot const& snapshot) {
   return snapshot.waitingCode != 0 && (snapshot.lastCheck == CheckOutcome::NoUpdate ||
                                        snapshot.lastCheck == CheckOutcome::UpdateFound);
+}
+
+update::ChannelLines UpdateChecker::ChannelLinesOf(Snapshot const& snapshot) {
+  return update::LinesOf(
+      {.installed = snapshot.installed,
+       .codeZero = version::kCode == 0,
+       .developerBuild = update::IsBetaVersion(version::kString),
+       .marker = snapshot.marker,
+       .developerRow = update::FeedById(update::kDeveloperChannelId) != nullptr,
+       .change = snapshot.change,
+       .foundNothingNewer = snapshot.lastCheck == CheckOutcome::NoUpdate,
+       .releaseCounts = snapshot.newestCode != 0,
+       .releaseWaiting = NamesWaiting(snapshot)});
+}
+
+std::wstring UpdateChecker::RepositoryOf(update::Feed const& feed) {
+  return Widen(feed.owner) + L"/" + Widen(feed.repo);
+}
+
+std::wstring UpdateChecker::ChannelSentenceText(Snapshot const& snapshot,
+                                                update::ChannelLines const& lines) {
+  switch (lines.channel) {
+    case update::ChannelSentence::DevBuild:
+      return Localized("upd_channel_dev_build");
+    case update::ChannelSentence::NotInstalled:
+      return Localized("upd_channel_not_installed");
+    case update::ChannelSentence::Untrusted:
+      return Localized("upd_channel_untrusted");
+    case update::ChannelSentence::Developer:
+      // on the developer feed the snapshot's feed is its row
+      return Format("upd_channel_developer", RepositoryOf(*snapshot.feed));
+    case update::ChannelSentence::Official:
+      break;
+  }
+  return Format("upd_channel_official", RepositoryOf(update::kOfficialFeed));
+}
+
+std::wstring UpdateChecker::BuildSentenceText(update::ChannelLines const& lines) {
+  return lines.buildSentence ? Localized("upd_channel_developer_build") : std::wstring{};
+}
+
+std::wstring UpdateChecker::ChangeSentenceText(Snapshot const& snapshot,
+                                               update::ChannelLines const& lines) {
+  switch (lines.change) {
+    case update::ChangeLine::Asking:
+      return Localized("upd_channel_asking");
+    case update::ChangeLine::Unchanged:
+      return Localized("upd_channel_unchanged");
+    case update::ChangeLine::Unsigned:
+      return Localized("upd_channel_unsigned");
+    case update::ChangeLine::Busy:
+      return Localized("upd_channel_busy");
+    case update::ChangeLine::Failed:
+      return Format("upd_channel_failed", snapshot.changeCode);
+    case update::ChangeLine::None:
+      break;
+  }
+  return {};
 }
 
 void UpdateChecker::RevealInExplorer(std::wstring const& file) {

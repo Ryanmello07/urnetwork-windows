@@ -357,6 +357,20 @@ class UpdateChecker {
   // a check that reached GitHub, and not while one runs or after one failed,
   // when the time it would name is an earlier check's.
   static bool NamesWaiting(Snapshot const& snapshot);
+  // What every surface says about the update channel for this build and
+  // `snapshot` (UpdateChannel.h LinesOf): the pages draw the answer.
+  static update::ChannelLines ChannelLinesOf(Snapshot const& snapshot);
+  // The channel's own sentence, the developer build's and the line after a
+  // change, in the catalog's words; the last two are empty when there is
+  // none. The Developer screen and Settings say the same sentences.
+  static std::wstring ChannelSentenceText(Snapshot const& snapshot,
+                                          update::ChannelLines const& lines);
+  static std::wstring BuildSentenceText(update::ChannelLines const& lines);
+  static std::wstring ChangeSentenceText(Snapshot const& snapshot,
+                                         update::ChannelLines const& lines);
+  // A feed's repository as GitHub spells it, owner/name: the words that
+  // say whose builds a channel takes.
+  static std::wstring RepositoryOf(update::Feed const& feed);
   // Open an Explorer window with `file` selected.
   static void RevealInExplorer(std::wstring const& file);
   // `unixSeconds` as the user's short local date, for "Couldn't check for

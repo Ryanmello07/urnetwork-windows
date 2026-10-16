@@ -78,6 +78,11 @@ class SettingsPage {
   // out, because these sections build on the first ApplyStrings, which can be
   // minutes after the launch check already ran.
   void ApplyUpdateCheck(urnw::UpdateChecker::Snapshot const& snap);
+  // The update channel's row in General (UpdateChannel.h LinesOf): shown only
+  // while it has something to say, with the way back to official releases.
+  // Pushed by MainWindow's fan-out like ApplyUpdateCheck, and replayed when
+  // General is built.
+  void ApplyUpdateChannel(urnw::UpdateChecker::Snapshot const& snap);
 
   // The settings destination's API loads: network user (sign-in methods,
   // network name), device info, referral code + network, account preferences.
@@ -249,6 +254,11 @@ class SettingsPage {
   // its neighbours: nothing ever writes IsOn back — the pref has one writer
   // (this toggle) and one reader path (the checker), so there is no echo.
   winrt::Microsoft::UI::Xaml::Controls::ToggleSwitch autoUpdateCheck_{nullptr};
+  // The update channel's row under it (ApplyUpdateChannel): the row, its
+  // note, which wraps, and its "Switch to official releases" button.
+  winrt::Microsoft::UI::Xaml::Controls::StackPanel channelRow_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::TextBlock channelNote_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::Button channelOfficial_{nullptr};
   // The "Update" value row in the Device pane's version section (beta spec §5):
   // the running build plus the last check's outcome. ApplyUpdateCheck is the
   // one writer — the checker is the one source of that state.
