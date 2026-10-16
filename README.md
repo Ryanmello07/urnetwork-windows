@@ -54,9 +54,9 @@ Switching back does not undo it at once. The PC keeps the developer build it
 has until a newer official release has been out for a day. That can take
 several days. To go back sooner, uninstall URnetwork and install an official
 release. An official MSI installed over a developer build keeps the channel:
-only the switch, or an uninstall, ends it. Developer builds leave out the
-split-tunnel driver that official releases install. Report problems with a
-developer build in that repository's issues, not here.
+only the switch, or an uninstall from its default folder, ends it. Developer
+builds leave out the split-tunnel driver that official releases install.
+Report problems with a developer build in that repository's issues, not here.
 
 ## Architecture
 

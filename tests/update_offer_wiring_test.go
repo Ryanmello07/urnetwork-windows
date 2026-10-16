@@ -724,7 +724,10 @@ func checkChannelSurfaces(developer, settings, connect, window string, xaml map[
 		regexp.QuoteMeta(`L"acceptance.update.channel-switch");`),
 		regexp.QuoteMeta("self->developer().OnChannelToggled();"),
 		regexp.QuoteMeta(`urnw::Format("dev_channel_switch_note", UpdateChecker::RepositoryOf(*developer))`),
+		regexp.QuoteMeta("Automation::AutomationProperties::SetFullDescription(channelSwitch_, note);"),
 		regexp.QuoteMeta(`Automation::AutomationProperties::SetAutomationId(channelLine_, L"acceptance.update.channel-line");`),
+		regexp.QuoteMeta("Automation::AutomationProperties::SetLiveSetting(channelLine_,")+`\s*`+
+			regexp.QuoteMeta("Automation::Peers::AutomationLiveSetting::Polite);"),
 		regexp.QuoteMeta(`channelRepair_ = MakeActionButton(Loc("upd_channel_switch_official"));`),
 		regexp.QuoteMeta(`L"acceptance.update.channel-repair");`),
 		regexp.QuoteMeta("urnw::pages::Updates().RequestChannel(update::kOfficialFeed);"),
@@ -744,6 +747,7 @@ func checkChannelSurfaces(developer, settings, connect, window string, xaml map[
 		regexp.QuoteMeta("std::wstring channel = UpdateChecker::ChannelSentenceText(snap, lines);"),
 		regexp.QuoteMeta("UpdateChecker::BuildSentenceText(lines), UpdateChecker::ChangeSentenceText(snap, lines)"),
 		regexp.QuoteMeta("channelLine_.Text(hstring{channel});"),
+		regexp.QuoteMeta("AnnounceIfChanged(channelLine_, channelBefore);"),
 		regexp.QuoteMeta("channelRepair_.Visibility(lines.repairButton ? Visibility::Visible : Visibility::Collapsed);"),
 		regexp.QuoteMeta("channelRepair_.IsEnabled(lines.buttonsEnabled);"),
 		regexp.QuoteMeta("case Outcome::NoUpdate:"),
@@ -764,20 +768,36 @@ func checkChannelSurfaces(developer, settings, connect, window string, xaml map[
 		regexp.QuoteMeta("urnw::pages::Updates().RequestChannel(urnw::update::kOfficialFeed);"),
 		regexp.QuoteMeta("channelNote_ = Supporting(channelRow_, hstring{});"),
 		regexp.QuoteMeta(`L"acceptance.update.channel-row");`),
+		regexp.QuoteMeta("Automation::AutomationProperties::SetLiveSetting(channelNote_,")+`\s*`+
+			regexp.QuoteMeta("Automation::Peers::AutomationLiveSetting::Polite);"),
 		regexp.QuoteMeta("ApplyUpdateChannel(urnw::pages::Updates().Current());"),
 		regexp.QuoteMeta("launchAtStartup_ = ToggleRow("))...)
 	channel := applyDefinition(settings, "void SettingsPage::ApplyUpdateChannel(UpdateChecker::Snapshot const& snap) {")
 	problems = append(problems, applyOrderProblems("SettingsPage::ApplyUpdateChannel", channel,
 		regexp.QuoteMeta("const update::ChannelLines lines = UpdateChecker::ChannelLinesOf(snap);"),
 		regexp.QuoteMeta("channelRow_.Visibility(lines.settingsRow ? Visibility::Visible : Visibility::Collapsed);"),
-		regexp.QuoteMeta(`urnw::Format("upd_channel_developer_note", UpdateChecker::RepositoryOf(*snap.feed))`),
+		regexp.QuoteMeta(`urnw::Format("upd_channel_developer_note",`)+`\s*`+
+			regexp.QuoteMeta("UpdateChecker::RepositoryOf(update::FeedOfMarker(snap.marker)))"),
 		regexp.QuoteMeta(`urnw::Localized("upd_channel_untrusted")`),
 		regexp.QuoteMeta(`urnw::Localized("upd_channel_official_note")`),
 		regexp.QuoteMeta("if (lines.settingsBuildSentence) note += L\" \" + UpdateChecker::BuildSentenceText(lines);"),
 		regexp.QuoteMeta(`if (lines.settingsWhere) note += L" " + urnw::Localized("upd_channel_where");`),
 		regexp.QuoteMeta("UpdateChecker::ChangeSentenceText(snap, lines)"),
+		regexp.QuoteMeta("AnnounceIfChanged(channelNote_, noteBefore);"),
 		regexp.QuoteMeta("channelOfficial_.Visibility(lines.settingsButton ? Visibility::Visible : Visibility::Collapsed);"),
 		regexp.QuoteMeta("channelOfficial_.IsEnabled(lines.buttonsEnabled);"))...)
+	// S21 names the row the marker selects, never the snapshot's feed, which
+	// follows the marker a moment later (the A2c review's C11)
+	if strings.Contains(channel, "snap.feed") {
+		problems = append(problems, "SettingsPage::ApplyUpdateChannel names the snapshot's feed: S21 names the row the marker selects")
+	}
+	// a live region is said only when its peer raises LiveRegionChanged
+	for page, source := range map[string]string{"DeveloperPage.cpp": developer, "SettingsPage.cpp": settings} {
+		announce := applyDefinition(source, "void AnnounceIfChanged(TextBlock const& line, hstring const& before) {")
+		if !strings.Contains(announce, "peer.RaiseAutomationEvent(Automation::Peers::AutomationEvents::LiveRegionChanged);") {
+			problems = append(problems, page+"'s AnnounceIfChanged does not raise LiveRegionChanged: the channel's line is never said")
+		}
+	}
 	const channelOpener = "void SettingsPage::ApplyUpdateChannel("
 	if at := strings.Index(settings, channelOpener); at < 0 || strings.Contains(settings[at+len(channelOpener):], "SettingsPage::") {
 		problems = append(problems, "SettingsPage::ApplyUpdateChannel is not the last definition of SettingsPage.cpp, "+
@@ -896,6 +916,27 @@ func TestUpdateOfferTheChannelOnEverySurfaceRejectsWeakerSources(t *testing.T) {
 				}
 			}
 			return surfaces(developer, settings, connect, window, without)
+		}},
+		// the A2c review's C10: the switch's warning and the channel's lines,
+		// unheard by a screen reader
+		{"the switch's warning not read with it", "DeveloperPage::Build is missing Automation::AutomationProperties::SetFullDescription", func() []string {
+			return surfaces(replace(developer, "      Automation::AutomationProperties::SetFullDescription(channelSwitch_, note);\n", ""),
+				settings, connect, window, xaml)
+		}},
+		{"the channel line not said", "DeveloperPage::ApplyUpdateCheck is missing AnnounceIfChanged", func() []string {
+			return surfaces(replace(developer, "  AnnounceIfChanged(channelLine_, channelBefore);\n", ""), settings, connect, window, xaml)
+		}},
+		{"Settings' note not said", "SettingsPage::ApplyUpdateChannel is missing AnnounceIfChanged", func() []string {
+			return surfaces(developer, replace(settings, "  AnnounceIfChanged(channelNote_, noteBefore);\n", ""), connect, window, xaml)
+		}},
+		{"a live region that never raises its event", "AnnounceIfChanged does not raise LiveRegionChanged", func() []string {
+			return surfaces(developer, replace(settings, "    peer.RaiseAutomationEvent(Automation::Peers::AutomationEvents::LiveRegionChanged);\n", ""),
+				connect, window, xaml)
+		}},
+		// the A2c review's C11: S21 naming the snapshot's feed
+		{"S21 naming the snapshot's feed", "SettingsPage::ApplyUpdateChannel names the snapshot's feed", func() []string {
+			return surfaces(developer, replace(settings, "UpdateChecker::RepositoryOf(update::FeedOfMarker(snap.marker)))",
+				"UpdateChecker::RepositoryOf(*snap.feed))"), connect, window, xaml)
 		}},
 		{"one id on two controls", `want exactly one L"acceptance.update.channel-switch"`, func() []string {
 			return surfaces(replace(developer, `L"acceptance.update.channel-line"`, `L"acceptance.update.channel-switch"`), settings, connect, window, xaml)
@@ -1406,6 +1447,7 @@ func checkReadmeNamesTheDeveloperFeed(readme, selection string) []string {
 		"how long switching back takes, in two sentences":                         `until a newer official release has been out for a day\. That can take several days\.`,
 		"the sooner way back":                                                     `To go back sooner, uninstall URnetwork and install an official release\.`,
 		"that an official MSI installed over a developer build keeps the channel": `An official MSI installed over a developer build keeps the channel`,
+		"that an uninstall ends the channel only from its default folder":         `only the switch, or an uninstall from its default folder, ends it\.`,
 		"that developer builds leave out the split-tunnel driver":                 `Developer builds leave out the split-tunnel driver`,
 		"where problems with a developer build are reported":                      `Report problems with a developer build in that repository's issues`,
 	} {
@@ -1703,6 +1745,11 @@ func TestUpdateOfferTheReadmeNamesTheDeveloperFeedRejectsWeakerSources(t *testin
 		}},
 		{"the channel said to end with an official MSI", "keeps the channel", func() []string {
 			return developer(replace(readme, "build keeps the channel:", "build ends the channel:"))
+		}},
+		// the A2c review's C12: the installer removes updates\ from its default
+		// folder alone (Package.wxs URNETWORK_UPDATES_FOLDER)
+		{"an uninstall said to end the channel from any folder", "does not say that an uninstall ends the channel only from its default folder", func() []string {
+			return developer(replace(readme, "or an uninstall from its default folder, ends it.", "or an uninstall, ends it."))
 		}},
 		{"the README links the developer feed's releases", "README.md sends people to Ryanmello07/urnetwork-windows's releases", func() []string {
 			return checkReadmeNamesTheFeed(replace(readme, "issues, not here.",

@@ -10,6 +10,7 @@
 #include <string>
 
 #include <winrt/Microsoft.UI.Xaml.Automation.h>
+#include <winrt/Microsoft.UI.Xaml.Automation.Peers.h>
 #include <winrt/Windows.Storage.h>
 #include <winrt/Windows.Storage.Pickers.h>
 
@@ -137,6 +138,17 @@ class PaneModeScope {
  private:
   bool previous_;
 };
+
+// A live region's new text, said by a screen reader without moving to it:
+// WinUI announces a live region only when its peer raises LiveRegionChanged,
+// and a peer exists only while assistive technology is asking (as
+// SolanaWalletSheets.cpp does).
+void AnnounceIfChanged(TextBlock const& line, hstring const& before) {
+  if (line.Text().empty() || line.Text() == before) return;
+  if (auto peer = Automation::Peers::FrameworkElementAutomationPeer::FromElement(line)) {
+    peer.RaiseAutomationEvent(Automation::Peers::AutomationEvents::LiveRegionChanged);
+  }
+}
 
 }  // namespace
 
@@ -407,6 +419,9 @@ void SettingsPage::BuildGeneralSection(Panel const& host) {
   });
   channelNote_ = Supporting(channelRow_, hstring{});
   Automation::AutomationProperties::SetAutomationId(channelNote_, L"acceptance.update.channel-row");
+  // what a change came to is said here too, as on the Developer screen
+  Automation::AutomationProperties::SetLiveSetting(channelNote_,
+                                                   Automation::Peers::AutomationLiveSetting::Polite);
   ApplyUpdateChannel(urnw::pages::Updates().Current());
 
   // Launch URnetwork on system startup, as on macOS (owner decision,
@@ -1844,10 +1859,13 @@ void SettingsPage::ApplyUpdateChannel(UpdateChecker::Snapshot const& snap) {
   if (!lines.settingsRow) return;
   // The channel's note, then the developer build's sentence and where
   // developer builds are turned on, then a change's line, so a switch back
-  // that failed says so here too. Each its own key, joined by a space.
+  // that failed says so here too. Each its own key, joined by a space. S21
+  // names the row the marker selects: the snapshot's feed follows the marker
+  // a moment later (UpdateChecker SyncChannel, then ChannelChanged).
   std::wstring note =
       lines.settingsNote == update::ChannelNote::Developer
-          ? urnw::Format("upd_channel_developer_note", UpdateChecker::RepositoryOf(*snap.feed))
+          ? urnw::Format("upd_channel_developer_note",
+                         UpdateChecker::RepositoryOf(update::FeedOfMarker(snap.marker)))
       : lines.settingsNote == update::ChannelNote::Untrusted ? urnw::Localized("upd_channel_untrusted")
                                                              : urnw::Localized("upd_channel_official_note");
   if (lines.settingsBuildSentence) note += L" " + UpdateChecker::BuildSentenceText(lines);
@@ -1855,7 +1873,9 @@ void SettingsPage::ApplyUpdateChannel(UpdateChecker::Snapshot const& snap) {
   if (const std::wstring change = UpdateChecker::ChangeSentenceText(snap, lines); !change.empty()) {
     note += L" " + change;
   }
+  const hstring noteBefore = channelNote_.Text();
   channelNote_.Text(hstring{note});
+  AnnounceIfChanged(channelNote_, noteBefore);
   channelOfficial_.Visibility(lines.settingsButton ? Visibility::Visible : Visibility::Collapsed);
   channelOfficial_.IsEnabled(lines.buttonsEnabled);
 }

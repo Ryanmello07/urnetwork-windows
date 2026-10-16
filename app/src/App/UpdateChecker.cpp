@@ -853,8 +853,9 @@ std::wstring UpdateChecker::ChannelSentenceText(Snapshot const& snapshot,
     case update::ChannelSentence::Untrusted:
       return Localized("upd_channel_untrusted");
     case update::ChannelSentence::Developer:
-      // on the developer feed the snapshot's feed is its row
-      return Format("upd_channel_developer", RepositoryOf(*snapshot.feed));
+      // the row the marker selects: the snapshot's feed follows the marker a
+      // moment later (SyncChannel writes the marker, ChannelChanged the feed)
+      return Format("upd_channel_developer", RepositoryOf(update::FeedOfMarker(snapshot.marker)));
     case update::ChannelSentence::Official:
       break;
   }

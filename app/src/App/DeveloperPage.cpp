@@ -9,6 +9,7 @@
 #include <thread>
 
 #include <winrt/Microsoft.UI.Xaml.Automation.h>
+#include <winrt/Microsoft.UI.Xaml.Automation.Peers.h>
 #include <winrt/Microsoft.UI.Xaml.Media.h>
 #include <winrt/Windows.UI.Text.h>
 
@@ -134,6 +135,17 @@ Grid MakeSettingRow(hstring const& label, hstring const& detail,
   Grid::SetColumn(trailing, 1);
   row.Children().Append(trailing);
   return row;
+}
+
+// A live region's new text, said by a screen reader without moving to it:
+// WinUI announces a live region only when its peer raises LiveRegionChanged,
+// and a peer exists only while assistive technology is asking (as
+// SolanaWalletSheets.cpp does).
+void AnnounceIfChanged(TextBlock const& line, hstring const& before) {
+  if (line.Text().empty() || line.Text() == before) return;
+  if (auto peer = Automation::Peers::FrameworkElementAutomationPeer::FromElement(line)) {
+    peer.RaiseAutomationEvent(Automation::Peers::AutomationEvents::LiveRegionChanged);
+  }
 }
 
 // The one kit button role that fits a dense diagnostic surface:
@@ -891,16 +903,19 @@ void DeveloperPage::Build() {
         if (auto self = weak.get()) self->developer().OnChannelToggled();
       });
       TextBlock title{nullptr};
-      body.Children().Append(MakeSettingRow(
-          Loc("dev_channel_switch"),
-          hstring{urnw::Format("dev_channel_switch_note", UpdateChecker::RepositoryOf(*developer))},
-          channelSwitch_, &title));
+      const hstring note{urnw::Format("dev_channel_switch_note", UpdateChecker::RepositoryOf(*developer))};
+      body.Children().Append(MakeSettingRow(Loc("dev_channel_switch"), note, channelSwitch_, &title));
       // Without this the switch is nameless to a screen reader (see the
-      // UrSwitchToggleStyle comment in App.xaml).
+      // UrSwitchToggleStyle comment in App.xaml); its warning is read with
+      // its name.
       Automation::AutomationProperties::SetLabeledBy(channelSwitch_, title);
+      Automation::AutomationProperties::SetFullDescription(channelSwitch_, note);
     }
     channelLine_ = MakeText(hstring{}, 12, MutedBrush(), true);
     Automation::AutomationProperties::SetAutomationId(channelLine_, L"acceptance.update.channel-line");
+    // what a change came to (S6 to S10) is said where it is shown
+    Automation::AutomationProperties::SetLiveSetting(channelLine_,
+                                                     Automation::Peers::AutomationLiveSetting::Polite);
     body.Children().Append(channelLine_);
     channelRepair_ = MakeActionButton(Loc("upd_channel_switch_official"));
     Automation::AutomationProperties::SetAutomationId(channelRepair_,
@@ -1398,7 +1413,9 @@ void DeveloperPage::ApplyUpdateCheck(UpdateChecker::Snapshot const& snap) {
        {UpdateChecker::BuildSentenceText(lines), UpdateChecker::ChangeSentenceText(snap, lines)}) {
     if (!more.empty()) channel += L" " + more;
   }
+  const hstring channelBefore = channelLine_.Text();
   channelLine_.Text(hstring{channel});
+  AnnounceIfChanged(channelLine_, channelBefore);
   channelRepair_.Visibility(lines.repairButton ? Visibility::Visible : Visibility::Collapsed);
   channelRepair_.IsEnabled(lines.buttonsEnabled);
   // Version strings and codes are DATA (release grammar / decimal), so the

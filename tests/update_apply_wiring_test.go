@@ -2258,6 +2258,15 @@ func checkTrayFollowsTheChannel(checker, window string, appSources map[string]st
 		regexp.QuoteMeta("if (snapshot_.phase != Phase::Result) {"),
 		regexp.QuoteMeta("snapshot_.feed = feed_;"),
 		regexp.QuoteMeta("snapshot_.change = update::ChangeLine::None;"))...)
+	// S5 names the row the marker selects (the A2c review's C11): the snapshot's
+	// feed follows the marker a moment later, SyncChannel writing the marker and
+	// ChannelChanged the feed, and a screen drawn between the two would name the
+	// official repository on the developer channel
+	if sentence := applyDefinition(checker, "std::wstring UpdateChecker::ChannelSentenceText("); !strings.Contains(sentence,
+		`return Format("upd_channel_developer", RepositoryOf(update::FeedOfMarker(snapshot.marker)));`) ||
+		strings.Contains(sentence, "snapshot.feed") {
+		problems = append(problems, "UpdateChecker::ChannelSentenceText does not name the row the marker selects in S5")
+	}
 	// the screens that show the channel ask for it to be read
 	if !strings.Contains(window, `if (tag == L"developer" || tag == L"settings") urnw::pages::Updates().RequestChannelSync();`) {
 		problems = append(problems, "MainWindow does not ask for the update channel as the Developer or the Settings screen is shown")
@@ -2418,6 +2427,10 @@ func TestUpdateApplyTrayFollowsTheChannelRejectsWeakerSources(t *testing.T) {
 		}},
 		{"the marker's line dropped from the screens' view", `UpdateChecker::ChannelLinesOf is "`, func() []string {
 			return follows(replace(checker, "       .marker = snapshot.marker,\n", ""))
+		}},
+		// the review's C11: S5 naming the snapshot's feed
+		{"S5 naming the snapshot's feed", "does not name the row the marker selects in S5", func() []string {
+			return follows(replace(checker, "RepositoryOf(update::FeedOfMarker(snapshot.marker))", "RepositoryOf(*snapshot.feed)"))
 		}},
 		// the review's B9: the tray deleting the marker itself
 		{"the tray reaching the marker's path", "names ChannelMarkerPath(", func() []string {
