@@ -25,6 +25,7 @@
 #include "ClientEvents.h"
 #include "ConnectAction.h"
 #include "ConnectionHealth.h"
+#include "ExitDrain.h"
 #include "ExtenderPresentation.h"
 #include "ExtenderReset.h"
 #include "MobileBroadband.h"
@@ -958,16 +959,23 @@ class SdkHost {
   // lock and the pipe calls, as the stop_tunnel it replaces did.
   void Logout();
 
-  // The tray's Quit, the service half (owner decision 2026-10-05,
-  // AppLifetime.h): the service ends with no session and no provider-only
-  // device, and nothing in this process starts either again. In order:
-  //   1. the session-request slot is emptied and closed for good, so a pass
-  //      already queued, the failsafe edge, a mode change or the watchdog's
-  //      recovery cannot reach start_tunnel or start_provider afterwards;
-  //   2. this object's own threads are stopped and joined: the service
+  // The tray's Quit and the end of the Windows session, the service half
+  // (owner decision 2026-10-05, AppLifetime.h): the service ends with no
+  // session and no provider-only device, and nothing in this process starts
+  // either again. In order, on a thread of its own (QuitInOrder):
+  //   1. the session-request slot is closed for good, so the failsafe edge, a
+  //      mode change or the watchdog's recovery cannot reach start_tunnel or
+  //      start_provider afterwards; of what it holds only the user's
+  //      Disconnect is kept (ExitDrain.h), and the wait for it and for a pass
+  //      in flight ends at exitdrain::kCommandsCap;
+  //   2. a pass still holding mutex_ inside an rpc at that cap does not hold
+  //      the service stop: stop_tunnel and stop_provider go without the lock
+  //      (StopServiceWithoutLock), and the locked stop below follows if the
+  //      pass returns before the process ends;
+  //   3. this object's own threads are stopped and joined: the service
   //      watchdog, the presentation worker, the rpc-sync watchdog and the
   //      provider-only statistics loop with its provider status poll;
-  //   3. under mutex_, so after any pass in flight: stop_tunnel, which ends
+  //   4. under mutex_, so after any pass in flight: stop_tunnel, which ends
   //      the session (tunnel or rpc-only) and lifts any firewall policy, the
   //      kill switch's armed floor included, as Disconnect does; then
   //      stop_provider; then the DeviceRemote and the saved rpc session go.
@@ -976,10 +984,24 @@ class SdkHost {
   // provide mode and the auth are untouched: quitting is not signing out, and
   // the next launch reconciles from them.
   //
-  // Blocking (joins, the lock, two pipe calls), and it is the last thing the
-  // app does: AppController::Shutdown calls it from the UI thread after the
-  // window and the tray are gone. Not undone: the process is ending.
+  // Returns once that is done, or at exitdrain::kQuitCap whatever is still
+  // running: AppController::Shutdown calls it from the UI thread after the
+  // window and the tray are gone, and from inside WM_ENDSESSION for a sign-out
+  // of Windows or a shutdown, which must not hang. Not undone: the process is
+  // ending. ExitSettled says whether anything still runs in this object.
   void Quit();
+  // Every other ending's wait (a close request: taskkill, an installer): the
+  // service keeps what it runs, but the user's Disconnect still queued runs
+  // first, and anything else queued is dropped (ExitDrain.h). Returns true
+  // once the session worker is idle, false at `deadline`. Waits on
+  // pendingMutex_ alone, never on mutex_: the UI thread for a close request,
+  // Quit's own thread for a quit.
+  bool SettleCommandsForExit(std::chrono::steady_clock::time_point deadline);
+  // Whether nothing runs inside this object any more: the session worker is
+  // idle and Quit, if it ran, finished. Destroyed otherwise, a pass still
+  // inside an rpc would wake into freed members, so AppController leaves it
+  // to the process exit (exitdrain::HostDestroyableAtExit). UI thread.
+  bool ExitSettled();
 
   // ---- connect ------------------------------------------------------------
   //
@@ -1935,6 +1957,17 @@ class SdkHost {
     }
     return gesture::Gesture::EnsureSession;
   }
+  // The queued request in the words an ending decides by (ExitDrain.h).
+  static constexpr exitdrain::Queued QueuedOf(ConnectKind kind) {
+    switch (kind) {
+      case ConnectKind::Disconnect:    return exitdrain::Queued::Disconnect;
+      case ConnectKind::BestAvailable: return exitdrain::Queued::Connect;
+      case ConnectKind::Location:      return exitdrain::Queued::Connect;
+      case ConnectKind::Provider:      return exitdrain::Queued::Provider;
+      case ConnectKind::None:          break;
+    }
+    return exitdrain::Queued::Ensure;
+  }
   // Record the request and make sure a worker is running. Takes ONLY
   // pendingMutex_ — never mutex_ — so it is safe from the UI thread while a
   // bootstrap is in flight.
@@ -2071,6 +2104,16 @@ class SdkHost {
   // RequestSession records nothing and ReconcileProviderLocked asks the service
   // nothing. Atomic because the reconcile reads it under mutex_ alone.
   std::atomic<bool> quitting_{false};
+  // Quit's steps after the slot is closed, on the quit's own thread; `start`
+  // is when Quit began, which the commands' cap counts from.
+  void QuitInOrder(std::chrono::steady_clock::time_point start);
+  // stop_tunnel, then stop_provider, without mutex_: a pass still holds it
+  // inside an rpc. The pipe serializes the calls behind the pass's own
+  // (PipeClient::Call), as it does the tray's force-stop (StopServiceTunnel).
+  void StopServiceWithoutLock();
+  // Quit's thread, finished once its steps are done; null until Quit runs.
+  // UI thread only.
+  std::shared_ptr<exitdrain::Completion> quitCompletion_;
 
   // ---- the sign-out the service is owed (Common/SignOut.h) -------------------
   //
