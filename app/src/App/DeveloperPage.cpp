@@ -851,21 +851,6 @@ void DeveloperPage::Build() {
           self->developer().RunAction(ReliabilityAction::Sync, DevW("dev_sync", L"Sync"));
       });
       actions.Children().Append(syncButton_);
-
-      // The update checker's manual trigger (beta spec §5) — and the only way
-      // to exercise that path on a dev build, where the periodic check is
-      // disabled (kCode == 0). Never gated: it is an unauthenticated HTTP GET
-      // that needs no session, no device and no service. The outcome lands on
-      // updateCheckText_ below via MainWindow's fan-out, not here.
-      Button checkUpdates =
-          MakeActionButton(Dev("dev_check_updates", L"Check for updates"));
-      // found by a UI Automation driver of the update banner, with the line
-      // below
-      Automation::AutomationProperties::SetAutomationId(checkUpdates,
-                                                        L"acceptance.update.check-now");
-      checkUpdates.Click(
-          [](auto const&, auto const&) { urnw::pages::Updates().CheckNow(); });
-      actions.Children().Append(checkUpdates);
     }
     body.Children().Append(actions);
 
@@ -873,16 +858,44 @@ void DeveloperPage::Build() {
     lastAction_.Visibility(Visibility::Collapsed);
     body.Children().Append(lastAction_);
 
-    updateCheckText_ = MakeText(hstring{}, 12, MutedBrush(), true);
-    updateCheckText_.Visibility(Visibility::Collapsed);
-    Automation::AutomationProperties::SetAutomationId(updateCheckText_,
-                                                      L"acceptance.update.check-line");
-    body.Children().Append(updateCheckText_);
     body.Children().Append(MakeText(
         Dev("dev_actions_are_requests",
             L"Actions are requests: confirm them in the measurements and exit rows, which "
             L"refresh underneath."),
         11, FaintBrush(), true));
+
+    top.Children().Append(card);
+  }
+
+  // ---- updates ----------------------------------------------------------------
+  // The update check has a card of its own, after the intro. It is in neither
+  // gated list, so it always shows: the check needs no session, no device and
+  // no service. Out of the intro's row of actions, which it pushed past the
+  // card's edge at the window's default width, it no longer cuts the row.
+  {
+    StackPanel body{nullptr};
+    Border card = MakeCard(hstring{L"Updates"}, body);
+
+    // The update checker's manual trigger (beta spec §5) — and the only way
+    // to exercise that path on a dev build, where the periodic check is
+    // disabled (kCode == 0). Never gated: it is an unauthenticated HTTP GET
+    // that needs no session, no device and no service. The outcome lands on
+    // updateCheckText_ below via MainWindow's fan-out, not here.
+    Button checkUpdates =
+        MakeActionButton(Dev("dev_check_updates", L"Check for updates"));
+    // found by a UI Automation driver of the update banner, with the line
+    // below
+    Automation::AutomationProperties::SetAutomationId(checkUpdates,
+                                                      L"acceptance.update.check-now");
+    checkUpdates.Click(
+        [](auto const&, auto const&) { urnw::pages::Updates().CheckNow(); });
+    body.Children().Append(checkUpdates);
+
+    updateCheckText_ = MakeText(hstring{}, 12, MutedBrush(), true);
+    updateCheckText_.Visibility(Visibility::Collapsed);
+    Automation::AutomationProperties::SetAutomationId(updateCheckText_,
+                                                      L"acceptance.update.check-line");
+    body.Children().Append(updateCheckText_);
 
     top.Children().Append(card);
   }

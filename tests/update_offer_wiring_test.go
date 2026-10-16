@@ -665,6 +665,40 @@ func checkUpdateBannerAutomationIds(xaml map[string]string, window, developer st
 	return problems
 }
 
+// The developer screen's update check is a card of its own, in the stack
+// that always shows, after the intro. In the intro's row of actions it pushed
+// that row past the card's edge at the window's default width, and a gated
+// card would hide it while there is no session, which the check does not
+// need.
+func checkUpdateCheckHasItsOwnCard(developer string) []string {
+	build := applyDefinition(developer, "void DeveloperPage::Build() {")
+	problems := applyOrderProblems("DeveloperPage::Build", build,
+		regexp.QuoteMeta(`Border card = MakeCard(Dev("dev_developer", L"Developer"), body);`),
+		regexp.QuoteMeta("body.Children().Append(actions);"),
+		regexp.QuoteMeta("top.Children().Append(card);"),
+		regexp.QuoteMeta(`Border card = MakeCard(hstring{L"Updates"}, body);`),
+		regexp.QuoteMeta("body.Children().Append(checkUpdates);"),
+		regexp.QuoteMeta("body.Children().Append(updateCheckText_);"),
+		regexp.QuoteMeta("top.Children().Append(card);"),
+		regexp.QuoteMeta("auto deviceCard = [&](Panel const& host, hstring const& heading, StackPanel& body) {"))
+	if strings.Contains(build, "actions.Children().Append(checkUpdates);") {
+		problems = append(problems, "the update check is in the intro's row of actions, which it pushes past the card's edge")
+	}
+	if start := strings.Index(build, `Border card = MakeCard(hstring{L"Updates"}, body);`); start >= 0 {
+		card := build[start:]
+		if end := strings.Index(card, "\n  }\n"); end >= 0 {
+			card = card[:end]
+		}
+		for _, gate := range []string{"deviceCards_", "settingsCards_", "card.Visibility("} {
+			if strings.Contains(card, gate) {
+				problems = append(problems, "the Updates card is gated ("+gate+
+					"): the update check needs no session, no device and no service")
+			}
+		}
+	}
+	return problems
+}
+
 // Each x:Name in a XAML document, with the x:Names of the elements around it,
 // outermost first.
 func xamlNamedAncestors(markup string) (map[string][]string, error) {
@@ -1176,6 +1210,10 @@ func TestUpdateOfferBannerAutomationIds(t *testing.T) {
 	xaml := xamlAutomationIds(t, filepath.Join(repositoryRoot(t), "app", "src", "App", "MainWindow.xaml"))
 	reportProblems(t, checkUpdateBannerAutomationIds(xaml, stripComments(readAppSource(t, "MainWindow.xaml.cpp")),
 		stripComments(readAppSource(t, "DeveloperPage.cpp"))))
+}
+
+func TestUpdateOfferTheUpdateCheckHasItsOwnCard(t *testing.T) {
+	reportProblems(t, checkUpdateCheckHasItsOwnCard(stripComments(readAppSource(t, "DeveloperPage.cpp"))))
 }
 
 func TestUpdateOfferIsMadeWhileSignedOut(t *testing.T) {
@@ -1767,6 +1805,15 @@ func TestUpdateOfferWiringRejectsWeakerSources(t *testing.T) {
 		}},
 		{"the developer screen's check without its automation id", "DeveloperPage's update check is missing", func() []string {
 			return checkUpdateBannerAutomationIds(xaml, window, replace(developer, `L"acceptance.update.check-now"`, `L"acceptance.update.check"`))
+		}},
+		{"the update check back in the intro's row of actions", "the update check is in the intro's row of actions", func() []string {
+			return checkUpdateCheckHasItsOwnCard(replace(developer,
+				"    body.Children().Append(checkUpdates);\n", "    actions.Children().Append(checkUpdates);\n"))
+		}},
+		{"the Updates card gated by the session", "the Updates card is gated (deviceCards_)", func() []string {
+			return checkUpdateCheckHasItsOwnCard(replace(developer,
+				"    Border card = MakeCard(hstring{L\"Updates\"}, body);\n",
+				"    Border card = MakeCard(hstring{L\"Updates\"}, body);\n    deviceCards_.push_back(card);\n"))
 		}},
 		{"one automation id on two controls", `want exactly one L"acceptance.update.later"`, func() []string {
 			return checkUpdateBannerAutomationIds(xaml, replace(window, `L"acceptance.update.action"`, `L"acceptance.update.later"`), developer)
