@@ -676,7 +676,7 @@ func checkUpdateCheckHasItsOwnCard(developer string) []string {
 		regexp.QuoteMeta(`Border card = MakeCard(Dev("dev_developer", L"Developer"), body);`),
 		regexp.QuoteMeta("body.Children().Append(actions);"),
 		regexp.QuoteMeta("top.Children().Append(card);"),
-		regexp.QuoteMeta(`Border card = MakeCard(hstring{L"Updates"}, body);`),
+		regexp.QuoteMeta(`Border card = MakeCard(Loc("dev_updates_heading"), body);`),
 		regexp.QuoteMeta("body.Children().Append(checkUpdates);"),
 		regexp.QuoteMeta("body.Children().Append(updateCheckText_);"),
 		regexp.QuoteMeta("top.Children().Append(card);"),
@@ -684,7 +684,7 @@ func checkUpdateCheckHasItsOwnCard(developer string) []string {
 	if strings.Contains(build, "actions.Children().Append(checkUpdates);") {
 		problems = append(problems, "the update check is in the intro's row of actions, which it pushes past the card's edge")
 	}
-	if start := strings.Index(build, `Border card = MakeCard(hstring{L"Updates"}, body);`); start >= 0 {
+	if start := strings.Index(build, `Border card = MakeCard(Loc("dev_updates_heading"), body);`); start >= 0 {
 		card := build[start:]
 		if end := strings.Index(card, "\n  }\n"); end >= 0 {
 			card = card[:end]
@@ -697,6 +697,216 @@ func checkUpdateCheckHasItsOwnCard(developer string) []string {
 		}
 	}
 	return problems
+}
+
+// What each surface says about the update channel, drawn from the checker's
+// snapshot through UpdateChannel.h LinesOf, and how a surface asks for a
+// change. The Developer screen's Updates card holds the developer builds
+// switch, built only while the feed table has the developer row, its
+// channel line and, for a marker that is not trusted, the way back; the
+// switch's own handler returns while the screen writes the marker's state
+// into it. Its check line never says "this build is current" for a developer
+// build or on the developer feed. Settings has a channel row under the
+// automatic check, shown only while LinesOf says so, with its button, and
+// About's "up to date" is LinesOf's to allow; the row's method is defined at
+// the file's end, and its line in the window's fan-out sits between the
+// connect screen's and the developer screen's. Both update banners put a
+// developer offer under its own title, and say whose build it is first. The
+// Developer nav item has an id, and every new id is one control's.
+func checkChannelSurfaces(developer, settings, connect, window string, xaml map[string]string) []string {
+	var problems []string
+	build := applyDefinition(developer, "void DeveloperPage::Build() {")
+	problems = append(problems, applyOrderProblems("DeveloperPage::Build", build,
+		regexp.QuoteMeta(`Border card = MakeCard(Loc("dev_updates_heading"), body);`),
+		regexp.QuoteMeta("if (const update::Feed* developer = update::FeedById(update::kDeveloperChannelId)) {"),
+		regexp.QuoteMeta("channelSwitch_ = ToggleSwitch();"),
+		regexp.QuoteMeta(`L"acceptance.update.channel-switch");`),
+		regexp.QuoteMeta("self->developer().OnChannelToggled();"),
+		regexp.QuoteMeta(`urnw::Format("dev_channel_switch_note", UpdateChecker::RepositoryOf(*developer))`),
+		regexp.QuoteMeta(`Automation::AutomationProperties::SetAutomationId(channelLine_, L"acceptance.update.channel-line");`),
+		regexp.QuoteMeta(`channelRepair_ = MakeActionButton(Loc("upd_channel_switch_official"));`),
+		regexp.QuoteMeta(`L"acceptance.update.channel-repair");`),
+		regexp.QuoteMeta("urnw::pages::Updates().RequestChannel(update::kOfficialFeed);"),
+		regexp.QuoteMeta("body.Children().Append(checkUpdates);"))...)
+	problems = append(problems, applyOrderProblems("DeveloperPage::OnChannelToggled",
+		applyDefinition(developer, "void DeveloperPage::OnChannelToggled() {"),
+		regexp.QuoteMeta("if (applyingChannel_ || !channelSwitch_) return;"),
+		regexp.QuoteMeta("const update::Feed* developer = update::FeedById(update::kDeveloperChannelId);"),
+		regexp.QuoteMeta("urnw::pages::Updates().RequestChannel(channelSwitch_.IsOn() ? *developer : update::kOfficialFeed);"))...)
+	check := applyDefinition(developer, "void DeveloperPage::ApplyUpdateCheck(UpdateChecker::Snapshot const& snap) {")
+	problems = append(problems, applyOrderProblems("DeveloperPage::ApplyUpdateCheck", check,
+		regexp.QuoteMeta("const update::ChannelLines lines = UpdateChecker::ChannelLinesOf(snap);"),
+		regexp.QuoteMeta("applyingChannel_ = true;"),
+		regexp.QuoteMeta("channelSwitch_.IsOn(lines.switchOn);"),
+		regexp.QuoteMeta("channelSwitch_.IsEnabled(lines.switchEnabled);"),
+		regexp.QuoteMeta("applyingChannel_ = false;"),
+		regexp.QuoteMeta("std::wstring channel = UpdateChecker::ChannelSentenceText(snap, lines);"),
+		regexp.QuoteMeta("UpdateChecker::BuildSentenceText(lines), UpdateChecker::ChangeSentenceText(snap, lines)"),
+		regexp.QuoteMeta("channelLine_.Text(hstring{channel});"),
+		regexp.QuoteMeta("channelRepair_.Visibility(lines.repairButton ? Visibility::Visible : Visibility::Collapsed);"),
+		regexp.QuoteMeta("channelRepair_.IsEnabled(lines.buttonsEnabled);"),
+		regexp.QuoteMeta("case Outcome::NoUpdate:"),
+		regexp.QuoteMeta(`lines.check == update::CheckLine::NoneListed`),
+		regexp.QuoteMeta(`urnw::Localized("dev_update_none_listed")`),
+		regexp.QuoteMeta(`lines.check == update::CheckLine::NoneDeveloper`),
+		regexp.QuoteMeta(`urnw::Localized("dev_update_none_developer")`),
+		regexp.QuoteMeta(`lines.check == update::CheckLine::NoneOfficial`),
+		regexp.QuoteMeta(`urnw::Localized("dev_update_none_official")`),
+		regexp.QuoteMeta(`DevW("dev_update_none", L"No update: this build is current")`))...)
+	general := applyDefinition(settings, "void SettingsPage::BuildGeneralSection(Panel const& host) {")
+	problems = append(problems, applyOrderProblems("SettingsPage::BuildGeneralSection", general,
+		regexp.QuoteMeta("urnw::pages::Updates().SetAutoCheckEnabled(autoUpdateCheck_.IsOn());"),
+		regexp.QuoteMeta("channelRow_ = StackPanel();"),
+		regexp.QuoteMeta("channelRow_.Visibility(Visibility::Collapsed);"),
+		regexp.QuoteMeta(`channelOfficial_ = ButtonRow(channelRow_, Loc("upd_channel_label"), hstring{},`),
+		regexp.QuoteMeta(`L"acceptance.update.channel-official");`),
+		regexp.QuoteMeta("urnw::pages::Updates().RequestChannel(urnw::update::kOfficialFeed);"),
+		regexp.QuoteMeta("channelNote_ = Supporting(channelRow_, hstring{});"),
+		regexp.QuoteMeta(`L"acceptance.update.channel-row");`),
+		regexp.QuoteMeta("ApplyUpdateChannel(urnw::pages::Updates().Current());"),
+		regexp.QuoteMeta("launchAtStartup_ = ToggleRow("))...)
+	channel := applyDefinition(settings, "void SettingsPage::ApplyUpdateChannel(UpdateChecker::Snapshot const& snap) {")
+	problems = append(problems, applyOrderProblems("SettingsPage::ApplyUpdateChannel", channel,
+		regexp.QuoteMeta("const update::ChannelLines lines = UpdateChecker::ChannelLinesOf(snap);"),
+		regexp.QuoteMeta("channelRow_.Visibility(lines.settingsRow ? Visibility::Visible : Visibility::Collapsed);"),
+		regexp.QuoteMeta(`urnw::Format("upd_channel_developer_note", UpdateChecker::RepositoryOf(*snap.feed))`),
+		regexp.QuoteMeta(`urnw::Localized("upd_channel_untrusted")`),
+		regexp.QuoteMeta(`urnw::Localized("upd_channel_official_note")`),
+		regexp.QuoteMeta("if (lines.settingsBuildSentence) note += L\" \" + UpdateChecker::BuildSentenceText(lines);"),
+		regexp.QuoteMeta(`if (lines.settingsWhere) note += L" " + urnw::Localized("upd_channel_where");`),
+		regexp.QuoteMeta("UpdateChecker::ChangeSentenceText(snap, lines)"),
+		regexp.QuoteMeta("channelOfficial_.Visibility(lines.settingsButton ? Visibility::Visible : Visibility::Collapsed);"),
+		regexp.QuoteMeta("channelOfficial_.IsEnabled(lines.buttonsEnabled);"))...)
+	const channelOpener = "void SettingsPage::ApplyUpdateChannel("
+	if at := strings.Index(settings, channelOpener); at < 0 || strings.Contains(settings[at+len(channelOpener):], "SettingsPage::") {
+		problems = append(problems, "SettingsPage::ApplyUpdateChannel is not the last definition of SettingsPage.cpp, "+
+			"where a merge with the fork's own update methods gains no conflict")
+	}
+	problems = append(problems, applyOrderProblems("SettingsPage::ApplyUpdateCheck",
+		applyDefinition(settings, "void SettingsPage::ApplyUpdateCheck(UpdateChecker::Snapshot const& snap) {"),
+		regexp.QuoteMeta("case Outcome::NoUpdate:"),
+		regexp.QuoteMeta("if (UpdateChecker::ChannelLinesOf(snap).aboutUpToDate) {"),
+		regexp.QuoteMeta(`text += L" — " + AdvW("upd_state_current", L"up to date");`))...)
+	problems = append(problems, applyOrderProblems("MainWindow::ApplyUpdateChecker",
+		applyDefinition(window, "void MainWindow::ApplyUpdateChecker() {"),
+		regexp.QuoteMeta("if (connect_) connect_->ApplyUpdateChecker(updateSnapshot_);"),
+		regexp.QuoteMeta("if (settings_) settings_->ApplyUpdateChannel(updateSnapshot_);"),
+		regexp.QuoteMeta("if (developer_) developer_->ApplyUpdateCheck(updateSnapshot_);"),
+		regexp.QuoteMeta("if (settings_) settings_->ApplyUpdateCheck(updateSnapshot_);"))...)
+	banner := applyDefinition(connect, offerBannerRenderer)
+	problems = append(problems, applyOrderProblems("ConnectPage::RenderUpdateBanner", banner,
+		regexp.QuoteMeta(`winrt::hstring title{urnw::Format("upd_available_title_version", snap.version)};`),
+		regexp.QuoteMeta("const bool developerOffer = snap.feed->id != urnw::update::kOfficialFeed.id;"),
+		regexp.QuoteMeta(`title = winrt::hstring{urnw::Format("upd_developer_title_version", snap.version)};`),
+		regexp.QuoteMeta("case Phase::Result:"),
+		regexp.QuoteMeta("if (developerOffer && snap.phase != Phase::Result) {"),
+		regexp.QuoteMeta(`message = urnw::Format("upd_developer_message", urnw::UpdateChecker::RepositoryOf(*snap.feed)) +`),
+		regexp.QuoteMeta("bar.Title(title);"),
+		regexp.QuoteMeta("bar.Message(winrt::hstring{message});"))...)
+	if got := xaml["DeveloperNavItem"]; got != "acceptance.nav.developer" {
+		problems = append(problems, fmt.Sprintf("DeveloperNavItem: AutomationProperties.AutomationId = %q, want %q", got, "acceptance.nav.developer"))
+	}
+	for source, ids := range map[string][]string{
+		developer: {`L"acceptance.update.channel-switch"`, `L"acceptance.update.channel-line"`, `L"acceptance.update.channel-repair"`},
+		settings:  {`L"acceptance.update.channel-official"`, `L"acceptance.update.channel-row"`},
+	} {
+		for _, id := range ids {
+			if strings.Count(source, id) != 1 {
+				problems = append(problems, "want exactly one "+id)
+			}
+		}
+	}
+	return problems
+}
+
+func TestUpdateOfferTheChannelOnEverySurface(t *testing.T) {
+	xaml := xamlAutomationIds(t, filepath.Join(repositoryRoot(t), "app", "src", "App", "MainWindow.xaml"))
+	reportProblems(t, checkChannelSurfaces(stripComments(readAppSource(t, "DeveloperPage.cpp")),
+		stripComments(readAppSource(t, "SettingsPage.cpp")), stripComments(readAppSource(t, "ConnectPage.cpp")),
+		stripComments(readAppSource(t, "MainWindow.xaml.cpp")), xaml))
+}
+
+// Each surface of the channel, taken away, is reported for its reason.
+func TestUpdateOfferTheChannelOnEverySurfaceRejectsWeakerSources(t *testing.T) {
+	developer := stripComments(readAppSource(t, "DeveloperPage.cpp"))
+	settings := stripComments(readAppSource(t, "SettingsPage.cpp"))
+	connect := stripComments(readAppSource(t, "ConnectPage.cpp"))
+	window := stripComments(readAppSource(t, "MainWindow.xaml.cpp"))
+	xaml := xamlAutomationIds(t, filepath.Join(repositoryRoot(t), "app", "src", "App", "MainWindow.xaml"))
+	replace := func(text, old, replacement string) string {
+		if strings.Count(text, old) != 1 {
+			t.Fatalf("negative control: %q is not in the source exactly once", old)
+		}
+		return strings.Replace(text, old, replacement, 1)
+	}
+	surfaces := func(d, s, c, w string, x map[string]string) []string { return checkChannelSurfaces(d, s, c, w, x) }
+	for _, tc := range []struct {
+		name, want string
+		check      func() []string
+	}{
+		{"the switch's revert read as a request", `DeveloperPage::OnChannelToggled is missing if \(applyingChannel_`, func() []string {
+			return surfaces(replace(developer, "  if (applyingChannel_ || !channelSwitch_) return;\n", "  if (!channelSwitch_) return;\n"),
+				settings, connect, window, xaml)
+		}},
+		{"the switch written without its guard", "DeveloperPage::ApplyUpdateCheck is missing applyingChannel_ = true;", func() []string {
+			return surfaces(replace(developer, "    applyingChannel_ = true;\n", ""), settings, connect, window, xaml)
+		}},
+		{"a switch built whatever the table holds", `DeveloperPage::Build is missing if \(const update::Feed\* developer = update::FeedById`, func() []string {
+			return surfaces(replace(developer, "if (const update::Feed* developer = update::FeedById(update::kDeveloperChannelId)) {",
+				"if (const update::Feed* developer = &update::kOfficialFeed) {"), settings, connect, window, xaml)
+		}},
+		{"the check line saying this build is current on the developer feed", `DeveloperPage::ApplyUpdateCheck is missing lines\.check == update::CheckLine::NoneListed`, func() []string {
+			return surfaces(replace(developer, "lines.check == update::CheckLine::NoneListed", "false"), settings, connect, window, xaml)
+		}},
+		{"About saying up to date whatever the channel", `SettingsPage::ApplyUpdateCheck is missing if \(UpdateChecker::ChannelLinesOf`, func() []string {
+			return surfaces(developer, replace(settings, "      if (UpdateChecker::ChannelLinesOf(snap).aboutUpToDate) {\n", "      if (true) {\n"),
+				connect, window, xaml)
+		}},
+		{"Settings' channel row always shown", `SettingsPage::ApplyUpdateChannel is missing channelRow_\.Visibility\(lines\.settingsRow`, func() []string {
+			return surfaces(developer, replace(settings, "channelRow_.Visibility(lines.settingsRow ? Visibility::Visible : Visibility::Collapsed);",
+				"channelRow_.Visibility(Visibility::Visible);"), connect, window, xaml)
+		}},
+		{"Settings' button on a copy that cannot change the channel", `SettingsPage::ApplyUpdateChannel is missing channelOfficial_\.Visibility\(lines\.settingsButton`, func() []string {
+			return surfaces(developer, replace(settings, "channelOfficial_.Visibility(lines.settingsButton ? Visibility::Visible : Visibility::Collapsed);",
+				"channelOfficial_.Visibility(Visibility::Visible);"), connect, window, xaml)
+		}},
+		{"the row's method next to ApplyUpdateCheck", "SettingsPage::ApplyUpdateChannel is not the last definition", func() []string {
+			moved := replace(settings, "void SettingsPage::ApplyUpdateCheck(UpdateChecker::Snapshot const& snap) {",
+				"void SettingsPage::ApplyUpdateChannel(UpdateChecker::Snapshot const& snap) {\n}\n\n"+
+					"void SettingsPage::ApplyUpdateCheck(UpdateChecker::Snapshot const& snap) {")
+			return surfaces(developer, replace(moved, "\nvoid SettingsPage::ApplyUpdateChannel(UpdateChecker::Snapshot const& snap) {\n  if (!channelRow_)",
+				"\nvoid SettingsPage::ApplyUpdateChannelLater(UpdateChecker::Snapshot const& snap) {\n  if (!channelRow_)"), connect, window, xaml)
+		}},
+		{"the channel's row left out of the fan-out", "MainWindow::ApplyUpdateChecker is missing if \\(settings_\\) settings_->ApplyUpdateChannel", func() []string {
+			return surfaces(developer, settings, connect, replace(window, "  if (settings_) settings_->ApplyUpdateChannel(updateSnapshot_);\n", ""), xaml)
+		}},
+		{"a developer offer under the official title", "ConnectPage::RenderUpdateBanner is missing title = winrt::hstring", func() []string {
+			return surfaces(developer, settings, replace(connect,
+				"    title = winrt::hstring{urnw::Format(\"upd_developer_title_version\", snap.version)};\n", ""), window, xaml)
+		}},
+		{"a developer offer that does not say whose build it is", `ConnectPage::RenderUpdateBanner is missing if \(developerOffer && snap\.phase != Phase::Result\)`, func() []string {
+			return surfaces(developer, settings, replace(connect, "  if (developerOffer && snap.phase != Phase::Result) {\n", "  if (false) {\n"), window, xaml)
+		}},
+		{"the Developer nav item without its id", "DeveloperNavItem: AutomationProperties.AutomationId", func() []string {
+			without := map[string]string{}
+			for name, id := range xaml {
+				if name != "DeveloperNavItem" {
+					without[name] = id
+				}
+			}
+			return surfaces(developer, settings, connect, window, without)
+		}},
+		{"one id on two controls", `want exactly one L"acceptance.update.channel-switch"`, func() []string {
+			return surfaces(replace(developer, `L"acceptance.update.channel-line"`, `L"acceptance.update.channel-switch"`), settings, connect, window, xaml)
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			problems := strings.Join(tc.check(), "\n")
+			if !strings.Contains(problems, tc.want) && !regexp.MustCompile(tc.want).MatchString(problems) {
+				t.Fatalf("negative control was not detected by %q; the check reported:\n%s", tc.want, problems)
+			}
+		})
+	}
 }
 
 // Each x:Name in a XAML document, with the x:Names of the elements around it,
@@ -1820,8 +2030,8 @@ func TestUpdateOfferWiringRejectsWeakerSources(t *testing.T) {
 		}},
 		{"the Updates card gated by the session", "the Updates card is gated (deviceCards_)", func() []string {
 			return checkUpdateCheckHasItsOwnCard(replace(developer,
-				"    Border card = MakeCard(hstring{L\"Updates\"}, body);\n",
-				"    Border card = MakeCard(hstring{L\"Updates\"}, body);\n    deviceCards_.push_back(card);\n"))
+				"    Border card = MakeCard(Loc(\"dev_updates_heading\"), body);\n",
+				"    Border card = MakeCard(Loc(\"dev_updates_heading\"), body);\n    deviceCards_.push_back(card);\n"))
 		}},
 		{"one automation id on two controls", `want exactly one L"acceptance.update.later"`, func() []string {
 			return checkUpdateBannerAutomationIds(xaml, replace(window, `L"acceptance.update.action"`, `L"acceptance.update.later"`), developer)

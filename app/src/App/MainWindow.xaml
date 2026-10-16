@@ -742,7 +742,8 @@
                         <FontIcon FontFamily="{StaticResource UrIconFontFamily}" FontSize="20" Glyph="&#xE897;" />
                     </muxc:NavigationViewItem.Icon>
                 </muxc:NavigationViewItem>
-                <muxc:NavigationViewItem x:Name="DeveloperNavItem" Tag="developer">
+                <muxc:NavigationViewItem x:Name="DeveloperNavItem" Tag="developer"
+                                         AutomationProperties.AutomationId="acceptance.nav.developer">
                     <muxc:NavigationViewItem.Icon>
                         <FontIcon FontFamily="{StaticResource UrIconFontFamily}" FontSize="20" Glyph="&#xEBE8;" />
                     </muxc:NavigationViewItem.Icon>

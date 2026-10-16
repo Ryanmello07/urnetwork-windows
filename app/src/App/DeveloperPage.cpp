@@ -18,6 +18,7 @@
 #include "PageContext.h"
 #include "StatsFormat.h"
 #include "Strings.h"
+#include "UpdateChannel.h"
 #include "UrColors.h"
 #include "Version.h"
 
@@ -868,13 +869,47 @@ void DeveloperPage::Build() {
   }
 
   // ---- updates ----------------------------------------------------------------
-  // The update check has a card of its own, after the intro. It is in neither
-  // gated list, so it always shows: the check needs no session, no device and
-  // no service. Out of the intro's row of actions, which it pushed past the
-  // card's edge at the window's default width, it no longer cuts the row.
+  // The update check and the update channel have a card of their own, after
+  // the intro. It is in neither gated list, so it always shows: neither needs
+  // a session, a device or the service. Out of the intro's row of actions,
+  // which it pushed past the card's edge at the window's default width, the
+  // check no longer cuts the row.
   {
     StackPanel body{nullptr};
-    Border card = MakeCard(hstring{L"Updates"}, body);
+    Border card = MakeCard(Loc("dev_updates_heading"), body);
+
+    // The opt-in update channel (UpdateChannel.h), built only while the feed
+    // table has the developer row. Turning it on is the elevated helper's,
+    // after Windows' prompt and the helper's own question; the switch shows
+    // what the marker says, never what was asked (ApplyUpdateCheck).
+    if (const update::Feed* developer = update::FeedById(update::kDeveloperChannelId)) {
+      channelSwitch_ = ToggleSwitch();
+      if (auto style = LookupStyle(L"UrSwitchToggleStyle")) channelSwitch_.Style(*style);
+      Automation::AutomationProperties::SetAutomationId(channelSwitch_,
+                                                        L"acceptance.update.channel-switch");
+      channelSwitch_.Toggled([weak = w_.get_weak()](IInspectable const&, RoutedEventArgs const&) {
+        if (auto self = weak.get()) self->developer().OnChannelToggled();
+      });
+      TextBlock title{nullptr};
+      body.Children().Append(MakeSettingRow(
+          Loc("dev_channel_switch"),
+          hstring{urnw::Format("dev_channel_switch_note", UpdateChecker::RepositoryOf(*developer))},
+          channelSwitch_, &title));
+      // Without this the switch is nameless to a screen reader (see the
+      // UrSwitchToggleStyle comment in App.xaml).
+      Automation::AutomationProperties::SetLabeledBy(channelSwitch_, title);
+    }
+    channelLine_ = MakeText(hstring{}, 12, MutedBrush(), true);
+    Automation::AutomationProperties::SetAutomationId(channelLine_, L"acceptance.update.channel-line");
+    body.Children().Append(channelLine_);
+    channelRepair_ = MakeActionButton(Loc("upd_channel_switch_official"));
+    Automation::AutomationProperties::SetAutomationId(channelRepair_,
+                                                      L"acceptance.update.channel-repair");
+    channelRepair_.Visibility(Visibility::Collapsed);
+    channelRepair_.Click([](auto const&, auto const&) {
+      urnw::pages::Updates().RequestChannel(update::kOfficialFeed);
+    });
+    body.Children().Append(channelRepair_);
 
     // The update checker's manual trigger (beta spec §5) — and the only way
     // to exercise that path on a dev build, where the periodic check is
@@ -1347,7 +1382,25 @@ void DeveloperPage::Build() {
 
 void DeveloperPage::ApplyUpdateCheck(UpdateChecker::Snapshot const& snap) {
   using Outcome = UpdateChecker::CheckOutcome;
-  if (!updateCheckText_) return;  // the intro card is not built yet
+  if (!updateCheckText_) return;  // the Updates card is not built yet
+  // The update channel: the switch and the button follow the marker, and the
+  // line is its sentence, then the developer build's, then the change's, each
+  // its own key, joined by a space (UpdateChannel.h LinesOf).
+  const update::ChannelLines lines = UpdateChecker::ChannelLinesOf(snap);
+  if (channelSwitch_) {
+    applyingChannel_ = true;
+    channelSwitch_.IsOn(lines.switchOn);
+    channelSwitch_.IsEnabled(lines.switchEnabled);
+    applyingChannel_ = false;
+  }
+  std::wstring channel = UpdateChecker::ChannelSentenceText(snap, lines);
+  for (std::wstring const& more :
+       {UpdateChecker::BuildSentenceText(lines), UpdateChecker::ChangeSentenceText(snap, lines)}) {
+    if (!more.empty()) channel += L" " + more;
+  }
+  channelLine_.Text(hstring{channel});
+  channelRepair_.Visibility(lines.repairButton ? Visibility::Visible : Visibility::Collapsed);
+  channelRepair_.IsEnabled(lines.buttonsEnabled);
   // Version strings and codes are DATA (release grammar / decimal), so the
   // composition around the Dev() labels hides no literal from the store.
   std::wstring text;
@@ -1358,7 +1411,15 @@ void DeveloperPage::ApplyUpdateCheck(UpdateChecker::Snapshot const& snap) {
       text = DevW("dev_update_checking", L"Checking for updates…");
       break;
     case Outcome::NoUpdate:
-      text = DevW("dev_update_none", L"No update: this build is current") +
+      // On the developer feed, and for a developer build on the official
+      // one, "this build is current" would be the official feed's answer.
+      text = (lines.check == update::CheckLine::NoneListed
+                  ? urnw::Localized("dev_update_none_listed")
+              : lines.check == update::CheckLine::NoneDeveloper
+                  ? urnw::Localized("dev_update_none_developer")
+              : lines.check == update::CheckLine::NoneOfficial
+                  ? urnw::Localized("dev_update_none_official")
+                  : DevW("dev_update_none", L"No update: this build is current")) +
              L" (" + Widen(urnw::version::kString) + L"; " +
              DevW("dev_update_newest_seen", L"newest release seen:") + L" " +
              (snap.newestCode ? L"v" + snap.newestVersion
@@ -1794,6 +1855,14 @@ void DeveloperPage::ApplyProbeSuite(ReliabilitySnapshot const& snap) {
 }
 
 // ---- edits -----------------------------------------------------------------
+
+void DeveloperPage::OnChannelToggled() {
+  // the screen writing the marker's state back is no request
+  if (applyingChannel_ || !channelSwitch_) return;
+  const update::Feed* developer = update::FeedById(update::kDeveloperChannelId);
+  if (!developer) return;
+  urnw::pages::Updates().RequestChannel(channelSwitch_.IsOn() ? *developer : update::kOfficialFeed);
+}
 
 void DeveloperPage::OnBoolToggled(size_t index) {
   if (applying_ || index >= boolRows_.size()) return;

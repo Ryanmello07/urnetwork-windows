@@ -28,6 +28,7 @@
 #include "PaymentRefusal.h"
 #include "Strings.h"
 #include "SupportContact.h"
+#include "UpdateChannel.h"
 #include "UpdateChecker.h"
 #include "UrColors.h"
 #include "Version.h"
@@ -387,6 +388,26 @@ void SettingsPage::BuildGeneralSection(Panel const& host) {
   autoUpdateCheck_.Toggled([this](auto const&, auto const&) {
     urnw::pages::Updates().SetAutoCheckEnabled(autoUpdateCheck_.IsOn());
   });
+
+  // The machine's update channel (UpdateChannel.h): a row only while it has
+  // something to say. That is a PC on developer builds or with a marker that
+  // is not trusted, a developer build, or a change's line. Its button is the
+  // way back to official releases for someone who has turned Advanced Mode
+  // off and so has no Developer screen; turning developer builds on stays
+  // there. The note wraps: a value row would cut it.
+  channelRow_ = StackPanel();
+  channelRow_.Visibility(Visibility::Collapsed);
+  card.Children().Append(channelRow_);
+  channelOfficial_ = ButtonRow(channelRow_, Loc("upd_channel_label"), hstring{},
+                               Loc("upd_channel_switch_official"));
+  Automation::AutomationProperties::SetAutomationId(channelOfficial_,
+                                                    L"acceptance.update.channel-official");
+  channelOfficial_.Click([](auto const&, auto const&) {
+    urnw::pages::Updates().RequestChannel(urnw::update::kOfficialFeed);
+  });
+  channelNote_ = Supporting(channelRow_, hstring{});
+  Automation::AutomationProperties::SetAutomationId(channelNote_, L"acceptance.update.channel-row");
+  ApplyUpdateChannel(urnw::pages::Updates().Current());
 
   // Launch URnetwork on system startup, as on macOS (owner decision,
   // 2026-10-05): this installation's own registration with Windows, so it
@@ -840,7 +861,12 @@ void SettingsPage::ApplyUpdateCheck(UpdateChecker::Snapshot const& snap) {
       text += L" — " + AdvW("upd_state_checking", L"checking…");
       break;
     case Outcome::NoUpdate:
-      text += L" — " + AdvW("upd_state_current", L"up to date");
+      // the version alone on the developer feed, and for a developer build:
+      // "up to date" would be the official feed's answer, and General's
+      // channel row says why
+      if (UpdateChecker::ChannelLinesOf(snap).aboutUpToDate) {
+        text += L" — " + AdvW("upd_state_current", L"up to date");
+      }
       break;
     case Outcome::UpdateFound:
       text += L" — " + AdvW("upd_state_available", L"update available:") + L" v" +
@@ -1807,6 +1833,31 @@ void SettingsPage::OnSendFeedback(IInspectable const&, RoutedEventArgs const&) {
           if (attachLogs && !feedbackId.empty()) page.UploadLogs(feedbackId);
         });
       });
+}
+
+// ---- the update channel (UpdateChannel.h) ------------------------------------
+
+void SettingsPage::ApplyUpdateChannel(UpdateChecker::Snapshot const& snap) {
+  if (!channelRow_) return;  // General is not built yet
+  const update::ChannelLines lines = UpdateChecker::ChannelLinesOf(snap);
+  channelRow_.Visibility(lines.settingsRow ? Visibility::Visible : Visibility::Collapsed);
+  if (!lines.settingsRow) return;
+  // The channel's note, then the developer build's sentence and where
+  // developer builds are turned on, then a change's line, so a switch back
+  // that failed says so here too. Each its own key, joined by a space.
+  std::wstring note =
+      lines.settingsNote == update::ChannelNote::Developer
+          ? urnw::Format("upd_channel_developer_note", UpdateChecker::RepositoryOf(*snap.feed))
+      : lines.settingsNote == update::ChannelNote::Untrusted ? urnw::Localized("upd_channel_untrusted")
+                                                             : urnw::Localized("upd_channel_official_note");
+  if (lines.settingsBuildSentence) note += L" " + UpdateChecker::BuildSentenceText(lines);
+  if (lines.settingsWhere) note += L" " + urnw::Localized("upd_channel_where");
+  if (const std::wstring change = UpdateChecker::ChangeSentenceText(snap, lines); !change.empty()) {
+    note += L" " + change;
+  }
+  channelNote_.Text(hstring{note});
+  channelOfficial_.Visibility(lines.settingsButton ? Visibility::Visible : Visibility::Collapsed);
+  channelOfficial_.IsEnabled(lines.buttonsEnabled);
 }
 
 }  // namespace urnw
