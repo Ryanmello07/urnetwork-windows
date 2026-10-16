@@ -3011,10 +3011,15 @@ proto::TunnelStatus SdkHost::SessionStatus(bool haveLocation) const {
     // advanced strip's RPC field read "none" over a working tunnel, which is
     // the same class of lie as "Session rpc-only" with no session at all.
     //
-    // Under wfpStateMutex_ rather than mutex_ deliberately: this function is
-    // called from SDK listener callbacks that do NOT hold mutex_, so the string
-    // needs a lock of its own, and this is already the "last known session
-    // facts" lock. It is never held together with mutex_ in the other order.
+    // Under wfpStateMutex_ rather than mutex_ deliberately: this function runs
+    // with mutex_ held (BootstrapSession, and the connect location listener
+    // when ConnectLocked's write tells it inline: a DeviceRemote tells a
+    // connect write's listeners from the write, sdk
+    // device_remote_connect_state.go) and without it (that listener on an SDK
+    // thread, for the device's own report). So it can neither take mutex_ nor
+    // rely on it, and the string needs a lock of its own; this is already the
+    // "last known session facts" lock. Lock order is mutex_ -> wfpStateMutex_,
+    // never the reverse.
     st.rpc_listen_hostport = sessionRpcHostPort_;
   }
   if (mode == proto::StartMode::Tunnel &&
