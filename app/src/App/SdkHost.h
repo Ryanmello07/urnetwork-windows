@@ -110,6 +110,10 @@ struct CreateNetworkParams {
 // Snapshot of live connection / throughput / provide stats. Pushed to the UI on
 // SDK listener callbacks (macOS parity: listener-push, not polling).
 struct LiveStats {
+  // The read's place in the order reads began (SdkHost::ReadStats), from 1:
+  // the UI applies a snapshot only when it is newer than every one it applied
+  // (StatsReadOrder.h), since reads on different threads finish out of order.
+  std::uint64_t readSequence = 0;
   // getConnectionStatus() (CONNECTED/CONNECTING/DESTINATION_SET/DISCONNECTED)
   // -- EXCEPT in an rpc-only session, where it is forced to the deliberately
   // unrecognised "RPC_ONLY" so the connect page renders as disconnected. There
@@ -2625,6 +2629,8 @@ class SdkHost {
   // session worker; it is held across nothing else.
   mutable std::mutex healthMutex_;
   health::Tracker healthTracker_;
+  // The last read sequence ReadStats handed out (LiveStats::readSequence).
+  std::atomic<std::uint64_t> statsReadSequence_{0};
   // The egress binding currently in force on THIS process's SDK instance, as a
   // packed (index4, index6) pair, and the lock that keeps the compare and the
   // SDK call together.

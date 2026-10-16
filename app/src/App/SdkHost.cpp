@@ -3631,6 +3631,9 @@ void SdkHost::SubscribeStats() {
 
 LiveStats SdkHost::ReadStats() {
   LiveStats s;
+  // Taken before any read below: the UI orders snapshots by when their read
+  // began (StatsReadOrder.h).
+  s.readSequence = statsReadSequence_.fetch_add(1, std::memory_order_relaxed) + 1;
   // D4: the DeviceRemote getters below are NOT cached reads. While the rpc
   // transport thinks it is attached, every one of them is a synchronous
   // DeviceLocalRpc.Get* call (device_rpc.go), and against a service that is

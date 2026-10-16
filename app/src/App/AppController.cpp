@@ -532,6 +532,9 @@ void AppController::OnTunnelState(const proto::TunnelStatus& status) {
 }
 
 void AppController::OnStats(const LiveStats& stats) {
+  // Reads on different threads finish out of order: one older than a snapshot
+  // already applied would roll the tray and the window back (StatsReadOrder.h).
+  if (!statsReadOrder_.Admit(stats.readSequence)) return;
   // #27: the tray is a stats consumer now — the aggregate health rides every
   // snapshot. Change-gated: stats push on every throughput tick, and a
   // Shell_NotifyIcon per second for an unchanged icon is churn for nothing.
