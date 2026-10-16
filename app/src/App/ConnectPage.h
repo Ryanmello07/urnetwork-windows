@@ -79,6 +79,10 @@ class ConnectPage {
 
   // ---- window-level relays ----
   void ApplyStats(urnw::LiveStats const& stats);
+  // A start waiting on its balance shows as connecting until the gate answers
+  // it (StartConnectWait.h): Admitted keeps that state into its connect, Ended
+  // goes back to the last reported status.
+  void OnStartWaitChanged(urnw::StartWaitChange change);
   // The provider extender row under the provide group (connect/EXTENDER.md N7).
   // MainWindow hands every pushed status here and to the Earnings page, as it
   // hands the live stats to both.
@@ -547,6 +551,12 @@ class ConnectPage {
   bool connected_ = false;
   // the SDK connect controller's own status (ApplyStats); see ConnectStatus
   ConnectStatus connectStatus_ = ConnectStatus::Disconnected;
+  // A start waits on its balance (OnStartWaitChanged): connectStatus_ and
+  // health_ show connecting, and the pushes meanwhile land in the two reported
+  // values, which the wait's end goes back to.
+  bool startWaiting_ = false;
+  ConnectStatus reportedConnectStatus_ = ConnectStatus::Disconnected;
+  urnw::health::State reportedHealth_ = urnw::health::State::NoService;
   // the easter egg's five-tap count on the status dot (Initialize wires it)
   TapSequenceGate connectedIconTaps_;
   // ---- #27: the aggregate connection health ----

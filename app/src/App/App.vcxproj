@@ -454,6 +454,7 @@
     <ClInclude Include="ProviderLocationsSheet.h" />
     <ClInclude Include="ConnectCanvas.h" />
     <ClInclude Include="SdkHost.h" />
+    <ClInclude Include="StartConnectWait.h" />
     <ClInclude Include="VerifySendNotice.h" />
     <ClInclude Include="GuestConversion.h" />
     <ClInclude Include="StatsFormat.h" />

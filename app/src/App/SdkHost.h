@@ -38,6 +38,7 @@
 #include "ServiceClient.h"
 #include "ServiceRecoveryPolicy.h"
 #include "SignOut.h"
+#include "StartConnectWait.h"
 #include "VerifySendNotice.h"
 #include "Version.h"
 #include "WalletBridgeRoute.h"
@@ -1035,6 +1036,16 @@ class SdkHost {
     connectAdmitted_ = std::move(admitted);
     onUserDisconnect_ = std::move(disconnected);
   }
+  // A start waiting on its balance (StartConnectWait.h): told Waiting as it
+  // begins, and how it ended at the moment the gate answers it again, before
+  // its upgrade path opens; Ended when a disconnect or a sign-out cancels it.
+  // Called on the UI thread, inside the gesture or the fetch's settle.
+  void SetStartWaitHandler(std::function<void(StartWaitChange)> handler) {
+    onStartWait_ = std::move(handler);
+  }
+  // Whether a start waits on its balance now, for a window that shows after
+  // it began. UI thread.
+  bool StartConnectWaiting() const { return startWait_.Waiting(); }
   // Whether a connect gesture may start now; when not, shows the upgrade path,
   // or, on a stale balance, fetches it and runs `again` (the same gesture,
   // asked anew) once the fetch settles. `what` names the entry point in the log.
@@ -2331,6 +2342,18 @@ class SdkHost {
   std::function<void()> onUserDisconnect_;
   // RetryRefusedConnect is running the refused gesture: the gate admits it
   bool retryingRefusedConnect_ = false;
+  // the one start waiting on its balance, and its handler (SetStartWaitHandler);
+  // UI thread only, as every connect entry point
+  StartConnectWait startWait_;
+  std::function<void(StartWaitChange)> onStartWait_;
+  // The gate's FetchBalance: the start waits, and asks again once the fetch
+  // settles unless a newer tap, a disconnect or a sign-out came first.
+  void WaitForBalance(std::function<void()> again);
+  // Tells the views how a start that waited was answered (admitted or not),
+  // when the gate answers it; nothing for a gesture that did not wait.
+  void TellStartWaitOutcome(bool admitted);
+  // Ends a waiting start for a disconnect or a sign-out.
+  void CancelStartWait(const char* why);
   bool productUpdatesOptOut_ = false;  // the next create's product_updates
   // the sign-up pages' opt-out onto a create's args (absent = opted in)
   void ApplySignupPreferences(urnet::NetworkCreateArgs& args) const;

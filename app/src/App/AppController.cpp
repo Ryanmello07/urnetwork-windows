@@ -215,6 +215,16 @@ void AppController::Start() {
   // another connect, or the user's Disconnect, ends any wait on the balance
   sdk_.SetConnectGestureObserver([this] { ClearBalanceRecovery(); },
                                  [this] { ClearBalanceRecovery(); });
+  // A start waiting on its balance shows as connecting (StartConnectWait.h).
+  // Through the queue, so a refused start's way back renders before the
+  // upgrade path it opens (ShowUpgradeForBlockedConnect queues after it).
+  sdk_.SetStartWaitHandler([this](StartWaitChange change) {
+    OnUi([this, change] {
+      if (!windowVisible_ || !window_) return;  // resynced on show
+      if (auto self = window_.try_as<winrt::URnetwork::implementation::MainWindow>())
+        self->OnStartWaitChanged(change);
+    });
+  });
 
   // SDK state -> tray + window (marshaled onto the UI thread).
   sdk_.SetAuthStateHandler([this](AuthState s, const std::string& e) {
@@ -1071,6 +1081,9 @@ void AppController::ReconcileWindowPresentation() {
     if (lastTunnelStatus_) self->OnTunnelStateChanged(*lastTunnelStatus_);
     OnStats(sdk_.CurrentStats());
     self->OnBalanceChanged(balance_.Current(), balance_.CurrentPoll());
+    // a start that began waiting on its balance while the window was hidden
+    self->OnStartWaitChanged(sdk_.StartConnectWaiting() ? StartWaitChange::Waiting
+                                                        : StartWaitChange::Ended);
     if (authState_ == AuthState::LoggedIn) balance_.Refresh();
   }
 }

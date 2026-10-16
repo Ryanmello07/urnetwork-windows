@@ -6409,28 +6409,68 @@ bool IsLocationSelected(std::optional<urnet::ConnectLocation> const& selected,
 bool SdkHost::AdmitStartConnect(const char* what, std::function<void()> again) {
   // the balance recovery's retry decided on a fresh balance already, and it is
   // not a new gesture, so the observer is not told either
-  if (!startConnectFacts_ || retryingRefusedConnect_) return true;
+  if (!startConnectFacts_ || retryingRefusedConnect_) {
+    TellStartWaitOutcome(/*admitted=*/true);
+    return true;
+  }
   struct Sinks {
     SdkHost& host;
     const char* what;
     std::function<void()>& again;
     void Upgrade() {
       LogInfo("sdkhost: '{}' blocked: out of balance, showing the upgrade path", what);
+      // a start that waited goes back to the reported status before the
+      // upgrade path opens
+      host.TellStartWaitOutcome(/*admitted=*/false);
       // the refused gesture goes along: it waits on the balance to run again
       if (host.startConnectUpgrade_) host.startConnectUpgrade_(again);
     }
     void FetchBalance() {
       LogInfo("sdkhost: '{}' waits for a fresh balance", what);
-      if (host.startConnectFetchBalance_) {
-        host.startConnectFetchBalance_(std::move(again));
-      } else if (again) {
-        again();
-      }
+      host.WaitForBalance(std::move(again));
     }
   } sinks{*this, what, again};
   const bool admitted = urnw::balance::AdmitStartConnect(startConnectFacts_(), sinks);
-  if (admitted && connectAdmitted_) connectAdmitted_();
+  if (admitted) {
+    // a start that waited keeps its connecting state into the connect
+    TellStartWaitOutcome(/*admitted=*/true);
+    if (connectAdmitted_) connectAdmitted_();
+  }
   return admitted;
+}
+
+void SdkHost::WaitForBalance(std::function<void()> again) {
+  // The store calls every settle it was handed, so a repeated tap's older
+  // wait, and one a disconnect or a sign-out ended, must not connect.
+  const std::uint64_t token = startWait_.Begin();
+  if (onStartWait_) onStartWait_(StartWaitChange::Waiting);
+  std::function<void()> settled = [this, token, again = std::move(again)] {
+    if (!startWait_.Settle(token)) {
+      LogInfo("sdkhost: a start that waited for its balance was replaced or cancelled");
+      return;
+    }
+    // asks the gate again, which tells the views how it was answered
+    if (again) again();
+    // the gesture returned before the gate answered (a no-op re-click)
+    StartWaitChange change = StartWaitChange::Ended;
+    if (startWait_.TakeUnanswered(change) && onStartWait_) onStartWait_(change);
+  };
+  if (startConnectFetchBalance_) {
+    startConnectFetchBalance_(std::move(settled));
+  } else {
+    settled();
+  }
+}
+
+void SdkHost::TellStartWaitOutcome(bool admitted) {
+  StartWaitChange change = StartWaitChange::Ended;
+  if (startWait_.TakeOutcome(admitted, change) && onStartWait_) onStartWait_(change);
+}
+
+void SdkHost::CancelStartWait(const char* why) {
+  if (!startWait_.Cancel()) return;
+  LogInfo("sdkhost: the start waiting for its balance is cancelled ({})", why);
+  if (onStartWait_) onStartWait_(StartWaitChange::Ended);
 }
 
 void SdkHost::RetryRefusedConnect(const std::function<void()>& connect) {
@@ -7501,7 +7541,9 @@ void SdkHost::StopSyncWatchdog() {
 // A Disconnect NEVER starts a session (see the worker): with no session there is
 // nothing connected and nothing to do.
 void SdkHost::Disconnect() {
-  // the user's disconnect: a connect waiting on the balance is not run after it
+  // the user's disconnect: a start waiting on its balance fetch never connects,
+  // and a connect waiting on the balance is not run after it
+  CancelStartWait("disconnect");
   if (onUserDisconnect_) onUserDisconnect_();
   SessionRequest r;
   r.kind = ConnectKind::Disconnect;
@@ -7809,6 +7851,9 @@ void SdkHost::Logout() {
   // account signed in. On the UI thread, as every caller of it, and before
   // mutex_: it answers the flows' callbacks.
   CancelPendingWalletFlows("superseded by signing out");
+  // A start waiting on its balance never connects: the balance store settles
+  // its waiters when the sign-out stops it (StartConnectWait.h).
+  CancelStartWait("signing out");
   // 1. The signed-out account's queued work goes: a connect, a row click still
   // settling, a reconcile. A worker sleeping out a settle wakes to the empty
   // slot and exits.

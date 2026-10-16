@@ -435,6 +435,33 @@ void ConnectPage::OnConnectToggle(IInspectable const&, RoutedEventArgs const&) {
     Sdk().Connect(*selected);
 }
 
+// A tap on Connect whose balance is stale waits for the gate's fetch, for up
+// to its settle timeout, and nothing changed on screen meanwhile: the
+// optimistic Connecting below the gate never ran. It shows connecting now, and
+// a refused start goes back to the reported status before the upgrade path
+// opens (SdkHost tells Ended first). An admitted one keeps connecting into its
+// connect, as a tap that did not wait does, until the next push.
+void ConnectPage::OnStartWaitChanged(urnw::StartWaitChange change) {
+  switch (change) {
+    case urnw::StartWaitChange::Waiting:
+      startWaiting_ = true;
+      connectStatus_ = ConnectStatus::Connecting;
+      health_ = urnw::health::State::Connecting;
+      break;
+    case urnw::StartWaitChange::Admitted:
+      if (!startWaiting_) return;
+      startWaiting_ = false;
+      break;
+    case urnw::StartWaitChange::Ended:
+      if (!startWaiting_) return;
+      startWaiting_ = false;
+      connectStatus_ = reportedConnectStatus_;
+      health_ = reportedHealth_;
+      break;
+  }
+  ApplyConnectStatus();
+}
+
 // ---- state relay ---------------------------------------------------------
 
 void ConnectPage::SetNetworkIdentity(std::string const& networkName, bool guestMode) {
@@ -1288,14 +1315,17 @@ void ConnectPage::ApplyStats(urnw::LiveStats const& stats) {
                                               : H(locationName));
   ApplyLocationRowName();  // the row's name carries the provider, not just the label
   // The SDK's connection status: the only signal in the client that carries a
-  // CONNECTING state. It was read into LiveStats and never used.
-  connectStatus_ = ParseConnectStatus(stats.connectionStatus);
+  // CONNECTING state. It was read into LiveStats and never used. A start
+  // waiting on its balance keeps showing connecting (OnStartWaitChanged).
+  reportedConnectStatus_ = ParseConnectStatus(stats.connectionStatus);
+  connectStatus_ = startWaiting_ ? ConnectStatus::Connecting : reportedConnectStatus_;
   // the stall diagnosis rides the same snapshot (track 2); rendered by
   // ApplyConnectStatus as the reason line under the hero
   windowStallReason_ = stats.windowStallReason;
   // #27: the aggregate health, derived in the SAME ReadStats as every other
   // field of this snapshot — the status line renders THIS, not the raw status.
-  health_ = stats.health;
+  reportedHealth_ = stats.health;
+  health_ = startWaiting_ ? urnw::health::State::Connecting : reportedHealth_;
   healthReevalAtMillis_ = stats.healthReevalAtMillis;
   // The provider grid, into the hero. This is the first consumer
   // getProviderGridPointList() has ever had in this client. An empty list is
