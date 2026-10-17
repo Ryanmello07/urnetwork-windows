@@ -358,6 +358,17 @@ SdkHost::~SdkHost() {
   // The presentation worker takes mutex_ too (D4), so it is stopped under the
   // same rule: outside the lock, joined.
   StopPresentationWorker();
+  // The stats publish worker reads the device and this host's state: stopped,
+  // and a read in flight waited out, before any of it goes. The locations
+  // opener the same.
+  statsPublisher_.Stop();
+  locationsOpener_.Stop();
+  drawerSeedReader_.Stop();
+  // The user's writes still queued run, then the worker stops: each takes
+  // mutex_, so above the lock.
+  writer_.Stop();
+  // A sign-out's tail in flight is waited out the same way.
+  signOutWorker_.Stop();
   // Same rule, same reason: the rpc-sync watchdog takes mutex_ to look at the
   // device, so it is stopped and JOINED here, above the lock.
   StopSyncWatchdog();
@@ -757,20 +768,41 @@ bool SdkHost::Initialize() {
 //
 // loggedIn_ is written wherever the stored client jwt changes: Initialize,
 // RegisterNetworkClient's success, ApplyNetworkServer's re-derive, and Logout.
-// Note that Logout's own commit is asynchronous (asyncLocalState_->logout),
-// so the old lock-taking version ALSO returned stale-true for a while after a
-// sign-out; the flag is if anything the more accurate of the two.
-bool SdkHost::IsLoggedIn() { return loggedIn_.load(std::memory_order_acquire); }
+// Logout clears this flag on the click. Its worker clears local state
+// synchronously before releasing any sign-in waiting for that logout.
+bool SdkHost::IsLoggedIn() const { return loggedIn_.load(std::memory_order_acquire); }
 
 void SdkHost::SetAuthState(AuthState s, const std::string& error) {
-  authState_ = s;
-  if (onAuth_) onAuth_(s, error);
+  const std::uint64_t epoch = signOutRun_.Epoch();
+  if (!signOutRun_.ApplyIfCurrent(epoch, [&] { authState_ = s; })) return;
+  if (onAuth_) onAuth_(s, error, epoch);
+}
+
+// Auth state belongs to the attempt's original epoch, including its errors.
+// Commit only atomic flags against Logout's Begin; storage stays
+// under mutex_, and UI callbacks run after releasing the short epoch lock.
+bool SdkHost::SetRegistrationAuthState(std::uint64_t epoch, AuthState s,
+                                      const std::string& error) {
+  if (!signOutRun_.ApplyIfCurrent(epoch, [&] {
+        authState_ = s;
+        if (s == AuthState::LoggedIn) loggedIn_.store(true, std::memory_order_release);
+      })) return false;
+  if (onAuth_) onAuth_(s, error, epoch);
+  return true;
+}
+
+bool SdkHost::ContinueAuthAttempt(std::uint64_t epoch,
+                                const std::function<void(AuthResult)>& done) {
+  if (AuthEventIsCurrent(epoch)) return true;
+  if (done) done(AuthResult{false, false, "signed out while this sign-in was pending"});
+  return false;
 }
 
 void SdkHost::LoginWithPassword(const std::string& userAuth,
                                 const std::string& password,
                                 std::function<void(AuthResult)> done) {
-  SetAuthState(AuthState::Authenticating);
+  const std::uint64_t authEpoch = signOutRun_.Epoch();
+  SetRegistrationAuthState(authEpoch, AuthState::Authenticating);
   urnet::AuthLoginWithPasswordArgs args;
   args.user_auth = userAuth;
   args.password = password;
@@ -779,32 +811,33 @@ void SdkHost::LoginWithPassword(const std::string& userAuth,
   args.verify_otp_numeric = true;
 
   api_->authLoginWithPassword(
-      args, [this, done](std::optional<urnet::AuthLoginWithPasswordResult> result,
+      args, [this, done, authEpoch](std::optional<urnet::AuthLoginWithPasswordResult> result,
                          std::optional<std::string> err) {
+        if (!ContinueAuthAttempt(authEpoch, done)) return;
         if (err || !result) {
           AuthResult r{false, false, err ? *err : "no result"};
-          SetAuthState(AuthState::Error, r.error);
+          SetRegistrationAuthState(authEpoch, AuthState::Error, r.error);
           if (done) done(r);
           return;
         }
         if (result->error && !result->error->message.empty()) {
           AuthResult r{false, false, result->error->message};
-          SetAuthState(AuthState::Error, r.error);
+          SetRegistrationAuthState(authEpoch, AuthState::Error, r.error);
           if (done) done(r);
           return;
         }
         if (result->verification_required) {
           AuthResult r{false, true, ""};
           r.verify_send = VerifySendNoticeOf(result->verification_required->send_error);
-          SetAuthState(AuthState::LoggedOut);
+          SetRegistrationAuthState(authEpoch, AuthState::LoggedOut);
           if (done) done(r);  // UI routes to the verify screen
           return;
         }
         if (result->network && result->network->by_jwt) {
-          RegisterNetworkClient(*result->network->by_jwt, done);
+          RegisterNetworkClient(*result->network->by_jwt, done, authEpoch);
         } else {
           AuthResult r{false, false, "login returned no network"};
-          SetAuthState(AuthState::Error, r.error);
+          SetRegistrationAuthState(authEpoch, AuthState::Error, r.error);
           if (done) done(r);
         }
       });
@@ -812,28 +845,30 @@ void SdkHost::LoginWithPassword(const std::string& userAuth,
 
 void SdkHost::LoginWithCode(const std::string& authCode,
                             std::function<void(AuthResult)> done) {
-  SetAuthState(AuthState::Authenticating);
+  const std::uint64_t authEpoch = signOutRun_.Epoch();
+  SetRegistrationAuthState(authEpoch, AuthState::Authenticating);
   urnet::AuthCodeLoginArgs args;
   args.auth_code = authCode;
-  api_->authCodeLogin(args, [this, done](std::optional<urnet::AuthCodeLoginResult> result,
+  api_->authCodeLogin(args, [this, done, authEpoch](std::optional<urnet::AuthCodeLoginResult> result,
                                          std::optional<std::string> err) {
+    if (!ContinueAuthAttempt(authEpoch, done)) return;
     if (err || !result) {
       AuthResult r{false, false, err ? *err : "no result"};
-      SetAuthState(AuthState::Error, r.error);
+      SetRegistrationAuthState(authEpoch, AuthState::Error, r.error);
       if (done) done(r);
       return;
     }
     if (result->error && !result->error->message.empty()) {
       AuthResult r{false, false, result->error->message};
-      SetAuthState(AuthState::Error, r.error);
+      SetRegistrationAuthState(authEpoch, AuthState::Error, r.error);
       if (done) done(r);
       return;
     }
     if (!result->by_jwt.empty()) {
-      RegisterNetworkClient(result->by_jwt, done);
+      RegisterNetworkClient(result->by_jwt, done, authEpoch);
     } else {
       AuthResult r{false, false, "code login returned no jwt"};
-      SetAuthState(AuthState::Error, r.error);
+      SetRegistrationAuthState(authEpoch, AuthState::Error, r.error);
       if (done) done(r);
     }
   });
@@ -845,12 +880,19 @@ void SdkHost::LoginWithCode(const std::string& authCode,
 
 void SdkHost::StartLogin(const std::string& userAuth,
                          std::function<void(LoginRouting)> done) {
+  const std::uint64_t authEpoch = signOutRun_.Epoch();
   urnet::AuthLoginArgs args;
   args.user_auth = userAuth;
 
-  api_->authLogin(args, [this, userAuth, done](std::optional<urnet::AuthLoginResult> result,
+  api_->authLogin(args, [this, userAuth, done, authEpoch](std::optional<urnet::AuthLoginResult> result,
                                                std::optional<std::string> err) {
     LoginRouting routing;
+    if (!AuthEventIsCurrent(authEpoch)) {
+      routing.route = LoginRoute::Error;
+      routing.error = "signed out while this sign-in was pending";
+      if (done) done(routing);
+      return;
+    }
     routing.userAuth = userAuth;
     if (err || !result) {
       routing.route = LoginRoute::Error;
@@ -874,7 +916,7 @@ void SdkHost::StartLogin(const std::string& userAuth,
         routed.route = r.ok ? LoginRoute::Login : LoginRoute::Error;
         routed.error = r.error;
         if (done) done(routed);
-      });
+      }, authEpoch);
       return;
     }
     if (result->auth_allowed && !result->auth_allowed->empty()) {
@@ -900,7 +942,13 @@ void SdkHost::StartLogin(const std::string& userAuth,
 
 void SdkHost::CreateNetwork(const CreateNetworkParams& params,
                             std::function<void(AuthResult)> done) {
-  SetAuthState(AuthState::Authenticating);
+  std::uint64_t authEpoch = signOutRun_.Epoch();
+  if (params.useWalletAuth || params.useAuthJwt) {
+    std::scoped_lock lock(mutex_);
+    authEpoch = params.useWalletAuth ? pendingWalletEpoch_ : pendingAuthEpoch_;
+  }
+  if (!ContinueAuthAttempt(authEpoch, done)) return;
+  SetRegistrationAuthState(authEpoch, AuthState::Authenticating);
   if (params.useWalletAuth) {
     std::optional<urnet::WalletAuthArgs> identity;
     {
@@ -909,7 +957,7 @@ void SdkHost::CreateNetwork(const CreateNetworkParams& params,
     }
     if (!identity) {
       AuthResult r{false, false, "no wallet sign-in is pending"};
-      SetAuthState(AuthState::Error, r.error);
+      SetRegistrationAuthState(authEpoch, AuthState::Error, r.error);
       if (done) done(r);
       return;
     }
@@ -928,7 +976,7 @@ void SdkHost::CreateNetwork(const CreateNetworkParams& params,
                                        : pendingBittensorWalletId_;
       BeginBittensorProof(
           flow, walletId, std::string(bittensor::kPurposeCreate), expectedAddress,
-          [this, params, identity = *identity, flow, walletId,
+          [this, params, identity = *identity, flow, walletId, authEpoch,
            done = std::move(done)](BittensorProofOutcome outcome) mutable {
             if (!outcome.ok) {
               if (!walletFlows_.IsCurrent(flow)) {
@@ -937,7 +985,7 @@ void SdkHost::CreateNetwork(const CreateNetworkParams& params,
                 return;
               }
               AuthResult r{false, false, outcome.error};
-              SetAuthState(AuthState::LoggedOut, r.error);
+              SetRegistrationAuthState(authEpoch, AuthState::LoggedOut, r.error);
               if (done) done(r);
               return;
             }
@@ -945,13 +993,13 @@ void SdkHost::CreateNetwork(const CreateNetworkParams& params,
             createAuth.wallet_address = outcome.proof.Address;
             createAuth.wallet_message = outcome.proof.Message;
             createAuth.wallet_signature = outcome.proof.Signature;
-            SubmitCreateNetwork(params, std::move(createAuth), std::move(done), walletId);
+            SubmitCreateNetwork(params, std::move(createAuth), std::move(done), authEpoch, walletId);
           });
       return;
     }
     RequestWalletChallenge(
         blockchain, expectedAddress,
-        [this, params, identity = *identity, expectedAddress, blockchain, flow,
+        [this, params, identity = *identity, expectedAddress, blockchain, flow, authEpoch,
          done = std::move(done)](std::optional<std::string> message,
                                  std::string error) mutable {
       if (!walletFlows_.IsCurrent(flow)) {
@@ -965,28 +1013,28 @@ void SdkHost::CreateNetwork(const CreateNetworkParams& params,
       if (!message) {
         AuthResult r{false, false,
                      error.empty() ? "could not fetch wallet challenge" : error};
-        SetAuthState(AuthState::LoggedOut, r.error);
+        SetRegistrationAuthState(authEpoch, AuthState::LoggedOut, r.error);
         if (done) done(r);
         return;
       }
 
       walletSignMessage_ = *message;
       walletSignDone_ =
-          [this, params, identity, expectedAddress, message = *message,
+          [this, params, identity, expectedAddress, message = *message, authEpoch,
            done = std::move(done)](bool ok, std::string publicKey,
                                    std::string signature,
                                    std::string signError) mutable {
         if (!ok) {
           AuthResult r{false, false,
                        signError.empty() ? "wallet signing failed" : signError};
-          SetAuthState(AuthState::LoggedOut, r.error);
+          SetRegistrationAuthState(authEpoch, AuthState::LoggedOut, r.error);
           if (done) done(r);
           return;
         }
         if (publicKey != expectedAddress) {
           AuthResult r{false, false,
                        "wallet account changed; use the same account to create the network"};
-          SetAuthState(AuthState::LoggedOut, r.error);
+          SetRegistrationAuthState(authEpoch, AuthState::LoggedOut, r.error);
           if (done) done(r);
           return;
         }
@@ -995,7 +1043,7 @@ void SdkHost::CreateNetwork(const CreateNetworkParams& params,
         createAuth.wallet_address = publicKey;
         createAuth.wallet_message = message;
         createAuth.wallet_signature = signature;
-        SubmitCreateNetwork(params, std::move(createAuth), std::move(done));
+        SubmitCreateNetwork(params, std::move(createAuth), std::move(done), authEpoch);
       };
 
       wallet_.SignMessage(*message);
@@ -1003,13 +1051,15 @@ void SdkHost::CreateNetwork(const CreateNetworkParams& params,
     return;
   }
 
-  SubmitCreateNetwork(params, std::nullopt, std::move(done));
+  SubmitCreateNetwork(params, std::nullopt, std::move(done), authEpoch);
 }
 
 void SdkHost::SubmitCreateNetwork(const CreateNetworkParams& params,
                                   std::optional<urnet::WalletAuthArgs> walletAuth,
                                   std::function<void(AuthResult)> done,
+                                  std::uint64_t authEpoch,
                                   const std::string& bittensorWalletId) {
+  if (!ContinueAuthAttempt(authEpoch, done)) return;
   urnet::NetworkCreateArgs args;
   ApplySignupPreferences(args);
   args.user_name = std::string();
@@ -1019,7 +1069,7 @@ void SdkHost::SubmitCreateNetwork(const CreateNetworkParams& params,
   if (params.useWalletAuth) {
     if (!walletAuth) {
       AuthResult r{false, false, "no wallet sign-in is pending"};
-      SetAuthState(AuthState::Error, r.error);
+      SetRegistrationAuthState(authEpoch, AuthState::Error, r.error);
       if (done) done(r);
       return;
     }
@@ -1031,7 +1081,7 @@ void SdkHost::SubmitCreateNetwork(const CreateNetworkParams& params,
     std::scoped_lock lock(mutex_);
     if (!pendingAuthJwt_) {
       AuthResult r{false, false, "no SSO sign-in is pending"};
-      SetAuthState(AuthState::Error, r.error);
+      SetRegistrationAuthState(authEpoch, AuthState::Error, r.error);
       if (done) done(r);
       return;
     }
@@ -1043,12 +1093,13 @@ void SdkHost::SubmitCreateNetwork(const CreateNetworkParams& params,
   }
   if (!params.referralCode.empty()) args.referral_code = params.referralCode;
 
-  api_->networkCreate(args, [this, done, bittensorWalletId](
+  api_->networkCreate(args, [this, done, bittensorWalletId, authEpoch](
                                 std::optional<urnet::NetworkCreateResult> result,
                                 std::optional<std::string> err) {
+    if (!ContinueAuthAttempt(authEpoch, done)) return;
     if (err || !result) {
       AuthResult r{false, false, err ? *err : "no result"};
-      SetAuthState(AuthState::Error, r.error);
+      SetRegistrationAuthState(authEpoch, AuthState::Error, r.error);
       if (done) done(r);
       return;
     }
@@ -1056,61 +1107,71 @@ void SdkHost::SubmitCreateNetwork(const CreateNetworkParams& params,
       AuthResult r{false, false,
                    WalletProofRefusalText(result->error->code.value_or(std::string()),
                                           result->error->message, bittensorWalletId)};
-      SetAuthState(AuthState::LoggedOut);  // a form error, not a session error
+      SetRegistrationAuthState(authEpoch, AuthState::LoggedOut);  // a form error, not a session error
       if (done) done(r);
       return;
     }
     if (result->verification_required) {
       AuthResult r{false, true, ""};
       r.verify_send = VerifySendNoticeOf(result->verification_required->send_error);
-      SetAuthState(AuthState::LoggedOut);
+      SetRegistrationAuthState(authEpoch, AuthState::LoggedOut);
       if (done) done(r);  // the UI routes to the verify step
       return;
     }
     if (result->network && result->network->by_jwt && !result->network->by_jwt->empty()) {
+      bool current = false;
       {
         std::scoped_lock lock(mutex_);
+        current = AuthEventIsCurrent(authEpoch);
         // consumed by this create, or unused by it
-        pendingWalletAuth_.reset();
-        pendingAuthJwt_.reset();
-        pendingAuthJwtType_.clear();
+        if (current) {
+          pendingWalletAuth_.reset();
+          pendingAuthJwt_.reset();
+          pendingAuthJwtType_.clear();
+        }
       }
-      RegisterNetworkClient(*result->network->by_jwt, done);
+      if (!current) {
+        ContinueAuthAttempt(authEpoch, done);
+        return;
+      }
+      RegisterNetworkClient(*result->network->by_jwt, done, authEpoch);
       return;
     }
     AuthResult r{false, false, "create network returned no network"};
-    SetAuthState(AuthState::Error, r.error);
+    SetRegistrationAuthState(authEpoch, AuthState::Error, r.error);
     if (done) done(r);
   });
 }
 
 void SdkHost::VerifyCode(const std::string& userAuth, const std::string& code,
                          std::function<void(AuthResult)> done) {
-  SetAuthState(AuthState::Authenticating);
+  const std::uint64_t authEpoch = signOutRun_.Epoch();
+  SetRegistrationAuthState(authEpoch, AuthState::Authenticating);
   urnet::AuthVerifyArgs args;
   args.user_auth = userAuth;
   args.verify_code = code;
 
-  api_->authVerify(args, [this, done](std::optional<urnet::AuthVerifyResult> result,
+  api_->authVerify(args, [this, done, authEpoch](std::optional<urnet::AuthVerifyResult> result,
                                       std::optional<std::string> err) {
+    if (!ContinueAuthAttempt(authEpoch, done)) return;
     if (err || !result) {
       AuthResult r{false, false, err ? *err : "no result"};
-      SetAuthState(AuthState::Error, r.error);
+      SetRegistrationAuthState(authEpoch, AuthState::Error, r.error);
       if (done) done(r);
       return;
     }
     if (result->error && !result->error->message.empty()) {
       AuthResult r{false, false, result->error->message};
-      SetAuthState(AuthState::LoggedOut);  // a wrong code, not a session error
+      SetRegistrationAuthState(authEpoch, AuthState::LoggedOut);  // a wrong code, not a session error
       if (done) done(r);
       return;
     }
     if (result->network && !result->network->by_jwt.empty()) {
-      RegisterNetworkClient(result->network->by_jwt, done);
+      RegisterNetworkClient(result->network->by_jwt, done, authEpoch);
       return;
     }
     AuthResult r{false, false, "verify returned no network"};
-    SetAuthState(AuthState::Error, r.error);
+    SetRegistrationAuthState(authEpoch, AuthState::Error, r.error);
     if (done) done(r);
   });
 }
@@ -1185,47 +1246,55 @@ std::string NormalizeSeedphrase(const std::string& raw) {
 
 void SdkHost::LoginWithSeedphrase(const std::string& seedphrase,
                                   std::function<void(AuthResult)> done) {
-  SetAuthState(AuthState::Authenticating);
+  const std::uint64_t authEpoch = signOutRun_.Epoch();
+  SetRegistrationAuthState(authEpoch, AuthState::Authenticating);
   urnet::AuthLoginArgs args;
   args.seedphrase = NormalizeSeedphrase(seedphrase);
 
   // NOTE: nothing on any path below may echo the args. An error log that
   // included the request would put the credential in a file on disk.
-  api_->authLogin(args, [this, done](std::optional<urnet::AuthLoginResult> result,
+  api_->authLogin(args, [this, done, authEpoch](std::optional<urnet::AuthLoginResult> result,
                                      std::optional<std::string> err) {
+    if (!ContinueAuthAttempt(authEpoch, done)) return;
     if (err || !result) {
       AuthResult r{false, false, err ? *err : "no result"};
-      SetAuthState(AuthState::Error, r.error);
+      SetRegistrationAuthState(authEpoch, AuthState::Error, r.error);
       if (done) done(r);
       return;
     }
     if (result->error && !result->error->message.empty()) {
       // a wrong phrase is a form error, not a session error
       AuthResult r{false, false, result->error->message};
-      SetAuthState(AuthState::LoggedOut);
+      SetRegistrationAuthState(authEpoch, AuthState::LoggedOut);
       if (done) done(r);
       return;
     }
     if (result->network && !result->network->by_jwt.empty()) {
-      RegisterNetworkClient(result->network->by_jwt, done);
+      RegisterNetworkClient(result->network->by_jwt, done, authEpoch);
       return;
     }
     AuthResult r{false, false, "seedphrase login returned no network"};
-    SetAuthState(AuthState::LoggedOut);
+    SetRegistrationAuthState(authEpoch, AuthState::LoggedOut);
     if (done) done(r);
   });
 }
 
 void SdkHost::CreateInstantAccount(std::function<void(InstantAccount)> done) {
+  const std::uint64_t authEpoch = signOutRun_.Epoch();
   // NO user_auth, password, auth_jwt or wallet_auth: that combination is what
   // makes the server mint a seedphrase-secured network and return the phrase.
   urnet::NetworkCreateArgs args;
   ApplySignupPreferences(args);
   args.terms = true;  // the form's button is gated on the terms consent
 
-  api_->networkCreate(args, [this, done](std::optional<urnet::NetworkCreateResult> result,
+  api_->networkCreate(args, [this, done, authEpoch](std::optional<urnet::NetworkCreateResult> result,
                                          std::optional<std::string> err) {
     InstantAccount out;
+    if (!AuthEventIsCurrent(authEpoch)) {
+      out.error = "signed out while this sign-in was pending";
+      if (done) done(out);
+      return;
+    }
     if (err || !result) {
       out.error = err ? *err : "no result";
       if (done) done(out);
@@ -1256,9 +1325,19 @@ void SdkHost::CreateInstantAccount(std::function<void(InstantAccount)> done) {
       if (done) done(out);
       return;
     }
+    bool current = false;
     {
       std::scoped_lock lock(mutex_);
-      pendingInstantJwt_ = *result->network->by_jwt;
+      current = AuthEventIsCurrent(authEpoch);
+      if (current) {
+        pendingInstantJwt_ = *result->network->by_jwt;
+        pendingInstantEpoch_ = authEpoch;
+      }
+    }
+    if (!current) {
+      out.error = "signed out while this sign-in was pending";
+      if (done) done(out);
+      return;
     }
     out.ok = true;
     out.seedphrase = *result->seedphrase;
@@ -1268,6 +1347,7 @@ void SdkHost::CreateInstantAccount(std::function<void(InstantAccount)> done) {
 
 void SdkHost::ConfirmInstantAccount(std::function<void(AuthResult)> done) {
   std::string jwt;
+  std::uint64_t authEpoch = 0;
   {
     std::scoped_lock lock(mutex_);
     if (!pendingInstantJwt_) {
@@ -1275,10 +1355,11 @@ void SdkHost::ConfirmInstantAccount(std::function<void(AuthResult)> done) {
       return;
     }
     jwt = *pendingInstantJwt_;
+    authEpoch = pendingInstantEpoch_;
     pendingInstantJwt_.reset();
   }
-  SetAuthState(AuthState::Authenticating);
-  RegisterNetworkClient(jwt, done);
+  SetRegistrationAuthState(authEpoch, AuthState::Authenticating);
+  RegisterNetworkClient(jwt, done, authEpoch);
 }
 
 void SdkHost::DiscardInstantAccount() {
@@ -1290,13 +1371,14 @@ void SdkHost::DiscardInstantAccount() {
 // Nothing here logs a code, a credential or a network name: the lines are closed.
 
 void SdkHost::RedeemApprovedCode(const std::string& code, std::function<void(ApprovedNetwork)> done) {
+  const std::uint64_t authEpoch = signOutRun_.Epoch();
   urnet::AuthCodeLoginArgs args;
   args.auth_code = code;
   // The flow the approval began in (BeginBrowserApproval). The code was minted for the network that was active then, and a
   // network change takes the next flow number, like every other flow that starts: so the code goes out, and the credential it
   // returns is kept, only while this is still the number of the flow that started last. Read once, for both.
   const std::uint64_t flow = approvalFlow_.load(std::memory_order_acquire);
-  const auto answer = [this, done, flow](std::optional<urnet::AuthCodeLoginResult> result,
+  const auto answer = [this, done, flow, authEpoch](std::optional<urnet::AuthCodeLoginResult> result,
                                          std::optional<std::string> err) {
     ApprovedNetwork out;
     // never retried: the server answers an invalid, an expired and a spent code the same way, as
@@ -1330,8 +1412,11 @@ void SdkHost::RedeemApprovedCode(const std::string& code, std::function<void(App
       std::scoped_lock lock(mutex_);
       // a flow that began while the code was out left api_ on another network (a switch replaces it), and what the old
       // network answered is not that network's to confirm
-      superseded = flow == 0 || !walletFlows_.IsCurrent(flow);
-      if (!superseded) pendingApprovedJwt_ = result->by_jwt;
+      superseded = flow == 0 || !walletFlows_.IsCurrent(flow) || !AuthEventIsCurrent(authEpoch);
+      if (!superseded) {
+        pendingApprovedJwt_ = result->by_jwt;
+        pendingApprovedEpoch_ = authEpoch;
+      }
     }
     if (superseded) {
       out.failure = ApprovedNetwork::Failure::Refused;
@@ -1379,10 +1464,12 @@ void SdkHost::RedeemApprovedCode(const std::string& code, std::function<void(App
 
 void SdkHost::ConfirmApprovedNetwork(std::function<void(AuthResult)> done) {
   std::string jwt;
+  std::uint64_t authEpoch = 0;
   {
     std::scoped_lock lock(mutex_);
     if (pendingApprovedJwt_) {
       jwt = std::move(*pendingApprovedJwt_);
+      authEpoch = pendingApprovedEpoch_;
       pendingApprovedJwt_.reset();
     }
   }
@@ -1390,17 +1477,17 @@ void SdkHost::ConfirmApprovedNetwork(std::function<void(AuthResult)> done) {
     if (done) done({false, false, "no approved sign-in is pending"});
     return;
   }
-  SetAuthState(AuthState::Authenticating);
-  RegisterNetworkClient(jwt, [this, done](AuthResult r) {
+  SetRegistrationAuthState(authEpoch, AuthState::Authenticating);
+  RegisterNetworkClient(jwt, [this, done, authEpoch](AuthResult r) {
     if (!r.ok) {
       // RegisterNetworkClient hands the api the network credential before it registers the
       // device, and its failures leave it there: a refused registration (a client limit, a
       // plan gate) must not leave a signed-out app calling the api as that network
       std::scoped_lock lock(mutex_);
-      if (api_) api_->setByJwt("");
+      if (AuthEventIsCurrent(authEpoch) && api_) api_->setByJwt("");
     }
     if (done) done(r);
-  });
+  }, authEpoch);
 }
 
 void SdkHost::DiscardApprovedNetwork() {
@@ -1483,6 +1570,13 @@ bool SdkHost::ApplyNetworkServer(const std::string& hostName, const std::string&
   // approval (and an armed Google or Apple attempt) belongs to the server it began on, and
   // is answered and dropped here, before mutex_ like every caller of CancelPendingWalletFlows.
   CancelPendingWalletFlows("superseded by a network change");
+  // A sign-out's tail still runs over the old space's state: no switch until it
+  // has ended (SignOutRun.h). The sign-in sheet that asks shows only after its
+  // LoggedOut, so this is the gap before its end.
+  if (signOutRun_.Running()) {
+    LogInfo("sdkhost: network switch refused: a sign-out is still ending");
+    return false;
+  }
   bool ok = false;
   bool loggedIn = false;
   {
@@ -1644,66 +1738,118 @@ void SdkHost::RefreshJwt() {
 }
 
 void SdkHost::RegisterNetworkClient(const std::string& byJwt,
-                                    std::function<void(AuthResult)> done) {
+                                     std::function<void(AuthResult)> done,
+                                     std::uint64_t authEpoch) {
+  // A sign-out still running: this sign-in waits for its tail and runs after it
+  // (SignOutRun.h), so the tail never logs out, or clears the credential of, an
+  // account that signed in after it began. An older one waiting is told.
+  const std::uint64_t signOutEpoch = authEpoch;
+  {
+    std::optional<DeferredSignIn> replaced;
+    if (signOutRun_.Defer(DeferredSignIn{byJwt, done, signOutEpoch}, replaced, signOutEpoch)) {
+      LogInfo("sdkhost: sign-in: waits for the sign-out running to end");
+      if (replaced && replaced->done) {
+        replaced->done(AuthResult{false, false, "a newer sign-in replaced this one"});
+      }
+      return;
+    }
+  }
+  // A sign-out that begins after this moves the epoch: the callback then
+  // installs nothing for an account the user signed out of.
+  bool signedOutBeforeDispatch = false;
   {
     // A new network jwt invalidates a running session (guest upgrade, verify
     // after an upgrade): tear the device + tunnel down so the registration
     // below rebuilds them under the new auth (linux SdkHost parity). Fresh
     // sign-ins have no device and skip this.
     std::scoped_lock lock(mutex_);
-    if (device_) {
+    signedOutBeforeDispatch = signOutRun_.Epoch() != signOutEpoch;
+    if (!signedOutBeforeDispatch && device_) {
       try {
         TeardownSessionLocked();
       } catch (const std::exception& e) {
         LogWarn("sdkhost: pre-registration teardown failed: {}", e.what());
       }
     }
+    // Teardown can wait for an RPC while Logout advances the epoch. The
+    // tail takes this same session lock, so an old registration never writes
+    // its API credential after that tail released the next account.
+    signedOutBeforeDispatch = signOutRun_.Epoch() != signOutEpoch;
+    if (!signedOutBeforeDispatch) api_->setByJwt(byJwt);
   }
-  // Persist the network JWT, then register this device to obtain a client JWT.
-  localState_->getByJwt();  // touch
-  api_->setByJwt(byJwt);
+  if (signedOutBeforeDispatch) {
+    if (done) done(AuthResult{false, false, "signed out while this sign-in registered"});
+    return;
+  }
 
   urnet::AuthNetworkClientArgs args;
   args.description = DeviceDescription();
   args.device_spec = DeviceSpec();
 
-  AuthNetworkClientWithLocale(args, [this, byJwt, done](std::optional<urnet::AuthNetworkClientResult> result,
-                                                        std::optional<std::string> err) {
+  AuthNetworkClientWithLocale(args, [this, byJwt, done, signOutEpoch](
+                                        std::optional<urnet::AuthNetworkClientResult> result,
+                                        std::optional<std::string> err) {
+    const auto complete = [this, done, signOutEpoch](AuthResult r) {
+      if (!SetRegistrationAuthState(signOutEpoch, r.ok ? AuthState::LoggedIn : AuthState::Error,
+                                   r.error)) {
+        r = AuthResult{false, false, "signed out while this sign-in registered"};
+      } else if (r.ok) {
+        RequestProviderReconcile("signed in");
+      }
+      if (done) done(r);
+    };
     if (err || !result) {
       AuthResult r{false, false, err ? *err : "no result"};
-      SetAuthState(AuthState::Error, r.error);
-      if (done) done(r);
+      complete(r);
       return;
     }
     if (result->error && !result->error->message.empty()) {
       AuthResult r{false, false, result->error->message};
-      SetAuthState(AuthState::Error, r.error);
-      if (done) done(r);
+      complete(r);
       return;
     }
     if (result->by_client_jwt) {
+      bool signedOutMeanwhile = false;
+      std::string persistenceError;
       {
         std::scoped_lock lock(mutex_);
-        try {
-          // SYNCHRONOUS setters, under the lock. These were
-          // asyncLocalState_->set*(..., [](bool){}): hand the commit to the
-          // SDK's own thread and carry on — and the next reader (then an
-          // immediate BootstrapSession, today the first Connect press's
-          // bootstrap) raced it. On a fresh install there is no earlier value
-          // to read, so the FIRST sign-in lost that race and reported "no
-          // client credentials are stored for this device" over an authLogin
-          // and an authNetworkClient that had both just succeeded. Pressing
-          // sign in again worked, because by then the async commit had landed
-          // — which is exactly what made it look like a flaky server rather
-          // than our own ordering. A fast Connect press can still arrive
-          // within milliseconds of this callback, so the setters stay
-          // synchronous.
-          localState_->setByJwt(byJwt);
-          localState_->setByClientJwt(*result->by_client_jwt);
-          loggedIn_.store(true, std::memory_order_release);
-        } catch (const std::exception& e) {
-          LogWarn("sdkhost: persist jwt failed: {}", e.what());
+        // Under the lock the tail's logout takes: a sign-out that began after
+        // this registration did signs its account out, so its credential is not
+        // installed; one that began after this section clears what it installs.
+        signedOutMeanwhile = signOutRun_.Epoch() != signOutEpoch;
+        if (!signedOutMeanwhile) {
+          try {
+            // SYNCHRONOUS setters, under the lock. These were
+            // asyncLocalState_->set*(..., [](bool){}): hand the commit to the
+            // SDK's own thread and carry on — and the next reader (then an
+            // immediate BootstrapSession, today the first Connect press's
+            // bootstrap) raced it. On a fresh install there is no earlier value
+            // to read, so the FIRST sign-in lost that race and reported "no
+            // client credentials are stored for this device" over an authLogin
+            // and an authNetworkClient that had both just succeeded. Pressing
+            // sign in again worked, because by then the async commit had landed
+            // — which is exactly what made it look like a flaky server rather
+            // than our own ordering. A fast Connect press can still arrive
+            // within milliseconds of this callback, so the setters stay
+            // synchronous.
+            localState_->setByJwt(byJwt);
+            localState_->setByClientJwt(*result->by_client_jwt);
+          } catch (const std::exception& e) {
+            LogWarn("sdkhost: persist jwt failed: {}", e.what());
+            persistenceError = "could not store the device credentials";
+          }
         }
+      }
+      if (signedOutMeanwhile) {
+        LogInfo("sdkhost: sign-in: signed out while it registered; its credential is not "
+                "installed");
+        AuthResult r{false, false, "signed out while this sign-in registered"};
+        if (done) done(r);
+        return;
+      }
+      if (!persistenceError.empty()) {
+        complete(AuthResult{false, false, persistenceError});
+        return;
       }
       // THE SIGN-IN SUCCEEDED, AND THAT IS ALL THAT HAPPENED. D8, owner
       // decision: signing in does not start the tunnel. BootstrapSession used
@@ -1713,27 +1859,23 @@ void SdkHost::RegisterNetworkClient(const std::string& byJwt,
       // session now exists only when a Connect gesture asks for one, and the
       // one start_tunnel call site logs its reason every time.
       //
-      // Auth state goes LoggedIn unconditionally: a sign-in with the service
-      // down is still a successful sign-in, and reporting anything else here
-      // used to dump a user with a perfectly valid credential onto the
+      // A sign-in with the service down is still a successful sign-in, and
+      // reporting anything else here used to dump a user with a valid credential onto the
       // sign-in screen (the seedphrase step rendered it as "your phrase is
       // wrong" — the most alarming sentence this app can say to somebody
       // whose credential has no reset path).
       LogInfo("sdkhost: signed in; no session started — the tunnel starts "
               "only on a Connect gesture");
-      SetAuthState(AuthState::LoggedIn);
       // ...but a stored provide mode that provides while disconnected starts
       // the provider-only device, under the new client jwt (the service
       // replaces one built from an older jwt: the request differs). It installs
       // nothing on this machine, so this is not the session start D8 forbids
       // here.
-      RequestProviderReconcile("signed in");
       AuthResult r{true, false, ""};
-      if (done) done(r);
+      complete(r);
     } else {
       AuthResult r{false, false, "device registration returned no client jwt"};
-      SetAuthState(AuthState::Error, r.error);
-      if (done) done(r);
+      complete(r);
     }
   });
 }
@@ -1806,7 +1948,7 @@ void SdkHost::SetupWalletCallbacks() {
       case bridge::SignatureRoute::SignIn:
         break;
     }
-    AuthLoginWithWallet(publicKey, signature, walletAuthMessage_, provider);
+    AuthLoginWithWallet(publicKey, signature, walletAuthMessage_, provider, walletAuthEpoch_);
   };
   wallet_.on_sso = [this](std::string provider, std::string authJwt, std::string state,
                           std::string error) {
@@ -1829,6 +1971,7 @@ void SdkHost::SetupWalletCallbacks() {
       return;
     }
     const SsoAttempt attempt = *ssoAttempt_;
+    const std::uint64_t authEpoch = walletAuthEpoch_;
     ssoAttempt_.reset();
     // Matched: say so. The drops above warn and the flow's own answer is
     // silent, so without this line a CONSUMED attempt reads in the log as if
@@ -1856,7 +1999,7 @@ void SdkHost::SetupWalletCallbacks() {
         break;
     }
     auto done = std::exchange(walletAuthDone_, nullptr);
-    AuthLoginWithSso(attempt.provider, authJwt, done ? done : [](AuthResult) {});
+    AuthLoginWithSso(attempt.provider, authJwt, done ? done : [](AuthResult) {}, authEpoch);
   };
   // Bittensor hand-backs go to the session helper, never through the routes
   // above: it decides whether the link belongs to the proof in flight.
@@ -1961,47 +2104,51 @@ uint64_t SdkHost::CancelPendingWalletFlows(const char* reason) {
 
 void SdkHost::SignInWithSolana(WalletConnect::Provider provider,
                                std::function<void(AuthResult)> done) {
-  SetAuthState(AuthState::Authenticating);
+  const std::uint64_t authEpoch = signOutRun_.Epoch();
+  SetRegistrationAuthState(authEpoch, AuthState::Authenticating);
   {
     std::scoped_lock lock(mutex_);
     pendingWalletAuth_.reset();  // a fresh sign-in supersedes any retained auth
   }
   // ...and any pending bare signature request, which is TOLD it was superseded
   CancelPendingWalletFlows("superseded by a wallet sign-in");
+  walletAuthEpoch_ = authEpoch;
   walletAuthDone_ = std::move(done);
   wallet_.Connect(provider);  // opens the browser; the rest continues on the deep-link callback
 }
 
 void SdkHost::SignInWithBittensor(const std::string& walletId,
                                   std::function<void(AuthResult)> done) {
-  SetAuthState(AuthState::Authenticating);
+  const std::uint64_t authEpoch = signOutRun_.Epoch();
+  SetRegistrationAuthState(authEpoch, AuthState::Authenticating);
   {
     std::scoped_lock lock(mutex_);
     pendingWalletAuth_.reset();  // a fresh sign-in supersedes any retained auth
   }
   const uint64_t flow = CancelPendingWalletFlows("superseded by a wallet sign-in");
+  walletAuthEpoch_ = authEpoch;
   walletAuthDone_ = std::move(done);
   pendingBittensorWalletId_ = walletId;
   BeginBittensorProof(
       flow, walletId, std::string(bittensor::kPurposeLogin), std::string(),
-      [this, flow, walletId](BittensorProofOutcome outcome) {
+      [this, flow, walletId, authEpoch](BittensorProofOutcome outcome) {
         // A newer flow superseded this sign-in and has answered it already.
-        if (!walletFlows_.IsCurrent(flow)) return;
+        if (!walletFlows_.IsCurrent(flow) || !AuthEventIsCurrent(authEpoch)) return;
         if (!outcome.ok) {
           auto authDone = std::exchange(walletAuthDone_, nullptr);
           if (!authDone) return;
           if (bridge::IsSuperseded(outcome.error)) {
             // the user closed the wallet form: back to the sign-in buttons
-            SetAuthState(AuthState::LoggedOut);
+            SetRegistrationAuthState(authEpoch, AuthState::LoggedOut);
             authDone({false, false, std::string()});
             return;
           }
-          SetAuthState(AuthState::Error, outcome.error);
+          SetRegistrationAuthState(authEpoch, AuthState::Error, outcome.error);
           authDone({false, false, outcome.error});
           return;
         }
         AuthLoginWithWallet(outcome.proof.Address, outcome.proof.Signature,
-                            outcome.proof.Message, WalletConnect::Provider::Bittensor, walletId);
+                            outcome.proof.Message, WalletConnect::Provider::Bittensor, authEpoch, walletId);
       });
 }
 
@@ -2388,7 +2535,8 @@ void SdkHost::SignInWithSso(const std::string& provider, std::function<void(Auth
     if (done) done({false, false, "unknown sign-in provider"});
     return;
   }
-  SetAuthState(AuthState::Authenticating);
+  const std::uint64_t authEpoch = signOutRun_.Epoch();
+  SetRegistrationAuthState(authEpoch, AuthState::Authenticating);
   {
     std::scoped_lock lock(mutex_);
     // a fresh sign-in supersedes any retained token or wallet auth
@@ -2398,6 +2546,7 @@ void SdkHost::SignInWithSso(const std::string& provider, std::function<void(Auth
   }
   // the browser round trip has ONE pair of callbacks: whatever was waiting is TOLD
   CancelPendingWalletFlows("superseded by a sign-in");
+  walletAuthEpoch_ = authEpoch;
   walletAuthDone_ = std::move(done);
   OpenSsoAttempt(provider, add_sign_in::SsoPurpose::SignIn);
 }
@@ -2498,7 +2647,8 @@ void SdkHost::CancelAddSignIn() {
 }
 
 void SdkHost::AuthLoginWithSso(const std::string& provider, const std::string& idToken,
-                               std::function<void(AuthResult)> done) {
+                               std::function<void(AuthResult)> done, std::uint64_t authEpoch) {
+  if (!ContinueAuthAttempt(authEpoch, done)) return;
   urnet::AuthLoginArgs args;
   args.auth_jwt_type = provider;
   args.auth_jwt = idToken;
@@ -2512,41 +2662,51 @@ void SdkHost::AuthLoginWithSso(const std::string& provider, const std::string& i
   std::scoped_lock lock(mutex_);
   if (!api_) {
     AuthResult r{false, false, "the network session went away during sign-in"};
-    SetAuthState(AuthState::Error, r.error);
+    SetRegistrationAuthState(authEpoch, AuthState::Error, r.error);
     if (done) done(r);
     return;
   }
   // The identity token is a bearer credential; nothing below logs the args.
-  api_->authLogin(args, [this, provider, idToken, done](std::optional<urnet::AuthLoginResult> result,
+  api_->authLogin(args, [this, provider, idToken, done, authEpoch](std::optional<urnet::AuthLoginResult> result,
                                                         std::optional<std::string> err) {
+    if (!ContinueAuthAttempt(authEpoch, done)) return;
     if (err || !result) {
       AuthResult r{false, false, err ? *err : "no result"};
-      SetAuthState(AuthState::Error, r.error);
+      SetRegistrationAuthState(authEpoch, AuthState::Error, r.error);
       if (done) done(r);
       return;
     }
     if (result->error && !result->error->message.empty()) {
       AuthResult r{false, false, result->error->message};
-      SetAuthState(AuthState::LoggedOut);
+      SetRegistrationAuthState(authEpoch, AuthState::LoggedOut);
       if (done) done(r);
       return;
     }
     if (result->network && !result->network->by_jwt.empty()) {
-      RegisterNetworkClient(result->network->by_jwt, done ? done : [](AuthResult) {});
+      RegisterNetworkClient(result->network->by_jwt, done ? done : [](AuthResult) {}, authEpoch);
       return;
     }
     // Authenticated, but this identity has no network yet: retain the token
     // (and which provider issued it) and let the UI route to the
     // create-network step (name + terms, no password), the same shape the
     // wallet path uses.
+    bool current = false;
     {
       std::scoped_lock lock(mutex_);
-      pendingAuthJwt_ = idToken;
-      pendingAuthJwtType_ = provider;
+      current = AuthEventIsCurrent(authEpoch);
+      if (current) {
+        pendingAuthJwt_ = idToken;
+        pendingAuthJwtType_ = provider;
+        pendingAuthEpoch_ = authEpoch;
+      }
+    }
+    if (!current) {
+      ContinueAuthAttempt(authEpoch, done);
+      return;
     }
     AuthResult r;
     r.auth_needs_network = true;
-    SetAuthState(AuthState::LoggedOut);
+    SetRegistrationAuthState(authEpoch, AuthState::LoggedOut);
     if (done) done(r);
   });
 }
@@ -2554,7 +2714,10 @@ void SdkHost::AuthLoginWithSso(const std::string& provider, const std::string& i
 void SdkHost::AuthLoginWithWallet(const std::string& address, const std::string& signature,
                                   const std::string& message,
                                   WalletConnect::Provider provider,
+                                  std::uint64_t authEpoch,
                                   const std::string& bittensorWalletId) {
+  if (!AuthEventIsCurrent(authEpoch)) return;
+  const std::uint64_t flow = walletFlows_.Current();
   urnet::WalletAuthArgs w;
   w.wallet_address = address;
   w.wallet_signature = signature;
@@ -2566,13 +2729,17 @@ void SdkHost::AuthLoginWithWallet(const std::string& address, const std::string&
   // a signature from another account than the address comes back as
   // result.error.code (a 401 error otherwise)
   args.result_errors = true;
-  api_->authLogin(args, [this, w, bittensorWalletId](std::optional<urnet::AuthLoginResult> result,
+  api_->authLogin(args, [this, w, bittensorWalletId, authEpoch, flow](std::optional<urnet::AuthLoginResult> result,
                                                      std::optional<std::string> err) {
-    auto done = walletAuthDone_;
-    walletAuthDone_ = nullptr;
+    std::function<void(AuthResult)> done;
+    // Logout invalidates the epoch before answering this slot. An older API
+    // response must not take the callback of a newer wallet sign-in.
+    if (!signOutRun_.ApplyIfCurrent(authEpoch, [&] {
+          if (walletFlows_.IsCurrent(flow)) done = std::exchange(walletAuthDone_, nullptr);
+        }) || !done) return;
     if (err || !result) {
       AuthResult r{false, false, err ? *err : "no result"};
-      SetAuthState(AuthState::Error, r.error);
+      SetRegistrationAuthState(authEpoch, AuthState::Error, r.error);
       if (done) done(r);
       return;
     }
@@ -2580,24 +2747,33 @@ void SdkHost::AuthLoginWithWallet(const std::string& address, const std::string&
       AuthResult r{false, false,
                    WalletProofRefusalText(result->error->code.value_or(std::string()),
                                           result->error->message, bittensorWalletId)};
-      SetAuthState(AuthState::Error, r.error);
+      SetRegistrationAuthState(authEpoch, AuthState::Error, r.error);
       if (done) done(r);
       return;
     }
     if (result->network && !result->network->by_jwt.empty()) {
-      RegisterNetworkClient(result->network->by_jwt, done ? done : [](AuthResult) {});
+      RegisterNetworkClient(result->network->by_jwt, done, authEpoch);
       return;
     }
     // The wallet authenticated but isn't linked to a network yet: retain the
     // signed wallet auth and let the UI route to the create-network step, which
     // calls CreateNetwork{useWalletAuth} (name + terms, no password).
+    bool current = false;
     {
       std::scoped_lock lock(mutex_);
-      pendingWalletAuth_ = w;
+      current = AuthEventIsCurrent(authEpoch);
+      if (current) {
+        pendingWalletAuth_ = w;
+        pendingWalletEpoch_ = authEpoch;
+      }
+    }
+    if (!current) {
+      ContinueAuthAttempt(authEpoch, done);
+      return;
     }
     AuthResult r;
     r.wallet_needs_network = true;
-    SetAuthState(AuthState::LoggedOut);
+    SetRegistrationAuthState(authEpoch, AuthState::LoggedOut);
     if (done) done(r);
   });
 }
@@ -3593,13 +3769,18 @@ void SdkHost::SubscribeStats() {
   if (!device_ || connectVc_) return;
   connectVc_ = device_->openConnectViewController();
   connectVc_->start();
+  // the selection the sheets read, kept by the listener below from here on
+  KeepSelectedLocation(connectVc_->getSelectedLocation());
   contractVc_ = device_->openContractViewController();  // live throughput feed
   auto pub = [this] { PublishStats(); };
   // ConnectViewController: status, provider grid/window size, selected location.
   presentationSubs_.push_back(connectVc_->addConnectionStatusListener(pub));
   presentationSubs_.push_back(connectVc_->addGridListener(pub));
   presentationSubs_.push_back(connectVc_->addSelectedLocationListener(
-      [this](std::optional<urnet::ConnectLocation>) { PublishStats(); }));
+      [this](std::optional<urnet::ConnectLocation> location) {
+        KeepSelectedLocation(std::move(location));
+        PublishStats();
+      }));
   presentationSubs_.push_back(device_->addConnectLocationChangeListener(
       [this](std::optional<urnet::ConnectLocation>) { PublishStats(); }));
   // ContractViewController: throughput points (bytes/bit rate up/down).
@@ -3631,14 +3812,30 @@ void SdkHost::SubscribeStats() {
 
 LiveStats SdkHost::ReadStats() {
   LiveStats s;
+  // Taken before any read below: the UI orders snapshots by when their read
+  // began (StatsReadOrder.h).
+  s.readSequence = statsReadSequence_.fetch_add(1, std::memory_order_relaxed) + 1;
+  // ...and so is how far the user's gestures had settled: a snapshot read from
+  // here on carries what every gesture through it left (TapHold.h). The slot's
+  // lock is a leaf, taken inside mutex_ by a read the session worker's write
+  // tells inline.
+  {
+    std::scoped_lock lock(pendingMutex_);
+    s.gestureSettled = taphold::SettledThrough(
+        gestureIssued_, pendingRequested_ ? pending_.gesture : 0, gestureInFlight_);
+  }
   // D4: the DeviceRemote getters below are NOT cached reads. While the rpc
   // transport thinks it is attached, every one of them is a synchronous
   // DeviceLocalRpc.Get* call (device_rpc.go), and against a service that is
   // DYING — socket open, process gone — each blocks until the transport's
-  // write timeout tears it down. ReadStats runs on the UI thread (ConnectPage's
-  // 1s health tick via RepublishStats, and window activation), and the friend's
-  // app glog ends mid Get* burst 4-5s before Windows recorded AppHangB1. The
-  // pipe drop is this process's EARLY notice of the death — Go's transport
+  // write timeout tears it down, and each waits on the device's state lock
+  // while a connect write holds it through its rpc, up to the rpc timeout.
+  // ReadStats used to run on the UI thread (ConnectPage's 1s health tick via
+  // RepublishStats, and window activation), and the friend's app glog ended
+  // mid Get* burst 4-5s before Windows recorded AppHangB1; it now runs only on
+  // SDK callback threads, the session worker and the stats publish worker
+  // (RepublishStats), never on the UI thread. The pipe drop is this process's
+  // EARLY notice of the death — Go's transport
   // needs seconds more to notice — so with the channel down the device getters
   // are skipped outright. Nothing rendered is lost: the SERVICE_DOWN clamp at
   // the end of this function already replaces everything they would produce.
@@ -3683,6 +3880,9 @@ LiveStats SdkHost::ReadStats() {
   } else if (device_ && serviceUp) {  // getConnectLocation is an rpc — see above
     s.connected = device_->getConnectLocation().has_value();
     s.connectionStatus = s.connected ? "DESTINATION_SET" : "DISCONNECTED";
+    // no controller reports on it: the health tracker reads it over an active
+    // capture as the connection asked for (ConnectionHealth.h)
+    s.statusFromLocation = s.connected;
   }
   if (contractVc_) {
     // Most recent throughput point that has a Remote (tunneled) sample.
@@ -3707,15 +3907,30 @@ LiveStats SdkHost::ReadStats() {
     s.providePaused = device_->getProvidePaused();
     s.provideMode = static_cast<int64_t>(device_->getProvideMode());
     s.provideHasNetworkKey = provideHasNetworkKey_.load();
+    std::optional<urnet::NetworkPeerList> connectedPeers;
     if (auto np = device_->getNetworkPeers(); np && np->Connected) {
       s.provideClients = static_cast<int64_t>(np->Connected->size());
+      s.connectedPeerCount = s.provideClients;
+      connectedPeers = std::move(np->Connected);
     }
+    // the peers line's other reading, which RemoteConnected() would take
+    // mutex_ for on the UI thread
+    s.remoteConnected = device_->getRemoteConnected();
     // selected provider (read-only row + dns regional recommendations)
-    if (auto loc = device_->getConnectLocation()) {
+    const std::optional<urnet::ConnectLocation> loc = device_->getConnectLocation();
+    if (loc) {
       if (loc->name) s.locationName = *loc->name;
       if (loc->country_code) s.countryCode = *loc->country_code;
       if (loc->country) s.countryName = *loc->country;
     }
+    // A selected network peer is named after its device (req4), here rather
+    // than in ConnectPage::ApplyStats, whose two reads took mutex_ on the UI
+    // thread. The selection is what SelectedLocation answers, without its lock:
+    // the presented controller's, read lock-free like its status above, else
+    // the device's location.
+    s.locationName = SelectedLocationName(
+        std::move(s.locationName), connectVc_ ? connectVc_->getSelectedLocation() : loc,
+        connectedPeers);
     // The window honesty diagnosis (track 2): the SDK's stall reason and the
     // terminal failed latch. One more rpc getter under the same serviceUp
     // gate as the five above; an old service simply omits the JSON keys and
@@ -3765,6 +3980,7 @@ LiveStats SdkHost::ReadStats() {
     s.rawConnectionStatus = s.connectionStatus;
     s.rawConnected = s.connected;
     s.connectionStatus = "RPC_ONLY";
+    s.statusFromLocation = false;
     s.connected = false;  // gates "Connected to N providers" and the rate line
     s.providerCount = 0;
     s.downBitsPerSecond = 0;
@@ -3802,6 +4018,7 @@ LiveStats SdkHost::ReadStats() {
     s.rawConnectionStatus = s.connectionStatus;
     s.rawConnected = s.connected;
     s.connectionStatus = "SERVICE_DOWN";
+    s.statusFromLocation = false;
     s.connected = false;
     s.providerCount = 0;
     s.downBitsPerSecond = 0;
@@ -3841,6 +4058,8 @@ LiveStats SdkHost::ReadStats() {
     hs.provenCount = proven;
     // the SDK's terminal verdict (already clamped above with everything else)
     hs.windowFailed = s.windowFailed;
+    // a hidden window's destination set from the location alone
+    hs.statusFromLocation = s.statusFromLocation;
     const int64_t nowMillis =
         std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now().time_since_epoch())
@@ -3897,7 +4116,13 @@ void SdkHost::PublishStats() {
   if (onStats_) onStats_(ReadStats());
 }
 
-LiveStats SdkHost::CurrentStats() { return ReadStats(); }
+void SdkHost::PublishStatsOnWorker() {
+  try {
+    PublishStats();
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: a stats publish failed: {}", e.what());
+  }
+}
 
 // ---- connect drawer feeds (macOS ThroughputStore/ContractDetailsStore/
 // BlockActionsStore/DnsSettingsStore parity) --------------------------------
@@ -5352,18 +5577,11 @@ std::optional<urnet::TransportStatus> SdkHost::CurrentTransportStatus(
   return std::nullopt;
 }
 
-PerformanceSettings SdkHost::CurrentPerformanceSettings() {
+namespace {
+// A profile in the drawer's terms.
+PerformanceSettings PerformanceSettingsFrom(
+    const std::optional<urnet::PerformanceProfile>& profile) {
   PerformanceSettings s;
-  std::optional<urnet::PerformanceProfile> profile;
-  try {
-    if (device_) {
-      profile = device_->getPerformanceProfile();
-    } else if (localState_) {
-      profile = localState_->getPerformanceProfile();
-    }
-  } catch (const std::exception& e) {
-    LogWarn("sdkhost: get performance profile failed: {}", e.what());
-  }
   if (!profile) return s;  // nil profile â‰¡ window type auto, everything off
   // a nil profile and window type "auto" mean the same thing (macOS
   // loadPerformanceProfileFromDevice parity)
@@ -5380,43 +5598,104 @@ PerformanceSettings SdkHost::CurrentPerformanceSettings() {
               profile->window_size->window_size_max == 1;
   return s;
 }
+}  // namespace
 
-void SdkHost::SetPerformanceSettings(const PerformanceSettings& settings) {
-  std::scoped_lock lock(mutex_);
-  // always a profile, even for window type auto, so the orthogonal settings
-  // (allow direct, post quantum encryption) persist and apply in every mode
-  // (macOS DeviceManager createPerformanceProfile parity)
-  urnet::PerformanceProfile p;
-  p.allow_direct = settings.allowDirect;
-  p.post_quantum_encryption = settings.postQuantum;
-  if (settings.mode == ConnectionMode::Auto) {
-    // no fixed window type or size
-    p.window_type = urnet::WindowTypeAuto;
-  } else {
-    p.window_type = settings.mode == ConnectionMode::Web ? urnet::WindowTypeQuality
-                                                         : urnet::WindowTypeSpeed;
-    urnet::WindowSizeSettings ws;
-    ws.window_size_min = settings.fixedIp ? 1 : 2;
-    ws.window_size_max = settings.fixedIp ? 1 : 4;
-    p.window_size = ws;
-  }
-  const std::optional<urnet::PerformanceProfile> profile = std::move(p);
+PerformanceSettings SdkHost::CurrentPerformanceSettings() {
+  std::optional<urnet::PerformanceProfile> profile;
   try {
-    if (localState_) localState_->setPerformanceProfile(profile);  // persistence
-    if (device_) device_->setPerformanceProfile(profile);          // live device
+    if (device_) {
+      profile = device_->getPerformanceProfile();
+    } else if (localState_) {
+      profile = localState_->getPerformanceProfile();
+    }
   } catch (const std::exception& e) {
-    LogWarn("sdkhost: set performance profile failed: {}", e.what());
+    LogWarn("sdkhost: get performance profile failed: {}", e.what());
+  }
+  return PerformanceSettingsFrom(profile);
+}
+
+PerformanceSettings SdkHost::StoredPerformanceSettings() {
+  std::optional<urnet::PerformanceProfile> profile;
+  try {
+    if (localState_) profile = localState_->getPerformanceProfile();
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: get the stored performance profile failed: {}", e.what());
+  }
+  return PerformanceSettingsFrom(profile);
+}
+
+bool SdkHost::StoredKillSwitch() {
+  try {
+    // kill switch == !routeLocal (SdkHost.h)
+    if (localState_) return !localState_->getRouteLocal();
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: get the stored route local failed: {}", e.what());
+  }
+  return false;  // no state at all: claim the permissive default, not the strict one
+}
+
+std::string SdkHost::StoredProvideControlMode() {
+  try {
+    if (localState_) return localState_->getProvideControlMode();
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: get the stored provide control mode failed: {}", e.what());
+  }
+  return "never";
+}
+
+void SdkHost::ReadDrawerSeedOnWorker() {
+  try {
+    DrawerSeed seed;
+    seed.dns = CurrentDnsSettings();
+    seed.clientTransport = CurrentTransportSettings(TransportSettingsKind::Client);
+    seed.providerTransport = CurrentTransportSettings(TransportSettingsKind::Provider);
+    seed.blockerEnabled = CurrentBlockerEnabled();
+    if (onDrawerSeed_) onDrawerSeed_(std::move(seed));
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: reading the drawer's settings failed: {}", e.what());
   }
 }
 
+void SdkHost::SetPerformanceSettings(const PerformanceSettings& settings) {
+  PostWrite("set performance settings", [this, settings] {
+    std::scoped_lock lock(mutex_);
+    // always a profile, even for window type auto, so the orthogonal settings
+    // (allow direct, post quantum encryption) persist and apply in every mode
+    // (macOS DeviceManager createPerformanceProfile parity)
+    urnet::PerformanceProfile p;
+    p.allow_direct = settings.allowDirect;
+    p.post_quantum_encryption = settings.postQuantum;
+    if (settings.mode == ConnectionMode::Auto) {
+      // no fixed window type or size
+      p.window_type = urnet::WindowTypeAuto;
+    } else {
+      p.window_type = settings.mode == ConnectionMode::Web ? urnet::WindowTypeQuality
+                                                           : urnet::WindowTypeSpeed;
+      urnet::WindowSizeSettings ws;
+      ws.window_size_min = settings.fixedIp ? 1 : 2;
+      ws.window_size_max = settings.fixedIp ? 1 : 4;
+      p.window_size = ws;
+    }
+    const std::optional<urnet::PerformanceProfile> profile = std::move(p);
+    try {
+      if (localState_) localState_->setPerformanceProfile(profile);  // persistence
+      if (device_) device_->setPerformanceProfile(profile);          // live device
+    } catch (const std::exception& e) {
+      LogWarn("sdkhost: set performance profile failed: {}", e.what());
+    }
+  });
+}
+
 void SdkHost::SetBlockerEnabled(bool on) {
-  std::scoped_lock lock(mutex_);
-  if (!device_) return;
-  try {
-    device_->setBlockerEnabled(on);  // the device persists and restores this
-  } catch (const std::exception& e) {
-    LogWarn("sdkhost: set blocker failed: {}", e.what());
-  }
+  PostWrite("set blocker", [this, on] {
+    std::scoped_lock lock(mutex_);
+    if (!device_) return;
+    try {
+      device_->setBlockerEnabled(on);  // the device persists and restores this
+    } catch (const std::exception& e) {
+      LogWarn("sdkhost: set blocker failed: {}", e.what());
+    }
+  });
 }
 
 bool SdkHost::CurrentKillSwitch() {
@@ -5431,46 +5710,55 @@ bool SdkHost::CurrentKillSwitch() {
   return false;  // no state at all: claim the permissive default, not the strict one
 }
 
-bool SdkHost::SetKillSwitch(bool on) {
-  std::scoped_lock lock(mutex_);
-  // A kill switch stuck in the WRONG state is a privacy failure, not a cosmetic
-  // one, so this reports whether it took instead of swallowing the throw.
-  //
-  // The order is deliberate too. LocalState is the persistent truth the session
-  // bootstrap restores from, so it is written FIRST: if the device write then
-  // throws, the two disagree only until the next session and the value that
-  // survives is the one the user asked for. Writing the device first lost the
-  // LocalState write entirely whenever it threw, leaving device and LocalState
-  // silently disagreeing with nothing to notice it.
-  bool ok = true;
-  try {
-    if (localState_) localState_->setRouteLocal(!on);
-  } catch (const std::exception& e) {
-    LogWarn("sdkhost: persist route local failed: {}", e.what());
-    ok = false;
-  }
-  try {
-    if (device_) device_->setRouteLocal(!on);
-  } catch (const std::exception& e) {
-    LogWarn("sdkhost: set route local on device failed: {}", e.what());
-    ok = false;
-  }
-  // ...and the leg that actually enforces it. routeLocal is a branch DOWNSTREAM
-  // of the OS routing decision — it only sees packets the kernel already routed
-  // into the tun — so it cannot cover IPv6, the LAN, another adapter's
-  // resolver, a split-tunnel exclusion, or a dead service, which is the case a
-  // kill switch exists for. The service's WFP policy is what covers those. Kept
-  // alongside rather than instead of: the two legs disagreeing is a privacy
-  // failure, so both are written and both report.
-  if (service_.IsConnected() && !service_.SetKillSwitch(on)) {
-    LogWarn("sdkhost: the service did not accept the kill-switch change; the "
-            "firewall policy may not match the setting");
-    ok = false;
-  }
-  // Turning it off with no session lifts the armed floor, the one state that
-  // holds the provider-only device off (ProvideLifecycle.h): providing resumes.
-  if (!on && !device_) RequestProviderReconcile("kill switch turned off");
-  return ok;
+void SdkHost::SetKillSwitch(bool on, std::function<void(bool applied, bool actual)> done) {
+  PostWrite("set kill switch", [this, on, done = std::move(done)] {
+    bool applied = true;
+    bool actual = false;
+    {
+      std::scoped_lock lock(mutex_);
+      // A kill switch stuck in the WRONG state is a privacy failure, not a cosmetic
+      // one, so this reports whether it took instead of swallowing the throw.
+      //
+      // The order is deliberate too. LocalState is the persistent truth the session
+      // bootstrap restores from, so it is written FIRST: if the device write then
+      // throws, the two disagree only until the next session and the value that
+      // survives is the one the user asked for. Writing the device first lost the
+      // LocalState write entirely whenever it threw, leaving device and LocalState
+      // silently disagreeing with nothing to notice it.
+      bool ok = true;
+      try {
+        if (localState_) localState_->setRouteLocal(!on);
+      } catch (const std::exception& e) {
+        LogWarn("sdkhost: persist route local failed: {}", e.what());
+        ok = false;
+      }
+      try {
+        if (device_) device_->setRouteLocal(!on);
+      } catch (const std::exception& e) {
+        LogWarn("sdkhost: set route local on device failed: {}", e.what());
+        ok = false;
+      }
+      // ...and the leg that actually enforces it. routeLocal is a branch DOWNSTREAM
+      // of the OS routing decision — it only sees packets the kernel already routed
+      // into the tun — so it cannot cover IPv6, the LAN, another adapter's
+      // resolver, a split-tunnel exclusion, or a dead service, which is the case a
+      // kill switch exists for. The service's WFP policy is what covers those. Kept
+      // alongside rather than instead of: the two legs disagreeing is a privacy
+      // failure, so both are written and both report.
+      if (service_.IsConnected() && !service_.SetKillSwitch(on)) {
+        LogWarn("sdkhost: the service did not accept the kill-switch change; the "
+                "firewall policy may not match the setting");
+        ok = false;
+      }
+      // Turning it off with no session lifts the armed floor, the one state that
+      // holds the provider-only device off (ProvideLifecycle.h): providing resumes.
+      if (!on && !device_) RequestProviderReconcile("kill switch turned off");
+      applied = ok;
+      // read back on the same worker, after the write: what the caller shows
+      actual = CurrentKillSwitch();
+    }
+    if (done) done(applied, actual);
+  });
 }
 
 std::string SdkHost::CurrentProvideControlMode() {
@@ -5485,190 +5773,257 @@ std::string SdkHost::CurrentProvideControlMode() {
 }
 
 void SdkHost::SetProvideControlMode(const std::string& mode) {
-  std::scoped_lock lock(mutex_);
-  try {
-    if (device_) device_->setProvideControlMode(mode);
-    // Persist alongside the device write (macOS handleProvideControlModeUpdate
-    // parity) â€” DeviceLocal.SetProvideControlMode alone does not persist, and
-    // the session bootstrap restores the persisted mode.
-    if (localState_) localState_->setProvideControlMode(mode);
-  } catch (const std::exception& e) {
-    LogWarn("sdkhost: set provide control mode failed: {}", e.what());
-  }
-  // No session: the provider-only device follows the new mode — started for a
-  // mode that provides while disconnected, stopped for one that does not. Off
-  // this (UI) thread: starting one builds a DeviceLocal in the service.
-  if (!device_) RequestProviderReconcile("provide mode changed");
+  PostWrite("set provide control mode", [this, mode] {
+    std::scoped_lock lock(mutex_);
+    try {
+      if (device_) device_->setProvideControlMode(mode);
+      // Persist alongside the device write (macOS handleProvideControlModeUpdate
+      // parity) â€” DeviceLocal.SetProvideControlMode alone does not persist, and
+      // the session bootstrap restores the persisted mode.
+      if (localState_) localState_->setProvideControlMode(mode);
+    } catch (const std::exception& e) {
+      LogWarn("sdkhost: set provide control mode failed: {}", e.what());
+    }
+    // No session: the provider-only device follows the new mode — started for a
+    // mode that provides while disconnected, stopped for one that does not. On
+    // the session worker: starting one builds a DeviceLocal in the service.
+    if (!device_) RequestProviderReconcile("provide mode changed");
+  });
 }
 
 void SdkHost::SetProvideExtender(bool on) {
-  std::scoped_lock lock(mutex_);
-  ExtenderProvideStatusView shown;
-  {
+  PostWrite("set provide extender", [this, on] {
+    std::scoped_lock lock(mutex_);
+    ExtenderProvideStatusView shown;
+    {
+      std::scoped_lock drawerLock(drawerMutex_);
+      shown = lastExtenderProvideStatus_;
+    }
+    switch (ExtenderProvideWriteRouteFor(device_.has_value(), shown)) {
+      case ExtenderProvideWriteRoute::Device:
+        break;
+      case ExtenderProvideWriteRoute::Service:
+        // Not on this worker: the pipe serializes calls, and this one can
+        // wait behind a start_tunnel.
+        QueueProviderOnlyExtenderWrite(on);
+        return;
+      case ExtenderProvideWriteRoute::None:
+        return;
+    }
+    // The device persists it in its space and applies it at once (N4); detached,
+    // the DeviceRemote queues it for the next sync, and a device process with no
+    // setter drops it rather than replaying it on every reconnect.
+    device_->setProvideExtender(on);
+    // The row paints its guess after this returns (N7). The device emits a status
+    // for the write within its one-second epoch, but two flips inside one epoch
+    // can land on the status already published, which the dedup would drop and so
+    // leave the guess standing.
     std::scoped_lock drawerLock(drawerMutex_);
-    shown = lastExtenderProvideStatus_;
-  }
-  switch (ExtenderProvideWriteRouteFor(device_.has_value(), shown)) {
-    case ExtenderProvideWriteRoute::Device:
-      break;
-    case ExtenderProvideWriteRoute::Service:
-      // Not on this (UI) thread: the pipe serializes calls, and this one can
-      // wait behind a start_tunnel.
-      QueueProviderOnlyExtenderWrite(on);
-      return;
-    case ExtenderProvideWriteRoute::None:
-      return;
-  }
-  // The device persists it in its space and applies it at once (N4); detached,
-  // the DeviceRemote queues it for the next sync, and a device process with no
-  // setter drops it rather than replaying it on every reconnect.
-  device_->setProvideExtender(on);
-  // The row paints its guess after this returns (N7). The device emits a status
-  // for the write within its one-second epoch, but two flips inside one epoch
-  // can land on the status already published, which the dedup would drop and so
-  // leave the guess standing.
-  std::scoped_lock drawerLock(drawerMutex_);
-  extenderProvideRepublish_ = true;
+    extenderProvideRepublish_ = true;
+  });
 }
 
 void SdkHost::SetMeasurementsEnabled(bool on) {
-  std::scoped_lock lock(mutex_);
-  ExtenderProvideStatusView shown;
-  {
+  PostWrite("set measurements", [this, on] {
+    std::scoped_lock lock(mutex_);
+    ExtenderProvideStatusView shown;
+    {
+      std::scoped_lock drawerLock(drawerMutex_);
+      shown = lastExtenderProvideStatus_;
+    }
+    switch (SpeedTestsWriteRouteFor(device_.has_value(), shown)) {
+      case ExtenderProvideWriteRoute::Device:
+        break;
+      case ExtenderProvideWriteRoute::Service:
+        // Not on this worker either, as the Extender switch's write.
+        QueueProviderOnlyMeasurementsWrite(on);
+        return;
+      case ExtenderProvideWriteRoute::None:
+        return;
+    }
+    // The device persists it in its space and applies it at once; detached, the
+    // DeviceRemote queues it for the next sync.
+    device_->setMeasurementsEnabled(on);
+    // The switch paints its guess after this returns; the device's next status
+    // replaces it, even one equal to the last published.
     std::scoped_lock drawerLock(drawerMutex_);
-    shown = lastExtenderProvideStatus_;
-  }
-  switch (SpeedTestsWriteRouteFor(device_.has_value(), shown)) {
-    case ExtenderProvideWriteRoute::Device:
-      break;
-    case ExtenderProvideWriteRoute::Service:
-      // Not on this (UI) thread, as the Extender switch's write.
-      QueueProviderOnlyMeasurementsWrite(on);
-      return;
-    case ExtenderProvideWriteRoute::None:
-      return;
-  }
-  // The device persists it in its space and applies it at once; detached, the
-  // DeviceRemote queues it for the next sync.
-  device_->setMeasurementsEnabled(on);
-  // The switch paints its guess after this returns; the device's next status
-  // replaces it, even one equal to the last published.
-  std::scoped_lock drawerLock(drawerMutex_);
-  extenderProvideRepublish_ = true;
+    extenderProvideRepublish_ = true;
+  });
 }
 
-void SdkHost::ApplyDnsSettings(const urnet::DnsResolverSettings& settings) {
-  std::scoped_lock lock(mutex_);
-  if (!device_) return;
-  try {
-    device_->setDnsResolverSettings(settings);
-  } catch (const std::exception& e) {
-    LogWarn("sdkhost: set dns settings failed: {}", e.what());
-  }
-  if (onDnsSettings_) onDnsSettings_(CurrentDnsSettings());
+void SdkHost::ApplyDnsSettings(const std::optional<urnet::DnsResolverSettings>& opened,
+                               const urnet::DnsResolverSettings& settings) {
+  PostWrite("apply dns settings", [this, opened, settings] {
+    std::scoped_lock lock(mutex_);
+    if (!device_) return;
+    // compare and set (EditorApply.h): only over the reading the editor opened
+    // on, still the device's now
+    const std::optional<urnet::DnsResolverSettings> current = CurrentDnsSettings();
+    bool write = false;
+    try {
+      write = editorapply::Decide(opened, current, editorapply::DnsReadingKnown(current),
+                                  [](const urnet::DnsResolverSettings& a,
+                                     const urnet::DnsResolverSettings& b) {
+                                    return nlohmann::json(a) == nlohmann::json(b);
+                                  }) == editorapply::Step::Write;
+    } catch (const std::exception& e) {
+      LogWarn("sdkhost: comparing dns settings failed: {}", e.what());
+    }
+    if (write) {
+      try {
+        device_->setDnsResolverSettings(settings);
+      } catch (const std::exception& e) {
+        LogWarn("sdkhost: set dns settings failed: {}", e.what());
+      }
+    } else {
+      LogWarn("sdkhost: dns settings not written: they changed since the editor opened, "
+              "or are unknown");
+    }
+    // the views take the device's reading either way, the editor's next seed
+    if (onDnsSettings_) onDnsSettings_(CurrentDnsSettings());
+  });
 }
 
 void SdkHost::ApplyTransportSettings(TransportSettingsKind kind,
+                                     const std::optional<urnet::TransportSettings>& opened,
                                      const urnet::TransportSettings& settings) {
-  std::scoped_lock lock(mutex_);
-  const bool provider = kind == TransportSettingsKind::Provider;
-  // the device first: attached, the service applies it (make-before-break
-  // migration of the live window) and persists it; detached, the DeviceRemote
-  // queues it for the next sync. Both fire the change listener.
-  if (device_) {
+  PostWrite("apply transport settings", [this, kind, opened, settings] {
+    std::scoped_lock lock(mutex_);
+    const bool provider = kind == TransportSettingsKind::Provider;
+    // Compare and set (EditorApply.h): only over the reading the editor opened
+    // on, still the policy in force now. None is the default in force when the
+    // device says so over an attached rpc, or the mirror does with no session;
+    // from a detached device it is a fallback, and a write over it would be
+    // queued and replayed over the service's real policy.
+    bool write = false;
     try {
-      if (provider) {
-        device_->setProviderTransportSettings(settings);
-      } else {
-        device_->setTransportSettings(settings);
+      std::optional<urnet::TransportSettings> current;
+      bool known = false;
+      if (device_) {
+        current = provider ? device_->getProviderTransportSettings()
+                           : device_->getTransportSettings();
+        known = current.has_value() || device_->getRemoteConnected();
+      } else if (localState_) {
+        current = provider ? localState_->getProviderTransportSettings()
+                           : localState_->getTransportSettings();
+        known = true;
       }
+      write = editorapply::Decide(opened, current, known,
+                                  [](const urnet::TransportSettings& a,
+                                     const urnet::TransportSettings& b) {
+                                    return urnet::transportSettingsEqual(a, b);
+                                  }) == editorapply::Step::Write;
     } catch (const std::exception& e) {
-      LogWarn("sdkhost: set {} transport settings failed: {}",
+      LogWarn("sdkhost: reading the {} transport settings failed: {}",
               provider ? "provider" : "client", e.what());
     }
-  }
-  // then the app-side mirror, with or without a device: it seeds the device on
-  // the next bootstrap and answers the offline reads (see the header note)
-  if (localState_) {
-    try {
-      if (provider) {
-        localState_->setProviderTransportSettings(settings);
-      } else {
-        localState_->setTransportSettings(settings);
-      }
-    } catch (const std::exception& e) {
-      LogWarn("sdkhost: persist {} transport settings failed: {}",
-              provider ? "provider" : "client", e.what());
+    if (!write) {
+      LogWarn("sdkhost: {} transport settings not written: they changed since the editor "
+              "opened, or are unknown",
+              provider ? "provider" : "client");
+      // the editor's next seed
+      if (onTransportSettings_) onTransportSettings_(kind, CurrentTransportSettings(kind));
+      return;
     }
-  }
-  // No session: a provider-only device runs on the policy it was built with.
-  // The reconcile's request now carries the new one, so the service builds a
-  // new device for it.
-  if (provider && !device_) RequestProviderReconcile("provider transport policy changed");
-  if (onTransportSettings_) onTransportSettings_(kind, CurrentTransportSettings(kind));
+    // the device first: attached, the service applies it (make-before-break
+    // migration of the live window) and persists it; detached, the DeviceRemote
+    // queues it for the next sync. Both fire the change listener.
+    if (device_) {
+      try {
+        if (provider) {
+          device_->setProviderTransportSettings(settings);
+        } else {
+          device_->setTransportSettings(settings);
+        }
+      } catch (const std::exception& e) {
+        LogWarn("sdkhost: set {} transport settings failed: {}",
+                provider ? "provider" : "client", e.what());
+      }
+    }
+    // then the app-side mirror, with or without a device: it seeds the device on
+    // the next bootstrap and answers the offline reads (see the header note)
+    if (localState_) {
+      try {
+        if (provider) {
+          localState_->setProviderTransportSettings(settings);
+        } else {
+          localState_->setTransportSettings(settings);
+        }
+      } catch (const std::exception& e) {
+        LogWarn("sdkhost: persist {} transport settings failed: {}",
+                provider ? "provider" : "client", e.what());
+      }
+    }
+    // No session: a provider-only device runs on the policy it was built with.
+    // The reconcile's request now carries the new one, so the service builds a
+    // new device for it.
+    if (provider && !device_) RequestProviderReconcile("provider transport policy changed");
+    if (onTransportSettings_) onTransportSettings_(kind, CurrentTransportSettings(kind));
+  });
 }
 
 std::string SdkHost::CreateSplitRule(const std::vector<std::string>& hosts) {
-  std::scoped_lock lock(mutex_);
-  if (!device_ || hosts.empty()) return {};
-  std::string overrideId;
-  try {
-    urnet::BlockActionOverride over;
-    over.OverrideId = urnet::newId();
-    over.Hosts = hosts;
-    urnet::RouteOverride route;
-    route.Local = true;
+  urnet::RouteOverride route;
+  route.Local = true;
+  return PostRuleCreate("create split rule", hosts, [route](urnet::BlockActionOverride& over) {
     over.RouteOverride = route;
-    device_->addBlockActionOverride(over);
-    overrideId = *over.OverrideId;
-  } catch (const std::exception& e) {
-    LogWarn("sdkhost: create split rule failed: {}", e.what());
-  }
-  PublishSplitRules();
-  return overrideId;
+  });
 }
 
 std::string SdkHost::CreateTunnelRule(const std::vector<std::string>& hosts) {
-  std::scoped_lock lock(mutex_);
-  if (!device_ || hosts.empty()) return {};
-  std::string overrideId;
-  try {
-    // CreateSplitRule's mirror: Local=false keeps the hosts INSIDE the tunnel.
-    // Pin=false, because a pin is exit placement, not membership (see the
-    // header) - a pinned "rule" would not answer "why is this not tunnelled".
-    urnet::BlockActionOverride over;
-    over.OverrideId = urnet::newId();
-    over.Hosts = hosts;
-    urnet::RouteOverride route;
-    route.Local = false;
-    route.Pin = false;
+  // CreateSplitRule's mirror: Local=false keeps the hosts INSIDE the tunnel.
+  // Pin=false, because a pin is exit placement, not membership (see the
+  // header) - a pinned "rule" would not answer "why is this not tunnelled".
+  urnet::RouteOverride route;
+  route.Local = false;
+  route.Pin = false;
+  return PostRuleCreate("create tunnel rule", hosts, [route](urnet::BlockActionOverride& over) {
     over.RouteOverride = route;
-    device_->addBlockActionOverride(over);
-    overrideId = *over.OverrideId;
-  } catch (const std::exception& e) {
-    LogWarn("sdkhost: create tunnel rule failed: {}", e.what());
-  }
-  PublishSplitRules();
-  return overrideId;
+  });
 }
 
 std::string SdkHost::CreateBlockRule(const std::vector<std::string>& hosts, bool block) {
-  std::scoped_lock lock(mutex_);
-  if (!device_ || hosts.empty()) return {};
+  urnet::BlockOverride blockOverride;
+  blockOverride.Block = block;
+  return PostRuleCreate("create block rule", hosts,
+                        [blockOverride](urnet::BlockActionOverride& over) {
+                          over.BlockOverride = blockOverride;
+                        });
+}
+
+void SdkHost::PostWrite(const char* what, std::function<void()> job) {
+  // refused only once the quit or the destructor stopped the worker
+  if (!writer_.Post(std::move(job))) LogInfo("sdkhost: '{}' dropped: the app is quitting", what);
+}
+
+std::string SdkHost::PostRuleCreate(const char* what, const std::vector<std::string>& hosts,
+                                    std::function<void(urnet::BlockActionOverride&)> shape) {
+  // The id is the caller's at once, for its undo, which removes by id: it is
+  // minted here, not by the device. With no session or no hosts nothing is
+  // written, as before; a write that throws later leaves no rule, and an undo
+  // of it removes nothing.
+  if (!HasSession() || hosts.empty()) return {};
   std::string overrideId;
   try {
-    urnet::BlockActionOverride over;
-    over.OverrideId = urnet::newId();
-    over.Hosts = hosts;
-    urnet::BlockOverride blockOverride;
-    blockOverride.Block = block;
-    over.BlockOverride = blockOverride;
-    device_->addBlockActionOverride(over);
-    overrideId = *over.OverrideId;
+    overrideId = urnet::newId();
   } catch (const std::exception& e) {
-    LogWarn("sdkhost: create block rule failed: {}", e.what());
+    LogWarn("sdkhost: {} failed: {}", what, e.what());
+    return {};
   }
-  PublishSplitRules();
+  PostWrite(what, [this, what, hosts, overrideId, shape = std::move(shape)] {
+    std::scoped_lock lock(mutex_);
+    if (!device_) return;
+    try {
+      urnet::BlockActionOverride over;
+      over.OverrideId = overrideId;
+      over.Hosts = hosts;
+      shape(over);
+      device_->addBlockActionOverride(over);
+    } catch (const std::exception& e) {
+      LogWarn("sdkhost: {} failed: {}", what, e.what());
+    }
+    PublishSplitRules();
+  });
   return overrideId;
 }
 
@@ -5679,35 +6034,39 @@ void SdkHost::RemoveBlockRule(const std::string& overrideId) {
 
 void SdkHost::UpdateSplitRule(const std::string& overrideId,
                               const std::vector<std::string>& hosts) {
-  {
-    std::scoped_lock lock(mutex_);
-    if (!device_) return;
-    if (!hosts.empty()) {
-      try {
-        // rebuild the full override list with the rule's hosts replaced
-        auto list = device_->getBlockActionOverrides();
-        if (!list) return;
-        bool found = false;
-        for (auto& over : *list) {
-          if (over.OverrideId && *over.OverrideId == overrideId) {
-            over.Hosts = hosts;
-            found = true;
-            break;
-          }
-        }
-        if (found) device_->setBlockActionOverrides(list);
-      } catch (const std::exception& e) {
-        LogWarn("sdkhost: update split rule failed: {}", e.what());
-      }
-      PublishSplitRules();
+  PostWrite("update split rule", [this, overrideId, hosts] {
+    // empty selection removes the rule
+    if (hosts.empty()) {
+      RemoveSplitRuleOnWriter(overrideId);
       return;
     }
-  }
-  // empty selection removes the rule (RemoveSplitRule takes the lock itself)
-  RemoveSplitRule(overrideId);
+    std::scoped_lock lock(mutex_);
+    if (!device_) return;
+    try {
+      // rebuild the full override list with the rule's hosts replaced
+      auto list = device_->getBlockActionOverrides();
+      if (!list) return;
+      bool found = false;
+      for (auto& over : *list) {
+        if (over.OverrideId && *over.OverrideId == overrideId) {
+          over.Hosts = hosts;
+          found = true;
+          break;
+        }
+      }
+      if (found) device_->setBlockActionOverrides(list);
+    } catch (const std::exception& e) {
+      LogWarn("sdkhost: update split rule failed: {}", e.what());
+    }
+    PublishSplitRules();
+  });
 }
 
 void SdkHost::RemoveSplitRule(const std::string& overrideId) {
+  PostWrite("remove split rule", [this, overrideId] { RemoveSplitRuleOnWriter(overrideId); });
+}
+
+void SdkHost::RemoveSplitRuleOnWriter(const std::string& overrideId) {
   std::scoped_lock lock(mutex_);
   if (!device_) return;
   try {
@@ -5719,49 +6078,53 @@ void SdkHost::RemoveSplitRule(const std::string& overrideId) {
 }
 
 void SdkHost::SetAppRule(const std::string& imagePath, bool includeInTunnel) {
-  std::scoped_lock lock(mutex_);
-  if (imagePath.empty()) return;
-  try {
-    // localState_ is the OFFLINE source of truth (persists, readable while
-    // disconnected). device_ drives the LIVE tunnel when connected -
-    // setBlockActionOverrides fires the change listener -> re-drives the driver.
-    // Write both so the config is durable and applies immediately when up.
-    if (localState_) {
-      auto list = localState_->getBlockActionOverrides();
-      if (!list) list = urnet::BlockActionOverrideList{};
-      UrstUpsertAppRule(*list, imagePath, includeInTunnel);
-      localState_->setBlockActionOverrides(list);
+  PostWrite("set app rule", [this, imagePath, includeInTunnel] {
+    std::scoped_lock lock(mutex_);
+    if (imagePath.empty()) return;
+    try {
+      // localState_ is the OFFLINE source of truth (persists, readable while
+      // disconnected). device_ drives the LIVE tunnel when connected -
+      // setBlockActionOverrides fires the change listener -> re-drives the driver.
+      // Write both so the config is durable and applies immediately when up.
+      if (localState_) {
+        auto list = localState_->getBlockActionOverrides();
+        if (!list) list = urnet::BlockActionOverrideList{};
+        UrstUpsertAppRule(*list, imagePath, includeInTunnel);
+        localState_->setBlockActionOverrides(list);
+      }
+      if (device_) {
+        auto list = device_->getBlockActionOverrides();
+        if (!list) list = urnet::BlockActionOverrideList{};
+        UrstUpsertAppRule(*list, imagePath, includeInTunnel);
+        device_->setBlockActionOverrides(list);
+      }
+    } catch (const std::exception& e) {
+      LogWarn("sdkhost: set app rule failed: {}", e.what());
     }
-    if (device_) {
-      auto list = device_->getBlockActionOverrides();
-      if (!list) list = urnet::BlockActionOverrideList{};
-      UrstUpsertAppRule(*list, imagePath, includeInTunnel);
-      device_->setBlockActionOverrides(list);
-    }
-  } catch (const std::exception& e) {
-    LogWarn("sdkhost: set app rule failed: {}", e.what());
-  }
+  });
 }
 
 void SdkHost::RemoveAppRule(const std::string& imagePath) {
-  std::scoped_lock lock(mutex_);
-  if (imagePath.empty()) return;
-  try {
-    if (localState_) {
-      if (auto list = localState_->getBlockActionOverrides()) {
-        UrstRemoveAppRule(*list, imagePath);
-        localState_->setBlockActionOverrides(list);
+  PostWrite("remove app rule", [this, imagePath] {
+    std::scoped_lock lock(mutex_);
+    if (imagePath.empty()) return;
+    try {
+      if (localState_) {
+        if (auto list = localState_->getBlockActionOverrides()) {
+          UrstRemoveAppRule(*list, imagePath);
+          localState_->setBlockActionOverrides(list);
+        }
       }
-    }
-    if (device_) {
-      if (auto list = device_->getBlockActionOverrides()) {
-        UrstRemoveAppRule(*list, imagePath);
-        device_->setBlockActionOverrides(list);
+      if (device_) {
+        if (auto list = device_->getBlockActionOverrides()) {
+          UrstRemoveAppRule(*list, imagePath);
+          device_->setBlockActionOverrides(list);
+        }
       }
+    } catch (const std::exception& e) {
+      LogWarn("sdkhost: remove app rule failed: {}", e.what());
     }
-  } catch (const std::exception& e) {
-    LogWarn("sdkhost: remove app rule failed: {}", e.what());
-  }
+  });
 }
 
 std::vector<AppRule> SdkHost::CurrentAppRules() {
@@ -5806,7 +6169,7 @@ ReliabilitySnapshot SdkHost::ReadReliability() {
   // either side of a session teardown and disagree about which session they
   // describe. The cost is that a slow or unreachable service holds mutex_ for
   // the whole batch, and mutex_ is taken by UI-thread readers (RemoteConnected,
-  // CurrentStats, SelectedLocation, ...). That is the shape the rest of this
+  // SelectedLocation, ...). That is the shape the rest of this
   // class already has — those readers hold it across rpcs too — but this is the
   // biggest single hold in it, so it is the first thing to revisit if the
   // window is ever seen to stall while the developer screen is open.
@@ -6134,9 +6497,15 @@ std::vector<urnet::ProbeResult> SdkHost::GetProbeResults() {
 // WHICH SOURCE WINS: the view controller, always, whenever it exists. It pushes
 // live updates and owns server-side search; the api path is a cold snapshot.
 // deviceFeedOpen_ is the gate, checked by the api path before every push.
-void SdkHost::EnsureLocations() {
-  std::scoped_lock lock(mutex_);
-  EnsureLocationsLocked();
+void SdkHost::EnsureLocations() { locationsOpener_.Request(); }
+
+void SdkHost::EnsureLocationsOnWorker() {
+  try {
+    std::scoped_lock lock(mutex_);
+    EnsureLocationsLocked();
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: opening the locations feeds failed: {}", e.what());
+  }
 }
 
 void SdkHost::EnsureLocationsLocked() {
@@ -6373,10 +6742,13 @@ bool SdkHost::RemoteConnected() {
 }
 
 std::optional<urnet::ConnectLocation> SdkHost::SelectedLocation() {
-  std::scoped_lock lock(mutex_);
-  if (connectVc_) return connectVc_->getSelectedLocation();
-  if (device_) return device_->getConnectLocation();
-  return std::nullopt;
+  std::scoped_lock lock(selectedLocationMutex_);
+  return selectedLocation_;
+}
+
+void SdkHost::KeepSelectedLocation(std::optional<urnet::ConnectLocation> location) {
+  std::scoped_lock lock(selectedLocationMutex_);
+  selectedLocation_ = std::move(location);
 }
 
 // ---- selection identity (shared: sheet, Network pane, row coalescer) -------
@@ -6409,28 +6781,68 @@ bool IsLocationSelected(std::optional<urnet::ConnectLocation> const& selected,
 bool SdkHost::AdmitStartConnect(const char* what, std::function<void()> again) {
   // the balance recovery's retry decided on a fresh balance already, and it is
   // not a new gesture, so the observer is not told either
-  if (!startConnectFacts_ || retryingRefusedConnect_) return true;
+  if (!startConnectFacts_ || retryingRefusedConnect_) {
+    TellStartWaitOutcome(/*admitted=*/true);
+    return true;
+  }
   struct Sinks {
     SdkHost& host;
     const char* what;
     std::function<void()>& again;
     void Upgrade() {
       LogInfo("sdkhost: '{}' blocked: out of balance, showing the upgrade path", what);
+      // a start that waited goes back to the reported status before the
+      // upgrade path opens
+      host.TellStartWaitOutcome(/*admitted=*/false);
       // the refused gesture goes along: it waits on the balance to run again
       if (host.startConnectUpgrade_) host.startConnectUpgrade_(again);
     }
     void FetchBalance() {
       LogInfo("sdkhost: '{}' waits for a fresh balance", what);
-      if (host.startConnectFetchBalance_) {
-        host.startConnectFetchBalance_(std::move(again));
-      } else if (again) {
-        again();
-      }
+      host.WaitForBalance(std::move(again));
     }
   } sinks{*this, what, again};
   const bool admitted = urnw::balance::AdmitStartConnect(startConnectFacts_(), sinks);
-  if (admitted && connectAdmitted_) connectAdmitted_();
+  if (admitted) {
+    // a start that waited keeps its connecting state into the connect
+    TellStartWaitOutcome(/*admitted=*/true);
+    if (connectAdmitted_) connectAdmitted_();
+  }
   return admitted;
+}
+
+void SdkHost::WaitForBalance(std::function<void()> again) {
+  // The store calls every settle it was handed, so a repeated tap's older
+  // wait, and one a disconnect or a sign-out ended, must not connect.
+  const std::uint64_t token = startWait_.Begin();
+  if (onStartWait_) onStartWait_(StartWaitChange::Waiting);
+  std::function<void()> settled = [this, token, again = std::move(again)] {
+    if (!startWait_.Settle(token)) {
+      LogInfo("sdkhost: a start that waited for its balance was replaced or cancelled");
+      return;
+    }
+    // asks the gate again, which tells the views how it was answered
+    if (again) again();
+    // the gesture returned before the gate answered (a no-op re-click)
+    StartWaitChange change = StartWaitChange::Ended;
+    if (startWait_.TakeUnanswered(change) && onStartWait_) onStartWait_(change);
+  };
+  if (startConnectFetchBalance_) {
+    startConnectFetchBalance_(std::move(settled));
+  } else {
+    settled();
+  }
+}
+
+void SdkHost::TellStartWaitOutcome(bool admitted) {
+  StartWaitChange change = StartWaitChange::Ended;
+  if (startWait_.TakeOutcome(admitted, change) && onStartWait_) onStartWait_(change);
+}
+
+void SdkHost::CancelStartWait(const char* why) {
+  if (!startWait_.Cancel()) return;
+  LogInfo("sdkhost: the start waiting for its balance is cancelled ({})", why);
+  if (onStartWait_) onStartWait_(StartWaitChange::Ended);
 }
 
 void SdkHost::RetryRefusedConnect(const std::function<void()>& connect) {
@@ -6445,6 +6857,14 @@ void SdkHost::ConnectBestAvailable() {
   SessionRequest r;
   r.kind = ConnectKind::BestAvailable;
   r.reason = "connect (best available)";
+  RequestSession(std::move(r));
+}
+
+void SdkHost::ConnectSelected() {
+  if (!AdmitStartConnect("connect (selection)", [this] { ConnectSelected(); })) return;
+  SessionRequest r;
+  r.kind = HasSession() ? ConnectKind::Selected : ConnectKind::BestAvailable;
+  r.reason = "connect (selection)";
   RequestSession(std::move(r));
 }
 
@@ -6464,7 +6884,8 @@ void SdkHost::Connect(const std::string& connectLocationJson) {
     LogWarn("sdkhost: connect parse failed: {}", e.what());
     std::scoped_lock lock(mutex_);
     PublishSessionFailure("that provider location could not be read");
-    PublishStats();
+    // read on the publish worker: this is the caller's thread, the UI's
+    RepublishStats();
     return;
   }
   r.kind = ConnectKind::Location;
@@ -6584,64 +7005,82 @@ void SdkHost::EnsureSession(const char* reason, bool automaticRecovery) {
 // ---- the session worker ----------------------------------------------------
 
 void SdkHost::RequestSession(SessionRequest request) {
-  // ONLY pendingMutex_ HERE. This runs on the UI thread (a Connect press) and
-  // mutex_ is held by the worker across a whole BootstrapSession — service
-  // connect, hello, start_tunnel, up to the 30 s pipe timeout. A press that
-  // waited on that is a frozen window, which is the failure this app has
-  // already paid for twice (see IsLoggedIn's comment).
-  std::scoped_lock lock(pendingMutex_);
-  // The tray's Quit closed the slot (Quit). What it stopped in the service
-  // must not be started again by a request that lands after it: the failsafe
-  // edge, a pipe drop's recovery, a setting saved on the way out.
-  if (quitting_.load()) {
-    LogInfo("sdkhost: '{}' dropped: the app is quitting", request.reason);
-    return;
-  }
-  // LAST REQUEST WINS. Two presses in a row, or a press while a bootstrap is
-  // running, must not queue two start_tunnels — they must land on one session
-  // and the destination the user chose most recently.
-  //
-  // ONE exception, born with the row-click settle window: a bare "make sure a
-  // session exists" (kind None — the resume path, a network-server change, the
-  // service watchdog) must not REPLACE a pending connect. Every connect
-  // creates the session it needs, so the ensure is already implied by what is
-  // sitting in the slot, and replacing would throw the user's destination
-  // choice away for a request that wanted strictly less. Before the settle
-  // window this race was microseconds wide; at 1.2s of deliberate delay it
-  // would be a click the watchdog eats.
-  //
-  // A provider reconcile (kind Provider) wants less still, and is covered by
-  // any pending request: every pass that leaves no session ends with the same
-  // reconcile, and a pass that builds one hands providing to its device. It
-  // never covers anything itself — an ensure replaces it.
-  const bool covered =
-      pendingRequested_ &&
-      ((request.kind == ConnectKind::None && pending_.kind != ConnectKind::None &&
-        pending_.kind != ConnectKind::Provider) ||
-       (request.kind == ConnectKind::Provider && pending_.kind != ConnectKind::Provider));
-  if (covered) {
-    LogInfo("sdkhost: '{}' is covered by the pending '{}'", request.reason,
-            pending_.reason);
-  } else {
-    pending_ = std::move(request);
-  }
-  pendingRequested_ = true;
-  // Wake a worker that is sleeping out a settle deadline: the replacement may
-  // be IMMEDIATE (a Disconnect, an explicit connect) and must not wait behind
-  // the deadline of the row click it just superseded.
-  pendingCv_.notify_all();
-  // sessionWorkerAlive_ is read and written ONLY under this lock, by both the
-  // producer here and the worker as it exits, so a request that arrives while
-  // the worker is finishing cannot fall between them.
-  if (sessionWorkerAlive_) {
-    if (!covered) {
-      LogInfo("sdkhost: '{}' folded into the session start already in flight",
-              pending_.reason);
+  // The gesture the slot records, told to the views below, outside the lock.
+  const taphold::Kind tapKind = request.kind == ConnectKind::Disconnect
+                                    ? taphold::Kind::Disconnect
+                                    : taphold::Kind::Connect;
+  std::uint64_t recordedGesture = 0;
+  [&] {
+    // ONLY pendingMutex_ HERE. This runs on the UI thread (a Connect press) and
+    // mutex_ is held by the worker across a whole BootstrapSession — service
+    // connect, hello, start_tunnel, up to the 30 s pipe timeout. A press that
+    // waited on that is a frozen window, which is the failure this app has
+    // already paid for twice (see IsLoggedIn's comment).
+    std::scoped_lock lock(pendingMutex_);
+    // The tray's Quit closed the slot (Quit). What it stopped in the service
+    // must not be started again by a request that lands after it: the failsafe
+    // edge, a pipe drop's recovery, a setting saved on the way out.
+    if (quitting_.load()) {
+      LogInfo("sdkhost: '{}' dropped: the app is quitting", request.reason);
+      return;
     }
-    return;
-  }
-  sessionWorkerAlive_ = true;
-  std::thread([this] { SessionWorkerLoop(); }).detach();
+    // Signing out or signed out: no connect of that account reaches the sdk
+    // (SignOutConnectFence.h). The next sign-in sets the flag again.
+    if (!signoutfence::Admits(FenceWorkOf(request.kind),
+                              loggedIn_.load(std::memory_order_acquire))) {
+      LogInfo("sdkhost: '{}' dropped: signed out", request.reason);
+      return;
+    }
+    // LAST REQUEST WINS. Two presses in a row, or a press while a bootstrap is
+    // running, must not queue two start_tunnels — they must land on one session
+    // and the destination the user chose most recently.
+    //
+    // ONE exception, born with the row-click settle window: a bare "make sure a
+    // session exists" (kind None — the resume path, a network-server change, the
+    // service watchdog) must not REPLACE a pending connect. Every connect
+    // creates the session it needs, so the ensure is already implied by what is
+    // sitting in the slot, and replacing would throw the user's destination
+    // choice away for a request that wanted strictly less. Before the settle
+    // window this race was microseconds wide; at 1.2s of deliberate delay it
+    // would be a click the watchdog eats.
+    //
+    // A provider reconcile (kind Provider) wants less still, and is covered by
+    // any pending request: every pass that leaves no session ends with the same
+    // reconcile, and a pass that builds one hands providing to its device. It
+    // never covers anything itself — an ensure replaces it.
+    const bool covered =
+        pendingRequested_ &&
+        ((request.kind == ConnectKind::None && pending_.kind != ConnectKind::None &&
+          pending_.kind != ConnectKind::Provider) ||
+         (request.kind == ConnectKind::Provider && pending_.kind != ConnectKind::Provider));
+    if (covered) {
+      LogInfo("sdkhost: '{}' is covered by the pending '{}'", request.reason,
+              pending_.reason);
+    } else {
+      // A tap holds its state until the pass that runs it, or a newer one, has
+      // published (TapHold.h); the request it replaces goes with it.
+      if (IsGesture(request.kind)) recordedGesture = request.gesture = ++gestureIssued_;
+      pending_ = std::move(request);
+    }
+    pendingRequested_ = true;
+    // Wake a worker that is sleeping out a settle deadline: the replacement may
+    // be IMMEDIATE (a Disconnect, an explicit connect) and must not wait behind
+    // the deadline of the row click it just superseded.
+    pendingCv_.notify_all();
+    // sessionWorkerAlive_ is read and written ONLY under this lock, by both the
+    // producer here and the worker as it exits, so a request that arrives while
+    // the worker is finishing cannot fall between them.
+    if (sessionWorkerAlive_) {
+      if (!covered) {
+        LogInfo("sdkhost: '{}' folded into the session start already in flight",
+                pending_.reason);
+      }
+      return;
+    }
+    sessionWorkerAlive_ = true;
+    std::thread([this] { SessionWorkerLoop(); }).detach();
+  }();
+  if (recordedGesture != 0 && onGesture_) onGesture_(recordedGesture, tapKind);
 }
 
 void SdkHost::SessionWorkerLoop() {
@@ -6661,11 +7100,15 @@ void SdkHost::SessionWorkerLoop() {
       }
       if (!pendingRequested_) {
         sessionWorkerAlive_ = false;
+        // an ending waits for this (SettleCommandsForExit)
+        pendingCv_.notify_all();
         return;
       }
       req = std::move(pending_);
       pending_ = SessionRequest{};
       pendingRequested_ = false;
+      // the tap it carries stays held until this pass has published (TapHold.h)
+      gestureInFlight_ = req.gesture;
     }
 
     // Not a session request: keep the provider-only device in step and nothing
@@ -6835,11 +7278,18 @@ void SdkHost::SessionWorkerLoop() {
       }
 
       const bool connecting = req.kind == ConnectKind::BestAvailable ||
-                              req.kind == ConnectKind::Location;
+                              req.kind == ConnectKind::Location ||
+                              req.kind == ConnectKind::Selected;
       if (ok) {
         serviceRecoveryNeeded_.store(false, std::memory_order_release);
         watchdogCv_.notify_all();
-        if (plan.sdkConnect && req.kind != ConnectKind::None) ConnectLocked(req);
+        // A sign-out that began after this pass took its request: the pass
+        // still ends what it built, but connects nothing for the account.
+        if (plan.sdkConnect && req.kind != ConnectKind::None &&
+            signoutfence::Admits(FenceWorkOf(req.kind),
+                                 loggedIn_.load(std::memory_order_acquire))) {
+          ConnectLocked(req);
+        }
         // An rpc-only session is live and driveable and carries NOTHING. On a
         // Connect press that is the answer to "why did pressing this change
         // nothing", so re-raise the standing notice rather than let the press
@@ -6901,6 +7351,12 @@ void SdkHost::SessionWorkerLoop() {
       // service's provider-only device, which installs nothing on this machine
       // (ReconcileProviderLocked). With a session, its own device provides.
       if (!device_) ReconcileProviderLocked(req.reason);
+    }
+    // The pass's gesture has settled, so the read below, which begins after
+    // this, carries what it left and ends the views' hold (TapHold.h).
+    {
+      std::scoped_lock lock(pendingMutex_);
+      gestureInFlight_ = 0;
     }
     // OUTSIDE the lock. On failure this is what takes the connect button off
     // "Connecting": with no session there is no listener to push a correcting
@@ -7183,8 +7639,31 @@ void SdkHost::FollowServiceLogUpload(const proto::TunnelStatus& st) {
   }
 }
 
-void SdkHost::ConnectLocked(const SessionRequest& request) {
+void SdkHost::ConnectLocked(const SessionRequest& requested) {
   // caller holds mutex_
+  //
+  // The connect button's selection is read here, on the worker: the
+  // presented controller's own selection, else the device's location
+  // (ConnectSelected).
+  SessionRequest request = requested;
+  if (request.kind == ConnectKind::Selected) {
+    std::optional<urnet::ConnectLocation> selected;
+    try {
+      if (connectVc_) {
+        selected = connectVc_->getSelectedLocation();
+      } else if (device_) {
+        selected = device_->getConnectLocation();
+      }
+    } catch (const std::exception& e) {
+      LogWarn("sdkhost: reading the selection for '{}' failed: {}", request.reason, e.what());
+    }
+    if (IsBestAvailableSelected(selected)) {
+      request.kind = ConnectKind::BestAvailable;
+    } else {
+      request.kind = ConnectKind::Location;
+      request.location = std::move(selected);
+    }
+  }
   //
   // #27: a DELIBERATE connect/disconnect starts a new health attempt. Proof
   // earned by the previous target must not survive into the new window, or a
@@ -7501,7 +7980,9 @@ void SdkHost::StopSyncWatchdog() {
 // A Disconnect NEVER starts a session (see the worker): with no session there is
 // nothing connected and nothing to do.
 void SdkHost::Disconnect() {
-  // the user's disconnect: a connect waiting on the balance is not run after it
+  // the user's disconnect: a start waiting on its balance fetch never connects,
+  // and a connect waiting on the balance is not run after it
+  CancelStartWait("disconnect");
   if (onUserDisconnect_) onUserDisconnect_();
   SessionRequest r;
   r.kind = ConnectKind::Disconnect;
@@ -7544,6 +8025,9 @@ proto::TunnelStatus SdkHost::StopServiceTunnel() {
 
 void SdkHost::ClosePresentationLocked(bool sessionEnding) {
   presentationSubs_.clear();
+  // A hide keeps the selection for the window that comes back; the session's
+  // end takes it with the session.
+  if (sessionEnding || !device_) KeepSelectedLocation(std::nullopt);
   // Released here rather than beside each locationsVc_.reset() below, so the two
   // exit paths cannot disagree. Once it is clear the api path may write again.
   deviceFeedOpen_.store(false, std::memory_order_release);
@@ -7803,12 +8287,22 @@ void SdkHost::TeardownSessionLocked(bool stopTunnel) {
 
 // See the contract in the header.
 void SdkHost::Logout() {
+  // One sign-out at a time: a click while one runs joins it (SignOutRun.h).
+  // Its sign-out controls are disabled meanwhile, so this is a second sign-out
+  // from elsewhere (the server's rejection, the sign-in page's action).
+  if (!signOutRun_.Begin()) {
+    LogInfo("sdkhost: sign-out: one is already running; this one joins it");
+    return;
+  }
   // 0. A browser or wallet flow the account started is answered and forgotten
   // (each network starts fresh, owner decision 2026-10-05): an add-sign-in
   // attempt's late return would otherwise add that sign-in method to the next
   // account signed in. On the UI thread, as every caller of it, and before
   // mutex_: it answers the flows' callbacks.
   CancelPendingWalletFlows("superseded by signing out");
+  // A start waiting on its balance never connects: the balance store settles
+  // its waiters when the sign-out stops it (StartConnectWait.h).
+  CancelStartWait("signing out");
   // 1. The signed-out account's queued work goes: a connect, a row click still
   // settling, a reconcile. A worker sleeping out a settle wakes to the empty
   // slot and exits.
@@ -7820,10 +8314,33 @@ void SdkHost::Logout() {
   pendingCv_.notify_all();
   // 2. Signed out from here, before the lock: a pass that takes mutex_ ahead of
   // this one reads it and starts nothing for the account that is leaving
-  // (BootstrapSession, ReconcileProviderLocked). Also before SetAuthState below,
-  // whose handler asks IsLoggedIn().
+  // (BootstrapSession, ReconcileProviderLocked). Also before SetAuthState in the
+  // tail, whose handler asks IsLoggedIn().
   loggedIn_.store(false, std::memory_order_release);
-  std::scoped_lock lock(mutex_);
+  // 3 and 4 wait on mutex_, which a pass in flight holds through its rpcs up to
+  // the sdk's 60 s rpc timeout, and on the pipe: on the tail's own thread, with
+  // the window showing the sign-out running until it ends.
+  if (onSignOutProgress_) onSignOutProgress_(true);
+  signOutWorker_.Request();
+}
+
+void SdkHost::SignOutTail() {
+  {
+    std::scoped_lock lock(mutex_);
+    SignOutTailLocked();
+  }
+  // Signed out: the sign-in that waited for this tail, if any, runs now, with
+  // nothing of the signed-out account left for it to meet.
+  std::optional<DeferredSignIn> next = signOutRun_.Finish();
+  if (onSignOutProgress_) onSignOutProgress_(false);
+  if (next) {
+    LogInfo("sdkhost: sign-in: the sign-out has ended; the sign-in that waited for it runs");
+    RegisterNetworkClient(next->byJwt, std::move(next->done), next->epoch);
+  }
+}
+
+void SdkHost::SignOutTailLocked() {
+  // caller holds mutex_
   try {
     pendingWalletAuth_.reset();
     pendingAuthJwt_.reset();
@@ -7838,7 +8355,10 @@ void SdkHost::Logout() {
     // The local credentials first, because nothing can hold them up: the app
     // is signed out on disk even if it is ended while the service half below
     // waits on the pipe.
-    if (asyncLocalState_) asyncLocalState_->logout([](bool) {});
+    // This tail already runs off the UI thread. Queueing the destructive
+    // write would let Finish release a new sign-in before the old logout
+    // erased its freshly stored credentials.
+    if (localState_) localState_->logout();
     // and the credential the api attaches to its calls, which the next
     // sign-in's own calls would otherwise carry until it installs its own
     if (api_) api_->setByJwt("");
@@ -7988,17 +8508,103 @@ signout::Marker SdkHost::SignOutMarker() {
 
 // See the contract in the header.
 void SdkHost::Quit() {
-  // 1. Nothing new, and nothing queued. A worker sleeping out a row click's
-  // settle wakes to the empty slot and exits; one in the middle of a pass
-  // finds nothing after it.
+  const auto start = std::chrono::steady_clock::now();
+  // 1. Nothing new from here: RequestSession records nothing once the latch is
+  // set, so the slot holds at most what was queued before (QuitInOrder keeps
+  // only the user's Disconnect of it).
   {
     std::scoped_lock lock(pendingMutex_);
     quitting_.store(true);
-    pending_ = SessionRequest{};
-    pendingRequested_ = false;
   }
-  pendingCv_.notify_all();
-  // 2. The threads that act on their own, joined outside mutex_ because each
+  // The steps wait on the session worker, its lock and the pipe, each of which
+  // a pass inside an rpc can hold far longer than a sign-out of Windows may
+  // wait, so they run on a thread of their own and this waits at most the
+  // quit's cap (ExitDrain.h). What is still running then is left to the
+  // process exit, which ExitSettled tells the app.
+  auto completion = std::make_shared<exitdrain::Completion>();
+  quitCompletion_ = completion;
+  std::thread([this, completion, start] {
+    try {
+      QuitInOrder(start);
+    } catch (const std::exception& e) {
+      LogError("sdkhost: quit failed: {}", e.what());
+    }
+    completion->Finish();
+  }).detach();
+  if (!completion->WaitUntil(start + exitdrain::kQuitCap)) {
+    LogWarn("sdkhost: quit: still stopping after {}ms; the rest is left to the process exit",
+            static_cast<long long>(exitdrain::kQuitCap.count()));
+  }
+}
+
+bool SdkHost::SettleCommandsForExit(std::chrono::steady_clock::time_point deadline) {
+  // The slot under its own lock, as RequestSession and the worker see it.
+  struct Slot {
+    SdkHost& host;
+    bool Requested() { return host.pendingRequested_; }
+    exitdrain::Queued Kind() { return QueuedOf(host.pending_.kind); }
+    void Drop() {
+      LogInfo("sdkhost: exit: '{}' dropped: the app is exiting", host.pending_.reason);
+      host.pending_ = SessionRequest{};
+      host.pendingRequested_ = false;
+    }
+    bool WorkerAlive() { return host.sessionWorkerAlive_; }
+  } slot{*this};
+  std::unique_lock<std::mutex> lock(pendingMutex_);
+  if (pendingRequested_ && exitdrain::KeepsQueued(QueuedOf(pending_.kind))) {
+    LogInfo("sdkhost: exit: '{}' runs before the app exits", pending_.reason);
+  }
+  const bool settled = exitdrain::SettleQueued(slot, lock, pendingCv_, deadline);
+  if (!settled) {
+    LogWarn("sdkhost: exit: the session worker is still in a pass at the cap; what it "
+            "holds is left to the process exit");
+  }
+  return settled;
+}
+
+bool SdkHost::ExitSettled() {
+  bool workerIdle = false;
+  {
+    std::scoped_lock lock(pendingMutex_);
+    workerIdle = !sessionWorkerAlive_;
+  }
+  // a sign-out's tail inside an rpc runs inside this host like a pass
+  if (signOutRun_.Running()) workerIdle = false;
+  const bool quitFinished = !quitCompletion_ || quitCompletion_->Finished();
+  return exitdrain::HostDestroyableAtExit(workerIdle, quitFinished);
+}
+
+void SdkHost::StopServiceWithoutLock() {
+  // Not dialled when down: the pass may be dialling it itself, and a dropped
+  // channel is the pass's to find. The locked stop below dials it.
+  if (!service_.IsConnected()) {
+    LogWarn("sdkhost: quit: a pass holds the session lock and there is no control "
+            "channel; the stop waits for the lock");
+    return;
+  }
+  LogWarn("sdkhost: quit: a pass still holds the session lock inside an rpc; stopping "
+          "the service without it");
+  const proto::TunnelStatus stopped = service_.StopTunnel();
+  AdoptServiceFacts(stopped);
+  std::optional<proto::TunnelStatus> after;
+  std::string error;
+  if (!service_.StopProvider(&after, &error)) {
+    LogWarn("sdkhost: quit: stop_provider failed: {}", error.empty() ? "no detail" : error);
+  }
+  if (after) AdoptServiceFacts(*after);
+}
+
+void SdkHost::QuitInOrder(std::chrono::steady_clock::time_point start) {
+  // 1. The user's Disconnect still queued runs first, so it is saved, and
+  // everything else queued goes; a worker sleeping out a row click's settle
+  // wakes to the empty slot and exits. Bounded: a pass inside an rpc the
+  // service does not answer is not waited out.
+  const bool settled = SettleCommandsForExit(start + exitdrain::kCommandsCap);
+  // 2. That pass holds mutex_, and the machine comes first.
+  if (exitdrain::StopRouteFor(settled) == exitdrain::StopRoute::Unlocked) {
+    StopServiceWithoutLock();
+  }
+  // 3. The threads that act on their own, joined outside mutex_ because each
   // of them takes it (the destructor's rule; its own calls then find them
   // stopped). The watchdog first: its recovery pass is the one that dials the
   // service and ends in a provider reconcile.
@@ -8006,8 +8612,17 @@ void SdkHost::Quit() {
   StopPresentationWorker();
   StopSyncWatchdog();
   StopProviderOnlyStats();
-  // 3. The service, under mutex_: after any pass in flight (a Connect's
-  // bootstrap, a reconcile), and with none able to follow it.
+  // they read the device the teardown below closes
+  statsPublisher_.Stop();
+  locationsOpener_.Stop();
+  drawerSeedReader_.Stop();
+  // the user's writes still queued run first; each takes mutex_
+  writer_.Stop();
+  // a sign-out's tail in flight ends first, under mutex_ (SignOutRun.h)
+  signOutWorker_.Stop();
+  // 4. The service, under mutex_: after any pass in flight (a Connect's
+  // bootstrap, a reconcile, the user's Disconnect), and with none able to
+  // follow it.
   std::scoped_lock lock(mutex_);
   try {
     // A dropped channel is not a stopped service, and one that is still

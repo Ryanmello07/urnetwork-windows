@@ -6306,6 +6306,10 @@
     <value>連接後可查看即時活動</value>
     <comment>Disabled stat cards: connect-to-view hint</comment>
   </data>
+  <data name="site_app_connecting" xml:space="preserve">
+    <value>正在連接…</value>
+    <comment>App connect screen and macOS menu bar: status while a connect is in progress, before the connection is up.</comment>
+  </data>
   <data name="site_app_connections" xml:space="preserve">
     <value>連線</value>
     <comment>App settings: connections section</comment>

@@ -6520,7 +6520,7 @@ del mundo</value>
   </data>
   <data name="site_app_connecting" xml:space="preserve">
     <value>Conectando…</value>
-    <comment>App connect screen: connecting state</comment>
+    <comment>App connect screen and macOS menu bar: status while a connect is in progress, before the connection is up.</comment>
   </data>
   <data name="site_app_connections" xml:space="preserve">
     <value>Conexiones</value>
@@ -6905,6 +6905,10 @@ del mundo</value>
   <data name="site_app_sign_and_connect" xml:space="preserve">
     <value>Firmar y conectar</value>
     <comment>App earnings: manual address entry button (the wallet still signs the challenge)</comment>
+  </data>
+  <data name="site_app_stale_sign_in" xml:space="preserve">
+    <value>Este navegador inició sesión en otra red desde otra pestaña. Actualiza esta página para continuar.</value>
+    <comment>ur.io: notice over the page when another tab signs in to another network; this page stops its work until the visitor refreshes it.</comment>
   </data>
   <data name="site_app_stay_in_touch" xml:space="preserve">
     <value>Mantente en contacto</value>

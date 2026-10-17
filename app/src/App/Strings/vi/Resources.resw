@@ -6306,6 +6306,10 @@ nội dung thế giới</value>
     <value>Kết nối để xem hoạt động trực tiếp</value>
     <comment>Disabled stat cards: connect-to-view hint</comment>
   </data>
+  <data name="site_app_connecting" xml:space="preserve">
+    <value>Đang kết nối…</value>
+    <comment>App connect screen and macOS menu bar: status while a connect is in progress, before the connection is up.</comment>
+  </data>
   <data name="site_app_connections" xml:space="preserve">
     <value>Kết nối</value>
     <comment>App settings: connections section</comment>

@@ -6421,6 +6421,10 @@ conteúdo do mundo</value>
     <value>Ligue-se para ver a atividade em direto</value>
     <comment>Disabled stat cards: connect-to-view hint</comment>
   </data>
+  <data name="site_app_connecting" xml:space="preserve">
+    <value>A ligar…</value>
+    <comment>App connect screen and macOS menu bar: status while a connect is in progress, before the connection is up.</comment>
+  </data>
   <data name="site_app_connections" xml:space="preserve">
     <value>Ligações</value>
     <comment>App settings: connections section</comment>

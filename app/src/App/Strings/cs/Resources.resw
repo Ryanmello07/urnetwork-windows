@@ -6652,6 +6652,10 @@ kontent světa</value>
     <value>Připojte se a zobrazte živou aktivitu</value>
     <comment>Disabled stat cards: connect-to-view hint</comment>
   </data>
+  <data name="site_app_connecting" xml:space="preserve">
+    <value>Připojování…</value>
+    <comment>App connect screen and macOS menu bar: status while a connect is in progress, before the connection is up.</comment>
+  </data>
   <data name="site_app_connections" xml:space="preserve">
     <value>Připojení</value>
     <comment>App settings: connections section</comment>

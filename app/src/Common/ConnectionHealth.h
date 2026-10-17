@@ -165,6 +165,11 @@ struct Signals {
   // Cleared by the rpc-only and service-down clamps like every other claim —
   // a session that carries nothing cannot have failed to connect.
   bool windowFailed = false;
+  // The status is the device's connect location alone (LiveStats::
+  // statusFromLocation): no presented controller reports how far the
+  // connection got, so a set location reads as the connection the user asked
+  // for. Only with no grid feed; WithCapture then holds it to the tunnel.
+  bool statusFromLocation = false;
 };
 
 // The stateful half: attempt identity and the degrade hold. One instance lives
@@ -202,11 +207,24 @@ class Tracker {
       // that a reattach over a DEAD connection becomes Degraded after the
       // hold rather than staying green forever, which is the honest reading
       // of "the tunnel claims up and the evidence never arrived".
+      //
+      // The SDK's failed verdict reaches this process over the device rpc
+      // with no feed open too, and it stands while it lasts: a window that
+      // hid on a failed attempt does not read as connected meanwhile.
+      if (in.windowFailed && !proven_) return state_ = State::Failed;
       if (state_ == State::Connected || state_ == State::Degraded ||
           state_ == State::Evaluating) {
         return state_;
       }
-      if (in.activity == Activity::Active) {
+      // A destination set from the location alone, with no controller to
+      // report on it (a hidden window: an autostart reattach, a recovery, a
+      // tray connect, a connect still in progress when the window hid), is
+      // the connection the user asked for, as a CONNECTED session is; the
+      // capture clamp (WithCapture) keeps it connecting until the tunnel is
+      // up. Read as connecting, the tray said "Connecting" over a working
+      // tunnel for as long as the window stayed hidden.
+      if (in.activity == Activity::Active ||
+          (in.statusFromLocation && in.activity == Activity::Connecting)) {
         proven_ = true;
         provenLostAtMillis_ = -1;
         return state_ = State::Connected;
