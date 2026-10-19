@@ -12,6 +12,7 @@
 #include "Log.h"
 #include "MainWindow.xaml.h"
 #include "PageContext.h"
+#include "PasswordSignIn.h"
 #include "SessionGlyphs.h"
 #include "StatsFormat.h"
 #include "Strings.h"
@@ -199,6 +200,7 @@ void AccountPage::ResetForSignOut() {
   // value left over from the previous session mails the PREVIOUS account's
   // owner. needsNameClaim_ would likewise pick that account's save branch.
   userAuth_.clear();
+  passwordResetUserAuth_.clear();
   referralCode_.clear();
   referralTotals_.Reset();
   needsNameClaim_ = false;
@@ -225,7 +227,7 @@ void AccountPage::ApplyAccountState(rows::FieldState state) {
   w_.NetworkNameRow().IsEnabled(loaded);
   w_.NetworkNameBox().IsEnabled(loaded);
   w_.SaveNameButton().IsEnabled(loaded);
-  changePasswordButton_.IsEnabled(loaded && !userAuth_.empty() &&
+  changePasswordButton_.IsEnabled(loaded && !passwordResetUserAuth_.empty() &&
                                   resetRateLimit_.CanSend(urnw::ResendCooldown::Clock::now()));
   // Leaving the editor open over a card that has just lost its account would
   // offer a Save that cannot run.
@@ -326,6 +328,8 @@ void AccountPage::LoadAccount() {
       auto& page = self->account();
       page.needsNameClaim_ = claim;
       page.userAuth_ = u.user_auth ? *u.user_auth : std::string();
+      page.passwordResetUserAuth_ =
+          urnw::account::PasswordResetUserAuth(u.user_auth, u.auth_type, u.auth_types);
       page.ApplyNetworkName(u.network_name);
       const std::wstring auth = urnw::Widen(page.userAuth_);
       page.SetAuthText(hstring{urnw::Format(
@@ -546,11 +550,11 @@ void AccountPage::OnSaveNetworkName(IInspectable const&, RoutedEventArgs const&)
 }
 
 void AccountPage::SendPasswordReset() {
-  if (sendingReset_ || userAuth_.empty() || !Sdk().IsLoggedIn()) return;
+  if (sendingReset_ || passwordResetUserAuth_.empty() || !Sdk().IsLoggedIn()) return;
   sendingReset_ = true;
   changePasswordButton_.IsEnabled(false);
 
-  const std::string userAuth = userAuth_;
+  const std::string userAuth = passwordResetUserAuth_;
   auto queue = w_.DispatcherQueue();
   auto weak = w_.get_weak();
   // A link the server did not send (send failed, rate limited) comes back as
@@ -611,7 +615,7 @@ void AccountPage::RefreshResetRateLimit() {
     resetRateLimit_.Clear();
     if (resetRateLimitTimer_) resetRateLimitTimer_.Stop();
     if (ownsStatus) kit::ApplySupportingText(nameStatus_, hstring{}, kit::ValidationState::NotChecked);
-    changePasswordButton_.IsEnabled(!userAuth_.empty() && Sdk().IsLoggedIn());
+    changePasswordButton_.IsEnabled(!passwordResetUserAuth_.empty() && Sdk().IsLoggedIn());
     return;
   }
   if (ownsStatus) {
