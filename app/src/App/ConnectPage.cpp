@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "BalanceGate.h"
+#include "ConnectionRegion.h"  // the can't-reach prompt on a platform-unreachable stall
 #include "FastDnsOnConnect.h"
 #include "Log.h"
 #include "MainWindow.xaml.h"
@@ -1327,7 +1328,14 @@ void ConnectPage::ApplyStats(urnw::LiveStats const& stats) {
   rawConnectionStatus_ = stats.rpcOnly ? stats.rawConnectionStatus : stats.connectionStatus;
   // the stall diagnosis rides the same snapshot (track 2); rendered by
   // ApplyConnectStatus as the reason line under the hero
+  const std::string previousStallReason = windowStallReason_;
   windowStallReason_ = stats.windowStallReason;
+  // Can't reach URnetwork: offer the connection region picker, once as the
+  // diagnosis turns to it. The prompt only opens the picker; the region is
+  // never changed here (ConnectionRegion.h).
+  if (urnw::connection_region::ShouldPromptOnStall(previousStallReason, windowStallReason_)) {
+    w_.ShowCantReachPrompt();
+  }
   // #27: the aggregate health, derived in the SAME ReadStats as every other
   // field of this snapshot — the status line renders THIS, not the raw status.
   reportedHealth_ = stats.health;

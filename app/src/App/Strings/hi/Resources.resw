@@ -995,6 +995,10 @@
     <value>रद्द करें</value>
     <comment>Call to action</comment>
   </data>
+  <data name="cant_reach_urnetwork_choose_region" xml:space="preserve">
+    <value>URnetwork तक नहीं पहुँच सके — चुनें कि आप कहाँ से कनेक्ट कर रहे हैं</value>
+    <comment>Shown when the app cannot reach the URnetwork platform; tapping it opens the Connection region picker.</comment>
+  </data>
   <data name="chain_rpc_unreachable" xml:space="preserve">
     <value>चेन RPC तक नहीं पहुँचा जा सकता। दोबारा कोशिश करें।</value>
     <comment>Error when the subnet RPC cannot be reached.</comment>
@@ -1395,6 +1399,10 @@
     <value>{} प्रदाताओं से कनेक्ट किया गया</value>
     <comment>A message indicating that the device is connected to a certain number of providers. The argument is the number of providers.</comment>
   </data>
+  <data name="connecting_from" xml:space="preserve">
+    <value>यहाँ से कनेक्ट</value>
+    <comment>Login screen: the label of the small optional control showing the chosen connection region, followed by the region name (or Other / Undisclosed).</comment>
+  </data>
   <data name="connecting_status_indicator" xml:space="preserve">
     <value>प्रदाताओं से कनेक्ट हो रहा है</value>
     <comment>Call to action</comment>
@@ -1406,6 +1414,30 @@
   <data name="connection_mode" xml:space="preserve">
     <value>कनेक्शन मोड</value>
     <comment>Used in Main/Connect/ConnectActions/ConnectActions.swift.</comment>
+  </data>
+  <data name="connection_region" xml:space="preserve">
+    <value>कनेक्शन क्षेत्र</value>
+    <comment>Login screen and DNS settings: the picker of the region the user connects from, which only changes how the app reaches the URnetwork platform (ingress DNS).</comment>
+  </data>
+  <data name="connection_region_default_resolvers" xml:space="preserve">
+    <value>डिफ़ॉल्ट रिज़ॉल्वर</value>
+    <comment>Connection region picker: shown when the chosen region uses only the default resolvers (Other / Undisclosed).</comment>
+  </data>
+  <data name="connection_region_description" xml:space="preserve">
+    <value>केवल यह बदलता है कि ऐप URnetwork तक कैसे पहुँचता है, आपका ट्रैफ़िक नहीं।</value>
+    <comment>DNS settings: one line under the Connection region picker explaining its scope.</comment>
+  </data>
+  <data name="connection_region_encrypted_resolvers" xml:space="preserve">
+    <value>एन्क्रिप्टेड रिज़ॉल्वर</value>
+    <comment>Connection region picker: heading of the encrypted (DoH) resolvers the chosen region adds ahead of the defaults.</comment>
+  </data>
+  <data name="connection_region_fallback_resolvers" xml:space="preserve">
+    <value>बिना एन्क्रिप्शन वाला फ़ॉलबैक (केवल URnetwork नाम)</value>
+    <comment>Connection region picker: heading of the plain DNS servers used only as a last resort, only for URnetwork's own names, when every encrypted resolver fails.</comment>
+  </data>
+  <data name="connection_region_undisclosed" xml:space="preserve">
+    <value>अन्य / अघोषित</value>
+    <comment>Connection region picker: the default choice, any region without a recommendation or not saying, which uses the default resolvers.</comment>
   </data>
   <data name="connections" xml:space="preserve">
     <value>कनेक्शन</value>
@@ -7413,6 +7445,10 @@
     <value>कुल रेफ़रल: {}</value>
     <comment>Usage-bar referral row: the number of referrals the network has made. Was Shared/Views/UsageBar.swift on apple; now the windows usage bar.</comment>
   </data>
+  <data name="traffic_dns" xml:space="preserve">
+    <value>ट्रैफ़िक DNS</value>
+    <comment>DNS settings: heading of the existing egress DNS controls (the DNS used for the user's traffic through the tunnel), to tell them apart from the Connection region.</comment>
+  </data>
   <data name="transaction" xml:space="preserve">
     <value>लेन-देन</value>
     <comment>Call to action</comment>
@@ -8097,6 +8133,10 @@
   <data name="when_you_refer_a_friend" xml:space="preserve">
     <value>जब आप किसी मित्र को रेफ़र करते हैं:</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="where_are_you_connecting_from" xml:space="preserve">
+    <value>आप कहाँ से कनेक्ट कर रहे हैं?</value>
+    <comment>Title of the Connection region picker opened from the login screen or the can't-reach prompt.</comment>
   </data>
   <data name="widget_chart_peak" xml:space="preserve">
     <value>शिखर</value>

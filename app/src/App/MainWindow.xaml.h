@@ -17,6 +17,7 @@
 #include "BalanceGate.h"
 #include "BalanceSheets.h"
 #include "ConnectPage.h"
+#include "ConnectionRegionSheet.h"
 #include "DeveloperPage.h"
 #include "GuestConversion.h"
 #include "LicensesPage.h"
@@ -72,6 +73,16 @@ struct MainWindow : MainWindowT<MainWindow> {
   // only one ContentDialog can show at a time
   bool sheetOpen() const { return sheetOpen_; }
   void SetSheetOpen(bool open) { sheetOpen_ = open; }
+  // ---- the connection region (ConnectionRegionSheet.h) ----
+  // The picker in a sheet: the login screen's "Connecting from" control and
+  // the can't-reach prompt open it. Window level because the prompt is raised
+  // on the login screen and signed in alike.
+  winrt::fire_and_forget OpenConnectionRegion();
+  // A platform call failed: raises the can't-reach prompt when it failed to
+  // reach URnetwork at all (ConnectionRegion.h IsCantReachFailure), not for an
+  // answer the server gave. Never changes the region.
+  void NoteReachFailure(std::string const& error);
+  void ShowCantReachPrompt();
   // the Pro celebration flight (ProCelebration.h): the free -> Pro flip, the
   // Account plan label while Pro, and the connect page's easter egg play it
   void LaunchProCelebration();
@@ -257,6 +268,9 @@ struct MainWindow : MainWindowT<MainWindow> {
   // the bottom-left "Change Network API" text affordance
   void OnChangeNetworkServer(winrt::Windows::Foundation::IInspectable const&,
                              winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
+  // the login screen's optional "Connecting from" control: the region picker
+  void OnConnectingFrom(winrt::Windows::Foundation::IInspectable const&,
+                        winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
   // the bottom-left "Sign in with browser" text affordance: the bridge sheet
   void OnSignInWithBrowser(winrt::Windows::Foundation::IInspectable const&,
                            winrt::Microsoft::UI::Xaml::RoutedEventArgs const&);
@@ -577,6 +591,8 @@ struct MainWindow : MainWindowT<MainWindow> {
   bool proPlanTapWired_ = false;
 
   bool sheetOpen_ = false;  // only one ContentDialog can show at a time
+  std::shared_ptr<urnw::ConnectionRegionSheet> connectionRegionSheet_;
+  bool regionPromptWired_ = false;
   // --preview-ui: the home view is pinned regardless of auth state
   bool previewUi_ = false;
 

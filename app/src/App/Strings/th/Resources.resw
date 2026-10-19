@@ -984,6 +984,10 @@
     <value>ยกเลิก</value>
     <comment>Call to action</comment>
   </data>
+  <data name="cant_reach_urnetwork_choose_region" xml:space="preserve">
+    <value>เชื่อมต่อ URnetwork ไม่ได้ — เลือกตำแหน่งที่คุณเชื่อมต่อ</value>
+    <comment>Shown when the app cannot reach the URnetwork platform; tapping it opens the Connection region picker.</comment>
+  </data>
   <data name="chain_rpc_unreachable" xml:space="preserve">
     <value>เข้าถึง RPC ของเชนไม่ได้ โปรดลองอีกครั้ง</value>
     <comment>Error when the subnet RPC cannot be reached.</comment>
@@ -1380,6 +1384,10 @@
     <value>เชื่อมต่อกับผู้ให้บริการ {} แล้ว</value>
     <comment>A message indicating that the device is connected to a certain number of providers. The argument is the number of providers.</comment>
   </data>
+  <data name="connecting_from" xml:space="preserve">
+    <value>เชื่อมต่อจาก</value>
+    <comment>Login screen: the label of the small optional control showing the chosen connection region, followed by the region name (or Other / Undisclosed).</comment>
+  </data>
   <data name="connecting_status_indicator" xml:space="preserve">
     <value>กำลังเชื่อมต่อกับผู้ให้บริการ</value>
     <comment>Call to action</comment>
@@ -1391,6 +1399,30 @@
   <data name="connection_mode" xml:space="preserve">
     <value>โหมดการเชื่อมต่อ</value>
     <comment>Used in Main/Connect/ConnectActions/ConnectActions.swift.</comment>
+  </data>
+  <data name="connection_region" xml:space="preserve">
+    <value>ภูมิภาคการเชื่อมต่อ</value>
+    <comment>Login screen and DNS settings: the picker of the region the user connects from, which only changes how the app reaches the URnetwork platform (ingress DNS).</comment>
+  </data>
+  <data name="connection_region_default_resolvers" xml:space="preserve">
+    <value>ตัวแปลง DNS เริ่มต้น</value>
+    <comment>Connection region picker: shown when the chosen region uses only the default resolvers (Other / Undisclosed).</comment>
+  </data>
+  <data name="connection_region_description" xml:space="preserve">
+    <value>มีผลเฉพาะวิธีที่แอปเชื่อมต่อกับ URnetwork ไม่ใช่ทราฟฟิกของคุณ</value>
+    <comment>DNS settings: one line under the Connection region picker explaining its scope.</comment>
+  </data>
+  <data name="connection_region_encrypted_resolvers" xml:space="preserve">
+    <value>ตัวแปลง DNS ที่เข้ารหัส</value>
+    <comment>Connection region picker: heading of the encrypted (DoH) resolvers the chosen region adds ahead of the defaults.</comment>
+  </data>
+  <data name="connection_region_fallback_resolvers" xml:space="preserve">
+    <value>สำรองแบบไม่เข้ารหัส (เฉพาะชื่อของ URnetwork)</value>
+    <comment>Connection region picker: heading of the plain DNS servers used only as a last resort, only for URnetwork's own names, when every encrypted resolver fails.</comment>
+  </data>
+  <data name="connection_region_undisclosed" xml:space="preserve">
+    <value>อื่นๆ / ไม่ระบุ</value>
+    <comment>Connection region picker: the default choice, any region without a recommendation or not saying, which uses the default resolvers.</comment>
   </data>
   <data name="connections" xml:space="preserve">
     <value>การเชื่อมต่อ</value>
@@ -7293,6 +7325,10 @@
     <value>จำนวนการแนะนำทั้งหมด: {}</value>
     <comment>Usage-bar referral row: the number of referrals the network has made. Was Shared/Views/UsageBar.swift on apple; now the windows usage bar.</comment>
   </data>
+  <data name="traffic_dns" xml:space="preserve">
+    <value>DNS ของทราฟฟิก</value>
+    <comment>DNS settings: heading of the existing egress DNS controls (the DNS used for the user's traffic through the tunnel), to tell them apart from the Connection region.</comment>
+  </data>
   <data name="transaction" xml:space="preserve">
     <value>รายการ</value>
     <comment>Call to action</comment>
@@ -7973,6 +8009,10 @@
   <data name="when_you_refer_a_friend" xml:space="preserve">
     <value>เมื่อคุณแนะนำเพื่อน:</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="where_are_you_connecting_from" xml:space="preserve">
+    <value>คุณเชื่อมต่อจากที่ไหน?</value>
+    <comment>Title of the Connection region picker opened from the login screen or the can't-reach prompt.</comment>
   </data>
   <data name="widget_chart_peak" xml:space="preserve">
     <value>สูงสุด</value>

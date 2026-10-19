@@ -359,6 +359,16 @@
                                          Foreground="{StaticResource UrTextMutedBrush}"
                                          Click="OnChangeNetworkServer" />
                     </StackPanel>
+                    <!-- "Connecting from: <region> ▾", optional and quiet like
+                         the pair above: the connection region picker
+                         (ConnectionRegionSheet.h), which only picks how the
+                         app reaches URnetwork. Never a required step. -->
+                    <HyperlinkButton x:Name="ConnectingFromLink"
+                                     FontSize="12" Padding="0"
+                                     Background="Transparent" BorderThickness="0"
+                                     FontFamily="{StaticResource UrBodyFontFamily}"
+                                     Foreground="{StaticResource UrTextMutedBrush}"
+                                     Click="OnConnectingFrom" />
                 </StackPanel>
 
                 <!-- Password: an existing account signs in -->
@@ -3878,6 +3888,15 @@
              copy with no visible result is indistinguishable from a copy that
              did not happen, which is why this exists at all. It floats over
              whichever panel is showing and dismisses itself (kit::Snackbar). -->
+        <!-- "Can't reach URnetwork - choose where you're connecting from"
+             (MainWindow::ShowCantReachPrompt): raised when a platform call
+             fails to reach URnetwork, on the login screen or signed in. Its
+             action opens the connection region picker; nothing here changes
+             the region. Window level, like the snackbar below. -->
+        <muxc:InfoBar x:Name="RegionPromptBar" Grid.Row="1"
+                      Severity="Warning" IsClosable="True"
+                      VerticalAlignment="Top" HorizontalAlignment="Center"
+                      Margin="24" MaxWidth="480" IsOpen="False" />
         <muxc:InfoBar x:Name="AccountSnackbar" Grid.Row="1"
                       Style="{StaticResource UrSnackbarStyle}"
                       VerticalAlignment="Bottom" HorizontalAlignment="Center"
