@@ -3102,6 +3102,53 @@ void MainWindow::OnChangeNetworkServer(IInspectable const& s, RoutedEventArgs co
 void MainWindow::OnSignInWithBrowser(IInspectable const& s, RoutedEventArgs const& e) {
   login_->OnSignInWithBrowser(s, e);
 }
+void MainWindow::OnConnectingFrom(IInspectable const&, RoutedEventArgs const&) {
+  OpenConnectionRegion();
+}
+
+// ---- the connection region (ConnectionRegionSheet.h) ------------------------
+
+winrt::fire_and_forget MainWindow::OpenConnectionRegion() {
+  if (sheetOpen_) co_return;  // only one ContentDialog can show at a time
+  auto self = get_strong();
+  self->sheetOpen_ = true;
+  RegionPromptBar().IsOpen(false);
+  try {
+    auto weak = get_weak();
+    self->connectionRegionSheet_ = urnw::ConnectionRegionSheet::Create(
+        Content().XamlRoot(), Sdk(), [weak](std::string const& stored) {
+          if (auto window = weak.get()) window->login().ShowConnectingFrom(stored);
+        });
+    co_await self->connectionRegionSheet_->Dialog().ShowAsync();
+  } catch (winrt::hresult_error const& e) {
+    urnw::LogError("connection region sheet: {} (0x{:08x})",
+                   urnw::Narrow(std::wstring{e.message()}), static_cast<uint32_t>(e.code()));
+  } catch (std::exception const& e) {
+    urnw::LogError("connection region sheet: {}", e.what());
+  }
+  self->connectionRegionSheet_.reset();
+  self->sheetOpen_ = false;
+}
+
+void MainWindow::NoteReachFailure(std::string const& error) {
+  if (urnw::connection_region::IsCantReachFailure(error)) ShowCantReachPrompt();
+}
+
+void MainWindow::ShowCantReachPrompt() {
+  auto bar = RegionPromptBar();
+  if (!regionPromptWired_) {
+    regionPromptWired_ = true;
+    Button action;
+    action.Click([weak = get_weak()](IInspectable const&, RoutedEventArgs const&) {
+      if (auto self = weak.get()) self->OpenConnectionRegion();
+    });
+    bar.ActionButton(action);
+  }
+  bar.ActionButton().as<Button>().Content(
+      winrt::box_value(Loc(urnw::connection_region::kTitleKey)));
+  bar.Message(Loc(urnw::connection_region::kCantReachKey));
+  bar.IsOpen(true);
+}
 void MainWindow::OnAccountMenu(IInspectable const& s, RoutedEventArgs const& e) {
   login_->OnAccountMenu(s, e);
 }

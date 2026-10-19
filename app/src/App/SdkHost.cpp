@@ -5543,6 +5543,72 @@ std::vector<std::string> SdkHost::RegionalControlDohUrls(const std::string& coun
   return {};
 }
 
+// ---- the connection region (ingress country) --------------------------------
+//
+// Nothing here logs the region: where a user says they connect from is theirs.
+
+std::optional<std::string> SdkHost::GetIngressCountryCode() {
+  std::scoped_lock lock(mutex_);
+  if (!networkSpace_) return std::nullopt;
+  try {
+    return networkSpace_->getIngressCountryCode();
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: get ingress country code failed: {}", e.what());
+  } catch (...) {
+    LogWarn("sdkhost: get ingress country code failed");
+  }
+  return std::nullopt;
+}
+
+std::optional<std::string> SdkHost::SetIngressCountryCode(const std::string& code) {
+  std::scoped_lock lock(mutex_);
+  if (!networkSpace_) return std::nullopt;
+  try {
+    // The space's own setter: it normalizes, stores in the space values and
+    // swaps the strategy's ingress DoH settings in place (network_space.go
+    // updateInPlaceValues), so api_ -- taken from this space, the login
+    // screen's calls included -- resolves through it from the next lookup.
+    std::string stored = networkSpace_->setIngressCountryCode(code);
+    LogInfo("sdkhost: connection region saved");
+    // As for the bootstrap DoH servers: the provider-only device resolves the
+    // api through the space it was built from.
+    if (!device_) RequestProviderReconcile("connection region saved");
+    return stored;
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: set ingress country code failed: {}", e.what());
+  } catch (...) {
+    LogWarn("sdkhost: set ingress country code failed");
+  }
+  return std::nullopt;
+}
+
+namespace {
+template <class Read>
+std::vector<std::string> ReadIngressList(const char* what, Read read) {
+  try {
+    return read().value_or(urnet::StringList{});
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: {} failed: {}", what, e.what());
+  } catch (...) {
+    LogWarn("sdkhost: {} failed", what);
+  }
+  return {};
+}
+}  // namespace
+
+std::vector<std::string> SdkHost::IngressCountryCodes() {
+  return ReadIngressList("ingress country codes", [] { return urnet::ingressCountryCodes(); });
+}
+
+std::vector<std::string> SdkHost::IngressDohUrls(const std::string& code) {
+  return ReadIngressList("ingress doh urls", [&code] { return urnet::ingressDohUrls(code); });
+}
+
+std::vector<std::string> SdkHost::IngressPlainDnsServers(const std::string& code) {
+  return ReadIngressList("ingress plain dns servers",
+                         [&code] { return urnet::ingressPlainDnsServers(code); });
+}
+
 std::optional<urnet::TransportSettings> SdkHost::CurrentTransportSettings(
     TransportSettingsKind kind) {
   try {

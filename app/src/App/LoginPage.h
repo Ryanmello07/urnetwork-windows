@@ -95,6 +95,11 @@ class LoginPage {
   // relay also replays an error that landed while the window was away, and an
   // unmapped replay used to replace the mapped sentence with the raw token.
   void ShowErrorOnCurrentStep(std::string const& error);
+  // The "Connecting from: <region>" control's text for a stored connection
+  // region ("" Other / Undisclosed); the picker calls it after each save.
+  void ShowConnectingFrom(std::string const& stored);
+  // Reads the stored region off the UI thread into the control.
+  winrt::fire_and_forget RefreshConnectingFrom();
 
   // True once, right after this sign-in created a network (sign-up, its
   // verification step, or an instant account): the window shows the
@@ -352,6 +357,8 @@ class LoginPage {
   std::shared_ptr<urnw::NetworkServerSheet> networkServerSheet_;
   std::shared_ptr<urnw::VlessSheet> vlessSheet_;
   std::shared_ptr<urnw::ControlDohSheet> controlDohSheet_;
+  // the stored connection region the "Connecting from" control shows
+  std::string connectingFrom_;
   std::shared_ptr<urnw::GuestConversionSheet> guestConversionSheet_;
   // "Seedphrase copied" / "Referral link copied" acknowledgements
   std::unique_ptr<urnw::kit::Snackbar> snackbar_;

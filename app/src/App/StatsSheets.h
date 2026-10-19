@@ -21,6 +21,7 @@
 #include <winrt/Microsoft.UI.Xaml.Media.h>
 #include <winrt/Microsoft.UI.Xaml.Shapes.h>
 
+#include "ConnectionRegionSheet.h"  // ConnectionRegionBlock: the DNS editor's region picker
 #include "InstalledApps.h"
 #include "SdkHost.h"
 
@@ -325,6 +326,8 @@ class DnsEditorSheet : public std::enable_shared_from_this<DnsEditorSheet> {
 
   SdkHost& sdk_;
   winrt::Microsoft::UI::Xaml::Controls::ContentDialog dialog_{nullptr};
+  // the connection region, above the Traffic DNS controls (saves on its own)
+  std::shared_ptr<ConnectionRegionBlock> regionBlock_;
   winrt::Microsoft::UI::Xaml::Controls::StackPanel recPanel_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::ToggleSwitch remoteDohToggle_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::ToggleSwitch localDohToggle_{nullptr};

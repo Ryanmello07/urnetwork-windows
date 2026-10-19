@@ -17,6 +17,7 @@
 
 #include "AppRuleRows.h"  // the app split rules sheet's list: one row per app
 #include "BlockActionReason.h"  // safety-rule chip + "Route locally" offer
+#include "ConnectionRegion.h"  // the DNS editor's region picker
 #include "FastDnsOnConnect.h"
 #include "Localization.h"
 #include "PageContext.h"   // pages::Adv: the sheets' not-yet-in-store strings
@@ -1356,6 +1357,16 @@ void DnsEditorSheet::Build(XamlRoot const& root) {
   if (!editorapply::DnsReadingKnown(opened_)) {
     body.Children().Append(MakeText(Loc("dns_settings_unavailable"), 13, FaintBrush(), true));
   }
+
+  // The connection region first (ConnectionRegionSheet.h): it only picks how
+  // the app reaches URnetwork, saves on selection and is not part of this
+  // draft. Everything under "Traffic DNS" is the tunnel's (egress) DNS, which
+  // Update applies; neither ever changes the other.
+  body.Children().Append(SectionHeader(Loc(connection_region::kTitleKey)));
+  regionBlock_ = ConnectionRegionBlock::Create(sdk_);
+  body.Children().Append(regionBlock_->Root());
+  regionBlock_->Load();
+  body.Children().Append(SectionHeader(Loc(connection_region::kTrafficDnsKey)));
 
   recPanel_ = StackPanel();
   recPanel_.Spacing(12);

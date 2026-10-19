@@ -984,6 +984,10 @@
     <value>取消</value>
     <comment>Call to action</comment>
   </data>
+  <data name="cant_reach_urnetwork_choose_region" xml:space="preserve">
+    <value>无法连接 URnetwork — 请选择你的连接位置</value>
+    <comment>Shown when the app cannot reach the URnetwork platform; tapping it opens the Connection region picker.</comment>
+  </data>
   <data name="chain_rpc_unreachable" xml:space="preserve">
     <value>无法访问链的 RPC。请重试。</value>
     <comment>Error when the subnet RPC cannot be reached.</comment>
@@ -1380,6 +1384,10 @@
     <value>已连接到 {} 个提供商</value>
     <comment>A message indicating that the device is connected to a certain number of providers. The argument is the number of providers.</comment>
   </data>
+  <data name="connecting_from" xml:space="preserve">
+    <value>连接位置</value>
+    <comment>Login screen: the label of the small optional control showing the chosen connection region, followed by the region name (or Other / Undisclosed).</comment>
+  </data>
   <data name="connecting_status_indicator" xml:space="preserve">
     <value>正在连接到提供商</value>
     <comment>Call to action</comment>
@@ -1391,6 +1399,30 @@
   <data name="connection_mode" xml:space="preserve">
     <value>连接模式</value>
     <comment>Used in Main/Connect/ConnectActions/ConnectActions.swift.</comment>
+  </data>
+  <data name="connection_region" xml:space="preserve">
+    <value>连接地区</value>
+    <comment>Login screen and DNS settings: the picker of the region the user connects from, which only changes how the app reaches the URnetwork platform (ingress DNS).</comment>
+  </data>
+  <data name="connection_region_default_resolvers" xml:space="preserve">
+    <value>默认解析器</value>
+    <comment>Connection region picker: shown when the chosen region uses only the default resolvers (Other / Undisclosed).</comment>
+  </data>
+  <data name="connection_region_description" xml:space="preserve">
+    <value>只影响应用连接 URnetwork 的方式，不影响你的流量。</value>
+    <comment>DNS settings: one line under the Connection region picker explaining its scope.</comment>
+  </data>
+  <data name="connection_region_encrypted_resolvers" xml:space="preserve">
+    <value>加密解析器</value>
+    <comment>Connection region picker: heading of the encrypted (DoH) resolvers the chosen region adds ahead of the defaults.</comment>
+  </data>
+  <data name="connection_region_fallback_resolvers" xml:space="preserve">
+    <value>未加密的备用方式（仅限 URnetwork 名称）</value>
+    <comment>Connection region picker: heading of the plain DNS servers used only as a last resort, only for URnetwork's own names, when every encrypted resolver fails.</comment>
+  </data>
+  <data name="connection_region_undisclosed" xml:space="preserve">
+    <value>其他 / 不透露</value>
+    <comment>Connection region picker: the default choice, any region without a recommendation or not saying, which uses the default resolvers.</comment>
   </data>
   <data name="connections" xml:space="preserve">
     <value>连接</value>
@@ -8317,6 +8349,10 @@
     <value>推荐总数：{}</value>
     <comment>Usage-bar referral row: the number of referrals the network has made. Was Shared/Views/UsageBar.swift on apple; now the windows usage bar.</comment>
   </data>
+  <data name="traffic_dns" xml:space="preserve">
+    <value>流量 DNS</value>
+    <comment>DNS settings: heading of the existing egress DNS controls (the DNS used for the user's traffic through the tunnel), to tell them apart from the Connection region.</comment>
+  </data>
   <data name="transaction" xml:space="preserve">
     <value>交易</value>
     <comment>Call to action</comment>
@@ -8997,6 +9033,10 @@
   <data name="when_you_refer_a_friend" xml:space="preserve">
     <value>当你推荐朋友时：</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="where_are_you_connecting_from" xml:space="preserve">
+    <value>你从哪里连接？</value>
+    <comment>Title of the Connection region picker opened from the login screen or the can't-reach prompt.</comment>
   </data>
   <data name="widget_chart_peak" xml:space="preserve">
     <value>峰值</value>

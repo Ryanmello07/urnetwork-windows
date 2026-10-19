@@ -322,6 +322,7 @@
     <ClCompile Include="ExtenderSheets.cpp" />
     <!-- The bootstrap DNS-over-HTTPS servers block (Account > Extenders and the
          login screen's network sheet); its decisions are ExtenderPresentation. -->
+    <ClCompile Include="ConnectionRegionSheet.cpp" />
     <ClCompile Include="ControlDohSettings.cpp" />
     <!-- The VLESS settings sheet's decisions (field visibility, the form <->
          settings mapping, error keys, picker options, the reading of a space's
@@ -494,6 +495,8 @@
     <ClInclude Include="ExtenderPresentation.h" />
     <ClInclude Include="ExtenderPanel.h" />
     <ClInclude Include="ExtenderSheets.h" />
+    <ClInclude Include="ConnectionRegion.h" />
+    <ClInclude Include="ConnectionRegionSheet.h" />
     <ClInclude Include="ControlDohSettings.h" />
     <ClInclude Include="VlessPresentation.h" />
     <ClInclude Include="VlessSheet.h" />
