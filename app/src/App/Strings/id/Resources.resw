@@ -1772,12 +1772,20 @@ cara yang benar</value>
     <value>Tindakan adalah permintaan: pastikan hasilnya di pengukuran dan baris exit, yang diperbarui di bawah.</value>
     <comment>Developer page: note that the action buttons only request changes.</comment>
   </data>
+  <data name="dev_affinity_max_time" xml:space="preserve">
+    <value>Usia afinitas maksimum</value>
+    <comment>Developer tools: maximum original connection creation age for healthy ordinary-flow affinity, edited as a duration.</comment>
+  </data>
+  <data name="dev_affinity_max_time_detail" xml:space="preserve">
+    <value>Untuk koneksi baru biasa, gunakan kembali hanya exit IP/domain yang sehat jika usia sejak pembuatan koneksi awal masih di bawah batas ini. Default: 1 menit. Nol atau nilai negatif menonaktifkan penggunaan kembali. Exit yang diperingatkan atau tidak sehat selalu memicu balapan. Koneksi yang ada dan pin eksplisit tidak berubah.</value>
+    <comment>Developer tools: strict healthy-donor age cap, disabled values, default and unaffected existing connections/pins.</comment>
+  </data>
   <data name="dev_affinity_performance" xml:space="preserve">
     <value>Afinitas berbasis performa</value>
     <comment>Developer tools screen (reliability surface): performance-aware affinity control label.</comment>
   </data>
   <data name="dev_affinity_performance_detail" xml:space="preserve">
-    <value>Beri bobot pada balapan TLS baru berdasarkan laju puncak byte yang dikonfirmasi setiap penyedia dibandingkan bandwidth yang diumumkan. Dengan afinitas ketat aktif, penyedia dengan hasil ukur rendah mengalah dalam balapan. Koneksi yang ada dan pin eksplisit tetap tidak berubah</value>
+    <value>Beri bobot pada balapan TLS baru berdasarkan laju puncak byte yang dikonfirmasi setiap penyedia dibandingkan bandwidth yang diumumkan. Dalam batas usia afinitas, penyedia dengan hasil ukur rendah mengalah dalam balapan. Koneksi yang ada dan pin eksplisit tetap tidak berubah</value>
     <comment>Developer tools screen: explanatory subtext under the performance-aware affinity control.</comment>
   </data>
   <data name="dev_affinity_sticky" xml:space="preserve">
@@ -2148,17 +2156,13 @@ cara yang benar</value>
     <value>Seberapa sering aliran yang sedang terhubung memeriksa ulang jendela kosong, agar permintaan pertama berangkat tepat setelah exit pertama tersedia. Nonaktif menunggu tempo coba ulang 2 dtk</value>
     <comment>Developer tools screen: explanatory subtext under the 'formation poll' control.</comment>
   </data>
-  <data name="dev_fresh_flow_affinity" xml:space="preserve">
-    <value>Afinitas ketat aliran baru</value>
-    <comment>Developer tools screen (reliability surface): hard fresh-flow affinity control label.</comment>
-  </data>
-  <data name="dev_fresh_flow_affinity_detail" xml:space="preserve">
-    <value>Tetapkan setiap koneksi baru ke exit yang sudah dipakai IP atau domainnya. Nonaktif adalah default: setiap koneksi baru biasa masuk ke balapan penyedia. Koneksi yang ada dan pin eksplisit selalu tetap</value>
-    <comment>Developer tools screen: explanatory subtext under the hard fresh-flow affinity control.</comment>
-  </data>
   <data name="dev_group_follow" xml:space="preserve">
     <value>Ikuti exit yang dicadangkan</value>
     <comment>Developer tools screen (reliability surface): group follow control label.</comment>
+  </data>
+  <data name="dev_group_follow_compat_detail" xml:space="preserve">
+    <value>Pengaturan kompatibilitas lama, bukan pengabaian pemeriksaan kesehatan. Koneksi baru biasa tidak pernah memakai ulang exit yang diperingatkan atau tidak sehat; koneksi itu selalu memulai balapan penyedia baru. Koneksi yang ada dan pin eksplisit tidak berubah.</value>
+    <comment>Developer tools: both legacy group-follow controls are not ordinary fresh-flow health overrides.</comment>
   </data>
   <data name="dev_group_follow_detail" xml:space="preserve">
     <value>Exit yang dikarantina mempertahankan koneksi baru dari situsnya sendiri selama awal masa cadangan, saat vonis paling belum terbukti, agar masa cadangan tidak memecah IP egress situs. Situs baru tetap menghindarinya. Nonaktif menyebarkannya</value>
@@ -2167,10 +2171,6 @@ cara yang benar</value>
   <data name="dev_group_follow_window" xml:space="preserve">
     <value>Jendela pengikutan</value>
     <comment>Developer tools screen (reliability surface): group follow window control label.</comment>
-  </data>
-  <data name="dev_group_follow_window_detail" xml:space="preserve">
-    <value>Berapa lama sejak awal masa cadangan koneksi baru sebuah situs terus mengikuti exit-nya — masa cadangan awal biasanya alarm palsu; yang berlangsung lama mengarah ke penghapusan dan berhenti menerima aliran. Nonaktif langsung menyebarkan</value>
-    <comment>Developer tools screen: explanatory subtext under the 'group follow window' control.</comment>
   </data>
   <data name="dev_group_follow_window_ms_detail" xml:space="preserve">
     <value>Berapa lama sejak awal masa cadangan koneksi baru sebuah situs terus mengikuti exit-nya, dalam ms — masa cadangan awal biasanya alarm palsu; yang berlangsung lama mengarah ke penghapusan dan berhenti menerima aliran. Nonaktif langsung menyebarkan</value>

@@ -1772,12 +1772,20 @@
     <value>操作はリクエストです: 結果は、下で更新される測定値と出口の行で確認してください。</value>
     <comment>Developer page: note that the action buttons only request changes.</comment>
   </data>
+  <data name="dev_affinity_max_time" xml:space="preserve">
+    <value>アフィニティの最大経過時間</value>
+    <comment>Developer tools: maximum original connection creation age for healthy ordinary-flow affinity, edited as a duration.</comment>
+  </data>
+  <data name="dev_affinity_max_time_detail" xml:space="preserve">
+    <value>通常の新しい接続では、元の接続の作成からの経過時間がこの上限未満の、正常な IP／ドメインの出口だけを再利用します。デフォルトは1分です。0または負の値で再利用を無効にします。警告のある出口や異常な出口では常にレースを行います。既存の接続と明示的な固定は変更しません。</value>
+    <comment>Developer tools: strict healthy-donor age cap, disabled values, default and unaffected existing connections/pins.</comment>
+  </data>
   <data name="dev_affinity_performance" xml:space="preserve">
     <value>性能を考慮したアフィニティ</value>
     <comment>Developer tools screen (reliability surface): performance-aware affinity control label.</comment>
   </data>
   <data name="dev_affinity_performance_detail" xml:space="preserve">
-    <value>新しい TLS レースを、各プロバイダーの確認済みバイトのピーク速度と公表帯域幅の比で重み付けします。ハードアフィニティが有効な場合、測定値の低い提供元はレースで譲ります。既存の接続と明示的な固定は変わりません</value>
+    <value>新しい TLS レースを、各プロバイダーの確認済みバイトのピーク速度と公表帯域幅の比で重み付けします。アフィニティの経過時間の上限内でも、測定値の低い提供元はレースで譲ります。既存の接続と明示的な固定は変わりません</value>
     <comment>Developer tools screen: explanatory subtext under the performance-aware affinity control.</comment>
   </data>
   <data name="dev_affinity_sticky" xml:space="preserve">
@@ -2148,17 +2156,13 @@
     <value>接続中のフローが空のウィンドウを再確認する頻度。最初の出口が到着した直後に最初のリクエストを送れます。オフにすると 2 秒の再試行間隔を待ちます</value>
     <comment>Developer tools screen: explanatory subtext under the 'formation poll' control.</comment>
   </data>
-  <data name="dev_fresh_flow_affinity" xml:space="preserve">
-    <value>新規フローのハードアフィニティ</value>
-    <comment>Developer tools screen (reliability surface): hard fresh-flow affinity control label.</comment>
-  </data>
-  <data name="dev_fresh_flow_affinity_detail" xml:space="preserve">
-    <value>新しい接続を、その IP またはドメインがすでに使っている出口に割り当てます。デフォルトはオフで、通常の新しい接続はすべてプロバイダーのレースに参加します。既存の接続と明示的な固定は常にそのままです</value>
-    <comment>Developer tools screen: explanatory subtext under the hard fresh-flow affinity control.</comment>
-  </data>
   <data name="dev_group_follow" xml:space="preserve">
     <value>待機中の出口に追従</value>
     <comment>Developer tools screen (reliability surface): group follow control label.</comment>
+  </data>
+  <data name="dev_group_follow_compat_detail" xml:space="preserve">
+    <value>互換性のために残された設定であり、正常性チェックを無視するものではありません。通常の新しい接続は、警告のある出口や異常な出口を再利用せず、常に新しいプロバイダーレースを行います。既存の接続と明示的な固定は変更しません。</value>
+    <comment>Developer tools: both legacy group-follow controls are not ordinary fresh-flow health overrides.</comment>
   </data>
   <data name="dev_group_follow_detail" xml:space="preserve">
     <value>隔離された出口は、判定の裏付けが最も弱い待機の初期段階では、自分のサイトの新しい接続を保持します。これにより、待機によってサイトの出口 IP が分かれることを防ぎます。新しいサイトは引き続きその出口を避けます。オフにすると分散させます</value>
@@ -2167,10 +2171,6 @@
   <data name="dev_group_follow_window" xml:space="preserve">
     <value>追従ウィンドウ</value>
     <comment>Developer tools screen (reliability surface): group follow window control label.</comment>
-  </data>
-  <data name="dev_group_follow_window_detail" xml:space="preserve">
-    <value>待機が始まってから、サイトの新しい接続が出口に追従し続ける時間。初期の待機はたいてい誤検知ですが、長引く待機は除外に向かい、フローを受け付けなくなります。オフにするとすぐに分散させます</value>
-    <comment>Developer tools screen: explanatory subtext under the 'group follow window' control.</comment>
   </data>
   <data name="dev_group_follow_window_ms_detail" xml:space="preserve">
     <value>待機が始まってから、サイトの新しい接続が出口に追従し続ける時間（ミリ秒）。初期の待機はたいてい誤検知ですが、長引く待機は除外に向かい、フローを受け付けなくなります。オフにするとすぐに分散させます</value>

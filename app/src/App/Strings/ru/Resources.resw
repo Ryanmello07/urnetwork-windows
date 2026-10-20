@@ -1832,12 +1832,20 @@
     <value>Действия — это запросы: проверяйте их результат в измерениях и строках выходов, которые обновляются ниже.</value>
     <comment>Developer page: note that the action buttons only request changes.</comment>
   </data>
+  <data name="dev_affinity_max_time" xml:space="preserve">
+    <value>Максимальный возраст привязки</value>
+    <comment>Developer tools: maximum original connection creation age for healthy ordinary-flow affinity, edited as a duration.</comment>
+  </data>
+  <data name="dev_affinity_max_time_detail" xml:space="preserve">
+    <value>Для обычных новых соединений повторно используйте только исправный выход IP/домена, если с момента создания исходного соединения прошло меньше времени, чем этот предел. По умолчанию: 1 минута. Ноль или отрицательное значение отключает повторное использование. Выходы с предупреждением или неисправные выходы всегда запускают гонку. Существующие соединения и явные закрепления не меняются.</value>
+    <comment>Developer tools: strict healthy-donor age cap, disabled values, default and unaffected existing connections/pins.</comment>
+  </data>
   <data name="dev_affinity_performance" xml:space="preserve">
     <value>Привязка с учётом производительности</value>
     <comment>Developer tools screen (reliability surface): performance-aware affinity control label.</comment>
   </data>
   <data name="dev_affinity_performance_detail" xml:space="preserve">
-    <value>Взвешивает новые TLS-гонки по пиковой скорости подтверждённых байтов каждого провайдера относительно его заявленной пропускной способности. При включённой жёсткой привязке провайдеры с низкими замерами уступают гонке. Существующие соединения и явные закрепления остаются без изменений</value>
+    <value>Взвешивает новые TLS-гонки по пиковой скорости подтверждённых байтов каждого провайдера относительно его заявленной пропускной способности. В пределах ограничения возраста привязки провайдеры с низкими замерами уступают гонке. Существующие соединения и явные закрепления остаются без изменений</value>
     <comment>Developer tools screen: explanatory subtext under the performance-aware affinity control.</comment>
   </data>
   <data name="dev_affinity_sticky" xml:space="preserve">
@@ -2220,17 +2228,13 @@
     <value>Как часто подключающийся поток перепроверяет пустое окно, чтобы первый запрос ушёл сразу после появления первого выхода. Если выключено, используется интервал повтора 2 с</value>
     <comment>Developer tools screen: explanatory subtext under the 'formation poll' control.</comment>
   </data>
-  <data name="dev_fresh_flow_affinity" xml:space="preserve">
-    <value>Жёсткая привязка новых потоков</value>
-    <comment>Developer tools screen (reliability surface): hard fresh-flow affinity control label.</comment>
-  </data>
-  <data name="dev_fresh_flow_affinity_detail" xml:space="preserve">
-    <value>Назначает каждое новое соединение на выход, который уже использует его IP или домен. По умолчанию выключено: каждое обычное новое соединение попадает в гонку провайдеров. Существующие соединения и явные закрепления всегда остаются без изменений</value>
-    <comment>Developer tools screen: explanatory subtext under the hard fresh-flow affinity control.</comment>
-  </data>
   <data name="dev_group_follow" xml:space="preserve">
     <value>Следовать за отстранёнными выходами</value>
     <comment>Developer tools screen (reliability surface): group follow control label.</comment>
+  </data>
+  <data name="dev_group_follow_compat_detail" xml:space="preserve">
+    <value>Устаревшая настройка совместимости, не отменяющая проверку исправности. Обычные новые соединения никогда не используют повторно выходы с предупреждением или неисправные выходы; они всегда запускают новую гонку провайдеров. Существующие соединения и явные закрепления не меняются.</value>
+    <comment>Developer tools: both legacy group-follow controls are not ordinary fresh-flow health overrides.</comment>
   </data>
   <data name="dev_group_follow_detail" xml:space="preserve">
     <value>Выход на карантине сохраняет новые соединения своих сайтов в начале отстранения, когда вердикт наименее обоснован, чтобы отстранение не разделяло исходящий IP сайта. Новые сайты по-прежнему его избегают. Если выключено, соединения распределяются по другим выходам</value>
@@ -2239,10 +2243,6 @@
   <data name="dev_group_follow_window" xml:space="preserve">
     <value>Окно следования</value>
     <comment>Developer tools screen (reliability surface): group follow window control label.</comment>
-  </data>
-  <data name="dev_group_follow_window_detail" xml:space="preserve">
-    <value>Как долго после начала отстранения новые соединения сайта продолжают следовать за своим выходом — ранние отстранения обычно оказываются ложными тревогами; затянувшееся ведёт к удалению, и выход перестаёт принимать потоки. Если выключено, соединения сразу распределяются</value>
-    <comment>Developer tools screen: explanatory subtext under the 'group follow window' control.</comment>
   </data>
   <data name="dev_group_follow_window_ms_detail" xml:space="preserve">
     <value>Как долго после начала отстранения новые соединения сайта продолжают следовать за своим выходом, в мс — ранние отстранения обычно оказываются ложными тревогами; затянувшееся ведёт к удалению, и выход перестаёт принимать потоки. Если выключено, соединения сразу распределяются</value>

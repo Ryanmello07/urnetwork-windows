@@ -1772,12 +1772,20 @@ cách đúng đắn</value>
     <value>Thao tác chỉ là yêu cầu: hãy xác nhận kết quả trong phần đo lường và các hàng điểm thoát, vốn tự làm mới bên dưới.</value>
     <comment>Developer page: note that the action buttons only request changes.</comment>
   </data>
+  <data name="dev_affinity_max_time" xml:space="preserve">
+    <value>Tuổi liên kết tối đa</value>
+    <comment>Developer tools: maximum original connection creation age for healthy ordinary-flow affinity, edited as a duration.</comment>
+  </data>
+  <data name="dev_affinity_max_time_detail" xml:space="preserve">
+    <value>Với kết nối mới thông thường, chỉ dùng lại điểm thoát IP/tên miền khỏe mạnh nếu thời gian kể từ khi tạo kết nối ban đầu còn nhỏ hơn giới hạn này. Mặc định: 1 phút. Số không hoặc giá trị âm tắt việc dùng lại. Điểm thoát có cảnh báo hoặc không khỏe luôn kích hoạt cuộc đua mới. Kết nối hiện có và các ghim rõ ràng không thay đổi.</value>
+    <comment>Developer tools: strict healthy-donor age cap, disabled values, default and unaffected existing connections/pins.</comment>
+  </data>
   <data name="dev_affinity_performance" xml:space="preserve">
     <value>Ưu tiên theo hiệu năng</value>
     <comment>Developer tools screen (reliability surface): performance-aware affinity control label.</comment>
   </data>
   <data name="dev_affinity_performance_detail" xml:space="preserve">
-    <value>Cân nhắc các cuộc đua TLS mới theo tốc độ byte được xác nhận cao nhất của từng nhà cung cấp so với băng thông họ công bố. Khi bật ưu tiên cứng, các nhà cung cấp có kết quả đo thấp sẽ nhường trong cuộc đua. Các kết nối hiện có và các ghim rõ ràng giữ nguyên</value>
+    <value>Cân nhắc các cuộc đua TLS mới theo tốc độ byte được xác nhận cao nhất của từng nhà cung cấp so với băng thông họ công bố. Trong giới hạn tuổi liên kết, các nhà cung cấp có kết quả đo thấp sẽ nhường trong cuộc đua. Các kết nối hiện có và các ghim rõ ràng giữ nguyên</value>
     <comment>Developer tools screen: explanatory subtext under the performance-aware affinity control.</comment>
   </data>
   <data name="dev_affinity_sticky" xml:space="preserve">
@@ -2148,17 +2156,13 @@ cách đúng đắn</value>
     <value>Tần suất một luồng đang kết nối kiểm tra lại cửa sổ trống, để yêu cầu đầu tiên đi ngay khi điểm thoát đầu tiên xuất hiện. Tắt sẽ chờ theo nhịp thử lại 2 giây</value>
     <comment>Developer tools screen: explanatory subtext under the 'formation poll' control.</comment>
   </data>
-  <data name="dev_fresh_flow_affinity" xml:space="preserve">
-    <value>Ưu tiên cứng cho luồng mới</value>
-    <comment>Developer tools screen (reliability surface): hard fresh-flow affinity control label.</comment>
-  </data>
-  <data name="dev_fresh_flow_affinity_detail" xml:space="preserve">
-    <value>Gán mỗi kết nối mới vào điểm thoát mà IP hoặc tên miền của nó đang dùng. Mặc định là tắt: mỗi kết nối mới thông thường đều vào cuộc đua nhà cung cấp. Các kết nối hiện có và các ghim rõ ràng luôn giữ nguyên</value>
-    <comment>Developer tools screen: explanatory subtext under the hard fresh-flow affinity control.</comment>
-  </data>
   <data name="dev_group_follow" xml:space="preserve">
     <value>Theo các điểm thoát đang dự bị</value>
     <comment>Developer tools screen (reliability surface): group follow control label.</comment>
+  </data>
+  <data name="dev_group_follow_compat_detail" xml:space="preserve">
+    <value>Cài đặt tương thích cũ, không bỏ qua kiểm tra sức khỏe. Kết nối mới thông thường không bao giờ dùng lại điểm thoát có cảnh báo hoặc không khỏe; chúng luôn bắt đầu cuộc đua nhà cung cấp mới. Kết nối hiện có và các ghim rõ ràng không thay đổi.</value>
+    <comment>Developer tools: both legacy group-follow controls are not ordinary fresh-flow health overrides.</comment>
   </data>
   <data name="dev_group_follow_detail" xml:space="preserve">
     <value>Một điểm thoát bị cách ly vẫn giữ các kết nối mới của chính các trang web của nó trong giai đoạn đầu dự bị, khi phán quyết còn ít bằng chứng nhất, để việc dự bị không chia tách IP ra ngoài của trang. Các trang mới vẫn tránh nó. Tắt sẽ phân tán chúng</value>
@@ -2167,10 +2171,6 @@ cách đúng đắn</value>
   <data name="dev_group_follow_window" xml:space="preserve">
     <value>Cửa sổ theo dõi</value>
     <comment>Developer tools screen (reliability surface): group follow window control label.</comment>
-  </data>
-  <data name="dev_group_follow_window_detail" xml:space="preserve">
-    <value>Trong bao lâu kể từ khi bắt đầu dự bị, các kết nối mới của một trang tiếp tục theo điểm thoát của chúng — dự bị sớm thường là báo động giả; dự bị kéo dài sẽ dẫn tới loại bỏ và ngừng nhận luồng. Tắt sẽ phân tán ngay</value>
-    <comment>Developer tools screen: explanatory subtext under the 'group follow window' control.</comment>
   </data>
   <data name="dev_group_follow_window_ms_detail" xml:space="preserve">
     <value>Trong bao lâu kể từ khi bắt đầu dự bị, các kết nối mới của một trang tiếp tục theo điểm thoát của chúng, tính bằng ms — dự bị sớm thường là báo động giả; dự bị kéo dài sẽ dẫn tới loại bỏ và ngừng nhận luồng. Tắt sẽ phân tán ngay</value>

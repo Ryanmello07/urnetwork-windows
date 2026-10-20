@@ -1792,12 +1792,20 @@ rätt sätt</value>
     <value>Åtgärder är förfrågningar: kontrollera effekten i mätningarna och utgångsraderna, som uppdateras nedanför.</value>
     <comment>Developer page: note that the action buttons only request changes.</comment>
   </data>
+  <data name="dev_affinity_max_time" xml:space="preserve">
+    <value>Högsta affinitetsålder</value>
+    <comment>Developer tools: maximum original connection creation age for healthy ordinary-flow affinity, edited as a duration.</comment>
+  </data>
+  <data name="dev_affinity_max_time_detail" xml:space="preserve">
+    <value>För vanliga nya anslutningar återanvänds bara en frisk IP-/domänutgång om tiden sedan den ursprungliga anslutningen skapades är kortare än denna gräns. Standard: 1 minut. Noll eller ett negativt värde stänger av återanvändning. Varnade eller osunda utgångar leder alltid till ett lopp. Befintliga anslutningar och uttryckliga fästningar ändras inte.</value>
+    <comment>Developer tools: strict healthy-donor age cap, disabled values, default and unaffected existing connections/pins.</comment>
+  </data>
   <data name="dev_affinity_performance" xml:space="preserve">
     <value>Prestandabaserad affinitet</value>
     <comment>Developer tools screen (reliability surface): performance-aware affinity control label.</comment>
   </data>
   <data name="dev_affinity_performance_detail" xml:space="preserve">
-    <value>Vikta nya TLS-lopp efter varje leverantörs högsta takt av kvitterade byte i förhållande till dess angivna bandbredd. Med hård affinitet påslagen viker lågt uppmätta givare för loppet. Befintliga anslutningar och uttryckliga fästningar ligger fast</value>
+    <value>Vikta nya TLS-lopp efter varje leverantörs högsta takt av kvitterade byte i förhållande till dess angivna bandbredd. Inom affinitetens åldersgräns viker lågt uppmätta givare för loppet. Befintliga anslutningar och uttryckliga fästningar ligger fast</value>
     <comment>Developer tools screen: explanatory subtext under the performance-aware affinity control.</comment>
   </data>
   <data name="dev_affinity_sticky" xml:space="preserve">
@@ -2172,17 +2180,13 @@ rätt sätt</value>
     <value>Hur ofta ett flöde som ansluter kontrollerar ett tomt fönster igen, så att den första begäran går iväg direkt när den första utgången kommer. Av väntar omförsökstakten på 2 s</value>
     <comment>Developer tools screen: explanatory subtext under the 'formation poll' control.</comment>
   </data>
-  <data name="dev_fresh_flow_affinity" xml:space="preserve">
-    <value>Hård affinitet för nya flöden</value>
-    <comment>Developer tools screen (reliability surface): hard fresh-flow affinity control label.</comment>
-  </data>
-  <data name="dev_fresh_flow_affinity_detail" xml:space="preserve">
-    <value>Tilldela varje ny anslutning den utgång som dess IP eller domän redan använder. Av är standard: varje vanlig ny anslutning går till leverantörsloppet. Befintliga anslutningar och uttryckliga fästningar ligger alltid fast</value>
-    <comment>Developer tools screen: explanatory subtext under the hard fresh-flow affinity control.</comment>
-  </data>
   <data name="dev_group_follow" xml:space="preserve">
     <value>Följ avbänkade utgångar</value>
     <comment>Developer tools screen (reliability surface): group follow control label.</comment>
+  </data>
+  <data name="dev_group_follow_compat_detail" xml:space="preserve">
+    <value>Äldre kompatibilitetsinställning, inget undantag från hälsokontrollen. Vanliga nya anslutningar återanvänder aldrig varnade eller osunda utgångar; de startar alltid ett nytt leverantörslopp. Befintliga anslutningar och uttryckliga fästningar ändras inte.</value>
+    <comment>Developer tools: both legacy group-follow controls are not ordinary fresh-flow health overrides.</comment>
   </data>
   <data name="dev_group_follow_detail" xml:space="preserve">
     <value>En utgång i karantän behåller sina egna webbplatsers nya anslutningar under början av avbänkningen, när domen är minst bevisad, så att avbänkningen inte delar webbplatsens egress-IP. Nya webbplatser undviker den fortfarande. Av sprider dem</value>
@@ -2191,10 +2195,6 @@ rätt sätt</value>
   <data name="dev_group_follow_window" xml:space="preserve">
     <value>Följfönster</value>
     <comment>Developer tools screen (reliability surface): group follow window control label.</comment>
-  </data>
-  <data name="dev_group_follow_window_detail" xml:space="preserve">
-    <value>Hur länge in i en avbänkning en webbplats nya anslutningar fortsätter att följa sin utgång — tidiga avbänkningar är oftast falsklarm; en som varar är på väg mot borttagning och slutar ta emot flöden. Av sprider direkt</value>
-    <comment>Developer tools screen: explanatory subtext under the 'group follow window' control.</comment>
   </data>
   <data name="dev_group_follow_window_ms_detail" xml:space="preserve">
     <value>Hur länge in i en avbänkning en webbplats nya anslutningar fortsätter att följa sin utgång, i ms — tidiga avbänkningar är oftast falsklarm; en som varar är på väg mot borttagning och slutar ta emot flöden. Av sprider direkt</value>

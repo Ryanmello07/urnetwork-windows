@@ -1772,12 +1772,20 @@
     <value>操作只是請求：請在下方會更新的量度和出口行中確認其效果。</value>
     <comment>Developer page: note that the action buttons only request changes.</comment>
   </data>
+  <data name="dev_affinity_max_time" xml:space="preserve">
+    <value>親和性最長時效</value>
+    <comment>Developer tools: maximum original connection creation age for healthy ordinary-flow affinity, edited as a duration.</comment>
+  </data>
+  <data name="dev_affinity_max_time_detail" xml:space="preserve">
+    <value>對於一般新連線，僅在原始連線建立至今的時間未達此上限時，重用健康的 IP／網域出口。預設：1 分鐘。零或負值停用重用。出現警告或不健康的出口一律觸發重新競速。現有連線和明確固定不變。</value>
+    <comment>Developer tools: strict healthy-donor age cap, disabled values, default and unaffected existing connections/pins.</comment>
+  </data>
   <data name="dev_affinity_performance" xml:space="preserve">
     <value>效能感知親和性</value>
     <comment>Developer tools screen (reliability surface): performance-aware affinity control label.</comment>
   </data>
   <data name="dev_affinity_performance_detail" xml:space="preserve">
-    <value>按各供應商的峰值已確認位元組速率相對其聲稱頻寬的比例，為新的 TLS 競速加權。啟用強親和性時，量度值低的供應商會讓位於競速。現有連線和明確固定保持不變</value>
+    <value>按各供應商的峰值已確認位元組速率相對其聲稱頻寬的比例，為新的 TLS 競速加權。在親和性時效上限內，量度值低的供應商會讓位於競速。現有連線和明確固定保持不變</value>
     <comment>Developer tools screen: explanatory subtext under the performance-aware affinity control.</comment>
   </data>
   <data name="dev_affinity_sticky" xml:space="preserve">
@@ -2148,17 +2156,13 @@
     <value>正在連接的流重新檢查空視窗的頻率，讓第一個請求在首個出口就緒後立即發出。關閉時按 2 秒的重試節奏等待</value>
     <comment>Developer tools screen: explanatory subtext under the 'formation poll' control.</comment>
   </data>
-  <data name="dev_fresh_flow_affinity" xml:space="preserve">
-    <value>新流強親和性</value>
-    <comment>Developer tools screen (reliability surface): hard fresh-flow affinity control label.</comment>
-  </data>
-  <data name="dev_fresh_flow_affinity_detail" xml:space="preserve">
-    <value>將每個新連線分配給其 IP 或網域已在使用的出口。預設關閉：每個一般的新連線都會進入供應商競速。現有連線和明確固定一律保持不變</value>
-    <comment>Developer tools screen: explanatory subtext under the hard fresh-flow affinity control.</comment>
-  </data>
   <data name="dev_group_follow" xml:space="preserve">
     <value>跟隨被隔離的出口</value>
     <comment>Developer tools screen (reliability surface): group follow control label.</comment>
+  </data>
+  <data name="dev_group_follow_compat_detail" xml:space="preserve">
+    <value>此為舊版相容設定，不會繞過健康檢查。一般新連線絕不重用出現警告或不健康的出口，而是一律啟動新的供應商競速。現有連線和明確固定不變。</value>
+    <comment>Developer tools: both legacy group-follow controls are not ordinary fresh-flow health overrides.</comment>
   </data>
   <data name="dev_group_follow_detail" xml:space="preserve">
     <value>被隔離的出口在隔離初期（此時判定最不可靠）仍會承接其自身網站的新連線，以免隔離令網站的出口 IP 分散。新網站仍會避開它。關閉時將這些連線分散出去</value>
@@ -2167,10 +2171,6 @@
   <data name="dev_group_follow_window" xml:space="preserve">
     <value>跟隨視窗</value>
     <comment>Developer tools screen (reliability surface): group follow window control label.</comment>
-  </data>
-  <data name="dev_group_follow_window_detail" xml:space="preserve">
-    <value>隔離開始後，網站的新連線繼續跟隨其出口的時長——早期隔離通常是誤報；持續的隔離則趨向移除，並停止接收新流。關閉時立即分散</value>
-    <comment>Developer tools screen: explanatory subtext under the 'group follow window' control.</comment>
   </data>
   <data name="dev_group_follow_window_ms_detail" xml:space="preserve">
     <value>隔離開始後，網站的新連線繼續跟隨其出口的時長（毫秒）——早期隔離通常是誤報；持續的隔離則趨向移除，並停止接收新流。關閉時立即分散</value>

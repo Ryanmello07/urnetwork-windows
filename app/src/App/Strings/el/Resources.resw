@@ -1792,12 +1792,20 @@
     <value>Οι ενέργειες είναι αιτήματα: επιβεβαιώστε το αποτέλεσμά τους στις μετρήσεις και στις γραμμές εξόδων, που ανανεώνονται από κάτω.</value>
     <comment>Developer page: note that the action buttons only request changes.</comment>
   </data>
+  <data name="dev_affinity_max_time" xml:space="preserve">
+    <value>Μέγιστη ηλικία συνάφειας</value>
+    <comment>Developer tools: maximum original connection creation age for healthy ordinary-flow affinity, edited as a duration.</comment>
+  </data>
+  <data name="dev_affinity_max_time_detail" xml:space="preserve">
+    <value>Για συνηθισμένες νέες συνδέσεις, χρησιμοποιήστε ξανά μόνο μια υγιή έξοδο IP/τομέα εφόσον ο χρόνος από τη δημιουργία της αρχικής σύνδεσης είναι μικρότερος από αυτό το όριο. Προεπιλογή: 1 λεπτό. Το μηδέν ή μια αρνητική τιμή απενεργοποιεί την επαναχρησιμοποίηση. Οι έξοδοι με προειδοποίηση ή κακή κατάσταση οδηγούν πάντα σε αγώνα. Οι υπάρχουσες συνδέσεις και οι ρητές καρφιτσώσεις δεν αλλάζουν.</value>
+    <comment>Developer tools: strict healthy-donor age cap, disabled values, default and unaffected existing connections/pins.</comment>
+  </data>
   <data name="dev_affinity_performance" xml:space="preserve">
     <value>Συνάφεια βάσει απόδοσης</value>
     <comment>Developer tools screen (reliability surface): performance-aware affinity control label.</comment>
   </data>
   <data name="dev_affinity_performance_detail" xml:space="preserve">
-    <value>Σταθμίζει τους νέους αγώνες TLS με βάση τον μέγιστο ρυθμό επιβεβαιωμένων byte κάθε παρόχου σε σχέση με το δηλωμένο εύρος ζώνης του. Με την αυστηρή συνάφεια ενεργή, οι πάροχοι με χαμηλές μετρήσεις υποχωρούν στον αγώνα. Οι υπάρχουσες συνδέσεις και οι ρητές καρφιτσώσεις μένουν σταθερές</value>
+    <value>Σταθμίζει τους νέους αγώνες TLS με βάση τον μέγιστο ρυθμό επιβεβαιωμένων byte κάθε παρόχου σε σχέση με το δηλωμένο εύρος ζώνης του. Εντός του ορίου ηλικίας συνάφειας, οι πάροχοι με χαμηλές μετρήσεις υποχωρούν στον αγώνα. Οι υπάρχουσες συνδέσεις και οι ρητές καρφιτσώσεις μένουν σταθερές</value>
     <comment>Developer tools screen: explanatory subtext under the performance-aware affinity control.</comment>
   </data>
   <data name="dev_affinity_sticky" xml:space="preserve">
@@ -2172,17 +2180,13 @@
     <value>Πόσο συχνά μια ροή που συνδέεται ελέγχει ξανά ένα κενό παράθυρο, ώστε το πρώτο αίτημα να φύγει μόλις φτάσει η πρώτη έξοδος. Η απενεργοποίηση περιμένει τον ρυθμό επανάληψης των 2 δ</value>
     <comment>Developer tools screen: explanatory subtext under the 'formation poll' control.</comment>
   </data>
-  <data name="dev_fresh_flow_affinity" xml:space="preserve">
-    <value>Αυστηρή συνάφεια νέων ροών</value>
-    <comment>Developer tools screen (reliability surface): hard fresh-flow affinity control label.</comment>
-  </data>
-  <data name="dev_fresh_flow_affinity_detail" xml:space="preserve">
-    <value>Αναθέτει κάθε νέα σύνδεση στην έξοδο που ήδη χρησιμοποιεί η IP ή ο τομέας της. Απενεργοποιημένο είναι το προεπιλεγμένο: κάθε συνηθισμένη νέα σύνδεση φτάνει στον αγώνα παρόχων. Οι υπάρχουσες συνδέσεις και οι ρητές καρφιτσώσεις μένουν πάντα σταθερές</value>
-    <comment>Developer tools screen: explanatory subtext under the hard fresh-flow affinity control.</comment>
-  </data>
   <data name="dev_group_follow" xml:space="preserve">
     <value>Ακολούθηση εξόδων στον πάγκο</value>
     <comment>Developer tools screen (reliability surface): group follow control label.</comment>
+  </data>
+  <data name="dev_group_follow_compat_detail" xml:space="preserve">
+    <value>Παλαιά ρύθμιση συμβατότητας, όχι παράκαμψη ελέγχου υγείας. Οι συνηθισμένες νέες συνδέσεις δεν επαναχρησιμοποιούν ποτέ εξόδους με προειδοποίηση ή κακή κατάσταση· ξεκινούν πάντα νέο αγώνα παρόχων. Οι υπάρχουσες συνδέσεις και οι ρητές καρφιτσώσεις δεν αλλάζουν.</value>
+    <comment>Developer tools: both legacy group-follow controls are not ordinary fresh-flow health overrides.</comment>
   </data>
   <data name="dev_group_follow_detail" xml:space="preserve">
     <value>Μια έξοδος σε καραντίνα κρατά τις νέες συνδέσεις των δικών της ιστότοπων στην αρχή του πάγκου, όταν η ετυμηγορία είναι λιγότερο αποδεδειγμένη, ώστε ο πάγκος να μη διασπά την IP εξόδου του ιστότοπου. Οι νέοι ιστότοποι εξακολουθούν να την αποφεύγουν. Η απενεργοποίηση τις διασκορπίζει</value>
@@ -2191,10 +2195,6 @@
   <data name="dev_group_follow_window" xml:space="preserve">
     <value>Παράθυρο ακολούθησης</value>
     <comment>Developer tools screen (reliability surface): group follow window control label.</comment>
-  </data>
-  <data name="dev_group_follow_window_detail" xml:space="preserve">
-    <value>Για πόσο από την αρχή του πάγκου οι νέες συνδέσεις ενός ιστότοπου συνεχίζουν να ακολουθούν την έξοδό τους — οι πρώιμοι πάγκοι είναι συνήθως ψευδείς συναγερμοί· ένας που διαρκεί οδεύει προς αφαίρεση και σταματά να δέχεται ροές. Η απενεργοποίηση διασκορπίζει αμέσως</value>
-    <comment>Developer tools screen: explanatory subtext under the 'group follow window' control.</comment>
   </data>
   <data name="dev_group_follow_window_ms_detail" xml:space="preserve">
     <value>Για πόσο από την αρχή του πάγκου οι νέες συνδέσεις ενός ιστότοπου συνεχίζουν να ακολουθούν την έξοδό τους, σε ms — οι πρώιμοι πάγκοι είναι συνήθως ψευδείς συναγερμοί· ένας που διαρκεί οδεύει προς αφαίρεση και σταματά να δέχεται ροές. Η απενεργοποίηση διασκορπίζει αμέσως</value>

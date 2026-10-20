@@ -1792,12 +1792,20 @@ modo giusto</value>
     <value>Le azioni sono richieste: verificane l’effetto nelle misure e nelle righe delle uscite, che si aggiornano qui sotto.</value>
     <comment>Developer page: note that the action buttons only request changes.</comment>
   </data>
+  <data name="dev_affinity_max_time" xml:space="preserve">
+    <value>Età massima dell’affinità</value>
+    <comment>Developer tools: maximum original connection creation age for healthy ordinary-flow affinity, edited as a duration.</comment>
+  </data>
+  <data name="dev_affinity_max_time_detail" xml:space="preserve">
+    <value>Per le nuove connessioni ordinarie, riutilizza solo un’uscita IP/dominio sana se il tempo dalla creazione della connessione originale è inferiore a questo limite. Predefinito: 1 minuto. Zero o un valore negativo disattiva il riutilizzo. Le uscite con avvisi o non sane avviano sempre una gara. Le connessioni esistenti e i blocchi espliciti non cambiano.</value>
+    <comment>Developer tools: strict healthy-donor age cap, disabled values, default and unaffected existing connections/pins.</comment>
+  </data>
   <data name="dev_affinity_performance" xml:space="preserve">
     <value>Affinità basata sulle prestazioni</value>
     <comment>Developer tools screen (reliability surface): performance-aware affinity control label.</comment>
   </data>
   <data name="dev_affinity_performance_detail" xml:space="preserve">
-    <value>Pesa le nuove gare TLS in base alla velocità massima di byte confermati di ogni provider rispetto alla banda dichiarata. Con l’affinità rigida attiva, i provider con misure basse cedono alla gara. Le connessioni esistenti e i blocchi espliciti restano fissi</value>
+    <value>Pesa le nuove gare TLS in base alla velocità massima di byte confermati di ogni provider rispetto alla banda dichiarata. Entro il limite di età dell’affinità, i provider con misure basse cedono alla gara. Le connessioni esistenti e i blocchi espliciti restano fissi</value>
     <comment>Developer tools screen: explanatory subtext under the performance-aware affinity control.</comment>
   </data>
   <data name="dev_affinity_sticky" xml:space="preserve">
@@ -2172,17 +2180,13 @@ modo giusto</value>
     <value>Ogni quanto un flusso in connessione ricontrolla una finestra vuota, così la prima richiesta parte appena arriva la prima uscita. Disattivato attende il ritmo di nuovo tentativo di 2 s</value>
     <comment>Developer tools screen: explanatory subtext under the 'formation poll' control.</comment>
   </data>
-  <data name="dev_fresh_flow_affinity" xml:space="preserve">
-    <value>Affinità rigida per i nuovi flussi</value>
-    <comment>Developer tools screen (reliability surface): hard fresh-flow affinity control label.</comment>
-  </data>
-  <data name="dev_fresh_flow_affinity_detail" xml:space="preserve">
-    <value>Assegna ogni nuova connessione all’uscita che il suo IP o dominio usa già. Disattivato è il valore predefinito: ogni nuova connessione normale arriva alla gara dei provider. Le connessioni esistenti e i blocchi espliciti restano sempre fissi</value>
-    <comment>Developer tools screen: explanatory subtext under the hard fresh-flow affinity control.</comment>
-  </data>
   <data name="dev_group_follow" xml:space="preserve">
     <value>Segui le uscite in panchina</value>
     <comment>Developer tools screen (reliability surface): group follow control label.</comment>
+  </data>
+  <data name="dev_group_follow_compat_detail" xml:space="preserve">
+    <value>Impostazione di compatibilità precedente, non un’eccezione ai controlli di salute. Le nuove connessioni ordinarie non riutilizzano mai uscite con avvisi o non sane; avviano sempre una nuova gara tra provider. Le connessioni esistenti e i blocchi espliciti non cambiano.</value>
+    <comment>Developer tools: both legacy group-follow controls are not ordinary fresh-flow health overrides.</comment>
   </data>
   <data name="dev_group_follow_detail" xml:space="preserve">
     <value>Un’uscita in quarantena mantiene le nuove connessioni dei propri siti all’inizio della panchina, quando il verdetto è meno provato, così la panchina non divide l’IP di uscita del sito. I nuovi siti continuano a evitarla. Disattivato li disperde</value>
@@ -2191,10 +2195,6 @@ modo giusto</value>
   <data name="dev_group_follow_window" xml:space="preserve">
     <value>Finestra di inseguimento</value>
     <comment>Developer tools screen (reliability surface): group follow window control label.</comment>
-  </data>
-  <data name="dev_group_follow_window_detail" xml:space="preserve">
-    <value>Per quanto tempo dall’inizio della panchina le nuove connessioni di un sito continuano a seguire la loro uscita — le panchine iniziali sono di solito falsi allarmi; una che dura tende alla rimozione e smette di ricevere flussi. Disattivato disperde subito</value>
-    <comment>Developer tools screen: explanatory subtext under the 'group follow window' control.</comment>
   </data>
   <data name="dev_group_follow_window_ms_detail" xml:space="preserve">
     <value>Per quanto tempo dall’inizio della panchina le nuove connessioni di un sito continuano a seguire la loro uscita, in ms — le panchine iniziali sono di solito falsi allarmi; una che dura tende alla rimozione e smette di ricevere flussi. Disattivato disperde subito</value>

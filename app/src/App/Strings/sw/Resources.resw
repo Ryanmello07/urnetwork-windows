@@ -1792,12 +1792,20 @@ kwa njia sahihi</value>
     <value>Vitendo ni maombi: thibitisha matokeo yake kwenye vipimo na safu za njia za kutoka, zinazojisasisha hapa chini.</value>
     <comment>Developer page: note that the action buttons only request changes.</comment>
   </data>
+  <data name="dev_affinity_max_time" xml:space="preserve">
+    <value>Umri wa juu wa mshikamano</value>
+    <comment>Developer tools: maximum original connection creation age for healthy ordinary-flow affinity, edited as a duration.</comment>
+  </data>
+  <data name="dev_affinity_max_time_detail" xml:space="preserve">
+    <value>Kwa miunganisho mipya ya kawaida, tumia tena njia ya kutoka ya IP/kikoa iliyo salama tu ikiwa muda tangu kuundwa kwa muunganisho wa awali ni chini ya kikomo hiki. Chaguomsingi: dakika 1. Sifuri au thamani hasi huzima utumiaji tena. Njia zilizoonywa au zisizo salama daima huanzisha mashindano. Miunganisho iliyopo na ubanaji wazi havibadiliki.</value>
+    <comment>Developer tools: strict healthy-donor age cap, disabled values, default and unaffected existing connections/pins.</comment>
+  </data>
   <data name="dev_affinity_performance" xml:space="preserve">
     <value>Mshikamano unaozingatia utendaji</value>
     <comment>Developer tools screen (reliability surface): performance-aware affinity control label.</comment>
   </data>
   <data name="dev_affinity_performance_detail" xml:space="preserve">
-    <value>Pima mashindano mapya ya TLS kwa kasi ya juu ya baiti zilizothibitishwa za kila mtoa huduma ikilinganishwa na kipimo data alichotangaza. Mshikamano mkali ukiwashwa, watoa huduma wenye vipimo vya chini hupisha mashindano. Miunganisho iliyopo na ubanaji uliowekwa wazi hubaki vilevile</value>
+    <value>Pima mashindano mapya ya TLS kwa kasi ya juu ya baiti zilizothibitishwa za kila mtoa huduma ikilinganishwa na kipimo data alichotangaza. Ndani ya kikomo cha umri wa mshikamano, watoa huduma wenye vipimo vya chini hupisha mashindano. Miunganisho iliyopo na ubanaji uliowekwa wazi hubaki vilevile</value>
     <comment>Developer tools screen: explanatory subtext under the performance-aware affinity control.</comment>
   </data>
   <data name="dev_affinity_sticky" xml:space="preserve">
@@ -2172,17 +2180,13 @@ kwa njia sahihi</value>
     <value>Mara ngapi mtiririko unaounganika hukagua upya dirisha tupu, ili ombi la kwanza liondoke mara tu njia ya kwanza ya kutoka inapofika. Kuzima kunasubiri mwendo wa kujaribu tena wa sekunde 2</value>
     <comment>Developer tools screen: explanatory subtext under the 'formation poll' control.</comment>
   </data>
-  <data name="dev_fresh_flow_affinity" xml:space="preserve">
-    <value>Mshikamano mkali wa mitiririko mipya</value>
-    <comment>Developer tools screen (reliability surface): hard fresh-flow affinity control label.</comment>
-  </data>
-  <data name="dev_fresh_flow_affinity_detail" xml:space="preserve">
-    <value>Panga kila muunganisho mpya kwenye njia ya kutoka ambayo IP au kikoa chake tayari kinatumia. Chaguomsingi ni kuzimwa: kila muunganisho mpya wa kawaida hufika kwenye mashindano ya watoa huduma. Miunganisho iliyopo na ubanaji uliowekwa wazi hubaki vilevile kila wakati</value>
-    <comment>Developer tools screen: explanatory subtext under the hard fresh-flow affinity control.</comment>
-  </data>
   <data name="dev_group_follow" xml:space="preserve">
     <value>Fuata njia za kutoka zilizowekwa benchi</value>
     <comment>Developer tools screen (reliability surface): group follow control label.</comment>
+  </data>
+  <data name="dev_group_follow_compat_detail" xml:space="preserve">
+    <value>Mpangilio wa zamani wa uoanifu, si kupuuza ukaguzi wa afya. Miunganisho mipya ya kawaida haitumii tena njia zilizoonywa au zisizo salama; daima huanza mashindano mapya ya watoa huduma. Miunganisho iliyopo na ubanaji wazi havibadiliki.</value>
+    <comment>Developer tools: both legacy group-follow controls are not ordinary fresh-flow health overrides.</comment>
   </data>
   <data name="dev_group_follow_detail" xml:space="preserve">
     <value>Njia ya kutoka iliyotengwa huendelea kupokea miunganisho mipya ya tovuti zake mwanzoni mwa kukaa benchi, wakati hukumu bado haijathibitishwa sana, ili benchi lisigawanye IP ya kutokea ya tovuti. Tovuti mpya bado huiepuka. Kuzima kunazitawanya</value>
@@ -2191,10 +2195,6 @@ kwa njia sahihi</value>
   <data name="dev_group_follow_window" xml:space="preserve">
     <value>Dirisha la kufuata</value>
     <comment>Developer tools screen (reliability surface): group follow window control label.</comment>
-  </data>
-  <data name="dev_group_follow_window_detail" xml:space="preserve">
-    <value>Muda ambao miunganisho mipya ya tovuti huendelea kufuata njia yake ya kutoka tangu ianze kukaa benchi — benchi za mapema mara nyingi ni kengele za uongo; inayodumu huelekea kuondolewa na huacha kupokea mitiririko. Kuzima kunatawanya mara moja</value>
-    <comment>Developer tools screen: explanatory subtext under the 'group follow window' control.</comment>
   </data>
   <data name="dev_group_follow_window_ms_detail" xml:space="preserve">
     <value>Muda ambao miunganisho mipya ya tovuti huendelea kufuata njia yake ya kutoka tangu ianze kukaa benchi, kwa ms — benchi za mapema mara nyingi ni kengele za uongo; inayodumu huelekea kuondolewa na huacha kupokea mitiririko. Kuzima kunatawanya mara moja</value>

@@ -1792,12 +1792,20 @@ richtig auf</value>
     <value>Aktionen sind Anfragen: Prüfe ihre Wirkung in den Messwerten und Exit-Zeilen, die sich darunter aktualisieren.</value>
     <comment>Developer page: note that the action buttons only request changes.</comment>
   </data>
+  <data name="dev_affinity_max_time" xml:space="preserve">
+    <value>Maximales Affinitätsalter</value>
+    <comment>Developer tools: maximum original connection creation age for healthy ordinary-flow affinity, edited as a duration.</comment>
+  </data>
+  <data name="dev_affinity_max_time_detail" xml:space="preserve">
+    <value>Für gewöhnliche neue Verbindungen nur einen gesunden IP-/Domain-Exit wiederverwenden, wenn seit der Erstellung der ursprünglichen Verbindung weniger Zeit als dieses Limit vergangen ist. Standard: 1 Minute. Null oder negative Werte deaktivieren die Wiederverwendung. Bei gewarnten oder ungesunden Exits wird immer ein Race gestartet. Bestehende Verbindungen und explizite Pins bleiben unverändert.</value>
+    <comment>Developer tools: strict healthy-donor age cap, disabled values, default and unaffected existing connections/pins.</comment>
+  </data>
   <data name="dev_affinity_performance" xml:space="preserve">
     <value>Leistungsbewusste Affinität</value>
     <comment>Developer tools screen (reliability surface): performance-aware affinity control label.</comment>
   </data>
   <data name="dev_affinity_performance_detail" xml:space="preserve">
-    <value>Gewichtet neue TLS-Races nach der höchsten Rate bestätigter Bytes jedes Anbieters im Verhältnis zu seiner angegebenen Bandbreite. Bei aktivierter harter Affinität weichen Anbieter mit niedrigen Messwerten dem Race. Bestehende Verbindungen und explizite Pins bleiben unverändert</value>
+    <value>Gewichtet neue TLS-Races nach der höchsten Rate bestätigter Bytes jedes Anbieters im Verhältnis zu seiner angegebenen Bandbreite. Innerhalb des Affinitätsalterslimits weichen Anbieter mit niedrigen Messwerten dem Race. Bestehende Verbindungen und explizite Pins bleiben unverändert</value>
     <comment>Developer tools screen: explanatory subtext under the performance-aware affinity control.</comment>
   </data>
   <data name="dev_affinity_sticky" xml:space="preserve">
@@ -2172,17 +2180,13 @@ richtig auf</value>
     <value>Wie oft ein Flow im Verbindungsaufbau ein leeres Fenster erneut prüft, damit die erste Anfrage direkt nach dem Eintreffen des ersten Exits losgeht. Aus: wartet den 2-s-Wiederholungstakt ab</value>
     <comment>Developer tools screen: explanatory subtext under the 'formation poll' control.</comment>
   </data>
-  <data name="dev_fresh_flow_affinity" xml:space="preserve">
-    <value>Harte Affinität für neue Flows</value>
-    <comment>Developer tools screen (reliability surface): hard fresh-flow affinity control label.</comment>
-  </data>
-  <data name="dev_fresh_flow_affinity_detail" xml:space="preserve">
-    <value>Weist jede neue Verbindung dem Exit zu, den ihre IP oder Domain bereits nutzt. Aus ist die Voreinstellung: Jede gewöhnliche neue Verbindung geht in das Anbieter-Race. Bestehende Verbindungen und explizite Pins bleiben immer unverändert</value>
-    <comment>Developer tools screen: explanatory subtext under the hard fresh-flow affinity control.</comment>
-  </data>
   <data name="dev_group_follow" xml:space="preserve">
     <value>Exits auf der Ersatzbank folgen</value>
     <comment>Developer tools screen (reliability surface): group follow control label.</comment>
+  </data>
+  <data name="dev_group_follow_compat_detail" xml:space="preserve">
+    <value>Alte Kompatibilitätseinstellung, keine Ausnahme von der Zustandsprüfung. Gewöhnliche neue Verbindungen verwenden gewarnte oder ungesunde Exits nie wieder, sondern starten immer ein neues Anbieter-Race. Bestehende Verbindungen und explizite Pins bleiben unverändert.</value>
+    <comment>Developer tools: both legacy group-follow controls are not ordinary fresh-flow health overrides.</comment>
   </data>
   <data name="dev_group_follow_detail" xml:space="preserve">
     <value>Ein Exit in Quarantäne behält in der frühen Ersatzbankphase, in der das Urteil am wenigsten gesichert ist, die neuen Verbindungen seiner eigenen Websites, damit die Ersatzbank die Egress-IP der Website nicht aufteilt. Neue Websites meiden ihn weiterhin. Aus: verteilt sie</value>
@@ -2191,10 +2195,6 @@ richtig auf</value>
   <data name="dev_group_follow_window" xml:space="preserve">
     <value>Folgefenster</value>
     <comment>Developer tools screen (reliability surface): group follow window control label.</comment>
-  </data>
-  <data name="dev_group_follow_window_detail" xml:space="preserve">
-    <value>Wie lange während einer Ersatzbankphase die neuen Verbindungen einer Website ihrem Exit weiter folgen — frühe Ersatzbankphasen sind meist Fehlalarme; eine, die anhält, läuft auf eine Entfernung hinaus und nimmt keine Flows mehr auf. Aus: verteilt sofort</value>
-    <comment>Developer tools screen: explanatory subtext under the 'group follow window' control.</comment>
   </data>
   <data name="dev_group_follow_window_ms_detail" xml:space="preserve">
     <value>Wie lange während einer Ersatzbankphase die neuen Verbindungen einer Website ihrem Exit weiter folgen, in ms — frühe Ersatzbankphasen sind meist Fehlalarme; eine, die anhält, läuft auf eine Entfernung hinaus und nimmt keine Flows mehr auf. Aus: verteilt sofort</value>
