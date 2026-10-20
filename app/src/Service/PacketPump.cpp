@@ -76,8 +76,9 @@ bool PacketPump::Start() {
             //
             // PER PACKET, NOT PER BATCH, on both counters. These numbers are
             // compared against packet-denominated thresholds
-            // (kDeadFastOutboundPackets, TunnelWatchdog.h); counting dispatches
-            // would silently rescale every one of them.
+            // (DeadTunnelSettings::deadFastOutboundPackets,
+            // TunnelWatchdogSettings.h); counting dispatches would silently
+            // rescale every one of them.
             counters->inbound.fetch_add(1, std::memory_order_relaxed);
             // null once Stop() has run; the adapter may already be gone. The
             // rest of the batch is still walked, and still counted.
@@ -239,10 +240,11 @@ void PacketPump::OutboundLoop() {
       // back, and a batch counted before the call would be counted even when the
       // call threw or the pump was stopping mid-drain.
       //
-      // The UNIT is the part batching could quietly break: kDeadFastOutboundPackets
-      // is eight PACKETS (TunnelWatchdog.h), so counting one per sendPacketBatch
-      // would let a machine commit up to kMaxPacketCount times that much traffic
-      // into a dead tunnel before the fast window arms.
+      // The UNIT is the part batching could quietly break: the DEAD_FAST arming
+      // count is PACKETS, eight by default (DeadTunnelSettings::
+      // deadFastOutboundPackets, TunnelWatchdogSettings.h), so counting one per
+      // sendPacketBatch would let a machine commit up to kMaxPacketCount times
+      // that much traffic into a dead tunnel before the fast window arms.
       counters_->outbound.fetch_add(packetCount, std::memory_order_relaxed);
     }
     if (!running_.load()) break;  // re-checked: the drain loop may have exited on it

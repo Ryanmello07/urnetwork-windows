@@ -364,6 +364,8 @@ SdkHost::~SdkHost() {
   statsPublisher_.Stop();
   locationsOpener_.Stop();
   drawerSeedReader_.Stop();
+  // A network kick in flight is a call into the sdk this teardown closes.
+  sdkNetworkKick_.Stop();
   // The user's writes still queued run, then the worker stops: each takes
   // mutex_, so above the lock.
   writer_.Stop();
@@ -3018,6 +3020,11 @@ void SdkHost::ApplySdkEgressBind(int64_t index4, int64_t index6, const char* why
     // process pinned to a stale interface.
     urnet::setEgressInterfaceIndex(index4, index6);
   }
+  // Moved TO an interface: what this process's sdk already holds was made
+  // unbound or on the interface just left, so tell it the network moved
+  // (urnet::networkChanged drops its pooled api connections). On a worker: this
+  // may be the pipe reader, or the bootstrap thread holding mutex_.
+  if (index4 != 0 || index6 != 0) sdkNetworkKick_.Request();
   if (index4 != 0) {
     LogInfo("sdkhost: [R1] this process's sdk sockets are now pinned to "
             "ifIndex v4={} v6={} ({}). The UI has its OWN sdk instance, so the "
@@ -8682,6 +8689,8 @@ void SdkHost::QuitInOrder(std::chrono::steady_clock::time_point start) {
   statsPublisher_.Stop();
   locationsOpener_.Stop();
   drawerSeedReader_.Stop();
+  // a call into the sdk; nothing follows it
+  sdkNetworkKick_.Stop();
   // the user's writes still queued run first; each takes mutex_
   writer_.Stop();
   // a sign-out's tail in flight ends first, under mutex_ (SignOutRun.h)

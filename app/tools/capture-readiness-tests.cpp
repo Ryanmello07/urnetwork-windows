@@ -16,6 +16,10 @@ using namespace urnw;
 
 namespace {
 
+// The capture timing the service runs with, read from its defaults rather than
+// restated, so a case follows them when they move.
+const CaptureReadinessSettings kCapture;
+
 void Check(bool condition, const char* message) {
   if (!condition) throw std::runtime_error(message);
 }
@@ -104,7 +108,7 @@ void TestQualifiedPartialWindowActivatesPumpBeforeCapture() {
 
 void TestOnlyUsableExitProofCounts() {
   const CaptureExit healthy{.proven = true, .probeAgeSeconds = 0};
-  Check(CaptureExitIsUsable(healthy, 12000, 10000), "usable exit rejected");
+  Check(CaptureExitIsUsable(healthy, 12000, 10000, kCapture), "usable exit rejected");
   std::vector<CaptureExit> excluded{
       {.proven = false, .probeAgeSeconds = 0},
       {.proven = true, .done = true, .probeAgeSeconds = 0},
@@ -113,8 +117,8 @@ void TestOnlyUsableExitProofCounts() {
       {.proven = true, .probeAgeSeconds = -1},
       {.proven = true, .probeAgeSeconds = 20}};
   for (const auto exit : excluded)
-    Check(!CaptureExitIsUsable(exit, 12000, 10000), "unusable exit authorized capture");
-  Check(!CaptureExitIsUsable({.proven = true, .probeAgeSeconds = -1}, 12000, -1),
+    Check(!CaptureExitIsUsable(exit, 12000, 10000, kCapture), "unusable exit authorized capture");
+  Check(!CaptureExitIsUsable({.proven = true, .probeAgeSeconds = -1}, 12000, -1, kCapture),
         "negative proof age qualified before the first network event");
 }
 
@@ -253,13 +257,57 @@ void TestNetworkChangeAndResumeRequireFreshProof() {
   readiness.CompleteSample(oldSample, {.generation = 1, .added = 1},
                           {.generation = 1, .added = 1}, 1);
   Check(!readiness.Ready(), "late callback restored a pre-network proof");
-  Check(!CaptureProofAfterNetworkChange(20, 12000, 10000), "historical proof accepted");
-  Check(!CaptureProofAfterNetworkChange(0, 10999, 10000), "ambiguous rounded age accepted");
-  Check(!CaptureProofAfterNetworkChange(-1, 12000, 10000), "never-proven exit accepted");
-  Check(CaptureProofAfterNetworkChange(0, 12000, 10000), "post-event proof rejected");
+  const int64_t resolution = kCapture.probeAgeResolutionMillis;
+  Check(!CaptureProofAfterNetworkChange(20, 12000, 10000, kCapture), "historical proof accepted");
+  Check(!CaptureProofAfterNetworkChange(0, 10000 + resolution - 1, 10000, kCapture),
+        "ambiguous rounded age accepted");
+  Check(!CaptureProofAfterNetworkChange(-1, 12000, 10000, kCapture), "never-proven exit accepted");
+  Check(CaptureProofAfterNetworkChange(0, 10000 + resolution, 10000, kCapture),
+        "post-event proof rejected");
   Check(readiness.BeginSample().proofSinceMillis == 10000, "proof epoch lost on sample");
   Qualify(readiness);
   Check(readiness.Ready().has_value(), "fresh network proof cannot recover");
+}
+
+// Settings other than the defaults are the ones a readiness and the helpers
+// keep: the timing is its settings', not a constant's.
+void TestNonDefaultCaptureSettingsAreHonoured() {
+  int64_t now = 1000;
+  const CaptureReadinessSettings brief{.freshnessMillis = 2000};
+  CaptureReadiness readiness([&] { return now; }, brief);
+  Qualify(readiness);
+  now = 1000 + brief.freshnessMillis + 500;
+  Check(now - 1000 < kCapture.freshnessMillis && !readiness.Ready(),
+        "a shorter freshness window in the settings was not the one kept");
+  const CaptureReadinessSettings exact{.probeAgeResolutionMillis = 0};
+  Check(CaptureProofAfterNetworkChange(0, 10000, 10000, exact) &&
+            !CaptureProofAfterNetworkChange(0, 10000, 10000, kCapture),
+        "a probe-age resolution of zero in the settings was not the one kept");
+  const CaptureReadinessSettings quick{.sampleStallMillis = 5000};
+  Check(CaptureSampleStalled(1000, -1, 6000, quick) &&
+            !CaptureSampleStalled(1000, -1, 6000, kCapture),
+        "a shorter stall diagnostic in the settings was not the one kept");
+}
+
+// A stall the watchdog measured that was too short to be a sleep holds a
+// pending capture's proof as a resume does, and queues no network change for
+// the device: nothing moved.
+void TestStallBarrierHoldsProofWithoutANetworkChange() {
+  CaptureReadiness readiness;
+  Qualify(readiness);
+  const auto beforeStall = *readiness.Ready();
+  const auto oldSample = readiness.BeginSample();
+  readiness.ProofBarrier(10000);
+  Check(readiness.ProofSinceMillis() == 10000, "the stall did not move the proof epoch");
+  Check(!readiness.Current(beforeStall) && !readiness.Ready(), "a stall kept pre-stall proof");
+  Check(!readiness.PendingNetworkEvent().has_value(), "a stall queued a network change for the device");
+  readiness.CompleteSample(oldSample, {.generation = 1, .added = 1},
+                           {.generation = 1, .added = 1}, 1);
+  Check(!readiness.Ready(), "a sample begun before the stall restored its proof");
+  readiness.ProofBarrier(9000);
+  Check(readiness.ProofSinceMillis() == 10000, "an earlier stall moved the proof epoch backwards");
+  Qualify(readiness);
+  Check(readiness.Ready().has_value(), "fresh proof after a stall cannot recover");
 }
 
 void TestPrivacySafeWaitingDiagnostics() {
@@ -271,9 +319,12 @@ void TestPrivacySafeWaitingDiagnostics() {
         "qualification-pending", "provider presence was reported as proof");
   Check(std::string(CaptureWaitReason({.generation = 1}, 0, "platform-unreachable")) ==
         "platform-unreachable", "finite platform diagnosis not preserved");
-  Check(!CaptureSampleStalled(1000, -1, 30999) && CaptureSampleStalled(1000, -1, 31000),
+  const int64_t stall = kCapture.sampleStallMillis;
+  Check(!CaptureSampleStalled(1000, -1, 1000 + stall - 1, kCapture) &&
+            CaptureSampleStalled(1000, -1, 1000 + stall, kCapture),
         "sample stall deadline is not based on session time");
-  Check(!CaptureSampleStalled(31000, 2000, 31000), "suspended time was diagnosed as a stall");
+  Check(!CaptureSampleStalled(1000 + stall, 2000, 1000 + stall, kCapture),
+        "suspended time was diagnosed as a stall");
 }
 
 void TestSuspendedActivationCannotCommitAnExpiredTicket() {
@@ -284,7 +335,7 @@ void TestSuspendedActivationCannotCommitAnExpiredTicket() {
   Machine machine;
   machine.after = [&](CaptureStage stage) {
     if (stage == CaptureStage::Network) {
-      now += 9000;  // suspended between the route write and final commit
+      now += kCapture.freshnessMillis + 1000;  // suspended between the route write and final commit
       Qualify(readiness);  // a resumed sampler cannot renew the already-issued ticket
     }
   };
@@ -323,7 +374,7 @@ void TestNetworkEventSurvivesWatcherReplacement() {
   const CaptureWindow window{.generation = 1, .added = 1};
   now = 15000;
   const bool historical = CaptureExitIsUsable(
-      {.proven = true, .probeAgeSeconds = 4}, now, session->ProofSinceMillis());
+      {.proven = true, .probeAgeSeconds = 4}, now, session->ProofSinceMillis(), kCapture);
   session->CompleteSample(session->BeginSample(), window, window, historical ? 1 : 0);
   Check(!session->Ready(), "replacement watcher accepted pre-change qualification");
 
@@ -353,7 +404,7 @@ void TestNetworkEventSurvivesWatcherReplacement() {
         "completed event remained in the replay queue");
   now = 18000;
   const bool fresh = CaptureExitIsUsable(
-      {.proven = true, .probeAgeSeconds = 0}, now, session->ProofSinceMillis());
+      {.proven = true, .probeAgeSeconds = 0}, now, session->ProofSinceMillis(), kCapture);
   session->CompleteSample(session->BeginSample(), window, window, fresh ? 1 : 0);
   Check(session->Ready().has_value(), "fresh post-change provider proof could not recover");
   Machine machine;
@@ -421,12 +472,14 @@ int main() {
     TestPartialFailureAndHaltAtEveryCaptureStage();
     TestStopDuringBlockedSampleAndOldSessionCallback();
     TestNetworkChangeAndResumeRequireFreshProof();
+    TestStallBarrierHoldsProofWithoutANetworkChange();
+    TestNonDefaultCaptureSettingsAreHonoured();
     TestPrivacySafeWaitingDiagnostics();
     TestSuspendedActivationCannotCommitAnExpiredTicket();
     TestNetworkEventSurvivesWatcherReplacement();
     TestOldNetworkCallbackCannotNotifyReplacementSession();
     TestServiceFailureClampsAStaleProvenProviderGrid();
-    std::cout << "15 capture lifecycle tests passed\n";
+    std::cout << "17 capture lifecycle tests passed\n";
     return 0;
   } catch (const std::exception& error) {
     std::cerr << "capture lifecycle failure: " << error.what() << '\n';

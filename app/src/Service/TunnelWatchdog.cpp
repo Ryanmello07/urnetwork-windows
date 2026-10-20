@@ -51,7 +51,7 @@ void TunnelWatchdog::Start(urnet::DeviceLocal* device,
   if (device == nullptr) return;
   Stop();  // idempotent; also joins anything a previous session left
 
-  auto channel = std::make_shared<WatchdogChannel>();
+  auto channel = std::make_shared<WatchdogChannel>(settings_);
   channel->device.store(device);
   channel->onDead = std::move(onDead);
   channel->sessionReadiness = std::move(sessionReadiness);
@@ -114,9 +114,10 @@ void TunnelWatchdog::Start(urnet::DeviceLocal* device,
           "cannot carry traffic is turned off automatically rather than left "
           "blocking this machine (no exit for {}s, or {}s of sending with "
           "nothing coming back, or {}s of sdk silence).",
-          kSdkSampleIntervalMillis, kEvaluateIntervalMillis,
-          kNetworkNotifyDebounceMillis, kDeadSlowMillis / 1000,
-          kDeadFastMillis / 1000, kSdkUnresponsiveMillis / 1000);
+          settings_.sampleIntervalMillis, settings_.evaluateIntervalMillis,
+          settings_.networkNotify.windowMillis, settings_.deadTunnel.deadSlowMillis / 1000,
+          settings_.deadTunnel.deadFastMillis / 1000,
+          settings_.deadTunnel.sdkUnresponsiveMillis / 1000);
 }
 
 void TunnelWatchdog::Cancel() {
@@ -204,7 +205,7 @@ void TunnelWatchdog::Stop() {
               "stop is holding. Letting it run rather than joining it: two "
               "teardowns of one session are idempotent, and a join here would "
               "deadlock the pair.",
-              kWatchdogJoinBudgetMillis);
+              settings_.joinBudgetMillis);
       evaluator_.detach();
     }
   }
@@ -253,7 +254,7 @@ void TunnelWatchdog::Stop() {
                "waited on. This machine's network is not affected by that "
                "(the revert runs ahead of it); what it does mean is that this "
                "process must now exit by TerminateProcess.",
-               kWatchdogJoinBudgetMillis);
+               settings_.joinBudgetMillis);
       sampler_.detach();
       NoteTeardownAbandoned();
     }
@@ -273,10 +274,10 @@ bool TunnelWatchdog::JoinWithin(const std::shared_ptr<WatchdogChannel>& channel,
                                 std::atomic<bool>* done) {
   if (!channel || !done) return true;
   const auto deadline = std::chrono::steady_clock::now() +
-                        std::chrono::milliseconds(kWatchdogJoinBudgetMillis);
+                        std::chrono::milliseconds(channel->settings.joinBudgetMillis);
   while (!done->load() && std::chrono::steady_clock::now() < deadline) {
     std::unique_lock lock(channel->mutex);
-    channel->wake.wait_for(lock, std::chrono::milliseconds(10));
+    channel->wake.wait_for(lock, std::chrono::milliseconds(channel->settings.joinPollMillis));
   }
   return done->load();
 }
@@ -332,10 +333,13 @@ void TunnelWatchdog::Fire(const std::shared_ptr<WatchdogChannel>& channel,
 // Two jobs, both of them cgo calls that can block, which is why they share a
 // thread and why that thread is the abandonable one:
 //
-//   * TELL THE SDK THE NETWORK MOVED. networkChanged() kicks every platform
-//     transport in the process so connections bound to the old path re-dial now;
-//     notifyNetworkChange() rebases the uplink staleness epoch. NEITHER IS A
-//     SUPERSET OF THE OTHER, so both are called, networkChanged() first.
+//   * TELL THE SDK THE NETWORK MOVED, once per burst. networkChanged() is the
+//     sdk's one seam for it (DeviceLocal.NetworkChanged): it rebases the uplink
+//     staleness epoch, kicks every platform transport in the process so
+//     connections bound to the old path re-dial now, and drops the pooled DoH
+//     connections. notifyNetworkChange() is the same call under its mobile name,
+//     so calling both, as this thread used to, kicked every transport twice per
+//     burst, and a second kick cancels the dial the first one started.
 //   * SAMPLE THE EXIT WINDOW, so the verdict has a proven-exit count and — more
 //     importantly — so the ABSENCE of a completed sample becomes the wedge
 //     detector that needs no cooperation from the SDK at all.
@@ -370,20 +374,18 @@ void TunnelWatchdog::RunSampler(std::shared_ptr<WatchdogChannel> channel) {
     int64_t burst = 0;
     {
       std::unique_lock lock(channel->mutex);
-      const int64_t now = NowMillis();
-      int64_t waitMillis = nextSampleMillis - now;
-      if (channel->coalescer.pending()) {
-        const int64_t untilNotify = channel->coalescer.deadlineMillis() - now;
-        if (untilNotify < waitMillis) waitMillis = untilNotify;
-      }
-      if (channel->qualityCoalescer.pending()) {
-        const int64_t untilNotify =
-            channel->qualityCoalescer.deadlineMillis() - now;
-        if (untilNotify < waitMillis) waitMillis = untilNotify;
-      }
-      if (waitMillis > 0) {
-        channel->wake.wait_for(lock, std::chrono::milliseconds(waitMillis),
-                               [&] { return channel->cancelled.load(); });
+      // Until the next sample or the soonest open window. A burst that begins
+      // during the sleep ends it, so the device is told when that burst's window
+      // closes and not at the next sample (PlanSamplerSleep): the sample period
+      // is longer than the window, and ending the sleep only on cancellation
+      // held the network change for up to that whole period.
+      const SamplerSleep plan = PlanSamplerSleep(NowMillis(), nextSampleMillis, channel->coalescer,
+                                                 channel->qualityCoalescer);
+      if (plan.waitMillis > 0) {
+        channel->wake.wait_for(lock, std::chrono::milliseconds(plan.waitMillis), [&] {
+          return channel->cancelled.load() ||
+                 SamplerSleepInterrupted(plan, channel->coalescer, channel->qualityCoalescer);
+        });
       }
       if (channel->cancelled.load()) return;
       notifyDue = channel->coalescer.TakeDue(NowMillis());
@@ -406,14 +408,16 @@ void TunnelWatchdog::RunSampler(std::shared_ptr<WatchdogChannel> channel) {
               burst);
       try {
         device->networkChanged();
-        if (channel->cancelled.load()) return;
-        device->notifyNetworkChange();
+        // Handled as soon as the call has returned, cancelled or not: the device
+        // was told. A replacement watchdog (capture activating, a superseded
+        // capture) replays only what is still pending, and replaying this one
+        // would kick the same device again.
         if (networkEvent) channel->sessionReadiness->NetworkEventHandled(*networkEvent);
       } catch (const std::exception& e) {
         LogWarn("watchdog: the sdk network-change notification failed: {}",
                 e.what());
       }
-      // The device may have been torn down while we were inside those calls.
+      // The device may have been torn down while we were inside that call.
       if (channel->cancelled.load()) return;
       device = channel->device.load();
       if (device == nullptr) return;
@@ -433,18 +437,19 @@ void TunnelWatchdog::RunSampler(std::shared_ptr<WatchdogChannel> channel) {
     }
 
     if (NowMillis() < nextSampleMillis) continue;
-    nextSampleMillis = NowMillis() + kSdkSampleIntervalMillis;
+    nextSampleMillis = NowMillis() + channel->settings.sampleIntervalMillis;
 
     // A count without its destination identity can qualify a replacement
     // window using the retired one's proof. Bracket the SDK read and reject
     // callbacks, cancellation, or network changes anywhere inside the sample.
     const auto readiness = channel->captureReadiness;
     const int64_t proofSinceMillis = readiness ? readiness->ProofSinceMillis() : -1;
-    // Leave a full second after the event before scheduling the bounded SDK
-    // probe pass. That makes a fresh result provable even with truncated ages.
+    // Leave the probe age's resolution (a second, by default) after the event
+    // before scheduling the bounded SDK probe pass. That makes a fresh result
+    // provable even with truncated ages (CaptureProofAfterNetworkChange).
     if (readiness && proofSinceMillis >= 0 &&
         proofSinceMillis != probedNetworkMillis &&
-        NowMillis() - proofSinceMillis >= 1000) {
+        NowMillis() - proofSinceMillis >= channel->settings.capture.probeAgeResolutionMillis) {
       try {
         device->probeAllExits();
         probedNetworkMillis = proofSinceMillis;
@@ -481,7 +486,8 @@ void TunnelWatchdog::RunSampler(std::shared_ptr<WatchdogChannel> channel) {
         if (CaptureExitIsUsable(
                 {.proven = e.Proven, .done = e.Done, .quarantined = e.Quarantined,
                  .warning = e.Warning, .probeAgeSeconds = e.ProbeAgeSeconds},
-                proofSampleMillis, captureSample.proofSinceMillis)) ++usableProven;
+                proofSampleMillis, captureSample.proofSinceMillis,
+                channel->settings.capture)) ++usableProven;
       }
     }
     // Re-checked on the far side of the SDK call, BEFORE anything is published:
@@ -576,7 +582,8 @@ void TunnelWatchdog::RunEvaluator(std::shared_ptr<WatchdogChannel> channel,
     {
       std::unique_lock lock(channel->mutex);
       if (channel->wake.wait_for(lock,
-                                 std::chrono::milliseconds(kEvaluateIntervalMillis),
+                                 std::chrono::milliseconds(
+                                     channel->settings.evaluateIntervalMillis),
                                  [&] { return channel->cancelled.load(); })) {
         return;
       }
@@ -591,25 +598,41 @@ void TunnelWatchdog::RunEvaluator(std::shared_ptr<WatchdogChannel> channel,
     //
     // Checked BEFORE anything is measured, because if the answer is no then
     // every age below is the length of a sleep rather than the length of a
-    // failure. See kEvaluatorFrozenMillis for why this is not hypothetical on
-    // the machine this ships to.
+    // failure. See the freeze bar in TunnelWatchdog.h for why this is not
+    // hypothetical on the machine this ships to.
     const int64_t tickGap = now - lastTickMillis;
     lastTickMillis = now;
-    if (EvaluatorFroze(tickGap)) {
-      if (channel->captureReadiness) {
-        channel->captureReadiness->NetworkChanged(now);
+    const FreezeResponse freeze = FreezeResponseFor(tickGap, channel->settings.frozenMillis,
+                                                    channel->settings.freezeNetworkChangeMillis);
+    if (freeze.rebase) {
+      if (freeze.networkChanged && channel->sessionReadiness) {
+        // Long enough to have been a sleep: told here, in a live tunnel as well
+        // as a pending capture. The os events a resume raises reach the device
+        // only when they move what EgressMonitor compares (EgressChangeFilter),
+        // and a laptop that slept on the same Wi-Fi comes back with the same
+        // interface, address and gateway — over connections the far end has
+        // long since dropped.
+        channel->sessionReadiness->NetworkChanged(now);
         std::scoped_lock lock(channel->mutex);
         channel->coalescer.Observe(now);
         channel->wake.notify_all();
+      } else if (channel->captureReadiness) {
+        // A stall, which moved no network: nothing to tell the device, but a
+        // pending capture still may not activate on proof sampled before it.
+        channel->captureReadiness->ProofBarrier(now);
       }
       LogWarn("watchdog: this process did not run for {}ms (it asked to wait "
               "{}ms) — a modern-standby resume, a hibernate, a suspended vm or "
               "a machine that could not schedule this thread. Every failsafe "
               "window is a duration, so they are all rebased from now: this "
               "tunnel gets a full fresh grace period rather than being torn "
-              "down for silence it was never awake to hear. The sdk is being "
-              "told the network moved by the os events the resume raises.",
-              tickGap, kEvaluateIntervalMillis);
+              "down for silence it was never awake to hear. {}",
+              tickGap, channel->settings.evaluateIntervalMillis,
+              freeze.networkChanged
+                  ? "Long enough to have been a sleep, so the sdk is told the "
+                    "network moved."
+                  : "Too short to have been a sleep, so the sdk is not told the "
+                    "network moved.");
       sessionStartMillis = now;
       trafficStartMillis = now;
       if (counters) {
@@ -645,7 +668,7 @@ void TunnelWatchdog::RunEvaluator(std::shared_ptr<WatchdogChannel> channel,
 
     if (channel->captureReadiness) {
       const bool stalled = CaptureSampleStalled(
-          sessionStartMillis, channel->lastSampleMillis.load(), now);
+          sessionStartMillis, channel->lastSampleMillis.load(), now, channel->settings.capture);
       if (stalled && !captureStallReported)
         LogWarn("tunnel: stage=provider-proof outcome=sample-stalled capture=false");
       captureStallReported = stalled;
@@ -670,7 +693,7 @@ void TunnelWatchdog::RunEvaluator(std::shared_ptr<WatchdogChannel> channel,
         LogInfo("watchdog: sdk destination generation {} first satisfied its "
                 "provider window — the {}s no-inbound traffic clock starts now",
                 connectionEpoch.connectionGeneration(),
-                kDeadFastMillis / 1000);
+                channel->settings.deadTunnel.deadFastMillis / 1000);
       }
     }
     if (connectionUpdate.verdictClockReset ||
@@ -701,7 +724,7 @@ void TunnelWatchdog::RunEvaluator(std::shared_ptr<WatchdogChannel> channel,
     signals.lastInboundMillis = traffic.lastInboundMillis();
     signals.outboundSinceInbound = traffic.outboundSinceInbound();
 
-    const DeadTunnelVerdict verdict = Evaluate(signals, now);
+    const DeadTunnelVerdict verdict = Evaluate(signals, now, channel->settings.deadTunnel);
     armed_.store(verdict.armed, std::memory_order_relaxed);
     millisToFailsafe_.store(verdict.millisToFailsafe, std::memory_order_relaxed);
     if (verdict.reason == DeadTunnelReason::None) continue;

@@ -61,7 +61,8 @@
 
 #include "PacketPump.h"  // PacketCounters
 #include "CaptureReadiness.h"
-#include "NetworkChangeNotify.h"  // NotifyCoalescer, kNetworkNotifyDebounceMillis
+#include "NetworkChangeNotify.h"  // NotifyCoalescer, FreezeResponseFor
+#include "TunnelWatchdogSettings.h"
 #include "Sdk.h"
 
 namespace urnw {
@@ -70,94 +71,21 @@ namespace urnw {
 // the thresholds
 // ---------------------------------------------------------------------------
 //
-// Every number here is justified against something already measured or already
-// recorded in this repo, not guessed. A failsafe with invented thresholds is a
-// second bug wearing the first one's clothes.
-
-// DEAD_FAST. The host is sending and NOTHING is coming back.
-//
-// Must exceed the longest HONEST machine-wide inbound gap. The Windows DNS
-// client's query schedule across a server list runs ~12-13 s and a black-holed
-// TCP connect costs ~21 s (both recorded on kConnectingWindow in
-// TunnelController.cpp) — but the TCP one stalls ONE FLOW, not every flow,
-// while this window is machine-wide. Measured window formation on the owner's
-// box is sub-second ("UP in 658ms"). 20 s is >1.5x the DNS schedule and under
-// the ~30 s at which a human has already concluded the internet is broken.
-inline constexpr int64_t kDeadFastMillis = 20000;
-
-// ...and it takes REAL committed traffic to arm, not one stray packet. With the
-// connected policy in force the host stack retransmits, so a machine that is
-// genuinely trying produces this in well under a second; a machine that is idle
-// never does, and MUST NOT — an idle blocked machine is indistinguishable from
-// an idle working one, and firing there would be a teardown with no evidence.
-inline constexpr uint64_t kDeadFastOutboundPackets = 8;
-
-// DEAD_SLOW. No proven exit at all — and nothing coming back to contradict it
-// (see the carrying veto in Evaluate: a packet out of the tun overrules any
-// claim about exits, because Exit.Proven is a probe result and a packet is not).
-//
-// One honest COLD attempt after a roam is DNS (<=13 s) + TCP (<=21 s) +
-// handshake, call it ~35 s (the same note). 90 s is ~2.5x that, so a genuine
-// roam that recovers on its second attempt is never torn down. It also bounds
-// the never-proven connect on a hostile network at ~90 s instead of forever.
-inline constexpr int64_t kDeadSlowMillis = 90000;
-
-// UNRESPONSIVE. The SDK sampler has not COMPLETED a getExits() in this long.
-//
-// The sampler runs at 2 s, so this is 15 consecutive missed samples. A cgo call
-// that has not returned in 30 s is wedged, not slow — and this is the ONLY
-// condition that can fire during the silent-death family of task #39, because
-// it needs no cooperation from the SDK whatsoever.
-inline constexpr int64_t kSdkUnresponsiveMillis = 30000;
-
-// How overdue a sample must be before the unresponsive countdown is worth
-// SHOWING. Below this it is just the normal 2 s cadence and reporting "armed"
-// would mean reporting it forever.
-inline constexpr int64_t kSdkUnresponsiveArmMillis = 10000;
-
-// How close a verdict must be before the UI is told a countdown is running. The
-// teardown must never be a surprise, and a warning 90 s early is noise that
-// teaches the owner to ignore the one that matters.
-inline constexpr int64_t kFailsafeNoticeMillis = 30000;
-
-// How often the SDK is sampled, and how often the verdict is recomputed. The
-// verdict thread is deliberately faster AND touches no SDK, so a wedged sampler
-// cannot stop the verdict being reached.
-inline constexpr int64_t kSdkSampleIntervalMillis = 2000;
-inline constexpr int64_t kEvaluateIntervalMillis = 1000;
-
-// How late an evaluator tick has to be before the only honest reading is THIS
-// PROCESS WAS NOT RUNNING.
-//
-// Every threshold above is a DURATION measured on a steady clock, and the
-// unstated assumption underneath all of them is that this process was awake for
-// it. On Windows 11 that assumption is wrong by default: Modern Standby (S0ix)
-// freezes every thread while the counter keeps advancing, so a laptop closed
-// for the night resumes with a sampleAge of eight hours. The very first tick
-// after the resume would fire UNRESPONSIVE — before the sampler has had a
-// chance to complete one getExits(), before the resume's own route and
-// interface events have reached networkChanged(), and reporting "the sdk
-// stopped answering" about an sdk that was never asked. With the kill switch
-// ON that is a machine that resumes blocked, with an error that is not true.
-//
-// A gap this large is a freeze however it was caused — modern standby,
-// hibernate, a suspended VM, a machine so loaded the evaluator missed five
-// slots — and the response to all of them is the same: this session has not
-// been WATCHED for that time, so it is owed a fresh grace period rather than a
-// verdict. 5x the interval it asked for is far beyond any scheduling jitter and
-// far below the shortest window it protects.
-//
-// Note the direction of the failure: a machine that stalls this thread forever
-// gets no failsafe rather than a wrong one. That is the correct way round — the
-// bug this file exists for leaves the internet blocked, and so does a teardown
-// nobody could justify.
-inline constexpr int64_t kEvaluatorFrozenMillis = 5 * kEvaluateIntervalMillis;
+// Every tunable of this file — the verdict's windows (DeadTunnelSettings), the
+// cadence of its two threads, the freeze bars, the join budget and the capture
+// timing — is a field of TunnelWatchdogSettings (TunnelWatchdogSettings.h),
+// with its default and the measurement that justifies it there. The watchdog is
+// built with an instance and its threads read it from their channel; nothing
+// here reads a timing from anywhere else, so a test or a caller can move one.
 
 // True when the gap between two evaluator ticks can only be explained by the
-// process not having run. Pure, so the selftest pins the discrimination rather
-// than the wall-clock behaviour of a laptop lid.
-inline constexpr bool EvaluatorFroze(int64_t tickGapMillis) {
-  return tickGapMillis >= kEvaluatorFrozenMillis;
+// process not having run, at `settings`' freeze bar. Pure, so the selftest pins
+// the discrimination rather than the wall-clock behaviour of a laptop lid.
+inline constexpr bool EvaluatorFroze(int64_t tickGapMillis,
+                                     const TunnelWatchdogSettings& settings) {
+  return FreezeResponseFor(tickGapMillis, settings.frozenMillis,
+                           settings.freezeNetworkChangeMillis)
+      .rebase;
 }
 
 // A timestamp is THIS session's evidence only if it was taken after the session
@@ -167,21 +95,17 @@ inline constexpr bool EvaluatorFroze(int64_t tickGapMillis) {
 //
 // Used on the freeze path: after a rebase, the sampler's last completed sample
 // and the last proven reading are both from before the machine went away, and
-// treating them as current is exactly the false UNRESPONSIVE above.
+// treating them as current is exactly the false UNRESPONSIVE the freeze bar
+// exists for (TunnelWatchdogSettings::frozenMillis).
 inline constexpr int64_t StampInSession(int64_t stampMillis,
                                         int64_t sessionStartMillis) {
   return stampMillis >= sessionStartMillis ? stampMillis : -1;
 }
 
-// One SDK network-change notification per kNetworkNotifyDebounceMillis, which
-// lives with the coalescer in NetworkChangeNotify.h: the provider-only device's
-// notifications follow the same rule.
-
-// How long TunnelWatchdog::Stop() waits for the SDK sampler before abandoning
-// it. Same discipline, and the same reasoning, as kSdkTeardownBudget: a healthy
-// getExits() returns in microseconds, so this can only expire on a wedge — and
-// a stop that waits on a wedge is the failure this whole area exists to remove.
-inline constexpr int64_t kWatchdogJoinBudgetMillis = 250;
+// One SDK network-change notification per window (NetworkNotifySettings,
+// TunnelWatchdogSettings::networkNotify), which lives with the coalescer in
+// NetworkChangeNotify.h: the provider-only device's notifications follow the
+// same rule.
 
 // ---------------------------------------------------------------------------
 // the verdict
@@ -189,13 +113,13 @@ inline constexpr int64_t kWatchdogJoinBudgetMillis = 250;
 
 enum class DeadTunnelReason {
   None,
-  // No proven exit for kDeadSlowMillis. The tunnel never had, or has entirely
+  // No proven exit for DeadTunnelSettings::deadSlowMillis. The tunnel never had, or has entirely
   // lost, anything to carry traffic to.
   NoExit,
-  // Committed outbound traffic and ZERO inbound for kDeadFastMillis. The
+  // Committed outbound traffic and ZERO inbound for DeadTunnelSettings::deadFastMillis. The
   // strongest evidence available: it measures the hole rather than inferring it.
   NoInbound,
-  // The SDK has not answered in kSdkUnresponsiveMillis. Everything else here is
+  // The SDK has not answered in DeadTunnelSettings::sdkUnresponsiveMillis. Everything else here is
   // built on readings from it, so this outranks them.
   SdkUnresponsive,
 };
@@ -269,7 +193,7 @@ struct DeadTunnelSignals {
   int64_t upSinceMillis = 0;
 
   // The beginning of the traffic generation being judged by DEAD_FAST. A
-  // destination replacement may honestly spend longer than kDeadFastMillis
+  // destination replacement may honestly spend longer than the DEAD_FAST window
   // forming; its traffic clock starts only when that new provider window first
   // becomes ready. 0 retains the session-start behavior for callers that have
   // no separate traffic boundary.
@@ -300,7 +224,7 @@ struct DeadTunnelSignals {
 
 struct DeadTunnelVerdict {
   DeadTunnelReason reason = DeadTunnelReason::None;
-  // A countdown is running RIGHT NOW and is within kFailsafeNoticeMillis of
+  // A countdown is running RIGHT NOW and is within DeadTunnelSettings::failsafeNoticeMillis of
   // firing. This is what TunnelStatus::failsafe_armed carries, so the UI can
   // warn BEFORE the teardown rather than explain it afterwards.
   bool armed = false;
@@ -319,11 +243,12 @@ inline constexpr int64_t AgeSince(int64_t stampMillis, int64_t upSinceMillis,
 }
 }  // namespace detail
 
-// THE VERDICT. Pure, total, and the only place the failsafe's mind is made up.
+// THE VERDICT, under `settings`. Pure, total, and the only place the failsafe's
+// mind is made up.
 //
 // WHY THIS CANNOT FIRE WHILE TRAFFIC IS GENUINELY FLOWING. Not as an argument
 // about SDK internals but as the FIRST RULE IN THE FUNCTION: a packet that came
-// back out of the tun within kDeadFastMillis vetoes every verdict below it, so
+// back out of the tun within the DEAD_FAST window vetoes every verdict below it, so
 // no claim about exits and no silence from the SDK can tear down a tunnel this
 // machine is measurably using. The connected policy
 // blocks every non-tun path, so a working tunnel's host stack retransmits and
@@ -331,13 +256,14 @@ inline constexpr int64_t AgeSince(int64_t stampMillis, int64_t upSinceMillis,
 // idle machine has outboundSinceInbound == 0 and never trips DEAD_FAST — which
 // is correct, because an idle blocked machine is indistinguishable from an idle
 // working one. The moment the owner tries to use the network the evidence
-// appears and the verdict follows within kDeadFastMillis.
+// appears and the verdict follows within the DEAD_FAST window.
 //
 // Recovery is ONE-SIDED AND IMMEDIATE, mirroring ConnectionHealth::Tracker: one
 // proven exit or one inbound packet clears everything at once. Only loss is
 // held.
 inline constexpr DeadTunnelVerdict Evaluate(const DeadTunnelSignals& s,
-                                            int64_t nowMillis) {
+                                            int64_t nowMillis,
+                                            const DeadTunnelSettings& settings) {
   DeadTunnelVerdict v;
   // Nothing to judge unless this machine is actually pointed at a tunnel.
   if (!s.tunnelUp || !s.routesInstalled || s.upSinceMillis <= 0) return v;
@@ -367,9 +293,9 @@ inline constexpr DeadTunnelVerdict Evaluate(const DeadTunnelSignals& s,
   //     addReceivePacket — keeps delivering. UNRESPONSIVE would call that a
   //     wedge, tear down a tunnel the user was using, and report a reason that
   //     was not true.
-  //   * the sampler thread's OWN networkChanged()/notifyNetworkChange() being
-  //     slow during exactly the roam that made them necessary — the watchdog's
-  //     own sdk work presenting as sdk silence.
+  //   * the sampler thread's OWN networkChanged() being slow during exactly
+  //     the roam that made it necessary — the watchdog's own sdk work
+  //     presenting as sdk silence.
   //   * an exit that carries but is never marked Proven. Exit.Proven is a probe
   //     result; task #15/S2 exists precisely because exit state is known to be
   //     incomplete. NO_EXIT is explicitly "whatever the traffic", and that is
@@ -377,14 +303,14 @@ inline constexpr DeadTunnelVerdict Evaluate(const DeadTunnelSignals& s,
   //
   // It cannot mask DEAD_FAST, which already requires inboundAge >= this same
   // window, and it cannot mask a genuine wedge: a wedged sdk delivers nothing,
-  // so the veto lapses within kDeadFastMillis of the wedge beginning.
-  if (s.lastInboundMillis >= 0 && inboundAge < kDeadFastMillis) return v;
+  // so the veto lapses within the DEAD_FAST window of the wedge beginning.
+  if (s.lastInboundMillis >= 0 && inboundAge < settings.deadFastMillis) return v;
 
   // ---- UNRESPONSIVE first ---------------------------------------------------
   // Deliberately ahead of the other two: provenCount is a reading FROM the SDK,
   // so if the SDK has stopped answering, the other two rules would be judging
   // stale data. This rule judges the answering itself.
-  if (sampleAge >= kSdkUnresponsiveMillis) {
+  if (sampleAge >= settings.sdkUnresponsiveMillis) {
     v.reason = DeadTunnelReason::SdkUnresponsive;
     return v;
   }
@@ -393,8 +319,9 @@ inline constexpr DeadTunnelVerdict Evaluate(const DeadTunnelSignals& s,
   // Committed outbound, zero inbound, nothing proven — all three, continuously.
   const bool fastApplies =
       s.providerWindowReady && s.provenCount == 0 &&
-      s.outboundSinceInbound >= kDeadFastOutboundPackets;
-  if (fastApplies && inboundAge >= kDeadFastMillis && provenAge >= kDeadFastMillis) {
+      s.outboundSinceInbound >= settings.deadFastOutboundPackets;
+  if (fastApplies && inboundAge >= settings.deadFastMillis &&
+      provenAge >= settings.deadFastMillis) {
     v.reason = DeadTunnelReason::NoInbound;
     return v;
   }
@@ -408,7 +335,7 @@ inline constexpr DeadTunnelVerdict Evaluate(const DeadTunnelSignals& s,
   // Gated on the sampler having ANSWERED AT LEAST ONCE. "We never got a reading"
   // is the unresponsive rule's business, not this one's, and firing here on an
   // absence of evidence would be exactly the kind of guess this file refuses.
-  if (s.provenCount == 0 && s.lastSampleMillis >= 0 && provenAge >= kDeadSlowMillis) {
+  if (s.provenCount == 0 && s.lastSampleMillis >= 0 && provenAge >= settings.deadSlowMillis) {
     v.reason = DeadTunnelReason::NoExit;
     return v;
   }
@@ -425,16 +352,16 @@ inline constexpr DeadTunnelVerdict Evaluate(const DeadTunnelSignals& s,
     if (remaining < 0) remaining = 0;
     if (soonest < 0 || remaining < soonest) soonest = remaining;
   };
-  if (sampleAge >= kSdkUnresponsiveArmMillis)
-    consider(kSdkUnresponsiveMillis - sampleAge);
+  if (sampleAge >= settings.sdkUnresponsiveArmMillis)
+    consider(settings.sdkUnresponsiveMillis - sampleAge);
   if (fastApplies) {
     const int64_t elapsed = inboundAge < provenAge ? inboundAge : provenAge;
-    consider(kDeadFastMillis - elapsed);
+    consider(settings.deadFastMillis - elapsed);
   }
   if (s.provenCount == 0 && s.lastSampleMillis >= 0)
-    consider(kDeadSlowMillis - provenAge);
+    consider(settings.deadSlowMillis - provenAge);
 
-  if (soonest >= 0 && soonest <= kFailsafeNoticeMillis) {
+  if (soonest >= 0 && soonest <= settings.failsafeNoticeMillis) {
     v.armed = true;
     v.millisToFailsafe = soonest;
   }
@@ -554,6 +481,15 @@ class ConnectionEpochTracker {
 // thread that publishes into its owner's members is a use-after-free waiting
 // for a bad day. It owns a share of this instead.
 struct WatchdogChannel {
+  explicit WatchdogChannel(const TunnelWatchdogSettings& timing)
+      : settings(timing),
+        coalescer(timing.networkNotify),
+        qualityCoalescer(timing.networkNotify) {}
+
+  // The watchdog's timing, as it was constructed with: fixed before either
+  // thread starts and only read after, so it needs no lock. The threads read
+  // their intervals and bars here, never from constants.
+  const TunnelWatchdogSettings settings;
   // Retained in both Preparing and Up so late callbacks cannot queue work for
   // a replacement session. captureReadiness is set only while capture is pending.
   std::shared_ptr<CaptureReadiness> sessionReadiness;
@@ -595,7 +531,7 @@ struct WatchdogChannel {
   int64_t connectionGeneration = 0;
   bool providerWindowMinSatisfied = true;
 
-  // the network-change coalescer, guarded by `mutex`
+  // the network-change coalescers, on the settings' window, guarded by `mutex`
   NotifyCoalescer coalescer;
   NotifyCoalescer qualityCoalescer;
 
@@ -618,7 +554,12 @@ class TunnelWatchdog {
   // is a safety property and not a style choice.
   using DeadHandler = std::function<void(DeadTunnelReason)>;
 
-  TunnelWatchdog() = default;
+  // The service constructs it with the defaults (TunnelWatchdogSettings); every
+  // session it watches runs on these.
+  explicit TunnelWatchdog(TunnelWatchdogSettings settings = {}) : settings_(settings) {}
+  // What it was built with: the controller hands the capture part to each
+  // session's CaptureReadiness, so the two read the same timing.
+  const TunnelWatchdogSettings& settings() const { return settings_; }
   ~TunnelWatchdog();
   TunnelWatchdog(const TunnelWatchdog&) = delete;
   TunnelWatchdog& operator=(const TunnelWatchdog&) = delete;
@@ -651,10 +592,12 @@ class TunnelWatchdog {
   // lock and there is therefore no orderly teardown to hang this off.
   void Cancel();
 
-  // An OS network event was observed. Cheap, non-blocking, and safe from a
-  // system worker thread: it records a timestamp and wakes the sampler. THE SDK
-  // IS NEVER CALLED FROM HERE — EgressMonitor::Stop() waits for in-flight
-  // callbacks, so a blocking one would wedge the teardown.
+  // EgressMonitor observed the network move (an OS event that moved what the
+  // sdk's sockets ride: EgressChangeFilter). Cheap, non-blocking, and safe from
+  // a system worker thread: it records a timestamp and wakes the sampler, whose
+  // sleep it ends (PlanSamplerSleep). THE SDK IS NEVER CALLED FROM HERE —
+  // EgressMonitor::Stop() waits for in-flight callbacks, so a blocking one would
+  // wedge the teardown.
   bool NoteNetworkEvent(const std::shared_ptr<CaptureReadiness>& session,
                         int64_t eventMillis);
 
@@ -678,13 +621,16 @@ class TunnelWatchdog {
   // depend on this object still existing (see WatchdogChannel::onDead).
   static void Fire(const std::shared_ptr<WatchdogChannel>& channel,
                    DeadTunnelReason reason);
-  // Wait up to kWatchdogJoinBudgetMillis for a thread's done-flag. True means
+  // Wait up to the channel's join budget (TunnelWatchdogSettings::
+  // joinBudgetMillis) for a thread's done-flag. True means
   // it has returned and joining it will not block; false means the caller must
   // abandon it rather than wait.
   static bool JoinWithin(const std::shared_ptr<WatchdogChannel>& channel,
                          std::atomic<bool>* done);
 
  private:
+  // What each session's channel is built with (WatchdogChannel::settings).
+  const TunnelWatchdogSettings settings_;
   // Guards channel_ and the two thread handles. NEVER held across a join:
   // NoteNetworkEvent runs on a system worker thread that EgressMonitor::Stop()
   // waits for, so anything that blocks while holding this lock blocks a

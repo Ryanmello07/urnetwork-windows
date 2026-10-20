@@ -2759,6 +2759,14 @@ class SdkHost {
   // pinned to this interface; the service's Connected policy repeats the exact
   // app-id exemption at UDP/TCP port 53 in the DNS sublayer for that reason.
   //
+  // A bind that MOVES to an interface — the first one under a tunnel, and every
+  // move after it, which the service pushes as it happens (Wi-Fi to ethernet, a
+  // phone hotspot) — also tells this process's sdk the network moved
+  // (urnet::networkChanged, on sdkNetworkKick_). Its pooled api connections
+  // were made unbound or pinned to the interface just left, and without that
+  // they wait out their timeouts on it. Unbinding tells it nothing: a socket
+  // pinned to the physical NIC still leaves through it.
+  //
   // Idempotent and change-gated; safe from the pipe reader thread.
   void ApplySdkEgressBind(int64_t index4, int64_t index6, const char* why);
 
@@ -2909,6 +2917,11 @@ class SdkHost {
   void SignOutTail();
   void SignOutTailLocked();
   CoalescedWorker signOutWorker_{[this] { SignOutTail(); }};
+  // ApplySdkEgressBind's "the network moved" for this process's own sdk, off
+  // the caller's thread: that is the pipe reader, which must stay free to read,
+  // or the bootstrap thread holding mutex_. Moves coalesce into the last one.
+  // Stopped with statsPublisher_.
+  CoalescedWorker sdkNetworkKick_{[] { urnet::networkChanged(); }};
   void ReadDrawerSeedOnWorker();
   // SelectedLocation's value: kept by the presented controller's selection
   // listener and seeded as it opens (SubscribeStats), cleared when the session

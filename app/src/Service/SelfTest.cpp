@@ -1932,7 +1932,7 @@ void TestStopBudget() {
   // StopBudget.h exists is that an unbounded wait on the stop path is a
   // correct-looking way to write "this machine is now stuck".
   Check(kStopLockBudget + kSdkTeardownBudget +
-                std::chrono::milliseconds{2 * kWatchdogJoinBudgetMillis} <
+                std::chrono::milliseconds{2 * TunnelWatchdogSettings{}.joinBudgetMillis} <
             std::chrono::milliseconds{kServiceStopWaitHintMillis},
         "worst-case Stop() (lock budget + sdk budget + both watchdog joins) "
         "fits inside the STOP_PENDING wait hint given to the SCM — the hint is "
@@ -1940,7 +1940,7 @@ void TestStopBudget() {
         "apart the next time one of them is raised",
         std::format("{}ms + {}ms + 2x{}ms against a {}ms hint",
                     kStopLockBudget.count(), kSdkTeardownBudget.count(),
-                    kWatchdogJoinBudgetMillis, kServiceStopWaitHintMillis));
+                    TunnelWatchdogSettings{}.joinBudgetMillis, kServiceStopWaitHintMillis));
   // THE MEASUREMENT THAT CAUSED THIS RAISE. A tester's machine finished the SDK
   // teardown in 2013 ms against the old 2000 ms budget and was abandoned for it,
   // then completed 392 ms later. A budget a real healthy machine can overrun by
@@ -3862,6 +3862,9 @@ void TestRpcSessionBlob() {
 // below is its specification.
 void TestDeadTunnelVerdict() {
   Section("TunnelWatchdog — the dead-tunnel verdict (pure; no device, no thread)");
+  // The thresholds the service runs with: the watchdog's default settings.
+  const TunnelWatchdogSettings watchdog;
+  const DeadTunnelSettings& dead = watchdog.deadTunnel;
 
   // The session came up at t=0 and every case below reads at some later `now`.
   // Baseline: a healthy tunnel, sampled a moment ago, with a proven exit.
@@ -3885,20 +3888,20 @@ void TestDeadTunnelVerdict() {
     s.provenCount = 0;
     s.lastProvenMillis = -1;
     s.lastInboundMillis = -1;
-    Check(Evaluate(s, 10'000'000).reason == DeadTunnelReason::None,
+    Check(Evaluate(s, 10'000'000, dead).reason == DeadTunnelReason::None,
           "a tunnel that is not up is never torn down by the failsafe — there "
           "is nothing holding this machine's routes to tear down");
     s = healthy();
     s.routesInstalled = false;
     s.provenCount = 0;
     s.lastProvenMillis = -1;
-    Check(Evaluate(s, 10'000'000).reason == DeadTunnelReason::None,
+    Check(Evaluate(s, 10'000'000, dead).reason == DeadTunnelReason::None,
           "…nor is a session with no routes installed (the rpc-only case, which "
           "carries nothing and blocks nothing)");
     s = healthy();
     s.upSinceMillis = 0;
     s.provenCount = 0;
-    Check(Evaluate(s, 10'000'000).reason == DeadTunnelReason::None,
+    Check(Evaluate(s, 10'000'000, dead).reason == DeadTunnelReason::None,
           "…nor is a session with no start instant, which is the shape of "
           "'there is no session'");
   }
@@ -3917,7 +3920,7 @@ void TestDeadTunnelVerdict() {
       s.lastSampleMillis = t;
       s.lastInboundMillis = t;
       s.outboundSinceInbound = 0;
-      if (Evaluate(s, t).reason != DeadTunnelReason::None) everFired = true;
+      if (Evaluate(s, t, dead).reason != DeadTunnelReason::None) everFired = true;
     }
     Check(!everFired,
           "over ten minutes of a tunnel that is proven, sampled and carrying "
@@ -3932,7 +3935,7 @@ void TestDeadTunnelVerdict() {
     s.lastSampleMillis = 300000;   // still being sampled
     s.lastInboundMillis = 1000;    // nothing has come back since Up
     s.outboundSinceInbound = 0;    // ...because nothing was sent
-    Check(Evaluate(s, 300000).reason == DeadTunnelReason::None,
+    Check(Evaluate(s, 300000, dead).reason == DeadTunnelReason::None,
           "an IDLE machine with a proven exit is left alone: no outbound "
           "commitment means no evidence, and a teardown with no evidence is "
           "the false positive that costs a working VPN");
@@ -3943,12 +3946,12 @@ void TestDeadTunnelVerdict() {
     s.lastProvenMillis = -1;
     s.lastSampleMillis = 300000;
     s.lastInboundMillis = -1;
-    s.outboundSinceInbound = kDeadFastOutboundPackets - 1;  // one short
-    Check(Evaluate(s, 1000 + kDeadFastMillis + 1).reason !=
+    s.outboundSinceInbound = dead.deadFastOutboundPackets - 1;  // one short
+    Check(Evaluate(s, 1000 + dead.deadFastMillis + 1, dead).reason !=
               DeadTunnelReason::NoInbound,
           std::format("…and {} outbound packets is one short of the fast "
                       "window's evidence bar, so DEAD_FAST does not fire on it",
-                      kDeadFastOutboundPackets - 1));
+                      dead.deadFastOutboundPackets - 1));
   }
 
   // ---- DEAD_FAST: sending hard, nothing coming back ------------------------
@@ -3958,14 +3961,14 @@ void TestDeadTunnelVerdict() {
     s.lastProvenMillis = -1;
     s.lastSampleMillis = 500000;  // the sdk is answering; it just has no exit
     s.lastInboundMillis = -1;     // nothing has EVER come back
-    s.outboundSinceInbound = kDeadFastOutboundPackets;
-    Check(Evaluate(s, 1000 + kDeadFastMillis - 1).reason == DeadTunnelReason::None,
+    s.outboundSinceInbound = dead.deadFastOutboundPackets;
+    Check(Evaluate(s, 1000 + dead.deadFastMillis - 1, dead).reason == DeadTunnelReason::None,
           std::format("one millisecond before {}s of committed sending with "
                       "zero inbound, nothing fires",
-                      kDeadFastMillis / 1000));
-    Check(Evaluate(s, 1000 + kDeadFastMillis).reason == DeadTunnelReason::NoInbound,
+                      dead.deadFastMillis / 1000));
+    Check(Evaluate(s, 1000 + dead.deadFastMillis, dead).reason == DeadTunnelReason::NoInbound,
           std::format("…and at exactly {}s it does — reported as {}",
-                      kDeadFastMillis / 1000, kStopReasonNoInbound));
+                      dead.deadFastMillis / 1000, kStopReasonNoInbound));
   }
 
   // ---- ONE inbound packet resets everything --------------------------------
@@ -3975,20 +3978,20 @@ void TestDeadTunnelVerdict() {
   // host stack retransmits — so a single TCP ACK, DNS answer or keepalive is
   // proof, and it must count as proof instantly rather than after a hold.
   {
-    const int64_t now = 1000 + kDeadFastMillis + 5000;
+    const int64_t now = 1000 + dead.deadFastMillis + 5000;
     DeadTunnelSignals s = healthy();
     s.provenCount = 0;
     s.lastProvenMillis = -1;
     s.lastSampleMillis = now;
     s.lastInboundMillis = -1;
     s.outboundSinceInbound = 4000;
-    Check(Evaluate(s, now).reason == DeadTunnelReason::NoInbound,
+    Check(Evaluate(s, now, dead).reason == DeadTunnelReason::NoInbound,
           "a machine well past the fast window with thousands of packets sent "
           "and none received is Dead");
     // ...and now ONE packet arrives.
     s.lastInboundMillis = now;
     s.outboundSinceInbound = 0;
-    Check(Evaluate(s, now).reason == DeadTunnelReason::None,
+    Check(Evaluate(s, now, dead).reason == DeadTunnelReason::None,
           "ONE inbound packet clears it outright — no hold, no hysteresis, no "
           "second sample needed");
   }
@@ -4000,20 +4003,20 @@ void TestDeadTunnelVerdict() {
     s.lastProvenMillis = -1;
     s.lastInboundMillis = -1;
     s.outboundSinceInbound = 0;  // idle: only the slow rule can apply
-    s.lastSampleMillis = 1000 + kDeadSlowMillis;  // the sdk keeps answering
-    Check(Evaluate(s, 1000 + kDeadSlowMillis - 1).reason == DeadTunnelReason::None,
+    s.lastSampleMillis = 1000 + dead.deadSlowMillis;  // the sdk keeps answering
+    Check(Evaluate(s, 1000 + dead.deadSlowMillis - 1, dead).reason == DeadTunnelReason::None,
           std::format("one millisecond before {}s with no proven exit, nothing "
                       "fires — a cold attempt after a roam costs ~35s and must "
                       "survive its second try",
-                      kDeadSlowMillis / 1000));
-    Check(Evaluate(s, 1000 + kDeadSlowMillis).reason == DeadTunnelReason::NoExit,
+                      dead.deadSlowMillis / 1000));
+    Check(Evaluate(s, 1000 + dead.deadSlowMillis, dead).reason == DeadTunnelReason::NoExit,
           std::format("…and at {}s it does, reported as {}, on a machine with "
                       "nothing coming back to veto it: a tunnel with nothing to "
                       "carry to cannot carry",
-                      kDeadSlowMillis / 1000, kStopReasonNoExit));
+                      dead.deadSlowMillis / 1000, kStopReasonNoExit));
     // One proven exit at any point restarts the whole clock.
-    s.lastProvenMillis = 1000 + kDeadSlowMillis - 1;
-    Check(Evaluate(s, 1000 + kDeadSlowMillis).reason == DeadTunnelReason::None,
+    s.lastProvenMillis = 1000 + dead.deadSlowMillis - 1;
+    Check(Evaluate(s, 1000 + dead.deadSlowMillis, dead).reason == DeadTunnelReason::None,
           "…and a single proven exit restarts that clock from zero");
   }
   {
@@ -4023,7 +4026,7 @@ void TestDeadTunnelVerdict() {
     s.lastProvenMillis = -1;
     s.lastSampleMillis = -1;  // the sampler has NEVER completed
     s.lastInboundMillis = -1;
-    Check(Evaluate(s, 1000 + kSdkUnresponsiveMillis).reason ==
+    Check(Evaluate(s, 1000 + dead.sdkUnresponsiveMillis, dead).reason ==
               DeadTunnelReason::SdkUnresponsive,
           "'the sdk never answered' is reported as UNRESPONSIVE, not as 'no "
           "exit' — the second would be a verdict on evidence that was never "
@@ -4038,19 +4041,19 @@ void TestDeadTunnelVerdict() {
     s.lastInboundMillis = -1;
     s.outboundSinceInbound = 10000;
     s.lastSampleMillis = 1000;  // one sample at Up, then silence
-    const int64_t now = 1000 + kDeadSlowMillis + 1;
-    Check(Evaluate(s, now).reason == DeadTunnelReason::SdkUnresponsive,
+    const int64_t now = 1000 + dead.deadSlowMillis + 1;
+    Check(Evaluate(s, now, dead).reason == DeadTunnelReason::SdkUnresponsive,
           "when the sdk has stopped answering, the verdict is UNRESPONSIVE "
           "even though the other two rules also hold — they would be judging a "
           "reading that has not been refreshed");
     s.lastSampleMillis = now;  // it is answering again
-    Check(Evaluate(s, now).reason == DeadTunnelReason::NoInbound,
+    Check(Evaluate(s, now, dead).reason == DeadTunnelReason::NoInbound,
           "…and with a fresh sample the verdict underneath surfaces — as "
           "NO_INBOUND rather than NO_EXIT, because with committed traffic the "
           "rule that MEASURED the hole outranks the one that inferred it, and "
           "it is also the better sentence to show a user");
     s.outboundSinceInbound = 0;  // the same machine, idle
-    Check(Evaluate(s, now).reason == DeadTunnelReason::NoExit,
+    Check(Evaluate(s, now, dead).reason == DeadTunnelReason::NoExit,
           "…and with no traffic to measure, the inference is all there is, so "
           "NO_EXIT is what is reported");
   }
@@ -4060,16 +4063,16 @@ void TestDeadTunnelVerdict() {
     // Nothing has come back through the tun this session — without that the
     // carrying veto below would (correctly) refuse to call anything dead.
     s.lastInboundMillis = -1;
-    Check(Evaluate(s, 1000 + kSdkUnresponsiveMillis - 1).reason ==
+    Check(Evaluate(s, 1000 + dead.sdkUnresponsiveMillis - 1, dead).reason ==
               DeadTunnelReason::None,
           std::format("{}s of sdk silence is not yet unresponsive",
-                      (kSdkUnresponsiveMillis - 1) / 1000));
-    Check(Evaluate(s, 1000 + kSdkUnresponsiveMillis).reason ==
+                      (dead.sdkUnresponsiveMillis - 1) / 1000));
+    Check(Evaluate(s, 1000 + dead.sdkUnresponsiveMillis, dead).reason ==
               DeadTunnelReason::SdkUnresponsive,
           std::format("…{}s of it is, and this is the ONLY rule that can fire "
                       "while the sdk is wedged — it needs no cooperation from "
                       "it whatsoever",
-                      kSdkUnresponsiveMillis / 1000));
+                      dead.sdkUnresponsiveMillis / 1000));
   }
 
   // ---- THE CARRYING VETO: a measurement outranks every claim ---------------
@@ -4086,31 +4089,31 @@ void TestDeadTunnelVerdict() {
     s.lastProvenMillis = -1;
     s.lastSampleMillis = -1;  // the sdk has NEVER answered: a wedge by any reading
     s.outboundSinceInbound = 50000;
-    const int64_t now = 1000 + 10 * kSdkUnresponsiveMillis;
-    s.lastInboundMillis = now - (kDeadFastMillis - 1);  // ...but packets ARE arriving
-    Check(Evaluate(s, now).reason == DeadTunnelReason::None,
+    const int64_t now = 1000 + 10 * dead.sdkUnresponsiveMillis;
+    s.lastInboundMillis = now - (dead.deadFastMillis - 1);  // ...but packets ARE arriving
+    Check(Evaluate(s, now, dead).reason == DeadTunnelReason::None,
           "an sdk that has not answered in five minutes does NOT tear down a "
           "tunnel that is still handing this machine packets — getExits() can "
           "block on a state lock the data path never takes, and the watchdog's "
           "own networkChanged() runs on that same thread");
-    Check(!Evaluate(s, now).armed,
+    Check(!Evaluate(s, now, dead).armed,
           "…and no countdown is shown either: there is nothing to warn about "
           "while the tunnel is demonstrably carrying");
     s.lastSampleMillis = now;  // the sdk answers again, still with no exit
     s.lastProvenMillis = -1;
-    Check(Evaluate(s, now).reason == DeadTunnelReason::None,
+    Check(Evaluate(s, now, dead).reason == DeadTunnelReason::None,
           "…and neither does 'no proven exit', however long it has been: "
           "Exit.Proven is a probe result (task #15/S2 exists because exit state "
           "is incomplete) and a probe cannot outrank a packet");
     // ...and the veto lapses the moment the packets stop.
     s.lastSampleMillis = -1;
-    s.lastInboundMillis = now - kDeadFastMillis;
-    Check(Evaluate(s, now).reason == DeadTunnelReason::SdkUnresponsive,
+    s.lastInboundMillis = now - dead.deadFastMillis;
+    Check(Evaluate(s, now, dead).reason == DeadTunnelReason::SdkUnresponsive,
           std::format("…and the veto is exactly {}s wide: one millisecond older "
                       "than the fast window and the wedge underneath surfaces, "
                       "so a real wedge is still caught within {}s of the last "
                       "packet",
-                      kDeadFastMillis / 1000, kDeadFastMillis / 1000));
+                      dead.deadFastMillis / 1000, dead.deadFastMillis / 1000));
   }
 
   // ---- A FREEZE IS NOT A FAILURE ------------------------------------------
@@ -4121,22 +4124,37 @@ void TestDeadTunnelVerdict() {
   // asked, before the resume's own network events can reach it, and with the
   // kill switch on that is a laptop that resumes blocked.
   {
-    Check(!EvaluatorFroze(kEvaluateIntervalMillis),
+    Check(!EvaluatorFroze(watchdog.evaluateIntervalMillis, watchdog),
           "a tick that arrives on time is not a freeze");
-    Check(!EvaluatorFroze(kEvaluatorFrozenMillis - 1),
+    Check(!EvaluatorFroze(watchdog.frozenMillis - 1, watchdog),
           "…nor is ordinary scheduling jitter short of the bar");
-    Check(EvaluatorFroze(kEvaluatorFrozenMillis),
+    Check(EvaluatorFroze(watchdog.frozenMillis, watchdog),
           std::format("…{}ms late, the process was not running, and every age "
                       "measured across it is the length of a sleep rather than "
                       "the length of a failure",
-                      kEvaluatorFrozenMillis));
-    Check(EvaluatorFroze(8 * 3600 * 1000),
+                      watchdog.frozenMillis));
+    Check(EvaluatorFroze(8 * 3600 * 1000, watchdog),
           "…and an overnight modern-standby resume certainly is");
-    Check(kEvaluatorFrozenMillis > kEvaluateIntervalMillis &&
-              kEvaluatorFrozenMillis < kDeadFastMillis,
+    Check(watchdog.frozenMillis > watchdog.evaluateIntervalMillis &&
+              watchdog.frozenMillis < dead.deadFastMillis,
           "the freeze bar sits above the tick it protects and below the "
           "shortest window it protects, so it can neither be tripped by jitter "
           "nor swallow a real verdict");
+    // ...and only a gap long enough to have been a sleep is told to the sdk as
+    // a network change: a load stall's connections still work.
+    const auto freezeAt = [&](int64_t gap) {
+      return FreezeResponseFor(gap, watchdog.frozenMillis, watchdog.freezeNetworkChangeMillis);
+    };
+    Check(watchdog.freezeNetworkChangeMillis == 15000,
+          "the network-change bar is 15s by default");
+    Check(freezeAt(watchdog.freezeNetworkChangeMillis - 1).rebase &&
+              !freezeAt(watchdog.freezeNetworkChangeMillis - 1).networkChanged,
+          std::format("a {}ms stall rebases the failsafe and tells the sdk nothing",
+                      watchdog.freezeNetworkChangeMillis - 1));
+    Check(freezeAt(watchdog.freezeNetworkChangeMillis).networkChanged &&
+              freezeAt(8 * 3600 * 1000).networkChanged,
+          std::format("a gap of {}ms or more, a sleep, tells the sdk the network moved",
+                      watchdog.freezeNetworkChangeMillis));
 
     Check(StampInSession(500, 1000) == -1,
           "a reading taken before the session began is folded to 'never in this "
@@ -4155,7 +4173,7 @@ void TestDeadTunnelVerdict() {
     s.lastSampleMillis = 900;   // the last sample completed before the sleep
     s.lastInboundMillis = 900;
     s.outboundSinceInbound = 0;
-    Check(Evaluate(s, resumeAt).reason == DeadTunnelReason::SdkUnresponsive,
+    Check(Evaluate(s, resumeAt, dead).reason == DeadTunnelReason::SdkUnresponsive,
           "WITHOUT the rebase, the first tick after an eight-hour sleep tears "
           "the tunnel down and blames the sdk — this is the bug the rebase "
           "removes, pinned so the removal cannot be undone silently");
@@ -4165,17 +4183,17 @@ void TestDeadTunnelVerdict() {
     s.lastProvenMillis = StampInSession(s.lastProvenMillis, resumeAt);
     s.lastSampleMillis = StampInSession(s.lastSampleMillis, resumeAt);
     s.lastInboundMillis = -1;  // TrafficTracker::Reset
-    Check(Evaluate(s, resumeAt).reason == DeadTunnelReason::None &&
-              !Evaluate(s, resumeAt).armed,
+    Check(Evaluate(s, resumeAt, dead).reason == DeadTunnelReason::None &&
+              !Evaluate(s, resumeAt, dead).armed,
           "…and WITH it the resumed session is judged on nothing but the time "
           "since it woke: no verdict, no countdown, a full fresh grace period "
           "for the sdk to re-dial on the network events the resume raises");
-    Check(Evaluate(s, resumeAt + kSdkUnresponsiveMillis).reason ==
+    Check(Evaluate(s, resumeAt + dead.sdkUnresponsiveMillis, dead).reason ==
               DeadTunnelReason::SdkUnresponsive,
           std::format("…and a tunnel that is still dead {}s after the resume is "
                       "still torn down — the rebase delays the verdict, it does "
                       "not cancel it",
-                      kSdkUnresponsiveMillis / 1000));
+                      dead.sdkUnresponsiveMillis / 1000));
   }
 
   // ---- the countdown the UI renders ---------------------------------------
@@ -4185,21 +4203,21 @@ void TestDeadTunnelVerdict() {
   // so it has to be true only while a countdown is genuinely running and close.
   {
     DeadTunnelSignals s = healthy();
-    Check(!Evaluate(s, 100000).armed,
+    Check(!Evaluate(s, 100000, dead).armed,
           "a healthy tunnel never reports a countdown");
 
     s.provenCount = 0;
     s.lastProvenMillis = -1;
     s.lastInboundMillis = -1;
     s.lastSampleMillis = 200000;
-    const int64_t early = 1000 + kDeadSlowMillis - kFailsafeNoticeMillis - 1000;
-    Check(!Evaluate(s, early).armed,
+    const int64_t early = 1000 + dead.deadSlowMillis - dead.failsafeNoticeMillis - 1000;
+    Check(!Evaluate(s, early, dead).armed,
           std::format("…and neither does one whose slow deadline is still more "
                       "than {}s away: a warning 90s early is noise that teaches "
                       "the owner to ignore the one that matters",
-                      kFailsafeNoticeMillis / 1000));
-    const int64_t late = 1000 + kDeadSlowMillis - 5000;
-    const DeadTunnelVerdict v = Evaluate(s, late);
+                      dead.failsafeNoticeMillis / 1000));
+    const int64_t late = 1000 + dead.deadSlowMillis - 5000;
+    const DeadTunnelVerdict v = Evaluate(s, late, dead);
     Check(v.armed && v.reason == DeadTunnelReason::None,
           "…but 5s out it reports a countdown WITHOUT having fired, which is "
           "the whole point of the field");
@@ -4212,34 +4230,34 @@ void TestDeadTunnelVerdict() {
     // sample lands every 2s and its deadline is therefore always ~28s out.
     DeadTunnelSignals s = healthy();
     s.lastSampleMillis = 200000;
-    Check(!Evaluate(s, 200000 + kSdkUnresponsiveArmMillis - 1).armed,
+    Check(!Evaluate(s, 200000 + dead.sdkUnresponsiveArmMillis - 1, dead).armed,
           "a sample that arrived within the normal cadence never arms the "
           "unresponsive countdown, which would otherwise be armed forever");
-    Check(Evaluate(s, 200000 + kSdkUnresponsiveArmMillis).armed,
-          std::format("…{}s overdue, it does", kSdkUnresponsiveArmMillis / 1000));
+    Check(Evaluate(s, 200000 + dead.sdkUnresponsiveArmMillis, dead).armed,
+          std::format("…{}s overdue, it does", dead.sdkUnresponsiveArmMillis / 1000));
   }
 
   // ---- the thresholds are what this file claims they are -------------------
   //
   // Pinned as VALUES, not just as behaviour: each one is justified in
-  // TunnelWatchdog.h against a measured cost (the Windows DNS query schedule, a
+  // TunnelWatchdogSettings.h against a measured cost (the Windows DNS query schedule, a
   // black-holed TCP connect, the sampler's own cadence), and a silent edit to
   // any of them changes when a user's VPN is torn down.
-  Check(kDeadFastMillis == 20000 && kDeadSlowMillis == 90000 &&
-            kSdkUnresponsiveMillis == 30000 && kDeadFastOutboundPackets == 8,
+  Check(dead.deadFastMillis == 20000 && dead.deadSlowMillis == 90000 &&
+            dead.sdkUnresponsiveMillis == 30000 && dead.deadFastOutboundPackets == 8,
         "the four thresholds are 20s fast / 90s slow / 30s unresponsive / 8 "
         "packets of committed evidence");
-  Check(kDeadFastMillis > 13000,
+  Check(dead.deadFastMillis > 13000,
         "the fast window exceeds the ~12-13s Windows DNS query schedule, so an "
         "honest machine-wide resolution stall cannot look like a dead tunnel");
-  Check(kDeadSlowMillis > 2 * 35000,
+  Check(dead.deadSlowMillis > 2 * 35000,
         "the slow window is more than twice a cold attempt (DNS ~13s + TCP "
         "~21s + handshake), so a roam that recovers on its second try survives");
-  Check(kSdkUnresponsiveMillis >= 15 * kSdkSampleIntervalMillis,
+  Check(dead.sdkUnresponsiveMillis >= 15 * watchdog.sampleIntervalMillis,
         "the wedge threshold is at least 15 consecutive missed samples — slow "
         "is not wedged");
-  Check(kNetworkNotifyDebounceMillis < kEvaluateIntervalMillis &&
-            kEvaluateIntervalMillis < kDeadFastMillis,
+  Check(watchdog.networkNotify.windowMillis < watchdog.evaluateIntervalMillis &&
+            watchdog.evaluateIntervalMillis < dead.deadFastMillis,
         "debounce < evaluate interval < the shortest verdict window, so the "
         "verdict is never decided by the sampling rate");
 }
@@ -4252,6 +4270,9 @@ void TestDeadTunnelVerdict() {
 // the verdict table so a later watchdog refactor cannot rejoin those clocks.
 void TestDeadTunnelConnectionEpoch() {
   Section("TunnelWatchdog — destination generations own their traffic grace");
+  // The thresholds the service runs with: the watchdog's default settings.
+  const TunnelWatchdogSettings watchdog;
+  const DeadTunnelSettings& dead = watchdog.deadTunnel;
 
   ConnectionEpochTracker tracker;
   ConnectionEpochUpdate update = tracker.Observe(/*generation=*/41,
@@ -4279,11 +4300,11 @@ void TestDeadTunnelConnectionEpoch() {
   forming.lastInboundMillis = -1;
   forming.outboundSinceInbound = 56;
   forming.providerWindowReady = tracker.FastVerdictEligible();
-  Check(Evaluate(forming, switchAt + 27000).reason == DeadTunnelReason::None,
+  Check(Evaluate(forming, switchAt + 27000, dead).reason == DeadTunnelReason::None,
         "the exact acceptance shape — 27s of outbound traffic while the "
         "replacement peer forms — is not judged by the old 20s window");
   forming.providerWindowReady = true;
-  Check(Evaluate(forming, switchAt + 27000).reason ==
+  Check(Evaluate(forming, switchAt + 27000, dead).reason ==
             DeadTunnelReason::NoInbound,
         "without the readiness boundary the same deterministic signals fire "
         "failsafe_no_inbound, reproducing the shipped teardown");
@@ -4299,12 +4320,12 @@ void TestDeadTunnelConnectionEpoch() {
   ready.providerWindowReady = tracker.FastVerdictEligible();
   ready.trafficStartMillis = readyAt;
   ready.lastSampleMillis = readyAt;
-  ready.outboundSinceInbound = kDeadFastOutboundPackets;
-  Check(Evaluate(ready, readyAt + kDeadFastMillis - 1).reason ==
+  ready.outboundSinceInbound = dead.deadFastOutboundPackets;
+  Check(Evaluate(ready, readyAt + dead.deadFastMillis - 1, dead).reason ==
             DeadTunnelReason::None,
         "a newly-ready provider gets the complete fast grace period");
-  ready.lastSampleMillis = readyAt + kDeadFastMillis;
-  Check(Evaluate(ready, readyAt + kDeadFastMillis).reason ==
+  ready.lastSampleMillis = readyAt + dead.deadFastMillis;
+  Check(Evaluate(ready, readyAt + dead.deadFastMillis, dead).reason ==
             DeadTunnelReason::NoInbound,
         "a provider that still returns nothing after that fresh grace is torn "
         "down — the fix moves the boundary rather than disabling the failsafe");
@@ -4327,12 +4348,12 @@ void TestDeadTunnelConnectionEpoch() {
   DeadTunnelSignals neverReady = forming;
   neverReady.providerWindowReady = false;
   neverReady.outboundSinceInbound = 0;
-  neverReady.lastSampleMillis = switchAt + kDeadSlowMillis;
-  Check(Evaluate(neverReady, switchAt + kDeadSlowMillis).reason ==
+  neverReady.lastSampleMillis = switchAt + dead.deadSlowMillis;
+  Check(Evaluate(neverReady, switchAt + dead.deadSlowMillis, dead).reason ==
             DeadTunnelReason::NoExit,
         "window formation is still bounded by the 90s no-exit verdict");
   neverReady.lastSampleMillis = -1;
-  Check(Evaluate(neverReady, switchAt + kSdkUnresponsiveMillis).reason ==
+  Check(Evaluate(neverReady, switchAt + dead.sdkUnresponsiveMillis, dead).reason ==
             DeadTunnelReason::SdkUnresponsive,
         "and a wedged sdk is still bounded while the provider window forms");
 }
@@ -4407,6 +4428,9 @@ void TestEgressCoalescer() {
   Check(!wifiSignal.Observe(100) && wifiSignal.Observe(80),
         "after reset, same-bar jitter stays quiet and a downward crossing notifies");
 
+  // the window the service runs with: the default settings
+  const int64_t notifyWindowMillis = NetworkNotifySettings{}.windowMillis;
+
   // ---- a roam is one notification, not thirty -----------------------------
   {
     NotifyCoalescer c;
@@ -4416,7 +4440,7 @@ void TestEgressCoalescer() {
     // Thirty events inside 300ms — the shape of a Wi-Fi roam or a DHCP renew.
     for (int i = 0; i < 30; ++i) c.Observe(1000 + i * 10);
     int fired = 0;
-    for (int64_t t = 1000; t <= 1000 + kNetworkNotifyDebounceMillis + 500; t += 10)
+    for (int64_t t = 1000; t <= 1000 + notifyWindowMillis + 500; t += 10)
       if (c.TakeDue(t)) ++fired;
     Check(fired == 1,
           std::format("30 events inside 300ms produce EXACTLY ONE sdk "
@@ -4450,12 +4474,12 @@ void TestEgressCoalescer() {
   {
     NotifyCoalescer c;
     c.Observe(0);
-    Check(c.TakeDue(kNetworkNotifyDebounceMillis), "the first burst fires");
-    Check(!c.TakeDue(kNetworkNotifyDebounceMillis + 10000),
+    Check(c.TakeDue(notifyWindowMillis), "the first burst fires");
+    Check(!c.TakeDue(notifyWindowMillis + 10000),
           "…and does not fire twice, however long the caller waits");
     c.Observe(20000);
     Check(!c.TakeDue(20000), "a new burst starts a new window");
-    Check(c.TakeDue(20000 + kNetworkNotifyDebounceMillis),
+    Check(c.TakeDue(20000 + notifyWindowMillis),
           "…which fires on its own deadline");
   }
 

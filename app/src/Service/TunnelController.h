@@ -21,6 +21,7 @@
 #include <thread>
 
 #include "AppLogHandles.h"
+#include "CoalescedWorker.h"
 #include "EgressMonitor.h"
 #include "FlowOwner.h"
 #include "LogUpload.h"
@@ -128,9 +129,16 @@ class TunnelController {
   void FailsafeStop(DeadTunnelReason reason);
 
   // Called, OUTSIDE mutex_, whenever this controller changes state on its own
-  // initiative rather than in reply to a request: deferred activation and the
-  // dead-tunnel failsafe. These transitions have no control reply to ride on.
+  // initiative rather than in reply to a request: deferred activation, the
+  // dead-tunnel failsafe, and the egress binding moving under a live tunnel
+  // (from a worker of its own, egressPush_). These have no control reply to
+  // ride on.
   void SetOnStateChanged(std::function<void()> handler);
+
+  // End the egress pushes for good, waiting out one in flight. For the control
+  // server's stop, after it has cleared the handler and stopped the pipe that a
+  // push writes to: nothing it stops may then be reached by a push.
+  void StopStatePushes() { egressPush_.Stop(); }
 
   // Update the split-tunnel app set + mode (driver, if present). allowlist=false:
   // excludedPaths bypass the tunnel; allowlist=true: ONLY excludedPaths tunnel.
@@ -569,8 +577,10 @@ class TunnelController {
   // Retires the standalone log upload device, if any. Caller holds mutex_.
   void RetireLogUploadDeviceLocked();
   void PushExcludedToDriver(const std::vector<std::string>& paths, bool allowlist);
-  // Re-point the driver at a new physical interface. Runs from the egress
-  // monitor's change callback, on a system worker thread.
+  // Follow a binding that moved: the interface Status() reports (and pushes, so
+  // the app re-pins its own sdk), and the driver's physical interface and
+  // source address. Runs from the egress monitor's change callback, on a system
+  // worker thread, and from Start()'s baseline on the starting thread.
   void OnEgressChanged(EgressInterfaces egress);
   // Shared by both; the caller holds splitMutex_.
   void PushPhysicalAddressesLocked(const EgressInterfaces& egress);
@@ -811,6 +821,14 @@ class TunnelController {
   // upSinceMillis_'s mirror, kept separate so Status() can age it against a
   // live clock rather than serve the uptime as of the last publish.
   std::atomic<int64_t> upSinceMirror_{0};
+  // The session monitor's binding, kept separate for the same reason: written
+  // by the start and by OnEgressChanged, whose system thread may not take
+  // mutex_, and overlaid by Status() whenever the status reports a binding at
+  // all. The mirror's copy is the one composed at the last publish, and the
+  // egress moving publishes nothing, so on its own the app was told the
+  // interface it had left.
+  std::atomic<int64_t> liveEgressIndex4_{0};
+  std::atomic<int64_t> liveEgressIndex6_{0};
 
   // The dead-tunnel failsafe. DECLARED LAST so that destruction order — members
   // die in reverse declaration order — stops its threads BEFORE device_ and the
@@ -827,6 +845,17 @@ class TunnelController {
   // recomputed. One list per family; the v6 list is empty for a v4-only tunnel.
   std::vector<std::string> appliedResolvers_;
   std::vector<std::string> appliedResolversV6_;
+
+  // Pushes a status when the egress binding moved under a live tunnel
+  // (OnEgressChanged), so the app re-pins its own sdk now rather than at the
+  // next transition. Never on the thread that saw the move: that is a system
+  // thread EgressMonitor::Stop() waits for, and a push writes to the control
+  // pipe, which blocks while the app is not reading — the watchdog's sampler
+  // would be no better, since a sampler held there reads as an unresponsive sdk.
+  // Moves coalesce into the last one. DECLARED LAST, so it is destroyed first
+  // and a push in flight is waited out before anything it reads goes; the
+  // control server stops it earlier still (StopStatePushes).
+  CoalescedWorker egressPush_{[this] { NotifyStateChanged(); }};
 };
 
 }  // namespace urnw

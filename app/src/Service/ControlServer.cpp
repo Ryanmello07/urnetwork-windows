@@ -29,6 +29,12 @@ void ControlServer::Stop() {
   // benefit — the client is going away with the service.
   tunnel_.SetOnStateChanged(nullptr);
   pipe_.Stop();
+  // The egress push's worker can be inside PushState right now, having read the
+  // handler before it was cleared. Waited out here: after the pipe has stopped,
+  // so what is left of that push writes nothing (the pipe has no connection),
+  // and before anything it reaches is destroyed — pipe_ is destroyed before
+  // tunnel_.
+  tunnel_.StopStatePushes();
   tunnel_.Stop();
 }
 

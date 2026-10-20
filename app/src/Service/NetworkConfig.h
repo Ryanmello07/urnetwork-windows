@@ -21,6 +21,8 @@
 #include <iphlpapi.h>
 #include <netioapi.h>  // MIB_IPINTERFACE_ROW
 
+#include "NetworkChangeNotify.h"  // EgressSignature
+
 namespace urnw {
 
 // Mirrors sdk.GetDefaultTunnelMtu/connect.DefaultTunnelMtu: the interface
@@ -215,6 +217,17 @@ class NetworkConfig {
   // Find the best default-route interface indices that are NOT the tun. Used to
   // set the SDK egress binding. Recomputed on every network change.
   static EgressInterfaces DiscoverEgress(NET_LUID tunLuid);
+
+  // What a socket of each family bound to `bound` would ride: the interface,
+  // whether it can carry one (connected, by DiscoverEgress's rule; a default
+  // route of the family on it; a preferred source address), the source the
+  // split-tunnel driver is given, the network it is on (the v4 source; the
+  // lowest /64 among its preferred v6 addresses) and its default route's next
+  // hop. Read-only, and cheap enough for every notification: the forward table
+  // and the address table once per family, and one interface read.
+  // EgressMonitor compares readings to tell a network that moved from churn
+  // that did not (EgressChangeFilter).
+  static EgressSignature ObserveEgress(const EgressInterfaces& bound);
 
   // Every IPv4 resolver the HOST is currently configured with, on any
   // operational adapter except excludeLuid (pass the tun's), deduplicated and

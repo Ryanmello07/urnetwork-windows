@@ -8,6 +8,11 @@
 // WatchProviderNetworkLocked). Without it that device was never told about a
 // Wi-Fi or Ethernet change and recovered only through its transports' timeouts.
 //
+// What counts as the network moving is here too (EgressChangeFilter): the
+// monitor reports an observation only when it moved what the SDK's sockets ride.
+// So is the watchdog sampler's sleep rule (PlanSamplerSleep), which decides how
+// soon after a burst begins the device is told.
+//
 // Pure C++ with no Windows or SDK header, so tools/network-change-notify-tests.cpp
 // runs it on any host with a C++20 compiler, as CaptureReadiness.h's harness
 // does. The notifier reads and sleeps on an injectable clock (NotifyClock), so
@@ -16,6 +21,7 @@
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
 
+#include <array>
 #include <chrono>
 #include <condition_variable>
 #include <cstdint>
@@ -26,12 +32,17 @@
 
 namespace urnw {
 
-// One SDK network-change notification per this many milliseconds.
-//
-// A roam produces dozens of OS notifications in a second. Below this two
-// notifications never describe different states; above it the burst of a single
-// roam would be split into several kicks.
-inline constexpr int64_t kNetworkNotifyDebounceMillis = 750;
+// The network-change notification's timing. Handed to whatever coalesces
+// notifications rather than read from a constant, so a test or a caller can
+// move it; the defaults are the service's.
+struct NetworkNotifySettings {
+  // One SDK network-change notification per this many milliseconds.
+  //
+  // A roam produces dozens of OS notifications in a second. Below this two
+  // notifications never describe different states; above it the burst of a
+  // single roam would be split into several kicks.
+  int64_t windowMillis = 750;
+};
 
 // ---------------------------------------------------------------------------
 // the network-change coalescer (pure)
@@ -47,12 +58,16 @@ inline constexpr int64_t kNetworkNotifyDebounceMillis = 750;
 // precisely the condition in which the SDK most needs to be told.
 class NotifyCoalescer {
  public:
+  // The window is the settings' (NetworkNotifySettings::windowMillis).
+  explicit NotifyCoalescer(const NetworkNotifySettings& settings = {})
+      : windowMillis_(settings.windowMillis) {}
+
   // An observation arrived. Never notifies anything; it only records.
   void Observe(int64_t nowMillis) {
     ++coalesced_;
     if (pending_) return;
     pending_ = true;
-    deadlineMillis_ = nowMillis + kNetworkNotifyDebounceMillis;
+    deadlineMillis_ = nowMillis + windowMillis_;
   }
 
   // Is a notification due? Consumes the pending burst when it says yes, so a
@@ -73,10 +88,193 @@ class NotifyCoalescer {
   int64_t lastBurstSize() const { return lastBurstSize_; }
 
  private:
+  int64_t windowMillis_;
   bool pending_ = false;
   int64_t deadlineMillis_ = 0;
   int64_t coalesced_ = 0;
   int64_t lastBurstSize_ = 0;
+};
+
+// ---------------------------------------------------------------------------
+// the watchdog sampler's sleep (pure)
+// ---------------------------------------------------------------------------
+//
+// TunnelWatchdog::RunSampler sleeps until its next exit sample or the close of
+// an open window, whichever is sooner. A burst that begins during that sleep
+// was not in the plan, and a sleep that ended only on cancellation held its
+// notification until the next sample: by default the device heard about the
+// network moving between 750 ms (the window) and 2 s (the sample interval)
+// after it moved, depending on where in the sample period the burst began. So
+// an observation that opens a window the
+// plan did not include ends the sleep, and the sampler plans again with that
+// window's deadline. Later observations of the same burst do not: the window
+// is fixed (NotifyCoalescer), so they cannot move the deadline, and waking for
+// each of them would only spin the thread.
+//
+// NetworkChangeNotifier needs none of this: its thread only waits for windows,
+// so every wake plans again.
+struct SamplerSleep {
+  // How long to sleep. Zero or less: do not.
+  int64_t waitMillis = 0;
+  // The windows open when the sleep was planned.
+  bool networkPending = false;
+  bool qualityPending = false;
+};
+
+inline SamplerSleep PlanSamplerSleep(int64_t nowMillis, int64_t nextSampleMillis,
+                                     const NotifyCoalescer& network,
+                                     const NotifyCoalescer& quality) {
+  SamplerSleep plan;
+  plan.waitMillis = nextSampleMillis - nowMillis;
+  plan.networkPending = network.pending();
+  plan.qualityPending = quality.pending();
+  if (plan.networkPending && network.deadlineMillis() - nowMillis < plan.waitMillis)
+    plan.waitMillis = network.deadlineMillis() - nowMillis;
+  if (plan.qualityPending && quality.deadlineMillis() - nowMillis < plan.waitMillis)
+    plan.waitMillis = quality.deadlineMillis() - nowMillis;
+  return plan;
+}
+
+// Beside cancellation, what ends a planned sleep: a window it did not include.
+inline bool SamplerSleepInterrupted(const SamplerSleep& plan, const NotifyCoalescer& network,
+                                    const NotifyCoalescer& quality) {
+  return (!plan.networkPending && network.pending()) ||
+         (!plan.qualityPending && quality.pending());
+}
+
+// ---------------------------------------------------------------------------
+// when a freeze is a network change (pure)
+// ---------------------------------------------------------------------------
+//
+// TunnelWatchdog::RunEvaluator measures the gap between two of its ticks, and
+// answers it at two bars, both its settings' (TunnelWatchdogSettings,
+// TunnelWatchdogSettings.h) and passed in here so the rule is tested on its own:
+//
+//   the freeze bar (frozenMillis): the process did not run, so every failsafe
+//     window starts again, and proof sampled before the gap no longer
+//     qualifies a capture;
+//   the network-change bar (freezeNetworkChangeMillis): long enough to have
+//     been a sleep — modern standby, a hibernate, a suspended vm — so the device
+//     is also told the network moved, which kicks every transport. Below it the
+//     gap was a stall, and the connections across it still work: a kick would
+//     only cancel their dials.
+struct FreezeResponse {
+  bool rebase = false;
+  bool networkChanged = false;
+};
+
+inline constexpr FreezeResponse FreezeResponseFor(int64_t tickGapMillis, int64_t frozenMillis,
+                                                  int64_t networkChangeMillis) {
+  FreezeResponse response;
+  response.rebase = tickGapMillis >= frozenMillis;
+  response.networkChanged = response.rebase && tickGapMillis >= networkChangeMillis;
+  return response;
+}
+
+// ---------------------------------------------------------------------------
+// what counts as the network moving (pure)
+// ---------------------------------------------------------------------------
+//
+// Every IP helper notification used to be a network change: a parameter change
+// on any interface, a default route on any adapter. Each one kicked every
+// transport in the process, which cancels a dial in flight, for things that move
+// nothing the SDK's sockets ride on (a Hyper-V or WSL adapter coming up, the
+// stale default route of a NIC already left behind, a lease renewed with the
+// same address), and one switch became a kick for each of its steps that came
+// more than a window apart: link up, then the DHCP lease, then the router
+// advertisement.
+//
+// So EgressMonitor reads what a socket of each family would ride
+// (NetworkConfig::ObserveEgress fills an EgressSignature) and this compares each
+// reading with the last. Two questions, because two consumers want different
+// answers:
+//
+//   network  the SDK's sockets ride a different network, or the one they ride
+//            came or went: the bound interface, whether it can carry a socket
+//            at all, the network it is on (the v4 address; the v6 /64, so a
+//            temporary address rotating inside it is not a new network) and its
+//            gateway. This is the kick, and the capture proof's invalidation.
+//   binding  something pinned to the physical interface has to follow it: the
+//            interface, or the exact address a socket on it leaves from, which
+//            the split-tunnel driver rebinds excluded apps to.
+//
+// `usable` carries the case that every observation used to be reported for:
+// the cable comes out, the adapter keeps its default route for a while and the
+// monitor keeps its index bound on purpose (EgressMonitor::Refresh), so nothing
+// else moves; what moved is that the interface can no longer carry a socket.
+struct EgressFamilySignature {
+  // The interface this family's sockets are bound to (the election, after the
+  // monitor's retention). 0 for none.
+  uint32_t ifIndex = 0;
+  // It is connected, holds a default route of this family and has a preferred
+  // address of this family.
+  bool usable = false;
+  // The address a socket on it leaves from, network order (v4 in the first four
+  // bytes): the one the split-tunnel driver is given. Zero for none.
+  std::array<uint8_t, 16> source{};
+  // The network it is on: the v4 source, or the lowest /64 among the
+  // interface's preferred v6 addresses. Zero for none.
+  std::array<uint8_t, 16> network{};
+  // Its default route's next hop. Zero for none.
+  std::array<uint8_t, 16> gateway{};
+
+  bool operator==(const EgressFamilySignature&) const = default;
+};
+
+struct EgressSignature {
+  EgressFamilySignature v4;
+  EgressFamilySignature v6;
+
+  bool operator==(const EgressSignature&) const = default;
+};
+
+struct EgressChange {
+  // Tell the device the network moved (the kick), and invalidate capture proof.
+  bool network = false;
+  // Re-point what follows the physical interface (EgressMonitor::SetOnChange).
+  bool binding = false;
+};
+
+// Each reading against the last. Not synchronised: the monitor calls it under
+// its own lock.
+class EgressChangeFilter {
+ public:
+  // The reading watching starts from. Never a change: starting to watch is not
+  // the network moving.
+  void Seed(const EgressSignature& signature) {
+    last_ = signature;
+    seeded_ = true;
+  }
+
+  EgressChange Observe(const EgressSignature& signature) {
+    EgressChange change;
+    if (!seeded_) {
+      // nothing to compare with: everything moved, rather than nothing
+      change.network = true;
+      change.binding = true;
+    } else {
+      change.network = NetworkMoved(last_.v4, signature.v4) || NetworkMoved(last_.v6, signature.v6);
+      change.binding = BindingMoved(last_.v4, signature.v4) || BindingMoved(last_.v6, signature.v6);
+    }
+    Seed(signature);
+    return change;
+  }
+
+  bool seeded() const { return seeded_; }
+  const EgressSignature& last() const { return last_; }
+
+ private:
+  static bool NetworkMoved(const EgressFamilySignature& before, const EgressFamilySignature& after) {
+    return before.ifIndex != after.ifIndex || before.usable != after.usable ||
+           before.network != after.network || before.gateway != after.gateway;
+  }
+
+  static bool BindingMoved(const EgressFamilySignature& before, const EgressFamilySignature& after) {
+    return before.ifIndex != after.ifIndex || before.source != after.source;
+  }
+
+  EgressSignature last_;
+  bool seeded_ = false;
 };
 
 // ---------------------------------------------------------------------------
@@ -142,13 +340,16 @@ class NetworkChangeNotifier {
  public:
   using Call = std::function<void()>;
 
-  // The service passes no clock and gets the steady one (NotifyClock).
+  // The service passes no clock and gets the steady one (NotifyClock), and no
+  // settings and gets the defaults (NetworkNotifySettings).
   NetworkChangeNotifier(Call networkChanged, Call networkQualityChanged,
-                        NotifyClock clock = {})
+                        NotifyClock clock = {}, NetworkNotifySettings settings = {})
       : channel_(std::make_shared<Channel>()) {
     channel_->networkChanged = std::move(networkChanged);
     channel_->networkQualityChanged = std::move(networkQualityChanged);
     channel_->clock = std::move(clock);
+    channel_->network = NotifyCoalescer(settings);
+    channel_->quality = NotifyCoalescer(settings);
     thread_ = std::thread([channel = channel_] { Run(channel); });
   }
 

@@ -1,7 +1,10 @@
 // A thread of its own that runs one fixed job on request, off the caller's
 // thread: SdkHost's stats publish, whose DeviceRemote getters can wait up to
 // the rpc timeout behind a held command and so must never run on the UI
-// thread.
+// thread; and the service's status push when the egress binding moves
+// (TunnelController::egressPush_), which must not write to the control pipe
+// from the system thread that saw the move. In Common for that reason: both
+// processes use it.
 //
 // Requests coalesce. A request while a run is in flight is folded into one more
 // run after it, however many land, so a burst costs at most two runs and the

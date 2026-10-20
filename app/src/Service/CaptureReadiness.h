@@ -38,15 +38,46 @@ struct CaptureNetworkEpoch {
   int64_t millis = -1;
 };
 
+// The capture transaction's timing, in milliseconds. The controller builds each
+// session's readiness from the watchdog's settings (TunnelWatchdogSettings::
+// capture, TunnelWatchdogSettings.h), so the readiness, the sampler that feeds
+// it and the evaluator that watches it read the same values.
+struct CaptureReadinessSettings {
+  // The resolution of the sdk's probe age (ProbeAgeSeconds: whole seconds,
+  // truncated). A proof qualifies after a network change only when its whole
+  // possible interval follows the change, which needs at least this much
+  // between the change and the sample; the sampler waits this long after a
+  // change before its re-probe pass for the same reason, so what that pass
+  // proves can qualify. It is the age's resolution, not a preference, and moves
+  // only with it. Zero or less: ages are exact, so a proof qualifies once it
+  // postdates the change, and the re-probe runs at once.
+  int64_t probeAgeResolutionMillis = 1000;
+  // How long a completed sample's proof may authorize a capture. A ticket cannot
+  // survive a suspended evaluator or a long blocked activation merely because no
+  // callback ran to invalidate it, and regular samples issue fresh tickets
+  // rather than renewing old ones: four of the default 2 s samples. Zero: only
+  // a sample from the same millisecond is fresh; negative: none is, and no
+  // capture ever activates.
+  int64_t freshnessMillis = 8000;
+  // How long a pending capture may go without a completed sample before the
+  // evaluator logs the stall. A diagnostic only, at the sdk's unresponsive
+  // window by default. Zero or less: every evaluator tick reports a stall.
+  int64_t sampleStallMillis = 30000;
+};
+
 // ProbeAgeSeconds is truncated. Its entire possible timestamp interval must
 // follow the network event; a historical qualification is not a new uplink proof.
 inline bool CaptureProofAfterNetworkChange(int64_t ageSeconds,
                                            int64_t sampleMillis,
-                                           int64_t changedMillis) {
+                                           int64_t changedMillis,
+                                           const CaptureReadinessSettings& settings) {
   if (changedMillis < 0) return true;
+  const int64_t resolution =
+      settings.probeAgeResolutionMillis > 0 ? settings.probeAgeResolutionMillis : 0;
   const int64_t elapsed = sampleMillis - changedMillis;
-  return ageSeconds >= 0 && elapsed >= 1000 &&
-         ageSeconds <= (elapsed - 1000) / 1000;
+  // the age's unit is the second: 1000 ms
+  return ageSeconds >= 0 && elapsed >= resolution &&
+         ageSeconds <= (elapsed - resolution) / 1000;
 }
 
 struct CaptureExit {
@@ -60,10 +91,12 @@ struct CaptureExit {
 // Provider presence, historical qualification, and a usable current exit are
 // distinct. Fold the SDK snapshot here so every exclusion is regression-tested.
 inline bool CaptureExitIsUsable(CaptureExit exit, int64_t sampleMillis,
-                                int64_t changedMillis) {
+                                int64_t changedMillis,
+                                const CaptureReadinessSettings& settings) {
   return exit.proven && !exit.done && !exit.quarantined && !exit.warning &&
          exit.probeAgeSeconds >= 0 &&
-         CaptureProofAfterNetworkChange(exit.probeAgeSeconds, sampleMillis, changedMillis);
+         CaptureProofAfterNetworkChange(exit.probeAgeSeconds, sampleMillis, changedMillis,
+                                        settings);
 }
 
 // Emit only these fixed diagnostic labels; SDK reason strings are untrusted
@@ -80,22 +113,25 @@ inline const char* CaptureWaitReason(CaptureWindow window, int64_t usableProven,
 }
 
 inline bool CaptureSampleStalled(int64_t startedMillis, int64_t sampledMillis,
-                                 int64_t nowMillis) {
+                                 int64_t nowMillis, const CaptureReadinessSettings& settings) {
   const int64_t last = sampledMillis >= startedMillis ? sampledMillis : startedMillis;
-  return nowMillis - last >= 30000;
+  return nowMillis - last >= settings.sampleStallMillis;
 }
 
 // All methods are thread-safe. A fresh object is required for every session;
 // cancellation is permanent, including when an old SDK callback arrives late.
 class CaptureReadiness {
  public:
+  // The service's: the steady clock, and the watchdog's capture settings.
+  explicit CaptureReadiness(CaptureReadinessSettings settings = {})
+      : CaptureReadiness(SteadyMillis, settings) {}
   // The clock is injected by deterministic tests. A ticket cannot survive a
   // suspended evaluator or a long blocked activation merely because no callback
-  // ran to invalidate it. Regular samples issue fresh tickets, never renew old ones.
-  explicit CaptureReadiness(std::function<int64_t()> now = [] {
-    return std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::steady_clock::now().time_since_epoch()).count();
-  }) : now_(std::move(now)) {}
+  // ran to invalidate it (CaptureReadinessSettings::freshnessMillis). Regular
+  // samples issue fresh tickets, never renew old ones.
+  explicit CaptureReadiness(std::function<int64_t()> now,
+                            CaptureReadinessSettings settings = {})
+      : now_(std::move(now)), settings_(settings) {}
 
   void Invalidate(int64_t generation = 0) {
     std::scoped_lock lock(mutex_);
@@ -109,6 +145,18 @@ class CaptureReadiness {
     std::scoped_lock lock(mutex_);
     if (proofSinceMillis_ < nowMillis) proofSinceMillis_ = nowMillis;
     ++networkRevision_;
+    ++revision_;
+    proven_ = false;
+  }
+
+  // NetworkChanged's proof barrier without the network change: proof sampled
+  // before `nowMillis` no longer qualifies, and nothing is queued for the
+  // device. For a stall the watchdog's evaluator measured that was too short to
+  // be a sleep (FreezeResponseFor): what was proven before it is not current,
+  // and the network did not move.
+  void ProofBarrier(int64_t nowMillis) {
+    std::scoped_lock lock(mutex_);
+    if (proofSinceMillis_ < nowMillis) proofSinceMillis_ = nowMillis;
     ++revision_;
     proven_ = false;
   }
@@ -200,7 +248,12 @@ class CaptureReadiness {
 
   bool FreshWithLock(int64_t sampledMillis) const {
     const int64_t age = now_() - sampledMillis;
-    return 0 <= age && age <= 8000;
+    return 0 <= age && age <= settings_.freshnessMillis;
+  }
+
+  static int64_t SteadyMillis() {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
   }
 
   mutable std::mutex mutex_;
@@ -211,6 +264,7 @@ class CaptureReadiness {
   uint64_t handledNetworkRevision_ = 0;
   int64_t sampledMillis_ = 0;
   const std::function<int64_t()> now_;
+  const CaptureReadinessSettings settings_;
   bool proven_ = false;
   bool cancelled_ = false;
   bool active_ = false;
