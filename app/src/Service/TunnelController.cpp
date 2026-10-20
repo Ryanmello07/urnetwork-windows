@@ -603,7 +603,8 @@ proto::TunnelStatus TunnelController::StartLocked(const proto::StartTunnel& conf
   // and re-arming.
   killSwitch_.store(config.kill_switch);
   StopLocked(/*finalDisarm=*/false);  // idempotent restart
-  auto readiness = std::make_shared<CaptureReadiness>();
+  // On the watchdog's capture timing, which its sampler and evaluator read too.
+  auto readiness = std::make_shared<CaptureReadiness>(deadTunnelWatchdog_.settings().capture);
   std::atomic_store(&captureReadiness_, readiness);
   if (stopGeneration_.load() != stopGeneration) readiness->Cancel();
   // A NEW ATTEMPT CLEARS THE LAST TEARDOWN'S REASON. Left set, a failsafe stop
@@ -874,9 +875,12 @@ proto::TunnelStatus TunnelController::StartLocked(const proto::StartTunnel& conf
     // for the monitor's callbacks to drain.
     egress_->SetOnChange([this](EgressInterfaces e) { OnEgressChanged(e); });
     // THE SECOND CALLBACK, AND THE ONE THAT COVERS THE OWNER'S CASE. SetOnChange
-    // above fires only when the bound INDEX MOVES, which is false for a cable
-    // coming out (the index is deliberately retained) — so it cannot be the hook
-    // that tells the SDK the network moved. This one fires on every observation.
+    // above fires when the binding moves, which a cable coming out does not do
+    // (the index is deliberately retained) — so it cannot be the hook that tells
+    // the SDK the network moved. This one fires whenever an observation moves
+    // the network the SDK's sockets ride, the cable out included
+    // (EgressChangeFilter), and never for churn that moves nothing: each one
+    // kicks every transport in this process.
     //
     // It must do almost nothing: it runs on a system worker thread that
     // EgressMonitor::Stop() waits for, so it records the event and returns. The
@@ -888,6 +892,14 @@ proto::TunnelStatus TunnelController::StartLocked(const proto::StartTunnel& conf
     egress_->SetOnNetworkQualityEvent(
         [this] { deadTunnelWatchdog_.NoteNetworkQualityEvent(); });
     egress_->Start();  // logs the chosen interface; keeps it current on change
+    // The binding Status() reports, from the monitor that owns it (see
+    // liveEgressIndex4_). Start() has reported it already when there is one;
+    // this also clears whatever an earlier session left when there is not.
+    {
+      const EgressInterfaces bound = egress_->Current();
+      liveEgressIndex4_.store(static_cast<int64_t>(bound.index4));
+      liveEgressIndex6_.store(static_cast<int64_t>(bound.index6));
+    }
     if (egress_->Current().index4 == 0) {
       // Not fatal — there may genuinely be no network yet, and the monitor will
       // bind as soon as one appears — but it is the R1 hazard, so it is loud.
@@ -1033,6 +1045,14 @@ proto::TunnelStatus TunnelController::StartLocked(const proto::StartTunnel& conf
       SetStateLocked(proto::TunnelState::RpcOnly);
       upSinceMillis_ = NowMillis();
       PublishStatusLocked();  // the uptime clock, set after the transition
+      // The device hears about network changes the way a tunnel session's does:
+      // from the watchdog's sampler, the one thread that tells it. Without one
+      // the monitor's events found no listener and an rpc-only device was never
+      // told, so it re-dialled a switch only on its transports' timeouts. The
+      // failsafe has nothing to judge here — it judges only a tunnel that is up —
+      // so it gets no handler, and with no capture to wait for there is no
+      // readiness callback either.
+      deadTunnelWatchdog_.Start(&*device_, nullptr, {}, readiness);
       EgressInterfaces bound = egress_->Current();
       LogInfo("tunnel: RPC-ONLY UP in {}ms (rpc={} egress_v4_ifindex={}). Steps "
               "6/8 (routes+dns), 7/8 (split tunnel) and 8/8 (packet pump) were "
@@ -1420,8 +1440,9 @@ void TunnelController::StopLocked(bool finalDisarm) {
   trace_.Stop();
   // Same contract, same reason, and BOUNDED — unlike the trace, the watchdog is
   // always on, so it may not become a new way for a stop to hang. Its Stop()
-  // gives the SDK sampler kWatchdogJoinBudgetMillis and abandons it after that
-  // (TunnelWatchdog.h spells out why abandoning is safe). It also recognises
+  // gives the SDK sampler its join budget (TunnelWatchdogSettings::
+  // joinBudgetMillis) and abandons it after that (TunnelWatchdog.h spells out
+  // why abandoning is safe). It also recognises
   // being called from its own evaluator thread — which it always is when the
   // failsafe is what got us here — and detaches instead of joining itself.
   deadTunnelWatchdog_.Stop();
@@ -1646,6 +1667,10 @@ bool TunnelController::TearDownSessionLocked() {
   pump_.reset();
   auto egress = std::move(egress_);
   egress_.reset();
+  // Its handlers are cleared above, so nothing writes these again for this
+  // session; the next session's monitor sets them when it starts.
+  liveEgressIndex4_.store(0);
+  liveEgressIndex6_.store(0);
 
   // Clear the flow-owner lookup BEFORE the move below, for the same reason
   // egress_'s handlers are cleared above: the lambda StartLocked installed on
@@ -1798,6 +1823,27 @@ void TunnelController::PushPhysicalAddressesLocked(const EgressInterfaces& egres
 // every excluded app keeps being rebound to the source address of the adapter
 // we just left — which stops working the moment that address is reclaimed.
 void TunnelController::OnEgressChanged(EgressInterfaces egress) {
+  // The binding Status() serves, live: the mirror holds the one composed at the
+  // last publish, and nothing publishes when the egress moves (this thread may
+  // not take mutex_), so get_state went on handing the app the interface it had
+  // already left. The app pins its own sdk to what it is told
+  // (SdkHost::ApplySdkEgressBind), so it stayed pinned to that interface.
+  const int64_t index4 = static_cast<int64_t>(egress.index4);
+  const int64_t index6 = static_cast<int64_t>(egress.index6);
+  const int64_t before4 = liveEgressIndex4_.exchange(index4);
+  const int64_t before6 = liveEgressIndex6_.exchange(index6);
+  const bool moved = before4 != index4 || before6 != index6;
+  // And told, when the interface moved while the app is following a binding at
+  // all (Status() reports one only while routes are installed). Pushed from a
+  // worker: this is a system thread EgressMonitor::Stop() waits for, and a push
+  // writes to the control pipe, which blocks while the app is not reading.
+  bool reported = false;
+  {
+    std::scoped_lock lock(statusMirrorMutex_);
+    reported = statusMirror_.routes_installed;
+  }
+  if (moved && reported) egressPush_.Request();
+
   std::scoped_lock lock(splitMutex_);
   if (!splitTunnel_.IsAvailable()) return;
   LogInfo("split-tunnel: following the egress change, re-binding excluded apps "
@@ -2793,6 +2839,13 @@ proto::TunnelStatus TunnelController::Status() {
   // WHILE a failsafe teardown is in flight, which is the case they exist for.
   s.stop_reason = lastStopReason_.load();
   s.failsafe_armed = deadTunnelWatchdog_.FailsafeArmed();
+  // The binding as the monitor holds it now, under the gate ComposeStatusLocked
+  // reports one by: the mirror's copy is the one bound at the last publish, and
+  // the egress moving publishes nothing (OnEgressChanged).
+  if (s.routes_installed) {
+    s.egress_index4 = liveEgressIndex4_.load();
+    s.egress_index6 = liveEgressIndex6_.load();
+  }
   const int64_t upSince = upSinceMirror_.load();
   s.tunnel_local_up_millis = upSince ? (NowMillis() - upSince) : 0;
   // The log upload in flight, off the flight's own lock (never the session's).

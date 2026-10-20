@@ -1,11 +1,12 @@
 // Executable spec for how the app publishes and applies live stats snapshots:
 // read on a worker of their own, never on the caller's thread
-// (App/CoalescedWorker.h), and applied in the order their reads began
-// (App/StatsReadOrder.h), so a read that finishes late cannot roll the window
-// or the tray back to an older state. Run against the same headers the app
-// compiles, on any host with a C++20 compiler:
+// (Common/CoalescedWorker.h, which the service's egress push shares), and
+// applied in the order their reads began (App/StatsReadOrder.h), so a read
+// that finishes late cannot roll the window or the tray back to an older
+// state. Run against the same headers the app compiles, on any host with a
+// C++20 compiler:
 //
-//   c++ -std=c++20 -Wall -Wextra -Werror -pthread -I ../src/App stats-publish-tests.cpp -o /tmp/stats-publish-tests && /tmp/stats-publish-tests
+//   c++ -std=c++20 -Wall -Wextra -Werror -pthread -I ../src/App -I ../src/Common stats-publish-tests.cpp -o /tmp/stats-publish-tests && /tmp/stats-publish-tests
 //
 // The worker cases hold the job at a barrier the spec releases; their waits are
 // bounded only so a broken worker fails instead of hanging. SdkHost,

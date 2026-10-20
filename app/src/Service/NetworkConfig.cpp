@@ -279,6 +279,81 @@ DnsFlushFn ResolveDnsFlush() {
   return fn;
 }
 
+// An address's bytes, network order, in EgressFamilySignature's 16-byte layout
+// (v4 in the first four).
+std::array<uint8_t, 16> AddressBytes(const SOCKADDR_INET& address, ADDRESS_FAMILY family) {
+  std::array<uint8_t, 16> bytes{};
+  if (family == AF_INET)
+    std::memcpy(bytes.data(), &address.Ipv4.sin_addr, sizeof(IN_ADDR));
+  else
+    std::memcpy(bytes.data(), &address.Ipv6.sin6_addr, sizeof(IN6_ADDR));
+  return bytes;
+}
+
+// The lowest /64 among an interface's preferred, non-link-local v6 addresses,
+// zero for none. The lowest rather than the first, because the table's order is
+// no promise; and a /64 rather than an address, because the interface's
+// temporary addresses rotate inside it without the network moving.
+std::array<uint8_t, 16> LowestPreferredPrefix64(uint32_t ifIndex) {
+  std::array<uint8_t, 16> lowest{};
+  PMIB_UNICASTIPADDRESS_TABLE table = nullptr;
+  if (::GetUnicastIpAddressTable(AF_INET6, &table) != NO_ERROR || !table) return lowest;
+  bool found = false;
+  for (ULONG i = 0; i < table->NumEntries; ++i) {
+    const MIB_UNICASTIPADDRESS_ROW& row = table->Table[i];
+    if (row.InterfaceIndex != ifIndex || row.DadState != IpDadStatePreferred) continue;
+    const IN6_ADDR& a = row.Address.Ipv6.sin6_addr;
+    // link-local (fe80::/10) says nothing about the network
+    if (a.u.Byte[0] == 0xFE && (a.u.Byte[1] & 0xC0) == 0x80) continue;
+    std::array<uint8_t, 16> prefix{};
+    std::memcpy(prefix.data(), a.u.Byte, 8);
+    if (!found || prefix < lowest) {
+      lowest = prefix;
+      found = true;
+    }
+  }
+  ::FreeMibTable(table);
+  return lowest;
+}
+
+// One family of NetworkConfig::ObserveEgress.
+EgressFamilySignature ObserveEgressFamily(ADDRESS_FAMILY family, uint32_t ifIndex) {
+  EgressFamilySignature signature;
+  signature.ifIndex = ifIndex;
+  if (ifIndex == 0) return signature;
+
+  // Connected by DiscoverEgress's rule: an unknown state counts as connected,
+  // so a lookup failure never makes a working adapter read as a lost link.
+  bool connected = true;
+  MIB_IF_ROW2 ifEntry{};
+  ifEntry.InterfaceIndex = ifIndex;
+  if (::GetIfEntry2(&ifEntry) == NO_ERROR)
+    connected = ifEntry.MediaConnectState != MediaConnectStateDisconnected;
+
+  // Its lowest-metric default route of this family, and that route's next hop.
+  bool hasDefaultRoute = false;
+  PMIB_IPFORWARD_TABLE2 routes = nullptr;
+  if (::GetIpForwardTable2(family, &routes) == NO_ERROR && routes) {
+    ULONG bestMetric = 0;
+    for (ULONG i = 0; i < routes->NumEntries; ++i) {
+      const MIB_IPFORWARD_ROW2& row = routes->Table[i];
+      if (row.DestinationPrefix.PrefixLength != 0 || row.InterfaceIndex != ifIndex) continue;
+      if (hasDefaultRoute && row.Metric >= bestMetric) continue;
+      hasDefaultRoute = true;
+      bestMetric = row.Metric;
+      signature.gateway = AddressBytes(row.NextHop, family);
+    }
+    ::FreeMibTable(routes);
+  }
+
+  std::array<uint8_t, 16> source{};
+  const bool hasSource = NetworkConfig::InterfaceSourceAddress(ifIndex, family, source.data());
+  if (hasSource) signature.source = source;
+  signature.network = family == AF_INET ? signature.source : LowestPreferredPrefix64(ifIndex);
+  signature.usable = connected && hasDefaultRoute && hasSource;
+  return signature;
+}
+
 }  // namespace
 
 void NetworkConfig::PrepareTunnelIpv6InterfaceRow(MIB_IPINTERFACE_ROW& row,
@@ -883,6 +958,13 @@ EgressInterfaces NetworkConfig::DiscoverEgress(NET_LUID tunLuid) {
       result.index6 = bestIndex;
   }
   return result;
+}
+
+EgressSignature NetworkConfig::ObserveEgress(const EgressInterfaces& bound) {
+  EgressSignature signature;
+  signature.v4 = ObserveEgressFamily(AF_INET, bound.index4);
+  signature.v6 = ObserveEgressFamily(AF_INET6, bound.index6);
+  return signature;
 }
 
 std::vector<std::string> NetworkConfig::HostResolversV4(NET_LUID excludeLuid) {

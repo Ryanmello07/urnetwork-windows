@@ -45,9 +45,12 @@ bool InterfaceExists(uint32_t ifIndex) {
 EgressMonitor::~EgressMonitor() { Stop(); }
 
 bool EgressMonitor::Start() {
-  // An observing monitor has nothing to bind, and starting to watch is not a
-  // network change to report (see Binding).
-  if (binding_ == Binding::Bind) Refresh();
+  // The reading watching starts from: bound (by a binding monitor), and the
+  // baseline every later reading is compared with. Never a network event, in
+  // either mode: starting to watch is not the network moving, and the tunnel
+  // session's capture readiness used to keep this one and replay it as a kick
+  // into the session device's first platform dial (see Binding).
+  Update(Reading::Baseline);
   bool ok = true;
   DWORD err = ::NotifyIpInterfaceChange(AF_UNSPEC, &EgressMonitor::OnChange,
                                         this, FALSE, &notifyHandle_);
@@ -73,6 +76,17 @@ bool EgressMonitor::Start() {
              "failsafe becomes the only thing that notices.",
              err);
     ok = false;
+  }
+  // THE ADDRESS HALF (see OnAddressChange). Tolerated like the route half, and
+  // less load-bearing: without it an address that changes with no interface or
+  // route event is seen at the next one of those instead of at once.
+  err = ::NotifyUnicastIpAddressChange(AF_UNSPEC, &EgressMonitor::OnAddressChange, this,
+                                       FALSE, &addressNotifyHandle_);
+  if (err != NO_ERROR) {
+    LogWarn("egress: NotifyUnicastIpAddressChange failed: {} — a new lease on the "
+            "same adapter, or an address finishing duplicate detection, is seen "
+            "only at the next interface or route event",
+            err);
   }
   DWORD negotiatedVersion = 0;
   err = ::WlanOpenHandle(2, nullptr, &negotiatedVersion, &wlanHandle_);
@@ -103,6 +117,10 @@ void EgressMonitor::Stop() {
     ::CancelMibChangeNotify2(routeNotifyHandle_);
     routeNotifyHandle_ = nullptr;
   }
+  if (addressNotifyHandle_) {
+    ::CancelMibChangeNotify2(addressNotifyHandle_);
+    addressNotifyHandle_ = nullptr;
+  }
   if (wlanHandle_) {
     ::WlanRegisterNotification(wlanHandle_, WLAN_NOTIFICATION_SOURCE_NONE,
                                FALSE, nullptr, nullptr, nullptr, nullptr);
@@ -130,23 +148,34 @@ void EgressMonitor::SetOnNetworkQualityEvent(NetworkQualityEventHandler handler)
   onNetworkQualityEvent_ = std::move(handler);
 }
 
-void EgressMonitor::Refresh() {
-  // Observe only: report the observation and stop. No discovery, no binding and
-  // no R1 log line — none of it applies to a device that binds nothing.
+void EgressMonitor::Refresh() { Update(Reading::Observation); }
+
+void EgressMonitor::Update(Reading reading) {
+  // Observe only: report a network that moved and stop. No binding and no R1
+  // log line — none of it applies to a device that binds nothing. The route
+  // table's election is read, never bound, only to tell a move from churn.
   if (binding_ == Binding::ObserveOnly) {
     NetworkEventHandler observed;
+    bool moved = false;
     {
       std::scoped_lock lock(mutex_);
+      const EgressSignature signature =
+          NetworkConfig::ObserveEgress(NetworkConfig::DiscoverEgress(tunLuid_));
+      if (reading == Reading::Baseline) {
+        filter_.Seed(signature);
+      } else {
+        moved = filter_.Observe(signature).network;
+      }
       observed = onNetworkEvent_;
     }
-    if (observed) observed();
+    if (moved && observed) observed();
     return;
   }
 
   ChangeHandler handler;
   NetworkEventHandler networkEvent;
   EgressInterfaces egress;
-  bool changed = false;
+  EgressChange change;
 
   // Zero LUID == the rpc-only mode's "no tun exists" (see the ctor). Every R1
   // claim below is about looping into the tunnel, so with no tunnel they are
@@ -196,16 +225,38 @@ void EgressMonitor::Refresh() {
       egress.index6 = current_.index6;
     }
 
-    changed = egress.index4 != current_.index4 || egress.index6 != current_.index6;
+    const bool indexMoved =
+        egress.index4 != current_.index4 || egress.index6 != current_.index6;
     current_ = egress;
+    // BEFORE anything is reported, so the kick the report leads to re-dials over
+    // this binding and not the one it replaces.
     urnet::setEgressInterfaceIndex(static_cast<int64_t>(egress.index4),
                                    static_cast<int64_t>(egress.index6));
 
-    if (changed) {
+    // What a socket of each family rides now, against the last reading. The
+    // baseline only seeds the comparison, and reports to SetOnChange the
+    // binding it starts from.
+    const EgressSignature signature = NetworkConfig::ObserveEgress(egress);
+    if (reading == Reading::Baseline) {
+      filter_.Seed(signature);
+      change.binding = indexMoved;
+    } else {
+      change = filter_.Observe(signature);
+      change.binding = change.binding || indexMoved;
+    }
+
+    if (indexMoved) {
       LogInfo("egress: bound to v4=[{}] src={} v6=[{}]",
               NetworkConfig::DescribeInterface(egress.index4),
               SourceAddressOf(egress.index4),
               NetworkConfig::DescribeInterface(egress.index6));
+    } else if (change.network || change.binding) {
+      LogInfo("egress: still bound to v4={} v6={}, and what a socket on it rides "
+              "moved (link {}, src={}) — {}",
+              egress.index4, egress.index6, signature.v4.usable ? "usable" : "UNUSABLE",
+              SourceAddressOf(egress.index4),
+              change.network ? "telling the sdk the network moved"
+                             : "only the address followers move");
     } else {
       LogDebug("egress: unchanged (v4={} v6={})", egress.index4, egress.index6);
     }
@@ -229,11 +280,12 @@ void EgressMonitor::Refresh() {
 
   // Deliberately outside the lock: the handler takes locks of its own, and
   // Stop() blocks on this callback while its caller holds one of them.
-  if (changed && handler) handler(egress);
-  // UNCONDITIONAL, and that is the entire point of the second callback. See the
-  // note on SetOnNetworkEvent: the dominant failure produces `changed == false`,
-  // so anything hung off `changed` is blind to it.
-  if (networkEvent) networkEvent();
+  if (change.binding && handler) handler(egress);
+  // On what moved the network, not on what moved the binding: the dominant
+  // failure (the cable out under a retained index) moves no binding, and is a
+  // network change here because the interface became unusable. See the note on
+  // SetOnNetworkEvent.
+  if (change.network && networkEvent) networkEvent();
 }
 
 EgressInterfaces EgressMonitor::Current() const {
@@ -269,7 +321,7 @@ void __stdcall EgressMonitor::OnRouteChange(void* context,
   auto* self = static_cast<EgressMonitor*>(context);
   if (!self) return;
   // MibInitialNotification arrives with a NULL row and says nothing about any
-  // route; the initial Refresh in Start() has already covered that ground.
+  // route; the baseline Start() reads has already covered that ground.
   if (type == MibInitialNotification || row == nullptr) return;
   // ONLY DEFAULT ROUTES, and never our own tun's. See the note on this function
   // in the header: without the filter, every bring-up and every teardown storms
@@ -279,6 +331,21 @@ void __stdcall EgressMonitor::OnRouteChange(void* context,
       row->InterfaceLuid.Value == self->tunLuid_.Value)
     return;
   RunGuarded("egress-route-change", [&] { self->Refresh(); });
+}
+
+void __stdcall EgressMonitor::OnAddressChange(void* context,
+                                              MIB_UNICASTIPADDRESS_ROW* row,
+                                              MIB_NOTIFICATION_TYPE type) {
+  auto* self = static_cast<EgressMonitor*>(context);
+  if (!self) return;
+  // As for routes: the initial notification describes no address.
+  if (type == MibInitialNotification || row == nullptr) return;
+  // Our tun's addresses are capture configuration, not the uplink: the same
+  // reason OnChange skips it.
+  if (self->tunLuid_.Value != 0 &&
+      row->InterfaceLuid.Value == self->tunLuid_.Value)
+    return;
+  RunGuarded("egress-address-change", [&] { self->Refresh(); });
 }
 
 void WINAPI EgressMonitor::OnWlanChange(PWLAN_NOTIFICATION_DATA data,
