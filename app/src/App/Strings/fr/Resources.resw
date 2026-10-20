@@ -1792,12 +1792,20 @@ bonne manière</value>
     <value>Les actions sont des demandes : vérifiez leur effet dans les mesures et les lignes de sorties, qui s’actualisent en dessous.</value>
     <comment>Developer page: note that the action buttons only request changes.</comment>
   </data>
+  <data name="dev_affinity_max_time" xml:space="preserve">
+    <value>Âge maximal de l’affinité</value>
+    <comment>Developer tools: maximum original connection creation age for healthy ordinary-flow affinity, edited as a duration.</comment>
+  </data>
+  <data name="dev_affinity_max_time_detail" xml:space="preserve">
+    <value>Pour les nouvelles connexions ordinaires, réutilise uniquement une sortie IP/domaine saine si le temps écoulé depuis la création de la connexion d’origine est inférieur à cette limite. Valeur par défaut : 1 minute. Zéro ou une valeur négative désactive la réutilisation. Une sortie avertie ou défaillante déclenche toujours une course. Les connexions existantes et les épinglages explicites ne changent pas.</value>
+    <comment>Developer tools: strict healthy-donor age cap, disabled values, default and unaffected existing connections/pins.</comment>
+  </data>
   <data name="dev_affinity_performance" xml:space="preserve">
     <value>Affinité selon les performances</value>
     <comment>Developer tools screen (reliability surface): performance-aware affinity control label.</comment>
   </data>
   <data name="dev_affinity_performance_detail" xml:space="preserve">
-    <value>Pondère les nouvelles courses TLS selon le débit maximal d’octets acquittés de chaque fournisseur par rapport à sa bande passante annoncée. Avec l’affinité stricte activée, les fournisseurs peu performants cèdent à la course. Les connexions existantes et les épinglages explicites restent fixes</value>
+    <value>Pondère les nouvelles courses TLS selon le débit maximal d’octets acquittés de chaque fournisseur par rapport à sa bande passante annoncée. Dans la limite d’âge de l’affinité, les fournisseurs peu performants cèdent à la course. Les connexions existantes et les épinglages explicites restent fixes</value>
     <comment>Developer tools screen: explanatory subtext under the performance-aware affinity control.</comment>
   </data>
   <data name="dev_affinity_sticky" xml:space="preserve">
@@ -2172,17 +2180,13 @@ bonne manière</value>
     <value>Fréquence à laquelle un flux en cours de connexion revérifie une fenêtre vide, pour que la première requête parte dès que la première sortie arrive. Désactivé attend le rythme de nouvelle tentative de 2 s</value>
     <comment>Developer tools screen: explanatory subtext under the 'formation poll' control.</comment>
   </data>
-  <data name="dev_fresh_flow_affinity" xml:space="preserve">
-    <value>Affinité stricte des nouveaux flux</value>
-    <comment>Developer tools screen (reliability surface): hard fresh-flow affinity control label.</comment>
-  </data>
-  <data name="dev_fresh_flow_affinity_detail" xml:space="preserve">
-    <value>Attribue chaque nouvelle connexion à la sortie que son IP ou son domaine utilise déjà. Désactivé par défaut : chaque nouvelle connexion ordinaire passe par la course des fournisseurs. Les connexions existantes et les épinglages explicites restent toujours fixes</value>
-    <comment>Developer tools screen: explanatory subtext under the hard fresh-flow affinity control.</comment>
-  </data>
   <data name="dev_group_follow" xml:space="preserve">
     <value>Suivre les sorties mises sur la touche</value>
     <comment>Developer tools screen (reliability surface): group follow control label.</comment>
+  </data>
+  <data name="dev_group_follow_compat_detail" xml:space="preserve">
+    <value>Ancien réglage de compatibilité, sans dérogation au contrôle de santé. Les nouvelles connexions ordinaires ne réutilisent jamais une sortie avertie ou défaillante ; elles lancent toujours une nouvelle course de fournisseurs. Les connexions existantes et les épinglages explicites ne changent pas.</value>
+    <comment>Developer tools: both legacy group-follow controls are not ordinary fresh-flow health overrides.</comment>
   </data>
   <data name="dev_group_follow_detail" xml:space="preserve">
     <value>Une sortie en quarantaine garde les nouvelles connexions de ses propres sites au début de la mise sur la touche, quand le verdict est le moins établi, pour que la mise sur la touche ne divise pas l’IP de sortie du site. Les nouveaux sites l’évitent toujours. Désactivé les disperse</value>
@@ -2191,10 +2195,6 @@ bonne manière</value>
   <data name="dev_group_follow_window" xml:space="preserve">
     <value>Fenêtre de suivi</value>
     <comment>Developer tools screen (reliability surface): group follow window control label.</comment>
-  </data>
-  <data name="dev_group_follow_window_detail" xml:space="preserve">
-    <value>Combien de temps après une mise sur la touche les nouvelles connexions d’un site suivent encore leur sortie — les mises sur la touche précoces sont souvent de fausses alertes ; une qui dure tend vers le retrait et cesse de recevoir des flux. Désactivé disperse immédiatement</value>
-    <comment>Developer tools screen: explanatory subtext under the 'group follow window' control.</comment>
   </data>
   <data name="dev_group_follow_window_ms_detail" xml:space="preserve">
     <value>Combien de temps après une mise sur la touche les nouvelles connexions d’un site suivent encore leur sortie, en ms — les mises sur la touche précoces sont souvent de fausses alertes ; une qui dure tend vers le retrait et cesse de recevoir des flux. Désactivé disperse immédiatement</value>

@@ -1832,12 +1832,20 @@
     <value>Дії — це запити: перевіряйте їхній результат у вимірюваннях і рядках виходів, які оновлюються нижче.</value>
     <comment>Developer page: note that the action buttons only request changes.</comment>
   </data>
+  <data name="dev_affinity_max_time" xml:space="preserve">
+    <value>Максимальний вік прив’язки</value>
+    <comment>Developer tools: maximum original connection creation age for healthy ordinary-flow affinity, edited as a duration.</comment>
+  </data>
+  <data name="dev_affinity_max_time_detail" xml:space="preserve">
+    <value>Для звичайних нових з’єднань повторно використовуйте лише справний вихід IP/домену, якщо від створення початкового з’єднання минуло менше часу, ніж ця межа. Типово: 1 хвилина. Нуль або від’ємне значення вимикає повторне використання. Виходи з попередженням або несправні виходи завжди запускають перегони. Наявні з’єднання та явні закріплення не змінюються.</value>
+    <comment>Developer tools: strict healthy-donor age cap, disabled values, default and unaffected existing connections/pins.</comment>
+  </data>
   <data name="dev_affinity_performance" xml:space="preserve">
     <value>Прив’язка з урахуванням продуктивності</value>
     <comment>Developer tools screen (reliability surface): performance-aware affinity control label.</comment>
   </data>
   <data name="dev_affinity_performance_detail" xml:space="preserve">
-    <value>Зважує нові перегони TLS за піковою швидкістю підтверджених байтів кожного провайдера відносно заявленої пропускної здатності. З увімкненою жорсткою прив’язкою провайдери з низькими вимірами поступаються в перегонах. Наявні з’єднання та явні закріплення не змінюються</value>
+    <value>Зважує нові перегони TLS за піковою швидкістю підтверджених байтів кожного провайдера відносно заявленої пропускної здатності. У межах вікового обмеження прив’язки провайдери з низькими вимірами поступаються в перегонах. Наявні з’єднання та явні закріплення не змінюються</value>
     <comment>Developer tools screen: explanatory subtext under the performance-aware affinity control.</comment>
   </data>
   <data name="dev_affinity_sticky" xml:space="preserve">
@@ -2220,17 +2228,13 @@
     <value>Як часто потік, що підключається, знову перевіряє порожнє вікно, щоб перший запит пішов одразу, щойно з’явиться перший вихід. Вимкнення чекає 2-секундний ритм повторів</value>
     <comment>Developer tools screen: explanatory subtext under the 'formation poll' control.</comment>
   </data>
-  <data name="dev_fresh_flow_affinity" xml:space="preserve">
-    <value>Жорстка прив’язка нових потоків</value>
-    <comment>Developer tools screen (reliability surface): hard fresh-flow affinity control label.</comment>
-  </data>
-  <data name="dev_fresh_flow_affinity_detail" xml:space="preserve">
-    <value>Призначає кожне нове з’єднання виходу, який уже використовують його IP або домен. За замовчуванням вимкнено: кожне звичайне нове з’єднання потрапляє в перегони провайдерів. Наявні з’єднання та явні закріплення завжди залишаються незмінними</value>
-    <comment>Developer tools screen: explanatory subtext under the hard fresh-flow affinity control.</comment>
-  </data>
   <data name="dev_group_follow" xml:space="preserve">
     <value>Стежити за виходами на лаві</value>
     <comment>Developer tools screen (reliability surface): group follow control label.</comment>
+  </data>
+  <data name="dev_group_follow_compat_detail" xml:space="preserve">
+    <value>Застаріле налаштування сумісності, що не скасовує перевірку справності. Звичайні нові з’єднання ніколи не використовують повторно виходи з попередженням або несправні виходи; вони завжди запускають нові перегони провайдерів. Наявні з’єднання та явні закріплення не змінюються.</value>
+    <comment>Developer tools: both legacy group-follow controls are not ordinary fresh-flow health overrides.</comment>
   </data>
   <data name="dev_group_follow_detail" xml:space="preserve">
     <value>Вихід на карантині зберігає нові з’єднання своїх сайтів на початку перебування на лаві, коли вердикт найменш доведений, щоб лава не розділяла вихідну IP сайту. Нові сайти й далі його уникають. Вимкнення розсіює їх</value>
@@ -2239,10 +2243,6 @@
   <data name="dev_group_follow_window" xml:space="preserve">
     <value>Вікно стеження</value>
     <comment>Developer tools screen (reliability surface): group follow window control label.</comment>
-  </data>
-  <data name="dev_group_follow_window_detail" xml:space="preserve">
-    <value>Як довго після початку перебування на лаві нові з’єднання сайту й далі йдуть за своїм виходом — ранні лави зазвичай хибні тривоги; та, що триває, веде до видалення й перестає приймати потоки. Вимкнення розсіює одразу</value>
-    <comment>Developer tools screen: explanatory subtext under the 'group follow window' control.</comment>
   </data>
   <data name="dev_group_follow_window_ms_detail" xml:space="preserve">
     <value>Як довго після початку перебування на лаві нові з’єднання сайту й далі йдуть за своїм виходом, у мс — ранні лави зазвичай хибні тривоги; та, що триває, веде до видалення й перестає приймати потоки. Вимкнення розсіює одразу</value>

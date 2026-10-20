@@ -1832,12 +1832,20 @@
     <value>פעולות הן בקשות: בדקו את השפעתן במדידות ובשורות היציאות, שמתרעננות למטה.</value>
     <comment>Developer page: note that the action buttons only request changes.</comment>
   </data>
+  <data name="dev_affinity_max_time" xml:space="preserve">
+    <value>גיל זיקה מרבי</value>
+    <comment>Developer tools: maximum original connection creation age for healthy ordinary-flow affinity, edited as a duration.</comment>
+  </data>
+  <data name="dev_affinity_max_time_detail" xml:space="preserve">
+    <value>בחיבורים חדשים רגילים, שימוש חוזר מותר רק ביציאת IP/דומיין תקינה אם הזמן מאז יצירת החיבור המקורי קצר ממגבלה זו. ברירת מחדל: דקה אחת. אפס או ערך שלילי משביתים שימוש חוזר. יציאות עם אזהרה או לא תקינות תמיד מובילות למרוץ. חיבורים קיימים והצמדות מפורשות אינם משתנים.</value>
+    <comment>Developer tools: strict healthy-donor age cap, disabled values, default and unaffected existing connections/pins.</comment>
+  </data>
   <data name="dev_affinity_performance" xml:space="preserve">
     <value>זיקה מבוססת ביצועים</value>
     <comment>Developer tools screen (reliability surface): performance-aware affinity control label.</comment>
   </data>
   <data name="dev_affinity_performance_detail" xml:space="preserve">
-    <value>שקלול מרוצי TLS חדשים לפי קצב השיא של בתים שאושרו אצל כל ספק ביחס לרוחב הפס המוצהר שלו. כשזיקה קשיחה מופעלת, ספקים עם מדידות נמוכות מפנים את מקומם במרוץ. חיבורים קיימים והצמדות מפורשות נשארים קבועים</value>
+    <value>שקלול מרוצי TLS חדשים לפי קצב השיא של בתים שאושרו אצל כל ספק ביחס לרוחב הפס המוצהר שלו. בתוך מגבלת גיל הזיקה, ספקים עם מדידות נמוכות מפנים את מקומם במרוץ. חיבורים קיימים והצמדות מפורשות נשארים קבועים</value>
     <comment>Developer tools screen: explanatory subtext under the performance-aware affinity control.</comment>
   </data>
   <data name="dev_affinity_sticky" xml:space="preserve">
@@ -2220,17 +2228,13 @@
     <value>באיזו תדירות זרימה שמתחברת בודקת שוב חלון ריק, כדי שהבקשה הראשונה תצא מיד כשהיציאה הראשונה מגיעה. כיבוי ממתין לקצב הניסיון החוזר של 2 שניות</value>
     <comment>Developer tools screen: explanatory subtext under the 'formation poll' control.</comment>
   </data>
-  <data name="dev_fresh_flow_affinity" xml:space="preserve">
-    <value>זיקה קשיחה לזרימות חדשות</value>
-    <comment>Developer tools screen (reliability surface): hard fresh-flow affinity control label.</comment>
-  </data>
-  <data name="dev_fresh_flow_affinity_detail" xml:space="preserve">
-    <value>הקצאת כל חיבור חדש ליציאה שכבר משמשת את כתובת ה-IP או את הדומיין שלו. כבוי כברירת מחדל: כל חיבור חדש רגיל מגיע למרוץ הספקים. חיבורים קיימים והצמדות מפורשות נשארים תמיד קבועים</value>
-    <comment>Developer tools screen: explanatory subtext under the hard fresh-flow affinity control.</comment>
-  </data>
   <data name="dev_group_follow" xml:space="preserve">
     <value>מעקב אחר יציאות על הספסל</value>
     <comment>Developer tools screen (reliability surface): group follow control label.</comment>
+  </data>
+  <data name="dev_group_follow_compat_detail" xml:space="preserve">
+    <value>הגדרת תאימות ישנה, לא עקיפה של בדיקת תקינות. חיבורים חדשים רגילים לעולם אינם משתמשים שוב ביציאות עם אזהרה או לא תקינות; הם תמיד מתחילים מרוץ ספקים חדש. חיבורים קיימים והצמדות מפורשות אינם משתנים.</value>
+    <comment>Developer tools: both legacy group-follow controls are not ordinary fresh-flow health overrides.</comment>
   </data>
   <data name="dev_group_follow_detail" xml:space="preserve">
     <value>יציאה בהסגר שומרת את החיבורים החדשים של האתרים שלה בתחילת השהייה על הספסל, כשההכרעה הכי פחות מוכחת, כדי שהספסל לא יפצל את כתובת ה-IP היוצאת של האתר. אתרים חדשים עדיין נמנעים ממנה. כיבוי מפזר אותם</value>
@@ -2239,10 +2243,6 @@
   <data name="dev_group_follow_window" xml:space="preserve">
     <value>חלון מעקב</value>
     <comment>Developer tools screen (reliability surface): group follow window control label.</comment>
-  </data>
-  <data name="dev_group_follow_window_detail" xml:space="preserve">
-    <value>כמה זמן מתחילת השהייה על הספסל החיבורים החדשים של אתר ממשיכים לעקוב אחר היציאה שלהם — שהיות מוקדמות על הספסל הן בדרך כלל אזעקות שווא; שהייה שנמשכת מתקדמת להסרה ומפסיקה לקבל זרימות. כיבוי מפזר מיד</value>
-    <comment>Developer tools screen: explanatory subtext under the 'group follow window' control.</comment>
   </data>
   <data name="dev_group_follow_window_ms_detail" xml:space="preserve">
     <value>כמה זמן מתחילת השהייה על הספסל החיבורים החדשים של אתר ממשיכים לעקוב אחר היציאה שלהם, במילישניות — שהיות מוקדמות על הספסל הן בדרך כלל אזעקות שווא; שהייה שנמשכת מתקדמת להסרה ומפסיקה לקבל זרימות. כיבוי מפזר מיד</value>

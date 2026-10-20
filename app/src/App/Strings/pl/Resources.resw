@@ -1832,12 +1832,20 @@ właściwy sposób</value>
     <value>Akcje są żądaniami: sprawdzaj ich skutek w pomiarach i wierszach wyjść, które odświeżają się poniżej.</value>
     <comment>Developer page: note that the action buttons only request changes.</comment>
   </data>
+  <data name="dev_affinity_max_time" xml:space="preserve">
+    <value>Maksymalny wiek powinowactwa</value>
+    <comment>Developer tools: maximum original connection creation age for healthy ordinary-flow affinity, edited as a duration.</comment>
+  </data>
+  <data name="dev_affinity_max_time_detail" xml:space="preserve">
+    <value>Dla zwykłych nowych połączeń używaj ponownie tylko zdrowego wyjścia IP/domeny, jeśli czas od utworzenia pierwotnego połączenia jest krótszy niż ten limit. Domyślnie: 1 minuta. Zero lub wartość ujemna wyłącza ponowne użycie. Wyjścia z ostrzeżeniem lub niesprawne zawsze uruchamiają wyścig. Istniejące połączenia i jawne przypięcia nie zmieniają się.</value>
+    <comment>Developer tools: strict healthy-donor age cap, disabled values, default and unaffected existing connections/pins.</comment>
+  </data>
   <data name="dev_affinity_performance" xml:space="preserve">
     <value>Powinowactwo według wydajności</value>
     <comment>Developer tools screen (reliability surface): performance-aware affinity control label.</comment>
   </data>
   <data name="dev_affinity_performance_detail" xml:space="preserve">
-    <value>Waży nowe wyścigi TLS według szczytowej szybkości potwierdzonych bajtów każdego dostawcy względem jego deklarowanej przepustowości. Przy włączonym twardym powinowactwie dostawcy o niskich pomiarach ustępują w wyścigu. Istniejące połączenia i jawne przypięcia pozostają bez zmian</value>
+    <value>Waży nowe wyścigi TLS według szczytowej szybkości potwierdzonych bajtów każdego dostawcy względem jego deklarowanej przepustowości. W granicach limitu wieku powinowactwa dostawcy o niskich pomiarach ustępują w wyścigu. Istniejące połączenia i jawne przypięcia pozostają bez zmian</value>
     <comment>Developer tools screen: explanatory subtext under the performance-aware affinity control.</comment>
   </data>
   <data name="dev_affinity_sticky" xml:space="preserve">
@@ -2220,17 +2228,13 @@ właściwy sposób</value>
     <value>Jak często łączący się przepływ ponownie sprawdza puste okno, aby pierwsze żądanie wyszło zaraz po pojawieniu się pierwszego wyjścia. Wyłączenie czeka na 2-sekundowy rytm ponowień</value>
     <comment>Developer tools screen: explanatory subtext under the 'formation poll' control.</comment>
   </data>
-  <data name="dev_fresh_flow_affinity" xml:space="preserve">
-    <value>Twarde powinowactwo nowych przepływów</value>
-    <comment>Developer tools screen (reliability surface): hard fresh-flow affinity control label.</comment>
-  </data>
-  <data name="dev_fresh_flow_affinity_detail" xml:space="preserve">
-    <value>Przypisuje każde nowe połączenie do wyjścia, którego już używa jego adres IP lub domena. Domyślnie wyłączone: każde zwykłe nowe połączenie trafia do wyścigu dostawców. Istniejące połączenia i jawne przypięcia zawsze pozostają bez zmian</value>
-    <comment>Developer tools screen: explanatory subtext under the hard fresh-flow affinity control.</comment>
-  </data>
   <data name="dev_group_follow" xml:space="preserve">
     <value>Podążaj za wyjściami na ławce</value>
     <comment>Developer tools screen (reliability surface): group follow control label.</comment>
+  </data>
+  <data name="dev_group_follow_compat_detail" xml:space="preserve">
+    <value>Starsze ustawienie zgodności, nie obejście kontroli stanu. Zwykłe nowe połączenia nigdy nie używają ponownie wyjść z ostrzeżeniem lub niesprawnych; zawsze rozpoczynają nowy wyścig dostawców. Istniejące połączenia i jawne przypięcia nie zmieniają się.</value>
+    <comment>Developer tools: both legacy group-follow controls are not ordinary fresh-flow health overrides.</comment>
   </data>
   <data name="dev_group_follow_detail" xml:space="preserve">
     <value>Wyjście w kwarantannie zachowuje nowe połączenia swoich witryn na początku ławki, gdy werdykt jest najmniej pewny, aby ławka nie rozdzieliła wyjściowego IP witryny. Nowe witryny nadal go unikają. Wyłączenie je rozprasza</value>
@@ -2239,10 +2243,6 @@ właściwy sposób</value>
   <data name="dev_group_follow_window" xml:space="preserve">
     <value>Okno podążania</value>
     <comment>Developer tools screen (reliability surface): group follow window control label.</comment>
-  </data>
-  <data name="dev_group_follow_window_detail" xml:space="preserve">
-    <value>Jak długo od początku ławki nowe połączenia witryny nadal podążają za swoim wyjściem — wczesne ławki to zwykle fałszywe alarmy; ta, która trwa, zmierza do usunięcia i przestaje przyjmować przepływy. Wyłączenie rozprasza od razu</value>
-    <comment>Developer tools screen: explanatory subtext under the 'group follow window' control.</comment>
   </data>
   <data name="dev_group_follow_window_ms_detail" xml:space="preserve">
     <value>Jak długo od początku ławki nowe połączenia witryny nadal podążają za swoim wyjściem, w ms — wczesne ławki to zwykle fałszywe alarmy; ta, która trwa, zmierza do usunięcia i przestaje przyjmować przepływy. Wyłączenie rozprasza od razu</value>

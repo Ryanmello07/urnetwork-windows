@@ -1792,12 +1792,20 @@ maneira certa</value>
     <value>As ações são pedidos: confirme o efeito nas medições e nas linhas de saídas, que se atualizam por baixo.</value>
     <comment>Developer page: note that the action buttons only request changes.</comment>
   </data>
+  <data name="dev_affinity_max_time" xml:space="preserve">
+    <value>Idade máxima da afinidade</value>
+    <comment>Developer tools: maximum original connection creation age for healthy ordinary-flow affinity, edited as a duration.</comment>
+  </data>
+  <data name="dev_affinity_max_time_detail" xml:space="preserve">
+    <value>Para novas ligações comuns, reutiliza apenas uma saída IP/domínio saudável se o tempo desde a criação da ligação original for inferior a este limite. Predefinição: 1 minuto. Zero ou um valor negativo desativa a reutilização. Saídas com avisos ou sem saúde iniciam sempre uma corrida. As ligações existentes e as fixações explícitas não mudam.</value>
+    <comment>Developer tools: strict healthy-donor age cap, disabled values, default and unaffected existing connections/pins.</comment>
+  </data>
   <data name="dev_affinity_performance" xml:space="preserve">
     <value>Afinidade por desempenho</value>
     <comment>Developer tools screen (reliability surface): performance-aware affinity control label.</comment>
   </data>
   <data name="dev_affinity_performance_detail" xml:space="preserve">
-    <value>Pondera as novas corridas TLS pela taxa máxima de bytes confirmados de cada fornecedor em relação à largura de banda anunciada. Com a afinidade estrita ativada, os fornecedores com medições baixas cedem à corrida. As ligações existentes e as fixações explícitas não mudam</value>
+    <value>Pondera as novas corridas TLS pela taxa máxima de bytes confirmados de cada fornecedor em relação à largura de banda anunciada. Dentro do limite de idade da afinidade, os fornecedores com medições baixas cedem à corrida. As ligações existentes e as fixações explícitas não mudam</value>
     <comment>Developer tools screen: explanatory subtext under the performance-aware affinity control.</comment>
   </data>
   <data name="dev_affinity_sticky" xml:space="preserve">
@@ -2172,17 +2180,13 @@ maneira certa</value>
     <value>Com que frequência um fluxo em ligação volta a verificar uma janela vazia, para que o primeiro pedido saia logo que a primeira saída chega. Desativado espera o ritmo de nova tentativa de 2 s</value>
     <comment>Developer tools screen: explanatory subtext under the 'formation poll' control.</comment>
   </data>
-  <data name="dev_fresh_flow_affinity" xml:space="preserve">
-    <value>Afinidade estrita para novos fluxos</value>
-    <comment>Developer tools screen (reliability surface): hard fresh-flow affinity control label.</comment>
-  </data>
-  <data name="dev_fresh_flow_affinity_detail" xml:space="preserve">
-    <value>Atribui cada nova ligação à saída que o seu IP ou domínio já usa. Desativado é a predefinição: todas as novas ligações comuns chegam à corrida de fornecedores. As ligações existentes e as fixações explícitas nunca mudam</value>
-    <comment>Developer tools screen: explanatory subtext under the hard fresh-flow affinity control.</comment>
-  </data>
   <data name="dev_group_follow" xml:space="preserve">
     <value>Seguir saídas no banco</value>
     <comment>Developer tools screen (reliability surface): group follow control label.</comment>
+  </data>
+  <data name="dev_group_follow_compat_detail" xml:space="preserve">
+    <value>Definição de compatibilidade antiga, não uma exceção à verificação de saúde. As novas ligações comuns nunca reutilizam saídas com avisos ou sem saúde; iniciam sempre uma nova corrida de fornecedores. As ligações existentes e as fixações explícitas não mudam.</value>
+    <comment>Developer tools: both legacy group-follow controls are not ordinary fresh-flow health overrides.</comment>
   </data>
   <data name="dev_group_follow_detail" xml:space="preserve">
     <value>Uma saída em quarentena mantém as novas ligações dos seus próprios sites no início do banco, quando o veredicto está menos comprovado, para que o banco não divida o IP de saída do site. Os novos sites continuam a evitá-la. Desativado dispersa-as</value>
@@ -2191,10 +2195,6 @@ maneira certa</value>
   <data name="dev_group_follow_window" xml:space="preserve">
     <value>Janela de acompanhamento</value>
     <comment>Developer tools screen (reliability surface): group follow window control label.</comment>
-  </data>
-  <data name="dev_group_follow_window_detail" xml:space="preserve">
-    <value>Durante quanto tempo, já no banco, as novas ligações de um site continuam a seguir a sua saída — os bancos iniciais costumam ser falsos alarmes; um que se prolonga tende para a remoção e deixa de receber fluxos. Desativado dispersa de imediato</value>
-    <comment>Developer tools screen: explanatory subtext under the 'group follow window' control.</comment>
   </data>
   <data name="dev_group_follow_window_ms_detail" xml:space="preserve">
     <value>Durante quanto tempo, já no banco, as novas ligações de um site continuam a seguir a sua saída, em ms — os bancos iniciais costumam ser falsos alarmes; um que se prolonga tende para a remoção e deixa de receber fluxos. Desativado dispersa de imediato</value>

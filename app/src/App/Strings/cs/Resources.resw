@@ -1831,12 +1831,20 @@ správným způsobem</value>
     <value>Akce jsou požadavky: ověřte jejich účinek v měřeních a řádcích výstupů, které se níže obnovují.</value>
     <comment>Developer page: note that the action buttons only request changes.</comment>
   </data>
+  <data name="dev_affinity_max_time" xml:space="preserve">
+    <value>Maximální stáří afinity</value>
+    <comment>Developer tools: maximum original connection creation age for healthy ordinary-flow affinity, edited as a duration.</comment>
+  </data>
+  <data name="dev_affinity_max_time_detail" xml:space="preserve">
+    <value>U běžných nových připojení znovu použijte jen zdravý výstup IP/domény, pokud je stáří původního připojení od jeho vytvoření pod tímto limitem. Výchozí: 1 minuta. Nula nebo záporná hodnota opětovné použití vypne. Výstupy s varováním nebo nezdravé výstupy vždy přejdou do závodu. Stávající připojení a explicitní připnutí se nemění.</value>
+    <comment>Developer tools: strict healthy-donor age cap, disabled values, default and unaffected existing connections/pins.</comment>
+  </data>
   <data name="dev_affinity_performance" xml:space="preserve">
     <value>Afinita podle výkonu</value>
     <comment>Developer tools screen (reliability surface): performance-aware affinity control label.</comment>
   </data>
   <data name="dev_affinity_performance_detail" xml:space="preserve">
-    <value>Váží nové závody TLS podle špičkové rychlosti potvrzených bajtů každého poskytovatele vzhledem k jeho inzerované šířce pásma. Se zapnutou pevnou afinitou ustupují poskytovatelé s nízkým naměřeným výkonem závodu. Stávající připojení a explicitní připnutí zůstávají beze změny</value>
+    <value>Váží nové závody TLS podle špičkové rychlosti potvrzených bajtů každého poskytovatele vzhledem k jeho inzerované šířce pásma. V rámci limitu stáří afinity ustupují poskytovatelé s nízkým naměřeným výkonem závodu. Stávající připojení a explicitní připnutí zůstávají beze změny</value>
     <comment>Developer tools screen: explanatory subtext under the performance-aware affinity control.</comment>
   </data>
   <data name="dev_affinity_sticky" xml:space="preserve">
@@ -2219,17 +2227,13 @@ správným způsobem</value>
     <value>Jak často připojující se tok znovu zkontroluje prázdné okno, aby první požadavek odešel hned, jak dorazí první výstup. Vypnuto čeká 2s tempo opakování</value>
     <comment>Developer tools screen: explanatory subtext under the 'formation poll' control.</comment>
   </data>
-  <data name="dev_fresh_flow_affinity" xml:space="preserve">
-    <value>Pevná afinita nových toků</value>
-    <comment>Developer tools screen (reliability surface): hard fresh-flow affinity control label.</comment>
-  </data>
-  <data name="dev_fresh_flow_affinity_detail" xml:space="preserve">
-    <value>Přiřadí každé nové připojení výstupu, který už používá jeho IP nebo doména. Výchozí je vypnuto: každé běžné nové připojení se dostane do závodu poskytovatelů. Stávající připojení a explicitní připnutí zůstávají vždy beze změny</value>
-    <comment>Developer tools screen: explanatory subtext under the hard fresh-flow affinity control.</comment>
-  </data>
   <data name="dev_group_follow" xml:space="preserve">
     <value>Sledovat výstupy na lavičce</value>
     <comment>Developer tools screen (reliability surface): group follow control label.</comment>
+  </data>
+  <data name="dev_group_follow_compat_detail" xml:space="preserve">
+    <value>Starší nastavení kompatibility, nikoli obejití kontroly zdraví. Běžná nová připojení nikdy znovu nepoužijí výstupy s varováním nebo nezdravé výstupy; vždy zahájí nový závod poskytovatelů. Stávající připojení a explicitní připnutí se nemění.</value>
+    <comment>Developer tools: both legacy group-follow controls are not ordinary fresh-flow health overrides.</comment>
   </data>
   <data name="dev_group_follow_detail" xml:space="preserve">
     <value>Výstup v karanténě si ponechá nová připojení svých vlastních webů během začátku pobytu na lavičce, kdy je verdikt nejméně prokázaný, aby lavička nerozdělila výstupní IP webu. Nové weby se mu dál vyhýbají. Vypnuto je rozptýlí</value>
@@ -2238,10 +2242,6 @@ správným způsobem</value>
   <data name="dev_group_follow_window" xml:space="preserve">
     <value>Okno sledování</value>
     <comment>Developer tools screen (reliability surface): group follow window control label.</comment>
-  </data>
-  <data name="dev_group_follow_window_detail" xml:space="preserve">
-    <value>Jak dlouho od začátku pobytu na lavičce nová připojení webu dál sledují svůj výstup — rané lavičky bývají plané poplachy; ta, která trvá, směřuje k odstranění a přestane přijímat toky. Vypnuto rozptýlí okamžitě</value>
-    <comment>Developer tools screen: explanatory subtext under the 'group follow window' control.</comment>
   </data>
   <data name="dev_group_follow_window_ms_detail" xml:space="preserve">
     <value>Jak dlouho od začátku pobytu na lavičce nová připojení webu dál sledují svůj výstup, v ms — rané lavičky bývají plané poplachy; ta, která trvá, směřuje k odstranění a přestane přijímat toky. Vypnuto rozptýlí okamžitě</value>
