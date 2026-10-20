@@ -6923,8 +6923,8 @@
     <comment>App top200: the manifest's SHA-256 is not the commitment_sha256 line pasted with it</comment>
   </data>
   <data name="site_app_top200_manifest_hint" xml:space="preserve">
-    <value>粘贴您的设备群清单（provider fleet manifest 输出的 JSON）和有效纪元，即可为每台设备生成绑定。应用会在 收益 › 前 200 名 › 签署设备群绑定 中显示其设备用于清单的成员条目。</value>
-    <comment>App top200: how to get the fleet manifest and where an app shows its member entry</comment>
+    <value>在一台提供方设备上用 provider fleet init 生成设备群清单（即下方已为此部署填好的命令；其他每台设备用 --member=&lt;client_id&gt;:&lt;client_key&gt; 添加），然后用 provider fleet publish 从您的热键发布其承诺。主网的发布将在主网设备群运行时获批后开放。将清单与有效纪元一起粘贴到此处，即可为每台设备生成绑定。应用会在 收益 › 前 200 名 › 签署设备群绑定 中显示其设备用于清单的成员条目。</value>
+    <comment>App top200: how to create and publish the fleet manifest and where an app shows its member entry</comment>
   </data>
   <data name="site_app_top200_manifest_hotkey_mismatch" xml:space="preserve">
     <value>清单中的 hotkey 与第 1 步中输入的 hotkey 不一致。</value>

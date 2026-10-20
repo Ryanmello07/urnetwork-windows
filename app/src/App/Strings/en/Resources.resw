@@ -7541,8 +7541,8 @@ world's content</value>
     <comment>App top200: the manifest's SHA-256 is not the commitment_sha256 line pasted with it</comment>
   </data>
   <data name="site_app_top200_manifest_hint" xml:space="preserve">
-    <value>Paste your fleet manifest (the JSON that provider fleet manifest prints) and the validity epochs to build each device's binding. The app shows its device's member entry for the manifest under Earnings › Top 200 › Sign fleet binding.</value>
-    <comment>App top200: how to get the fleet manifest and where an app shows its member entry</comment>
+    <value>Write the fleet manifest on a provider device with provider fleet init (the command below, filled in for this deployment; add each other device with --member=&lt;client_id&gt;:&lt;client_key&gt;), then publish its commitment from your hotkey with provider fleet publish. Publishing on mainnet opens once the mainnet fleet runtime is approved. Paste the manifest here with the validity epochs to build each device's binding. The app shows its device's member entry for the manifest under Earnings › Top 200 › Sign fleet binding.</value>
+    <comment>App top200: how to create and publish the fleet manifest and where an app shows its member entry</comment>
   </data>
   <data name="site_app_top200_manifest_hotkey_mismatch" xml:space="preserve">
     <value>The manifest's hotkey is not the hotkey entered in step 1.</value>
