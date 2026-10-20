@@ -11,6 +11,7 @@
 
 #include "AppController.h"
 #include "BittensorWalletDialogs.h"
+#include "ConnectionRegionSheet.h"  // RegionLabel: the "Connecting from" control
 #include "Log.h"
 #include "MainWindow.xaml.h"
 #include "PageContext.h"
@@ -100,6 +101,7 @@ LoginPage::~LoginPage() {
 
 void LoginPage::Initialize() {
   auto queue = w_.DispatcherQueue();
+  RefreshConnectingFrom();
 
   // debounce the sign-up network-name availability check (macOS: 250ms)
   nameCheckTimer_ = queue.CreateTimer();
@@ -293,6 +295,9 @@ void LoginPage::ApplyStrings() {
   w_.BrowserSignInLink().Content(
       winrt::box_value(Adv("adv_sign_in_browser", L"Sign in with browser")));
   w_.NetworkServerLink().Content(LocBox("change_network_api"));
+  // optional: where the user connects from, which only picks how the app
+  // reaches URnetwork (ConnectionRegion.h); the picker is the window's
+  ShowConnectingFrom(connectingFrom_);
   // MainWindow calls ApplyStrings BEFORE Initialize, so on the first pass there
   // is no carousel yet; Initialize paints it once it exists.
   if (carousel_) carousel_->ApplyStrings();
@@ -397,6 +402,8 @@ void LoginPage::ResetToInitialStep() {
   // the reset, and a server switch has none
   HideSignedOutNotice();
   ShowLoginStep(LoginStep::Initial);
+  // a server switch is another space, with its own connection region
+  RefreshConnectingFrom();
 }
 
 // An InfoBar at the top of the initial step, in the page's Informational
@@ -427,6 +434,27 @@ void LoginPage::ClearSeedphraseField() {
 
 void LoginPage::ShowErrorOnCurrentStep(std::string const& error) {
   ShowLoginErrorFor(loginStep_, MapAuthErrorForDisplay(error));
+  w_.NoteReachFailure(error);
+}
+
+void LoginPage::ShowConnectingFrom(std::string const& stored) {
+  connectingFrom_ = stored;
+  const hstring text{std::wstring{urnw::Localized(urnw::connection_region::kConnectingFromKey)} +
+                     L": " + std::wstring{urnw::RegionLabel(stored)} + L" \u25BE"};
+  w_.ConnectingFromLink().Content(winrt::box_value(text));
+  winrt::Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(w_.ConnectingFromLink(),
+                                                                       text);
+}
+
+winrt::fire_and_forget LoginPage::RefreshConnectingFrom() {
+  auto queue = w_.DispatcherQueue();
+  auto weak = w_.get_weak();
+  urnw::SdkHost* const sdk = &Sdk();
+  co_await winrt::resume_background();
+  const std::string stored = sdk->GetIngressCountryCode().value_or("");
+  queue.TryEnqueue([weak, stored] {
+    if (auto self = weak.get()) self->login().ShowConnectingFrom(stored);
+  });
 }
 
 bool LoginPage::ConsumeNewNetwork() {
@@ -618,6 +646,7 @@ void LoginPage::ApplyLoginRouting(urnw::LoginRouting const& routing) {
       ShowLoginErrorFor(LoginStep::Initial, routing.error.empty()
                                                 ? Loc("there_was_an_error_logging_in")
                                                 : H(routing.error));
+      w_.NoteReachFailure(routing.error);
       break;
   }
 }
@@ -662,6 +691,7 @@ void LoginPage::OnSignIn(IInspectable const&, RoutedEventArgs const&) {
         }
       } else if (!r.ok && !r.error.empty()) {
         page.ShowLoginErrorFor(LoginStep::Password, H(r.error));
+        self->NoteReachFailure(r.error);
       }
     });
   });
@@ -947,6 +977,7 @@ void LoginPage::OnCreateNetwork(IInspectable const&, RoutedEventArgs const&) {
         page.ShowVerifySendError(r.verify_send);
       } else if (!r.ok && !r.error.empty()) {
         page.ShowLoginErrorFor(LoginStep::Create, H(r.error));
+        self->NoteReachFailure(r.error);
       } else if (r.ok) {
         page.newNetworkPending_ = true;
       }
@@ -1186,6 +1217,7 @@ void LoginPage::SignInWithAuthCode(std::string code) {
       page.SetWalletSignInEnabled(true);
       if (!r.ok && !r.error.empty()) {
         page.ShowLoginErrorFor(LoginStep::Initial, H(r.error));
+        self->NoteReachFailure(r.error);
       }
     });
   });

@@ -984,6 +984,10 @@
     <value>キャンセル</value>
     <comment>Call to action</comment>
   </data>
+  <data name="cant_reach_urnetwork_choose_region" xml:space="preserve">
+    <value>URnetworkに接続できません — 接続元を選んでください</value>
+    <comment>Shown when the app cannot reach the URnetwork platform; tapping it opens the Connection region picker.</comment>
+  </data>
   <data name="chain_rpc_unreachable" xml:space="preserve">
     <value>チェーンの RPC に接続できません。もう一度お試しください。</value>
     <comment>Error when the subnet RPC cannot be reached.</comment>
@@ -1380,6 +1384,10 @@
     <value>{} プロバイダーに接続済み</value>
     <comment>A message indicating that the device is connected to a certain number of providers. The argument is the number of providers.</comment>
   </data>
+  <data name="connecting_from" xml:space="preserve">
+    <value>接続元</value>
+    <comment>Login screen: the label of the small optional control showing the chosen connection region, followed by the region name (or Other / Undisclosed).</comment>
+  </data>
   <data name="connecting_status_indicator" xml:space="preserve">
     <value>プロバイダーに接続中</value>
     <comment>Call to action</comment>
@@ -1391,6 +1399,30 @@
   <data name="connection_mode" xml:space="preserve">
     <value>接続モード</value>
     <comment>Used in Main/Connect/ConnectActions/ConnectActions.swift.</comment>
+  </data>
+  <data name="connection_region" xml:space="preserve">
+    <value>接続地域</value>
+    <comment>Login screen and DNS settings: the picker of the region the user connects from, which only changes how the app reaches the URnetwork platform (ingress DNS).</comment>
+  </data>
+  <data name="connection_region_default_resolvers" xml:space="preserve">
+    <value>既定のリゾルバー</value>
+    <comment>Connection region picker: shown when the chosen region uses only the default resolvers (Other / Undisclosed).</comment>
+  </data>
+  <data name="connection_region_description" xml:space="preserve">
+    <value>アプリがURnetworkに接続する方法にのみ影響し、通信内容には影響しません。</value>
+    <comment>DNS settings: one line under the Connection region picker explaining its scope.</comment>
+  </data>
+  <data name="connection_region_encrypted_resolvers" xml:space="preserve">
+    <value>暗号化リゾルバー</value>
+    <comment>Connection region picker: heading of the encrypted (DoH) resolvers the chosen region adds ahead of the defaults.</comment>
+  </data>
+  <data name="connection_region_fallback_resolvers" xml:space="preserve">
+    <value>暗号化なしのフォールバック（URnetworkの名前のみ）</value>
+    <comment>Connection region picker: heading of the plain DNS servers used only as a last resort, only for URnetwork's own names, when every encrypted resolver fails.</comment>
+  </data>
+  <data name="connection_region_undisclosed" xml:space="preserve">
+    <value>その他 / 非公開</value>
+    <comment>Connection region picker: the default choice, any region without a recommendation or not saying, which uses the default resolvers.</comment>
   </data>
   <data name="connections" xml:space="preserve">
     <value>接続</value>
@@ -7290,6 +7322,10 @@
     <value>総紹介数: {}</value>
     <comment>Usage-bar referral row: the number of referrals the network has made. Was Shared/Views/UsageBar.swift on apple; now the windows usage bar.</comment>
   </data>
+  <data name="traffic_dns" xml:space="preserve">
+    <value>通信のDNS</value>
+    <comment>DNS settings: heading of the existing egress DNS controls (the DNS used for the user's traffic through the tunnel), to tell them apart from the Connection region.</comment>
+  </data>
   <data name="transaction" xml:space="preserve">
     <value>トランザクション</value>
     <comment>Call to action</comment>
@@ -7970,6 +8006,10 @@
   <data name="when_you_refer_a_friend" xml:space="preserve">
     <value>友達を紹介するとき：</value>
     <comment>Call to action</comment>
+  </data>
+  <data name="where_are_you_connecting_from" xml:space="preserve">
+    <value>どこから接続していますか？</value>
+    <comment>Title of the Connection region picker opened from the login screen or the can't-reach prompt.</comment>
   </data>
   <data name="widget_chart_peak" xml:space="preserve">
     <value>ピーク</value>

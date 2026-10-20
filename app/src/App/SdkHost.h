@@ -1630,6 +1630,24 @@ class SdkHost {
   // kControlDohChinaCountryCode), v4 first; empty when there is none or the
   // call failed. Touches no host state.
   std::vector<std::string> RegionalControlDohUrls(const std::string& countryCode);
+  // ---- the connection region (ingress country; ConnectionRegion.h) ---------
+  // Where the user says they connect from, a value of the active network
+  // space: it picks the resolvers for the space's own names (api, connect,
+  // extender), never the tunnel's DNS. Local only, applies in place from the
+  // next lookup. The same lock and C ABI rule as above: callers run these off
+  // the UI thread (ConnectionRegionBlock).
+  //
+  // The stored lower-case code, "" undisclosed; nullopt with no space or when
+  // the read failed.
+  std::optional<std::string> GetIngressCountryCode();
+  // Stores `code` ("" undisclosed) and answers what was stored (an unknown code
+  // stores ""); nullopt when the call could not run.
+  std::optional<std::string> SetIngressCountryCode(const std::string& code);
+  // Touch no host state: the regions with a recommendation, and a region's
+  // encrypted (DoH) resolvers and unencrypted last resort. Empty on failure.
+  std::vector<std::string> IngressCountryCodes();
+  std::vector<std::string> IngressDohUrls(const std::string& code);
+  std::vector<std::string> IngressPlainDnsServers(const std::string& code);
   // The client / provider transport policy: the device's when there is a
   // session (offline the DeviceRemote answers with the pending or last known
   // policy), else the app LocalState mirror (see ApplyTransportSettings), else

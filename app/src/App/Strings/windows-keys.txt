@@ -173,6 +173,7 @@ build_right
 by_subscribing_you_agree_to_urnetwork_s_terms
 bypass_vpn
 cancel
+cant_reach_urnetwork_choose_region
 chain_rpc_unreachable
 change
 change_network_api
@@ -238,8 +239,15 @@ connect_solana_wallet_to_add_sign_in_method
 connect_wallet_first
 connected
 connected_provider_count
+connecting_from
 connecting_status_indicator
 connecting_to_wallet
+connection_region
+connection_region_default_resolvers
+connection_region_description
+connection_region_encrypted_resolvers
+connection_region_fallback_resolvers
+connection_region_undisclosed
 connections
 continue_txt
 continue_with_free_plan
@@ -1063,6 +1071,7 @@ top_matches
 total_clients
 total_referrals
 total_referrals_lld
+traffic_dns
 transport
 transport_auto_degraded
 transport_auto_degraded_memory
@@ -1188,6 +1197,7 @@ wallet_sign_in_method_added
 welcome_to_urnetwork
 when_unlinking_your_referral_network_you_will_no
 when_you_refer_a_friend
+where_are_you_connecting_from
 window_type_auto
 window_type_quality
 window_type_speed

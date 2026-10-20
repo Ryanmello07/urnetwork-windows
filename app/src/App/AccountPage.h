@@ -74,8 +74,8 @@ class AccountPage {
   // where the user left the Account list.
   void FocusSessionsNav();
 
-  // Drop the signed-out account's identity. userAuth_ is the dangerous one:
-  // SendPasswordReset mails a link to it, so a leftover value mails the
+  // Drop the signed-out account's identity. passwordResetUserAuth_ is the dangerous
+  // one: SendPasswordReset mails a link to it, so a leftover value mails the
   // PREVIOUS account's owner. needsNameClaim_ would likewise pick the previous
   // account's branch on the next save.
   void ResetForSignOut();
@@ -134,8 +134,11 @@ class AccountPage {
 
   ReferralTotalsFetch referralTotals_;
   std::string referralCode_;
-  // the auth this account signs in with, needed by the password-reset call
+  // the identity the account was created with, shown on the profile
   std::string userAuth_;
+  // the address Change password mails a reset link to: userAuth_ when the
+  // account has a password sign-in, else empty (Common/PasswordSignIn.h)
+  std::string passwordResetUserAuth_;
   // apple AccountNavStackView: a name must be CLAIMED (no reclaim cooldown on
   // the auto-generated one) rather than CHANGED (24h cooldown protects the old
   // name) exactly when the account carries none of these identity methods.
