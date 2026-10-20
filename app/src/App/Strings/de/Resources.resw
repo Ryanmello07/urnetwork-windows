@@ -7039,8 +7039,8 @@ der Welt</value>
     <comment>App top200: the manifest's SHA-256 is not the commitment_sha256 line pasted with it</comment>
   </data>
   <data name="site_app_top200_manifest_hint" xml:space="preserve">
-    <value>Füge dein Flotten-Manifest (das JSON, das provider fleet manifest ausgibt) und die Gültigkeitsepochen ein, um die Bindung jedes Geräts zu erstellen. Die App zeigt den Mitgliedseintrag ihres Geräts für das Manifest unter Einnahmen › Top 200 › Flottenbindung signieren.</value>
-    <comment>App top200: how to get the fleet manifest and where an app shows its member entry</comment>
+    <value>Erstelle das Flotten-Manifest auf einem Provider-Gerät mit provider fleet init (der Befehl unten, für dieses Deployment ausgefüllt; füge jedes weitere Gerät mit --member=&lt;client_id&gt;:&lt;client_key&gt; hinzu) und veröffentliche dann seine Commitment mit deinem Hotkey per provider fleet publish. Das Veröffentlichen im Mainnet ist möglich, sobald die Mainnet-Flotten-Runtime freigegeben ist. Füge das Manifest hier mit den Gültigkeitsepochen ein, um die Bindung jedes Geräts zu erstellen. Die App zeigt den Mitgliedseintrag ihres Geräts für das Manifest unter Einnahmen › Top 200 › Flottenbindung signieren.</value>
+    <comment>App top200: how to create and publish the fleet manifest and where an app shows its member entry</comment>
   </data>
   <data name="site_app_top200_manifest_hotkey_mismatch" xml:space="preserve">
     <value>Der Hotkey des Manifests ist nicht der in Schritt 1 eingegebene Hotkey.</value>

@@ -7271,8 +7271,8 @@
     <comment>App top200: the manifest's SHA-256 is not the commitment_sha256 line pasted with it</comment>
   </data>
   <data name="site_app_top200_manifest_hint" xml:space="preserve">
-    <value>Вставьте манифест парка (JSON, который выводит provider fleet manifest) и эпохи действия, чтобы создать привязку для каждого устройства. Приложение показывает запись участника своего устройства для манифеста в разделе Заработок › Топ-200 › Подписать привязку парка.</value>
-    <comment>App top200: how to get the fleet manifest and where an app shows its member entry</comment>
+    <value>Создайте манифест парка на устройстве провайдера командой provider fleet init (команда ниже, уже заполненная для этого развёртывания; каждое другое устройство добавьте через --member=&lt;client_id&gt;:&lt;client_key&gt;), затем опубликуйте его коммитмент со своего хоткея командой provider fleet publish. Публикация в mainnet откроется, когда будет одобрена среда выполнения парка для mainnet. Вставьте манифест сюда вместе с эпохами действия, чтобы создать привязку для каждого устройства. Приложение показывает запись участника своего устройства для манифеста в разделе Заработок › Топ-200 › Подписать привязку парка.</value>
+    <comment>App top200: how to create and publish the fleet manifest and where an app shows its member entry</comment>
   </data>
   <data name="site_app_top200_manifest_hotkey_mismatch" xml:space="preserve">
     <value>Hotkey в манифесте не совпадает с hotkey, указанным на шаге 1.</value>
