@@ -13,6 +13,8 @@
 #include <winrt/Windows.UI.ViewManagement.h>
 
 #include "ClientEvents.h"
+#include "CryptoInvoice.h"
+#include "CryptoPaySdk.h"
 #include "Localization.h"
 #include "Log.h"
 #include "PageContext.h"
@@ -39,6 +41,7 @@ using ShapeEllipse = winrt::Microsoft::UI::Xaml::Shapes::Ellipse;
 using ShapeLine = winrt::Microsoft::UI::Xaml::Shapes::Line;
 using ShapeRectangle = winrt::Microsoft::UI::Xaml::Shapes::Rectangle;
 using urnw::pages::Balance;
+using urnw::pages::CryptoInvoice;
 using urnw::pages::H;
 using urnw::pages::Loc;
 using urnw::pages::Sdk;
@@ -236,6 +239,7 @@ void Onboarding::ApplyPrices() {
   pickerOffer.active = showOffer;
   plans_.SetPrices(tier, pickerOffer);
   if (auto root = welcomeOffer_.Root()) {
+    // while a coin is selected only its deadline stays (ApplyMethod)
     root.Visibility(showOffer ? Visibility::Visible : Visibility::Collapsed);
     if (showOffer) welcomeOffer_.Update(offer, tier, kFreeTrialDays);
   }
@@ -258,10 +262,10 @@ void Onboarding::ApplyPrices() {
     offerTrial_.Text(hstring{Format("includes_free_trial_days", kFreeTrialDays)});
   }
   offerLines_.Update(offer, tier, kFreeTrialDays);
-  if (offerCta_) {
-    offerCta_.Content(winrt::box_value(
-        hstring{Plural("offer_cta_start_trial_months_free", offer.monthsFree)}));
-  }
+  ApplyOfferCta();
+  // the payment-method rows from the same snapshot (their coins can come and
+  // go with any fetch)
+  ApplyMethods();
   // the intro surface's shown event, once the offer is actually on the page
   if (showOffer && step_ == kOnboardingStepWelcome && !introOfferShown_ && Sdk().eventsReady()) {
     introOfferShown_ = true;
@@ -297,10 +301,70 @@ void Onboarding::IssueOffer() {
 }
 
 void Onboarding::StartCheckout(bool yearly) {
-  if (yearly && offerEnabled_ && balance_.offer.active && Sdk().eventsReady()) {
-    Sdk().events().OfferCtaTapped(PlanName(true), "stripe");
+  // a coin buys the year (the welcome offer while it is active): no monthly
+  const std::string method = method_;
+  const bool coin = cryptopay::IsCoin(method);
+  if ((yearly || coin) && offerEnabled_ && balance_.offer.active && Sdk().eventsReady()) {
+    // the method's store: stripe for Card, the coin's otherwise (§6.1 Events)
+    Sdk().events().OfferCtaTapped(PlanName(true), cryptopay::MethodEventStore(method));
   }
-  if (actions_.startCheckout) actions_.startCheckout(yearly);
+  if (actions_.startCheckout) actions_.startCheckout(yearly || coin, method);
+}
+
+// ---- the payment method (crypto-pay §6.1) -------------------------------------
+
+void Onboarding::ApplyMethods() {
+  if (!built_) return;
+  const std::vector<std::string> methods =
+      cryptopay::PaymentMethodsFor(balance_.cryptoAssets, balance_.offer.active);
+  const std::string wanted = wantedMethod_.empty() ? CryptoInvoice().PaymentMethod() : wantedMethod_;
+  welcomeMethods_.SetMethods(methods, wanted);
+  offerMethods_.SetMethods(methods, wanted);
+  ApplyMethod(welcomeMethods_.Method());
+}
+
+void Onboarding::ChooseMethod(std::string const& method) {
+  wantedMethod_ = method;
+  CryptoInvoice().SetPaymentMethod(method);  // remembered on this device
+  // one selection on both pages
+  welcomeMethods_.Select(method);
+  offerMethods_.Select(method);
+  ApplyMethod(welcomeMethods_.Method());
+}
+
+void Onboarding::ApplyMethod(std::string const& method) {
+  method_ = method;
+  const bool coin = cryptopay::IsCoin(method);
+  // a coin greys out monthly ("Monthly is card only") and buys the year
+  plans_.SetCardOnlyMonthly(cryptopay::MonthlyLocked(method));
+  // once: no trial or renewal wording while it is selected (crypto-pay §6.1),
+  // on the plan card, under the welcome page's picker and on the offer page's
+  // card; the prices and the offer's deadline stay, and the coin's fine print
+  // under the button says what it buys
+  const bool cardTerms = cryptopay::CardTermsShown(method);
+  plans_.SetCardTermsShown(cardTerms);
+  welcomeOffer_.SetCardTermsShown(cardTerms);
+  offerLines_.SetCardTermsShown(cardTerms);
+  const Visibility cardOnly = cardTerms ? Visibility::Visible : Visibility::Collapsed;
+  if (offerThen_) offerThen_.Visibility(cardOnly);
+  if (offerTrial_) offerTrial_.Visibility(cardOnly);
+  ApplyPlanCta(plans_.Yearly());
+  ApplyOfferCta();
+  const Visibility coinOnly = coin ? Visibility::Visible : Visibility::Collapsed;
+  if (welcomeFinePrint_) welcomeFinePrint_.Visibility(coinOnly);
+  if (offerFinePrint_) offerFinePrint_.Visibility(coinOnly);
+}
+
+void Onboarding::ApplyOfferCta() {
+  if (!offerCta_) return;
+  if (cryptopay::IsCoin(method_)) {
+    offerCta_.Content(winrt::box_value(
+        hstring{Format("crypto_pay_button", Localized(cryptopay::MethodLabelKey(method_)))}));
+    return;
+  }
+  const OfferView& offer = balance_.offer;
+  offerCta_.Content(winrt::box_value(
+      hstring{Plural("offer_cta_start_trial_months_free", offer.monthsFree)}));
 }
 
 void Onboarding::Hide() {
@@ -803,9 +867,16 @@ void Onboarding::StopTrip() {
   if (walker_) walker_.Opacity(0);
 }
 
-// only the yearly plan carries the trial: the button says what the click does
+// only the yearly plan carries the trial: the button says what the click does,
+// and a coin's says "Pay with {method}"
 void Onboarding::ApplyPlanCta(bool yearly) {
-  if (checkoutButton_) checkoutButton_.Content(winrt::box_value(PlanPicker::CtaLabel(yearly)));
+  if (!checkoutButton_) return;
+  if (cryptopay::IsCoin(method_)) {
+    checkoutButton_.Content(winrt::box_value(
+        hstring{Format("crypto_pay_button", Localized(cryptopay::MethodLabelKey(method_)))}));
+    return;
+  }
+  checkoutButton_.Content(winrt::box_value(PlanPicker::CtaLabel(yearly)));
 }
 
 StackPanel Onboarding::BuildWelcome() {
@@ -843,12 +914,28 @@ StackPanel Onboarding::BuildWelcome() {
   welcomeOffer.Visibility(Visibility::Collapsed);
   page.Children().Append(welcomeOffer);
 
+  // the payment method, directly above the CTA (crypto-pay §6.1): this page
+  // skips the upgrade sheet's products page, so the row joins its picker;
+  // shown only while the server sells a coin
+  auto methods = welcomeMethods_.Build();
+  methods.Margin(Thickness{0, 20, 0, 0});
+  page.Children().Append(methods);
+  welcomeMethods_.onSelect = [weak = weak_from_this()](std::string const& method) {
+    if (auto self = weak.lock()) self->ChooseMethod(method);
+  };
+
   checkoutButton_ = MakePrimaryButton(PlanPicker::CtaLabel(plans_.Yearly()));
   checkoutButton_.Margin(Thickness{0, 16, 0, 0});
   checkoutButton_.Click([weak = weak_from_this()](auto const&, auto const&) {
     if (auto self = weak.lock()) self->StartCheckout(self->plans_.Yearly());
   });
   page.Children().Append(checkoutButton_);
+
+  // a coin's fine print under the CTA
+  welcomeFinePrint_ = MakeText(Loc("crypto_fine_print_yearly"), 12, colors::MutedBrush(), true);
+  welcomeFinePrint_.Margin(Thickness{0, 8, 0, 0});
+  welcomeFinePrint_.Visibility(Visibility::Collapsed);
+  page.Children().Append(welcomeFinePrint_);
 
   // the other ways in, as quiet links at the bottom: the screen is about
   // starting the free trial
@@ -1102,12 +1189,27 @@ StackPanel Onboarding::BuildOffer() {
   card.Child(lines);
   page.Children().Append(card);
 
+  // the payment method, directly above the CTA (crypto-pay §6.1), one
+  // selection with page 1's row
+  auto methods = offerMethods_.Build();
+  methods.Margin(Thickness{0, 28, 0, 0});
+  page.Children().Append(methods);
+  offerMethods_.onSelect = [weak = weak_from_this()](std::string const& method) {
+    if (auto self = weak.lock()) self->ChooseMethod(method);
+  };
+
   offerCta_ = MakePrimaryButton(hstring{});
   offerCta_.Margin(Thickness{0, 32, 0, 0});
   offerCta_.Click([weak = weak_from_this()](auto const&, auto const&) {
     if (auto self = weak.lock()) self->StartCheckout(true);
   });
   page.Children().Append(offerCta_);
+
+  // a coin's fine print under the CTA
+  offerFinePrint_ = MakeText(Loc("crypto_fine_print_yearly"), 12, colors::MutedBrush(), true);
+  offerFinePrint_.Margin(Thickness{0, 8, 0, 0});
+  offerFinePrint_.Visibility(Visibility::Collapsed);
+  page.Children().Append(offerFinePrint_);
 
   auto keepFree = MakeTextButton(Loc("continue_with_free_plan"), colors::MutedBrush());
   keepFree.HorizontalAlignment(HorizontalAlignment::Center);

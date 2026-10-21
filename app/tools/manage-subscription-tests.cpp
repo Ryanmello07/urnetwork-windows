@@ -35,7 +35,10 @@ int main() {
   Check(!ShowsManageSubscription(""), "a free network has nothing to manage");
   Check(!ShowsManageSubscription("apple"), "an App Store subscription is managed in the App Store");
   Check(!ShowsManageSubscription("google"), "a Play subscription is managed in Play");
-  Check(!ShowsManageSubscription("other"), "a crypto rail has no portal");
+  Check(!ShowsManageSubscription("other"), "a store this app does not know has no portal");
+  // a one-time USDC, Zcash or Monero year (urnet::SubscriptionStoreCrypto):
+  // it never renews, so there is nothing to manage or cancel (crypto-pay §6.2)
+  Check(!ShowsManageSubscription("crypto"), "a crypto year has no portal");
   std::cout << (gCases - gFailures) << "/" << gCases << " manage subscription checks passed\n";
   return gFailures == 0 ? 0 : 1;
 }

@@ -311,6 +311,19 @@ void AppController::Start() {
     }
   });
 
+  // The session's crypto invoice (crypto-pay CONTRACT §4.4). Its listener hops
+  // onto this (UI) thread; the window paints the Account rows and the open
+  // upgrade sheet from each change, and reads the current state again when it
+  // shows (MainWindow::SetPresentationActive), as it does the balance.
+  cryptoInvoice_.Initialize(uiThread_);
+  cryptoInvoice_.SetChangeHandler([this](const cryptopay::CryptoInvoiceView& view) {
+    if (windowVisible_ && window_) {
+      if (auto self = window_.try_as<winrt::URnetwork::implementation::MainWindow>()) {
+        self->OnCryptoInvoiceChanged(view);
+      }
+    }
+  });
+
   // Debounced placement save. Restarted on every move/resize the user makes,
   // so it lands once they settle rather than once per drag frame.
   if (uiThread_) {
@@ -425,6 +438,8 @@ void AppController::Shutdown(lifetime::Ending ending) {
   // a browser approval does not outlive the app: its key is wiped and its timer stopped
   CancelApproval(approval::ClearReason::Shutdown);
   balance_.Stop();
+  // the controller closes; a saved invoice stays for the next launch
+  cryptoInvoice_.Stop(/*signedOut=*/false);
   tray_.Destroy();
   if (window_) window_.Close();
   window_ = nullptr;
@@ -503,6 +518,15 @@ void AppController::OnAuthState(AuthState state, const std::string& error) {
     signedOutNotice_.Clear();
   } else if (state == AuthState::LoggedOut && wasLoggedIn) {
     balance_.Stop();
+  }
+  // The session's crypto invoice follows the session the same way: opened at
+  // sign-in, with the invoice saved for this network resumed (at launch too,
+  // which arrives here signed in); closed at sign-out, the saved invoice and
+  // the remembered method going with the sign-in.
+  if (state == AuthState::LoggedIn) {
+    cryptoInvoice_.Start();
+  } else if (state == AuthState::LoggedOut && wasLoggedIn) {
+    cryptoInvoice_.Stop(/*signedOut=*/true);
   }
   // a sign-in or sign-out ends the session the out-of-balance latch describes
   if (state == AuthState::LoggedIn || (state == AuthState::LoggedOut && wasLoggedIn)) {
@@ -1118,6 +1142,9 @@ void AppController::ReconcileWindowPresentation() {
 
   sdk_.SetPresentationActive(active);
   balance_.SetVisible(active);
+  // an invoice on screen polls only while the window presents (no background
+  // check, ZCASH.md §0.3)
+  cryptoInvoice_.SetPresenting(active);
   if (!window_) return;
   if (auto self = window_.try_as<winrt::URnetwork::implementation::MainWindow>()) {
     self->SetPresentationActive(active);

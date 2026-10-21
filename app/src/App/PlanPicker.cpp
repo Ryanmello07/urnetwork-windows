@@ -2,9 +2,12 @@
 #include "pch.h"
 #include "PlanPicker.h"
 
+#include <array>
+
 #include <winrt/Microsoft.UI.Xaml.Automation.Peers.h>
 #include <winrt/Microsoft.UI.Xaml.Automation.h>
 
+#include "CryptoPayPresentation.h"  // the coin's copy rule: YearlyCardSlots
 #include "Localization.h"
 #include "OfferCard.h"
 #include "PageContext.h"
@@ -211,6 +214,8 @@ Border PlanPicker::BuildCard(std::shared_ptr<State> const& state, bool yearly) {
 
   card.Tapped([weak = std::weak_ptr<State>(state), yearly](auto const&, auto const&) {
     if (auto self = weak.lock()) {
+      // monthly is card only while a coin is the method (it takes no hits then)
+      if (!yearly && self->cardOnlyMonthly) return;
       self->yearly = yearly;
       Apply(*self);
       if (self->onSelect && *self->onSelect) (*self->onSelect)(yearly);
@@ -237,6 +242,13 @@ void PlanPicker::Apply(State const& state) {
   const auto selectedVisibility = state.yearly ? Visibility::Visible : Visibility::Collapsed;
   if (state.haloSelected) state.haloSelected.Visibility(selectedVisibility);
   if (state.yearlyTint) state.yearlyTint.Visibility(selectedVisibility);
+  // monthly is card only while a coin is the method: greyed out
+  if (state.monthlyCard) state.monthlyCard.Opacity(state.cardOnlyMonthly ? 0.45 : 1.0);
+}
+
+void PlanPicker::ApplyHitTest(State const& state) {
+  if (state.yearlyCard) state.yearlyCard.IsHitTestVisible(state.enabled);
+  if (state.monthlyCard) state.monthlyCard.IsHitTestVisible(state.enabled && !state.cardOnlyMonthly);
 }
 
 Grid PlanPicker::Build() {
@@ -295,34 +307,76 @@ void PlanPicker::SetPrices(const PriceTierView& tier, const OfferView& offer) {
 }
 
 void PlanPicker::SetTexts(const PlanCardTexts& texts) {
+  state_->texts = texts;
+  Print(*state_);
+}
+
+void PlanPicker::Print(State const& state) {
   auto set = [](TextBlock const& block, hstring const& text) {
     if (!block) return;
     block.Text(text);
     block.Visibility(text.empty() ? Visibility::Collapsed : Visibility::Visible);
   };
-  set(state_->yearlyPrice, texts.yearlyPrice);
-  set(state_->yearlySecondary, texts.yearlySecondary);
-  set(state_->yearlyEquivalent, texts.yearlyEquivalent);
-  set(state_->yearlyTrial, texts.yearlyTrial);
-  // the invisible copy that sizes the monthly card like the yearly one
-  if (state_->reserved.size() == 4) {
-    set(state_->reserved[0], texts.yearlyPrice);
-    set(state_->reserved[1], texts.yearlySecondary);
-    set(state_->reserved[2], texts.yearlyEquivalent);
-    set(state_->reserved[3], texts.yearlyTrial);
+  const PlanCardTexts& texts = state.texts;
+  auto textOf = [&texts](cryptopay::PlanCardLine line) {
+    switch (line) {
+      case cryptopay::PlanCardLine::Secondary: return texts.yearlySecondary;
+      case cryptopay::PlanCardLine::Equivalent: return texts.yearlyEquivalent;
+      case cryptopay::PlanCardLine::Trial: return texts.yearlyTrial;
+      default: return texts.yearlyPrice;
+    }
+  };
+  // A coin buys one year once: no trial or renewal wording on its card
+  // (crypto-pay §6.1). Those lines keep their room, transparent and kept
+  // from screen readers, so the cards keep their height as the method
+  // changes; the price stays.
+  const auto slots = cryptopay::YearlyCardSlots(state.cardTermsShown, texts.yearlySecondaryRenews);
+  const std::array<TextBlock, 4> blocks{state.yearlyPrice, state.yearlySecondary,
+                                        state.yearlyEquivalent, state.yearlyTrial};
+  for (size_t index = 0; index < blocks.size(); ++index) {
+    TextBlock const& block = blocks[index];
+    if (!block) continue;
+    const cryptopay::PlanCardSlot& slot = slots[index];
+    set(block, textOf(slot.line));
+    block.Opacity(slot.shown ? 1.0 : 0.0);
+    winrt::Microsoft::UI::Xaml::Automation::AutomationProperties::SetAccessibilityView(
+        block, slot.shown ? winrt::Microsoft::UI::Xaml::Automation::Peers::AccessibilityView::Content
+                          : winrt::Microsoft::UI::Xaml::Automation::Peers::AccessibilityView::Raw);
   }
-  set(state_->monthlyPrice, texts.monthlyPrice);
-  set(state_->monthlyLine, texts.monthlyLine);
+  // the invisible copy that sizes the monthly card like the yearly one
+  if (state.reserved.size() == blocks.size()) {
+    for (size_t index = 0; index < blocks.size(); ++index) {
+      set(state.reserved[index], textOf(slots[index].line));
+    }
+  }
+  // a coin sells no monthly plan
+  set(state.monthlyPrice, texts.monthlyPrice);
+  set(state.monthlyLine,
+      state.cardOnlyMonthly ? Loc("pay_method_card_only_monthly") : texts.monthlyLine);
 }
 
 void PlanPicker::Select(bool yearly) {
-  state_->yearly = yearly;
+  // monthly is card only while a coin is the method
+  state_->yearly = yearly || state_->cardOnlyMonthly;
   Apply(*state_);
 }
 
 void PlanPicker::SetEnabled(bool enabled) {
-  if (state_->yearlyCard) state_->yearlyCard.IsHitTestVisible(enabled);
-  if (state_->monthlyCard) state_->monthlyCard.IsHitTestVisible(enabled);
+  state_->enabled = enabled;
+  ApplyHitTest(*state_);
+}
+
+void PlanPicker::SetCardOnlyMonthly(bool cardOnly) {
+  state_->cardOnlyMonthly = cardOnly;
+  if (cardOnly) state_->yearly = true;
+  Apply(*state_);
+  ApplyHitTest(*state_);
+  Print(*state_);
+}
+
+void PlanPicker::SetCardTermsShown(bool shown) {
+  state_->cardTermsShown = shown;
+  Print(*state_);
 }
 
 hstring PlanPicker::CtaLabel(bool yearly) {

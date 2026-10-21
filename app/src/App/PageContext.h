@@ -22,18 +22,20 @@ struct MainWindow;
 
 namespace urnw {
 
+class CryptoInvoiceStore;
 class SdkHost;
 class SubscriptionBalanceStore;
 class UpdateChecker;
 
 namespace pages {
 
-// The process-wide SDK host, balance store and update checker, through
-// AppController. Declared here and defined in PageContext.cpp so this header
-// does not have to pull in AppController.h (which reaches TrayIcon and the
-// whole SDK surface).
+// The process-wide SDK host, balance store, crypto invoice and update checker,
+// through AppController. Declared here and defined in PageContext.cpp so this
+// header does not have to pull in AppController.h (which reaches TrayIcon and
+// the whole SDK surface).
 SdkHost& Sdk();
 SubscriptionBalanceStore& Balance();
+CryptoInvoiceStore& CryptoInvoice();
 UpdateChecker& Updates();
 
 inline winrt::hstring H(std::string const& s) { return winrt::to_hstring(s); }

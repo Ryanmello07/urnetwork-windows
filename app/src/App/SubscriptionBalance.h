@@ -29,6 +29,7 @@
 #include <winrt/Microsoft.UI.Dispatching.h>
 
 #include "ConfirmationPollGate.h"
+#include "CryptoPayPresentation.h"
 #include "PricePresentation.h"
 #include "ReferralCodeState.h"
 #include "ReferralTotalsState.h"
@@ -44,7 +45,8 @@ struct BalanceSnapshot {
   int64_t startBalanceByteCount = 0;  // the "daily data balance" row
   bool isPro = false;
   // the current subscription's store family (urnet::classifySubscriptionStore:
-  // "stripe", "apple", "google", "other"), "" without a subscription
+  // "stripe", "apple", "google", "crypto" for a one-time USDC, Zcash or Monero
+  // year, "other"), "" without a subscription
   std::string subscriptionStoreFamily;
   bool guest = false;
   bool loaded = false;  // at least one successful fetch this session
@@ -57,6 +59,14 @@ struct BalanceSnapshot {
   OfferView offer;
   std::string offerVariant;       // offer.in_app variant ("" when unassigned)
   std::string offerExperimentId;
+  // The coins the server sells now (crypto-pay CONTRACT §2.2 crypto_assets),
+  // what the payment-method rows offer (cryptopay::PaymentMethodsFor). Empty
+  // from an older server and with every coin switched off, which keeps every
+  // billing surface exactly as it was.
+  urnet::CryptoPaymentAssetList cryptoAssets;
+  // The network's latest one-time crypto credit still in its grace
+  // (crypto_term): the renewal notice's dates. Empty when there is none.
+  cryptopay::CryptoTermView cryptoTerm;
 };
 
 // Confirmation-poll state, for the upgrade flow UI.
