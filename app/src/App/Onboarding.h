@@ -31,6 +31,7 @@
 #include <winrt/Microsoft.UI.Xaml.Media.Animation.h>
 #include <winrt/Microsoft.UI.Xaml.Shapes.h>
 
+#include "CryptoPayViews.h"
 #include "OfferCard.h"
 #include "OnboardingRouting.h"
 #include "PlanPicker.h"
@@ -39,12 +40,20 @@
 
 namespace urnw {
 
+// Crypto (crypto-pay CONTRACT §6.3): the plan page and the offer page skip the
+// upgrade sheet's products page, so each carries the payment-method row of its
+// own, directly above its CTA, while the server sells a coin. The two rows
+// are one selection (the device's remembered method). A coin greys out
+// monthly, says "Pay with {method}" and its fine print, and the CTA opens the
+// coin's invoice instead of the card checkout.
 class Onboarding : public std::enable_shared_from_this<Onboarding> {
  public:
   struct Actions {
-    std::function<void()> finish;                    // Get connected, and Skip
-    std::function<void(bool yearly)> startCheckout;  // the Stripe trial checkout
-    std::function<void()> redeemCode;                // the redeem balance code sheet
+    std::function<void()> finish;  // Get connected, and Skip
+    // The CTA's purchase: Card's Stripe trial checkout for the plan, or the
+    // coin's invoice (`method` is cryptopay::kMethodCard or a coin's asset)
+    std::function<void(bool yearly, std::string const& method)> startCheckout;
+    std::function<void()> redeemCode;  // the redeem balance code sheet
   };
 
   static std::shared_ptr<Onboarding> Create(winrt::Microsoft::UI::Xaml::Controls::Grid host,
@@ -81,6 +90,16 @@ class Onboarding : public std::enable_shared_from_this<Onboarding> {
 
   winrt::Microsoft::UI::Xaml::Controls::StackPanel BuildWelcome();
   void ApplyPlanCta(bool yearly);
+  // the offer page's CTA: the trial's months for Card, the coin's otherwise
+  void ApplyOfferCta();
+  // ---- the payment method (crypto-pay §6.1) ----
+  // both rows from the balance's coins, keeping the selection (the device's
+  // remembered method until one is made here)
+  void ApplyMethods();
+  // the selection's consequences on both pages
+  void ApplyMethod(std::string const& method);
+  // a tap on either row: one selection, remembered on this device
+  void ChooseMethod(std::string const& method);
   winrt::Microsoft::UI::Xaml::Controls::StackPanel BuildBandwidth();
   winrt::Microsoft::UI::Xaml::Controls::StackPanel BuildProviding();
   winrt::Microsoft::UI::Xaml::Controls::StackPanel BuildReferral();
@@ -170,6 +189,14 @@ class Onboarding : public std::enable_shared_from_this<Onboarding> {
   winrt::Microsoft::UI::Xaml::Controls::TextBlock offerTrial_{nullptr};
   OfferLines offerLines_;
   winrt::Microsoft::UI::Xaml::Controls::Button offerCta_{nullptr};
+
+  // the payment method on page 1 and on the offer page: one selection
+  PaymentMethodRow welcomeMethods_;
+  PaymentMethodRow offerMethods_;
+  winrt::Microsoft::UI::Xaml::Controls::TextBlock welcomeFinePrint_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::TextBlock offerFinePrint_{nullptr};
+  std::string method_ = cryptopay::kMethodCard;  // the selection
+  std::string wantedMethod_;  // picked here; "" until then (the remembered one)
 };
 
 }  // namespace urnw

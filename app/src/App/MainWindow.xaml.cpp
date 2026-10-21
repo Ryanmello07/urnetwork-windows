@@ -258,6 +258,18 @@ MainWindow::MainWindow() {
   // plan + usage card (Account; Home's copy of it is gone - spec §5)
   accountUsageBar_ = std::make_unique<urnw::UsageBar>(AccountUsageBarHost(),
                                                       AccountUsageLegend());
+  // The crypto rows of the plan pane (crypto-pay §6.2): "Does not renew"
+  // under a crypto year, the term notice with Renew, and "Payment in
+  // progress" for a saved invoice. First in the plan's extra host, so they
+  // fold with the pane's other commands (ApplyAccountFold).
+  cryptoAccount_ = std::make_unique<urnw::CryptoAccountRows>();
+  AccountPlanExtraHost().Children().InsertAt(0, cryptoAccount_->Build());
+  cryptoAccount_->onRenew = [weak = get_weak()] {
+    if (auto self = weak.get()) self->ShowUpgradeSheet();
+  };
+  cryptoAccount_->onOpenInvoice = [weak = get_weak()] {
+    if (auto self = weak.get()) self->ShowCryptoInvoice();
+  };
 
   // Banner action buttons (balance warning, service setup, app update): the
   // stock ButtonBackground* theme brushes are translucent greys
@@ -480,6 +492,8 @@ MainWindow::MainWindow() {
   balance_ = Balance().Current();
   balancePoll_ = Balance().CurrentPoll();
   ApplyBalance();
+  // ...and the crypto rows from the session's invoice
+  OnCryptoInvoiceChanged(urnw::pages::CryptoInvoice().Current());
 
   ApplyAuthState(Sdk().IsLoggedIn() ? urnw::AuthState::LoggedIn
                                     : urnw::AuthState::LoggedOut,
@@ -590,6 +604,9 @@ void MainWindow::SetPresentationActive(bool active) {
   // the Sessions page's controller polls only while the window presents, and
   // refreshes when it comes back
   sessions_->SetPresentationActive(active);
+  // the crypto invoice's changes are pushed only while the window presents:
+  // back on screen, it reads the current one (the balance replays the same way)
+  if (active) OnCryptoInvoiceChanged(urnw::pages::CryptoInvoice().Current());
 }
 
 // ---- strings -------------------------------------------------------------
@@ -1983,6 +2000,9 @@ void MainWindow::LoadCurrentDestination() {
   if (tag == L"account") {
     account_->LoadAccount();
     Balance().Refresh();  // macOS AccountRootView onAppear parity
+    // a crypto invoice saved on this device and not paid comes back as the
+    // plan pane's "Payment in progress" (crypto-pay §6.2)
+    urnw::pages::CryptoInvoice().Resume();
     // R4: login methods, the auth code, the client id, the bonus referral code
     // and the referral network live on Account now, and SettingsPage is what
     // loads them (it still owns those rows - see BuildSections). Without this
@@ -2210,8 +2230,15 @@ void MainWindow::ShowOnboarding() {
     actions.finish = [weak] {
       if (auto self = weak.get()) self->HideOnboarding();
     };
-    actions.startCheckout = [weak](bool yearly) {
-      if (auto self = weak.get()) self->ShowUpgradeCheckout(yearly);
+    actions.startCheckout = [weak](bool yearly, std::string const& method) {
+      auto self = weak.get();
+      if (!self) return;
+      // a coin opens its invoice instead of the card checkout (crypto-pay §6.3)
+      if (urnw::cryptopay::IsCoin(method)) {
+        self->ShowCryptoCheckout(method);
+      } else {
+        self->ShowUpgradeCheckout(yearly);
+      }
     };
     actions.redeemCode = [weak] {
       if (auto self = weak.get()) self->ShowRedeemSheet();
@@ -2337,8 +2364,8 @@ winrt::fire_and_forget MainWindow::ShowUpgradeCheckout(bool yearly) {
   self->sheetOpen_ = true;
   bool guestSignInRequired = false;
   try {
-    self->upgradeSheet_ =
-        urnw::UpgradeSheet::CreateForCheckout(Content().XamlRoot(), Sdk(), Balance(), yearly);
+    self->upgradeSheet_ = urnw::UpgradeSheet::CreateForCheckout(
+        Content().XamlRoot(), Sdk(), Balance(), urnw::pages::CryptoInvoice(), yearly);
     co_await self->upgradeSheet_->Dialog().ShowAsync();
     guestSignInRequired = self->upgradeSheet_->GuestSignInRequired();
   } catch (...) {
@@ -2350,6 +2377,68 @@ winrt::fire_and_forget MainWindow::ShowUpgradeCheckout(bool yearly) {
   if (guestSignInRequired) {
     self->DivertGuestToConversion([weak = self->get_weak(), yearly] {
       if (auto self = weak.get()) self->ShowUpgradeCheckout(yearly);
+    });
+  }
+}
+
+// The upgrade sheet opened straight on the invoice of the coin an onboarding
+// page picked (crypto-pay §6.3): its products page stands behind the invoice
+// for a refusal and for Pay another way.
+winrt::fire_and_forget MainWindow::ShowCryptoCheckout(std::string method) {
+  if (balance_.guest) {  // no purchase for a guest network (ShowUpgradeSheet)
+    DivertGuestToConversion([weak = get_weak(), method] {
+      if (auto self = weak.get()) self->ShowCryptoCheckout(method);
+    });
+    co_return;
+  }
+  if (sheetOpen_) co_return;
+  auto self = get_strong();
+  self->sheetOpen_ = true;
+  bool guestSignInRequired = false;
+  try {
+    self->upgradeSheet_ =
+        urnw::UpgradeSheet::CreateForCheckout(Content().XamlRoot(), Sdk(), Balance(),
+                                              urnw::pages::CryptoInvoice(), /*yearly=*/true, method);
+    co_await self->upgradeSheet_->Dialog().ShowAsync();
+    guestSignInRequired = self->upgradeSheet_->GuestSignInRequired();
+  } catch (...) {
+  }
+  self->upgradeSheet_.reset();
+  self->sheetOpen_ = false;
+  // the server refused the invoice for a guest network the balance had not
+  // reported yet: the conversion, then this invoice once it is done
+  if (guestSignInRequired) {
+    self->DivertGuestToConversion([weak = self->get_weak(), method] {
+      if (auto self = weak.get()) self->ShowCryptoCheckout(method);
+    });
+  }
+}
+
+// The Account page's "Payment in progress": the upgrade sheet on the invoice
+// the store resumed, its products page behind it.
+winrt::fire_and_forget MainWindow::ShowCryptoInvoice() {
+  if (balance_.guest) {  // no purchase for a guest network (ShowUpgradeSheet)
+    DivertGuestToConversion([weak = get_weak()] {
+      if (auto self = weak.get()) self->ShowCryptoInvoice();
+    });
+    co_return;
+  }
+  if (sheetOpen_) co_return;
+  auto self = get_strong();
+  self->sheetOpen_ = true;
+  bool guestSignInRequired = false;
+  try {
+    self->upgradeSheet_ = urnw::UpgradeSheet::CreateForInvoice(Content().XamlRoot(), Sdk(), Balance(),
+                                                               urnw::pages::CryptoInvoice());
+    co_await self->upgradeSheet_->Dialog().ShowAsync();
+    guestSignInRequired = self->upgradeSheet_->GuestSignInRequired();
+  } catch (...) {
+  }
+  self->upgradeSheet_.reset();
+  self->sheetOpen_ = false;
+  if (guestSignInRequired) {
+    self->DivertGuestToConversion([weak = self->get_weak()] {
+      if (auto self = weak.get()) self->ShowUpgradeSheet();
     });
   }
 }
@@ -2446,9 +2535,28 @@ void MainWindow::ApplyBalance() {
   AccountReferralDetail().Text(hstring{urnw::Format(
       "referral_panel_detail", Balance().ReferralTerms().bonusGibPerDay)});
 
+  // "Does not renew" under a crypto year, and the term notice once it ended
+  if (cryptoAccount_) cryptoAccount_->ApplyBalance(balance_);
+
   UpdateBalanceWarning();
   // the open upgrade sheet watches for the plan flip / poll timeout
   if (upgradeSheet_) upgradeSheet_->OnBalance(balance_, balancePoll_);
+}
+
+void MainWindow::OnCryptoInvoiceChanged(urnw::cryptopay::CryptoInvoiceView const& view) {
+  // "Payment in progress" while a saved invoice is not paid
+  if (cryptoAccount_) cryptoAccount_->ApplyInvoice(view);
+  // the open upgrade sheet: the answer to its start, and the invoice it shows
+  if (upgradeSheet_) upgradeSheet_->OnInvoice(view);
+  // An invoice credited with no sheet on it (an answer that was in flight when
+  // its sheet closed): the success path a sheet would take, minus the sheet,
+  // once per invoice -- the plan is read again, and the Pro celebration plays
+  // when it flips.
+  if (!upgradeSheet_ && urnw::cryptopay::RouteFor(view) == urnw::cryptopay::InvoiceRoute::Paid &&
+      view.intentId != balanceReadForPaidIntent_) {
+    balanceReadForPaidIntent_ = view.intentId;
+    Balance().StartConfirmationPolling();
+  }
 }
 
 void MainWindow::SetInsufficientBalance(bool insufficient) {
@@ -2756,8 +2864,8 @@ winrt::fire_and_forget MainWindow::ShowUpgradeSheet() {
     // a blocked connect's sheet says when the free data refreshes
     const bool freeRefresh =
         urnw::datainfo::UpgradeShowsFreeRefresh(upgradeForBlockedConnect_, balance_.isPro);
-    self->upgradeSheet_ =
-        urnw::UpgradeSheet::Create(Content().XamlRoot(), Sdk(), Balance(), freeRefresh);
+    self->upgradeSheet_ = urnw::UpgradeSheet::Create(Content().XamlRoot(), Sdk(), Balance(),
+                                                     urnw::pages::CryptoInvoice(), freeRefresh);
     co_await self->upgradeSheet_->Dialog().ShowAsync();
     guestSignInRequired = self->upgradeSheet_->GuestSignInRequired();
   } catch (...) {

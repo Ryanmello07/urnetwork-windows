@@ -431,6 +431,10 @@ struct MainWindow : MainWindowT<MainWindow> {
   void CloseSheetsForHide();
   void OnBalanceChanged(urnw::BalanceSnapshot const& snapshot,
                         urnw::BalancePollState const& poll);
+  // The session's crypto invoice changed (CryptoInvoiceStore, through
+  // AppController, UI thread): the Account rows and the open upgrade sheet
+  // follow it, and a paid invoice no sheet shows reads the balance once.
+  void OnCryptoInvoiceChanged(urnw::cryptopay::CryptoInvoiceView const& view);
   // A batch of newly observed referrals: the first ever shows the full-window
   // gold crowning overlay, later ones the gold toast.
   void OnReferralCelebration(urnw::ReferralCelebration const& celebration);
@@ -453,6 +457,12 @@ struct MainWindow : MainWindowT<MainWindow> {
   void ShowOnboarding();
   void HideOnboarding();
   winrt::fire_and_forget ShowUpgradeCheckout(bool yearly);
+  // An onboarding page's coin (crypto-pay §6.3): the upgrade sheet opened on
+  // that coin's invoice instead of the card checkout.
+  winrt::fire_and_forget ShowCryptoCheckout(std::string method);
+  // The Account page's "Payment in progress": the upgrade sheet opened on the
+  // saved invoice.
+  winrt::fire_and_forget ShowCryptoInvoice();
   // connect.first, once per network (remembered in the app prefs)
   void NoteConnected();
   // every label in the window: the window's own chrome and nav, then each page's
@@ -580,6 +590,12 @@ struct MainWindow : MainWindowT<MainWindow> {
   std::shared_ptr<urnw::UpgradeSheet> upgradeSheet_;
   std::shared_ptr<urnw::RedeemCodeSheet> redeemSheet_;
   std::shared_ptr<urnw::DataInfoSheet> dataInfoSheet_;
+  // the crypto rows of the Account plan pane (CryptoPayViews.h): does not
+  // renew, the term notice, payment in progress
+  std::unique_ptr<urnw::CryptoAccountRows> cryptoAccount_;
+  // the paid invoice the balance was last read for, with no sheet on it
+  // (OnCryptoInvoiceChanged)
+  std::string balanceReadForPaidIntent_;
   // set only while OpenUpgradeForBlockedConnect runs: ShowUpgradeSheet reads it
   // before its first suspension
   bool upgradeForBlockedConnect_ = false;

@@ -283,6 +283,13 @@
     <ClCompile Include="BrowserApprovalSheet.cpp" />
     <ClCompile Include="LoginCarousel.cpp" />
     <ClCompile Include="BalanceSheets.cpp" />
+    <!-- Crypto payments (crypto-pay CONTRACT §6): the session's invoice store
+         over the sdk's CryptoInvoiceViewController, and the views it drives
+         (the payment-method row, the native invoice, the Account rows). Their
+         decisions are CryptoPayPresentation.h, which tools/crypto-pay-tests.cpp
+         runs on any host. -->
+    <ClCompile Include="CryptoInvoice.cpp" />
+    <ClCompile Include="CryptoPayViews.cpp" />
     <ClCompile Include="FreeRefreshTicker.cpp" />
     <ClCompile Include="BittensorWalletDialogs.cpp" />
     <ClCompile Include="Localization.cpp" />
@@ -432,6 +439,12 @@
     <ClInclude Include="AuthSheets.h" />
     <ClInclude Include="BrowserApprovalSheet.h" />
     <ClInclude Include="BalanceSheets.h" />
+    <ClInclude Include="CryptoInvoice.h" />
+    <ClInclude Include="CryptoPayViews.h" />
+    <!-- header-only and WinRT-free: tools/crypto-pay-tests.cpp runs it -->
+    <ClInclude Include="CryptoPayPresentation.h" />
+    <!-- header-only, WinRT-free, needs the sdk: tools/crypto-pay-tests.cpp builds it against the generated header -->
+    <ClInclude Include="CryptoPaySdk.h" />
     <!-- header-only and WinRT-free: tools/data-info-tests.cpp runs it -->
     <ClInclude Include="DataInfo.h" />
     <ClInclude Include="FreeRefreshTicker.h" />
