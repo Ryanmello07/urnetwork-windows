@@ -6233,6 +6233,14 @@
     <value>भेज दिया गया! प्रतिक्रिया के लिए धन्यवाद।</value>
     <comment>Snackbar shown after feedback is sent successfully. Used in Main/Feedback/FeedbackView.swift.</comment>
   </data>
+  <data name="session_restore_failed" xml:space="preserve">
+    <value>आपका सत्र बहाल नहीं किया जा सका</value>
+    <comment>Shown at launch when the app couldn't restore the stored sign-in (a retryable failure); above the retry hint and the Try again button.</comment>
+  </data>
+  <data name="session_restore_failed_retry_hint" xml:space="preserve">
+    <value>जारी रखने के लिए फिर से कोशिश करें।</value>
+    <comment>Under the launch-time session restore failure title, above the Try again button.</comment>
+  </data>
   <data name="sessions_action_failed" xml:space="preserve">
     <value>इस सत्र से साइन आउट नहीं हो सका। पुनः प्रयास करें।</value>
     <comment>Sessions screen (Account &gt; Sessions): shown on a row when signing its session out failed.</comment>

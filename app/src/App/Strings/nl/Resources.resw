@@ -6236,6 +6236,14 @@ inhoud van de wereld</value>
     <value>Verzonden! Bedankt voor je feedback.</value>
     <comment>Snackbar shown after feedback is sent successfully. Used in Main/Feedback/FeedbackView.swift.</comment>
   </data>
+  <data name="session_restore_failed" xml:space="preserve">
+    <value>Je sessie kon niet worden hersteld</value>
+    <comment>Shown at launch when the app couldn't restore the stored sign-in (a retryable failure); above the retry hint and the Try again button.</comment>
+  </data>
+  <data name="session_restore_failed_retry_hint" xml:space="preserve">
+    <value>Probeer het opnieuw om verder te gaan.</value>
+    <comment>Under the launch-time session restore failure title, above the Try again button.</comment>
+  </data>
   <data name="sessions_action_failed" xml:space="preserve">
     <value>Kan deze sessie niet uitloggen. Probeer het opnieuw.</value>
     <comment>Sessions screen (Account &gt; Sessions): shown on a row when signing its session out failed.</comment>

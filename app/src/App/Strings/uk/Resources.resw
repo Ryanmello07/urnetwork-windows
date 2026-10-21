@@ -6460,6 +6460,14 @@
     <value>Надіслано! Дякуємо за відгук.</value>
     <comment>Snackbar shown after feedback is sent successfully. Used in Main/Feedback/FeedbackView.swift.</comment>
   </data>
+  <data name="session_restore_failed" xml:space="preserve">
+    <value>Не вдалося відновити сеанс</value>
+    <comment>Shown at launch when the app couldn't restore the stored sign-in (a retryable failure); above the retry hint and the Try again button.</comment>
+  </data>
+  <data name="session_restore_failed_retry_hint" xml:space="preserve">
+    <value>Спробуйте ще раз, щоб продовжити.</value>
+    <comment>Under the launch-time session restore failure title, above the Try again button.</comment>
+  </data>
   <data name="sessions_action_failed" xml:space="preserve">
     <value>Не вдалося завершити цей сеанс. Спробуйте ще раз.</value>
     <comment>Sessions screen (Account &gt; Sessions): shown on a row when signing its session out failed.</comment>

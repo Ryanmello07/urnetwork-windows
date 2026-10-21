@@ -6124,6 +6124,14 @@ nội dung thế giới</value>
     <value>Đã gửi! Cảm ơn phản hồi của bạn.</value>
     <comment>Snackbar shown after feedback is sent successfully. Used in Main/Feedback/FeedbackView.swift.</comment>
   </data>
+  <data name="session_restore_failed" xml:space="preserve">
+    <value>Không thể khôi phục phiên của bạn</value>
+    <comment>Shown at launch when the app couldn't restore the stored sign-in (a retryable failure); above the retry hint and the Try again button.</comment>
+  </data>
+  <data name="session_restore_failed_retry_hint" xml:space="preserve">
+    <value>Hãy thử lại để tiếp tục.</value>
+    <comment>Under the launch-time session restore failure title, above the Try again button.</comment>
+  </data>
   <data name="sessions_action_failed" xml:space="preserve">
     <value>Không thể đăng xuất phiên này. Hãy thử lại.</value>
     <comment>Sessions screen (Account &gt; Sessions): shown on a row when signing its session out failed.</comment>

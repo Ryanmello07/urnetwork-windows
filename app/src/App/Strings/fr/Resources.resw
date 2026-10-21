@@ -6236,6 +6236,14 @@ du monde</value>
     <value>Envoyé ! Merci pour votre retour.</value>
     <comment>Snackbar shown after feedback is sent successfully. Used in Main/Feedback/FeedbackView.swift.</comment>
   </data>
+  <data name="session_restore_failed" xml:space="preserve">
+    <value>Impossible de restaurer votre session</value>
+    <comment>Shown at launch when the app couldn't restore the stored sign-in (a retryable failure); above the retry hint and the Try again button.</comment>
+  </data>
+  <data name="session_restore_failed_retry_hint" xml:space="preserve">
+    <value>Réessayez pour continuer.</value>
+    <comment>Under the launch-time session restore failure title, above the Try again button.</comment>
+  </data>
   <data name="sessions_action_failed" xml:space="preserve">
     <value>Impossible de déconnecter cette session. Réessayez.</value>
     <comment>Sessions screen (Account &gt; Sessions): shown on a row when signing its session out failed.</comment>
