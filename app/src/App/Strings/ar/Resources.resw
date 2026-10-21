@@ -7502,8 +7502,8 @@
     <comment>App top200: the manifest's SHA-256 is not the commitment_sha256 line pasted with it</comment>
   </data>
   <data name="site_app_top200_manifest_hint" xml:space="preserve">
-    <value>الصق بيان أسطولك (JSON الذي يطبعه provider fleet manifest) وحقب الصلاحية لإنشاء ربط كل جهاز. يعرض التطبيق إدخال العضو الخاص بجهازه للبيان في الأرباح › أفضل 200 › توقيع ربط الأسطول.</value>
-    <comment>App top200: how to get the fleet manifest and where an app shows its member entry</comment>
+    <value>اكتب بيان الأسطول على جهاز مزوّد باستخدام provider fleet init (الأمر أدناه، مملوءًا لهذا النشر؛ أضف كل جهاز آخر باستخدام --member=&lt;client_id&gt;:&lt;client_key&gt;)، ثم انشر التزامه من مفتاحك الساخن باستخدام provider fleet publish. يُفتح النشر على الشبكة الرئيسية بمجرد اعتماد بيئة تشغيل الأسطول على الشبكة الرئيسية. الصق البيان هنا مع حقب الصلاحية لإنشاء ربط كل جهاز. يعرض التطبيق إدخال العضو الخاص بجهازه للبيان في الأرباح › أفضل 200 › توقيع ربط الأسطول.</value>
+    <comment>App top200: how to create and publish the fleet manifest and where an app shows its member entry</comment>
   </data>
   <data name="site_app_top200_manifest_hotkey_mismatch" xml:space="preserve">
     <value>المفتاح الساخن في البيان ليس المفتاح الساخن الذي أُدخل في الخطوة 1.</value>

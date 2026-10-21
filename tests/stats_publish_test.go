@@ -12,14 +12,22 @@ import (
 )
 
 // How the app publishes and applies live stats snapshots: read on a worker of
-// their own, never on the caller's thread (App/CoalescedWorker.h), and applied
-// in the order their reads began (App/StatsReadOrder.h), as a C++ spec with
-// negative controls that rewrite a copy of a header; and the wiring in
-// SdkHost, AppController and ConnectPage, which need Windows and WinRT, read
-// with every comment blanked so prose cannot satisfy a contract.
+// their own, never on the caller's thread (Common/CoalescedWorker.h, which the
+// service's egress push shares), and applied in the order their reads began
+// (App/StatsReadOrder.h), as a C++ spec with negative controls that rewrite a
+// copy of a header; and the wiring in SdkHost, AppController and ConnectPage,
+// which need Windows and WinRT, read with every comment blanked so prose
+// cannot satisfy a contract.
 
 // The headers the spec compiles against.
 var statsPublishHeaders = []string{"StatsReadOrder.h", "CoalescedWorker.h"}
+
+// The source directory under app/src that holds each header, which is also the
+// project that lists it.
+var statsPublishHeaderDirs = map[string]string{
+	"StatsReadOrder.h":  "App",
+	"CoalescedWorker.h": "Common",
+}
 
 // Compile the spec (app/tools/stats-publish-tests.cpp) against copies of its
 // headers. `mutate`, when set, rewrites the copy of the header `name`.
@@ -32,7 +40,7 @@ func statsPublishTestProgram(t *testing.T, name string, mutate func(string) stri
 	root := repositoryRoot(t)
 	includeDir := t.TempDir()
 	for _, header := range statsPublishHeaders {
-		source, err := os.ReadFile(filepath.Join(root, "app", "src", "App", header))
+		source, err := os.ReadFile(filepath.Join(root, "app", "src", statsPublishHeaderDirs[header], header))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -60,10 +68,14 @@ func statsPublishTestProgram(t *testing.T, name string, mutate func(string) stri
 // one fold into one more, nothing runs after Stop, and snapshots apply in the
 // order their reads began.
 func TestStatsPublish(t *testing.T) {
-	vcxproj := readAppSource(t, "App.vcxproj")
+	projects := map[string]string{
+		"App":    readAppSource(t, "App.vcxproj"),
+		"Common": readCommonSource(t, "Common.vcxproj"),
+	}
 	for _, header := range statsPublishHeaders {
-		if !strings.Contains(vcxproj, `<ClInclude Include="`+header+`" />`) {
-			t.Errorf("App.vcxproj does not list %s", header)
+		dir := statsPublishHeaderDirs[header]
+		if !strings.Contains(projects[dir], `<ClInclude Include="`+header+`" />`) {
+			t.Errorf("%s.vcxproj does not list %s", dir, header)
 		}
 	}
 	program := statsPublishTestProgram(t, "", nil)

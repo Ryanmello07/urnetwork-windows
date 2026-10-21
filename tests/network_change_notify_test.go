@@ -80,8 +80,8 @@ func requireNetworkChangeFailure(t *testing.T, mutate func(string) string, want 
 func TestNetworkChangeNotifierRejectsNoCoalescing(t *testing.T) {
 	requireNetworkChangeFailure(t, func(source string) string {
 		return strings.Replace(source,
-			"    deadlineMillis_ = nowMillis + kNetworkNotifyDebounceMillis;",
-			"    deadlineMillis_ = nowMillis;", 1)
+			"    deadlineMillis_ = nowMillis + windowMillis_;",
+			"    deadlineMillis_ = nowMillis + 0 * windowMillis_;", 1)
 	}, "burst: a burst is one notification")
 }
 
@@ -113,4 +113,54 @@ func TestNetworkChangeNotifierRejectsQualityInsideNetworkPass(t *testing.T) {
 		return strings.Replace(source, "if (qualityDue && !networkDue && channel->networkQualityChanged)",
 			"if (qualityDue && channel->networkQualityChanged)", 1)
 	}, "quality in a network pass: dropped")
+}
+
+// The watchdog sampler's old sleep, which only cancellation ended: a burst that
+// began mid-sleep waited for the next 2 s sample.
+func TestSamplerSleepRejectsAnUninterruptibleSleep(t *testing.T) {
+	requireNetworkChangeFailure(t, func(source string) string {
+		return strings.Replace(source,
+			"  return (!plan.networkPending && network.pending()) ||\n         (!plan.qualityPending && quality.pending());",
+			"  (void)plan;\n  (void)network;\n  (void)quality;\n  return false;", 1)
+	}, "sampler sleep: a burst that begins mid-sleep ends the sleep")
+}
+
+// Every observation reported, as before the filter: churn that moves nothing
+// kicked every transport.
+func TestEgressFilterRejectsReportingEveryObservation(t *testing.T) {
+	requireNetworkChangeFailure(t, func(source string) string {
+		return strings.Replace(source, "    if (!seeded_) {\n      // nothing to compare with",
+			"    if (true) {\n      // nothing to compare with", 1)
+	}, "egress: churn that moved nothing is no change")
+}
+
+// A filter blind to whether the interface can carry a socket: the cable out under
+// a retained index moved nothing else, so the device was never told.
+func TestEgressFilterRejectsIgnoringALostLink(t *testing.T) {
+	requireNetworkChangeFailure(t, func(source string) string {
+		return strings.Replace(source,
+			"    return before.ifIndex != after.ifIndex || before.usable != after.usable ||\n",
+			"    return before.ifIndex != after.ifIndex ||\n", 1)
+	}, "egress: losing the link under a retained index is a change")
+}
+
+// The split tunnel's address followed only an interface that moved: another
+// network on the same adapter left excluded apps bound to an address it no
+// longer holds.
+func TestEgressFilterRejectsABindingBlindToTheAddress(t *testing.T) {
+	requireNetworkChangeFailure(t, func(source string) string {
+		return strings.Replace(source,
+			"    return before.ifIndex != after.ifIndex || before.source != after.source;\n",
+			"    return before.ifIndex != after.ifIndex;\n", 1)
+	}, "egress: a new network on the same adapter is a change, and the split tunnel follows its address")
+}
+
+// A window written into the coalescer rather than taken from its settings: the
+// default still holds, and nothing a test or a caller sets is honoured.
+func TestNetworkChangeNotifierRejectsAHardCodedWindow(t *testing.T) {
+	requireNetworkChangeFailure(t, func(source string) string {
+		return strings.Replace(source,
+			"    deadlineMillis_ = nowMillis + windowMillis_;",
+			"    deadlineMillis_ = nowMillis + 750 + 0 * windowMillis_;", 1)
+	}, "settings: a coalescer keeps the window it is given")
 }

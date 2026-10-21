@@ -44,6 +44,8 @@
     <ClInclude Include="AppLifetime.h" />
     <ClInclude Include="AppLogFiles.h" />
     <ClInclude Include="BalanceGate.h" />
+    <!-- header-only and WinRT-free: tools/stats-publish-tests.cpp runs it -->
+    <ClInclude Include="CoalescedWorker.h" />
     <ClInclude Include="ConnectAction.h" />
     <ClInclude Include="ConnectionHealth.h" />
     <ClInclude Include="CrashDumps.h" />

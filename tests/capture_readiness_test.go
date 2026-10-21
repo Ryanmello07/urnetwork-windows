@@ -96,3 +96,17 @@ func TestCaptureReadinessRejectsLostNetworkEvent(t *testing.T) {
 		t.Fatalf("lost-network-event negative control was not detected: %v\n%s", err, output)
 	}
 }
+
+// A stall's proof barrier that also queued a network change: the device was
+// kicked for a load stall that moved nothing.
+func TestCaptureReadinessRejectsAStallThatQueuesANetworkChange(t *testing.T) {
+	program := captureTestProgram(t, func(source string) string {
+		return strings.Replace(source,
+			"proofSinceMillis_ = nowMillis;\n    ++revision_;\n",
+			"proofSinceMillis_ = nowMillis;\n    ++networkRevision_;\n    ++revision_;\n", 1)
+	})
+	output, err := exec.Command(program).CombinedOutput()
+	if err == nil || !strings.Contains(string(output), "a stall queued a network change for the device") {
+		t.Fatalf("stall-network-change negative control was not detected: %v\n%s", err, output)
+	}
+}

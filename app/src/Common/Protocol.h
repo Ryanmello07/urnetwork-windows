@@ -588,9 +588,10 @@ struct TunnelStatus {
   // today. Absent means unchanged, and unchanged is the safe direction.
   std::string stop_reason;
   // A dead-tunnel countdown is running RIGHT NOW and is close enough to matter
-  // (Service/TunnelWatchdog.h, kFailsafeNoticeMillis). The UI warns on this, so
-  // an automatic teardown is never a surprise. Defaults false — a peer that
-  // cannot say simply never warns, which is today's behaviour.
+  // (Service/TunnelWatchdogSettings.h, DeadTunnelSettings::failsafeNoticeMillis).
+  // The UI warns on this, so an automatic teardown is never a surprise. Defaults
+  // false — a peer that cannot say simply never warns, which is today's
+  // behaviour.
   bool failsafe_armed = false;
   // The provider-only device (start_provider), which provides while there is
   // no tunnel session. Its running bit, the control mode it was asked for, its

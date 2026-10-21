@@ -137,9 +137,10 @@ func TestProviderOnlyRetireTakesStatsAndWatch(t *testing.T) {
 }
 
 // The provider-only device hears about network changes the way the tunnel
-// session's device does — an EgressMonitor's events, coalesced, then
-// networkChanged() — through a monitor that binds nothing, so the device's
-// sockets still follow the route table.
+// session's device does — an EgressMonitor's events, only for what moved the
+// network (EgressChangeFilter), coalesced, then networkChanged() — through a
+// monitor that binds nothing, so the device's sockets still follow the route
+// table.
 func TestProviderOnlyNetworkWatchWiring(t *testing.T) {
 	source := tunnelControllerSource(t)
 	watch := definitionBody(t, "TunnelController.cpp", source,
@@ -163,32 +164,43 @@ func TestProviderOnlyNetworkWatchWiring(t *testing.T) {
 		"egress_ = std::make_unique<EgressMonitor>(egressExcludeLuid);")
 
 	monitor := stripComments(readServiceSource(t, "EgressMonitor.cpp"))
-	refresh := definitionBody(t, "EgressMonitor.cpp", monitor, "void EgressMonitor::Refresh()")
-	observe := strings.Index(refresh, "if (binding_ == Binding::ObserveOnly) {")
-	bind := strings.Index(refresh, "urnet::setEgressInterfaceIndex(")
+	update := definitionBody(t, "EgressMonitor.cpp", monitor, "void EgressMonitor::Update(Reading reading)")
+	observe := strings.Index(update, "if (binding_ == Binding::ObserveOnly) {")
+	bind := strings.Index(update, "urnet::setEgressInterfaceIndex(")
 	if observe < 0 || bind < 0 || bind < observe {
-		t.Fatal("EgressMonitor::Refresh must handle an observe-only monitor before it binds")
+		t.Fatal("EgressMonitor::Update must handle an observe-only monitor before it binds")
 	}
 	// the branch, through the brace that closes it
-	branch := refresh[observe:]
+	branch := update[observe:]
 	if end := strings.Index(branch, "\n  }\n"); end >= 0 {
 		branch = branch[:end]
 	}
+	// it reads the election only to tell a network that moved from churn, and
+	// reports only that; it never binds
 	if !strings.Contains(branch, "return;") || !strings.Contains(branch, "onNetworkEvent_") ||
-		strings.Contains(branch, "DiscoverEgress(") || strings.Contains(branch, "setEgressInterfaceIndex(") {
-		t.Error("an observe-only EgressMonitor must report the event and return without discovering or binding")
+		!strings.Contains(branch, "filter_.Seed(signature);") ||
+		!strings.Contains(branch, "moved = filter_.Observe(signature).network;") ||
+		!strings.Contains(branch, "if (moved && observed) observed();") ||
+		strings.Contains(branch, "setEgressInterfaceIndex(") || strings.Contains(branch, "onChange_") {
+		t.Error("an observe-only EgressMonitor must report only a network that moved, and return without binding")
 	}
 	startBody := definitionBody(t, "EgressMonitor.cpp", monitor, "bool EgressMonitor::Start()")
-	provideRequire(t, "EgressMonitor::Start", startBody, "if (binding_ == Binding::Bind) Refresh();")
+	// the baseline, in both modes, before any notification can arrive
+	provideRequireOrder(t, "EgressMonitor::Start", startBody, "Update(Reading::Baseline);",
+		"::NotifyIpInterfaceChange(")
+	requireNone(t, "EgressMonitor::Start", startBody, "Refresh();", "Reading::Observation")
 
 	// one copy of the coalescing rule, which the tunnel watchdog shares
 	watchdog := stripComments(readServiceSource(t, "TunnelWatchdog.h"))
 	provideRequire(t, "TunnelWatchdog.h", watchdog, `#include "NetworkChangeNotify.h"`)
 	requireNone(t, "TunnelWatchdog.h", watchdog, "class NotifyCoalescer",
-		"kNetworkNotifyDebounceMillis = ")
+		"struct NetworkNotifySettings", "windowMillis = ")
 	notify := readServiceSource(t, "NetworkChangeNotify.h")
+	// the window is a setting with its default, never a constant
 	provideRequire(t, "NetworkChangeNotify.h", notify, "class NotifyCoalescer",
-		"class NetworkChangeNotifier", "inline constexpr int64_t kNetworkNotifyDebounceMillis = 750;")
+		"class NetworkChangeNotifier", "struct NetworkNotifySettings {", "int64_t windowMillis = 750;",
+		"deadlineMillis_ = nowMillis + windowMillis_;")
+	requireNone(t, "NetworkChangeNotify.h", notify, "kNetworkNotifyDebounceMillis")
 	if regexp.MustCompile(`#include\s*<(windows|winsock2)\.h>|#include\s*"(Sdk|Log)\.h"`).MatchString(notify) {
 		t.Error("NetworkChangeNotify.h must stay portable: its harness runs off Windows")
 	}

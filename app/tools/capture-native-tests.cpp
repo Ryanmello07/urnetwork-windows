@@ -848,7 +848,7 @@ void RunCase(const std::string& name, const std::wstring& readyEvent) {
   readiness.CompleteSample(readiness.BeginSample(), window, window, 1);
   const auto ticket = readiness.Ready();
   Check(ticket.has_value(), "synthetic proof was not accepted");
-  if (name == "expired-before") now += 8001;
+  if (name == "expired-before") now += CaptureReadinessSettings{}.freshnessMillis + 1;
   if (name == "superseded-before") readiness.Invalidate(2);
   if (name == "cancelled-before") readiness.Cancel();
   if (name == "network-before") readiness.NetworkChanged(now);
@@ -872,7 +872,7 @@ void RunCase(const std::string& name, const std::wstring& readyEvent) {
           (name == "fail-connected" && stage == CaptureStage::Connected);
       if (stage == CaptureStage::Network) {
         if (name == "throw-network") throw std::runtime_error("synthetic stage exception");
-        if (name == "expired-network") now += 8001;
+        if (name == "expired-network") now += CaptureReadinessSettings{}.freshnessMillis + 1;
         if (name == "superseded-network") readiness.Invalidate(2);
         if (name == "cancelled-network" || name == "cancelled-network-armed") readiness.Cancel();
       }
