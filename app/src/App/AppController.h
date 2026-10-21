@@ -17,6 +17,7 @@
 #include "AppLifetime.h"
 #include "AuthLogoutNotice.h"
 #include "BalanceGate.h"
+#include "CryptoInvoice.h"
 #include "InstanceHandover.h"
 #include "SdkHost.h"
 #include "StatsReadOrder.h"
@@ -51,6 +52,9 @@ class AppController {
   SdkHost& sdk() { return sdk_; }
   // The subscription balance / plan store (fetch + polling; Phase 1 keystone).
   SubscriptionBalanceStore& balance() { return balance_; }
+  // The session's crypto invoice (CryptoInvoice.h): opened at sign-in,
+  // resumed at launch, run only while an invoice is on screen.
+  CryptoInvoiceStore& cryptoInvoice() { return cryptoInvoice_; }
   // The update checker (beta spec §5). Owned here, not by the window: checks
   // run on launch and every 6 hours whether or not the tray was ever clicked,
   // and the window that renders the banner may not exist yet.
@@ -220,6 +224,8 @@ class AppController {
 
   SdkHost sdk_;
   SubscriptionBalanceStore balance_{sdk_};
+  // after sdk_, so it closes its controller before the sdk host goes
+  CryptoInvoiceStore cryptoInvoice_{sdk_};
   UpdateChecker updates_;
   TrayIcon tray_;
   winrt::Microsoft::UI::Dispatching::DispatcherQueue uiThread_{nullptr};

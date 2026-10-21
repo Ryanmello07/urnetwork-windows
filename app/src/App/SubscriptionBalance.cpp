@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <chrono>
 
+#include "CryptoPaySdk.h"
 #include "GuestConversion.h"
 #include "Log.h"
 #include "Paths.h"
@@ -299,6 +300,10 @@ void SubscriptionBalanceStore::Apply(urnet::SubscriptionBalanceResult const& res
   } else {
     snapshot_.offer.active = false;
   }
+  // the coins on sale and the crypto term, read through the one adapter that
+  // names the sdk's crypto fields (CryptoPaySdk.h)
+  snapshot_.cryptoAssets = cryptopay::AssetsFromSdk(result);
+  snapshot_.cryptoTerm = cryptopay::TermFromSdk(result);
   snapshot_.offerVariant.clear();
   snapshot_.offerExperimentId.clear();
   if (result.experiments) {

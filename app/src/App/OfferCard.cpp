@@ -117,6 +117,7 @@ PlanCardTexts ComposePlanCardTexts(const PriceTierView& tier, const OfferView& o
                                        std::wstring{Money(offer.firstYear, offer.currency)})};
     texts.yearlySecondary = hstring{Format("offer_then_regular_price",
                                            std::wstring{Money(offer.regularYear, offer.currency)})};
+    texts.yearlySecondaryRenews = true;
   } else {
     texts.yearlyPrice = hstring{Format("plan_price_per_year", yearly)};
     texts.yearlySecondary =
@@ -163,25 +164,31 @@ StackPanel OfferLines::Build(bool compact) {
   deadline_ = MakeLine(hstring{}, colors::MakeBrush(colors::kProGoldLight));
   root_.Children().Append(deadline_);
   if (!compact) {
-    StackPanel timeline;
-    timeline.Spacing(8);
-    timeline.Margin(Thickness{0, 4, 0, 0});
+    timeline_ = StackPanel();
+    timeline_.Spacing(8);
+    timeline_.Margin(Thickness{0, 4, 0, 0});
     TextBlock today{nullptr};
-    timeline.Children().Append(MakeTimelineRow(Loc("offer_timeline_today"), today));
+    timeline_.Children().Append(MakeTimelineRow(Loc("offer_timeline_today"), today));
     today.Text(Loc("offer_timeline_trial_starts"));
     TextBlock reminder{nullptr};
-    timeline.Children().Append(MakeTimelineRow(
+    timeline_.Children().Append(MakeTimelineRow(
         hstring{Format("offer_timeline_day", kFreeTrialDays - kReminderDaysBeforeCharge)},
         reminder));
     reminder.Text(Loc("offer_timeline_reminder"));
-    timeline.Children().Append(
+    timeline_.Children().Append(
         MakeTimelineRow(hstring{Format("offer_timeline_day", kFreeTrialDays)}, chargeLine_));
-    root_.Children().Append(timeline);
+    root_.Children().Append(timeline_);
   }
   terms_ = MakeLine(hstring{}, colors::MutedBrush());
   terms_.Margin(Thickness{0, 4, 0, 0});
   root_.Children().Append(terms_);
   return root_;
+}
+
+void OfferLines::SetCardTermsShown(bool shown) {
+  const Visibility visibility = shown ? Visibility::Visible : Visibility::Collapsed;
+  if (timeline_) timeline_.Visibility(visibility);
+  if (terms_) terms_.Visibility(visibility);
 }
 
 void OfferLines::Update(const OfferView& offer, const PriceTierView& tier, int64_t trialDays) {

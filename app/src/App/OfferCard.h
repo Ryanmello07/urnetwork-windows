@@ -29,6 +29,9 @@ namespace urnw {
 struct PlanCardTexts {
   winrt::hstring yearlyPrice;       // "$40/year" | "$30 for your first year"
   winrt::hstring yearlySecondary;   // "Save 33%" | "then $40/year"
+  // yearlySecondary is the offer's renewal price ("then $40/year"), which a
+  // coin's card does not print (crypto-pay §6.1)
+  bool yearlySecondaryRenews = false;
   winrt::hstring yearlyEquivalent;  // "≈ $3.34/month · billed once a year" or ""
   winrt::hstring yearlyTrial;       // "Includes 14 day free trial"
   winrt::hstring monthlyPrice;      // "$5/month"
@@ -49,10 +52,15 @@ class OfferLines {
   winrt::Microsoft::UI::Xaml::Controls::StackPanel Build(bool compact);
   void Update(const OfferView& offer, const PriceTierView& tier, int64_t trialDays);
   winrt::Microsoft::UI::Xaml::Controls::StackPanel Root() const { return root_; }
+  // The trial timeline and the terms describe the card subscription (a trial,
+  // then a charge, then renewals); a coin buys one year once (crypto-pay
+  // §6.1), so while one is selected they go and only the deadline stays.
+  void SetCardTermsShown(bool shown);
 
  private:
   winrt::Microsoft::UI::Xaml::Controls::StackPanel root_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::TextBlock deadline_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::StackPanel timeline_{nullptr};  // the full form only
   winrt::Microsoft::UI::Xaml::Controls::TextBlock chargeLine_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::TextBlock terms_{nullptr};
 };

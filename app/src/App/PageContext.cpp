@@ -10,6 +10,7 @@ namespace urnw::pages {
 
 SdkHost& Sdk() { return urnw::App().sdk(); }
 SubscriptionBalanceStore& Balance() { return urnw::App().balance(); }
+CryptoInvoiceStore& CryptoInvoice() { return urnw::App().cryptoInvoice(); }
 UpdateChecker& Updates() { return urnw::App().updates(); }
 
 // The miss test IS the equality: Localized() returns the key id itself when the

@@ -1604,6 +1604,130 @@
     <value>创建的认证码将在5分钟后失效</value>
     <comment>Used in Main/Account/Settings/SettingsForm-iOS.swift.</comment>
   </data>
+  <data name="crypto_code_emailed" xml:space="preserve">
+    <value>我们也已将其发送至 {}。</value>
+    <comment>ur.io Buy data, under the data code: shown when the buyer gave an email address, which the code was also sent to. {email} is that address.</comment>
+  </data>
+  <data name="crypto_code_redeem_hint" xml:space="preserve">
+    <value>可在 URnetwork 应用中兑换，或在 ur.io 的“帐户”下兑换。</value>
+    <comment>ur.io Buy data, under the data code: where to redeem it. URnetwork is the product name, ur.io the website, and Account the name of the account section on ur.io (the account key).</comment>
+  </data>
+  <data name="crypto_code_title" xml:space="preserve">
+    <value>您的数据码</value>
+    <comment>ur.io Buy data, after a crypto payment that named no network: the heading above the data code the purchase produced (a balance code that adds the data to whichever network redeems it), shown on the page once paid.</comment>
+  </data>
+  <data name="crypto_does_not_renew" xml:space="preserve">
+    <value>不会自动续订。到期后请再次支付。</value>
+    <comment>Wherever subscriptions are listed (account, subscription details): the note under a plan paid once in crypto (USDC, Zcash or Monero). It never auto-renews and there is nothing to cancel; the payer buys another term when this one ends. The method-neutral counterpart of site_sub_solana_no_renew, worded the same way.</comment>
+  </data>
+  <data name="crypto_fine_print_data" xml:space="preserve">
+    <value>一次性支付。数据一年内有效。</value>
+    <comment>Fine print under the buy button when a coin pays for a data pack: a one-time payment, and the data it adds expires a year after purchase.</comment>
+  </data>
+  <data name="crypto_fine_print_yearly" xml:space="preserve">
+    <value>一次性支付一年 Pro 费用。不会自动续订，也不含免费试用。</value>
+    <comment>Fine print under the buy button when a coin pays for the yearly Pro plan: a coin payment is a one-time payment for one year, it never auto-renews, and the free trial is card only.</comment>
+  </data>
+  <data name="crypto_invoice_copied" xml:space="preserve">
+    <value>已复制</value>
+    <comment>Crypto invoice: shown briefly in place of Copy after the amount or the address was copied.</comment>
+  </data>
+  <data name="crypto_invoice_copy" xml:space="preserve">
+    <value>复制</value>
+    <comment>Crypto invoice: button that copies the amount or the address beside it to the clipboard. Apple shows this text through the copy key, which has the same source.</comment>
+  </data>
+  <data name="crypto_invoice_expires_in" xml:space="preserve">
+    <value>报价将在 {} 后过期</value>
+    <comment>Crypto invoice: countdown under the amount. The amount of the coin is quoted at the current exchange rate and held for a limited time. {time} is the time left as minutes and seconds (m:ss, e.g. 29:59).</comment>
+  </data>
+  <data name="crypto_invoice_memo" xml:space="preserve">
+    <value>备注（Memo），手动发送时填写</value>
+    <comment>Crypto invoice, USDC only: the label above the payment's reference (memo). A payer who types the transfer into a wallet by hand must include it; paying from the QR code or Open in wallet fills it in.</comment>
+  </data>
+  <data name="crypto_invoice_open_wallet" xml:space="preserve">
+    <value>在钱包中打开</value>
+    <comment>Crypto invoice: button that opens the payment request (address and exact amount) in a wallet app on this device.</comment>
+  </data>
+  <data name="crypto_invoice_pay_another_way" xml:space="preserve">
+    <value>使用其他方式支付</value>
+    <comment>Crypto invoice: link that closes the invoice and goes back to the payment methods.</comment>
+  </data>
+  <data name="crypto_invoice_quote_expired" xml:space="preserve">
+    <value>此报价已过期。请刷新以获取新金额。</value>
+    <comment>Crypto invoice: shown when the quote's time ran out before any payment arrived. Refreshing keeps the same address and changes only the amount.</comment>
+  </data>
+  <data name="crypto_invoice_refresh_quote" xml:space="preserve">
+    <value>刷新报价</value>
+    <comment>Crypto invoice: button shown once the quote has expired. It gets a new amount of the coin at the current exchange rate, for the same address.</comment>
+  </data>
+  <data name="crypto_invoice_remaining" xml:space="preserve">
+    <value>还需发送 {}</value>
+    <comment>Crypto invoice: shown when a payment arrived but was short of the amount. {amount} is what is still to send, with the coin's ticker (e.g. 0.0012 XMR).</comment>
+  </data>
+  <data name="crypto_invoice_send_exactly" xml:space="preserve">
+    <value>请准确发送</value>
+    <comment>Crypto invoice: the label above the exact amount of the coin to send (e.g. 0.072387 XMR), which has a copy button.</comment>
+  </data>
+  <data name="crypto_invoice_to_address" xml:space="preserve">
+    <value>发送到此地址</value>
+    <comment>Crypto invoice: the label above the receiving address, which has a copy button.</comment>
+  </data>
+  <data name="crypto_invoice_unavailable" xml:space="preserve">
+    <value>暂时无法使用 {} 支付。请稍后重试，或使用其他方式支付。</value>
+    <comment>Crypto invoice: shown when an invoice can't be started or its quote refreshed because the coin can't be quoted right now. {method} is the coin's name: USDC, Zcash or Monero.</comment>
+  </data>
+  <data name="crypto_invoice_wallets" xml:space="preserve">
+    <value>适用的钱包：{}</value>
+    <comment>Crypto invoice: wallet apps known to pay this coin. {wallets} is a comma-separated list of wallet app names (e.g. Cake, Feather, Monerujo), which are never translated.</comment>
+  </data>
+  <data name="crypto_invoice_zcash_exchange_note" xml:space="preserve">
+    <value>Coinbase、Robinhood 等交易所无法向此屏蔽地址付款。请使用支持屏蔽地址的钱包发送。</value>
+    <comment>Crypto invoice, Zcash only: warning that exchange accounts cannot pay a shielded address, so the payer must send from a wallet that supports shielded Zcash addresses. Coinbase and Robinhood are company names. Use the same word for shielded as in crypto_network_zcash.</comment>
+  </data>
+  <data name="crypto_network_usdc" xml:space="preserve">
+    <value>Solana 上的 USDC</value>
+    <comment>Crypto invoice: its first line, naming the coin and the network to send it on, so the payer picks the right chain in the wallet (USDC sent on another chain is lost).</comment>
+  </data>
+  <data name="crypto_network_zcash" xml:space="preserve">
+    <value>Zcash（屏蔽）</value>
+    <comment>Crypto invoice: its first line, naming the coin and saying the receiving address is a shielded (private) Zcash address. Use the word Zcash wallets in the language use for shielded; the same word appears in the Zcash exchange note.</comment>
+  </data>
+  <data name="crypto_pay_button" xml:space="preserve">
+    <value>使用 {} 支付</value>
+    <comment>The buy button while a coin is the chosen payment method. {method} is the coin's name as the method row shows it: USDC, Zcash or Monero (product names, never translated).</comment>
+  </data>
+  <data name="crypto_payment_in_progress" xml:space="preserve">
+    <value>付款进行中</value>
+    <comment>Account screen and plan area: the label of the row or banner that reopens a crypto invoice (USDC, Zcash or Monero) saved on this device and not paid yet. Tapping it opens the invoice.</comment>
+  </data>
+  <data name="crypto_status_confirming" xml:space="preserve">
+    <value>确认中：{0}/{1}</value>
+    <comment>Crypto invoice status: the full payment arrived and is collecting block confirmations. {count} is the confirmations so far and {required} the number needed before the purchase is credited (e.g. 3 of 10). Numbers only follow, so no plural forms.</comment>
+  </data>
+  <data name="crypto_status_paid" xml:space="preserve">
+    <value>已付款。谢谢！</value>
+    <comment>Crypto invoice status: the payment is confirmed and the plan or the data has been credited.</comment>
+  </data>
+  <data name="crypto_status_review" xml:space="preserve">
+    <value>我们收到了一笔需要人工核查的付款。请联系客户支持，我们会为您处理。</value>
+    <comment>Crypto invoice status: a payment needs a person to review it (it was short when the quote expired, a second payment arrived, or a payment dropped off the chain). Nothing is lost; support settles it.</comment>
+  </data>
+  <data name="crypto_status_seen" xml:space="preserve">
+    <value>已检测到付款</value>
+    <comment>Crypto invoice status: a payment has appeared on the network but is not confirmed yet, or is not the full amount yet. Nothing has been credited.</comment>
+  </data>
+  <data name="crypto_status_waiting" xml:space="preserve">
+    <value>正在等待您的付款</value>
+    <comment>Crypto invoice status: no payment has arrived yet.</comment>
+  </data>
+  <data name="crypto_term_ended_notice" xml:space="preserve">
+    <value>您已付费的一年 Pro 已结束。请在 {} 前续订以保留 Pro。</value>
+    <comment>In-app notice once a year of Pro paid once in crypto (it never auto-renews) has ended and its 30-day grace period has begun. {date} is the last day of the grace period, formatted by the app for the reader's locale. Renew by = no later than.</comment>
+  </data>
+  <data name="crypto_term_renew" xml:space="preserve">
+    <value>续订</value>
+    <comment>Button on the notice that a crypto-paid year of Pro has ended: opens the plan picker to pay for another year.</comment>
+  </data>
   <data name="current_api_n" xml:space="preserve">
     <value>当前 API：{}</value>
     <comment>A label showing the current network API and connect URLs.</comment>
@@ -4868,6 +4992,22 @@
   <data name="paste_your_24_word_seedphrase_here" xml:space="preserve">
     <value>在此粘贴你的 24 个单词助记词</value>
     <comment>A placeholder text for the seedphrase field.</comment>
+  </data>
+  <data name="pay_method_card" xml:space="preserve">
+    <value>银行卡</value>
+    <comment>Payment method row: the option to pay by credit or debit card (processed by Stripe). A payment card, not a UI card.</comment>
+  </data>
+  <data name="pay_method_card_only_monthly" xml:space="preserve">
+    <value>按月仅支持银行卡</value>
+    <comment>Plan picker: the note on the monthly plan, which is greyed out while a coin (USDC, Zcash or Monero) is the chosen payment method. Coins sell the yearly plan and data packs only; monthly is paid by card.</comment>
+  </data>
+  <data name="pay_method_label" xml:space="preserve">
+    <value>支付方式</value>
+    <comment>Payment method row, directly above the buy button (plan picker, upgrade sheet, onboarding, Buy data): the label of the row of methods (Card, USDC, Zcash, Monero). Screen readers read it before the selected method, and a platform may also show it as the row's visible label.</comment>
+  </data>
+  <data name="pay_method_unavailable" xml:space="preserve">
+    <value>暂时不可用</value>
+    <comment>Payment method row: the note under a coin that is switched on but cannot be quoted right now (exchange rates or the payment service are unavailable). The coin can't be chosen until it clears.</comment>
   </data>
   <data name="pay_with_solana_wallet" xml:space="preserve">
     <value>使用 Solana 钱包支付</value>
