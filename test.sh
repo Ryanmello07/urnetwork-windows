@@ -24,7 +24,9 @@ if ! "$network_test_gate" --verify-held run-all; then
   exit 70
 fi
 
-(cd "$here" && go test "$@" ./tests)
+# The complete C++ specification and mutation census shares one package alarm.
+# Declare its aggregate budget; a caller -timeout still overrides this default.
+(cd "$here" && go test -timeout 30m "$@" ./tests)
 # the insufficient-balance acceptance driver (test-insufficient-balance-driver)
 (cd "$here" && go test "$@" ./tests/insufficientbalance)
 (cd "$root/build/all/windows" && go test "$@" ./...)
