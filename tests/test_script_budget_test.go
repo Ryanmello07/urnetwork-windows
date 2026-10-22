@@ -210,12 +210,20 @@ func TestWindowsHostScriptDeclaresAggregatePackageBudget(t *testing.T) {
 
 // A focused caller retains its deliberately narrower deadline in all Go phases.
 func TestWindowsHostScriptPreservesExplicitPackageBudget(t *testing.T) {
-	fixture := newWindowsHostBudgetFixture(t, "17s")
-	output, calls, err := fixture.run(t, "-timeout=17s", "-count=1")
-	if err != nil {
-		t.Fatalf("explicit caller package budget: %v\n%s", err, output)
+	for _, c := range []struct {
+		budget    string
+		arguments []string
+	}{
+		{budget: "17s", arguments: []string{"-timeout=17s", "-count=1"}},
+		{budget: "19s", arguments: []string{"-timeout", "19s", "-count=1"}},
+	} {
+		fixture := newWindowsHostBudgetFixture(t, c.budget)
+		output, calls, err := fixture.run(t, c.arguments...)
+		if err != nil {
+			t.Fatalf("explicit caller package budget %q: %v\n%s", c.budget, err, output)
+		}
+		fixture.requireCensus(t, calls, c.arguments...)
 	}
-	fixture.requireCensus(t, calls, "-timeout=17s", "-count=1")
 }
 
 // An actual failed first phase still stops the script before unrelated work.
@@ -226,5 +234,22 @@ func TestWindowsHostScriptPreservesFirstFailure(t *testing.T) {
 	var exited *exec.ExitError
 	if !errors.As(err, &exited) || exited.ExitCode() != 23 || len(calls) != 1 {
 		t.Fatalf("launcher hid or continued beyond first failure: status=%v calls=%+v", err, calls)
+	}
+}
+
+// The real shell preserves both Go modes and one space-containing selector,
+// with exact argument order and the original working directory in every phase.
+func TestWindowsHostScriptPreservesCallerModesArgumentsAndDirectories(t *testing.T) {
+	selector := "^(TestActualPackageBudget|TestFullSiblingCensus)$|synthetic selector with spaces"
+	for _, arguments := range [][]string{
+		{"-count=1", "-run", selector},
+		{"-race", "-count=1", "-run", selector},
+	} {
+		fixture := newWindowsHostBudgetFixture(t, "30m")
+		output, calls, err := fixture.run(t, arguments...)
+		if err != nil {
+			t.Fatalf("caller mode and quoted arguments %q: %v\n%s", arguments, err, output)
+		}
+		fixture.requireCensus(t, calls, arguments...)
 	}
 }
