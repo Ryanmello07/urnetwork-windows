@@ -185,13 +185,19 @@ func TestSendKeysEscape(t *testing.T) {
 	}
 }
 
+// Creation permissions are filtered by umask; the existing fixture helper pins
+// the actual mode before this negative security-policy premise is exercised.
 func TestReadCredentialsRejectsReadableFile(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "c.yml")
-	if err := os.WriteFile(path, []byte("email: a@b\npassword: secret-value\n"), 0644); err != nil {
+	path := writeCredentials(t, "permission@credentials.example", "synthetic-password", 0644)
+	info, err := os.Lstat(path)
+	if err != nil {
 		t.Fatal(err)
 	}
-	_, err := readCredentials(path)
-	if err == nil || strings.Contains(err.Error(), "secret-value") {
+	if !info.Mode().IsRegular() || info.Mode().Perm() != 0644 {
+		t.Fatalf("readable credential fixture mode=%#o, want regular0644", info.Mode().Perm())
+	}
+	_, err = readCredentials(path)
+	if err == nil || strings.Contains(err.Error(), "synthetic-password") {
 		t.Fatalf("got %v", err)
 	}
 }
