@@ -20,7 +20,10 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
+
+#include "ExtenderRingGeometry.h"
 
 namespace urnw {
 
@@ -46,19 +49,57 @@ struct ProviderLocationRow {
   // which the view renders as v4 (what such a provider carries)
   std::string ipFamily;
   std::string ipFamilyLabel;
+  // the extenders carrying this client's connection to the provider right now
+  // (connect/EXTENDER.md K1, K9), in the SDK's order, which is the order of the
+  // dot's rings from the outside in: none over a direct or p2p route, one
+  // through an extender, briefly two across a transport migration
+  std::vector<ExtenderMark> extenders;
 
   bool Plottable() const { return hasCoordinates; }
 
+  // The extenders are part of the value: a transport migration changes nothing
+  // else, and SdkHost publishes only a row set that differs.
   bool operator==(const ProviderLocationRow& other) const {
     return clientId == other.clientId && country == other.country &&
            countryCode == other.countryCode && region == other.region && city == other.city &&
            hasLocation == other.hasLocation && hasCoordinates == other.hasCoordinates &&
            lat == other.lat && lon == other.lon &&
            connectedSinceMillis == other.connectedSinceMillis &&
-           ipFamily == other.ipFamily && ipFamilyLabel == other.ipFamilyLabel;
+           ipFamily == other.ipFamily && ipFamilyLabel == other.ipFamilyLabel &&
+           extenders == other.extenders;
   }
   bool operator!=(const ProviderLocationRow& other) const { return !(*this == other); }
 };
+
+// ConnectedProviderLocation's ExtenderIps and ExtenderColorHexes, comma
+// separated in the same order, paired back up by index (K1, K3). The SDK keeps
+// the two lists the same length; if they ever differ, the unpaired tail is
+// dropped rather than drawn in a color the SDK did not give it. (The connect
+// grid's PairExtenderMarks keeps an address with no color and draws it muted.)
+std::vector<ExtenderMark> ProviderExtenders(std::string_view ips, std::string_view colorHexes);
+
+// ---- the dots' extender rings (K2, K9) ---------------------------------------
+// A provider reached through extenders wears their rings on its dot, in the
+// list and on the globe, each at that dot's own size. The rings grow inward
+// from the dot's edge, so a ringed dot keeps its footprint and the selection
+// ring outside it stays where it is.
+
+// The row dot's diameter: the location chooser's (MakeDot(..., 12)), so a
+// country reads the same size everywhere.
+inline constexpr double kProviderRowDotDiameter = 12;
+// The globe dot's radius in the globe's 600-unit space (the web and android
+// globes' 7); the globe scales it with everything else it draws.
+inline constexpr float kProviderGlobeDotRadius = 7.0f;
+
+// A row's dot and its rings at K2's numbers, as on every app's rows (K9): the
+// 12px dot holds one ring, and a second extender dashes it
+// (ExtenderRingFit::Drop) rather than thinning the rings to keep the count.
+ExtenderRingLayout ProviderRowDotRings(const ProviderLocationRow& row);
+
+// A globe dot and its rings in canvas units: laid out at the dot's size in the
+// 600-unit space, which holds one ring at K2's numbers, so a second extender
+// dashes it (ExtenderRingFit::Drop), then scaled by the globe's `unit`.
+ExtenderRingLayout ProviderGlobeDotRings(const ProviderLocationRow& row, double unit);
 
 // "City, Region, Country" -- omitting whichever parts the server does not know.
 // Empty when nothing is known; the view substitutes the localized

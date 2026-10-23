@@ -28,9 +28,19 @@
 // deliberate size, such as the account panel's rings -- the numbers are K2's
 // exactly. `ExtenderRingsFor(cell, marks).scaled` reports which happened.
 //
+// The provider rows and their globe (K9) ask for the other trade,
+// ExtenderRingFit::Drop. Their dots are small -- the rows' 12 px, and the
+// globe's 14 units of a 600-unit space, a few pixels on screen -- where one
+// full ring reads and two thinned ones blur into one. So K2's numbers are
+// kept, the rings past what the cell holds above the same dot floor are
+// dropped, and the last one drawn is dashed for them, as a fourth extender
+// dashes the third ring: either dot holds one ring and a second extender
+// dashes it, as on the other apps.
+//
 // Pure standard C++: no WinRT, no XAML, no SDK header, so tools/extender-
-// tests.cpp runs it on any host and both drawing surfaces (ConnectCanvas and
-// ExtenderPanel) share one source of truth for the numbers.
+// tests.cpp runs it on any host and every drawing surface (ConnectCanvas,
+// ExtenderPanel, the provider rows and their globe) shares one source of truth
+// for the numbers.
 //
 // SPDX-License-Identifier: MPL-2.0
 #pragma once
@@ -64,6 +74,18 @@ inline constexpr double kExtenderMinRingStroke = 0.5;
 // cell.
 inline constexpr double kExtenderRingDashOn = 2.0;
 inline constexpr double kExtenderRingDashOff = 2.0;
+
+// What a cell too small for its rings at K2's numbers gives up so its filled
+// dot keeps kExtenderMinDotFraction of the cell (see the header comment).
+enum class ExtenderRingFit {
+  // the stroke and the gap, together: every ring is drawn, thinner. The
+  // connect hero.
+  Scale,
+  // rings: K2's stroke and gap are kept and the rings that do not fit are
+  // dropped, the last one drawn dashed for them. The provider rows and their
+  // globe.
+  Drop,
+};
 
 struct ExtenderRgb {
   std::uint8_t r = 0;
@@ -115,7 +137,27 @@ struct ExtenderRingLayout {
   // The ring budget did not fit at K2's absolute numbers and was scaled down.
   bool scaled = false;
 
-  bool Collapsed() const { return kExtenderMaxRings < totalCount; }
+  // More extenders than drawn rings: past the third, or past what a Drop cell
+  // holds. The last drawn ring is the dashed one.
+  bool Collapsed() const {
+    return !rings.empty() && static_cast<int>(rings.size()) < totalCount;
+  }
+
+  // The same glyph `scale` times the size: the dot, every ring and the stroke
+  // together, for a surface that lays its dots out in units of its own and
+  // draws them at another size (the provider globe's 600-unit space, K9), so
+  // the rings shrink with the dot rather than being fitted again at the drawn
+  // size. The dash pattern is in stroke widths and follows the stroke.
+  ExtenderRingLayout ScaledBy(double scale) const {
+    if (scale < 0) scale = 0;
+    ExtenderRingLayout layout = *this;
+    layout.dotDiameter *= scale;
+    for (ExtenderRing& ring : layout.rings) {
+      ring.diameter *= scale;
+      ring.stroke *= scale;
+    }
+    return layout;
+  }
 };
 
 // "3cdd67", "#3cdd67", "3CDD67" -> rgb. Returns false (and leaves `out`
@@ -187,26 +229,35 @@ inline std::vector<ExtenderMark> PairExtenderMarks(std::string_view ips,
 }
 
 // The rings and the shrunken dot for a cell of `cellDiameter` px wearing
-// `marks`. A cell of zero or less, or no marks at all, yields the plain dot.
+// `marks`. A cell of zero or less, or no marks at all, yields the plain dot, as
+// does a Drop cell too small for even one ring.
 inline ExtenderRingLayout ExtenderRingsFor(double cellDiameter,
-                                           const std::vector<ExtenderMark>& marks) {
+                                           const std::vector<ExtenderMark>& marks,
+                                           ExtenderRingFit fit = ExtenderRingFit::Scale) {
   ExtenderRingLayout layout;
   if (cellDiameter <= 0) return layout;
   layout.dotDiameter = cellDiameter;
   layout.totalCount = static_cast<int>(marks.size());
   if (marks.empty()) return layout;
 
-  const int drawn = layout.totalCount < kExtenderMaxRings ? layout.totalCount
-                                                          : kExtenderMaxRings;
+  int drawn = layout.totalCount < kExtenderMaxRings ? layout.totalCount : kExtenderMaxRings;
 
   // The radial budget K2 asks for, and what the cell can actually spare while
   // still leaving a visible dot.
   double step = kExtenderRingStep;
   const double available = (cellDiameter - cellDiameter * kExtenderMinDotFraction) / 2.0;
   if (available < step * drawn) {
-    layout.scaled = true;
-    step = available / drawn;
+    if (fit == ExtenderRingFit::Drop) {
+      // as many whole rings as the spare radius holds at K2's step
+      drawn = static_cast<int>(available / step);
+      if (drawn <= 0) return layout;
+    } else {
+      layout.scaled = true;
+      step = available / drawn;
+    }
   }
+  // the last drawn ring stands in for every extender that did not get one
+  const bool collapsed = drawn < layout.totalCount;
   double stroke = kExtenderRingStroke * (step / kExtenderRingStep);
   if (stroke < kExtenderMinRingStroke) stroke = kExtenderMinRingStroke;
   // A stroke floor can push the ring back over its budget on an absurdly small
@@ -223,8 +274,9 @@ inline ExtenderRingLayout ExtenderRingsFor(double cellDiameter,
     ring.diameter = cellDiameter - 2.0 * step * k - stroke;
     if (ring.diameter < 0) ring.diameter = 0;
     ring.stroke = stroke;
-    // the innermost drawn ring stands in for every extender past the third
-    ring.dashed = layout.Collapsed() && k == drawn - 1;
+    // the innermost drawn ring stands in for every extender past the third, or
+    // past the rings a Drop cell holds
+    ring.dashed = collapsed && k == drawn - 1;
     const ExtenderMark& mark = marks[static_cast<std::size_t>(k)];
     ring.ip = mark.ip;
     ring.colorHex = mark.colorHex;

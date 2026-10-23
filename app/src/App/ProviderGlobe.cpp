@@ -43,7 +43,9 @@ constexpr winrt::Windows::UI::Color kGraticuleColor{0x60, 0xCC, 0xCC, 0xCC};
 constexpr winrt::Windows::UI::Color kLandColor{255, 0xF8, 0xF8, 0xF8};
 constexpr double kLandStrokeWidth = 0.3;
 constexpr double kGraticuleStrokeWidth = 0.5;
-constexpr float kDotRadius = 7.0f;
+// ProviderLocations.h, where ProviderGlobeDotRings lays a dot's extender rings
+// out at this size
+constexpr float kDotRadius = kProviderGlobeDotRadius;
 // the selected provider keeps its solid dot; the ring is an outline sitting
 // kSelectedRingGap outside the dot's edge (radii are stroke centerlines)
 constexpr float kSelectedRingGap = 4.0f;
@@ -199,6 +201,34 @@ bool StepRecenterSpring(float& value, float& velocity, float target, double dt) 
   value = static_cast<float>(static_cast<double>(target) + nextOffset);
   velocity = static_cast<float>(nextSpeed);
   return true;
+}
+
+// A dot's extender rings (EXTENDER.md K2, K9), centred on `center`. The
+// geometry is ProviderGlobeDotRings', already in canvas px.
+void AppendExtenderRings(Canvas const& layer, ExtenderRingLayout const& glyph, GlobePoint center) {
+  for (const ExtenderRing& spec : glyph.rings) {
+    // K3: the SDK's color as given; an extender it gave none is muted, as on
+    // the connect hero, rather than painted a hue this app invented
+    const winrt::Windows::UI::Color color =
+        spec.hasColor ? winrt::Windows::UI::Color{255, spec.color.r, spec.color.g, spec.color.b}
+                      : colors::kTextMuted;
+    ShapeEllipse ring;
+    ring.Width(spec.diameter);
+    ring.Height(spec.diameter);
+    ring.Stroke(SolidColorBrush(color));
+    ring.StrokeThickness(spec.stroke);
+    if (spec.dashed) {
+      DoubleCollection dashes;
+      dashes.Append(kExtenderRingDashOn);
+      dashes.Append(kExtenderRingDashOff);
+      ring.StrokeDashArray(dashes);
+      ring.StrokeDashCap(PenLineCap::Round);
+    }
+    ring.IsHitTestVisible(false);
+    Canvas::SetLeft(ring, center.x - spec.diameter / 2.0);
+    Canvas::SetTop(ring, center.y - spec.diameter / 2.0);
+    layer.Children().Append(ring);
+  }
 }
 
 // One closed ring / open polyline as a PathFigure. A single ReplaceAll sets the
@@ -459,9 +489,15 @@ void ProviderGlobe::RedrawDots(float width, float height, float unit) {
   // The selected dot is held back and appended last so it is never covered by a
   // dot that happens to sit on top of it -- providers in one city land on the
   // same pixel, and a Canvas paints in child order.
+  //
+  // A provider reached through extenders wears their rings (EXTENDER.md K9):
+  // the connect grid's geometry (K2) at the dot's size in the 600-unit space,
+  // scaled with everything else, so a dot holds one ring at any globe size and
+  // more extenders than fit dash it (ProviderGlobeDotRings).
   bool hasSelected = false;
   GlobePoint selectedCenter{};
   winrt::Windows::UI::Color selectedColor{};
+  ExtenderRingLayout selectedGlyph;
   for (const auto& row : plottable_) {
     const auto projected =
         GlobeGeometry::Project(static_cast<float>(row.lon), static_cast<float>(row.lat),
@@ -469,16 +505,18 @@ void ProviderGlobe::RedrawDots(float width, float height, float unit) {
     if (!projected) continue;  // back hemisphere
     const GlobePoint center = GlobeGeometry::ToCanvas(*projected, width, height);
     const winrt::Windows::UI::Color color = ProviderColor(row);
+    ExtenderRingLayout glyph = ProviderGlobeDotRings(row, unit);
 
     if (row.clientId == selectedClientId_) {
       hasSelected = true;
       selectedCenter = center;
       selectedColor = color;
+      selectedGlyph = std::move(glyph);
       continue;
     }
 
     ShapeEllipse dot;
-    const double diameter = 2.0 * kDotRadius * unit;
+    const double diameter = glyph.dotDiameter;
     dot.Width(diameter);
     dot.Height(diameter);
     dot.Fill(SolidColorBrush(color));
@@ -486,15 +524,17 @@ void ProviderGlobe::RedrawDots(float width, float height, float unit) {
     Canvas::SetLeft(dot, center.x - diameter / 2.0);
     Canvas::SetTop(dot, center.y - diameter / 2.0);
     dots_.Children().Append(dot);
+    AppendExtenderRings(dots_, glyph, center);
   }
 
   if (hasSelected) {
     const GlobePoint center = selectedCenter;
     const winrt::Windows::UI::Color color = selectedColor;
     // a darker core inside its own full-strength ring: the selection reads at a
-    // glance without changing which country color it is
+    // glance without changing which country color it is. The extender rings
+    // keep their own colors.
     ShapeEllipse dot;
-    const double diameter = 2.0 * kDotRadius * unit;
+    const double diameter = selectedGlyph.dotDiameter;
     dot.Width(diameter);
     dot.Height(diameter);
     dot.Fill(SolidColorBrush(DarkenForSelection(color)));
@@ -502,6 +542,7 @@ void ProviderGlobe::RedrawDots(float width, float height, float unit) {
     Canvas::SetLeft(dot, center.x - diameter / 2.0);
     Canvas::SetTop(dot, center.y - diameter / 2.0);
     dots_.Children().Append(dot);
+    AppendExtenderRings(dots_, selectedGlyph, center);
 
     ShapeEllipse ring;
     const double ringDiameter = 2.0 * kSelectedRingRadius * unit;

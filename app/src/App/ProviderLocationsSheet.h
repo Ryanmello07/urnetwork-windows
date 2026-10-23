@@ -11,6 +11,12 @@
 // value shared with the globe: clicking a row centers the globe on it, and
 // stepping the globe's wheel selects the row.
 //
+// A provider reached through extenders (connect/EXTENDER.md K9) wears their
+// rings on its dot, here and on the globe, and the row lists each extender
+// under the connected duration: a small ring in its color, then its address,
+// which is the extender's id on the rows, copied on a tap like the client id.
+// A direct or p2p provider shows neither.
+//
 // The selected row also offers "Stay on this exit" (ProviderLocations.h),
 // which reconnects to that one provider by its client id; the provider the
 // connection already stays on says so instead.
@@ -87,7 +93,11 @@ class ProviderLocationsSheet : public std::enable_shared_from_this<ProviderLocat
   // connect to the row's provider alone (SdkHost::Connect) and close the sheet
   void StayOnExit(const ProviderLocationRow& row);
   void CopyClientId(const std::string& clientId);
+  void CopyExtenderAddress(const std::string& ip);
   winrt::Microsoft::UI::Xaml::Controls::Grid MakeProviderRow(const ProviderLocationRow& row);
+  // one extender of a row: its ring, then its address, click to copy
+  winrt::Microsoft::UI::Xaml::Controls::Grid MakeExtenderLine(const ExtenderMark& extender,
+                                                              bool selected);
 
   SdkHost& sdk_;
   winrt::Microsoft::UI::Xaml::Controls::ContentDialog dialog_{nullptr};

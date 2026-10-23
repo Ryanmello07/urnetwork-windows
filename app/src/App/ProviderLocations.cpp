@@ -89,6 +89,27 @@ std::optional<StayOnExitTarget> MakeStayOnExitTarget(const ProviderLocationRow& 
   return target;
 }
 
+std::vector<ExtenderMark> ProviderExtenders(std::string_view ips, std::string_view colorHexes) {
+  const std::vector<std::string> addresses = SplitExtenderList(ips);
+  const std::vector<std::string> colors = SplitExtenderList(colorHexes);
+  const std::size_t paired = (std::min)(addresses.size(), colors.size());
+  std::vector<ExtenderMark> extenders;
+  extenders.reserve(paired);
+  for (std::size_t i = 0; i < paired; ++i) {
+    extenders.push_back(ExtenderMark{addresses[i], colors[i]});
+  }
+  return extenders;
+}
+
+ExtenderRingLayout ProviderRowDotRings(const ProviderLocationRow& row) {
+  return ExtenderRingsFor(kProviderRowDotDiameter, row.extenders, ExtenderRingFit::Drop);
+}
+
+ExtenderRingLayout ProviderGlobeDotRings(const ProviderLocationRow& row, double unit) {
+  return ExtenderRingsFor(2.0 * kProviderGlobeDotRadius, row.extenders, ExtenderRingFit::Drop)
+      .ScaledBy(unit);
+}
+
 ConnectedDuration SplitConnectedDuration(int64_t connectedSinceMillis, int64_t nowMillis) {
   if (connectedSinceMillis <= 0) return ConnectedDuration{};
   const int64_t elapsedSeconds = (std::max)(int64_t{0}, (nowMillis - connectedSinceMillis) / 1000);
