@@ -1551,6 +1551,10 @@
     <value>क्लाइंट ID कॉपी करें</value>
     <comment>A label for a context menu item that copies a client ID to the clipboard.</comment>
   </data>
+  <data name="copy_extender_address" xml:space="preserve">
+    <value>एक्सटेंडर का पता कॉपी करें</value>
+    <comment>Context menu item on a provider row in the provider details sheet that copies the address of the extender carrying it (EXTENDER.md K9).</comment>
+  </data>
   <data name="copy_share_text" xml:space="preserve">
     <value>शेयर टेक्स्ट कॉपी करें</value>
     <comment>Button on the share screen: copy the text form of the code.</comment>
@@ -3705,6 +3709,14 @@
   <data name="extender_active" xml:space="preserve">
     <value>सक्रिय · {}</value>
     <comment>Extender status when at least one address family is activated. The argument is the family or families, from the IPv4, IPv6 and IPv4 and IPv6 labels.</comment>
+  </data>
+  <data name="extender_address_copied" xml:space="preserve">
+    <value>एक्सटेंडर का पता कॉपी किया गया</value>
+    <comment>Snackbar after tapping an extender address on a provider row in the provider details sheet (EXTENDER.md K9).</comment>
+  </data>
+  <data name="extender_address_label" xml:space="preserve">
+    <value>एक्सटेंडर {}</value>
+    <comment>Spoken label of the extender line on a provider row in the provider details sheet: the word Extender followed by the extender's IP address (EXTENDER.md K9).</comment>
   </data>
   <data name="extender_default_value" xml:space="preserve">
     <value>डिफ़ॉल्ट: {}</value>
@@ -7223,6 +7235,10 @@
     <value>इसी एग्ज़िट पर रहें</value>
     <comment>Button under the selected provider in the Provider Locations sheet. Reconnects to that one provider (the exit), so the connection keeps its IP address.</comment>
   </data>
+  <data name="stay_on_this_exit_extender_note" xml:space="preserve">
+    <value>इस प्रदाता का IP पता और एक्सटेंडर तब तक बने रहते हैं जब तक इनमें से कोई ऑफ़लाइन न हो जाए।</value>
+    <comment>Muted note under a selected provider row reached through an extender, in the Provider Locations sheet, above Stay on this exit: staying pins the extender as well as the exit (EXTENDER.md K10).</comment>
+  </data>
   <data name="stay_on_this_exit_note" xml:space="preserve">
     <value>इस प्रदाता का IP पता तब तक बना रहता है जब तक वह ऑफ़लाइन न हो जाए।</value>
     <comment>Muted line under the Stay on this exit button in the Provider Locations sheet: what staying on one provider does.</comment>
@@ -7240,6 +7256,10 @@
   <data name="staying_on_this_exit" xml:space="preserve">
     <value>आप इसी एग्ज़िट पर बने हुए हैं। अगर यह ऑफ़लाइन हो जाए, तो कोई दूसरी लोकेशन चुनें।</value>
     <comment>Muted line on the provider the connection already stays on (after Stay on this exit), in the Provider Locations sheet. Says how to leave it.</comment>
+  </data>
+  <data name="staying_on_this_exit_through_extender" xml:space="preserve">
+    <value>आप एक्सटेंडर {} के ज़रिए इसी एग्ज़िट पर बने हुए हैं। अगर इनमें से कोई ऑफ़लाइन हो जाए, तो कोई दूसरी लोकेशन चुनें।</value>
+    <comment>Muted line on the provider the connection stays on through a pinned extender (after Stay on this exit on a row reached through one), in the Provider Locations sheet. The placeholder is the extender's IP address (EXTENDER.md K10).</comment>
   </data>
   <data name="step_in" xml:space="preserve">
     <value>इंटरनेट में कदम रखें जैसा कि यह होना चाहिए</value>
@@ -8205,6 +8225,10 @@
   <data name="waiting_for_approval" xml:space="preserve">
     <value>अनुमोदन की प्रतीक्षा है</value>
     <comment>Used in Shared/Views/UpgradeSubscriptionSheet.swift.</comment>
+  </data>
+  <data name="waiting_for_this_exit_through_extender" xml:space="preserve">
+    <value>एक्सटेंडर {} के ज़रिए इस एग्ज़िट का इंतज़ार किया जा रहा है।</value>
+    <comment>Shown in the Provider Locations sheet when the connection stays on an exit through a pinned extender and that exit is not connected right now. The placeholder is the extender's IP address (EXTENDER.md K10).</comment>
   </data>
   <data name="waiting_for_wallet_signature" xml:space="preserve">
     <value>वॉलेट हस्ताक्षर की प्रतीक्षा है...</value>

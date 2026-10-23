@@ -270,6 +270,7 @@ control_doh_use_china_hint
 copied
 copy
 copy_auth_code
+copy_extender_address
 copy_share_text
 copy_to_clipboard
 couldnt_update_preferences
@@ -530,6 +531,8 @@ extender
 extender_activation_failed
 extender_activation_refused
 extender_active
+extender_address_copied
+extender_address_label
 extender_default_value
 extender_dns_name
 extender_hosts

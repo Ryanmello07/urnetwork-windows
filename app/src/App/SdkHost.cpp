@@ -4930,6 +4930,9 @@ void SdkHost::PublishProviderLocations() {
         row.connectedSinceMillis = location.ConnectedSinceMillis;
         row.ipFamily = location.IpFamily;
         row.ipFamilyLabel = location.IpFamilyLabel;
+        // the extenders carrying the connection to it (EXTENDER.md K9): the
+        // two comma-separated lists, paired by index
+        row.extenders = ProviderExtenders(location.ExtenderIps, location.ExtenderColorHexes);
         rows.push_back(std::move(row));
       }
     }
