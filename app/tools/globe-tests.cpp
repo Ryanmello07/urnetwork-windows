@@ -1,6 +1,7 @@
 // Executable spec for the provider-locations pure logic: a port of the android
 // JVM tests GlobeGeometryTest.kt (25 cases) and WorldTopologyTest.kt (7 cases),
-// plus the row-label and "Stay on this exit" cases (StayOnExitTest.kt), run
+// plus the row-label and "Stay on this exit" cases (StayOnExitTest.kt) and the
+// extenders on the rows and their dots (apple ProviderExtenderTests.swift), run
 // against the same C++ sources the app compiles.
 //
 // The windows app has no test project (the solution is Common/Service/App/
@@ -649,6 +650,116 @@ void StayOnExitTests() {
   }
 }
 
+// ---- the extenders on the rows (apple ProviderExtenderTests, EXTENDER.md K9) --
+
+const ExtenderMark kFirstExtender{"203.0.113.7", "AABBCC"};
+const ExtenderMark kSecondExtender{"2001:db8::5", "DDEEFF"};
+
+ProviderLocationRow MakeExtendedRow(std::vector<ExtenderMark> extenders) {
+  ProviderLocationRow row = MakeExitRow(kClientId, "", "", "", "us");
+  row.extenders = std::move(extenders);
+  return row;
+}
+
+void ProviderExtenderTests() {
+  {
+    TEST_CASE("pairsTheSdkListsByIndex");
+    const auto extenders = ProviderExtenders("203.0.113.7,2001:db8::5", "AABBCC,DDEEFF");
+    Check(extenders == std::vector<ExtenderMark>{kFirstExtender, kSecondExtender},
+          "two extenders, each with its own color");
+  }
+  {
+    TEST_CASE("aDirectRouteHasNoExtenders");
+    Check(ProviderExtenders("", "").empty(), "empty fields");
+    Check(ProviderExtenders(" , ", ",").empty(), "separators and blanks alone");
+  }
+  {
+    // the SDK keeps the two lists the same length; an unpaired tail is
+    // dropped rather than drawn in a made-up color
+    TEST_CASE("anUnpairedTailIsDropped");
+    Check(ProviderExtenders("203.0.113.7,198.51.100.2", "AABBCC") ==
+              std::vector<ExtenderMark>{kFirstExtender},
+          "an address without a color");
+    Check(ProviderExtenders("203.0.113.7", "AABBCC,DDEEFF") ==
+              std::vector<ExtenderMark>{kFirstExtender},
+          "a color without an address");
+    Check(ProviderExtenders("", "AABBCC").empty(), "colors alone");
+  }
+  {
+    // a transport migration changes only the extenders, so they are part of
+    // the row's value: an equal row would not be republished
+    TEST_CASE("extendersArePartOfTheRow");
+    const ProviderLocationRow extended = MakeExtendedRow({kFirstExtender});
+    Check(MakeExtendedRow({}) != extended, "none against one");
+    Check(MakeExtendedRow({kFirstExtender, kSecondExtender}) != extended, "two against one");
+    Check(MakeExtendedRow({kSecondExtender}) != extended, "one swapped for another");
+    Check(MakeExtendedRow({ExtenderMark{"203.0.113.7", "DDEEFF"}}) != extended, "a new color");
+    Check(MakeExtendedRow({kFirstExtender}) == extended, "the same extender");
+  }
+  {
+    // the row dot draws K2's numbers at its own 12px (K9): one ring, and a
+    // second extender, or any more, dashes it rather than thinning the rings
+    TEST_CASE("theRowDotRingsAtItsSize");
+    CheckNear(12, kProviderRowDotDiameter, 1e-9, "the row dot");
+    const ExtenderRingLayout direct = ProviderRowDotRings(MakeExtendedRow({}));
+    Check(direct.rings.empty(), "a direct provider has no rings");
+    CheckNear(kProviderRowDotDiameter, direct.dotDiameter, 1e-9, "and its whole dot");
+
+    const ExtenderRingLayout one = ProviderRowDotRings(MakeExtendedRow({kFirstExtender}));
+    CheckEqualInt(1, static_cast<long long>(one.rings.size()), "one ring");
+    Check(!one.scaled && !one.rings[0].dashed, "at K2's numbers, solid");
+    CheckNear(kExtenderRingStroke, one.rings[0].stroke, 1e-9, "K2's stroke");
+    CheckNear(kProviderRowDotDiameter - 2 * kExtenderRingStep, one.dotDiameter, 1e-9,
+              "the dot shrinks by one ring");
+    CheckEqualString("AABBCC", one.rings[0].colorHex, "in the extender's color");
+
+    std::vector<ExtenderMark> four{kFirstExtender, kSecondExtender,
+                                   ExtenderMark{"198.51.100.2", "112233"},
+                                   ExtenderMark{"198.51.100.3", "445566"}};
+    for (std::size_t n = 2; n <= four.size(); ++n) {
+      const std::string at = " (n=" + std::to_string(n) + ")";
+      const ExtenderRingLayout layout = ProviderRowDotRings(
+          MakeExtendedRow(std::vector<ExtenderMark>(four.begin(), four.begin() + n)));
+      CheckEqualInt(1, static_cast<long long>(layout.rings.size()), "still one ring" + at);
+      Check(!layout.scaled && layout.rings[0].dashed, "at K2's numbers, dashed for the rest" + at);
+      CheckNear(kExtenderRingStroke, layout.rings[0].stroke, 1e-9, "not thinned" + at);
+      CheckEqualString("AABBCC", layout.rings[0].colorHex, "in the first one's color" + at);
+      CheckNear(kProviderRowDotDiameter - 2 * kExtenderRingStep, layout.dotDiameter, 1e-9,
+                "the dot as with one ring" + at);
+      // the outermost ring's outer edge is the dot's edge, so the selection
+      // ring outside it stays where it is
+      CheckNear(kProviderRowDotDiameter, layout.rings[0].OuterDiameter(), 1e-9,
+                "the outer edge" + at);
+    }
+  }
+  {
+    // the globe dot is 14 units across in the globe's space: one ring fits, a
+    // second extender collapses into a dashed ring in the first one's color,
+    // and the whole glyph scales with the globe
+    TEST_CASE("theGlobeDotHoldsOneRing");
+    const double unit = 0.65;
+
+    const ExtenderRingLayout direct = ProviderGlobeDotRings(MakeExtendedRow({}), unit);
+    Check(direct.rings.empty(), "a direct provider has no rings");
+    CheckNear(14 * unit, direct.dotDiameter, 1e-6, "the plain dot");
+
+    const ExtenderRingLayout one = ProviderGlobeDotRings(MakeExtendedRow({kFirstExtender}), unit);
+    CheckEqualInt(1, static_cast<long long>(one.rings.size()), "one ring");
+    Check(!one.rings[0].dashed, "solid");
+    CheckEqualString("AABBCC", one.rings[0].colorHex, "in the extender's color");
+    CheckNear((14 - 2 * kExtenderRingStep) * unit, one.dotDiameter, 1e-6, "the scaled dot");
+    CheckNear(kExtenderRingStroke * unit, one.rings[0].stroke, 1e-6, "the scaled stroke");
+    CheckNear(14 * unit, one.rings[0].OuterDiameter(), 1e-6, "the scaled outer edge");
+
+    const ExtenderRingLayout migrating =
+        ProviderGlobeDotRings(MakeExtendedRow({kFirstExtender, kSecondExtender}), unit);
+    CheckEqualInt(1, static_cast<long long>(migrating.rings.size()), "still one ring");
+    Check(migrating.rings[0].dashed, "dashed for the second extender");
+    CheckEqualString("AABBCC", migrating.rings[0].colorHex, "in the first one's color");
+    CheckNear(kExtenderRingStroke * unit, migrating.rings[0].stroke, 1e-6, "not thinned");
+  }
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -663,6 +774,8 @@ int main(int argc, char** argv) {
   ProviderLocationsTests();
   std::cout << "StayOnExit\n";
   StayOnExitTests();
+  std::cout << "ProviderExtenders\n";
+  ProviderExtenderTests();
 
   std::cout << "\n" << gCases << " cases, " << gFailures << " failures\n";
   return gFailures == 0 ? 0 : 1;

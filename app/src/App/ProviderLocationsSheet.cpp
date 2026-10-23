@@ -4,6 +4,8 @@
 #include "ProviderLocationsSheet.h"
 
 #include <winrt/Windows.ApplicationModel.DataTransfer.h>
+#include <winrt/Microsoft.UI.Xaml.Automation.h>
+#include <winrt/Microsoft.UI.Xaml.Automation.Peers.h>
 #include <winrt/Microsoft.UI.Xaml.Input.h>
 #include <winrt/Microsoft.UI.Xaml.Shapes.h>
 
@@ -35,6 +37,8 @@ namespace {
 // wingdi.h declares ::Ellipse; alias the XAML shape so unqualified lookup under
 // the using-directives stays unambiguous
 using ShapeEllipse = winrt::Microsoft::UI::Xaml::Shapes::Ellipse;
+namespace automation = winrt::Microsoft::UI::Xaml::Automation;
+namespace peers = winrt::Microsoft::UI::Xaml::Automation::Peers;
 
 constexpr winrt::Windows::UI::Color kTransparent{0, 0, 0, 0};
 
@@ -51,11 +55,16 @@ constexpr double kListMaxHeight = 260;
 // kDotRingGap outside the solid dot's edge, and the box is sized for the ring
 // so the column width never changes with selection. The dot diameter matches
 // the location-chooser rows (MakeDot(..., 12)) so a country reads the same size
-// everywhere.
-constexpr double kDotDiameter = 12;
+// everywhere; it lives in ProviderLocations.h, where ProviderRowDotRings lays
+// the dot's extender rings out inside it.
+constexpr double kDotDiameter = kProviderRowDotDiameter;
 constexpr double kDotRingGap = 4;
 constexpr double kDotRingStroke = 1.5;
 constexpr double kDotBox = kDotDiameter + (kDotRingGap + kDotRingStroke) * 2;
+
+// The ring that leads an extender line: the connect drawer extender panel's
+// ring on apple, at K2's stroke.
+constexpr double kExtenderLineRingDiameter = 10;
 
 hstring H(std::string const& s) { return winrt::to_hstring(s); }
 
@@ -110,6 +119,40 @@ winrt::Windows::UI::Color ColorFromHex(std::string hex) {
 winrt::Windows::UI::Color RowColor(const ProviderLocationRow& row) {
   if (row.countryCode.empty()) return winrt::Windows::UI::Color{255, 0x00, 0x99, 0xFF};
   return ColorFromHex(urnet::getColorHex(row.countryCode));
+}
+
+// An extender's color (EXTENDER.md K3) as the SDK gave it. One it gave no color
+// is muted, as on the connect hero, rather than painted a hue this app invented.
+winrt::Windows::UI::Color ExtenderColor(std::string const& colorHex) {
+  ExtenderRgb rgb{};
+  if (!ParseExtenderColorHex(colorHex, rgb)) return colors::kTextMuted;
+  return winrt::Windows::UI::Color{255, rgb.r, rgb.g, rgb.b};
+}
+
+// One extender ring of a row's dot, centred in the dot's box, as
+// ProviderRowDotRings laid it out (K2).
+ShapeEllipse MakeDotRing(const ExtenderRing& spec) {
+  ShapeEllipse ring;
+  ring.Width(spec.diameter);
+  ring.Height(spec.diameter);
+  ring.Stroke(SolidColorBrush(ExtenderColor(spec.colorHex)));
+  ring.StrokeThickness(spec.stroke);
+  if (spec.dashed) {
+    DoubleCollection dashes;
+    dashes.Append(kExtenderRingDashOn);
+    dashes.Append(kExtenderRingDashOff);
+    ring.StrokeDashArray(dashes);
+    ring.StrokeDashCap(PenLineCap::Round);
+  }
+  ring.HorizontalAlignment(HorizontalAlignment::Center);
+  ring.VerticalAlignment(VerticalAlignment::Center);
+  return ring;
+}
+
+void SetClipboardText(std::string const& value) {
+  winrt::Windows::ApplicationModel::DataTransfer::DataPackage package;
+  package.SetText(H(value));
+  winrt::Windows::ApplicationModel::DataTransfer::Clipboard::SetContent(package);
 }
 
 int64_t NowMillis() {
@@ -299,13 +342,19 @@ Grid ProviderLocationsSheet::MakeProviderRow(const ProviderLocationRow& row) {
   dotBox.Width(kDotBox);
   dotBox.Height(kDotBox);
   dotBox.VerticalAlignment(VerticalAlignment::Top);
+  // A provider reached through extenders wears their rings (EXTENDER.md K9),
+  // the connect hero's geometry at this dot's size: the filled dot shrinks
+  // inward and the outermost ring's outer edge is the dot's edge, so the
+  // selection ring below stays where it is.
+  const ExtenderRingLayout glyph = ProviderRowDotRings(row);
   ShapeEllipse dot;
-  dot.Width(kDotDiameter);
-  dot.Height(kDotDiameter);
+  dot.Width(glyph.dotDiameter);
+  dot.Height(glyph.dotDiameter);
   dot.Fill(SolidColorBrush(color));
   dot.HorizontalAlignment(HorizontalAlignment::Center);
   dot.VerticalAlignment(VerticalAlignment::Center);
   dotBox.Children().Append(dot);
+  for (const ExtenderRing& spec : glyph.rings) dotBox.Children().Append(MakeDotRing(spec));
   if (selected) {
     ShapeEllipse ring;
     // radii are stroke centerlines, so the outline sits kDotRingGap outside the
@@ -414,6 +463,13 @@ Grid ProviderLocationsSheet::MakeProviderRow(const ProviderLocationRow& row) {
   text.Children().Append(durationText);
   durationLabels_.emplace_back(row.connectedSinceMillis, durationText);
 
+  // the extenders carrying the connection to this provider, one line each with
+  // its ring color: usually none, one through an extender, briefly two across a
+  // transport migration
+  for (const ExtenderMark& extender : row.extenders) {
+    text.Children().Append(MakeExtenderLine(extender, selected));
+  }
+
   // "Stay on this exit": the selected row offers it, and the provider the
   // connection already stays on says so instead (StayOnExitStateFor)
   switch (StayOnExitStateFor(row, selectedClientId_, stayingClientId_)) {
@@ -476,6 +532,66 @@ Grid ProviderLocationsSheet::MakeProviderRow(const ProviderLocationRow& row) {
   return grid;
 }
 
+// One extender on a provider row (EXTENDER.md K9): a small ring in the
+// extender's color, then its address, which is the extender's id on the rows,
+// in the client id's monospaced face and colors. Clicking it copies the
+// address, as the client id copies itself.
+Grid ProviderLocationsSheet::MakeExtenderLine(const ExtenderMark& extender, bool selected) {
+  std::weak_ptr<ProviderLocationsSheet> weak = weak_from_this();
+
+  // ring Auto, address Star, so a long v6 address ellipsizes rather than
+  // widening the row; left aligned, so only the line itself takes the click
+  Grid line;
+  ColumnDefinition ringColumn, addressColumn;
+  ringColumn.Width(GridLength{0, GridUnitType::Auto});
+  addressColumn.Width(GridLength{1, GridUnitType::Star});
+  line.ColumnDefinitions().Append(ringColumn);
+  line.ColumnDefinitions().Append(addressColumn);
+  line.ColumnSpacing(6);
+  line.Margin(Thickness{0, 2, 0, 0});
+  line.HorizontalAlignment(HorizontalAlignment::Left);
+  line.Background(SolidColorBrush(kTransparent));  // hit-testable across the gap
+
+  // sized as the extender panel sizes its rings: the stroke straddles the
+  // geometry, so the ring is kExtenderLineRingDiameter across at K2's stroke
+  ShapeEllipse ring;
+  ring.Width(kExtenderLineRingDiameter - kExtenderRingStroke);
+  ring.Height(kExtenderLineRingDiameter - kExtenderRingStroke);
+  ring.StrokeThickness(kExtenderRingStroke);
+  ring.Stroke(SolidColorBrush(ExtenderColor(extender.colorHex)));
+  ring.VerticalAlignment(VerticalAlignment::Center);
+  Grid::SetColumn(ring, 0);
+  line.Children().Append(ring);
+
+  TextBlock address = MakeText(H(extender.ip), 11,
+                               selected ? colors::TextBrush() : colors::FaintBrush());
+  address.FontFamily(FontFamily(L"Consolas"));
+  address.TextWrapping(TextWrapping::NoWrap);
+  address.TextTrimming(TextTrimming::CharacterEllipsis);
+  address.VerticalAlignment(VerticalAlignment::Center);
+  Grid::SetColumn(address, 1);
+  line.Children().Append(address);
+
+  // read as one element, "Extender 203.0.113.7", not as a ring and a string of
+  // digits
+  const std::wstring spokenAddress = Widen(extender.ip);
+  automation::AutomationProperties::SetName(
+      line, hstring{Format("extender_address_label", spokenAddress)});
+  automation::AutomationProperties::SetAccessibilityView(ring, peers::AccessibilityView::Raw);
+  automation::AutomationProperties::SetAccessibilityView(address, peers::AccessibilityView::Raw);
+  // the row has no context menu, so the copy action's name is the line's
+  // tooltip, as on linux and the web
+  ToolTipService::SetToolTip(line, box_value(Loc("copy_extender_address")));
+
+  const std::string copyIp = extender.ip;
+  line.Tapped([weak, copyIp](IInspectable const&, Input::TappedRoutedEventArgs const& args) {
+    // the line owns the tap; the row's select handler must not also fire
+    args.Handled(true);
+    if (auto self = weak.lock()) self->CopyExtenderAddress(copyIp);
+  });
+  return line;
+}
+
 void ProviderLocationsSheet::Select(std::string clientId) {
   if (clientId == selectedClientId_) return;
   // the SDK view controller is the source of truth; it reports back through the
@@ -518,11 +634,16 @@ void ProviderLocationsSheet::StayOnExit(const ProviderLocationRow& row) {
 }
 
 void ProviderLocationsSheet::CopyClientId(const std::string& clientId) {
-  winrt::Windows::ApplicationModel::DataTransfer::DataPackage package;
-  package.SetText(H(clientId));
-  winrt::Windows::ApplicationModel::DataTransfer::Clipboard::SetContent(package);
+  SetClipboardText(clientId);
   // label, then the id that was copied (data, not prose)
   copiedNote_.Text(hstring{Localized("client_id_copied") + L": " + Widen(clientId)});
+  copiedNote_.Visibility(Visibility::Visible);
+}
+
+void ProviderLocationsSheet::CopyExtenderAddress(const std::string& ip) {
+  SetClipboardText(ip);
+  // the client id's note: label, then the address that was copied
+  copiedNote_.Text(hstring{Localized("extender_address_copied") + L": " + Widen(ip)});
   copiedNote_.Visibility(Visibility::Visible);
 }
 

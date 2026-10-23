@@ -1552,6 +1552,10 @@ maneira certa</value>
     <value>Copiar ID do cliente</value>
     <comment>A label for a context menu item that copies a client ID to the clipboard.</comment>
   </data>
+  <data name="copy_extender_address" xml:space="preserve">
+    <value>Copiar endereço do extensor</value>
+    <comment>Context menu item on a provider row in the provider details sheet that copies the address of the extender carrying it (EXTENDER.md K9).</comment>
+  </data>
   <data name="copy_share_text" xml:space="preserve">
     <value>Copiar texto de partilha</value>
     <comment>Button on the share screen: copy the text form of the code.</comment>
@@ -3706,6 +3710,14 @@ maneira certa</value>
   <data name="extender_active" xml:space="preserve">
     <value>Ativo · {}</value>
     <comment>Extender status when at least one address family is activated. The argument is the family or families, from the IPv4, IPv6 and IPv4 and IPv6 labels.</comment>
+  </data>
+  <data name="extender_address_copied" xml:space="preserve">
+    <value>Endereço do extensor copiado</value>
+    <comment>Snackbar after tapping an extender address on a provider row in the provider details sheet (EXTENDER.md K9).</comment>
+  </data>
+  <data name="extender_address_label" xml:space="preserve">
+    <value>Extensor {}</value>
+    <comment>Spoken label of the extender line on a provider row in the provider details sheet: the word Extender followed by the extender's IP address (EXTENDER.md K9).</comment>
   </data>
   <data name="extender_default_value" xml:space="preserve">
     <value>Predefinição: {}</value>
@@ -7225,6 +7237,10 @@ conteúdo do mundo</value>
     <value>Ficar nesta saída</value>
     <comment>Button under the selected provider in the Provider Locations sheet. Reconnects to that one provider (the exit), so the connection keeps its IP address.</comment>
   </data>
+  <data name="stay_on_this_exit_extender_note" xml:space="preserve">
+    <value>Mantém o endereço IP deste fornecedor e o extensor até um deles ficar offline.</value>
+    <comment>Muted note under a selected provider row reached through an extender, in the Provider Locations sheet, above Stay on this exit: staying pins the extender as well as the exit (EXTENDER.md K10).</comment>
+  </data>
   <data name="stay_on_this_exit_note" xml:space="preserve">
     <value>Mantém o endereço IP deste fornecedor até ficar offline.</value>
     <comment>Muted line under the Stay on this exit button in the Provider Locations sheet: what staying on one provider does.</comment>
@@ -7243,6 +7259,10 @@ anónimo</value>
   <data name="staying_on_this_exit" xml:space="preserve">
     <value>Está a ficar nesta saída. Se ficar offline, escolha outra localização.</value>
     <comment>Muted line on the provider the connection already stays on (after Stay on this exit), in the Provider Locations sheet. Says how to leave it.</comment>
+  </data>
+  <data name="staying_on_this_exit_through_extender" xml:space="preserve">
+    <value>Está a ficar nesta saída através do extensor {}. Se um deles ficar offline, escolha outra localização.</value>
+    <comment>Muted line on the provider the connection stays on through a pinned extender (after Stay on this exit on a row reached through one), in the Provider Locations sheet. The placeholder is the extender's IP address (EXTENDER.md K10).</comment>
   </data>
   <data name="step_in" xml:space="preserve">
     <value>Entre na internet como ela deveria ser.</value>
@@ -8208,6 +8228,10 @@ como ela deveria ser.</value>
   <data name="waiting_for_approval" xml:space="preserve">
     <value>A aguardar aprovação</value>
     <comment>Used in Shared/Views/UpgradeSubscriptionSheet.swift.</comment>
+  </data>
+  <data name="waiting_for_this_exit_through_extender" xml:space="preserve">
+    <value>A aguardar esta saída através do extensor {}.</value>
+    <comment>Shown in the Provider Locations sheet when the connection stays on an exit through a pinned extender and that exit is not connected right now. The placeholder is the extender's IP address (EXTENDER.md K10).</comment>
   </data>
   <data name="waiting_for_wallet_signature" xml:space="preserve">
     <value>A aguardar a assinatura da carteira...</value>

@@ -1,5 +1,5 @@
 // Executable spec for the extender UI's pure logic (connect/EXTENDER.md K2,
-// K3, K4, K6, K7, N7, O8): the ring geometry a provider dot is drawn with
+// K3, K4, K6, K7, K9, N7, O8): the ring geometry a provider dot is drawn with
 // (App/ExtenderRingGeometry.h), the status mapping, settings form, QR
 // placement and import decision the panel and the sheets act on, the provider
 // extender row's reading and its switch guess, and which statistics sections
@@ -288,6 +288,94 @@ void RingGeometryTests() {
       Check(layout.rings.empty(), "no rings before the canvas has a size");
       CheckNear(0, layout.dotDiameter, 1e-9, "and no dot");
     }
+  }
+}
+
+// ---- ExtenderRingGeometry.h: the Drop fit and the scaled glyph (K9) ---------
+
+void RingFitTests() {
+  {
+    TEST_CASE("aDropCellKeepsK2sNumbersAndDashesTheLastRingItHolds");
+    // 14 units, the provider globe's dot: a third of it is the floor, which
+    // leaves room for one 4px ring and not two
+    const auto one = ExtenderRingsFor(14, Marks({"3cdd67"}), ExtenderRingFit::Drop);
+    CheckEq(1, static_cast<long long>(one.rings.size()), "one extender, one ring");
+    Check(!one.scaled && !one.Collapsed() && !one.rings[0].dashed, "K2 verbatim, solid");
+    CheckNear(2.0, one.rings[0].stroke, 1e-9, "K2's stroke");
+    CheckNear(14, one.rings[0].OuterDiameter(), 1e-9, "the outer edge is the cell edge");
+    CheckNear(14 - 8.0, one.dotDiameter, 1e-9, "the dot shrank by one ring");
+
+    for (int n = 2; n <= 5; ++n) {
+      std::vector<ExtenderMark> marks = Marks({"3cdd67", "dd4f3c", "67dd3c", "3c67dd", "dd3c67"});
+      marks.resize(static_cast<std::size_t>(n));
+      const auto layout = ExtenderRingsFor(14, marks, ExtenderRingFit::Drop);
+      const std::string at = " (n=" + std::to_string(n) + ")";
+      CheckEq(1, static_cast<long long>(layout.rings.size()), "still the one ring" + at);
+      Check(layout.rings[0].dashed, "dashed for the extenders without one" + at);
+      Check(layout.Collapsed(), "collapsed" + at);
+      CheckEq(n, layout.totalCount, "the total is preserved" + at);
+      CheckEq("3cdd67", layout.rings[0].colorHex, "in the first extender's colour" + at);
+      Check(!layout.scaled, "nothing thinned" + at);
+      CheckNear(2.0, layout.rings[0].stroke, 1e-9, "K2's stroke" + at);
+      CheckNear(14 - 8.0, layout.dotDiameter, 1e-9, "the dot shrank for one ring" + at);
+    }
+  }
+  {
+    TEST_CASE("aDropCellThatHoldsEveryRingIsTheScaleOne");
+    // where K2's numbers fit, the two fits are the same layout, the dashed
+    // third ring included
+    for (int n = 1; n <= 5; ++n) {
+      std::vector<ExtenderMark> marks = Marks({"3cdd67", "dd4f3c", "67dd3c", "3c67dd", "dd3c67"});
+      marks.resize(static_cast<std::size_t>(n));
+      const auto drop = ExtenderRingsFor(64, marks, ExtenderRingFit::Drop);
+      const auto scale = ExtenderRingsFor(64, marks);
+      const std::string at = " (n=" + std::to_string(n) + ")";
+      CheckEq(static_cast<long long>(scale.rings.size()), static_cast<long long>(drop.rings.size()),
+              "as many rings" + at);
+      CheckNear(scale.dotDiameter, drop.dotDiameter, 1e-9, "the same dot" + at);
+      for (std::size_t k = 0; k < drop.rings.size() && k < scale.rings.size(); ++k) {
+        CheckNear(scale.rings[k].diameter, drop.rings[k].diameter, 1e-9, "the same ring" + at);
+        Check(scale.rings[k].dashed == drop.rings[k].dashed, "the same dash" + at);
+      }
+    }
+  }
+  {
+    TEST_CASE("aDropCellDropsWhereAScaleCellThins");
+    // the connect hero's cell: Scale keeps three thinned rings, Drop one full one
+    const double cell = 256.0 / 14;
+    const auto marks = Marks({"3cdd67", "dd4f3c", "67dd3c"});
+    const auto scale = ExtenderRingsFor(cell, marks);
+    const auto drop = ExtenderRingsFor(cell, marks, ExtenderRingFit::Drop);
+    CheckEq(3, static_cast<long long>(scale.rings.size()), "Scale keeps the count");
+    Check(scale.scaled, "by thinning");
+    CheckEq(1, static_cast<long long>(drop.rings.size()), "Drop keeps the stroke");
+    Check(drop.rings[0].dashed && !drop.scaled, "and dashes the ring it keeps");
+    Check(cell / 3 <= drop.dotDiameter, "the dot keeps its floor either way");
+  }
+  {
+    TEST_CASE("aDropCellTooSmallForOneRingIsThePlainDot");
+    const auto layout = ExtenderRingsFor(10, Marks({"3cdd67", "dd4f3c"}), ExtenderRingFit::Drop);
+    Check(layout.rings.empty(), "no ring fits a 10px cell at K2's numbers");
+    CheckNear(10, layout.dotDiameter, 1e-9, "the dot fills the cell");
+    Check(!layout.Collapsed(), "nothing to dash");
+    CheckEq(2, layout.totalCount, "the extenders are still counted");
+  }
+  {
+    TEST_CASE("theGlyphScalesAsOne");
+    const auto layout = ExtenderRingsFor(64, Marks({"3cdd67", "dd4f3c", "67dd3c", "3c67dd"}));
+    const auto half = layout.ScaledBy(0.5);
+    CheckNear(layout.dotDiameter / 2, half.dotDiameter, 1e-9, "the dot");
+    CheckEq(static_cast<long long>(layout.rings.size()), static_cast<long long>(half.rings.size()),
+            "every ring");
+    for (std::size_t k = 0; k < layout.rings.size() && k < half.rings.size(); ++k) {
+      CheckNear(layout.rings[k].diameter / 2, half.rings[k].diameter, 1e-9, "the ring");
+      CheckNear(layout.rings[k].stroke / 2, half.rings[k].stroke, 1e-9, "the stroke");
+      Check(layout.rings[k].dashed == half.rings[k].dashed, "the dash");
+      CheckEq(layout.rings[k].colorHex, half.rings[k].colorHex, "the colour");
+    }
+    CheckNear(32, half.rings[0].OuterDiameter(), 1e-9, "the outer edge is the scaled cell's");
+    CheckEq(layout.totalCount, half.totalCount, "the count");
+    CheckNear(0, layout.ScaledBy(-1).dotDiameter, 1e-9, "a negative scale draws nothing");
   }
 }
 
@@ -1724,6 +1812,8 @@ int main() {
   PairingTests();
   std::cout << "ExtenderRingGeometry K2\n";
   RingGeometryTests();
+  std::cout << "ExtenderRingGeometry fit and scale\n";
+  RingFitTests();
   std::cout << "gossip state\n";
   GossipStateTests();
   std::cout << "extender panel model\n";
