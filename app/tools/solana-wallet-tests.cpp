@@ -64,10 +64,22 @@ struct Case {
 };
 #define TEST_CASE(name) Case case_##__LINE__(name)
 
-// Real, well-known Solana public keys, so the syntax check runs on the real shape.
+// Real, well-known Solana public keys. The payout rule refuses two of them, as
+// the server does: the USDC mint is a token's address, and the system
+// program's is the all-zero key.
 constexpr const char* kUsdcMint = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";      // 44
 constexpr const char* kTokenProgram = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";  // 43
 constexpr const char* kSystemProgram = "11111111111111111111111111111111";            // 32
+// Synthetic keys: base58 of 32 bytes made up here, each checked against the
+// server's decoder (solana-go PublicKeyFromBase58).
+// 0x01 to 0x20
+constexpr const char* kSyntheticKey = "4wBqpZM9xaSheZzJSMawUKKwhdpChKbZ5eu5ky4Vigw";    // 43
+// 32 bytes of 0xff: the longest encoding
+constexpr const char* kLongestKey = "JEKNVnkbo3jma5nREBBJCDoXFVeKkD56V3xKrvRmWxFG";     // 44
+// 31 zero bytes and a 0x01: the shortest encoding, one above the all-zero key
+constexpr const char* kShortestKey = "11111111111111111111111111111112";               // 32
+// a zero byte, then 0x01 to 0x1f: each leading zero byte is a leading '1'
+constexpr const char* kLeadingZeroKey = "1thX6LZfHDZZKUs92febYZhYRcXddmzfzF2NvTkPNE";  // 42
 // a Bittensor coldkey (ss58, 48 characters): not a Solana address
 constexpr const char* kColdkey = "5F3sa2TJAWMqDhXG6jhV4N8ko9SxwGy8TpaNS1repo5EYjQX";
 
@@ -113,7 +125,7 @@ void CheckState(ConnectState expected, const ConnectMachine& m, const std::strin
 // A machine whose manual address the server has accepted.
 ConnectMachine ReadyMachine() {
   ConnectMachine m;
-  Debounced(m, kUsdcMint, /*askServer=*/true);
+  Debounced(m, kSyntheticKey, /*askServer=*/true);
   Verdict(m, ServerVerdict::Valid);
   return m;
 }
@@ -126,41 +138,80 @@ void AddressTests() {
     CheckEq(44, static_cast<long long>(std::string(kUsdcMint).size()), "the USDC mint");
     CheckEq(43, static_cast<long long>(std::string(kTokenProgram).size()), "the token program");
     CheckEq(32, static_cast<long long>(std::string(kSystemProgram).size()), "the system program");
+    CheckEq(43, static_cast<long long>(std::string(kSyntheticKey).size()), "the synthetic key");
+    CheckEq(44, static_cast<long long>(std::string(kLongestKey).size()), "the longest key");
+    CheckEq(32, static_cast<long long>(std::string(kShortestKey).size()), "the shortest key");
+    CheckEq(42, static_cast<long long>(std::string(kLeadingZeroKey).size()),
+            "the leading zero key");
   }
   {
-    TEST_CASE("realPublicKeysLookLikeSolanaAddresses");
-    Check(LooksLikeSolanaAddress(kUsdcMint), "44 characters");
-    Check(LooksLikeSolanaAddress(kTokenProgram), "43 characters");
-    Check(LooksLikeSolanaAddress(kSystemProgram), "32 characters");
+    TEST_CASE("payoutKeysPass");
+    Check(LooksLikeSolanaAddress(kSyntheticKey), "a synthetic key");
+    Check(LooksLikeSolanaAddress(kTokenProgram), "a real key");
+    Check(LooksLikeSolanaAddress(kLeadingZeroKey), "a key with a leading zero byte");
   }
   {
-    TEST_CASE("theLengthBoundsAreInclusive");
-    Check(!LooksLikeSolanaAddress(std::string(31, '1')), "31 is too short");
-    Check(LooksLikeSolanaAddress(std::string(32, '1')), "32 is the shortest");
-    Check(LooksLikeSolanaAddress(std::string(44, 'z')), "44 is the longest");
-    Check(!LooksLikeSolanaAddress(std::string(45, 'z')), "45 is too long");
+    TEST_CASE("thirtyTwoBytesTakeThirtyTwoToFortyFourCharacters");
+    Check(LooksLikeSolanaAddress(kShortestKey), "32 is the shortest");
+    Check(LooksLikeSolanaAddress(kLongestKey), "44 is the longest");
+    Check(!LooksLikeSolanaAddress(std::string(30, '1') + "2"), "31 characters are 31 bytes");
+    Check(!LooksLikeSolanaAddress(std::string("1") + kLongestKey), "45 characters are 33 bytes");
+    Check(!LooksLikeSolanaAddress(std::string(45, 'z')), "45 'z' are 33 bytes");
+  }
+  {
+    TEST_CASE("theShapeOfAnAddressIsNotEnough");
+    // 32 to 44 base58 characters that are not 32 bytes: only the server refused
+    // these (support inbox 8045)
+    Check(!LooksLikeSolanaAddress(std::string(44, 'z')), "44 'z' are 33 bytes");
+    Check(!LooksLikeSolanaAddress(std::string("1") + kSyntheticKey), "a '1' more is a 33rd byte");
+    Check(!LooksLikeSolanaAddress(std::string(kLeadingZeroKey).substr(1)),
+          "a '1' fewer leaves 31 bytes");
+    Check(!LooksLikeSolanaAddress(std::string(33, '1')), "33 zero bytes");
+    Check(!LooksLikeSolanaAddress(std::string(30, '1') + "22"), "32 characters, 31 bytes");
+    Check(!LooksLikeSolanaAddress("2" + std::string(31, '1')), "32 characters, 23 bytes");
+  }
+  {
+    TEST_CASE("theAllZeroKeyIsRefused");
+    // 32 bytes, all zero: the system program's id, not a wallet
+    Check(!LooksLikeSolanaAddress(kSystemProgram), "32 '1's");
+    Check(!LooksLikeSolanaAddress(std::string(" ") + kSystemProgram + "\n"), "padded");
+    Check(LooksLikeSolanaAddress(kShortestKey), "the key one above it passes");
+  }
+  {
+    TEST_CASE("theUsdcMintIsRefused");
+    // 32 bytes, but a token's address, not a wallet's
+    Check(!LooksLikeSolanaAddress(kUsdcMint), "the mint");
+    Check(!LooksLikeSolanaAddress(std::string("\t") + kUsdcMint + " \r\n"), "padded");
+    std::string next = kUsdcMint;
+    next.back() = 'w';
+    Check(LooksLikeSolanaAddress(next),
+          "refused as the mint, not for its bytes: the key one above it passes");
   }
   {
     TEST_CASE("theFourLookalikesAreNotBase58");
     for (char lookalike : std::string("0OIl")) {
-      std::string address = kUsdcMint;
+      std::string address = kSyntheticKey;
       address[5] = lookalike;
       Check(!LooksLikeSolanaAddress(address),
-            std::string("rejects a '") + lookalike + "' inside a real key");
+            std::string("rejects a '") + lookalike + "' inside a key");
     }
     for (char other : std::string("+/-_=.")) {
-      std::string address = kUsdcMint;
+      std::string address = kSyntheticKey;
       address[5] = other;
       Check(!LooksLikeSolanaAddress(address),
             std::string("rejects a '") + other + "' (base64 and punctuation)");
     }
+    std::string accented = kSyntheticKey;
+    accented[5] = static_cast<char>(0xE9);
+    Check(!LooksLikeSolanaAddress(accented), "rejects a byte above 0x7f");
   }
   {
     TEST_CASE("surroundingWhitespaceIsTrimmedButInnerIsNot");
-    Check(LooksLikeSolanaAddress(std::string("  ") + kUsdcMint + "\n"), "a padded paste passes");
-    Check(LooksLikeSolanaAddress(std::string("\t") + kSystemProgram + " \r\n"),
-          "trimmed before the length is counted");
-    std::string spaced = kUsdcMint;
+    Check(LooksLikeSolanaAddress(std::string("  ") + kSyntheticKey + "\n"),
+          "a padded paste passes");
+    Check(LooksLikeSolanaAddress(std::string("\t") + kShortestKey + " \r\n"),
+          "trimmed before it is decoded");
+    std::string spaced = kSyntheticKey;
     spaced[20] = ' ';
     Check(!LooksLikeSolanaAddress(spaced), "a space inside is not trimmed away");
     Check(!LooksLikeSolanaAddress(""), "empty");
@@ -666,11 +717,32 @@ void ManualTests() {
     Check(!ConnectEnabled(m), "Connect disabled");
   }
   {
+    TEST_CASE("anAddressTheServerWouldRefuseNeverReachesIt");
+    // an address's shape, which only the server refused (support inbox 8045):
+    // answered at once, with no check out for a verdict to answer
+    for (const std::string& refused :
+         {std::string(kUsdcMint), std::string(kSystemProgram), std::string(44, 'z')}) {
+      ConnectMachine m;
+      Check(!Debounced(m, refused, /*askServer=*/true), "no request for " + refused);
+      CheckEq("invalid_solana_address", CheckKey(m), "invalid at once: " + refused);
+      Check(CheckIsError(m), "as a refusal: " + refused);
+      CheckState(ConnectState::Idle, m, "idle: " + refused);
+      Check(!Verdict(m, ServerVerdict::Valid), "no check is out: " + refused);
+      Check(!ConnectEnabled(m) && !Submit(m), "nothing to link: " + refused);
+
+      ConnectMachine browsing;
+      ChooseProvider(browsing);
+      Check(!Debounced(browsing, refused, true), "no request while the browser is out: " + refused);
+      CheckState(ConnectState::OpeningBrowser, browsing, "that flow goes on: " + refused);
+      CheckEq("invalid_solana_address", CheckKey(browsing), "invalid there too: " + refused);
+    }
+  }
+  {
     TEST_CASE("aPlausibleAddressIsCheckedByTheServer");
     ConnectMachine m;
-    Check(Debounced(m, std::string(" ") + kUsdcMint + " ", true), "a request");
+    Check(Debounced(m, std::string(" ") + kSyntheticKey + " ", true), "a request");
     CheckState(ConnectState::Checking, m, "checking");
-    CheckEq(kUsdcMint, m.address, "the trimmed address is the one asked about");
+    CheckEq(kSyntheticKey, m.address, "the trimmed address is the one asked about");
     CheckEq("checking_wallet_address", CheckKey(m), "says so");
     Check(!CheckIsError(m), "as progress");
     Check(!ConnectEnabled(m), "Connect disabled while checking");
@@ -679,7 +751,7 @@ void ManualTests() {
   {
     TEST_CASE("aValidVerdictReadiesConnect");
     ConnectMachine m;
-    Debounced(m, kUsdcMint, true);
+    Debounced(m, kSyntheticKey, true);
     Check(Verdict(m, ServerVerdict::Valid), "accepted");
     CheckState(ConnectState::Ready, m, "ready");
     CheckEq("", CheckKey(m), "the line clears");
@@ -688,7 +760,7 @@ void ManualTests() {
   {
     TEST_CASE("anInvalidVerdictSaysSo");
     ConnectMachine m;
-    Debounced(m, kUsdcMint, true);  // the USDC mint itself: the server refuses it
+    Debounced(m, kSyntheticKey, true);  // the server has the last word on what passes here
     Check(Verdict(m, ServerVerdict::Invalid), "accepted");
     CheckState(ConnectState::Idle, m, "idle");
     CheckEq("invalid_solana_address", CheckKey(m), "invalid");
@@ -698,7 +770,7 @@ void ManualTests() {
   {
     TEST_CASE("anUnansweredCheckSaysSomethingWentWrong");
     ConnectMachine m;
-    Debounced(m, kUsdcMint, true);
+    Debounced(m, kSyntheticKey, true);
     Check(Verdict(m, ServerVerdict::Unavailable), "accepted");
     CheckState(ConnectState::Idle, m, "idle");
     CheckEq("something_went_wrong", CheckKey(m), "the transport failure's key");
@@ -714,7 +786,7 @@ void ManualTests() {
     CheckEq("", m.address, "and no address it was about");
     Check(!ConnectEnabled(m), "Connect disabled until the new text is checked");
     ConnectMachine checking;
-    Debounced(checking, kUsdcMint, true);
+    Debounced(checking, kSyntheticKey, true);
     Typed(checking);
     Check(!Verdict(checking, ServerVerdict::Valid), "the old text's verdict is refused");
     Check(!ConnectEnabled(checking), "and enables nothing");
@@ -722,12 +794,14 @@ void ManualTests() {
   {
     TEST_CASE("withoutASessionTheCheckIsLocalOnly");
     ConnectMachine m;
-    Check(!Debounced(m, kUsdcMint, /*askServer=*/false), "no request");
+    Check(!Debounced(m, kSyntheticKey, /*askServer=*/false), "no request");
     CheckEq("", CheckKey(m), "no verdict for a plausible address");
     CheckState(ConnectState::Idle, m, "idle");
     Check(!ConnectEnabled(m), "Connect disabled");
     Check(!Debounced(m, "not an address", false), "no request");
     CheckEq("invalid_solana_address", CheckKey(m), "a local failure still shows");
+    Check(!Debounced(m, kUsdcMint, false), "no request");
+    CheckEq("invalid_solana_address", CheckKey(m), "and so does one of the server's rules");
   }
   {
     TEST_CASE("anEmptyFieldClearsTheVerdict");
@@ -744,19 +818,19 @@ void ManualTests() {
     ConnectMachine m = ReadyMachine();
     Check(Submit(m), "accepted");
     CheckState(ConnectState::Linking, m, "linking");
-    CheckEq(kUsdcMint, m.address, "the checked address");
+    CheckEq(kSyntheticKey, m.address, "the checked address");
     CheckEq("connecting_to_wallet", StatusKey(m), "says so");
     Check(!ProvidersEnabled(m) && !ConnectEnabled(m) && !EntryEnabled(m), "all disabled");
     Check(!Submit(m), "a second press is refused");
     Check(!Typed(m), "typing while linking changes nothing");
     Check(!Debounced(m, kTokenProgram, true), "nor does a late debounce");
-    CheckEq(kUsdcMint, m.address, "the address being linked stays");
+    CheckEq(kSyntheticKey, m.address, "the address being linked stays");
   }
   {
     TEST_CASE("typingWhileTheBrowserIsOutKeepsThatFlow");
     ConnectMachine m;
     ChooseProvider(m);
-    Check(Debounced(m, kUsdcMint, true), "the address is still checked");
+    Check(Debounced(m, kSyntheticKey, true), "the address is still checked");
     CheckState(ConnectState::OpeningBrowser, m, "the browser round trip goes on");
     Verdict(m, ServerVerdict::Valid);
     CheckState(ConnectState::OpeningBrowser, m, "still");
