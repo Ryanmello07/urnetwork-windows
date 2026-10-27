@@ -15,6 +15,7 @@
 #include "Log.h"
 #include "MainWindow.xaml.h"
 #include "PageContext.h"
+#include "SheetFit.h"  // sheetfit: sheets clamp to the window at open time
 #include "SnConsentPresentation.h"
 #include "Strings.h"
 #include "UrColors.h"
@@ -101,13 +102,16 @@ winrt::fire_and_forget ShowBittensorManualForm(
       urnw::Format("bittensor_manual_sign_instructions", Widen(request.walletName))});
   content.Children().Append(instructions);
 
-  // the exact challenge: read-only, selectable, and one click to copy
+  // the exact challenge: read-only, selectable, and one click to copy. A payout
+  // consent is about 2 KB of JSON: the box scrolls it, as the Top 200 sheet's
+  // payload box does, so the fields stay close below it
   TextBox messageBox;
   messageBox.Header(winrt::box_value(Loc("bittensor_message_to_sign")));
   messageBox.Text(H(request.message));
   messageBox.IsReadOnly(true);
   messageBox.AcceptsReturn(true);
   messageBox.TextWrapping(TextWrapping::Wrap);
+  messageBox.MaxHeight(160);
   content.Children().Append(messageBox);
 
   Button copyButton;
@@ -142,10 +146,18 @@ winrt::fire_and_forget ShowBittensorManualForm(
   errorText.Visibility(Visibility::Collapsed);
   content.Children().Append(errorText);
 
+  // a ContentDialog clips what overflows instead of scrolling it (SheetFit.h),
+  // which cut the signature field off below a consent: the form scrolls
+  ScrollViewer scroll;
+  scroll.VerticalScrollBarVisibility(ScrollBarVisibility::Auto);
+  scroll.HorizontalScrollBarVisibility(ScrollBarVisibility::Disabled);
+  scroll.MaxHeight(sheetfit::Height(window->Content().XamlRoot(), 520));
+  scroll.Content(content);
+
   ContentDialog dialog;
   dialog.XamlRoot(window->Content().XamlRoot());
   dialog.Title(winrt::box_value(H(request.walletName)));
-  dialog.Content(content);
+  dialog.Content(scroll);
   dialog.PrimaryButtonText(Loc("continue_txt"));
   dialog.CloseButtonText(Loc("cancel"));
   dialog.DefaultButton(ContentDialogButton::Primary);

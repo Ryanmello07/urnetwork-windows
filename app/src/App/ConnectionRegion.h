@@ -132,10 +132,14 @@ inline bool Contains(const std::string& haystack, std::string_view needle) {
 
 // Whether a failed platform call failed to REACH URnetwork: a transport error
 // from the sdk's http client (connect net_http.go: "http request failed: ...",
-// Go's dial / lookup / timeout / reset errors). An answer from the server -- a
-// status error ("401 Unauthorized: ..."), a validation or auth message in a
-// result -- is not: URnetwork was reached. Only this raises the can't-reach
-// prompt; it never changes the region.
+// Go's dial / lookup / timeout / reset errors). An api call that no route
+// answered -- a lookup a censor drops, a dial to a blackholed address, a
+// timeout -- fails as "http request attempts exhausted" (connect
+// HttpRequestExhaustedError, net_http_exhaustion.go), whose text names none of
+// those causes. An answer from the server -- a status error ("401
+// Unauthorized: ..."), a validation or auth message in a result -- is not:
+// URnetwork was reached. Only this raises the can't-reach prompt; it never
+// changes the region.
 inline bool IsCantReachFailure(std::string_view error) {
   if (error.empty()) return false;
   const std::string text = Lower(error);
@@ -146,6 +150,7 @@ inline bool IsCantReachFailure(std::string_view error) {
     return false;
   }
   static constexpr std::string_view kTransport[] = {
+      "http request attempts exhausted",
       "http request failed",
       "dial tcp",
       "dial udp",

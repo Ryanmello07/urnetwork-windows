@@ -328,8 +328,8 @@ void AccountPage::LoadAccount() {
       auto& page = self->account();
       page.needsNameClaim_ = claim;
       page.userAuth_ = u.user_auth ? *u.user_auth : std::string();
-      page.passwordResetUserAuth_ =
-          urnw::account::PasswordResetUserAuth(u.user_auth, u.auth_type, u.auth_types);
+      page.passwordResetUserAuth_ = urnw::account::PasswordResetUserAuth(
+          u.user_auth, u.auth_type, u.auth_types, urnw::account::PasswordSignIns(u.user_auths));
       page.ApplyNetworkName(u.network_name);
       const std::wstring auth = urnw::Widen(page.userAuth_);
       page.SetAuthText(hstring{urnw::Format(

@@ -642,6 +642,12 @@ bool SdkHost::Initialize() {
       if (auto due = owedExtenderReset_.TakeDue(st.state)) {
         QueueExtenderResetResend(std::move(*due));
       }
+      // The same for an ingress dns the service refused as busy
+      // (Common/IngressDnsSync.h): the session that refused it still resolves
+      // through the values it imported until it takes these.
+      if (auto due = owedIngressDns_.TakeDue(st.state)) {
+        QueueIngressDnsResend(std::move(*due));
+      }
       if (onTunnel_) onTunnel_(st);
       // Terminal activation failure may close the SDK feed before another
       // stats event arrives. Publish the service truth without an SDK getter
@@ -3756,6 +3762,12 @@ bool SdkHost::BootstrapSession(const char* reason, bool attachOnly) {
 
     LogInfo("sdkhost: session bootstrapped (mode={} rpc={})",
             proto::ToString(sessionMode_.load()), hostPort);
+    // A reattached session imported the space when it started, so a region or
+    // servers saved since then, by an earlier run of this app or while the
+    // service could not take them, have not reached it: hand it the values this
+    // space holds (Common/IngressDnsSync.h). A session started here imported
+    // them with start_tunnel.
+    if (reattaching) QueueIngressDnsLocked("reattached to a running session");
     // …and then GO AND CHECK, because every line above this one succeeded
     // without the service having answered once. See the rpc-sync watchdog in
     // SdkHost.h: this log used to be the last word on a session that was in
@@ -4446,6 +4458,7 @@ void SdkHost::ProviderOnlyStatsLoop() {
     std::optional<bool> extenderWrite;
     std::optional<bool> measurementsWrite;
     std::optional<proto::ResetExtenders> extenderReset;
+    std::optional<proto::SetIngressDns> ingressDns;
     {
       std::unique_lock lock(providerOnlyMutex_);
       providerOnlyCv_.wait_for(lock, kProviderOnlyStatsInterval,
@@ -4456,6 +4469,7 @@ void SdkHost::ProviderOnlyStatsLoop() {
       extenderWrite = std::exchange(providerOnlyExtenderWrite_, std::nullopt);
       measurementsWrite = std::exchange(providerOnlyMeasurementsWrite_, std::nullopt);
       extenderReset = std::exchange(extenderResetResend_, std::nullopt);
+      ingressDns = std::exchange(ingressDnsSend_, std::nullopt);
     }
     try {
       // The Extender switch's write, outside mutex_ like the read below and
@@ -4465,6 +4479,8 @@ void SdkHost::ProviderOnlyStatsLoop() {
       if (measurementsWrite) WriteProviderOnlyMeasurements(*measurementsWrite);
       // An owed extender reset, sent once more, outside mutex_ too.
       if (extenderReset) ResendExtenderReset(*extenderReset);
+      // The ingress dns the app's space holds, outside mutex_ too.
+      if (ingressDns) SendIngressDns(*ingressDns);
       bool presenting = false;
       {
         std::scoped_lock lock(presentationMutex_);
@@ -4622,6 +4638,83 @@ void SdkHost::ResendExtenderReset(const proto::ResetExtenders& request) {
           answer == extenderreset::ServiceAnswer::Taken
               ? (reset ? " (applied)" : " (no such space, or applied already)")
               : "; the service's next import applies it");
+}
+
+// ---- the ingress dns to the service (Common/IngressDnsSync.h) -----------------
+//
+// Nothing here logs the region or the servers, as above: only that they went.
+
+void SdkHost::QueueIngressDnsLocked(const char* reason) {
+  // caller holds mutex_: networkSpace_ is reassigned under it
+  if (!networkSpace_) return;
+  std::optional<proto::SetIngressDns> request;
+  try {
+    // The space's own reading, after the save: the region it stored (an
+    // unknown code stores "") and the servers it normalized.
+    request = proto::SetIngressDnsRequestFor(
+        networkSpace_->getKey(), networkSpace_->getIngressCountryCode(),
+        networkSpace_->getControlDohUrls().value_or(urnet::StringList{}));
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: reading the ingress dns for the service failed ({}): {}", reason, e.what());
+    return;
+  } catch (...) {
+    LogWarn("sdkhost: reading the ingress dns for the service failed ({})", reason);
+    return;
+  }
+  if (!request) {
+    LogWarn("sdkhost: the space names no key for the service's ingress dns ({}); its next "
+            "import carries it",
+            reason);
+    return;
+  }
+  {
+    std::scoped_lock lock(providerOnlyMutex_);
+    // newer values replace any not yet sent
+    ingressDnsSend_ = std::move(request);
+    providerOnlyKick_ = true;
+  }
+  providerOnlyCv_.notify_all();
+  LogInfo("sdkhost: the ingress dns goes to the service ({})", reason);
+}
+
+void SdkHost::QueueIngressDnsResend(proto::SetIngressDns request) {
+  {
+    std::scoped_lock lock(providerOnlyMutex_);
+    // values queued since the refusal are newer than the owed ones
+    if (!ingressDnsSend_) ingressDnsSend_ = std::move(request);
+    providerOnlyKick_ = true;
+  }
+  providerOnlyCv_.notify_all();
+}
+
+void SdkHost::SendIngressDns(const proto::SetIngressDns& request) {
+  if (!service_.IsConnected()) {
+    owedIngressDns_.Answered(request, ingressdns::ServiceAnswer::NotTaken);
+    LogInfo("sdkhost: no control channel; the service takes the ingress dns at its next import "
+            "of the space");
+    return;
+  }
+  bool held = false;
+  std::string error;
+  const ingressdns::ServiceAnswer answer = service_.SetIngressDns(request, &held, &error);
+  // A busy refusal is owed until a pushed status ends the operation that held
+  // the service's lock (the state handler); any other answer owes nothing.
+  owedIngressDns_.Answered(request, answer);
+  switch (answer) {
+    case ingressdns::ServiceAnswer::Taken:
+      LogInfo("sdkhost: the service {} the ingress dns",
+              held ? "applied" : "held no such space; its next import carries");
+      break;
+    case ingressdns::ServiceAnswer::Busy:
+      LogInfo("sdkhost: the service is busy with a tunnel operation; the ingress dns goes again "
+              "once it ends");
+      break;
+    case ingressdns::ServiceAnswer::NotTaken:
+      LogWarn("sdkhost: the service did not take the ingress dns ({}); its next import of the "
+              "space carries it",
+              error.empty() ? "no detail" : error);
+      break;
+  }
 }
 
 void SdkHost::ShowProviderOnlyStatsLocked(const proto::ProviderStats& stats) {
@@ -5527,6 +5620,10 @@ std::optional<std::string> SdkHost::SetControlDohUrls(const std::vector<std::str
     std::string errorId = networkSpace_->setControlDohUrls(urnet::StringList(urls));
     if (errorId.empty()) {
       LogInfo("sdkhost: bootstrap doh servers saved");
+      // The service's session and provider-only device resolve through the
+      // space they imported at their start: the servers go to it now, where
+      // they apply in place (Common/IngressDnsSync.h).
+      QueueIngressDnsLocked("bootstrap doh servers saved");
       // No session: the provider-only device resolves the api through the
       // servers of the space it was built from, so in China it may never reach
       // it until it is rebuilt. The reconcile's request carries the saved
@@ -5580,6 +5677,12 @@ std::optional<std::string> SdkHost::SetIngressCountryCode(const std::string& cod
     // screen's calls included -- resolves through it from the next lookup.
     std::string stored = networkSpace_->setIngressCountryCode(code);
     LogInfo("sdkhost: connection region saved");
+    // The service's session resolves URnetwork's names through the space it
+    // imported when it started, so a region chosen from the "Can't reach
+    // URnetwork" prompt over that stalled session would reach it only at the
+    // next connect. It goes to the service now, where it applies in place
+    // (Common/IngressDnsSync.h), as it does for an in-process tunnel.
+    QueueIngressDnsLocked("connection region saved");
     // As for the bootstrap DoH servers: the provider-only device resolves the
     // api through the space it was built from.
     if (!device_) RequestProviderReconcile("connection region saved");

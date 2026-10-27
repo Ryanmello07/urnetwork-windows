@@ -252,6 +252,33 @@ class TunnelController {
     std::string error;
   };
   ExtenderResetResult ResetExtenders(const proto::ResetExtenders& request);
+  // set_ingress_dns (Protocol.h SetIngressDns; sdk control_doh.go): the
+  // connection region and the bootstrap DNS-over-HTTPS servers the app's space
+  // holds. Written through the space's own setters (setIngressCountryCode,
+  // setControlDohUrls) into the space spaceManager_ holds under the request's
+  // key, the one object the session's device and the provider-only device run
+  // in, where they apply in place: the space's DoH cache is swapped, and a
+  // connection attempt resolves URnetwork's own names through them from its
+  // next lookup, without a restart. The result's `held` says whether the space
+  // was held; with no manager or no such space nothing is written, and the
+  // next import of the space carries the values.
+  //
+  // The session lock is taken in budget, for StartProvider's reason, and only
+  // to look the space up: the setters join the lookups in flight on the cache
+  // they replace, so they run with the lock released. Not ok, with `error`,
+  // when the lock was not free -- `busy` then, which the app answers by
+  // sending the values again once the operation holding the lock ends
+  // (Common/IngressDnsSync.h) -- or when the space refused the values.
+  //
+  // Nothing here logs the region or the servers: where a user says they
+  // connect from, and which resolvers they can reach, is theirs.
+  struct IngressDnsResult {
+    bool ok = false;
+    bool busy = false;
+    bool held = false;
+    std::string error;
+  };
+  IngressDnsResult SetIngressDns(const proto::SetIngressDns& request);
 
   // The network country the app read (Common/NetworkCountry.h; open bug P052):
   // the country of the mobile broadband network carrying the default route, ""

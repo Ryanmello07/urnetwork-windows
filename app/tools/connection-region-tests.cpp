@@ -153,6 +153,17 @@ int main(int argc, char** argv) {
     if (!region::IsCantReachFailure(error)) Fail(std::string("not classified: ") + error);
   }
 
+  // Support inbox 8050, 8051: what the sdk's api calls answer when nothing
+  // reached URnetwork. connect ends a request whose attempts all failed -- a
+  // lookup a censor drops, a dial to a blackholed address, a timeout -- with
+  // its HttpRequestExhaustedError, whose text names none of those causes
+  // (net_http_exhaustion.go). A sign-in from such a network fails with exactly
+  // this text.
+  Case("an api request that no route answered raises the prompt");
+  if (!region::IsCantReachFailure("http request attempts exhausted")) {
+    Fail("not classified: http request attempts exhausted");
+  }
+
   Case("auth and validation errors do not raise the prompt");
   for (const char* error : {
            "",

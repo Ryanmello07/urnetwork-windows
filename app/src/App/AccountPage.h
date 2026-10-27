@@ -136,8 +136,9 @@ class AccountPage {
   std::string referralCode_;
   // the identity the account was created with, shown on the profile
   std::string userAuth_;
-  // the address Change password mails a reset link to: userAuth_ when the
-  // account has a password sign-in, else empty (Common/PasswordSignIn.h)
+  // the address Change password mails a reset link to: a password sign-in's
+  // address, which an account that added an email later has though it has no
+  // userAuth_, else empty (Common/PasswordSignIn.h)
   std::string passwordResetUserAuth_;
   // apple AccountNavStackView: a name must be CLAIMED (no reclaim cooldown on
   // the auto-generated one) rather than CHANGED (24h cooldown protects the old
