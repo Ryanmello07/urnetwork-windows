@@ -223,3 +223,34 @@ func TestBittensorBridgeCodesMatchTheSdkHeader(t *testing.T) {
 		}
 	}
 }
+
+// The manual form shows the exact message to sign above the address and
+// signature boxes. A payout consent is about 2 KB of JSON, and the form put it
+// in a box that grew with it, inside a ContentDialog, which clips what
+// overflows instead of scrolling it (SheetFit.h): the signature box was cut
+// off, so a consent could not be signed with TAO.com (support inbox 8058,
+// 8073). The message box is bounded and the form scrolls within the window.
+func TestBittensorManualFormScrolls(t *testing.T) {
+	dialogs := stripLineComments(readAppSource(t, "BittensorWalletDialogs.cpp"))
+	form := functionBody(dialogs, "winrt::fire_and_forget ShowBittensorManualForm(")
+	if form == "" {
+		t.Fatal("BittensorWalletDialogs.cpp: no ShowBittensorManualForm")
+	}
+	if !strings.Contains(dialogs, `#include "SheetFit.h"`) {
+		t.Error("BittensorWalletDialogs.cpp: the manual form does not clamp to the window (SheetFit.h)")
+	}
+	for _, want := range []string{
+		"messageBox.MaxHeight(",
+		"scroll.VerticalScrollBarVisibility(ScrollBarVisibility::Auto)",
+		"scroll.MaxHeight(sheetfit::Height(",
+		"scroll.Content(content)",
+		"dialog.Content(scroll)",
+	} {
+		if !strings.Contains(form, want) {
+			t.Errorf("ShowBittensorManualForm: missing %s", want)
+		}
+	}
+	if strings.Contains(form, "dialog.Content(content)") {
+		t.Error("ShowBittensorManualForm: the form is the dialog's content, unscrolled")
+	}
+}
