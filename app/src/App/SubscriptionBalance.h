@@ -30,6 +30,7 @@
 
 #include "ConfirmationPollGate.h"
 #include "CryptoPayPresentation.h"
+#include "PaymentPastDue.h"
 #include "PricePresentation.h"
 #include "ReferralCodeState.h"
 #include "ReferralTotalsState.h"
@@ -67,6 +68,10 @@ struct BalanceSnapshot {
   // The network's latest one-time crypto credit still in its grace
   // (crypto_term): the renewal notice's dates. Empty when there is none.
   cryptopay::CryptoTermView cryptoTerm;
+  // A Stripe renewal that did not go through and is still being retried
+  // (payment_past_due): the past-due notice shows exactly while it is
+  // present. Absent from an older server.
+  pastdue::PaymentPastDueView paymentPastDue;
 };
 
 // Confirmation-poll state, for the upgrade flow UI.

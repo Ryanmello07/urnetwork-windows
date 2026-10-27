@@ -5041,6 +5041,14 @@
     <value>การชำระเงินของคุณไม่สำเร็จ</value>
     <comment>Shown in the payment-problem dialog when the Stripe payment sheet reports a failure. The sheet's own error detail is appended by the caller.</comment>
   </data>
+  <data name="payment_past_due_notice" xml:space="preserve">
+    <value>การชำระเงินสำหรับ UR Pro ของคุณไม่สำเร็จ อัปเดตวิธีการชำระเงินเพื่อใช้ Pro ต่อ</value>
+    <comment>In-app notice while the renewal payment of a UR Pro subscription has failed (a declined card, for example) and the store is still retrying it. If no payment goes through before the retries end, the subscription is cancelled. Keep UR Pro and Pro (the plan's name) unchanged. Didn't go through = failed.</comment>
+  </data>
+  <data name="payment_past_due_update_payment" xml:space="preserve">
+    <value>อัปเดตวิธีการชำระเงิน</value>
+    <comment>Button on the notice that a UR Pro payment didn't go through: opens the subscription page on ur.io in the browser, where the payment method (a card, for example) is updated.</comment>
+  </data>
   <data name="payment_problem" xml:space="preserve">
     <value>ปัญหาการชำระเงิน</value>
     <comment>Billing errors. Every one is shown to the user WITH a remedy: a payment error they cannot see is a payment error they will hit again.</comment>

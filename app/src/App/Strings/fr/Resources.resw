@@ -5112,6 +5112,14 @@ le plus vaste, le plus sûr et le plus décentralisé au monde.</value>
     <value>Votre paiement n’a pas pu aboutir.</value>
     <comment>Shown in the payment-problem dialog when the Stripe payment sheet reports a failure. The sheet's own error detail is appended by the caller.</comment>
   </data>
+  <data name="payment_past_due_notice" xml:space="preserve">
+    <value>Votre paiement pour UR Pro n’a pas abouti. Mettez à jour votre moyen de paiement pour conserver Pro.</value>
+    <comment>In-app notice while the renewal payment of a UR Pro subscription has failed (a declined card, for example) and the store is still retrying it. If no payment goes through before the retries end, the subscription is cancelled. Keep UR Pro and Pro (the plan's name) unchanged. Didn't go through = failed.</comment>
+  </data>
+  <data name="payment_past_due_update_payment" xml:space="preserve">
+    <value>Mettre à jour le moyen de paiement</value>
+    <comment>Button on the notice that a UR Pro payment didn't go through: opens the subscription page on ur.io in the browser, where the payment method (a card, for example) is updated.</comment>
+  </data>
   <data name="payment_problem" xml:space="preserve">
     <value>Problème de paiement</value>
     <comment>Billing errors. Every one is shown to the user WITH a remedy: a payment error they cannot see is a payment error they will hit again.</comment>

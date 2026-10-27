@@ -173,9 +173,10 @@ func TestUpgradeSheetWordsTheHostedRefusal(t *testing.T) {
 	}
 }
 
-// Manage subscription in Settings words the billing portal's refusal with
-// PaymentRefusal.h; a portal url still opens first, and a failure with no
-// answer from the server still shows the sdk's words.
+// Manage subscription on the Account plan pane words the billing portal's
+// refusal with PaymentRefusal.h; a portal url still opens first, and a failure
+// with no answer from the server still shows the sdk's words. Both show on the
+// window-level bar (TestSubscriptionRowsReportOnTheWindowLevelBar).
 func TestManageSubscriptionWordsThePortalRefusal(t *testing.T) {
 	settings := readAppSource(t, "SettingsPage.cpp")
 	body := paymentRefusalCode(functionBody(settings, "winrt::fire_and_forget SettingsPage::OpenCustomerPortal("))
@@ -185,8 +186,8 @@ func TestManageSubscriptionWordsThePortalRefusal(t *testing.T) {
 	if !strings.Contains(settings, `#include "PaymentRefusal.h"`) {
 		t.Error(`SettingsPage.cpp does not include "PaymentRefusal.h"`)
 	}
-	shown := `page.settingsSnackbar().Show(hstring{PaymentRefusalMessage(Localized(refusal->key),Widen(refusal->detail))},InfoBarSeverity::Error);`
-	unanswered := `page.settingsSnackbar().Show(error.empty()?Loc("something_went_wrong"):winrt::to_hstring(error),InfoBarSeverity::Error);`
+	shown := `page.accountSnackbar_.Show(hstring{PaymentRefusalMessage(Localized(refusal->key),Widen(refusal->detail))},InfoBarSeverity::Error);`
+	unanswered := `page.accountSnackbar_.Show(error.empty()?Loc("something_went_wrong"):winrt::to_hstring(error),InfoBarSeverity::Error);`
 	for _, want := range []string{
 		`if(result&&result->error){refusal=PaymentRefusalTextFor(*result->error,"something_went_wrong");}elseif(err){error=*err;}`,
 		"if(refusal){" + shown + "return;}",

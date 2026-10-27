@@ -10,6 +10,7 @@
 #include "GuestConversion.h"
 #include "Log.h"
 #include "Paths.h"
+#include "PaymentPastDueSdk.h"
 
 namespace urnw {
 namespace {
@@ -304,6 +305,9 @@ void SubscriptionBalanceStore::Apply(urnet::SubscriptionBalanceResult const& res
   // names the sdk's crypto fields (CryptoPaySdk.h)
   snapshot_.cryptoAssets = cryptopay::AssetsFromSdk(result);
   snapshot_.cryptoTerm = cryptopay::TermFromSdk(result);
+  // a failed Stripe renewal still being retried, read through its one adapter
+  // (PaymentPastDueSdk.h)
+  snapshot_.paymentPastDue = pastdue::PastDueFromSdk(result);
   snapshot_.offerVariant.clear();
   snapshot_.offerExperimentId.clear();
   if (result.experiments) {

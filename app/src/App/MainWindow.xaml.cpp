@@ -639,8 +639,10 @@ void MainWindow::ApplyStrings() {
   account_->ApplyStrings();
   wallet_->ApplyStrings();
   settings_->ApplyStrings();
-  // the rows ApplyStrings builds start hidden: re-apply the plan's store
+  // the rows ApplyStrings builds start hidden: re-apply the plan's store and
+  // the past-due notice
   settings_->ApplySubscriptionStore(balance_.subscriptionStoreFamily);
+  settings_->ApplyPaymentPastDue(balance_.paymentPastDue);
   referrals_->ApplyStrings();
   sessions_->ApplyStrings();
   licenses_->ApplyStrings();
@@ -2492,6 +2494,9 @@ void MainWindow::ApplyBalance() {
 
   // the Stripe customer portal only manages a Stripe subscription
   if (settings_) settings_->ApplySubscriptionStore(balance_.subscriptionStoreFamily);
+  // the past-due notice: exactly while the balance carries payment_past_due,
+  // whatever the plan and its store say
+  if (settings_) settings_->ApplyPaymentPastDue(balance_.paymentPastDue);
 
   // the small ring while the post-checkout confirmation poll runs
   AccountPlanRing().IsActive(balancePoll_.confirming);
