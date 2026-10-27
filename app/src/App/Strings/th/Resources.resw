@@ -5041,6 +5041,14 @@
     <value>การชำระเงินของคุณไม่สำเร็จ</value>
     <comment>Shown in the payment-problem dialog when the Stripe payment sheet reports a failure. The sheet's own error detail is appended by the caller.</comment>
   </data>
+  <data name="payment_past_due_notice" xml:space="preserve">
+    <value>การชำระเงินสำหรับ UR Pro ของคุณไม่สำเร็จ อัปเดตวิธีการชำระเงินเพื่อใช้ Pro ต่อ</value>
+    <comment>In-app notice while the renewal payment of a UR Pro subscription has failed (a declined card, for example) and the store is still retrying it. If no payment goes through before the retries end, the subscription is cancelled. Keep UR Pro and Pro (the plan's name) unchanged. Didn't go through = failed.</comment>
+  </data>
+  <data name="payment_past_due_update_payment" xml:space="preserve">
+    <value>อัปเดตวิธีการชำระเงิน</value>
+    <comment>Button on the notice that a UR Pro payment didn't go through: opens the subscription page on ur.io in the browser, where the payment method (a card, for example) is updated.</comment>
+  </data>
   <data name="payment_problem" xml:space="preserve">
     <value>ปัญหาการชำระเงิน</value>
     <comment>Billing errors. Every one is shown to the user WITH a remedy: a payment error they cannot see is a payment error they will hit again.</comment>
@@ -6797,6 +6805,18 @@
   <data name="site_sub_other_platform" xml:space="preserve">
     <value>แพลตฟอร์มอื่น</value>
     <comment>Subscription: unknown platform fallback</comment>
+  </data>
+  <data name="site_sub_past_due_body" xml:space="preserve">
+    <value>เราไม่สามารถต่ออายุ UR Pro ด้วยวิธีการชำระเงินของคุณได้ อัปเดตวิธีการชำระเงิน หรือชำระใบแจ้งหนี้ด้วยบัตรอื่น เพื่อใช้ Pro ต่อ</value>
+    <comment>ur.io Manage subscription: the past-due notice under its title. Stripe retries the failed renewal for about two weeks, then cancels the subscription. The notice's two actions are "Update payment method" and "Pay invoice" (the failing invoice, paid with another card). Keep UR Pro and Pro (the plan's name) unchanged.</comment>
+  </data>
+  <data name="site_sub_past_due_title" xml:space="preserve">
+    <value>การชำระเงินของคุณไม่สำเร็จ</value>
+    <comment>ur.io Manage subscription: title of the notice shown while a Stripe renewal's payment has failed (a declined card, for example) and Stripe is retrying it. Didn't go through = failed.</comment>
+  </data>
+  <data name="site_sub_pay_invoice" xml:space="preserve">
+    <value>ชำระใบแจ้งหนี้</value>
+    <comment>ur.io Manage subscription: button on the past-due notice that opens the failing renewal's invoice on Stripe's own page, where it can be paid at once with another card.</comment>
   </data>
   <data name="site_sub_platform_body" xml:space="preserve">
     <value>ระบบเรียกเก็บเงินการสมัคร Pro ของคุณผ่าน {platform} หากต้องการเปลี่ยนหรือยกเลิก ให้จัดการการสมัครของคุณผ่าน {platform}</value>

@@ -25,6 +25,7 @@
 #include "MainWindow.xaml.h"
 #include "ManageSubscription.h"
 #include "PageContext.h"
+#include "PaymentPastDueSdk.h"
 #include "PaymentRefusal.h"
 #include "Strings.h"
 #include "SupportContact.h"
@@ -140,7 +141,9 @@ class PaneModeScope {
 }  // namespace
 
 SettingsPage::SettingsPage(winrt::URnetwork::implementation::MainWindow& window)
-    : w_(window), snackbar_(window.SupportInfo(), window.DispatcherQueue()) {}
+    : w_(window),
+      snackbar_(window.SupportInfo(), window.DispatcherQueue()),
+      accountSnackbar_(window.AccountSnackbar(), window.DispatcherQueue()) {}
 
 void SettingsPage::ApplyStrings() {
   BuildSections();  // idempotent
@@ -763,6 +766,28 @@ void SettingsPage::BuildSupportContactSection(Panel const& host, bool withGroupH
 
 void SettingsPage::BuildSubscriptionSection(Panel const& host) {
   auto card = Card(host);
+  // The past-due notice (PaymentPastDue.h): a Stripe renewal did not go
+  // through and Stripe is still retrying it. An in-app notice, never a system
+  // notification, in the crypto term notice's shape (CryptoAccountRows): a
+  // warning bar the user cannot close, with its one action. Above Manage
+  // Subscription, and independent of it: the balance's payment_past_due is
+  // the notice's only rule, whatever the plan and its store say.
+  pastDueNotice_ = InfoBar();
+  pastDueNotice_.Severity(InfoBarSeverity::Warning);
+  pastDueNotice_.IsClosable(false);
+  pastDueNotice_.IsOpen(false);
+  pastDueNotice_.Margin(ThicknessHelper::FromLengths(12, 8, 12, 8));
+  pastDueNotice_.Message(Loc("payment_past_due_notice"));
+  pastDueUpdate_ = Button();
+  pastDueUpdate_.Content(winrt::box_value(Loc("payment_past_due_update_payment")));
+  winrt::Microsoft::UI::Xaml::Automation::AutomationProperties::SetAutomationId(
+      pastDueUpdate_, L"acceptance.account.payment-past-due-update");
+  pastDueUpdate_.Click([this](auto const&, auto const&) { OpenUpdatePayment(); });
+  pastDueNotice_.ActionButton(pastDueUpdate_);
+  // hidden until the balance carries payment_past_due (ApplyPaymentPastDue)
+  pastDueNotice_.Visibility(Visibility::Collapsed);
+  card.Children().Append(pastDueNotice_);
+
   // Opens the Stripe customer portal in the browser; there is nothing to show
   // beside the label, so the whole row is the affordance.
   TextBlock unused{nullptr};
@@ -776,6 +801,13 @@ void SettingsPage::ApplySubscriptionStore(std::string const& storeFamily) {
   if (!manageSubscription_) return;
   manageSubscription_.Visibility(urnw::ShowsManageSubscription(storeFamily) ? Visibility::Visible
                                                                             : Visibility::Collapsed);
+}
+
+void SettingsPage::ApplyPaymentPastDue(pastdue::PaymentPastDueView const& view) {
+  if (!pastDueNotice_) return;
+  const bool notice = pastdue::NoticeShows(view);
+  pastDueNotice_.IsOpen(notice);
+  pastDueNotice_.Visibility(notice ? Visibility::Visible : Visibility::Collapsed);
 }
 
 void SettingsPage::BuildVersionSection(Panel const& host) {
@@ -1428,7 +1460,7 @@ winrt::fire_and_forget SettingsPage::OpenCustomerPortal() {
   if (!Sdk().IsLoggedIn()) {
     // co_return alone made this row a control that swallowed the click and
     // said nothing at all.
-    snackbar_.Show(Loc("please_login_to_urnetwork"), InfoBarSeverity::Warning);
+    accountSnackbar_.Show(Loc("please_login_to_urnetwork"), InfoBarSeverity::Warning);
     co_return;
   }
   manageSubscription_.IsEnabled(false);
@@ -1459,12 +1491,12 @@ winrt::fire_and_forget SettingsPage::OpenCustomerPortal() {
             return;
           }
           if (refusal) {
-            page.settingsSnackbar().Show(
+            page.accountSnackbar_.Show(
                 hstring{PaymentRefusalMessage(Localized(refusal->key), Widen(refusal->detail))},
                 InfoBarSeverity::Error);
             return;
           }
-          page.settingsSnackbar().Show(
+          page.accountSnackbar_.Show(
               error.empty() ? Loc("something_went_wrong") : winrt::to_hstring(error),
               InfoBarSeverity::Error);
         });
@@ -1488,7 +1520,56 @@ winrt::fire_and_forget SettingsPage::LaunchCustomerPortal(std::string url) {
   }
   if (launched) co_return;
   LogWarn("settings: the customer portal did not open");
-  snackbar_.Show(Loc("site_billing_portal_error"), InfoBarSeverity::Error);
+  accountSnackbar_.Show(Loc("site_billing_portal_error"), InfoBarSeverity::Error);
+}
+
+winrt::fire_and_forget SettingsPage::OpenUpdatePayment() {
+  auto self = w_.get_strong();  // keep the window alive across the call
+  // No session to make a code for: the notice shows only signed in, so this
+  // is a sign-out racing the click. The bare url, and ur.io asks to sign in.
+  if (!Sdk().apiReady() || !Sdk().IsLoggedIn()) {
+    LaunchUpdatePayment(pastdue::UpdatePaymentUrl(""));
+    co_return;
+  }
+  pastDueUpdate_.IsEnabled(false);
+
+  auto queue = w_.DispatcherQueue();
+  auto weak = w_.get_weak();
+  Sdk().api().authCodeCreate(
+      pastdue::UpdatePaymentAuthCodeArgs(),
+      [queue, weak](std::optional<urnet::AuthCodeCreateResult> result,
+                    std::optional<std::string> err) {
+        // the code, or "" after any failure: then the url has no code
+        const std::string code = pastdue::AuthCodeFromSdk(result, err);
+        queue.TryEnqueue([weak, code] {
+          auto window = weak.get();
+          if (!window) return;
+          auto& page = window->settings();
+          page.pastDueUpdate_.IsEnabled(true);
+          if (code.empty()) LogWarn("settings: no auth code for Manage Subscription, opening it without one");
+          page.LaunchUpdatePayment(pastdue::UpdatePaymentUrl(code));
+        });
+      });
+  co_return;
+}
+
+winrt::fire_and_forget SettingsPage::LaunchUpdatePayment(std::string url) {
+  auto self = w_.get_strong();  // keep the window alive across the launch
+  // The url can carry a sign-in code: it goes to the launcher and nowhere
+  // else, the log included.
+  bool launched = false;
+  try {
+    launched = co_await winrt::Windows::System::Launcher::LaunchUriAsync(
+        winrt::Windows::Foundation::Uri(winrt::to_hstring(url)));
+  } catch (winrt::hresult_error const& e) {
+    LogWarn("settings: Manage Subscription launch failed: {}", urnw::Narrow(std::wstring{e.message()}));
+    launched = false;
+  } catch (...) {
+    launched = false;
+  }
+  if (launched) co_return;
+  LogWarn("settings: Manage Subscription did not open");
+  accountSnackbar_.Show(Loc("site_billing_portal_error"), InfoBarSeverity::Error);
 }
 
 winrt::fire_and_forget SettingsPage::OpenCloudProxies() {
