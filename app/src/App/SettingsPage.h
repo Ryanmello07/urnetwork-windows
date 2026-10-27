@@ -24,6 +24,7 @@
 #include <winrt/Microsoft.UI.Xaml.h>
 #include <winrt/Microsoft.UI.Xaml.Controls.h>
 
+#include "PaymentPastDue.h"
 #include "ServiceSetup.h"
 #include "SettingsSheets.h"
 #include "StatsSheets.h"
@@ -73,6 +74,10 @@ class SettingsPage {
   // Manage Subscription shows only for a Stripe subscription
   // (ShowsManageSubscription): the store family from the balance snapshot.
   void ApplySubscriptionStore(std::string const& storeFamily);
+  // The past-due notice above Manage Subscription shows exactly while the
+  // balance snapshot carries payment_past_due (pastdue::NoticeShows), whatever
+  // the plan and its store.
+  void ApplyPaymentPastDue(pastdue::PaymentPastDueView const& view);
 
   // The update checker's snapshot changed (beta spec §5): the "Update" value
   // row in the Device pane's version section reads the running build plus the
@@ -192,6 +197,14 @@ class SettingsPage {
   // Open the portal url in the browser, observing the launch: a failure shows
   // site_billing_portal_error instead of looking like a portal that opened.
   winrt::fire_and_forget LaunchCustomerPortal(std::string url);
+  // The past-due notice's "Update payment method": ask for a one-time auth
+  // code and open ur.io's Manage Subscription signed in with it
+  // (pastdue::UpdatePaymentUrl). Without a code, after any failure or a blank
+  // answer, the bare url opens and ur.io asks the user to sign in.
+  winrt::fire_and_forget OpenUpdatePayment();
+  // Open that url in the browser, observing the launch the way
+  // LaunchCustomerPortal does.
+  winrt::fire_and_forget LaunchUpdatePayment(std::string url);
   // Open the ur.io cloud proxies page (CloudProxyLink.h) in the browser, the
   // same observed launch: a failure shows something_went_wrong.
   winrt::fire_and_forget OpenCloudProxies();
@@ -221,6 +234,10 @@ class SettingsPage {
   winrt::URnetwork::implementation::MainWindow& w_;
   // "Thanks for the feedback": a transient acknowledgement (iOS UrSnackBar)
   urnw::kit::Snackbar snackbar_;
+  // The subscription rows' messages, on the window-level bar (AccountSnackbar,
+  // which LoginPage also writes): the rows live on Account, where snackbar_'s
+  // bar, on the Support destination, is never on screen.
+  urnw::kit::Snackbar accountSnackbar_;
   std::shared_ptr<urnw::AppRulesSheet> appRulesSheet_;
 
   bool built_ = false;
@@ -263,6 +280,10 @@ class SettingsPage {
   // "Launch URnetwork on system startup" (StartupRegistration.h)
   winrt::Microsoft::UI::Xaml::Controls::ToggleSwitch launchAtStartup_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::Button manageSubscription_{nullptr};
+  // the past-due notice above Manage Subscription, and its "Update payment
+  // method" (ApplyPaymentPastDue)
+  winrt::Microsoft::UI::Xaml::Controls::InfoBar pastDueNotice_{nullptr};
+  winrt::Microsoft::UI::Xaml::Controls::Button pastDueUpdate_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::TextBlock versionValue_{nullptr};
   winrt::Microsoft::UI::Xaml::Controls::Button deleteAccountButton_{nullptr};
   // the Licenses row, twice: About's, and General's while About is folded

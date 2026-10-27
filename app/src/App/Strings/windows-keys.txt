@@ -728,6 +728,8 @@ pay_method_monero
 pay_method_unavailable
 pay_method_usdc
 pay_method_zcash
+payment_past_due_notice
+payment_past_due_update_payment
 payout_wallet_updated
 payouts_now_go_to
 peer_discovery_disabled
