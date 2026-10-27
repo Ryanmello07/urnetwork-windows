@@ -8,6 +8,7 @@
 
 #include "PipeClient.h"
 #include "ExtenderReset.h"
+#include "IngressDnsSync.h"
 #include "LogUpload.h"
 #include "Protocol.h"
 
@@ -112,6 +113,20 @@ class ServiceClient {
   extenderreset::ServiceAnswer ResetExtenders(const proto::ResetExtenders& request,
                                               bool* reset = nullptr,
                                               std::string* error = nullptr);
+  // set_ingress_dns (Protocol.h SetIngressDns): the service writes the
+  // connection region and the bootstrap DNS-over-HTTPS servers the app's space
+  // holds into the space it holds under the same key, which its session's
+  // device and its provider-only device run in, where they apply in place.
+  // Taken when the service answered it, with `held` saying whether it held
+  // that space; Busy when a tunnel or provider operation held its session lock
+  // (Reply::ingress_dns_busy), which the app answers by sending the values
+  // again once that operation ends (Common/IngressDnsSync.h); NotTaken for any
+  // other refusal, a transport failure or a service too old to know the verb
+  // ("unknown request type"), with `error` saying which. The next import of
+  // the space carries the values to the service whatever it answers.
+  ingressdns::ServiceAnswer SetIngressDns(const proto::SetIngressDns& request,
+                                          bool* held = nullptr,
+                                          std::string* error = nullptr);
 
  private:
   proto::TunnelStatus CallStatus(const nlohmann::json& request,

@@ -195,6 +195,28 @@ extenderreset::ServiceAnswer ServiceClient::ResetExtenders(const proto::ResetExt
   }
 }
 
+ingressdns::ServiceAnswer ServiceClient::SetIngressDns(const proto::SetIngressDns& request,
+                                                       bool* held, std::string* error) {
+  if (held) *held = false;
+  nlohmann::json body = request;
+  try {
+    // An older service's "unknown request type" is a reply too: not ok.
+    proto::Reply r =
+        pipe_.Call(proto::Request(proto::msg::kSetIngressDns, body)).get<proto::Reply>();
+    if (error) *error = r.error;
+    if (r.ok) {
+      if (held) *held = r.ingress_dns_held;
+      return ingressdns::ServiceAnswer::Taken;
+    }
+    return r.ingress_dns_busy ? ingressdns::ServiceAnswer::Busy
+                              : ingressdns::ServiceAnswer::NotTaken;
+  } catch (const std::exception& e) {
+    LogError("service: set ingress dns failed: {}", e.what());
+    if (error) *error = e.what();
+    return ingressdns::ServiceAnswer::NotTaken;
+  }
+}
+
 bool ServiceClient::CallProvider(const nlohmann::json& request,
                                  std::optional<proto::TunnelStatus>* status,
                                  std::string* error) {

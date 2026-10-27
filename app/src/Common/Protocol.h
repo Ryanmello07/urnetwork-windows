@@ -106,6 +106,15 @@ namespace urnw::proto {
 //    (extender_reset_id). A peer that drops `reset` reads as nothing reset,
 //    which claims less, and one that drops `reset_busy` as a refusal the app
 //    does not send again, which the next import covers as well.
+//
+//    Nor for set_ingress_dns, Reply::ingress_dns_held and
+//    Reply::ingress_dns_busy, by the same rule: a service that does not know
+//    the verb answers "unknown request type" and writes nothing, which is the
+//    behaviour before it existed, and the next import of the space carries the
+//    region and the servers (its values hold them). A peer that drops
+//    `ingress_dns_held` reads as a space not held, which claims less, and one
+//    that drops `ingress_dns_busy` as a refusal the app does not send again,
+//    which the next import covers as well.
 inline constexpr int kProtocolVersion = 4;
 
 // The first version that understands StartTunnel::mode. Below this, an absent
@@ -133,6 +142,7 @@ inline constexpr const char* kSetProvideExtender = "set_provide_extender";  // a
 // app -> service
 inline constexpr const char* kSetMeasurementsEnabled = "set_measurements_enabled";
 inline constexpr const char* kResetExtenders = "reset_extenders";  // app -> service
+inline constexpr const char* kSetIngressDns = "set_ingress_dns";  // app -> service
 inline constexpr const char* kReply = "reply";                   // service -> app
 inline constexpr const char* kEvent = "event";                   // service -> app (unsolicited)
 }  // namespace msg
@@ -503,6 +513,61 @@ Key SpaceKeyOf(const ResetExtenders& request) {
   return key;
 }
 
+// set_ingress_dns: the network space's ingress dns (sdk control_doh.go), the
+// connection region (NetworkSpace::setIngressCountryCode) and the bootstrap
+// DNS-over-HTTPS servers (NetworkSpace::setControlDohUrls), which pick the
+// resolvers URnetwork's own names (api, connect, extender) are looked up
+// through. The app saves them in its own space, where they apply in place, and
+// hands the service the values its space then holds, with the space's key. The
+// service writes them through the same setters into the space it holds under
+// that key, which the session's device and the provider-only device both run
+// in, so they apply in place there too: a connection attempt that cannot reach
+// URnetwork resolves through a region chosen from the can't-reach prompt at its
+// next lookup, as an in-process tunnel does, rather than only after a
+// reconnect. The app also sends them when it reattaches to a running session,
+// which imported the space when it started. A service that holds no such space
+// writes nothing: the next import of the space (start_tunnel, start_provider)
+// carries the values. Every field is required; an empty region is undisclosed,
+// and no servers is the built-in servers alone.
+struct SetIngressDns {
+  // the space's key
+  std::string host_name;
+  std::string env_name;
+  // what NetworkSpace::getIngressCountryCode answers in the app
+  std::string ingress_country_code;
+  // what NetworkSpace::getControlDohUrls answers in the app, v4 then v6
+  std::vector<std::string> control_doh_urls;
+};
+
+// The set_ingress_dns request for the space `key` names, with the region and
+// the servers that space holds: nullopt when the key is missing, which the
+// service would refuse, so the next import of the space carries the values
+// instead. A template over urnet::NetworkSpaceKey by the sdk's field names, so
+// this header needs no sdk header.
+template <class Key>
+std::optional<SetIngressDns> SetIngressDnsRequestFor(const std::optional<Key>& key,
+                                                     const std::string& ingressCountryCode,
+                                                     const std::vector<std::string>& controlDohUrls) {
+  if (!key || !key->host_name || !key->env_name) return std::nullopt;
+  SetIngressDns request;
+  request.host_name = *key->host_name;
+  request.env_name = *key->env_name;
+  if (request.host_name.empty() || request.env_name.empty()) return std::nullopt;
+  request.ingress_country_code = ingressCountryCode;
+  request.control_doh_urls = controlDohUrls;
+  return request;
+}
+
+// The key of the space a set_ingress_dns request names, as the service's space
+// manager looks it up (urnet::NetworkSpaceKey).
+template <class Key>
+Key SpaceKeyOf(const SetIngressDns& request) {
+  Key key;
+  key.host_name = request.host_name;
+  key.env_name = request.env_name;
+  return key;
+}
+
 // ---- reply / state payload ------------------------------------------------
 
 struct TunnelStatus {
@@ -699,6 +764,13 @@ struct Reply {
   // service's session lock: the app sends it again once that operation ends
   // (Common/ExtenderReset.h). False in every other reply.
   bool reset_busy = false;
+  // set_ingress_dns' answer: the service held the space and wrote the values
+  // into it. False in every other reply, and from a service too old to say.
+  bool ingress_dns_held = false;
+  // set_ingress_dns refused because a tunnel or provider operation held the
+  // service's session lock: the app sends it again once that operation ends
+  // (Common/IngressDnsSync.h). False in every other reply.
+  bool ingress_dns_busy = false;
 };
 
 // ---- JSON (de)serialization ----------------------------------------------
@@ -877,6 +949,48 @@ inline void from_json(const nlohmann::json& j, ResetExtenders& v) {
   required("host_name", v.host_name);
   required("env_name", v.env_name);
   required("extender_reset_id", v.extender_reset_id);
+}
+
+inline void to_json(nlohmann::json& j, const SetIngressDns& v) {
+  j = {{"host_name", v.host_name},
+       {"env_name", v.env_name},
+       {"ingress_country_code", v.ingress_country_code},
+       {"control_doh_urls", v.control_doh_urls}};
+}
+
+// Strict, like reset_extenders': a request that does not name its space
+// exactly must not write another's, and a value that did not arrive is not
+// written as a default the user never chose (a missing region is not
+// undisclosed, missing servers are not the built-in servers alone). The
+// ControlServer answers the throw as a failed reply.
+inline void from_json(const nlohmann::json& j, SetIngressDns& v) {
+  auto requiredKey = [&](const char* k, std::string& out) {
+    auto it = j.find(k);
+    if (it == j.end() || !it->is_string() || it->get_ref<const std::string&>().empty()) {
+      throw std::runtime_error(std::string("set_ingress_dns requires ") + k +
+                               " (a non-empty string)");
+    }
+    out = it->get<std::string>();
+  };
+  requiredKey("host_name", v.host_name);
+  requiredKey("env_name", v.env_name);
+  auto region = j.find("ingress_country_code");
+  if (region == j.end() || !region->is_string()) {
+    throw std::runtime_error("set_ingress_dns requires ingress_country_code (a string)");
+  }
+  v.ingress_country_code = region->get<std::string>();
+  auto urls = j.find("control_doh_urls");
+  if (urls == j.end() || !urls->is_array()) {
+    throw std::runtime_error("set_ingress_dns requires control_doh_urls (an array of strings)");
+  }
+  std::vector<std::string> controlDohUrls;
+  for (const auto& url : *urls) {
+    if (!url.is_string()) {
+      throw std::runtime_error("set_ingress_dns requires control_doh_urls (an array of strings)");
+    }
+    controlDohUrls.push_back(url.get<std::string>());
+  }
+  v.control_doh_urls = std::move(controlDohUrls);
 }
 
 // "A device built from `a` can keep running for `b`." Everything that goes into
@@ -1085,6 +1199,8 @@ inline void to_json(nlohmann::json& j, const Reply& v) {
   if (v.log_upload_busy) j["log_upload_busy"] = true;
   if (v.reset) j["reset"] = true;
   if (v.reset_busy) j["reset_busy"] = true;
+  if (v.ingress_dns_held) j["ingress_dns_held"] = true;
+  if (v.ingress_dns_busy) j["ingress_dns_busy"] = true;
 }
 
 inline void from_json(const nlohmann::json& j, Reply& v) {
@@ -1109,6 +1225,8 @@ inline void from_json(const nlohmann::json& j, Reply& v) {
   get("log_upload_busy", v.log_upload_busy);
   get("reset", v.reset);
   get("reset_busy", v.reset_busy);
+  get("ingress_dns_held", v.ingress_dns_held);
+  get("ingress_dns_busy", v.ingress_dns_busy);
 }
 
 // Envelope helpers: every message on the wire has a top-level "type" tag.
