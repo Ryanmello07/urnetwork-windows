@@ -302,8 +302,9 @@ void ConnectSolanaWalletSheet::OnAddressChanged() {
   debounceTimer_.Start();
 }
 
-// Syntax first, locally: a typo never reaches the network. Then the server, for
-// SOL only - the menu item names Solana.
+// The server's SOL rule first, locally: an address it would refuse never
+// reaches the network. Then the server, for SOL only - the menu item names
+// Solana.
 void ConnectSolanaWalletSheet::CheckAddress() {
   if (closed_) return;
   const std::string text = winrt::to_string(addressBox_.Text());

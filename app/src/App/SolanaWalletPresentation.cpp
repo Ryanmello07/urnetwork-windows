@@ -4,6 +4,7 @@
 // this with PrecompiledHeader=NotUsing, like ExtenderPresentation.cpp.
 #include "SolanaWalletPresentation.h"
 
+#include <array>
 #include <cstdio>
 #include <string_view>
 #include <utility>
@@ -19,9 +20,38 @@ constexpr bool IsSpace(char c) {
 constexpr std::string_view kBase58Alphabet =
     "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
-// a 32-byte ed25519 public key in base58
-constexpr size_t kMinSolanaAddress = 32;
-constexpr size_t kMaxSolanaAddress = 44;
+// an ed25519 public key
+using SolanaKey = std::array<uint8_t, 32>;
+
+// the server's solanaUsdcMint: a token's address, not a wallet's
+constexpr std::string_view kUsdcMint = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+
+// The key base58 `text` stands for, decoded as the server's
+// solana.PublicKeyFromBase58 decodes it: a zero byte for each leading '1', then
+// the rest as one big-endian number. Nothing when a character is not base58 or
+// the bytes are not exactly 32.
+std::optional<SolanaKey> DecodeSolanaKey(std::string_view text) {
+  size_t ones = 0;
+  while (ones < text.size() && text[ones] == '1') ++ones;
+  SolanaKey number{};
+  for (char c : text.substr(ones)) {
+    const size_t digit = kBase58Alphabet.find(c);
+    if (digit == std::string_view::npos) return std::nullopt;
+    // number * 58 + digit
+    uint32_t carry = static_cast<uint32_t>(digit);
+    for (auto byte = number.rbegin(); byte != number.rend(); ++byte) {
+      carry += uint32_t{*byte} * 58;
+      *byte = static_cast<uint8_t>(carry);
+      carry >>= 8;
+    }
+    if (carry != 0) return std::nullopt;  // past 32 bytes
+  }
+  // the number's own bytes start at its first nonzero one
+  size_t zeros = 0;
+  while (zeros < number.size() && number[zeros] == 0) ++zeros;
+  if (ones + (number.size() - zeros) != number.size()) return std::nullopt;
+  return number;
+}
 
 // the SDK's ShortSs58: whole up to this many bytes
 constexpr size_t kShortWhole = 12;
@@ -82,11 +112,8 @@ std::string Trim(std::string value) {
 
 bool LooksLikeSolanaAddress(const std::string& text) {
   const std::string address = Trim(text);
-  if (address.size() < kMinSolanaAddress || address.size() > kMaxSolanaAddress) return false;
-  for (char c : address) {
-    if (kBase58Alphabet.find(c) == std::string_view::npos) return false;
-  }
-  return true;
+  const std::optional<SolanaKey> key = DecodeSolanaKey(address);
+  return key && *key != SolanaKey{} && address != kUsdcMint;
 }
 
 std::string ShortAddress(const std::string& address) {
