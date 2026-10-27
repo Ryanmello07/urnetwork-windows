@@ -7802,6 +7802,18 @@
     <value>其他平台</value>
     <comment>Subscription: unknown platform fallback</comment>
   </data>
+  <data name="site_sub_past_due_body" xml:space="preserve">
+    <value>我们无法使用您的支付方式续订 UR Pro。请更新支付方式，或使用其他卡支付账单，以保留 Pro。</value>
+    <comment>ur.io Manage subscription: the past-due notice under its title. Stripe retries the failed renewal for about two weeks, then cancels the subscription. The notice's two actions are "Update payment method" and "Pay invoice" (the failing invoice, paid with another card). Keep UR Pro and Pro (the plan's name) unchanged.</comment>
+  </data>
+  <data name="site_sub_past_due_title" xml:space="preserve">
+    <value>您的付款未成功</value>
+    <comment>ur.io Manage subscription: title of the notice shown while a Stripe renewal's payment has failed (a declined card, for example) and Stripe is retrying it. Didn't go through = failed.</comment>
+  </data>
+  <data name="site_sub_pay_invoice" xml:space="preserve">
+    <value>支付账单</value>
+    <comment>ur.io Manage subscription: button on the past-due notice that opens the failing renewal's invoice on Stripe's own page, where it can be paid at once with another card.</comment>
+  </data>
   <data name="site_sub_platform_body" xml:space="preserve">
     <value>您的 Pro 订阅通过 {platform} 计费。如需更改或取消，请通过 {platform} 管理您的订阅。</value>
     <comment>Subscription: other-platform body ({platform})</comment>
