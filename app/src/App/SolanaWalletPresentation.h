@@ -36,10 +36,14 @@ namespace urnw::solana {
 // `value` without leading or trailing ASCII whitespace.
 std::string Trim(std::string value);
 
-// A Solana public key as a user pastes one: once trimmed, 32 to 44 characters
-// of the base58 alphabet (no 0, O, I or l). Syntax only - POST
-// /wallet/validate-address is the validator - but a paste that fails it is
-// answered at once, with no request, like the Bittensor entry's ss58 check.
+// A Solana payout address by the server's own rule for SOL (POST
+// /wallet/validate-address, and POST /account/wallet on create): once trimmed,
+// base58 (no 0, O, I or l) that decodes to exactly 32 bytes, not all zero (32
+// '1's, the system program's id), and not the USDC mint, a token's address
+// rather than a wallet's. A paste that fails it is answered at once, with no
+// request, like the Bittensor entry's ss58 check; one that passes is still
+// asked of the server, which has the last word. The decode is plain C++, not
+// the SDK's, so the tests run it on any host.
 bool LooksLikeSolanaAddress(const std::string& text);
 
 // "EPjF…Dt1v": the first and last four characters around an ellipsis, the
