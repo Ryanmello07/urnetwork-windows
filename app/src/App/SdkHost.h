@@ -33,6 +33,7 @@
 #include "ExtenderReset.h"
 #include "MobileBroadband.h"
 #include "FeedbackLogUpload.h"
+#include "IngressDnsSync.h"
 #include "NetworkCountryWatch.h"
 #include "PostQuantumIdentity.h"
 #include "ProvideLifecycle.h"
@@ -1615,9 +1616,11 @@ class SdkHost {
   // tried ahead of the built-in DoH servers for the lookups of the space's own
   // names, for networks that block the built-in ones. Like VLESS above they
   // need no session -- a fresh install behind such a network cannot sign in
-  // without them -- a save applies in place, and the service takes them with
-  // the space at its next tunnel start. The same lock and C ABI rule: callers
-  // run these off the UI thread (ControlDohBlock).
+  // without them -- and a save applies in place. Unlike VLESS a save also goes
+  // to the service at once (QueueIngressDnsLocked), whose running session takes
+  // them in place too; a service that does not take them takes them with the
+  // space at its next tunnel start. The same lock and C ABI rule: callers run
+  // these off the UI thread (ControlDohBlock).
   //
   // The space's servers, v4 then v6, normalized; empty is the built-in servers
   // alone. nullopt with no space or when the read failed.
@@ -1634,8 +1637,11 @@ class SdkHost {
   // Where the user says they connect from, a value of the active network
   // space: it picks the resolvers for the space's own names (api, connect,
   // extender), never the tunnel's DNS. Local only, applies in place from the
-  // next lookup. The same lock and C ABI rule as above: callers run these off
-  // the UI thread (ConnectionRegionBlock).
+  // next lookup, in this process and, through QueueIngressDnsLocked, in the
+  // service's session and provider-only device, which is what the "Can't reach
+  // URnetwork" prompt over a stalled session relies on. The same lock and C
+  // ABI rule as above: callers run these off the UI thread
+  // (ConnectionRegionBlock).
   //
   // The stored lower-case code, "" undisclosed; nullopt with no space or when
   // the read failed.
@@ -2231,6 +2237,21 @@ class SdkHost {
   // and an app that exits first drops it: the next import carries the reset.
   void QueueExtenderResetResend(proto::ResetExtenders request);
   void ResendExtenderReset(const proto::ResetExtenders& request);
+  // The network space's ingress dns -- the connection region and the
+  // bootstrap DNS-over-HTTPS servers -- handed to the service
+  // (Common/IngressDnsSync.h, Protocol.h set_ingress_dns), whose session and
+  // provider-only device run in the space it imported at their start. Queued
+  // after every save (SetIngressCountryCode, SetControlDohUrls) and after a
+  // reattach to a running session (BootstrapSession), from the values
+  // networkSpace_ holds, so the newest values replace any not yet sent; sent by
+  // ProviderOnlyStatsLoop, outside mutex_, because the pipe call can wait
+  // behind a start_tunnel. A busy refusal is owed until the first pushed status
+  // that ends the operation which held the service's lock (the state handler),
+  // which queues the owed values again unless newer ones are queued already.
+  // An app that exits first drops them: the next import carries the values.
+  void QueueIngressDnsLocked(const char* reason);
+  void QueueIngressDnsResend(proto::SetIngressDns request);
+  void SendIngressDns(const proto::SetIngressDns& request);
 
   std::thread providerOnlyThread_;
   std::mutex providerOnlyMutex_;
@@ -2247,6 +2268,11 @@ class SdkHost {
   // The reset the service last refused as busy, until a pushed status ends
   // the operation that refused it. Its own lock, innermost.
   extenderreset::Owed owedExtenderReset_;
+  // The ingress dns not yet sent to the service; newer values replace it.
+  std::optional<proto::SetIngressDns> ingressDnsSend_;
+  // The ingress dns the service last refused as busy, until a pushed status
+  // ends the operation that refused it. Its own lock, innermost.
+  ingressdns::Owed owedIngressDns_;
   // Bumped whenever the readings stop belonging to the polls in flight (an
   // unwant, a reset), so a late answer is dropped, the controller's rule.
   uint64_t providerOnlyStatusGeneration_ = 0;

@@ -2290,6 +2290,61 @@ TunnelController::ExtenderResetResult TunnelController::ResetExtenders(
   return result;
 }
 
+TunnelController::IngressDnsResult TunnelController::SetIngressDns(
+    const proto::SetIngressDns& request) {
+  IngressDnsResult result;
+  const auto key = proto::SpaceKeyOf<urnet::NetworkSpaceKey>(request);
+  urnet::NetworkSpace space;
+  {
+    // Timed, for StartProvider's reason: a wedged bring-up must not hold the
+    // control pipe. Busy, so the app sends the values again once the operation
+    // holding the lock ends; the next import of the space carries them anyway.
+    std::unique_lock<std::timed_mutex> lock(mutex_, std::defer_lock);
+    if (!lock.try_lock_for(kStopLockBudget)) {
+      result.busy = true;
+      result.error = "a tunnel operation is in progress";
+      LogWarn("tunnel: set_ingress_dns refused: the session lock was not free within {}ms",
+              kStopLockBudget.count());
+      return result;
+    }
+    // A handle of 0 is the sdk's nil: the manager holds no space under the key.
+    try {
+      if (spaceManager_) space = spaceManager_->getNetworkSpace(key);
+    } catch (const std::exception&) {
+      result.error = "the network space could not be read";
+      LogError("tunnel: stage=ingress-dns outcome=failed step=lookup");
+      return result;
+    }
+  }
+  if (space) {
+    // With the session lock released: each setter swaps the space's DoH cache
+    // in place, which joins the lookups in flight on the one it replaces. The
+    // setters are the app's own (SdkHost::SetIngressCountryCode,
+    // SetControlDohUrls), so the space normalizes and validates as it did
+    // there, and a value it already holds changes nothing.
+    try {
+      (void)space.setIngressCountryCode(request.ingress_country_code);
+      const std::string errorId =
+          space.setControlDohUrls(urnet::StringList(request.control_doh_urls));
+      if (!errorId.empty()) {
+        result.error = "the bootstrap DNS-over-HTTPS servers were refused: " + errorId;
+        LogError("tunnel: stage=ingress-dns outcome=failed step=doh-servers error_id={}",
+                 errorId);
+        return result;
+      }
+    } catch (const std::exception&) {
+      result.error = "the ingress dns could not be applied";
+      LogError("tunnel: stage=ingress-dns outcome=failed step=apply");
+      return result;
+    }
+    result.held = true;
+  }
+  LogInfo("tunnel: ingress dns space={}/{} outcome={}", request.host_name, request.env_name,
+          space ? "applied" : "not-held");
+  result.ok = true;
+  return result;
+}
+
 void TunnelController::RetireProviderDeviceLocked() {
   if (!providerDevice_ && !providerSpace_) return;
   // The statistics first, under their own lock, so a get_provider_stats served

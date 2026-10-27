@@ -217,6 +217,21 @@ nlohmann::json ControlServer::Handle(const nlohmann::json& request) {
       reply.reset = result.reset;
       reply.reset_busy = result.busy;
       reply.error = result.error;
+    } else if (type == proto::msg::kSetIngressDns) {
+      // The connection region and the bootstrap DNS-over-HTTPS servers the app
+      // saved, or holds as it reattaches (TunnelController::SetIngressDns), on
+      // this pipe under its access rule (kPipeSddl) like every other request. A
+      // request that does not name its space and both values throws out of the
+      // get<> as a failed reply. A busy refusal says so (ingress_dns_busy), and
+      // the app sends the values again once the operation holding the session
+      // lock has pushed the status that ends it. The tunnel status does not
+      // change, so nothing is pushed.
+      const proto::SetIngressDns req = request.get<proto::SetIngressDns>();
+      const TunnelController::IngressDnsResult result = tunnel_.SetIngressDns(req);
+      reply.ok = result.ok;
+      reply.ingress_dns_held = result.held;
+      reply.ingress_dns_busy = result.busy;
+      reply.error = result.error;
     } else {
       reply.ok = false;
       reply.error = "unknown request type: " + type;
