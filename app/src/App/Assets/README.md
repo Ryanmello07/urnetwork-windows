@@ -89,3 +89,24 @@ The four `noprovide/provide × noconnect/connect` states map 1:1 to the macOS
 the *appearance*, so Light = dark ink (for light taskbars) and Dark = white ink
 (for dark taskbars); `TrayIcon.cpp` picks by `SystemUsesLightTheme`. Each `.ico`
 carries 16/20/24/32/48 (tray) or 16–256 (app) sizes.
+
+### Slow-internet tunnel icons
+
+`tray_{light,dark}_slow_{1..4}.ico` are not taken from macOS art: the same
+command draws them from the tunnel's geometry (`TunnelIndicator.h`,
+apple/DELAY.md §2.1) at every tray size, so the thin inner strokes are as sharp
+as each size allows. Regenerate them alone, without the macOS asset catalog:
+
+```
+go run ./tools/make-icons -only-tunnel
+```
+
+| File | Squares | Ink |
+|---|---|---|
+| `tray_*_slow_1` … `_4` | 1, 2, 4, 6 (the depth table's rows) | |
+| `tray_dark_slow_*` | | amber `#F5C242`, for a **dark** taskbar |
+| `tray_light_slow_*` | | the same hue darkened to `#AE8009` (3:1 on a light bar), for a **light** taskbar |
+
+The tray shows them in place of the connected art while it says the internet
+is slow (`SlowInternet.h`'s dwell); `TrayIcon.cpp` picks the variant by the
+same `SystemUsesLightTheme` read.

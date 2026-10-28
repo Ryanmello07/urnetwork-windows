@@ -32,6 +32,7 @@
 #include "ProviderLocationsSheet.h"
 #include "SdkHost.h"
 #include "ServiceSetup.h"
+#include "SlowInternetPill.h"
 #include "StatsSheets.h"
 #include "SeedOrder.h"
 #include "TapSequenceGate.h"
@@ -77,8 +78,16 @@ class ConnectPage {
   // section in pane A (BuildFoldDoors) shows instead: the fold rule bars a
   // foldable pane from owning content with no second door.
   void ApplyPaneCFolded(bool folded);
+  // How many of the three panes are on screen (1 to 3), pushed by
+  // MainWindow::ApplyBreakpoint beside ApplyPaneCFolded: the slow-internet
+  // pill rides the rightmost visible pane's header, so it stays top right.
+  void ApplyPaneCount(int panes);
 
   // ---- window-level relays ----
+  // The device's transport delay (SlowInternet.h), nullopt while unavailable,
+  // relayed by AppController while the window presents and replayed on show:
+  // the slow-internet pill follows it directly.
+  void ApplyTransportDelay(std::optional<urnw::slow::Reading> const& reading);
   void ApplyStats(urnw::LiveStats const& stats);
   // A start waiting on its balance shows as connecting until the gate answers
   // it (StartConnectWait.h): Admitted keeps that state into its connect, Ended
@@ -758,6 +767,18 @@ class ConnectPage {
   // C's ProviderCountLine rule: hidden while there is no session to draw
   // (ApplyStats writes it next to LiveStatsGroup).
   winrt::Microsoft::UI::Xaml::Controls::Button foldDoorGlobeRow_{nullptr};
+  // ---- the slow-internet pill (SlowInternetPill.h) ----
+  // Built once, in the header of the rightmost pane on screen: pane A's alone,
+  // pane B's beside it, or pane C's. Each host holds the pill and nothing
+  // else, so moving it is a Clear and an Append, and the pill fits itself
+  // beside that header's title.
+  void BuildSlowPill();
+  void PlaceSlowPill();
+  winrt::Microsoft::UI::Xaml::Controls::Panel SlowPillHost(int panes);
+  std::unique_ptr<urnw::SlowInternetPill> slowPill_;
+  // the pane count ApplyPaneCount last pushed, and the one the pill is in
+  int paneCount_ = 1;
+  int slowPillPanes_ = 0;
   std::shared_ptr<urnw::ClientContractsSheet> contractsSheet_;
   std::shared_ptr<urnw::SplitRulesSheet> splitRulesSheet_;
   std::shared_ptr<urnw::DnsEditorSheet> dnsSheet_;

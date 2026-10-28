@@ -109,6 +109,7 @@ void ConnectPage::Initialize() {
   BuildCharts();
   BuildHero();
   WireDrawerFeeds();
+  BuildSlowPill();
 
   // The connections verdict filter. Wired here rather than in markup for the
   // same reason the status-dot taps are: XAML event handlers live on
@@ -207,6 +208,9 @@ void ConnectPage::SetPresentationActive(bool active) {
   // presenting frames for a window nobody is looking at unless they are stopped
   // here as well as the per-frame clock
   if (canvas_) canvas_->SetPresentationActive(active);
+  // the pill moves only while someone can see it: off screen it is put away,
+  // and the reading replayed on show draws it afresh
+  if (slowPill_) slowPill_->SetPresentationActive(active);
   if (!chartTimer_) return;
   if (active) {
     if (!chartTimer_.IsRunning()) chartTimer_.Start();
@@ -227,6 +231,7 @@ void ConnectPage::ApplyStrings() {
   w_.PaneATitle().Text(Loc("connect"));
   w_.PaneBTitle().Text(Loc("activity"));
   w_.PaneCTitle().Text(Loc("client_statistics"));
+  if (slowPill_) slowPill_->ApplyStrings();
   w_.ConnectionsLabel().Text(Loc("connections"));
   w_.DataUsageLabel().Text(Loc("data_usage"));
   w_.PeersGroupLabel().Text(Loc("network_peers"));
@@ -1718,6 +1723,54 @@ void ConnectPage::ApplyPaneCFolded(bool folded) {
   paneCFolded_ = folded;
   if (!foldDoorHost_) return;  // not built yet; BuildFoldDoors replays the state
   foldDoorHost_.Visibility(folded ? Visibility::Visible : Visibility::Collapsed);
+}
+
+// ---- the slow-internet pill (SlowInternetPill.h) -----------------------------
+
+void ConnectPage::BuildSlowPill() {
+  // fresh numbers every 10 s while it shows them: the listener carries them
+  // only with a change of level
+  slowPill_ = std::make_unique<urnw::SlowInternetPill>([] { Sdk().RefreshTransportDelay(); });
+  PlaceSlowPill();
+  // The can't-reach banner is the more severe state, and it shows at the top
+  // of the window too: the pill hides while it is open (apple/DELAY.md §5.2).
+  // The banner's own writers (MainWindow) open and close it; the pill watches
+  // the property rather than each of them.
+  w_.RegionPromptBar().RegisterPropertyChangedCallback(
+      InfoBar::IsOpenProperty(), [weak = w_.get_weak()](auto const&, auto const&) {
+        if (auto self = weak.get()) {
+          auto& page = self->connect();
+          if (page.slowPill_) page.slowPill_->SetSuppressed(self->RegionPromptBar().IsOpen());
+        }
+      });
+  slowPill_->SetSuppressed(w_.RegionPromptBar().IsOpen());
+}
+
+Controls::Panel ConnectPage::SlowPillHost(int panes) {
+  if (3 <= panes) return w_.PaneCSlowHost();
+  if (panes == 2) return w_.PaneBSlowHost();
+  return w_.PaneASlowHost();
+}
+
+void ConnectPage::PlaceSlowPill() {
+  if (!slowPill_ || slowPillPanes_ == paneCount_) return;
+  // each host holds the pill and nothing else
+  if (slowPillPanes_ != 0) SlowPillHost(slowPillPanes_).Children().Clear();
+  SlowPillHost(paneCount_).Children().Append(slowPill_->Root());
+  // it fits itself beside the title of the header it is in
+  slowPill_->SetTitle(3 <= paneCount_    ? w_.PaneCTitle()
+                      : paneCount_ == 2 ? w_.PaneBTitle()
+                                        : w_.PaneATitle());
+  slowPillPanes_ = paneCount_;
+}
+
+void ConnectPage::ApplyPaneCount(int panes) {
+  paneCount_ = std::clamp(panes, 1, 3);
+  PlaceSlowPill();
+}
+
+void ConnectPage::ApplyTransportDelay(std::optional<urnw::slow::Reading> const& reading) {
+  if (slowPill_) slowPill_->Apply(reading);
 }
 
 void ConnectPage::WireDrawerFeeds() {
