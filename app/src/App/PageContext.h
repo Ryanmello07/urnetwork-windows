@@ -37,6 +37,10 @@ SdkHost& Sdk();
 SubscriptionBalanceStore& Balance();
 CryptoInvoiceStore& CryptoInvoice();
 UpdateChecker& Updates();
+// Settings > General's "Notify me when my internet is slow": the tray's
+// preference, kept by AppController (SlowInternetNotify).
+bool SlowInternetNotify();
+void SetSlowInternetNotify(bool on);
 
 inline winrt::hstring H(std::string const& s) { return winrt::to_hstring(s); }
 

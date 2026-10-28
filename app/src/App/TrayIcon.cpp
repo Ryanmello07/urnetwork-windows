@@ -161,8 +161,9 @@ void TrayIcon::Destroy() {
   LogInfo("tray: icon removed");
 }
 
-void TrayIcon::SetState(TrayState state) {
+void TrayIcon::SetState(TrayState state, int slowIcon) {
   state_ = state;
+  slowIcon_ = 0 < slowIcon && slowIcon <= 4 ? slowIcon : 0;
   UpdateIcon();
 }
 
@@ -189,9 +190,12 @@ void TrayIcon::ShowBalloon(const std::wstring& title, const std::wstring& text) 
 }
 
 HICON TrayIcon::CurrentIcon() {
-  // Resource ids: light and dark variants of each of the four states.
-  const int base = darkTaskbar_ ? IDI_TRAY_DARK_BASE : IDI_TRAY_LIGHT_BASE;
-  const int id = base + static_cast<int>(state_);
+  // Resource ids: light and dark variants of each of the four states, and of
+  // the four slow-internet tunnels, which take the state's place while slow.
+  const int id =
+      0 < slowIcon_
+          ? (darkTaskbar_ ? IDI_TRAY_DARK_SLOW_BASE : IDI_TRAY_LIGHT_SLOW_BASE) + slowIcon_ - 1
+          : (darkTaskbar_ ? IDI_TRAY_DARK_BASE : IDI_TRAY_LIGHT_BASE) + static_cast<int>(state_);
   // LoadImage at the small-icon metric, not LoadIcon: the notification area is
   // a SM_CXSMICON slot, and LoadIcon hands back the large image for the shell to
   // downscale, which is the usual cause of a fuzzy tray icon (and is wrong again

@@ -84,7 +84,9 @@ class TrayIcon {
   bool Create(HINSTANCE instance, Callbacks callbacks);
   void Destroy();
 
-  void SetState(TrayState state);
+  // The connect x provide art, or while the tray says the internet is slow
+  // (SlowInternet.h), the tunnel icon `slowIcon`, 1 to 4, in its place.
+  void SetState(TrayState state, int slowIcon = 0);
   void SetTooltip(const std::wstring& tip);
   void ShowBalloon(const std::wstring& title, const std::wstring& text);
 
@@ -106,6 +108,8 @@ class TrayIcon {
   HINSTANCE instance_ = nullptr;
   Callbacks cb_;
   TrayState state_ = TrayState::NoProvideNoConnect;
+  // 1 to 4 while slow; 0 for the state's own art
+  int slowIcon_ = 0;
   bool darkTaskbar_ = false;
   UINT wmTaskbarCreated_ = 0;  // re-add the icon if Explorer restarts
   // A NIF_GUID registration is bound to the executable's PATH: run the same

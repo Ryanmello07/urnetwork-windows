@@ -391,6 +391,16 @@ void SettingsPage::BuildGeneralSection(Panel const& host) {
     urnw::pages::Updates().SetAutoCheckEnabled(autoUpdateCheck_.IsOn());
   });
 
+  // Notify me when my internet is slow (SlowInternet.h): whether the tray
+  // posts its balloon once per slow episode. A local preference like the one
+  // above, in app_prefs.json, default ON; the tray keeps showing the slow
+  // state either way, so this only silences the notice.
+  slowInternetNotify_ = ToggleRow(card, Loc("slow_internet_notify_toggle"), hstring{});
+  slowInternetNotify_.IsOn(urnw::pages::SlowInternetNotify());
+  slowInternetNotify_.Toggled([this](auto const&, auto const&) {
+    urnw::pages::SetSlowInternetNotify(slowInternetNotify_.IsOn());
+  });
+
   // Launch URnetwork on system startup, as on macOS (owner decision,
   // 2026-10-05): this installation's own registration with Windows, so it
   // needs no session. Off until the user turns it on; a sign-in then starts

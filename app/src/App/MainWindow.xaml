@@ -840,10 +840,19 @@
                         </Grid.RowDefinitions>
                         <Border Style="{StaticResource UrPaneHeaderStyle}">
                             <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
                                 <TextBlock x:Name="PaneATitle"
                                            Style="{StaticResource UrPaneTitleStyle}" />
                                 <TextBlock x:Name="PaneAMeta" HorizontalAlignment="Right"
                                            Style="{StaticResource UrPaneMetaStyle}" />
+                                <!-- the slow-internet pill's slot while this is the only
+                                     pane on screen (ConnectPage::PlaceSlowPill): it holds
+                                     the code-built pill and nothing else -->
+                                <Grid x:Name="PaneASlowHost" Grid.Column="1"
+                                      VerticalAlignment="Center" />
                             </Grid>
                         </Border>
                         <ScrollViewer Grid.Row="1" x:Name="PaneAScroll"
@@ -1292,18 +1301,26 @@
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
                         <Border Style="{StaticResource UrPaneHeaderStyle}">
-                            <Grid ColumnSpacing="12">
+                            <!-- the 12 between the title and the rates is the rates'
+                                 own margin, not ColumnSpacing: an empty pill slot must
+                                 not move them off the edge -->
+                            <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock x:Name="PaneBTitle"
                                            Style="{StaticResource UrPaneTitleStyle}" />
                                 <!-- the live down/up rates: the pane's own figure, in its
                                      own header, rather than a line inside a card -->
                                 <TextBlock x:Name="ThroughputText" Grid.Column="1"
-                                           HorizontalAlignment="Right"
+                                           HorizontalAlignment="Right" Margin="12,0,0,0"
                                            Style="{StaticResource UrPaneMetaStyle}" />
+                                <!-- the slow-internet pill's slot while this is the
+                                     rightmost pane (ConnectPage::PlaceSlowPill) -->
+                                <Grid x:Name="PaneBSlowHost" Grid.Column="2"
+                                      VerticalAlignment="Center" />
                             </Grid>
                         </Border>
                         <!-- The connections verdict filter: a SelectorBar, the app's
@@ -1501,8 +1518,16 @@
                         </Grid.RowDefinitions>
                         <Border Style="{StaticResource UrPaneHeaderStyle}">
                             <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
                                 <TextBlock x:Name="PaneCTitle"
                                            Style="{StaticResource UrPaneTitleStyle}" />
+                                <!-- the slow-internet pill's slot while all three panes
+                                     are on screen (ConnectPage::PlaceSlowPill) -->
+                                <Grid x:Name="PaneCSlowHost" Grid.Column="1"
+                                      VerticalAlignment="Center" />
                             </Grid>
                         </Border>
                         <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled"

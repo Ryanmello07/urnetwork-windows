@@ -24,6 +24,7 @@
 #include "Log.h"
 #include "MainWindow.xaml.h"
 #include "PageContext.h"  // pages::AdvW — the tray tooltip's health words (#27)
+#include "Paths.h"        // LoadAppPrefs / SaveAppPref — the slow-internet notice setting
 #include "ProtocolHandler.h"
 #include "SingleInstance.h"
 #include "Startup.h"
@@ -91,6 +92,16 @@ bool RandomBytes(unsigned char* out, std::size_t length) {
   return ::BCryptGenRandom(nullptr, out, static_cast<ULONG>(length), BCRYPT_USE_SYSTEM_PREFERRED_RNG) >= 0;
 }
 
+// "Notify me when my internet is slow" in app_prefs.json (AppController::SlowInternetNotify).
+constexpr char kSlowInternetNotifyPrefKey[] = "notify_slow_internet";
+
+// The dwell's clock (SlowInternet.h): monotonic, in milliseconds.
+int64_t SteadyMillis() {
+  return std::chrono::duration_cast<std::chrono::milliseconds>(
+             std::chrono::steady_clock::now().time_since_epoch())
+      .count();
+}
+
 }  // namespace
 
 AppController& App() { return *g_app; }
@@ -103,6 +114,8 @@ AppController::AppController() {
 AppController::~AppController() {
   if (placementSaveTimer_) placementSaveTimer_.Stop();
   if (approvalTimer_) approvalTimer_.Stop();
+  if (slowTimer_) slowTimer_.Stop();
+  if (slowRefreshTimer_) slowRefreshTimer_.Stop();
 }
 
 template <class F>
@@ -282,6 +295,12 @@ void AppController::Start() {
   sdk_.SetStatsHandler([this](const LiveStats& s) {
     OnUi([this, s] { OnStats(s); });
   });
+  // The device's transport delay (SlowInternet.h): session-scoped, so the
+  // tray follows it while the window is hidden.
+  sdk_.SetTransportDelayHandler([this](std::optional<slow::Reading> reading) {
+    OnUi([this, reading] { OnTransportDelay(reading); });
+  });
+  slowNotify_ = LoadAppPrefs().value(kSlowInternetNotifyPrefKey, true);
 
   // Subscription balance / plan store (Api::subscriptionBalance + polling).
   // Its timers live on this (UI) thread; its change handler already runs here.
@@ -341,6 +360,22 @@ void AppController::Start() {
     approvalTimer_.Interval(approval::kLife);
     approvalTimer_.IsRepeating(false);
     approvalTimer_.Tick([this](auto const&, auto const&) { OnApprovalTimer(); });
+
+    // The slow-internet dwell's next step (SlowInternet.h): one-shot, armed
+    // by ObserveSlowInternet for when the tray's presentation can change with
+    // no new reading.
+    slowTimer_ = uiThread_.CreateTimer();
+    slowTimer_.IsRepeating(false);
+    slowTimer_.Tick([this](auto const&, auto const&) {
+      ObserveSlowInternet();
+      UpdateTray();
+    });
+    // While the tray says slow, fresh numbers for its tooltip, at most every
+    // 30 s (apple/DELAY.md §5.5): the read comes back through the handler.
+    slowRefreshTimer_ = uiThread_.CreateTimer();
+    slowRefreshTimer_.Interval(std::chrono::milliseconds(slow::kNumbersRefreshMillis));
+    slowRefreshTimer_.IsRepeating(true);
+    slowRefreshTimer_.Tick([this](auto const&, auto const&) { sdk_.RefreshTransportDelay(); });
   }
 
   // The update checker (beta spec §5): its worker owns the launch-delay check
@@ -435,6 +470,9 @@ void AppController::Shutdown(lifetime::Ending ending) {
   // Nothing up to the service stop below waits on anything unbounded:
   // updates_.Stop() above is the only join, and it is bounded by design.
   if (placementSaveTimer_) placementSaveTimer_.Stop();
+  // the slow-internet dwell and its numbers' refresh
+  if (slowTimer_) slowTimer_.Stop();
+  if (slowRefreshTimer_) slowRefreshTimer_.Stop();
   // a browser approval does not outlive the app: its key is wiped and its timer stopped
   CancelApproval(approval::ClearReason::Shutdown);
   balance_.Stop();
@@ -607,11 +645,54 @@ void AppController::OnTunnelState(const proto::TunnelStatus& status) {
   // when there was a VPN to lose
   updates_.SetVpnConnected(isUp);
   lastTunnelStatus_ = status;
+  // a slow reading counts only with the tunnel up (ObserveSlowInternet)
+  ObserveSlowInternet();
   UpdateTray();
   if (windowVisible_ && window_) {
     if (auto self = window_.try_as<winrt::URnetwork::implementation::MainWindow>())
       self->OnTunnelStateChanged(status);
   }
+}
+
+void AppController::OnTransportDelay(std::optional<slow::Reading> reading) {
+  transportDelay_ = std::move(reading);
+  ObserveSlowInternet();
+  UpdateTray();
+  // the pill follows the level directly; replayed on show
+  if (windowVisible_ && window_) {
+    if (auto self = window_.try_as<winrt::URnetwork::implementation::MainWindow>())
+      self->OnTransportDelayChanged(transportDelay_);
+  }
+}
+
+void AppController::ObserveSlowInternet() {
+  // Signed in with the tunnel up, or nothing to say: no tunnel, no slow
+  // internet to report, and a level from before it is stale.
+  const tray::Facts facts = CurrentTrayFacts();
+  std::optional<int> depth;
+  if (transportDelay_ && facts.signedIn && facts.statusKnown && facts.tunnel == tray::Tunnel::Up) {
+    depth = slow::DepthOf(*transportDelay_);
+  }
+  const int64_t now = SteadyMillis();
+  const slow::Presentation presentation = slowTray_.Observe(depth, now);
+  if (slowTimer_) {
+    slowTimer_.Stop();
+    if (0 <= presentation.nextMillis) {
+      slowTimer_.Interval(
+          std::chrono::milliseconds(std::max<int64_t>(1, presentation.nextMillis - now)));
+      slowTimer_.Start();
+    }
+  }
+  if (slowRefreshTimer_) {
+    const bool refreshing = presentation.phase == slow::Phase::Slow;
+    if (refreshing && !slowRefreshTimer_.IsRunning()) slowRefreshTimer_.Start();
+    if (!refreshing && slowRefreshTimer_.IsRunning()) slowRefreshTimer_.Stop();
+  }
+}
+
+void AppController::SetSlowInternetNotify(bool on) {
+  slowNotify_ = on;
+  SaveAppPref(kSlowInternetNotifyPrefKey, on);
 }
 
 void AppController::OnStats(const LiveStats& stats) {
@@ -810,8 +891,14 @@ void AppController::UpdateTray() {
   // working", so Evaluating/Degraded keep the not-connected art. With no stats
   // since the tunnel came up its own claim stands (TrayConnectionState.h).
   const tray::View view = tray::Decide(CurrentTrayFacts());
+  // The slow states (SlowInternet.h) as the dwell has them, over Connected
+  // only: every other status says something more urgent. While slow, the
+  // tunnel for the depth stands in for the connected art.
+  const slow::TrayView slowView =
+      slowTray_.Decide(view.status == tray::Status::Connected, slowNotify_);
   tray_.SetState(view.connectedIcon ? TrayState::NoProvideConnect
-                                    : TrayState::NoProvideNoConnect);
+                                    : TrayState::NoProvideNoConnect,
+                 slowView.icon);
   // "URnetwork — Connected": the app name, then the status. The em dash is
   // punctuation, not text. The health words reuse the connect page's exact
   // strings (same ids), so the tooltip and the status line can never name the
@@ -862,8 +949,32 @@ void AppController::UpdateTray() {
       break;
   }
   std::wstring tip = Localized("app_name");
+  // "URnetwork — Slow internet (↑ 640 ms · ↓ 1.2 s)": the words, and the
+  // numbers while the shell's 127 characters have room for them
+  const bool fallback = transportDelay_ && transportDelay_->fallback;
+  switch (slowView.tip) {
+    case slow::Tip::Status:
+      break;
+    case slow::Tip::Slow:
+      status = slow::SlowStatus(
+          Localized(fallback ? "slow_internet_fallback_title" : "slow_internet"),
+          transportDelay_.value_or(slow::Reading{}), tip.size() + 3);
+      break;
+    case slow::Tip::Recovered:
+      status = Localized("slow_internet_recovered");
+      break;
+  }
   if (!status.empty()) tip += L" — " + status;
   tray_.SetTooltip(tip);
+  // Once per slow episode, when the setting is on (the moment is spent either
+  // way). One line per posted notice: a balloon cannot be read back from the
+  // shell.
+  if (slowView.postBalloon) {
+    LogInfo("app: slow internet notice posted");
+    tray_.ShowBalloon(
+        Localized(fallback ? "slow_internet_fallback_title" : "slow_internet"),
+        Localized(fallback ? "slow_internet_fallback_body" : "slow_internet_still_connected"));
+  }
 }
 
 void AppController::ShowWindow(const POINT* anchor) {
@@ -1164,6 +1275,9 @@ void AppController::ReconcileWindowPresentation() {
                              authErrorUndelivered_ ? authError_ : std::string());
     authErrorUndelivered_ = false;
     if (lastTunnelStatus_) self->OnTunnelStateChanged(*lastTunnelStatus_);
+    // the slow-internet pill: the level now, and fresh numbers behind it
+    self->OnTransportDelayChanged(transportDelay_);
+    sdk_.RefreshTransportDelay();
     sdk_.RepublishStats();
     self->OnBalanceChanged(balance_.Current(), balance_.CurrentPoll());
     // a tap the tray holds, made while the window was hidden

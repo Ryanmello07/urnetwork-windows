@@ -364,6 +364,8 @@ SdkHost::~SdkHost() {
   statsPublisher_.Stop();
   locationsOpener_.Stop();
   drawerSeedReader_.Stop();
+  // A transport delay read in flight is a call into the sdk as well.
+  transportDelayReader_.Stop();
   // A network kick in flight is a call into the sdk this teardown closes.
   sdkNetworkKick_.Stop();
   // The user's writes still queued run, then the worker stops: each takes
@@ -3048,6 +3050,96 @@ void SdkHost::ApplySdkEgressBind(int64_t index4, int64_t index6, const char* why
   }
 }
 
+// ---- the slow-internet feed (SlowInternet.h) ----------------------------------
+//
+// See SetTransportDelayHandler in the header.
+
+namespace {
+// The sdk's TransportDelay onto the plain reading the tray and the pill
+// decide on, so neither sees an sdk type and SlowInternet.h stays pure.
+slow::Reading ReadingOf(const urnet::TransportDelay& delay) {
+  slow::Reading reading;
+  reading.upQuality = delay.UpQuality;
+  reading.downQuality = delay.DownQuality;
+  reading.upBitsPerSecond = delay.UpBitsPerSecond;
+  reading.downBitsPerSecond = delay.DownBitsPerSecond;
+  reading.upQueueDelayMillis = delay.UpQueueDelayMillis;
+  reading.downQueueDelayMillis = delay.DownQueueDelayMillis;
+  reading.fallback = delay.Fallback;
+  return reading;
+}
+}  // namespace
+
+void SdkHost::BeginTransportDelay(std::uint64_t generation, std::uint64_t device) {
+  std::scoped_lock lock(transportDelayMutex_);
+  transportDelayGeneration_ = generation;
+  transportDelayDevice_ = device;
+  transportDelayReading_.reset();
+  transportDelayRemote_ = false;
+  PublishTransportDelayLocked();
+}
+
+void SdkHost::EndTransportDelay() {
+  std::scoped_lock lock(transportDelayMutex_);
+  transportDelayGeneration_ = 0;
+  transportDelayDevice_ = 0;
+  transportDelayReading_.reset();
+  transportDelayRemote_ = false;
+  PublishTransportDelayLocked();
+}
+
+void SdkHost::NoteTransportDelay(std::uint64_t generation, std::optional<slow::Reading> reading) {
+  std::scoped_lock lock(transportDelayMutex_);
+  if (generation == 0 || generation != transportDelayGeneration_) return;
+  transportDelayReading_ = std::move(reading);
+  PublishTransportDelayLocked();
+}
+
+void SdkHost::NoteTransportDelayRemote(std::uint64_t generation, bool remoteConnected) {
+  {
+    std::scoped_lock lock(transportDelayMutex_);
+    if (generation == 0 || generation != transportDelayGeneration_) return;
+    const bool reconnected = remoteConnected && !transportDelayRemote_;
+    transportDelayRemote_ = remoteConnected;
+    PublishTransportDelayLocked();
+    if (!reconnected) return;
+  }
+  // Back: what the device says now, not what it said before the remote went
+  // down. The sync replays the level too; this read also brings the numbers.
+  transportDelayReader_.Request();
+}
+
+void SdkHost::PublishTransportDelayLocked() {
+  std::optional<slow::Reading> value;
+  if (transportDelayRemote_) value = transportDelayReading_;
+  if (value == transportDelayPublished_) return;
+  transportDelayPublished_ = value;
+  if (onTransportDelay_) onTransportDelay_(std::move(value));
+}
+
+void SdkHost::ReadTransportDelayOnWorker() {
+  std::uint64_t device = 0;
+  std::uint64_t generation = 0;
+  {
+    std::scoped_lock lock(transportDelayMutex_);
+    device = transportDelayDevice_;
+    generation = transportDelayGeneration_;
+  }
+  if (device == 0) return;
+  // Device::getTransportDelay by the handle (see the header): never nil in Go;
+  // a released handle answers null.
+  char* json = urnet_device_get_transport_delay(device);
+  if (json == nullptr) return;
+  std::optional<slow::Reading> reading;
+  try {
+    reading = ReadingOf(nlohmann::json::parse(json).get<urnet::TransportDelay>());
+  } catch (const std::exception& e) {
+    LogWarn("sdkhost: reading the transport delay failed: {}", e.what());
+  }
+  urnet_free_string(json);
+  if (reading) NoteTransportDelay(generation, std::move(reading));
+}
+
 // ---- the network country (P052) ---------------------------------------------
 //
 // See the contract in the header and Common/NetworkCountry.h.
@@ -3641,6 +3733,9 @@ bool SdkHost::BootstrapSession(const char* reason, bool attachOnly) {
     confirmedRpcPersistenceGeneration_.store(
         persistenceRecord.state == rpcsession::State::Confirmed ? generation : 0,
         std::memory_order_release);
+    // The slow-internet feed belongs to this session from here on, before the
+    // presence listener below reports on it.
+    BeginTransportDelay(generation, device_->handle());
 
     // Register BEFORE setRpcServer: a loopback sync may complete immediately,
     // and a transition-only listener installed afterwards would miss the only
@@ -3665,6 +3760,9 @@ bool SdkHost::BootstrapSession(const char* reason, bool attachOnly) {
           }
         }
       }
+      // the slow-internet feed is shown only over a connected remote: down,
+      // its last level is stale (connect/DELAY.md §10.5)
+      NoteTransportDelayRemote(generation, remoteConnected);
       if (onRemoteChanged_) onRemoteChanged_(remoteConnected);
     };
     subs_.push_back(device_->addRemoteChangeListener(remoteChanged));
@@ -3698,6 +3796,16 @@ bool SdkHost::BootstrapSession(const char* reason, bool attachOnly) {
           if (!onTunnel_) return;
           onTunnel_(SessionStatus(location.has_value()));
         }));
+    // The slow-internet feed (SlowInternet.h), functional for the same reason:
+    // the tray follows it while the window is hidden. Registered first, then
+    // read once: registration does not replay the current value
+    // (apple/DELAY.md §5.1), and the getter is an rpc that can wait out the
+    // rpc timeout, so the reader asks it, off this pass and off mutex_.
+    subs_.push_back(device_->addTransportDelayChangeListener(
+        [this, generation](std::optional<urnet::TransportDelay> delay) {
+          if (delay) NoteTransportDelay(generation, ReadingOf(*delay));
+        }));
+    transportDelayReader_.Request();
     // Re-apply the persisted performance profile onto the (re)created device
     // (macOS DeviceManager parity: LocalState is the profile's persistence).
     try {
@@ -8431,6 +8539,10 @@ void SdkHost::TeardownSessionLocked(bool stopTunnel) {
   activeRpcPersistenceGeneration_.store(0, std::memory_order_release);
   confirmedRpcPersistenceGeneration_.store(0, std::memory_order_release);
   ClosePresentationLocked(/*sessionEnding=*/true);
+  // The slow-internet feed ends with the session, and says so: unavailable,
+  // never the level it last had. A listener or a read still in flight finds
+  // its session gone and is dropped.
+  EndTransportDelay();
   subs_.clear();
   if (device_) { device_->close(); device_.reset(); }
   // A pending rpc-sync check must not act on the session that is ending — its
@@ -8795,6 +8907,7 @@ void SdkHost::QuitInOrder(std::chrono::steady_clock::time_point start) {
   statsPublisher_.Stop();
   locationsOpener_.Stop();
   drawerSeedReader_.Stop();
+  transportDelayReader_.Stop();
   // a call into the sdk; nothing follows it
   sdkNetworkKick_.Stop();
   // the user's writes still queued run first; each takes mutex_

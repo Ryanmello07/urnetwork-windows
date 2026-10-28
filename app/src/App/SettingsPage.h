@@ -273,6 +273,9 @@ class SettingsPage {
   // its neighbours: nothing ever writes IsOn back — the pref has one writer
   // (this toggle) and one reader path (the checker), so there is no echo.
   winrt::Microsoft::UI::Xaml::Controls::ToggleSwitch autoUpdateCheck_{nullptr};
+  // "Notify me when my internet is slow" (SlowInternet.h). One writer (this
+  // toggle) and one reader (the tray), so no echo guard either.
+  winrt::Microsoft::UI::Xaml::Controls::ToggleSwitch slowInternetNotify_{nullptr};
   // The "Update" value row in the Device pane's version section (beta spec §5):
   // the running build plus the last check's outcome. ApplyUpdateCheck is the
   // one writer — the checker is the one source of that state.

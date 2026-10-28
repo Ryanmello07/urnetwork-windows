@@ -6974,6 +6974,58 @@ du monde</value>
     <value>Passer</value>
     <comment>Small muted button at the top of the post-login onboarding flow that leaves the whole flow.</comment>
   </data>
+  <data name="slow_internet" xml:space="preserve">
+    <value>Internet lent</value>
+    <comment>Status label while the user's own network is slowing traffic (URnetwork measured a high upload or download delay). Shown in the amber pill at the top of the connect screen (also the Mac toolbar and menu bar, and the Windows and Linux connect page), as the title of the details sheet that pill opens, as the Live Activity title on the iPhone Lock Screen and expanded Dynamic Island, and as the Android VPN notification title. It describes the user's internet connection, not a URnetwork fault. Keep it short: it sits in a small pill beside an icon.</comment>
+  </data>
+  <data name="slow_internet_download_delay" xml:space="preserve">
+    <value>Retard de réception</value>
+    <comment>Label for the measured download delay (for example 640 ms or 1.2 s, with the download rate when it is limited) in the slow-internet details sheet, the expanded Dynamic Island and Lock Screen Live Activity, the Android VPN notification, and the Windows and Linux tray and notification. Download = traffic this device receives. Keep it short: it labels a number in a small box.</comment>
+  </data>
+  <data name="slow_internet_fallback" xml:space="preserve">
+    <value>Connexion de secours</value>
+    <comment>Replaces "Slow internet" in the connect-screen pill when URnetwork itself is the reason traffic is slower: it switched to a slower fallback (backup) connection because its usual connection is blocked or unavailable on this network. Keep it short: it sits in a small pill beside an icon.</comment>
+  </data>
+  <data name="slow_internet_fallback_body" xml:space="preserve">
+    <value>URnetwork utilise une connexion de secours plus lente, car sa connexion habituelle n’est pas disponible sur ce réseau.</value>
+    <comment>Body text of the slow-internet details sheet (a flyout on Windows and Linux) while URnetwork is on a slower fallback (backup) connection. Its usual connection = the way URnetwork normally connects, which this network blocks or does not support.</comment>
+  </data>
+  <data name="slow_internet_fallback_short" xml:space="preserve">
+    <value>Mode secours</value>
+    <comment>Replaces "Poor signal" in the small pill at the top right of the connect screen on iPhone, iPad, Mac, Android, Windows and Linux while URnetwork carries the traffic over a slower fallback (backup) connection, because its usual connection is blocked or unavailable on this network. A status tag beside a small tunnel icon and the delay numbers: one short word, two at most.</comment>
+  </data>
+  <data name="slow_internet_fallback_title" xml:space="preserve">
+    <value>Utilisation d’une connexion de secours plus lente</value>
+    <comment>Title of the slow-internet details sheet, the iPhone Live Activity and the Android VPN notification while URnetwork is on a slower fallback (backup) connection because its usual connection isn't available on the current network. Replaces "Slow internet" in that case.</comment>
+  </data>
+  <data name="slow_internet_notify_toggle" xml:space="preserve">
+    <value>M’avertir lorsque ma connexion Internet est lente</value>
+    <comment>Settings switch on Windows (Settings &gt; General), Linux, and iPhone (in Settings): when on (the default), the app shows a notification, once per episode, when the user's internet becomes slow.</comment>
+  </data>
+  <data name="slow_internet_poor_signal" xml:space="preserve">
+    <value>Signal faible</value>
+    <comment>Label in the small pill at the top right of the connect screen on iPhone, iPad, Mac, Android, Windows and Linux, shown while the user's own internet connection is slow or congested: URnetwork measured a long upload or download delay. It sits in amber beside a small tunnel icon and the delay numbers (for example ↑ 800 ms ↓ 1.9 s). It describes the user's network, Wi-Fi, cellular or wired alike, not a URnetwork fault. Use your language's usual short phrase for a poor connection signal, one or two words: the pill has very little room.</comment>
+  </data>
+  <data name="slow_internet_recovered" xml:space="preserve">
+    <value>Internet revenu à la normale</value>
+    <comment>Title shown for about 3 seconds when a slow-internet episode ends, just before the indicator goes away: in the iPhone Live Activity (Lock Screen and Dynamic Island), the Android VPN notification, and the Windows and Linux notification.</comment>
+  </data>
+  <data name="slow_internet_recovered_detail" xml:space="preserve">
+    <value>Plus aucun retard</value>
+    <comment>Subtitle under "Internet back to normal" in the brief recovered state at the end of a slow-internet episode: the upload and download delays URnetwork measured are gone.</comment>
+  </data>
+  <data name="slow_internet_short" xml:space="preserve">
+    <value>Lent</value>
+    <comment>The one-word form of "Slow internet" in the iPhone Dynamic Island's compact view (trailing side, beside the small tunnel icon, in amber). There is room for only a few characters, so use the shortest natural word for slow.</comment>
+  </data>
+  <data name="slow_internet_still_connected" xml:space="preserve">
+    <value>URnetwork est toujours connecté</value>
+    <comment>Subtitle under the slow-internet title in the iPhone Live Activity and the Android VPN notification: reassures the user that the VPN has not dropped even though traffic is slow.</comment>
+  </data>
+  <data name="slow_internet_upload_delay" xml:space="preserve">
+    <value>Retard d’envoi</value>
+    <comment>Label for the measured upload delay (for example 640 ms or 1.2 s, with the upload rate when it is limited) in the slow-internet details sheet, the expanded Dynamic Island and Lock Screen Live Activity, the Android VPN notification, and the Windows and Linux tray and notification. Upload = traffic this device sends. Keep it short: it labels a number in a small box.</comment>
+  </data>
   <data name="sn_consent_active" xml:space="preserve">
     <value>Les gains sont versés à {}</value>
     <comment>Payout consent section, beside the settlement v2 tile and claim: the status while a consent covers the current epoch. The placeholder is the consented Bittensor coldkey, shortened to its first and last four characters around an ellipsis (5F3s…kQ9v); keep it as is.</comment>

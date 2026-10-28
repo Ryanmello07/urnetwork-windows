@@ -1,10 +1,12 @@
 // Command make-icons generates the Windows tray and application ICO files from
-// the macOS asset catalog. The outputs are committed and should be regenerated
-// whenever the shared brand art changes.
+// the macOS asset catalog, and the tray's slow-internet tunnel icons from the
+// tunnel's geometry (tunnel.go). The outputs are committed and should be
+// regenerated whenever the shared brand art or the tunnel changes.
 //
 // Usage from windows/app:
 //
 //	go run ./tools/make-icons
+//	go run ./tools/make-icons -only-tunnel
 //
 // SPDX-License-Identifier: MPL-2.0
 package main
@@ -168,18 +170,34 @@ func resizeBilinear(source image.Image, size int) *image.NRGBA {
 }
 
 func encodeICO(writer io.Writer, source image.Image, sizes []int) error {
-	if len(sizes) == 0 || len(sizes) > math.MaxUint16 {
-		return fmt.Errorf("invalid ICO image count: %d", len(sizes))
-	}
-	frames := make([][]byte, 0, len(sizes))
+	images := make([]image.Image, 0, len(sizes))
 	for _, size := range sizes {
 		if size <= 0 || size > 256 {
 			return fmt.Errorf("unsupported ICO size: %d", size)
 		}
+		images = append(images, resizeBilinear(source, size))
+	}
+	return encodeICOImages(writer, images)
+}
+
+// encodeICOImages writes one square PNG frame per image, at each image's own
+// size.
+func encodeICOImages(writer io.Writer, images []image.Image) error {
+	if len(images) == 0 || len(images) > math.MaxUint16 {
+		return fmt.Errorf("invalid ICO image count: %d", len(images))
+	}
+	sizes := make([]int, 0, len(images))
+	frames := make([][]byte, 0, len(images))
+	for _, frame := range images {
+		size := frame.Bounds().Dx()
+		if size <= 0 || size > 256 || frame.Bounds().Dy() != size {
+			return fmt.Errorf("unsupported ICO frame: %v", frame.Bounds())
+		}
 		var encoded bytes.Buffer
-		if err := png.Encode(&encoded, resizeBilinear(source, size)); err != nil {
+		if err := png.Encode(&encoded, frame); err != nil {
 			return err
 		}
+		sizes = append(sizes, size)
 		frames = append(frames, encoded.Bytes())
 	}
 
@@ -230,6 +248,14 @@ func writeICO(sourcePNG, destination string, sizes []int) error {
 	if closeErr != nil {
 		return closeErr
 	}
+	return writeFileAtomically(destination, func(writer io.Writer) error {
+		return encodeICO(writer, source, sizes)
+	})
+}
+
+// writeFileAtomically writes destination through a temporary file beside it,
+// so an interrupted run never leaves half an icon.
+func writeFileAtomically(destination string, write func(io.Writer) error) error {
 	if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
 		return err
 	}
@@ -239,7 +265,7 @@ func writeICO(sourcePNG, destination string, sizes []int) error {
 	}
 	temporaryName := temporary.Name()
 	defer os.Remove(temporaryName)
-	if err := encodeICO(temporary, source, sizes); err != nil {
+	if err := write(temporary); err != nil {
 		temporary.Close()
 		return err
 	}
@@ -278,6 +304,9 @@ func generate(config paths) error {
 	}
 	relative, _ := filepath.Rel(config.appleAssets, source)
 	fmt.Printf("  app.ico  <- %s\n", relative)
+	if err := generateTunnelIcons(config.output); err != nil {
+		return err
+	}
 	fmt.Println("done.")
 	return nil
 }
@@ -291,11 +320,21 @@ func run(arguments []string) error {
 	flags.SetOutput(io.Discard)
 	appleAssets := flags.String("apple-assets", defaults.appleAssets, "macOS Assets.xcassets path")
 	output := flags.String("out", defaults.output, "Windows Assets output path")
+	// the slow-internet icons alone: they are drawn from the tunnel's geometry
+	// and need no macOS assets
+	onlyTunnel := flags.Bool("only-tunnel", false, "generate only the slow-internet tunnel icons")
 	if err := flags.Parse(arguments); err != nil {
 		return err
 	}
 	if flags.NArg() != 0 {
 		return fmt.Errorf("unexpected argument: %s", flags.Arg(0))
+	}
+	if *onlyTunnel {
+		if err := generateTunnelIcons(*output); err != nil {
+			return err
+		}
+		fmt.Println("done.")
+		return nil
 	}
 	return generate(paths{appleAssets: *appleAssets, output: *output})
 }

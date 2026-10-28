@@ -45,6 +45,7 @@
 #include "SignOut.h"
 #include "SignOutConnectFence.h"
 #include "SignOutRun.h"
+#include "SlowInternet.h"
 #include "StartConnectWait.h"
 #include "TapHold.h"
 #include "VerifySendNotice.h"
@@ -610,6 +611,14 @@ class SdkHost {
   // the initial read); nullopt = no device / no policy known.
   using TransportSettingsHandler =
       std::function<void(TransportSettingsKind, std::optional<urnet::TransportSettings>)>;
+  // The slow-internet feed (SlowInternet.h): the device's transport delay
+  // while its remote is connected, nullopt while there is no session or the
+  // remote is down, so nothing shows a stale level (connect/DELAY.md §10.5).
+  // Session-scoped, not presentation-scoped: the tray follows it while the
+  // window is hidden. Pushed only when the value changed, on an sdk thread or
+  // the reader's, with transportDelayMutex_ held so pushes arrive in the order
+  // they were made: the handler only marshals.
+  using TransportDelayHandler = std::function<void(std::optional<slow::Reading>)>;
   // Location/provider chooser feeds (invoked on SDK callback threads; payloads
   // by value so the UI can marshal them onto its thread).
   using LocationsHandler =
@@ -1419,6 +1428,13 @@ class SdkHost {
   void SetTransportSettingsHandler(TransportSettingsHandler h) {
     onTransportSettings_ = std::move(h);
   }
+  // Set once, before Initialize (AppController::Start).
+  void SetTransportDelayHandler(TransportDelayHandler h) { onTransportDelay_ = std::move(h); }
+  // Reads the device's transport delay again, off the caller's thread, and
+  // pushes it if it changed. The listener carries the numbers only with a
+  // change of level or fallback (connect/DELAY.md §10.3), so a surface that
+  // shows the numbers asks for fresh ones. Coalesced; returns at once.
+  void RefreshTransportDelay() { transportDelayReader_.Request(); }
   void SetLocationsHandler(LocationsHandler h) { onLocations_ = std::move(h); }
   void SetPeersHandler(PeersHandler h) { onPeers_ = std::move(h); }
   // R4: a SECOND, independent subscriber to the same two feeds.
@@ -2929,6 +2945,37 @@ class SdkHost {
   // RequestDrawerSeed's reads, stopped with statsPublisher_ for the same reason.
   DrawerSeedHandler onDrawerSeed_;
   CoalescedWorker drawerSeedReader_{[this] { ReadDrawerSeedOnWorker(); }};
+  // ---- the slow-internet feed (SetTransportDelayHandler) ----
+  // The session's device handle, the session it belongs to, the last reading
+  // and whether the remote is connected, behind their own leaf lock: never
+  // mutex_, because the listeners and the reader run on sdk threads while a
+  // bootstrap holds mutex_ for seconds. The reader asks the device by its
+  // handle through the c abi, as AuthLogoutCause.h does, so it reads nothing
+  // of device_; a handle a teardown has released since answers nothing.
+  mutable std::mutex transportDelayMutex_;
+  std::uint64_t transportDelayDevice_ = 0;
+  // the sessionGeneration_ the listener and the reading belong to; 0: none
+  std::uint64_t transportDelayGeneration_ = 0;
+  std::optional<slow::Reading> transportDelayReading_;
+  bool transportDelayRemote_ = false;
+  // what the handler was last told: nullopt, unavailable, until a session
+  // has a reading over a connected remote
+  std::optional<slow::Reading> transportDelayPublished_;
+  TransportDelayHandler onTransportDelay_;
+  // A reading (the listener's or the reader's) or the remote's presence, for
+  // the session `generation`; a stale session's is dropped.
+  void NoteTransportDelay(std::uint64_t generation, std::optional<slow::Reading> reading);
+  void NoteTransportDelayRemote(std::uint64_t generation, bool remoteConnected);
+  // Starts the session's feed (BootstrapSession, mutex_ held) and ends it
+  // (TeardownSessionLocked): the ended feed publishes unavailable.
+  void BeginTransportDelay(std::uint64_t generation, std::uint64_t device);
+  void EndTransportDelay();
+  // Pushes the gated value when it changed. Caller holds transportDelayMutex_.
+  void PublishTransportDelayLocked();
+  // RefreshTransportDelay's reads, stopped with statsPublisher_ for the same
+  // reason.
+  void ReadTransportDelayOnWorker();
+  CoalescedWorker transportDelayReader_{[this] { ReadTransportDelayOnWorker(); }};
   // ---- the sign-out's tail (Logout, SignOutRun.h) ----
   // A registration waiting for the tail: RegisterNetworkClient's arguments.
   struct DeferredSignIn {
