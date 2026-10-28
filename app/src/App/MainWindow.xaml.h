@@ -417,6 +417,8 @@ struct MainWindow : MainWindowT<MainWindow> {
   void OnAuthStateChanged(urnw::AuthState state, std::string const& error);
   void OnTunnelStateChanged(urnw::proto::TunnelStatus const& status);
   void OnStatsChanged(urnw::LiveStats const& stats);
+  // The device's transport delay (SlowInternet.h), for the connect page's pill.
+  void OnTransportDelayChanged(std::optional<urnw::slow::Reading> const& reading);
   // A start waiting on its balance (StartConnectWait.h), for the connect page.
   void OnStartWaitChanged(urnw::StartWaitChange change);
   // A sign-out's tail is running (SdkHost::Logout): its controls are disabled.

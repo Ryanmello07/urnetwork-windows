@@ -378,6 +378,7 @@
     <ClCompile Include="ApprovalCheck.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
     <ClCompile Include="ServiceClient.cpp" />
     <ClCompile Include="ServiceSetup.cpp" />
+    <ClCompile Include="SlowInternetPill.cpp" />
     <ClCompile Include="TrayIcon.cpp" />
     <ClCompile Include="UpdateChecker.cpp" />
     <ClCompile Include="UrComponents.cpp" />
@@ -555,6 +556,11 @@
     <ClInclude Include="ApprovalCheck.h" />
     <ClInclude Include="ServiceClient.h" />
     <ClInclude Include="ServiceSetup.h" />
+    <!-- header-only and WinRT-free: tools/slow-internet-tests.cpp runs it -->
+    <ClInclude Include="SlowInternet.h" />
+    <ClInclude Include="SlowInternetPill.h" />
+    <!-- header-only and WinRT-free: tools/tunnel-indicator-tests.cpp runs it -->
+    <ClInclude Include="TunnelIndicator.h" />
     <ClInclude Include="TrayConnectionState.h" />
     <ClInclude Include="TrayIcon.h" />
     <ClInclude Include="UpdateChecker.h" />

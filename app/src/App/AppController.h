@@ -20,6 +20,7 @@
 #include "CryptoInvoice.h"
 #include "InstanceHandover.h"
 #include "SdkHost.h"
+#include "SlowInternet.h"
 #include "StatsReadOrder.h"
 #include "TapHold.h"
 #include "SubscriptionBalance.h"
@@ -85,6 +86,13 @@ class AppController {
   // user's own hands): a connect waiting on the balance is not run by itself
   // any more (BalanceGate.h, BalanceRecovery). UI thread.
   void ClearBalanceRecovery();
+
+  // Settings > General: "Notify me when my internet is slow", whether the tray
+  // posts its one balloon per slow episode (SlowInternet.h). A preference of
+  // this installation, in app_prefs.json beside Advanced Mode, default on:
+  // read once at Start and kept here, its one reader. UI thread.
+  bool SlowInternetNotify() const { return slowNotify_; }
+  void SetSlowInternetNotify(bool on);
 
   // What the sign-in page says about the sign-out the server made, once
   // (AuthLogoutNotice.h): the window takes it whenever it shows that page,
@@ -169,6 +177,15 @@ class AppController {
   void OnAuthInvalid(const std::string& cause);
   void OnTunnelState(const proto::TunnelStatus& status);
   void OnStats(const LiveStats& stats);
+  // The device's transport delay as SdkHost pushed it (nullopt: unavailable):
+  // the tray's dwell observes it, and the window's pill follows it while the
+  // window presents.
+  void OnTransportDelay(std::optional<slow::Reading> reading);
+  // The dwell's next presentation (SlowInternet.h), from the last reading and
+  // the tray's facts: a reading counts only signed in with the tunnel up, and
+  // anything else starts the dwell over. Arms the dwell's timer, and the
+  // numbers' refresh while the tray says slow.
+  void ObserveSlowInternet();
   // The reaction to a stats or balance push in the insufficient-balance gate
   // (BalanceGate.h): a tray notice once per out-of-balance episode, and never
   // a disconnect.
@@ -295,6 +312,20 @@ class AppController {
   // one until a snapshot read after the tap settled ends it. Signed out it
   // holds nothing.
   std::optional<taphold::Hold> trayTap_;
+  // ---- slow internet (SlowInternet.h) ----
+  // The last transport delay SdkHost pushed: nullopt while there is no
+  // session or its remote is down.
+  std::optional<slow::Reading> transportDelay_;
+  // The tray's dwell over it, and this episode's balloon moment.
+  slow::TrayEpisode slowTray_;
+  // Settings > General's "Notify me when my internet is slow"
+  // (SetSlowInternetNotify)
+  bool slowNotify_ = true;
+  // The dwell's next step with no new reading (one-shot), and while the tray
+  // says slow, the numbers' refresh: the listener carries them only with a
+  // change of level.
+  winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer slowTimer_{nullptr};
+  winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer slowRefreshTimer_{nullptr};
   // Set when the app ends (Shutdown: the tray "Quit", a close request, the
   // end of the Windows session), so the window's Closing handler lets it close instead
   // of hiding to tray (macOS parity: X/close hides, tray Quit exits). Atomic

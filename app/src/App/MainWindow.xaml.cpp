@@ -809,6 +809,9 @@ void MainWindow::ApplyBreakpoint() {
   // one gate, the page renders it) and shows pane A's fold-gated section exactly
   // while pane C is folded. See the note above the gate arithmetic.
   connect_->ApplyPaneCFolded(!connectThree);
+  // ...and how many panes the two gates left on screen: the slow-internet pill
+  // rides the rightmost one's header (ConnectPage::ApplyPaneCount)
+  connect_->ApplyPaneCount(connectThree ? 3 : twoPanes ? 2 : 1);
 
   // ---- Network: the list, and what one row IS ------------------------------
   // The inverse of Home's rail: here the LIST takes the star and the detail is
@@ -3096,6 +3099,10 @@ void MainWindow::SetSigningOut(bool signingOut) {
 
 void MainWindow::OnTapRecorded(std::uint64_t gesture, urnw::taphold::Kind kind) {
   connect_->OnTapRecorded(gesture, kind);
+}
+
+void MainWindow::OnTransportDelayChanged(std::optional<urnw::slow::Reading> const& reading) {
+  connect_->ApplyTransportDelay(reading);
 }
 
 void MainWindow::OnStatsChanged(urnw::LiveStats const& stats) {
