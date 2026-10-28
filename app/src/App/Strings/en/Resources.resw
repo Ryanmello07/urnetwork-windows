@@ -10214,6 +10214,14 @@ as it should be.</value>
     <value>Open URnetwork to set up</value>
     <comment>Widget subtitle when the app has no tunnel configuration yet.</comment>
   </data>
+  <data name="widget_overview_description" xml:space="preserve">
+    <value>Connection, providers on the globe, balance, today's traffic and contracts in one widget, with quick connect.</value>
+    <comment>Description of the overview widget in the widget gallery, on Android (the home screen, the lock screen and Samsung's cover screen) and on the iPhone, iPad and Mac home screen: one large widget that shows the connection with the quick connect toggle, the connected providers on a globe, the transfer balance, today's traffic and the open contracts.</comment>
+  </data>
+  <data name="widget_overview_name" xml:space="preserve">
+    <value>Overview</value>
+    <comment>Name of the overview widget in the widget gallery on iPhone, iPad and Mac, shown under the app's name: one large widget that shows the connection with the quick connect toggle, the connected providers on a globe, the transfer balance, today's traffic and the open contracts. One or two words.</comment>
+  </data>
   <data name="widget_peak_rate" xml:space="preserve">
     <value>{} peak</value>
     <comment>Chart label; the argument is a formatted byte rate such as '1.2 MB/s'.</comment>
@@ -10313,6 +10321,10 @@ as it should be.</value>
   <data name="widget_toggle_intent_title" xml:space="preserve">
     <value>Toggle URnetwork VPN</value>
     <comment>Title of the Set-Value intent behind the quick connect control and widget toggle (shown by the system in Shortcuts/debug UI).</comment>
+  </data>
+  <data name="widget_traffic_today" xml:space="preserve">
+    <value>Traffic today</value>
+    <comment>Title of a small tile in the overview widget (on Android's home screen, lock screen and Samsung's cover screen, and on the iPhone, iPad and Mac home screen) above the amount of data this device sent and received through URnetwork since midnight, for example 42 MB, with a small bar chart of each hour. Keep it short: the tile is narrow.</comment>
   </data>
   <data name="widget_updated_ago" xml:space="preserve">
     <value>Updated {}</value>
@@ -10419,6 +10431,10 @@ as it should be.</value>
   <data name="your_friend_gets_3_gib_day_for" xml:space="preserve">
     <value>Your friend gets 3 GiB/day for life</value>
     <comment>Text displayed in a scrollable view within a VStack in the body of a view that is displayed in a modal.</comment>
+  </data>
+  <data name="your_network" xml:space="preserve">
+    <value>Your network</value>
+    <comment>Heading of the panel beside the leaderboard on wide screens (an unfolded foldable phone, a tablet, a wide window). The panel shows the user's own URnetwork network: its current ranking, the data it provided, its points, its longest streak and the switch that shows it on the leaderboard. "Network" is the user's URnetwork account (the network they named), not a Wi-Fi or mobile network. A short heading: two or three words.</comment>
   </data>
   <data name="your_purchase_needs_to_be_approved_before_it_can" xml:space="preserve">
     <value>Your purchase needs to be approved before it can complete. UR Pro will turn on by itself once it goes through — there's no need to buy again.</value>

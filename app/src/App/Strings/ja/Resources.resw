@@ -8323,6 +8323,14 @@
     <value>URnetwork を開いて設定</value>
     <comment>Widget subtitle when the app has no tunnel configuration yet.</comment>
   </data>
+  <data name="widget_overview_description" xml:space="preserve">
+    <value>接続、地球儀上のプロバイダー、残高、今日のトラフィック、契約を1つのウィジェットに。クイック接続付き。</value>
+    <comment>Description of the overview widget in the widget gallery, on Android (the home screen, the lock screen and Samsung's cover screen) and on the iPhone, iPad and Mac home screen: one large widget that shows the connection with the quick connect toggle, the connected providers on a globe, the transfer balance, today's traffic and the open contracts.</comment>
+  </data>
+  <data name="widget_overview_name" xml:space="preserve">
+    <value>概要</value>
+    <comment>Name of the overview widget in the widget gallery on iPhone, iPad and Mac, shown under the app's name: one large widget that shows the connection with the quick connect toggle, the connected providers on a globe, the transfer balance, today's traffic and the open contracts. One or two words.</comment>
+  </data>
   <data name="widget_peak_rate" xml:space="preserve">
     <value>ピーク {}</value>
     <comment>Chart label; the argument is a formatted byte rate such as '1.2 MB/s'.</comment>
@@ -8362,6 +8370,10 @@
   <data name="widget_toggle_intent_title" xml:space="preserve">
     <value>URnetwork VPN のオン/オフ</value>
     <comment>Title of the Set-Value intent behind the quick connect control and widget toggle (shown by the system in Shortcuts/debug UI).</comment>
+  </data>
+  <data name="widget_traffic_today" xml:space="preserve">
+    <value>今日のトラフィック</value>
+    <comment>Title of a small tile in the overview widget (on Android's home screen, lock screen and Samsung's cover screen, and on the iPhone, iPad and Mac home screen) above the amount of data this device sent and received through URnetwork since midnight, for example 42 MB, with a small bar chart of each hour. Keep it short: the tile is narrow.</comment>
   </data>
   <data name="widget_updated_ago" xml:space="preserve">
     <value>{}に更新</value>
@@ -8453,6 +8465,10 @@
   <data name="your_friend_gets_3_gib_day_for" xml:space="preserve">
     <value>友達は生涯 3 GiB/日 を獲得できます</value>
     <comment>Text displayed in a scrollable view within a VStack in the body of a view that is displayed in a modal.</comment>
+  </data>
+  <data name="your_network" xml:space="preserve">
+    <value>あなたのネットワーク</value>
+    <comment>Heading of the panel beside the leaderboard on wide screens (an unfolded foldable phone, a tablet, a wide window). The panel shows the user's own URnetwork network: its current ranking, the data it provided, its points, its longest streak and the switch that shows it on the leaderboard. "Network" is the user's URnetwork account (the network they named), not a Wi-Fi or mobile network. A short heading: two or three words.</comment>
   </data>
   <data name="your_purchase_needs_to_be_approved_before_it_can" xml:space="preserve">
     <value>購入を完了するには承認が必要です。承認されるとUR Proは自動的に有効になります。もう一度購入する必要はありません。</value>
