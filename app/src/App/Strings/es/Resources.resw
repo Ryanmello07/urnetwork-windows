@@ -9330,6 +9330,10 @@ como debería ser.</value>
     <value>ID de usuario (UUID)</value>
     <comment>VLESS settings: the user ID field label. The ID is a UUID the server issued.</comment>
   </data>
+  <data name="vpn_notification_protected" xml:space="preserve">
+    <value>Protegido · {}</value>
+    <comment>Title of the Android VPN notification while the VPN is connected. Samsung's Flip cover screen, the lock screen and other small screens show it in a narrow row and cut off what does not fit, so keep it short and keep the status first: a narrow screen then loses the end of the place, never the status. "Protected" means this device's internet traffic goes through URnetwork, the same word as the "Protected" row of the desktop apps' connection inspector. {location} is where the connection goes: a country, region or city name (for example Germany), or "Best available provider".</comment>
+  </data>
   <data name="wait_for_refresh" xml:space="preserve">
     <value>Esperar la renovación</value>
     <comment>Upgrade screen, when a connect blocked by insufficient balance opened it: closes the screen to wait for the free daily data instead of upgrading.</comment>
