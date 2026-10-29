@@ -17,6 +17,8 @@
 #include "Log.h"
 #include "MainWindow.xaml.h"
 #include "PageContext.h"
+#include "Sdk.h"      // urnet::Api's API key calls and their results
+#include "SdkHost.h"  // Sdk().api()
 #include "SettingsSheets.h"  // rows::MakeSheet, rows::Lookup
 #include "SheetFit.h"        // sheetfit: sheets clamp to the window at open time
 #include "StatsFormat.h"     // the user's dates
