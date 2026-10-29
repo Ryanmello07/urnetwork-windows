@@ -71,9 +71,6 @@ constexpr std::string_view kConnectPurpose = bittensor::kPurposeConnect;
 constexpr const char* kUrXyzUrl = "https://ur.xyz";
 constexpr const char* kTop200Path = "/app/account/top200";
 
-// A head score this close to the eviction floor is worth a warning.
-constexpr double kDemotionWarningRatio = 1.15;
-
 int64_t NowMillis() {
   return std::chrono::duration_cast<std::chrono::milliseconds>(
              std::chrono::system_clock::now().time_since_epoch())
@@ -521,7 +518,9 @@ providerstatus::ValueText<std::wstring> ProviderStatusText() {
 WalletPage::WalletPage(winrt::URnetwork::implementation::MainWindow& window)
     : w_(window),
       snackbar_(window.WalletInfo(), window.DispatcherQueue()),
-      leaderboardSnackbar_(window.LeaderboardInfo(), window.DispatcherQueue()) {}
+      leaderboardSnackbar_(window.LeaderboardInfo(), window.DispatcherQueue()) {
+  protocol_ = std::make_unique<ProtocolBoard>(window, alive_);
+}
 
 WalletPage::~WalletPage() {
   *alive_ = false;  // the controller's listener and the sheet's completions stop here
@@ -607,6 +606,16 @@ void WalletPage::Initialize() {
     if (auto self = weak.get()) self->wallet().ValidateWalletAddress();
   });
   InitializePointsBoard();
+  // the Protocol board (LEADERTOP), and the tile's door to it
+  protocol_->Initialize();
+  {
+    auto weak = w_.get_weak();
+    auto alive = alive_;
+    w_.Top200SeeBoardButton().Click([weak, alive](IInspectable const&, RoutedEventArgs const&) {
+      if (!*alive) return;
+      if (auto self = weak.get()) self->wallet().ShowProtocolBoard();
+    });
+  }
 
   // The statistics groups (connect/EXTENDER.md O5, O8): the charts and the bar,
   // their feed, and the clock that redraws them. The feed hops through the
@@ -660,6 +669,10 @@ void WalletPage::SetSelected(bool selected) {
   if (selected_ == selected) return;
   selected_ = selected;
   ReconcileProviderStatus();
+  // the Protocol board shows with the destination: back after a while, it
+  // reloads from a fresh snapshot
+  protocol_->SetShowing(selected && board_ == Board::Protocol &&
+                        w_.LeaderboardHost().Visibility() == Visibility::Visible);
 }
 
 void WalletPage::OpenUrl(std::string const& url) {
@@ -728,6 +741,7 @@ void WalletPage::ApplyStrings() {
   w_.Top200Button().Content(LocBox("claim_your_spot"));
   w_.Top200SignButton().Content(LocBox("top200_sign_binding"));
   w_.Top200Warning().Text(Loc("top200_demotion_warning"));
+  w_.Top200SeeBoardButton().Content(LocBox("earnings_top200_see_board"));
   w_.UpgradeButton().Content(LocBox("upgrade_with_stripe"));
 
   // pane C
@@ -796,6 +810,7 @@ void WalletPage::OnEarningsTableChanged(SelectorBar const& bar,
   w_.LeaderboardHost().Visibility(leaderboard ? Visibility::Visible : Visibility::Collapsed);
   ApplyLedgerMeta();
   if (leaderboard && pointsBoardShowing_) EnsurePointsBoard();
+  protocol_->SetShowing(leaderboard && board_ == Board::Protocol);
   // Selecting the tab shows the board: the first show in a session fetches it.
   LoadLeaderboardIfShowing();
   UpdatePointsIndicator();
@@ -825,7 +840,8 @@ void WalletPage::LoadWallet() {
   LoadReliability();
   LoadEpochs();
   LoadSnWallet();  // continues into LoadClaims/LoadGas/LoadV2Accounts once the coldkey is known
-  LoadHead();
+  // the Top 200 tile and the Protocol card: one answer (GET /sn/top/me)
+  protocol_->LoadMe();
   LoadLegacyWallets();
   LoadLeaderboardIfShowing();
   LoadConsentStatus();
@@ -856,6 +872,9 @@ void WalletPage::ResetForSignOut() {
   // closes it there, drops every row, page and `me` it holds, and re-renders
   // the board empty.
   ClosePointsBoard(/*deviceAlive=*/true);
+  // The Protocol board's rows, card and tile were this account's: every answer
+  // still out for it is dropped, and the tile hides.
+  protocol_->ResetForSignOut();
 
   // Then the visible state, back to the seed ApplyStrings starts from
   // ("Loading..." with a dash figure): the state the fetch has not left yet,
@@ -1009,38 +1028,6 @@ void WalletPage::LoadSnWallet() {
     queue.TryEnqueue([weak, info, ok] {
       if (auto self = weak.get())
         self->wallet().ApplySnWallet(info, ok ? Fetch::Ready : Fetch::Failed);
-    });
-  });
-}
-
-// GET /sn/head: whether this network qualifies for (or holds) a head mining
-// spot, per the validators' consensus as the server currently estimates it.
-void WalletPage::LoadHead() {
-  auto queue = w_.DispatcherQueue();
-  auto weak = w_.get_weak();
-  Sdk().api().snHead([queue, weak](std::optional<urnet::SnHeadResult> result,
-                                   std::optional<std::string> err) {
-    std::string error = err ? *err : std::string();
-    if (error.empty() && result && result->error) error = result->error->message;
-    const bool ok = result && error.empty();
-    std::optional<HeadInfo> head;
-    if (ok) {
-      HeadInfo h;
-      h.eligible = result->eligible;
-      h.score = result->score;
-      h.floor = result->floor;
-      h.rankEstimate = result->rank_estimate;
-      h.cutoff = result->cutoff > 0 ? result->cutoff : 200;
-      h.bound = result->bound;
-      h.hotkey = result->hotkey.value_or(std::string());
-      h.uid = result->uid.value_or(0);
-      h.rank = result->rank.value_or(0);
-      head = h;
-    }
-    if (!ok) urnw::LogError("earnings: snHead failed: {}", error);
-    queue.TryEnqueue([weak, head, ok] {
-      if (auto self = weak.get())
-        self->wallet().ApplyHead(head, ok ? Fetch::Ready : Fetch::Failed);
     });
   });
 }
@@ -2317,8 +2304,9 @@ void WalletPage::RebuildHistory() {
 // The ledger pane's header figure belongs to whichever table is showing.
 void WalletPage::ApplyLedgerMeta() {
   const bool history = w_.LeaderboardHost().Visibility() != Visibility::Visible;
-  const int64_t boardCount =
-      pointsBoardShowing_ ? static_cast<int64_t>(pointsRows_.size()) : leaderboardCount_;
+  const int64_t boardCount = board_ == Board::Protocol ? static_cast<int64_t>(protocol_->state().rows.size())
+                             : pointsBoardShowing_    ? static_cast<int64_t>(pointsRows_.size())
+                                                      : leaderboardCount_;
   const int64_t count = history ? static_cast<int64_t>(epochs_.size()) : boardCount;
   kit::SetTextOrCollapse(w_.WalletPaneBMeta(),
                          count <= 0 ? hstring{} : hstring{std::to_wstring(count)});
@@ -2395,24 +2383,59 @@ void WalletPage::RebuildPayoutLine() {
 
 void WalletPage::ApplyGas(std::optional<GasKeyInfo> gas) { gas_ = std::move(gas); }
 
-void WalletPage::ApplyHead(std::optional<HeadInfo> head, Fetch state) {
-  head_ = std::move(head);
-  const bool show = state == Fetch::Ready && head_ && (head_->eligible || head_->bound);
+// The tile (owner decision 2026-10-29, LEADERTOP; apple/LEADERTOP.md §8), from
+// the Protocol board's card answer: the same projected position, margin and
+// label. While binding is closed the claim button is the "Claiming opens
+// soon" note and Sign fleet binding is hidden; when it opens the existing
+// claim flow is unchanged. A claimed network shows its fleets' UIDs,
+// validator ranks and selection, as the board's detail sheet.
+void WalletPage::ApplyTop200(protocolboard::Tile const& tile) {
+  const bool show = tile.body != protocolboard::TileBody::Hidden;
   w_.Top200Panel().Visibility(show ? Visibility::Visible : Visibility::Collapsed);
   if (!show) return;
-  if (head_->bound) {
-    w_.Top200Status().Text(hstring{urnw::Format("top200_bound_status", head_->uid, head_->rank)});
-    w_.Top200Detail().Text(Loc("top200_bound_detail"));
-    w_.Top200Button().Visibility(Visibility::Collapsed);
-  } else {
-    w_.Top200Status().Text(Loc("top200_you_qualify"));
-    w_.Top200Detail().Text(
-        hstring{urnw::Format("top200_detail", head_->rankEstimate, head_->cutoff)});
-    w_.Top200Button().Visibility(Visibility::Visible);
+  auto chips = w_.Top200ChipHost();
+  chips.Children().Clear();
+  if (!tile.labelText.empty()) chips.Children().Append(MakeProtocolChip(tile.labelText, tile.tone));
+  w_.Top200Status().Text(H(tile.position));
+  w_.Top200Projected().Text(H(tile.projected));
+  w_.Top200Detail().Text(H(tile.about));
+  auto fleets = w_.Top200Fleets();
+  fleets.Children().Clear();
+  for (auto const& fleet : tile.fleets) {
+    StackPanel line;
+    line.Orientation(Orientation::Horizontal);
+    line.Spacing(8);
+    TextBlock uid = MakeText(H(fleet.uid), 14, colors::TextBrush());
+    uid.FontWeight(winrt::Windows::UI::Text::FontWeights::SemiBold());
+    uid.VerticalAlignment(VerticalAlignment::Center);
+    line.Children().Append(uid);
+    if (!fleet.validatorRank.empty()) {
+      TextBlock rank = MakeText(H(fleet.validatorRank), 13, colors::MutedBrush());
+      rank.VerticalAlignment(VerticalAlignment::Center);
+      line.Children().Append(rank);
+    }
+    if (!fleet.selected.empty()) {
+      line.Children().Append(MakeProtocolChip(fleet.selected, fleet.isSelected ? protocolboard::Tone::Positive
+                                                                                : protocolboard::Tone::Muted));
+    }
+    fleets.Children().Append(line);
   }
-  const bool nearFloor =
-      head_->floor > 0 && head_->score > 0 && head_->score < head_->floor * kDemotionWarningRatio;
-  w_.Top200Warning().Visibility(nearFloor ? Visibility::Visible : Visibility::Collapsed);
+  fleets.Visibility(tile.fleets.empty() ? Visibility::Collapsed : Visibility::Visible);
+  kit::SetTextOrCollapse(w_.Top200BoundDetail(), H(tile.boundDetail));
+  w_.Top200Warning().Visibility(tile.nearLine ? Visibility::Visible : Visibility::Collapsed);
+  const bool soon = !tile.soonTitle.empty();
+  w_.Top200SoonPanel().Visibility(soon ? Visibility::Visible : Visibility::Collapsed);
+  w_.Top200SoonTitle().Text(H(tile.soonTitle));
+  w_.Top200SoonBody().Text(H(tile.soonBody));
+  w_.Top200Button().Visibility(tile.claimButton ? Visibility::Visible : Visibility::Collapsed);
+  kit::SetTextOrCollapse(w_.Top200ClaimWarning(), H(tile.warning));
+  w_.Top200SignButton().Visibility(tile.signButton ? Visibility::Visible : Visibility::Collapsed);
+}
+
+void WalletPage::ShowProtocolBoard() {
+  w_.LeaderboardBoardBar().SelectedItem(w_.ProtocolBoardItem());
+  w_.EarningsTableBar().SelectedItem(w_.LeaderboardTabItem());
+  ShowBoard(Board::Protocol);
 }
 
 std::string WalletPage::ExplorerTxUrl() const {
@@ -3139,13 +3162,18 @@ void WalletPage::ShowPreviewWalletState() {
     // the payout consent beside it: none yet, so the panel asks for one (its
     // button waits: --preview-ui has no session to sign with)
     ApplyConsentStatus(++consentReadGeneration_, snconsent::Fetch::Ready, snconsent::Status{});
-    HeadInfo head;
-    head.eligible = true;
-    head.score = 41.5;
-    head.floor = 38.0;
-    head.rankEstimate = 172;
-    head.cutoff = 200;
-    ApplyHead(head, Fetch::Ready);
+    // the Top 200 tile: a synthetic network projected inside, binding closed
+    protocolboard::Me me;
+    me.row = protocolboard::Row{};
+    me.row->position = 172;
+    me.row->margin = 0.12;
+    me.row->label = protocolboard::Label::Estimate;
+    me.row->measurable = true;
+    me.row->claimPrompt = true;
+    protocolboard::Snapshot snapshot;
+    snapshot.totalRanked = 41230;
+    snapshot.projectedCutoff = 41.2;
+    ApplyTop200(protocolboard::TileFor(me, snapshot, protocol_->BoardText()));
     return;
   }
   ApplyPoints({}, Fetch::Ready);
@@ -3153,12 +3181,13 @@ void WalletPage::ShowPreviewWalletState() {
   ApplyEpochs({}, Fetch::Ready);
   ApplySnWallet(std::nullopt, Fetch::Ready);
   ApplyGas(std::nullopt);
-  ApplyHead(std::nullopt, Fetch::Ready);
+  ApplyTop200(protocolboard::Tile{});
 }
 
 // ---- leaderboard ---------------------------------------------------------
 
 void WalletPage::ShowPreviewLeaderboardState() {
+  protocol_->ShowPreview(PreviewSample());
   if (PreviewSample()) {
     ownNetworkId_ = kSampleOwnNetworkId;
     urnet::NetworkRanking ranking;
@@ -3247,6 +3276,14 @@ void WalletPage::ApplyRanking(urnet::NetworkRanking const& ranking, bool ok) {
   SetRankingToggle(rankingPublic_);
 }
 
+void WalletPage::ApplyRankingNamePublic(bool isPublic, uint64_t askedAt) {
+  // a local edit made after this was asked for wins until a newer answer
+  if (askedAt < ownFlagsEditedAt_) return;
+  pointsPublic_ = isPublic;
+  RenderPointsHeader();
+  SyncNameSwitches();
+}
+
 void WalletPage::SetRankingToggle(bool isPublic) {
   applyingRankingToggle_ = true;
   w_.LeaderboardPublicToggle().IsOn(isPublic);
@@ -3263,18 +3300,23 @@ void WalletPage::LoadLeaderboard() {
 
   auto queue = w_.DispatcherQueue();
   auto weak = w_.get_weak();
+  // the ranking also carries the shared name switch (points_leaderboard_public)
+  const uint64_t askedAt = ++ownFlagsClock_;
 
   Sdk().api().getNetworkLeaderboardRanking(
-      [queue, weak](std::optional<urnet::GetNetworkRankingResult> result,
-                    std::optional<std::string> err) {
+      [queue, weak, askedAt](std::optional<urnet::GetNetworkRankingResult> result,
+                             std::optional<std::string> err) {
         std::string error = err ? *err : std::string();
         if (error.empty() && result && result->error) error = result->error->message;
         const bool ok = result && result->network_ranking && error.empty();
         urnet::NetworkRanking ranking;
         if (ok) ranking = *result->network_ranking;
         if (!ok) urnw::LogError("leaderboard: ranking fetch failed: {}", error);
-        queue.TryEnqueue([weak, ranking, ok] {
-          if (auto self = weak.get()) self->wallet().ApplyRanking(ranking, ok);
+        queue.TryEnqueue([weak, ranking, ok, askedAt] {
+          if (auto self = weak.get()) {
+            self->wallet().ApplyRanking(ranking, ok);
+            if (ok) self->wallet().ApplyRankingNamePublic(ranking.points_leaderboard_public, askedAt);
+          }
         });
       });
 
@@ -3433,7 +3475,10 @@ void WalletPage::InitializePointsBoard() {
       [weak, alive](SelectorBar const& bar, SelectorBarSelectionChangedEventArgs const&) {
         if (!*alive) return;
         if (auto self = weak.get()) {
-          self->wallet().ShowPointsBoard(bar.SelectedItem() == self->PointsBoardItem());
+          auto const item = bar.SelectedItem();
+          self->wallet().ShowBoard(item == self->PointsBoardItem() ? Board::Points
+                                   : item == self->DataBoardItem() ? Board::Data
+                                                                   : Board::Protocol);
         }
       });
   w_.PointsSortBar().SelectionChanged(
@@ -3462,29 +3507,34 @@ void WalletPage::InitializePointsBoard() {
   // activating a board tab -- the already-active one included -- scrolls its
   // list to the top (mmm/DESIGNSTYLE.md "Long ranked lists"); a re-tap
   // changes no selection, so this hangs on the tap and on Enter/Space
-  for (SelectorBarItem const item : {w_.DataBoardItem(), w_.PointsBoardItem()}) {
-    const bool points = item == w_.PointsBoardItem();
-    item.Tapped([weak, alive, points](IInspectable const&,
-                                      winrt::Microsoft::UI::Xaml::Input::TappedRoutedEventArgs const&) {
+  for (SelectorBarItem const item : {w_.ProtocolBoardItem(), w_.PointsBoardItem(), w_.DataBoardItem()}) {
+    const Board board = item == w_.PointsBoardItem() ? Board::Points
+                        : item == w_.DataBoardItem() ? Board::Data
+                                                     : Board::Protocol;
+    item.Tapped([weak, alive, board](IInspectable const&,
+                                     winrt::Microsoft::UI::Xaml::Input::TappedRoutedEventArgs const&) {
       if (!*alive) return;
-      if (auto self = weak.get()) self->wallet().ResetBoardList(points);
+      if (auto self = weak.get()) self->wallet().ResetBoardList(board);
     });
-    item.KeyDown([weak, alive, points](IInspectable const&,
-                                       winrt::Microsoft::UI::Xaml::Input::KeyRoutedEventArgs const& e) {
+    item.KeyDown([weak, alive, board](IInspectable const&,
+                                      winrt::Microsoft::UI::Xaml::Input::KeyRoutedEventArgs const& e) {
       if (!*alive) return;
       using winrt::Windows::System::VirtualKey;
       if (e.Key() != VirtualKey::Enter && e.Key() != VirtualKey::Space) return;
-      if (auto self = weak.get()) self->wallet().ResetBoardList(points);
+      if (auto self = weak.get()) self->wallet().ResetBoardList(board);
     });
   }
   BuildPointsIndicator();
 }
 
 void WalletPage::ApplyPointsBoardStrings() {
-  w_.DataBoardItem().Text(Loc("data"));
+  w_.ProtocolBoardItem().Text(Loc("leaderboard_tab_protocol"));
   w_.PointsBoardItem().Text(Loc("points"));
+  w_.DataBoardItem().Text(Loc("data"));
+  // Q14: Protocol is the first board and the default
   if (!w_.LeaderboardBoardBar().SelectedItem()) {
-    w_.LeaderboardBoardBar().SelectedItem(w_.DataBoardItem());
+    w_.LeaderboardBoardBar().SelectedItem(w_.ProtocolBoardItem());
+    ShowBoard(Board::Protocol);
   }
   w_.PointsSortPointsItem().Text(Loc("points"));
   w_.PointsSortBlocksItem().Text(Loc("blocks"));
@@ -3498,6 +3548,7 @@ void WalletPage::ApplyPointsBoardStrings() {
   BuildPointsNetworkHost();
   RenderPointsHeader();
   RenderPointsFooter();
+  protocol_->ApplyStrings();
 }
 
 // Pane C's block for the Points board: the group strip with the ranked count,
@@ -3624,14 +3675,22 @@ void WalletPage::BuildPointsNetworkHost() {
   }
 }
 
-void WalletPage::ShowPointsBoard(bool points) {
-  pointsBoardShowing_ = points;
-  w_.LeaderboardDataHost().Visibility(points ? Visibility::Collapsed : Visibility::Visible);
-  w_.PointsHost().Visibility(points ? Visibility::Visible : Visibility::Collapsed);
-  w_.DataRankingHost().Visibility(points ? Visibility::Collapsed : Visibility::Visible);
-  w_.PointsNetworkHost().Visibility(points ? Visibility::Visible : Visibility::Collapsed);
+void WalletPage::ShowBoard(Board board) {
+  board_ = board;
+  pointsBoardShowing_ = board == Board::Points;
+  const bool protocol = board == Board::Protocol;
+  const bool data = board == Board::Data;
+  auto shown = [](bool on) { return on ? Visibility::Visible : Visibility::Collapsed; };
+  // the ledger pane's list, and the network pane's block beside it
+  w_.ProtocolHost().Visibility(shown(protocol));
+  w_.PointsHost().Visibility(shown(pointsBoardShowing_));
+  w_.LeaderboardDataHost().Visibility(shown(data));
+  w_.ProtocolNetworkHost().Visibility(shown(protocol));
+  w_.PointsNetworkHost().Visibility(shown(pointsBoardShowing_));
+  w_.DataRankingHost().Visibility(shown(data));
   ApplyLedgerMeta();
-  if (points) EnsurePointsBoard();
+  if (pointsBoardShowing_) EnsurePointsBoard();
+  protocol_->SetShowing(protocol && w_.LeaderboardHost().Visibility() == Visibility::Visible);
   UpdatePointsIndicator();
 }
 
@@ -3959,6 +4018,8 @@ void WalletPage::RenderPointsHeader() {
   SetPointsToggle(pointsPublic_);
   pointsPublicToggle_.IsEnabled(!settingPointsPublic_);
   pointsPrivateHint_.Visibility(pointsPublic_ ? Visibility::Collapsed : Visibility::Visible);
+  // the same switch on the Protocol card
+  protocol_->ApplyNamePublic(pointsPublic_, settingPointsPublic_);
 }
 
 void WalletPage::RenderPointsFooter() {
@@ -4345,7 +4406,13 @@ void WalletPage::ScrollPointsToFirstRow() {
 
 // A board tab activated (the active one included): its list to the top; the
 // points board also reloads from the top when its window moved away from it.
-void WalletPage::ResetBoardList(bool pointsBoard) {
+void WalletPage::ResetBoardList(Board board) {
+  if (board == Board::Protocol) {
+    // the Protocol list always starts at position 1: only the scroll moves
+    protocol_->ScrollToTop();
+    return;
+  }
+  const bool pointsBoard = board == Board::Points;
   const auto reset =
       leaderboard::TabResetFor(pointsBoard, pointsVc_.has_value(), pointsFirstPosition_);
   if (reset.scrollToTop) {
@@ -4421,19 +4488,33 @@ void WalletPage::OnPointsPublicToggled() {
   // the handler cannot tell a user flip from the programmatic write that
   // renders the answer, so the write sets a flag and this returns
   if (applyingPointsToggle_) return;
-  const bool requested = pointsPublicToggle_.IsOn();
-  if (requested == pointsPublic_) return;
+  RequestNamePublic(pointsPublicToggle_.IsOn());
+}
+
+// Both switches show pointsPublic_, and neither takes a flip while a write of
+// it is out.
+void WalletPage::SyncNameSwitches() {
+  SetPointsToggle(pointsPublic_);
+  if (pointsPublicToggle_) pointsPublicToggle_.IsEnabled(!settingPointsPublic_);
+  protocol_->ApplyNamePublic(pointsPublic_, settingPointsPublic_);
+}
+
+void WalletPage::RequestNamePublic(bool requested) {
+  if (requested == pointsPublic_) {
+    SyncNameSwitches();
+    return;
+  }
   if (settingPointsPublic_) {
-    SetPointsToggle(pointsPublic_);  // one in flight: snap back
+    SyncNameSwitches();  // one in flight: snap back
     return;
   }
   if (!CanCallApi()) {
-    SetPointsToggle(pointsPublic_);
+    SyncNameSwitches();
     RefuseNoSession();
     return;
   }
   settingPointsPublic_ = true;
-  pointsPublicToggle_.IsEnabled(false);
+  SyncNameSwitches();
 
   auto alive = alive_;
   const uint32_t generation =
@@ -4442,8 +4523,7 @@ void WalletPage::OnPointsPublicToggled() {
         if (auto self = weak.get()) {
           auto& page = self->wallet();
           page.settingPointsPublic_ = false;
-          page.pointsPublicToggle_.IsEnabled(true);
-          page.SetPointsToggle(page.pointsPublic_);
+          page.SyncNameSwitches();
           page.Notify(Loc("something_went_wrong"), InfoBarSeverity::Error);
         }
       });
@@ -4473,20 +4553,21 @@ void WalletPage::ApplyPointsPublicResult(uint32_t generation, bool ok, bool requ
                                          std::string const& serverError) {
   if (!SettleFlow(pointsPublicFlow_, generation)) return;
   settingPointsPublic_ = false;
-  pointsPublicToggle_.IsEnabled(true);
   if (ok) {
     // the local value wins until a `me` newer than this edit lands
     ownFlagsEditedAt_ = ++ownFlagsClock_;
     pointsPublic_ = requested;
     RenderPointsHeader();
-    // the list shows or hides the own row; `me` is re-read too
+    SyncNameSwitches();
+    // both lists show or hide the own row's name; `me` is re-read too
     if (pointsVc_) {
       ownFlagsAppliedAt_ = ++ownFlagsClock_;
       pointsVc_->refresh();
     }
+    protocol_->ReloadAfterNameChange();
     return;
   }
-  SetPointsToggle(pointsPublic_);
+  SyncNameSwitches();
   Notify(serverError.empty() ? Loc("something_went_wrong") : H(serverError),
          InfoBarSeverity::Error);
 }

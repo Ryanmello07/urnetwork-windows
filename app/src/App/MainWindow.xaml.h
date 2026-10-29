@@ -763,6 +763,7 @@ struct MainWindow : MainWindowT<MainWindow> {
     uint32_t index = 0;
   };
   bool foldHomesRecorded_ = false;
+  FoldHome protocolNetworkHome_;
   FoldHome pointsNetworkHome_;
   FoldHome dataRankingHome_;
   FoldHome walletTransportHome_;

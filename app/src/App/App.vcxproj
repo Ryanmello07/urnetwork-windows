@@ -258,6 +258,7 @@
     <ClCompile Include="ReferralsPage.cpp" />
     <ClCompile Include="SessionsPage.cpp" />
     <ClCompile Include="ApiKeysPage.cpp" />
+    <ClCompile Include="ProtocolBoard.cpp" />
     <ClCompile Include="LicensesPage.cpp" />
     <ClCompile Include="ConnectCanvas.cpp" />
     <ClCompile Include="ConnectPage.cpp" />
@@ -407,6 +408,9 @@
     <ClInclude Include="ApiKeysPage.h" />
     <!-- header-only and WinRT-free: tools/api-keys-tests.cpp runs it -->
     <ClInclude Include="ApiKeysPresentation.h" />
+    <ClInclude Include="ProtocolBoard.h" />
+    <!-- header-only and WinRT-free: tools/protocol-board-tests.cpp runs it -->
+    <ClInclude Include="ProtocolBoardPresentation.h" />
     <ClInclude Include="LicensesPage.h" />
     <ClInclude Include="LicensePresentation.h" />
     <ClInclude Include="ConnectPage.h" />
