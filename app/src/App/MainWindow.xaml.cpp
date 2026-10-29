@@ -188,6 +188,7 @@ MainWindow::MainWindow() {
   settings_ = std::make_unique<urnw::SettingsPage>(*this);
   referrals_ = std::make_unique<urnw::ReferralsPage>(*this);
   sessions_ = std::make_unique<urnw::SessionsPage>(*this);
+  apiKeys_ = std::make_unique<urnw::ApiKeysPage>(*this);
   licenses_ = std::make_unique<urnw::LicensesPage>(*this);
   // Last: its ctor binds SdkHost's mode-notice handler and asks for a refresh,
   // so everything it may paint over must already exist.
@@ -583,6 +584,8 @@ MainWindow::~MainWindow() {
   wallet_.reset();
   // its session controller closes, after the listener is dropped
   sessions_.reset();
+  // a create sheet still up closes, and its key goes
+  apiKeys_.reset();
   login_.reset();
   account_.reset();
   settings_.reset();
@@ -645,6 +648,7 @@ void MainWindow::ApplyStrings() {
   settings_->ApplyPaymentPastDue(balance_.paymentPastDue);
   referrals_->ApplyStrings();
   sessions_->ApplyStrings();
+  apiKeys_->ApplyStrings();
   licenses_->ApplyStrings();
   developer_->ApplyStrings();
 }
@@ -1883,6 +1887,12 @@ void MainWindow::OnNavSelectionChanged(NavigationView const&,
     sessions_->Close();
   }
   SessionsView().Visibility(Visibility::Collapsed);
+  // ...nor on the API keys page, whose answers still out are dropped with it
+  if (apiKeysOpen_) {
+    apiKeysOpen_ = false;
+    apiKeys_->Close();
+  }
+  ApiKeysView().Visibility(Visibility::Collapsed);
   // ...and never on the Licenses page that may have been open in Settings'
   if (LicensesView().Visibility() == Visibility::Visible) licenses_->OnClosed();
   LicensesView().Visibility(Visibility::Collapsed);
@@ -2071,6 +2081,27 @@ void MainWindow::CloseSessions() {
   AccountView().Visibility(Visibility::Visible);
   // keyboard focus back on the row that opened the page
   account_->FocusSessionsNav();
+}
+
+// ---- the API keys page (reached from Account's API keys row) -----------------
+// The page lists the network's keys on the in-process Api when it opens (with
+// no session, --preview-ui included, it asks nothing and says so), and drops
+// every answer still out when it closes.
+
+void MainWindow::OpenApiKeys() {
+  apiKeysOpen_ = true;
+  AccountView().Visibility(Visibility::Collapsed);
+  ApiKeysView().Visibility(Visibility::Visible);
+  apiKeys_->Open();
+}
+
+void MainWindow::CloseApiKeys() {
+  apiKeysOpen_ = false;
+  apiKeys_->Close();
+  ApiKeysView().Visibility(Visibility::Collapsed);
+  AccountView().Visibility(Visibility::Visible);
+  // keyboard focus back on the row that opened the page
+  account_->FocusApiKeysNav();
 }
 
 // ---- the Licenses page (reached from Settings' Licenses row) -----------------
@@ -2994,6 +3025,9 @@ void MainWindow::ApplyAuthState(urnw::AuthState state, std::string const& error)
     // the departed account's sessions and their controller go
     sessions_->ResetForSignOut();
     if (sessionsOpen_) CloseSessions();
+    // ...and its API keys, with a create sheet still up and the key on it
+    apiKeys_->ResetForSignOut();
+    if (apiKeysOpen_) CloseApiKeys();
   }
   // The sign-in page, after a sign-out the server made, says why once: the
   // notice AppController kept for it (AuthLogoutNotice.h), taken whenever the

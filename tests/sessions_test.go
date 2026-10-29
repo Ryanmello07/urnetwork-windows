@@ -653,6 +653,7 @@ func TestAccountRowsLeadWithAMark(t *testing.T) {
 		{settings, "kDeleteAccountGlyph", `\uE74D`}, // Delete
 		{account, "kPasswordGlyph", `\uE72E`},       // Lock: the password
 		{account, "kReferralsGlyph", `\uEB51`},      // Heart: android's and apple's referrals mark
+		{account, "kApiKeysGlyph", `\uE943`},        // Code: the API keys row
 	} {
 		if !strings.Contains(constant.source, "constexpr wchar_t "+constant.name+`[] = L"`+constant.glyph+`";`) {
 			t.Errorf("%s must be %s", constant.name, constant.glyph)
@@ -669,6 +670,7 @@ func TestAccountRowsLeadWithAMark(t *testing.T) {
 		{"SettingsPage.cpp", settings, "void SettingsPage::BuildDangerSection() {"},
 		{"AccountPage.cpp", account, "void AccountPage::BuildProfileExtra() {"},
 		{"AccountPage.cpp", account, "void AccountPage::BuildSessionsNav() {"},
+		{"AccountPage.cpp", account, "void AccountPage::BuildApiKeysNav() {"},
 		{"AccountPage.cpp", account, "void AccountPage::BuildReferralsNav() {"},
 	}
 	calls := 0
