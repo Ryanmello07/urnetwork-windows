@@ -52,6 +52,9 @@ std::string MaskSecret(std::string const& secret) {
 // Sessions row's.
 constexpr wchar_t kPasswordGlyph[] = L"\uE72E";   // Lock
 constexpr wchar_t kReferralsGlyph[] = L"\uEB51";  // Heart
+// API keys are Code: the row is about the API, and the key mark is the sign-in
+// methods' (SettingsPage.cpp kSignInMethodGlyph)
+constexpr wchar_t kApiKeysGlyph[] = L"\uE943";  // Code
 
 // apple AccountNavStackView.needsNameClaim: true when the account carries NONE
 // of the identity methods, i.e. it is still on its auto-generated name.
@@ -150,6 +153,27 @@ void AccountPage::FocusSessionsNav() {
   if (sessionsNavButton_) sessionsNavButton_.Focus(FocusState::Programmatic);
 }
 
+// The API keys row (owner decision 2026-10-29): right after Sessions, it opens
+// the API keys page (ApiKeysPage) in Account's place. It is always there and
+// asks the server nothing; the page loads the keys when it opens.
+void AccountPage::BuildApiKeysNav() {
+  if (apiKeysNavBuilt_) return;
+  apiKeysNavBuilt_ = true;
+  rows::SetPaneMode(true);
+  auto card = rows::Card(w_.AccountApiKeysNavHost());
+  TextBlock unused{nullptr};
+  apiKeysNavButton_ =
+      rows::NavRow(card, kit::MakeRowGlyph(kApiKeysGlyph), Loc("api_keys_title"), unused);
+  Automation::AutomationProperties::SetAutomationId(apiKeysNavButton_,
+                                                     L"acceptance.account.api-keys");
+  apiKeysNavButton_.Click([this](auto const&, auto const&) { w_.OpenApiKeys(); });
+  rows::SetPaneMode(false);
+}
+
+void AccountPage::FocusApiKeysNav() {
+  if (apiKeysNavButton_) apiKeysNavButton_.Focus(FocusState::Programmatic);
+}
+
 // ---- the profile name's explicit edit mode (R4) ----------------------------
 //
 // The spec's Profile section asks for inline edit with Save appearing only while
@@ -237,6 +261,7 @@ void AccountPage::ApplyAccountState(rows::FieldState state) {
 void AccountPage::ApplyStrings() {
   BuildProfileExtra();  // idempotent
   BuildSessionsNav();   // idempotent
+  BuildApiKeysNav();    // idempotent
   BuildReferralsNav();  // idempotent
 
   // the three pane headers
