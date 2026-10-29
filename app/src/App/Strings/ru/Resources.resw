@@ -589,6 +589,86 @@
     <value>Если проблема сохраняется, свяжитесь с нами по адресу {0} или присоединяйтесь к нашему {1} для получения прямой поддержки.</value>
     <comment>Call to action</comment>
   </data>
+  <data name="api_keys_copied" xml:space="preserve">
+    <value>Скопировано</value>
+    <comment>API keys screen (Account &gt; API keys): shown briefly in place of Copy key (api_keys_copy) after the key was copied. Apple reads this English from the crypto_invoice_copied entry (one catalog entry per English text), so this key is not tagged apple.</comment>
+  </data>
+  <data name="api_keys_copy" xml:space="preserve">
+    <value>Копировать ключ</value>
+    <comment>API keys screen (Account &gt; API keys): the button on the sheet that shows a newly created key; it puts the key on the clipboard.</comment>
+  </data>
+  <data name="api_keys_create" xml:space="preserve">
+    <value>Создать API-ключ</value>
+    <comment>API keys screen (Account &gt; API keys): the action that creates a new API key: the screen's button, and the title or confirm button of the form that asks for the key's name.</comment>
+  </data>
+  <data name="api_keys_create_failed" xml:space="preserve">
+    <value>Не удалось создать API-ключ. Попробуйте ещё раз.</value>
+    <comment>API keys screen (Account &gt; API keys): shown when creating a new key failed.</comment>
+  </data>
+  <data name="api_keys_created_at" xml:space="preserve">
+    <value>Создан: {}</value>
+    <comment>API keys screen (Account &gt; API keys): a key's row, the line under its name. {date} is the date the key was created, already formatted by the app ("Oct 29, 2026"), inserted as is, so no case ending or preposition can attach to it.</comment>
+  </data>
+  <data name="api_keys_created_title" xml:space="preserve">
+    <value>Ваш новый API-ключ</value>
+    <comment>API keys screen (Account &gt; API keys): title of the sheet that shows a newly created key in full. This is the only time the key is ever shown.</comment>
+  </data>
+  <data name="api_keys_created_warning" xml:space="preserve">
+    <value>Скопируйте этот ключ сейчас. Он больше не будет показан, и любой, у кого он есть, сможет пользоваться вашим аккаунтом.</value>
+    <comment>API keys screen (Account &gt; API keys): the warning on the sheet that shows a newly created key. The key is shown only this once, and anyone who has it has full access to the account.</comment>
+  </data>
+  <data name="api_keys_delete" xml:space="preserve">
+    <value>Удалить</value>
+    <comment>API keys screen (Account &gt; API keys): the action on a key's row that deletes the key, and the destructive button of the confirmation that follows. Apple reads this English from the delete entry (one catalog entry per English text), so this key is not tagged apple.</comment>
+  </data>
+  <data name="api_keys_delete_confirm_body" xml:space="preserve">
+    <value>«{}» сразу перестанет работать, и всё, что его использует, потеряет доступ.</value>
+    <comment>API keys screen (Account &gt; API keys): body of the confirmation before a key is deleted. {name} is the key's name as the user gave it ("home server"), or api_keys_unnamed ("Unnamed key") for a key without one, inserted as is between quotes, so no case ending or article can attach to it, and the sentence must read with either.</comment>
+  </data>
+  <data name="api_keys_delete_confirm_title" xml:space="preserve">
+    <value>Удалить этот API-ключ?</value>
+    <comment>API keys screen (Account &gt; API keys): title of the confirmation before a key is deleted.</comment>
+  </data>
+  <data name="api_keys_delete_failed" xml:space="preserve">
+    <value>Не удалось удалить API-ключ. Попробуйте ещё раз.</value>
+    <comment>API keys screen (Account &gt; API keys): shown when deleting a key failed.</comment>
+  </data>
+  <data name="api_keys_docs_link" xml:space="preserve">
+    <value>Как использовать API-ключи</value>
+    <comment>API keys screen (Account &gt; API keys): a link under the explanation that opens the documentation on using API keys with the API.</comment>
+  </data>
+  <data name="api_keys_empty" xml:space="preserve">
+    <value>У вас нет API-ключей.</value>
+    <comment>API keys screen (Account &gt; API keys): shown in place of the list when the account has no API keys.</comment>
+  </data>
+  <data name="api_keys_id" xml:space="preserve">
+    <value>ID {}</value>
+    <comment>API keys screen (Account &gt; API keys): a key's row, the line with the key's ID, shown so the user can use the ID with the API. {id} is the ID as is. Apple reads this English from the sessions_id entry ("ID %@", one catalog entry per English text), so this key is not tagged apple.</comment>
+  </data>
+  <data name="api_keys_intro" xml:space="preserve">
+    <value>API-ключи позволяют вашим собственным инструментам и скриптам использовать ваш аккаунт URnetwork через API. Любой, у кого есть ключ, получает полный доступ к вашему аккаунту, пока вы не удалите этот ключ.</value>
+    <comment>API keys screen (Account &gt; API keys): the explanation at the top of the screen. It must keep both points: a key lets the user's own tools and scripts use the account through the API, and anyone who has a key has full access to the account until the key is deleted.</comment>
+  </data>
+  <data name="api_keys_load_failed" xml:space="preserve">
+    <value>Не удалось загрузить ваши API-ключи. Попробуйте ещё раз.</value>
+    <comment>API keys screen (Account &gt; API keys): shown when the list of keys failed to load, above the retry button.</comment>
+  </data>
+  <data name="api_keys_name_label" xml:space="preserve">
+    <value>Название ключа</value>
+    <comment>API keys screen (Account &gt; API keys): label of the name field in the form that creates a key. The name only helps the user tell keys apart ("home server"). Not plain "Name": apple has one catalog entry per English text, and name_label's "Name" reads as a person's name in several languages.</comment>
+  </data>
+  <data name="api_keys_name_placeholder" xml:space="preserve">
+    <value>Например, домашний сервер</value>
+    <comment>API keys screen (Account &gt; API keys): placeholder in the empty name field of the form that creates a key, suggesting a name that says where the key will be used.</comment>
+  </data>
+  <data name="api_keys_title" xml:space="preserve">
+    <value>API-ключи</value>
+    <comment>API keys screen (Account &gt; API keys): the screen's title, and the label of the Account row that opens it. The screen lists the account's API keys, which let the user's own tools and scripts use the account through the API, and creates and deletes them.</comment>
+  </data>
+  <data name="api_keys_unnamed" xml:space="preserve">
+    <value>Ключ без названия</value>
+    <comment>API keys screen (Account &gt; API keys): the row title of a key that has no name (a key created through the API may have an empty name), and the {name} of api_keys_delete_confirm_body for such a key, where it appears between quotes.</comment>
+  </data>
   <data name="app_excluded_toast" xml:space="preserve">
     <value>{} будет работать в обход VPN</value>
     <comment>transfer stats and split rules</comment>
