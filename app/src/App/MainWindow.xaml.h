@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "AccountPage.h"
+#include "ApiKeysPage.h"
 #include "BalanceGate.h"
 #include "BalanceSheets.h"
 #include "ConnectPage.h"
@@ -66,6 +67,7 @@ struct MainWindow : MainWindowT<MainWindow> {
   urnw::SettingsPage& settings() { return *settings_; }
   urnw::ReferralsPage& referrals() { return *referrals_; }
   urnw::SessionsPage& sessions() { return *sessions_; }
+  urnw::ApiKeysPage& apiKeys() { return *apiKeys_; }
   urnw::LicensesPage& licenses() { return *licenses_; }
   urnw::DeveloperPage& developer() { return *developer_; }
 
@@ -112,6 +114,12 @@ struct MainWindow : MainWindowT<MainWindow> {
   // its session controller lives exactly as long as it is open.
   void OpenSessions();
   void CloseSessions();
+  // The API keys page (owner decision 2026-10-29): shown in place of the
+  // Account panes the same way, opened from Account's API keys row and closed
+  // from its own "‹ Account", by any rail navigation and by a sign-out, which
+  // also closes a create sheet still up and wipes its key.
+  void OpenApiKeys();
+  void CloseApiKeys();
   // The Licenses page: shown in place of the Settings panes the same way (no
   // rail item), opened from Settings' Licenses row and closed from its own
   // "‹ Settings"; any rail navigation closes it too.
@@ -575,6 +583,8 @@ struct MainWindow : MainWindowT<MainWindow> {
   bool referralsOpen_ = false;  // the Refer and earn page is up in Account's place
   std::unique_ptr<urnw::SessionsPage> sessions_;
   bool sessionsOpen_ = false;  // the Sessions page is up in Account's place
+  std::unique_ptr<urnw::ApiKeysPage> apiKeys_;
+  bool apiKeysOpen_ = false;  // the API keys page is up in Account's place
   std::unique_ptr<urnw::LicensesPage> licenses_;
   std::unique_ptr<urnw::DeveloperPage> developer_;
   // The last nav tag OnNavSelectionChanged applied; the destination-swap fade

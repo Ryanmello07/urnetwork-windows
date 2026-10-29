@@ -1,5 +1,6 @@
 // The Account destination: profile (network name + auth + password), the
-// Sessions row that opens the Sessions page (SessionsPage), the redeemed
+// Sessions row that opens the Sessions page (SessionsPage), the API keys row
+// that opens the API keys page (ApiKeysPage), the redeemed
 // balance-code list, and the Referrals row that opens the "Refer and earn"
 // page (ReferralsPage). macOS AccountRootView and ProfileView parity.
 //
@@ -73,6 +74,8 @@ class AccountPage {
   // Keyboard focus onto the Sessions row, as the Sessions page closes: back
   // where the user left the Account list.
   void FocusSessionsNav();
+  // The same for the API keys row, as the API keys page closes.
+  void FocusApiKeysNav();
 
   // Drop the signed-out account's identity. passwordResetUserAuth_ is the dangerous
   // one: SendPasswordReset mails a link to it, so a leftover value mails the
@@ -89,6 +92,9 @@ class AccountPage {
   // The Sessions row (pane B), right after the profile, that opens the
   // Sessions page (SessionsPage.h).
   void BuildSessionsNav();
+  // The API keys row (pane B), right after Sessions, that opens the API keys
+  // page (ApiKeysPage.h).
+  void BuildApiKeysNav();
   // ---- pane D: extenders (EXTENDER.md K6, K7) ------------------------------
   // The whole section is built here rather than in markup, for the reason
   // SettingsSheets.h gives about the settings sections: MainWindow.xaml is the
@@ -161,6 +167,8 @@ class AccountPage {
   winrt::Microsoft::UI::Xaml::Controls::TextBlock referralsNavValue_{nullptr};
   bool sessionsNavBuilt_ = false;
   winrt::Microsoft::UI::Xaml::Controls::Button sessionsNavButton_{nullptr};
+  bool apiKeysNavBuilt_ = false;
+  winrt::Microsoft::UI::Xaml::Controls::Button apiKeysNavButton_{nullptr};
   // one-shot: the "nothing has been requested yet" states, applied by
   // ApplyStrings so a load is not needed to make the card readable
   bool initialStatesApplied_ = false;
