@@ -3448,6 +3448,26 @@
     <value>상태</value>
     <comment>Column header of the per-epoch history table: the claim status of the epoch's alpha.</comment>
   </data>
+  <data name="earnings_top200_body" xml:space="preserve">
+    <value>SN25 검증자의 Top 200처럼, 내 기기가 제공에 사용하는 고유 IP 프리픽스를 기준으로 순위를 매깁니다. 상위 채굴자는 tempo마다 SN25α를 받습니다.</value>
+    <comment>Earnings Top 200 tile: the explanation under the projected position, replacing top200_detail ("ranks about #N of 200 head spots"). The ranking is the Protocol leaderboard's, done the way the SN25 validator picks its Top 200 head miners, who earn SN25α every tempo (about every 72 minutes).</comment>
+  </data>
+  <data name="earnings_top200_claiming_soon" xml:space="preserve">
+    <value>곧 자리 확보가 열립니다</value>
+    <comment>Earnings Top 200 tile: the note that replaces the Claim your spot button (claim_your_spot) while claiming a Top 200 spot isn't open on mainnet.</comment>
+  </data>
+  <data name="earnings_top200_claiming_soon_body" xml:space="preserve">
+    <value>자리를 확보할 수 있게 되면 알려 드리겠습니다. 자리를 확보한 플릿이라도 201위 이하이면 아무것도 벌지 못합니다.</value>
+    <comment>Earnings Top 200 tile: under earnings_top200_claiming_soon while claiming isn't open. The second sentence is the claim warning (leaderboard_protocol_claim_warning): a fleet that claimed a spot but ranks 201st or lower earns nothing.</comment>
+  </data>
+  <data name="earnings_top200_projected" xml:space="preserve">
+    <value>예상 · {}</value>
+    <comment>Earnings Top 200 tile: the line under the network's projected position ("#173"), the same projection the Protocol leaderboard shows. {margin} is the margin to the Top 200 line, already formatted by the app with its sign and percent sign ("+12%" above the line, "−8%" below), inserted as is.</comment>
+  </data>
+  <data name="earnings_top200_see_board" xml:space="preserve">
+    <value>프로토콜 리더보드 보기</value>
+    <comment>Earnings Top 200 tile: link to the Protocol leaderboard (Leaderboard &gt; Protocol). Names the tab (leaderboard_tab_protocol) and the leaderboard (leaderboard) in their own words.</comment>
+  </data>
   <data name="earnings_view_transaction" xml:space="preserve">
     <value>트랜잭션 보기</value>
     <comment>Link that opens a claim transaction in the block explorer.</comment>
@@ -4361,6 +4381,194 @@
   <data name="leaderboard_position_indicator" xml:space="preserve">
     <value>리더보드 위치</value>
     <comment>Points leaderboard: accessibility name of the draggable position indicator (a slider over ranks 1 to N).</comment>
+  </data>
+  <data name="leaderboard_protocol_above_line" xml:space="preserve">
+    <value>Top 200 기준선보다 {} 위</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): own-status card, how far the network's projected score is above the Top 200 line (the score at position 200, the cutoff for a head spot). {percent} is the margin, already formatted by the app with its percent sign ("12%"), inserted as is.</comment>
+  </data>
+  <data name="leaderboard_protocol_banner_closed" xml:space="preserve">
+    <value>아직 자리를 확보할 수 없습니다. 지금 예상 순위는 확인할 수 있습니다.</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): the neutral one-line banner on top of the tab while claiming a Top 200 spot (binding a fleet to a miner UID on SN25) isn't open on mainnet. The board still shows where the network would rank if it claimed now.</comment>
+  </data>
+  <data name="leaderboard_protocol_banner_stale" xml:space="preserve">
+    <value>순위 마지막 업데이트: {}</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): banner on top of the tab when the rankings are stale, last computed more than 3 tempos (about 3.5 hours) ago. {time} is when they were computed, already formatted by the app, a relative time ("4h ago") or a date ("Oct 29"), inserted as is, so the wording must read with either.</comment>
+  </data>
+  <data name="leaderboard_protocol_below_line" xml:space="preserve">
+    <value>Top 200 기준선보다 {} 아래</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): own-status card, how far the network's projected score is below the Top 200 line (the score at position 200, the cutoff for a head spot). {percent} is the margin, already formatted by the app with its percent sign ("8%"), inserted as is.</comment>
+  </data>
+  <data name="leaderboard_protocol_chart_a11y" xml:space="preserve">
+    <value>90일간 예상 순위, 현재 {}위</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): accessibility summary of the progress chart, read by VoiceOver and TalkBack. {rank} is today's projected position, a number, inserted as is.</comment>
+  </data>
+  <data name="leaderboard_protocol_chart_line" xml:space="preserve">
+    <value>Top 200 기준선</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): own-status card, label of the horizontal line drawn across the progress chart at position 200, the cutoff for a Top 200 head spot.</comment>
+  </data>
+  <data name="leaderboard_protocol_chart_title" xml:space="preserve">
+    <value>예상 순위, 최근 90일</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): own-status card, title of the progress chart: the network's projected position each day over the last 90 days.</comment>
+  </data>
+  <data name="leaderboard_protocol_claim_borderline" xml:space="preserve">
+    <value>기준선에 가깝고, 순위는 tempo마다 바뀝니다.</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): own-status card, added to the claim prompt when the network is within 20% of the Top 200 line. The rankings are recomputed once per tempo (about every 72 minutes).</comment>
+  </data>
+  <data name="leaderboard_protocol_claim_button" xml:space="preserve">
+    <value>수익에서 자리 확보하기</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): own-status card, the claim prompt's primary button once claiming is open. It opens the Earnings page (earnings) at its Top 200 tile, where the user claims the spot (claim_your_spot), so it names that page in the page's own words.</comment>
+  </data>
+  <data name="leaderboard_protocol_claim_inside" xml:space="preserve">
+    <value>Top 200 안에 들 것으로 예상됩니다.</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): own-status card, the claim prompt for a measurable network projected inside the top 200. While claiming isn't open, leaderboard_protocol_claim_soon follows; once it opens, the Claim on Earnings button.</comment>
+  </data>
+  <data name="leaderboard_protocol_claim_soon" xml:space="preserve">
+    <value>곧 수익 페이지에서 자리를 확보할 수 있습니다.</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): own-status card, after "You're projected in the top 200." while claiming isn't open on mainnet. Names the Earnings page (earnings) in the page's own words. Nothing invites registering early.</comment>
+  </data>
+  <data name="leaderboard_protocol_claim_warning" xml:space="preserve">
+    <value>자리를 확보한 플릿이라도 201위 이하이면 아무것도 벌지 못합니다.</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): the warning every claim prompt carries: a fleet that claimed a Top 200 spot but is ranked 201st or lower by the SN25 validator earns nothing (its devices leave the regular payout pool either way). The Earnings Top 200 tile repeats it (earnings_top200_claiming_soon_body).</comment>
+  </data>
+  <data name="leaderboard_protocol_detail_claimed" xml:space="preserve">
+    <value>확보됨</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): the sheet that opens from a row whose network has claimed a Top 200 spot: the state next to the fleet's UID ("UID 81 · claimed"). Lowercase where the language allows.</comment>
+  </data>
+  <data name="leaderboard_protocol_detail_epoch" xml:space="preserve">
+    <value>에포크 {}</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): claimed row sheet, the value of Claim valid until. {epoch} is the settlement epoch number, inserted as is. Apple reads this English from the epoch_row_title entry ("Epoch %lld", one catalog entry per English text), so this key is not tagged apple.</comment>
+  </data>
+  <data name="leaderboard_protocol_detail_generation" xml:space="preserve">
+    <value>세대</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): claimed row sheet, label of the generation of the fleet's binding: a number that goes up each time the fleet binds again.</comment>
+  </data>
+  <data name="leaderboard_protocol_detail_incentive" xml:space="preserve">
+    <value>온체인 인센티브</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): claimed row sheet, label of the fleet UID's incentive as read from the SN25 metagraph on chain (Bittensor's incentive value, which the chain pays it by).</comment>
+  </data>
+  <data name="leaderboard_protocol_detail_incentive_note" xml:space="preserve">
+    <value>온체인 인센티브는 검증자 순위보다 늦게 반영됩니다.</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): claimed row sheet, note under the on-chain incentive: the chain's incentive reflects the validator's ranking one or two tempos later.</comment>
+  </data>
+  <data name="leaderboard_protocol_detail_not_selected" xml:space="preserve">
+    <value>선정되지 않음</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): claimed row sheet: the SN25 validator did not select the fleet for a head spot in the last tempo (it was not in the validator's Top 200).</comment>
+  </data>
+  <data name="leaderboard_protocol_detail_projected_rank" xml:space="preserve">
+    <value>예상 순위</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): claimed row sheet, label of the network's projected position on the board.</comment>
+  </data>
+  <data name="leaderboard_protocol_detail_replica_score" xml:space="preserve">
+    <value>보드 복제 점수</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): claimed row sheet, label of the fleet's score as the board computes it with an exact replica of the SN25 validator's scoring, from the same measurements. Shown next to the validator's own score.</comment>
+  </data>
+  <data name="leaderboard_protocol_detail_selected" xml:space="preserve">
+    <value>선정됨</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): claimed row sheet: the SN25 validator selected the fleet for a head spot in the last tempo (it was in the validator's Top 200).</comment>
+  </data>
+  <data name="leaderboard_protocol_detail_stale" xml:space="preserve">
+    <value>오래됨</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): claimed row sheet, shown next to the on-chain incentive when the value read from chain is out of date. Lowercase where the language allows.</comment>
+  </data>
+  <data name="leaderboard_protocol_detail_valid_until" xml:space="preserve">
+    <value>확보 유효 기한</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): claimed row sheet, label of the last settlement epoch the fleet's claim (its binding) is valid for. The value is leaderboard_protocol_detail_epoch ("Epoch 1234").</comment>
+  </data>
+  <data name="leaderboard_protocol_detail_validator_rank" xml:space="preserve">
+    <value>검증자 순위</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): claimed row sheet, label of where the SN25 validator itself ranked the fleet last tempo (the value is leaderboard_protocol_detail_validator_rank_value).</comment>
+  </data>
+  <data name="leaderboard_protocol_detail_validator_rank_value" xml:space="preserve">
+    <value>확보한 {1}개 중 #{0}</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): claimed row sheet, the value of Validator rank: where the SN25 validator ranked this fleet among the claimed fleets it scored last tempo. {rank} is the position and {count} the number of claimed fleets, both numbers inserted as is, so the wording must read with any number.</comment>
+  </data>
+  <data name="leaderboard_protocol_detail_validator_score" xml:space="preserve">
+    <value>검증자 점수</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): claimed row sheet, label of the fleet's score as the SN25 validator itself computed it last tempo.</comment>
+  </data>
+  <data name="leaderboard_protocol_empty" xml:space="preserve">
+    <value>다음 업데이트 후에 순위가 표시됩니다.</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): shown in place of the ranked list while there are no rankings yet. The board updates once per tempo, about every 72 minutes.</comment>
+  </data>
+  <data name="leaderboard_protocol_explainer" xml:space="preserve">
+    <value>SN25 검증자가 Top 200을 고르는 방식대로 순위를 매깁니다. 내 기기가 제공에 사용하는 고유 IP 프리픽스 수를 기준으로 하며, 공유된 프리픽스는 이를 사용하는 네트워크끼리 나눕니다. 약 72분마다 업데이트됩니다. 자리를 확보하기 전까지는 예상치입니다.</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): the paragraph under the own-status card (in the second pane on wide screens) that explains the ranking. The SN25 validator picks its Top 200 head miners by distinct IP prefixes; a prefix several networks provide from is split between them. The board updates once per tempo, about every 72 minutes.</comment>
+  </data>
+  <data name="leaderboard_protocol_label_borderline" xml:space="preserve">
+    <value>경계선</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): label chip (own-status card and own row) once the board is accurate enough: the network's projected score is within 20% of the Top 200 line, above or below it.</comment>
+  </data>
+  <data name="leaderboard_protocol_label_estimate" xml:space="preserve">
+    <value>추정</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): label chip on the own-status card and the user's own row, shown until the board's measured accuracy against the validator's real picks reaches 90%: the position is only an estimate. The other chips are Likely, Borderline, Unlikely and Not measurable.</comment>
+  </data>
+  <data name="leaderboard_protocol_label_likely" xml:space="preserve">
+    <value>가능성 높음</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): label chip (own-status card and own row) once the board is accurate enough: the network is at least 20% above the Top 200 line and was measurable in at least 3 of the last 4 tempos, so the validator will likely rank it in its Top 200.</comment>
+  </data>
+  <data name="leaderboard_protocol_label_not_measurable" xml:space="preserve">
+    <value>측정 불가</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): label chip (own-status card and own row): the SN25 validator can't measure the network yet, so it can't score it whatever the projection says. The card says why (leaderboard_protocol_not_measurable_cohort, _shared, _providing).</comment>
+  </data>
+  <data name="leaderboard_protocol_label_unlikely" xml:space="preserve">
+    <value>가능성 낮음</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): label chip (own-status card and own row) once the board is accurate enough: the network is at least 20% below the Top 200 line.</comment>
+  </data>
+  <data name="leaderboard_protocol_line" xml:space="preserve">
+    <value>Top 200 기준선 · 점수 {}</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): the divider in the ranked list between positions 200 and 201. {score} is position 200's projected score (the cutoff for a head spot), already formatted by the app ("41.2"), inserted as is.</comment>
+  </data>
+  <data name="leaderboard_protocol_line_a11y" xml:space="preserve">
+    <value>Top 200 기준선, 점수 {}</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): what VoiceOver and TalkBack read for the divider between positions 200 and 201 (leaderboard_protocol_line). {score} is position 200's projected score, already formatted by the app ("41.2"), inserted as is.</comment>
+  </data>
+  <data name="leaderboard_protocol_not_measurable_cohort" xml:space="preserve">
+    <value>아직 검증자가 내 기기를 측정하지 않습니다.</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): own-status card, why the network is not measurable: none of its devices is in the set the SN25 validator measures yet, so the validator can't score it. Shown instead of a claim prompt.</comment>
+  </data>
+  <data name="leaderboard_protocol_not_measurable_providing" xml:space="preserve">
+    <value>순위에 오르려면 제공을 켜세요.</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): own-status card, why the network is not measurable: none of its devices is providing. Shown instead of a claim prompt.</comment>
+  </data>
+  <data name="leaderboard_protocol_not_measurable_shared" xml:space="preserve">
+    <value>내 기기가 다른 네트워크와 IP를 공유하고 있습니다.</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): own-status card, why the network is not measurable: its devices provide from an IP address another network also provides from, so the validator can't tell the two apart. Shown instead of a claim prompt.</comment>
+  </data>
+  <data name="leaderboard_protocol_of_ranked" xml:space="preserve">
+    <value>순위에 오른 {}개 네트워크 중</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): own-status card, under "#173 projected": how many networks the board ranks. {count} is that number (hundreds or thousands), inserted as is, so the wording must read with any number.</comment>
+  </data>
+  <data name="leaderboard_protocol_projected" xml:space="preserve">
+    <value>예상</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): own-status card, the word after the network's position, "#173 projected": the position is a projection of where the SN25 validator would rank the network if it claimed, not a final rank. It qualifies the number before it; lowercase where the language allows.</comment>
+  </data>
+  <data name="leaderboard_protocol_solo" xml:space="preserve">
+    <value>오늘 혼자 자리를 확보한다면: {}</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): own-status card, why this score: the score the network would have today if it claimed a Top 200 spot and no other network sharing its IP prefixes claimed. {score} is that score, already formatted by the app ("41.2"), inserted as is.</comment>
+  </data>
+  <data name="leaderboard_protocol_trend_down" xml:space="preserve">
+    <value>지난 업데이트 이후 {}계단 하락</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): own-status card, next to the trend arrow after the margin to the Top 200 line: how many positions the network moved down since the previous update (once per tempo, about every 72 minutes). {count} is the number of positions, inserted as is, so the wording must read with any number. Lowercase in English: it continues the margin line.</comment>
+  </data>
+  <data name="leaderboard_protocol_trend_up" xml:space="preserve">
+    <value>지난 업데이트 이후 {}계단 상승</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): own-status card, next to the trend arrow after the margin to the Top 200 line: how many positions the network moved up since the previous update (once per tempo, about every 72 minutes). {count} is the number of positions, inserted as is, so the wording must read with any number. Lowercase in English: it continues the margin line.</comment>
+  </data>
+  <data name="leaderboard_protocol_uid" xml:space="preserve">
+    <value>UID {}</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): the badge on a row whose network has claimed a Top 200 spot, and the name shown for an anonymous network that has. {uid} is the fleet's miner UID on SN25, a number, inserted as is. UID is the Bittensor term and stays as is.</comment>
+  </data>
+  <data name="leaderboard_protocol_why" xml:space="preserve">
+    <value>고유 IP 프리픽스: {0}개. 다른 네트워크와 공유: {1}개.</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): own-status card, why this score: how many distinct IP prefixes the network's devices provide from, and how many of those other networks provide from too (a shared prefix's credit is split between the networks on it). {prefixes} and {shared} are counts, each after its label and a colon, so the line reads with any number, 0 and 1 included. Counts only, never addresses.</comment>
+  </data>
+  <data name="leaderboard_protocol_you" xml:space="preserve">
+    <value>나</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): the marker on the signed-in network's own row in the ranked list. Apple reads this English from the route_you entry ("You", one catalog entry per English text), so this key is not tagged apple.</comment>
+  </data>
+  <data name="leaderboard_tab_protocol" xml:space="preserve">
+    <value>프로토콜</value>
+    <comment>Protocol leaderboard (Leaderboard &gt; Protocol): the tab's label, the first of the leaderboard's three tabs (then Points, the points key, and Data, the data key). The tab ranks networks the way the SN25 validator picks its Top 200 head miners.</comment>
   </data>
   <data name="leaderboard_tier_rest" xml:space="preserve">
     <value>나머지</value>
