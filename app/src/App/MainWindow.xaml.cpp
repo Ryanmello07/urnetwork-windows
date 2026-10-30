@@ -1051,6 +1051,7 @@ void MainWindow::RecordFoldHomes() {
       home.index = i;
     }
   };
+  record(ProtocolNetworkHost(), WalletPaneCStack(), protocolNetworkHome_);
   record(PointsNetworkHost(), WalletPaneCStack(), pointsNetworkHome_);
   record(DataRankingHost(), WalletPaneCStack(), dataRankingHome_);
   record(WalletProviderTransportBarRow(), WalletPaneCStack(), walletTransportHome_);
@@ -1070,19 +1071,29 @@ void MainWindow::RecordFoldHomes() {
 // REPARENTED into WalletPaneCFold at the foot of pane A's scroll - and below
 // 900 pane A folds too, so the host itself moves into the ledger pane's foot
 // strip (the note's option i: the rows ride with the host, wiring untouched).
-// The visibility writers (ShowPointsBoard, ApplyStatsSections) hold element
+// The visibility writers (ShowBoard, ApplyStatsSections) hold element
 // references, so they keep working across the move.
+//
+// The Protocol board's block (the banners, the own-status card, the
+// explainer) folds elsewhere: to the top of the board's own scroll, ahead of
+// its rows, which is the design's compact order (apple/LEADERTOP.md §3:
+// banner, card, explainer, then the list). A card with a chart does not fit
+// the 132px foot strip, and at the foot of the wallet rail it would sit far
+// from the list it explains.
 void MainWindow::ApplyWalletFold(bool earningsThree, bool earningsTwo) {
   RecordFoldHomes();
   auto fold = WalletPaneCFold();
   if (earningsThree) {
     // ascending recorded-index order within pane C's stack - see FoldBack
+    FoldBack(ProtocolNetworkHost(), ProtocolCompactHost(), protocolNetworkHome_.parent,
+             protocolNetworkHome_.index);
     FoldBack(PointsNetworkHost(), fold, pointsNetworkHome_.parent, pointsNetworkHome_.index);
     FoldBack(DataRankingHost(), fold, dataRankingHome_.parent, dataRankingHome_.index);
     FoldBack(WalletProviderTransportBarRow(), fold, walletTransportHome_.parent,
              walletTransportHome_.index);
     fold.Visibility(Visibility::Collapsed);
   } else {
+    FoldIn(ProtocolNetworkHost(), ProtocolCompactHost(), protocolNetworkHome_.parent);
     FoldIn(PointsNetworkHost(), fold, pointsNetworkHome_.parent);
     FoldIn(DataRankingHost(), fold, dataRankingHome_.parent);
     FoldIn(WalletProviderTransportBarRow(), fold, walletTransportHome_.parent);

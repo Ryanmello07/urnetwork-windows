@@ -167,17 +167,28 @@ func TestTop200SignSpecDetectsEachDefectPutBack(t *testing.T) {
 
 // The button, the link and the sheet, on their source.
 func TestTop200SignWiring(t *testing.T) {
-	// the button sits in the Top 200 card, which shows for eligible and bound
-	// alike, and ApplyHead never hides it
+	// the button sits in the Top 200 card, which shows for a network projected
+	// inside the top 200 and a claimed one alike. Owner decision 2026-10-29
+	// (LEADERTOP Q16): it shows in both while fleet binding is open and stays
+	// hidden while it is closed, so ApplyTop200 writes it from the tile, and
+	// the tile (ProtocolBoardPresentation.h TileFor, run by
+	// tools/protocol-board-tests.cpp) sets it only with binding open
 	xaml := readAppSource(t, "MainWindow.xaml")
 	card := xaml[strings.Index(xaml, `x:Name="Top200Card"`):]
-	card = card[:strings.Index(card, "</Border>")]
+	card = card[:strings.Index(card, `x:Name="UpgradeButton"`)]
 	if !regexp.MustCompile(`<Button x:Name="Top200SignButton"[^>]*Click="OnSignTop200"`).MatchString(card) {
 		t.Error("the Top 200 card has no Top200SignButton wired to OnSignTop200")
 	}
 	wallet := stripLineComments(readAppSource(t, "WalletPage.cpp"))
-	if strings.Contains(definitionBody(t, "WalletPage.cpp", wallet, "void WalletPage::ApplyHead("), "Top200SignButton") {
-		t.Error("ApplyHead touches the sign button: it shows in the eligible tile and the bound card alike")
+	if !strings.Contains(definitionBody(t, "WalletPage.cpp", wallet, "void WalletPage::ApplyTop200("),
+		"w_.Top200SignButton().Visibility(tile.signButton ? Visibility::Visible : Visibility::Collapsed);") {
+		t.Error("ApplyTop200 does not show the sign button from the tile: it shows in the claimable tile and the claimed card alike while binding is open")
+	}
+	tile := definitionBody(t, "ProtocolBoardPresentation.h",
+		stripLineComments(readAppSource(t, "ProtocolBoardPresentation.h")), "inline Tile TileFor(")
+	openAt, signAt := strings.Index(tile, "if (snapshot->bindingOpen) {"), strings.Index(tile, "tile.signButton = true;")
+	if openAt < 0 || signAt < openAt {
+		t.Error("TileFor offers Sign fleet binding outside the binding-open branch: nothing invites registering early")
 	}
 	if !strings.Contains(wallet, `w_.Top200SignButton().Content(LocBox("top200_sign_binding"));`) {
 		t.Error("the sign button is not labelled top200_sign_binding")

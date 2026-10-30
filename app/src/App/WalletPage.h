@@ -9,11 +9,13 @@
 //           migration completes, and the USDC still waiting for one; the
 //           unclaimed SN25a tile and the claim dialog; beside it settlement
 //           v2's section, the coldkey's v2 accounts, and their claim dialog;
-//           the Top 200 head-spot tile, and its Sign fleet binding sheet
-//           (Top200SignSheet)
+//           the Top 200 head-spot tile (GET /sn/top/me, the Protocol board's
+//           own answer), and its Sign fleet binding sheet (Top200SignSheet)
 //   pane B  the per-epoch history (points; the alpha column only with a
-//           wallet) and the leaderboard, one at a time
-//   pane C  own ranking, reliability
+//           wallet) and the leaderboard, one at a time: the Protocol board
+//           (ProtocolBoard.h) first and the default, then Points, then Data
+//   pane C  the board's own block (the Protocol card, the points network, or
+//           the data board's own rank), reliability
 //
 // Points are URnetwork's own system and always the headline. Alpha accrues
 // from the first epoch after the wallet was attached, never retroactively.
@@ -42,6 +44,7 @@
 #include <winrt/Microsoft.UI.Xaml.Shapes.h>
 
 #include "EarningsSheets.h"
+#include "ProtocolBoard.h"
 #include "ProviderIdleReason.h"
 #include "ProviderStatusPresentation.h"
 #include "SnConsentPresentation.h"
@@ -176,15 +179,33 @@ class WalletPage {
 
   void RefreshAfterWalletChange();
 
-  // ---- the points board (android/POINTSLEADERBOARD.md) ----------------------
-  // The leaderboard is two boards behind one switch: Data (the last-4-payments
-  // board above) and Points (the all-time points board). The Points board is
-  // the SDK's PointsLeaderboardViewController rendered as it is: rows, ranks,
-  // sort and pages all come from the controller; nothing here sorts, ranks or
-  // pages. ShowPointsBoard flips the switch; the controller is opened the first
-  // time the Points board shows and closed with the page.
-  void ShowPointsBoard(bool points);
+  // ---- the boards ------------------------------------------------------------
+  // The leaderboard is three boards behind one switch, in the owner's order
+  // (owner decision 2026-10-29, LEADERTOP Q14): Protocol (ProtocolBoard.h, the
+  // SN25-aligned top 400) first and the default, Points (the all-time points
+  // board, android/POINTSLEADERBOARD.md) and Data (the last-4-payments board
+  // above). The Points board is the SDK's PointsLeaderboardViewController
+  // rendered as it is: rows, ranks, sort and pages all come from the
+  // controller; nothing here sorts, ranks or pages. ShowBoard flips the
+  // switch; the points controller is opened the first time the Points board
+  // shows and closed with the page.
+  enum class Board { Protocol, Points, Data };
+  void ShowBoard(Board board);
   winrt::fire_and_forget OnEditEmoji();
+
+  // ---- the Protocol board and the Top 200 tile (LEADERTOP) -------------------
+  ProtocolBoard& protocol() { return *protocol_; }
+  // The tile, from the Protocol board's card answer (GET /sn/top/me): hidden,
+  // a network projected inside the top 200, or a claimed one.
+  void ApplyTop200(protocolboard::Tile const& tile);
+  // "See the Protocol leaderboard": the ledger pane's leaderboard tab, on the
+  // Protocol board.
+  void ShowProtocolBoard();
+  // The network's "Show my network name" switch (points_leaderboard_public,
+  // Q12), one value behind two switches: the Points board's and the Protocol
+  // card's. Either asks for `requested` here; the answer, or a refusal, is
+  // written back to both.
+  void RequestNamePublic(bool requested);
 
   // ---- the points board's row (public: built by a free helper in the .cpp)
   // One ranked network as the list renders it: a value copy of the SDK row
@@ -235,18 +256,6 @@ class WalletPage {
     double points = 0;
     int64_t shareBps = 0;
   };
-  // the head-spot status (the SDK's SnHeadResult)
-  struct HeadInfo {
-    bool eligible = false;
-    double score = 0;
-    double floor = 0;
-    int64_t rankEstimate = 0;
-    int64_t cutoff = 200;
-    bool bound = false;
-    std::string hotkey;
-    int64_t uid = 0;
-    int64_t rank = 0;
-  };
   // the unauthenticated address check (POST /sn/wallet/validate)
   struct AddressVerdict {
     bool validSyntax = false;
@@ -260,7 +269,6 @@ class WalletPage {
   void LoadReliability();
   void LoadEpochs();
   void LoadSnWallet();
-  void LoadHead();
   void LoadClaims();
   void LoadGas();
   void LoadV2Accounts();
@@ -327,7 +335,7 @@ class WalletPage {
   void NotifyPromotedPayoutWallet();
   void SetLegacyBusy(bool busy);
 
-  // ---- history, claims, gas, head
+  // ---- history, claims, gas
   void ApplyEpochs(std::vector<EpochRow> const& epochs, Fetch state);
   void RebuildHistory();
   // `error` is the SDK's SnError (or one built from a transport error) when
@@ -345,7 +353,6 @@ class WalletPage {
   // the device, which stores them. `then` runs on the UI thread either way.
   void EnsureChainSettings(std::function<void()> then);
   void ApplyGas(std::optional<GasKeyInfo> gas);
-  void ApplyHead(std::optional<HeadInfo> head, Fetch state);
   void ApplyLedgerMeta();
   // The SDK claim, wrapped for the dialog (Device.snClaim).
   Claimer MakeClaimer();
@@ -443,6 +450,9 @@ class WalletPage {
   // ---- leaderboard
   void ApplyLeaderboard(urnet::LeaderboardEarnersList const& earners, Fetch state);
   void ApplyRanking(urnet::NetworkRanking const& ranking, bool ok);
+  // the ranking's points_leaderboard_public, read at `askedAt` on the
+  // own-flags clock: it loses to a local edit made after it was asked for
+  void ApplyRankingNamePublic(bool isPublic, uint64_t askedAt);
   void ApplyRankingPublicResult(uint32_t generation, bool ok, bool requested,
                                 std::string const& serverError);
   void SetRankingToggle(bool isPublic);
@@ -534,7 +544,6 @@ class WalletPage {
   Fetch claimsState_ = Fetch::Loading;
   std::optional<snpayout::EpochSchedule> schedule_;
   std::optional<GasKeyInfo> gas_;
-  std::optional<HeadInfo> head_;
   bool chainSynced_ = false;
   // settlement v2: the read, and the accounts it answered with
   snpayout::LedgerFetch v2Fetch_ = snpayout::LedgerFetch::Loading;
@@ -612,10 +621,12 @@ class WalletPage {
   void ScrollPointsToFirstRow();
   void PrependPointsRows(size_t count);
   winrt::Microsoft::UI::Xaml::UIElement MakePointsRow(PointsRow const& row, std::string const& ownId);
-  void ResetBoardList(bool pointsBoard);  // a board tab activated (the active one included)
+  void ResetBoardList(Board board);  // a board tab activated (the active one included)
   void OnPointsRetry();
   void OnPointsPublicToggled();
   void SetPointsToggle(bool isPublic);
+  // both name switches from pointsPublic_ and settingPointsPublic_
+  void SyncNameSwitches();
   void ApplyPointsPublicResult(uint32_t generation, bool ok, bool requested,
                                std::string const& serverError);
   void SaveEmojiTag(std::string tag, std::function<void(std::string)> done);
@@ -627,7 +638,10 @@ class WalletPage {
   std::optional<urnet::PointsLeaderboardViewController> pointsVc_;
   std::optional<urnet::Sub> pointsSub_;
   uint64_t pointsVcDevice_ = 0;  // the device handle the controller was opened on
-  bool pointsBoardShowing_ = false;
+  Board board_ = Board::Protocol;
+  bool pointsBoardShowing_ = false;  // board_ is Points
+  // the Protocol board: built with the page, after alive_
+  std::unique_ptr<ProtocolBoard> protocol_;
   // The Leaderboard's once-per-session fetch guard, read only by
   // LoadLeaderboardIfShowing, which both ways the board starts showing ask
   // (the tab's selection, and LoadWallet for a session that starts with the
