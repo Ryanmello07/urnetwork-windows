@@ -362,6 +362,15 @@ std::optional<std::string> FailureOf(const std::optional<SdkResult>& result,
 
 }  // namespace read
 
+// A page refused because its cursor's snapshot expired: the server keeps
+// snapshots 7 days and answers a cursor into an older one with HTTP 410. The
+// sdk delivers a non-200 response as "<status line>: <body>" (connect's
+// HttpStatusError), so the status leads the error: "410 Gone: The snapshot
+// expired. Reload from the top." Sending the same cursor again fails forever.
+inline bool IsSnapshotExpired(std::string_view error) {
+  return 4 <= error.size() && error.substr(0, 3) == "410" && (error[3] == ' ' || error[3] == ':');
+}
+
 // The list is a strictly increasing run of positions inside the top 400: rows
 // out of that range, and a second row at a position already read, are left
 // out, whatever order the server sent them in.
@@ -1059,7 +1068,9 @@ class Model {
   enum class Applied {
     Dropped,  // not the latest request's answer
     Applied,
-    Restart,  // a page from another snapshot: the list reloads from the top
+    // a page from another snapshot, or one whose snapshot expired (410): the
+    // list reloads from the first page of the newest snapshot
+    Restart,
   };
 
   Applied ApplyPage(const PageRequest& request, TopOutcome outcome, int64_t nowMillis) {
@@ -1083,6 +1094,9 @@ class Model {
     }
     state_.pageLoading = false;
     if (!outcome.ok) {
+      // the cursor's snapshot expired: the first page of the newest snapshot,
+      // never the dead cursor again (a seek carries on through the new pages)
+      if (IsSnapshotExpired(outcome.error)) return Applied::Restart;
       state_.pageFailed = true;
       state_.seekTarget = 0;
       return Applied::Applied;

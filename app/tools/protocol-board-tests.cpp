@@ -701,6 +701,28 @@ void TestReaders(const std::string& which) {
     const pb::MeOutcome readAway = pb::MeOutcomeFrom(std::optional<MeResult>{unranked}, std::nullopt);
     Check(readAway.ok && readAway.me && !readAway.me->Ranked() && readAway.me->reason == pb::Reason::NotProviding,
           which + ": a network that is not ranked, and why");
+
+    // the server's own shape for it: me is never null; an unranked network
+    // has a row at position 0, labelled not_measurable, and a reason
+    MeResult serverUnranked{};
+    serverUnranked.snapshot = ResultSnapshot<T>("snap-7", false, std::nullopt, std::nullopt);
+    typename T::Me zero{};
+    zero.row = ResultRow<T>(0, "", "not_measurable", false);
+    zero.not_measurable_reason = std::string("not_providing");
+    serverUnranked.me = zero;
+    const pb::MeOutcome readZero = pb::MeOutcomeFrom(std::optional<MeResult>{serverUnranked}, std::nullopt);
+    Check(readZero.ok && readZero.me && readZero.me->row && readZero.me->row->position == 0 &&
+              !readZero.me->Ranked() && readZero.me->reason == pb::Reason::NotProviding,
+          which + ": a row at position 0 is the server's unranked network");
+
+    // before the first snapshot: the stand-in with no id, nothing ranked
+    TopResult standIn{};
+    standIn.snapshot = ResultSnapshot<T>("", false, std::nullopt, std::nullopt);
+    standIn.snapshot->total_ranked = 0;
+    standIn.rows = std::vector<typename T::Row>{};
+    const pb::TopOutcome readStandIn = pb::TopOutcomeFrom(std::optional<TopResult>{standIn}, std::nullopt);
+    Check(readStandIn.ok && readStandIn.rows.empty() && readStandIn.next.empty(),
+          which + ": the stand-in snapshot reads as a board with nothing ranked");
   }
 }
 
@@ -884,6 +906,30 @@ void TestCard() {
   CheckText("K", card.tag, "the network's own tag");
   Check(!card.claim.shown, "no prompt");
 
+  // the server's unranked network: a row at position 0, labelled
+  // not_measurable, with its reason. The card is Unranked and says why; the
+  // tile stays hidden.
+  {
+    pb::Model zero;
+    zero.Open();
+    pb::MeOutcome serverUnranked;
+    serverUnranked.ok = true;
+    serverUnranked.snapshot = MakeSnapshot(true);
+    serverUnranked.me = pb::Me{};
+    serverUnranked.me->row = MakeRow(0, "", 0.0, false);
+    serverUnranked.me->row->label = pb::Label::NotMeasurable;
+    serverUnranked.me->row->claimPrompt = false;
+    serverUnranked.me->reason = pb::Reason::NotProviding;
+    zero.ApplyMe(zero.BeginMe(), serverUnranked);
+    const pb::Card unrankedCard = pb::CardFor(zero.state(), true, false, "n", "", text);
+    Check(unrankedCard.body == pb::CardBody::Unranked, "a row at position 0 is an unranked card");
+    CheckText("Turn on providing to be ranked.", unrankedCard.notMeasurable, "with its reason");
+    Check(!unrankedCard.claim.shown && unrankedCard.position.empty(), "and no position or prompt");
+    Check(pb::TileFor(zero.state().me, zero.state().meSnapshot, text).body == pb::TileBody::Hidden,
+          "the tile stays hidden");
+    Check(!pb::YouBarFor(zero.state(), true, text).shown, "and no \"you\" bar points at position 0");
+  }
+
   // ranked, binding closed, inside
   pb::Model board;
   board.Open();
@@ -975,6 +1021,16 @@ void TestList() {
   Check(pb::ListFor(model.state(), text).body == pb::ListBody::Placeholders, "a retry: placeholders again");
   model.ApplyPage(request, Page({}, ""), 1000);
   Check(pb::ListFor(model.state(), text).body == pb::ListBody::Empty, "an empty snapshot");
+  {
+    // no rankings yet: the server's stand-in snapshot has no id
+    pb::Model none;
+    none.Open();
+    pb::TopOutcome standIn = Page({}, "", "");
+    standIn.snapshot->totalRanked = 0;
+    none.ApplyPage(none.BeginReload(), standIn, 1);
+    Check(pb::ListFor(none.state(), text).body == pb::ListBody::Empty, "an empty snapshot id is the empty state");
+    Check(!none.BeginNextPage(), "with nothing to page");
+  }
 
   // rows 195-205 around the line
   std::vector<pb::Row> rows = Rows(195, 205);
@@ -1250,6 +1306,51 @@ void TestModel() {
   Check(!model.state().pageLoading, "a reload drops a page still out");
   model.ApplyPage(reload, Page(Rows(1, 50), "c2", "snap-9"), 20);
 
+  // A next page whose snapshot expired: the server keeps snapshots 7 days and
+  // refuses the cursor with HTTP 410, which the sdk delivers as "<status
+  // line>: <body>". Re-sending that cursor fails forever, so the board
+  // reloads from the first page of the newest snapshot instead.
+  {
+    pb::Model expiring;
+    expiring.Open();
+    expiring.ApplyPage(expiring.BeginReload(), Page(Rows(1, 50), "c2", "snap-old"), 1);
+    auto stale = expiring.BeginNextPage();
+    pb::TopOutcome gone;
+    gone.error = "410 Gone: The snapshot expired. Reload from the top.";
+    Check(stale && expiring.ApplyPage(*stale, gone, 2) == pb::Model::Applied::Restart,
+          "a next page whose snapshot expired reloads from the top");
+    Check(!expiring.state().pageFailed && !expiring.state().pageLoading,
+          "and offers no retry that would send the dead cursor again");
+    CheckEq(50, static_cast<int64_t>(expiring.state().rows.size()), "the rows stay until the reload lands");
+    const auto reload = expiring.BeginReload();
+    Check(reload.first && reload.cursor.empty(), "the reload is the first page, with no cursor");
+    expiring.ApplyPage(reload, Page(Rows(1, 50), "c2-new", "snap-new"), 3);
+    CheckText("snap-new", expiring.state().snapshot ? expiring.state().snapshot->id : "",
+              "the newest snapshot replaces the expired one");
+    auto fresh = expiring.BeginNextPage();
+    Check(fresh && fresh->cursor == "c2-new", "and pages on with its own cursor");
+
+    // other refusals of a next page keep the retry
+    for (const char* error : {"404 Not Found: Unknown snapshot.", "timeout",
+                              "Get \"https://api.example/sn/top?cursor=410\": EOF"}) {
+      pb::Model other;
+      other.Open();
+      other.ApplyPage(other.BeginReload(), Page(Rows(1, 50), "c2"), 1);
+      auto page = other.BeginNextPage();
+      pb::TopOutcome failed;
+      failed.error = error;
+      Check(page && other.ApplyPage(*page, failed, 2) == pb::Model::Applied::Applied && other.state().pageFailed,
+            std::string("a next page refused otherwise keeps its retry: ") + error);
+    }
+    // a first page has no cursor to expire: a 410 there is a failure, never a loop
+    pb::Model first;
+    first.Open();
+    pb::TopOutcome gone2;
+    gone2.error = "410 Gone: The snapshot expired. Reload from the top.";
+    Check(first.ApplyPage(first.BeginReload(), gone2, 1) == pb::Model::Applied::Applied && first.state().listFailed,
+          "a first page answered 410 fails rather than reloading forever");
+  }
+
   // the end and 400
   pb::Model full;
   full.Open();
@@ -1400,6 +1501,20 @@ void TestSdkCalls() {
   });
   Check(top && !top->ok, "a failed request, delivered by the sdk");
 
+  // the server's 410 for a cursor whose snapshot expired, as the sdk delivers
+  // it (connect's HttpStatusError: "<status line>: <body>"), restarts the list
+  abi::gAnswer = {nullptr, "410 Gone: The snapshot expired. Reload from the top."};
+  top.reset();
+  api.snTop(args, [&top](std::optional<urnet::SnTopResult> result, std::optional<std::string> err) {
+    top = pb::TopOutcomeFrom(result, err);
+  });
+  pb::Model expiring;
+  expiring.Open();
+  expiring.ApplyPage(expiring.BeginReload(), Page(Rows(1, 50), "c2"), 1);
+  auto next = expiring.BeginNextPage();
+  Check(top && !top->ok && next && expiring.ApplyPage(*next, std::move(*top), 2) == pb::Model::Applied::Restart,
+        "the sdk's 410 for an expired cursor reloads the board from the top");
+
   abi::gAnswer = {
       R"({"snapshot":{"id":"snap-7","total_ranked":41230,"head_seats":200,"projected_cutoff":41.2,"binding_open":true},)"
       R"("me":{"row":{"position":173,"name":"","tag":"","projected_score":42.6,"margin":0.12,"trend":9,)"
@@ -1414,6 +1529,31 @@ void TestSdkCalls() {
   Check(me && me->ok && me->me && me->me->Ranked() && me->me->row->position == 173 && me->me->history.size() == 2,
         "the sdk's card reads");
   Check(me && me->snapshot && me->snapshot->bindingOpen, "with its snapshot");
+
+  // the server's unranked network, as Go writes it: me never null, a row at
+  // position 0 labelled not_measurable, and the reason
+  abi::gAnswer = {
+      R"({"snapshot":{"id":"","head_seats":200,"open_seats":200,"binding_open":false},)"
+      R"("me":{"row":{"position":0,"name":"","tag":"","projected_score":0,"margin":0,"trend":0,)"
+      R"("label":"not_measurable","measurable":false,"claim_prompt":false,"is_me":true},"solo_score":0,)"
+      R"("distinct_prefixes":0,"shared_prefixes":0,"shared_with_units":0,"not_measurable_reason":"not_providing",)"
+      R"("history":[]}})",
+      nullptr};
+  me.reset();
+  api.snTopMe([&me](std::optional<urnet::SnTopMeResult> result, std::optional<std::string> err) {
+    me = pb::MeOutcomeFrom(result, err);
+  });
+  Check(me && me->ok && me->me && !me->me->Ranked() && me->me->reason == pb::Reason::NotProviding,
+        "the sdk's unranked network reads as unranked, with its reason");
+  if (me) {
+    pb::Model zero;
+    zero.Open();
+    zero.ApplyMe(zero.BeginMe(), std::move(*me));
+    const pb::Text text = EnglishText();
+    Check(pb::CardFor(zero.state(), true, false, "n", "", text).body == pb::CardBody::Unranked &&
+              pb::TileFor(zero.state().me, zero.state().meSnapshot, text).body == pb::TileBody::Hidden,
+          "its card is unranked and its tile hidden");
+  }
 }
 
 }  // namespace
