@@ -377,7 +377,9 @@ void ProtocolBoard::ApplyPage(uint64_t generation, pb::Model::PageRequest reques
     case pb::Model::Applied::Dropped:
       return;
     case pb::Model::Applied::Restart:
-      // the board moved on to a new snapshot while the list paged: from the top
+      // the board moved on to a new snapshot while the list paged, or the
+      // page's snapshot expired (410): from the top of the newest one
+      LogInfo("protocol board: the list's snapshot is gone; reloading from the top");
       Reload();
       break;
     case pb::Model::Applied::Applied:

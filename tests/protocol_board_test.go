@@ -177,7 +177,9 @@ func requireProtocolBoardFailureWith(t *testing.T, extra []string, mutate func(s
 // row, a chart whose axis is not inverted, the tile's claim and sign while
 // binding is closed, the tile's demotion warning gone, a stale answer
 // repainting the list, an answer from before a reset applying, a failed
-// refresh dropping the rows, two snapshots mixed in one list, the indicator
+// refresh dropping the rows, two snapshots mixed in one list, a next page
+// whose snapshot expired (410) retried with its dead cursor instead of a
+// reload from the top, another refusal taken for one, the indicator
 // spanning positions an ended list never reaches, the line's height left out
 // of the scroll position, a stale incentive shown as fresh, and an
 // unmeasurable network's card keeping a prompt.
@@ -238,6 +240,11 @@ func TestProtocolBoardPresentationRejectsBrokenReadings(t *testing.T) {
 			"inside the 201st"},
 		{"      if (fleet.incentiveStale) value += ", "      if (false) value += ",
 			"every fact, the incentive flagged stale"},
+		{"      if (IsSnapshotExpired(outcome.error)) return Applied::Restart;\n", "",
+			"a next page whose snapshot expired reloads from the top"},
+		{"error.substr(0, 3) == \"410\" && (error[3] == ' ' || error[3] == ':');",
+			"error.find(\"410\") != std::string_view::npos;",
+			"a next page refused otherwise keeps its retry: Get"},
 		{"      card.tone = Tone::Muted;\n    }\n    return card;\n  }", "      card.tone = Tone::Muted;\n    }\n  }",
 			"why it cannot be scored"},
 	}
