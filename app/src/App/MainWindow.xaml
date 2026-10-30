@@ -2945,44 +2945,92 @@
                                     </Border>
                                 </StackPanel>
 
-                                <!-- top 200: a head mining spot .................. -->
+                                <!-- top 200: the projected head spot ............. -->
+                                <!-- Read from GET /sn/top/me (owner decision 2026-10-29,
+                                     LEADERTOP; apple/LEADERTOP.md §8), the Protocol
+                                     board's own answer, so the tile shows the same
+                                     projected position, margin and label as the board:
+                                     a measurable network projected inside the top 200,
+                                     or a claimed one, wherever it ranks. While binding is
+                                     closed the claim button becomes the "Claiming opens
+                                     soon" note and Sign fleet binding stays hidden; when
+                                     it opens the existing claim flow is unchanged.
+                                     WalletPage::ApplyTop200 writes it. -->
                                 <StackPanel x:Name="Top200Panel" Visibility="Collapsed">
                                     <Border Style="{StaticResource UrGroupHeaderStyle}">
-                                        <TextBlock x:Name="Top200Heading"
-                                                   Style="{StaticResource UrGroupHeaderTextStyle}" />
+                                        <Grid>
+                                            <TextBlock x:Name="Top200Heading"
+                                                       Style="{StaticResource UrGroupHeaderTextStyle}" />
+                                            <StackPanel x:Name="Top200ChipHost"
+                                                        HorizontalAlignment="Right"
+                                                        VerticalAlignment="Center" />
+                                        </Grid>
                                     </Border>
                                     <Border x:Name="Top200Card"
                                             BorderBrush="{StaticResource UrReferralGoldBrush}"
                                             BorderThickness="0,0,0,1" Padding="12,10">
                                         <StackPanel Spacing="6">
-                                            <!-- "You qualify" is an earnings WIN,
-                                                 so it spends the earnings lime;
-                                                 the eviction-floor warning below
-                                                 keeps the amber-family reading. -->
-                                            <TextBlock x:Name="Top200Status"
-                                                       Style="{StaticResource UrKeyTextStyle}"
-                                                       Foreground="{StaticResource UrAccentBrush}"
-                                                       TextWrapping="Wrap" TextTrimming="None" />
+                                            <!-- the projected position, in the display
+                                                 face, and the margin beside it -->
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <TextBlock x:Name="Top200Status"
+                                                           FontFamily="{StaticResource UrHeadingCondensedFontFamily}"
+                                                           FontSize="36" />
+                                                <TextBlock x:Name="Top200Projected"
+                                                           VerticalAlignment="Bottom" Margin="0,0,0,5"
+                                                           Style="{StaticResource UrRowNoteStyle}"
+                                                           TextWrapping="Wrap" TextTrimming="None" />
+                                            </StackPanel>
                                             <TextBlock x:Name="Top200Detail" TextWrapping="Wrap"
                                                        Style="{StaticResource UrRowNoteStyle}"
                                                        TextTrimming="None" />
+                                            <!-- claimed: each fleet's UID, validator rank
+                                                 and selection, as the detail sheet -->
+                                            <StackPanel x:Name="Top200Fleets" Spacing="4"
+                                                        Visibility="Collapsed" />
+                                            <TextBlock x:Name="Top200BoundDetail" TextWrapping="Wrap"
+                                                       Style="{StaticResource UrRowNoteStyle}"
+                                                       TextTrimming="None" Visibility="Collapsed" />
+                                            <!-- a claimed fleet near or under the line keeps
+                                                 the amber-family reading -->
                                             <TextBlock x:Name="Top200Warning" TextWrapping="Wrap"
                                                        Style="{StaticResource UrRowNoteStyle}"
                                                        Foreground="{StaticResource UrReferralGoldLightBrush}"
                                                        TextTrimming="None" Visibility="Collapsed" />
+                                            <!-- binding closed: a note instead of the
+                                                 button; nothing invites registering early -->
+                                            <Border x:Name="Top200SoonPanel" Visibility="Collapsed"
+                                                    Background="{StaticResource UrBackgroundBrush}"
+                                                    BorderBrush="{StaticResource UrBorderBrush}"
+                                                    BorderThickness="1" CornerRadius="6" Padding="12">
+                                                <StackPanel Spacing="4">
+                                                    <TextBlock x:Name="Top200SoonTitle"
+                                                               Style="{StaticResource UrKeyTextStyle}"
+                                                               TextWrapping="Wrap" TextTrimming="None" />
+                                                    <TextBlock x:Name="Top200SoonBody" TextWrapping="Wrap"
+                                                               Style="{StaticResource UrRowNoteStyle}"
+                                                               TextTrimming="None" />
+                                                </StackPanel>
+                                            </Border>
                                             <Button x:Name="Top200Button"
                                                     Style="{StaticResource UrPaneActionSecondaryStyle}"
                                                     HorizontalAlignment="Stretch"
                                                     Click="OnClaimTop200" />
-                                            <!-- Sign fleet binding: in the
-                                                 eligible tile under the ur.io
-                                                 link and in the bound card
-                                                 alike (bindings renew per epoch
-                                                 window; new devices join) -->
+                                            <TextBlock x:Name="Top200ClaimWarning" TextWrapping="Wrap"
+                                                       Style="{StaticResource UrRowNoteStyle}"
+                                                       TextTrimming="None" Visibility="Collapsed" />
+                                            <!-- Sign fleet binding: in the claimable tile
+                                                 and the claimed card alike while binding is
+                                                 open (bindings renew per epoch window; new
+                                                 devices join) -->
                                             <Button x:Name="Top200SignButton"
                                                     Style="{StaticResource UrPaneActionSecondaryStyle}"
                                                     HorizontalAlignment="Stretch"
                                                     Click="OnSignTop200" />
+                                            <!-- the Protocol board, on the ledger pane -->
+                                            <HyperlinkButton x:Name="Top200SeeBoardButton"
+                                                             Padding="0" Margin="0"
+                                                             HorizontalAlignment="Left" />
                                         </StackPanel>
                                     </Border>
                                 </StackPanel>
@@ -3087,20 +3135,68 @@
                                            Foreground="{StaticResource UrTextFaintBrush}"
                                            Style="{StaticResource UrSupportingTextStyle}" />
                             </Grid>
-                            <!-- LEADERBOARD. The same pane, the same floor. Two boards
-                                 behind one more switch: Data (the last-4-payments
-                                 board) and Points (the all-time points board,
-                                 android/POINTSLEADERBOARD.md). The handlers are wired
-                                 in code (WalletPage::InitializePointsBoard). -->
+                            <!-- LEADERBOARD. The same pane, the same floor. Three boards
+                                 behind one more switch, in the owner's order (owner
+                                 decision 2026-10-29, LEADERTOP Q14): Protocol first and
+                                 the default (the SN25-aligned top 400,
+                                 apple/LEADERTOP.md), Points (the all-time points board,
+                                 android/POINTSLEADERBOARD.md) and Data (the
+                                 last-4-payments board, frozen since 2026-10-06). The
+                                 handlers are wired in code (WalletPage::InitializePointsBoard,
+                                 ProtocolBoard::Initialize). -->
                             <Grid x:Name="LeaderboardHost" Visibility="Collapsed">
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="*" />
                                 </Grid.RowDefinitions>
                                 <muxc:SelectorBar x:Name="LeaderboardBoardBar" Margin="12,6,12,0">
-                                    <muxc:SelectorBarItem x:Name="DataBoardItem" />
+                                    <muxc:SelectorBarItem x:Name="ProtocolBoardItem" />
                                     <muxc:SelectorBarItem x:Name="PointsBoardItem" />
+                                    <muxc:SelectorBarItem x:Name="DataBoardItem" />
                                 </muxc:SelectorBar>
+                                <!-- the Protocol board (ProtocolBoard.h): the top 400 by
+                                     position with the Top 200 line, paged in as the list
+                                     nears its end. Below the three-pane width the network
+                                     pane's block (ProtocolNetworkHost: the banners, the
+                                     own-status card, the explainer) folds into
+                                     ProtocolCompactHost, ahead of the rows, the design's
+                                     compact order. The position indicator is added over
+                                     the scroll in code; the "you" bar sits under it. -->
+                                <Grid x:Name="ProtocolHost" Grid.Row="1" Visibility="Collapsed">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="*" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <ScrollViewer x:Name="ProtocolScroll"
+                                                  HorizontalScrollBarVisibility="Disabled"
+                                                  VerticalScrollBarVisibility="Auto">
+                                        <StackPanel x:Name="ProtocolScrollContent">
+                                            <StackPanel x:Name="ProtocolCompactHost" />
+                                            <muxc:InfoBar x:Name="ProtocolNotice"
+                                                          Severity="Warning" IsOpen="False"
+                                                          IsClosable="True" Margin="12,8" />
+                                            <StackPanel x:Name="ProtocolRows" />
+                                            <StackPanel x:Name="ProtocolFooter" Padding="12"
+                                                        HorizontalAlignment="Center" Spacing="8">
+                                                <muxc:ProgressRing x:Name="ProtocolFooterRing"
+                                                                   Width="24" Height="24"
+                                                                   IsActive="False"
+                                                                   Visibility="Collapsed" />
+                                                <TextBlock x:Name="ProtocolFooterText"
+                                                           TextWrapping="Wrap" TextAlignment="Center"
+                                                           MaxWidth="320" Visibility="Collapsed"
+                                                           Style="{StaticResource UrSupportingTextStyle}" />
+                                                <Button x:Name="ProtocolRetryButton"
+                                                        HorizontalAlignment="Center"
+                                                        Visibility="Collapsed"
+                                                        Style="{StaticResource UrSecondaryButtonStyle}" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </ScrollViewer>
+                                    <Border x:Name="ProtocolYouHost" Grid.Row="1" Visibility="Collapsed"
+                                            BorderBrush="{StaticResource UrBorderBrush}"
+                                            BorderThickness="0,1,0,0" />
+                                </Grid>
                                 <Grid x:Name="LeaderboardDataHost" Grid.Row="1">
                                     <ScrollViewer HorizontalScrollBarVisibility="Disabled"
                                                   VerticalScrollBarVisibility="Auto">
@@ -3193,6 +3289,14 @@
                         <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled"
                                       VerticalScrollBarVisibility="Auto">
                             <StackPanel x:Name="WalletPaneCStack">
+                                <!-- the Protocol board's network block: the banners
+                                     (claiming closed, a stale snapshot), the own-status
+                                     card with its chart and claim prompt, and the
+                                     explainer. Built in code (ProtocolBoard::Initialize);
+                                     shown while the ledger pane shows the Protocol board,
+                                     and folded ahead of its rows below the three-pane
+                                     width (MainWindow::ApplyWalletFold). -->
+                                <StackPanel x:Name="ProtocolNetworkHost" Visibility="Collapsed" />
                                 <!-- the points board's network block: this network's
                                      emoji tag and name, its points / blocks / streak
                                      with their ranks, the opt-in switch. Built in code
