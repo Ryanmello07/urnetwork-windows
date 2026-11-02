@@ -914,6 +914,10 @@
     <value>Cette demande a expiré. Recommencez pour obtenir un nouveau message à signer.</value>
     <comment>Error: the single-use wallet challenge expired (5 minutes) before it was signed.</comment>
   </data>
+  <data name="bittensor_error_extension_not_authorized" xml:space="preserve">
+    <value>{} n'a pas encore autorisé ur.io à utiliser votre compte Bittensor. Approuvez la demande de connexion dans le portefeuille ou autorisez ur.io dans « Connected Sites » (sites connectés) dans ses réglages, puis réessayez.</value>
+    <comment>Bittensor wallet error (ur.io, and the apps when a ur.io wallet bridge page returns extension_not_authorized): the browser extension has not allowed the site to use an account yet, so nothing was signed. The user rejected or closed the extension's connect window, has no Polkadot/Bittensor account in the extension, removed the site's accounts in the extension's connected sites, or a connect request is still open in it. Talisman says "Site &lt;url&gt; has not been authorised for Talisman yet"; polkadot{.js}, SubWallet and TAO.com say "The source &lt;url&gt; has not been enabled yet" or "is not allowed to interact with this extension". The argument is the wallet product name (Talisman or TAO.com). "Connected Sites" is the extension's settings page that lists the sites allowed to use its accounts: use the extension's own name for it where it ships your language (Talisman: de Verbundene Seiten, es Sitios Conectados, ru Подключенные сайты, zh 连接网站); otherwise keep the English name, followed by a translation in parentheses.</comment>
+  </data>
   <data name="bittensor_error_extension_not_found" xml:space="preserve">
     <value>L'extension {} est introuvable dans ce navigateur. Installez-la, puis réessayez.</value>
     <comment>Error: the wallet's browser extension is not installed in this browser (on ur.io, or in the apps when a ur.io wallet bridge page returns extension_not_found). The argument is the wallet product name (Talisman on the Bittensor page, Phantom or Solflare on the Solana page).</comment>
@@ -945,6 +949,18 @@
   <data name="bittensor_error_walletconnect_unavailable" xml:space="preserve">
     <value>WalletConnect n'est pas disponible pour le moment. Réessayez plus tard ou saisissez votre adresse manuellement.</value>
     <comment>Bittensor wallet error in the apps, when the ur.io bridge page returns walletconnect_unavailable: the page has no WalletConnect project id, so it cannot pair a wallet. Manual entry still works. WalletConnect is a product name.</comment>
+  </data>
+  <data name="bittensor_manual_choice" xml:space="preserve">
+    <value>Signer manuellement</value>
+    <comment>The manual signing option in a Bittensor wallet chooser: on ur.io its own entry, and in the phone apps the line under a wallet that has no way to sign here directly. The user signs a message outside the page or app, for example with the btcli command line tool, and pastes the signature back.</comment>
+  </data>
+  <data name="bittensor_manual_no_popup" xml:space="preserve">
+    <value>Aucune fenêtre de portefeuille ne s'ouvre ici. Vous signez le message vous-même, puis vous collez la signature ci-dessous.</value>
+    <comment>First line of the manual signing form, on ur.io and in the apps' sheet. Support inbox 8167: a user waited for a wallet window that never comes on this path.</comment>
+  </data>
+  <data name="bittensor_manual_phone_route" xml:space="preserve">
+    <value>Si votre portefeuille ne peut pas signer un message collé, revenez en arrière et choisissez WalletConnect (Nova et d'autres), ou signez sur ur.io/app/account/earnings dans le navigateur d'un ordinateur.</value>
+    <comment>The phone apps' manual signing sheet: what to do when the wallet can't sign a pasted message. WalletConnect and Nova are product names, and ur.io/app/account/earnings is a web address: keep them as they are.</comment>
   </data>
   <data name="bittensor_manual_sign_instructions" xml:space="preserve">
     <value>Signez ce message avec le portefeuille {} qui détient votre coldkey, puis collez l’adresse et la signature ci-dessous.</value>
@@ -5227,6 +5243,10 @@ vous avons envoyé pour vérifier votre identité.</value>
     <value>Essai gratuit avec {} mois offerts</value>
     <comment>Onboarding offer screen: the single primary button. The number is the months the discount equals.</comment>
   </data>
+  <data name="offer_first_month_price" xml:space="preserve">
+    <value>{} le premier mois</value>
+    <comment>Plan card with the win-back offer (a returning subscriber's first month of the monthly plan at a discount): the billed first-month amount on the monthly card (most prominent line).</comment>
+  </data>
   <data name="offer_first_year_price" xml:space="preserve">
     <value>{} la première année</value>
     <comment>Plan card with the welcome offer: the billed first-year amount (most prominent line).</comment>
@@ -5239,9 +5259,17 @@ vous avons envoyé pour vérifier votre identité.</value>
     <value>{} mois de Pro offerts</value>
     <comment>Onboarding offer screen headline. The number is the months the discount equals.</comment>
   </data>
+  <data name="offer_percent_off_first_month" xml:space="preserve">
+    <value>{} % de réduction sur votre premier mois</value>
+    <comment>Win-back offer line on the monthly plan card and the account plan row. The number is the percent off the first month of the monthly plan.</comment>
+  </data>
   <data name="offer_percent_off_first_year" xml:space="preserve">
     <value>{} % de réduction sur votre première année</value>
     <comment>Onboarding offer screen sub-line under the headline. The number is the percent off the first year.</comment>
+  </data>
+  <data name="offer_terms_first_month" xml:space="preserve">
+    <value>{0} le premier mois, puis {1}/mois. Annulable à tout moment.</value>
+    <comment>Plan picker with the win-back offer and the monthly plan chosen: the terms line under the button (the discounted first month, then the regular monthly price).</comment>
   </data>
   <data name="offer_terms_first_year.one" xml:space="preserve">
     <value>{0} jour gratuit, puis {1} la première année, puis {2}/an. Annulable à tout moment.</value>
@@ -5250,6 +5278,10 @@ vous avons envoyé pour vérifier votre identité.</value>
   <data name="offer_terms_first_year.other" xml:space="preserve">
     <value>{0} jours gratuits, puis {1} la première année, puis {2}/an. Annulable à tout moment.</value>
     <comment>Plan picker with the welcome offer: the terms line under the button (trial, discounted first year, renewal price).</comment>
+  </data>
+  <data name="offer_then_regular_monthly_price" xml:space="preserve">
+    <value>puis {}/mois</value>
+    <comment>Plan card with the win-back offer: the regular monthly price line under the first-month amount.</comment>
   </data>
   <data name="offer_then_regular_price" xml:space="preserve">
     <value>puis {}/an</value>
@@ -7257,6 +7289,10 @@ du monde</value>
   <data name="site_subscription_error_store_unavailable" xml:space="preserve">
     <value>Impossible de joindre Stripe pour le moment. Réessayez dans un instant.</value>
     <comment>Manage subscription (ur.io's screen; Settings in the Windows app, Account in the Linux app): Stripe did not answer or refused the change, or the billing portal could not be opened; trying again usually works (error.code store_unavailable).</comment>
+  </data>
+  <data name="site_winback_sheet_line" xml:space="preserve">
+    <value>Bon retour : {0} % de réduction sur votre premier mois, jusqu'au {1}</value>
+    <comment>Upgrade sheet: the win-back offer line while a returning subscriber's offer is active (the monthly plan's first month at a discount). {percent} whole number, {when} a local date and time.</comment>
   </data>
   <data name="skip" xml:space="preserve">
     <value>Passer</value>

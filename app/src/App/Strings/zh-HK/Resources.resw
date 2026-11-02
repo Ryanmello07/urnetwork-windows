@@ -902,6 +902,10 @@
     <value>此請求已過期。請重新開始以取得新的待簽署訊息。</value>
     <comment>Error: the single-use wallet challenge expired (5 minutes) before it was signed.</comment>
   </data>
+  <data name="bittensor_error_extension_not_authorized" xml:space="preserve">
+    <value>{} 尚未允許 ur.io 使用你的 Bittensor 帳戶。請在錢包中批准連接請求，或在其設定的「Connected Sites」（已連接網站）中允許 ur.io，然後再試一次。</value>
+    <comment>Bittensor wallet error (ur.io, and the apps when a ur.io wallet bridge page returns extension_not_authorized): the browser extension has not allowed the site to use an account yet, so nothing was signed. The user rejected or closed the extension's connect window, has no Polkadot/Bittensor account in the extension, removed the site's accounts in the extension's connected sites, or a connect request is still open in it. Talisman says "Site &lt;url&gt; has not been authorised for Talisman yet"; polkadot{.js}, SubWallet and TAO.com say "The source &lt;url&gt; has not been enabled yet" or "is not allowed to interact with this extension". The argument is the wallet product name (Talisman or TAO.com). "Connected Sites" is the extension's settings page that lists the sites allowed to use its accounts: use the extension's own name for it where it ships your language (Talisman: de Verbundene Seiten, es Sitios Conectados, ru Подключенные сайты, zh 连接网站); otherwise keep the English name, followed by a translation in parentheses.</comment>
+  </data>
   <data name="bittensor_error_extension_not_found" xml:space="preserve">
     <value>在此瀏覽器中找不到 {} 擴充功能。請安裝後再試一次。</value>
     <comment>Error: the wallet's browser extension is not installed in this browser (on ur.io, or in the apps when a ur.io wallet bridge page returns extension_not_found). The argument is the wallet product name (Talisman on the Bittensor page, Phantom or Solflare on the Solana page).</comment>
@@ -933,6 +937,18 @@
   <data name="bittensor_error_walletconnect_unavailable" xml:space="preserve">
     <value>WalletConnect 目前無法使用。請稍後再試，或手動輸入你的地址。</value>
     <comment>Bittensor wallet error in the apps, when the ur.io bridge page returns walletconnect_unavailable: the page has no WalletConnect project id, so it cannot pair a wallet. Manual entry still works. WalletConnect is a product name.</comment>
+  </data>
+  <data name="bittensor_manual_choice" xml:space="preserve">
+    <value>手動簽名</value>
+    <comment>The manual signing option in a Bittensor wallet chooser: on ur.io its own entry, and in the phone apps the line under a wallet that has no way to sign here directly. The user signs a message outside the page or app, for example with the btcli command line tool, and pastes the signature back.</comment>
+  </data>
+  <data name="bittensor_manual_no_popup" xml:space="preserve">
+    <value>此處不會開啟錢包視窗。請你自行為訊息簽名，然後將簽名貼到下方。</value>
+    <comment>First line of the manual signing form, on ur.io and in the apps' sheet. Support inbox 8167: a user waited for a wallet window that never comes on this path.</comment>
+  </data>
+  <data name="bittensor_manual_phone_route" xml:space="preserve">
+    <value>如果你的錢包無法為貼上的訊息簽名，請返回並選擇 WalletConnect（Nova 等），或在電腦瀏覽器中前往 ur.io/app/account/earnings 簽名。</value>
+    <comment>The phone apps' manual signing sheet: what to do when the wallet can't sign a pasted message. WalletConnect and Nova are product names, and ur.io/app/account/earnings is a web address: keep them as they are.</comment>
   </data>
   <data name="bittensor_manual_sign_instructions" xml:space="preserve">
     <value>請使用存有你 coldkey 的 {} 錢包簽署此訊息，然後在下方貼上地址和簽名。</value>
@@ -5164,6 +5180,10 @@
     <value>開始免費試用，另享 {} 個月免費</value>
     <comment>Onboarding offer screen: the single primary button. The number is the months the discount equals.</comment>
   </data>
+  <data name="offer_first_month_price" xml:space="preserve">
+    <value>首月 {}</value>
+    <comment>Plan card with the win-back offer (a returning subscriber's first month of the monthly plan at a discount): the billed first-month amount on the monthly card (most prominent line).</comment>
+  </data>
   <data name="offer_first_year_price" xml:space="preserve">
     <value>首年 {}</value>
     <comment>Plan card with the welcome offer: the billed first-year amount (most prominent line).</comment>
@@ -5172,13 +5192,25 @@
     <value>Pro 免費 {} 個月</value>
     <comment>Onboarding offer screen headline. The number is the months the discount equals.</comment>
   </data>
+  <data name="offer_percent_off_first_month" xml:space="preserve">
+    <value>首月減 {}%</value>
+    <comment>Win-back offer line on the monthly plan card and the account plan row. The number is the percent off the first month of the monthly plan.</comment>
+  </data>
   <data name="offer_percent_off_first_year" xml:space="preserve">
     <value>首年減 {}%</value>
     <comment>Onboarding offer screen sub-line under the headline. The number is the percent off the first year.</comment>
   </data>
+  <data name="offer_terms_first_month" xml:space="preserve">
+    <value>首月 {0}，之後 {1}/月。可隨時取消。</value>
+    <comment>Plan picker with the win-back offer and the monthly plan chosen: the terms line under the button (the discounted first month, then the regular monthly price).</comment>
+  </data>
   <data name="offer_terms_first_year.other" xml:space="preserve">
     <value>免費 {0} 天，首年 {1}，之後 {2}/年。可隨時取消。</value>
     <comment>Plan picker with the welcome offer: the terms line under the button (trial, discounted first year, renewal price).</comment>
+  </data>
+  <data name="offer_then_regular_monthly_price" xml:space="preserve">
+    <value>之後 {}/月</value>
+    <comment>Plan card with the win-back offer: the regular monthly price line under the first-month amount.</comment>
   </data>
   <data name="offer_then_regular_price" xml:space="preserve">
     <value>之後 {}/年</value>
@@ -7141,6 +7173,10 @@
   <data name="site_subscription_error_store_unavailable" xml:space="preserve">
     <value>暫時無法連接 Stripe。請稍後再試。</value>
     <comment>Manage subscription (ur.io's screen; Settings in the Windows app, Account in the Linux app): Stripe did not answer or refused the change, or the billing portal could not be opened; trying again usually works (error.code store_unavailable).</comment>
+  </data>
+  <data name="site_winback_sheet_line" xml:space="preserve">
+    <value>歡迎回來：首月減 {0}%，有效期至 {1}</value>
+    <comment>Upgrade sheet: the win-back offer line while a returning subscriber's offer is active (the monthly plan's first month at a discount). {percent} whole number, {when} a local date and time.</comment>
   </data>
   <data name="skip" xml:space="preserve">
     <value>略過</value>
