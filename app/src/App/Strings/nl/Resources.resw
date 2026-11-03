@@ -4564,7 +4564,11 @@ juiste manier</value>
   </data>
   <data name="insufficient_balance_disconnect_first" xml:space="preserve">
     <value>Kies eerst ‘Verbinding verbreken’ om te upgraden. Tot die tijd kan de betaling niet doorgaan.</value>
-    <comment>Out-of-balance alert, on the builds whose checkout has to go through the tunnel (Windows, Linux, the Android Play flavor, the macOS direct download), while the tunnel holds or blocks traffic. Payment cannot reach the store until the user disconnects, and nothing disconnects for them; Disconnect is the button beside this line. Each translation names that button by its own label (the disconnect key).</comment>
+    <comment>Out-of-balance alert, on the desktop builds whose checkout has to go through the tunnel (Windows, Linux), while the tunnel holds or blocks traffic. Their Disconnect lifts the kill switch too; apple and android say more (insufficient_balance_disconnect_first_kill_switch). Payment cannot reach the store until the user disconnects, and nothing disconnects for them; Disconnect is the button beside this line. Each translation names that button by its own label (the disconnect key).</comment>
+  </data>
+  <data name="insufficient_balance_disconnect_first_kill_switch" xml:space="preserve">
+    <value>Kies eerst ‘Verbinding verbreken’ om te upgraden en zet de Kill switch uit als die aan staat. Tot die tijd kan de betaling niet doorgaan.</value>
+    <comment>Out-of-balance alert, on the apple and android builds whose checkout has to go through the tunnel (the macOS direct download, the Android Play flavor), while the tunnel holds traffic. Payment cannot reach the store until the user disconnects, and nothing disconnects for them; Disconnect is the button beside this line. On these apps a kill switch that is on keeps the tunnel up after a Disconnect and still stops the payment, so the line also says to turn it off. Each translation names Disconnect by its own label (the disconnect key) and the kill switch by the label of its setting (the kill_switch key).</comment>
   </data>
   <data name="insufficient_balance_exhausted" xml:space="preserve">
     <value>Je data is op tot de gratis vernieuwing of een upgrade.</value>
@@ -7726,13 +7730,21 @@ inhoud van de wereld</value>
     <value>Nu opeisen</value>
     <comment>Earnings, the settlement v2 tile and the claim sheet: a button that asks URnetwork to claim the balance now, without waiting for the automatic threshold. Short: a button.</comment>
   </data>
-  <data name="sn_claim_relay_claim_now_paid" xml:space="preserve">
-    <value>‘Nu opeisen’ wordt betaald door URnetwork, één keer per {} dagen.</value>
-    <comment>Earnings, the settlement v2 tile, under the Claim now button: URnetwork pays the gas, and the button can be used once in this many days (30). Claim now is the button's label; keep it recognizable as that label.</comment>
+  <data name="sn_claim_relay_claim_now_paid.one" xml:space="preserve">
+    <value>‘Nu opeisen’ wordt betaald door URnetwork, één keer per dag.</value>
+    <comment>Earnings, the settlement v2 tile, under the Claim now button: URnetwork pays the gas, and the button can be used once in this many days (30 today; the count selects the plural form). Claim now is the button's label; keep it recognizable as that label.</comment>
   </data>
-  <data name="sn_claim_relay_claim_now_paid_each" xml:space="preserve">
+  <data name="sn_claim_relay_claim_now_paid.other" xml:space="preserve">
+    <value>‘Nu opeisen’ wordt betaald door URnetwork, één keer per {} dagen.</value>
+    <comment>Earnings, the settlement v2 tile, under the Claim now button: URnetwork pays the gas, and the button can be used once in this many days (30 today; the count selects the plural form). Claim now is the button's label; keep it recognizable as that label.</comment>
+  </data>
+  <data name="sn_claim_relay_claim_now_paid_each.one" xml:space="preserve">
+    <value>Betaald door URnetwork, één keer per dag per coldkey.</value>
+    <comment>Earnings claim sheet, under the Claim now button: URnetwork pays the gas, once in this many days (30 today; the count selects the plural form) for each Bittensor address (coldkey). Keep coldkey as the app writes it elsewhere.</comment>
+  </data>
+  <data name="sn_claim_relay_claim_now_paid_each.other" xml:space="preserve">
     <value>Betaald door URnetwork, één keer per {} dagen per coldkey.</value>
-    <comment>Earnings claim sheet, under the Claim now button: URnetwork pays the gas, once in this many days (30) for each Bittensor address (coldkey). Keep coldkey as the app writes it elsewhere.</comment>
+    <comment>Earnings claim sheet, under the Claim now button: URnetwork pays the gas, once in this many days (30 today; the count selects the plural form) for each Bittensor address (coldkey). Keep coldkey as the app writes it elsewhere.</comment>
   </data>
   <data name="sn_claim_relay_claimed" xml:space="preserve">
     <value>Opgeëist door URnetwork. {0} SN25α staat op je sleutel, {1}.</value>
