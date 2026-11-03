@@ -168,18 +168,10 @@ bittensor_error_extension_not_found
 bittensor_error_invalid_signature
 bittensor_error_message_mismatch
 bittensor_error_no_account
-bittensor_error_signature_mismatch
 bittensor_error_user_rejected
 bittensor_error_walletconnect_expired
 bittensor_error_walletconnect_unavailable
-bittensor_manual_choice
-bittensor_manual_no_popup
-bittensor_manual_phone_route
-bittensor_manual_sign_instructions
-bittensor_message_to_sign
 bittensor_sign_in
-bittensor_signature_label
-bittensor_signature_placeholder
 bittensor_wallet
 bittensor_walletconnect_continue
 bittensor_walletconnect_hint
@@ -240,6 +232,7 @@ conn_failsafe_armed
 conn_failsafe_blocked
 conn_failsafe_restored
 conn_finding_providers
+conn_not_protected
 conn_reason_auth
 conn_reason_platform
 conn_reason_providers
@@ -346,6 +339,8 @@ data_info_refresh_at
 data_info_title
 data_info_used
 data_info_why
+data_limit_held_notice
+data_limit_reached
 data_usage
 days_ago_abbrev
 default_daily_data
@@ -626,6 +621,7 @@ includes_free_trial_days
 instant_account_explainer
 instant_account_failed
 insufficient_balance
+insufficient_balance_disconnect_first
 insufficient_balance_exhausted
 insufficient_balance_held_notice
 insufficient_balance_message

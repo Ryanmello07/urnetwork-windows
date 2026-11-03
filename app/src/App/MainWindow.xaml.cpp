@@ -324,6 +324,7 @@ MainWindow::MainWindow() {
       }
     });
     BalanceWarning().ActionButton(getPro);
+    balanceUpgrade_ = getPro;
 
     // the banner leads with when the free data refreshes (ConnectPage); Why?
     // explains the balance in the "About your data" sheet
@@ -334,6 +335,7 @@ MainWindow::MainWindow() {
     why.Click([weak = get_weak()](auto const&, auto const&) {
       if (auto self = weak.get()) self->ShowDataInfoSheet();
     });
+    balanceWhy_ = why;
     // a refused start waits on the balance and is run by itself once data is
     // back (BalanceGate.h, BalanceRecovery); Cancel ends the wait, since a
     // connect that never started has no Disconnect
@@ -343,10 +345,22 @@ MainWindow::MainWindow() {
     Automation::AutomationProperties::SetAutomationId(
         balanceRecoveryCancel_, L"acceptance.insufficient-balance.cancel-reconnect");
     balanceRecoveryCancel_.Click([](auto const&, auto const&) { urnw::App().ClearBalanceRecovery(); });
+    // the banner tells the user to disconnect before paying (BalanceGate.h), so it
+    // carries the press itself: the connect button's Disconnect, with none of that
+    // button's Retry. It ends the session and nothing else: the provide mode stands
+    balanceDisconnect_ = Button();
+    solidBannerAction(balanceDisconnect_);
+    balanceDisconnect_.Content(LocBox("disconnect"));
+    balanceDisconnect_.Visibility(Visibility::Collapsed);
+    Automation::AutomationProperties::SetAutomationId(balanceDisconnect_,
+                                                      L"acceptance.insufficient-balance.disconnect");
+    balanceDisconnect_.Click([](auto const&, auto const&) { Sdk().Disconnect(); });
     StackPanel links;
     links.Orientation(winrt::Microsoft::UI::Xaml::Controls::Orientation::Horizontal);
+    links.Spacing(8);
     links.Children().Append(why);
     links.Children().Append(balanceRecoveryCancel_);
+    links.Children().Append(balanceDisconnect_);
     BalanceWarning().Content(links);
   }
 
@@ -533,25 +547,6 @@ MainWindow::MainWindow() {
     // Anything that failed BEFORE this handler existed is standing state in
     // SdkHost (sessionFailure_); this is what replays it.
     Sdk().RefreshModeNotice();
-  }
-
-  // ---- Bittensor manual proof (TAO.com) ----
-  // SdkHost asks for the manual form from an SDK thread once a TAO.com proof
-  // has its challenge; the form answers SdkHost directly. A window that is
-  // gone answers with a cancel so the flow is not left waiting.
-  {
-    auto queue = DispatcherQueue();
-    Sdk().SetBittensorManualHandler(
-        [weak = get_weak(), queue](urnw::SdkHost::BittensorManualRequest request) {
-          const bool queued = queue.TryEnqueue([weak, request] {
-            if (auto self = weak.get()) {
-              urnw::pages::ShowBittensorManualForm(self, request);
-            } else {
-              Sdk().CancelBittensorProof();
-            }
-          });
-          if (!queued) Sdk().CancelBittensorProof();
-        });
   }
 
   // ---- Advanced Mode (D5) ----
@@ -2621,11 +2616,29 @@ void MainWindow::SetBalanceRecovery(urnw::balance::RecoveryState state) {
   UpdateBalanceWarning();
 }
 
+void MainWindow::SetDataLimit(bool dataLimit) {
+  // pushed with every stats and balance push; re-render only on a change
+  if (dataLimit == dataLimit_) return;
+  dataLimit_ = dataLimit;
+  UpdateBalanceWarning();
+}
+
+void MainWindow::ApplyBalanceDisconnect(bool offered) {
+  if (balanceDisconnect_) {
+    balanceDisconnect_.Visibility(offered ? Visibility::Visible : Visibility::Collapsed);
+  }
+}
+
 void MainWindow::UpdateBalanceWarning() {
   // macOS ConnectActions: the insufficient-balance CTA shows for a non-Pro
   // account when no confirmation poll is bridging a just-made purchase. A
-  // refused start waiting on the balance keeps it open with its Cancel.
-  BalanceWarning().IsOpen(urnw::balance::BannerOpen(outOfBalance(), balanceRecovery_));
+  // refused start waiting on the balance keeps it open with its Cancel, and a
+  // paying account refused at a data limit gets it in words for the limit.
+  BalanceWarning().IsOpen(urnw::balance::BannerOpen(outOfBalance() || dataLimit_, balanceRecovery_));
+  const auto offered = urnw::balance::BannerOffersUpgrade(dataLimit_) ? Visibility::Visible
+                                                                      : Visibility::Collapsed;
+  if (balanceUpgrade_) balanceUpgrade_.Visibility(offered);
+  if (balanceWhy_) balanceWhy_.Visibility(offered);
   if (balanceRecoveryCancel_) {
     const bool cancel = urnw::balance::RecoveryLinesFor(outOfBalance(), false, outOfBalanceKind(),
                                                         balanceRecovery_)

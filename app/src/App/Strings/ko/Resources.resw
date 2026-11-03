@@ -1354,7 +1354,7 @@
   </data>
   <data name="conn_not_protected" xml:space="preserve">
     <value>인터넷 트래픽이 보호되지 않습니다.</value>
-    <comment>Connect page: warning that the internet traffic is not protected.</comment>
+    <comment>Connect page and the out-of-balance or data-limit alert: warning that the internet traffic is not protected, shown when the tunnel is not capturing traffic.</comment>
   </data>
   <data name="conn_reason_auth" xml:space="preserve">
     <value>플랫폼 로그인이 계속 실패하고 있습니다…</value>
@@ -1947,6 +1947,14 @@
   <data name="data_info_why" xml:space="preserve">
     <value>왜 그런가요?</value>
     <comment>Link under the out-of-balance notice that opens the "About your data" sheet.</comment>
+  </data>
+  <data name="data_limit_held_notice" xml:space="preserve">
+    <value>추가 데이터를 사용할 수 있게 되거나 연결을 해제할 때까지 트래픽이 터널 안에 보류됩니다.</value>
+    <comment>Alert body shown in the app and in a local notification when a paying account is refused at a data limit while the tunnel is capturing traffic. Connect stays requested and the VPN keeps holding traffic until the limit allows more data or the user disconnects. The paying counterpart of insufficient_balance_held_notice, with no upgrade to offer.</comment>
+  </data>
+  <data name="data_limit_reached" xml:space="preserve">
+    <value>데이터 한도에 도달했습니다</value>
+    <comment>Alert title and status line on the connect screen, and the title of a local notification, when the server refuses a paying account's connection because a data limit was reached (a per-device data cap or the plan's data), not because the account has no balance. Short.</comment>
   </data>
   <data name="data_usage" xml:space="preserve">
     <value>데이터 사용량</value>
@@ -4174,6 +4182,10 @@
     <value>잔액 부족 — 잔액 또는 플랜을 추가하세요</value>
     <comment>Connection status shown when the network has no data balance left.</comment>
   </data>
+  <data name="insufficient_balance_disconnect_first" xml:space="preserve">
+    <value>업그레이드하려면 먼저 '연결 해제'를 선택하세요. 그 전에는 결제를 완료할 수 없습니다.</value>
+    <comment>Out-of-balance alert, on the builds whose checkout has to go through the tunnel (Windows, Linux, the Android Play flavor, the macOS direct download), while the tunnel holds or blocks traffic. Payment cannot reach the store until the user disconnects, and nothing disconnects for them; Disconnect is the button beside this line. Each translation names that button by its own label (the disconnect key).</comment>
+  </data>
   <data name="insufficient_balance_exhausted" xml:space="preserve">
     <value>무료 갱신 또는 업그레이드 전까지 데이터가 없습니다.</value>
     <comment>Out-of-balance notice (and the Upgrade screen when a blocked connect opened it), shown when the data is used up and almost nothing is held by open connections, so nothing meaningful will come back on its own. It follows the "Free data refreshes in {time}." line, which says when the free refresh is.</comment>
@@ -5923,6 +5935,14 @@
   <data name="purchase_could_not_be_verified" xml:space="preserve">
     <value>Google Play에서 이 구매를 확인할 수 없어 계정에 적용할 수 없습니다. 요금이 청구되었는데 요금제가 업데이트되지 않으면 지원팀에 문의하세요.</value>
     <comment>Error dialog body when the server's verify answer for a Play purchase is terminal `invalid` — the proof will never verify (unknown token, disallowed product, canceled before completing). The purchase is still acknowledged with Play so a real charge is not auto-refunded; this dialog is how the failure reaches the user instead of a silent nothing (android google/PlanViewModel.kt report path).</comment>
+  </data>
+  <data name="purchase_disconnect_notice_message" xml:space="preserve">
+    <value>URnetwork가 이후 다시 연결합니다. 그때까지 인터넷 트래픽은 VPN을 거치지 않습니다.</value>
+    <comment>macOS alert body under purchase_disconnect_notice_title. The app reconnects the VPN by itself after the purchase; "it" is the VPN. Until then the user's internet traffic does not go through the VPN.</comment>
+  </data>
+  <data name="purchase_disconnect_notice_title" xml:space="preserve">
+    <value>이 구매를 위해 VPN 연결을 해제할까요?</value>
+    <comment>macOS alert title, shown when the user starts a purchase while a VPN connection is requested, before the app disconnects the VPN for the purchase. The alert's buttons are Disconnect and Cancel.</comment>
   </data>
   <data name="purchase_found_confirming_your_plan" xml:space="preserve">
     <value>구매 내역을 찾았습니다. 요금제를 확인하는 중이며 자동으로 업데이트됩니다.</value>

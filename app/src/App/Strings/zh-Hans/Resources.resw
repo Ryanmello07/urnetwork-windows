@@ -1430,7 +1430,7 @@
   </data>
   <data name="conn_not_protected" xml:space="preserve">
     <value>你的互联网流量未受保护。</value>
-    <comment>Connect page: warning that the internet traffic is not protected.</comment>
+    <comment>Connect page and the out-of-balance or data-limit alert: warning that the internet traffic is not protected, shown when the tunnel is not capturing traffic.</comment>
   </data>
   <data name="conn_reason_auth" xml:space="preserve">
     <value>登录平台一直失败…</value>
@@ -2023,6 +2023,14 @@
   <data name="data_info_why" xml:space="preserve">
     <value>为什么？</value>
     <comment>Link under the out-of-balance notice that opens the "About your data" sheet.</comment>
+  </data>
+  <data name="data_limit_held_notice" xml:space="preserve">
+    <value>在有更多可用数据或你断开连接之前，你的流量会保留在隧道中。</value>
+    <comment>Alert body shown in the app and in a local notification when a paying account is refused at a data limit while the tunnel is capturing traffic. Connect stays requested and the VPN keeps holding traffic until the limit allows more data or the user disconnects. The paying counterpart of insufficient_balance_held_notice, with no upgrade to offer.</comment>
+  </data>
+  <data name="data_limit_reached" xml:space="preserve">
+    <value>已达到数据上限</value>
+    <comment>Alert title and status line on the connect screen, and the title of a local notification, when the server refuses a paying account's connection because a data limit was reached (a per-device data cap or the plan's data), not because the account has no balance. Short.</comment>
   </data>
   <data name="data_usage" xml:space="preserve">
     <value>数据使用量</value>
@@ -4250,6 +4258,10 @@
     <value>余额不足 — 请添加余额或计划</value>
     <comment>Connection status shown when the network has no data balance left.</comment>
   </data>
+  <data name="insufficient_balance_disconnect_first" xml:space="preserve">
+    <value>要升级，请先选择“断开连接”。在此之前，付款无法完成。</value>
+    <comment>Out-of-balance alert, on the builds whose checkout has to go through the tunnel (Windows, Linux, the Android Play flavor, the macOS direct download), while the tunnel holds or blocks traffic. Payment cannot reach the store until the user disconnects, and nothing disconnects for them; Disconnect is the button beside this line. Each translation names that button by its own label (the disconnect key).</comment>
+  </data>
   <data name="insufficient_balance_exhausted" xml:space="preserve">
     <value>在免费数据更新或升级之前，你的数据已用完。</value>
     <comment>Out-of-balance notice (and the Upgrade screen when a blocked connect opened it), shown when the data is used up and almost nothing is held by open connections, so nothing meaningful will come back on its own. It follows the "Free data refreshes in {time}." line, which says when the free refresh is.</comment>
@@ -6000,6 +6012,14 @@
   <data name="purchase_could_not_be_verified" xml:space="preserve">
     <value>无法通过 Google Play 验证此次购买，因此无法将其应用到您的账户。如果您已被扣款但方案未更新，请联系支持团队。</value>
     <comment>Error dialog body when the server's verify answer for a Play purchase is terminal `invalid` — the proof will never verify (unknown token, disallowed product, canceled before completing). The purchase is still acknowledged with Play so a real charge is not auto-refunded; this dialog is how the failure reaches the user instead of a silent nothing (android google/PlanViewModel.kt report path).</comment>
+  </data>
+  <data name="purchase_disconnect_notice_message" xml:space="preserve">
+    <value>URnetwork 稍后会重新连接。在此之前，你的互联网流量不会通过 VPN。</value>
+    <comment>macOS alert body under purchase_disconnect_notice_title. The app reconnects the VPN by itself after the purchase; "it" is the VPN. Until then the user's internet traffic does not go through the VPN.</comment>
+  </data>
+  <data name="purchase_disconnect_notice_title" xml:space="preserve">
+    <value>要为此次购买断开 VPN 连接吗？</value>
+    <comment>macOS alert title, shown when the user starts a purchase while a VPN connection is requested, before the app disconnects the VPN for the purchase. The alert's buttons are Disconnect and Cancel.</comment>
   </data>
   <data name="purchase_found_confirming_your_plan" xml:space="preserve">
     <value>已找到购买记录。正在确认您的方案，方案将自动更新。</value>

@@ -1366,7 +1366,7 @@ maneira certa</value>
   </data>
   <data name="conn_not_protected" xml:space="preserve">
     <value>Seu tráfego de internet não está protegido.</value>
-    <comment>Connect page: warning that the internet traffic is not protected.</comment>
+    <comment>Connect page and the out-of-balance or data-limit alert: warning that the internet traffic is not protected, shown when the tunnel is not capturing traffic.</comment>
   </data>
   <data name="conn_reason_auth" xml:space="preserve">
     <value>O login na plataforma está falhando…</value>
@@ -1967,6 +1967,14 @@ maneira certa</value>
   <data name="data_info_why" xml:space="preserve">
     <value>Por quê?</value>
     <comment>Link under the out-of-balance notice that opens the "About your data" sheet.</comment>
+  </data>
+  <data name="data_limit_held_notice" xml:space="preserve">
+    <value>Seu tráfego fica retido no túnel até haver mais dados disponíveis ou você desconectar.</value>
+    <comment>Alert body shown in the app and in a local notification when a paying account is refused at a data limit while the tunnel is capturing traffic. Connect stays requested and the VPN keeps holding traffic until the limit allows more data or the user disconnects. The paying counterpart of insufficient_balance_held_notice, with no upgrade to offer.</comment>
+  </data>
+  <data name="data_limit_reached" xml:space="preserve">
+    <value>Limite de dados atingido</value>
+    <comment>Alert title and status line on the connect screen, and the title of a local notification, when the server refuses a paying account's connection because a data limit was reached (a per-device data cap or the plan's data), not because the account has no balance. Short.</comment>
   </data>
   <data name="data_usage" xml:space="preserve">
     <value>Uso de dados</value>
@@ -4214,6 +4222,10 @@ maneira certa</value>
     <value>Saldo insuficiente — adicione saldo ou um plano</value>
     <comment>Connection status shown when the network has no data balance left.</comment>
   </data>
+  <data name="insufficient_balance_disconnect_first" xml:space="preserve">
+    <value>Para fazer upgrade, escolha primeiro "Desconectar". Até lá, o pagamento não será concluído.</value>
+    <comment>Out-of-balance alert, on the builds whose checkout has to go through the tunnel (Windows, Linux, the Android Play flavor, the macOS direct download), while the tunnel holds or blocks traffic. Payment cannot reach the store until the user disconnects, and nothing disconnects for them; Disconnect is the button beside this line. Each translation names that button by its own label (the disconnect key).</comment>
+  </data>
   <data name="insufficient_balance_exhausted" xml:space="preserve">
     <value>Seus dados acabaram até a renovação grátis ou um upgrade.</value>
     <comment>Out-of-balance notice (and the Upgrade screen when a blocked connect opened it), shown when the data is used up and almost nothing is held by open connections, so nothing meaningful will come back on its own. It follows the "Free data refreshes in {time}." line, which says when the free refresh is.</comment>
@@ -6015,6 +6027,14 @@ e mais descentralizado protocolo de entrada e saída do mundo.</value>
   <data name="purchase_could_not_be_verified" xml:space="preserve">
     <value>Não foi possível verificar esta compra com o Google Play, então ela não pode ser aplicada à sua conta. Se você foi cobrado e seu plano não for atualizado, entre em contato com o suporte.</value>
     <comment>Error dialog body when the server's verify answer for a Play purchase is terminal `invalid` — the proof will never verify (unknown token, disallowed product, canceled before completing). The purchase is still acknowledged with Play so a real charge is not auto-refunded; this dialog is how the failure reaches the user instead of a silent nothing (android google/PlanViewModel.kt report path).</comment>
+  </data>
+  <data name="purchase_disconnect_notice_message" xml:space="preserve">
+    <value>O URnetwork reconecta a VPN depois. Até lá, seu tráfego de internet não passará pela VPN.</value>
+    <comment>macOS alert body under purchase_disconnect_notice_title. The app reconnects the VPN by itself after the purchase; "it" is the VPN. Until then the user's internet traffic does not go through the VPN.</comment>
+  </data>
+  <data name="purchase_disconnect_notice_title" xml:space="preserve">
+    <value>Desconectar a VPN para esta compra?</value>
+    <comment>macOS alert title, shown when the user starts a purchase while a VPN connection is requested, before the app disconnects the VPN for the purchase. The alert's buttons are Disconnect and Cancel.</comment>
   </data>
   <data name="purchase_found_confirming_your_plan" xml:space="preserve">
     <value>Compra encontrada. Confirmando seu plano — ele será atualizado automaticamente.</value>

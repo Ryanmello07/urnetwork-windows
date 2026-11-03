@@ -1354,7 +1354,7 @@ cara yang benar</value>
   </data>
   <data name="conn_not_protected" xml:space="preserve">
     <value>Lalu lintas internet Anda tidak terlindungi.</value>
-    <comment>Connect page: warning that the internet traffic is not protected.</comment>
+    <comment>Connect page and the out-of-balance or data-limit alert: warning that the internet traffic is not protected, shown when the tunnel is not capturing traffic.</comment>
   </data>
   <data name="conn_reason_auth" xml:space="preserve">
     <value>Masuk ke platform terus gagal…</value>
@@ -1947,6 +1947,14 @@ cara yang benar</value>
   <data name="data_info_why" xml:space="preserve">
     <value>Mengapa?</value>
     <comment>Link under the out-of-balance notice that opens the "About your data" sheet.</comment>
+  </data>
+  <data name="data_limit_held_notice" xml:space="preserve">
+    <value>Lalu lintas Anda ditahan di terowongan sampai ada lebih banyak data atau Anda memutuskan koneksi.</value>
+    <comment>Alert body shown in the app and in a local notification when a paying account is refused at a data limit while the tunnel is capturing traffic. Connect stays requested and the VPN keeps holding traffic until the limit allows more data or the user disconnects. The paying counterpart of insufficient_balance_held_notice, with no upgrade to offer.</comment>
+  </data>
+  <data name="data_limit_reached" xml:space="preserve">
+    <value>Batas data tercapai</value>
+    <comment>Alert title and status line on the connect screen, and the title of a local notification, when the server refuses a paying account's connection because a data limit was reached (a per-device data cap or the plan's data), not because the account has no balance. Short.</comment>
   </data>
   <data name="data_usage" xml:space="preserve">
     <value>Penggunaan data</value>
@@ -4174,6 +4182,10 @@ cara yang benar</value>
     <value>Saldo tidak mencukupi — tambahkan saldo atau paket</value>
     <comment>Connection status shown when the network has no data balance left.</comment>
   </data>
+  <data name="insufficient_balance_disconnect_first" xml:space="preserve">
+    <value>Untuk meningkatkan paket, pilih “Putuskan” terlebih dahulu. Pembayaran tidak dapat diproses sebelum itu.</value>
+    <comment>Out-of-balance alert, on the builds whose checkout has to go through the tunnel (Windows, Linux, the Android Play flavor, the macOS direct download), while the tunnel holds or blocks traffic. Payment cannot reach the store until the user disconnects, and nothing disconnects for them; Disconnect is the button beside this line. Each translation names that button by its own label (the disconnect key).</comment>
+  </data>
   <data name="insufficient_balance_exhausted" xml:space="preserve">
     <value>Data Anda habis sampai pembaruan gratis atau sampai Anda meningkatkan paket.</value>
     <comment>Out-of-balance notice (and the Upgrade screen when a blocked connect opened it), shown when the data is used up and almost nothing is held by open connections, so nothing meaningful will come back on its own. It follows the "Free data refreshes in {time}." line, which says when the free refresh is.</comment>
@@ -5924,6 +5936,14 @@ terbesar, teraman, dan paling terdesentralisasi di dunia.</value>
   <data name="purchase_could_not_be_verified" xml:space="preserve">
     <value>Pembelian ini tidak dapat diverifikasi dengan Google Play, jadi tidak dapat diterapkan ke akun Anda. Jika Anda sudah ditagih dan paket Anda tidak diperbarui, hubungi dukungan.</value>
     <comment>Error dialog body when the server's verify answer for a Play purchase is terminal `invalid` — the proof will never verify (unknown token, disallowed product, canceled before completing). The purchase is still acknowledged with Play so a real charge is not auto-refunded; this dialog is how the failure reaches the user instead of a silent nothing (android google/PlanViewModel.kt report path).</comment>
+  </data>
+  <data name="purchase_disconnect_notice_message" xml:space="preserve">
+    <value>URnetwork akan menyambungkannya kembali setelah itu. Sampai saat itu, lalu lintas internet Anda tidak akan melewati VPN.</value>
+    <comment>macOS alert body under purchase_disconnect_notice_title. The app reconnects the VPN by itself after the purchase; "it" is the VPN. Until then the user's internet traffic does not go through the VPN.</comment>
+  </data>
+  <data name="purchase_disconnect_notice_title" xml:space="preserve">
+    <value>Putuskan VPN untuk pembelian ini?</value>
+    <comment>macOS alert title, shown when the user starts a purchase while a VPN connection is requested, before the app disconnects the VPN for the purchase. The alert's buttons are Disconnect and Cancel.</comment>
   </data>
   <data name="purchase_found_confirming_your_plan" xml:space="preserve">
     <value>Pembelian ditemukan. Mengonfirmasi paket Anda — paket akan diperbarui otomatis.</value>
