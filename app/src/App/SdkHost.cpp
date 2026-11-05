@@ -35,6 +35,7 @@
 #include "LogUpload.h"
 #include "NetworkSpaceStartup.h"
 #include "Paths.h"
+#include "LocationFeed.h"
 #include "PeerLocation.h"
 #include "RpcSessionBlob.h"
 #include "SdkErrorId.h"
@@ -4148,6 +4149,12 @@ void SdkHost::FillProviderOnlyStats(LiveStats& stats) const {
   const int64_t clients = serviceProviderClients_.load();
   stats.provideClients = clients < 0 ? 0 : clients;
   stats.provideClientsUnknown = stats.provideEnabled && clients < 0;
+  // The peers line, from the same answer: every connected device, providing or
+  // not, as a session's line counts them.
+  if (0 <= clients) {
+    stats.connectedPeerCount = clients;
+    stats.providerOnlyPeers = true;
+  }
 }
 
 void SdkHost::PublishStats() {
@@ -4531,6 +4538,8 @@ void SdkHost::ProviderOnlyStatsLoop() {
           shown = false;
           serviceProviderClients_.store(-1);
           lastClients = -1;
+          // its PeerViewController's pushes fill the peers feed now
+          ForgetProviderOnlyPeers();
           ResetProviderOnlyStatus();
           ForgetProviderOnlyExtenderStatus();
           continue;
@@ -4773,11 +4782,44 @@ void SdkHost::ShowProviderOnlyStatsLocked(const proto::ProviderStats& stats) {
   extender.serviceWritable = stats.provide_extender_writable;
   extender.measurementsServiceWritable = stats.measurements_enabled_writable;
   PublishExtenderProvideView(std::move(extender));
+  // The peers it discovers with no session: the lists a session's
+  // PeerViewController fills, filtered as it filters them. An older service
+  // sends none, and the lists stay as they were.
+  if (auto peers = proto::NetworkPeersOf<urnet::NetworkPeerList>(stats)) {
+    PublishProviderOnlyPeersLocked(ConnectablePeers(std::move(*peers)));
+  }
+}
+
+void SdkHost::PublishProviderOnlyPeersLocked(urnet::NetworkPeerList peers) {
+  // caller holds mutex_, with no session
+  {
+    std::scoped_lock lock(drawerMutex_);
+    if (lastProviderOnlyPeers_ && SamePeerRows(*lastProviderOnlyPeers_, peers)) return;
+    lastProviderOnlyPeers_ = peers;
+  }
+  if (onPeersObserver_) onPeersObserver_(peers);
+  if (onPeers_) onPeers_(std::move(peers));
+}
+
+void SdkHost::ForgetProviderOnlyPeers() {
+  std::scoped_lock lock(drawerMutex_);
+  lastProviderOnlyPeers_.reset();
 }
 
 void SdkHost::ClearProviderOnlyStatsLocked(bool providerGone) {
   // caller holds mutex_, with no session
   if (providerGone) serviceProviderClients_.store(-1);
+  // The rows of a provider that stopped do not stay. A hide leaves them, as
+  // ClearDrawer's rule is, and the next answer pushes again.
+  if (providerGone) {
+    bool pushed = false;
+    {
+      std::scoped_lock lock(drawerMutex_);
+      pushed = lastProviderOnlyPeers_.has_value();
+    }
+    if (pushed) PublishProviderOnlyPeersLocked({});
+  }
+  ForgetProviderOnlyPeers();
   {
     std::scoped_lock lock(drawerMutex_);
     lastProviderPoints_.clear();
@@ -5181,6 +5223,9 @@ void SdkHost::ClearDrawer(bool sessionEnding) {
     lastProviderPoints_.clear();
     lastExtenderPoints_.clear();
     lastProviderDistribution_ = {};
+    // the peers feed is emptied below: the provider-only device's next answer
+    // pushes its peers again (PublishProviderOnlyPeersLocked)
+    lastProviderOnlyPeers_.reset();
     // a hide keeps these for the window that comes back (O8), and the next
     // presentation's reads confirm them
     if (sessionEnding) {
@@ -6714,7 +6759,16 @@ void SdkHost::EnsureLocationsLocked() {
     EnsureApiLocationsLocked();
     return;
   }
-  if (locationsVc_) return;
+  if (locationsVc_) {
+    // Clear before the read: a query set after this runs the worker again.
+    const bool queryChanged = locationsQueryDirty_.exchange(false, std::memory_order_acq_rel);
+    if (LocationFilterRunNeeded(queryChanged, locationsVc_->getFilteredLocationState())) {
+      locationsVc_->filterLocations(WantedLocationQuery());
+    }
+    return;
+  }
+  locationsQueryDirty_.store(false, std::memory_order_release);
+  const std::string wantedQuery = WantedLocationQuery();
   locationsVc_ = device_->openLocationsViewController();
   // Before start(), so the very first listener push cannot be preceded by a
   // stray api push landing on top of it.
@@ -6724,7 +6778,13 @@ void SdkHost::EnsureLocationsLocked() {
         if (onLocationsObserver_) onLocationsObserver_(locations, state);
         if (onLocations_) onLocations_(std::move(locations), std::move(state));
       }));
-  locationsVc_->start();
+  // start() is a goroutine running filterLocations(""), which could land after
+  // and replace a query the box already holds, so a held query runs instead.
+  if (wantedQuery.empty()) {
+    locationsVc_->start();
+  } else {
+    locationsVc_->filterLocations(wantedQuery);
+  }
   // PeerViewController: connected AND provide-enabled peers only (SDK filters).
   peerVc_ = device_->openPeerViewController();
   presentationSubs_.push_back(peerVc_->addPeersListener(
@@ -6746,9 +6806,14 @@ void SdkHost::EnsureLocationsLocked() {
     auto seedLocations =
         ReadSdkList(logged, "getFilteredLocations (seed)",
                     [&] { return locationsVc_->getFilteredLocations(); });
-    auto seedState = locationsVc_->getFilteredLocationState();
-    if (onLocationsObserver_) onLocationsObserver_(seedLocations, seedState);
-    if (onLocations_) onLocations_(std::move(seedLocations), std::move(seedState));
+    // A fresh controller has no snapshot and reports LOCATIONS_ERROR until its
+    // load begins. Nothing to seed then, and pushing it could land after the
+    // listener's own pushes and put an empty, failed feed over them.
+    if (seedLocations) {
+      auto seedState = locationsVc_->getFilteredLocationState();
+      if (onLocationsObserver_) onLocationsObserver_(seedLocations, seedState);
+      if (onLocations_) onLocations_(std::move(seedLocations), std::move(seedState));
+    }
   }
   if (onPeers_ || onPeersObserver_) {
     static std::atomic<bool> logged{false};
@@ -6776,6 +6841,7 @@ void SdkHost::EnsureApiLocationsLocked() {
   if (!api_) return;
   std::string query;
   uint64_t generation = 0;
+  bool cacheAnswers = false;
   {
     std::scoped_lock lock(apiLocationsMutex_);
     // A fetch for this exact query is already on its way.
@@ -6783,14 +6849,21 @@ void SdkHost::EnsureApiLocationsLocked() {
     // The cache already answers this exact query. A LOCATIONS_ERROR cache is
     // deliberately NOT "good", so the next arming (re-entering the destination,
     // or the window coming back) is the retry - the SDK schedules none.
-    if (apiLocations_ && apiLocationsState_ == urnet::LocationsLoaded &&
-        apiLocationsLoadedQuery_ == apiLocationsQuery_)
-      return;
-    query = apiLocationsQuery_;
-    apiLocationsPendingQuery_ = query;
-    apiLocationsInFlight_ = true;
-    apiLocationsState_ = urnet::LocationsLoading;
-    generation = ++apiLocationsGeneration_;
+    cacheAnswers = apiLocations_ && apiLocationsState_ == urnet::LocationsLoaded &&
+                   apiLocationsLoadedQuery_ == apiLocationsQuery_;
+    if (!cacheAnswers) {
+      query = apiLocationsQuery_;
+      apiLocationsPendingQuery_ = query;
+      apiLocationsInFlight_ = true;
+      apiLocationsState_ = urnet::LocationsLoading;
+      generation = ++apiLocationsGeneration_;
+    }
+  }
+  // Pushed, not assumed: a closing device feed pushed its consumers an empty
+  // feed (ClearDrawer) and this cache is the only thing that can refill them.
+  if (cacheAnswers) {
+    PublishApiLocations();
+    return;
   }
   // Say "loading" now rather than leave the pane in whatever state the last
   // arming left it in. The PREVIOUS result stays on screen underneath, which is
@@ -6860,37 +6933,22 @@ void SdkHost::PublishApiLocations() {
 }
 
 void SdkHost::SetLocationFilter(const std::string& query) {
-  {
-    std::scoped_lock lock(mutex_);
-    // The device feed owns the search when it exists: it re-buckets server-side
-    // and pushes the result back through the same listener.
-    if (locationsVc_) {
-      locationsVc_->filterLocations(query);
-      return;
-    }
-  }
-  // No view controller. Record the desired query and let EnsureApiLocations run
-  // the same two-endpoint dispatch the view controller runs; see the header.
-  // Trimmed exactly as FilterLocations trims (locations_view_controller.go:137),
-  // so a box holding only spaces is the idle list and not a search for " ".
-  // Trimmed HERE rather than via the pages:: helper: SdkHost must not take a
-  // dependency on the UI layer for four lines of whitespace handling.
-  std::string trimmed = query;
-  {
-    const auto notSpace = [](unsigned char c) { return !std::isspace(c); };
-    trimmed.erase(trimmed.begin(),
-                  std::find_if(trimmed.begin(), trimmed.end(), notSpace));
-    trimmed.erase(std::find_if(trimmed.rbegin(), trimmed.rend(), notSpace).base(),
-                  trimmed.end());
-  }
+  // Called per keystroke on the UI thread, and mutex_ is held through a whole
+  // connect: record the query and let the worker run the latest one.
+  std::string trimmed = TrimLocationQuery(query);
   {
     std::scoped_lock lock(apiLocationsMutex_);
-    if (apiLocationsQuery_ == trimmed) return;
-    apiLocationsQuery_ = trimmed;
+    if (apiLocationsQuery_ != trimmed) {
+      apiLocationsQuery_ = std::move(trimmed);
+      locationsQueryDirty_.store(true, std::memory_order_release);
+    }
   }
-  // Not held across the block above: lock order is mutex_ -> apiLocationsMutex_.
-  std::scoped_lock lock(mutex_);
-  EnsureApiLocationsLocked();
+  locationsOpener_.Request();
+}
+
+std::string SdkHost::WantedLocationQuery() {
+  std::scoped_lock lock(apiLocationsMutex_);
+  return apiLocationsQuery_;
 }
 
 std::optional<urnet::FilteredLocations> SdkHost::CurrentFilteredLocations() {

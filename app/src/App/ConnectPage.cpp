@@ -1365,7 +1365,8 @@ void ConnectPage::ApplyStats(urnw::LiveStats const& stats) {
   // the list itself stays the peers push's (OnPeers), so this re-renders it
   ApplyPeerCount(std::nullopt,
                  PeerLineReading{.remoteConnected = stats.remoteConnected,
-                                 .connectedPeerCount = stats.connectedPeerCount});
+                                 .connectedPeerCount = stats.connectedPeerCount,
+                                 .providerOnlyPeers = stats.providerOnlyPeers});
   // the connected country drives the dns-card recommendation pill; only refresh
   // it when the country actually changes (stats push on every throughput tick).
   const bool countryChanged =
@@ -1945,12 +1946,16 @@ void ConnectPage::WireDrawerFeeds() {
   // which the session worker holds through a whole connect, so a push behind
   // a held command froze the window.
   sdk.SetLocationsHandler([queue, weak](std::optional<urnet::FilteredLocations> locations,
-                                        std::string) {
-    queue.TryEnqueue([weak, locations = std::move(locations)] {
+                                        std::string state) {
+    queue.TryEnqueue([weak, locations = std::move(locations), state = std::move(state)] {
       if (auto self = weak.get()) {
         auto& page = self->connect();
         page.locations_ = locations;
-        if (page.locationSheet_) page.locationSheet_->Update(locations, page.peers_);
+        page.locationsState_ = state;
+        if (page.locationSheet_) {
+          page.locationSheet_->SetFeedState(state);
+          page.locationSheet_->Update(locations, page.peers_);
+        }
       }
     });
   });
@@ -3812,7 +3817,14 @@ void ConnectPage::ApplyPeersList() {
   w_.PeersGroupCount().Text(count == 0 ? hstring{L""}
                                        : H(urnw::FormatCountCompact(count)));
   if (!peers_ || peers_->empty()) {
-    auto row = urnw::kit::MakePaneKeyValueRow(Loc("peer_discovery_disabled"), {}, 34);
+    // What the line under the connect button says, so the two never disagree:
+    // discovery disabled, or how many devices are online (none of them
+    // provides, or this list would hold it).
+    const hstring empty =
+        PeerDiscoveryLive(peerLine_)
+            ? hstring{urnw::Plural("network_peer_count", peerLine_.connectedPeerCount)}
+            : Loc("peer_discovery_disabled");
+    auto row = urnw::kit::MakePaneKeyValueRow(empty, {}, 34);
     host.Children().Append(row.root);
     return;
   }
@@ -4444,12 +4456,15 @@ winrt::fire_and_forget ConnectPage::ShowLocationChooserSheet() {
   if (w_.sheetOpen()) co_return;  // only one ContentDialog can show at a time
   auto self = w_.get_strong();
   w_.SetSheetOpen(true);
-  // open the locations + peers view controllers (idempotent) and push an initial
-  // snapshot before seeding the sheet from the current values
-  Sdk().EnsureLocations();
+  // The sheet opens with an empty box, and the filter is shared and outlives a
+  // sheet: a search left in it (here or on the Network destination) would fill
+  // this one with that search's buckets. This also opens the feeds (idempotent)
+  // and retries a failed load.
+  Sdk().SetLocationFilter(std::string());
   try {
     locationSheet_ = urnw::LocationChooserSheet::Create(self->Content().XamlRoot(), Sdk());
     // what the feeds last pushed; EnsureLocations' own pushes follow
+    locationSheet_->SetFeedState(locationsState_);
     locationSheet_->Update(locations_, peers_);
     co_await locationSheet_->Dialog().ShowAsync();
   } catch (...) {
@@ -4495,11 +4510,12 @@ void ConnectPage::ApplyPeerCount(std::optional<urnet::NetworkPeerList> const& pe
   // the reading a stats snapshot carried, kept for the pushes that carry none
   if (reading) peerLine_ = *reading;
   ApplyPeersList();
-  // The peers state lives in the service's device: while the rpc is down
-  // (service not running) a zero here would be a stale claim presented as
-  // fact, so the line goes gray and says discovery is disabled (apple
-  // ConnectActions parity).
-  if (!peerLine_.remoteConnected) {
+  // The peers state lives in the service's devices: while neither the session's
+  // rpc nor the provider-only device can say (service not running, nothing
+  // provides) a zero here would be a stale claim presented as fact, so the
+  // line goes gray and says discovery is disabled (apple ConnectActions
+  // parity).
+  if (!PeerDiscoveryLive(peerLine_)) {
     const hstring disabled = Loc("peer_discovery_disabled");
     w_.PeerCountText().Text(disabled);
     // the row's automation name IS its text, and its text changes: set both

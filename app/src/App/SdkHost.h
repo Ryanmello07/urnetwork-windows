@@ -170,6 +170,11 @@ struct LiveStats {
   // or not (ConnectedPeerCount's figure, from the device itself).
   bool remoteConnected = false;
   int64_t connectedPeerCount = 0;
+  // With no session: the service's provider-only device said how many devices
+  // are connected (get_provider_stats), and connectedPeerCount is its count.
+  // Its peers are discovered with no DeviceRemote, so the line counts them
+  // rather than saying discovery is disabled until connected.
+  bool providerOnlyPeers = false;
   std::string countryCode;        // selected location country code (dns recommendations)
   std::string countryName;
 
@@ -1237,10 +1242,11 @@ class SdkHost {
   // callers are on the UI thread (a window built, a sheet opened, the Network
   // destination shown); what it opens reaches them through the handlers.
   void EnsureLocations();
-  // Set the provider-list search query. Proxies to the view controller when one
-  // exists; otherwise runs the SAME two-endpoint dispatch the view controller
-  // runs, against the in-process Api. Search therefore works identically with
-  // and without a session.
+  // Set the provider-list search query. Returns at once. locationsOpener_ runs
+  // the latest query on the view controller when one exists, otherwise the SAME
+  // two-endpoint dispatch against the in-process Api, so search works identically
+  // with and without a session. The query outlives a feed: a view controller
+  // opened later (a session starting, the window coming back) runs it too.
   //
   // urnet::getFilteredLocationsFromResult does NOT do text matching - MEASURED,
   // after a first cut of this assumed otherwise and shipped a search box that
@@ -1257,6 +1263,8 @@ class SdkHost {
   //
   // then buckets whichever result came back with that same query.
   void SetLocationFilter(const std::string& query);
+  // The query the last SetLocationFilter asked for, trimmed.
+  std::string WantedLocationQuery();
   std::optional<urnet::FilteredLocations> CurrentFilteredLocations();
   std::string CurrentFilteredLocationState();
   std::optional<urnet::NetworkPeerList> ConnectedProvidePeers();
@@ -2190,6 +2198,14 @@ class SdkHost {
   // Caller holds mutex_, with no session.
   void ShowProviderOnlyStatsLocked(const proto::ProviderStats& stats);
   void ClearProviderOnlyStatsLocked(bool providerGone);
+  // The provider-only device's connectable peers (ConnectablePeers) on the
+  // peers feed, as a session's PeerViewController pushes its own: only when
+  // they changed since this last pushed. Caller holds mutex_, with no session,
+  // so the controller is never a second writer. Forgetting what was pushed
+  // (the feed was emptied, or a session took it over) makes the next answer
+  // push again.
+  void PublishProviderOnlyPeersLocked(urnet::NetworkPeerList peers);
+  void ForgetProviderOnlyPeers();
   // One GET /network/provider-status on the api, applied to the readings when
   // it answers unless they moved on meanwhile. Caller holds mutex_ (api_).
   void FetchProviderOnlyStatusLocked(const std::string& clientId);
@@ -2674,6 +2690,8 @@ class SdkHost {
   // is live and it drives server-side search) and two writers into one UI state
   // is the bug this exists to prevent.
   std::atomic<bool> deviceFeedOpen_{false};
+  // The wanted query moved since an open view controller last ran it.
+  std::atomic<bool> locationsQueryDirty_{false};
 
   // Drawer caches (change detection + on-demand snapshots), guarded by
   // drawerMutex_ because the SDK listeners fire on their own threads.
@@ -2702,6 +2720,8 @@ class SdkHost {
   std::vector<urnet::ThroughputPoint> lastExtenderPoints_;
   bool lastHasProviderStats_ = false;
   TransportDistributionSnapshot lastProviderDistribution_;
+  // What PublishProviderOnlyPeersLocked last pushed; nullopt once forgotten.
+  std::optional<urnet::NetworkPeerList> lastProviderOnlyPeers_;
   // The value-compare baselines for the two signal-only provider feeds; see
   // CurrentProviderLocations() for why an identity compare is not enough.
   std::vector<ProviderLocationRow> lastProviderLocations_;
